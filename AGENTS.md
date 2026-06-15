@@ -39,6 +39,8 @@
 
 - `python scripts/validate_agents_docs.py --level ERROR` — 检查核心治理文档
 - `python scripts/validate_agents_docs.py --level WARN` — 收尾前检查文档和任务清单
-- `python -m ruff check worker` — worker 初始化后检查 Python 代码
+- `uv run ruff check worker` — worker 初始化后检查 Python 代码
+- `uv run pytest worker\tests` — 运行 worker focused tests
+- `npm --prefix app test` — 运行前端状态模型测试
 - `npm --prefix app run lint` — app 初始化后检查 TypeScript/Tauri 前端
 - `npm --prefix app run build` — app 初始化后验证前端构建

@@ -1,0 +1,78 @@
+import { describe, expect, test } from "vitest";
+import {
+  canSubmitUrl,
+  createInitialWorkflow,
+  getProgressSteps,
+  getResultCards,
+  startProcessing,
+  summarizeWorkerResult,
+} from "./workflow";
+
+describe("workflow state model", () => {
+  test("allows only a single douyin video url to be submitted", () => {
+    expect(canSubmitUrl("")).toBe(false);
+    expect(canSubmitUrl("https://example.com/video/1")).toBe(false);
+    expect(canSubmitUrl("https://www.douyin.com/video/7524373044106677544")).toBe(true);
+  });
+
+  test("starts processing by hiding input and entering video extraction", () => {
+    const state = startProcessing(
+      createInitialWorkflow(),
+      "https://www.douyin.com/video/7524373044106677544",
+    );
+
+    expect(state.stage).toBe("video_extracting");
+    expect(state.submittedUrl).toBe("https://www.douyin.com/video/7524373044106677544");
+    expect(state.showUrlInput).toBe(false);
+    expect(getProgressSteps(state).map((step) => step.label)).toEqual([
+      "视频提取中",
+      "视频转译中",
+      "话题点生成中",
+    ]);
+  });
+
+  test("completed worker result exposes both result cards", () => {
+    const state = summarizeWorkerResult({
+      status: "completed",
+      text: "完整文字稿",
+      insights: ["为什么流程编排可能比单点模型能力更关键？"],
+      transcript_path: "outputs/demo_transcript.txt",
+      insights_path: "outputs/demo_insights.json",
+      error: null,
+    });
+
+    expect(state.stage).toBe("completed");
+    expect(getResultCards(state).map((card) => card.id)).toEqual(["insights", "transcript"]);
+  });
+
+  test("partial worker result keeps transcript and marks insights retryable", () => {
+    const state = summarizeWorkerResult({
+      status: "partial_completed",
+      text: "已经完成的文字稿",
+      insights: [],
+      transcript_path: "outputs/demo_transcript.txt",
+      insights_path: null,
+      error: {
+        code: "INSIGHTFLOW_CONFIG_MISSING",
+        message: "InsightFlow LLM configuration is missing.",
+        stage: "insights_generating",
+      },
+    });
+
+    expect(state.stage).toBe("partial_completed");
+    expect(getResultCards(state)).toEqual([
+      {
+        id: "transcript",
+        title: "完整文字稿",
+        status: "ready",
+        action: "open",
+      },
+      {
+        id: "insights",
+        title: "启发话题点",
+        status: "failed",
+        action: "retry",
+      },
+    ]);
+  });
+});

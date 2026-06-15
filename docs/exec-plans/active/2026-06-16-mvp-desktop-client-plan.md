@@ -9,9 +9,9 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 
 ## Progress
 
-- [ ] 2026-06-16: App shell scaffolded and initial UI states render.
-- [ ] 2026-06-16: Python worker scaffolded with structured request/result schema.
-- [ ] 2026-06-16: Download, media validation, and audio extraction pipeline works for the sample URL.
+- [x] 2026-06-16: App shell scaffolded and initial UI states render. Validation: `npm --prefix app test`, `npm --prefix app run build`.
+- [x] 2026-06-16: Python worker scaffolded with structured request/result schema. Validation: `uv run pytest worker\tests`.
+- [x] 2026-06-16: Download, media validation, and audio extraction pipeline works for the sample URL. Validation: sample URL created `outputs/7524373044106677544.mp4`; `probe_media_file` reported valid video/audio; `extract_audio` created 16 kHz mono WAV.
 - [ ] 2026-06-16: ASR transcript pipeline writes `.txt` and `.md` outputs.
 - [ ] 2026-06-16: Embedded InsightFlow topic generation writes `.json` and `.md` outputs.
 - [ ] 2026-06-16: Tauri command connects UI to worker with progress, cancel, retry, and export paths.
@@ -20,16 +20,21 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 ## Surprises & Discoveries
 
 - Evidence: `douyin_video_download_solution.md` records that the sample URL download produced a valid MP4 with HEVC video, AAC audio, 1024x576 resolution, and about 271.3 seconds duration.
+- Evidence: Development machine has `uv 0.11.3`, Node `v24.5.0`, npm `11.7.0`, and FFmpeg available; `cargo` is not currently on PATH, so full Tauri/Rust build is blocked until Rust tooling is installed.
+- Evidence: `npm --prefix app run tauri -- build` fails at `cargo metadata` with `program not found`, confirming the desktop build blocker is Rust/Cargo rather than the JS app.
+- Evidence: Real sample URL download created `outputs/7524373044106677544.mp4` with HEVC video, AAC audio, 1280x720 resolution, 271.3 seconds duration, and 8,864,763 bytes.
+- Evidence: `extract_audio` created `work/7524373044106677544.wav` as `pcm_s16le`, 16 kHz, 1 channel.
 
 ## Decision Log
 
 - Decision: Use Tauri + React + TypeScript + Python ASR Worker. Rationale: lightweight desktop shell, mature UI ecosystem, and direct access to Python ASR tooling. Date/Author: 2026-06-16 / Codex, from accepted ADR-001.
 - Decision: Use `Qwen/Qwen3-ASR-0.6B` as default ASR model. Rationale: Chinese-focused quality with lower resource demand than 1.7B. Date/Author: 2026-06-16 / Codex, from accepted ADR-002.
 - Decision: Copy and embed only the required InsightFlow modules into this repo. Rationale: desktop app must be independently packaged and cannot depend on a local reference path. Date/Author: 2026-06-16 / Codex, from accepted ADR-003.
+- Decision: Manage the project Python environment with `uv` and create a project-local `.venv`. Rationale: user explicitly requested `uv` for this project while noting a separate development-machine environment at `D:\Code\.venv`. Date/Author: 2026-06-16 / User + Codex.
 
 ## Outcomes & Retrospective
 
-Not started. Update this section when the plan is completed, canceled, or replaced. Record passed validation, skipped checks, residual risks, and follow-up work.
+In progress. Completed the project-local `uv` worker scaffold, structured request/result schema, worker CLI facade, Tauri React TypeScript scaffold, workflow state model, first-pass UI shell, and the real download/media/audio extraction path for the sample URL. Tauri desktop build remains blocked because `cargo` is not installed or not on PATH.
 
 ## Context and Orientation
 
@@ -71,19 +76,20 @@ npm --prefix app run build
 
 Expected output: dependency install succeeds and build exits with code 0.
 
-3. Create the worker environment:
+3. Create the worker environment with `uv`:
 
 ```powershell
-py -3.11 -m venv .venv
-.\\.venv\\Scripts\\python -m pip install -U pip
+uv venv .venv
+uv sync --dev
 ```
 
-Expected output: `.venv/` exists and pip upgrades without error.
+Expected output: `.venv/` exists and project dependencies install without error.
 
-4. Install worker MVP dependencies after confirming package availability:
+4. Add worker MVP dependencies after confirming package availability:
 
 ```powershell
-.\\.venv\\Scripts\\python -m pip install yt-dlp qwen-asr modelscope pytest ruff
+uv add yt-dlp
+uv add --dev pytest ruff
 ```
 
 Expected output: packages install without error.
@@ -91,7 +97,7 @@ Expected output: packages install without error.
 5. Implement worker services under `worker/` and run focused tests:
 
 ```powershell
-.\\.venv\\Scripts\\python -m pytest worker\\tests
+uv run pytest worker\\tests
 ```
 
 Expected output: focused worker tests pass.
@@ -109,7 +115,7 @@ Expected output: document validation has 0 errors and app build exits with code 
 
 - Documentation: `python scripts/validate_agents_docs.py --level ERROR` returns 0 errors.
 - Frontend: `npm --prefix app run build` returns 0 after app scaffold exists.
-- Worker tests: `.\\.venv\\Scripts\\python -m pytest worker\\tests` returns 0 after worker tests exist.
+- Worker tests: `uv run pytest worker\tests` returns 0 after worker tests exist.
 - Media pipeline: sample URL produces MP4, valid `ffprobe` JSON, and 16 kHz mono WAV.
 - ASR pipeline: transcript `.txt` and `.md` are non-empty.
 - Insight pipeline: insights `.json` contains a non-empty `insights` array, or UI enters `部分完成` while preserving transcript.

@@ -1,0 +1,161 @@
+export type WorkflowStage =
+  | "waiting_input"
+  | "video_extracting"
+  | "video_transcribing"
+  | "insights_generating"
+  | "completed"
+  | "partial_completed"
+  | "failed";
+
+export type ProgressStepState = "pending" | "active" | "complete";
+
+export type ProgressStep = {
+  id: WorkflowStage;
+  label: string;
+  state: ProgressStepState;
+};
+
+export type ResultCard = {
+  id: "insights" | "transcript";
+  title: string;
+  status: "ready" | "failed";
+  action: "open" | "retry";
+};
+
+export type WorkerResult = {
+  status: "completed" | "partial_completed" | "failed";
+  text: string;
+  insights: string[];
+  transcript_path: string | null;
+  insights_path: string | null;
+  error: WorkerErrorResult | null;
+};
+
+export type WorkerErrorResult = {
+  code: string;
+  message: string;
+  stage: WorkflowStage;
+};
+
+export type WorkflowState = {
+  stage: WorkflowStage;
+  url: string;
+  submittedUrl: string;
+  showUrlInput: boolean;
+  text: string;
+  insights: string[];
+  transcriptPath: string | null;
+  insightsPath: string | null;
+  error: WorkerErrorResult | null;
+};
+
+const PROGRESS_STEP_LABELS: Array<Pick<ProgressStep, "id" | "label">> = [
+  { id: "video_extracting", label: "视频提取中" },
+  { id: "video_transcribing", label: "视频转译中" },
+  { id: "insights_generating", label: "话题点生成中" },
+];
+
+export function createInitialWorkflow(): WorkflowState {
+  return {
+    stage: "waiting_input",
+    url: "",
+    submittedUrl: "",
+    showUrlInput: true,
+    text: "",
+    insights: [],
+    transcriptPath: null,
+    insightsPath: null,
+    error: null,
+  };
+}
+
+export function canSubmitUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return url.hostname.endsWith("douyin.com") && /^\/video\/\d+/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function startProcessing(state: WorkflowState, url: string): WorkflowState {
+  return {
+    ...state,
+    stage: "video_extracting",
+    url,
+    submittedUrl: url,
+    showUrlInput: false,
+    error: null,
+  };
+}
+
+export function getProgressSteps(state: WorkflowState): ProgressStep[] {
+  const activeIndex = PROGRESS_STEP_LABELS.findIndex((step) => step.id === state.stage);
+
+  return PROGRESS_STEP_LABELS.map((step, index) => {
+    if (state.stage === "completed" || state.stage === "partial_completed") {
+      return { ...step, state: "complete" };
+    }
+
+    if (activeIndex === -1) {
+      return { ...step, state: "pending" };
+    }
+
+    if (index < activeIndex) {
+      return { ...step, state: "complete" };
+    }
+
+    return { ...step, state: index === activeIndex ? "active" : "pending" };
+  });
+}
+
+export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
+  return {
+    ...createInitialWorkflow(),
+    stage: result.status,
+    showUrlInput: false,
+    text: result.text,
+    insights: result.insights,
+    transcriptPath: result.transcript_path,
+    insightsPath: result.insights_path,
+    error: result.error,
+  };
+}
+
+export function getResultCards(state: WorkflowState): ResultCard[] {
+  if (state.stage === "partial_completed") {
+    return [
+      {
+        id: "transcript",
+        title: "完整文字稿",
+        status: "ready",
+        action: "open",
+      },
+      {
+        id: "insights",
+        title: "启发话题点",
+        status: "failed",
+        action: "retry",
+      },
+    ];
+  }
+
+  if (state.stage === "completed") {
+    return [
+      {
+        id: "insights",
+        title: "启发话题点",
+        status: "ready",
+        action: "open",
+      },
+      {
+        id: "transcript",
+        title: "完整文字稿",
+        status: "ready",
+        action: "open",
+      },
+    ];
+  }
+
+  return [];
+}

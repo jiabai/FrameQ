@@ -1,0 +1,18 @@
+[project]
+name = "frameq-worker"
+version = "0.1.0"
+description = "Python worker for FrameQ desktop video transcription workflows."
+requires-python = ">=3.11"
+dependencies = [
+    "yt-dlp>=2026.6.9",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["worker"]
+testpaths = ["worker/tests"]
