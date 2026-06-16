@@ -15,10 +15,13 @@ import {
   createInitialWorkflow,
   getProgressSteps,
   getResultCards,
+  isProcessingStage,
   startProcessing,
+  summarizeWorkerResult,
   type ResultCard,
   type WorkflowState,
 } from "./workflow";
+import { processVideo } from "./workerClient";
 
 type DetailTab = ResultCard["id"];
 
@@ -60,12 +63,19 @@ function App() {
   const progressSteps = useMemo(() => getProgressSteps(workflow), [workflow]);
   const resultCards = useMemo(() => getResultCards(workflow), [workflow]);
 
-  function submitUrl(event: FormEvent<HTMLFormElement>) {
+  async function submitUrl(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) {
       return;
     }
-    setWorkflow((current) => startProcessing(current, current.url));
+    const submittedUrl = workflow.url;
+    setWorkflow((current) => startProcessing(current, submittedUrl));
+    const result = await processVideo(submittedUrl);
+    setWorkflow((current) => ({
+      ...summarizeWorkerResult(result),
+      url: submittedUrl,
+      submittedUrl: current.submittedUrl || submittedUrl,
+    }));
   }
 
   function resetWorkflow() {
@@ -121,7 +131,7 @@ function App() {
                 <p className="section-label">处理进度</p>
                 <h2>{activeCopy.title}</h2>
               </div>
-              {workflow.stage !== "completed" && workflow.stage !== "partial_completed" ? (
+              {isProcessingStage(workflow.stage) ? (
                 <button className="secondary-button" type="button" onClick={resetWorkflow}>
                   <X size={17} />
                   <span>取消</span>
@@ -145,7 +155,15 @@ function App() {
         )}
 
         <section className="result-area" aria-label="结果总览">
-          {resultCards.length > 0 ? (
+          {workflow.stage === "failed" && workflow.error ? (
+            <div className="error-result">
+              <X size={20} />
+              <div>
+                <strong>{workflow.error.code}</strong>
+                <span>{workflow.error.message}</span>
+              </div>
+            </div>
+          ) : resultCards.length > 0 ? (
             <div className="result-grid">
               {resultCards.map((card) => (
                 <button

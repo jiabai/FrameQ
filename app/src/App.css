@@ -255,12 +255,31 @@ h2 {
   min-height: 190px;
 }
 
-.empty-result {
+.empty-result,
+.error-result {
   align-items: center;
   color: #68756f;
   display: flex;
   gap: 10px;
   min-height: 140px;
+}
+
+.error-result {
+  align-items: flex-start;
+  background: #fff7e8;
+  border: 1px solid #e6bf70;
+  border-radius: 8px;
+  color: #573915;
+  padding: 16px;
+}
+
+.error-result div {
+  display: grid;
+  gap: 4px;
+}
+
+.error-result span {
+  color: #705126;
 }
 
 .result-grid {

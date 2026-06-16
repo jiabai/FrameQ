@@ -4,6 +4,7 @@ import {
   createInitialWorkflow,
   getProgressSteps,
   getResultCards,
+  isProcessingStage,
   startProcessing,
   summarizeWorkerResult,
 } from "./workflow";
@@ -74,5 +75,15 @@ describe("workflow state model", () => {
         action: "retry",
       },
     ]);
+  });
+
+  test("cancel controls are only shown for active processing stages", () => {
+    expect(isProcessingStage("video_extracting")).toBe(true);
+    expect(isProcessingStage("video_transcribing")).toBe(true);
+    expect(isProcessingStage("insights_generating")).toBe(true);
+    expect(isProcessingStage("failed")).toBe(false);
+    expect(isProcessingStage("completed")).toBe(false);
+    expect(isProcessingStage("partial_completed")).toBe(false);
+    expect(isProcessingStage("waiting_input")).toBe(false);
   });
 });

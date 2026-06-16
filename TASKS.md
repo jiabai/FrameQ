@@ -2,15 +2,18 @@
 
 ## 进行中
 
-- [ ] 连接 Tauri command、UI 进度与 worker pipeline ✅ 桌面流程能到达结果或结构化失败状态
+- [ ] 完善桌面取消、重试、复制/导出交互 ✅ UI 操作绑定到实际 worker 结果和输出文件
 
 ## 待办
 
-- [ ] 安装 Rust/Cargo 以解除 Tauri 桌面构建阻塞 ✅ `cargo -V` 成功且 `npm --prefix app run tauri -- build` 不再因 `program not found` 失败
-- [ ] 运行真实 Qwen3-ASR 模型推理 ✅ `outputs/7524373044106677544_transcript.txt` 由真实 ASR 生成且非空
+- [ ] 运行真实 Qwen3-ASR 模型推理 ✅ `FRAMEQ_ALLOW_REAL_ASR=1` 时 `outputs/7524373044106677544_transcript.txt` 由真实 ASR 生成且非空
 
 ## 已完成
 
+- [x] 用户完成桌面 UI 手工验证（2026-06-16）✅ `app.exe` 显示 FrameQ、提交后进入失败态、返回 `ASR_MODEL_NOT_READY`、失败态不显示取消按钮
+- [x] 完成安装器打包验证（2026-06-16）✅ 用户报告 `npm --prefix app run tauri -- build` 已成功
+- [x] 将 Rust/Cargo 加入持久 PATH（2026-06-16）✅ 用户报告 `cargo -V` / `rustc -V` 在新会话可用
+- [x] 连接 Tauri command、UI 进度与 worker CLI（2026-06-16）✅ `npm --prefix app run tauri -- build --no-bundle` 生成 `app.exe`，worker CLI 子进程烟测返回结构化 JSON
 - [x] 内置并适配 InsightFlow 话题点生成（2026-06-16）✅ `outputs/7524373044106677544_insights.json` 包含非空 `insights`
 - [x] 实现 ASR adapter 和 transcript writers（2026-06-16）✅ fake transcriber 生成非空 `outputs/7524373044106677544_transcript.txt` 与 `.md`
 - [x] 实现下载与媒体校验服务（2026-06-16）✅ 示例 URL 创建 `outputs/7524373044106677544.mp4` 且 ffprobe JSON 有视频/音频流

@@ -109,6 +109,14 @@ export function getProgressSteps(state: WorkflowState): ProgressStep[] {
   });
 }
 
+export function isProcessingStage(stage: WorkflowStage): boolean {
+  return (
+    stage === "video_extracting" ||
+    stage === "video_transcribing" ||
+    stage === "insights_generating"
+  );
+}
+
 export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
   return {
     ...createInitialWorkflow(),
