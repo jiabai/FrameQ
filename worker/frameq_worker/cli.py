@@ -6,7 +6,11 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from frameq_worker.asr import Transcriber
+from frameq_worker.asr import (
+    Transcriber,
+    build_qwen_asr_transcriber,
+    resolve_model_cache_dir,
+)
 from frameq_worker.insightflow import InsightClient
 from frameq_worker.media import (
     CommandExecutionError,
@@ -29,6 +33,7 @@ def run_worker_once(
     transcriber: Transcriber | None = None,
     insight_client: InsightClient | None = None,
     allow_real_asr: bool | None = None,
+    environ: dict[str, str] | None = None,
 ) -> dict[str, object]:
     try:
         payload = json.loads(request_json)
@@ -51,15 +56,17 @@ def run_worker_once(
             stage=JobStage.WAITING_INPUT,
         ).to_dict()
 
+    runtime_env = environ if environ is not None else os.environ
     result = run_worker_pipeline(
         request=request,
         project_root=project_root or Path.cwd(),
         command_runner=command_runner,
         transcriber=transcriber,
         insight_client=insight_client,
-        allow_real_asr=should_allow_real_asr()
+        allow_real_asr=should_allow_real_asr(runtime_env)
         if allow_real_asr is None
         else allow_real_asr,
+        environ=runtime_env,
     )
     return result.to_dict()
 
@@ -95,6 +102,7 @@ def run_worker_pipeline(
     transcriber: Transcriber | None,
     insight_client: InsightClient | None,
     allow_real_asr: bool,
+    environ: dict[str, str],
 ) -> ProcessResult:
     output_dir = project_root / "outputs"
     work_dir = project_root / "work"
@@ -153,6 +161,22 @@ def run_worker_pipeline(
             video_path=video_path,
             audio_path=audio_path,
         )
+
+    if transcriber is None:
+        model_cache_dir = resolve_model_cache_dir(project_root=project_root, environ=environ)
+        try:
+            transcriber = build_qwen_asr_transcriber(
+                model_name=request.model,
+                cache_dir=model_cache_dir,
+            )
+        except OSError as exc:
+            return failed_result(
+                code="ASR_MODEL_CACHE_UNAVAILABLE",
+                message=f"Model cache directory is not writable: {exc}",
+                stage=JobStage.VIDEO_TRANSCRIBING,
+                video_path=video_path,
+                audio_path=audio_path,
+            )
 
     transcript_result = run_asr_transcript_step(
         audio_path=audio_path,
@@ -233,8 +257,9 @@ def failed_result(
     )
 
 
-def should_allow_real_asr() -> bool:
-    return os.environ.get("FRAMEQ_ALLOW_REAL_ASR") == "1"
+def should_allow_real_asr(environ: dict[str, str] | None = None) -> bool:
+    env = environ if environ is not None else os.environ
+    return env.get("FRAMEQ_ALLOW_REAL_ASR") == "1"
 
 
 def render_result_json(result: dict[str, object]) -> str:

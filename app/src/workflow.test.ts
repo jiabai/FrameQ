@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   canSubmitUrl,
   createInitialWorkflow,
+  formatWorkerError,
   getProgressSteps,
   getResultCards,
   isProcessingStage,
@@ -85,5 +86,25 @@ describe("workflow state model", () => {
     expect(isProcessingStage("completed")).toBe(false);
     expect(isProcessingStage("partial_completed")).toBe(false);
     expect(isProcessingStage("waiting_input")).toBe(false);
+  });
+
+  test("formats ASR readiness errors with actionable local setup guidance", () => {
+    expect(
+      formatWorkerError({
+        code: "ASR_MODEL_NOT_READY",
+        message: "Real ASR is disabled until model cache handling is configured.",
+        stage: "video_transcribing",
+      }),
+    ).toBe(
+      "真实 ASR 尚未启用。请用 FRAMEQ_ALLOW_REAL_ASR=1 启动应用，并确认 models/ 模型缓存目录可写。",
+    );
+
+    expect(
+      formatWorkerError({
+        code: "ASR_MODEL_CACHE_UNAVAILABLE",
+        message: "Model cache directory is not writable.",
+        stage: "video_transcribing",
+      }),
+    ).toBe("模型缓存目录不可写。请检查 FRAMEQ_MODEL_DIR 或项目 models/ 目录权限。");
   });
 });

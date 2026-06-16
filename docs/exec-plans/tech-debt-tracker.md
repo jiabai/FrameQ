@@ -6,8 +6,7 @@ Last updated: 2026-06-16
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Real Qwen3-ASR inference not verified | Adapter and writers are tested, but model weights have not been downloaded or executed on the sample WAV | `docs/exec-plans/active/2026-06-16-mvp-desktop-client-plan.md` | Run Qwen3-ASR on `work/7524373044106677544.wav` and replace fake transcript validation with real output |
-| ASR model cache/download UX not implemented | The worker CLI deliberately returns `ASR_MODEL_NOT_READY` unless `FRAMEQ_ALLOW_REAL_ASR=1`, preventing surprise large model downloads from the desktop UI | `worker/frameq_worker/cli.py` | Add explicit model cache/download progress UX and allow real ASR through product settings or a documented setup path |
+| ASR model download/loading progress UX not implemented | The worker now supports `models/` / `FRAMEQ_MODEL_DIR` cache placement and real ASR is verified, but the desktop UI cannot yet show model download or load progress during the long ASR startup path | `worker/frameq_worker/asr.py`, `app/src/App.tsx` | Add explicit model download/loading progress UX and allow real ASR through product settings or a documented setup path |
 | Real InsightFlow LLM call not configured | Embedded generator and output writers are tested with a fake client; production LLM credentials/client wiring still need configuration | `worker/frameq_worker/insightflow/` | Configure an LLM client, run generation on a real transcript, and verify `insights.json` comes from the configured LLM |
 
 ## Debt Handling Rules

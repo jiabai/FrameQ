@@ -6,10 +6,11 @@
 
 ## 待办
 
-- [ ] 运行真实 Qwen3-ASR 模型推理 ✅ `FRAMEQ_ALLOW_REAL_ASR=1` 时 `outputs/7524373044106677544_transcript.txt` 由真实 ASR 生成且非空
+- [ ] 完善模型下载/加载进度展示 ✅ UI 不再长时间停留在单一“视频转译中”状态
 
 ## 已完成
 
+- [x] 运行真实 Qwen3-ASR 模型推理（2026-06-16）✅ `outputs/7524373044106677544_transcript.txt` 由真实 ASR 生成且非空，模型缓存位于 `models/`
 - [x] 用户完成桌面 UI 手工验证（2026-06-16）✅ `app.exe` 显示 FrameQ、提交后进入失败态、返回 `ASR_MODEL_NOT_READY`、失败态不显示取消按钮
 - [x] 完成安装器打包验证（2026-06-16）✅ 用户报告 `npm --prefix app run tauri -- build` 已成功
 - [x] 将 Rust/Cargo 加入持久 PATH（2026-06-16）✅ 用户报告 `cargo -V` / `rustc -V` 在新会话可用
