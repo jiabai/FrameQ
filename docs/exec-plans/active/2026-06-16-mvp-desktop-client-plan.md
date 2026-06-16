@@ -21,6 +21,7 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - [x] 2026-06-16: Detail modal copy/export interactions are wired. Validation: active tab text is copied through the clipboard API; export reveals the generated transcript or insights file using Tauri opener.
 - [x] 2026-06-16: Model download/loading progress is visible in the UI. Validation: worker CLI emits prefixed progress JSON on stderr, Tauri forwards `worker-progress` events, and the UI merges stage message/percent updates.
 - [x] 2026-06-16: InsightFlow retry is wired from `partial_completed` UI state through Tauri to a worker-only retry command. Validation: `uv run pytest worker\tests\test_cli.py -q` and `npm --prefix app test -- workerClient.test.ts workflow.test.ts`.
+- [x] 2026-06-16: InsightFlow LLM client can be configured from project `.env`. Validation: focused tests cover `.env` loading, OpenAI-compatible client request/response handling, CLI client construction, and external-service warning copy.
 - [ ] 2026-06-16: Desktop polish remains: true cancel semantics.
 - [ ] 2026-06-16: Focused validation passes and residual risks are documented.
 
@@ -42,6 +43,7 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - Evidence: detail modal copy/export helpers are covered by frontend tests; export uses `@tauri-apps/plugin-opener` `revealItemInDir` against worker-generated paths.
 - Evidence: progress events use the `FRAMEQ_PROGRESS ` stderr prefix so final worker stdout remains parseable result JSON; Tauri only forwards prefixed lines to the frontend.
 - Evidence: `retry_insights` calls `python -m frameq_worker --retry-insights-json ...` with the existing transcript path and text, so a retry does not re-download video or rerun ASR.
+- Evidence: `.env.example` documents `FRAMEQ_LLM_*` keys; `.env` remains ignored by git, and configured LLM progress copy warns that transcript text is sent to the service.
 
 ## Decision Log
 
@@ -52,10 +54,11 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - Decision: Keep real ASR opt-in through `FRAMEQ_ALLOW_REAL_ASR=1` until model download/loading progress is user-visible in the desktop UI. Rationale: desktop smoke tests should not silently download large model weights; the worker now uses `models/` or `FRAMEQ_MODEL_DIR` for cache placement. Date/Author: 2026-06-16 / Codex.
 - Decision: Stream worker progress through stderr-prefixed JSON instead of mixing progress with stdout. Rationale: stdout remains the stable final result contract while Tauri can forward live progress events to React. Date/Author: 2026-06-16 / Codex.
 - Decision: Add a dedicated InsightFlow retry command instead of resubmitting the original URL. Rationale: `partial_completed` already has a usable transcript, and retry should only repeat the failed topic-generation stage. Date/Author: 2026-06-16 / Codex.
+- Decision: Store development LLM configuration in project `.env` and commit only `.env.example`. Rationale: local setup is simple while API keys stay outside git; environment variables can still override `.env` for CI or packaged runs. Date/Author: 2026-06-16 / User + Codex.
 
 ## Outcomes & Retrospective
 
-In progress. Completed the project-local `uv` worker scaffold, structured request/result schema, worker CLI facade, Tauri React TypeScript scaffold, workflow state model, first-pass UI shell, the real download/media/audio extraction path for the sample URL, the ASR adapter/transcript writer contract, embedded InsightFlow topic generation with file outputs, the Tauri command bridge to the worker CLI, real Qwen3-ASR inference on the sample WAV, detail modal copy/export actions, live worker progress events through Tauri, and InsightFlow retry from the `partial_completed` result card. Tauri release application build and installer bundling have been validated, with installer success reported by the user after WiX setup/cache.
+In progress. Completed the project-local `uv` worker scaffold, structured request/result schema, worker CLI facade, Tauri React TypeScript scaffold, workflow state model, first-pass UI shell, the real download/media/audio extraction path for the sample URL, the ASR adapter/transcript writer contract, embedded InsightFlow topic generation with file outputs, the Tauri command bridge to the worker CLI, real Qwen3-ASR inference on the sample WAV, detail modal copy/export actions, live worker progress events through Tauri, InsightFlow retry from the `partial_completed` result card, and `.env`-driven InsightFlow LLM client configuration. Tauri release application build and installer bundling have been validated, with installer success reported by the user after WiX setup/cache.
 
 ## Context and Orientation
 

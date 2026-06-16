@@ -108,7 +108,7 @@ export function startInsightRetry(state: WorkflowState): WorkflowState {
     ...state,
     stage: "insights_generating",
     showUrlInput: false,
-    statusMessage: "正在重新生成启发话题点。",
+    statusMessage: "正在重新生成启发话题点；如已配置云端 LLM，文字稿会发送到该服务。",
     progressPercent: 88,
     error: null,
   };
