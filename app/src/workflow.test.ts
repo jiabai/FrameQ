@@ -10,6 +10,7 @@ import {
   isProcessingStage,
   mergeProgressEvent,
   startProcessing,
+  startInsightRetry,
   summarizeWorkerResult,
 } from "./workflow";
 
@@ -156,5 +157,29 @@ describe("workflow state model", () => {
     expect(updated.statusMessage).toBe("正在加载模型并开始转写。");
     expect(updated.progressPercent).toBe(68);
     expect(updated.showUrlInput).toBe(false);
+  });
+
+  test("starts an insight retry without discarding the existing transcript", () => {
+    const state = summarizeWorkerResult({
+      status: "partial_completed",
+      text: "已经完成的文字稿。",
+      insights: [],
+      transcript_path: "outputs/demo_transcript.txt",
+      insights_path: null,
+      error: {
+        code: "INSIGHTFLOW_CONFIG_MISSING",
+        message: "InsightFlow LLM client is not configured.",
+        stage: "insights_generating",
+      },
+    });
+
+    const retrying = startInsightRetry(state);
+
+    expect(retrying.stage).toBe("insights_generating");
+    expect(retrying.statusMessage).toBe("正在重新生成启发话题点。");
+    expect(retrying.progressPercent).toBe(88);
+    expect(retrying.text).toBe("已经完成的文字稿。");
+    expect(retrying.transcriptPath).toBe("outputs/demo_transcript.txt");
+    expect(retrying.error).toBeNull();
   });
 });

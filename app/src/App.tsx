@@ -22,12 +22,13 @@ import {
   isProcessingStage,
   mergeProgressEvent,
   startProcessing,
+  startInsightRetry,
   summarizeWorkerResult,
   type DetailTab,
   type ResultCard,
   type WorkflowState,
 } from "./workflow";
-import { processVideo } from "./workerClient";
+import { processVideo, retryInsights } from "./workerClient";
 
 const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }> = {
   waiting_input: {
@@ -95,7 +96,31 @@ function App() {
     if (card.action === "open") {
       setActionNotice("");
       setDetailTab(card.id);
+      return;
     }
+
+    if (card.action === "retry") {
+      void retryInsightGeneration();
+    }
+  }
+
+  async function retryInsightGeneration() {
+    if (!workflow.transcriptPath) {
+      return;
+    }
+
+    const transcriptPath = workflow.transcriptPath;
+    const transcriptText = workflow.text;
+    setDetailTab(null);
+    setActionNotice("");
+    setWorkflow((current) => startInsightRetry(current));
+
+    const result = await retryInsights(transcriptPath, transcriptText);
+    setWorkflow((current) => ({
+      ...summarizeWorkerResult(result),
+      url: current.url,
+      submittedUrl: current.submittedUrl,
+    }));
   }
 
   async function copyDetail() {
@@ -232,7 +257,11 @@ function App() {
             <div className="empty-result">
               <FileText size={20} />
               <span>
-                {workflow.stage === "waiting_input" ? "提交后开始处理。" : "视频提取完成后将开始转译。"}
+                {workflow.stage === "waiting_input"
+                  ? "提交后开始处理。"
+                  : workflow.stage === "insights_generating" && workflow.text
+                    ? "文字稿已保留，正在重新生成话题点。"
+                    : "视频提取完成后将开始转译。"}
               </span>
             </div>
           )}

@@ -103,6 +103,17 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
   };
 }
 
+export function startInsightRetry(state: WorkflowState): WorkflowState {
+  return {
+    ...state,
+    stage: "insights_generating",
+    showUrlInput: false,
+    statusMessage: "正在重新生成启发话题点。",
+    progressPercent: 88,
+    error: null,
+  };
+}
+
 export function getProgressSteps(state: WorkflowState): ProgressStep[] {
   const activeIndex = PROGRESS_STEP_LABELS.findIndex((step) => step.id === state.stage);
 

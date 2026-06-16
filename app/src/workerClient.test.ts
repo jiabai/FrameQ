@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   WORKER_PROGRESS_EVENT,
   processVideo,
+  retryInsights,
   type WorkerCommandRunner,
   type WorkerProgressListener,
 } from "./workerClient";
@@ -109,5 +110,64 @@ describe("worker client", () => {
       },
     ]);
     expect(unlistenCalls).toEqual([WORKER_PROGRESS_EVENT]);
+  });
+
+  test("invokes the Tauri retry_insights command with existing transcript data", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return {
+        status: "completed",
+        text: "已经完成的文字稿。",
+        insights: ["为什么重试应该只重新生成话题点？"],
+        transcript_path: "outputs/demo_transcript.txt",
+        insights_path: "outputs/demo_insights.json",
+        error: null,
+      };
+    };
+
+    const result = await retryInsights(
+      "outputs/demo_transcript.txt",
+      "已经完成的文字稿。",
+      runner,
+    );
+
+    expect(calls).toEqual([
+      {
+        command: "retry_insights",
+        args: {
+          request: {
+            transcript_path: "outputs/demo_transcript.txt",
+            text: "已经完成的文字稿。",
+          },
+        },
+      },
+    ]);
+    expect(result.status).toBe("completed");
+  });
+
+  test("preserves existing transcript when the retry command fails", async () => {
+    const runner: WorkerCommandRunner = async () => {
+      throw new Error("retry worker process could not start");
+    };
+
+    const result = await retryInsights(
+      "outputs/demo_transcript.txt",
+      "已经完成的文字稿。",
+      runner,
+    );
+
+    expect(result).toEqual({
+      status: "partial_completed",
+      text: "已经完成的文字稿。",
+      insights: [],
+      transcript_path: "outputs/demo_transcript.txt",
+      insights_path: null,
+      error: {
+        code: "TAURI_COMMAND_FAILED",
+        message: "retry worker process could not start",
+        stage: "insights_generating",
+      },
+    });
   });
 });

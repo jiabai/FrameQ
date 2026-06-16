@@ -22,6 +22,11 @@ export type ProcessVideoRequest = {
   insightflow_mode: string;
 };
 
+export type RetryInsightsRequest = {
+  transcript_path: string;
+  text: string;
+};
+
 const defaultRunner: WorkerCommandRunner = (command, args) => invoke(command, args);
 
 export async function processVideo(
@@ -60,6 +65,34 @@ export async function processVideo(
     if (unlisten) {
       await unlisten();
     }
+  }
+}
+
+export async function retryInsights(
+  transcriptPath: string,
+  text: string,
+  runner: WorkerCommandRunner = defaultRunner,
+): Promise<WorkerResult> {
+  const request: RetryInsightsRequest = {
+    transcript_path: transcriptPath,
+    text,
+  };
+
+  try {
+    return await runner("retry_insights", { request });
+  } catch (error) {
+    return {
+      status: "partial_completed",
+      text,
+      insights: [],
+      transcript_path: transcriptPath,
+      insights_path: null,
+      error: {
+        code: "TAURI_COMMAND_FAILED",
+        message: error instanceof Error ? error.message : String(error),
+        stage: "insights_generating",
+      },
+    };
   }
 }
 

@@ -25,6 +25,12 @@ class ProcessRequest:
 
 
 @dataclass(frozen=True)
+class RetryInsightsRequest:
+    transcript_path: str
+    text: str
+
+
+@dataclass(frozen=True)
 class WorkerError:
     code: str
     message: str

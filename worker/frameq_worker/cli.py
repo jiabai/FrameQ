@@ -21,7 +21,13 @@ from frameq_worker.media import (
     probe_media_file,
     run_command,
 )
-from frameq_worker.models import JobStage, ProcessRequest, ProcessResult, WorkerError
+from frameq_worker.models import (
+    JobStage,
+    ProcessRequest,
+    ProcessResult,
+    RetryInsightsRequest,
+    WorkerError,
+)
 from frameq_worker.pipeline import run_asr_transcript_step, run_insight_generation_step
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
@@ -97,6 +103,112 @@ def parse_process_request(payload: object) -> ProcessRequest:
         model=str(payload.get("model", "Qwen/Qwen3-ASR-0.6B")),
         generate_insights=bool(payload.get("generate_insights", True)),
         insightflow_mode=str(payload.get("insightflow_mode", "embedded")),
+    )
+
+
+def retry_insights_once(
+    request_json: str,
+    project_root: Path | None = None,
+    insight_client: InsightClient | None = None,
+) -> dict[str, object]:
+    try:
+        payload = json.loads(request_json)
+    except json.JSONDecodeError:
+        return ProcessResult(
+            status=JobStage.FAILED,
+            error=WorkerError(
+                code="INVALID_RETRY_JSON",
+                message="Retry payload must be valid JSON.",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ),
+        ).to_dict()
+
+    try:
+        request = parse_retry_insights_request(payload)
+    except ValueError as exc:
+        return failed_insight_retry_result(
+            code="INVALID_RETRY_PAYLOAD",
+            message=str(exc),
+            transcript_path=None,
+            text="",
+        ).to_dict()
+
+    transcript_path = Path(request.transcript_path)
+    if not transcript_path.is_absolute() and project_root is not None:
+        transcript_path = project_root / transcript_path
+
+    markdown_transcript_path = resolve_markdown_transcript_path(transcript_path)
+    if not markdown_transcript_path.exists() and insight_client is not None:
+        return failed_insight_retry_result(
+            code="TRANSCRIPT_MARKDOWN_NOT_FOUND",
+            message="Transcript markdown file is required to regenerate insights.",
+            transcript_path=transcript_path,
+            text=request.text,
+        ).to_dict()
+
+    insight_result = run_insight_generation_step(
+        transcript_path=markdown_transcript_path,
+        output_dir=transcript_path.parent,
+        output_stem=derive_output_stem(transcript_path),
+        transcript_text=request.text,
+        client=insight_client,
+    )
+
+    return ProcessResult(
+        status=insight_result.status,
+        transcript_path=transcript_path.as_posix(),
+        insights_path=insight_result.insights_path,
+        text=insight_result.text,
+        insights=insight_result.insights,
+        error=insight_result.error,
+    ).to_dict()
+
+
+def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
+    if not isinstance(payload, dict):
+        raise ValueError("Retry payload must be a JSON object.")
+
+    transcript_path = payload.get("transcript_path")
+    if not isinstance(transcript_path, str) or not transcript_path.strip():
+        raise ValueError("Retry payload must include a non-empty transcript_path.")
+
+    text = payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("Retry payload must include non-empty transcript text.")
+
+    return RetryInsightsRequest(transcript_path=transcript_path.strip(), text=text)
+
+
+def resolve_markdown_transcript_path(transcript_path: Path) -> Path:
+    if transcript_path.suffix.lower() == ".md":
+        return transcript_path
+
+    return transcript_path.with_suffix(".md")
+
+
+def derive_output_stem(transcript_path: Path) -> str:
+    transcript_suffix = "_transcript"
+    if transcript_path.stem.endswith(transcript_suffix):
+        return transcript_path.stem[: -len(transcript_suffix)]
+
+    return transcript_path.stem
+
+
+def failed_insight_retry_result(
+    code: str,
+    message: str,
+    transcript_path: Path | None,
+    text: str,
+) -> ProcessResult:
+    return ProcessResult(
+        status=JobStage.PARTIAL_COMPLETED,
+        transcript_path=transcript_path.as_posix() if transcript_path else None,
+        text=text,
+        error=WorkerError(
+            code=code,
+            message=message,
+            stage=JobStage.INSIGHTS_GENERATING,
+        ),
     )
 
 
@@ -336,9 +448,17 @@ def print_progress_event(event: dict[str, object]) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run one FrameQ worker request.")
-    parser.add_argument("--request-json", required=True, help="Serialized ProcessRequest payload.")
+    request_group = parser.add_mutually_exclusive_group(required=True)
+    request_group.add_argument("--request-json", help="Serialized ProcessRequest payload.")
+    request_group.add_argument(
+        "--retry-insights-json",
+        help="Serialized RetryInsightsRequest payload.",
+    )
     args = parser.parse_args(argv)
 
-    result = run_worker_once(args.request_json, progress_callback=print_progress_event)
+    if args.retry_insights_json:
+        result = retry_insights_once(args.retry_insights_json)
+    else:
+        result = run_worker_once(args.request_json, progress_callback=print_progress_event)
     print(render_result_json(result))
     return 0

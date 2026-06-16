@@ -7,6 +7,7 @@ from frameq_worker.cli import (
     PROGRESS_EVENT_PREFIX,
     render_progress_event,
     render_result_json,
+    retry_insights_once,
     run_worker_once,
 )
 from frameq_worker.media import CommandResult
@@ -55,6 +56,67 @@ class FakeMediaRunner:
 class FakeTranscriber:
     def transcribe(self, audio_path: Path, language: str = "Chinese") -> Transcript:
         return Transcript(text="这是一段用于桌面联调的文字稿。", language=language)
+
+
+class FakeInsightClient:
+    def generate(self, prompt: str) -> str:
+        return '["为什么重试应该只重新生成话题点？"]'
+
+
+def test_retry_insights_once_regenerates_topics_from_existing_transcript(
+    tmp_path: Path,
+) -> None:
+    transcript_txt = tmp_path / "outputs" / "demo_transcript.txt"
+    transcript_md = transcript_txt.with_suffix(".md")
+    transcript_txt.parent.mkdir()
+    transcript_txt.write_text("已经完成的文字稿。", encoding="utf-8")
+    transcript_md.write_text("# 视频文字稿\n\n已经完成的文字稿。", encoding="utf-8")
+
+    result = retry_insights_once(
+        json.dumps(
+            {
+                "transcript_path": transcript_txt.as_posix(),
+                "text": "已经完成的文字稿。",
+            }
+        ),
+        insight_client=FakeInsightClient(),
+    )
+
+    assert result["status"] == "completed"
+    assert result["text"] == "已经完成的文字稿。"
+    assert result["transcript_path"] == transcript_txt.as_posix()
+    assert result["insights"] == ["为什么重试应该只重新生成话题点？"]
+    assert result["insights_path"] == (
+        tmp_path / "outputs" / "demo_insights.json"
+    ).as_posix()
+
+
+def test_retry_insights_once_preserves_transcript_when_client_is_missing(
+    tmp_path: Path,
+) -> None:
+    transcript_txt = tmp_path / "outputs" / "demo_transcript.txt"
+    transcript_md = transcript_txt.with_suffix(".md")
+    transcript_txt.parent.mkdir()
+    transcript_txt.write_text("已经完成的文字稿。", encoding="utf-8")
+    transcript_md.write_text("# 视频文字稿\n\n已经完成的文字稿。", encoding="utf-8")
+
+    result = retry_insights_once(
+        json.dumps(
+            {
+                "transcript_path": transcript_txt.as_posix(),
+                "text": "已经完成的文字稿。",
+            }
+        )
+    )
+
+    assert result["status"] == "partial_completed"
+    assert result["text"] == "已经完成的文字稿。"
+    assert result["transcript_path"] == transcript_txt.as_posix()
+    assert result["error"] == {
+        "code": "INSIGHTFLOW_CONFIG_MISSING",
+        "message": "InsightFlow LLM client is not configured.",
+        "stage": "insights_generating",
+    }
 
 
 def test_run_worker_once_returns_model_not_ready_without_real_asr(
