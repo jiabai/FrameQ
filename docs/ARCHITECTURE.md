@@ -18,6 +18,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | `models/` | 本地模型权重缓存，不提交仓库；可用 `FRAMEQ_MODEL_DIR` 覆盖 | 已由真实 Qwen3-ASR 探针创建 |
 | `outputs/` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成 |
 | `work/` | 音频、中间文件、调试日志和临时产物 | 运行时生成 |
+| `.env` | 本机运行配置和密钥，不提交仓库；`.env.example` 提供占位模板 | 已支持 InsightFlow LLM 和 ASR 运行期开关 |
 
 ## 模块关系
 
@@ -46,6 +47,8 @@ Desktop UI
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
 - `worker/frameq_worker/asr.py`：Qwen ASR adapter、模型缓存目录解析和 transcript `.txt/.md` 写出。
+- `worker/frameq_worker/config.py`：项目根 `.env` 加载和环境变量合并。
+- `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client，由 `FRAMEQ_LLM_*` 配置创建。
 - `worker/frameq_worker/pipeline.py`：worker 分阶段 pipeline 与 `ProcessResult` 映射。
 - `worker/frameq_worker/insightflow/`：内置 InsightFlow 话题点生成模块，运行期不依赖外部参考仓库。
 

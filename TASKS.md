@@ -10,6 +10,7 @@
 
 ## 已完成
 
+- [x] 支持 `.env` 配置真实 InsightFlow LLM client（2026-06-16）✅ worker 从项目根 `.env` 读取 `FRAMEQ_LLM_*`，调用 OpenAI-compatible Chat Completions 生成话题点，未配置时保持 `部分完成`
 - [x] 完善话题点重试交互（2026-06-16）✅ `部分完成` 状态的话题点卡片可重新触发 InsightFlow，保留既有文字稿并只重跑话题点生成
 - [x] 完善模型下载/加载进度展示（2026-06-16）✅ worker 进度事件经 Tauri 转发到 UI，展示下载、校验、音频提取、模型缓存、模型加载、转写和话题点生成文案
 - [x] 完善详情浮窗复制/导出交互（2026-06-16）✅ 复制使用当前 tab 文本，导出在文件管理器中定位生成的 transcript/insights 文件

@@ -6,7 +6,7 @@ Last updated: 2026-06-16
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Real InsightFlow LLM call not configured | Embedded generator and output writers are tested with a fake client; production LLM credentials/client wiring still need configuration | `worker/frameq_worker/insightflow/` | Configure an LLM client, run generation on a real transcript, and verify `insights.json` comes from the configured LLM |
+| Real InsightFlow LLM live call not smoke-tested | `.env` configuration and OpenAI-compatible client wiring are implemented, but this branch does not include a real API key or live provider response | `worker/frameq_worker/llm.py` | Fill `.env` with a real provider key/model, run retry or full generation on a real transcript, and verify `insights.json` comes from the configured LLM |
 
 ## Debt Handling Rules
 

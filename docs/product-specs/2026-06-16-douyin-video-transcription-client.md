@@ -38,6 +38,7 @@
 - 默认 ASR 模型为 `Qwen/Qwen3-ASR-0.6B`，后续可提供低资源降级模型。
 - 下载、转码和 ASR 默认本地处理。
 - 云端 LLM 使用前必须明确提示文字稿会发送到对应服务。
+- InsightFlow LLM 开发期配置来自项目根 `.env`：`FRAMEQ_LLM_PROVIDER=openai_compatible`、`FRAMEQ_LLM_BASE_URL`、`FRAMEQ_LLM_API_KEY`、`FRAMEQ_LLM_MODEL`、`FRAMEQ_LLM_TIMEOUT_SECONDS`。
 - worker 必须返回结构化状态和错误码，UI 不解析命令行散文本作为业务结果。
 - 当前开发态不静默下载大模型权重；真实 ASR 推理需要显式设置 `FRAMEQ_ALLOW_REAL_ASR=1`。
 - 模型权重默认缓存到项目 `models/`，可通过 `FRAMEQ_MODEL_DIR` 覆盖；下载/加载进度 UX 完成前，UI 必须给出可行动错误提示。
@@ -51,4 +52,5 @@
 - 话题点成功后，`outputs/` 中存在 insights `.json` 和 `.md`。
 - InsightFlow 失败时，UI 展示 `部分完成`，保留文字稿并提供重试入口。
 - 在 `部分完成` 状态点击话题点重试时，仅重新生成话题点，不重新下载视频或重新执行 ASR。
+- `.env` 配置 LLM key 和 model 后，话题点生成调用 OpenAI-compatible Chat Completions 接口；未配置时仍进入 `部分完成` 并保留文字稿。
 - 结果详情浮窗可在 `启发话题点` 和 `完整文字稿` 间切换，并支持复制和导出。

@@ -12,7 +12,9 @@ from frameq_worker.asr import (
     build_qwen_asr_transcriber,
     resolve_model_cache_dir,
 )
+from frameq_worker.config import load_project_env
 from frameq_worker.insightflow import InsightClient
+from frameq_worker.llm import build_insight_client_from_env
 from frameq_worker.media import (
     CommandExecutionError,
     CommandRunner,
@@ -45,6 +47,7 @@ def run_worker_once(
     environ: dict[str, str] | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> dict[str, object]:
+    root = project_root or Path.cwd()
     try:
         payload = json.loads(request_json)
     except json.JSONDecodeError:
@@ -66,13 +69,14 @@ def run_worker_once(
             stage=JobStage.WAITING_INPUT,
         ).to_dict()
 
-    runtime_env = environ if environ is not None else os.environ
+    runtime_env = load_project_env(root, environ)
+    configured_insight_client = insight_client or build_insight_client_from_env(runtime_env)
     result = run_worker_pipeline(
         request=request,
-        project_root=project_root or Path.cwd(),
+        project_root=root,
         command_runner=command_runner,
         transcriber=transcriber,
-        insight_client=insight_client,
+        insight_client=configured_insight_client,
         allow_real_asr=should_allow_real_asr(runtime_env)
         if allow_real_asr is None
         else allow_real_asr,
@@ -110,6 +114,7 @@ def retry_insights_once(
     request_json: str,
     project_root: Path | None = None,
     insight_client: InsightClient | None = None,
+    environ: dict[str, str] | None = None,
 ) -> dict[str, object]:
     try:
         payload = json.loads(request_json)
@@ -138,7 +143,10 @@ def retry_insights_once(
         transcript_path = project_root / transcript_path
 
     markdown_transcript_path = resolve_markdown_transcript_path(transcript_path)
-    if not markdown_transcript_path.exists() and insight_client is not None:
+    root = project_root or Path.cwd()
+    runtime_env = load_project_env(root, environ)
+    configured_insight_client = insight_client or build_insight_client_from_env(runtime_env)
+    if not markdown_transcript_path.exists() and configured_insight_client is not None:
         return failed_insight_retry_result(
             code="TRANSCRIPT_MARKDOWN_NOT_FOUND",
             message="Transcript markdown file is required to regenerate insights.",
@@ -151,7 +159,7 @@ def retry_insights_once(
         output_dir=transcript_path.parent,
         output_stem=derive_output_stem(transcript_path),
         transcript_text=request.text,
-        client=insight_client,
+        client=configured_insight_client,
     )
 
     return ProcessResult(
@@ -354,7 +362,9 @@ def run_worker_pipeline(
     emit_progress(
         progress_callback,
         JobStage.INSIGHTS_GENERATING,
-        "正在生成启发话题点。",
+        "正在使用配置的 LLM 生成启发话题点，文字稿会发送到该服务。"
+        if insight_client is not None
+        else "正在生成启发话题点。",
         88,
     )
     markdown_transcript_path = output_dir / f"{video_path.stem}_transcript.md"
@@ -457,8 +467,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.retry_insights_json:
-        result = retry_insights_once(args.retry_insights_json)
+        result = retry_insights_once(args.retry_insights_json, project_root=Path.cwd())
     else:
-        result = run_worker_once(args.request_json, progress_callback=print_progress_event)
+        result = run_worker_once(
+            args.request_json,
+            project_root=Path.cwd(),
+            progress_callback=print_progress_event,
+        )
     print(render_result_json(result))
     return 0

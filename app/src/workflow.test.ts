@@ -176,7 +176,9 @@ describe("workflow state model", () => {
     const retrying = startInsightRetry(state);
 
     expect(retrying.stage).toBe("insights_generating");
-    expect(retrying.statusMessage).toBe("正在重新生成启发话题点。");
+    expect(retrying.statusMessage).toBe(
+      "正在重新生成启发话题点；如已配置云端 LLM，文字稿会发送到该服务。",
+    );
     expect(retrying.progressPercent).toBe(88);
     expect(retrying.text).toBe("已经完成的文字稿。");
     expect(retrying.transcriptPath).toBe("outputs/demo_transcript.txt");

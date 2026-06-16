@@ -119,6 +119,95 @@ def test_retry_insights_once_preserves_transcript_when_client_is_missing(
     }
 
 
+def test_retry_insights_once_builds_client_from_project_dotenv(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured_env: dict[str, str] = {}
+    transcript_txt = tmp_path / "outputs" / "demo_transcript.txt"
+    transcript_md = transcript_txt.with_suffix(".md")
+    transcript_txt.parent.mkdir()
+    transcript_txt.write_text("已经完成的文字稿。", encoding="utf-8")
+    transcript_md.write_text("# 视频文字稿\n\n已经完成的文字稿。", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "FRAMEQ_LLM_PROVIDER=openai_compatible",
+                "FRAMEQ_LLM_API_KEY=secret",
+                "FRAMEQ_LLM_MODEL=demo-model",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_build_insight_client_from_env(env: dict[str, str]) -> FakeInsightClient:
+        captured_env.update(env)
+        return FakeInsightClient()
+
+    monkeypatch.setattr(
+        cli,
+        "build_insight_client_from_env",
+        fake_build_insight_client_from_env,
+    )
+
+    result = retry_insights_once(
+        json.dumps(
+            {
+                "transcript_path": transcript_txt.as_posix(),
+                "text": "已经完成的文字稿。",
+            }
+        ),
+        project_root=tmp_path,
+    )
+
+    assert result["status"] == "completed"
+    assert result["insights"] == ["为什么重试应该只重新生成话题点？"]
+    assert captured_env["FRAMEQ_LLM_API_KEY"] == "secret"
+    assert captured_env["FRAMEQ_LLM_MODEL"] == "demo-model"
+
+
+def test_retry_insights_once_reports_missing_markdown_when_dotenv_client_exists(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    transcript_txt = tmp_path / "outputs" / "demo_transcript.txt"
+    transcript_txt.parent.mkdir()
+    transcript_txt.write_text("已经完成的文字稿。", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "FRAMEQ_LLM_API_KEY=secret",
+                "FRAMEQ_LLM_MODEL=demo-model",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        cli,
+        "build_insight_client_from_env",
+        lambda env: FakeInsightClient(),
+    )
+
+    result = retry_insights_once(
+        json.dumps(
+            {
+                "transcript_path": transcript_txt.as_posix(),
+                "text": "已经完成的文字稿。",
+            }
+        ),
+        project_root=tmp_path,
+    )
+
+    assert result["status"] == "partial_completed"
+    assert result["text"] == "已经完成的文字稿。"
+    assert result["transcript_path"] == transcript_txt.as_posix()
+    assert result["error"] == {
+        "code": "TRANSCRIPT_MARKDOWN_NOT_FOUND",
+        "message": "Transcript markdown file is required to regenerate insights.",
+        "stage": "insights_generating",
+    }
+
+
 def test_run_worker_once_returns_model_not_ready_without_real_asr(
     tmp_path: Path,
 ) -> None:
@@ -248,6 +337,27 @@ def test_run_worker_once_emits_progress_events_for_model_startup(
             "progress": 88,
         },
     ]
+
+
+def test_run_worker_once_warns_when_configured_llm_receives_transcript(
+    tmp_path: Path,
+) -> None:
+    events: list[dict[str, object]] = []
+
+    run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        transcriber=FakeTranscriber(),
+        insight_client=FakeInsightClient(),
+        progress_callback=events.append,
+    )
+
+    assert events[-1] == {
+        "stage": "insights_generating",
+        "message": "正在使用配置的 LLM 生成启发话题点，文字稿会发送到该服务。",
+        "progress": 88,
+    }
 
 
 def test_run_worker_once_rejects_invalid_json_with_structured_error() -> None:
