@@ -3,6 +3,8 @@ import {
   canSubmitUrl,
   createInitialWorkflow,
   formatWorkerError,
+  getDetailText,
+  getExportPath,
   getProgressSteps,
   getResultCards,
   isProcessingStage,
@@ -106,5 +108,34 @@ describe("workflow state model", () => {
         stage: "video_transcribing",
       }),
     ).toBe("模型缓存目录不可写。请检查 FRAMEQ_MODEL_DIR 或项目 models/ 目录权限。");
+  });
+
+  test("formats detail text for clipboard copying", () => {
+    const state = summarizeWorkerResult({
+      status: "completed",
+      text: "完整文字稿",
+      insights: ["第一个话题点", "第二个话题点"],
+      transcript_path: "outputs/demo_transcript.txt",
+      insights_path: "outputs/demo_insights.json",
+      error: null,
+    });
+
+    expect(getDetailText("transcript", state)).toBe("完整文字稿");
+    expect(getDetailText("insights", state)).toBe("1. 第一个话题点\n2. 第二个话题点");
+  });
+
+  test("selects generated export path for each detail tab", () => {
+    const state = summarizeWorkerResult({
+      status: "completed",
+      text: "完整文字稿",
+      insights: ["第一个话题点"],
+      transcript_path: "outputs/demo_transcript.txt",
+      insights_path: "outputs/demo_insights.md",
+      error: null,
+    });
+
+    expect(getExportPath("transcript", state)).toBe("outputs/demo_transcript.txt");
+    expect(getExportPath("insights", state)).toBe("outputs/demo_insights.md");
+    expect(getExportPath("insights", createInitialWorkflow())).toBeNull();
   });
 });

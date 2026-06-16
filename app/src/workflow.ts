@@ -22,6 +22,8 @@ export type ResultCard = {
   action: "open" | "retry";
 };
 
+export type DetailTab = ResultCard["id"];
+
 export type WorkerResult = {
   status: "completed" | "partial_completed" | "failed";
   text: string;
@@ -178,4 +180,20 @@ export function getResultCards(state: WorkflowState): ResultCard[] {
   }
 
   return [];
+}
+
+export function getDetailText(tab: DetailTab, state: WorkflowState): string {
+  if (tab === "transcript") {
+    return state.text.trim();
+  }
+
+  return state.insights.map((insight, index) => `${index + 1}. ${insight}`).join("\n");
+}
+
+export function getExportPath(tab: DetailTab, state: WorkflowState): string | null {
+  if (tab === "transcript") {
+    return state.transcriptPath;
+  }
+
+  return state.insightsPath;
 }

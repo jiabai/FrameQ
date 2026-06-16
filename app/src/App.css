@@ -375,6 +375,13 @@ h2 {
   justify-content: space-between;
 }
 
+.action-notice {
+  color: #476158;
+  font-size: 0.88rem;
+  min-height: 22px;
+  padding: 0 22px;
+}
+
 .search-box {
   align-items: center;
   border: 1px solid #cfd8d1;

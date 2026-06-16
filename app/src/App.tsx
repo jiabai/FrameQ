@@ -9,22 +9,24 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import {
   canSubmitUrl,
   createInitialWorkflow,
   formatWorkerError,
+  getDetailText,
+  getExportPath,
   getProgressSteps,
   getResultCards,
   isProcessingStage,
   startProcessing,
   summarizeWorkerResult,
+  type DetailTab,
   type ResultCard,
   type WorkflowState,
 } from "./workflow";
 import { processVideo } from "./workerClient";
-
-type DetailTab = ResultCard["id"];
 
 const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }> = {
   waiting_input: {
@@ -60,6 +62,7 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
 function App() {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
+  const [actionNotice, setActionNotice] = useState("");
   const canSubmit = canSubmitUrl(workflow.url);
   const progressSteps = useMemo(() => getProgressSteps(workflow), [workflow]);
   const resultCards = useMemo(() => getResultCards(workflow), [workflow]);
@@ -81,17 +84,57 @@ function App() {
 
   function resetWorkflow() {
     setDetailTab(null);
+    setActionNotice("");
     setWorkflow(createInitialWorkflow());
   }
 
   function openCard(card: ResultCard) {
     if (card.action === "open") {
+      setActionNotice("");
       setDetailTab(card.id);
+    }
+  }
+
+  async function copyDetail() {
+    if (!detailTab) {
+      return;
+    }
+    const text = getDetailText(detailTab, workflow);
+    if (!text) {
+      setActionNotice("暂无可复制内容。");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setActionNotice("已复制到剪贴板。");
+    } catch {
+      setActionNotice("复制失败，请手动选择内容复制。");
+    }
+  }
+
+  async function exportDetail() {
+    if (!detailTab) {
+      return;
+    }
+    const exportPath = getExportPath(detailTab, workflow);
+    if (!exportPath) {
+      setActionNotice("暂无可导出的文件。");
+      return;
+    }
+
+    try {
+      await revealItemInDir(exportPath);
+      setActionNotice("已在文件管理器中定位导出文件。");
+    } catch {
+      setActionNotice(`无法定位文件：${exportPath}`);
     }
   }
 
   const activeCopy = stageCopy[workflow.stage];
   const detailTitle = detailTab === "insights" ? "启发话题点" : "完整文字稿";
+  const detailText = detailTab ? getDetailText(detailTab, workflow) : "";
+  const exportPath = detailTab ? getExportPath(detailTab, workflow) : null;
 
   return (
     <main className="app-shell">
@@ -227,16 +270,17 @@ function App() {
                 <input placeholder="搜索关键词..." />
               </label>
               <div className="tool-actions">
-                <button type="button">
+                <button type="button" onClick={copyDetail} disabled={!detailText}>
                   <Copy size={16} />
                   <span>复制</span>
                 </button>
-                <button type="button">
+                <button type="button" onClick={exportDetail} disabled={!exportPath}>
                   <Download size={16} />
                   <span>导出</span>
                 </button>
               </div>
             </div>
+            {actionNotice ? <p className="action-notice">{actionNotice}</p> : null}
             <div className="modal-content">
               {detailTab === "insights" ? (
                 workflow.insights.length > 0 ? (
