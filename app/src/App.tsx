@@ -13,6 +13,7 @@ import "./App.css";
 import {
   canSubmitUrl,
   createInitialWorkflow,
+  formatWorkerError,
   getProgressSteps,
   getResultCards,
   isProcessingStage,
@@ -160,7 +161,7 @@ function App() {
               <X size={20} />
               <div>
                 <strong>{workflow.error.code}</strong>
-                <span>{workflow.error.message}</span>
+                <span>{formatWorkerError(workflow.error)}</span>
               </div>
             </div>
           ) : resultCards.length > 0 ? (

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import frameq_worker.cli as cli
 from frameq_worker.asr import Transcript
 from frameq_worker.cli import render_result_json, run_worker_once
 from frameq_worker.media import CommandResult
@@ -94,6 +95,37 @@ def test_run_worker_once_runs_to_partial_completion_with_injected_transcriber(
         "code": "INSIGHTFLOW_CONFIG_MISSING",
         "message": "InsightFlow LLM client is not configured.",
         "stage": "insights_generating",
+    }
+
+
+def test_run_worker_once_builds_real_asr_with_project_model_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_build_qwen_asr_transcriber(model_name: str, cache_dir: Path) -> FakeTranscriber:
+        captured["model_name"] = model_name
+        captured["cache_dir"] = cache_dir
+        return FakeTranscriber()
+
+    monkeypatch.setattr(
+        cli,
+        "build_qwen_asr_transcriber",
+        fake_build_qwen_asr_transcriber,
+    )
+
+    result = run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        allow_real_asr=True,
+    )
+
+    assert result["status"] == "partial_completed"
+    assert captured == {
+        "model_name": "Qwen/Qwen3-ASR-0.6B",
+        "cache_dir": tmp_path / "models",
     }
 
 

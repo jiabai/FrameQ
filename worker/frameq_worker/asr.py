@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from os import PathLike
 from pathlib import Path
 from typing import Any, Protocol
 
 DEFAULT_ASR_MODEL = "Qwen/Qwen3-ASR-0.6B"
+DEFAULT_MODEL_CACHE_ENV = "FRAMEQ_MODEL_DIR"
 
 
 class ASRError(RuntimeError):
@@ -43,6 +45,30 @@ class Transcriber(Protocol):
 
 
 ModelFactory = Callable[..., Any]
+
+
+def resolve_model_cache_dir(
+    project_root: Path,
+    environ: dict[str, str] | None = None,
+) -> Path:
+    env = environ if environ is not None else {}
+    configured_path = env.get(DEFAULT_MODEL_CACHE_ENV)
+    if configured_path:
+        return Path(configured_path)
+    return project_root / "models"
+
+
+def build_qwen_asr_transcriber(
+    model_name: str = DEFAULT_ASR_MODEL,
+    cache_dir: str | PathLike[str] | Path | None = None,
+) -> QwenAsrTranscriber:
+    model_kwargs: dict[str, Any] = {}
+    if cache_dir is not None:
+        resolved_cache_dir = Path(cache_dir)
+        resolved_cache_dir.mkdir(parents=True, exist_ok=True)
+        model_kwargs["cache_dir"] = resolved_cache_dir.as_posix()
+
+    return QwenAsrTranscriber(model_name=model_name, model_kwargs=model_kwargs)
 
 
 class QwenAsrTranscriber:

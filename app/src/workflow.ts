@@ -117,6 +117,18 @@ export function isProcessingStage(stage: WorkflowStage): boolean {
   );
 }
 
+export function formatWorkerError(error: WorkerErrorResult): string {
+  if (error.code === "ASR_MODEL_NOT_READY") {
+    return "真实 ASR 尚未启用。请用 FRAMEQ_ALLOW_REAL_ASR=1 启动应用，并确认 models/ 模型缓存目录可写。";
+  }
+
+  if (error.code === "ASR_MODEL_CACHE_UNAVAILABLE") {
+    return "模型缓存目录不可写。请检查 FRAMEQ_MODEL_DIR 或项目 models/ 目录权限。";
+  }
+
+  return error.message;
+}
+
 export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
   return {
     ...createInitialWorkflow(),

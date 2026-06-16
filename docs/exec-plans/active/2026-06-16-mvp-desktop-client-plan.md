@@ -17,6 +17,7 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - [x] 2026-06-16: Tauri command connects UI to the worker CLI and can reach a structured result or failure. Validation: `npm --prefix app test`, `npm --prefix app run build`, worker CLI subprocess smoke test, and `npm --prefix app run tauri -- build --no-bundle`.
 - [x] 2026-06-16: Desktop smoke validation completed by user. Validation: `app.exe` showed FrameQ, submitting a URL reached the expected `ASR_MODEL_NOT_READY` structured failure, and failed state did not show cancel.
 - [x] 2026-06-16: Installer bundle validation completed by user after WiX setup/cache. Validation: user reported `npm --prefix app run tauri -- build` succeeds.
+- [x] 2026-06-16: Real Qwen3-ASR inference completed on the sample WAV. Validation: `outputs/7524373044106677544_transcript.txt` and `.md` were written from real ASR output; transcript text length was 2416 characters; model files cached under `models/`.
 - [ ] 2026-06-16: Desktop polish remains: true cancel semantics, retry, and copy/export paths.
 - [ ] 2026-06-16: Focused validation passes and residual risks are documented.
 
@@ -28,12 +29,13 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - Evidence: Real sample URL download created `outputs/7524373044106677544.mp4` with HEVC video, AAC audio, 1280x720 resolution, 271.3 seconds duration, and 8,864,763 bytes.
 - Evidence: `extract_audio` created `work/7524373044106677544.wav` as `pcm_s16le`, 16 kHz, 1 channel.
 - Evidence: `qwen-asr==0.0.6` and `modelscope==1.37.1` installed through `uv`; `qwen_asr` exposes `Qwen3ASRModel`.
-- Evidence: fake ASR integration wrote non-empty `outputs/7524373044106677544_transcript.txt` and `.md`; real Qwen model weights have not been downloaded or executed yet.
+- Evidence: fake ASR integration wrote non-empty transcript files before real model setup; real Qwen3-ASR later produced a 2416-character transcript for `work/7524373044106677544.wav`.
 - Evidence: embedded `worker/insightflow/` module writes `insights.json` and `insights.md` from a fake LLM client and maps missing LLM config to `partial_completed`.
 - Evidence: worker CLI now runs download, media validation, and audio extraction before ASR; by default it returns `ASR_MODEL_NOT_READY` instead of starting a large model download unless `FRAMEQ_ALLOW_REAL_ASR=1` is set.
 - Evidence: `npm --prefix app run tauri -- build --no-bundle` builds `D:\Github\FrameQ\app\src-tauri\target\release\app.exe` when `~\.cargo\bin` is prepended to PATH.
 - Evidence: user reported Rust/Cargo are now on persistent PATH and full `npm --prefix app run tauri -- build` succeeds after WiX setup/cache.
 - Evidence: user manually launched `app.exe` and confirmed UI behavior: FrameQ title, processing flow, expected `ASR_MODEL_NOT_READY`, and no cancel button in failed state.
+- Evidence: real ASR model cache was created under `models/models--Qwen--Qwen3-ASR-0.6B`; standard transcript outputs were updated at `outputs/7524373044106677544_transcript.txt` and `.md`.
 
 ## Decision Log
 
@@ -41,11 +43,11 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - Decision: Use `Qwen/Qwen3-ASR-0.6B` as default ASR model. Rationale: Chinese-focused quality with lower resource demand than 1.7B. Date/Author: 2026-06-16 / Codex, from accepted ADR-002.
 - Decision: Copy and embed only the required InsightFlow modules into this repo. Rationale: desktop app must be independently packaged and cannot depend on a local reference path. Date/Author: 2026-06-16 / Codex, from accepted ADR-003.
 - Decision: Manage the project Python environment with `uv` and create a project-local `.venv`. Rationale: user explicitly requested `uv` for this project while noting a separate development-machine environment at `D:\Code\.venv`. Date/Author: 2026-06-16 / User + Codex.
-- Decision: Keep real ASR disabled by default in the CLI until model cache/download UX is implemented. Rationale: desktop smoke tests should not silently download large model weights; explicit opt-in is available through `FRAMEQ_ALLOW_REAL_ASR=1`. Date/Author: 2026-06-16 / Codex.
+- Decision: Keep real ASR opt-in through `FRAMEQ_ALLOW_REAL_ASR=1` until model download/loading progress is user-visible in the desktop UI. Rationale: desktop smoke tests should not silently download large model weights; the worker now uses `models/` or `FRAMEQ_MODEL_DIR` for cache placement. Date/Author: 2026-06-16 / Codex.
 
 ## Outcomes & Retrospective
 
-In progress. Completed the project-local `uv` worker scaffold, structured request/result schema, worker CLI facade, Tauri React TypeScript scaffold, workflow state model, first-pass UI shell, the real download/media/audio extraction path for the sample URL, the ASR adapter/transcript writer contract, embedded InsightFlow topic generation with file outputs, and the Tauri command bridge to the worker CLI. Tauri release application build and installer bundling have been validated, with installer success reported by the user after WiX setup/cache. Real Qwen model inference remains unverified and is behind `FRAMEQ_ALLOW_REAL_ASR=1`.
+In progress. Completed the project-local `uv` worker scaffold, structured request/result schema, worker CLI facade, Tauri React TypeScript scaffold, workflow state model, first-pass UI shell, the real download/media/audio extraction path for the sample URL, the ASR adapter/transcript writer contract, embedded InsightFlow topic generation with file outputs, the Tauri command bridge to the worker CLI, and real Qwen3-ASR inference on the sample WAV. Tauri release application build and installer bundling have been validated, with installer success reported by the user after WiX setup/cache. Real ASR remains explicit opt-in until model download/loading progress is visible in the UI.
 
 ## Context and Orientation
 

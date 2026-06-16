@@ -6,6 +6,8 @@ from frameq_worker.asr import (
     ASRRuntimeError,
     QwenAsrTranscriber,
     Transcript,
+    build_qwen_asr_transcriber,
+    resolve_model_cache_dir,
     transcribe_and_write,
     write_transcript_files,
 )
@@ -84,6 +86,35 @@ def test_qwen_asr_transcriber_uses_injected_model_factory() -> None:
         "max_inference_batch_size": 4,
         "max_new_tokens": 4096,
     }
+
+
+def test_resolve_model_cache_dir_defaults_to_project_models(tmp_path: Path) -> None:
+    cache_dir = resolve_model_cache_dir(project_root=tmp_path, environ={})
+
+    assert cache_dir == tmp_path / "models"
+
+
+def test_resolve_model_cache_dir_uses_explicit_env_path(tmp_path: Path) -> None:
+    cache_dir = resolve_model_cache_dir(
+        project_root=tmp_path,
+        environ={"FRAMEQ_MODEL_DIR": str(tmp_path / "custom-model-cache")},
+    )
+
+    assert cache_dir == tmp_path / "custom-model-cache"
+
+
+def test_build_qwen_asr_transcriber_creates_cache_dir_and_passes_it(
+    tmp_path: Path,
+) -> None:
+    cache_dir = tmp_path / "models"
+
+    transcriber = build_qwen_asr_transcriber(
+        model_name="Qwen/Qwen3-ASR-0.6B",
+        cache_dir=cache_dir,
+    )
+
+    assert cache_dir.is_dir()
+    assert transcriber.model_kwargs["cache_dir"] == cache_dir.as_posix()
 
 
 def test_qwen_asr_transcriber_reports_missing_dependency() -> None:
