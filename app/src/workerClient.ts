@@ -1,8 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
-import type { WorkerResult, WorkflowStage } from "./workflow";
+import { listen } from "@tauri-apps/api/event";
+import type { Event } from "@tauri-apps/api/event";
+import type { WorkerProgressEvent, WorkerResult, WorkflowStage } from "./workflow";
 
 export type WorkerCommandRunner = (command: string, args: InvokeArgs) => Promise<WorkerResult>;
+export type WorkerProgressListener = (
+  eventName: string,
+  handler: (event: Event<unknown>) => void,
+) => Promise<() => void | Promise<void>>;
+export type WorkerProgressHandler = (event: WorkerProgressEvent) => void;
+
+export const WORKER_PROGRESS_EVENT = "worker-progress";
 
 export type ProcessVideoRequest = {
   url: string;
@@ -18,6 +27,8 @@ const defaultRunner: WorkerCommandRunner = (command, args) => invoke(command, ar
 export async function processVideo(
   url: string,
   runner: WorkerCommandRunner = defaultRunner,
+  onProgress?: WorkerProgressHandler,
+  progressListener: WorkerProgressListener = listen,
 ): Promise<WorkerResult> {
   const request: ProcessVideoRequest = {
     url,
@@ -28,6 +39,15 @@ export async function processVideo(
     insightflow_mode: "embedded",
   };
 
+  const unlisten = onProgress
+    ? await progressListener(WORKER_PROGRESS_EVENT, (event) => {
+        const progressEvent = parseProgressEvent(event.payload);
+        if (progressEvent) {
+          onProgress(progressEvent);
+        }
+      })
+    : null;
+
   try {
     return await runner("process_video", { request });
   } catch (error) {
@@ -36,7 +56,32 @@ export async function processVideo(
       error instanceof Error ? error.message : String(error),
       "video_extracting",
     );
+  } finally {
+    if (unlisten) {
+      await unlisten();
+    }
   }
+}
+
+function parseProgressEvent(payload: unknown): WorkerProgressEvent | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const event = payload as Partial<WorkerProgressEvent>;
+  if (
+    typeof event.stage !== "string" ||
+    typeof event.message !== "string" ||
+    typeof event.progress !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    stage: event.stage as WorkflowStage,
+    message: event.message,
+    progress: event.progress,
+  };
 }
 
 function failedResult(code: string, message: string, stage: WorkflowStage): WorkerResult {

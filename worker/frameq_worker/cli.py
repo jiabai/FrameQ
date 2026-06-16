@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from collections.abc import Sequence
+import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from frameq_worker.asr import (
@@ -24,6 +25,8 @@ from frameq_worker.models import JobStage, ProcessRequest, ProcessResult, Worker
 from frameq_worker.pipeline import run_asr_transcript_step, run_insight_generation_step
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
+PROGRESS_EVENT_PREFIX = "FRAMEQ_PROGRESS "
+ProgressCallback = Callable[[dict[str, object]], None]
 
 
 def run_worker_once(
@@ -34,6 +37,7 @@ def run_worker_once(
     insight_client: InsightClient | None = None,
     allow_real_asr: bool | None = None,
     environ: dict[str, str] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, object]:
     try:
         payload = json.loads(request_json)
@@ -67,6 +71,7 @@ def run_worker_once(
         if allow_real_asr is None
         else allow_real_asr,
         environ=runtime_env,
+        progress_callback=progress_callback,
     )
     return result.to_dict()
 
@@ -103,10 +108,17 @@ def run_worker_pipeline(
     insight_client: InsightClient | None,
     allow_real_asr: bool,
     environ: dict[str, str],
+    progress_callback: ProgressCallback | None = None,
 ) -> ProcessResult:
     output_dir = project_root / "outputs"
     work_dir = project_root / "work"
 
+    emit_progress(
+        progress_callback,
+        JobStage.VIDEO_EXTRACTING,
+        "正在下载视频并准备媒体文件。",
+        18,
+    )
     try:
         download_video(request.url, output_dir=output_dir, runner=command_runner)
     except CommandExecutionError as exc:
@@ -116,6 +128,12 @@ def run_worker_pipeline(
             stage=JobStage.VIDEO_EXTRACTING,
         )
 
+    emit_progress(
+        progress_callback,
+        JobStage.VIDEO_EXTRACTING,
+        "正在校验视频和音频流。",
+        34,
+    )
     video_path = find_latest_video(output_dir)
     if video_path is None:
         return failed_result(
@@ -142,6 +160,12 @@ def run_worker_pipeline(
             video_path=video_path,
         )
 
+    emit_progress(
+        progress_callback,
+        JobStage.VIDEO_EXTRACTING,
+        "正在提取 16 kHz 单声道音频。",
+        48,
+    )
     audio_path = work_dir / f"{video_path.stem}.wav"
     try:
         extract_audio(video_path, audio_path, runner=command_runner)
@@ -163,6 +187,12 @@ def run_worker_pipeline(
         )
 
     if transcriber is None:
+        emit_progress(
+            progress_callback,
+            JobStage.VIDEO_TRANSCRIBING,
+            "正在准备 Qwen3-ASR-0.6B 模型缓存。",
+            58,
+        )
         model_cache_dir = resolve_model_cache_dir(project_root=project_root, environ=environ)
         try:
             transcriber = build_qwen_asr_transcriber(
@@ -178,6 +208,12 @@ def run_worker_pipeline(
                 audio_path=audio_path,
             )
 
+    emit_progress(
+        progress_callback,
+        JobStage.VIDEO_TRANSCRIBING,
+        "正在加载模型并开始转写。",
+        68,
+    )
     transcript_result = run_asr_transcript_step(
         audio_path=audio_path,
         output_dir=output_dir,
@@ -203,6 +239,12 @@ def run_worker_pipeline(
             text=transcript_result.text,
         )
 
+    emit_progress(
+        progress_callback,
+        JobStage.INSIGHTS_GENERATING,
+        "正在生成启发话题点。",
+        88,
+    )
     markdown_transcript_path = output_dir / f"{video_path.stem}_transcript.md"
     insight_result = run_insight_generation_step(
         transcript_path=markdown_transcript_path,
@@ -262,8 +304,34 @@ def should_allow_real_asr(environ: dict[str, str] | None = None) -> bool:
     return env.get("FRAMEQ_ALLOW_REAL_ASR") == "1"
 
 
+def emit_progress(
+    callback: ProgressCallback | None,
+    stage: JobStage,
+    message: str,
+    progress: int,
+) -> None:
+    if callback is None:
+        return
+
+    callback(
+        {
+            "stage": stage.value,
+            "message": message,
+            "progress": progress,
+        }
+    )
+
+
 def render_result_json(result: dict[str, object]) -> str:
     return json.dumps(result, ensure_ascii=True)
+
+
+def render_progress_event(event: dict[str, object]) -> str:
+    return f"{PROGRESS_EVENT_PREFIX}{json.dumps(event, ensure_ascii=True)}"
+
+
+def print_progress_event(event: dict[str, object]) -> None:
+    print(render_progress_event(event), file=sys.stderr, flush=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -271,6 +339,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--request-json", required=True, help="Serialized ProcessRequest payload.")
     args = parser.parse_args(argv)
 
-    result = run_worker_once(args.request_json)
+    result = run_worker_once(args.request_json, progress_callback=print_progress_event)
     print(render_result_json(result))
     return 0

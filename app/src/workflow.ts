@@ -39,11 +39,19 @@ export type WorkerErrorResult = {
   stage: WorkflowStage;
 };
 
+export type WorkerProgressEvent = {
+  stage: WorkflowStage;
+  message: string;
+  progress: number;
+};
+
 export type WorkflowState = {
   stage: WorkflowStage;
   url: string;
   submittedUrl: string;
   showUrlInput: boolean;
+  statusMessage: string;
+  progressPercent: number;
   text: string;
   insights: string[];
   transcriptPath: string | null;
@@ -63,6 +71,8 @@ export function createInitialWorkflow(): WorkflowState {
     url: "",
     submittedUrl: "",
     showUrlInput: true,
+    statusMessage: "",
+    progressPercent: 0,
     text: "",
     insights: [],
     transcriptPath: null,
@@ -87,6 +97,8 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
     url,
     submittedUrl: url,
     showUrlInput: false,
+    statusMessage: "正在下载视频并准备媒体文件。",
+    progressPercent: 12,
     error: null,
   };
 }
@@ -136,11 +148,26 @@ export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
     ...createInitialWorkflow(),
     stage: result.status,
     showUrlInput: false,
+    statusMessage: "",
+    progressPercent: result.status === "failed" ? 35 : 100,
     text: result.text,
     insights: result.insights,
     transcriptPath: result.transcript_path,
     insightsPath: result.insights_path,
     error: result.error,
+  };
+}
+
+export function mergeProgressEvent(
+  state: WorkflowState,
+  event: WorkerProgressEvent,
+): WorkflowState {
+  return {
+    ...state,
+    stage: event.stage,
+    showUrlInput: false,
+    statusMessage: event.message,
+    progressPercent: Math.max(0, Math.min(100, event.progress)),
   };
 }
 

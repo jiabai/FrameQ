@@ -19,7 +19,8 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - [x] 2026-06-16: Installer bundle validation completed by user after WiX setup/cache. Validation: user reported `npm --prefix app run tauri -- build` succeeds.
 - [x] 2026-06-16: Real Qwen3-ASR inference completed on the sample WAV. Validation: `outputs/7524373044106677544_transcript.txt` and `.md` were written from real ASR output; transcript text length was 2416 characters; model files cached under `models/`.
 - [x] 2026-06-16: Detail modal copy/export interactions are wired. Validation: active tab text is copied through the clipboard API; export reveals the generated transcript or insights file using Tauri opener.
-- [ ] 2026-06-16: Desktop polish remains: true cancel semantics, InsightFlow retry, and model download/loading progress.
+- [x] 2026-06-16: Model download/loading progress is visible in the UI. Validation: worker CLI emits prefixed progress JSON on stderr, Tauri forwards `worker-progress` events, and the UI merges stage message/percent updates.
+- [ ] 2026-06-16: Desktop polish remains: true cancel semantics and InsightFlow retry.
 - [ ] 2026-06-16: Focused validation passes and residual risks are documented.
 
 ## Surprises & Discoveries
@@ -38,6 +39,7 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - Evidence: user manually launched `app.exe` and confirmed UI behavior: FrameQ title, processing flow, expected `ASR_MODEL_NOT_READY`, and no cancel button in failed state.
 - Evidence: real ASR model cache was created under `models/models--Qwen--Qwen3-ASR-0.6B`; standard transcript outputs were updated at `outputs/7524373044106677544_transcript.txt` and `.md`.
 - Evidence: detail modal copy/export helpers are covered by frontend tests; export uses `@tauri-apps/plugin-opener` `revealItemInDir` against worker-generated paths.
+- Evidence: progress events use the `FRAMEQ_PROGRESS ` stderr prefix so final worker stdout remains parseable result JSON; Tauri only forwards prefixed lines to the frontend.
 
 ## Decision Log
 
@@ -46,10 +48,11 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 - Decision: Copy and embed only the required InsightFlow modules into this repo. Rationale: desktop app must be independently packaged and cannot depend on a local reference path. Date/Author: 2026-06-16 / Codex, from accepted ADR-003.
 - Decision: Manage the project Python environment with `uv` and create a project-local `.venv`. Rationale: user explicitly requested `uv` for this project while noting a separate development-machine environment at `D:\Code\.venv`. Date/Author: 2026-06-16 / User + Codex.
 - Decision: Keep real ASR opt-in through `FRAMEQ_ALLOW_REAL_ASR=1` until model download/loading progress is user-visible in the desktop UI. Rationale: desktop smoke tests should not silently download large model weights; the worker now uses `models/` or `FRAMEQ_MODEL_DIR` for cache placement. Date/Author: 2026-06-16 / Codex.
+- Decision: Stream worker progress through stderr-prefixed JSON instead of mixing progress with stdout. Rationale: stdout remains the stable final result contract while Tauri can forward live progress events to React. Date/Author: 2026-06-16 / Codex.
 
 ## Outcomes & Retrospective
 
-In progress. Completed the project-local `uv` worker scaffold, structured request/result schema, worker CLI facade, Tauri React TypeScript scaffold, workflow state model, first-pass UI shell, the real download/media/audio extraction path for the sample URL, the ASR adapter/transcript writer contract, embedded InsightFlow topic generation with file outputs, the Tauri command bridge to the worker CLI, real Qwen3-ASR inference on the sample WAV, and detail modal copy/export actions. Tauri release application build and installer bundling have been validated, with installer success reported by the user after WiX setup/cache. Real ASR remains explicit opt-in until model download/loading progress is visible in the UI.
+In progress. Completed the project-local `uv` worker scaffold, structured request/result schema, worker CLI facade, Tauri React TypeScript scaffold, workflow state model, first-pass UI shell, the real download/media/audio extraction path for the sample URL, the ASR adapter/transcript writer contract, embedded InsightFlow topic generation with file outputs, the Tauri command bridge to the worker CLI, real Qwen3-ASR inference on the sample WAV, detail modal copy/export actions, and live worker progress events through Tauri. Tauri release application build and installer bundling have been validated, with installer success reported by the user after WiX setup/cache.
 
 ## Context and Orientation
 

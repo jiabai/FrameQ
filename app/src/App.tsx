@@ -20,6 +20,7 @@ import {
   getProgressSteps,
   getResultCards,
   isProcessingStage,
+  mergeProgressEvent,
   startProcessing,
   summarizeWorkerResult,
   type DetailTab,
@@ -74,7 +75,9 @@ function App() {
     }
     const submittedUrl = workflow.url;
     setWorkflow((current) => startProcessing(current, submittedUrl));
-    const result = await processVideo(submittedUrl);
+    const result = await processVideo(submittedUrl, undefined, (event) => {
+      setWorkflow((current) => mergeProgressEvent(current, event));
+    });
     setWorkflow((current) => ({
       ...summarizeWorkerResult(result),
       url: submittedUrl,
@@ -192,9 +195,12 @@ function App() {
               ))}
             </div>
             <div className="progress-track">
-              <span className={`progress-fill ${workflow.stage}`} />
+              <span
+                className={`progress-fill ${workflow.stage}`}
+                style={{ width: `${workflow.progressPercent || undefined}%` }}
+              />
             </div>
-            <p className="status-line">{activeCopy.body}</p>
+            <p className="status-line">{workflow.statusMessage || activeCopy.body}</p>
           </section>
         )}
 

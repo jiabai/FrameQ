@@ -8,6 +8,7 @@ import {
   getProgressSteps,
   getResultCards,
   isProcessingStage,
+  mergeProgressEvent,
   startProcessing,
   summarizeWorkerResult,
 } from "./workflow";
@@ -137,5 +138,23 @@ describe("workflow state model", () => {
     expect(getExportPath("transcript", state)).toBe("outputs/demo_transcript.txt");
     expect(getExportPath("insights", state)).toBe("outputs/demo_insights.md");
     expect(getExportPath("insights", createInitialWorkflow())).toBeNull();
+  });
+
+  test("merges worker progress events into the visible workflow state", () => {
+    const state = startProcessing(
+      createInitialWorkflow(),
+      "https://www.douyin.com/video/7524373044106677544",
+    );
+
+    const updated = mergeProgressEvent(state, {
+      stage: "video_transcribing",
+      message: "正在加载模型并开始转写。",
+      progress: 68,
+    });
+
+    expect(updated.stage).toBe("video_transcribing");
+    expect(updated.statusMessage).toBe("正在加载模型并开始转写。");
+    expect(updated.progressPercent).toBe(68);
+    expect(updated.showUrlInput).toBe(false);
   });
 });

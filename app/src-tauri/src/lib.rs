@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use tauri::{Emitter, Window};
+
+const PROGRESS_EVENT_NAME: &str = "worker-progress";
+const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ProcessVideoRequest {
@@ -30,19 +35,45 @@ struct ProcessVideoResult {
 }
 
 #[tauri::command]
-fn process_video(request: ProcessVideoRequest) -> Result<serde_json::Value, String> {
+fn process_video(window: Window, request: ProcessVideoRequest) -> Result<serde_json::Value, String> {
     let project_root = find_project_root()
         .ok_or_else(|| "Could not find FrameQ project root for worker execution.".to_string())?;
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
     let worker_path = project_root.join("worker");
-    let output = Command::new("uv")
+    let mut child = Command::new("uv")
         .args(["run", "python", "-m", "frameq_worker", "--request-json", &request_json])
         .env("PYTHONPATH", worker_path)
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
         .current_dir(project_root)
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|error| error.to_string())?;
+
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Could not capture worker stderr.".to_string())?;
+    let progress_window = window.clone();
+    let stderr_reader = std::thread::spawn(move || {
+        let mut diagnostic_lines = Vec::new();
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            if let Some(raw_event) = line.strip_prefix(PROGRESS_EVENT_PREFIX) {
+                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw_event) {
+                    let _ = progress_window.emit(PROGRESS_EVENT_NAME, payload);
+                }
+            } else if !line.trim().is_empty() {
+                diagnostic_lines.push(line);
+            }
+        }
+        diagnostic_lines.join("\n")
+    });
+
+    let output = child.wait_with_output().map_err(|error| error.to_string())?;
+    let stderr = stderr_reader
+        .join()
+        .unwrap_or_else(|_| "Worker stderr reader failed.".to_string());
 
     if !output.status.success() {
         return Ok(serde_json::json!(ProcessVideoResult {
@@ -53,7 +84,7 @@ fn process_video(request: ProcessVideoRequest) -> Result<serde_json::Value, Stri
             insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_PROCESS_FAILED".to_string(),
-                message: String::from_utf8_lossy(&output.stderr).to_string(),
+                message: stderr,
                 stage: "video_extracting".to_string(),
             }),
         }));

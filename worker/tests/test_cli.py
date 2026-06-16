@@ -3,7 +3,12 @@ from pathlib import Path
 
 import frameq_worker.cli as cli
 from frameq_worker.asr import Transcript
-from frameq_worker.cli import render_result_json, run_worker_once
+from frameq_worker.cli import (
+    PROGRESS_EVENT_PREFIX,
+    render_progress_event,
+    render_result_json,
+    run_worker_once,
+)
 from frameq_worker.media import CommandResult
 
 
@@ -129,6 +134,60 @@ def test_run_worker_once_builds_real_asr_with_project_model_cache(
     }
 
 
+def test_run_worker_once_emits_progress_events_for_model_startup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    events: list[dict[str, object]] = []
+
+    monkeypatch.setattr(
+        cli,
+        "build_qwen_asr_transcriber",
+        lambda model_name, cache_dir: FakeTranscriber(),
+    )
+
+    run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        allow_real_asr=True,
+        progress_callback=events.append,
+    )
+
+    assert events == [
+        {
+            "stage": "video_extracting",
+            "message": "正在下载视频并准备媒体文件。",
+            "progress": 18,
+        },
+        {
+            "stage": "video_extracting",
+            "message": "正在校验视频和音频流。",
+            "progress": 34,
+        },
+        {
+            "stage": "video_extracting",
+            "message": "正在提取 16 kHz 单声道音频。",
+            "progress": 48,
+        },
+        {
+            "stage": "video_transcribing",
+            "message": "正在准备 Qwen3-ASR-0.6B 模型缓存。",
+            "progress": 58,
+        },
+        {
+            "stage": "video_transcribing",
+            "message": "正在加载模型并开始转写。",
+            "progress": 68,
+        },
+        {
+            "stage": "insights_generating",
+            "message": "正在生成启发话题点。",
+            "progress": 88,
+        },
+    ]
+
+
 def test_run_worker_once_rejects_invalid_json_with_structured_error() -> None:
     result = run_worker_once("{bad json")
 
@@ -156,3 +215,21 @@ def test_render_result_json_is_ascii_safe_for_subprocess_stdout() -> None:
 
     assert "\\u4e2d\\u6587" in raw_json
     assert json.loads(raw_json)["text"] == "中文文字稿"
+
+
+def test_render_progress_event_uses_prefixed_json_line() -> None:
+    raw_line = render_progress_event(
+        {
+            "stage": "video_transcribing",
+            "message": "正在加载模型并开始转写。",
+            "progress": 68,
+        }
+    )
+
+    assert raw_line.startswith(PROGRESS_EVENT_PREFIX)
+    payload = json.loads(raw_line.removeprefix(PROGRESS_EVENT_PREFIX))
+    assert payload == {
+        "stage": "video_transcribing",
+        "message": "正在加载模型并开始转写。",
+        "progress": 68,
+    }
