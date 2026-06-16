@@ -106,7 +106,8 @@ def test_retry_insights_once_preserves_transcript_when_client_is_missing(
                 "transcript_path": transcript_txt.as_posix(),
                 "text": "已经完成的文字稿。",
             }
-        )
+        ),
+        project_root=tmp_path,
     )
 
     assert result["status"] == "partial_completed"

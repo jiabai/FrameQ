@@ -2,7 +2,7 @@
 
 ## 进行中
 
-- [ ] MVP 最终验收和残余风险整理 ✅ 汇总自动化验证、桌面 smoke 和剩余技术债
+- 暂无
 
 ## 待办
 
@@ -10,6 +10,7 @@
 
 ## 已完成
 
+- [x] MVP 最终验收和残余风险整理（2026-06-17）✅ 真实 InsightFlow LLM retry smoke 返回 `completed` 且生成 8 个话题点；自动化测试、文档门禁和 Tauri no-bundle 构建均通过；高优先级技术债已关闭
 - [x] 完善真正取消任务语义（2026-06-17）✅ 取消会终止运行中的 worker 进程树，UI 返回输入态并忽略晚到结果
 - [x] 支持 `.env` 配置真实 InsightFlow LLM client（2026-06-16）✅ worker 从项目根 `.env` 读取 `FRAMEQ_LLM_*`，调用 OpenAI-compatible Chat Completions 生成话题点，未配置时保持 `部分完成`
 - [x] 完善话题点重试交互（2026-06-16）✅ `部分完成` 状态的话题点卡片可重新触发 InsightFlow，保留既有文字稿并只重跑话题点生成
