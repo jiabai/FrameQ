@@ -59,6 +59,11 @@ button:disabled {
   justify-content: space-between;
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .eyebrow,
 .section-label {
   color: #5f6f68;
@@ -117,6 +122,7 @@ h2 {
 }
 
 .url-row input,
+.settings-form input,
 .search-box input {
   background: #ffffff;
   border: 1px solid #cfd8d1;
@@ -126,12 +132,14 @@ h2 {
   outline: none;
 }
 
-.url-row input {
+.url-row input,
+.settings-form input {
   min-height: 46px;
   padding: 0 14px;
 }
 
 .url-row input:focus,
+.settings-form input:focus,
 .search-box:focus-within {
   border-color: #2f7767;
   box-shadow: 0 0 0 3px rgba(47, 119, 103, 0.16);
@@ -420,6 +428,41 @@ h2 {
   padding-left: 24px;
 }
 
+.settings-modal {
+  max-width: 620px;
+}
+
+.settings-form {
+  display: grid;
+  gap: 14px;
+  padding: 0 22px 22px;
+}
+
+.settings-form label {
+  color: #31423a;
+  display: grid;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.settings-form label span {
+  font-size: 0.9rem;
+}
+
+.settings-warning {
+  background: #fff7e8;
+  border: 1px solid #e6bf70;
+  border-radius: 8px;
+  color: #573915;
+  padding: 12px 14px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: end;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding: 18px;
@@ -438,5 +481,10 @@ h2 {
   .modal-tools {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .settings-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

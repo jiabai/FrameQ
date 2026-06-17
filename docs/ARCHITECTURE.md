@@ -18,7 +18,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | `models/` | 本地模型权重缓存，不提交仓库；可用 `FRAMEQ_MODEL_DIR` 覆盖 | 已由真实 Qwen3-ASR 探针创建 |
 | `outputs/` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成 |
 | `work/` | 音频、中间文件、调试日志和临时产物 | 运行时生成 |
-| `.env` | 本机运行配置和密钥，不提交仓库；`.env.example` 提供占位模板 | 已支持 InsightFlow LLM 和 ASR 运行期开关 |
+| `.env` | 本机运行配置和密钥，不提交仓库；`.env.example` 提供占位模板 | 已支持 InsightFlow LLM 和 ASR 运行期开关；LLM 配置可由桌面 UI 写入 |
 
 ## 模块关系
 
@@ -43,6 +43,7 @@ Desktop UI
 - `ruff.toml`：Python worker 初始 lint 约束。
 - `pyproject.toml`：Python worker 项目元数据和 `uv` 依赖入口（初始化后维护）。
 - `app/src/workflow.ts`：前端工作流状态模型。
+- `app/src/settingsClient.ts`：前端 LLM 配置读写 client（Tauri invoke 包装）。
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
@@ -55,6 +56,7 @@ Desktop UI
 ## 架构不变量
 
 - UI 只编排任务和展示状态，不直接调用 `yt-dlp`、`ffmpeg`、ASR 或 LLM。
+- UI 可以通过 Tauri command 读取/保存 LLM 配置，但不得回显完整 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、话题点和错误码。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
 - 用户可见输出写入 `outputs/`；中间文件写入 `work/`；模型缓存写入 `models/`。

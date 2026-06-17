@@ -7,6 +7,7 @@ import {
   Play,
   RotateCcw,
   Search,
+  Settings,
   X,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -30,6 +31,7 @@ import {
   type WorkflowState,
 } from "./workflow";
 import { cancelProcess, processVideo, retryInsights } from "./workerClient";
+import { getLlmConfig, saveLlmConfig, type LlmConfigDraft } from "./settingsClient";
 
 const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }> = {
   waiting_input: {
@@ -66,6 +68,17 @@ function App() {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
   const [actionNotice, setActionNotice] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState<LlmConfigDraft>({
+    baseUrl: "",
+    apiKey: "",
+    model: "",
+    timeoutSeconds: "60",
+  });
+  const [settingsHasApiKey, setSettingsHasApiKey] = useState(false);
+  const [settingsNotice, setSettingsNotice] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const operationIdRef = useRef(0);
   const canSubmit = canSubmitUrl(workflow.url);
   const progressSteps = useMemo(() => getProgressSteps(workflow), [workflow]);
@@ -191,6 +204,53 @@ function App() {
     }
   }
 
+  async function openSettings() {
+    setSettingsOpen(true);
+    setSettingsLoading(true);
+    setSettingsNotice("正在读取配置。");
+    try {
+      const config = await getLlmConfig();
+      setSettingsDraft({
+        baseUrl: config.baseUrl,
+        apiKey: "",
+        model: config.model,
+        timeoutSeconds: config.timeoutSeconds,
+      });
+      setSettingsHasApiKey(config.hasApiKey);
+      setSettingsNotice(config.hasApiKey ? "已保存密钥；留空可继续保留。" : "尚未保存密钥。");
+    } catch (error) {
+      setSettingsNotice(`读取配置失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSettingsLoading(false);
+    }
+  }
+
+  async function submitSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSettingsSaving(true);
+    setSettingsNotice("");
+    try {
+      const config = await saveLlmConfig(settingsDraft);
+      setSettingsDraft((current) => ({
+        ...current,
+        apiKey: "",
+        baseUrl: config.baseUrl,
+        model: config.model,
+        timeoutSeconds: config.timeoutSeconds,
+      }));
+      setSettingsHasApiKey(config.hasApiKey);
+      setSettingsNotice("配置已保存，后续话题点生成会使用新的 LLM 设置。");
+    } catch (error) {
+      setSettingsNotice(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
+  function updateSettingsDraft(field: keyof LlmConfigDraft, value: string) {
+    setSettingsDraft((current) => ({ ...current, [field]: value }));
+  }
+
   const activeCopy = stageCopy[workflow.stage];
   const detailTitle = detailTab === "insights" ? "启发话题点" : "完整文字稿";
   const detailText = detailTab ? getDetailText(detailTab, workflow) : "";
@@ -203,14 +263,19 @@ function App() {
           <p className="eyebrow">FrameQ</p>
           <h1>视频转文字</h1>
         </div>
-        <button
-          className="icon-button"
-          type="button"
-          onClick={resetOrCancelWorkflow}
-          aria-label="处理新 URL"
-        >
-          <RotateCcw size={18} />
-        </button>
+        <div className="topbar-actions">
+          <button className="icon-button" type="button" onClick={openSettings} aria-label="配置 LLM">
+            <Settings size={18} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={resetOrCancelWorkflow}
+            aria-label="处理新 URL"
+          >
+            <RotateCcw size={18} />
+          </button>
+        </div>
       </header>
 
       <section className="workspace" aria-label="视频处理工作区">
@@ -368,6 +433,83 @@ function App() {
                 <p>{workflow.text || "文字稿生成后将在这里显示。"}</p>
               )}
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {settingsOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>
+          <section
+            className="detail-modal settings-modal"
+            aria-label="LLM 配置"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="modal-header">
+              <div>
+                <p className="section-label">InsightFlow</p>
+                <h2>LLM 配置</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setSettingsOpen(false)}>
+                <X size={18} />
+              </button>
+            </header>
+            <form className="settings-form" onSubmit={submitSettings}>
+              <p className="settings-warning">
+                启用云端 LLM 后，文字稿片段会发送到你配置的服务。API Key 只写入本机
+                .env，读取时不会回显完整密钥。
+              </p>
+              <label>
+                <span>Base URL</span>
+                <input
+                  value={settingsDraft.baseUrl}
+                  onChange={(event) => updateSettingsDraft("baseUrl", event.currentTarget.value)}
+                  placeholder="https://api.openai.com/v1"
+                  disabled={settingsLoading || settingsSaving}
+                />
+              </label>
+              <label>
+                <span>API Key</span>
+                <input
+                  value={settingsDraft.apiKey}
+                  onChange={(event) => updateSettingsDraft("apiKey", event.currentTarget.value)}
+                  placeholder={settingsHasApiKey ? "已保存密钥；留空保持不变" : "请输入 API Key"}
+                  type="password"
+                  disabled={settingsLoading || settingsSaving}
+                />
+              </label>
+              <label>
+                <span>Model</span>
+                <input
+                  value={settingsDraft.model}
+                  onChange={(event) => updateSettingsDraft("model", event.currentTarget.value)}
+                  placeholder="deepseek-ai/DeepSeek-V3.2"
+                  disabled={settingsLoading || settingsSaving}
+                />
+              </label>
+              <label>
+                <span>Timeout seconds</span>
+                <input
+                  value={settingsDraft.timeoutSeconds}
+                  onChange={(event) =>
+                    updateSettingsDraft("timeoutSeconds", event.currentTarget.value)
+                  }
+                  inputMode="decimal"
+                  placeholder="60"
+                  disabled={settingsLoading || settingsSaving}
+                />
+              </label>
+              {settingsNotice ? <p className="action-notice">{settingsNotice}</p> : null}
+              <div className="settings-actions">
+                <button type="button" className="secondary-button" onClick={() => setSettingsOpen(false)}>
+                  <span>关闭</span>
+                </button>
+                <button className="primary-button" type="submit" disabled={settingsLoading || settingsSaving}>
+                  <span>{settingsSaving ? "保存中" : "保存配置"}</span>
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       ) : null}
