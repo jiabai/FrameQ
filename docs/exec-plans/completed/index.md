@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-06-17-history-and-output-config-plan.md` | Added task history viewing and configurable output directory |
 | `2026-06-17-ui-llm-configuration-plan.md` | Added desktop UI controls for InsightFlow LLM configuration |
 | `2026-06-16-mvp-desktop-client-plan.md` | Built and validated the MVP desktop client workflow from URL input to transcript and insight output |
 | `2026-06-16-mvp-desktop-client-tasks.md` | Completed task checklist for the MVP desktop client ExecPlan |

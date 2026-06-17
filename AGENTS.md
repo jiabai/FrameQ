@@ -15,7 +15,7 @@
 - 产品规格索引：`docs/product-specs/index.md`
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
-- 最近完成执行计划：`docs/exec-plans/completed/2026-06-16-mvp-desktop-client-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-06-17-history-and-output-config-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

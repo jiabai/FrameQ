@@ -6,6 +6,7 @@ export type LlmConfig = {
   baseUrl: string;
   model: string;
   timeoutSeconds: string;
+  outputDir: string;
   hasApiKey: boolean;
 };
 
@@ -14,6 +15,7 @@ export type LlmConfigDraft = {
   apiKey: string;
   model: string;
   timeoutSeconds: string;
+  outputDir: string;
 };
 
 export type LlmConfigResponse = {
@@ -21,6 +23,7 @@ export type LlmConfigResponse = {
   base_url: string;
   model: string;
   timeout_seconds: string;
+  output_dir: string;
   has_api_key: boolean;
 };
 
@@ -48,6 +51,7 @@ export async function saveLlmConfig(
         api_key: draft.apiKey,
         model: draft.model,
         timeout_seconds: draft.timeoutSeconds,
+        output_dir: draft.outputDir,
       },
     }),
   );
@@ -59,6 +63,7 @@ function mapLlmConfigResponse(response: LlmConfigResponse): LlmConfig {
     baseUrl: response.base_url,
     model: response.model,
     timeoutSeconds: response.timeout_seconds,
+    outputDir: response.output_dir,
     hasApiKey: response.has_api_key,
   };
 }

@@ -15,6 +15,7 @@ describe("settings client", () => {
         base_url: "https://llm.example/v1",
         model: "demo-model",
         timeout_seconds: "30",
+        output_dir: "D:\\FrameQ\\outputs",
         has_api_key: true,
       };
     };
@@ -27,6 +28,7 @@ describe("settings client", () => {
       baseUrl: "https://llm.example/v1",
       model: "demo-model",
       timeoutSeconds: "30",
+      outputDir: "D:\\FrameQ\\outputs",
       hasApiKey: true,
     });
   });
@@ -40,6 +42,7 @@ describe("settings client", () => {
         base_url: "https://llm.example/v1",
         model: "demo-model",
         timeout_seconds: "30",
+        output_dir: "D:\\FrameQ\\outputs",
         has_api_key: true,
       };
     };
@@ -50,6 +53,7 @@ describe("settings client", () => {
         apiKey: "secret",
         model: "demo-model",
         timeoutSeconds: "30",
+        outputDir: "D:\\FrameQ\\outputs",
       },
       runner,
     );
@@ -63,6 +67,7 @@ describe("settings client", () => {
             api_key: "secret",
             model: "demo-model",
             timeout_seconds: "30",
+            output_dir: "D:\\FrameQ\\outputs",
           },
         },
       },
@@ -82,6 +87,7 @@ describe("settings client", () => {
           apiKey: "",
           model: "demo-model",
           timeoutSeconds: "30",
+          outputDir: "",
         },
         runner,
       ),

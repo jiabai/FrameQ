@@ -12,13 +12,13 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 
 | 模块 | 责任 | 状态 |
 |------|------|------|
-| `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
+| `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
 | `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；由 `uv` 管理本项目 `.venv` | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；真实 ASR 已在 sample WAV 上验证，仍需显式 `FRAMEQ_ALLOW_REAL_ASR=1` |
 | `worker/insightflow/` | 从参考实现复制并裁剪后的话题点生成模块 | 已初始化 splitter、prompt、JSON parser、generator |
 | `models/` | 本地模型权重缓存，不提交仓库；可用 `FRAMEQ_MODEL_DIR` 覆盖 | 已由真实 Qwen3-ASR 探针创建 |
-| `outputs/` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成 |
-| `work/` | 音频、中间文件、调试日志和临时产物 | 运行时生成 |
-| `.env` | 本机运行配置和密钥，不提交仓库；`.env.example` 提供占位模板 | 已支持 InsightFlow LLM 和 ASR 运行期开关；LLM 配置可由桌面 UI 写入 |
+| `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成；输出目录可由设置面板保存到 `.env` |
+| `work/` | 音频、中间文件、调试日志、`history.json` 历史任务索引和临时产物 | 运行时生成 |
+| `.env` | 本机运行配置和密钥，不提交仓库；`.env.example` 提供占位模板 | 已支持 InsightFlow LLM、输出目录和 ASR 运行期开关；LLM/输出目录配置可由桌面 UI 写入 |
 
 ## 模块关系
 
@@ -44,6 +44,7 @@ Desktop UI
 - `pyproject.toml`：Python worker 项目元数据和 `uv` 依赖入口（初始化后维护）。
 - `app/src/workflow.ts`：前端工作流状态模型。
 - `app/src/settingsClient.ts`：前端 LLM 配置读写 client（Tauri invoke 包装）。
+- `app/src/historyClient.ts`：前端历史记录读取 client（Tauri invoke 包装）。
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
@@ -59,7 +60,8 @@ Desktop UI
 - UI 可以通过 Tauri command 读取/保存 LLM 配置，但不得回显完整 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、话题点和错误码。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
-- 用户可见输出写入 `outputs/`；中间文件写入 `work/`；模型缓存写入 `models/`。
+- 用户可见输出默认写入 `outputs/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义目录；中间文件和历史索引写入 `work/`；模型缓存写入 `models/`。
+- 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。
 - 话题点失败不得阻断文字稿结果，客户端进入 `部分完成` 状态。
 
 ## 层级边界

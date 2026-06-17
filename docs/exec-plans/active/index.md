@@ -2,4 +2,4 @@
 
 | File | Focus |
 |------|-------|
-| None | No active ExecPlan |
+| _None_ | _No active plans_ |

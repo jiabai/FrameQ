@@ -2,13 +2,14 @@
 
 ## 进行中
 
-- 暂无
 
 ## 待办
 
 - 暂无
 
 ## 已完成
+
+- [x] 增加历史任务查看和输出目录配置（2026-06-17）✅ 采用本地 `work/history.json` 记录任务历史，设置面板保存 `FRAMEQ_OUTPUT_DIR`，历史面板可查看旧结果并恢复详情；worker/Rust/frontend 测试、文档门禁和 Tauri no-bundle 构建通过
 
 - [x] 增加 UI 层 LLM 配置入口（2026-06-17）✅ 用户可在桌面 UI 输入并保存 OpenAI-compatible base URL、API key、model 和 timeout；保存后 worker 使用该配置生成话题点；自动化测试和 Tauri no-bundle 构建通过
 - [x] MVP 最终验收和残余风险整理（2026-06-17）✅ 真实 InsightFlow LLM retry smoke 返回 `completed` 且生成 8 个话题点；自动化测试、文档门禁和 Tauri no-bundle 构建均通过；高优先级技术债已关闭

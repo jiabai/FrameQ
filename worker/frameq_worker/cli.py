@@ -5,7 +5,9 @@ import json
 import os
 import sys
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from frameq_worker.asr import (
     Transcriber,
@@ -34,6 +36,8 @@ from frameq_worker.pipeline import run_asr_transcript_step, run_insight_generati
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 PROGRESS_EVENT_PREFIX = "FRAMEQ_PROGRESS "
+OUTPUT_DIR_ENV = "FRAMEQ_OUTPUT_DIR"
+HISTORY_FILE_NAME = "history.json"
 ProgressCallback = Callable[[dict[str, object]], None]
 
 
@@ -82,6 +86,12 @@ def run_worker_once(
         else allow_real_asr,
         environ=runtime_env,
         progress_callback=progress_callback,
+    )
+    append_history_item(
+        project_root=root,
+        request=request,
+        result=result,
+        output_dir=resolve_output_dir(root, runtime_env),
     )
     return result.to_dict()
 
@@ -230,7 +240,7 @@ def run_worker_pipeline(
     environ: dict[str, str],
     progress_callback: ProgressCallback | None = None,
 ) -> ProcessResult:
-    output_dir = project_root / "outputs"
+    output_dir = resolve_output_dir(project_root, environ)
     work_dir = project_root / "work"
 
     emit_progress(
@@ -385,6 +395,82 @@ def run_worker_pipeline(
         insights=insight_result.insights,
         error=insight_result.error,
     )
+
+
+def resolve_output_dir(project_root: Path, environ: dict[str, str] | None = None) -> Path:
+    env = environ if environ is not None else {}
+    configured_path = env.get(OUTPUT_DIR_ENV, "").strip()
+    if not configured_path:
+        return project_root / "outputs"
+
+    output_dir = Path(configured_path)
+    if output_dir.is_absolute():
+        return output_dir
+    return project_root / output_dir
+
+
+def append_history_item(
+    project_root: Path,
+    request: ProcessRequest,
+    result: ProcessResult,
+    output_dir: Path,
+) -> None:
+    history_path = project_root / "work" / HISTORY_FILE_NAME
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history = load_history(history_path)
+    items = history.setdefault("items", [])
+    if not isinstance(items, list):
+        items = []
+        history["items"] = items
+
+    items.insert(0, build_history_item(request, result, output_dir))
+    history_path.write_text(
+        json.dumps(history, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_history(history_path: Path) -> dict[str, object]:
+    if not history_path.exists():
+        return {"items": []}
+
+    try:
+        loaded = json.loads(history_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"items": []}
+
+    if isinstance(loaded, dict) and isinstance(loaded.get("items"), list):
+        return loaded
+    return {"items": []}
+
+
+def build_history_item(
+    request: ProcessRequest,
+    result: ProcessResult,
+    output_dir: Path,
+) -> dict[str, object]:
+    error = None
+    if result.error is not None:
+        error = {
+            "code": result.error.code,
+            "message": result.error.message,
+            "stage": result.error.stage.value,
+        }
+
+    return {
+        "id": f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}",
+        "created_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "url": request.url,
+        "status": result.status.value,
+        "output_dir": output_dir.as_posix(),
+        "video_path": result.video_path,
+        "audio_path": result.audio_path,
+        "transcript_path": result.transcript_path,
+        "insights_path": result.insights_path,
+        "error": error,
+        "text_preview": result.text.strip()[:180],
+        "insights_count": len(result.insights),
+    }
 
 
 def find_latest_video(output_dir: Path) -> Path | None:

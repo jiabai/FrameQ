@@ -3,6 +3,7 @@ import {
   Copy,
   Download,
   FileText,
+  History as HistoryIcon,
   Lightbulb,
   Play,
   RotateCcw,
@@ -32,6 +33,7 @@ import {
 } from "./workflow";
 import { cancelProcess, processVideo, retryInsights } from "./workerClient";
 import { getLlmConfig, saveLlmConfig, type LlmConfigDraft } from "./settingsClient";
+import { getHistory, historyItemToWorkerResult, type HistoryItem } from "./historyClient";
 
 const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }> = {
   waiting_input: {
@@ -64,6 +66,21 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
   },
 };
 
+const historyStatusCopy: Record<HistoryItem["status"], string> = {
+  completed: "已完成",
+  partial_completed: "部分完成",
+  failed: "失败",
+};
+
+function formatHistoryDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
+
 function App() {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
@@ -74,11 +91,16 @@ function App() {
     apiKey: "",
     model: "",
     timeoutSeconds: "60",
+    outputDir: "",
   });
   const [settingsHasApiKey, setSettingsHasApiKey] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyNotice, setHistoryNotice] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
   const operationIdRef = useRef(0);
   const canSubmit = canSubmitUrl(workflow.url);
   const progressSteps = useMemo(() => getProgressSteps(workflow), [workflow]);
@@ -204,6 +226,33 @@ function App() {
     }
   }
 
+  async function openHistory() {
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    setHistoryItems([]);
+    setHistoryNotice("正在读取历史记录。");
+    try {
+      const items = await getHistory();
+      setHistoryItems(items);
+      setHistoryNotice(items.length > 0 ? "" : "暂无历史任务。");
+    } catch (error) {
+      setHistoryNotice(`读取历史失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function openHistoryItem(item: HistoryItem) {
+    setWorkflow({
+      ...summarizeWorkerResult(historyItemToWorkerResult(item)),
+      url: item.url,
+      submittedUrl: item.url,
+    });
+    setDetailTab(item.insights.length > 0 ? "insights" : item.text ? "transcript" : null);
+    setActionNotice("");
+    setHistoryOpen(false);
+  }
+
   async function openSettings() {
     setSettingsOpen(true);
     setSettingsLoading(true);
@@ -215,6 +264,7 @@ function App() {
         apiKey: "",
         model: config.model,
         timeoutSeconds: config.timeoutSeconds,
+        outputDir: config.outputDir,
       });
       setSettingsHasApiKey(config.hasApiKey);
       setSettingsNotice(config.hasApiKey ? "已保存密钥；留空可继续保留。" : "尚未保存密钥。");
@@ -237,9 +287,10 @@ function App() {
         baseUrl: config.baseUrl,
         model: config.model,
         timeoutSeconds: config.timeoutSeconds,
+        outputDir: config.outputDir,
       }));
       setSettingsHasApiKey(config.hasApiKey);
-      setSettingsNotice("配置已保存，后续话题点生成会使用新的 LLM 设置。");
+      setSettingsNotice("配置已保存，后续任务会使用新的 LLM 和输出目录设置。");
     } catch (error) {
       setSettingsNotice(`保存失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -264,7 +315,10 @@ function App() {
           <h1>视频转文字</h1>
         </div>
         <div className="topbar-actions">
-          <button className="icon-button" type="button" onClick={openSettings} aria-label="配置 LLM">
+          <button className="icon-button" type="button" onClick={openHistory} aria-label="查看历史">
+            <HistoryIcon size={18} />
+          </button>
+          <button className="icon-button" type="button" onClick={openSettings} aria-label="应用设置">
             <Settings size={18} />
           </button>
           <button
@@ -286,9 +340,10 @@ function App() {
               <input
                 id="video-url"
                 value={workflow.url}
-                onChange={(event) =>
-                  setWorkflow((current) => ({ ...current, url: event.currentTarget.value }))
-                }
+                onChange={(event) => {
+                  const url = event.currentTarget.value;
+                  setWorkflow((current) => ({ ...current, url }));
+                }}
                 placeholder="https://www.douyin.com/video/7524373044106677544"
               />
               <button className="primary-button" type="submit" disabled={!canSubmit}>
@@ -437,19 +492,72 @@ function App() {
         </div>
       ) : null}
 
-      {settingsOpen ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>
+      {historyOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setHistoryOpen(false)}>
           <section
-            className="detail-modal settings-modal"
-            aria-label="LLM 配置"
+            className="detail-modal history-modal"
+            aria-label="历史任务"
             role="dialog"
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="modal-header">
               <div>
-                <p className="section-label">InsightFlow</p>
-                <h2>LLM 配置</h2>
+                <p className="section-label">History</p>
+                <h2>历史任务</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setHistoryOpen(false)}>
+                <X size={18} />
+              </button>
+            </header>
+            {historyNotice ? <p className="action-notice">{historyNotice}</p> : null}
+            <div className="history-list">
+              {historyItems.map((item) => (
+                <button
+                  className={`history-item ${item.status}`}
+                  key={item.id}
+                  type="button"
+                  onClick={() => openHistoryItem(item)}
+                >
+                  <div className="history-item-main">
+                    <span className={`history-status ${item.status}`}>
+                      {historyStatusCopy[item.status]}
+                    </span>
+                    <strong>{item.textPreview || item.url}</strong>
+                  </div>
+                  <div className="history-meta">
+                    <span>{formatHistoryDate(item.createdAt)}</span>
+                    <span>{item.outputDir || "outputs"}</span>
+                    <span>
+                      {item.error ? item.error.code : `${item.insightsCount} 个话题点`}
+                    </span>
+                  </div>
+                </button>
+              ))}
+              {!historyLoading && historyItems.length === 0 ? (
+                <div className="history-empty">
+                  <FileText size={18} />
+                  <span>还没有可查看的历史任务。</span>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {settingsOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>
+          <section
+            className="detail-modal settings-modal"
+            aria-label="应用设置"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="modal-header">
+              <div>
+                <p className="section-label">FrameQ</p>
+                <h2>应用设置</h2>
               </div>
               <button className="icon-button" type="button" onClick={() => setSettingsOpen(false)}>
                 <X size={18} />
@@ -497,6 +605,15 @@ function App() {
                   }
                   inputMode="decimal"
                   placeholder="60"
+                  disabled={settingsLoading || settingsSaving}
+                />
+              </label>
+              <label>
+                <span>输出目录</span>
+                <input
+                  value={settingsDraft.outputDir}
+                  onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
+                  placeholder="留空使用 outputs/"
                   disabled={settingsLoading || settingsSaving}
                 />
               </label>

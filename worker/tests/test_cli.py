@@ -255,6 +255,63 @@ def test_run_worker_once_runs_to_partial_completion_with_injected_transcriber(
     }
 
 
+def test_run_worker_once_uses_configured_output_dir_for_user_artifacts(
+    tmp_path: Path,
+) -> None:
+    custom_output_dir = tmp_path / "custom-results"
+    result = run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        transcriber=FakeTranscriber(),
+        environ={"FRAMEQ_OUTPUT_DIR": custom_output_dir.as_posix()},
+    )
+
+    assert result["status"] == "partial_completed"
+    assert result["video_path"] == (custom_output_dir / "demo.mp4").as_posix()
+    assert result["audio_path"] == (tmp_path / "work" / "demo.wav").as_posix()
+    assert result["transcript_path"] == (
+        custom_output_dir / "demo_transcript.txt"
+    ).as_posix()
+    assert (custom_output_dir / "demo_transcript.md").is_file()
+
+
+def test_run_worker_once_records_history_with_actual_result_paths(
+    tmp_path: Path,
+) -> None:
+    custom_output_dir = tmp_path / "custom-results"
+
+    result = run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        transcriber=FakeTranscriber(),
+        insight_client=FakeInsightClient(),
+        environ={"FRAMEQ_OUTPUT_DIR": custom_output_dir.as_posix()},
+    )
+
+    history_path = tmp_path / "work" / "history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+
+    assert result["status"] == "completed"
+    assert len(history["items"]) == 1
+    item = history["items"][0]
+    assert item["url"] == "https://www.douyin.com/video/7524373044106677544"
+    assert item["status"] == "completed"
+    assert item["output_dir"] == custom_output_dir.as_posix()
+    assert item["video_path"] == (custom_output_dir / "demo.mp4").as_posix()
+    assert item["audio_path"] == (tmp_path / "work" / "demo.wav").as_posix()
+    assert item["transcript_path"] == (
+        custom_output_dir / "demo_transcript.txt"
+    ).as_posix()
+    assert item["insights_path"] == (custom_output_dir / "demo_insights.json").as_posix()
+    assert item["error"] is None
+    assert item["text_preview"] == "这是一段用于桌面联调的文字稿。"
+    assert item["insights_count"] == 1
+    assert item["created_at"].endswith("Z")
+    assert item["id"]
+
+
 def test_run_worker_once_builds_real_asr_with_project_model_cache(
     tmp_path: Path,
     monkeypatch,
