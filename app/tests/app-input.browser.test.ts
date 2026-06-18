@@ -69,6 +69,231 @@ afterAll(async () => {
 });
 
 describe("App browser input interactions", () => {
+  test("renders a macOS-style desktop utility frame around the waiting input state", async () => {
+    const target = await requestJson<CdpTarget>(
+      cdpPort,
+      `/json/new?${encodeURIComponent(appUrl)}`,
+      "PUT",
+    );
+    const page = await connectToCdp(target.webSocketDebuggerUrl);
+
+    try {
+      await page.send("Page.enable");
+      await page.send("Runtime.enable");
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 1180,
+        height: 760,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      const loaded = page.waitForEvent("Page.loadEventFired");
+      await page.send("Page.navigate", { url: appUrl });
+      await loaded;
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.app-shell')) && getComputedStyle(document.querySelector('.app-shell')).display === 'grid'",
+      );
+
+      const structure = await page.send<{ result: { value: Record<string, unknown> } }>(
+        "Runtime.evaluate",
+        {
+          expression: `({
+            hasDesktopWindow: Boolean(document.querySelector('.desktop-window')),
+            trafficLights: document.querySelectorAll('.traffic-light').length,
+            trafficLightButtons: Array.from(document.querySelectorAll('button.traffic-light')).map((button) => button.getAttribute('aria-label')),
+            hasToolbar: Boolean(document.querySelector('.app-toolbar')),
+            toolbarDragRegion: document.querySelector('.app-toolbar')?.hasAttribute('data-tauri-drag-region') ?? false,
+            innerDragRegions: [
+              '.toolbar-title',
+              '.app-mark',
+              '.toolbar-title .eyebrow',
+              '.toolbar-title h1'
+            ].every((selector) => document.querySelector(selector)?.hasAttribute('data-tauri-drag-region')),
+            toolbarStageBadges: document.querySelectorAll('.app-toolbar .stage-badge').length,
+            localBadges: document.querySelectorAll('.command-panel .local-badge').length,
+            showsLocalFirstCopy: document.querySelector('.command-panel')?.textContent.includes('本地优先') ?? false,
+            visibleUrlLabels: document.querySelectorAll('.command-panel .field-label').length,
+            videoUrlAriaLabel: document.querySelector('#video-url')?.getAttribute('aria-label') ?? '',
+            hasCommandPanel: Boolean(document.querySelector('.command-panel')),
+            hasResultWorkspace: Boolean(document.querySelector('.result-workspace')),
+            hasQuietPlaceholder: Boolean(document.querySelector('.result-placeholder')),
+            primaryButtonText: document.querySelector('.primary-button')?.textContent.trim() ?? '',
+            commandPanelWidth: Math.round(document.querySelector('.command-panel')?.getBoundingClientRect().width ?? 0),
+            desktopWindowWidth: Math.round(document.querySelector('.desktop-window')?.getBoundingClientRect().width ?? 0)
+          })`,
+          returnByValue: true,
+        },
+      );
+
+      expect(structure.result.value).toMatchObject({
+        hasDesktopWindow: true,
+        trafficLights: 3,
+        trafficLightButtons: ["关闭窗口", "最小化窗口", "最大化或还原窗口"],
+        hasToolbar: true,
+        toolbarDragRegion: true,
+        innerDragRegions: true,
+        toolbarStageBadges: 0,
+        localBadges: 0,
+        showsLocalFirstCopy: false,
+        visibleUrlLabels: 0,
+        videoUrlAriaLabel: "视频 URL",
+        hasCommandPanel: true,
+        hasResultWorkspace: false,
+        hasQuietPlaceholder: false,
+        primaryButtonText: "确认",
+      });
+      expect(structure.result.value.commandPanelWidth).toBeGreaterThanOrEqual(720);
+      expect(structure.result.value.commandPanelWidth).toBeLessThanOrEqual(820);
+      expect(structure.result.value.desktopWindowWidth).toBe(1180);
+    } finally {
+      page.close();
+    }
+  }, 10_000);
+
+  test("shows the processing workspace only after the URL is submitted", async () => {
+    const target = await requestJson<CdpTarget>(
+      cdpPort,
+      `/json/new?${encodeURIComponent(appUrl)}`,
+      "PUT",
+    );
+    const page = await connectToCdp(target.webSocketDebuggerUrl);
+
+    try {
+      await page.send("Page.enable");
+      await page.send("Runtime.enable");
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 1180,
+        height: 760,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      const loaded = page.waitForEvent("Page.loadEventFired");
+      await page.send("Page.navigate", { url: appUrl });
+      await loaded;
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.result-workspace')",
+      );
+
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('#video-url').focus()",
+      });
+      await page.send("Input.insertText", { text: pastedUrl });
+      await waitForRuntimeCondition(page, "!document.querySelector('.primary-button').disabled");
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('.primary-button').click()",
+      });
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.process-monitor')) && Boolean(document.querySelector('.result-workspace'))",
+      );
+
+      const afterSubmit = await page.send<{ result: { value: Record<string, unknown> } }>(
+        "Runtime.evaluate",
+        {
+          expression: `({
+            hasCommandPanel: Boolean(document.querySelector('.command-panel')),
+            hasProcessMonitor: Boolean(document.querySelector('.process-monitor')),
+            hasResultWorkspace: Boolean(document.querySelector('.result-workspace')),
+            monitorTitle: document.querySelector('.process-monitor h2')?.textContent ?? '',
+            toolbarStageBadges: document.querySelectorAll('.app-toolbar .stage-badge').length,
+            resultHeaderStageBadges: document.querySelectorAll('.result-header .stage-badge').length,
+            activeLayoutColumns: getComputedStyle(document.querySelector('.workspace')).gridTemplateColumns.trim().split(/\\s+/).length,
+            processBottom: Math.round(document.querySelector('.process-monitor').getBoundingClientRect().bottom),
+            resultTop: Math.round(document.querySelector('.result-workspace').getBoundingClientRect().top),
+            processWidth: Math.round(document.querySelector('.process-monitor').getBoundingClientRect().width),
+            resultWidth: Math.round(document.querySelector('.result-workspace').getBoundingClientRect().width)
+          })`,
+          returnByValue: true,
+        },
+      );
+
+      expect(afterSubmit.result.value).toMatchObject({
+        hasCommandPanel: false,
+        hasProcessMonitor: true,
+        hasResultWorkspace: true,
+        monitorTitle: "视频提取中",
+        toolbarStageBadges: 0,
+        resultHeaderStageBadges: 0,
+        activeLayoutColumns: 1,
+      });
+      expect(afterSubmit.result.value.resultTop).toBeGreaterThan(afterSubmit.result.value.processBottom);
+      expect(afterSubmit.result.value.resultWidth).toBe(afterSubmit.result.value.processWidth);
+    } finally {
+      page.close();
+    }
+  }, 10_000);
+
+  test("stacks the completed task monitor above compact result tiles", async () => {
+    const target = await requestJson<CdpTarget>(
+      cdpPort,
+      `/json/new?${encodeURIComponent(appUrl)}`,
+      "PUT",
+    );
+    const page = await connectToCdp(target.webSocketDebuggerUrl);
+
+    try {
+      await page.send("Page.enable");
+      await page.send("Runtime.enable");
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 1180,
+        height: 760,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      const loaded = page.waitForEvent("Page.loadEventFired");
+      await page.send("Page.navigate", { url: appUrl });
+      await loaded;
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.workspace'))");
+
+      const completedLayout = await page.send<{ result: { value: Record<string, unknown> } }>(
+        "Runtime.evaluate",
+        {
+          expression: `(() => {
+            const workspace = document.querySelector('.workspace');
+            workspace.className = 'workspace active-layout';
+            workspace.innerHTML =
+              '<div class="workflow-column">' +
+                '<section class="process-monitor process-pane completed" aria-label="处理进度">' +
+                  '<div class="process-heading"><div><p class="section-label">Task monitor</p><h2>文字稿完成</h2></div></div>' +
+                  '<div class="progress-summary"><div><span class="progress-value">100%</span><p>结果已可查看和导出</p></div><div class="progress-track"><span class="progress-fill completed"></span></div></div>' +
+                  '<div class="steps"><div class="step complete"><span class="step-dot"></span><span>视频提取中</span></div><div class="step complete"><span class="step-dot"></span><span>视频转译中</span></div><div class="step complete"><span class="step-dot"></span><span>话题点生成中</span></div></div>' +
+                  '<p class="status-line worker-message">文字稿和启发话题点已准备好。</p>' +
+                '</section>' +
+              '</div>' +
+              '<section class="result-workspace result-area" aria-label="结果总览">' +
+                '<div class="result-header"><div><p class="section-label">Results</p><h2>结果工作区</h2></div></div>' +
+                '<div class="result-grid">' +
+                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>启发话题点</span><small>12 个话题点</small><em>打开详情</em></button>' +
+                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>完整文字稿</span><small>3,016 字</small><em>打开详情</em></button>' +
+                '</div>' +
+              '</section>';
+            const processRect = document.querySelector('.process-monitor').getBoundingClientRect();
+            const resultRect = document.querySelector('.result-workspace').getBoundingClientRect();
+            const cardHeights = Array.from(document.querySelectorAll('.result-card')).map((card) =>
+              Math.round(card.getBoundingClientRect().height)
+            );
+            return {
+              activeLayoutColumns: getComputedStyle(workspace).gridTemplateColumns.trim().split(/\\s+/).length,
+              processBottom: Math.round(processRect.bottom),
+              resultTop: Math.round(resultRect.top),
+              maxResultCardHeight: Math.max(...cardHeights),
+            };
+          })()`,
+          returnByValue: true,
+        },
+      );
+
+      expect(completedLayout.result.value.activeLayoutColumns).toBe(1);
+      expect(completedLayout.result.value.resultTop).toBeGreaterThan(
+        completedLayout.result.value.processBottom,
+      );
+      expect(completedLayout.result.value.maxResultCardHeight).toBeLessThanOrEqual(132);
+    } finally {
+      page.close();
+    }
+  }, 10_000);
+
   test("keeps the app mounted after a valid Douyin URL is pasted", async () => {
     const target = await requestJson<CdpTarget>(
       cdpPort,
@@ -119,6 +344,58 @@ describe("App browser input interactions", () => {
       page.close();
     }
   });
+});
+
+describe("App desktop sheet structure", () => {
+  test("opens settings as a grouped macOS-style sheet", async () => {
+    const target = await requestJson<CdpTarget>(
+      cdpPort,
+      `/json/new?${encodeURIComponent(appUrl)}`,
+      "PUT",
+    );
+    const page = await connectToCdp(target.webSocketDebuggerUrl);
+
+    try {
+      await page.send("Page.enable");
+      await page.send("Runtime.enable");
+      const loaded = page.waitForEvent("Page.loadEventFired");
+      await page.send("Page.navigate", { url: appUrl });
+      await loaded;
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.app-shell')) && getComputedStyle(document.querySelector('.app-shell')).display === 'grid'",
+      );
+
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('button[aria-label=\"应用设置\"]').click()",
+      });
+      await waitForRuntimeCondition(page, "document.body.innerText.includes('应用设置')");
+
+      const sheet = await page.send<{ result: { value: Record<string, unknown> } }>(
+        "Runtime.evaluate",
+        {
+          expression: `({
+            hasSheetPanel: Boolean(document.querySelector('.sheet-panel.settings-sheet')),
+            groupedSections: document.querySelectorAll('.sheet-form-section').length,
+            hasPrivacyCallout: Boolean(document.querySelector('.privacy-callout')),
+            hasStickyFooter: Boolean(document.querySelector('.sheet-footer')),
+            hasScrollableBody: getComputedStyle(document.querySelector('.settings-form')).overflowY === 'auto'
+          })`,
+          returnByValue: true,
+        },
+      );
+
+      expect(sheet.result.value).toEqual({
+        hasSheetPanel: true,
+        groupedSections: 2,
+        hasPrivacyCallout: true,
+        hasStickyFooter: true,
+        hasScrollableBody: true,
+      });
+    } finally {
+      page.close();
+    }
+  }, 10_000);
 });
 
 describe("App result detail modal layout", () => {

@@ -93,9 +93,20 @@ The built executable is written to:
 app/src-tauri/target/release/app.exe
 ```
 
+Build unsigned internal installer resources and package:
+
+```powershell
+$env:FRAMEQ_PYTHON_STANDALONE_URL = "D:\archives\python-build-standalone.tar.zst"
+$env:FRAMEQ_FFMPEG_ARCHIVE_URL = "D:\archives\ffmpeg-release.zip"
+$env:FRAMEQ_SENSEVOICE_MODEL_DIR = "D:\path\to\SenseVoiceSmall-cache"
+powershell -ExecutionPolicy Bypass -File scripts\build-installer.ps1 -Target windows-x64
+```
+
+The Python and ffmpeg values may be URLs or local archive paths. Use `-Target windows-x64`, `-Target macos-arm64`, or `-Target macos-x64` on the matching build machine. The installer build copies runtime files into `app/src-tauri/resources/`, then runs `tauri build`. Large generated resources stay out of git.
+
 ## LLM Configuration
 
-Copy `.env.example` to `.env` and fill in local values:
+For development, copy `.env.example` to `.env` and fill in local values. In installed builds, the settings sheet writes the same keys to the app-local data `.env`.
 
 ```dotenv
 FRAMEQ_LLM_PROVIDER=openai_compatible
@@ -107,21 +118,17 @@ FRAMEQ_LLM_TIMEOUT_SECONDS=60
 
 When this is configured, transcript text is sent to the configured LLM service for InsightFlow topic generation. Without it, FrameQ still produces the transcript and enters `部分完成`, so you can retry later.
 
-## Real ASR
+## Release Runtime
 
-Real ASR is explicit opt-in during development:
+Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. SenseVoice Small is the only release-exposed ASR model in the first installer build.
 
-```powershell
-$env:FRAMEQ_ALLOW_REAL_ASR = "1"
-```
-
-Model files are cached under `models/` by default. Override with:
+Development CLI runs can still override the model cache with:
 
 ```powershell
 $env:FRAMEQ_MODEL_DIR = "D:\path\to\models"
 ```
 
-Large model weights are not packaged into the installer.
+The release installer may include the pinned SenseVoice Small model. LLM API keys and cloud model credentials are never packaged.
 
 ## Worker Smoke
 

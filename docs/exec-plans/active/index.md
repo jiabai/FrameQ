@@ -2,4 +2,4 @@
 
 | File | Focus |
 |------|-------|
-| _None_ | _No active plans_ |
+| `2026-06-18-installer-distribution-runtime-plan.md` | 普通用户安装即用：内置 runtime、SenseVoice Small、用户数据目录和首启配置 |

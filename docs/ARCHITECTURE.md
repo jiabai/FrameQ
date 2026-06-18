@@ -13,12 +13,13 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | 模块 | 责任 | 状态 |
 |------|------|------|
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
-| `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；由 `uv` 管理本项目 `.venv` | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；支持 Qwen3-ASR 与 SenseVoice 模型选择，真实 ASR 仍需显式 `FRAMEQ_ALLOW_REAL_ASR=1` |
+| `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认内置并启用 SenseVoice Small |
 | `worker/insightflow/` | 从参考实现复制并裁剪后的话题点生成模块 | 已初始化 splitter、prompt、JSON parser、generator；先用 LLM 做话题分段规划，再逐话题生成问题；planner 失败时 fallback 到直接生成 |
-| `models/` | 本地模型权重缓存，不提交仓库；可用 `FRAMEQ_MODEL_DIR` 覆盖 | 已由真实 Qwen3-ASR 探针创建 |
-| `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成；输出目录可由设置面板保存到 `.env` |
-| `work/` | 音频、中间文件、调试日志、`history.json` 历史任务索引和临时产物 | 运行时生成 |
-| `.env` | 本机运行配置和密钥，不提交仓库；`.env.example` 提供占位模板 | 已支持 InsightFlow LLM、输出目录、ASR 模型选择和 ASR 运行期开关；LLM/输出目录/ASR 模型配置可由桌面 UI 写入 |
+| `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe、SenseVoice Small 模型和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
+| app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | 分发态从内置模型资源初始化，运行期可写 |
+| app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
+| app-local data `work/` | 音频、中间文件、调试日志、`history.json` 历史任务索引和临时产物 | 运行时生成；由 `FRAMEQ_WORK_DIR` 指向 |
+| app-local data `.env` | 本机运行配置和密钥，不提交仓库；`.env.example`/resource `.env.template` 提供占位模板 | 已支持 InsightFlow LLM、输出目录和 ASR 模型选择；LLM/输出目录/ASR 模型配置可由桌面 UI 写入 |
 
 ## 模块关系
 
@@ -60,7 +61,7 @@ Desktop UI
 - UI 可以通过 Tauri command 读取/保存 LLM 配置，但不得回显完整 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、话题点和错误码。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
-- 用户可见输出默认写入 `outputs/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义目录；中间文件和历史索引写入 `work/`；模型缓存写入 `models/`。
+- 对外分发态的用户可见输出默认写入 app-local data `outputs/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义目录；中间文件和历史索引写入 app-local data `work/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。
 - 话题点失败不得阻断文字稿结果，客户端进入 `部分完成` 状态。
 

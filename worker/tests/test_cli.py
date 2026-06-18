@@ -379,6 +379,30 @@ def test_run_worker_once_uses_configured_output_dir_for_user_artifacts(
     assert (custom_output_dir / "demo_transcript.md").is_file()
 
 
+def test_run_worker_once_uses_configured_work_dir_for_audio_and_history(
+    tmp_path: Path,
+) -> None:
+    custom_work_dir = tmp_path / "app-data" / "work"
+    custom_output_dir = tmp_path / "app-data" / "outputs"
+
+    result = run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        transcriber=FakeTranscriber(),
+        insight_client=FakeInsightClient(),
+        environ={
+            "FRAMEQ_OUTPUT_DIR": custom_output_dir.as_posix(),
+            "FRAMEQ_WORK_DIR": custom_work_dir.as_posix(),
+        },
+    )
+
+    assert result["status"] == "completed"
+    assert result["audio_path"] == (custom_work_dir / "demo.wav").as_posix()
+    assert (custom_work_dir / "history.json").is_file()
+    assert not (tmp_path / "work" / "history.json").exists()
+
+
 def test_run_worker_once_records_history_with_actual_result_paths(
     tmp_path: Path,
 ) -> None:

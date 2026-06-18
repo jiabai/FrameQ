@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, State, Window};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, Window};
 
 const PROGRESS_EVENT_NAME: &str = "worker-progress";
 const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
@@ -16,12 +16,18 @@ const LLM_API_KEY_ENV: &str = "FRAMEQ_LLM_API_KEY";
 const LLM_MODEL_ENV: &str = "FRAMEQ_LLM_MODEL";
 const LLM_TIMEOUT_ENV: &str = "FRAMEQ_LLM_TIMEOUT_SECONDS";
 const OUTPUT_DIR_ENV: &str = "FRAMEQ_OUTPUT_DIR";
+const WORK_DIR_ENV: &str = "FRAMEQ_WORK_DIR";
+const MODEL_DIR_ENV: &str = "FRAMEQ_MODEL_DIR";
+const RESOURCE_DIR_ENV: &str = "FRAMEQ_RESOURCE_DIR";
+const USER_DATA_DIR_ENV: &str = "FRAMEQ_USER_DATA_DIR";
+const ALLOW_REAL_ASR_ENV: &str = "FRAMEQ_ALLOW_REAL_ASR";
+const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
 const ASR_MODEL_ENV: &str = "FRAMEQ_ASR_MODEL";
 const HISTORY_FILE_NAME: &str = "history.json";
 const DEFAULT_LLM_PROVIDER: &str = "openai_compatible";
 const DEFAULT_LLM_TIMEOUT_SECONDS: &str = "60";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
-const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL, "Qwen/Qwen3-ASR-0.6B"];
+const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL];
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ProcessVideoRequest {
@@ -111,6 +117,48 @@ struct HistoryItemView {
     insights: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+struct FirstRunStatusView {
+    missing_llm_config: bool,
+    user_data_dir: String,
+    default_output_dir: String,
+    bundled_model: String,
+    bundled_model_available: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct WindowPositionView {
+    x: i32,
+    y: i32,
+}
+
+#[derive(Debug, Clone)]
+struct RuntimePaths {
+    resource_dir: PathBuf,
+    user_data_dir: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+enum WorkerInvocation {
+    ProcessVideo(String),
+    RetryInsights(String),
+}
+
+#[derive(Debug, Clone)]
+struct WorkerCommandSpec {
+    program: PathBuf,
+    args: Vec<String>,
+    env: Vec<(String, String)>,
+    current_dir: PathBuf,
+}
+
+impl WorkerCommandSpec {
+    #[cfg(test)]
+    fn env_map(&self) -> HashMap<String, String> {
+        self.env.iter().cloned().collect()
+    }
+}
+
 #[derive(Default)]
 struct WorkerProcessState {
     current_pid: Mutex<Option<u32>>,
@@ -161,27 +209,155 @@ impl WorkerProcessState {
     }
 }
 
+fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
+    Ok(RuntimePaths {
+        resource_dir: app.path().resource_dir().map_err(|error| error.to_string())?,
+        user_data_dir: app
+            .path()
+            .app_local_data_dir()
+            .map_err(|error| error.to_string())?,
+    })
+}
+
+fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
+    fs::create_dir_all(paths.user_data_dir.join("outputs")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(paths.user_data_dir.join("work")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(paths.user_data_dir.join("models")).map_err(|error| error.to_string())?;
+    copy_bundled_models_if_needed(paths)
+}
+
+fn copy_bundled_models_if_needed(paths: &RuntimePaths) -> Result<(), String> {
+    let source = paths.resource_dir.join("models");
+    let target = paths.user_data_dir.join("models");
+    if !source.exists() {
+        return Ok(());
+    }
+
+    copy_dir_missing_only(&source, &target)
+}
+
+fn copy_dir_missing_only(source: &Path, target: &Path) -> Result<(), String> {
+    fs::create_dir_all(target).map_err(|error| error.to_string())?;
+    for entry in fs::read_dir(source).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_missing_only(&source_path, &target_path)?;
+        } else if !target_path.exists() {
+            fs::copy(&source_path, &target_path).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn build_worker_command_spec(
+    paths: &RuntimePaths,
+    invocation: WorkerInvocation,
+) -> Result<WorkerCommandSpec, String> {
+    let (flag, payload) = match invocation {
+        WorkerInvocation::ProcessVideo(payload) => ("--request-json", payload),
+        WorkerInvocation::RetryInsights(payload) => ("--retry-insights-json", payload),
+    };
+    let resource_bin_dir = paths.resource_dir.join("bin");
+    let path_value = prepend_to_path(&resource_bin_dir)?;
+
+    Ok(WorkerCommandSpec {
+        program: bundled_python_path(&paths.resource_dir),
+        args: vec![
+            "-m".to_string(),
+            "frameq_worker".to_string(),
+            flag.to_string(),
+            payload,
+        ],
+        env: vec![
+            (
+                "PYTHONPATH".to_string(),
+                path_to_env_string(paths.resource_dir.join("worker")),
+            ),
+            ("PYTHONUTF8".to_string(), "1".to_string()),
+            ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
+            ("PATH".to_string(), path_value),
+            (
+                OUTPUT_DIR_ENV.to_string(),
+                path_to_env_string(paths.user_data_dir.join("outputs")),
+            ),
+            (
+                WORK_DIR_ENV.to_string(),
+                path_to_env_string(paths.user_data_dir.join("work")),
+            ),
+            (
+                MODEL_DIR_ENV.to_string(),
+                path_to_env_string(paths.user_data_dir.join("models")),
+            ),
+            (
+                RESOURCE_DIR_ENV.to_string(),
+                path_to_env_string(&paths.resource_dir),
+            ),
+            (
+                USER_DATA_DIR_ENV.to_string(),
+                path_to_env_string(&paths.user_data_dir),
+            ),
+            (ALLOW_REAL_ASR_ENV.to_string(), "1".to_string()),
+            (MODELSCOPE_OFFLINE_ENV.to_string(), "1".to_string()),
+        ],
+        current_dir: paths.user_data_dir.clone(),
+    })
+}
+
+fn bundled_python_path(resource_dir: &Path) -> PathBuf {
+    if cfg!(windows) {
+        resource_dir.join("python").join("python.exe")
+    } else {
+        resource_dir.join("python").join("bin").join("python3")
+    }
+}
+
+fn prepend_to_path(path: &Path) -> Result<String, String> {
+    let existing_path = std::env::var_os("PATH").unwrap_or_default();
+    let paths = std::iter::once(path.to_path_buf()).chain(std::env::split_paths(&existing_path));
+    std::env::join_paths(paths)
+        .map(|value| value.to_string_lossy().to_string())
+        .map_err(|error| error.to_string())
+}
+
+fn path_to_env_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().to_string_lossy().replace('\\', "/")
+}
+
+fn spawn_worker_command(spec: WorkerCommandSpec) -> Result<std::process::Child, String> {
+    let mut command = Command::new(spec.program);
+    command
+        .args(spec.args)
+        .envs(spec.env)
+        .current_dir(spec.current_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    command.spawn().map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 async fn process_video(
     window: Window,
+    app: AppHandle,
     process_state: State<'_, Arc<WorkerProcessState>>,
     request: ProcessVideoRequest,
 ) -> Result<serde_json::Value, String> {
     let process_state = Arc::clone(process_state.inner());
-    run_blocking_worker_command(move || process_video_blocking(window, process_state, request))
+    run_blocking_worker_command(move || process_video_blocking(window, app, process_state, request))
         .await
 }
 
 fn process_video_blocking(
     window: Window,
+    app: AppHandle,
     process_state: Arc<WorkerProcessState>,
     mut request: ProcessVideoRequest,
 ) -> Result<serde_json::Value, String> {
-    let project_root = find_project_root()
-        .ok_or_else(|| "Could not find FrameQ project root for worker execution.".to_string())?;
-    if let Err(error) =
-        apply_configured_asr_model_to_request(&project_root.join(DOTENV_FILE_NAME), &mut request)
-    {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    if let Err(error) = apply_configured_asr_model_to_request(&env_path(&paths), &mut request) {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
             text: String::new(),
@@ -196,24 +372,10 @@ fn process_video_blocking(
         }));
     }
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
-    let worker_path = project_root.join("worker");
-    let mut child = Command::new("uv")
-        .args([
-            "run",
-            "python",
-            "-m",
-            "frameq_worker",
-            "--request-json",
-            &request_json,
-        ])
-        .env("PYTHONPATH", worker_path)
-        .env("PYTHONUTF8", "1")
-        .env("PYTHONIOENCODING", "utf-8")
-        .current_dir(project_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| error.to_string())?;
+    let mut child = spawn_worker_command(build_worker_command_spec(
+        &paths,
+        WorkerInvocation::ProcessVideo(request_json),
+    )?)?;
     let worker_pid = child.id();
     if !process_state.register(worker_pid) {
         let _ = terminate_process_tree(worker_pid);
@@ -300,38 +462,26 @@ fn process_video_blocking(
 
 #[tauri::command]
 async fn retry_insights(
+    app: AppHandle,
     process_state: State<'_, Arc<WorkerProcessState>>,
     request: RetryInsightsRequest,
 ) -> Result<serde_json::Value, String> {
     let process_state = Arc::clone(process_state.inner());
-    run_blocking_worker_command(move || retry_insights_blocking(process_state, request)).await
+    run_blocking_worker_command(move || retry_insights_blocking(app, process_state, request)).await
 }
 
 fn retry_insights_blocking(
+    app: AppHandle,
     process_state: Arc<WorkerProcessState>,
     request: RetryInsightsRequest,
 ) -> Result<serde_json::Value, String> {
-    let project_root = find_project_root()
-        .ok_or_else(|| "Could not find FrameQ project root for worker execution.".to_string())?;
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
-    let worker_path = project_root.join("worker");
-    let child = Command::new("uv")
-        .args([
-            "run",
-            "python",
-            "-m",
-            "frameq_worker",
-            "--retry-insights-json",
-            &request_json,
-        ])
-        .env("PYTHONPATH", worker_path)
-        .env("PYTHONUTF8", "1")
-        .env("PYTHONIOENCODING", "utf-8")
-        .current_dir(project_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| error.to_string())?;
+    let child = spawn_worker_command(build_worker_command_spec(
+        &paths,
+        WorkerInvocation::RetryInsights(request_json),
+    )?)?;
     let worker_pid = child.id();
     if !process_state.register(worker_pid) {
         let _ = terminate_process_tree(worker_pid);
@@ -450,24 +600,79 @@ fn cancel_process(
 }
 
 #[tauri::command]
-fn get_llm_config() -> Result<LlmConfigView, String> {
-    let project_root = find_project_root()
-        .ok_or_else(|| "Could not find FrameQ project root for configuration.".to_string())?;
-    load_llm_config_from_file(&project_root.join(DOTENV_FILE_NAME))
+fn get_llm_config(app: AppHandle) -> Result<LlmConfigView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    load_llm_config_from_file(&env_path(&paths))
 }
 
 #[tauri::command]
-fn save_llm_config(config: LlmConfigInput) -> Result<LlmConfigView, String> {
-    let project_root = find_project_root()
-        .ok_or_else(|| "Could not find FrameQ project root for configuration.".to_string())?;
-    save_llm_config_to_file(&project_root.join(DOTENV_FILE_NAME), config)
+fn save_llm_config(app: AppHandle, config: LlmConfigInput) -> Result<LlmConfigView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    save_llm_config_to_file(&env_path(&paths), config)
 }
 
 #[tauri::command]
-fn get_history() -> Result<Vec<HistoryItemView>, String> {
-    let project_root = find_project_root()
-        .ok_or_else(|| "Could not find FrameQ project root for history.".to_string())?;
-    load_history_from_project(&project_root)
+fn get_history(app: AppHandle) -> Result<Vec<HistoryItemView>, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    load_history_from_project(&paths.user_data_dir)
+}
+
+#[tauri::command]
+fn check_first_run(app: AppHandle) -> Result<FirstRunStatusView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    let config = load_llm_config_from_file(&env_path(&paths))?;
+    Ok(FirstRunStatusView {
+        missing_llm_config: !config.has_api_key,
+        user_data_dir: path_to_env_string(&paths.user_data_dir),
+        default_output_dir: path_to_env_string(paths.user_data_dir.join("outputs")),
+        bundled_model: DEFAULT_ASR_MODEL.to_string(),
+        bundled_model_available: paths.user_data_dir.join("models").exists()
+            || paths.resource_dir.join("models").exists(),
+    })
+}
+
+#[tauri::command]
+fn start_window_drag(window: Window) -> Result<(), String> {
+    window.start_dragging().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn close_window(window: Window) -> Result<(), String> {
+    window.close().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn minimize_window(window: Window) -> Result<(), String> {
+    window.minimize().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn toggle_maximize_window(window: Window) -> Result<(), String> {
+    if window.is_maximized().map_err(|error| error.to_string())? {
+        window.unmaximize().map_err(|error| error.to_string())
+    } else {
+        window.maximize().map_err(|error| error.to_string())
+    }
+}
+
+#[tauri::command]
+fn get_window_position(window: Window) -> Result<WindowPositionView, String> {
+    let position = window.outer_position().map_err(|error| error.to_string())?;
+    Ok(WindowPositionView {
+        x: position.x,
+        y: position.y,
+    })
+}
+
+#[tauri::command]
+fn set_window_position(window: Window, position: WindowPositionView) -> Result<(), String> {
+    window
+        .set_position(PhysicalPosition::new(position.x, position.y))
+        .map_err(|error| error.to_string())
 }
 
 fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
@@ -490,6 +695,10 @@ fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
             .get(LLM_API_KEY_ENV)
             .is_some_and(|value| !value.trim().is_empty()),
     })
+}
+
+fn env_path(paths: &RuntimePaths) -> PathBuf {
+    paths.user_data_dir.join(DOTENV_FILE_NAME)
 }
 
 fn save_llm_config_to_file(path: &Path, config: LlmConfigInput) -> Result<LlmConfigView, String> {
@@ -851,18 +1060,6 @@ fn terminate_process_tree(pid: u32) -> Result<(), String> {
     }
 }
 
-fn find_project_root() -> Option<PathBuf> {
-    let current_dir = std::env::current_dir().ok()?;
-    current_dir
-        .ancestors()
-        .find(|path| is_project_root(path))
-        .map(Path::to_path_buf)
-}
-
-fn is_project_root(path: &Path) -> bool {
-    path.join("pyproject.toml").exists() && path.join("worker").exists()
-}
-
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -880,7 +1077,14 @@ pub fn run() {
             cancel_process,
             get_llm_config,
             save_llm_config,
-            get_history
+            get_history,
+            check_first_run,
+            start_window_drag,
+            close_window,
+            minimize_window,
+            toggle_maximize_window,
+            get_window_position,
+            set_window_position
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -891,7 +1095,8 @@ mod tests {
     use super::{
         apply_configured_asr_model_to_request, load_history_from_project,
         load_llm_config_from_file, parse_worker_stdout, run_blocking_worker_command,
-        save_llm_config_to_file, LlmConfigInput, ProcessVideoRequest, WorkerProcessState,
+        save_llm_config_to_file, supported_asr_models, build_worker_command_spec, LlmConfigInput,
+        ProcessVideoRequest, RuntimePaths, WorkerInvocation, WorkerProcessState,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -958,6 +1163,66 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn worker_command_spec_uses_bundled_python_and_app_local_data() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
+            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
+        };
+        let request_json = r#"{"url":"https://www.douyin.com/video/7524373044106677544"}"#;
+
+        let spec = build_worker_command_spec(
+            &paths,
+            WorkerInvocation::ProcessVideo(request_json.to_string()),
+        )
+        .expect("build worker command spec");
+        let env = spec.env_map();
+
+        assert_eq!(
+            spec.program,
+            PathBuf::from("C:/Program Files/FrameQ/resources/python/python.exe")
+        );
+        assert_eq!(
+            spec.args,
+            vec![
+                "-m",
+                "frameq_worker",
+                "--request-json",
+                request_json,
+            ]
+        );
+        assert!(!spec.program.to_string_lossy().contains("uv"));
+        assert!(!spec.args.iter().any(|arg| arg == "uv"));
+        assert_eq!(
+            env.get("PYTHONPATH"),
+            Some(&"C:/Program Files/FrameQ/resources/worker".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_OUTPUT_DIR"),
+            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/outputs".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_WORK_DIR"),
+            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/work".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_MODEL_DIR"),
+            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/models".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_RESOURCE_DIR"),
+            Some(&"C:/Program Files/FrameQ/resources".to_string())
+        );
+        assert_eq!(env.get("FRAMEQ_ALLOW_REAL_ASR"), Some(&"1".to_string()));
+        assert_eq!(env.get("MODELSCOPE_OFFLINE"), Some(&"1".to_string()));
+        assert_eq!(spec.current_dir, paths.user_data_dir);
+    }
+
+    #[test]
+    fn release_supported_asr_models_only_exposes_bundled_sensevoice() {
+        assert_eq!(supported_asr_models(), vec!["iic/SenseVoiceSmall".to_string()]);
+    }
+
+    #[test]
     fn load_llm_config_hides_saved_api_key() {
         let env_path = temp_env_path("load_llm_config_hides_saved_api_key");
         fs::write(
@@ -983,13 +1248,7 @@ Some dependency logged to stdout
         assert_eq!(config.timeout_seconds, "42");
         assert_eq!(config.output_dir, "D:/FrameQ/results");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
-        assert_eq!(
-            config.supported_asr_models,
-            vec![
-                "iic/SenseVoiceSmall".to_string(),
-                "Qwen/Qwen3-ASR-0.6B".to_string(),
-            ]
-        );
+        assert_eq!(config.supported_asr_models, vec!["iic/SenseVoiceSmall"]);
         assert!(config.has_api_key);
     }
 
@@ -1015,7 +1274,7 @@ Some dependency logged to stdout
                 model: "new-model".to_string(),
                 timeout_seconds: "35".to_string(),
                 output_dir: "D:/FrameQ/custom-results".to_string(),
-                asr_model: "Qwen/Qwen3-ASR-0.6B".to_string(),
+                asr_model: "iic/SenseVoiceSmall".to_string(),
             },
         )
         .expect("save config");
@@ -1028,7 +1287,7 @@ Some dependency logged to stdout
         assert!(saved.contains("FRAMEQ_LLM_MODEL=new-model"));
         assert!(saved.contains("FRAMEQ_LLM_TIMEOUT_SECONDS=35"));
         assert!(saved.contains("FRAMEQ_OUTPUT_DIR=D:/FrameQ/custom-results"));
-        assert!(saved.contains("FRAMEQ_ASR_MODEL=Qwen/Qwen3-ASR-0.6B"));
+        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("OTHER_SETTING=keep-me"));
     }
 
@@ -1044,7 +1303,7 @@ Some dependency logged to stdout
                 model: "demo-model".to_string(),
                 timeout_seconds: "30".to_string(),
                 output_dir: "".to_string(),
-                asr_model: "Qwen/Qwen3-ASR-0.6B".to_string(),
+                asr_model: "iic/SenseVoiceSmall".to_string(),
             },
         )
         .expect_err("missing key should fail");
@@ -1084,19 +1343,19 @@ Some dependency logged to stdout
     #[test]
     fn apply_configured_asr_model_overrides_worker_request_model() {
         let env_path = temp_env_path("apply_configured_asr_model");
-        fs::write(&env_path, "FRAMEQ_ASR_MODEL=Qwen/Qwen3-ASR-0.6B").expect("write test env");
+        fs::write(&env_path, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall").expect("write test env");
         let mut request = ProcessVideoRequest {
             url: "https://www.douyin.com/video/7646789377271647540".to_string(),
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string(), "md".to_string()],
-            model: "Qwen/Qwen3-ASR-0.6B".to_string(),
+            model: "iic/SenseVoiceSmall".to_string(),
             generate_insights: true,
             insightflow_mode: "embedded".to_string(),
         };
 
         apply_configured_asr_model_to_request(&env_path, &mut request).expect("apply asr model");
 
-        assert_eq!(request.model, "Qwen/Qwen3-ASR-0.6B");
+        assert_eq!(request.model, "iic/SenseVoiceSmall");
     }
 
     #[test]

@@ -1,5 +1,9 @@
 # FrameQ AI Collaboration Rules
 
+## 对外分发补充规则
+
+- 对外分发版本允许内置明确版本的核心本地 ASR 模型（首版为 SenseVoice Small），但 LLM key、云端 LLM 模型和用户私有配置不得打进安装包；模型版本、缓存、降级路径和离线行为必须在产品和 worker 中显式处理。
+
 <!-- 由 vibe-coding-launcher 生成。详细规则请修改对应 docs/ 文件，并同步本入口地图。 -->
 
 ## 快速入口

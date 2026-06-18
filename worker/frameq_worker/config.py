@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 DOTENV_FILE_NAME = ".env"
+USER_DATA_DIR_ENV = "FRAMEQ_USER_DATA_DIR"
 
 
 def load_project_env(
@@ -12,8 +13,13 @@ def load_project_env(
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     base_env = dict(environ if environ is not None else os.environ)
-    dotenv_env = parse_dotenv(project_root / DOTENV_FILE_NAME)
-    merged_env = {**dotenv_env, **base_env}
+    project_dotenv_env = parse_dotenv(project_root / DOTENV_FILE_NAME)
+    user_data_dotenv_env: dict[str, str] = {}
+    user_data_dir = base_env.get(USER_DATA_DIR_ENV, "").strip()
+    if user_data_dir:
+        user_data_dotenv_env = parse_dotenv(Path(user_data_dir) / DOTENV_FILE_NAME)
+
+    merged_env = {**project_dotenv_env, **user_data_dotenv_env, **base_env}
     return {key: value for key, value in merged_env.items() if value != ""}
 
 

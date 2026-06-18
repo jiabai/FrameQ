@@ -13,8 +13,13 @@
     "windows": [
       {
         "title": "FrameQ",
-        "width": 800,
-        "height": 600
+        "width": 1180,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 640,
+        "center": true,
+        "decorations": false,
+        "shadow": true
       }
     ],
     "security": {
@@ -23,7 +28,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "dmg"],
+    "resources": [
+      "resources/python/**/*",
+      "resources/worker/**/*",
+      "resources/bin/**/*",
+      "resources/models/**/*",
+      "resources/pyproject.toml",
+      "resources/.env.template"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

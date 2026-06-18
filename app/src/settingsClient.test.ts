@@ -1,11 +1,37 @@
 import { describe, expect, test } from "vitest";
 import {
+  checkFirstRun,
   getLlmConfig,
   saveLlmConfig,
   type SettingsCommandRunner,
 } from "./settingsClient";
 
 describe("settings client", () => {
+  test("loads first-run status from Tauri", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return {
+        missing_llm_config: true,
+        user_data_dir: "C:\\Users\\demo\\AppData\\Local\\FrameQ",
+        default_output_dir: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs",
+        bundled_model: "iic/SenseVoiceSmall",
+        bundled_model_available: true,
+      };
+    };
+
+    const status = await checkFirstRun(runner);
+
+    expect(calls).toEqual([{ command: "check_first_run", args: {} }]);
+    expect(status).toEqual({
+      missingLlmConfig: true,
+      userDataDir: "C:\\Users\\demo\\AppData\\Local\\FrameQ",
+      defaultOutputDir: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs",
+      bundledModel: "iic/SenseVoiceSmall",
+      bundledModelAvailable: true,
+    });
+  });
+
   test("loads sanitized LLM config from Tauri", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: SettingsCommandRunner = async (command, args) => {
@@ -17,10 +43,7 @@ describe("settings client", () => {
         timeout_seconds: "30",
         output_dir: "D:\\FrameQ\\outputs",
         asr_model: "iic/SenseVoiceSmall",
-        supported_asr_models: [
-          "iic/SenseVoiceSmall",
-          "Qwen/Qwen3-ASR-0.6B",
-        ],
+        supported_asr_models: ["iic/SenseVoiceSmall"],
         has_api_key: true,
       };
     };
@@ -35,10 +58,7 @@ describe("settings client", () => {
       timeoutSeconds: "30",
       outputDir: "D:\\FrameQ\\outputs",
       asrModel: "iic/SenseVoiceSmall",
-      supportedAsrModels: [
-        "iic/SenseVoiceSmall",
-        "Qwen/Qwen3-ASR-0.6B",
-      ],
+      supportedAsrModels: ["iic/SenseVoiceSmall"],
       hasApiKey: true,
     });
   });
@@ -54,10 +74,7 @@ describe("settings client", () => {
         timeout_seconds: "30",
         output_dir: "D:\\FrameQ\\outputs",
         asr_model: "Qwen/Qwen3-ASR-0.6B",
-        supported_asr_models: [
-          "iic/SenseVoiceSmall",
-          "Qwen/Qwen3-ASR-0.6B",
-        ],
+        supported_asr_models: ["iic/SenseVoiceSmall"],
         has_api_key: true,
       };
     };

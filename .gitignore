@@ -10,6 +10,18 @@ venv/
 # Build outputs
 app/dist/
 app/src-tauri/target/
+app/src-tauri/resources/*
+!app/src-tauri/resources/.gitkeep
+!app/src-tauri/resources/.env.template
+!app/src-tauri/resources/pyproject.toml
+!app/src-tauri/resources/bin/
+!app/src-tauri/resources/bin/.gitkeep
+!app/src-tauri/resources/models/
+!app/src-tauri/resources/models/.gitkeep
+!app/src-tauri/resources/python/
+!app/src-tauri/resources/python/.gitkeep
+!app/src-tauri/resources/worker/
+!app/src-tauri/resources/worker/.gitkeep
 dist/
 target/
 
@@ -23,6 +35,7 @@ logs/*
 .env
 .env.*
 !.env.example
+!app/src-tauri/resources/.env.template
 *.local
 
 # Python cache

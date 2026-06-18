@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-06-18-macos-desktop-ui-upgrade-plan.md` | Upgraded the React desktop UI to a macOS-style utility shell |
 | `2026-06-18-topic-planner-insights-plan.md` | Added LLM topic planning before insight question generation |
 | `2026-06-18-insight-prompt-tuning-plan.md` | Aligned FrameQ insight prompts and generation parameters with the reference service |
 | `2026-06-17-sensevoice-modelscope-cache-plan.md` | Routed SenseVoice ModelScope cache into FrameQ's configured model directory |

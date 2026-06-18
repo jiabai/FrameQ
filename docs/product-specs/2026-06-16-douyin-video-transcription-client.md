@@ -84,3 +84,20 @@
 - After `yt-dlp` returns, the worker should prefer a video file whose stem matches the Douyin `/video/<id>` value, and use newest-file fallback only when the URL ID cannot be resolved or no matching local file exists.
 - When `work/<video_stem>.wav` already exists and `ffprobe` reports a valid audio stream, the worker should reuse it and skip `ffmpeg` extraction.
 - If the cached WAV is missing or invalid, the worker should extract audio from the validated video as before.
+
+## 2026-06-18 macOS Desktop UI Upgrade
+
+- FrameQ should present as a focused macOS-style desktop utility rather than a centered web form.
+- Tauri dev/build windows should disable the native titlebar/decorations and use the app's custom toolbar as the visible desktop chrome.
+- The custom toolbar must be functional chrome: empty toolbar space drags the Tauri window, and the red/yellow/green controls close, minimize, and maximize/restore the window.
+- The Tauri capability for the main window must grant the minimum required window commands for the custom chrome actions.
+- On Windows/WebView2, toolbar dragging should fall back to manual window position updates when native `start_dragging` is unreliable.
+- The first screen still prioritizes a single URL command input and the fixed primary action `确认`; it must not become a marketing or hero page.
+- The waiting-input screen should show only the `粘贴视频链接` card in the content area. The result workspace should appear only after the user submits a URL.
+- The shell should use a stable desktop app frame with a compact toolbar, app identity, current status, and icon actions for history, settings, and new task.
+- Processing states should appear as a task monitor with a clear stage timeline, worker progress message, percent indicator, and cancel action only while processing.
+- Completed and partial-completed states should show compact result tiles for `启发话题点` and `完整文字稿`, including status, small metadata, and clear open/retry affordances.
+- Failure states should explain the failed stage, cause, recovery action, and preserved artifacts when available.
+- Settings should appear as a macOS-style sheet with grouped fields, local privacy callout, scrollable body, and sticky actions.
+- History should preserve the existing behavior while using a denser desktop list treatment that remains scrollable inside the panel.
+- The visual system should use restrained neutral surfaces, subtle borders, low shadows, system typography, visible focus states, and semantic status colors.

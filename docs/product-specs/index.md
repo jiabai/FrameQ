@@ -1,5 +1,9 @@
 # Product Specs Index
 
+## Distribution Spec
+
+- `2026-06-18-installer-distribution.md` — 普通用户安装即用分发：内置 runtime、SenseVoice Small、用户数据目录和首启配置体验。
+
 <!-- 由 vibe-coding-launcher 生成。 -->
 
 ## Purpose

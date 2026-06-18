@@ -43,6 +43,7 @@ from frameq_worker.pipeline import run_asr_transcript_step, run_insight_generati
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 PROGRESS_EVENT_PREFIX = "FRAMEQ_PROGRESS "
 OUTPUT_DIR_ENV = "FRAMEQ_OUTPUT_DIR"
+WORK_DIR_ENV = "FRAMEQ_WORK_DIR"
 HISTORY_FILE_NAME = "history.json"
 ASR_MODEL_ENV = "FRAMEQ_ASR_MODEL"
 ProgressCallback = Callable[[dict[str, object]], None]
@@ -114,6 +115,7 @@ def run_worker_once(
         request=request,
         result=result,
         output_dir=resolve_output_dir(root, runtime_env),
+        work_dir=resolve_work_dir(root, runtime_env),
     )
     return result.to_dict()
 
@@ -263,7 +265,7 @@ def run_worker_pipeline(
     progress_callback: ProgressCallback | None = None,
 ) -> ProcessResult:
     output_dir = resolve_output_dir(project_root, environ)
-    work_dir = project_root / "work"
+    work_dir = resolve_work_dir(project_root, environ)
     video_id = extract_douyin_video_id(request.url)
 
     emit_progress(
@@ -442,6 +444,18 @@ def resolve_output_dir(project_root: Path, environ: dict[str, str] | None = None
     return project_root / output_dir
 
 
+def resolve_work_dir(project_root: Path, environ: dict[str, str] | None = None) -> Path:
+    env = environ if environ is not None else {}
+    configured_path = env.get(WORK_DIR_ENV, "").strip()
+    if not configured_path:
+        return project_root / "work"
+
+    work_dir = Path(configured_path)
+    if work_dir.is_absolute():
+        return work_dir
+    return project_root / work_dir
+
+
 def resolve_configured_asr_model(
     request_model: str,
     environ: dict[str, str] | None = None,
@@ -456,8 +470,10 @@ def append_history_item(
     request: ProcessRequest,
     result: ProcessResult,
     output_dir: Path,
+    work_dir: Path | None = None,
 ) -> None:
-    history_path = project_root / "work" / HISTORY_FILE_NAME
+    resolved_work_dir = work_dir or project_root / "work"
+    history_path = resolved_work_dir / HISTORY_FILE_NAME
     history_path.parent.mkdir(parents=True, exist_ok=True)
     history = load_history(history_path)
     items = history.setdefault("items", [])
