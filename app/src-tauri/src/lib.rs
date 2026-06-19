@@ -232,7 +232,10 @@ struct ModelDownloadProcessState {
 
 impl ModelDownloadProcessState {
     fn register(&self, pid: u32) -> bool {
-        let mut current_pid = self.current_pid.lock().expect("download state lock poisoned");
+        let mut current_pid = self
+            .current_pid
+            .lock()
+            .expect("download state lock poisoned");
         if current_pid.is_some() {
             return false;
         }
@@ -242,11 +245,17 @@ impl ModelDownloadProcessState {
     }
 
     fn current_pid(&self) -> Option<u32> {
-        *self.current_pid.lock().expect("download state lock poisoned")
+        *self
+            .current_pid
+            .lock()
+            .expect("download state lock poisoned")
     }
 
     fn clear_current(&self, pid: u32) {
-        let mut current_pid = self.current_pid.lock().expect("download state lock poisoned");
+        let mut current_pid = self
+            .current_pid
+            .lock()
+            .expect("download state lock poisoned");
         if *current_pid == Some(pid) {
             *current_pid = None;
         }
@@ -275,13 +284,36 @@ impl ModelDownloadProcessState {
 }
 
 fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
+    let raw_resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| error.to_string())?;
     Ok(RuntimePaths {
-        resource_dir: app.path().resource_dir().map_err(|error| error.to_string())?,
+        resource_dir: normalize_resource_dir(raw_resource_dir),
         user_data_dir: app
             .path()
             .app_local_data_dir()
             .map_err(|error| error.to_string())?,
     })
+}
+
+fn normalize_resource_dir(resource_dir: PathBuf) -> PathBuf {
+    if resource_dir_has_runtime(&resource_dir) {
+        return resource_dir;
+    }
+
+    let nested_resources = resource_dir.join("resources");
+    if resource_dir_has_runtime(&nested_resources) {
+        return nested_resources;
+    }
+
+    resource_dir
+}
+
+fn resource_dir_has_runtime(resource_dir: &Path) -> bool {
+    bundled_python_path(resource_dir).is_file()
+        || resource_dir.join("worker").is_dir()
+        || resource_dir.join("bin").is_dir()
 }
 
 fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
@@ -314,7 +346,9 @@ fn model_marker_exists(model_dir: &Path) -> bool {
         && sensevoice_model.is_file()
         && vad_model.is_file()
         && fs::read_to_string(marker)
-            .map(|content| content.contains(DEFAULT_ASR_MODEL) && content.contains(SENSEVOICE_VAD_MODEL))
+            .map(|content| {
+                content.contains(DEFAULT_ASR_MODEL) && content.contains(SENSEVOICE_VAD_MODEL)
+            })
             .unwrap_or(false)
 }
 
@@ -428,7 +462,11 @@ fn configured_env_value(config_values: &HashMap<String, String>, key: &str) -> O
         .get(key)
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .or_else(|| std::env::var(key).ok().filter(|value| !value.trim().is_empty()))
+        .or_else(|| {
+            std::env::var(key)
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
 }
 
 fn asr_model_source(config_values: &HashMap<String, String>) -> String {
@@ -787,10 +825,8 @@ async fn download_asr_model(
     download_state: State<'_, Arc<ModelDownloadProcessState>>,
 ) -> Result<AsrModelDownloadResult, String> {
     let download_state = Arc::clone(download_state.inner());
-    run_blocking_worker_command(move || {
-        download_asr_model_blocking(window, app, download_state)
-    })
-    .await
+    run_blocking_worker_command(move || download_asr_model_blocking(window, app, download_state))
+        .await
 }
 
 fn download_asr_model_blocking(
@@ -805,7 +841,8 @@ fn download_asr_model_blocking(
     }
 
     let config_values = parse_dotenv_values(&env_path(&paths))?;
-    let mut child = spawn_worker_command(build_model_download_command_spec(&paths, &config_values)?)?;
+    let mut child =
+        spawn_worker_command(build_model_download_command_spec(&paths, &config_values)?)?;
     let download_pid = child.id();
     if !download_state.register(download_pid) {
         let _ = terminate_process_tree(download_pid);
@@ -1376,12 +1413,12 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_configured_asr_model_to_request, load_history_from_project,
-        load_llm_config_from_file, parse_worker_output_or_fallback, parse_worker_stdout,
-        run_blocking_worker_command,
-        save_llm_config_to_file, supported_asr_models, build_model_download_command_spec,
-        build_worker_command_spec, asr_model_available, LlmConfigInput, ProcessVideoRequest,
-        ProcessVideoResult, RuntimePaths, WorkerError, WorkerInvocation, WorkerProcessState,
+        apply_configured_asr_model_to_request, asr_model_available,
+        build_model_download_command_spec, build_worker_command_spec, load_history_from_project,
+        load_llm_config_from_file, normalize_resource_dir, parse_worker_output_or_fallback,
+        parse_worker_stdout, run_blocking_worker_command, save_llm_config_to_file,
+        supported_asr_models, LlmConfigInput, ProcessVideoRequest, ProcessVideoResult,
+        RuntimePaths, WorkerError, WorkerInvocation, WorkerProcessState,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -1469,8 +1506,8 @@ Some dependency logged to stdout
             }),
         };
 
-        let parsed =
-            parse_worker_output_or_fallback(&output, fallback).expect("parse structured worker result");
+        let parsed = parse_worker_output_or_fallback(&output, fallback)
+            .expect("parse structured worker result");
 
         assert_eq!(parsed["status"], "failed");
         assert_eq!(parsed["error"]["code"], "ASR_MODEL_NOT_DOWNLOADED");
@@ -1498,12 +1535,7 @@ Some dependency logged to stdout
         );
         assert_eq!(
             spec.args,
-            vec![
-                "-m",
-                "frameq_worker",
-                "--request-json",
-                request_json,
-            ]
+            vec!["-m", "frameq_worker", "--request-json", request_json,]
         );
         assert!(!spec.program.to_string_lossy().contains("uv"));
         assert!(!spec.args.iter().any(|arg| arg == "uv"));
@@ -1533,8 +1565,22 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn normalize_resource_dir_uses_packaged_resources_subdir_when_tauri_returns_install_root() {
+        let root = temp_dir("normalize_resource_dir_uses_packaged_resources_subdir");
+        let install_root = root.join("FrameQ");
+        let resources = install_root.join("resources");
+        fs::create_dir_all(resources.join("python")).expect("create packaged python dir");
+        fs::write(resources.join("python").join("python.exe"), "python").expect("write python");
+
+        assert_eq!(normalize_resource_dir(install_root), resources);
+    }
+
+    #[test]
     fn release_supported_asr_models_only_exposes_bundled_sensevoice() {
-        assert_eq!(supported_asr_models(), vec!["iic/SenseVoiceSmall".to_string()]);
+        assert_eq!(
+            supported_asr_models(),
+            vec!["iic/SenseVoiceSmall".to_string()]
+        );
     }
 
     #[test]
@@ -1557,7 +1603,10 @@ Some dependency logged to stdout
 
         assert!(!asr_model_available(&paths));
 
-        let sensevoice_dir = model_root.join("models").join("iic").join("SenseVoiceSmall");
+        let sensevoice_dir = model_root
+            .join("models")
+            .join("iic")
+            .join("SenseVoiceSmall");
         let vad_dir = model_root
             .join("models")
             .join("iic")
@@ -1613,7 +1662,10 @@ Some dependency logged to stdout
             spec.program,
             PathBuf::from("C:/Program Files/FrameQ/resources/python/python.exe")
         );
-        assert_eq!(spec.args, vec!["-m", "frameq_worker", "--download-asr-model"]);
+        assert_eq!(
+            spec.args,
+            vec!["-m", "frameq_worker", "--download-asr-model"]
+        );
         assert!(!spec.program.to_string_lossy().contains("uv"));
         assert!(!spec.args.iter().any(|arg| arg == "uv"));
         assert_eq!(
