@@ -9,8 +9,18 @@ export const tokens = {
     line: "rgba(255, 255, 255, 0.16)",
     accent: "#5EEAD4",
     accentWarm: "#FACC15",
+    accentBlue: "#38BDF8",
+    accentGreen: "#34D399",
+    accentOrange: "#FB923C",
     background: "#0B1020",
     backgroundSoft: "#141B2D",
+    surface: "#F8FAFC",
+    surfaceWarm: "#FFF7ED",
+    surfaceBlue: "#E0F2FE",
+    surfaceGreen: "#DCFCE7",
+    productInk: "#111827",
+    productMuted: "#667085",
+    productLine: "#D7DEE8",
   },
   font: {
     family:
