@@ -26,6 +26,8 @@ let appUrl = "";
 let chromeProcess: ChildProcess | null = null;
 let chromeProfileDir = "";
 let cdpPort = 0;
+let chromeStderr = "";
+let chromeExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
 
 beforeAll(async () => {
   viteServer = await createServer({
@@ -34,10 +36,16 @@ beforeAll(async () => {
     plugins: [react()],
     clearScreen: false,
     logLevel: "error",
+    optimizeDeps: {
+      entries: [resolve(appRoot, "index.html")],
+    },
     server: {
       host: "127.0.0.1",
       port: 0,
       strictPort: false,
+      watch: {
+        ignored: ["**/src-tauri/**"],
+      },
     },
   });
   await viteServer.listen();
@@ -47,19 +55,33 @@ beforeAll(async () => {
 
   cdpPort = await findFreePort();
   chromeProfileDir = mkdtempSync(join(tmpdir(), "frameq-cdp-"));
-  chromeProcess = spawn(findChromeExecutable(), [
-    "--headless=new",
-    `--remote-debugging-port=${cdpPort}`,
-    `--user-data-dir=${chromeProfileDir}`,
-    "--disable-gpu",
-    "--no-first-run",
-    "about:blank",
-  ]);
-  await waitForChrome(cdpPort);
-});
+  chromeProcess = spawn(
+    findChromeExecutable(),
+    [
+      "--headless=new",
+      `--remote-debugging-port=${cdpPort}`,
+      `--user-data-dir=${chromeProfileDir}`,
+      "--no-sandbox",
+      "--disable-gpu",
+      "--disable-gpu-compositing",
+      "--disable-3d-apis",
+      "--disable-dev-shm-usage",
+      "--no-first-run",
+      "about:blank",
+    ],
+    { stdio: ["ignore", "ignore", "pipe"] },
+  );
+  chromeProcess.stderr?.on("data", (chunk) => {
+    chromeStderr = `${chromeStderr}${String(chunk)}`.slice(-4_000);
+  });
+  chromeProcess.on("exit", (code, signal) => {
+    chromeExit = { code, signal };
+  });
+  await waitForChrome(cdpPort, chromeDiagnostics);
+}, 30_000);
 
 afterAll(async () => {
-  chromeProcess?.kill();
+  await stopChromeProcess();
   if (viteServer) {
     await viteServer.close();
   }
@@ -572,13 +594,14 @@ async function connectToCdp(webSocketDebuggerUrl: string) {
     close: () => socket.close(),
     send: <T>(method: string, params: Record<string, unknown> = {}) => {
       const id = ++nextId;
-      socket.send(JSON.stringify({ id, method, params }));
-      return new Promise<T>((resolve, reject) => {
+      const response = new Promise<T>((resolve, reject) => {
         pending.set(id, {
           resolve: (value) => resolve(value as T),
           reject,
         });
       });
+      socket.send(JSON.stringify({ id, method, params }));
+      return response;
     },
     waitForEvent: (method: string) =>
       new Promise<CdpEvent>((resolve) => {
@@ -640,8 +663,19 @@ function requestJson<T>(port: number, path: string, method = "GET"): Promise<T> 
   });
 }
 
-async function waitForChrome(port: number) {
-  const deadline = Date.now() + 5_000;
+function chromeDiagnostics() {
+  const parts = [];
+  if (chromeExit) {
+    parts.push(`exit=${chromeExit.code ?? "null"}/${chromeExit.signal ?? "null"}`);
+  }
+  if (chromeStderr.trim()) {
+    parts.push(`stderr=${chromeStderr.trim()}`);
+  }
+  return parts.length ? ` ${parts.join(" ")}` : "";
+}
+
+async function waitForChrome(port: number, diagnostics = () => "") {
+  const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     try {
       await requestJson(port, "/json/version");
@@ -650,7 +684,22 @@ async function waitForChrome(port: number) {
       await delay(100);
     }
   }
-  throw new Error("Chrome DevTools endpoint did not become ready.");
+  throw new Error(`Chrome DevTools endpoint did not become ready.${diagnostics()}`);
+}
+
+async function stopChromeProcess() {
+  const process = chromeProcess;
+  if (!process) {
+    return;
+  }
+  if (process.exitCode !== null || process.signalCode !== null) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    process.once("exit", () => resolve());
+    process.kill();
+    setTimeout(resolve, 2_000);
+  });
 }
 
 function findFreePort(): Promise<number> {

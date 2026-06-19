@@ -2,14 +2,14 @@
 
 把一条抖音视频 URL，变成本地视频、完整文字稿和可继续思考的启发话题点。
 
-FrameQ 是一个本地优先的桌面客户端：它把视频下载、媒体校验、音频提取、Qwen3-ASR 转写和 InsightFlow 话题点生成串成一条清晰的工作流。你粘贴一个已授权处理的公开视频链接，剩下的交给本机 worker 完成。
+FrameQ 是一个本地优先的桌面客户端：它把视频下载、媒体校验、音频提取、SenseVoice Small 转写和 InsightFlow 话题点生成串成一条清晰的工作流。你粘贴一个已授权处理的公开视频链接，剩下的交给本机 worker 完成。
 
 ```text
 Douyin URL
   -> yt-dlp 下载公开视频
   -> ffprobe 校验媒体流
   -> ffmpeg 提取 16 kHz 单声道音频
-  -> Qwen3-ASR-0.6B 本地转写
+  -> SenseVoice Small 本地转写
   -> InsightFlow 生成启发话题点
   -> txt / md / json 文件导出
 ```
@@ -28,8 +28,9 @@ Douyin URL
 FrameQ 的 MVP 已经打通：
 
 - Tauri + React + TypeScript 桌面客户端。
-- Python worker 调用 `yt-dlp`、`ffprobe`、`ffmpeg` 和 `qwen-asr`。
-- 默认 ASR 模型：`Qwen/Qwen3-ASR-0.6B`。
+- Python worker 调用 `yt-dlp`、`ffprobe`、`ffmpeg` 和 SenseVoice/FunASR runtime。
+- 默认 ASR 模型：`iic/SenseVoiceSmall`。
+- Qwen ASR adapter 仍保留在代码里，但首版普通用户 release 不默认安装 `qwen-asr`，开发者需要时可用 `uv sync --dev --extra qwen` 安装可选依赖。
 - 内置裁剪后的 InsightFlow 话题点生成模块。
 - `.env` 驱动 OpenAI-compatible LLM 配置。
 - 支持导出：
@@ -49,7 +50,7 @@ flowchart LR
   Worker --> Downloader["yt-dlp"]
   Worker --> Probe["ffprobe"]
   Worker --> Audio["ffmpeg"]
-  Worker --> ASR["Qwen3-ASR-0.6B"]
+  Worker --> ASR["SenseVoice Small"]
   Worker --> Insight["Embedded InsightFlow"]
   Insight --> LLM["OpenAI-compatible LLM"]
   Worker --> Files["outputs/ and work/"]
@@ -98,11 +99,11 @@ Build unsigned internal installer resources and package:
 ```powershell
 $env:FRAMEQ_PYTHON_STANDALONE_URL = "D:\archives\python-build-standalone.tar.zst"
 $env:FRAMEQ_FFMPEG_ARCHIVE_URL = "D:\archives\ffmpeg-release.zip"
-$env:FRAMEQ_SENSEVOICE_MODEL_DIR = "D:\path\to\SenseVoiceSmall-cache"
 powershell -ExecutionPolicy Bypass -File scripts\build-installer.ps1 -Target windows-x64
 ```
 
 The Python and ffmpeg values may be URLs or local archive paths. Use `-Target windows-x64`, `-Target macos-arm64`, or `-Target macos-x64` on the matching build machine. The installer build copies runtime files into `app/src-tauri/resources/`, then runs `tauri build`. Large generated resources stay out of git.
+The installer does not bundle SenseVoice Small weights. It prunes non-runtime Python debug/cache/test/header artifacts, keeps `resources/models` out of the bundle, and installed builds guide the user through downloading SenseVoice Small into app-local data on first run. The default installer dependency set excludes Qwen-only packages; `qwen-asr` is an optional development extra. macOS targets map to explicit Tauri triples (`aarch64-apple-darwin` or `x86_64-apple-darwin`) instead of relying on the host default.
 
 ## LLM Configuration
 
@@ -120,7 +121,7 @@ When this is configured, transcript text is sent to the configured LLM service f
 
 ## Release Runtime
 
-Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. SenseVoice Small is the only release-exposed ASR model in the first installer build.
+Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. SenseVoice Small is the only release-exposed ASR model in the first installer build, but the model cache is downloaded on first run into app-local data.
 
 Development CLI runs can still override the model cache with:
 
@@ -128,7 +129,16 @@ Development CLI runs can still override the model cache with:
 $env:FRAMEQ_MODEL_DIR = "D:\path\to\models"
 ```
 
-The release installer may include the pinned SenseVoice Small model. LLM API keys and cloud model credentials are never packaged.
+Release operators can override the default ModelScope download source with:
+
+```powershell
+$env:FRAMEQ_ASR_MODEL_DOWNLOAD_URL = "https://cdn.example.com/frameq/sensevoice-small-cache.zip"
+$env:FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256 = "expected-sha256"
+$env:FRAMEQ_MODELSCOPE_ENDPOINT = "https://www.modelscope.cn"
+$env:FRAMEQ_SENSEVOICE_REVISION = "master"
+```
+
+The custom archive must contain `models/iic/SenseVoiceSmall/model.pt` and `models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch/model.pt`. LLM API keys and cloud model credentials are never packaged.
 
 ## Worker Smoke
 

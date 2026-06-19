@@ -4,7 +4,6 @@ param(
 
     [string]$PythonStandaloneUrl = $env:FRAMEQ_PYTHON_STANDALONE_URL,
     [string]$FfmpegArchiveUrl = $env:FRAMEQ_FFMPEG_ARCHIVE_URL,
-    [string]$SenseVoiceModelDir = $env:FRAMEQ_SENSEVOICE_MODEL_DIR,
     [switch]$SkipDownloads,
     [switch]$SkipTauriBuild
 )
@@ -16,11 +15,10 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $appRoot = Join-Path $repoRoot "app"
 $tauriRoot = Join-Path $appRoot "src-tauri"
 $resourcesRoot = Join-Path $tauriRoot "resources"
-$buildRoot = Join-Path $repoRoot "build" "installer-runtime" $Target
+$buildRoot = Join-Path (Join-Path (Join-Path $repoRoot "build") "installer-runtime") $Target
 $pythonRoot = Join-Path $resourcesRoot "python"
 $workerRoot = Join-Path $resourcesRoot "worker"
 $binRoot = Join-Path $resourcesRoot "bin"
-$modelsRoot = Join-Path $resourcesRoot "models"
 
 function Reset-Directory {
     param([string]$Path)
@@ -38,6 +36,27 @@ function Require-FileOrUrl {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         throw "$Name is required. Pass the parameter or set the matching FRAMEQ_* environment variable."
     }
+}
+
+function Assert-LastCommandSucceeded {
+    param([string]$Description)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Description failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Join-PathParts {
+    param(
+        [string]$Root,
+        [string[]]$Parts
+    )
+
+    $resolved = $Root
+    foreach ($part in $Parts) {
+        $resolved = Join-Path $resolved $part
+    }
+    return $resolved
 }
 
 function Download-Archive {
@@ -116,10 +135,16 @@ function Copy-DirectoryContents {
     Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
+function Ensure-GitKeep {
+    param([string]$Path)
+
+    [System.IO.File]::WriteAllText((Join-Path $Path ".gitkeep"), "`r`n")
+}
+
 function Find-PythonExecutable {
     param([string]$Root)
     $windowsPython = Join-Path $Root "python.exe"
-    $unixPython = Join-Path $Root "bin" "python3"
+    $unixPython = Join-Path (Join-Path $Root "bin") "python3"
     if (Test-Path $windowsPython) {
         return $windowsPython
     }
@@ -127,6 +152,16 @@ function Find-PythonExecutable {
         return $unixPython
     }
     throw "Could not find bundled Python executable under $Root"
+}
+
+function Resolve-TauriTargetTriple {
+    param([string]$Target)
+    switch ($Target) {
+        "windows-x64" { "x86_64-pc-windows-msvc" }
+        "macos-arm64" { "aarch64-apple-darwin" }
+        "macos-x64" { "x86_64-apple-darwin" }
+        default { throw "Unsupported target: $Target" }
+    }
 }
 
 function Copy-StandalonePythonFromArchive {
@@ -187,9 +222,38 @@ function Copy-FfmpegFromArchive {
     }
 }
 
+function Prune-BundledPythonRuntime {
+    param([string]$PythonRoot)
+
+    foreach ($pattern in @("*.pdb", "*.lib", "*.pyc", "*.pyo", "*.h", "*.hpp")) {
+        Get-ChildItem -LiteralPath $PythonRoot -Recurse -File -Filter $pattern -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+    }
+
+    foreach ($directoryName in @("__pycache__", "tests", "test")) {
+        Get-ChildItem -LiteralPath $PythonRoot -Recurse -Directory -Filter $directoryName -ErrorAction SilentlyContinue |
+            Sort-Object { $_.FullName.Length } -Descending |
+            Remove-Item -Recurse -Force
+    }
+
+    foreach ($relativePath in @(
+        @("Lib", "site-packages", "torch", "include"),
+        @("Lib", "site-packages", "torch", "share")
+    )) {
+        $path = Join-PathParts $PythonRoot $relativePath
+        if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Recurse -Force
+        }
+    }
+}
+
 Reset-Directory $resourcesRoot
 Reset-Directory $buildRoot
-New-Item -ItemType Directory -Force -Path $pythonRoot, $workerRoot, $binRoot, $modelsRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $pythonRoot, $workerRoot, $binRoot | Out-Null
+Ensure-GitKeep $resourcesRoot
+Ensure-GitKeep $pythonRoot
+Ensure-GitKeep $workerRoot
+Ensure-GitKeep $binRoot
 
 if (!$SkipDownloads) {
     Require-FileOrUrl $PythonStandaloneUrl "PythonStandaloneUrl"
@@ -205,26 +269,27 @@ Copy-DirectoryContents (Join-Path $repoRoot "worker") $workerRoot
 Copy-Item -LiteralPath (Join-Path $repoRoot "pyproject.toml") -Destination (Join-Path $resourcesRoot "pyproject.toml") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot ".env.example") -Destination (Join-Path $resourcesRoot ".env.template") -Force
 
-if ([string]::IsNullOrWhiteSpace($SenseVoiceModelDir)) {
-    Write-Host "FRAMEQ_SENSEVOICE_MODEL_DIR not set. Model resources will be empty; clean-machine ASR smoke will fail until models are copied."
-} else {
-    Copy-DirectoryContents $SenseVoiceModelDir $modelsRoot
-    "model=iic/SenseVoiceSmall`ntarget=$Target`nbuilt_at=$(Get-Date -Format o)" |
-        Set-Content -Encoding UTF8 -Path (Join-Path $modelsRoot "MODEL_VERSION.txt")
-}
-
 $pythonExe = Find-PythonExecutable $pythonRoot
 $requirementsPath = Join-Path $buildRoot "requirements.txt"
 uv export --no-dev --format requirements-txt --output-file $requirementsPath
+Assert-LastCommandSucceeded "Export Python requirements"
 & $pythonExe -m ensurepip --upgrade
+Assert-LastCommandSucceeded "Install bundled Python pip"
 & $pythonExe -m pip install --upgrade pip
+Assert-LastCommandSucceeded "Upgrade bundled Python pip"
 & $pythonExe -m pip install -r $requirementsPath
+Assert-LastCommandSucceeded "Install bundled Python dependencies"
+Prune-BundledPythonRuntime $pythonRoot
 $env:PYTHONPATH = $workerRoot
 & $pythonExe -c "import funasr, modelscope, yt_dlp; import frameq_worker"
+Assert-LastCommandSucceeded "Python runtime smoke test"
 
 if (!$SkipTauriBuild) {
+    $tauriTarget = Resolve-TauriTargetTriple $Target
     npm --prefix $appRoot install
-    npm --prefix $appRoot run tauri -- build
+    Assert-LastCommandSucceeded "Install app dependencies"
+    npm --prefix $appRoot run tauri -- build --target $tauriTarget
+    Assert-LastCommandSucceeded "Build Tauri installer"
 }
 
 Write-Host "FrameQ installer resources prepared at $resourcesRoot"

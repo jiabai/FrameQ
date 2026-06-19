@@ -13,10 +13,10 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | 模块 | 责任 | 状态 |
 |------|------|------|
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
-| `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认内置并启用 SenseVoice Small |
+| `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认启用 SenseVoice Small，但模型缓存由首启下载 |
 | `worker/insightflow/` | 从参考实现复制并裁剪后的话题点生成模块 | 已初始化 splitter、prompt、JSON parser、generator；先用 LLM 做话题分段规划，再逐话题生成问题；planner 失败时 fallback 到直接生成 |
-| `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe、SenseVoice Small 模型和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
-| app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | 分发态从内置模型资源初始化，运行期可写 |
+| `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
+| app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | 首启引导从 ModelScope 或自定义归档源下载 SenseVoice Small 与 VAD 缓存，运行期可写 |
 | app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
 | app-local data `work/` | 音频、中间文件、调试日志、`history.json` 历史任务索引和临时产物 | 运行时生成；由 `FRAMEQ_WORK_DIR` 指向 |
 | app-local data `.env` | 本机运行配置和密钥，不提交仓库；`.env.example`/resource `.env.template` 提供占位模板 | 已支持 InsightFlow LLM、输出目录和 ASR 模型选择；LLM/输出目录/ASR 模型配置可由桌面 UI 写入 |
@@ -50,6 +50,7 @@ Desktop UI
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
 - `worker/frameq_worker/asr.py`：ASR model registry、Qwen / SenseVoice adapter、模型缓存目录解析和 transcript `.txt/.md` 写出。
+- `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
 - `worker/frameq_worker/config.py`：项目根 `.env` 加载和环境变量合并。
 - `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client，由 `FRAMEQ_LLM_*` 配置创建；话题点生成默认使用 `temperature=0.7`。
 - `worker/frameq_worker/pipeline.py`：worker 分阶段 pipeline 与 `ProcessResult` 映射。

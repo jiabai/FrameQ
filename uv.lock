@@ -692,9 +692,14 @@ source = { virtual = "." }
 dependencies = [
     { name = "funasr" },
     { name = "modelscope" },
-    { name = "qwen-asr" },
+    { name = "torch" },
     { name = "torchaudio" },
     { name = "yt-dlp" },
+]
+
+[package.optional-dependencies]
+qwen = [
+    { name = "qwen-asr" },
 ]
 
 [package.dev-dependencies]
@@ -707,10 +712,12 @@ dev = [
 requires-dist = [
     { name = "funasr", specifier = ">=1.2.7" },
     { name = "modelscope", specifier = ">=1.37.1" },
-    { name = "qwen-asr", specifier = ">=0.0.6" },
+    { name = "qwen-asr", marker = "extra == 'qwen'", specifier = ">=0.0.6" },
+    { name = "torch", specifier = ">=2.10.0" },
     { name = "torchaudio", specifier = ">=2.10.0" },
     { name = "yt-dlp", specifier = ">=2026.6.9" },
 ]
+provides-extras = ["qwen"]
 
 [package.metadata.requires-dev]
 dev = [

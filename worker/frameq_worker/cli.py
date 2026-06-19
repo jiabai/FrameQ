@@ -31,6 +31,11 @@ from frameq_worker.media import (
     probe_media_file,
     run_command,
 )
+from frameq_worker.model_download import (
+    ModelDownloadError,
+    download_asr_model_cache,
+    validate_asr_model_cache,
+)
 from frameq_worker.models import (
     JobStage,
     ProcessRequest,
@@ -42,10 +47,16 @@ from frameq_worker.pipeline import run_asr_transcript_step, run_insight_generati
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 PROGRESS_EVENT_PREFIX = "FRAMEQ_PROGRESS "
+MODEL_DOWNLOAD_EVENT_PREFIX = "FRAMEQ_MODEL_DOWNLOAD "
 OUTPUT_DIR_ENV = "FRAMEQ_OUTPUT_DIR"
 WORK_DIR_ENV = "FRAMEQ_WORK_DIR"
 HISTORY_FILE_NAME = "history.json"
 ASR_MODEL_ENV = "FRAMEQ_ASR_MODEL"
+MODEL_DIR_ENV = "FRAMEQ_MODEL_DIR"
+MODEL_DOWNLOAD_URL_ENV = "FRAMEQ_ASR_MODEL_DOWNLOAD_URL"
+MODEL_DOWNLOAD_SHA256_ENV = "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256"
+MODELSCOPE_ENDPOINT_ENV = "FRAMEQ_MODELSCOPE_ENDPOINT"
+SENSEVOICE_REVISION_ENV = "FRAMEQ_SENSEVOICE_REVISION"
 ProgressCallback = Callable[[dict[str, object]], None]
 
 
@@ -359,6 +370,14 @@ def run_worker_pipeline(
             58,
         )
         model_cache_dir = resolve_model_cache_dir(project_root=project_root, environ=environ)
+        if not validate_asr_model_cache(model_cache_dir):
+            return failed_result(
+                code="ASR_MODEL_NOT_DOWNLOADED",
+                message="SenseVoice Small model is not downloaded yet.",
+                stage=JobStage.VIDEO_TRANSCRIBING,
+                video_path=video_path,
+                audio_path=audio_path,
+            )
         try:
             transcriber = build_asr_transcriber(
                 model_name=request.model,
@@ -623,8 +642,61 @@ def render_progress_event(event: dict[str, object]) -> str:
     return f"{PROGRESS_EVENT_PREFIX}{json.dumps(event, ensure_ascii=True)}"
 
 
+def render_model_download_event(event: dict[str, object]) -> str:
+    return f"{MODEL_DOWNLOAD_EVENT_PREFIX}{json.dumps(event, ensure_ascii=True)}"
+
+
 def print_progress_event(event: dict[str, object]) -> None:
     print(render_progress_event(event), file=sys.stderr, flush=True)
+
+
+def print_model_download_event(event: dict[str, object]) -> None:
+    print(render_model_download_event(event), file=sys.stderr, flush=True)
+
+
+def run_asr_model_download_once(
+    project_root: Path | None = None,
+    environ: dict[str, str] | None = None,
+    progress_callback: ProgressCallback | None = None,
+) -> dict[str, object]:
+    root = project_root or Path.cwd()
+    runtime_env = load_project_env(root, environ)
+    cache_dir = Path(runtime_env.get(MODEL_DIR_ENV, str(root / "models")))
+
+    try:
+        download_asr_model_cache(
+            cache_dir=cache_dir,
+            download_url=_optional_env(runtime_env, MODEL_DOWNLOAD_URL_ENV),
+            expected_sha256=_optional_env(runtime_env, MODEL_DOWNLOAD_SHA256_ENV),
+            revision=_optional_env(runtime_env, SENSEVOICE_REVISION_ENV),
+            endpoint=_optional_env(runtime_env, MODELSCOPE_ENDPOINT_ENV),
+            progress_callback=progress_callback,
+        )
+    except ModelDownloadError as exc:
+        return {
+            "status": "failed",
+            "code": exc.code,
+            "message": exc.message,
+            "model_dir": cache_dir.as_posix(),
+        }
+    except Exception as exc:  # noqa: BLE001 - wraps third-party downloader failures.
+        return {
+            "status": "failed",
+            "code": "ASR_MODEL_DOWNLOAD_FAILED",
+            "message": str(exc),
+            "model_dir": cache_dir.as_posix(),
+        }
+
+    return {
+        "status": "completed",
+        "model": DEFAULT_ASR_MODEL,
+        "model_dir": cache_dir.as_posix(),
+    }
+
+
+def _optional_env(env: dict[str, str], key: str) -> str | None:
+    value = env.get(key, "").strip()
+    return value or None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -635,9 +707,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--retry-insights-json",
         help="Serialized RetryInsightsRequest payload.",
     )
+    request_group.add_argument(
+        "--download-asr-model",
+        action="store_true",
+        help="Download the release ASR model cache into FRAMEQ_MODEL_DIR.",
+    )
     args = parser.parse_args(argv)
 
-    if args.retry_insights_json:
+    is_model_download = args.download_asr_model
+    if is_model_download:
+        result = run_asr_model_download_once(
+            project_root=Path.cwd(),
+            progress_callback=print_model_download_event,
+        )
+    elif args.retry_insights_json:
         result = retry_insights_once(args.retry_insights_json, project_root=Path.cwd())
     else:
         result = run_worker_once(
@@ -646,4 +729,4 @@ def main(argv: Sequence[str] | None = None) -> int:
             progress_callback=print_progress_event,
         )
     print(render_result_json(result))
-    return 0
+    return 1 if is_model_download and result.get("status") == "failed" else 0

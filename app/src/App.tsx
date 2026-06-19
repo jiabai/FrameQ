@@ -1,4 +1,5 @@
 import { FormEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { listen, type Event } from "@tauri-apps/api/event";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -39,8 +40,19 @@ import {
   type WorkflowState,
 } from "./workflow";
 import { cancelProcess, processVideo, retryInsights } from "./workerClient";
-import { checkFirstRun, getLlmConfig, saveLlmConfig, type LlmConfigDraft } from "./settingsClient";
+import {
+  ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
+  cancelAsrModelDownload,
+  checkFirstRun,
+  downloadAsrModel,
+  getLlmConfig,
+  saveLlmConfig,
+  type AsrModelDownloadProgress,
+  type FirstRunStatus,
+  type LlmConfigDraft,
+} from "./settingsClient";
 import { getHistory, historyItemToWorkerResult, type HistoryItem } from "./historyClient";
+import { shouldApplyModelDownloadUpdate } from "./modelDownloadState";
 import {
   calculateDraggedWindowPosition,
   closeWindow,
@@ -64,7 +76,7 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
   },
   video_transcribing: {
     title: "视频转译中",
-    body: "正在使用内置 SenseVoice Small 识别语音内容。",
+    body: "正在使用本地 SenseVoice Small 缓存识别语音内容。",
   },
   insights_generating: {
     title: "话题点生成中",
@@ -95,6 +107,20 @@ const defaultAsrModels = ["iic/SenseVoiceSmall"];
 const asrModelLabels: Record<string, string> = {
   "Qwen/Qwen3-ASR-0.6B": "Qwen3-ASR 0.6B",
   "iic/SenseVoiceSmall": "SenseVoice Small",
+};
+
+type AsrModelStatus = {
+  model: string;
+  modelDir: string;
+  available: boolean;
+  source: string;
+};
+
+const defaultAsrModelStatus: AsrModelStatus = {
+  model: "iic/SenseVoiceSmall",
+  modelDir: "",
+  available: false,
+  source: "modelscope",
 };
 
 const stageSummary: Record<WorkflowState["stage"], string> = {
@@ -136,6 +162,36 @@ function getResultMeta(card: ResultCard, workflow: WorkflowState): string {
   return `${workflow.text.length.toLocaleString("zh-CN")} 字`;
 }
 
+function parseAsrModelDownloadProgress(payload: unknown): AsrModelDownloadProgress | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const event = payload as Partial<AsrModelDownloadProgress>;
+  if (
+    typeof event.status !== "string" ||
+    typeof event.message !== "string" ||
+    typeof event.progress !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    status: event.status,
+    message: event.message,
+    progress: Math.max(0, Math.min(100, event.progress)),
+    currentFile:
+      typeof event.currentFile === "string"
+        ? event.currentFile
+        : typeof (event as { current_file?: unknown }).current_file === "string"
+          ? (event as { current_file: string }).current_file
+          : undefined,
+  };
+}
+
+function asrModelSourceLabel(source: string): string {
+  return source === "custom_url" ? "自定义下载源" : "ModelScope";
+}
+
 function App() {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
@@ -155,17 +211,30 @@ function App() {
   const [settingsNotice, setSettingsNotice] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [modelGuideOpen, setModelGuideOpen] = useState(false);
+  const [asrModelStatus, setAsrModelStatus] = useState<AsrModelStatus>(defaultAsrModelStatus);
+  const [modelDownloadProgress, setModelDownloadProgress] = useState<AsrModelDownloadProgress>({
+    status: "idle",
+    message: "",
+    progress: 0,
+  });
+  const [modelDownloadNotice, setModelDownloadNotice] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [historyNotice, setHistoryNotice] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
   const operationIdRef = useRef(0);
+  const modelDownloadOperationIdRef = useRef(0);
+  const cancelledModelDownloadOperationIdRef = useRef<number | null>(null);
   const windowDragSessionRef = useRef<WindowDragSession | null>(null);
   const queuedWindowPositionRef = useRef<WindowPosition | null>(null);
   const windowMoveInFlightRef = useRef(false);
   const canSubmit = canSubmitUrl(workflow.url);
   const progressSteps = useMemo(() => getProgressSteps(workflow), [workflow]);
   const resultCards = useMemo(() => getResultCards(workflow), [workflow]);
+  const modelDownloadActive = ["started", "downloading", "extracting"].includes(
+    modelDownloadProgress.status,
+  );
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -185,12 +254,17 @@ function App() {
 
       if (settingsOpen) {
         setSettingsOpen(false);
+        return;
+      }
+
+      if (modelGuideOpen && !modelDownloadActive) {
+        setModelGuideOpen(false);
       }
     }
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [detailTab, historyOpen, settingsOpen]);
+  }, [detailTab, historyOpen, settingsOpen, modelGuideOpen, modelDownloadActive]);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,7 +272,20 @@ function App() {
     async function openFirstRunSettingsIfNeeded() {
       try {
         const firstRun = await checkFirstRun();
-        if (cancelled || !firstRun.missingLlmConfig) {
+        if (cancelled) {
+          return;
+        }
+
+        updateAsrModelStatus(firstRun);
+        if (!firstRun.asrModelAvailable) {
+          setModelGuideOpen(true);
+          setModelDownloadNotice(
+            `首次使用前需要下载 SenseVoice Small。模型会保存到：${firstRun.asrModelDir}`,
+          );
+          return;
+        }
+
+        if (!firstRun.missingLlmConfig) {
           return;
         }
 
@@ -216,6 +303,131 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  function updateAsrModelStatus(status: FirstRunStatus) {
+    setAsrModelStatus({
+      model: status.asrModel,
+      modelDir: status.asrModelDir,
+      available: status.asrModelAvailable,
+      source: status.asrModelSource,
+    });
+  }
+
+  async function refreshAsrModelStatus(): Promise<FirstRunStatus> {
+    const status = await checkFirstRun();
+    updateAsrModelStatus(status);
+    return status;
+  }
+
+  async function startAsrModelDownload() {
+    if (modelDownloadActive) {
+      return;
+    }
+
+    const operationId = modelDownloadOperationIdRef.current + 1;
+    modelDownloadOperationIdRef.current = operationId;
+    cancelledModelDownloadOperationIdRef.current = null;
+    setModelGuideOpen(true);
+    setModelDownloadNotice("");
+    setModelDownloadProgress({
+      status: "started",
+      message: "正在准备下载 SenseVoice Small。",
+      progress: 0,
+    });
+
+    let unlisten: (() => void) | null = null;
+    try {
+      unlisten = await listen(ASR_MODEL_DOWNLOAD_PROGRESS_EVENT, (event: Event<unknown>) => {
+        const progress = parseAsrModelDownloadProgress(event.payload);
+        if (
+          progress &&
+          shouldApplyModelDownloadUpdate({
+            operationId,
+            activeOperationId: modelDownloadOperationIdRef.current,
+            cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
+          })
+        ) {
+          setModelDownloadProgress(progress);
+        }
+      });
+
+      await downloadAsrModel();
+      if (
+        !shouldApplyModelDownloadUpdate({
+          operationId,
+          activeOperationId: modelDownloadOperationIdRef.current,
+          cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
+        })
+      ) {
+        return;
+      }
+      const status = await refreshAsrModelStatus();
+      if (
+        !shouldApplyModelDownloadUpdate({
+          operationId,
+          activeOperationId: modelDownloadOperationIdRef.current,
+          cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
+        })
+      ) {
+        return;
+      }
+      if (status.asrModelAvailable) {
+        setModelDownloadProgress({
+          status: "completed",
+          message: "SenseVoice Small 已下载完成。",
+          progress: 100,
+        });
+        setModelDownloadNotice("ASR 模型已可用，后续转写会使用本地缓存。");
+      } else {
+        setModelDownloadProgress((current) => ({
+          status: "failed",
+          message: "模型下载未完成。",
+          progress: current.progress,
+        }));
+        setModelDownloadNotice("模型下载未完成，请稍后重试。");
+      }
+    } catch (error) {
+      if (
+        !shouldApplyModelDownloadUpdate({
+          operationId,
+          activeOperationId: modelDownloadOperationIdRef.current,
+          cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
+        })
+      ) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      setModelDownloadProgress((current) => ({
+        status: "failed",
+        message,
+        progress: current.progress,
+      }));
+      setModelDownloadNotice(`下载失败：${message}`);
+    } finally {
+      if (unlisten) {
+        unlisten();
+      }
+    }
+  }
+
+  async function cancelCurrentAsrModelDownload() {
+    try {
+      const operationId = modelDownloadOperationIdRef.current;
+      const result = await cancelAsrModelDownload();
+      if (result.cancelled) {
+        cancelledModelDownloadOperationIdRef.current = operationId;
+      }
+      setModelDownloadProgress((current) => ({
+        status: result.cancelled ? "cancelled" : current.status,
+        message: result.cancelled ? "模型下载已取消。" : result.error || "当前没有正在下载的模型。",
+        progress: result.cancelled ? 0 : current.progress,
+      }));
+      setModelDownloadNotice(result.cancelled ? "模型下载已取消。" : result.error || "当前没有正在下载的模型。");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setModelDownloadNotice(`取消失败：${message}`);
+    }
+  }
 
   async function submitUrl(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -715,6 +927,101 @@ function App() {
         </section>
       </section>
 
+      {modelGuideOpen ? (
+        <div
+          className="modal-backdrop sheet-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!modelDownloadActive) {
+              setModelGuideOpen(false);
+            }
+          }}
+        >
+          <section
+            className="sheet-panel detail-modal model-guide-modal model-guide-sheet"
+            aria-label="ASR 模型下载"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="modal-header sheet-header">
+              <div>
+                <p className="section-label">ASR model</p>
+                <h2>下载 SenseVoice Small</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setModelGuideOpen(false)}
+                aria-label="关闭 ASR 模型下载"
+                disabled={modelDownloadActive}
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="model-guide-content">
+              <p className="settings-warning privacy-callout">
+                <ShieldCheck size={16} />
+                <span>
+                  ASR 在本机运行，首次使用前需要下载 SenseVoice Small 和 VAD 模型缓存。下载完成后可离线转写。
+                </span>
+              </p>
+              <div className="model-status-card">
+                <div>
+                  <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
+                    {asrModelStatus.available ? "已就绪" : "需要下载"}
+                  </span>
+                  <strong>{asrModelLabels[asrModelStatus.model] ?? asrModelStatus.model}</strong>
+                  <small>来源：{asrModelSourceLabel(asrModelStatus.source)}</small>
+                  <small>保存位置：{asrModelStatus.modelDir || "app-local data/models"}</small>
+                </div>
+              </div>
+              <div className="model-download-progress">
+                <div className="progress-summary compact">
+                  <div>
+                    <span className="progress-value">{formatProgressPercent(modelDownloadProgress.progress)}</span>
+                    <p>{modelDownloadProgress.message || "等待开始下载。"}</p>
+                  </div>
+                  <div className="progress-track">
+                    <span className="progress-fill video_transcribing" style={{ width: `${modelDownloadProgress.progress}%` }} />
+                  </div>
+                </div>
+                {modelDownloadProgress.currentFile ? (
+                  <small className="model-current-file">{modelDownloadProgress.currentFile}</small>
+                ) : null}
+              </div>
+              {modelDownloadNotice ? <p className="action-notice inline-notice">{modelDownloadNotice}</p> : null}
+            </div>
+            <div className="settings-actions sheet-footer">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setModelGuideOpen(false)}
+                disabled={modelDownloadActive}
+              >
+                <span>稍后下载</span>
+              </button>
+              {modelDownloadActive ? (
+                <button type="button" className="secondary-button danger-soft" onClick={cancelCurrentAsrModelDownload}>
+                  <X size={16} />
+                  <span>取消下载</span>
+                </button>
+              ) : (
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={startAsrModelDownload}
+                  disabled={asrModelStatus.available}
+                >
+                  <Download size={16} />
+                  <span>{asrModelStatus.available ? "已下载" : "下载模型"}</span>
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {detailTab ? (
         <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={() => setDetailTab(null)}>
           <section
@@ -902,6 +1209,23 @@ function App() {
                     ))}
                   </select>
                 </label>
+                <div className="model-settings-row">
+                  <div>
+                    <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
+                      {asrModelStatus.available ? "ASR 模型已就绪" : "ASR 模型未下载"}
+                    </span>
+                    <small>{asrModelStatus.modelDir || "app-local data/models"}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={startAsrModelDownload}
+                    disabled={asrModelStatus.available || modelDownloadActive}
+                  >
+                    <Download size={15} />
+                    <span>{modelDownloadActive ? "下载中" : "下载模型"}</span>
+                  </button>
+                </div>
                 <label className="field-row">
                   <span>输出目录</span>
                   <input

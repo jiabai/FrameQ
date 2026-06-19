@@ -3,12 +3,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, Window};
 
 const PROGRESS_EVENT_NAME: &str = "worker-progress";
 const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
+const ASR_MODEL_DOWNLOAD_EVENT_NAME: &str = "asr-model-download-progress";
+const MODEL_DOWNLOAD_EVENT_PREFIX: &str = "FRAMEQ_MODEL_DOWNLOAD ";
 const DOTENV_FILE_NAME: &str = ".env";
 const LLM_PROVIDER_ENV: &str = "FRAMEQ_LLM_PROVIDER";
 const LLM_BASE_URL_ENV: &str = "FRAMEQ_LLM_BASE_URL";
@@ -23,10 +25,16 @@ const USER_DATA_DIR_ENV: &str = "FRAMEQ_USER_DATA_DIR";
 const ALLOW_REAL_ASR_ENV: &str = "FRAMEQ_ALLOW_REAL_ASR";
 const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
 const ASR_MODEL_ENV: &str = "FRAMEQ_ASR_MODEL";
+const ASR_MODEL_DOWNLOAD_URL_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_URL";
+const ASR_MODEL_DOWNLOAD_SHA256_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256";
+const MODELSCOPE_ENDPOINT_ENV: &str = "FRAMEQ_MODELSCOPE_ENDPOINT";
+const SENSEVOICE_REVISION_ENV: &str = "FRAMEQ_SENSEVOICE_REVISION";
 const HISTORY_FILE_NAME: &str = "history.json";
+const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
 const DEFAULT_LLM_PROVIDER: &str = "openai_compatible";
 const DEFAULT_LLM_TIMEOUT_SECONDS: &str = "60";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
+const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
 const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL];
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -122,8 +130,15 @@ struct FirstRunStatusView {
     missing_llm_config: bool,
     user_data_dir: String,
     default_output_dir: String,
-    bundled_model: String,
-    bundled_model_available: bool,
+    asr_model: String,
+    asr_model_dir: String,
+    asr_model_available: bool,
+    asr_model_source: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AsrModelDownloadResult {
+    started: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -209,6 +224,56 @@ impl WorkerProcessState {
     }
 }
 
+#[derive(Default)]
+struct ModelDownloadProcessState {
+    current_pid: Mutex<Option<u32>>,
+    cancelled_pid: Mutex<Option<u32>>,
+}
+
+impl ModelDownloadProcessState {
+    fn register(&self, pid: u32) -> bool {
+        let mut current_pid = self.current_pid.lock().expect("download state lock poisoned");
+        if current_pid.is_some() {
+            return false;
+        }
+
+        *current_pid = Some(pid);
+        true
+    }
+
+    fn current_pid(&self) -> Option<u32> {
+        *self.current_pid.lock().expect("download state lock poisoned")
+    }
+
+    fn clear_current(&self, pid: u32) {
+        let mut current_pid = self.current_pid.lock().expect("download state lock poisoned");
+        if *current_pid == Some(pid) {
+            *current_pid = None;
+        }
+    }
+
+    fn mark_cancelled(&self, pid: u32) {
+        let mut cancelled_pid = self
+            .cancelled_pid
+            .lock()
+            .expect("download cancelled state lock poisoned");
+        *cancelled_pid = Some(pid);
+    }
+
+    fn take_cancelled(&self, pid: u32) -> bool {
+        let mut cancelled_pid = self
+            .cancelled_pid
+            .lock()
+            .expect("download cancelled state lock poisoned");
+        if *cancelled_pid == Some(pid) {
+            *cancelled_pid = None;
+            return true;
+        }
+
+        false
+    }
+}
+
 fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
     Ok(RuntimePaths {
         resource_dir: app.path().resource_dir().map_err(|error| error.to_string())?,
@@ -222,33 +287,35 @@ fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
 fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
     fs::create_dir_all(paths.user_data_dir.join("outputs")).map_err(|error| error.to_string())?;
     fs::create_dir_all(paths.user_data_dir.join("work")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(paths.user_data_dir.join("models")).map_err(|error| error.to_string())?;
-    copy_bundled_models_if_needed(paths)
+    fs::create_dir_all(asr_model_dir(paths)).map_err(|error| error.to_string())
 }
 
-fn copy_bundled_models_if_needed(paths: &RuntimePaths) -> Result<(), String> {
-    let source = paths.resource_dir.join("models");
-    let target = paths.user_data_dir.join("models");
-    if !source.exists() {
-        return Ok(());
-    }
-
-    copy_dir_missing_only(&source, &target)
+fn asr_model_dir(paths: &RuntimePaths) -> PathBuf {
+    paths.user_data_dir.join("models")
 }
 
-fn copy_dir_missing_only(source: &Path, target: &Path) -> Result<(), String> {
-    fs::create_dir_all(target).map_err(|error| error.to_string())?;
-    for entry in fs::read_dir(source).map_err(|error| error.to_string())? {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let source_path = entry.path();
-        let target_path = target.join(entry.file_name());
-        if source_path.is_dir() {
-            copy_dir_missing_only(&source_path, &target_path)?;
-        } else if !target_path.exists() {
-            fs::copy(&source_path, &target_path).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
+fn asr_model_available(paths: &RuntimePaths) -> bool {
+    model_marker_exists(&asr_model_dir(paths))
+}
+
+fn model_marker_exists(model_dir: &Path) -> bool {
+    let marker = model_dir.join(MODEL_VERSION_FILE_NAME);
+    let sensevoice_model = model_dir
+        .join("models")
+        .join("iic")
+        .join("SenseVoiceSmall")
+        .join("model.pt");
+    let vad_model = model_dir
+        .join("models")
+        .join("iic")
+        .join("speech_fsmn_vad_zh-cn-16k-common-pytorch")
+        .join("model.pt");
+    marker.is_file()
+        && sensevoice_model.is_file()
+        && vad_model.is_file()
+        && fs::read_to_string(marker)
+            .map(|content| content.contains(DEFAULT_ASR_MODEL) && content.contains(SENSEVOICE_VAD_MODEL))
+            .unwrap_or(false)
 }
 
 fn build_worker_command_spec(
@@ -303,6 +370,73 @@ fn build_worker_command_spec(
         ],
         current_dir: paths.user_data_dir.clone(),
     })
+}
+
+fn build_model_download_command_spec(
+    paths: &RuntimePaths,
+    config_values: &HashMap<String, String>,
+) -> Result<WorkerCommandSpec, String> {
+    let resource_bin_dir = paths.resource_dir.join("bin");
+    let path_value = prepend_to_path(&resource_bin_dir)?;
+    let mut env = vec![
+        (
+            "PYTHONPATH".to_string(),
+            path_to_env_string(paths.resource_dir.join("worker")),
+        ),
+        ("PYTHONUTF8".to_string(), "1".to_string()),
+        ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
+        ("PATH".to_string(), path_value),
+        (
+            MODEL_DIR_ENV.to_string(),
+            path_to_env_string(asr_model_dir(paths)),
+        ),
+        (
+            RESOURCE_DIR_ENV.to_string(),
+            path_to_env_string(&paths.resource_dir),
+        ),
+        (
+            USER_DATA_DIR_ENV.to_string(),
+            path_to_env_string(&paths.user_data_dir),
+        ),
+    ];
+
+    for key in [
+        ASR_MODEL_DOWNLOAD_URL_ENV,
+        ASR_MODEL_DOWNLOAD_SHA256_ENV,
+        MODELSCOPE_ENDPOINT_ENV,
+        SENSEVOICE_REVISION_ENV,
+    ] {
+        if let Some(value) = configured_env_value(config_values, key) {
+            env.push((key.to_string(), value));
+        }
+    }
+
+    Ok(WorkerCommandSpec {
+        program: bundled_python_path(&paths.resource_dir),
+        args: vec![
+            "-m".to_string(),
+            "frameq_worker".to_string(),
+            "--download-asr-model".to_string(),
+        ],
+        env,
+        current_dir: paths.user_data_dir.clone(),
+    })
+}
+
+fn configured_env_value(config_values: &HashMap<String, String>, key: &str) -> Option<String> {
+    config_values
+        .get(key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or_else(|| std::env::var(key).ok().filter(|value| !value.trim().is_empty()))
+}
+
+fn asr_model_source(config_values: &HashMap<String, String>) -> String {
+    if configured_env_value(config_values, ASR_MODEL_DOWNLOAD_URL_ENV).is_some() {
+        "custom_url".to_string()
+    } else {
+        "modelscope".to_string()
+    }
 }
 
 fn bundled_python_path(resource_dir: &Path) -> PathBuf {
@@ -442,8 +576,9 @@ fn process_video_blocking(
         }));
     }
 
-    if !output.status.success() {
-        return Ok(serde_json::json!(ProcessVideoResult {
+    parse_worker_output_or_fallback(
+        &output,
+        ProcessVideoResult {
             status: "failed".to_string(),
             text: String::new(),
             insights: vec![],
@@ -454,10 +589,8 @@ fn process_video_blocking(
                 message: stderr,
                 stage: "video_extracting".to_string(),
             }),
-        }));
-    }
-
-    parse_worker_stdout(&output.stdout)
+        },
+    )
 }
 
 #[tauri::command]
@@ -525,8 +658,9 @@ fn retry_insights_blocking(
         }));
     }
 
-    if !output.status.success() {
-        return Ok(serde_json::json!(ProcessVideoResult {
+    parse_worker_output_or_fallback(
+        &output,
+        ProcessVideoResult {
             status: "partial_completed".to_string(),
             text: request.text,
             insights: vec![],
@@ -537,10 +671,8 @@ fn retry_insights_blocking(
                 message: String::from_utf8_lossy(&output.stderr).to_string(),
                 stage: "insights_generating".to_string(),
             }),
-        }));
-    }
-
-    parse_worker_stdout(&output.stdout)
+        },
+    )
 }
 
 fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, String> {
@@ -570,6 +702,17 @@ fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, String> {
     Err(format!(
         "Worker stdout did not contain a structured JSON result: {detail}. stdout preview: {preview}"
     ))
+}
+
+fn parse_worker_output_or_fallback(
+    output: &Output,
+    fallback: ProcessVideoResult,
+) -> Result<serde_json::Value, String> {
+    match parse_worker_stdout(&output.stdout) {
+        Ok(value) => Ok(value),
+        Err(error) if output.status.success() => Err(error),
+        Err(_) => Ok(serde_json::json!(fallback)),
+    }
 }
 
 #[tauri::command]
@@ -625,14 +768,151 @@ fn check_first_run(app: AppHandle) -> Result<FirstRunStatusView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let config = load_llm_config_from_file(&env_path(&paths))?;
+    let config_values = parse_dotenv_values(&env_path(&paths))?;
     Ok(FirstRunStatusView {
         missing_llm_config: !config.has_api_key,
         user_data_dir: path_to_env_string(&paths.user_data_dir),
         default_output_dir: path_to_env_string(paths.user_data_dir.join("outputs")),
-        bundled_model: DEFAULT_ASR_MODEL.to_string(),
-        bundled_model_available: paths.user_data_dir.join("models").exists()
-            || paths.resource_dir.join("models").exists(),
+        asr_model: DEFAULT_ASR_MODEL.to_string(),
+        asr_model_dir: path_to_env_string(asr_model_dir(&paths)),
+        asr_model_available: asr_model_available(&paths),
+        asr_model_source: asr_model_source(&config_values),
     })
+}
+
+#[tauri::command]
+async fn download_asr_model(
+    window: Window,
+    app: AppHandle,
+    download_state: State<'_, Arc<ModelDownloadProcessState>>,
+) -> Result<AsrModelDownloadResult, String> {
+    let download_state = Arc::clone(download_state.inner());
+    run_blocking_worker_command(move || {
+        download_asr_model_blocking(window, app, download_state)
+    })
+    .await
+}
+
+fn download_asr_model_blocking(
+    window: Window,
+    app: AppHandle,
+    download_state: Arc<ModelDownloadProcessState>,
+) -> Result<AsrModelDownloadResult, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    if asr_model_available(&paths) {
+        return Ok(AsrModelDownloadResult { started: false });
+    }
+
+    let config_values = parse_dotenv_values(&env_path(&paths))?;
+    let mut child = spawn_worker_command(build_model_download_command_spec(&paths, &config_values)?)?;
+    let download_pid = child.id();
+    if !download_state.register(download_pid) {
+        let _ = terminate_process_tree(download_pid);
+        return Err("Another ASR model download is already running.".to_string());
+    }
+
+    let Some(stderr) = child.stderr.take() else {
+        download_state.clear_current(download_pid);
+        let _ = terminate_process_tree(download_pid);
+        return Err("Could not capture ASR model download stderr.".to_string());
+    };
+    let progress_window = window.clone();
+    let stderr_reader = std::thread::spawn(move || {
+        let mut diagnostic_lines = Vec::new();
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            if let Some(raw_event) = line.strip_prefix(MODEL_DOWNLOAD_EVENT_PREFIX) {
+                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw_event) {
+                    let _ = progress_window.emit(ASR_MODEL_DOWNLOAD_EVENT_NAME, payload);
+                }
+            } else if !line.trim().is_empty() {
+                diagnostic_lines.push(line);
+            }
+        }
+        diagnostic_lines.join("\n")
+    });
+
+    let output = match child.wait_with_output() {
+        Ok(output) => output,
+        Err(error) => {
+            download_state.clear_current(download_pid);
+            let _ = download_state.take_cancelled(download_pid);
+            return Err(error.to_string());
+        }
+    };
+    download_state.clear_current(download_pid);
+    let was_cancelled = download_state.take_cancelled(download_pid);
+    let stderr = stderr_reader
+        .join()
+        .unwrap_or_else(|_| "ASR model download stderr reader failed.".to_string());
+
+    if was_cancelled {
+        let _ = window.emit(
+            ASR_MODEL_DOWNLOAD_EVENT_NAME,
+            serde_json::json!({
+                "status": "cancelled",
+                "message": "ASR model download was cancelled.",
+                "progress": 0
+            }),
+        );
+        return Ok(AsrModelDownloadResult { started: false });
+    }
+
+    if !output.status.success() {
+        let detail = parse_worker_stdout(&output.stdout)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("message")
+                    .and_then(|message| message.as_str())
+                    .map(|message| message.to_string())
+            })
+            .filter(|message| !message.trim().is_empty())
+            .unwrap_or(stderr);
+        return Err(detail);
+    }
+
+    let result = parse_worker_stdout(&output.stdout)?;
+    if result
+        .get("status")
+        .and_then(|status| status.as_str())
+        .is_some_and(|status| status == "completed")
+    {
+        return Ok(AsrModelDownloadResult { started: true });
+    }
+
+    Err(result
+        .get("message")
+        .and_then(|message| message.as_str())
+        .unwrap_or("ASR model download did not complete.")
+        .to_string())
+}
+
+#[tauri::command]
+fn cancel_asr_model_download(
+    download_state: State<'_, Arc<ModelDownloadProcessState>>,
+) -> Result<CancelProcessResult, String> {
+    let Some(pid) = download_state.current_pid() else {
+        return Ok(CancelProcessResult {
+            cancelled: false,
+            error: None,
+        });
+    };
+
+    download_state.mark_cancelled(pid);
+    match terminate_process_tree(pid) {
+        Ok(()) => {
+            download_state.clear_current(pid);
+            Ok(CancelProcessResult {
+                cancelled: true,
+                error: None,
+            })
+        }
+        Err(error) => Ok(CancelProcessResult {
+            cancelled: false,
+            error: Some(error),
+        }),
+    }
 }
 
 #[tauri::command]
@@ -1069,6 +1349,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(WorkerProcessState::default()))
+        .manage(Arc::new(ModelDownloadProcessState::default()))
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -1079,6 +1360,8 @@ pub fn run() {
             save_llm_config,
             get_history,
             check_first_run,
+            download_asr_model,
+            cancel_asr_model_download,
             start_window_drag,
             close_window,
             minimize_window,
@@ -1094,12 +1377,16 @@ pub fn run() {
 mod tests {
     use super::{
         apply_configured_asr_model_to_request, load_history_from_project,
-        load_llm_config_from_file, parse_worker_stdout, run_blocking_worker_command,
-        save_llm_config_to_file, supported_asr_models, build_worker_command_spec, LlmConfigInput,
-        ProcessVideoRequest, RuntimePaths, WorkerInvocation, WorkerProcessState,
+        load_llm_config_from_file, parse_worker_output_or_fallback, parse_worker_stdout,
+        run_blocking_worker_command,
+        save_llm_config_to_file, supported_asr_models, build_model_download_command_spec,
+        build_worker_command_spec, asr_model_available, LlmConfigInput, ProcessVideoRequest,
+        ProcessVideoResult, RuntimePaths, WorkerError, WorkerInvocation, WorkerProcessState,
     };
+    use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
+    use std::process::Output;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -1163,6 +1450,34 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn parse_worker_output_prefers_structured_stdout_even_when_exit_fails() {
+        let output = Output {
+            status: exit_status(1),
+            stdout: br#"{"status":"failed","error":{"code":"ASR_MODEL_NOT_DOWNLOADED","message":"SenseVoice Small model is not downloaded yet.","stage":"video_transcribing"}}"#.to_vec(),
+            stderr: b"third-party stderr".to_vec(),
+        };
+        let fallback = ProcessVideoResult {
+            status: "failed".to_string(),
+            text: String::new(),
+            insights: vec![],
+            transcript_path: None,
+            insights_path: None,
+            error: Some(WorkerError {
+                code: "WORKER_PROCESS_FAILED".to_string(),
+                message: "third-party stderr".to_string(),
+                stage: "video_extracting".to_string(),
+            }),
+        };
+
+        let parsed =
+            parse_worker_output_or_fallback(&output, fallback).expect("parse structured worker result");
+
+        assert_eq!(parsed["status"], "failed");
+        assert_eq!(parsed["error"]["code"], "ASR_MODEL_NOT_DOWNLOADED");
+        assert_eq!(parsed["error"]["stage"], "video_transcribing");
+    }
+
+    #[test]
     fn worker_command_spec_uses_bundled_python_and_app_local_data() {
         let paths = RuntimePaths {
             resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
@@ -1220,6 +1535,100 @@ Some dependency logged to stdout
     #[test]
     fn release_supported_asr_models_only_exposes_bundled_sensevoice() {
         assert_eq!(supported_asr_models(), vec!["iic/SenseVoiceSmall".to_string()]);
+    }
+
+    #[test]
+    fn asr_model_availability_requires_marker_and_model_files() {
+        let root = temp_dir("asr_model_availability_requires_marker_and_model_files");
+        let paths = RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        };
+        let model_root = paths.user_data_dir.join("models");
+        fs::create_dir_all(&model_root).expect("create user model dir");
+
+        assert!(!asr_model_available(&paths));
+
+        fs::write(
+            model_root.join("MODEL_VERSION.txt"),
+            "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
+        )
+        .expect("write model marker");
+
+        assert!(!asr_model_available(&paths));
+
+        let sensevoice_dir = model_root.join("models").join("iic").join("SenseVoiceSmall");
+        let vad_dir = model_root
+            .join("models")
+            .join("iic")
+            .join("speech_fsmn_vad_zh-cn-16k-common-pytorch");
+        fs::create_dir_all(&sensevoice_dir).expect("create sensevoice dir");
+        fs::create_dir_all(&vad_dir).expect("create vad dir");
+        fs::write(sensevoice_dir.join("model.pt"), "sensevoice").expect("write sensevoice model");
+        fs::write(vad_dir.join("model.pt"), "vad").expect("write vad model");
+
+        assert!(asr_model_available(&paths));
+    }
+
+    #[test]
+    fn asr_model_availability_ignores_resource_model_marker() {
+        let root = temp_dir("asr_model_availability_ignores_resource_model_marker");
+        let paths = RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        };
+        fs::create_dir_all(paths.resource_dir.join("models")).expect("create resource model dir");
+        fs::write(
+            paths.resource_dir.join("models").join("MODEL_VERSION.txt"),
+            "model=iic/SenseVoiceSmall\n",
+        )
+        .expect("write model marker");
+
+        assert!(!asr_model_available(&paths));
+    }
+
+    #[test]
+    fn model_download_command_spec_uses_bundled_python_and_user_model_dir() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
+            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
+        };
+        let spec = build_model_download_command_spec(
+            &paths,
+            &HashMap::from([
+                (
+                    "FRAMEQ_ASR_MODEL_DOWNLOAD_URL".to_string(),
+                    "https://cdn.example/sensevoice.zip".to_string(),
+                ),
+                (
+                    "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256".to_string(),
+                    "abc123".to_string(),
+                ),
+            ]),
+        )
+        .expect("build download command spec");
+        let env = spec.env_map();
+
+        assert_eq!(
+            spec.program,
+            PathBuf::from("C:/Program Files/FrameQ/resources/python/python.exe")
+        );
+        assert_eq!(spec.args, vec!["-m", "frameq_worker", "--download-asr-model"]);
+        assert!(!spec.program.to_string_lossy().contains("uv"));
+        assert!(!spec.args.iter().any(|arg| arg == "uv"));
+        assert_eq!(
+            env.get("FRAMEQ_MODEL_DIR"),
+            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/models".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_URL"),
+            Some(&"https://cdn.example/sensevoice.zip".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256"),
+            Some(&"abc123".to_string())
+        );
+        assert_eq!(spec.current_dir, paths.user_data_dir);
     }
 
     #[test]
@@ -1428,5 +1837,17 @@ Some dependency logged to stdout
 
     fn path_string(path: &std::path::Path) -> String {
         path.to_string_lossy().replace('\\', "/")
+    }
+
+    #[cfg(windows)]
+    fn exit_status(code: u32) -> std::process::ExitStatus {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code)
+    }
+
+    #[cfg(unix)]
+    fn exit_status(code: i32) -> std::process::ExitStatus {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code << 8)
     }
 }

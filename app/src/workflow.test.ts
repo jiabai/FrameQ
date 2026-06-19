@@ -113,6 +113,16 @@ describe("workflow state model", () => {
     ).toBe("模型缓存目录不可写。请检查 FRAMEQ_MODEL_DIR 或项目 models/ 目录权限。");
   });
 
+  test("formats missing ASR model download errors with a download hint", () => {
+    expect(
+      formatWorkerError({
+        code: "ASR_MODEL_NOT_DOWNLOADED",
+        message: "SenseVoice Small model is not downloaded yet.",
+        stage: "video_transcribing",
+      }),
+    ).toBe("SenseVoice Small 尚未下载。请先在首启引导或设置中下载 ASR 模型，然后重新转写。");
+  });
+
   test("formats detail text for clipboard copying", () => {
     const state = summarizeWorkerResult({
       status: "completed",

@@ -2,7 +2,7 @@
 
 ## Installer-ready local runtime
 
-对外分发版本必须让普通用户安装后直接使用。安装包可以内置 FrameQ 核心本地 ASR 模型权重，但只限明确版本的核心 ASR 模型（首版为 SenseVoice Small）；LLM API key、云端 LLM 模型和用户私有配置不得内置。安装包必须同时内置 Python runtime、worker、媒体工具和必要依赖，运行期不得要求用户安装 Python、uv、ffmpeg 或手动设置环境变量。
+对外分发版本必须让普通用户安装后直接启动并按引导完成首启准备。安装包只内置 Python runtime、worker、媒体工具和必要依赖；核心本地 ASR 模型（首版为 SenseVoice Small）由首启引导下载到 app-local data，LLM API key、云端 LLM 模型和用户私有配置不得内置。运行期不得要求用户安装 Python、uv、ffmpeg 或手动设置环境变量。
 
 <!-- 由 vibe-coding-launcher 生成。 -->
 

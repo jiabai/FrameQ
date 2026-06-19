@@ -6,10 +6,13 @@ requires-python = ">=3.11"
 dependencies = [
     "funasr>=1.2.7",
     "modelscope>=1.37.1",
-    "qwen-asr>=0.0.6",
+    "torch>=2.10.0",
     "torchaudio>=2.10.0",
     "yt-dlp>=2026.6.9",
 ]
+
+[project.optional-dependencies]
+qwen = ["qwen-asr>=0.0.6"]
 
 [dependency-groups]
 dev = [

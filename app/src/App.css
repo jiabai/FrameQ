@@ -759,6 +759,11 @@ h3 {
   max-width: 780px;
 }
 
+.model-guide-modal,
+.model-guide-sheet {
+  max-width: 680px;
+}
+
 .modal-header,
 .sheet-header,
 .modal-tools,
@@ -941,6 +946,84 @@ h3 {
   display: flex;
   gap: 8px;
   min-height: 96px;
+}
+
+.model-guide-content {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 18px;
+}
+
+.model-status-card,
+.model-settings-row {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.model-status-card > div,
+.model-settings-row > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.model-status-card strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.model-status-card small,
+.model-settings-row small,
+.model-current-file {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.model-settings-row {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.model-status-badge {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  justify-self: start;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.model-status-badge.ready {
+  background: #eef8f1;
+  border-color: rgba(35, 134, 75, 0.2);
+  color: #1e6f40;
+}
+
+.model-status-badge.missing {
+  background: #fff7e8;
+  border-color: rgba(182, 106, 0, 0.22);
+  color: #8a5100;
+}
+
+.model-download-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-summary.compact {
+  min-height: 96px;
+}
+
+.inline-notice {
+  padding: 0;
 }
 
 .settings-form {

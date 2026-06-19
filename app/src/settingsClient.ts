@@ -25,16 +25,36 @@ export type FirstRunStatus = {
   missingLlmConfig: boolean;
   userDataDir: string;
   defaultOutputDir: string;
-  bundledModel: string;
-  bundledModelAvailable: boolean;
+  asrModel: string;
+  asrModelDir: string;
+  asrModelAvailable: boolean;
+  asrModelSource: string;
 };
 
 export type FirstRunStatusResponse = {
   missing_llm_config: boolean;
   user_data_dir: string;
   default_output_dir: string;
-  bundled_model: string;
-  bundled_model_available: boolean;
+  asr_model: string;
+  asr_model_dir: string;
+  asr_model_available: boolean;
+  asr_model_source: string;
+};
+
+export type AsrModelDownloadResult = {
+  started: boolean;
+};
+
+export type CancelAsrModelDownloadResult = {
+  cancelled: boolean;
+  error?: string | null;
+};
+
+export type AsrModelDownloadProgress = {
+  status: string;
+  message: string;
+  progress: number;
+  currentFile?: string;
 };
 
 export type LlmConfigResponse = {
@@ -54,6 +74,7 @@ export type SettingsCommandRunner = (
 ) => Promise<unknown>;
 
 const defaultSettingsRunner: SettingsCommandRunner = (command, args) => invoke(command, args);
+export const ASR_MODEL_DOWNLOAD_PROGRESS_EVENT = "asr-model-download-progress";
 
 export async function getLlmConfig(
   runner: SettingsCommandRunner = defaultSettingsRunner,
@@ -87,6 +108,18 @@ export async function checkFirstRun(
   );
 }
 
+export async function downloadAsrModel(
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<AsrModelDownloadResult> {
+  return (await runner("download_asr_model", {})) as AsrModelDownloadResult;
+}
+
+export async function cancelAsrModelDownload(
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<CancelAsrModelDownloadResult> {
+  return (await runner("cancel_asr_model_download", {})) as CancelAsrModelDownloadResult;
+}
+
 function mapLlmConfigResponse(response: LlmConfigResponse): LlmConfig {
   return {
     provider: response.provider,
@@ -105,7 +138,9 @@ function mapFirstRunStatusResponse(response: FirstRunStatusResponse): FirstRunSt
     missingLlmConfig: response.missing_llm_config,
     userDataDir: response.user_data_dir,
     defaultOutputDir: response.default_output_dir,
-    bundledModel: response.bundled_model,
-    bundledModelAvailable: response.bundled_model_available,
+    asrModel: response.asr_model,
+    asrModelDir: response.asr_model_dir,
+    asrModelAvailable: response.asr_model_available,
+    asrModelSource: response.asr_model_source,
   };
 }

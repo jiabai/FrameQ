@@ -33,7 +33,6 @@
       "resources/python/**/*",
       "resources/worker/**/*",
       "resources/bin/**/*",
-      "resources/models/**/*",
       "resources/pyproject.toml",
       "resources/.env.template"
     ],

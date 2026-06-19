@@ -121,6 +121,60 @@ class FakeInsightClient:
         return '["为什么重试应该只重新生成话题点？"]'
 
 
+def create_valid_asr_cache(root: Path) -> None:
+    sensevoice_dir = root / "models" / "iic" / "SenseVoiceSmall"
+    vad_dir = root / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+    sensevoice_dir.mkdir(parents=True)
+    vad_dir.mkdir(parents=True)
+    (sensevoice_dir / "model.pt").write_bytes(b"sensevoice")
+    (vad_dir / "model.pt").write_bytes(b"vad")
+    (root / "MODEL_VERSION.txt").write_text(
+        "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
+        encoding="utf-8",
+    )
+
+
+def test_main_returns_zero_for_structured_worker_failures(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli,
+        "run_worker_once",
+        lambda *args, **kwargs: {
+            "status": "failed",
+            "error": {
+                "code": "ASR_MODEL_NOT_DOWNLOADED",
+                "message": "SenseVoice Small model is not downloaded yet.",
+                "stage": "video_transcribing",
+            },
+        },
+    )
+
+    exit_code = cli.main(["--request-json", "{}"])
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "failed"
+    assert output["error"]["code"] == "ASR_MODEL_NOT_DOWNLOADED"
+
+
+def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli,
+        "run_asr_model_download_once",
+        lambda *args, **kwargs: {
+            "status": "failed",
+            "code": "ASR_MODEL_DOWNLOAD_FAILED",
+            "message": "download failed",
+        },
+    )
+
+    exit_code = cli.main(["--download-asr-model"])
+
+    assert exit_code == 1
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "failed"
+    assert output["code"] == "ASR_MODEL_DOWNLOAD_FAILED"
+
+
 def test_retry_insights_once_regenerates_topics_from_existing_transcript(
     tmp_path: Path,
 ) -> None:
@@ -444,6 +498,7 @@ def test_run_worker_once_builds_real_asr_with_project_model_cache(
     monkeypatch,
 ) -> None:
     captured: dict[str, object] = {}
+    create_valid_asr_cache(tmp_path / "models")
 
     def fake_build_asr_transcriber(model_name: str, cache_dir: Path) -> FakeTranscriber:
         captured["model_name"] = model_name
@@ -470,11 +525,42 @@ def test_run_worker_once_builds_real_asr_with_project_model_cache(
     }
 
 
+def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extraction(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_build_asr_transcriber(model_name: str, cache_dir: Path) -> FakeTranscriber:
+        raise AssertionError("ASR model should be validated before loading")
+
+    monkeypatch.setattr(
+        cli,
+        "build_asr_transcriber",
+        fail_build_asr_transcriber,
+    )
+
+    result = run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        allow_real_asr=True,
+    )
+
+    assert result["status"] == "failed"
+    assert result["video_path"] == (tmp_path / "outputs" / "demo.mp4").as_posix()
+    assert result["audio_path"] == (tmp_path / "work" / "demo.wav").as_posix()
+    assert result["error"] == {
+        "code": "ASR_MODEL_NOT_DOWNLOADED",
+        "message": "SenseVoice Small model is not downloaded yet.",
+        "stage": "video_transcribing",
+    }
+
+
 def test_run_worker_once_uses_configured_asr_model_from_project_env(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     captured: dict[str, object] = {}
+    create_valid_asr_cache(tmp_path / "models")
     (tmp_path / ".env").write_text(
         "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n",
         encoding="utf-8",
@@ -513,6 +599,7 @@ def test_run_worker_once_emits_progress_events_for_model_startup(
     monkeypatch,
 ) -> None:
     events: list[dict[str, object]] = []
+    create_valid_asr_cache(tmp_path / "models")
 
     monkeypatch.setattr(
         cli,
