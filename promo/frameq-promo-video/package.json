@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "remotion studio src/index.ts",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src scripts --ext .ts,.tsx,.js,.mjs",
     "validate:data": "node scripts/validate-data.mjs",
     "voiceover": "powershell -ExecutionPolicy Bypass -File scripts/generate-voiceover.ps1",
     "still:hook": "remotion still src/index.ts FrameQPromo --frame=30 --scale=0.25 out/still-hook.png",
@@ -25,6 +26,7 @@
     "@remotion/eslint-config-flat": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "eslint": "latest",
     "typescript": "latest"
   }
 }

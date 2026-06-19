@@ -62,4 +62,51 @@ for (const keyword of requiredKeywords) {
   }
 }
 
+if (!Array.isArray(data.captionWords) || data.captionWords.length === 0) {
+  throw new Error("captionWords must contain at least one item");
+}
+
+for (const [index, item] of data.captionWords.entries()) {
+  if (typeof item.text !== "string" || item.text.trim().length === 0) {
+    throw new Error(`captionWords[${index}].text must be a non-empty string`);
+  }
+
+  for (const key of ["startMs", "endMs", "timestampMs", "confidence"]) {
+    if (typeof item[key] !== "number" || !Number.isFinite(item[key])) {
+      throw new Error(`captionWords[${index}].${key} must be a finite number`);
+    }
+  }
+
+  if (item.startMs < 0) {
+    throw new Error(`captionWords[${index}].startMs must be >= 0`);
+  }
+
+  if (item.endMs <= item.startMs) {
+    throw new Error(`captionWords[${index}].endMs must be greater than startMs`);
+  }
+
+  if (item.timestampMs !== item.startMs) {
+    throw new Error(`captionWords[${index}].timestampMs must equal startMs`);
+  }
+
+  if (item.confidence < 0 || item.confidence > 1) {
+    throw new Error(`captionWords[${index}].confidence must be between 0 and 1`);
+  }
+
+  if (index === 0 && item.startMs !== 0) {
+    throw new Error("First captionWords item must start at 0ms");
+  }
+
+  if (index > 0) {
+    const previous = data.captionWords[index - 1];
+    if (previous.endMs !== item.startMs) {
+      throw new Error(`captionWords[${index - 1}] must end where captionWords[${index}] starts`);
+    }
+  }
+}
+
+if (data.captionWords[data.captionWords.length - 1].endMs !== 45000) {
+  throw new Error("Last captionWords item must end at 45000ms");
+}
+
 console.log("promo data ok");
