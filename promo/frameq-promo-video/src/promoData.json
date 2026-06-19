@@ -1,0 +1,133 @@
+{
+  "composition": {
+    "id": "FrameQPromo",
+    "fps": 30,
+    "width": 1080,
+    "height": 1350,
+    "durationInFrames": 1350
+  },
+  "keywords": ["本地优先", "文字稿", "启发话题点", "轻量分发"],
+  "voiceover": [
+    "刷到一条有价值的视频，却没时间反复听、手动整理？",
+    "把链接交给 FrameQ，它会把公开视频处理成可阅读、可复用的文字稿。",
+    "视频、音频和文字稿默认留在本机。本地优先，整理内容更安心。",
+    "不止转文字，它还能从文字稿里提炼启发话题点，帮你快速找到下一篇内容、下一场讨论、下一个思考角度。",
+    "FrameQ，把公开视频变成文字稿和灵感入口。安装轻，启动快，开始整理你的第一条视频。"
+  ],
+  "scenes": [
+    { "id": "pain-hook", "label": "痛点钩子", "startFrame": 0, "endFrame": 180 },
+    { "id": "workflow-intro", "label": "FrameQ 出场", "startFrame": 180, "endFrame": 450 },
+    { "id": "local-first", "label": "本地优先", "startFrame": 450, "endFrame": 840 },
+    { "id": "topic-ideas", "label": "话题点生成", "startFrame": 840, "endFrame": 1140 },
+    { "id": "end-card", "label": "轻 CTA", "startFrame": 1140, "endFrame": 1350 }
+  ],
+  "captions": [
+    {
+      "startFrame": 0,
+      "endFrame": 180,
+      "text": "刷到一条有价值的视频，却没时间反复听、手动整理？",
+      "highlight": "手动整理"
+    },
+    {
+      "startFrame": 180,
+      "endFrame": 450,
+      "text": "把链接交给 FrameQ，它会把公开视频处理成可阅读、可复用的文字稿。",
+      "highlight": "文字稿"
+    },
+    {
+      "startFrame": 450,
+      "endFrame": 840,
+      "text": "视频、音频和文字稿默认留在本机。本地优先，整理内容更安心。",
+      "highlight": "本地优先"
+    },
+    {
+      "startFrame": 840,
+      "endFrame": 1140,
+      "text": "不止转文字，它还能从文字稿里提炼启发话题点，帮你快速找到下一篇内容、下一场讨论、下一个思考角度。",
+      "highlight": "启发话题点"
+    },
+    {
+      "startFrame": 1140,
+      "endFrame": 1350,
+      "text": "FrameQ，把公开视频变成文字稿和灵感入口。安装轻，启动快，开始整理你的第一条视频。",
+      "highlight": "轻"
+    }
+  ],
+  "captionWords": [
+    {
+      "text": "刷到一条有价值的视频，",
+      "startMs": 0,
+      "endMs": 3000,
+      "timestampMs": 0,
+      "confidence": 1
+    },
+    {
+      "text": " 却没时间反复听、手动整理？",
+      "startMs": 3000,
+      "endMs": 6000,
+      "timestampMs": 3000,
+      "confidence": 1
+    },
+    {
+      "text": "把链接交给 FrameQ，",
+      "startMs": 6000,
+      "endMs": 10000,
+      "timestampMs": 6000,
+      "confidence": 1
+    },
+    {
+      "text": " 它会把公开视频处理成可阅读、可复用的文字稿。",
+      "startMs": 10000,
+      "endMs": 15000,
+      "timestampMs": 10000,
+      "confidence": 1
+    },
+    {
+      "text": "视频、音频和文字稿默认留在本机。",
+      "startMs": 15000,
+      "endMs": 21000,
+      "timestampMs": 15000,
+      "confidence": 1
+    },
+    {
+      "text": " 本地优先，整理内容更安心。",
+      "startMs": 21000,
+      "endMs": 28000,
+      "timestampMs": 21000,
+      "confidence": 1
+    },
+    {
+      "text": "不止转文字，",
+      "startMs": 28000,
+      "endMs": 33000,
+      "timestampMs": 28000,
+      "confidence": 1
+    },
+    {
+      "text": " 它还能从文字稿里提炼启发话题点，",
+      "startMs": 33000,
+      "endMs": 38000,
+      "timestampMs": 33000,
+      "confidence": 1
+    },
+    {
+      "text": " 帮你快速找到下一篇内容、下一场讨论、下一个思考角度。",
+      "startMs": 38000,
+      "endMs": 41000,
+      "timestampMs": 38000,
+      "confidence": 1
+    },
+    {
+      "text": "FrameQ，把公开视频变成文字稿和灵感入口。安装轻，启动快，开始整理你的第一条视频。",
+      "startMs": 41000,
+      "endMs": 45000,
+      "timestampMs": 41000,
+      "confidence": 1
+    }
+  ],
+  "topicCards": [
+    "这个视频可以延展成哪篇选题？",
+    "观众最容易被哪个观点打动？",
+    "下一场讨论可以从哪里开始？"
+  ]
+}
