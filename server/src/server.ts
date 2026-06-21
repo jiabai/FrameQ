@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { AuthService } from "./auth.js";
 import { BillingService, type NativePaymentResult } from "./billing.js";
+import { renderLoginPage } from "./loginPage.js";
 import { sha256 } from "./security.js";
 import type { SessionRecord, Store } from "./store.js";
 import { createWechatNotificationParser, type WechatNotificationParser } from "./wechat.js";
@@ -62,7 +63,8 @@ export function buildServer(dependencies: ServerDependencies) {
 
   app.get("/login", async (_request, reply) => {
     reply.type("text/html; charset=utf-8");
-    return "<!doctype html><title>FrameQ Login</title><h1>FrameQ Login</h1>";
+    reply.header("cache-control", "no-store");
+    return renderLoginPage();
   });
 
   app.post("/auth/email/start", async (request, reply) => {

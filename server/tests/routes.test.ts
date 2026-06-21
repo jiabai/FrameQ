@@ -3,6 +3,29 @@ import { buildServer } from "../src/server.js";
 import { MemoryStore } from "../src/store.js";
 
 describe("desktop account routes", () => {
+  test("serves the desktop email login page", async () => {
+    const app = buildServer({
+      store: new MemoryStore(),
+      sendOtp: async () => {},
+      createNativePayment: async () => ({
+        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+        providerPayload: {},
+      }),
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/login?desktop=1&state=state-1001&redirect_uri=frameq%3A%2F%2Fauth%2Fcallback",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.body).toContain("type=\"email\"");
+    expect(response.body).toContain("/auth/email/start");
+    expect(response.body).toContain("/auth/email/verify");
+    expect(response.body).toContain("window.location.href = data.redirect_url");
+  });
+
   test("rejects account route without a desktop session", async () => {
     const app = buildServer({
       store: new MemoryStore(),
