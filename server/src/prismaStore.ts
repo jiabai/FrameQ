@@ -1,9 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type {
+  ActivationCodeRecord,
+  AdminSessionRecord,
   DesktopLoginTicketRecord,
   EmailOtpRecord,
   EntitlementRecord,
+  LlmConfigRecord,
   OrderRecord,
   SessionRecord,
   Store,
@@ -142,12 +145,22 @@ export class PrismaStore implements Store {
     return entitlement as EntitlementRecord | null;
   }
 
-  async upsertEntitlement(userId: string, expiresAt: Date, now: Date): Promise<EntitlementRecord> {
+  async upsertEntitlement(
+    userId: string,
+    expiresAt: Date,
+    now: Date,
+    quota: { llmQuotaLimit?: number; llmQuotaUsed?: number } = {},
+  ): Promise<EntitlementRecord> {
+    const quotaUpdate = {
+      ...(quota.llmQuotaLimit !== undefined ? { llmQuotaLimit: quota.llmQuotaLimit } : {}),
+      ...(quota.llmQuotaUsed !== undefined ? { llmQuotaUsed: quota.llmQuotaUsed } : {}),
+    };
     const entitlement = await this.prisma.entitlement.upsert({
       where: { userId },
       update: {
         status: expiresAt > now ? "active" : "inactive",
         expiresAt,
+        ...quotaUpdate,
         updatedAt: now,
       },
       create: {
@@ -155,10 +168,155 @@ export class PrismaStore implements Store {
         userId,
         status: expiresAt > now ? "active" : "inactive",
         expiresAt,
+        llmQuotaLimit: quota.llmQuotaLimit ?? 0,
+        llmQuotaUsed: quota.llmQuotaUsed ?? 0,
         updatedAt: now,
       },
     });
     return entitlement as EntitlementRecord;
+  }
+
+  async updateEntitlementQuota(
+    userId: string,
+    llmQuotaLimit: number,
+    llmQuotaUsed: number,
+    now: Date,
+  ): Promise<EntitlementRecord | null> {
+    const entitlement = await this.prisma.entitlement.update({
+      where: { userId },
+      data: { llmQuotaLimit, llmQuotaUsed, updatedAt: now },
+    });
+    return entitlement as EntitlementRecord | null;
+  }
+
+  async consumeLlmQuota(
+    userId: string,
+    requestId: string,
+    now: Date,
+  ): Promise<{ entitlement: EntitlementRecord; reused: boolean } | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const existingEvent = await tx.llmUsageEvent.findUnique({
+        where: { userId_requestId: { userId, requestId } },
+      });
+      const entitlement = await tx.entitlement.findUnique({ where: { userId } });
+      if (!entitlement || entitlement.expiresAt <= now) {
+        return null;
+      }
+      if (existingEvent) {
+        return { entitlement: entitlement as EntitlementRecord, reused: true };
+      }
+      if (entitlement.llmQuotaUsed >= entitlement.llmQuotaLimit) {
+        return null;
+      }
+      const updated = await tx.entitlement.update({
+        where: { userId },
+        data: {
+          llmQuotaUsed: { increment: 1 },
+          updatedAt: now,
+        },
+      });
+      await tx.llmUsageEvent.create({
+        data: {
+          id: randomUUID(),
+          userId,
+          entitlementId: entitlement.id,
+          requestId,
+          createdAt: now,
+        },
+      });
+      return { entitlement: updated as EntitlementRecord, reused: false };
+    });
+  }
+
+  async getLlmConfig(): Promise<LlmConfigRecord | null> {
+    const config = await this.prisma.llmConfig.findUnique({ where: { id: "default" } });
+    return config as LlmConfigRecord | null;
+  }
+
+  async upsertLlmConfig(
+    input: Omit<LlmConfigRecord, "id" | "createdAt" | "updatedAt">,
+    now: Date,
+  ): Promise<LlmConfigRecord> {
+    const config = await this.prisma.llmConfig.upsert({
+      where: { id: "default" },
+      update: { ...input, updatedAt: now },
+      create: {
+        ...input,
+        id: "default",
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    return config as LlmConfigRecord;
+  }
+
+  async createActivationCode(input: Omit<ActivationCodeRecord, "id">): Promise<ActivationCodeRecord> {
+    const code = await this.prisma.activationCode.create({
+      data: { ...input, id: randomUUID() },
+    });
+    return code as ActivationCodeRecord;
+  }
+
+  async findActivationCodeByHash(codeHash: string): Promise<ActivationCodeRecord | null> {
+    const code = await this.prisma.activationCode.findUnique({ where: { codeHash } });
+    return code as ActivationCodeRecord | null;
+  }
+
+  async markActivationCodeRedeemed(
+    codeHash: string,
+    userId: string,
+    redeemedAt: Date,
+  ): Promise<ActivationCodeRecord | null> {
+    const update = await this.prisma.activationCode.updateMany({
+      where: {
+        codeHash,
+        status: "active",
+        redeemedAt: null,
+      },
+      data: {
+        status: "redeemed",
+        redeemedByUserId: userId,
+        redeemedAt,
+      },
+    });
+    if (update.count !== 1) {
+      return null;
+    }
+    return this.findActivationCodeByHash(codeHash);
+  }
+
+  async listActivationCodes(): Promise<ActivationCodeRecord[]> {
+    const codes = await this.prisma.activationCode.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    return codes as ActivationCodeRecord[];
+  }
+
+  async listUsers(): Promise<UserRecord[]> {
+    return this.prisma.user.findMany({ orderBy: { email: "asc" } });
+  }
+
+  async createAdminSession(input: Omit<AdminSessionRecord, "id" | "revokedAt">): Promise<AdminSessionRecord> {
+    return this.prisma.adminSession.create({
+      data: { ...input, id: randomUUID(), revokedAt: null },
+    });
+  }
+
+  async findAdminSessionByTokenHash(tokenHash: string, now: Date): Promise<AdminSessionRecord | null> {
+    return this.prisma.adminSession.findFirst({
+      where: {
+        tokenHash,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+    });
+  }
+
+  async revokeAdminSession(tokenHash: string, now: Date): Promise<void> {
+    await this.prisma.adminSession.updateMany({
+      where: { tokenHash },
+      data: { revokedAt: now },
+    });
   }
 
   async createWebhookEvent(

@@ -4,8 +4,12 @@
 
 - `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, WeChat Native orders, payment webhooks, and entitlement status.
 - The service stores account and billing state in a private SQLite database at `server/data/frameq.sqlite` with WAL mode enabled. It is designed for a single writer service instance.
+- The service stores encrypted administrator-managed LLM config for a dedicated FrameQ client supplier key and tracks per-user insight-generation quota.
 - Desktop authentication uses `frameq://auth/callback` deep links. The browser receives a short-lived ticket, and the desktop client exchanges that ticket for an opaque session token.
-- The account service never receives video files, audio files, transcripts, generated insights, LLM API keys, cookies, model caches, or local history contents.
+- Activation codes are an administrator-issued entitlement source. Codes are redeemed through a signed-in desktop session and extend the same `Entitlement` record used by the processing gate.
+- Each activation grants 20 insight-generation uses. The desktop worker checks out one use before generating insights, then calls the LLM supplier directly with the returned config.
+- Admin Web access is limited to the configured administrator email and uses short-lived HttpOnly cookie sessions.
+- The account service never receives video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents. It may store and return the dedicated FrameQ client LLM key.
 - The existing local worker pipeline remains the only place where video extraction, ASR, and InsightFlow execution happen.
 
 <!-- 由 vibe-coding-launcher 生成。当前描述的是 MVP 目标架构；代码落地后必须同步更新。 -->
@@ -33,14 +37,17 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 
 ```text
 Desktop UI
-  -> Tauri Command
+  -> Tauri process_video command
   -> Python Worker
       -> yt-dlp
       -> ffprobe / ffmpeg
       -> Qwen3-ASR or SenseVoice
-      -> embedded InsightFlow module
-  -> Result JSON
-  -> Desktop UI
+  -> Result JSON with video/audio/transcript paths
+  -> Desktop UI result workspace
+  -> Tauri retry_insights command after user confirmation
+  -> Python Worker embedded InsightFlow module
+  -> Result JSON with insights path
+  -> Desktop UI result workspace
 ```
 
 ## 关键文件
@@ -69,6 +76,7 @@ Desktop UI
 - UI 只编排任务和展示状态，不直接调用 `yt-dlp`、`ffmpeg`、ASR 或 LLM。
 - UI 可以通过 Tauri command 读取/保存 LLM 配置，但不得回显完整 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、话题点和错误码。
+- `process_video` 主流程默认只负责视频下载、音频提取和 ASR 文字稿；`retry_insights`/话题点生成流程在用户二次确认后单独运行，并且是唯一需要 server-managed LLM checkout 的本地 worker 调用。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
 - 对外分发态的用户可见输出默认写入 app-local data `outputs/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义目录；中间文件和历史索引写入 app-local data `work/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。

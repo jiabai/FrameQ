@@ -38,6 +38,11 @@ type AccountStatusResponse = {
   email: string | null;
   entitlement_status: string;
   entitlement_expires_at: string | null;
+  llm_quota_limit: number;
+  llm_quota_used: number;
+  llm_quota_remaining: number;
+  llm_quota_resets_at: string | null;
+  llm_configured: boolean;
   last_verified_at: string | null;
   can_process: boolean;
   server_error: string | null;
@@ -105,6 +110,15 @@ export async function logoutAccount(
   await runner("logout_account", {});
 }
 
+export async function redeemActivationCode(
+  code: string,
+  runner: AccountCommandRunner = defaultRunner,
+): Promise<AccountStatus> {
+  return mapAccountStatus(
+    (await runner("redeem_activation_code", { code })) as AccountStatusResponse,
+  );
+}
+
 export async function createWechatCheckout(
   runner: AccountCommandRunner = defaultRunner,
 ): Promise<WechatCheckout> {
@@ -128,6 +142,11 @@ function mapAccountStatus(response: AccountStatusResponse): AccountStatus {
     email: response.email,
     entitlementStatus: response.entitlement_status,
     entitlementExpiresAt: response.entitlement_expires_at,
+    llmQuotaLimit: response.llm_quota_limit ?? 0,
+    llmQuotaUsed: response.llm_quota_used ?? 0,
+    llmQuotaRemaining: response.llm_quota_remaining ?? 0,
+    llmQuotaResetsAt: response.llm_quota_resets_at ?? null,
+    llmConfigured: response.llm_configured ?? false,
     lastVerifiedAt: response.last_verified_at,
     canProcess: response.can_process,
     serverError: response.server_error,
@@ -152,4 +171,3 @@ function mapCheckoutStatus(response: CheckoutStatusResponse): CheckoutStatus {
     entitlementExpiresAt: response.entitlement_expires_at,
   };
 }
-

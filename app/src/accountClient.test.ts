@@ -6,6 +6,7 @@ import {
   getAccountStatus,
   getCheckoutStatus,
   logoutAccount,
+  redeemActivationCode,
   type AccountCommandRunner,
 } from "./accountClient";
 
@@ -19,6 +20,11 @@ describe("account client", () => {
         email: "user@example.com",
         entitlement_status: "active",
         entitlement_expires_at: "2026-07-22T08:00:00.000Z",
+        llm_quota_limit: 20,
+        llm_quota_used: 3,
+        llm_quota_remaining: 17,
+        llm_quota_resets_at: "2026-07-22T08:00:00.000Z",
+        llm_configured: true,
         last_verified_at: "2026-06-21T08:00:00.000Z",
         can_process: true,
         server_error: null,
@@ -33,6 +39,11 @@ describe("account client", () => {
       email: "user@example.com",
       entitlementStatus: "active",
       entitlementExpiresAt: "2026-07-22T08:00:00.000Z",
+      llmQuotaLimit: 20,
+      llmQuotaUsed: 3,
+      llmQuotaRemaining: 17,
+      llmQuotaResetsAt: "2026-07-22T08:00:00.000Z",
+      llmConfigured: true,
       lastVerifiedAt: "2026-06-21T08:00:00.000Z",
       canProcess: true,
       serverError: null,
@@ -102,5 +113,46 @@ describe("account client", () => {
       { command: "logout_account", args: {} },
     ]);
   });
-});
 
+  test("redeems an activation code and maps refreshed account status", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: AccountCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return {
+        authenticated: true,
+        email: "user@example.com",
+        entitlement_status: "active",
+        entitlement_expires_at: "2026-07-22T08:00:00.000Z",
+        llm_quota_limit: 20,
+        llm_quota_used: 0,
+        llm_quota_remaining: 20,
+        llm_quota_resets_at: "2026-07-22T08:00:00.000Z",
+        llm_configured: true,
+        last_verified_at: "2026-06-21T08:00:00.000Z",
+        can_process: true,
+        server_error: null,
+      };
+    };
+
+    await expect(redeemActivationCode("fq-abcd-efgh-jklm-npqr", runner)).resolves.toEqual({
+      authenticated: true,
+      email: "user@example.com",
+      entitlementStatus: "active",
+      entitlementExpiresAt: "2026-07-22T08:00:00.000Z",
+      llmQuotaLimit: 20,
+      llmQuotaUsed: 0,
+      llmQuotaRemaining: 20,
+      llmQuotaResetsAt: "2026-07-22T08:00:00.000Z",
+      llmConfigured: true,
+      lastVerifiedAt: "2026-06-21T08:00:00.000Z",
+      canProcess: true,
+      serverError: null,
+    });
+    expect(calls).toEqual([
+      {
+        command: "redeem_activation_code",
+        args: { code: "fq-abcd-efgh-jklm-npqr" },
+      },
+    ]);
+  });
+});

@@ -203,6 +203,70 @@ def test_retry_insights_once_regenerates_topics_from_existing_transcript(
     ).as_posix()
 
 
+def test_retry_insights_once_updates_existing_partial_history_item(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "outputs"
+    work_dir = tmp_path / "work"
+    transcript_txt = output_dir / "demo_transcript.txt"
+    transcript_md = transcript_txt.with_suffix(".md")
+    history_path = work_dir / "history.json"
+    output_dir.mkdir()
+    work_dir.mkdir()
+    transcript_txt.write_text("ready transcript", encoding="utf-8")
+    transcript_md.write_text("# Transcript\n\nready transcript", encoding="utf-8")
+    history_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "id": "history-1",
+                        "created_at": "2026-06-21T16:13:24Z",
+                        "url": "https://www.douyin.com/video/7524373044106677544",
+                        "status": "partial_completed",
+                        "output_dir": output_dir.as_posix(),
+                        "video_path": (output_dir / "demo.mp4").as_posix(),
+                        "audio_path": (work_dir / "demo.wav").as_posix(),
+                        "transcript_path": transcript_txt.as_posix(),
+                        "insights_path": None,
+                        "error": {
+                            "code": "INSIGHTFLOW_LLM_REQUEST_FAILED",
+                            "message": "LLM request failed.",
+                            "stage": "insights_generating",
+                        },
+                        "text_preview": "ready transcript",
+                        "insights_count": 0,
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = retry_insights_once(
+        json.dumps(
+            {
+                "transcript_path": transcript_txt.as_posix(),
+                "text": "ready transcript",
+            }
+        ),
+        project_root=tmp_path,
+        insight_client=FakeInsightClient(),
+    )
+
+    assert result["status"] == "completed"
+    saved_history = json.loads(history_path.read_text(encoding="utf-8"))
+    saved_item = saved_history["items"][0]
+    assert saved_item["id"] == "history-1"
+    assert saved_item["status"] == "completed"
+    assert saved_item["transcript_path"] == transcript_txt.as_posix()
+    assert saved_item["insights_path"] == (output_dir / "demo_insights.json").as_posix()
+    assert saved_item["error"] is None
+    assert saved_item["insights_count"] == 1
+
+
 def test_retry_insights_once_preserves_transcript_when_client_is_missing(
     tmp_path: Path,
 ) -> None:

@@ -4,7 +4,7 @@ import json
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.request import Request
 
 from frameq_worker.insightflow import InsightClient, InsightGenerationError
@@ -18,6 +18,10 @@ LLM_API_KEY_ENV = "FRAMEQ_LLM_API_KEY"
 LLM_MODEL_ENV = "FRAMEQ_LLM_MODEL"
 LLM_BASE_URL_ENV = "FRAMEQ_LLM_BASE_URL"
 LLM_TIMEOUT_ENV = "FRAMEQ_LLM_TIMEOUT_SECONDS"
+LLM_SOURCE_ENV = "FRAMEQ_LLM_SOURCE"
+LLM_CHECKOUT_URL_ENV = "FRAMEQ_LLM_CHECKOUT_URL"
+LLM_SESSION_TOKEN_ENV = "FRAMEQ_LLM_SESSION_TOKEN"
+LLM_CHECKOUT_REQUEST_ID_ENV = "FRAMEQ_LLM_CHECKOUT_REQUEST_ID"
 
 Transport = Callable[[Request, float], bytes]
 
@@ -81,7 +85,78 @@ class OpenAICompatibleInsightClient:
         return extract_chat_completion_content(raw_response)
 
 
+@dataclass
+class ServerManagedInsightClient:
+    checkout_url: str
+    session_token: str
+    request_id: str
+    timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS
+    transport: Transport | None = None
+    _client: OpenAICompatibleInsightClient | None = field(default=None, init=False, repr=False)
+
+    def generate(self, prompt: str) -> str:
+        if self._client is None:
+            self._client = self._checkout_client()
+        return self._client.generate(prompt)
+
+    def _checkout_client(self) -> OpenAICompatibleInsightClient:
+        payload = {"request_id": self.request_id}
+        request = Request(
+            url=self.checkout_url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.session_token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            raw_response = (self.transport or urlopen_transport)(
+                request,
+                self.timeout_seconds,
+            )
+        except urllib.error.HTTPError as exc:
+            raise _managed_checkout_http_error(exc) from exc
+        except TimeoutError as exc:
+            raise InsightGenerationError(
+                "INSIGHTFLOW_LLM_CHECKOUT_TIMEOUT",
+                "FrameQ LLM checkout timed out. Please retry later.",
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise InsightGenerationError(
+                "INSIGHTFLOW_LLM_CHECKOUT_FAILED",
+                "FrameQ LLM checkout failed before a usable response was returned.",
+            ) from exc
+        except OSError as exc:
+            raise InsightGenerationError(
+                "INSIGHTFLOW_LLM_CHECKOUT_FAILED",
+                "FrameQ LLM checkout failed before a usable response was returned.",
+            ) from exc
+
+        config = parse_managed_checkout_response(raw_response)
+        return OpenAICompatibleInsightClient(
+            api_key=config["api_key"],
+            model=config["model"],
+            base_url=config["base_url"],
+            timeout_seconds=float(config["timeout_seconds"]),
+            transport=self.transport,
+        )
+
+
 def build_insight_client_from_env(env: Mapping[str, str]) -> InsightClient | None:
+    if env.get(LLM_SOURCE_ENV, "").strip().lower() == "server":
+        checkout_url = env.get(LLM_CHECKOUT_URL_ENV, "").strip()
+        session_token = env.get(LLM_SESSION_TOKEN_ENV, "").strip()
+        request_id = env.get(LLM_CHECKOUT_REQUEST_ID_ENV, "").strip()
+        if not checkout_url or not session_token or not request_id:
+            return None
+        return ServerManagedInsightClient(
+            checkout_url=checkout_url,
+            session_token=session_token,
+            request_id=request_id,
+            timeout_seconds=parse_timeout(env.get(LLM_TIMEOUT_ENV)),
+        )
+
     api_key = env.get(LLM_API_KEY_ENV, "").strip()
     model = env.get(LLM_MODEL_ENV, "").strip()
     if not api_key or not model:
@@ -98,6 +173,66 @@ def build_insight_client_from_env(env: Mapping[str, str]) -> InsightClient | Non
         or DEFAULT_LLM_BASE_URL,
         timeout_seconds=parse_timeout(env.get(LLM_TIMEOUT_ENV)),
     )
+
+
+def parse_managed_checkout_response(raw_response: bytes) -> dict[str, str | int]:
+    try:
+        payload = json.loads(raw_response.decode("utf-8"))
+        provider = str(payload["provider"]).strip().lower()
+        base_url = str(payload["base_url"]).strip()
+        model = str(payload["model"]).strip()
+        api_key = str(payload["api_key"]).strip()
+        timeout_seconds = int(payload.get("timeout_seconds", DEFAULT_LLM_TIMEOUT_SECONDS))
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise InsightGenerationError(
+            "INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE",
+            "FrameQ LLM checkout did not return usable configuration.",
+        ) from exc
+
+    if provider not in {"openai", "openai_compatible"} or not base_url or not model or not api_key:
+        raise InsightGenerationError(
+            "INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE",
+            "FrameQ LLM checkout did not return usable configuration.",
+        )
+    return {
+        "provider": provider,
+        "base_url": base_url,
+        "model": model,
+        "api_key": api_key,
+        "timeout_seconds": timeout_seconds,
+    }
+
+
+def _managed_checkout_http_error(error: urllib.error.HTTPError) -> InsightGenerationError:
+    detail = _extract_error_code(error)
+    if error.code == 401:
+        return InsightGenerationError(
+            "INSIGHTFLOW_LLM_AUTH_REQUIRED",
+            "FrameQ login is required to use the managed LLM.",
+        )
+    if error.code == 403:
+        return InsightGenerationError(
+            "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE",
+            "No insight-generation uses are available for this account.",
+        )
+    if detail == "LLM_CONFIG_MISSING":
+        return InsightGenerationError(
+            "INSIGHTFLOW_LLM_CONFIG_MISSING",
+            "FrameQ managed LLM is not configured.",
+        )
+    return InsightGenerationError(
+        "INSIGHTFLOW_LLM_CHECKOUT_FAILED",
+        f"FrameQ LLM checkout failed with HTTP {error.code}.",
+    )
+
+
+def _extract_error_code(error: urllib.error.HTTPError) -> str:
+    try:
+        payload = json.loads(error.read().decode("utf-8"))
+        code = payload.get("error")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+    return code if isinstance(code, str) else ""
 
 
 def parse_timeout(raw_value: str | None) -> float:

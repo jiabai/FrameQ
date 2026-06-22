@@ -7,11 +7,12 @@ import {
   Circle,
   Clock3,
   Copy,
-  CreditCard,
   Download,
   FileText,
+  Film,
   FolderOpen,
   History as HistoryIcon,
+  KeyRound,
   Lightbulb,
   LoaderCircle,
   Play,
@@ -20,10 +21,10 @@ import {
   Settings,
   ShieldCheck,
   UserRound,
+  Volume2,
   X,
 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import QRCode from "qrcode";
 import "./App.css";
 import {
   canSubmitUrl,
@@ -60,11 +61,9 @@ import { shouldApplyModelDownloadUpdate } from "./modelDownloadState";
 import {
   beginAuthFlow,
   completeAuthFlow,
-  createWechatCheckout,
   getAccountStatus,
-  getCheckoutStatus,
   logoutAccount,
-  type WechatCheckout,
+  redeemActivationCode,
 } from "./accountClient";
 import { canProcessWithAccount, createGuestAccountStatus, type AccountStatus } from "./accountState";
 import {
@@ -98,7 +97,7 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
   },
   completed: {
     title: "文字稿完成",
-    body: "文字稿和启发话题点已准备好。",
+    body: "视频、音频和文字稿已准备好；话题点可单独确认生成。",
   },
   partial_completed: {
     title: "部分完成",
@@ -142,7 +141,7 @@ const stageSummary: Record<WorkflowState["stage"], string> = {
   video_extracting: "正在准备媒体文件",
   video_transcribing: "正在生成本地文字稿",
   insights_generating: "正在生成启发话题点",
-  completed: "结果已可查看和导出",
+  completed: "视频、音频和文字稿已可查看",
   partial_completed: "文字稿已保留，可重试话题点",
   failed: "处理未完成，请查看原因",
 };
@@ -161,9 +160,21 @@ function formatProgressPercent(value: number): string {
 }
 
 function getResultMeta(card: ResultCard, workflow: WorkflowState): string {
+  if (card.id === "video") {
+    return workflow.videoPath ? "已下载，可定位文件" : "等待视频文件";
+  }
+
+  if (card.id === "audio") {
+    return workflow.audioPath ? "WAV 音频，可定位文件" : "等待音频文件";
+  }
+
   if (card.id === "insights") {
+    if (card.status === "pending") {
+      return "待生成，需单独确认";
+    }
+
     if (card.status === "failed") {
-      return "生成失败，可仅重试话题点";
+      return "生成失败，可重新确认";
     }
 
     return `${workflow.insights.length} 个话题点`;
@@ -174,6 +185,34 @@ function getResultMeta(card: ResultCard, workflow: WorkflowState): string {
   }
 
   return `${workflow.text.length.toLocaleString("zh-CN")} 字`;
+}
+
+function getResultActionLabel(card: ResultCard): string {
+  if (card.action === "locate") {
+    return "定位文件";
+  }
+
+  if (card.action === "confirm") {
+    return card.status === "failed" ? "重新生成" : "确认生成";
+  }
+
+  return "打开详情";
+}
+
+function renderResultIcon(card: ResultCard) {
+  if (card.id === "video") {
+    return <Film size={22} />;
+  }
+
+  if (card.id === "audio") {
+    return <Volume2 size={22} />;
+  }
+
+  if (card.id === "insights") {
+    return <Lightbulb size={22} />;
+  }
+
+  return <FileText size={22} />;
 }
 
 function parseAsrModelDownloadProgress(payload: unknown): AsrModelDownloadProgress | null {
@@ -206,22 +245,38 @@ function asrModelSourceLabel(source: string): string {
   return source === "custom_url" ? "自定义下载源" : "ModelScope";
 }
 
+function accountProcessBlockerMessage(account: AccountStatus, actionLabel: string): string {
+  if (!account.authenticated) {
+    return `请先登录 FrameQ 账号后再${actionLabel}。`;
+  }
+
+  if (account.entitlementStatus !== "active") {
+    return `请先输入激活码激活 FrameQ 月卡后再${actionLabel}。`;
+  }
+
+  if (!account.llmConfigured) {
+    return "启发话题点 LLM 尚未由管理员配置完成，请稍后再试。";
+  }
+
+  if (account.llmQuotaRemaining <= 0) {
+    return "本月启发话题点次数已用完，请联系管理员补充额度或兑换新的激活码。";
+  }
+
+  return `当前账号暂不能${actionLabel}，请刷新账号状态后重试。`;
+}
+
 function App() {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
+  const [insightConfirmOpen, setInsightConfirmOpen] = useState(false);
   const [detailSearch, setDetailSearch] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState<LlmConfigDraft>({
-    baseUrl: "",
-    apiKey: "",
-    model: "",
-    timeoutSeconds: "60",
     outputDir: "",
     asrModel: "iic/SenseVoiceSmall",
   });
   const [settingsSupportedAsrModels, setSettingsSupportedAsrModels] = useState(defaultAsrModels);
-  const [settingsHasApiKey, setSettingsHasApiKey] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -237,9 +292,8 @@ function App() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountNotice, setAccountNotice] = useState("");
   const [accountLoading, setAccountLoading] = useState(false);
-  const [checkout, setCheckout] = useState<WechatCheckout | null>(null);
-  const [checkoutQrDataUrl, setCheckoutQrDataUrl] = useState("");
-  const [checkoutChecking, setCheckoutChecking] = useState(false);
+  const [activationCodeDraft, setActivationCodeDraft] = useState("");
+  const [activationRedeeming, setActivationRedeeming] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [historyNotice, setHistoryNotice] = useState("");
@@ -273,6 +327,11 @@ function App() {
         return;
       }
 
+      if (insightConfirmOpen) {
+        setInsightConfirmOpen(false);
+        return;
+      }
+
       if (settingsOpen) {
         setSettingsOpen(false);
         return;
@@ -285,7 +344,7 @@ function App() {
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [detailTab, historyOpen, settingsOpen, modelGuideOpen, modelDownloadActive]);
+  }, [detailTab, historyOpen, insightConfirmOpen, settingsOpen, modelGuideOpen, modelDownloadActive]);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,14 +365,7 @@ function App() {
           return;
         }
 
-        if (!firstRun.missingLlmConfig) {
-          return;
-        }
-
-        setSettingsOpen(true);
-        await loadSettings(
-          `首次启动：可现在配置启发话题点 LLM，也可以稍后配置。未配置时文字稿仍可生成，话题点稍后可重试。默认输出目录：${firstRun.defaultOutputDir}`,
-        );
+        return;
       } catch {
         // Browser-only development and tests do not always provide Tauri commands.
       }
@@ -372,6 +424,11 @@ function App() {
         email: "browser-preview@frameq.local",
         entitlementStatus: "active",
         entitlementExpiresAt: null,
+        llmQuotaLimit: 20,
+        llmQuotaUsed: 0,
+        llmQuotaRemaining: 20,
+        llmQuotaResetsAt: null,
+        llmConfigured: true,
         lastVerifiedAt: null,
         canProcess: true,
         serverError: "Browser preview fallback",
@@ -536,7 +593,7 @@ function App() {
       return;
     }
     if (!canProcessWithAccount(account)) {
-      openAccountPanel("请先登录并开通 FrameQ 月卡后再开始新任务。");
+      openAccountPanel(accountProcessBlockerMessage(account, "开始新任务"));
       return;
     }
     const submittedUrl = workflow.url;
@@ -561,6 +618,7 @@ function App() {
   function resetWorkflow() {
     operationIdRef.current += 1;
     setDetailTab(null);
+    setInsightConfirmOpen(false);
     setActionNotice("");
     setWorkflow(createInitialWorkflow());
   }
@@ -577,12 +635,18 @@ function App() {
   async function cancelCurrentProcessing() {
     operationIdRef.current += 1;
     setDetailTab(null);
+    setInsightConfirmOpen(false);
     setActionNotice("");
     setWorkflow((current) => cancelProcessing(current));
     await cancelProcess();
   }
 
   function openCard(card: ResultCard) {
+    if (card.action === "locate") {
+      void locateArtifact(card);
+      return;
+    }
+
     if (card.action === "open") {
       setActionNotice("");
       setDetailSearch("");
@@ -590,9 +654,30 @@ function App() {
       return;
     }
 
-    if (card.action === "retry") {
-      void retryInsightGeneration();
+    if (card.action === "confirm") {
+      setActionNotice("");
+      setInsightConfirmOpen(true);
     }
+  }
+
+  async function locateArtifact(card: ResultCard) {
+    const artifactPath = getExportPath(card.id, workflow);
+    if (!artifactPath) {
+      setActionNotice("暂无可定位的文件。");
+      return;
+    }
+
+    try {
+      await revealItemInDir(artifactPath);
+      setActionNotice("已在文件管理器中定位文件。");
+    } catch {
+      setActionNotice(`无法定位文件：${artifactPath}`);
+    }
+  }
+
+  function confirmInsightGeneration() {
+    setInsightConfirmOpen(false);
+    void retryInsightGeneration();
   }
 
   async function retryInsightGeneration() {
@@ -600,7 +685,7 @@ function App() {
       return;
     }
     if (!canProcessWithAccount(account)) {
-      openAccountPanel("请先登录并开通 FrameQ 月卡后再重试话题点生成。");
+      openAccountPanel(accountProcessBlockerMessage(account, "重试话题点生成"));
       return;
     }
 
@@ -617,10 +702,15 @@ function App() {
       return;
     }
     setWorkflow((current) => ({
-      ...summarizeWorkerResult(result),
+      ...summarizeWorkerResult({
+        ...result,
+        video_path: result.video_path ?? current.videoPath,
+        audio_path: result.audio_path ?? current.audioPath,
+      }),
       url: current.url,
       submittedUrl: current.submittedUrl,
     }));
+    void refreshAccountStatus();
   }
 
   async function copyDetail() {
@@ -705,41 +795,23 @@ function App() {
     }
   }
 
-  async function startWechatCheckout() {
-    setAccountLoading(true);
-    setAccountNotice("");
-    setCheckout(null);
-    setCheckoutQrDataUrl("");
-    try {
-      const nextCheckout = await createWechatCheckout();
-      setCheckout(nextCheckout);
-      setCheckoutQrDataUrl(await QRCode.toDataURL(nextCheckout.codeUrl, { margin: 1, width: 224 }));
-      setAccountNotice("请使用微信扫描二维码完成 9.9 元月卡支付。");
-    } catch (error) {
-      setAccountNotice(`创建支付订单失败：${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setAccountLoading(false);
-    }
-  }
-
-  async function refreshCheckoutStatus() {
-    if (!checkout) {
+  async function redeemActivationCodeFromInput() {
+    const code = activationCodeDraft.trim();
+    if (!code) {
+      setAccountNotice("请输入激活码。");
       return;
     }
-    setCheckoutChecking(true);
+    setActivationRedeeming(true);
+    setAccountNotice("");
     try {
-      const status = await getCheckoutStatus(checkout.orderId);
-      setCheckout((current) => (current ? { ...current, status: status.status } : current));
-      if (status.status === "paid") {
-        await refreshAccountStatus();
-        setAccountNotice("支付已确认，月卡已生效。");
-      } else {
-        setAccountNotice("订单尚未支付成功，请稍后刷新状态。");
-      }
+      const status = await redeemActivationCode(code);
+      setAccount(status);
+      setActivationCodeDraft("");
+      setAccountNotice("激活成功，月卡已生效。");
     } catch (error) {
-      setAccountNotice(`刷新支付状态失败：${error instanceof Error ? error.message : String(error)}`);
+      setAccountNotice(`激活失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      setCheckoutChecking(false);
+      setActivationRedeeming(false);
     }
   }
 
@@ -748,8 +820,7 @@ function App() {
     try {
       await logoutAccount();
       setAccount(createGuestAccountStatus());
-      setCheckout(null);
-      setCheckoutQrDataUrl("");
+      setActivationCodeDraft("");
       setAccountNotice("已退出登录。");
     } catch (error) {
       setAccountNotice(`退出登录失败：${error instanceof Error ? error.message : String(error)}`);
@@ -758,38 +829,19 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    if (!accountOpen || !checkout || checkout.status !== "pending") {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void refreshCheckoutStatus();
-    }, 2000);
-
-    return () => window.clearInterval(timer);
-  }, [accountOpen, checkout?.orderId, checkout?.status]);
-
   async function loadSettings(successNotice?: string) {
     setSettingsLoading(true);
     setSettingsNotice("正在读取配置。");
     try {
       const config = await getLlmConfig();
       setSettingsDraft({
-        baseUrl: config.baseUrl,
-        apiKey: "",
-        model: config.model,
-        timeoutSeconds: config.timeoutSeconds,
         outputDir: config.outputDir,
         asrModel: config.asrModel,
       });
       setSettingsSupportedAsrModels(
         config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
       );
-      setSettingsHasApiKey(config.hasApiKey);
-      setSettingsNotice(
-        successNotice ?? (config.hasApiKey ? "已保存密钥；留空可继续保留。" : "尚未保存密钥。"),
-      );
+      setSettingsNotice(successNotice ?? "已读取本机 ASR 与输出目录设置。");
     } catch (error) {
       setSettingsNotice(`读取配置失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -805,18 +857,13 @@ function App() {
       const config = await saveLlmConfig(settingsDraft);
       setSettingsDraft((current) => ({
         ...current,
-        apiKey: "",
-        baseUrl: config.baseUrl,
-        model: config.model,
-        timeoutSeconds: config.timeoutSeconds,
         outputDir: config.outputDir,
         asrModel: config.asrModel,
       }));
       setSettingsSupportedAsrModels(
         config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
       );
-      setSettingsHasApiKey(config.hasApiKey);
-      setSettingsNotice("配置已保存，后续任务会使用新的 LLM 和输出目录设置。");
+      setSettingsNotice("配置已保存，后续任务会使用新的 ASR 和输出目录设置。");
     } catch (error) {
       setSettingsNotice(`保存失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -926,15 +973,25 @@ function App() {
           .filter((line) => line.toLocaleLowerCase().includes(searchQuery))
           .join("\n")
       : workflow.text;
+  const accountHasActiveEntitlement =
+    account.authenticated && account.entitlementStatus === "active";
   const accountChipLabel = canProcessWithAccount(account)
     ? "月卡有效"
     : account.authenticated
-      ? "续费"
+      ? accountHasActiveEntitlement
+        ? account.llmConfigured
+          ? "次数不足"
+          : "待配置"
+        : "激活"
       : "登录";
   const accountStatusText = canProcessWithAccount(account)
     ? `月卡有效${account.entitlementExpiresAt ? `至 ${formatHistoryDate(account.entitlementExpiresAt)}` : ""}`
     : account.authenticated
-      ? "未开通月卡"
+      ? accountHasActiveEntitlement
+        ? account.llmConfigured
+          ? "话题点次数不足"
+          : "等待管理员配置 LLM"
+        : "未激活月卡"
       : "未登录";
 
   return (
@@ -1106,11 +1163,11 @@ function App() {
                       onClick={() => openCard(card)}
                     >
                       <span className="result-icon">
-                        {card.id === "insights" ? <Lightbulb size={22} /> : <FileText size={22} />}
+                        {renderResultIcon(card)}
                       </span>
                       <span>{card.title}</span>
                       <small>{getResultMeta(card, workflow)}</small>
-                      <em>{card.action === "retry" ? "重试生成" : "打开详情"}</em>
+                      <em>{getResultActionLabel(card)}</em>
                     </button>
                   ))}
                 </div>
@@ -1129,6 +1186,7 @@ function App() {
                   </div>
                 </div>
               )}
+              {actionNotice ? <p className="action-notice result-action-notice">{actionNotice}</p> : null}
             </section>
           ) : null}
         </section>
@@ -1155,7 +1213,7 @@ function App() {
             <div className="account-content">
               <p className="settings-warning privacy-callout">
                 <ShieldCheck size={16} />
-                <span>账号服务只验证登录、订单和月卡状态；视频、音频、文字稿、历史记录和 LLM Key 仍保留在本机。</span>
+                <span>账号服务只验证登录、激活码、月卡和话题点次数；视频、音频、文字稿和历史记录仍保留在本机，LLM 配置由管理员统一管理。</span>
               </p>
               <div className={`account-status-card ${canProcessWithAccount(account) ? "active" : "inactive"}`}>
                 <div>
@@ -1165,17 +1223,46 @@ function App() {
                 </div>
               </div>
 
-              {checkout ? (
-                <div className="checkout-panel">
+              {account.authenticated ? (
+                <div className="account-quota-grid">
                   <div>
-                    <span className="account-status-label">微信扫码支付</span>
-                    <strong>{(checkout.amountFen / 100).toFixed(2)} 元 / 31 天</strong>
-                    <small>订单 {checkout.orderId}</small>
-                    <small>状态：{checkout.status}</small>
+                    <span className="account-status-label">话题点次数</span>
+                    <strong>
+                      {account.llmQuotaRemaining} / {account.llmQuotaLimit}
+                    </strong>
+                    <small>
+                      {account.llmQuotaResetsAt
+                        ? `随月卡到期重置：${formatHistoryDate(account.llmQuotaResetsAt)}`
+                        : "激活月卡后获得次数"}
+                    </small>
                   </div>
-                  {checkoutQrDataUrl ? (
-                    <img className="checkout-qr" src={checkoutQrDataUrl} alt="微信支付二维码" />
-                  ) : null}
+                  <div>
+                    <span className="account-status-label">LLM 配置</span>
+                    <strong>{account.llmConfigured ? "已就绪" : "待管理员配置"}</strong>
+                    <small>客户端会在生成话题点前自动领取本次配置。</small>
+                  </div>
+                </div>
+              ) : null}
+
+              {account.authenticated && !canProcessWithAccount(account) ? (
+                <div className="activation-panel">
+                  <div>
+                    <span className="account-status-label">激活码</span>
+                    <strong>输入管理员发放的月卡激活码</strong>
+                    <small>兑换成功后将为当前邮箱增加 31 天权益。</small>
+                  </div>
+                  <input
+                    className="activation-code-input"
+                    value={activationCodeDraft}
+                    onChange={(event) => setActivationCodeDraft(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        void redeemActivationCodeFromInput();
+                      }
+                    }}
+                    placeholder="FQ-XXXX-XXXX-XXXX-XXXX"
+                    disabled={activationRedeeming}
+                  />
                 </div>
               ) : null}
 
@@ -1192,22 +1279,15 @@ function App() {
                 </button>
               )}
               {account.authenticated ? (
-                checkout ? (
-                  <button type="button" className="primary-button" onClick={refreshCheckoutStatus} disabled={checkoutChecking}>
-                    <CreditCard size={16} />
-                    <span>{checkoutChecking ? "刷新中" : "刷新支付状态"}</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={startWechatCheckout}
-                    disabled={accountLoading || canProcessWithAccount(account)}
-                  >
-                    <CreditCard size={16} />
-                    <span>{canProcessWithAccount(account) ? "月卡已生效" : "微信支付 9.9 元"}</span>
-                  </button>
-                )
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={redeemActivationCodeFromInput}
+                  disabled={activationRedeeming || canProcessWithAccount(account)}
+                >
+                  <KeyRound size={16} />
+                  <span>{canProcessWithAccount(account) ? "月卡已生效" : activationRedeeming ? "兑换中" : "兑换激活码"}</span>
+                </button>
               ) : (
                 <button type="button" className="primary-button" onClick={startLoginFlow} disabled={accountLoading}>
                   <UserRound size={16} />
@@ -1309,6 +1389,60 @@ function App() {
                   <span>{asrModelStatus.available ? "已下载" : "下载模型"}</span>
                 </button>
               )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {insightConfirmOpen ? (
+        <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={() => setInsightConfirmOpen(false)}>
+          <section
+            className="sheet-panel detail-modal insight-confirm-modal insight-confirm-sheet"
+            aria-label="生成启发话题点"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="modal-header sheet-header">
+              <div>
+                <p className="section-label">Insight topics</p>
+                <h2>生成启发话题点</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setInsightConfirmOpen(false)} aria-label="关闭确认面板">
+                <X size={18} />
+              </button>
+            </header>
+            <div className="insight-confirm-content">
+              <p className="settings-warning privacy-callout">
+                <ShieldCheck size={16} />
+                <span>确认后会使用管理员配置的云端 LLM 生成话题点，文字稿片段会发送到该服务，并消耗 1 次话题点额度。</span>
+              </p>
+              <div className="confirm-summary">
+                <div>
+                  <span className="account-status-label">当前文字稿</span>
+                  <strong>{workflow.text ? `${workflow.text.length.toLocaleString("zh-CN")} 字` : "等待文字稿"}</strong>
+                  <small>{workflow.transcriptPath || "文字稿文件生成后才能继续。"}</small>
+                </div>
+                <div>
+                  <span className="account-status-label">账号额度</span>
+                  <strong>{account.llmQuotaRemaining} 次可用</strong>
+                  <small>生成开始时扣除 1 次；视频、音频和文字稿不会重新处理。</small>
+                </div>
+              </div>
+            </div>
+            <div className="settings-actions sheet-footer">
+              <button type="button" className="secondary-button" onClick={() => setInsightConfirmOpen(false)}>
+                <span>取消</span>
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={confirmInsightGeneration}
+                disabled={!workflow.transcriptPath || isProcessingStage(workflow.stage)}
+              >
+                <Lightbulb size={16} />
+                <span>确认</span>
+              </button>
             </div>
           </section>
         </div>
@@ -1477,8 +1611,7 @@ function App() {
               <p className="settings-warning privacy-callout">
                 <ShieldCheck size={16} />
                 <span>
-                  启用云端 LLM 后，文字稿片段会发送到你配置的服务。API Key 只写入本机
-                  .env，读取时不会回显完整密钥。
+                  这里仅管理本机 ASR 模型和输出目录。启发话题点 LLM 由管理员在服务端统一配置，客户端无需手动填写 API Key。
                 </span>
               </p>
 
@@ -1524,53 +1657,6 @@ function App() {
                     value={settingsDraft.outputDir}
                     onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
                     placeholder="留空使用 outputs/"
-                    disabled={settingsLoading || settingsSaving}
-                  />
-                </label>
-              </section>
-
-              <section className="sheet-form-section">
-                <div className="form-section-heading">
-                  <h3>启发话题点 LLM</h3>
-                  <p>{settingsHasApiKey ? "已保存密钥，留空保持不变。" : "尚未保存密钥。"}</p>
-                </div>
-                <label className="field-row">
-                  <span>Base URL</span>
-                  <input
-                    value={settingsDraft.baseUrl}
-                    onChange={(event) => updateSettingsDraft("baseUrl", event.currentTarget.value)}
-                    placeholder="https://api.openai.com/v1"
-                    disabled={settingsLoading || settingsSaving}
-                  />
-                </label>
-                <label className="field-row">
-                  <span>API Key</span>
-                  <input
-                    value={settingsDraft.apiKey}
-                    onChange={(event) => updateSettingsDraft("apiKey", event.currentTarget.value)}
-                    placeholder={settingsHasApiKey ? "已保存密钥；留空保持不变" : "请输入 API Key"}
-                    type="password"
-                    disabled={settingsLoading || settingsSaving}
-                  />
-                </label>
-                <label className="field-row">
-                  <span>Model</span>
-                  <input
-                    value={settingsDraft.model}
-                    onChange={(event) => updateSettingsDraft("model", event.currentTarget.value)}
-                    placeholder="deepseek-ai/DeepSeek-V3.2"
-                    disabled={settingsLoading || settingsSaving}
-                  />
-                </label>
-                <label className="field-row">
-                  <span>Timeout seconds</span>
-                  <input
-                    value={settingsDraft.timeoutSeconds}
-                    onChange={(event) =>
-                      updateSettingsDraft("timeoutSeconds", event.currentTarget.value)
-                    }
-                    inputMode="decimal"
-                    placeholder="60"
                     disabled={settingsLoading || settingsSaving}
                   />
                 </label>

@@ -50,7 +50,7 @@ export async function processVideo(
     language: "Chinese",
     output_formats: ["txt", "md"],
     model: "iic/SenseVoiceSmall",
-    generate_insights: true,
+    generate_insights: false,
     insightflow_mode: "embedded",
   };
 
@@ -93,6 +93,8 @@ export async function retryInsights(
   } catch (error) {
     return {
       status: "partial_completed",
+      video_path: null,
+      audio_path: null,
       text,
       insights: [],
       transcript_path: transcriptPath,
@@ -143,6 +145,8 @@ function parseProgressEvent(payload: unknown): WorkerProgressEvent | null {
 function failedResult(code: string, message: string, stage: WorkflowStage): WorkerResult {
   return {
     status: "failed",
+    video_path: null,
+    audio_path: null,
     text: "",
     insights: [],
     transcript_path: null,

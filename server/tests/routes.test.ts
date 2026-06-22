@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { buildServer } from "../src/server.js";
+import { sha256 } from "../src/security.js";
 import { MemoryStore } from "../src/store.js";
 
 describe("desktop account routes", () => {
@@ -97,6 +98,92 @@ describe("desktop account routes", () => {
     });
   });
 
+  test("redeems an activation code through an authenticated desktop session", async () => {
+    let sentCode = "";
+    const store = new MemoryStore();
+    const app = buildServer({
+      store,
+      sendOtp: async (_email, code) => {
+        sentCode = code;
+      },
+      createNativePayment: async () => ({
+        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+        providerPayload: {},
+      }),
+      now: () => new Date("2026-06-21T08:00:00.000Z"),
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/auth/email/start",
+      payload: { email: "user@example.com", state: "state-1001" },
+      remoteAddress: "203.0.113.10",
+    });
+    const verify = await app.inject({
+      method: "POST",
+      url: "/auth/email/verify",
+      payload: { email: "user@example.com", code: sentCode, state: "state-1001" },
+    });
+    const ticket = verify.json<{ ticket: string }>().ticket;
+    const exchange = await app.inject({
+      method: "POST",
+      url: "/api/desktop/sessions/exchange",
+      payload: { ticket, state: "state-1001" },
+    });
+    const sessionToken = exchange.json<{ session_token: string }>().session_token;
+    const activationCode = "FQ-ABCD-EFGH-JKLM-NPQR";
+    await store.createActivationCode({
+      codeHash: sha256(activationCode),
+      codePrefix: "FQ-ABCD",
+      status: "active",
+      entitlementDays: 31,
+      redeemBy: new Date("2026-07-21T08:00:00.000Z"),
+      createdAt: new Date("2026-06-21T08:00:00.000Z"),
+      redeemedAt: null,
+      redeemedByUserId: null,
+    });
+
+    const redeemed = await app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/redeem",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { code: activationCode },
+    });
+
+    expect(redeemed.statusCode).toBe(200);
+    expect(redeemed.json()).toMatchObject({
+      authenticated: true,
+      email: "user@example.com",
+      entitlement_status: "active",
+      llm_quota_limit: 20,
+      llm_quota_used: 0,
+      llm_quota_remaining: 20,
+      llm_configured: false,
+      can_process: false,
+    });
+  });
+
+  test("keeps WeChat routes disabled unless explicitly enabled", async () => {
+    const app = buildServer({
+      store: new MemoryStore(),
+      sendOtp: async () => {},
+      createNativePayment: async () => ({
+        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+        providerPayload: {},
+      }),
+      wechatPayEnabled: false,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/wechat/notify",
+      payload: { id: "notice-1" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "WECHAT_PAY_DISABLED" });
+  });
+
   test("returns a generic error when email delivery fails", async () => {
     const app = buildServer({
       store: new MemoryStore(),
@@ -133,6 +220,7 @@ describe("desktop account routes", () => {
       parseWechatNotification: async () => {
         throw new Error("invalid wechat signature");
       },
+      wechatPayEnabled: true,
     });
 
     const response = await app.inject({

@@ -15,6 +15,7 @@ model User {
   sessions     Session[]
   orders       Order[]
   entitlements Entitlement[]
+  redeemedCodes ActivationCode[]
 }
 
 model EmailOtp {
@@ -73,14 +74,67 @@ model Order {
 }
 
 model Entitlement {
-  id        String   @id
-  userId    String
-  status    String
-  expiresAt DateTime
-  updatedAt DateTime
-  user      User     @relation(fields: [userId], references: [id])
+  id            String   @id
+  userId        String
+  status        String
+  expiresAt     DateTime
+  llmQuotaLimit Int      @default(0)
+  llmQuotaUsed  Int      @default(0)
+  updatedAt     DateTime
+  user          User     @relation(fields: [userId], references: [id])
 
   @@unique([userId])
+}
+
+model LlmConfig {
+  id              String   @id
+  provider        String
+  baseUrl         String
+  model           String
+  encryptedApiKey String
+  apiKeyLast4     String
+  timeoutSeconds  Int
+  createdAt       DateTime
+  updatedAt       DateTime
+}
+
+model LlmUsageEvent {
+  id            String   @id
+  userId        String
+  entitlementId String
+  requestId     String
+  createdAt     DateTime
+
+  @@unique([userId, requestId])
+  @@index([userId])
+}
+
+model ActivationCode {
+  id               String    @id
+  codeHash         String    @unique
+  codePrefix       String
+  status           String
+  entitlementDays  Int
+  redeemBy         DateTime
+  createdAt        DateTime
+  redeemedAt       DateTime?
+  redeemedByUserId String?
+  redeemedByUser   User?     @relation(fields: [redeemedByUserId], references: [id])
+
+  @@index([status])
+  @@index([redeemedByUserId])
+}
+
+model AdminSession {
+  id            String    @id
+  email         String
+  tokenHash     String    @unique
+  csrfTokenHash String
+  createdAt     DateTime
+  expiresAt     DateTime
+  revokedAt     DateTime?
+
+  @@index([email])
 }
 
 model WebhookEvent {
@@ -93,4 +147,3 @@ model WebhookEvent {
 
   @@unique([provider, eventId])
 }
-

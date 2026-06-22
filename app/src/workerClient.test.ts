@@ -16,6 +16,8 @@ describe("worker client", () => {
       calls.push({ command, args });
       return {
         status: "completed",
+        video_path: "outputs/demo.mp4",
+        audio_path: "work/demo.wav",
         text: "完整文字稿",
         insights: ["为什么流程编排可能比单点模型能力更关键？"],
         transcript_path: "outputs/demo_transcript.txt",
@@ -38,7 +40,7 @@ describe("worker client", () => {
             language: "Chinese",
             output_formats: ["txt", "md"],
             model: "iic/SenseVoiceSmall",
-            generate_insights: true,
+            generate_insights: false,
             insightflow_mode: "embedded",
           },
         },
@@ -59,6 +61,8 @@ describe("worker client", () => {
 
     expect(result).toEqual({
       status: "failed",
+      video_path: null,
+      audio_path: null,
       text: "",
       insights: [],
       transcript_path: null,
@@ -90,6 +94,8 @@ describe("worker client", () => {
     };
     const runner: WorkerCommandRunner = async () => ({
       status: "completed",
+      video_path: "outputs/demo.mp4",
+      audio_path: "work/demo.wav",
       text: "完整文字稿",
       insights: [],
       transcript_path: "outputs/demo_transcript.txt",
@@ -120,6 +126,8 @@ describe("worker client", () => {
       calls.push({ command, args });
       return {
         status: "completed",
+        video_path: "outputs/demo.mp4",
+        audio_path: "work/demo.wav",
         text: "已经完成的文字稿。",
         insights: ["为什么重试应该只重新生成话题点？"],
         transcript_path: "outputs/demo_transcript.txt",
@@ -161,6 +169,8 @@ describe("worker client", () => {
 
     expect(result).toEqual({
       status: "partial_completed",
+      video_path: null,
+      audio_path: null,
       text: "已经完成的文字稿。",
       insights: [],
       transcript_path: "outputs/demo_transcript.txt",

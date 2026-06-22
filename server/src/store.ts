@@ -57,7 +57,51 @@ export type EntitlementRecord = {
   userId: string;
   status: "active" | "inactive";
   expiresAt: Date;
+  llmQuotaLimit: number;
+  llmQuotaUsed: number;
   updatedAt: Date;
+};
+
+export type LlmConfigRecord = {
+  id: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  encryptedApiKey: string;
+  apiKeyLast4: string;
+  timeoutSeconds: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type LlmUsageEventRecord = {
+  id: string;
+  userId: string;
+  entitlementId: string;
+  requestId: string;
+  createdAt: Date;
+};
+
+export type ActivationCodeRecord = {
+  id: string;
+  codeHash: string;
+  codePrefix: string;
+  status: "active" | "redeemed" | "expired" | "disabled";
+  entitlementDays: number;
+  redeemBy: Date;
+  createdAt: Date;
+  redeemedAt: Date | null;
+  redeemedByUserId: string | null;
+};
+
+export type AdminSessionRecord = {
+  id: string;
+  email: string;
+  tokenHash: string;
+  csrfTokenHash: string;
+  createdAt: Date;
+  expiresAt: Date;
+  revokedAt: Date | null;
 };
 
 export type WebhookEventRecord = {
@@ -85,7 +129,24 @@ export type Store = {
   findOrderByOutTradeNo(outTradeNo: string): Promise<OrderRecord | null>;
   markOrderPaid(outTradeNo: string, transactionId: string, paidAt: Date): Promise<OrderRecord>;
   getEntitlement(userId: string): Promise<EntitlementRecord | null>;
-  upsertEntitlement(userId: string, expiresAt: Date, now: Date): Promise<EntitlementRecord>;
+  upsertEntitlement(
+    userId: string,
+    expiresAt: Date,
+    now: Date,
+    quota?: { llmQuotaLimit?: number; llmQuotaUsed?: number },
+  ): Promise<EntitlementRecord>;
+  updateEntitlementQuota(userId: string, llmQuotaLimit: number, llmQuotaUsed: number, now: Date): Promise<EntitlementRecord | null>;
+  consumeLlmQuota(userId: string, requestId: string, now: Date): Promise<{ entitlement: EntitlementRecord; reused: boolean } | null>;
+  getLlmConfig(): Promise<LlmConfigRecord | null>;
+  upsertLlmConfig(input: Omit<LlmConfigRecord, "id" | "createdAt" | "updatedAt">, now: Date): Promise<LlmConfigRecord>;
+  createActivationCode(input: Omit<ActivationCodeRecord, "id">): Promise<ActivationCodeRecord>;
+  findActivationCodeByHash(codeHash: string): Promise<ActivationCodeRecord | null>;
+  markActivationCodeRedeemed(codeHash: string, userId: string, redeemedAt: Date): Promise<ActivationCodeRecord | null>;
+  listActivationCodes(): Promise<ActivationCodeRecord[]>;
+  listUsers(): Promise<UserRecord[]>;
+  createAdminSession(input: Omit<AdminSessionRecord, "id" | "revokedAt">): Promise<AdminSessionRecord>;
+  findAdminSessionByTokenHash(tokenHash: string, now: Date): Promise<AdminSessionRecord | null>;
+  revokeAdminSession(tokenHash: string, now: Date): Promise<void>;
   createWebhookEvent(input: Omit<WebhookEventRecord, "id" | "createdAt"> & { createdAt: Date }): Promise<boolean>;
 };
 
@@ -96,6 +157,10 @@ export class MemoryStore implements Store {
   sessions: SessionRecord[] = [];
   orders: OrderRecord[] = [];
   entitlements: EntitlementRecord[] = [];
+  llmConfig: LlmConfigRecord | null = null;
+  llmUsageEvents: LlmUsageEventRecord[] = [];
+  activationCodes: ActivationCodeRecord[] = [];
+  adminSessions: AdminSessionRecord[] = [];
   webhookEvents: WebhookEventRecord[] = [];
 
   async upsertUserByEmail(email: string, now: Date): Promise<UserRecord> {
@@ -223,11 +288,22 @@ export class MemoryStore implements Store {
     return this.entitlements.find((entitlement) => entitlement.userId === userId) ?? null;
   }
 
-  async upsertEntitlement(userId: string, expiresAt: Date, now: Date): Promise<EntitlementRecord> {
+  async upsertEntitlement(
+    userId: string,
+    expiresAt: Date,
+    now: Date,
+    quota: { llmQuotaLimit?: number; llmQuotaUsed?: number } = {},
+  ): Promise<EntitlementRecord> {
     const existing = await this.getEntitlement(userId);
     if (existing) {
       existing.status = expiresAt > now ? "active" : "inactive";
       existing.expiresAt = expiresAt;
+      if (quota.llmQuotaLimit !== undefined) {
+        existing.llmQuotaLimit = quota.llmQuotaLimit;
+      }
+      if (quota.llmQuotaUsed !== undefined) {
+        existing.llmQuotaUsed = quota.llmQuotaUsed;
+      }
       existing.updatedAt = now;
       return existing;
     }
@@ -236,10 +312,133 @@ export class MemoryStore implements Store {
       userId,
       status: expiresAt > now ? "active" : "inactive",
       expiresAt,
+      llmQuotaLimit: quota.llmQuotaLimit ?? 0,
+      llmQuotaUsed: quota.llmQuotaUsed ?? 0,
       updatedAt: now,
     };
     this.entitlements.push(entitlement);
     return entitlement;
+  }
+
+  async updateEntitlementQuota(
+    userId: string,
+    llmQuotaLimit: number,
+    llmQuotaUsed: number,
+    now: Date,
+  ): Promise<EntitlementRecord | null> {
+    const entitlement = await this.getEntitlement(userId);
+    if (!entitlement) {
+      return null;
+    }
+    entitlement.llmQuotaLimit = llmQuotaLimit;
+    entitlement.llmQuotaUsed = llmQuotaUsed;
+    entitlement.updatedAt = now;
+    return entitlement;
+  }
+
+  async consumeLlmQuota(
+    userId: string,
+    requestId: string,
+    now: Date,
+  ): Promise<{ entitlement: EntitlementRecord; reused: boolean } | null> {
+    const existingEvent = this.llmUsageEvents.find(
+      (event) => event.userId === userId && event.requestId === requestId,
+    );
+    const entitlement = await this.getEntitlement(userId);
+    if (!entitlement || entitlement.expiresAt <= now) {
+      return null;
+    }
+    if (existingEvent) {
+      return { entitlement, reused: true };
+    }
+    if (entitlement.llmQuotaUsed >= entitlement.llmQuotaLimit) {
+      return null;
+    }
+    entitlement.llmQuotaUsed += 1;
+    entitlement.updatedAt = now;
+    this.llmUsageEvents.push({
+      id: randomUUID(),
+      userId,
+      entitlementId: entitlement.id,
+      requestId,
+      createdAt: now,
+    });
+    return { entitlement, reused: false };
+  }
+
+  async getLlmConfig(): Promise<LlmConfigRecord | null> {
+    return this.llmConfig;
+  }
+
+  async upsertLlmConfig(
+    input: Omit<LlmConfigRecord, "id" | "createdAt" | "updatedAt">,
+    now: Date,
+  ): Promise<LlmConfigRecord> {
+    if (this.llmConfig) {
+      this.llmConfig = { ...this.llmConfig, ...input, updatedAt: now };
+      return this.llmConfig;
+    }
+    this.llmConfig = {
+      ...input,
+      id: "default",
+      createdAt: now,
+      updatedAt: now,
+    };
+    return this.llmConfig;
+  }
+
+  async createActivationCode(input: Omit<ActivationCodeRecord, "id">): Promise<ActivationCodeRecord> {
+    const code: ActivationCodeRecord = { ...input, id: randomUUID() };
+    this.activationCodes.push(code);
+    return code;
+  }
+
+  async findActivationCodeByHash(codeHash: string): Promise<ActivationCodeRecord | null> {
+    return this.activationCodes.find((code) => code.codeHash === codeHash) ?? null;
+  }
+
+  async markActivationCodeRedeemed(
+    codeHash: string,
+    userId: string,
+    redeemedAt: Date,
+  ): Promise<ActivationCodeRecord | null> {
+    const code = await this.findActivationCodeByHash(codeHash);
+    if (!code || code.status !== "active" || code.redeemedAt !== null) {
+      return null;
+    }
+    code.status = "redeemed";
+    code.redeemedByUserId = userId;
+    code.redeemedAt = redeemedAt;
+    return code;
+  }
+
+  async listActivationCodes(): Promise<ActivationCodeRecord[]> {
+    return [...this.activationCodes].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  }
+
+  async listUsers(): Promise<UserRecord[]> {
+    return [...this.users].sort((left, right) => left.email.localeCompare(right.email));
+  }
+
+  async createAdminSession(input: Omit<AdminSessionRecord, "id" | "revokedAt">): Promise<AdminSessionRecord> {
+    const session = { ...input, id: randomUUID(), revokedAt: null };
+    this.adminSessions.push(session);
+    return session;
+  }
+
+  async findAdminSessionByTokenHash(tokenHash: string, now: Date): Promise<AdminSessionRecord | null> {
+    return (
+      this.adminSessions.find(
+        (session) => session.tokenHash === tokenHash && session.revokedAt === null && session.expiresAt > now,
+      ) ?? null
+    );
+  }
+
+  async revokeAdminSession(tokenHash: string, now: Date): Promise<void> {
+    const session = this.adminSessions.find((record) => record.tokenHash === tokenHash);
+    if (session) {
+      session.revokedAt = now;
+    }
   }
 
   async createWebhookEvent(
@@ -256,4 +455,3 @@ export class MemoryStore implements Store {
     return true;
   }
 }
-

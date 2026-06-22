@@ -10,6 +10,11 @@ describe("account state", () => {
         email: "user@example.com",
         entitlementStatus: "inactive",
         entitlementExpiresAt: null,
+        llmQuotaLimit: 0,
+        llmQuotaUsed: 0,
+        llmQuotaRemaining: 0,
+        llmQuotaResetsAt: null,
+        llmConfigured: false,
         lastVerifiedAt: "2026-06-21T08:00:00.000Z",
         canProcess: false,
         serverError: null,
@@ -24,6 +29,11 @@ describe("account state", () => {
         email: "user@example.com",
         entitlementStatus: "active",
         entitlementExpiresAt: "2026-07-22T08:00:00.000Z",
+        llmQuotaLimit: 20,
+        llmQuotaUsed: 2,
+        llmQuotaRemaining: 18,
+        llmQuotaResetsAt: "2026-07-22T08:00:00.000Z",
+        llmConfigured: true,
         lastVerifiedAt: "2026-06-21T08:00:00.000Z",
         canProcess: true,
         serverError: null,
@@ -31,4 +41,3 @@ describe("account state", () => {
     ).toBe(true);
   });
 });
-

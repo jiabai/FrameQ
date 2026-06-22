@@ -23,6 +23,7 @@ models/*
 outputs/*
 work/*
 logs/*
+server/logs/
 server/data/
 server/backups/
 *.sqlite

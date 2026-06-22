@@ -77,6 +77,8 @@ describe("history client", () => {
 
     expect(result).toEqual({
       status: "partial_completed",
+      video_path: null,
+      audio_path: null,
       text: "已经完成的文字稿",
       insights: [],
       transcript_path: "D:\\FrameQ\\outputs\\task-2_transcript.txt",

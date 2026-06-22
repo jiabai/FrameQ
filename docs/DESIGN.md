@@ -6,6 +6,8 @@
 - Login and payment flows use sheet-style panels consistent with settings/history.
 - Account copy must clearly distinguish local processing from server-side account/payment verification.
 - If the user is not entitled, submitting a URL or retrying insights opens the account/payment sheet and does not start worker processing.
+- The account sheet shows remaining insight-generation uses when the user is signed in.
+- Desktop settings must not expose insight LLM provider, base URL, API key, model, or timeout; those fields are administrator-managed.
 - The payment sheet shows the monthly price, WeChat scan QR code, order expiration, and refresh status action in a stable layout.
 - Successful payment returns the user to the existing processing workflow without changing the local-first worker UI stages.
 
@@ -33,13 +35,13 @@ UI 必须围绕以下状态组织：
 
 - 主按钮文案固定为 `确认`。
 - 处理和完成态不再显示 URL 输入区域。
-- 完成态主界面只展示 `启发话题点` 和 `完整文字稿` 结果卡片。
+- 完成态主界面展示 `视频文件`、`音频文件`、`完整文字稿` 和 `启发话题点` 4 个产物入口；视频和音频入口只定位本地文件，不打开详情浮窗。
 - 点击结果卡片打开详情浮窗，浮窗内通过 tab 切换内容。
 - 详情浮窗内部内容独立滚动，支持 `Esc` 关闭。
 - 复制按钮复制当前详情 tab 的文本；无内容时置灰。
 - 导出按钮在对应输出文件生成前置灰；启用后定位 `outputs/` 中的已生成文件。
 - 进度区优先展示 worker 事件中的具体阶段文案；没有事件时回退到当前阶段默认文案。
-- `部分完成` 状态下点击失败的话题点卡片应重新触发 InsightFlow，仅重跑话题点生成，不重新下载视频或重新转写。
+- `启发话题点` 待生成或失败时，点击卡片先打开确认面板；用户在确认面板点击 `确认` 后才触发 InsightFlow，仅重跑话题点生成，不重新下载视频、重新提取音频或重新转写。
 - 取消任务只在处理中显示；点击后必须终止当前 worker 进程树，返回输入态并保留刚提交的 URL。
 - 取消后的晚到进度事件或 worker 结果不得覆盖当前 UI 状态。
 - 顶部工具区提供设置入口；设置面板用于配置启发话题点所需的 OpenAI-compatible LLM。
@@ -70,7 +72,7 @@ UI 必须围绕以下状态组织：
 - 等待输入态的单张输入卡应与桌面窗口比例协调，在默认桌面窗口宽度下使用宽松表单宽度，而不是窄小网页表单。
 - 处理态和完成态采用上下排列：task monitor 在上，结果工作区在下；避免两个大卡片左右并排导致内容被横向割裂。
 - 处理态使用 task monitor：阶段 timeline、百分比、worker 事件文案和取消按钮必须在同一信息层级内可扫描。
-- 完成态使用紧凑 document/result tiles：只展示 `启发话题点` 和 `完整文字稿` 两个结果入口，不直接铺满全文，也不把入口卡拉成大面积空白卡。
+- 完成态使用紧凑 document/result tiles：展示 `视频文件`、`音频文件`、`完整文字稿` 和 `启发话题点` 4 个结果入口，不直接铺满全文，也不把入口卡拉成大面积空白卡；话题点未生成时显示待生成状态和确认入口。
 - 设置面板使用 macOS sheet 质感：分组表单、本地隐私提示、内部滚动和底部固定操作区。
 - 历史面板使用紧凑列表：状态 badge、摘要、时间、输出目录和结果数量/错误码必须可快速扫描。
 - 视觉 token 优先使用浅中性背景、系统字体、1px 边框、低阴影、短反馈动画和清晰 focus ring。

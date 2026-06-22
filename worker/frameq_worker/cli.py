@@ -191,13 +191,21 @@ def retry_insights_once(
     root = project_root or Path.cwd()
     runtime_env = load_project_env(root, environ)
     configured_insight_client = insight_client or build_insight_client_from_env(runtime_env)
+    work_dir = resolve_work_dir(root, runtime_env)
     if not markdown_transcript_path.exists() and configured_insight_client is not None:
-        return failed_insight_retry_result(
+        result = failed_insight_retry_result(
             code="TRANSCRIPT_MARKDOWN_NOT_FOUND",
             message="Transcript markdown file is required to regenerate insights.",
             transcript_path=transcript_path,
             text=request.text,
-        ).to_dict()
+        )
+        update_history_item_after_insight_retry(
+            project_root=root,
+            transcript_path=transcript_path,
+            result=result,
+            work_dir=work_dir,
+        )
+        return result.to_dict()
 
     insight_result = run_insight_generation_step(
         transcript_path=markdown_transcript_path,
@@ -207,14 +215,21 @@ def retry_insights_once(
         client=configured_insight_client,
     )
 
-    return ProcessResult(
+    result = ProcessResult(
         status=insight_result.status,
         transcript_path=transcript_path.as_posix(),
         insights_path=insight_result.insights_path,
         text=insight_result.text,
         insights=insight_result.insights,
         error=insight_result.error,
-    ).to_dict()
+    )
+    update_history_item_after_insight_retry(
+        project_root=root,
+        transcript_path=transcript_path,
+        result=result,
+        work_dir=work_dir,
+    )
+    return result.to_dict()
 
 
 def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
@@ -507,6 +522,53 @@ def append_history_item(
     )
 
 
+def update_history_item_after_insight_retry(
+    project_root: Path,
+    transcript_path: Path,
+    result: ProcessResult,
+    work_dir: Path | None = None,
+) -> None:
+    resolved_work_dir = work_dir or project_root / "work"
+    history_path = resolved_work_dir / HISTORY_FILE_NAME
+    if not history_path.exists():
+        return
+
+    history = load_history(history_path)
+    items = history.get("items")
+    if not isinstance(items, list):
+        return
+
+    target_path = normalize_history_path(transcript_path, project_root)
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        stored_transcript_path = item.get("transcript_path")
+        if not isinstance(stored_transcript_path, str):
+            continue
+        if normalize_history_path(stored_transcript_path, project_root) != target_path:
+            continue
+
+        item["status"] = result.status.value
+        item["transcript_path"] = result.transcript_path
+        item["insights_path"] = result.insights_path
+        item["error"] = build_history_error(result.error)
+        item["text_preview"] = result.text.strip()[:180]
+        item["insights_count"] = len(result.insights)
+        history_path.write_text(
+            json.dumps(history, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return
+
+
+def normalize_history_path(path: str | Path, project_root: Path) -> str:
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = project_root / candidate
+    normalized = candidate.resolve(strict=False).as_posix()
+    return normalized.lower() if os.name == "nt" else normalized
+
+
 def load_history(history_path: Path) -> dict[str, object]:
     if not history_path.exists():
         return {"items": []}
@@ -526,14 +588,6 @@ def build_history_item(
     result: ProcessResult,
     output_dir: Path,
 ) -> dict[str, object]:
-    error = None
-    if result.error is not None:
-        error = {
-            "code": result.error.code,
-            "message": result.error.message,
-            "stage": result.error.stage.value,
-        }
-
     return {
         "id": f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}",
         "created_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
@@ -544,9 +598,20 @@ def build_history_item(
         "audio_path": result.audio_path,
         "transcript_path": result.transcript_path,
         "insights_path": result.insights_path,
-        "error": error,
+        "error": build_history_error(result.error),
         "text_preview": result.text.strip()[:180],
         "insights_count": len(result.insights),
+    }
+
+
+def build_history_error(error: WorkerError | None) -> dict[str, str] | None:
+    if error is None:
+        return None
+
+    return {
+        "code": error.code,
+        "message": error.message,
+        "stage": error.stage.value,
     }
 
 

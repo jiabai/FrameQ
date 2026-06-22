@@ -8,7 +8,11 @@
 - Login deep-link tickets expire after 5 minutes, are single-use, and must be bound to a desktop-generated `state` value.
 - WeChat merchant credentials, APIv3 key, certificate private key, and SMTP credentials must only be configured through the server environment. They must not be bundled into the desktop installer.
 - WeChat payment callbacks must verify signatures, decrypt encrypted resources, and apply entitlement updates idempotently.
-- The service must not accept uploads or API fields containing video, audio, transcript, insight, cookie, or LLM API key data.
+- Activation codes must be high-entropy, single-use, and stored as hashes only. The full code is displayed once when an administrator creates it.
+- Admin Web access is restricted to `FRAMEQ_ADMIN_EMAIL`, defaults to `lantianye@163.com`, and uses HttpOnly 12-hour sessions. Admin write routes must validate CSRF tokens.
+- The service must not accept uploads or API fields containing video, audio, transcript, insight, cookie, or user-local configuration data.
+- The service may store a dedicated FrameQ client LLM API key. It must be encrypted at rest with `FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY`, never displayed in full, and treated as revocable client runtime material rather than a supplier master key.
+- The dedicated client LLM key is delivered to authenticated entitled desktop clients during checkout. This improves out-of-box setup but does not prevent extraction from a compromised client; supplier-side key rotation and quota controls remain required.
 
 <!-- 由 vibe-coding-launcher 生成。 -->
 

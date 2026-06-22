@@ -20,6 +20,10 @@ const LLM_BASE_URL_ENV: &str = "FRAMEQ_LLM_BASE_URL";
 const LLM_API_KEY_ENV: &str = "FRAMEQ_LLM_API_KEY";
 const LLM_MODEL_ENV: &str = "FRAMEQ_LLM_MODEL";
 const LLM_TIMEOUT_ENV: &str = "FRAMEQ_LLM_TIMEOUT_SECONDS";
+const LLM_SOURCE_ENV: &str = "FRAMEQ_LLM_SOURCE";
+const LLM_CHECKOUT_URL_ENV: &str = "FRAMEQ_LLM_CHECKOUT_URL";
+const LLM_SESSION_TOKEN_ENV: &str = "FRAMEQ_LLM_SESSION_TOKEN";
+const LLM_CHECKOUT_REQUEST_ID_ENV: &str = "FRAMEQ_LLM_CHECKOUT_REQUEST_ID";
 const OUTPUT_DIR_ENV: &str = "FRAMEQ_OUTPUT_DIR";
 const WORK_DIR_ENV: &str = "FRAMEQ_WORK_DIR";
 const MODEL_DIR_ENV: &str = "FRAMEQ_MODEL_DIR";
@@ -37,8 +41,6 @@ const ACCOUNT_SESSION_FILE_NAME: &str = "session.json";
 const ACCOUNT_PENDING_STATE_FILE_NAME: &str = "pending_auth_state.txt";
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
 const DEFAULT_SERVER_BASE_URL: &str = "http://127.0.0.1:8787";
-const DEFAULT_LLM_PROVIDER: &str = "openai_compatible";
-const DEFAULT_LLM_TIMEOUT_SECONDS: &str = "60";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
 const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL];
@@ -69,6 +71,8 @@ struct WorkerError {
 #[derive(Debug, Serialize)]
 struct ProcessVideoResult {
     status: String,
+    video_path: Option<String>,
+    audio_path: Option<String>,
     text: String,
     insights: Vec<String>,
     transcript_path: Option<String>,
@@ -84,10 +88,6 @@ struct CancelProcessResult {
 
 #[derive(Debug, Deserialize)]
 struct LlmConfigInput {
-    base_url: String,
-    api_key: String,
-    model: String,
-    timeout_seconds: String,
     #[serde(default)]
     output_dir: String,
     #[serde(default)]
@@ -96,14 +96,9 @@ struct LlmConfigInput {
 
 #[derive(Debug, Serialize)]
 struct LlmConfigView {
-    provider: String,
-    base_url: String,
-    model: String,
-    timeout_seconds: String,
     output_dir: String,
     asr_model: String,
     supported_asr_models: Vec<String>,
-    has_api_key: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -133,7 +128,6 @@ struct HistoryItemView {
 
 #[derive(Debug, Serialize)]
 struct FirstRunStatusView {
-    missing_llm_config: bool,
     user_data_dir: String,
     default_output_dir: String,
     asr_model: String,
@@ -172,6 +166,11 @@ struct AccountStatusView {
     email: Option<String>,
     entitlement_status: String,
     entitlement_expires_at: Option<String>,
+    llm_quota_limit: i32,
+    llm_quota_used: i32,
+    llm_quota_remaining: i32,
+    llm_quota_resets_at: Option<String>,
+    llm_configured: bool,
     last_verified_at: Option<String>,
     can_process: bool,
     server_error: Option<String>,
@@ -183,6 +182,11 @@ struct ServerAccountStatus {
     email: String,
     entitlement_status: String,
     entitlement_expires_at: Option<String>,
+    llm_quota_limit: i32,
+    llm_quota_used: i32,
+    llm_quota_remaining: i32,
+    llm_quota_resets_at: Option<String>,
+    llm_configured: bool,
     last_verified_at: String,
     can_process: bool,
 }
@@ -245,6 +249,13 @@ struct WindowPositionView {
 struct RuntimePaths {
     resource_dir: PathBuf,
     user_data_dir: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct ServerManagedLlmInvocation {
+    server_base_url: String,
+    session_token: String,
+    request_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -466,13 +477,61 @@ fn required_model_files_exist(model_dir: &Path) -> bool {
 fn build_worker_command_spec(
     paths: &RuntimePaths,
     invocation: WorkerInvocation,
+    server_managed_llm: Option<ServerManagedLlmInvocation>,
 ) -> Result<WorkerCommandSpec, String> {
+    let include_server_managed_llm = worker_invocation_uses_server_managed_llm(&invocation);
     let (flag, payload) = match invocation {
         WorkerInvocation::ProcessVideo(payload) => ("--request-json", payload),
         WorkerInvocation::RetryInsights(payload) => ("--retry-insights-json", payload),
     };
     let resource_bin_dir = paths.resource_dir.join("bin");
     let path_value = prepend_to_path(&resource_bin_dir)?;
+
+    let mut env = vec![
+        (
+            "PYTHONPATH".to_string(),
+            path_to_env_string(paths.resource_dir.join("worker")),
+        ),
+        ("PYTHONUTF8".to_string(), "1".to_string()),
+        ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
+        ("PATH".to_string(), path_value),
+        (
+            OUTPUT_DIR_ENV.to_string(),
+            path_to_env_string(paths.user_data_dir.join("outputs")),
+        ),
+        (
+            WORK_DIR_ENV.to_string(),
+            path_to_env_string(paths.user_data_dir.join("work")),
+        ),
+        (
+            MODEL_DIR_ENV.to_string(),
+            path_to_env_string(paths.user_data_dir.join("models")),
+        ),
+        (
+            RESOURCE_DIR_ENV.to_string(),
+            path_to_env_string(&paths.resource_dir),
+        ),
+        (
+            USER_DATA_DIR_ENV.to_string(),
+            path_to_env_string(&paths.user_data_dir),
+        ),
+        (ALLOW_REAL_ASR_ENV.to_string(), "1".to_string()),
+        (MODELSCOPE_OFFLINE_ENV.to_string(), "1".to_string()),
+    ];
+    if include_server_managed_llm {
+        if let Some(llm) = server_managed_llm {
+            env.push((LLM_SOURCE_ENV.to_string(), "server".to_string()));
+            env.push((
+                LLM_CHECKOUT_URL_ENV.to_string(),
+                format!(
+                    "{}/api/desktop/llm/checkouts",
+                    llm.server_base_url.trim_end_matches('/')
+                ),
+            ));
+            env.push((LLM_SESSION_TOKEN_ENV.to_string(), llm.session_token));
+            env.push((LLM_CHECKOUT_REQUEST_ID_ENV.to_string(), llm.request_id));
+        }
+    }
 
     Ok(WorkerCommandSpec {
         program: bundled_python_path(&paths.resource_dir),
@@ -482,39 +541,27 @@ fn build_worker_command_spec(
             flag.to_string(),
             payload,
         ],
-        env: vec![
-            (
-                "PYTHONPATH".to_string(),
-                path_to_env_string(paths.resource_dir.join("worker")),
-            ),
-            ("PYTHONUTF8".to_string(), "1".to_string()),
-            ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
-            ("PATH".to_string(), path_value),
-            (
-                OUTPUT_DIR_ENV.to_string(),
-                path_to_env_string(paths.user_data_dir.join("outputs")),
-            ),
-            (
-                WORK_DIR_ENV.to_string(),
-                path_to_env_string(paths.user_data_dir.join("work")),
-            ),
-            (
-                MODEL_DIR_ENV.to_string(),
-                path_to_env_string(paths.user_data_dir.join("models")),
-            ),
-            (
-                RESOURCE_DIR_ENV.to_string(),
-                path_to_env_string(&paths.resource_dir),
-            ),
-            (
-                USER_DATA_DIR_ENV.to_string(),
-                path_to_env_string(&paths.user_data_dir),
-            ),
-            (ALLOW_REAL_ASR_ENV.to_string(), "1".to_string()),
-            (MODELSCOPE_OFFLINE_ENV.to_string(), "1".to_string()),
-        ],
+        env,
         current_dir: paths.user_data_dir.clone(),
     })
+}
+
+fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> bool {
+    match invocation {
+        WorkerInvocation::RetryInsights(_) => true,
+        WorkerInvocation::ProcessVideo(payload) => process_video_request_generates_insights(payload),
+    }
+}
+
+fn process_video_request_generates_insights(payload: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(payload)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("generate_insights")
+                .and_then(serde_json::Value::as_bool)
+        })
+        .unwrap_or(true)
 }
 
 fn build_model_download_command_spec(
@@ -643,6 +690,8 @@ fn process_video_blocking(
     if let Err(error) = apply_configured_asr_model_to_request(&env_path(&paths), &mut request) {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: String::new(),
             insights: vec![],
             transcript_path: None,
@@ -655,15 +704,19 @@ fn process_video_blocking(
         }));
     }
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
+    let llm_invocation = server_managed_llm_invocation(&paths)?;
     let mut child = spawn_worker_command(build_worker_command_spec(
         &paths,
         WorkerInvocation::ProcessVideo(request_json),
+        llm_invocation,
     )?)?;
     let worker_pid = child.id();
     if !process_state.register(worker_pid) {
         let _ = terminate_process_tree(worker_pid);
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: String::new(),
             insights: vec![],
             transcript_path: None,
@@ -713,6 +766,8 @@ fn process_video_blocking(
     if was_cancelled {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: String::new(),
             insights: vec![],
             transcript_path: None,
@@ -729,6 +784,8 @@ fn process_video_blocking(
         &output,
         ProcessVideoResult {
             status: "failed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: String::new(),
             insights: vec![],
             transcript_path: None,
@@ -760,15 +817,19 @@ fn retry_insights_blocking(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
+    let llm_invocation = server_managed_llm_invocation(&paths)?;
     let child = spawn_worker_command(build_worker_command_spec(
         &paths,
         WorkerInvocation::RetryInsights(request_json),
+        llm_invocation,
     )?)?;
     let worker_pid = child.id();
     if !process_state.register(worker_pid) {
         let _ = terminate_process_tree(worker_pid);
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "partial_completed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: request.text,
             insights: vec![],
             transcript_path: Some(request.transcript_path),
@@ -795,6 +856,8 @@ fn retry_insights_blocking(
     if was_cancelled {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "partial_completed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: request.text,
             insights: vec![],
             transcript_path: Some(request.transcript_path),
@@ -811,6 +874,8 @@ fn retry_insights_blocking(
         &output,
         ProcessVideoResult {
             status: "partial_completed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: request.text,
             insights: vec![],
             transcript_path: Some(request.transcript_path),
@@ -916,10 +981,8 @@ fn get_history(app: AppHandle) -> Result<Vec<HistoryItemView>, String> {
 fn check_first_run(app: AppHandle) -> Result<FirstRunStatusView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    let config = load_llm_config_from_file(&env_path(&paths))?;
     let config_values = parse_dotenv_values(&env_path(&paths))?;
     Ok(FirstRunStatusView {
-        missing_llm_config: !config.has_api_key,
         user_data_dir: path_to_env_string(&paths.user_data_dir),
         default_output_dir: path_to_env_string(paths.user_data_dir.join("outputs")),
         asr_model: DEFAULT_ASR_MODEL.to_string(),
@@ -1108,6 +1171,11 @@ async fn get_account_status(app: AppHandle) -> Result<AccountStatusView, String>
             email: Some(status.email),
             entitlement_status: status.entitlement_status,
             entitlement_expires_at: status.entitlement_expires_at,
+            llm_quota_limit: status.llm_quota_limit,
+            llm_quota_used: status.llm_quota_used,
+            llm_quota_remaining: status.llm_quota_remaining,
+            llm_quota_resets_at: status.llm_quota_resets_at,
+            llm_configured: status.llm_configured,
             last_verified_at: Some(status.last_verified_at),
             can_process: status.can_process,
             server_error: None,
@@ -1117,6 +1185,11 @@ async fn get_account_status(app: AppHandle) -> Result<AccountStatusView, String>
             email: Some(session.email),
             entitlement_status: "unknown".to_string(),
             entitlement_expires_at: None,
+            llm_quota_limit: 0,
+            llm_quota_used: 0,
+            llm_quota_remaining: 0,
+            llm_quota_resets_at: None,
+            llm_configured: false,
             last_verified_at: None,
             can_process: false,
             server_error: Some(error),
@@ -1136,6 +1209,27 @@ async fn logout_account(app: AppHandle) -> Result<(), String> {
     }
     let _ = fs::remove_file(account_session_path(&paths));
     Ok(())
+}
+
+#[tauri::command]
+async fn redeem_activation_code(app: AppHandle, code: String) -> Result<AccountStatusView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    let session = require_account_session(&paths)?;
+    let response = reqwest::Client::new()
+        .post(build_activation_redeem_url(&server_base_url()))
+        .bearer_auth(&session.session_token)
+        .json(&serde_json::json!({ "code": code }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        return Err(response_error_message(response, "Activation code redeem failed.").await);
+    }
+    let status = response
+        .json::<ServerAccountStatus>()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(account_status_view_from_server(status))
 }
 
 #[tauri::command]
@@ -1236,22 +1330,9 @@ fn set_window_position(window: Window, position: WindowPositionView) -> Result<(
 fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
     let values = parse_dotenv_values(path)?;
     Ok(LlmConfigView {
-        provider: values
-            .get(LLM_PROVIDER_ENV)
-            .cloned()
-            .unwrap_or_else(|| DEFAULT_LLM_PROVIDER.to_string()),
-        base_url: values.get(LLM_BASE_URL_ENV).cloned().unwrap_or_default(),
-        model: values.get(LLM_MODEL_ENV).cloned().unwrap_or_default(),
-        timeout_seconds: values
-            .get(LLM_TIMEOUT_ENV)
-            .cloned()
-            .unwrap_or_else(|| DEFAULT_LLM_TIMEOUT_SECONDS.to_string()),
         output_dir: values.get(OUTPUT_DIR_ENV).cloned().unwrap_or_default(),
         asr_model: resolve_asr_model_value(values.get(ASR_MODEL_ENV).cloned())?,
         supported_asr_models: supported_asr_models(),
-        has_api_key: values
-            .get(LLM_API_KEY_ENV)
-            .is_some_and(|value| !value.trim().is_empty()),
     })
 }
 
@@ -1266,6 +1347,19 @@ fn server_base_url() -> String {
         .unwrap_or_else(|| DEFAULT_SERVER_BASE_URL.to_string())
         .trim_end_matches('/')
         .to_string()
+}
+
+fn server_managed_llm_invocation(
+    paths: &RuntimePaths,
+) -> Result<Option<ServerManagedLlmInvocation>, String> {
+    let Some(session) = read_account_session(&account_session_path(paths))? else {
+        return Ok(None);
+    };
+    Ok(Some(ServerManagedLlmInvocation {
+        server_base_url: server_base_url(),
+        session_token: session.session_token,
+        request_id: format!("llm-{}", Uuid::new_v4().simple()),
+    }))
 }
 
 fn generate_auth_state() -> String {
@@ -1284,6 +1378,13 @@ fn build_auth_login_url(server_base_url: &str, state: &str) -> Result<String, St
         percent_encode(state),
         percent_encode("frameq://auth/callback")
     ))
+}
+
+fn build_activation_redeem_url(server_base_url: &str) -> String {
+    format!(
+        "{}/api/desktop/activation-codes/redeem",
+        server_base_url.trim_end_matches('/')
+    )
 }
 
 fn parse_auth_callback_url(callback_url: &str, expected_state: &str) -> Result<AuthCallback, String> {
@@ -1373,6 +1474,35 @@ async fn get_account_status_from_server(
         .map_err(|error| error.to_string())
 }
 
+fn account_status_view_from_server(status: ServerAccountStatus) -> AccountStatusView {
+    AccountStatusView {
+        authenticated: status.authenticated,
+        email: Some(status.email),
+        entitlement_status: status.entitlement_status,
+        entitlement_expires_at: status.entitlement_expires_at,
+        llm_quota_limit: status.llm_quota_limit,
+        llm_quota_used: status.llm_quota_used,
+        llm_quota_remaining: status.llm_quota_remaining,
+        llm_quota_resets_at: status.llm_quota_resets_at,
+        llm_configured: status.llm_configured,
+        last_verified_at: Some(status.last_verified_at),
+        can_process: status.can_process,
+        server_error: None,
+    }
+}
+
+async fn response_error_message(response: reqwest::Response, fallback: &str) -> String {
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    let server_error = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|value| value.get("error").and_then(|error| error.as_str()).map(str::to_string));
+    match server_error {
+        Some(message) if !message.trim().is_empty() => message,
+        _ => format!("{fallback} Status {status}."),
+    }
+}
+
 fn write_account_session(path: &Path, session: &SessionExchangeResponse) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -1410,6 +1540,11 @@ fn guest_account_status() -> AccountStatusView {
         email: None,
         entitlement_status: "inactive".to_string(),
         entitlement_expires_at: None,
+        llm_quota_limit: 0,
+        llm_quota_used: 0,
+        llm_quota_remaining: 0,
+        llm_quota_resets_at: None,
+        llm_configured: false,
         last_verified_at: None,
         can_process: false,
         server_error: None,
@@ -1417,63 +1552,19 @@ fn guest_account_status() -> AccountStatusView {
 }
 
 fn save_llm_config_to_file(path: &Path, config: LlmConfigInput) -> Result<LlmConfigView, String> {
-    let existing_values = parse_dotenv_values(path)?;
-    let base_url = sanitize_optional_env_value(config.base_url, "LLM base URL")?;
-    let model = sanitize_optional_env_value(config.model, "LLM model")?;
-    let timeout_seconds = sanitize_optional_env_value(config.timeout_seconds, LLM_TIMEOUT_ENV)?;
     let output_dir = sanitize_optional_env_value(config.output_dir, OUTPUT_DIR_ENV)?;
     let asr_model = resolve_asr_model_value(Some(config.asr_model))?;
-    let new_api_key = sanitize_optional_env_value(config.api_key, LLM_API_KEY_ENV)?;
-    let should_save_llm = !base_url.is_empty() || !model.is_empty() || !new_api_key.is_empty();
-
-    if !should_save_llm {
-        write_dotenv_updates(
-            path,
-            &[(OUTPUT_DIR_ENV, output_dir), (ASR_MODEL_ENV, asr_model)],
-        )?;
-        return load_llm_config_from_file(path);
-    }
-
-    if base_url.is_empty() {
-        return Err("LLM base URL is required.".to_string());
-    }
-    if !base_url.starts_with("https://") && !base_url.starts_with("http://") {
-        return Err("LLM base URL must start with http:// or https://.".to_string());
-    }
-
-    if model.is_empty() {
-        return Err("LLM model is required.".to_string());
-    }
-
-    let timeout_seconds = if timeout_seconds.is_empty() {
-        DEFAULT_LLM_TIMEOUT_SECONDS.to_string()
-    } else {
-        timeout_seconds
-    };
-    validate_timeout_seconds(&timeout_seconds)?;
-
-    let existing_api_key = existing_values
-        .get(LLM_API_KEY_ENV)
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty());
-    let api_key_to_save = if new_api_key.is_empty() {
-        existing_api_key
-            .ok_or_else(|| "LLM API key is required unless one is already saved.".to_string())?
-            .to_string()
-    } else {
-        new_api_key
-    };
-
-    let updates = [
-        (LLM_PROVIDER_ENV, DEFAULT_LLM_PROVIDER.to_string()),
-        (LLM_BASE_URL_ENV, base_url),
-        (LLM_API_KEY_ENV, api_key_to_save),
-        (LLM_MODEL_ENV, model),
-        (LLM_TIMEOUT_ENV, timeout_seconds),
-        (OUTPUT_DIR_ENV, output_dir),
-        (ASR_MODEL_ENV, asr_model),
-    ];
-    write_dotenv_updates(path, &updates)?;
+    write_dotenv_updates_removing(
+        path,
+        &[(OUTPUT_DIR_ENV, output_dir), (ASR_MODEL_ENV, asr_model)],
+        &[
+            LLM_PROVIDER_ENV,
+            LLM_BASE_URL_ENV,
+            LLM_API_KEY_ENV,
+            LLM_MODEL_ENV,
+            LLM_TIMEOUT_ENV,
+        ],
+    )?;
     load_llm_config_from_file(path)
 }
 
@@ -1649,7 +1740,11 @@ fn parse_dotenv_values(path: &Path) -> Result<HashMap<String, String>, String> {
     Ok(values)
 }
 
-fn write_dotenv_updates(path: &Path, updates: &[(&str, String)]) -> Result<(), String> {
+fn write_dotenv_updates_removing(
+    path: &Path,
+    updates: &[(&str, String)],
+    remove_keys: &[&str],
+) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
@@ -1668,6 +1763,10 @@ fn write_dotenv_updates(path: &Path, updates: &[(&str, String)]) -> Result<(), S
 
     for line in existing_content.lines() {
         if let Some((key, _)) = parse_dotenv_assignment(line) {
+            if remove_keys.iter().any(|remove_key| remove_key == &key) {
+                continue;
+            }
+
             if let Some(value) = update_map.get(key) {
                 if !written_keys.iter().any(|written| written == key) {
                     lines.push(format!("{key}={value}"));
@@ -1723,13 +1822,6 @@ fn sanitize_optional_env_value(value: String, label: &str) -> Result<String, Str
     }
 
     Ok(value.trim().to_string())
-}
-
-fn validate_timeout_seconds(value: &str) -> Result<(), String> {
-    match value.parse::<f64>() {
-        Ok(timeout) if timeout > 0.0 => Ok(()),
-        _ => Err("LLM timeout must be a positive number of seconds.".to_string()),
-    }
 }
 
 async fn run_blocking_worker_command<T, F>(operation: F) -> Result<T, String>
@@ -1814,6 +1906,7 @@ pub fn run() {
             complete_auth_flow,
             get_account_status,
             logout_account,
+            redeem_activation_code,
             create_wechat_checkout,
             get_checkout_status,
             start_window_drag,
@@ -1831,12 +1924,13 @@ pub fn run() {
 mod tests {
     use super::{
         apply_configured_asr_model_to_request, asr_model_available,
-        build_auth_login_url, build_model_download_command_spec, build_worker_command_spec,
-        load_history_from_project, load_llm_config_from_file, normalize_resource_dir,
-        parse_auth_callback_url, parse_worker_output_or_fallback, parse_worker_stdout,
-        run_blocking_worker_command, save_llm_config_to_file, supported_asr_models,
-        AuthCallback, LlmConfigInput, ProcessVideoRequest, ProcessVideoResult, RuntimePaths,
-        WorkerError, WorkerInvocation, WorkerProcessState,
+        build_activation_redeem_url, build_auth_login_url, build_model_download_command_spec,
+        build_worker_command_spec, load_history_from_project, load_llm_config_from_file,
+        normalize_resource_dir, parse_auth_callback_url, parse_worker_output_or_fallback,
+        parse_worker_stdout, run_blocking_worker_command, save_llm_config_to_file,
+        supported_asr_models, AuthCallback, LlmConfigInput, ProcessVideoRequest,
+        ProcessVideoResult, RuntimePaths, ServerManagedLlmInvocation, WorkerError,
+        WorkerInvocation, WorkerProcessState,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -1913,6 +2007,8 @@ Some dependency logged to stdout
         };
         let fallback = ProcessVideoResult {
             status: "failed".to_string(),
+            video_path: None,
+            audio_path: None,
             text: String::new(),
             insights: vec![],
             transcript_path: None,
@@ -1933,6 +2029,37 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn parse_worker_output_fallback_includes_media_path_fields() {
+        let output = Output {
+            status: exit_status(1),
+            stdout: b"not-json".to_vec(),
+            stderr: b"worker failed before returning json".to_vec(),
+        };
+        let fallback = ProcessVideoResult {
+            status: "failed".to_string(),
+            video_path: None,
+            audio_path: None,
+            text: String::new(),
+            insights: vec![],
+            transcript_path: None,
+            insights_path: None,
+            error: Some(WorkerError {
+                code: "WORKER_PROCESS_FAILED".to_string(),
+                message: "worker failed before returning json".to_string(),
+                stage: "video_extracting".to_string(),
+            }),
+        };
+
+        let parsed = parse_worker_output_or_fallback(&output, fallback)
+            .expect("fallback worker result");
+
+        assert!(parsed.get("video_path").is_some());
+        assert!(parsed.get("audio_path").is_some());
+        assert_eq!(parsed["video_path"], serde_json::Value::Null);
+        assert_eq!(parsed["audio_path"], serde_json::Value::Null);
+    }
+
+    #[test]
     fn worker_command_spec_uses_bundled_python_and_app_local_data() {
         let paths = RuntimePaths {
             resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
@@ -1943,6 +2070,7 @@ Some dependency logged to stdout
         let spec = build_worker_command_spec(
             &paths,
             WorkerInvocation::ProcessVideo(request_json.to_string()),
+            None,
         )
         .expect("build worker command spec");
         let env = spec.env_map();
@@ -2038,6 +2166,69 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn worker_command_spec_includes_server_managed_llm_checkout_env() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
+            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
+        };
+        let request_json =
+            r#"{"url":"https://www.douyin.com/video/7524373044106677544","generate_insights":true}"#;
+
+        let spec = build_worker_command_spec(
+            &paths,
+            WorkerInvocation::ProcessVideo(request_json.to_string()),
+            Some(ServerManagedLlmInvocation {
+                server_base_url: "http://127.0.0.1:8787".to_string(),
+                session_token: "desktop-token".to_string(),
+                request_id: "llm-run-12345678".to_string(),
+            }),
+        )
+        .expect("build worker command spec");
+        let env = spec.env_map();
+
+        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), Some(&"server".to_string()));
+        assert_eq!(
+            env.get("FRAMEQ_LLM_CHECKOUT_URL"),
+            Some(&"http://127.0.0.1:8787/api/desktop/llm/checkouts".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_LLM_SESSION_TOKEN"),
+            Some(&"desktop-token".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_LLM_CHECKOUT_REQUEST_ID"),
+            Some(&"llm-run-12345678".to_string())
+        );
+    }
+
+    #[test]
+    fn worker_command_spec_skips_server_managed_llm_for_transcript_only_process() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
+            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
+        };
+        let request_json =
+            r#"{"url":"https://www.douyin.com/video/7524373044106677544","generate_insights":false}"#;
+
+        let spec = build_worker_command_spec(
+            &paths,
+            WorkerInvocation::ProcessVideo(request_json.to_string()),
+            Some(ServerManagedLlmInvocation {
+                server_base_url: "http://127.0.0.1:8787".to_string(),
+                session_token: "desktop-token".to_string(),
+                request_id: "llm-run-12345678".to_string(),
+            }),
+        )
+        .expect("build worker command spec");
+        let env = spec.env_map();
+
+        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), None);
+        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_URL"), None);
+        assert_eq!(env.get("FRAMEQ_LLM_SESSION_TOKEN"), None);
+        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_REQUEST_ID"), None);
+    }
+
+    #[test]
     fn auth_login_url_includes_state_and_redirect_scheme() {
         let url = build_auth_login_url("https://frameq.example", "state-123456")
             .expect("build auth url");
@@ -2045,6 +2236,14 @@ Some dependency logged to stdout
         assert_eq!(
             url,
             "https://frameq.example/login?desktop=1&state=state-123456&redirect_uri=frameq%3A%2F%2Fauth%2Fcallback"
+        );
+    }
+
+    #[test]
+    fn activation_redeem_url_targets_desktop_activation_route() {
+        assert_eq!(
+            build_activation_redeem_url("https://frameq.example/"),
+            "https://frameq.example/api/desktop/activation-codes/redeem"
         );
     }
 
@@ -2170,8 +2369,8 @@ Some dependency logged to stdout
     }
 
     #[test]
-    fn load_llm_config_hides_saved_api_key() {
-        let env_path = temp_env_path("load_llm_config_hides_saved_api_key");
+    fn load_llm_config_reads_only_local_app_settings() {
+        let env_path = temp_env_path("load_llm_config_reads_only_local_app_settings");
         fs::write(
             &env_path,
             [
@@ -2189,24 +2388,23 @@ Some dependency logged to stdout
 
         let config = load_llm_config_from_file(&env_path).expect("load config");
 
-        assert_eq!(config.provider, "openai_compatible");
-        assert_eq!(config.base_url, "https://llm.example/v1");
-        assert_eq!(config.model, "demo-model");
-        assert_eq!(config.timeout_seconds, "42");
         assert_eq!(config.output_dir, "D:/FrameQ/results");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
         assert_eq!(config.supported_asr_models, vec!["iic/SenseVoiceSmall"]);
-        assert!(config.has_api_key);
     }
 
     #[test]
-    fn save_llm_config_preserves_existing_key_when_new_key_is_blank() {
-        let env_path = temp_env_path("save_llm_config_preserves_existing_key");
+    fn save_llm_config_updates_local_settings_and_removes_old_llm_values() {
+        let env_path = temp_env_path("save_llm_config_updates_local_settings");
         fs::write(
             &env_path,
             [
                 "# keep this comment",
+                "FRAMEQ_LLM_PROVIDER=openai_compatible",
+                "FRAMEQ_LLM_BASE_URL=https://old.example/v1",
                 "FRAMEQ_LLM_API_KEY=old-secret",
+                "FRAMEQ_LLM_MODEL=old-model",
+                "FRAMEQ_LLM_TIMEOUT_SECONDS=44",
                 "OTHER_SETTING=keep-me",
             ]
             .join("\n"),
@@ -2216,10 +2414,6 @@ Some dependency logged to stdout
         let config = save_llm_config_to_file(
             &env_path,
             LlmConfigInput {
-                base_url: "https://new.example/v1".to_string(),
-                api_key: "".to_string(),
-                model: "new-model".to_string(),
-                timeout_seconds: "35".to_string(),
                 output_dir: "D:/FrameQ/custom-results".to_string(),
                 asr_model: "iic/SenseVoiceSmall".to_string(),
             },
@@ -2227,38 +2421,16 @@ Some dependency logged to stdout
         .expect("save config");
         let saved = fs::read_to_string(&env_path).expect("read saved env");
 
-        assert!(config.has_api_key);
-        assert!(saved.contains("FRAMEQ_LLM_PROVIDER=openai_compatible"));
-        assert!(saved.contains("FRAMEQ_LLM_BASE_URL=https://new.example/v1"));
-        assert!(saved.contains("FRAMEQ_LLM_API_KEY=old-secret"));
-        assert!(saved.contains("FRAMEQ_LLM_MODEL=new-model"));
-        assert!(saved.contains("FRAMEQ_LLM_TIMEOUT_SECONDS=35"));
+        assert_eq!(config.output_dir, "D:/FrameQ/custom-results");
+        assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
         assert!(saved.contains("FRAMEQ_OUTPUT_DIR=D:/FrameQ/custom-results"));
         assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("OTHER_SETTING=keep-me"));
-    }
-
-    #[test]
-    fn save_llm_config_rejects_missing_api_key_when_none_is_saved() {
-        let env_path = temp_env_path("save_llm_config_rejects_missing_key");
-
-        let error = save_llm_config_to_file(
-            &env_path,
-            LlmConfigInput {
-                base_url: "https://llm.example/v1".to_string(),
-                api_key: "".to_string(),
-                model: "demo-model".to_string(),
-                timeout_seconds: "30".to_string(),
-                output_dir: "".to_string(),
-                asr_model: "iic/SenseVoiceSmall".to_string(),
-            },
-        )
-        .expect_err("missing key should fail");
-
-        assert_eq!(
-            error,
-            "LLM API key is required unless one is already saved."
-        );
+        assert!(!saved.contains("FRAMEQ_LLM_PROVIDER"));
+        assert!(!saved.contains("FRAMEQ_LLM_BASE_URL"));
+        assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
+        assert!(!saved.contains("FRAMEQ_LLM_MODEL"));
+        assert!(!saved.contains("FRAMEQ_LLM_TIMEOUT_SECONDS"));
     }
 
     #[test]
@@ -2268,10 +2440,6 @@ Some dependency logged to stdout
         let config = save_llm_config_to_file(
             &env_path,
             LlmConfigInput {
-                base_url: "".to_string(),
-                api_key: "".to_string(),
-                model: "".to_string(),
-                timeout_seconds: "".to_string(),
                 output_dir: "D:/FrameQ/results-only".to_string(),
                 asr_model: "iic/SenseVoiceSmall".to_string(),
             },
@@ -2281,7 +2449,6 @@ Some dependency logged to stdout
 
         assert_eq!(config.output_dir, "D:/FrameQ/results-only");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
-        assert!(!config.has_api_key);
         assert!(saved.contains("FRAMEQ_OUTPUT_DIR=D:/FrameQ/results-only"));
         assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));

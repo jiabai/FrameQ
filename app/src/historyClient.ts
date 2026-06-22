@@ -59,6 +59,8 @@ export async function getHistory(
 export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
   return {
     status: item.status,
+    video_path: item.videoPath,
+    audio_path: item.audioPath,
     text: item.text,
     insights: item.insights,
     transcript_path: item.transcriptPath,

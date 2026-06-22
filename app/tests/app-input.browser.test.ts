@@ -409,7 +409,7 @@ describe("App desktop sheet structure", () => {
 
       expect(sheet.result.value).toEqual({
         hasSheetPanel: true,
-        groupedSections: 2,
+        groupedSections: 1,
         hasPrivacyCallout: true,
         hasStickyFooter: true,
         hasScrollableBody: true,

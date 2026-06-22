@@ -2,27 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
 
 export type LlmConfig = {
-  provider: string;
-  baseUrl: string;
-  model: string;
-  timeoutSeconds: string;
   outputDir: string;
   asrModel: string;
   supportedAsrModels: string[];
-  hasApiKey: boolean;
 };
 
 export type LlmConfigDraft = {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  timeoutSeconds: string;
   outputDir: string;
   asrModel: string;
 };
 
 export type FirstRunStatus = {
-  missingLlmConfig: boolean;
   userDataDir: string;
   defaultOutputDir: string;
   asrModel: string;
@@ -32,7 +22,6 @@ export type FirstRunStatus = {
 };
 
 export type FirstRunStatusResponse = {
-  missing_llm_config: boolean;
   user_data_dir: string;
   default_output_dir: string;
   asr_model: string;
@@ -58,14 +47,9 @@ export type AsrModelDownloadProgress = {
 };
 
 export type LlmConfigResponse = {
-  provider: string;
-  base_url: string;
-  model: string;
-  timeout_seconds: string;
   output_dir: string;
   asr_model: string;
   supported_asr_models: string[];
-  has_api_key: boolean;
 };
 
 export type SettingsCommandRunner = (
@@ -89,10 +73,6 @@ export async function saveLlmConfig(
   return mapLlmConfigResponse(
     (await runner("save_llm_config", {
       config: {
-        base_url: draft.baseUrl,
-        api_key: draft.apiKey,
-        model: draft.model,
-        timeout_seconds: draft.timeoutSeconds,
         output_dir: draft.outputDir,
         asr_model: draft.asrModel,
       },
@@ -122,20 +102,14 @@ export async function cancelAsrModelDownload(
 
 function mapLlmConfigResponse(response: LlmConfigResponse): LlmConfig {
   return {
-    provider: response.provider,
-    baseUrl: response.base_url,
-    model: response.model,
-    timeoutSeconds: response.timeout_seconds,
     outputDir: response.output_dir,
     asrModel: response.asr_model,
     supportedAsrModels: response.supported_asr_models,
-    hasApiKey: response.has_api_key,
   };
 }
 
 function mapFirstRunStatusResponse(response: FirstRunStatusResponse): FirstRunStatus {
   return {
-    missingLlmConfig: response.missing_llm_config,
     userDataDir: response.user_data_dir,
     defaultOutputDir: response.default_output_dir,
     asrModel: response.asr_model,

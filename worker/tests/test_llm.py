@@ -5,6 +5,7 @@ import pytest
 from frameq_worker.insightflow import InsightGenerationError
 from frameq_worker.llm import (
     OpenAICompatibleInsightClient,
+    ServerManagedInsightClient,
     build_insight_client_from_env,
 )
 
@@ -88,3 +89,52 @@ def test_openai_compatible_client_reports_timeout_with_actionable_message() -> N
         "LLM request timed out after 12 seconds. "
         "Increase FRAMEQ_LLM_TIMEOUT_SECONDS in settings or .env and retry."
     )
+
+
+def test_server_managed_client_checkouts_once_and_reuses_returned_config() -> None:
+    calls: list[Request] = []
+
+    def fake_transport(request: Request, timeout: float) -> bytes:
+        calls.append(request)
+        if request.full_url == "http://127.0.0.1:8787/api/desktop/llm/checkouts":
+            assert request.get_header("Authorization") == "Bearer desktop-token"
+            assert json.loads(request.data.decode("utf-8")) == {"request_id": "run-12345678"}  # type: ignore[union-attr]
+            return json.dumps(
+                {
+                    "provider": "openai_compatible",
+                    "base_url": "https://llm.example/v1",
+                    "model": "dedicated-model",
+                    "api_key": "client-secret",
+                    "timeout_seconds": 33,
+                    "quota_remaining": 19,
+                }
+            ).encode("utf-8")
+        assert request.full_url == "https://llm.example/v1/chat/completions"
+        assert request.get_header("Authorization") == "Bearer client-secret"
+        return b'{"choices":[{"message":{"content":"[\\"topic\\"]"}}]}'
+
+    client = ServerManagedInsightClient(
+        checkout_url="http://127.0.0.1:8787/api/desktop/llm/checkouts",
+        session_token="desktop-token",
+        request_id="run-12345678",
+        transport=fake_transport,
+    )
+
+    assert client.generate("first prompt") == '["topic"]'
+    assert client.generate("second prompt") == '["topic"]'
+    assert [request.full_url for request in calls].count(
+        "http://127.0.0.1:8787/api/desktop/llm/checkouts",
+    ) == 1
+
+
+def test_build_insight_client_from_env_supports_server_managed_mode() -> None:
+    client = build_insight_client_from_env(
+        {
+            "FRAMEQ_LLM_SOURCE": "server",
+            "FRAMEQ_LLM_CHECKOUT_URL": "http://127.0.0.1:8787/api/desktop/llm/checkouts",
+            "FRAMEQ_LLM_SESSION_TOKEN": "desktop-token",
+            "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "run-12345678",
+        }
+    )
+
+    assert isinstance(client, ServerManagedInsightClient)

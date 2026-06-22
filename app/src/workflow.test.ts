@@ -41,6 +41,8 @@ describe("workflow state model", () => {
   test("completed worker result exposes both result cards", () => {
     const state = summarizeWorkerResult({
       status: "completed",
+      video_path: "outputs/demo.mp4",
+      audio_path: "work/demo.wav",
       text: "完整文字稿",
       insights: ["为什么流程编排可能比单点模型能力更关键？"],
       transcript_path: "outputs/demo_transcript.txt",
@@ -49,12 +51,59 @@ describe("workflow state model", () => {
     });
 
     expect(state.stage).toBe("completed");
-    expect(getResultCards(state).map((card) => card.id)).toEqual(["insights", "transcript"]);
+    expect(getResultCards(state).map((card) => card.id)).toEqual([
+      "video",
+      "audio",
+      "transcript",
+      "insights",
+    ]);
   });
 
-  test("partial worker result keeps transcript and marks insights retryable", () => {
+  test("completed transcript-only worker result marks insights pending", () => {
+    const state = summarizeWorkerResult({
+      status: "completed",
+      video_path: "outputs/demo.mp4",
+      audio_path: "work/demo.wav",
+      text: "已经完成的文字稿",
+      insights: [],
+      transcript_path: "outputs/demo_transcript.txt",
+      insights_path: null,
+      error: null,
+    });
+
+    expect(getResultCards(state)).toEqual([
+      {
+        id: "video",
+        title: "视频文件",
+        status: "ready",
+        action: "locate",
+      },
+      {
+        id: "audio",
+        title: "音频文件",
+        status: "ready",
+        action: "locate",
+      },
+      {
+        id: "transcript",
+        title: "完整文字稿",
+        status: "ready",
+        action: "open",
+      },
+      {
+        id: "insights",
+        title: "启发话题点",
+        status: "pending",
+        action: "confirm",
+      },
+    ]);
+  });
+
+  test("partial worker result keeps artifacts and marks insights retryable", () => {
     const state = summarizeWorkerResult({
       status: "partial_completed",
+      video_path: "outputs/demo.mp4",
+      audio_path: "work/demo.wav",
       text: "已经完成的文字稿",
       insights: [],
       transcript_path: "outputs/demo_transcript.txt",
@@ -69,6 +118,18 @@ describe("workflow state model", () => {
     expect(state.stage).toBe("partial_completed");
     expect(getResultCards(state)).toEqual([
       {
+        id: "video",
+        title: "视频文件",
+        status: "ready",
+        action: "locate",
+      },
+      {
+        id: "audio",
+        title: "音频文件",
+        status: "ready",
+        action: "locate",
+      },
+      {
         id: "transcript",
         title: "完整文字稿",
         status: "ready",
@@ -78,7 +139,7 @@ describe("workflow state model", () => {
         id: "insights",
         title: "启发话题点",
         status: "failed",
-        action: "retry",
+        action: "confirm",
       },
     ]);
   });
@@ -126,6 +187,8 @@ describe("workflow state model", () => {
   test("formats detail text for clipboard copying", () => {
     const state = summarizeWorkerResult({
       status: "completed",
+      video_path: "outputs/demo.mp4",
+      audio_path: "work/demo.wav",
       text: "完整文字稿",
       insights: ["第一个话题点", "第二个话题点"],
       transcript_path: "outputs/demo_transcript.txt",
@@ -140,6 +203,8 @@ describe("workflow state model", () => {
   test("selects generated export path for each detail tab", () => {
     const state = summarizeWorkerResult({
       status: "completed",
+      video_path: "outputs/demo.mp4",
+      audio_path: "work/demo.wav",
       text: "完整文字稿",
       insights: ["第一个话题点"],
       transcript_path: "outputs/demo_transcript.txt",
@@ -147,6 +212,8 @@ describe("workflow state model", () => {
       error: null,
     });
 
+    expect(getExportPath("video", state)).toBe("outputs/demo.mp4");
+    expect(getExportPath("audio", state)).toBe("work/demo.wav");
     expect(getExportPath("transcript", state)).toBe("outputs/demo_transcript.txt");
     expect(getExportPath("insights", state)).toBe("outputs/demo_insights.md");
     expect(getExportPath("insights", createInitialWorkflow())).toBeNull();
@@ -173,6 +240,8 @@ describe("workflow state model", () => {
   test("starts an insight retry without discarding the existing transcript", () => {
     const state = summarizeWorkerResult({
       status: "partial_completed",
+      video_path: "outputs/demo.mp4",
+      audio_path: "work/demo.wav",
       text: "已经完成的文字稿。",
       insights: [],
       transcript_path: "outputs/demo_transcript.txt",
@@ -192,6 +261,8 @@ describe("workflow state model", () => {
     );
     expect(retrying.progressPercent).toBe(88);
     expect(retrying.text).toBe("已经完成的文字稿。");
+    expect(retrying.videoPath).toBe("outputs/demo.mp4");
+    expect(retrying.audioPath).toBe("work/demo.wav");
     expect(retrying.transcriptPath).toBe("outputs/demo_transcript.txt");
     expect(retrying.error).toBeNull();
   });

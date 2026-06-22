@@ -16,16 +16,18 @@ export type ProgressStep = {
 };
 
 export type ResultCard = {
-  id: "insights" | "transcript";
+  id: "video" | "audio" | "insights" | "transcript";
   title: string;
-  status: "ready" | "failed";
-  action: "open" | "retry";
+  status: "ready" | "pending" | "failed";
+  action: "open" | "locate" | "confirm";
 };
 
 export type DetailTab = ResultCard["id"];
 
 export type WorkerResult = {
   status: "completed" | "partial_completed" | "failed";
+  video_path: string | null;
+  audio_path: string | null;
   text: string;
   insights: string[];
   transcript_path: string | null;
@@ -54,6 +56,8 @@ export type WorkflowState = {
   progressPercent: number;
   text: string;
   insights: string[];
+  videoPath: string | null;
+  audioPath: string | null;
   transcriptPath: string | null;
   insightsPath: string | null;
   error: WorkerErrorResult | null;
@@ -75,6 +79,8 @@ export function createInitialWorkflow(): WorkflowState {
     progressPercent: 0,
     text: "",
     insights: [],
+    videoPath: null,
+    audioPath: null,
     transcriptPath: null,
     insightsPath: null,
     error: null,
@@ -99,6 +105,12 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
     showUrlInput: false,
     statusMessage: "正在下载视频并准备媒体文件。",
     progressPercent: 12,
+    text: "",
+    insights: [],
+    videoPath: null,
+    audioPath: null,
+    transcriptPath: null,
+    insightsPath: null,
     error: null,
   };
 }
@@ -174,6 +186,8 @@ export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
     progressPercent: result.status === "failed" ? 35 : 100,
     text: result.text,
     insights: result.insights,
+    videoPath: result.video_path,
+    audioPath: result.audio_path,
     transcriptPath: result.transcript_path,
     insightsPath: result.insights_path,
     error: result.error,
@@ -194,38 +208,70 @@ export function mergeProgressEvent(
 }
 
 export function getResultCards(state: WorkflowState): ResultCard[] {
+  const mediaCards: ResultCard[] = [
+    state.videoPath
+      ? {
+          id: "video",
+          title: "视频文件",
+          status: "ready",
+          action: "locate",
+        }
+      : null,
+    state.audioPath
+      ? {
+          id: "audio",
+          title: "音频文件",
+          status: "ready",
+          action: "locate",
+        }
+      : null,
+  ].filter((card): card is ResultCard => card !== null);
+
+  const transcriptCard: ResultCard | null =
+    state.transcriptPath || state.text
+      ? {
+          id: "transcript",
+          title: "完整文字稿",
+          status: "ready",
+          action: "open",
+        }
+      : null;
+
   if (state.stage === "partial_completed") {
     return [
-      {
-        id: "transcript",
-        title: "完整文字稿",
-        status: "ready",
-        action: "open",
-      },
+      ...mediaCards,
+      ...(transcriptCard ? [transcriptCard] : []),
       {
         id: "insights",
         title: "启发话题点",
         status: "failed",
-        action: "retry",
+        action: "confirm",
       },
     ];
   }
 
   if (state.stage === "completed") {
     return [
-      {
-        id: "insights",
-        title: "启发话题点",
-        status: "ready",
-        action: "open",
-      },
-      {
-        id: "transcript",
-        title: "完整文字稿",
-        status: "ready",
-        action: "open",
-      },
+      ...mediaCards,
+      ...(transcriptCard ? [transcriptCard] : []),
+      state.insights.length > 0
+        ? {
+            id: "insights",
+            title: "启发话题点",
+            status: "ready",
+            action: "open",
+          }
+        : {
+            id: "insights",
+            title: "启发话题点",
+            status: "pending",
+            action: "confirm",
+          },
     ];
+  }
+
+  if (state.stage === "failed") {
+    return [...mediaCards, ...(transcriptCard ? [transcriptCard] : [])];
   }
 
   return [];
@@ -236,10 +282,22 @@ export function getDetailText(tab: DetailTab, state: WorkflowState): string {
     return state.text.trim();
   }
 
-  return state.insights.map((insight, index) => `${index + 1}. ${insight}`).join("\n");
+  if (tab === "insights") {
+    return state.insights.map((insight, index) => `${index + 1}. ${insight}`).join("\n");
+  }
+
+  return "";
 }
 
 export function getExportPath(tab: DetailTab, state: WorkflowState): string | null {
+  if (tab === "video") {
+    return state.videoPath;
+  }
+
+  if (tab === "audio") {
+    return state.audioPath;
+  }
+
   if (tab === "transcript") {
     return state.transcriptPath;
   }
