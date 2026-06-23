@@ -159,13 +159,13 @@ FrameQ-Setup-x.y.z.exe  (约 1.5–2.5 GB)
 - 运行期：Rust 侧设置 `FRAMEQ_MODEL_DIR=<resource_dir>/models`
 - worker `asr.py:50-58` 的 `resolve_model_cache_dir()` 无需改动，自动读取环境变量
 
-### 3.5 LLM 配置：首启动向导
+### 3.5 LLM 配置：server-managed checkout
 
-LLM API Key 属于"密钥不得硬编码"约束，不能入包。但话题点生成依赖 LLM，必须给用户配置入口。
+LLM API Key 属于"密钥不得硬编码"约束，不能入包，也不再由桌面端 `.env` 保存。话题点生成依赖管理员在 FrameQ server Admin Web 中配置的专用客户端 LLM key。
 
-**方案**：首启动检测 `<用户数据目录>/.env` 是否存在且包含 `FRAMEQ_LLM_API_KEY`：
-- 不存在 → 弹出配置向导，引导用户填写 base_url / api_key / model；提供"稍后配置"按钮，此时话题点功能降级为不可用，文字稿功能正常
-- 存在 → 直接进入主界面
+**方案**：首启动只检测本机 ASR 模型和非 LLM 本地设置；话题点功能根据账号状态中的 `llm_configured`、月卡和额度门禁决定是否可用：
+- LLM 未由管理员配置 → 文字稿功能正常，话题点入口提示等待管理员配置
+- LLM 已配置且用户有额度 → 二次确认后通过 server-managed checkout 注入 `FRAMEQ_LLM_SOURCE=server` 等临时环境变量
 
 **用户数据目录定位**（Windows）：`%LOCALAPPDATA%\FrameQ\`，即 `C:\Users\<user>\AppData\Local\FrameQ\`。Rust 侧用 `dirs::data_local_dir()` 解析。
 
@@ -213,7 +213,7 @@ Rust 侧 `process_video` 命令通过环境变量 `FRAMEQ_OUTPUT_DIR` 和 `FRAME
    - `Command::new(resource_dir.join("python/python.exe"))`
    - 设置 `PYTHONPATH`、`PATH`（前置 `resources/bin`）、`FRAMEQ_MODEL_DIR`、`FRAMEQ_OUTPUT_DIR`、`FRAMEQ_WORK_DIR`、`FRAMEQ_RESOURCE_DIR`
    - `current_dir(user_data_dir)`
-5. 新增首启动向导命令 `check_first_run()` 和 `save_llm_config(config)`
+5. 新增首启动向导命令 `check_first_run()` 和本机设置保存命令 `save_llm_config(config)`；该命令只保存 ASR 与输出目录设置，并移除旧 LLM 字段
 6. `Cargo.toml` 添加 `dirs = "5"`
 
 ### 阶段 4：worker 侧适配
@@ -222,7 +222,7 @@ Rust 侧 `process_video` 命令通过环境变量 `FRAMEQ_OUTPUT_DIR` 和 `FRAME
 
 1. `outputs/` 目录从 `FRAMEQ_OUTPUT_DIR` 环境变量读取，回退到 `project_root / "outputs"`
 2. `work/` 目录从 `FRAMEQ_WORK_DIR` 环境变量读取，回退到 `project_root / "work"`
-3. `config.py` 的 `load_project_env()` 支持从 `FRAMEQ_USER_DATA_DIR` 读取 `.env`（优先级：环境变量 > 用户数据目录 .env > 项目根 .env）
+3. `config.py` 的 `load_project_env()` 支持从 `FRAMEQ_USER_DATA_DIR` 读取 `.env`（优先级：进程环境变量 > 用户数据目录 `.env`）；项目根 `.env` 不参与 runtime，旧 `FRAMEQ_LLM_*` dotenv 字段必须忽略
 
 ### 阶段 5：tauri.conf.json 改造
 

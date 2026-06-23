@@ -1,5 +1,12 @@
 # FrameQ Architecture
 
+## 2026-06-23 Runtime Configuration Boundary
+
+- Desktop worker runtime configuration no longer reads repository-root `.env` files such as `D:/Github/FrameQ/.env`.
+- App-local data `.env` remains the local desktop settings file for output directory, ASR model selection, and model download overrides.
+- Legacy local `FRAMEQ_LLM_PROVIDER`, `FRAMEQ_LLM_BASE_URL`, `FRAMEQ_LLM_API_KEY`, `FRAMEQ_LLM_MODEL`, and `FRAMEQ_LLM_TIMEOUT_SECONDS` dotenv values are ignored.
+- Insight topic generation receives LLM runtime material only through server-managed checkout environment variables injected by Tauri for the insight-generation worker invocation.
+
 ## 2026-06-21 Account and Billing Boundary
 
 - `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, WeChat Native orders, payment webhooks, and entitlement status.
@@ -31,7 +38,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | 首启引导从 ModelScope 或自定义归档源下载 SenseVoice Small 与 VAD 缓存，运行期可写 |
 | app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
 | app-local data `work/` | 音频、中间文件、调试日志、`history.json` 历史任务索引和临时产物 | 运行时生成；由 `FRAMEQ_WORK_DIR` 指向 |
-| app-local data `.env` | 本机运行配置和密钥，不提交仓库；`.env.example`/resource `.env.template` 提供占位模板 | 已支持 InsightFlow LLM、输出目录和 ASR 模型选择；LLM/输出目录/ASR 模型配置可由桌面 UI 写入 |
+| app-local data `.env` | 本机非 LLM 运行配置，不提交仓库；`.env.example`/resource `.env.template` 提供占位模板 | 支持输出目录、ASR 模型选择和模型下载覆盖；InsightFlow LLM 配置由 server 管理，不从 dotenv 读取 |
 
 ## 模块关系
 
@@ -66,15 +73,15 @@ Desktop UI
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
 - `worker/frameq_worker/asr.py`：ASR model registry、Qwen / SenseVoice adapter、模型缓存目录解析和 transcript `.txt/.md` 写出。
 - `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
-- `worker/frameq_worker/config.py`：项目根 `.env` 加载和环境变量合并。
-- `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client，由 `FRAMEQ_LLM_*` 配置创建；话题点生成默认使用 `temperature=0.7`。
+- `worker/frameq_worker/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
+- `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client；桌面话题点生成通过 server-managed checkout env 创建 client，默认使用 `temperature=0.7`。
 - `worker/frameq_worker/pipeline.py`：worker 分阶段 pipeline 与 `ProcessResult` 映射。
 - `worker/frameq_worker/insightflow/`：内置 InsightFlow 话题点生成模块，运行期不依赖外部参考仓库；对完整 ASR 文字稿优先执行 topic planner，再按 planner 的标题、摘要、原文片段和 `question_count` 生成启发问题，最终去重并限制总数。
 
 ## 架构不变量
 
 - UI 只编排任务和展示状态，不直接调用 `yt-dlp`、`ffmpeg`、ASR 或 LLM。
-- UI 可以通过 Tauri command 读取/保存 LLM 配置，但不得回显完整 API Key。
+- UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、话题点和错误码。
 - `process_video` 主流程默认只负责视频下载、音频提取和 ASR 文字稿；`retry_insights`/话题点生成流程在用户二次确认后单独运行，并且是唯一需要 server-managed LLM checkout 的本地 worker 调用。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。

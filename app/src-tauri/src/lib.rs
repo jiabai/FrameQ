@@ -24,6 +24,13 @@ const LLM_SOURCE_ENV: &str = "FRAMEQ_LLM_SOURCE";
 const LLM_CHECKOUT_URL_ENV: &str = "FRAMEQ_LLM_CHECKOUT_URL";
 const LLM_SESSION_TOKEN_ENV: &str = "FRAMEQ_LLM_SESSION_TOKEN";
 const LLM_CHECKOUT_REQUEST_ID_ENV: &str = "FRAMEQ_LLM_CHECKOUT_REQUEST_ID";
+const LEGACY_LOCAL_LLM_ENV_KEYS: [&str; 5] = [
+    LLM_PROVIDER_ENV,
+    LLM_BASE_URL_ENV,
+    LLM_API_KEY_ENV,
+    LLM_MODEL_ENV,
+    LLM_TIMEOUT_ENV,
+];
 const OUTPUT_DIR_ENV: &str = "FRAMEQ_OUTPUT_DIR";
 const WORK_DIR_ENV: &str = "FRAMEQ_WORK_DIR";
 const MODEL_DIR_ENV: &str = "FRAMEQ_MODEL_DIR";
@@ -269,6 +276,7 @@ struct WorkerCommandSpec {
     program: PathBuf,
     args: Vec<String>,
     env: Vec<(String, String)>,
+    env_remove: Vec<String>,
     current_dir: PathBuf,
 }
 
@@ -542,6 +550,7 @@ fn build_worker_command_spec(
             payload,
         ],
         env,
+        env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),
     })
 }
@@ -611,8 +620,16 @@ fn build_model_download_command_spec(
             "--download-asr-model".to_string(),
         ],
         env,
+        env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),
     })
+}
+
+fn legacy_local_llm_env_removals() -> Vec<String> {
+    LEGACY_LOCAL_LLM_ENV_KEYS
+        .iter()
+        .map(|key| (*key).to_string())
+        .collect()
 }
 
 fn configured_env_value(config_values: &HashMap<String, String>, key: &str) -> Option<String> {
@@ -657,6 +674,9 @@ fn path_to_env_string(path: impl AsRef<Path>) -> String {
 
 fn spawn_worker_command(spec: WorkerCommandSpec) -> Result<std::process::Child, String> {
     let mut command = Command::new(spec.program);
+    for key in spec.env_remove {
+        command.env_remove(key);
+    }
     command
         .args(spec.args)
         .envs(spec.env)
@@ -1929,14 +1949,34 @@ mod tests {
         normalize_resource_dir, parse_auth_callback_url, parse_worker_output_or_fallback,
         parse_worker_stdout, run_blocking_worker_command, save_llm_config_to_file,
         supported_asr_models, AuthCallback, LlmConfigInput, ProcessVideoRequest,
-        ProcessVideoResult, RuntimePaths, ServerManagedLlmInvocation, WorkerError,
-        WorkerInvocation, WorkerProcessState,
+        ProcessVideoResult, RuntimePaths, ServerManagedLlmInvocation, WorkerCommandSpec,
+        WorkerError, WorkerInvocation, WorkerProcessState,
     };
     use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
     use std::process::Output;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn assert_removes_legacy_local_llm_env(spec: &WorkerCommandSpec) {
+        for key in [
+            "FRAMEQ_LLM_PROVIDER",
+            "FRAMEQ_LLM_BASE_URL",
+            "FRAMEQ_LLM_API_KEY",
+            "FRAMEQ_LLM_MODEL",
+            "FRAMEQ_LLM_TIMEOUT_SECONDS",
+        ] {
+            assert!(spec.env_remove.iter().any(|value| value == key));
+        }
+        for key in [
+            "FRAMEQ_LLM_SOURCE",
+            "FRAMEQ_LLM_CHECKOUT_URL",
+            "FRAMEQ_LLM_SESSION_TOKEN",
+            "FRAMEQ_LLM_CHECKOUT_REQUEST_ID",
+        ] {
+            assert!(!spec.env_remove.iter().any(|value| value == key));
+        }
+    }
 
     #[test]
     fn worker_process_state_tracks_only_one_running_process() {
@@ -2107,6 +2147,7 @@ Some dependency logged to stdout
         );
         assert_eq!(env.get("FRAMEQ_ALLOW_REAL_ASR"), Some(&"1".to_string()));
         assert_eq!(env.get("MODELSCOPE_OFFLINE"), Some(&"1".to_string()));
+        assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(spec.current_dir, paths.user_data_dir);
     }
 
@@ -2186,6 +2227,7 @@ Some dependency logged to stdout
         .expect("build worker command spec");
         let env = spec.env_map();
 
+        assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), Some(&"server".to_string()));
         assert_eq!(
             env.get("FRAMEQ_LLM_CHECKOUT_URL"),
@@ -2222,6 +2264,7 @@ Some dependency logged to stdout
         .expect("build worker command spec");
         let env = spec.env_map();
 
+        assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), None);
         assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_URL"), None);
         assert_eq!(env.get("FRAMEQ_LLM_SESSION_TOKEN"), None);
@@ -2365,6 +2408,7 @@ Some dependency logged to stdout
             env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256"),
             Some(&"abc123".to_string())
         );
+        assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(spec.current_dir, paths.user_data_dir);
     }
 

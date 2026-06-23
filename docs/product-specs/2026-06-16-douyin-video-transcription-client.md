@@ -2,6 +2,14 @@
 
 <!-- 由 vibe-coding-launcher 生成。来源：douyin_video_download_solution.md。 -->
 
+## 2026-06-23 Server-Managed LLM Dotenv Boundary
+
+- Insight topic generation LLM configuration is now managed by the FrameQ server Admin Web.
+- The desktop worker must not load `D:/Github/FrameQ/.env` or any repository-root `.env` as a runtime configuration source.
+- App-local data `.env` remains available for local output directory, ASR model selection, and model download overrides, but legacy local `FRAMEQ_LLM_*` dotenv keys must be ignored.
+- Insight generation may only receive LLM runtime material through the server-managed checkout environment (`FRAMEQ_LLM_SOURCE=server`, checkout URL, session token, and request ID).
+- The desktop settings UI must not ask users to enter an LLM API key, base URL, model, or timeout.
+
 ## 背景
 
 用户希望在桌面客户端中输入抖音视频 URL，先确认启动本地公开视频下载、音频提取和中文 ASR 转写，再在文字稿完成后单独确认生成可继续思考的启发话题点。
@@ -34,7 +42,7 @@
 - 用户阅读完整文字稿，并复制到笔记或文档中继续编辑。
 - 用户打开启发话题点，获得可用于讨论、选题或复盘的开放式问题。
 - InsightFlow 配置缺失时，用户仍能得到文字稿，并稍后重试话题点生成。
-- 用户可以在桌面 UI 中配置 OpenAI-compatible LLM 服务，用于生成启发话题点，而不需要手工编辑 `.env`。
+- 启发话题点使用由管理员在 FrameQ server 端统一配置的 OpenAI-compatible LLM；桌面 UI 不再提供 LLM API Key、base URL、model 或 timeout 输入。
 - 用户完成主流程后，可以先查看或定位视频、音频和文字稿，再通过单独的确认面板启动启发话题点生成。
 - 用户可以打开历史任务列表，查看过去处理过的 URL、完成状态、时间和结果路径，并重新打开文字稿或话题点详情。
 - 用户可以在设置中修改结果输出目录；修改后只影响新任务，旧历史仍指向旧文件路径。
@@ -46,11 +54,11 @@
 - 默认 ASR 模型为 `iic/SenseVoiceSmall`；可选 ASR 模型包括 `Qwen/Qwen3-ASR-0.6B`。
 - 下载、转码和 ASR 默认本地处理。
 - 云端 LLM 使用前必须明确提示文字稿会发送到对应服务。
-- InsightFlow LLM 配置可由桌面 UI 写入项目根 `.env`，键名为：`FRAMEQ_LLM_PROVIDER=openai_compatible`、`FRAMEQ_LLM_BASE_URL`、`FRAMEQ_LLM_API_KEY`、`FRAMEQ_LLM_MODEL`、`FRAMEQ_LLM_TIMEOUT_SECONDS`。
+- InsightFlow LLM 配置由 FrameQ server 托管；worker 不得读取项目根 `.env` 或 app-local `.env` 中的旧 `FRAMEQ_LLM_*` 字段作为 LLM 配置。
 - 启发话题点生成应优先让 LLM 对完整 ASR 文字稿做“话题分段规划”，输出话题标题、摘要、原文片段和 `question_count`；随后按每个话题段生成问题。planner 最多保留 8 个话题段、每段 1-3 个问题、最终话题点总数最多 12 个；planner 失败或返回空结果时，fallback 到直接按文本片段生成问题，fallback 默认按约 1000 字生成 1 个问题。OpenAI-compatible LLM 默认 `temperature` 为 `0.7`。
-- 结果输出目录配置可由桌面 UI 写入项目根 `.env`，键名为 `FRAMEQ_OUTPUT_DIR`；为空时默认使用项目根 `outputs/`。
-- ASR 模型配置可由桌面 UI 写入项目根 `.env`，键名为 `FRAMEQ_ASR_MODEL`；为空时默认使用 `iic/SenseVoiceSmall`。
-- UI 读取配置时不得回显完整 API Key；只能展示是否已保存密钥，用户可输入新密钥覆盖旧值。
+- 结果输出目录配置可由桌面 UI 写入 app-local data `.env`，键名为 `FRAMEQ_OUTPUT_DIR`；为空时默认使用 app-local data `outputs/`。
+- ASR 模型配置可由桌面 UI 写入 app-local data `.env`，键名为 `FRAMEQ_ASR_MODEL`；为空时默认使用 `iic/SenseVoiceSmall`。
+- UI 读取配置时不得展示或要求输入 LLM API Key；只能展示服务端 LLM 是否已由管理员配置就绪。
 - worker 必须返回结构化状态和错误码，UI 不解析命令行散文本作为业务结果。
 - 当前开发态不静默下载大模型权重；真实 ASR 推理需要显式设置 `FRAMEQ_ALLOW_REAL_ASR=1`。
 - 模型权重默认缓存到项目 `models/`，可通过 `FRAMEQ_MODEL_DIR` 覆盖；SenseVoice/FunASR 必须把该目录同步到 `MODELSCOPE_CACHE`，避免落入 ModelScope 用户级默认缓存。下载/加载进度 UX 完成前，UI 必须给出可行动错误提示。
@@ -77,9 +85,9 @@
 - 在 `部分完成` 状态点击话题点重试时，仅重新生成话题点，不重新下载视频或重新执行 ASR。
 - 话题点待生成或失败时，点击话题点入口都应进入确认面板；确认后仅运行话题点生成，不重新下载视频、提取音频或重新转写。
 - `.env` 配置 LLM key 和 model 后，话题点生成调用 OpenAI-compatible Chat Completions 接口；未配置时仍进入 `部分完成` 并保留文字稿。
-- 用户在 UI 设置中保存 base URL、API key、model 和 timeout 后，后续完整处理或话题点重试应使用保存后的 LLM 配置。
+- 管理员在 server 端保存 LLM base URL、API key、model 和 timeout 后，后续话题点生成应通过 server-managed checkout 使用该配置；主流程不携带 LLM checkout env。
 - 用户在 UI 设置中保存输出目录后，后续完整处理生成的视频、文字稿和话题点文件应写入该目录；中间 WAV 仍写入 `work/`。
-- 设置 UI 必须提示：启用云端 LLM 后，文字稿片段会发送到配置的服务。
+- 设置 UI 必须提示：这里只管理本机 ASR 和输出目录；话题点确认面板必须提示文字稿片段会发送到管理员配置的云端 LLM 服务。
 - 历史入口应展示最近任务列表；每条历史至少包含 URL、状态、时间、输出目录、文字稿路径、话题点路径和错误码或摘要。
 - 点击历史中的可用结果应打开与当前结果一致的详情浮窗；导出按钮应定位历史项记录的实际文件路径。
 - 处理中点击取消时，桌面端终止当前 worker 进程树，UI 返回输入态并保留已提交 URL；取消后的晚到结果不会覆盖界面。

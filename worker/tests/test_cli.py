@@ -403,11 +403,10 @@ def test_retry_insights_once_preserves_transcript_when_client_is_missing(
     }
 
 
-def test_retry_insights_once_builds_client_from_project_dotenv(
+def test_retry_insights_once_ignores_project_dotenv_llm_config(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    captured_env: dict[str, str] = {}
     transcript_txt = tmp_path / "outputs" / "demo_transcript.txt"
     transcript_md = transcript_txt.with_suffix(".md")
     transcript_txt.parent.mkdir()
@@ -424,9 +423,11 @@ def test_retry_insights_once_builds_client_from_project_dotenv(
         encoding="utf-8",
     )
 
-    def fake_build_insight_client_from_env(env: dict[str, str]) -> FakeInsightClient:
-        captured_env.update(env)
-        return FakeInsightClient()
+    def fake_build_insight_client_from_env(env: dict[str, str]) -> FakeInsightClient | None:
+        assert "FRAMEQ_LLM_PROVIDER" not in env
+        assert "FRAMEQ_LLM_API_KEY" not in env
+        assert "FRAMEQ_LLM_MODEL" not in env
+        return None
 
     monkeypatch.setattr(
         cli,
@@ -444,32 +445,32 @@ def test_retry_insights_once_builds_client_from_project_dotenv(
         project_root=tmp_path,
     )
 
-    assert result["status"] == "completed"
-    assert result["insights"] == ["为什么重试应该只重新生成话题点？"]
-    assert captured_env["FRAMEQ_LLM_API_KEY"] == "secret"
-    assert captured_env["FRAMEQ_LLM_MODEL"] == "demo-model"
+    assert result["status"] == "partial_completed"
+    assert result["transcript_path"] == transcript_txt.as_posix()
+    assert result["error"] == {
+        "code": "INSIGHTFLOW_CONFIG_MISSING",
+        "message": "InsightFlow LLM client is not configured.",
+        "stage": "insights_generating",
+    }
 
 
-def test_retry_insights_once_reports_missing_markdown_when_dotenv_client_exists(
+def test_retry_insights_once_reports_missing_markdown_when_process_env_client_exists(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     transcript_txt = tmp_path / "outputs" / "demo_transcript.txt"
     transcript_txt.parent.mkdir()
     transcript_txt.write_text("已经完成的文字稿。", encoding="utf-8")
-    (tmp_path / ".env").write_text(
-        "\n".join(
-            [
-                "FRAMEQ_LLM_API_KEY=secret",
-                "FRAMEQ_LLM_MODEL=demo-model",
-            ]
-        ),
-        encoding="utf-8",
-    )
+
+    def fake_build_insight_client_from_env(env: dict[str, str]) -> FakeInsightClient:
+        assert env["FRAMEQ_LLM_API_KEY"] == "secret"
+        assert env["FRAMEQ_LLM_MODEL"] == "demo-model"
+        return FakeInsightClient()
+
     monkeypatch.setattr(
         cli,
         "build_insight_client_from_env",
-        lambda env: FakeInsightClient(),
+        fake_build_insight_client_from_env,
     )
 
     result = retry_insights_once(
@@ -480,6 +481,10 @@ def test_retry_insights_once_reports_missing_markdown_when_dotenv_client_exists(
             }
         ),
         project_root=tmp_path,
+        environ={
+            "FRAMEQ_LLM_API_KEY": "secret",
+            "FRAMEQ_LLM_MODEL": "demo-model",
+        },
     )
 
     assert result["status"] == "partial_completed"
@@ -756,13 +761,15 @@ def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extrac
     }
 
 
-def test_run_worker_once_uses_configured_asr_model_from_project_env(
+def test_run_worker_once_uses_configured_asr_model_from_user_data_env(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     captured: dict[str, object] = {}
+    user_data_dir = tmp_path / "user-data"
+    user_data_dir.mkdir()
     create_valid_asr_cache(tmp_path / "models")
-    (tmp_path / ".env").write_text(
+    (user_data_dir / ".env").write_text(
         "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n",
         encoding="utf-8",
     )
@@ -779,10 +786,16 @@ def test_run_worker_once_uses_configured_asr_model_from_project_env(
     )
 
     result = run_worker_once(
-        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        json.dumps(
+            {
+                "url": "https://www.douyin.com/video/7524373044106677544",
+                "model": "Qwen/Qwen3-ASR-0.6B",
+            }
+        ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         allow_real_asr=True,
+        environ={"FRAMEQ_USER_DATA_DIR": user_data_dir.as_posix()},
     )
 
     transcript_md = tmp_path / "outputs" / "demo_transcript.md"

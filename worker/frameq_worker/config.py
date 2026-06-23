@@ -6,6 +6,13 @@ from pathlib import Path
 
 DOTENV_FILE_NAME = ".env"
 USER_DATA_DIR_ENV = "FRAMEQ_USER_DATA_DIR"
+LEGACY_LOCAL_LLM_DOTENV_KEYS = {
+    "FRAMEQ_LLM_PROVIDER",
+    "FRAMEQ_LLM_BASE_URL",
+    "FRAMEQ_LLM_API_KEY",
+    "FRAMEQ_LLM_MODEL",
+    "FRAMEQ_LLM_TIMEOUT_SECONDS",
+}
 
 
 def load_project_env(
@@ -13,13 +20,17 @@ def load_project_env(
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     base_env = dict(environ if environ is not None else os.environ)
-    project_dotenv_env = parse_dotenv(project_root / DOTENV_FILE_NAME)
     user_data_dotenv_env: dict[str, str] = {}
     user_data_dir = base_env.get(USER_DATA_DIR_ENV, "").strip()
     if user_data_dir:
-        user_data_dotenv_env = parse_dotenv(Path(user_data_dir) / DOTENV_FILE_NAME)
+        user_data_dotenv_env = remove_legacy_local_llm_dotenv_keys(
+            parse_dotenv(Path(user_data_dir) / DOTENV_FILE_NAME)
+        )
 
-    merged_env = {**project_dotenv_env, **user_data_dotenv_env, **base_env}
+    # The repository-root .env is intentionally ignored. Desktop runtime settings
+    # live in app-local data, and LLM settings are provided by server checkout env.
+    _ = project_root
+    merged_env = {**user_data_dotenv_env, **base_env}
     return {key: value for key, value in merged_env.items() if value != ""}
 
 
@@ -44,6 +55,14 @@ def parse_dotenv(path: Path) -> dict[str, str]:
         values[key] = strip_env_value(value.strip())
 
     return values
+
+
+def remove_legacy_local_llm_dotenv_keys(values: dict[str, str]) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in values.items()
+        if key not in LEGACY_LOCAL_LLM_DOTENV_KEYS
+    }
 
 
 def strip_env_value(value: str) -> str:

@@ -343,7 +343,7 @@ def _timeout_message(timeout_seconds: float) -> str:
     timeout_label = f"{timeout_seconds:g}"
     return (
         f"LLM request timed out after {timeout_label} seconds. "
-        "Increase FRAMEQ_LLM_TIMEOUT_SECONDS in settings or .env and retry."
+        "Ask the administrator to increase the server-managed timeout and retry."
     )
 
 

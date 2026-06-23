@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-06-23-disable-root-dotenv-llm-plan.md` | Stop applying repository-root `.env` to desktop worker runtime after LLM moved to server-managed checkout. |
 | `2026-06-22-four-artifact-split-flow-plan.md` | Four artifact result workspace and split transcript/insight generation flow. |
 | `2026-06-22-server-managed-llm-quota-plan.md` | Server-managed dedicated client LLM config, desktop checkout, and monthly insight quota. |
 | `2026-06-21-activation-code-authorization-plan.md` | Account login with Admin Web-issued activation codes replacing the visible WeChat payment flow. |

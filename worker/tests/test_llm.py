@@ -89,7 +89,7 @@ def test_openai_compatible_client_reports_timeout_with_actionable_message() -> N
     assert exc_info.value.code == "INSIGHTFLOW_LLM_REQUEST_TIMEOUT"
     assert str(exc_info.value) == (
         "LLM request timed out after 12 seconds. "
-        "Increase FRAMEQ_LLM_TIMEOUT_SECONDS in settings or .env and retry."
+        "Ask the administrator to increase the server-managed timeout and retry."
     )
 
 
@@ -124,7 +124,8 @@ def test_openai_compatible_client_classifies_provider_content_filter_errors() ->
     assert exc_info.value.code == "INSIGHTFLOW_LLM_CONTENT_BLOCKED"
     assert str(exc_info.value) == (
         "LLM provider blocked the request with its content safety policy. "
-        "Provider detail: content_policy_violation: The transcript was rejected by the content safety filter."
+        "Provider detail: content_policy_violation: "
+        "The transcript was rejected by the content safety filter."
     )
 
 

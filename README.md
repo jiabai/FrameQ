@@ -304,7 +304,7 @@ npm --prefix app run tauri -- build --no-bundle
 - FrameQ does not implement bypasses for platform login walls, access controls, CAPTCHA, or privacy restrictions.
 - The account service stores email accounts, OTP metadata, session token hashes, orders, entitlements, webhook audit records, encrypted LLM config, and quota events.
 - The account service must not receive video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents.
-- If insight topic generation is enabled, transcript text may be sent to the configured OpenAI-compatible LLM provider.
+- If insight topic generation is enabled, transcript text may be sent to the server-managed OpenAI-compatible LLM provider.
 - Real `.env` files, SQLite databases, backups, logs, model caches, output files, and secrets stay out of git.
 
 ## Source of Truth
