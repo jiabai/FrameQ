@@ -39,6 +39,7 @@ Supported video link
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [Desktop Release Runtime](#desktop-release-runtime)
+- [Desktop Local Settings](#desktop-local-settings)
 - [Server Deployment](#server-deployment)
 - [Worker Smoke Test](#worker-smoke-test)
 - [Repository Map](#repository-map)
@@ -190,6 +191,12 @@ models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch/model.pt
 
 LLM API keys, cloud model credentials, ASR weights, and user-private configuration are never packaged into the installer.
 
+## Desktop Local Settings
+
+The desktop app stores non-LLM local settings in its app-local data `.env` file. The settings sheet creates this file when needed, shows its path, and can reveal it in the system file manager.
+
+This file is for local output, ASR, and model-download settings only. Insight-topic LLM configuration is managed on the FrameQ server and is not read from desktop `.env` files.
+
 ## Server Deployment
 
 The account, activation-code, billing, and server-managed LLM checkout service lives in `server/`.
@@ -197,7 +204,7 @@ The account, activation-code, billing, and server-managed LLM checkout service l
 Production domain:
 
 ```text
-https://8xf.pro
+https://frameq.8xf.pro
 ```
 
 Deployment files:
@@ -205,14 +212,14 @@ Deployment files:
 | File | Purpose |
 | --- | --- |
 | `deploy/server-deployment.md` | Production deployment runbook |
-| `deploy/nginx/frameq-server.conf` | Nginx reverse proxy for `8xf.pro` |
+| `deploy/nginx/frameq-server.conf` | Nginx reverse proxy for `frameq.8xf.pro` |
 | `deploy/nginx/frameq-proxy-headers.conf` | Shared proxy headers snippet |
 | `deploy/systemd/frameq-server.service` | systemd service example |
 
 Recommended production shape:
 
 ```text
-Nginx :443 on 8xf.pro
+Nginx :443 on frameq.8xf.pro
   -> FrameQ server 127.0.0.1:8787
       -> server/data/frameq.sqlite
 ```

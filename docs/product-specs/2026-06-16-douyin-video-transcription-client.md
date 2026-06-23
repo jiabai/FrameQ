@@ -7,6 +7,8 @@
 - Insight topic generation LLM configuration is now managed by the FrameQ server Admin Web.
 - The desktop worker must not load `D:/Github/FrameQ/.env` or any repository-root `.env` as a runtime configuration source.
 - App-local data `.env` remains available for local output directory, ASR model selection, and model download overrides, but legacy local `FRAMEQ_LLM_*` dotenv keys must be ignored.
+- The settings panel should surface the app-local data `.env` path and allow the user to locate that file in the system file manager.
+- Opening or saving settings should create a commented app-local data `.env` template when the file does not exist, so advanced users can inspect supported local keys without relying on the repository-root `.env`.
 - Insight generation may only receive LLM runtime material through the server-managed checkout environment (`FRAMEQ_LLM_SOURCE=server`, checkout URL, session token, and request ID).
 - The desktop settings UI must not ask users to enter an LLM API key, base URL, model, or timeout.
 
@@ -84,7 +86,7 @@
 - InsightFlow 失败时，UI 展示 `部分完成`，保留文字稿并提供重试入口。
 - 在 `部分完成` 状态点击话题点重试时，仅重新生成话题点，不重新下载视频或重新执行 ASR。
 - 话题点待生成或失败时，点击话题点入口都应进入确认面板；确认后仅运行话题点生成，不重新下载视频、提取音频或重新转写。
-- `.env` 配置 LLM key 和 model 后，话题点生成调用 OpenAI-compatible Chat Completions 接口；未配置时仍进入 `部分完成` 并保留文字稿。
+- app-local data `.env` 只承载本机 ASR、输出目录和模型下载覆盖；话题点生成不得从 dotenv 读取 LLM key 或 model。
 - 管理员在 server 端保存 LLM base URL、API key、model 和 timeout 后，后续话题点生成应通过 server-managed checkout 使用该配置；主流程不携带 LLM checkout env。
 - 用户在 UI 设置中保存输出目录后，后续完整处理生成的视频、文字稿和话题点文件应写入该目录；中间 WAV 仍写入 `work/`。
 - 设置 UI 必须提示：这里只管理本机 ASR 和输出目录；话题点确认面板必须提示文字稿片段会发送到管理员配置的云端 LLM 服务。

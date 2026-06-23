@@ -18,12 +18,12 @@
 
 | 约束 | 来源 | 含义 |
 |------|------|------|
-| Local-first | `core-beliefs.md §1` | 视频/音频/文字稿默认本机处理；云端仅限用户显式配置 LLM |
+| Local-first | `core-beliefs.md §1` | 视频/音频/文字稿默认本机处理；云端仅限话题点生成通过 server-managed LLM checkout 使用 |
 | Worker owns heavy processing | `core-beliefs.md §2` | UI 不直接调 yt-dlp/ffmpeg/ASR/LLM |
 | Runtime independence | `core-beliefs.md §3` | 不依赖 `D:\Github\InsightFlow\src\server` |
 | Recoverable partial success | `core-beliefs.md §4` | 话题点失败不丢文字稿 |
 | Observable progress | `core-beliefs.md §5` | 长耗时阶段必须有可见状态 |
-| Secrets 不硬编码 | `SECURITY.md §Secrets` | LLM Key 只能从 `.env` 或环境变量读取 |
+| Secrets 不硬编码 | `SECURITY.md §Secrets` | LLM Key 不进入桌面安装包和本机 `.env`，只由 FrameQ server 管理员托管 |
 | **权重不入安装包** | `AGENTS.md 核心信念` | **本方案需要重新审视，见 §3.4** |
 
 ### 1.3 当前架构的发布阻塞点
@@ -248,17 +248,17 @@ Rust 侧 `process_video` 命令通过环境变量 `FRAMEQ_OUTPUT_DIR` 和 `FRAME
 
 新增 `app/src/FirstRunWizard.tsx`：
 - 检测 `check_first_run()` 返回 true 时显示
-- 引导用户填写 LLM 配置（base_url / api_key / model）
-- 提供"稍后配置"按钮
-- 保存到 `%LOCALAPPDATA%\FrameQ\.env`
+- 引导用户下载/确认本机 ASR 模型，并展示可稍后在设置中调整的本机配置
+- 提供"稍后下载"按钮
+- 本机设置保存到 `%LOCALAPPDATA%\FrameQ\.env`；该文件只承载 ASR、输出目录和模型下载覆盖项，不保存 LLM key
 
 ### 阶段 7：验证
 
 1. **干净 VM 验证**（关键）：在未装 Python、未装 uv、未装 ffmpeg 的 Windows VM 上双击安装包，验证：
    - 安装成功
    - 启动后首启动向导出现
-   - 配置 LLM 后能完成完整链路（输入 URL → 下载 → 转译 → 话题点）
-   - 不配置 LLM 时文字稿功能正常，话题点降级提示
+   - 管理员在 server 配置 LLM 且账号额度可用后能完成完整链路（输入 URL → 下载 → 转译 → 话题点）
+   - server 端 LLM 未就绪或账号额度不可用时文字稿功能正常，话题点降级提示
 2. **离线验证**：拔网线后启动，验证已下载模型可用
 3. **卸载验证**：通过控制面板卸载，确认 `C:\Program Files\FrameQ\` 清理干净，`%LOCALAPPDATA%\FrameQ\` 保留用户数据
 

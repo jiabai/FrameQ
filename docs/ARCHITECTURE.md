@@ -4,6 +4,7 @@
 
 - Desktop worker runtime configuration no longer reads repository-root `.env` files such as `D:/Github/FrameQ/.env`.
 - App-local data `.env` remains the local desktop settings file for output directory, ASR model selection, and model download overrides.
+- The desktop settings panel returns and displays the app-local data `.env` path, can locate it in the file manager, and creates a commented template if the file is missing.
 - Legacy local `FRAMEQ_LLM_PROVIDER`, `FRAMEQ_LLM_BASE_URL`, `FRAMEQ_LLM_API_KEY`, `FRAMEQ_LLM_MODEL`, and `FRAMEQ_LLM_TIMEOUT_SECONDS` dotenv values are ignored.
 - Insight topic generation receives LLM runtime material only through server-managed checkout environment variables injected by Tauri for the insight-generation worker invocation.
 
@@ -38,7 +39,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | 首启引导从 ModelScope 或自定义归档源下载 SenseVoice Small 与 VAD 缓存，运行期可写 |
 | app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的最终视频、文字稿和话题点文件 | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
 | app-local data `work/` | 音频、中间文件、调试日志、`history.json` 历史任务索引和临时产物 | 运行时生成；由 `FRAMEQ_WORK_DIR` 指向 |
-| app-local data `.env` | 本机非 LLM 运行配置，不提交仓库；`.env.example`/resource `.env.template` 提供占位模板 | 支持输出目录、ASR 模型选择和模型下载覆盖；InsightFlow LLM 配置由 server 管理，不从 dotenv 读取 |
+| app-local data `.env` | 本机非 LLM 运行配置，不提交仓库；设置页可定位该文件，缺失时自动创建注释模板 | 支持输出目录、ASR 模型选择和模型下载覆盖；InsightFlow LLM 配置由 server 管理，不从 dotenv 读取 |
 
 ## 模块关系
 
@@ -66,7 +67,7 @@ Desktop UI
 - `ruff.toml`：Python worker 初始 lint 约束。
 - `pyproject.toml`：Python worker 项目元数据和 `uv` 依赖入口（初始化后维护）。
 - `app/src/workflow.ts`：前端工作流状态模型。
-- `app/src/settingsClient.ts`：前端 LLM 配置读写 client（Tauri invoke 包装）。
+- `app/src/settingsClient.ts`：前端本机设置读写 client（Tauri invoke 包装），包含 ASR、输出目录和 app-local `.env` 路径。
 - `app/src/historyClient.ts`：前端历史记录读取 client（Tauri invoke 包装）。
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。

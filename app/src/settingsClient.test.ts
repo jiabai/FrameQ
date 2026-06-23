@@ -68,6 +68,7 @@ describe("settings client", () => {
         output_dir: "D:\\FrameQ\\outputs",
         asr_model: "iic/SenseVoiceSmall",
         supported_asr_models: ["iic/SenseVoiceSmall"],
+        config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
       };
     };
 
@@ -78,6 +79,7 @@ describe("settings client", () => {
       outputDir: "D:\\FrameQ\\outputs",
       asrModel: "iic/SenseVoiceSmall",
       supportedAsrModels: ["iic/SenseVoiceSmall"],
+      configPath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
     });
   });
 
@@ -89,6 +91,7 @@ describe("settings client", () => {
         output_dir: "D:\\FrameQ\\outputs",
         asr_model: "Qwen/Qwen3-ASR-0.6B",
         supported_asr_models: ["iic/SenseVoiceSmall"],
+        config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
       };
     };
 
@@ -111,7 +114,10 @@ describe("settings client", () => {
         },
       },
     ]);
-    expect(config).toMatchObject({ outputDir: "D:\\FrameQ\\outputs" });
+    expect(config).toMatchObject({
+      outputDir: "D:\\FrameQ\\outputs",
+      configPath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+    });
   });
 
   test("maps Tauri errors to settings errors", async () => {

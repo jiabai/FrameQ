@@ -278,6 +278,7 @@ function App() {
     asrModel: "iic/SenseVoiceSmall",
   });
   const [settingsSupportedAsrModels, setSettingsSupportedAsrModels] = useState(defaultAsrModels);
+  const [settingsConfigPath, setSettingsConfigPath] = useState("");
   const [settingsNotice, setSettingsNotice] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -848,6 +849,7 @@ function App() {
       setSettingsSupportedAsrModels(
         config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
       );
+      setSettingsConfigPath(config.configPath);
       setSettingsNotice(successNotice ?? "已读取本机 ASR 与输出目录设置。");
     } catch (error) {
       setSettingsNotice(`读取配置失败：${error instanceof Error ? error.message : String(error)}`);
@@ -870,6 +872,7 @@ function App() {
       setSettingsSupportedAsrModels(
         config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
       );
+      setSettingsConfigPath(config.configPath);
       setSettingsNotice("配置已保存，后续任务会使用新的 ASR 和输出目录设置。");
     } catch (error) {
       setSettingsNotice(`保存失败：${error instanceof Error ? error.message : String(error)}`);
@@ -880,6 +883,20 @@ function App() {
 
   function updateSettingsDraft(field: keyof LlmConfigDraft, value: string) {
     setSettingsDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  async function locateSettingsConfigFile() {
+    if (!settingsConfigPath) {
+      setSettingsNotice("配置文件路径尚未读取，请稍后再试。");
+      return;
+    }
+
+    try {
+      await revealItemInDir(settingsConfigPath);
+      setSettingsNotice("已在文件管理器中定位本机配置文件。");
+    } catch (error) {
+      setSettingsNotice(`定位配置文件失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   function runWindowChromeAction(action: () => Promise<void>) {
@@ -1671,6 +1688,25 @@ function App() {
                     disabled={settingsLoading || settingsSaving}
                   />
                 </label>
+              </section>
+
+              <section className="sheet-form-section settings-config-file-section">
+                <div className="form-section-heading">
+                  <h3>本机配置文件</h3>
+                  <p>高级本机设置保存在 app-local data 的 .env 文件中，LLM 配置仍由服务端统一管理。</p>
+                </div>
+                <div className="config-file-row">
+                  <code title={settingsConfigPath}>{settingsConfigPath || "读取后显示配置文件路径"}</code>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={locateSettingsConfigFile}
+                    disabled={settingsLoading || !settingsConfigPath}
+                  >
+                    <FolderOpen size={15} />
+                    <span>定位文件</span>
+                  </button>
+                </div>
               </section>
 
               {settingsNotice ? <p className="action-notice">{settingsNotice}</p> : null}

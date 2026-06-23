@@ -8,6 +8,7 @@
 - If the user is not entitled, submitting a URL or retrying insights opens the account/payment sheet and does not start worker processing.
 - The account sheet shows remaining insight-generation uses when the user is signed in.
 - Desktop settings must not expose insight LLM provider, base URL, API key, model, or timeout; those fields are administrator-managed.
+- Desktop settings should expose the app-local `.env` path for non-LLM local settings and provide a locate-file action.
 - The payment sheet shows the monthly price, WeChat scan QR code, order expiration, and refresh status action in a stable layout.
 - Successful payment returns the user to the existing processing workflow without changing the local-first worker UI stages.
 
@@ -44,10 +45,10 @@ UI 必须围绕以下状态组织：
 - `启发话题点` 待生成或失败时，点击卡片先打开确认面板；用户在确认面板点击 `确认` 后才触发 InsightFlow，仅重跑话题点生成，不重新下载视频、重新提取音频或重新转写。
 - 取消任务只在处理中显示；点击后必须终止当前 worker 进程树，返回输入态并保留刚提交的 URL。
 - 取消后的晚到进度事件或 worker 结果不得覆盖当前 UI 状态。
-- 顶部工具区提供设置入口；设置面板用于配置启发话题点所需的 OpenAI-compatible LLM。
+- 顶部工具区提供设置入口；设置面板用于管理本机 ASR、输出目录和 app-local `.env` 配置文件位置，启发话题点 LLM 由服务端管理员配置。
 - 顶部工具区提供历史入口；历史面板展示最近任务列表，支持查看可用结果和定位输出文件。
-- 设置面板字段包含 ASR 模型、base URL、API key、model、timeout 和结果输出目录；首版 release UI 的 ASR 模型只显示 SenseVoice Small，并展示模型是否已下载、下载入口和 app-local data 缓存位置；已保存 API key 不回显，只展示“已保存密钥”状态，用户可输入新密钥覆盖。
-- 设置面板必须显示外部服务提示：启用云端 LLM 后，文字稿片段会发送到配置的服务。
+- 设置面板字段包含 ASR 模型、结果输出目录和本机配置文件路径；首版 release UI 的 ASR 模型只显示 SenseVoice Small，并展示模型是否已下载、下载入口和 app-local data 缓存位置。
+- 设置面板必须提示：这里只管理本机配置；话题点确认面板负责提示文字稿片段会发送到管理员配置的云端 LLM 服务。
 - 设置面板和历史面板内容必须在弹窗内部独立滚动，不能因字段或记录过多而被裁切。
 - 输出目录为空时 UI 应展示默认 `outputs/`；保存自定义目录后应显示已保存路径，并说明只影响新任务。
 

@@ -563,6 +563,8 @@ describe("App desktop sheet structure", () => {
           expression: `({
             hasSheetPanel: Boolean(document.querySelector('.sheet-panel.settings-sheet')),
             groupedSections: document.querySelectorAll('.sheet-form-section').length,
+            hasConfigFileSection: Boolean(document.querySelector('.settings-config-file-section')),
+            hasLocateConfigButton: Boolean(document.querySelector('.config-file-row button')),
             hasPrivacyCallout: Boolean(document.querySelector('.privacy-callout')),
             hasStickyFooter: Boolean(document.querySelector('.sheet-footer')),
             hasScrollableBody: getComputedStyle(document.querySelector('.settings-form')).overflowY === 'auto'
@@ -573,7 +575,9 @@ describe("App desktop sheet structure", () => {
 
       expect(sheet.result.value).toEqual({
         hasSheetPanel: true,
-        groupedSections: 1,
+        groupedSections: 2,
+        hasConfigFileSection: true,
+        hasLocateConfigButton: true,
         hasPrivacyCallout: true,
         hasStickyFooter: true,
         hasScrollableBody: true,
@@ -687,9 +691,9 @@ describe("App result detail modal layout", () => {
             document.body.innerHTML =
               '<div class="modal-backdrop">' +
                 '<section class="detail-modal settings-modal" role="dialog">' +
-                  '<header class="modal-header"><h2>LLM 配置</h2><button class="icon-button">x</button></header>' +
+                  '<header class="modal-header"><h2>应用设置</h2><button class="icon-button">x</button></header>' +
                   '<form class="settings-form">' +
-                    '<p class="settings-warning">启用云端 LLM 后，文字稿片段会发送到你配置的服务。</p>' +
+                    '<p class="settings-warning">这里管理本机 ASR、输出目录和配置文件位置。</p>' +
                     fields +
                     '<div class="settings-actions"><button>保存配置</button></div>' +
                   '</form>' +
@@ -715,7 +719,7 @@ describe("App result detail modal layout", () => {
     } finally {
       page.close();
     }
-  });
+  }, 10_000);
 });
 
 async function connectToCdp(webSocketDebuggerUrl: string) {

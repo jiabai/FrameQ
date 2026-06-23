@@ -5,6 +5,7 @@ export type LlmConfig = {
   outputDir: string;
   asrModel: string;
   supportedAsrModels: string[];
+  configPath: string;
 };
 
 export type LlmConfigDraft = {
@@ -50,6 +51,7 @@ export type LlmConfigResponse = {
   output_dir: string;
   asr_model: string;
   supported_asr_models: string[];
+  config_path: string;
 };
 
 export type SettingsCommandRunner = (
@@ -105,6 +107,7 @@ function mapLlmConfigResponse(response: LlmConfigResponse): LlmConfig {
     outputDir: response.output_dir,
     asrModel: response.asr_model,
     supportedAsrModels: response.supported_asr_models,
+    configPath: response.config_path,
   };
 }
 

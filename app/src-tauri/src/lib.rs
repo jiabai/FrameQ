@@ -47,10 +47,27 @@ const HISTORY_FILE_NAME: &str = "history.json";
 const ACCOUNT_SESSION_FILE_NAME: &str = "session.json";
 const ACCOUNT_PENDING_STATE_FILE_NAME: &str = "pending_auth_state.txt";
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
-const DEFAULT_SERVER_BASE_URL: &str = "http://127.0.0.1:8787";
+const DEFAULT_SERVER_BASE_URL: &str = "https://frameq.8xf.pro";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
 const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL];
+const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# FrameQ desktop local settings.\n\
+# This file lives in app-local data and is read by the desktop client/worker.\n\
+# Insight LLM configuration is managed by the FrameQ server Admin Web.\n\
+# Do not put FRAMEQ_LLM_* keys here.\n\
+\n\
+# Optional output directory for generated videos, transcripts, and insights.\n\
+# Leave blank to use app-local data outputs/.\n\
+FRAMEQ_OUTPUT_DIR=\n\
+\n\
+# Local ASR model for new transcription tasks.\n\
+FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n\
+\n\
+# Optional release ASR model download overrides.\n\
+# FRAMEQ_ASR_MODEL_DOWNLOAD_URL=\n\
+# FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256=\n\
+# FRAMEQ_MODELSCOPE_ENDPOINT=\n\
+# FRAMEQ_SENSEVOICE_REVISION=master\n";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ProcessVideoRequest {
@@ -106,6 +123,7 @@ struct LlmConfigView {
     output_dir: String,
     asr_model: String,
     supported_asr_models: Vec<String>,
+    config_path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1348,12 +1366,25 @@ fn set_window_position(window: Window, position: WindowPositionView) -> Result<(
 }
 
 fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
+    ensure_app_settings_dotenv(path)?;
     let values = parse_dotenv_values(path)?;
     Ok(LlmConfigView {
         output_dir: values.get(OUTPUT_DIR_ENV).cloned().unwrap_or_default(),
         asr_model: resolve_asr_model_value(values.get(ASR_MODEL_ENV).cloned())?,
         supported_asr_models: supported_asr_models(),
+        config_path: path_to_env_string(path),
     })
+}
+
+fn ensure_app_settings_dotenv(path: &Path) -> Result<(), String> {
+    if path.exists() {
+        return Ok(());
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    fs::write(path, APP_SETTINGS_DOTENV_TEMPLATE).map_err(|error| error.to_string())
 }
 
 fn env_path(paths: &RuntimePaths) -> PathBuf {
@@ -1572,6 +1603,7 @@ fn guest_account_status() -> AccountStatusView {
 }
 
 fn save_llm_config_to_file(path: &Path, config: LlmConfigInput) -> Result<LlmConfigView, String> {
+    ensure_app_settings_dotenv(path)?;
     let output_dir = sanitize_optional_env_value(config.output_dir, OUTPUT_DIR_ENV)?;
     let asr_model = resolve_asr_model_value(Some(config.asr_model))?;
     write_dotenv_updates_removing(
@@ -1947,8 +1979,8 @@ mod tests {
         build_activation_redeem_url, build_auth_login_url, build_model_download_command_spec,
         build_worker_command_spec, load_history_from_project, load_llm_config_from_file,
         normalize_resource_dir, parse_auth_callback_url, parse_worker_output_or_fallback,
-        parse_worker_stdout, run_blocking_worker_command, save_llm_config_to_file,
-        supported_asr_models, AuthCallback, LlmConfigInput, ProcessVideoRequest,
+        parse_worker_stdout, path_to_env_string, run_blocking_worker_command, save_llm_config_to_file,
+        server_base_url, supported_asr_models, AuthCallback, LlmConfigInput, ProcessVideoRequest,
         ProcessVideoResult, RuntimePaths, ServerManagedLlmInvocation, WorkerCommandSpec,
         WorkerError, WorkerInvocation, WorkerProcessState,
     };
@@ -2283,6 +2315,23 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn server_base_url_defaults_to_production_domain_and_allows_override() {
+        let original = std::env::var("FRAMEQ_SERVER_BASE_URL").ok();
+        std::env::remove_var("FRAMEQ_SERVER_BASE_URL");
+
+        assert_eq!(server_base_url(), "https://frameq.8xf.pro");
+
+        std::env::set_var("FRAMEQ_SERVER_BASE_URL", "http://127.0.0.1:8787/");
+
+        assert_eq!(server_base_url(), "http://127.0.0.1:8787");
+
+        match original {
+            Some(value) => std::env::set_var("FRAMEQ_SERVER_BASE_URL", value),
+            None => std::env::remove_var("FRAMEQ_SERVER_BASE_URL"),
+        }
+    }
+
+    #[test]
     fn activation_redeem_url_targets_desktop_activation_route() {
         assert_eq!(
             build_activation_redeem_url("https://frameq.example/"),
@@ -2438,6 +2487,21 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn load_llm_config_creates_app_local_env_template_and_reports_path() {
+        let env_path = temp_env_path("load_llm_config_creates_app_local_env_template");
+
+        let config = load_llm_config_from_file(&env_path).expect("load config");
+        let saved = fs::read_to_string(&env_path).expect("read created env");
+
+        assert_eq!(config.config_path, path_to_env_string(&env_path));
+        assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
+        assert!(saved.contains("FrameQ desktop local settings"));
+        assert!(saved.contains("FRAMEQ_OUTPUT_DIR="));
+        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
+        assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
+    }
+
+    #[test]
     fn save_llm_config_updates_local_settings_and_removes_old_llm_values() {
         let env_path = temp_env_path("save_llm_config_updates_local_settings");
         fs::write(
@@ -2467,6 +2531,7 @@ Some dependency logged to stdout
 
         assert_eq!(config.output_dir, "D:/FrameQ/custom-results");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
+        assert_eq!(config.config_path, path_to_env_string(&env_path));
         assert!(saved.contains("FRAMEQ_OUTPUT_DIR=D:/FrameQ/custom-results"));
         assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("OTHER_SETTING=keep-me"));
@@ -2495,6 +2560,7 @@ Some dependency logged to stdout
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
         assert!(saved.contains("FRAMEQ_OUTPUT_DIR=D:/FrameQ/results-only"));
         assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
+        assert!(saved.contains("FrameQ desktop local settings"));
         assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
     }
 
