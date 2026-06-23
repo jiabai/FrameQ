@@ -34,6 +34,7 @@ from frameq_worker.media import (
 from frameq_worker.model_download import (
     ModelDownloadError,
     download_asr_model_cache,
+    normalize_asr_model_cache_layout,
     validate_asr_model_cache,
 )
 from frameq_worker.models import (
@@ -388,6 +389,7 @@ def run_worker_pipeline(
             58,
         )
         model_cache_dir = resolve_model_cache_dir(project_root=project_root, environ=environ)
+        normalize_asr_model_cache_layout(model_cache_dir)
         if not validate_asr_model_cache(model_cache_dir):
             return failed_result(
                 code="ASR_MODEL_NOT_DOWNLOADED",

@@ -14,6 +14,7 @@ from frameq_worker.model_download import (
     VAD_MODEL_ID,
     ModelDownloadError,
     download_asr_model_cache,
+    normalize_asr_model_cache_layout,
     validate_asr_model_cache,
 )
 
@@ -31,7 +32,7 @@ def create_valid_cache(root: Path) -> None:
     )
 
 
-def create_valid_modelscope_cache(root: Path) -> None:
+def create_valid_legacy_cache(root: Path) -> None:
     sensevoice_dir = root / "iic" / "SenseVoiceSmall"
     vad_dir = root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
     sensevoice_dir.mkdir(parents=True)
@@ -55,7 +56,7 @@ def test_validate_asr_model_cache_requires_marker_and_model_files(tmp_path: Path
 
 
 def test_validate_asr_model_cache_accepts_modelscope_snapshot_layout(tmp_path: Path) -> None:
-    create_valid_modelscope_cache(tmp_path)
+    create_valid_legacy_cache(tmp_path)
 
     assert validate_asr_model_cache(tmp_path)
 
@@ -67,12 +68,16 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
     def fake_snapshot_download(**kwargs: object) -> str:
         calls.append(kwargs)
         if kwargs["model_id"] == SENSEVOICE_MODEL_ID:
-            model_dir = tmp_path / "models" / "iic" / "SenseVoiceSmall"
+            model_dir = Path(kwargs["cache_dir"]) / "iic" / "SenseVoiceSmall"
         else:
-            model_dir = tmp_path / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+            model_dir = (
+                Path(kwargs["cache_dir"])
+                / "iic"
+                / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+            )
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "model.pt").write_bytes(b"model")
-        return str(tmp_path / "models")
+        return str(kwargs["cache_dir"])
 
     result = download_asr_model_cache(
         cache_dir=tmp_path,
@@ -87,21 +92,70 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
         {
             "model_id": SENSEVOICE_MODEL_ID,
             "revision": "v1.2.3",
-            "cache_dir": tmp_path,
+            "cache_dir": tmp_path / "models",
             "endpoint": "https://modelscope.example",
             "progress_callbacks": calls[0]["progress_callbacks"],
         },
         {
             "model_id": VAD_MODEL_ID,
             "revision": DEFAULT_SENSEVOICE_REVISION,
-            "cache_dir": tmp_path,
+            "cache_dir": tmp_path / "models",
             "endpoint": "https://modelscope.example",
             "progress_callbacks": calls[1]["progress_callbacks"],
         },
     ]
     assert validate_asr_model_cache(tmp_path)
+    assert not (tmp_path / "iic" / "SenseVoiceSmall").exists()
+    assert not (tmp_path / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch").exists()
     assert events[0]["status"] == "started"
     assert events[-1]["status"] == "completed"
+
+
+def test_normalize_asr_model_cache_layout_migrates_legacy_only_cache(
+    tmp_path: Path,
+) -> None:
+    create_valid_legacy_cache(tmp_path)
+
+    normalize_asr_model_cache_layout(tmp_path)
+
+    assert (tmp_path / "MODEL_VERSION.txt").is_file()
+    assert validate_asr_model_cache(tmp_path)
+    assert (tmp_path / "models" / "iic" / "SenseVoiceSmall" / "model.pt").is_file()
+    assert (
+        tmp_path
+        / "models"
+        / "iic"
+        / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        / "model.pt"
+    ).is_file()
+    assert not (tmp_path / "iic" / "SenseVoiceSmall").exists()
+    assert not (tmp_path / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch").exists()
+
+
+def test_normalize_asr_model_cache_layout_removes_duplicate_known_legacy_dirs(
+    tmp_path: Path,
+) -> None:
+    create_valid_cache(tmp_path)
+    legacy_sensevoice = tmp_path / "iic" / "SenseVoiceSmall"
+    legacy_vad = tmp_path / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+    unknown_legacy = tmp_path / "iic" / "custom-model"
+    legacy_sensevoice.mkdir(parents=True)
+    legacy_vad.mkdir(parents=True)
+    unknown_legacy.mkdir(parents=True)
+    (legacy_sensevoice / "model.pt").write_bytes(b"duplicate-sensevoice")
+    (legacy_vad / "model.pt").write_bytes(b"duplicate-vad")
+    (unknown_legacy / "model.pt").write_bytes(b"keep-me")
+    stale_temp = tmp_path / "._____temp"
+    stale_temp.mkdir()
+    (stale_temp / "partial.bin").write_bytes(b"not-a-model")
+
+    normalize_asr_model_cache_layout(tmp_path)
+
+    assert validate_asr_model_cache(tmp_path)
+    assert not legacy_sensevoice.exists()
+    assert not legacy_vad.exists()
+    assert (unknown_legacy / "model.pt").read_bytes() == b"keep-me"
+    assert not stale_temp.exists()
 
 
 def test_download_asr_model_cache_extracts_custom_archive_layout(tmp_path: Path) -> None:

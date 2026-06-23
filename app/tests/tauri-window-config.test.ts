@@ -20,6 +20,16 @@ type TauriConfig = {
   bundle: {
     targets: string[];
     resources: string[];
+    createUpdaterArtifacts?: boolean;
+  };
+  plugins?: {
+    updater?: {
+      pubkey?: string;
+      endpoints?: string[];
+      windows?: {
+        installMode?: string;
+      };
+    };
   };
 };
 
@@ -31,6 +41,10 @@ const workerManifestPath = resolve(import.meta.dirname, "../../pyproject.toml");
 const bundledWorkerCliPath = resolve(
   import.meta.dirname,
   "../src-tauri/resources/worker/frameq_worker/cli.py",
+);
+const bundledWorkerModelDownloadPath = resolve(
+  import.meta.dirname,
+  "../src-tauri/resources/worker/frameq_worker/model_download.py",
 );
 
 describe("Tauri desktop window configuration", () => {
@@ -81,11 +95,36 @@ describe("Tauri desktop window configuration", () => {
     expect(config.bundle.resources).not.toContain("resources/models/**/*");
   });
 
+  test("enables signed updater artifacts without bundling model resources", () => {
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as TauriConfig;
+
+    expect(config.bundle.createUpdaterArtifacts).toBe(true);
+    expect(config.plugins?.updater?.pubkey).toEqual(expect.any(String));
+    expect(config.plugins?.updater?.pubkey?.length).toBeGreaterThan(80);
+    expect(config.plugins?.updater?.endpoints).toEqual([
+      "https://frameq.8xf.pro/api/desktop/updates/{{target}}/{{arch}}/{{current_version}}?channel=stable",
+    ]);
+    expect(config.plugins?.updater?.windows?.installMode).toBe("passive");
+    expect(config.bundle.resources).not.toContain("resources/models/**/*");
+  });
+
+  test("allows updater and process plugin commands from the main window", () => {
+    const capability = JSON.parse(readFileSync(capabilityPath, "utf8")) as {
+      permissions: string[];
+    };
+
+    expect(capability.permissions).toEqual(
+      expect.arrayContaining(["updater:default", "process:default"]),
+    );
+  });
+
   test("uses release-grade application metadata", () => {
     const manifest = readFileSync(cargoManifestPath, "utf8");
 
     expect(manifest).toContain('description = "FrameQ desktop video transcription client"');
     expect(manifest).toContain('authors = ["FrameQ"]');
+    expect(manifest).toContain('tauri-plugin-updater = "2"');
+    expect(manifest).toContain('tauri-plugin-process = "2"');
     expect(manifest).not.toContain('description = "A Tauri App"');
     expect(manifest).not.toContain('authors = ["you"]');
   });
@@ -137,6 +176,18 @@ describe("Tauri desktop window configuration", () => {
 
     expect(workerCli).toContain("def update_history_item_after_insight_retry");
     expect(updateHistoryReferences).toBeGreaterThan(1);
+  });
+
+  test("local bundled worker uses canonical ASR model cache layout when present", () => {
+    if (!existsSync(bundledWorkerModelDownloadPath)) {
+      return;
+    }
+
+    const modelDownload = readFileSync(bundledWorkerModelDownloadPath, "utf8");
+
+    expect(modelDownload).toContain("def normalize_asr_model_cache_layout");
+    expect(modelDownload).toContain("modelscope_cache_dir = _canonical_model_root(cache_dir)");
+    expect(modelDownload).toContain("cache_dir=modelscope_cache_dir");
   });
 
   test("installer script prunes non-runtime Python artifacts before bundling", () => {

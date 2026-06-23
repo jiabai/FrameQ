@@ -10,6 +10,8 @@
 
 ## 进行中
 
+- [ ] 实现桌面端一键升级（2026-06-23）— Tauri updater + FrameQ server 动态 manifest；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 验证：server/app/Rust 测试、前端构建、Tauri no-bundle 构建和文档门禁通过后收尾。
+
 ## 待办
 
 - [ ] 完成干净 Windows VM 与 macOS arm64/x64 真实安装包验证 ✅ 使用轻量 runtime 资源产出安装包，在无 Python/uv/ffmpeg 的干净机器完成首启模型下载、URL → 下载 → ASR 文字稿，并记录签名/公证发布门禁状态。

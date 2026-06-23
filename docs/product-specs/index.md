@@ -8,6 +8,7 @@
 
 ## Distribution Spec
 
+- `2026-06-23-desktop-one-click-updates.md` — 桌面端低打扰升级提醒、一键升级、FrameQ server 动态更新 manifest。
 - `2026-06-18-installer-distribution.md` — 普通用户安装即用分发：内置 runtime，首启下载 SenseVoice Small，用户数据目录和首启配置体验。
 
 <!-- 由 vibe-coding-launcher 生成。 -->

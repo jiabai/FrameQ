@@ -27,6 +27,15 @@
     }
   },
   "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM3NEU1MTA5MjBEQ0FBNTQKUldSVXF0d2dDVkZPTitKZmE4S25ZWFdNbHJLMjJudklrRGlhN1FIWktHQVhhcXhZQ2IxS3JSRHcK",
+      "endpoints": [
+        "https://frameq.8xf.pro/api/desktop/updates/{{target}}/{{arch}}/{{current_version}}?channel=stable"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    },
     "deep-link": {
       "desktop": {
         "schemes": ["frameq"]
@@ -35,6 +44,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis", "dmg"],
     "resources": [
       "resources/python/**/*",

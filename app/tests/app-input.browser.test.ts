@@ -564,6 +564,7 @@ describe("App desktop sheet structure", () => {
             hasSheetPanel: Boolean(document.querySelector('.sheet-panel.settings-sheet')),
             groupedSections: document.querySelectorAll('.sheet-form-section').length,
             hasConfigFileSection: Boolean(document.querySelector('.settings-config-file-section')),
+            hasUpdateSection: Boolean(document.querySelector('.update-settings-section')),
             hasLocateConfigButton: Boolean(document.querySelector('.config-file-row button')),
             hasPrivacyCallout: Boolean(document.querySelector('.privacy-callout')),
             hasStickyFooter: Boolean(document.querySelector('.sheet-footer')),
@@ -575,8 +576,9 @@ describe("App desktop sheet structure", () => {
 
       expect(sheet.result.value).toEqual({
         hasSheetPanel: true,
-        groupedSections: 2,
+        groupedSections: 3,
         hasConfigFileSection: true,
+        hasUpdateSection: true,
         hasLocateConfigButton: true,
         hasPrivacyCallout: true,
         hasStickyFooter: true,

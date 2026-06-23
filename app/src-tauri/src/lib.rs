@@ -46,6 +46,7 @@ const SENSEVOICE_REVISION_ENV: &str = "FRAMEQ_SENSEVOICE_REVISION";
 const HISTORY_FILE_NAME: &str = "history.json";
 const ACCOUNT_SESSION_FILE_NAME: &str = "session.json";
 const ACCOUNT_PENDING_STATE_FILE_NAME: &str = "pending_auth_state.txt";
+const UPDATE_PREFERENCES_FILE_NAME: &str = "updates.json";
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
 const DEFAULT_SERVER_BASE_URL: &str = "https://frameq.8xf.pro";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
@@ -164,6 +165,14 @@ struct FirstRunStatusView {
 #[derive(Debug, Serialize)]
 struct AsrModelDownloadResult {
     started: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+struct UpdatePreferencesView {
+    last_checked_at: Option<String>,
+    postponed_until: Option<i64>,
+    skipped_version: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -467,6 +476,10 @@ fn account_session_path(paths: &RuntimePaths) -> PathBuf {
 
 fn account_pending_state_path(paths: &RuntimePaths) -> PathBuf {
     account_auth_dir(paths).join(ACCOUNT_PENDING_STATE_FILE_NAME)
+}
+
+fn update_preferences_path(paths: &RuntimePaths) -> PathBuf {
+    paths.user_data_dir.join(UPDATE_PREFERENCES_FILE_NAME)
 }
 
 fn asr_model_available(paths: &RuntimePaths) -> bool {
@@ -1016,6 +1029,21 @@ fn get_history(app: AppHandle) -> Result<Vec<HistoryItemView>, String> {
 }
 
 #[tauri::command]
+fn get_update_preferences(app: AppHandle) -> Result<UpdatePreferencesView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    load_update_preferences_from_file(&update_preferences_path(&paths))
+}
+
+#[tauri::command]
+fn save_update_preferences(
+    app: AppHandle,
+    preferences: UpdatePreferencesView,
+) -> Result<UpdatePreferencesView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    save_update_preferences_to_file(&update_preferences_path(&paths), preferences)
+}
+
+#[tauri::command]
 fn check_first_run(app: AppHandle) -> Result<FirstRunStatusView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
@@ -1389,6 +1417,31 @@ fn ensure_app_settings_dotenv(path: &Path) -> Result<(), String> {
 
 fn env_path(paths: &RuntimePaths) -> PathBuf {
     paths.user_data_dir.join(DOTENV_FILE_NAME)
+}
+
+fn load_update_preferences_from_file(path: &Path) -> Result<UpdatePreferencesView, String> {
+    if !path.exists() {
+        return Ok(UpdatePreferencesView::default());
+    }
+
+    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    if content.trim().is_empty() {
+        return Ok(UpdatePreferencesView::default());
+    }
+
+    serde_json::from_str::<UpdatePreferencesView>(&content).map_err(|error| error.to_string())
+}
+
+fn save_update_preferences_to_file(
+    path: &Path,
+    preferences: UpdatePreferencesView,
+) -> Result<UpdatePreferencesView, String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let content = serde_json::to_string_pretty(&preferences).map_err(|error| error.to_string())?;
+    fs::write(path, content).map_err(|error| error.to_string())?;
+    Ok(preferences)
 }
 
 fn server_base_url() -> String {
@@ -1936,6 +1989,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             #[cfg(any(windows, target_os = "linux"))]
             if let Err(error) = app.deep_link().register_all() {
@@ -1951,6 +2006,8 @@ pub fn run() {
             get_llm_config,
             save_llm_config,
             get_history,
+            get_update_preferences,
+            save_update_preferences,
             check_first_run,
             download_asr_model,
             cancel_asr_model_download,
@@ -1978,11 +2035,12 @@ mod tests {
         apply_configured_asr_model_to_request, asr_model_available,
         build_activation_redeem_url, build_auth_login_url, build_model_download_command_spec,
         build_worker_command_spec, load_history_from_project, load_llm_config_from_file,
-        normalize_resource_dir, parse_auth_callback_url, parse_worker_output_or_fallback,
-        parse_worker_stdout, path_to_env_string, run_blocking_worker_command, save_llm_config_to_file,
+        load_update_preferences_from_file, normalize_resource_dir, parse_auth_callback_url,
+        parse_worker_output_or_fallback, parse_worker_stdout, path_to_env_string,
+        run_blocking_worker_command, save_llm_config_to_file, save_update_preferences_to_file,
         server_base_url, supported_asr_models, AuthCallback, LlmConfigInput, ProcessVideoRequest,
-        ProcessVideoResult, RuntimePaths, ServerManagedLlmInvocation, WorkerCommandSpec,
-        WorkerError, WorkerInvocation, WorkerProcessState,
+        ProcessVideoResult, RuntimePaths, ServerManagedLlmInvocation, UpdatePreferencesView,
+        WorkerCommandSpec, WorkerError, WorkerInvocation, WorkerProcessState,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -2562,6 +2620,31 @@ Some dependency logged to stdout
         assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("FrameQ desktop local settings"));
         assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
+    }
+
+    #[test]
+    fn update_preferences_round_trip_uses_app_local_updates_json() {
+        let path = temp_dir("update_preferences_round_trip").join("updates.json");
+        assert_eq!(
+            load_update_preferences_from_file(&path).expect("load missing preferences"),
+            UpdatePreferencesView::default()
+        );
+
+        let preferences = UpdatePreferencesView {
+            last_checked_at: Some("2026-06-23T10:00:00.000Z".to_string()),
+            postponed_until: Some(1_800_000),
+            skipped_version: None,
+        };
+        let saved = save_update_preferences_to_file(&path, preferences.clone())
+            .expect("save update preferences");
+        let raw = fs::read_to_string(&path).expect("read update preferences");
+        let loaded = load_update_preferences_from_file(&path).expect("load update preferences");
+
+        assert_eq!(saved, preferences);
+        assert_eq!(loaded, preferences);
+        assert!(raw.contains("lastCheckedAt"));
+        assert!(raw.contains("postponedUntil"));
+        assert!(raw.contains("skippedVersion"));
     }
 
     #[test]

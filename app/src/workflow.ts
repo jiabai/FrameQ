@@ -206,7 +206,7 @@ export function formatWorkerError(error: WorkerErrorResult): string {
   }
 
   if (error.code === "ASR_MODEL_NOT_DOWNLOADED") {
-    return "SenseVoice Small 尚未下载。请先在首启引导或设置中下载 ASR 模型，然后重新转写。";
+    return "ASR 模型尚未下载。请先在首启引导或设置中下载 ASR 模型，然后重新转写。";
   }
 
   return error.message;

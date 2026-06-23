@@ -58,7 +58,30 @@ import {
   type LlmConfigDraft,
 } from "./settingsClient";
 import { getHistory, historyItemToWorkerResult, type HistoryItem } from "./historyClient";
-import { shouldApplyModelDownloadUpdate } from "./modelDownloadState";
+import {
+  checkForAppUpdate,
+  createDefaultUpdatePreferences,
+  getUpdatePreferences,
+  installAppUpdate,
+  relaunchApp,
+  saveUpdatePreferences,
+  type AppUpdateInfo,
+  type UpdatePreferences,
+} from "./updateClient";
+import {
+  applyUpdateDownloadEvent,
+  createInitialUpdateState,
+  failUpdate,
+  isUpdateInstallBlocked,
+  markUpdateAvailable,
+  markUpdateReadyToRestart,
+  markUpdateUpToDate,
+  postponeUpdate,
+  startUpdateCheck,
+  startUpdateDownload,
+  type UpdateState,
+} from "./updateState";
+import { isModelDownloadStalled, shouldApplyModelDownloadUpdate } from "./modelDownloadState";
 import {
   beginAuthFlow,
   completeAuthFlow,
@@ -90,7 +113,7 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
   },
   video_transcribing: {
     title: "视频转译中",
-    body: "正在使用本地 SenseVoice Small 缓存识别语音内容。",
+    body: "正在使用本地 ASR 模型缓存识别语音内容。",
   },
   insights_generating: {
     title: "话题点生成中",
@@ -266,6 +289,46 @@ function accountProcessBlockerMessage(account: AccountStatus, actionLabel: strin
   return `当前账号暂不能${actionLabel}，请刷新账号状态后重试。`;
 }
 
+function isUpdateBusy(status: UpdateState["status"]): boolean {
+  return status === "checking" || status === "downloading" || status === "installing";
+}
+
+function isUpdateActionVisible(status: UpdateState["status"]): boolean {
+  return ["available", "downloading", "installing", "ready_to_restart"].includes(status);
+}
+
+function updateToolbarLabel(state: UpdateState): string {
+  if (state.status === "ready_to_restart") {
+    return "重启更新";
+  }
+
+  if (state.status === "downloading") {
+    return `${formatProgressPercent(state.progress)}`;
+  }
+
+  if (state.status === "installing") {
+    return "安装中";
+  }
+
+  return state.availableVersion ? `新版本 ${state.availableVersion}` : "有更新";
+}
+
+function updateStatusLabel(state: UpdateState): string {
+  const labels: Record<UpdateState["status"], string> = {
+    idle: "未检查",
+    checking: "检查中",
+    available: "可升级",
+    downloading: "下载中",
+    installing: "安装中",
+    ready_to_restart: "待重启",
+    up_to_date: "已是最新",
+    failed: "检查失败",
+    postponed: "稍后提醒",
+  };
+
+  return labels[state.status];
+}
+
 function App() {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
@@ -290,6 +353,7 @@ function App() {
     progress: 0,
   });
   const [modelDownloadNotice, setModelDownloadNotice] = useState("");
+  const [modelDownloadStalled, setModelDownloadStalled] = useState(false);
   const [account, setAccount] = useState<AccountStatus>(createGuestAccountStatus);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountNotice, setAccountNotice] = useState("");
@@ -300,9 +364,13 @@ function App() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [historyNotice, setHistoryNotice] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [updateState, setUpdateState] = useState(createInitialUpdateState);
   const operationIdRef = useRef(0);
   const modelDownloadOperationIdRef = useRef(0);
   const cancelledModelDownloadOperationIdRef = useRef<number | null>(null);
+  const modelDownloadProgressUpdatedAtRef = useRef(Date.now());
+  const updateInfoRef = useRef<AppUpdateInfo | null>(null);
+  const updatePreferencesRef = useRef<UpdatePreferences>(createDefaultUpdatePreferences());
   const windowDragSessionRef = useRef<WindowDragSession | null>(null);
   const queuedWindowPositionRef = useRef<WindowPosition | null>(null);
   const windowMoveInFlightRef = useRef(false);
@@ -313,6 +381,30 @@ function App() {
   const modelDownloadActive = ["started", "downloading", "extracting"].includes(
     modelDownloadProgress.status,
   );
+  const updateBusy = isUpdateBusy(updateState.status);
+  const updateInstallBlocked = isUpdateInstallBlocked({
+    processingActive: isProcessingStage(workflow.stage),
+    modelDownloadActive,
+  });
+
+  useEffect(() => {
+    if (!modelDownloadActive) {
+      setModelDownloadStalled(false);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setModelDownloadStalled(
+        isModelDownloadStalled({
+          active: true,
+          lastProgressAtMs: modelDownloadProgressUpdatedAtRef.current,
+          nowMs: Date.now(),
+        }),
+      );
+    }, 5_000);
+
+    return () => window.clearInterval(interval);
+  }, [modelDownloadActive]);
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -363,7 +455,7 @@ function App() {
         if (!firstRun.asrModelAvailable) {
           setModelGuideOpen(true);
           setModelDownloadNotice(
-            `首次使用前需要下载 SenseVoice Small。模型会保存到：${firstRun.asrModelDir}`,
+            `首次使用前需要下载 ASR 模型。模型会保存到：${firstRun.asrModelDir}`,
           );
           return;
         }
@@ -382,6 +474,18 @@ function App() {
 
   useEffect(() => {
     void refreshAccountStatus();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void loadPreferencesAndCheckForUpdates(() => cancelled);
+    }, 2_500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -490,9 +594,11 @@ function App() {
     cancelledModelDownloadOperationIdRef.current = null;
     setModelGuideOpen(true);
     setModelDownloadNotice("");
+    setModelDownloadStalled(false);
+    modelDownloadProgressUpdatedAtRef.current = Date.now();
     setModelDownloadProgress({
       status: "started",
-      message: "正在准备下载 SenseVoice Small。",
+      message: "正在准备下载 ASR 模型。",
       progress: 0,
     });
 
@@ -508,6 +614,8 @@ function App() {
             cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
           })
         ) {
+          modelDownloadProgressUpdatedAtRef.current = Date.now();
+          setModelDownloadStalled(false);
           setModelDownloadProgress(progress);
         }
       });
@@ -533,13 +641,15 @@ function App() {
         return;
       }
       if (status.asrModelAvailable) {
+        setModelDownloadStalled(false);
         setModelDownloadProgress({
           status: "completed",
-          message: "SenseVoice Small 已下载完成。",
+          message: "ASR 模型已下载完成。",
           progress: 100,
         });
         setModelDownloadNotice("ASR 模型已可用，后续转写会使用本地缓存。");
       } else {
+        setModelDownloadStalled(false);
         setModelDownloadProgress((current) => ({
           status: "failed",
           message: "模型下载未完成。",
@@ -558,6 +668,7 @@ function App() {
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
+      setModelDownloadStalled(false);
       setModelDownloadProgress((current) => ({
         status: "failed",
         message,
@@ -583,10 +694,142 @@ function App() {
         message: result.cancelled ? "模型下载已取消。" : result.error || "当前没有正在下载的模型。",
         progress: result.cancelled ? 0 : current.progress,
       }));
+      setModelDownloadStalled(false);
       setModelDownloadNotice(result.cancelled ? "模型下载已取消。" : result.error || "当前没有正在下载的模型。");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      setModelDownloadStalled(false);
       setModelDownloadNotice(`取消失败：${message}`);
+    }
+  }
+
+  function persistUpdatePreferences(patch: Partial<UpdatePreferences>) {
+    const next = {
+      ...updatePreferencesRef.current,
+      ...patch,
+    };
+    updatePreferencesRef.current = next;
+    void saveUpdatePreferences(next).catch((error) => {
+      console.warn("Failed to save update preferences", error);
+    });
+  }
+
+  async function loadPreferencesAndCheckForUpdates(isCancelled: () => boolean) {
+    try {
+      const preferences = await getUpdatePreferences();
+      if (isCancelled()) {
+        return;
+      }
+      updatePreferencesRef.current = preferences;
+      if (preferences.postponedUntil && preferences.postponedUntil > Date.now()) {
+        return;
+      }
+    } catch (error) {
+      console.warn("Failed to load update preferences", error);
+    }
+
+    if (!isCancelled()) {
+      await checkForUpdates({ silent: true, isCancelled });
+    }
+  }
+
+  async function checkForUpdates(options: { silent?: boolean; isCancelled?: () => boolean } = {}) {
+    if (!options.silent) {
+      persistUpdatePreferences({ postponedUntil: null });
+    }
+    setUpdateState((current) => startUpdateCheck(current));
+    try {
+      const update = await checkForAppUpdate();
+      if (options.isCancelled?.()) {
+        return;
+      }
+
+      if (!update) {
+        updateInfoRef.current = null;
+        persistUpdatePreferences({
+          lastCheckedAt: new Date().toISOString(),
+          skippedVersion: null,
+        });
+        setUpdateState((current) =>
+          options.silent ? createInitialUpdateState() : markUpdateUpToDate(current),
+        );
+        return;
+      }
+
+      updateInfoRef.current = update;
+      persistUpdatePreferences({
+        lastCheckedAt: new Date().toISOString(),
+        skippedVersion: null,
+      });
+      setUpdateState((current) =>
+        markUpdateAvailable(current, {
+          version: update.version,
+          notes: update.notes,
+        }),
+      );
+    } catch (error) {
+      if (options.isCancelled?.()) {
+        return;
+      }
+
+      if (options.silent) {
+        setUpdateState(createInitialUpdateState());
+        return;
+      }
+
+      setUpdateState((current) => failUpdate(current, error));
+    }
+  }
+
+  async function installUpdate() {
+    if (updateState.status === "ready_to_restart") {
+      await restartForUpdate();
+      return;
+    }
+
+    if (updateInstallBlocked) {
+      setUpdateState((current) => ({
+        ...current,
+        message: "当前任务或模型下载完成后再安装更新。",
+      }));
+      return;
+    }
+
+    let update = updateInfoRef.current;
+    if (!update) {
+      await checkForUpdates({ silent: false });
+      update = updateInfoRef.current;
+    }
+
+    if (!update) {
+      return;
+    }
+
+    setUpdateState((current) => startUpdateDownload(current));
+    try {
+      await installAppUpdate(update, (event) => {
+        setUpdateState((current) => applyUpdateDownloadEvent(current, event));
+      });
+      setUpdateState((current) => markUpdateReadyToRestart(current));
+    } catch (error) {
+      setUpdateState((current) => failUpdate(current, error));
+    }
+  }
+
+  function postponeUpdateReminder() {
+    const next = postponeUpdate(updateState, 24 * 60 * 60 * 1000);
+    setUpdateState(next);
+    persistUpdatePreferences({
+      postponedUntil: next.postponedUntil,
+      skippedVersion: null,
+    });
+  }
+
+  async function restartForUpdate() {
+    try {
+      await relaunchApp();
+    } catch (error) {
+      setUpdateState((current) => failUpdate(current, error));
     }
   }
 
@@ -1017,6 +1260,8 @@ function App() {
           : "等待管理员配置 LLM"
         : "未激活月卡"
       : "未登录";
+  const updateToolbarVisible = isUpdateActionVisible(updateState.status);
+  const updateSpinnerVisible = updateState.status === "downloading" || updateState.status === "installing";
 
   return (
     <main className="app-shell">
@@ -1061,6 +1306,18 @@ function App() {
               <UserRound size={15} />
               <span>{accountChipLabel}</span>
             </button>
+            {updateToolbarVisible ? (
+              <button
+                className={`update-chip ${updateState.status}`}
+                type="button"
+                onClick={installUpdate}
+                aria-label="应用更新"
+                disabled={updateBusy}
+              >
+                {updateSpinnerVisible ? <LoaderCircle size={15} /> : <Download size={15} />}
+                <span>{updateToolbarLabel(updateState)}</span>
+              </button>
+            ) : null}
             <button className="icon-button" type="button" onClick={openHistory} aria-label="查看历史">
               <HistoryIcon size={17} />
             </button>
@@ -1347,7 +1604,7 @@ function App() {
             <header className="modal-header sheet-header">
               <div>
                 <p className="section-label">ASR model</p>
-                <h2>下载 SenseVoice Small</h2>
+                <h2>下载 ASR 模型</h2>
               </div>
               <button
                 className="icon-button"
@@ -1363,7 +1620,7 @@ function App() {
               <p className="settings-warning privacy-callout">
                 <ShieldCheck size={16} />
                 <span>
-                  ASR 在本机运行，首次使用前需要下载 SenseVoice Small 和 VAD 模型缓存。下载完成后可离线转写。
+                  ASR 在本机运行，首次使用前需要下载 ASR 模型缓存。下载完成后可离线转写。
                 </span>
               </p>
               <div className="model-status-card">
@@ -1391,6 +1648,11 @@ function App() {
                 ) : null}
               </div>
               {modelDownloadNotice ? <p className="action-notice inline-notice">{modelDownloadNotice}</p> : null}
+              {!modelDownloadNotice && modelDownloadStalled ? (
+                <p className="action-notice inline-notice">
+                  下载进度暂时没有变化，可能是 ModelScope 网络较慢。可以继续等待，或取消后稍后重试。
+                </p>
+              ) : null}
             </div>
             <div className="settings-actions sheet-footer">
               <button
@@ -1414,7 +1676,7 @@ function App() {
                   disabled={asrModelStatus.available}
                 >
                   <Download size={16} />
-                  <span>{asrModelStatus.available ? "已下载" : "下载模型"}</span>
+                  <span>{asrModelStatus.available ? "已下载" : "下载 ASR 模型"}</span>
                 </button>
               )}
             </div>
@@ -1676,7 +1938,7 @@ function App() {
                     disabled={asrModelStatus.available || modelDownloadActive}
                   >
                     <Download size={15} />
-                    <span>{modelDownloadActive ? "下载中" : "下载模型"}</span>
+                    <span>{modelDownloadActive ? "下载中" : "下载 ASR 模型"}</span>
                   </button>
                 </div>
                 <label className="field-row">
@@ -1706,6 +1968,81 @@ function App() {
                     <FolderOpen size={15} />
                     <span>定位文件</span>
                   </button>
+                </div>
+              </section>
+
+              <section className="sheet-form-section update-settings-section">
+                <div className="form-section-heading">
+                  <h3>应用更新</h3>
+                  <p>FrameQ 会升级桌面端和内置 worker；模型缓存和本机产物保持在 app-local data。</p>
+                </div>
+                <div className={`update-status-card ${updateState.status}`}>
+                  <div>
+                    <span className={`model-status-badge ${updateState.status === "failed" ? "missing" : "ready"}`}>
+                      {updateStatusLabel(updateState)}
+                    </span>
+                    <strong>{updateState.availableVersion ? `FrameQ ${updateState.availableVersion}` : "FrameQ stable"}</strong>
+                    <small>
+                      {updateState.message ||
+                        "启动后会自动静默检查更新，也可以在这里手动检查。"}
+                    </small>
+                    {updateState.notes ? <small>{updateState.notes}</small> : null}
+                    {updateInstallBlocked && updateState.status === "available" ? (
+                      <small>当前任务或模型下载完成后才能安装更新。</small>
+                    ) : null}
+                  </div>
+                  {updateState.status === "downloading" || updateState.status === "installing" ? (
+                    <div className="update-progress">
+                      <div className="progress-track">
+                        <span
+                          className="progress-fill video_transcribing"
+                          style={{ width: `${updateState.progress}%` }}
+                        />
+                      </div>
+                      <small>{formatProgressPercent(updateState.progress)}</small>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="update-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => checkForUpdates({ silent: false })}
+                    disabled={updateBusy}
+                  >
+                    <RotateCcw size={15} />
+                    <span>{updateState.status === "checking" ? "检查中" : "检查更新"}</span>
+                  </button>
+                  {updateState.status === "ready_to_restart" ? (
+                    <button type="button" className="primary-button" onClick={restartForUpdate}>
+                      <RotateCcw size={15} />
+                      <span>重启完成更新</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={installUpdate}
+                      disabled={
+                        updateBusy ||
+                        updateInstallBlocked ||
+                        !["available", "postponed"].includes(updateState.status)
+                      }
+                    >
+                      <Download size={15} />
+                      <span>一键升级</span>
+                    </button>
+                  )}
+                  {["available", "postponed"].includes(updateState.status) ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={postponeUpdateReminder}
+                      disabled={updateBusy}
+                    >
+                      <span>稍后提醒</span>
+                    </button>
+                  ) : null}
                 </div>
               </section>
 

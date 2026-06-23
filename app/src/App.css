@@ -265,6 +265,7 @@ h3 {
 
 .icon-button,
 .account-chip,
+.update-chip,
 .secondary-button,
 .tool-actions button {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 241, 245, 0.9));
@@ -285,6 +286,13 @@ h3 {
   min-width: 92px;
 }
 
+.update-chip {
+  color: #0c4f91;
+  font-size: 0.8rem;
+  min-width: 92px;
+  padding: 0 10px;
+}
+
 .account-chip.active {
   background: #effaf3;
   border-color: rgba(35, 134, 75, 0.28);
@@ -299,6 +307,7 @@ h3 {
 
 .icon-button:hover,
 .account-chip:hover,
+.update-chip:hover,
 .secondary-button:hover,
 .tool-actions button:hover {
   background: linear-gradient(180deg, #ffffff, #f5f7fa);
@@ -308,6 +317,7 @@ h3 {
 
 .icon-button:active,
 .account-chip:active,
+.update-chip:active,
 .secondary-button:active,
 .tool-actions button:active,
 .primary-button:active {
@@ -1233,6 +1243,64 @@ h3 {
 .model-download-progress {
   display: grid;
   gap: 8px;
+}
+
+.update-status-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel-quiet);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.update-status-card.available,
+.update-status-card.ready_to_restart {
+  border-color: rgba(10, 132, 255, 0.26);
+}
+
+.update-status-card.failed {
+  border-color: rgba(199, 53, 44, 0.22);
+}
+
+.update-status-card > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.update-status-card strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.update-status-card small {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.update-progress {
+  display: grid;
+  gap: 7px;
+}
+
+.update-progress small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  justify-self: end;
+}
+
+.update-chip.downloading svg,
+.update-chip.installing svg {
+  animation: spin 1s linear infinite;
 }
 
 .progress-summary.compact {

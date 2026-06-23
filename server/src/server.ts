@@ -9,6 +9,11 @@ import { LlmConfigService } from "./llmConfig.js";
 import { renderLoginPage } from "./loginPage.js";
 import { sha256 } from "./security.js";
 import type { EntitlementRecord, SessionRecord, Store } from "./store.js";
+import {
+  findDesktopUpdate,
+  loadDesktopReleaseManifest,
+  type DesktopReleaseManifest,
+} from "./updates.js";
 import { createWechatNotificationParser, type WechatNotificationParser } from "./wechat.js";
 
 export type ServerDependencies = {
@@ -23,6 +28,8 @@ export type ServerDependencies = {
   adminEmail?: string;
   wechatPayEnabled?: boolean;
   llmConfigEncryptionKey?: string;
+  releaseManifest?: DesktopReleaseManifest | null;
+  releaseManifestPath?: string;
   now?: () => Date;
 };
 
@@ -101,6 +108,11 @@ export function buildServer(dependencies: ServerDependencies) {
   const parseWechatNotification =
     dependencies.parseWechatNotification ?? createWechatNotificationParser();
   const wechatPayEnabled = dependencies.wechatPayEnabled ?? process.env.WECHAT_PAY_ENABLED === "1";
+  const releaseManifest =
+    dependencies.releaseManifest ??
+    loadDesktopReleaseManifest(
+      dependencies.releaseManifestPath ?? process.env.FRAMEQ_RELEASE_MANIFEST_PATH,
+    );
 
   app.removeContentTypeParser("application/json");
   app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
@@ -415,6 +427,27 @@ export function buildServer(dependencies: ServerDependencies) {
       timeout_seconds: config.timeoutSeconds,
       quota_remaining: remaining,
     };
+  });
+
+  app.get("/api/desktop/updates/:target/:arch/:currentVersion", async (request, reply) => {
+    const params = request.params as {
+      target?: string;
+      arch?: string;
+      currentVersion?: string;
+    };
+    const query = request.query as { channel?: string };
+    const update = findDesktopUpdate(releaseManifest, {
+      target: params.target ?? "",
+      arch: params.arch ?? "",
+      currentVersion: params.currentVersion ?? "",
+      channel: query.channel,
+    });
+
+    if (!update) {
+      return reply.code(204).send();
+    }
+
+    return update;
   });
 
   app.post("/api/desktop/billing/wechat-native", async (request, reply) => {

@@ -3,12 +3,15 @@
 ## Account and Payment UI
 
 - The toolbar exposes account status as a compact utility control, not as a marketing banner.
+- Update availability appears as a compact toolbar utility only when action is needed; it must not replace the task monitor or interrupt URL input.
 - Login and payment flows use sheet-style panels consistent with settings/history.
 - Account copy must clearly distinguish local processing from server-side account/payment verification.
 - If the user is not entitled, submitting a URL or retrying insights opens the account/payment sheet and does not start worker processing.
 - The account sheet shows remaining insight-generation uses when the user is signed in.
 - Desktop settings must not expose insight LLM provider, base URL, API key, model, or timeout; those fields are administrator-managed.
 - Desktop settings should expose the app-local `.env` path for non-LLM local settings and provide a locate-file action.
+- Desktop settings should include an `应用更新` section with manual check, low-noise status copy, progress, `一键升级`, `稍后提醒`, and `重启完成更新` actions.
+- Update installation must be disabled while worker processing or ASR model download is active, with copy explaining that the current task should finish first.
 - The payment sheet shows the monthly price, WeChat scan QR code, order expiration, and refresh status action in a stable layout.
 - Successful payment returns the user to the existing processing workflow without changing the local-first worker UI stages.
 

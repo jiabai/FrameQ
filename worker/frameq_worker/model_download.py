@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import shutil
 import stat
 import tarfile
@@ -22,6 +23,11 @@ ARCHIVE_INVALID_ERROR_CODE = "ASR_MODEL_ARCHIVE_INVALID"
 
 ModelDownloadEventCallback = Callable[[dict[str, object]], None]
 SnapshotDownloader = Callable[..., str]
+LOGGER = logging.getLogger(__name__)
+KNOWN_MODEL_RELATIVE_DIRS = (
+    Path("iic") / "SenseVoiceSmall",
+    Path("iic") / "speech_fsmn_vad_zh-cn-16k-common-pytorch",
+)
 
 
 class ModelDownloadError(RuntimeError):
@@ -43,13 +49,105 @@ def validate_asr_model_cache(cache_dir: Path) -> bool:
     return SENSEVOICE_MODEL_ID in marker_text and VAD_MODEL_ID in marker_text
 
 
+def normalize_asr_model_cache_layout(cache_dir: Path) -> None:
+    """Best-effort migration from legacy top-level ModelScope cache layout."""
+    cache_dir = Path(cache_dir)
+    canonical_root = _canonical_model_root(cache_dir)
+    canonical_complete = _has_required_model_files_in_root(canonical_root)
+    legacy_complete = _has_required_model_files_in_root(cache_dir)
+
+    if not canonical_complete and legacy_complete:
+        _copy_known_model_dirs(cache_dir, canonical_root)
+        canonical_complete = _has_required_model_files_in_root(canonical_root)
+
+    if canonical_complete:
+        _remove_known_legacy_model_dirs(cache_dir)
+        _remove_empty_legacy_vendor_dir(cache_dir)
+
+    _remove_stale_temp_dirs(cache_dir)
+
+
 def _has_required_model_files(cache_dir: Path) -> bool:
     for model_root in (cache_dir, cache_dir / "models"):
-        sensevoice_model = model_root / "iic" / "SenseVoiceSmall" / "model.pt"
-        vad_model = model_root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch" / "model.pt"
-        if sensevoice_model.is_file() and vad_model.is_file():
+        if _has_required_model_files_in_root(model_root):
             return True
     return False
+
+
+def _has_required_model_files_in_root(model_root: Path) -> bool:
+    sensevoice_model = model_root / "iic" / "SenseVoiceSmall" / "model.pt"
+    vad_model = model_root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch" / "model.pt"
+    return sensevoice_model.is_file() and vad_model.is_file()
+
+
+def _canonical_model_root(cache_dir: Path) -> Path:
+    return cache_dir / "models"
+
+
+def _copy_known_model_dirs(source_root: Path, target_root: Path) -> None:
+    for relative_dir in KNOWN_MODEL_RELATIVE_DIRS:
+        source = source_root / relative_dir
+        target = target_root / relative_dir
+        if not source.exists():
+            continue
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(source, target)
+        except OSError:
+            LOGGER.warning(
+                "Failed to copy ASR model cache directory %s to %s.",
+                source,
+                target,
+                exc_info=True,
+            )
+
+
+def _remove_known_legacy_model_dirs(cache_dir: Path) -> None:
+    for relative_dir in KNOWN_MODEL_RELATIVE_DIRS:
+        legacy_dir = cache_dir / relative_dir
+        if not legacy_dir.exists():
+            continue
+        try:
+            shutil.rmtree(legacy_dir)
+        except OSError:
+            LOGGER.warning(
+                "Failed to remove duplicate legacy ASR model cache directory %s.",
+                legacy_dir,
+                exc_info=True,
+            )
+
+
+def _remove_empty_legacy_vendor_dir(cache_dir: Path) -> None:
+    legacy_vendor_dir = cache_dir / "iic"
+    try:
+        if legacy_vendor_dir.is_dir() and not any(legacy_vendor_dir.iterdir()):
+            legacy_vendor_dir.rmdir()
+    except OSError:
+        LOGGER.warning(
+            "Failed to remove empty legacy ASR model vendor directory %s.",
+            legacy_vendor_dir,
+            exc_info=True,
+        )
+
+
+def _remove_stale_temp_dirs(cache_dir: Path) -> None:
+    for temp_dir in (cache_dir / "._____temp", _canonical_model_root(cache_dir) / "._____temp"):
+        if not temp_dir.is_dir():
+            continue
+        try:
+            has_model_file = any(
+                path.is_file() and path.name == "model.pt" for path in temp_dir.rglob("*")
+            )
+            if not has_model_file:
+                shutil.rmtree(temp_dir)
+        except OSError:
+            LOGGER.warning(
+                "Failed to remove stale ASR model temporary directory %s.",
+                temp_dir,
+                exc_info=True,
+            )
 
 
 def download_asr_model_cache(
@@ -82,6 +180,7 @@ def download_asr_model_cache(
         )
 
     _write_model_version(cache_dir, revision=revision)
+    normalize_asr_model_cache_layout(cache_dir)
     if not validate_asr_model_cache(cache_dir):
         raise ModelDownloadError(
             ARCHIVE_INVALID_ERROR_CODE,
@@ -100,11 +199,12 @@ def _download_from_modelscope(
     progress_callback: ModelDownloadEventCallback | None,
 ) -> None:
     sensevoice_revision = revision or DEFAULT_SENSEVOICE_REVISION
+    modelscope_cache_dir = _canonical_model_root(cache_dir)
     _emit(progress_callback, "downloading", "正在从 ModelScope 下载 SenseVoice Small。", 8)
     snapshot_downloader(
         model_id=SENSEVOICE_MODEL_ID,
         revision=sensevoice_revision,
-        cache_dir=cache_dir,
+        cache_dir=modelscope_cache_dir,
         endpoint=endpoint,
         progress_callbacks=[_make_modelscope_progress_callback(progress_callback, 10, 72)],
     )
@@ -113,7 +213,7 @@ def _download_from_modelscope(
     snapshot_downloader(
         model_id=VAD_MODEL_ID,
         revision=DEFAULT_SENSEVOICE_REVISION,
-        cache_dir=cache_dir,
+        cache_dir=modelscope_cache_dir,
         endpoint=endpoint,
         progress_callbacks=[_make_modelscope_progress_callback(progress_callback, 82, 14)],
     )

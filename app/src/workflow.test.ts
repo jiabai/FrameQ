@@ -215,7 +215,7 @@ describe("workflow state model", () => {
         message: "SenseVoice Small model is not downloaded yet.",
         stage: "video_transcribing",
       }),
-    ).toBe("SenseVoice Small 尚未下载。请先在首启引导或设置中下载 ASR 模型，然后重新转写。");
+    ).toBe("ASR 模型尚未下载。请先在首启引导或设置中下载 ASR 模型，然后重新转写。");
   });
 
   test("formats video download failures with actionable recovery guidance", () => {

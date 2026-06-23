@@ -12,6 +12,13 @@
 - Insight generation may only receive LLM runtime material through the server-managed checkout environment (`FRAMEQ_LLM_SOURCE=server`, checkout URL, session token, and request ID).
 - The desktop settings UI must not ask users to enter an LLM API key, base URL, model, or timeout.
 
+## 2026-06-23 ASR Model Cache Layout Boundary
+
+- `FRAMEQ_MODEL_DIR` points to the app-local ModelScope cache root; the canonical SenseVoice and VAD files live under `<FRAMEQ_MODEL_DIR>/models/iic/...`.
+- ModelScope downloads and FunASR runtime loading must use the same canonical cache layout to avoid duplicate `iic/...` and `models/iic/...` model copies.
+- Existing legacy top-level `iic/SenseVoiceSmall` and `iic/speech_fsmn_vad_zh-cn-16k-common-pytorch` caches should be migrated or cleaned automatically only when the canonical cache is complete.
+- Unknown user or future model directories under top-level `iic/` must be preserved.
+
 ## 背景
 
 用户希望在桌面客户端中输入抖音视频 URL，先确认启动本地公开视频下载、音频提取和中文 ASR 转写，再在文字稿完成后单独确认生成可继续思考的启发话题点。
@@ -63,7 +70,7 @@
 - UI 读取配置时不得展示或要求输入 LLM API Key；只能展示服务端 LLM 是否已由管理员配置就绪。
 - worker 必须返回结构化状态和错误码，UI 不解析命令行散文本作为业务结果。
 - 当前开发态不静默下载大模型权重；真实 ASR 推理需要显式设置 `FRAMEQ_ALLOW_REAL_ASR=1`。
-- 模型权重默认缓存到项目 `models/`，可通过 `FRAMEQ_MODEL_DIR` 覆盖；SenseVoice/FunASR 必须把该目录同步到 `MODELSCOPE_CACHE`，避免落入 ModelScope 用户级默认缓存。下载/加载进度 UX 完成前，UI 必须给出可行动错误提示。
+- 模型权重默认缓存到 app-local data `models/`，可通过 `FRAMEQ_MODEL_DIR` 覆盖；该目录是 ModelScope cache root，SenseVoice/FunASR 的实际文件位于其 `models/iic/...` 子树。下载/加载进度 UX 完成前，UI 必须给出可行动错误提示。
 - SenseVoice 真实推理依赖 `funasr`；当依赖缺失、模型不可下载或模型 ID 不受支持时，worker 必须返回结构化 ASR 错误，不得让 UI 白屏或卡死。
 - SenseVoice 处理长音频时必须启用 `fsmn-vad` 切分和长音频合并参数，并在写入文字稿前移除 `<|...|>` 控制标签。
 - 历史记录存放在本地 `work/history.json`，不提交仓库；历史记录不得包含 LLM API key、cookies 或完整敏感请求头。

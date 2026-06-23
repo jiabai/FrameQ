@@ -177,6 +177,19 @@ def create_valid_asr_cache(root: Path) -> None:
     )
 
 
+def create_valid_legacy_asr_cache(root: Path) -> None:
+    sensevoice_dir = root / "iic" / "SenseVoiceSmall"
+    vad_dir = root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+    sensevoice_dir.mkdir(parents=True)
+    vad_dir.mkdir(parents=True)
+    (sensevoice_dir / "model.pt").write_bytes(b"sensevoice")
+    (vad_dir / "model.pt").write_bytes(b"vad")
+    (root / "MODEL_VERSION.txt").write_text(
+        "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
+        encoding="utf-8",
+    )
+
+
 def test_main_returns_zero_for_structured_worker_failures(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         cli,
@@ -729,6 +742,45 @@ def test_run_worker_once_builds_real_asr_with_project_model_cache(
         "model_name": "iic/SenseVoiceSmall",
         "cache_dir": tmp_path / "models",
     }
+
+
+def test_run_worker_once_normalizes_legacy_asr_cache_before_model_load(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+    model_root = tmp_path / "models"
+    create_valid_legacy_asr_cache(model_root)
+
+    def fake_build_asr_transcriber(model_name: str, cache_dir: Path) -> FakeTranscriber:
+        captured["model_name"] = model_name
+        captured["cache_dir"] = cache_dir
+        return FakeTranscriber()
+
+    monkeypatch.setattr(
+        cli,
+        "build_asr_transcriber",
+        fake_build_asr_transcriber,
+    )
+
+    result = run_worker_once(
+        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        allow_real_asr=True,
+    )
+
+    assert result["status"] == "partial_completed"
+    assert captured == {
+        "model_name": "iic/SenseVoiceSmall",
+        "cache_dir": model_root,
+    }
+    assert (model_root / "models" / "iic" / "SenseVoiceSmall" / "model.pt").is_file()
+    assert (
+        model_root / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch" / "model.pt"
+    ).is_file()
+    assert not (model_root / "iic" / "SenseVoiceSmall").exists()
+    assert not (model_root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch").exists()
 
 
 def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extraction(
