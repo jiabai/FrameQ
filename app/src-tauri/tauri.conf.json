@@ -28,7 +28,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM3NEU1MTA5MjBEQ0FBNTQKUldSVXF0d2dDVkZPTitKZmE4S25ZWFdNbHJLMjJudklrRGlhN1FIWktHQVhhcXhZQ2IxS3JSRHcK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMyOUZGRUY3MjZEMUY4OTEKUldTUitORW05LzZmd25KMGJUUlJUeEpMVi8wNTllQ3dic1VXbDBNRVhsYUZubkJ4U2Q0T2ZFcC8K",
       "endpoints": [
         "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json"
       ],
