@@ -37,6 +37,7 @@ const configPath = resolve(import.meta.dirname, "../src-tauri/tauri.conf.json");
 const capabilityPath = resolve(import.meta.dirname, "../src-tauri/capabilities/default.json");
 const cargoManifestPath = resolve(import.meta.dirname, "../src-tauri/Cargo.toml");
 const installerScriptPath = resolve(import.meta.dirname, "../../scripts/build-installer.ps1");
+const rootEnvExamplePath = resolve(import.meta.dirname, "../../.env.example");
 const desktopReleaseWorkflowPath = resolve(
   import.meta.dirname,
   "../../.github/workflows/desktop-release.yml",
@@ -147,6 +148,19 @@ describe("Tauri desktop window configuration", () => {
     expect(script).not.toContain("Require-DirectoryWithFiles");
     expect(script).toContain("Copy-WorkerRuntime $repoRoot $workerRoot");
     expect(script).toContain('Join-Path $RepoRoot "worker") "frameq_worker"');
+  });
+
+  test("installer script has a tracked local settings template to bundle", () => {
+    expect(existsSync(rootEnvExamplePath)).toBe(true);
+    const script = readFileSync(installerScriptPath, "utf8");
+    const envExample = readFileSync(rootEnvExamplePath, "utf8");
+
+    expect(script).toContain('Join-Path $repoRoot ".env.example"');
+    expect(envExample).toContain("FRAMEQ_OUTPUT_DIR=");
+    expect(envExample).toContain("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall");
+    expect(envExample).not.toContain("FRAMEQ_LLM_API_KEY");
+    expect(envExample).not.toContain("FRAMEQ_LLM_BASE_URL");
+    expect(envExample).not.toContain("FRAMEQ_LLM_MODEL=");
   });
 
   test("installer script maps macOS targets to explicit Tauri triples", () => {
