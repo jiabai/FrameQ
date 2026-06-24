@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex};
@@ -33,6 +35,8 @@ const RESOURCE_DIR_ENV: &str = "FRAMEQ_RESOURCE_DIR";
 const USER_DATA_DIR_ENV: &str = "FRAMEQ_USER_DATA_DIR";
 const ALLOW_REAL_ASR_ENV: &str = "FRAMEQ_ALLOW_REAL_ASR";
 const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
+#[cfg(target_os = "windows")]
+const WINDOWS_CREATE_NO_WINDOW: u32 = 0x08000000;
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
@@ -467,8 +471,26 @@ fn path_to_env_string(path: impl AsRef<Path>) -> String {
     path.as_ref().to_string_lossy().replace('\\', "/")
 }
 
+#[cfg(target_os = "windows")]
+fn windows_subprocess_creation_flags() -> u32 {
+    WINDOWS_CREATE_NO_WINDOW
+}
+
+fn hide_child_console_window(command: &mut Command) {
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(windows_subprocess_creation_flags());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = command;
+    }
+}
+
 fn spawn_worker_command(spec: WorkerCommandSpec) -> Result<std::process::Child, String> {
     let mut command = Command::new(spec.program);
+    hide_child_console_window(&mut command);
     for key in spec.env_remove {
         command.env_remove(key);
     }
@@ -946,7 +968,9 @@ where
 
 #[cfg(target_os = "windows")]
 fn terminate_process_tree(pid: u32) -> Result<(), String> {
-    let output = Command::new("taskkill")
+    let mut command = Command::new("taskkill");
+    hide_child_console_window(&mut command);
+    let output = command
         .args(["/PID", &pid.to_string(), "/T", "/F"])
         .output()
         .map_err(|error| error.to_string())?;
@@ -1248,6 +1272,15 @@ Some dependency logged to stdout
         assert_eq!(env.get("MODELSCOPE_OFFLINE"), Some(&"1".to_string()));
         assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(spec.current_dir, paths.user_data_dir);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_worker_subprocesses_suppress_console_window() {
+        assert_eq!(
+            super::windows_subprocess_creation_flags() & 0x08000000,
+            0x08000000
+        );
     }
 
     #[test]
