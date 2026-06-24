@@ -30,7 +30,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMyOUZGRUY3MjZEMUY4OTEKUldTUitORW05LzZmd25KMGJUUlJUeEpMVi8wNTllQ3dic1VXbDBNRVhsYUZubkJ4U2Q0T2ZFcC8K",
       "endpoints": [
-        "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json"
+        "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1"
       ],
       "windows": {
         "installMode": "passive"

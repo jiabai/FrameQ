@@ -28,6 +28,8 @@ Implement low-noise one-click updates for the FrameQ desktop app using Tauri upd
 - [x] Tauri updater/process config implemented.
 - [x] Desktop update UI implemented.
 - [x] Automated verification completed.
+- [x] Release workflow normalizes `latest.json` to UTF-8 without BOM before final upload.
+- [x] Bundled updater endpoint includes a fixed query string to avoid stale GitHub release-asset cache entries after an in-place manifest repair.
 - [ ] Clean-machine signed update validation completed.
 
 ## Validation
@@ -59,3 +61,7 @@ Implement low-noise one-click updates for the FrameQ desktop app using Tauri upd
 - `uv run ruff check worker`
 - `uv run pytest worker\tests`
 - `python scripts\validate_agents_docs.py --level WARN`
+
+2026-06-25 updater manifest encoding fix:
+
+- `npm --prefix app test -- tests/updater-manifest-release.test.ts`

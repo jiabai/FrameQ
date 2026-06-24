@@ -178,7 +178,7 @@ The installer does not bundle SenseVoice Small weights. It prunes non-runtime Py
 FrameQ desktop uses Tauri signed updater artifacts hosted on GitHub Releases. The bundled updater endpoint is:
 
 ```text
-https://github.com/jiabai/FrameQ/releases/latest/download/latest.json
+https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1
 ```
 
 The GitHub Actions workflow `.github/workflows/desktop-release.yml` prepares the bundled runtime resources, builds the Windows NSIS installer, uploads updater artifacts, and uploads `latest.json` for Tauri updater checks. Configure these repository secrets before running it:
@@ -190,7 +190,7 @@ TAURI_SIGNING_PRIVATE_KEY
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 ```
 
-Create or update a release by pushing a `v*` tag or running the workflow manually with a tag such as `v0.1.0`. Draft releases are useful for inspection, but updater clients only resolve `releases/latest/download/latest.json` after the release is published as a non-draft, non-prerelease release.
+Create or update a release by pushing a `v*` tag or running the workflow manually with a tag such as `v0.1.0`. Draft releases are useful for inspection, but updater clients only resolve `releases/latest/download/latest.json?frameq-updater=1` after the release is published as a non-draft, non-prerelease release.
 
 Release operators can override the default ModelScope download source:
 
@@ -209,6 +209,8 @@ models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch/model.pt
 ```
 
 LLM API keys, cloud model credentials, ASR weights, and user-private configuration are never packaged into the installer.
+
+The workflow validates and rewrites the uploaded `latest.json` as UTF-8 without BOM before the final release-asset upload, because Tauri updater rejects updater manifests with a BOM as invalid JSON. The bundled updater endpoint includes a fixed query string to avoid stale GitHub release-asset cache entries after a manifest is corrected in place.
 
 ## Desktop Local Settings
 

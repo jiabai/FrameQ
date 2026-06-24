@@ -25,6 +25,7 @@ FrameQ already ships as a lightweight desktop installer with bundled runtime res
 
 - Updates use Tauri updater signed artifacts.
 - GitHub Releases hosts the public static `latest.json` updater metadata for published stable releases.
+- `latest.json` must be published as UTF-8 without BOM so Tauri updater can decode it as JSON.
 - Release metadata contains version, publication date, platform-specific artifact URL, signature, and release notes.
 - Large installer/update artifacts are served from GitHub Release assets; SQLite does not store package binaries.
 - ASR model weights, LLM keys, cloud LLM models, and user-private settings must not be bundled into update artifacts beyond the existing lightweight runtime resources.

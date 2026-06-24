@@ -77,3 +77,15 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: --bundles nsis --target x86_64-pc-windows-msvc
+
+      - name: Normalize updater manifest encoding
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $manifestDir = Join-Path $env:RUNNER_TEMP "frameq-updater-manifest"
+          New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
+          gh release download $env:RELEASE_TAG --pattern "latest.json" --dir $manifestDir --clobber
+          $manifestPath = Join-Path $manifestDir "latest.json"
+          node scripts/normalize-updater-manifest.mjs $manifestPath
+          gh release upload $env:RELEASE_TAG $manifestPath --clobber
