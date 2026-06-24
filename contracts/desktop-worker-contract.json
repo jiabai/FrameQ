@@ -1,0 +1,26 @@
+{
+  "events": {
+    "workerProgress": "worker-progress",
+    "workerProgressPrefix": "FRAMEQ_PROGRESS ",
+    "asrModelDownloadProgress": "asr-model-download-progress",
+    "asrModelDownloadPrefix": "FRAMEQ_MODEL_DOWNLOAD "
+  },
+  "asr": {
+    "defaultModel": "iic/SenseVoiceSmall"
+  },
+  "env": {
+    "outputDir": "FRAMEQ_OUTPUT_DIR",
+    "workDir": "FRAMEQ_WORK_DIR",
+    "modelDir": "FRAMEQ_MODEL_DIR"
+  },
+  "workerResultKeys": [
+    "status",
+    "video_path",
+    "audio_path",
+    "transcript_path",
+    "insights_path",
+    "text",
+    "insights",
+    "error"
+  ]
+}

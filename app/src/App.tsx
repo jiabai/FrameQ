@@ -1,18 +1,14 @@
 import { FormEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
-import { listen, type Event } from "@tauri-apps/api/event";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import {
-  AlertTriangle,
   CheckCircle2,
   Circle,
   Clock3,
   Copy,
   Download,
   FileText,
-  Film,
   FolderOpen,
   History as HistoryIcon,
-  KeyRound,
   Lightbulb,
   LoaderCircle,
   Play,
@@ -21,7 +17,6 @@ import {
   Settings,
   ShieldCheck,
   UserRound,
-  Volume2,
   X,
 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -30,7 +25,6 @@ import {
   canSubmitUrl,
   cancelProcessing,
   createInitialWorkflow,
-  formatWorkerError,
   getDetailText,
   getExportPath,
   getProgressSteps,
@@ -47,41 +41,12 @@ import {
 } from "./workflow";
 import { cancelProcess, processVideo, retryInsights } from "./workerClient";
 import {
-  ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
-  cancelAsrModelDownload,
-  checkFirstRun,
-  downloadAsrModel,
   getLlmConfig,
   saveLlmConfig,
-  type AsrModelDownloadProgress,
-  type FirstRunStatus,
   type LlmConfigDraft,
 } from "./settingsClient";
 import { getHistory, historyItemToWorkerResult, type HistoryItem } from "./historyClient";
-import {
-  checkForAppUpdate,
-  createDefaultUpdatePreferences,
-  getUpdatePreferences,
-  installAppUpdate,
-  relaunchApp,
-  saveUpdatePreferences,
-  type AppUpdateInfo,
-  type UpdatePreferences,
-} from "./updateClient";
-import {
-  applyUpdateDownloadEvent,
-  createInitialUpdateState,
-  failUpdate,
-  isUpdateInstallBlocked,
-  markUpdateAvailable,
-  markUpdateReadyToRestart,
-  markUpdateUpToDate,
-  postponeUpdate,
-  startUpdateCheck,
-  startUpdateDownload,
-  type UpdateState,
-} from "./updateState";
-import { isModelDownloadStalled, shouldApplyModelDownloadUpdate } from "./modelDownloadState";
+import type { UpdateState } from "./updateState";
 import {
   beginAuthFlow,
   completeAuthFlow,
@@ -101,6 +66,11 @@ import {
   type WindowDragSession,
   type WindowPosition,
 } from "./windowChrome";
+import { AccountSheet } from "./features/account/AccountSheet";
+import { ModelGuideSheet } from "./features/asrModel/ModelGuideSheet";
+import { useAsrModelDownload } from "./features/asrModel/useAsrModelDownload";
+import { ResultWorkspace } from "./features/results/ResultWorkspace";
+import { useAppUpdateController } from "./features/updates/useAppUpdateController";
 
 const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }> = {
   waiting_input: {
@@ -133,6 +103,10 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
   },
 };
 
+const stageTitles = Object.fromEntries(
+  Object.entries(stageCopy).map(([stage, copy]) => [stage, copy.title]),
+) as Record<WorkflowState["stage"], string>;
+
 const historyStatusCopy: Record<HistoryItem["status"], string> = {
   completed: "已完成",
   partial_completed: "部分完成",
@@ -144,20 +118,6 @@ const defaultAsrModels = ["iic/SenseVoiceSmall"];
 const asrModelLabels: Record<string, string> = {
   "Qwen/Qwen3-ASR-0.6B": "Qwen3-ASR 0.6B",
   "iic/SenseVoiceSmall": "SenseVoice Small",
-};
-
-type AsrModelStatus = {
-  model: string;
-  modelDir: string;
-  available: boolean;
-  source: string;
-};
-
-const defaultAsrModelStatus: AsrModelStatus = {
-  model: "iic/SenseVoiceSmall",
-  modelDir: "",
-  available: false,
-  source: "modelscope",
 };
 
 const stageSummary: Record<WorkflowState["stage"], string> = {
@@ -183,88 +143,6 @@ function formatProgressPercent(value: number): string {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
 
-function getResultMeta(card: ResultCard, workflow: WorkflowState): string {
-  if (card.id === "video") {
-    return workflow.videoPath ? "已下载，可定位文件" : "等待视频文件";
-  }
-
-  if (card.id === "audio") {
-    return workflow.audioPath ? "WAV 音频，可定位文件" : "等待音频文件";
-  }
-
-  if (card.id === "insights") {
-    if (card.status === "pending") {
-      return "待生成，需单独确认";
-    }
-
-    if (card.status === "failed") {
-      return "生成失败，可重新确认";
-    }
-
-    return `${workflow.insights.length} 个话题点`;
-  }
-
-  if (!workflow.text) {
-    return "等待文字稿";
-  }
-
-  return `${workflow.text.length.toLocaleString("zh-CN")} 字`;
-}
-
-function getResultActionLabel(card: ResultCard): string {
-  if (card.action === "locate") {
-    return "定位文件";
-  }
-
-  if (card.action === "confirm") {
-    return card.status === "failed" ? "重新生成" : "确认生成";
-  }
-
-  return "打开详情";
-}
-
-function renderResultIcon(card: ResultCard) {
-  if (card.id === "video") {
-    return <Film size={22} />;
-  }
-
-  if (card.id === "audio") {
-    return <Volume2 size={22} />;
-  }
-
-  if (card.id === "insights") {
-    return <Lightbulb size={22} />;
-  }
-
-  return <FileText size={22} />;
-}
-
-function parseAsrModelDownloadProgress(payload: unknown): AsrModelDownloadProgress | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-  const event = payload as Partial<AsrModelDownloadProgress>;
-  if (
-    typeof event.status !== "string" ||
-    typeof event.message !== "string" ||
-    typeof event.progress !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    status: event.status,
-    message: event.message,
-    progress: Math.max(0, Math.min(100, event.progress)),
-    currentFile:
-      typeof event.currentFile === "string"
-        ? event.currentFile
-        : typeof (event as { current_file?: unknown }).current_file === "string"
-          ? (event as { current_file: string }).current_file
-          : undefined,
-  };
-}
-
 function asrModelSourceLabel(source: string): string {
   return source === "custom_url" ? "自定义下载源" : "ModelScope";
 }
@@ -287,14 +165,6 @@ function accountProcessBlockerMessage(account: AccountStatus, actionLabel: strin
   }
 
   return `当前账号暂不能${actionLabel}，请刷新账号状态后重试。`;
-}
-
-function isUpdateBusy(status: UpdateState["status"]): boolean {
-  return status === "checking" || status === "downloading" || status === "installing";
-}
-
-function isUpdateActionVisible(status: UpdateState["status"]): boolean {
-  return ["available", "downloading", "installing", "ready_to_restart"].includes(status);
 }
 
 function updateToolbarLabel(state: UpdateState): string {
@@ -345,15 +215,19 @@ function App() {
   const [settingsNotice, setSettingsNotice] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [modelGuideOpen, setModelGuideOpen] = useState(false);
-  const [asrModelStatus, setAsrModelStatus] = useState<AsrModelStatus>(defaultAsrModelStatus);
-  const [modelDownloadProgress, setModelDownloadProgress] = useState<AsrModelDownloadProgress>({
-    status: "idle",
-    message: "",
-    progress: 0,
-  });
-  const [modelDownloadNotice, setModelDownloadNotice] = useState("");
-  const [modelDownloadStalled, setModelDownloadStalled] = useState(false);
+  const {
+    modelGuideOpen,
+    setModelGuideOpen,
+    openModelGuide,
+    asrModelStatus,
+    modelDownloadProgress,
+    modelDownloadNotice,
+    modelDownloadStalled,
+    modelDownloadActive,
+    refreshAsrModelStatus,
+    startAsrModelDownload,
+    cancelCurrentAsrModelDownload,
+  } = useAsrModelDownload();
   const [account, setAccount] = useState<AccountStatus>(createGuestAccountStatus);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountNotice, setAccountNotice] = useState("");
@@ -364,13 +238,7 @@ function App() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [historyNotice, setHistoryNotice] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [updateState, setUpdateState] = useState(createInitialUpdateState);
   const operationIdRef = useRef(0);
-  const modelDownloadOperationIdRef = useRef(0);
-  const cancelledModelDownloadOperationIdRef = useRef<number | null>(null);
-  const modelDownloadProgressUpdatedAtRef = useRef(Date.now());
-  const updateInfoRef = useRef<AppUpdateInfo | null>(null);
-  const updatePreferencesRef = useRef<UpdatePreferences>(createDefaultUpdatePreferences());
   const windowDragSessionRef = useRef<WindowDragSession | null>(null);
   const queuedWindowPositionRef = useRef<WindowPosition | null>(null);
   const windowMoveInFlightRef = useRef(false);
@@ -378,33 +246,20 @@ function App() {
   const progressSteps = useMemo(() => getProgressSteps(workflow), [workflow]);
   const resultCards = useMemo(() => getResultCards(workflow), [workflow]);
   const visibleWorkflowError = getVisibleWorkflowError(workflow);
-  const modelDownloadActive = ["started", "downloading", "extracting"].includes(
-    modelDownloadProgress.status,
-  );
-  const updateBusy = isUpdateBusy(updateState.status);
-  const updateInstallBlocked = isUpdateInstallBlocked({
+  const {
+    updateState,
+    updateBusy,
+    updateInstallBlocked,
+    updateToolbarVisible,
+    updateSpinnerVisible,
+    checkForUpdates,
+    installUpdate,
+    postponeUpdateReminder,
+    restartForUpdate,
+  } = useAppUpdateController({
     processingActive: isProcessingStage(workflow.stage),
     modelDownloadActive,
   });
-
-  useEffect(() => {
-    if (!modelDownloadActive) {
-      setModelDownloadStalled(false);
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      setModelDownloadStalled(
-        isModelDownloadStalled({
-          active: true,
-          lastProgressAtMs: modelDownloadProgressUpdatedAtRef.current,
-          nowMs: Date.now(),
-        }),
-      );
-    }, 5_000);
-
-    return () => window.clearInterval(interval);
-  }, [modelDownloadActive]);
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -446,15 +301,13 @@ function App() {
 
     async function openFirstRunSettingsIfNeeded() {
       try {
-        const firstRun = await checkFirstRun();
+        const firstRun = await refreshAsrModelStatus();
         if (cancelled) {
           return;
         }
 
-        updateAsrModelStatus(firstRun);
         if (!firstRun.asrModelAvailable) {
-          setModelGuideOpen(true);
-          setModelDownloadNotice(
+          openModelGuide(
             `首次使用前需要下载 ASR 模型。模型会保存到：${firstRun.asrModelDir}`,
           );
           return;
@@ -470,22 +323,10 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [openModelGuide, refreshAsrModelStatus]);
 
   useEffect(() => {
     void refreshAccountStatus();
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void loadPreferencesAndCheckForUpdates(() => cancelled);
-    }, 2_500);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
   }, []);
 
   useEffect(() => {
@@ -567,270 +408,6 @@ function App() {
     setAccountOpen(true);
     setAccountNotice(notice ?? "");
     void refreshAccountStatus();
-  }
-
-  function updateAsrModelStatus(status: FirstRunStatus) {
-    setAsrModelStatus({
-      model: status.asrModel,
-      modelDir: status.asrModelDir,
-      available: status.asrModelAvailable,
-      source: status.asrModelSource,
-    });
-  }
-
-  async function refreshAsrModelStatus(): Promise<FirstRunStatus> {
-    const status = await checkFirstRun();
-    updateAsrModelStatus(status);
-    return status;
-  }
-
-  async function startAsrModelDownload() {
-    if (modelDownloadActive) {
-      return;
-    }
-
-    const operationId = modelDownloadOperationIdRef.current + 1;
-    modelDownloadOperationIdRef.current = operationId;
-    cancelledModelDownloadOperationIdRef.current = null;
-    setModelGuideOpen(true);
-    setModelDownloadNotice("");
-    setModelDownloadStalled(false);
-    modelDownloadProgressUpdatedAtRef.current = Date.now();
-    setModelDownloadProgress({
-      status: "started",
-      message: "正在准备下载 ASR 模型。",
-      progress: 0,
-    });
-
-    let unlisten: (() => void) | null = null;
-    try {
-      unlisten = await listen(ASR_MODEL_DOWNLOAD_PROGRESS_EVENT, (event: Event<unknown>) => {
-        const progress = parseAsrModelDownloadProgress(event.payload);
-        if (
-          progress &&
-          shouldApplyModelDownloadUpdate({
-            operationId,
-            activeOperationId: modelDownloadOperationIdRef.current,
-            cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
-          })
-        ) {
-          modelDownloadProgressUpdatedAtRef.current = Date.now();
-          setModelDownloadStalled(false);
-          setModelDownloadProgress(progress);
-        }
-      });
-
-      await downloadAsrModel();
-      if (
-        !shouldApplyModelDownloadUpdate({
-          operationId,
-          activeOperationId: modelDownloadOperationIdRef.current,
-          cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
-        })
-      ) {
-        return;
-      }
-      const status = await refreshAsrModelStatus();
-      if (
-        !shouldApplyModelDownloadUpdate({
-          operationId,
-          activeOperationId: modelDownloadOperationIdRef.current,
-          cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
-        })
-      ) {
-        return;
-      }
-      if (status.asrModelAvailable) {
-        setModelDownloadStalled(false);
-        setModelDownloadProgress({
-          status: "completed",
-          message: "ASR 模型已下载完成。",
-          progress: 100,
-        });
-        setModelDownloadNotice("ASR 模型已可用，后续转写会使用本地缓存。");
-      } else {
-        setModelDownloadStalled(false);
-        setModelDownloadProgress((current) => ({
-          status: "failed",
-          message: "模型下载未完成。",
-          progress: current.progress,
-        }));
-        setModelDownloadNotice("模型下载未完成，请稍后重试。");
-      }
-    } catch (error) {
-      if (
-        !shouldApplyModelDownloadUpdate({
-          operationId,
-          activeOperationId: modelDownloadOperationIdRef.current,
-          cancelledOperationId: cancelledModelDownloadOperationIdRef.current,
-        })
-      ) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      setModelDownloadStalled(false);
-      setModelDownloadProgress((current) => ({
-        status: "failed",
-        message,
-        progress: current.progress,
-      }));
-      setModelDownloadNotice(`下载失败：${message}`);
-    } finally {
-      if (unlisten) {
-        unlisten();
-      }
-    }
-  }
-
-  async function cancelCurrentAsrModelDownload() {
-    try {
-      const operationId = modelDownloadOperationIdRef.current;
-      const result = await cancelAsrModelDownload();
-      if (result.cancelled) {
-        cancelledModelDownloadOperationIdRef.current = operationId;
-      }
-      setModelDownloadProgress((current) => ({
-        status: result.cancelled ? "cancelled" : current.status,
-        message: result.cancelled ? "模型下载已取消。" : result.error || "当前没有正在下载的模型。",
-        progress: result.cancelled ? 0 : current.progress,
-      }));
-      setModelDownloadStalled(false);
-      setModelDownloadNotice(result.cancelled ? "模型下载已取消。" : result.error || "当前没有正在下载的模型。");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setModelDownloadStalled(false);
-      setModelDownloadNotice(`取消失败：${message}`);
-    }
-  }
-
-  function persistUpdatePreferences(patch: Partial<UpdatePreferences>) {
-    const next = {
-      ...updatePreferencesRef.current,
-      ...patch,
-    };
-    updatePreferencesRef.current = next;
-    void saveUpdatePreferences(next).catch((error) => {
-      console.warn("Failed to save update preferences", error);
-    });
-  }
-
-  async function loadPreferencesAndCheckForUpdates(isCancelled: () => boolean) {
-    try {
-      const preferences = await getUpdatePreferences();
-      if (isCancelled()) {
-        return;
-      }
-      updatePreferencesRef.current = preferences;
-      if (preferences.postponedUntil && preferences.postponedUntil > Date.now()) {
-        return;
-      }
-    } catch (error) {
-      console.warn("Failed to load update preferences", error);
-    }
-
-    if (!isCancelled()) {
-      await checkForUpdates({ silent: true, isCancelled });
-    }
-  }
-
-  async function checkForUpdates(options: { silent?: boolean; isCancelled?: () => boolean } = {}) {
-    if (!options.silent) {
-      persistUpdatePreferences({ postponedUntil: null });
-    }
-    setUpdateState((current) => startUpdateCheck(current));
-    try {
-      const update = await checkForAppUpdate();
-      if (options.isCancelled?.()) {
-        return;
-      }
-
-      if (!update) {
-        updateInfoRef.current = null;
-        persistUpdatePreferences({
-          lastCheckedAt: new Date().toISOString(),
-          skippedVersion: null,
-        });
-        setUpdateState((current) =>
-          options.silent ? createInitialUpdateState() : markUpdateUpToDate(current),
-        );
-        return;
-      }
-
-      updateInfoRef.current = update;
-      persistUpdatePreferences({
-        lastCheckedAt: new Date().toISOString(),
-        skippedVersion: null,
-      });
-      setUpdateState((current) =>
-        markUpdateAvailable(current, {
-          version: update.version,
-          notes: update.notes,
-        }),
-      );
-    } catch (error) {
-      if (options.isCancelled?.()) {
-        return;
-      }
-
-      if (options.silent) {
-        setUpdateState(createInitialUpdateState());
-        return;
-      }
-
-      setUpdateState((current) => failUpdate(current, error));
-    }
-  }
-
-  async function installUpdate() {
-    if (updateState.status === "ready_to_restart") {
-      await restartForUpdate();
-      return;
-    }
-
-    if (updateInstallBlocked) {
-      setUpdateState((current) => ({
-        ...current,
-        message: "当前任务或模型下载完成后再安装更新。",
-      }));
-      return;
-    }
-
-    let update = updateInfoRef.current;
-    if (!update) {
-      await checkForUpdates({ silent: false });
-      update = updateInfoRef.current;
-    }
-
-    if (!update) {
-      return;
-    }
-
-    setUpdateState((current) => startUpdateDownload(current));
-    try {
-      await installAppUpdate(update, (event) => {
-        setUpdateState((current) => applyUpdateDownloadEvent(current, event));
-      });
-      setUpdateState((current) => markUpdateReadyToRestart(current));
-    } catch (error) {
-      setUpdateState((current) => failUpdate(current, error));
-    }
-  }
-
-  function postponeUpdateReminder() {
-    const next = postponeUpdate(updateState, 24 * 60 * 60 * 1000);
-    setUpdateState(next);
-    persistUpdatePreferences({
-      postponedUntil: next.postponedUntil,
-      skippedVersion: null,
-    });
-  }
-
-  async function restartForUpdate() {
-    try {
-      await relaunchApp();
-    } catch (error) {
-      setUpdateState((current) => failUpdate(current, error));
-    }
   }
 
   async function submitUrl(event: FormEvent<HTMLFormElement>) {
@@ -1260,9 +837,6 @@ function App() {
           : "等待管理员配置 LLM"
         : "未激活月卡"
       : "未登录";
-  const updateToolbarVisible = isUpdateActionVisible(updateState.status);
-  const updateSpinnerVisible = updateState.status === "downloading" || updateState.status === "installing";
-
   return (
     <main className="app-shell">
       <section className="desktop-window" aria-label="FrameQ 桌面窗口">
@@ -1416,273 +990,47 @@ function App() {
             )}
           </div>
 
-          {!workflow.showUrlInput ? (
-            <section className="result-workspace result-area" aria-label="结果总览">
-              <div className="result-header">
-                <div>
-                  <p className="section-label">Results</p>
-                  <h2>结果工作区</h2>
-                </div>
-              </div>
-
-              {visibleWorkflowError ? (
-                <div className="error-result">
-                  <AlertTriangle size={20} />
-                  <div>
-                    <strong>{visibleWorkflowError.code}</strong>
-                    <span>{formatWorkerError(visibleWorkflowError)}</span>
-                    <small>
-                      失败阶段：{stageCopy[visibleWorkflowError.stage]?.title ?? visibleWorkflowError.stage}
-                    </small>
-                  </div>
-                </div>
-              ) : null}
-
-              {resultCards.length > 0 ? (
-                <div className="result-grid">
-                  {resultCards.map((card) => (
-                    <button
-                      className={`result-card result-tile ${card.status}`}
-                      key={card.id}
-                      type="button"
-                      onClick={() => openCard(card)}
-                    >
-                      <span className="result-icon">
-                        {renderResultIcon(card)}
-                      </span>
-                      <span>{card.title}</span>
-                      <small>{getResultMeta(card, workflow)}</small>
-                      <em>{getResultActionLabel(card)}</em>
-                    </button>
-                  ))}
-                </div>
-              ) : !visibleWorkflowError ? (
-                <div className="result-placeholder empty-result">
-                  <div className="placeholder-icon">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <strong>结果生成中</strong>
-                    <span>
-                      {workflow.stage === "insights_generating" && workflow.text
-                        ? "文字稿已保留，正在重新生成话题点。"
-                        : "视频提取完成后将开始转译。"}
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-              {actionNotice ? <p className="action-notice result-action-notice">{actionNotice}</p> : null}
-            </section>
-          ) : null}
+          <ResultWorkspace
+            workflow={workflow}
+            resultCards={resultCards}
+            visibleWorkflowError={visibleWorkflowError}
+            actionNotice={actionNotice}
+            stageTitles={stageTitles}
+            onOpenCard={openCard}
+          />
         </section>
       </section>
 
-      {accountOpen ? (
-        <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={() => setAccountOpen(false)}>
-          <section
-            className="sheet-panel detail-modal account-modal account-sheet"
-            aria-label="账号与月卡"
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="modal-header sheet-header">
-              <div>
-                <p className="section-label">Account</p>
-                <h2>账号与月卡</h2>
-              </div>
-              <button className="icon-button" type="button" onClick={() => setAccountOpen(false)} aria-label="关闭账号面板">
-                <X size={18} />
-              </button>
-            </header>
-            <div className="account-content">
-              <p className="settings-warning privacy-callout">
-                <ShieldCheck size={16} />
-                <span>账号服务只验证登录、激活码、月卡和话题点次数；视频、音频、文字稿和历史记录仍保留在本机，LLM 配置由管理员统一管理。</span>
-              </p>
-              <div className={`account-status-card ${canProcessWithAccount(account) ? "active" : "inactive"}`}>
-                <div>
-                  <span className="account-status-label">{accountStatusText}</span>
-                  <strong>{account.email ?? "FrameQ 账号"}</strong>
-                  {account.serverError ? <small>{account.serverError}</small> : null}
-                </div>
-              </div>
+      <AccountSheet
+        open={accountOpen}
+        account={account}
+        accountStatusText={accountStatusText}
+        accountNotice={accountNotice}
+        accountLoading={accountLoading}
+        activationCodeDraft={activationCodeDraft}
+        activationRedeeming={activationRedeeming}
+        formatHistoryDate={formatHistoryDate}
+        onClose={() => setAccountOpen(false)}
+        onActivationCodeChange={setActivationCodeDraft}
+        onRedeemActivationCode={redeemActivationCodeFromInput}
+        onSignOut={signOutAccount}
+        onStartLogin={startLoginFlow}
+      />
 
-              {account.authenticated ? (
-                <div className="account-quota-grid">
-                  <div>
-                    <span className="account-status-label">话题点次数</span>
-                    <strong>
-                      {account.llmQuotaRemaining} / {account.llmQuotaLimit}
-                    </strong>
-                    <small>
-                      {account.llmQuotaResetsAt
-                        ? `随月卡到期重置：${formatHistoryDate(account.llmQuotaResetsAt)}`
-                        : "激活月卡后获得次数"}
-                    </small>
-                  </div>
-                  <div>
-                    <span className="account-status-label">LLM 配置</span>
-                    <strong>{account.llmConfigured ? "已就绪" : "待管理员配置"}</strong>
-                    <small>客户端会在生成话题点前自动领取本次配置。</small>
-                  </div>
-                </div>
-              ) : null}
-
-              {account.authenticated && !canProcessWithAccount(account) ? (
-                <div className="activation-panel">
-                  <div>
-                    <span className="account-status-label">激活码</span>
-                    <strong>输入管理员发放的月卡激活码</strong>
-                    <small>兑换成功后将为当前邮箱增加 31 天权益。</small>
-                  </div>
-                  <input
-                    className="activation-code-input"
-                    value={activationCodeDraft}
-                    onChange={(event) => setActivationCodeDraft(event.currentTarget.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        void redeemActivationCodeFromInput();
-                      }
-                    }}
-                    placeholder="FQ-XXXX-XXXX-XXXX-XXXX"
-                    disabled={activationRedeeming}
-                  />
-                </div>
-              ) : null}
-
-              {accountNotice ? <p className="action-notice inline-notice">{accountNotice}</p> : null}
-            </div>
-            <div className="settings-actions sheet-footer">
-              {account.authenticated ? (
-                <button type="button" className="secondary-button" onClick={signOutAccount} disabled={accountLoading}>
-                  <span>退出登录</span>
-                </button>
-              ) : (
-                <button type="button" className="secondary-button" onClick={() => setAccountOpen(false)}>
-                  <span>稍后</span>
-                </button>
-              )}
-              {account.authenticated ? (
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={redeemActivationCodeFromInput}
-                  disabled={activationRedeeming || canProcessWithAccount(account)}
-                >
-                  <KeyRound size={16} />
-                  <span>{canProcessWithAccount(account) ? "月卡已生效" : activationRedeeming ? "兑换中" : "兑换激活码"}</span>
-                </button>
-              ) : (
-                <button type="button" className="primary-button" onClick={startLoginFlow} disabled={accountLoading}>
-                  <UserRound size={16} />
-                  <span>{accountLoading ? "登录中" : "邮箱登录"}</span>
-                </button>
-              )}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {modelGuideOpen ? (
-        <div
-          className="modal-backdrop sheet-backdrop"
-          role="presentation"
-          onClick={() => {
-            if (!modelDownloadActive) {
-              setModelGuideOpen(false);
-            }
-          }}
-        >
-          <section
-            className="sheet-panel detail-modal model-guide-modal model-guide-sheet"
-            aria-label="ASR 模型下载"
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="modal-header sheet-header">
-              <div>
-                <p className="section-label">ASR model</p>
-                <h2>下载 ASR 模型</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={() => setModelGuideOpen(false)}
-                aria-label="关闭 ASR 模型下载"
-                disabled={modelDownloadActive}
-              >
-                <X size={18} />
-              </button>
-            </header>
-            <div className="model-guide-content">
-              <p className="settings-warning privacy-callout">
-                <ShieldCheck size={16} />
-                <span>
-                  ASR 在本机运行，首次使用前需要下载 ASR 模型缓存。下载完成后可离线转写。
-                </span>
-              </p>
-              <div className="model-status-card">
-                <div>
-                  <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
-                    {asrModelStatus.available ? "已就绪" : "需要下载"}
-                  </span>
-                  <strong>{asrModelLabels[asrModelStatus.model] ?? asrModelStatus.model}</strong>
-                  <small>来源：{asrModelSourceLabel(asrModelStatus.source)}</small>
-                  <small>保存位置：{asrModelStatus.modelDir || "app-local data/models"}</small>
-                </div>
-              </div>
-              <div className="model-download-progress">
-                <div className="progress-summary compact">
-                  <div>
-                    <span className="progress-value">{formatProgressPercent(modelDownloadProgress.progress)}</span>
-                    <p>{modelDownloadProgress.message || "等待开始下载。"}</p>
-                  </div>
-                  <div className="progress-track">
-                    <span className="progress-fill video_transcribing" style={{ width: `${modelDownloadProgress.progress}%` }} />
-                  </div>
-                </div>
-                {modelDownloadProgress.currentFile ? (
-                  <small className="model-current-file">{modelDownloadProgress.currentFile}</small>
-                ) : null}
-              </div>
-              {modelDownloadNotice ? <p className="action-notice inline-notice">{modelDownloadNotice}</p> : null}
-              {!modelDownloadNotice && modelDownloadStalled ? (
-                <p className="action-notice inline-notice">
-                  下载进度暂时没有变化，可能是 ModelScope 网络较慢。可以继续等待，或取消后稍后重试。
-                </p>
-              ) : null}
-            </div>
-            <div className="settings-actions sheet-footer">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setModelGuideOpen(false)}
-                disabled={modelDownloadActive}
-              >
-                <span>稍后下载</span>
-              </button>
-              {modelDownloadActive ? (
-                <button type="button" className="secondary-button danger-soft" onClick={cancelCurrentAsrModelDownload}>
-                  <X size={16} />
-                  <span>取消下载</span>
-                </button>
-              ) : (
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={startAsrModelDownload}
-                  disabled={asrModelStatus.available}
-                >
-                  <Download size={16} />
-                  <span>{asrModelStatus.available ? "已下载" : "下载 ASR 模型"}</span>
-                </button>
-              )}
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ModelGuideSheet
+        open={modelGuideOpen}
+        modelDownloadActive={modelDownloadActive}
+        asrModelStatus={asrModelStatus}
+        asrModelLabels={asrModelLabels}
+        modelDownloadProgress={modelDownloadProgress}
+        modelDownloadNotice={modelDownloadNotice}
+        modelDownloadStalled={modelDownloadStalled}
+        formatProgressPercent={formatProgressPercent}
+        asrModelSourceLabel={asrModelSourceLabel}
+        onClose={() => setModelGuideOpen(false)}
+        onStartDownload={startAsrModelDownload}
+        onCancelDownload={cancelCurrentAsrModelDownload}
+      />
 
       {insightConfirmOpen ? (
         <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={() => setInsightConfirmOpen(false)}>

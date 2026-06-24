@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-06-23-desktop-worker-structure-refactor-plan.md` | Split desktop client, Tauri bridge, and Python worker orchestration into focused modules without changing behavior. |
 | `2026-06-23-desktop-one-click-updates-plan.md` | Tauri updater plus FrameQ server dynamic manifest for low-noise one-click desktop updates. |
 | `2026-06-23-asr-model-cache-layout-plan.md` | Unify SenseVoice ASR cache layout under `<FRAMEQ_MODEL_DIR>/models/iic/...` and clean duplicate legacy caches. |
 | `2026-06-23-disable-root-dotenv-llm-plan.md` | Stop applying repository-root `.env` to desktop worker runtime after LLM moved to server-managed checkout. |

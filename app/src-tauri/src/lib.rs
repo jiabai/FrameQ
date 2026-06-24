@@ -5,32 +5,27 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, Window};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_deep_link::DeepLinkExt;
-use url::Url;
-use uuid::Uuid;
+
+mod window_chrome;
+mod updates;
+mod history;
+mod account;
+mod settings;
+
+use settings::{
+    asr_model_source, configured_env_value, env_path, legacy_local_llm_env_removals,
+    parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_DOWNLOAD_SHA256_ENV,
+    ASR_MODEL_DOWNLOAD_URL_ENV, ASR_MODEL_ENV, LLM_CHECKOUT_REQUEST_ID_ENV,
+    LLM_CHECKOUT_URL_ENV, LLM_SESSION_TOKEN_ENV, LLM_SOURCE_ENV, MODELSCOPE_ENDPOINT_ENV,
+    SENSEVOICE_REVISION_ENV,
+};
 
 const PROGRESS_EVENT_NAME: &str = "worker-progress";
 const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 const ASR_MODEL_DOWNLOAD_EVENT_NAME: &str = "asr-model-download-progress";
 const MODEL_DOWNLOAD_EVENT_PREFIX: &str = "FRAMEQ_MODEL_DOWNLOAD ";
-const DOTENV_FILE_NAME: &str = ".env";
-const LLM_PROVIDER_ENV: &str = "FRAMEQ_LLM_PROVIDER";
-const LLM_BASE_URL_ENV: &str = "FRAMEQ_LLM_BASE_URL";
-const LLM_API_KEY_ENV: &str = "FRAMEQ_LLM_API_KEY";
-const LLM_MODEL_ENV: &str = "FRAMEQ_LLM_MODEL";
-const LLM_TIMEOUT_ENV: &str = "FRAMEQ_LLM_TIMEOUT_SECONDS";
-const LLM_SOURCE_ENV: &str = "FRAMEQ_LLM_SOURCE";
-const LLM_CHECKOUT_URL_ENV: &str = "FRAMEQ_LLM_CHECKOUT_URL";
-const LLM_SESSION_TOKEN_ENV: &str = "FRAMEQ_LLM_SESSION_TOKEN";
-const LLM_CHECKOUT_REQUEST_ID_ENV: &str = "FRAMEQ_LLM_CHECKOUT_REQUEST_ID";
-const LEGACY_LOCAL_LLM_ENV_KEYS: [&str; 5] = [
-    LLM_PROVIDER_ENV,
-    LLM_BASE_URL_ENV,
-    LLM_API_KEY_ENV,
-    LLM_MODEL_ENV,
-    LLM_TIMEOUT_ENV,
-];
 const OUTPUT_DIR_ENV: &str = "FRAMEQ_OUTPUT_DIR";
 const WORK_DIR_ENV: &str = "FRAMEQ_WORK_DIR";
 const MODEL_DIR_ENV: &str = "FRAMEQ_MODEL_DIR";
@@ -38,38 +33,10 @@ const RESOURCE_DIR_ENV: &str = "FRAMEQ_RESOURCE_DIR";
 const USER_DATA_DIR_ENV: &str = "FRAMEQ_USER_DATA_DIR";
 const ALLOW_REAL_ASR_ENV: &str = "FRAMEQ_ALLOW_REAL_ASR";
 const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
-const ASR_MODEL_ENV: &str = "FRAMEQ_ASR_MODEL";
-const ASR_MODEL_DOWNLOAD_URL_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_URL";
-const ASR_MODEL_DOWNLOAD_SHA256_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256";
-const MODELSCOPE_ENDPOINT_ENV: &str = "FRAMEQ_MODELSCOPE_ENDPOINT";
-const SENSEVOICE_REVISION_ENV: &str = "FRAMEQ_SENSEVOICE_REVISION";
-const HISTORY_FILE_NAME: &str = "history.json";
-const ACCOUNT_SESSION_FILE_NAME: &str = "session.json";
-const ACCOUNT_PENDING_STATE_FILE_NAME: &str = "pending_auth_state.txt";
-const UPDATE_PREFERENCES_FILE_NAME: &str = "updates.json";
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
-const DEFAULT_SERVER_BASE_URL: &str = "https://frameq.8xf.pro";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
 const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL];
-const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# FrameQ desktop local settings.\n\
-# This file lives in app-local data and is read by the desktop client/worker.\n\
-# Insight LLM configuration is managed by the FrameQ server Admin Web.\n\
-# Do not put FRAMEQ_LLM_* keys here.\n\
-\n\
-# Optional output directory for generated videos, transcripts, and insights.\n\
-# Leave blank to use app-local data outputs/.\n\
-FRAMEQ_OUTPUT_DIR=\n\
-\n\
-# Local ASR model for new transcription tasks.\n\
-FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n\
-\n\
-# Optional release ASR model download overrides.\n\
-# FRAMEQ_ASR_MODEL_DOWNLOAD_URL=\n\
-# FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256=\n\
-# FRAMEQ_MODELSCOPE_ENDPOINT=\n\
-# FRAMEQ_SENSEVOICE_REVISION=master\n";
-
 #[derive(Debug, Deserialize, Serialize)]
 struct ProcessVideoRequest {
     url: String,
@@ -111,47 +78,6 @@ struct CancelProcessResult {
     error: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct LlmConfigInput {
-    #[serde(default)]
-    output_dir: String,
-    #[serde(default)]
-    asr_model: String,
-}
-
-#[derive(Debug, Serialize)]
-struct LlmConfigView {
-    output_dir: String,
-    asr_model: String,
-    supported_asr_models: Vec<String>,
-    config_path: String,
-}
-
-#[derive(Debug, Serialize)]
-struct HistoryErrorView {
-    code: String,
-    message: String,
-    stage: String,
-}
-
-#[derive(Debug, Serialize)]
-struct HistoryItemView {
-    id: String,
-    created_at: String,
-    url: String,
-    status: String,
-    output_dir: String,
-    video_path: Option<String>,
-    audio_path: Option<String>,
-    transcript_path: Option<String>,
-    insights_path: Option<String>,
-    error: Option<HistoryErrorView>,
-    text_preview: String,
-    insights_count: usize,
-    text: String,
-    insights: Vec<String>,
-}
-
 #[derive(Debug, Serialize)]
 struct FirstRunStatusView {
     user_data_dir: String,
@@ -167,129 +93,10 @@ struct AsrModelDownloadResult {
     started: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-struct UpdatePreferencesView {
-    last_checked_at: Option<String>,
-    postponed_until: Option<i64>,
-    skipped_version: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct AuthCallback {
-    ticket: String,
-    state: String,
-}
-
-#[derive(Debug, Serialize)]
-struct BeginAuthFlowResult {
-    auth_url: String,
-    state: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct AccountSessionFile {
-    session_token: String,
-    email: String,
-    expires_at: String,
-}
-
-#[derive(Debug, Serialize)]
-struct AccountStatusView {
-    authenticated: bool,
-    email: Option<String>,
-    entitlement_status: String,
-    entitlement_expires_at: Option<String>,
-    llm_quota_limit: i32,
-    llm_quota_used: i32,
-    llm_quota_remaining: i32,
-    llm_quota_resets_at: Option<String>,
-    llm_configured: bool,
-    last_verified_at: Option<String>,
-    can_process: bool,
-    server_error: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ServerAccountStatus {
-    authenticated: bool,
-    email: String,
-    entitlement_status: String,
-    entitlement_expires_at: Option<String>,
-    llm_quota_limit: i32,
-    llm_quota_used: i32,
-    llm_quota_remaining: i32,
-    llm_quota_resets_at: Option<String>,
-    llm_configured: bool,
-    last_verified_at: String,
-    can_process: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct SessionExchangeResponse {
-    session_token: String,
-    email: String,
-    expires_at: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CompleteAuthFlowResult {
-    authenticated: bool,
-    email: String,
-    can_process: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct WechatCheckoutView {
-    order_id: String,
-    amount_fen: i32,
-    currency: String,
-    code_url: String,
-    expires_at: String,
-    status: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ServerWechatCheckout {
-    order_id: String,
-    amount_fen: i32,
-    currency: String,
-    code_url: String,
-    expires_at: String,
-    status: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CheckoutStatusView {
-    order_id: String,
-    status: String,
-    entitlement_expires_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ServerCheckoutStatus {
-    order_id: String,
-    status: String,
-    entitlement_expires_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct WindowPositionView {
-    x: i32,
-    y: i32,
-}
-
 #[derive(Debug, Clone)]
-struct RuntimePaths {
-    resource_dir: PathBuf,
-    user_data_dir: PathBuf,
-}
-
-#[derive(Debug, Clone)]
-struct ServerManagedLlmInvocation {
-    server_base_url: String,
-    session_token: String,
-    request_id: String,
+pub(crate) struct RuntimePaths {
+    pub(crate) resource_dir: PathBuf,
+    pub(crate) user_data_dir: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -423,7 +230,7 @@ impl ModelDownloadProcessState {
     }
 }
 
-fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
+pub(crate) fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
     let raw_resource_dir = app
         .path()
         .resource_dir()
@@ -456,7 +263,7 @@ fn resource_dir_has_runtime(resource_dir: &Path) -> bool {
         || resource_dir.join("bin").is_dir()
 }
 
-fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
+pub(crate) fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
     fs::create_dir_all(paths.user_data_dir.join("outputs")).map_err(|error| error.to_string())?;
     fs::create_dir_all(paths.user_data_dir.join("work")).map_err(|error| error.to_string())?;
     fs::create_dir_all(asr_model_dir(paths)).map_err(|error| error.to_string())
@@ -464,22 +271,6 @@ fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
 
 fn asr_model_dir(paths: &RuntimePaths) -> PathBuf {
     paths.user_data_dir.join("models")
-}
-
-fn account_auth_dir(paths: &RuntimePaths) -> PathBuf {
-    paths.user_data_dir.join("auth")
-}
-
-fn account_session_path(paths: &RuntimePaths) -> PathBuf {
-    account_auth_dir(paths).join(ACCOUNT_SESSION_FILE_NAME)
-}
-
-fn account_pending_state_path(paths: &RuntimePaths) -> PathBuf {
-    account_auth_dir(paths).join(ACCOUNT_PENDING_STATE_FILE_NAME)
-}
-
-fn update_preferences_path(paths: &RuntimePaths) -> PathBuf {
-    paths.user_data_dir.join(UPDATE_PREFERENCES_FILE_NAME)
 }
 
 fn asr_model_available(paths: &RuntimePaths) -> bool {
@@ -516,7 +307,7 @@ fn required_model_files_exist(model_dir: &Path) -> bool {
 fn build_worker_command_spec(
     paths: &RuntimePaths,
     invocation: WorkerInvocation,
-    server_managed_llm: Option<ServerManagedLlmInvocation>,
+    server_managed_llm: Option<account::ServerManagedLlmInvocation>,
 ) -> Result<WorkerCommandSpec, String> {
     let include_server_managed_llm = worker_invocation_uses_server_managed_llm(&invocation);
     let (flag, payload) = match invocation {
@@ -656,33 +447,6 @@ fn build_model_download_command_spec(
     })
 }
 
-fn legacy_local_llm_env_removals() -> Vec<String> {
-    LEGACY_LOCAL_LLM_ENV_KEYS
-        .iter()
-        .map(|key| (*key).to_string())
-        .collect()
-}
-
-fn configured_env_value(config_values: &HashMap<String, String>, key: &str) -> Option<String> {
-    config_values
-        .get(key)
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .or_else(|| {
-            std::env::var(key)
-                .ok()
-                .filter(|value| !value.trim().is_empty())
-        })
-}
-
-fn asr_model_source(config_values: &HashMap<String, String>) -> String {
-    if configured_env_value(config_values, ASR_MODEL_DOWNLOAD_URL_ENV).is_some() {
-        "custom_url".to_string()
-    } else {
-        "modelscope".to_string()
-    }
-}
-
 fn bundled_python_path(resource_dir: &Path) -> PathBuf {
     if cfg!(windows) {
         resource_dir.join("python").join("python.exe")
@@ -755,7 +519,7 @@ fn process_video_blocking(
         }));
     }
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
-    let llm_invocation = server_managed_llm_invocation(&paths)?;
+    let llm_invocation = account::server_managed_llm_invocation(&paths)?;
     let mut child = spawn_worker_command(build_worker_command_spec(
         &paths,
         WorkerInvocation::ProcessVideo(request_json),
@@ -868,7 +632,7 @@ fn retry_insights_blocking(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
-    let llm_invocation = server_managed_llm_invocation(&paths)?;
+    let llm_invocation = account::server_managed_llm_invocation(&paths)?;
     let child = spawn_worker_command(build_worker_command_spec(
         &paths,
         WorkerInvocation::RetryInsights(request_json),
@@ -1005,42 +769,6 @@ fn cancel_process(
             error: Some(error),
         }),
     }
-}
-
-#[tauri::command]
-fn get_llm_config(app: AppHandle) -> Result<LlmConfigView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
-    load_llm_config_from_file(&env_path(&paths))
-}
-
-#[tauri::command]
-fn save_llm_config(app: AppHandle, config: LlmConfigInput) -> Result<LlmConfigView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
-    save_llm_config_to_file(&env_path(&paths), config)
-}
-
-#[tauri::command]
-fn get_history(app: AppHandle) -> Result<Vec<HistoryItemView>, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
-    load_history_from_project(&paths.user_data_dir)
-}
-
-#[tauri::command]
-fn get_update_preferences(app: AppHandle) -> Result<UpdatePreferencesView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    load_update_preferences_from_file(&update_preferences_path(&paths))
-}
-
-#[tauri::command]
-fn save_update_preferences(
-    app: AppHandle,
-    preferences: UpdatePreferencesView,
-) -> Result<UpdatePreferencesView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    save_update_preferences_to_file(&update_preferences_path(&paths), preferences)
 }
 
 #[tauri::command]
@@ -1192,506 +920,6 @@ fn cancel_asr_model_download(
     }
 }
 
-#[tauri::command]
-fn begin_auth_flow(app: AppHandle) -> Result<BeginAuthFlowResult, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
-    fs::create_dir_all(account_auth_dir(&paths)).map_err(|error| error.to_string())?;
-    let state = generate_auth_state();
-    fs::write(account_pending_state_path(&paths), &state).map_err(|error| error.to_string())?;
-    Ok(BeginAuthFlowResult {
-        auth_url: build_auth_login_url(&server_base_url(), &state)?,
-        state,
-    })
-}
-
-#[tauri::command]
-async fn complete_auth_flow(app: AppHandle, callback_url: String) -> Result<CompleteAuthFlowResult, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
-    let pending_state = fs::read_to_string(account_pending_state_path(&paths))
-        .map_err(|_| "No pending login state was found.".to_string())?;
-    let callback = parse_auth_callback_url(&callback_url, pending_state.trim())?;
-    let exchange = exchange_auth_ticket(&server_base_url(), &callback).await?;
-    fs::create_dir_all(account_auth_dir(&paths)).map_err(|error| error.to_string())?;
-    write_account_session(&account_session_path(&paths), &exchange)?;
-    let _ = fs::remove_file(account_pending_state_path(&paths));
-    let status = get_account_status_from_server(&server_base_url(), &exchange.session_token).await?;
-    Ok(CompleteAuthFlowResult {
-        authenticated: true,
-        email: exchange.email,
-        can_process: status.can_process,
-    })
-}
-
-#[tauri::command]
-async fn get_account_status(app: AppHandle) -> Result<AccountStatusView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
-    let Some(session) = read_account_session(&account_session_path(&paths))? else {
-        return Ok(guest_account_status());
-    };
-    match get_account_status_from_server(&server_base_url(), &session.session_token).await {
-        Ok(status) => Ok(AccountStatusView {
-            authenticated: status.authenticated,
-            email: Some(status.email),
-            entitlement_status: status.entitlement_status,
-            entitlement_expires_at: status.entitlement_expires_at,
-            llm_quota_limit: status.llm_quota_limit,
-            llm_quota_used: status.llm_quota_used,
-            llm_quota_remaining: status.llm_quota_remaining,
-            llm_quota_resets_at: status.llm_quota_resets_at,
-            llm_configured: status.llm_configured,
-            last_verified_at: Some(status.last_verified_at),
-            can_process: status.can_process,
-            server_error: None,
-        }),
-        Err(error) => Ok(AccountStatusView {
-            authenticated: true,
-            email: Some(session.email),
-            entitlement_status: "unknown".to_string(),
-            entitlement_expires_at: None,
-            llm_quota_limit: 0,
-            llm_quota_used: 0,
-            llm_quota_remaining: 0,
-            llm_quota_resets_at: None,
-            llm_configured: false,
-            last_verified_at: None,
-            can_process: false,
-            server_error: Some(error),
-        }),
-    }
-}
-
-#[tauri::command]
-async fn logout_account(app: AppHandle) -> Result<(), String> {
-    let paths = resolve_runtime_paths(&app)?;
-    if let Some(session) = read_account_session(&account_session_path(&paths))? {
-        let _ = reqwest::Client::new()
-            .post(format!("{}/api/desktop/logout", server_base_url()))
-            .bearer_auth(session.session_token)
-            .send()
-            .await;
-    }
-    let _ = fs::remove_file(account_session_path(&paths));
-    Ok(())
-}
-
-#[tauri::command]
-async fn redeem_activation_code(app: AppHandle, code: String) -> Result<AccountStatusView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    let session = require_account_session(&paths)?;
-    let response = reqwest::Client::new()
-        .post(build_activation_redeem_url(&server_base_url()))
-        .bearer_auth(&session.session_token)
-        .json(&serde_json::json!({ "code": code }))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(response_error_message(response, "Activation code redeem failed.").await);
-    }
-    let status = response
-        .json::<ServerAccountStatus>()
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(account_status_view_from_server(status))
-}
-
-#[tauri::command]
-async fn create_wechat_checkout(app: AppHandle) -> Result<WechatCheckoutView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    let session = require_account_session(&paths)?;
-    let response = reqwest::Client::new()
-        .post(format!("{}/api/desktop/billing/wechat-native", server_base_url()))
-        .bearer_auth(session.session_token)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!("Checkout failed with status {}.", response.status()));
-    }
-    let checkout = response
-        .json::<ServerWechatCheckout>()
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(WechatCheckoutView {
-        order_id: checkout.order_id,
-        amount_fen: checkout.amount_fen,
-        currency: checkout.currency,
-        code_url: checkout.code_url,
-        expires_at: checkout.expires_at,
-        status: checkout.status,
-    })
-}
-
-#[tauri::command]
-async fn get_checkout_status(app: AppHandle, order_id: String) -> Result<CheckoutStatusView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    let session = require_account_session(&paths)?;
-    let response = reqwest::Client::new()
-        .get(format!(
-            "{}/api/desktop/billing/orders/{}",
-            server_base_url(),
-            percent_encode(&order_id)
-        ))
-        .bearer_auth(session.session_token)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!("Order status failed with status {}.", response.status()));
-    }
-    let status = response
-        .json::<ServerCheckoutStatus>()
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(CheckoutStatusView {
-        order_id: status.order_id,
-        status: status.status,
-        entitlement_expires_at: status.entitlement_expires_at,
-    })
-}
-
-#[tauri::command]
-fn start_window_drag(window: Window) -> Result<(), String> {
-    window.start_dragging().map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn close_window(window: Window) -> Result<(), String> {
-    window.close().map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn minimize_window(window: Window) -> Result<(), String> {
-    window.minimize().map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn toggle_maximize_window(window: Window) -> Result<(), String> {
-    if window.is_maximized().map_err(|error| error.to_string())? {
-        window.unmaximize().map_err(|error| error.to_string())
-    } else {
-        window.maximize().map_err(|error| error.to_string())
-    }
-}
-
-#[tauri::command]
-fn get_window_position(window: Window) -> Result<WindowPositionView, String> {
-    let position = window.outer_position().map_err(|error| error.to_string())?;
-    Ok(WindowPositionView {
-        x: position.x,
-        y: position.y,
-    })
-}
-
-#[tauri::command]
-fn set_window_position(window: Window, position: WindowPositionView) -> Result<(), String> {
-    window
-        .set_position(PhysicalPosition::new(position.x, position.y))
-        .map_err(|error| error.to_string())
-}
-
-fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
-    ensure_app_settings_dotenv(path)?;
-    let values = parse_dotenv_values(path)?;
-    Ok(LlmConfigView {
-        output_dir: values.get(OUTPUT_DIR_ENV).cloned().unwrap_or_default(),
-        asr_model: resolve_asr_model_value(values.get(ASR_MODEL_ENV).cloned())?,
-        supported_asr_models: supported_asr_models(),
-        config_path: path_to_env_string(path),
-    })
-}
-
-fn ensure_app_settings_dotenv(path: &Path) -> Result<(), String> {
-    if path.exists() {
-        return Ok(());
-    }
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, APP_SETTINGS_DOTENV_TEMPLATE).map_err(|error| error.to_string())
-}
-
-fn env_path(paths: &RuntimePaths) -> PathBuf {
-    paths.user_data_dir.join(DOTENV_FILE_NAME)
-}
-
-fn load_update_preferences_from_file(path: &Path) -> Result<UpdatePreferencesView, String> {
-    if !path.exists() {
-        return Ok(UpdatePreferencesView::default());
-    }
-
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    if content.trim().is_empty() {
-        return Ok(UpdatePreferencesView::default());
-    }
-
-    serde_json::from_str::<UpdatePreferencesView>(&content).map_err(|error| error.to_string())
-}
-
-fn save_update_preferences_to_file(
-    path: &Path,
-    preferences: UpdatePreferencesView,
-) -> Result<UpdatePreferencesView, String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let content = serde_json::to_string_pretty(&preferences).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())?;
-    Ok(preferences)
-}
-
-fn server_base_url() -> String {
-    std::env::var("FRAMEQ_SERVER_BASE_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_SERVER_BASE_URL.to_string())
-        .trim_end_matches('/')
-        .to_string()
-}
-
-fn server_managed_llm_invocation(
-    paths: &RuntimePaths,
-) -> Result<Option<ServerManagedLlmInvocation>, String> {
-    let Some(session) = read_account_session(&account_session_path(paths))? else {
-        return Ok(None);
-    };
-    Ok(Some(ServerManagedLlmInvocation {
-        server_base_url: server_base_url(),
-        session_token: session.session_token,
-        request_id: format!("llm-{}", Uuid::new_v4().simple()),
-    }))
-}
-
-fn generate_auth_state() -> String {
-    format!("state-{}", Uuid::new_v4().simple())
-}
-
-fn build_auth_login_url(server_base_url: &str, state: &str) -> Result<String, String> {
-    validate_auth_state(state)?;
-    let base = server_base_url.trim_end_matches('/');
-    if !base.starts_with("http://") && !base.starts_with("https://") {
-        return Err("FrameQ server URL must start with http:// or https://.".to_string());
-    }
-    Ok(format!(
-        "{}/login?desktop=1&state={}&redirect_uri={}",
-        base,
-        percent_encode(state),
-        percent_encode("frameq://auth/callback")
-    ))
-}
-
-fn build_activation_redeem_url(server_base_url: &str) -> String {
-    format!(
-        "{}/api/desktop/activation-codes/redeem",
-        server_base_url.trim_end_matches('/')
-    )
-}
-
-fn parse_auth_callback_url(callback_url: &str, expected_state: &str) -> Result<AuthCallback, String> {
-    validate_auth_state(expected_state)?;
-    let url = Url::parse(callback_url).map_err(|_| "Auth callback URL is invalid.".to_string())?;
-    if url.scheme() != "frameq" || url.host_str() != Some("auth") || url.path() != "/callback" {
-        return Err("Auth callback URL target is invalid.".to_string());
-    }
-    let mut ticket: Option<String> = None;
-    let mut state: Option<String> = None;
-    for (key, value) in url.query_pairs() {
-        match key.as_ref() {
-            "ticket" => ticket = Some(value.to_string()),
-            "state" => state = Some(value.to_string()),
-            _ => {}
-        }
-    }
-    let Some(ticket) = ticket else {
-        return Err("Auth callback is missing a login ticket.".to_string());
-    };
-    let Some(state) = state else {
-        return Err("Auth callback is missing state.".to_string());
-    };
-    if state != expected_state {
-        return Err("Auth callback state does not match this device.".to_string());
-    }
-    if !ticket.starts_with("flt_") || ticket.len() > 256 {
-        return Err("Auth callback ticket is invalid.".to_string());
-    }
-    Ok(AuthCallback { ticket, state })
-}
-
-fn validate_auth_state(state: &str) -> Result<(), String> {
-    if state.len() < 8
-        || state.len() > 160
-        || !state
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '~' | '-'))
-    {
-        return Err("Auth state is invalid.".to_string());
-    }
-    Ok(())
-}
-
-fn percent_encode(value: &str) -> String {
-    url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
-}
-
-async fn exchange_auth_ticket(
-    server_base_url: &str,
-    callback: &AuthCallback,
-) -> Result<SessionExchangeResponse, String> {
-    let response = reqwest::Client::new()
-        .post(format!("{}/api/desktop/sessions/exchange", server_base_url.trim_end_matches('/')))
-        .json(&serde_json::json!({
-            "ticket": callback.ticket,
-            "state": callback.state,
-        }))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!("Login exchange failed with status {}.", response.status()));
-    }
-    response
-        .json::<SessionExchangeResponse>()
-        .await
-        .map_err(|error| error.to_string())
-}
-
-async fn get_account_status_from_server(
-    server_base_url: &str,
-    session_token: &str,
-) -> Result<ServerAccountStatus, String> {
-    let response = reqwest::Client::new()
-        .get(format!("{}/api/desktop/account", server_base_url.trim_end_matches('/')))
-        .bearer_auth(session_token)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!("Account status failed with status {}.", response.status()));
-    }
-    response
-        .json::<ServerAccountStatus>()
-        .await
-        .map_err(|error| error.to_string())
-}
-
-fn account_status_view_from_server(status: ServerAccountStatus) -> AccountStatusView {
-    AccountStatusView {
-        authenticated: status.authenticated,
-        email: Some(status.email),
-        entitlement_status: status.entitlement_status,
-        entitlement_expires_at: status.entitlement_expires_at,
-        llm_quota_limit: status.llm_quota_limit,
-        llm_quota_used: status.llm_quota_used,
-        llm_quota_remaining: status.llm_quota_remaining,
-        llm_quota_resets_at: status.llm_quota_resets_at,
-        llm_configured: status.llm_configured,
-        last_verified_at: Some(status.last_verified_at),
-        can_process: status.can_process,
-        server_error: None,
-    }
-}
-
-async fn response_error_message(response: reqwest::Response, fallback: &str) -> String {
-    let status = response.status();
-    let body = response.text().await.unwrap_or_default();
-    let server_error = serde_json::from_str::<serde_json::Value>(&body)
-        .ok()
-        .and_then(|value| value.get("error").and_then(|error| error.as_str()).map(str::to_string));
-    match server_error {
-        Some(message) if !message.trim().is_empty() => message,
-        _ => format!("{fallback} Status {status}."),
-    }
-}
-
-fn write_account_session(path: &Path, session: &SessionExchangeResponse) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let session_file = AccountSessionFile {
-        session_token: session.session_token.clone(),
-        email: session.email.clone(),
-        expires_at: session.expires_at.clone(),
-    };
-    fs::write(
-        path,
-        serde_json::to_string_pretty(&session_file).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| error.to_string())
-}
-
-fn read_account_session(path: &Path) -> Result<Option<AccountSessionFile>, String> {
-    if !path.is_file() {
-        return Ok(None);
-    }
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    serde_json::from_str::<AccountSessionFile>(&content)
-        .map(Some)
-        .map_err(|error| error.to_string())
-}
-
-fn require_account_session(paths: &RuntimePaths) -> Result<AccountSessionFile, String> {
-    read_account_session(&account_session_path(paths))?
-        .ok_or_else(|| "Please log in to FrameQ first.".to_string())
-}
-
-fn guest_account_status() -> AccountStatusView {
-    AccountStatusView {
-        authenticated: false,
-        email: None,
-        entitlement_status: "inactive".to_string(),
-        entitlement_expires_at: None,
-        llm_quota_limit: 0,
-        llm_quota_used: 0,
-        llm_quota_remaining: 0,
-        llm_quota_resets_at: None,
-        llm_configured: false,
-        last_verified_at: None,
-        can_process: false,
-        server_error: None,
-    }
-}
-
-fn save_llm_config_to_file(path: &Path, config: LlmConfigInput) -> Result<LlmConfigView, String> {
-    ensure_app_settings_dotenv(path)?;
-    let output_dir = sanitize_optional_env_value(config.output_dir, OUTPUT_DIR_ENV)?;
-    let asr_model = resolve_asr_model_value(Some(config.asr_model))?;
-    write_dotenv_updates_removing(
-        path,
-        &[(OUTPUT_DIR_ENV, output_dir), (ASR_MODEL_ENV, asr_model)],
-        &[
-            LLM_PROVIDER_ENV,
-            LLM_BASE_URL_ENV,
-            LLM_API_KEY_ENV,
-            LLM_MODEL_ENV,
-            LLM_TIMEOUT_ENV,
-        ],
-    )?;
-    load_llm_config_from_file(path)
-}
-
-fn load_history_from_project(project_root: &Path) -> Result<Vec<HistoryItemView>, String> {
-    let history_path = project_root.join("work").join(HISTORY_FILE_NAME);
-    if !history_path.exists() {
-        return Ok(vec![]);
-    }
-
-    let content = fs::read_to_string(&history_path).map_err(|error| error.to_string())?;
-    let history: serde_json::Value =
-        serde_json::from_str(&content).map_err(|error| error.to_string())?;
-    let Some(items) = history.get("items").and_then(serde_json::Value::as_array) else {
-        return Ok(vec![]);
-    };
-
-    Ok(items
-        .iter()
-        .filter_map(|item| history_item_from_value(project_root, item))
-        .collect())
-}
-
 fn apply_configured_asr_model_to_request(
     dotenv_path: &Path,
     request: &mut ProcessVideoRequest,
@@ -1704,229 +932,6 @@ fn apply_configured_asr_model_to_request(
         request.model = resolve_asr_model_value(configured_model)?;
     }
     Ok(())
-}
-
-fn supported_asr_models() -> Vec<String> {
-    SUPPORTED_ASR_MODELS
-        .iter()
-        .map(|model| (*model).to_string())
-        .collect()
-}
-
-fn resolve_asr_model_value(value: Option<String>) -> Result<String, String> {
-    let model = value.unwrap_or_default().trim().to_string();
-    if model.is_empty() {
-        return Ok(DEFAULT_ASR_MODEL.to_string());
-    }
-
-    if SUPPORTED_ASR_MODELS.contains(&model.as_str()) {
-        Ok(model)
-    } else {
-        Err(format!("Unsupported ASR model: {model}"))
-    }
-}
-
-fn history_item_from_value(
-    project_root: &Path,
-    item: &serde_json::Value,
-) -> Option<HistoryItemView> {
-    let transcript_path = optional_string(item, "transcript_path");
-    let insights_path = optional_string(item, "insights_path");
-    let text = transcript_path
-        .as_deref()
-        .and_then(|path| read_text_file_if_exists(project_root, path))
-        .unwrap_or_default();
-    let insights = insights_path
-        .as_deref()
-        .map(|path| read_insights_file_if_exists(project_root, path))
-        .unwrap_or_default();
-
-    Some(HistoryItemView {
-        id: required_string(item, "id")?,
-        created_at: required_string(item, "created_at")?,
-        url: required_string(item, "url")?,
-        status: required_string(item, "status")?,
-        output_dir: required_string(item, "output_dir")?,
-        video_path: optional_string(item, "video_path"),
-        audio_path: optional_string(item, "audio_path"),
-        transcript_path,
-        insights_path,
-        error: history_error_from_value(item.get("error")),
-        text_preview: optional_string(item, "text_preview").unwrap_or_default(),
-        insights_count: item
-            .get("insights_count")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0) as usize,
-        text,
-        insights,
-    })
-}
-
-fn history_error_from_value(value: Option<&serde_json::Value>) -> Option<HistoryErrorView> {
-    let value = value?;
-    if value.is_null() {
-        return None;
-    }
-
-    Some(HistoryErrorView {
-        code: required_string(value, "code")?,
-        message: required_string(value, "message")?,
-        stage: required_string(value, "stage")?,
-    })
-}
-
-fn required_string(value: &serde_json::Value, key: &str) -> Option<String> {
-    value.get(key)?.as_str().map(str::to_string)
-}
-
-fn optional_string(value: &serde_json::Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
-}
-
-fn read_text_file_if_exists(project_root: &Path, raw_path: &str) -> Option<String> {
-    let path = resolve_history_path(project_root, raw_path);
-    fs::read_to_string(path)
-        .ok()
-        .map(|text| text.trim().to_string())
-}
-
-fn read_insights_file_if_exists(project_root: &Path, raw_path: &str) -> Vec<String> {
-    let path = resolve_history_path(project_root, raw_path);
-    let Ok(content) = fs::read_to_string(path) else {
-        return vec![];
-    };
-    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&content) else {
-        return vec![];
-    };
-    let Some(insights) = payload
-        .get("insights")
-        .and_then(serde_json::Value::as_array)
-    else {
-        return vec![];
-    };
-
-    insights
-        .iter()
-        .filter_map(|item| {
-            item.as_str().map(str::to_string).or_else(|| {
-                item.get("text")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string)
-            })
-        })
-        .collect()
-}
-
-fn resolve_history_path(project_root: &Path, raw_path: &str) -> PathBuf {
-    let path = PathBuf::from(raw_path);
-    if path.is_absolute() {
-        path
-    } else {
-        project_root.join(path)
-    }
-}
-
-fn parse_dotenv_values(path: &Path) -> Result<HashMap<String, String>, String> {
-    if !path.exists() {
-        return Ok(HashMap::new());
-    }
-
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let mut values = HashMap::new();
-    for raw_line in content.lines() {
-        let Some((key, value)) = parse_dotenv_assignment(raw_line) else {
-            continue;
-        };
-        values.insert(key.to_string(), strip_env_quotes(value.trim()).to_string());
-    }
-    Ok(values)
-}
-
-fn write_dotenv_updates_removing(
-    path: &Path,
-    updates: &[(&str, String)],
-    remove_keys: &[&str],
-) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let existing_content = if path.exists() {
-        fs::read_to_string(path).map_err(|error| error.to_string())?
-    } else {
-        String::new()
-    };
-    let update_map: HashMap<&str, &str> = updates
-        .iter()
-        .map(|(key, value)| (*key, value.as_str()))
-        .collect();
-    let mut written_keys: Vec<String> = Vec::new();
-    let mut lines = Vec::new();
-
-    for line in existing_content.lines() {
-        if let Some((key, _)) = parse_dotenv_assignment(line) {
-            if remove_keys.iter().any(|remove_key| remove_key == &key) {
-                continue;
-            }
-
-            if let Some(value) = update_map.get(key) {
-                if !written_keys.iter().any(|written| written == key) {
-                    lines.push(format!("{key}={value}"));
-                    written_keys.push(key.to_string());
-                }
-                continue;
-            }
-        }
-
-        lines.push(line.to_string());
-    }
-
-    for (key, value) in updates {
-        if !written_keys.iter().any(|written| written == key) {
-            lines.push(format!("{key}={value}"));
-        }
-    }
-
-    fs::write(path, format!("{}\n", lines.join("\n"))).map_err(|error| error.to_string())
-}
-
-fn parse_dotenv_assignment(line: &str) -> Option<(&str, &str)> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('#') || !line.contains('=') {
-        return None;
-    }
-
-    let line = line.strip_prefix("export ").unwrap_or(line).trim();
-    let (key, value) = line.split_once('=')?;
-    let key = key.trim();
-    if key.is_empty() {
-        return None;
-    }
-
-    Some((key, value))
-}
-
-fn strip_env_quotes(value: &str) -> &str {
-    if value.len() >= 2 {
-        let first = value.as_bytes()[0];
-        let last = value.as_bytes()[value.len() - 1];
-        if (first == b'"' && last == b'"') || (first == b'\'' && last == b'\'') {
-            return &value[1..value.len() - 1];
-        }
-    }
-
-    value
-}
-
-fn sanitize_optional_env_value(value: String, label: &str) -> Result<String, String> {
-    if value.contains('\n') || value.contains('\r') {
-        return Err(format!("{label} must be a single line."));
-    }
-
-    Ok(value.trim().to_string())
 }
 
 async fn run_blocking_worker_command<T, F>(operation: F) -> Result<T, String>
@@ -2003,27 +1008,27 @@ pub fn run() {
             process_video,
             retry_insights,
             cancel_process,
-            get_llm_config,
-            save_llm_config,
-            get_history,
-            get_update_preferences,
-            save_update_preferences,
+            settings::get_llm_config,
+            settings::save_llm_config,
+            history::get_history,
+            updates::get_update_preferences,
+            updates::save_update_preferences,
             check_first_run,
             download_asr_model,
             cancel_asr_model_download,
-            begin_auth_flow,
-            complete_auth_flow,
-            get_account_status,
-            logout_account,
-            redeem_activation_code,
-            create_wechat_checkout,
-            get_checkout_status,
-            start_window_drag,
-            close_window,
-            minimize_window,
-            toggle_maximize_window,
-            get_window_position,
-            set_window_position
+            account::begin_auth_flow,
+            account::complete_auth_flow,
+            account::get_account_status,
+            account::logout_account,
+            account::redeem_activation_code,
+            account::create_wechat_checkout,
+            account::get_checkout_status,
+            window_chrome::start_window_drag,
+            window_chrome::close_window,
+            window_chrome::minimize_window,
+            window_chrome::toggle_maximize_window,
+            window_chrome::get_window_position,
+            window_chrome::set_window_position
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -2033,14 +1038,18 @@ pub fn run() {
 mod tests {
     use super::{
         apply_configured_asr_model_to_request, asr_model_available,
-        build_activation_redeem_url, build_auth_login_url, build_model_download_command_spec,
-        build_worker_command_spec, load_history_from_project, load_llm_config_from_file,
-        load_update_preferences_from_file, normalize_resource_dir, parse_auth_callback_url,
+        build_model_download_command_spec, build_worker_command_spec, normalize_resource_dir,
         parse_worker_output_or_fallback, parse_worker_stdout, path_to_env_string,
-        run_blocking_worker_command, save_llm_config_to_file, save_update_preferences_to_file,
-        server_base_url, supported_asr_models, AuthCallback, LlmConfigInput, ProcessVideoRequest,
-        ProcessVideoResult, RuntimePaths, ServerManagedLlmInvocation, UpdatePreferencesView,
+        run_blocking_worker_command, ProcessVideoRequest, ProcessVideoResult, RuntimePaths,
         WorkerCommandSpec, WorkerError, WorkerInvocation, WorkerProcessState,
+    };
+    use super::account::{
+        build_activation_redeem_url, build_auth_login_url, parse_auth_callback_url,
+        server_base_url, AuthCallback, ServerManagedLlmInvocation,
+    };
+    use super::history::load_history_from_project;
+    use super::settings::{
+        load_llm_config_from_file, save_llm_config_to_file, supported_asr_models, LlmConfigInput,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -2623,28 +1632,34 @@ Some dependency logged to stdout
     }
 
     #[test]
-    fn update_preferences_round_trip_uses_app_local_updates_json() {
-        let path = temp_dir("update_preferences_round_trip").join("updates.json");
+    fn desktop_worker_contract_matches_tauri_constants() {
+        let contract_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("contracts")
+            .join("desktop-worker-contract.json");
+        let contract: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(contract_path).expect("read desktop worker contract"),
+        )
+        .expect("parse desktop worker contract");
+
+        assert_eq!(super::PROGRESS_EVENT_NAME, contract["events"]["workerProgress"]);
         assert_eq!(
-            load_update_preferences_from_file(&path).expect("load missing preferences"),
-            UpdatePreferencesView::default()
+            super::ASR_MODEL_DOWNLOAD_EVENT_NAME,
+            contract["events"]["asrModelDownloadProgress"]
         );
-
-        let preferences = UpdatePreferencesView {
-            last_checked_at: Some("2026-06-23T10:00:00.000Z".to_string()),
-            postponed_until: Some(1_800_000),
-            skipped_version: None,
-        };
-        let saved = save_update_preferences_to_file(&path, preferences.clone())
-            .expect("save update preferences");
-        let raw = fs::read_to_string(&path).expect("read update preferences");
-        let loaded = load_update_preferences_from_file(&path).expect("load update preferences");
-
-        assert_eq!(saved, preferences);
-        assert_eq!(loaded, preferences);
-        assert!(raw.contains("lastCheckedAt"));
-        assert!(raw.contains("postponedUntil"));
-        assert!(raw.contains("skippedVersion"));
+        assert_eq!(
+            super::PROGRESS_EVENT_PREFIX,
+            contract["events"]["workerProgressPrefix"]
+        );
+        assert_eq!(
+            super::MODEL_DOWNLOAD_EVENT_PREFIX,
+            contract["events"]["asrModelDownloadPrefix"]
+        );
+        assert_eq!(super::DEFAULT_ASR_MODEL, contract["asr"]["defaultModel"]);
+        assert_eq!(super::OUTPUT_DIR_ENV, contract["env"]["outputDir"]);
+        assert_eq!(super::WORK_DIR_ENV, contract["env"]["workDir"]);
+        assert_eq!(super::MODEL_DIR_ENV, contract["env"]["modelDir"]);
     }
 
     #[test]
