@@ -33,6 +33,7 @@ Add a small cloud account service and desktop paywall so FrameQ can require a va
 - [x] Tauri account/billing commands implemented.
 - [x] React account/paywall UI implemented.
 - [x] Verification gates passed.
+- [x] Existing desktop window restores and focuses when browser login returns through `frameq://auth/callback`.
 
 ## Validation Results
 
@@ -44,6 +45,10 @@ Add a small cloud account service and desktop paywall so FrameQ can require a va
 - `npm --prefix app run build`
 - `cargo test --manifest-path app/src-tauri/Cargo.toml`
 - `python scripts/validate_agents_docs.py --level WARN`
+
+2026-06-25 deep-link foreground fix:
+
+- `cargo test --manifest-path app\src-tauri\Cargo.toml deep_link_activation_brings_existing_main_window_forward`
 
 ## Validation
 

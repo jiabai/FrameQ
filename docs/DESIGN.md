@@ -5,6 +5,7 @@
 - The toolbar exposes account status as a compact utility control, not as a marketing banner.
 - Update availability appears as a compact toolbar utility only when action is needed; it must not replace the task monitor or interrupt URL input.
 - Login and payment flows use sheet-style panels consistent with settings/history.
+- Browser deep-link return from login must restore and focus the existing desktop window so the account sheet is visible without the user hunting for FrameQ.
 - Account copy must clearly distinguish local processing from server-side account/payment verification.
 - If the user is not entitled, submitting a URL or retrying insights opens the account/payment sheet and does not start worker processing.
 - The account sheet shows remaining insight-generation uses when the user is signed in.

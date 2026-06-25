@@ -7,6 +7,7 @@ FrameQ currently works as a local-first desktop utility. The first paid release 
 ## Goals
 
 - Let users start login from FrameQ, complete email verification in a server-hosted browser page, and return to the desktop client through `frameq://auth/callback`.
+- When the browser opens `frameq://auth/callback`, an already-running FrameQ desktop window must restore, show, and move to the foreground before completing the login callback.
 - Use email one-time codes instead of passwords.
 - Use WeChat Native payment for a manual monthly pass priced at CNY 9.90.
 - Unlock new video processing and insight retry only when the desktop client has a valid paid entitlement.
@@ -50,4 +51,3 @@ FrameQ currently works as a local-first desktop utility. The first paid release 
 - A WeChat Native order is created for exactly `990` fen and can become `paid` through the webhook or test payment adapter.
 - Replayed WeChat notifications do not extend entitlement more than once for the same payment.
 - SQLite database, WAL/SHM files, local backups, and secrets are not tracked by git.
-
