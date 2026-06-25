@@ -86,6 +86,7 @@ ARCHITECTURE_CONCEPT_GROUPS = {
     "关键文件": ["关键文件", "Key Files"],
     "架构约束信息": ["不变量", "边界", "Invariant", "Boundary"],
 }
+EXTERNAL_AGENT_DIRS = {"lib-external"}
 
 
 def is_cli_project(root: Path) -> bool:
@@ -163,6 +164,15 @@ def read_text_if_exists(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
+
+
+def should_validate_child_agents_md(root: Path, path: Path) -> bool:
+    """Skip AGENTS.md files that belong to vendored external references."""
+    try:
+        relative_parts = path.relative_to(root).parts
+    except ValueError:
+        return True
+    return not any(part in EXTERNAL_AGENT_DIRS for part in relative_parts[:-1])
 
 
 def agents_has_lightweight_workflow(agents_md: Path) -> bool:
@@ -534,7 +544,7 @@ def validate_project(root: Path, min_level: Severity) -> list[ValidationResult]:
 
     # 检查所有子目录 AGENTS.md
     for agents_path in root.rglob("AGENTS.md"):
-        if agents_path != agents_md:
+        if agents_path != agents_md and should_validate_child_agents_md(root, agents_path):
             results.extend(validate_agents_md(agents_path, min_level))
 
     return results

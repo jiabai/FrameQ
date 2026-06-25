@@ -1,5 +1,15 @@
 # Security and Compliance
 
+## 2026-06-25 Douyin Share Page Fallback Boundary
+
+- The Douyin fallback may request public `iesdouyin.com` share pages and public media CDN URLs for user-submitted public or user-authorized links.
+- The fallback must not require, collect, persist, or upload browser cookies. Exported cookie files are not part of the supported product path for this fallback.
+- The fallback may use a fixed mobile Safari user agent and minimal public-page headers for compatibility with public share pages. It must not use user-agent rotation, proxy pools, browser fingerprint spoofing, CAPTCHA solving, login automation, or account-authenticated scraping.
+- A process-local cookie jar may accept anonymous cookies naturally set by the public share page, such as `ttwid`, but those cookies must be discarded after the worker invocation and must not be written to history, logs, app-local settings, or server requests.
+- The fallback must not attempt to solve CAPTCHA, defeat login gates, bypass private content restrictions, or automate account-authenticated scraping.
+- Worker logs, history records, and UI errors must not store cookies, sensitive request headers, or full media CDN URLs when those URLs contain volatile request tokens. Logs may keep the original submitted URL, short error summaries, hostnames, stream quality labels, byte sizes, and local output paths.
+- Downloaded video, extracted audio, transcripts, summaries, mindmaps, and topic outputs remain local artifacts under the configured output/work directories; no fallback media data is sent to the FrameQ server.
+
 ## 2026-06-23 Desktop Update Boundary
 
 - Desktop updates must use Tauri updater signature verification before installation.

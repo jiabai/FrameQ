@@ -25,7 +25,7 @@ Make desktop client, Tauri bridge, and Python worker code easier to change by sp
 - [x] Frontend shell split completed.
 - [x] Tauri modules split completed.
 - [x] Worker orchestration split completed.
-- [ ] Full verification completed.
+- [x] Full verification completed.
 
 ## Validation
 
@@ -48,3 +48,13 @@ Make desktop client, Tauri bridge, and Python worker code easier to change by sp
 - Worker extraction leaves `cli.py` as an argparse/stdout facade and moves service orchestration, request parsing, history writing, and the media/ASR/insight pipeline into focused modules.
 - Validation passed: `npm --prefix app test` (80 tests), `npm --prefix app run build`, `cargo test --manifest-path app\src-tauri\Cargo.toml` (29 tests), `npm --prefix app run tauri -- build --no-bundle`, `python -m ruff check worker`, `python -m pytest worker\tests` (85 tests), `python scripts\validate_agents_docs.py --level WARN`, and `git diff --check`.
 - Validation gaps: `npm --prefix app run lint` is unavailable because `app/package.json` has no `lint` script; `uv run ruff check worker` and `uv run pytest worker\tests` timed out again during environment initialization in this worktree, so worker validation used the already available Python environment instead.
+
+2026-06-26 re-verification gates passed:
+
+- `npm --prefix app test` — 84 passed.
+- `npm --prefix app run build` — passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` — 31 passed.
+- `npm --prefix server test` — 32 passed.
+- `uv run pytest worker\tests` — 99 passed.
+- `uv run ruff check worker` — passed.
+- `python scripts/validate_agents_docs.py --level WARN` — 0 errors, 0 warnings.

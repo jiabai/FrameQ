@@ -1,5 +1,13 @@
 # FrameQ Design Guidelines
 
+## 2026-06-25 Douyin Download Fallback UX
+
+- Douyin share page fallback is invisible by default: the user still submits one URL and sees the existing `视频提取中` stage.
+- Worker progress copy may mention `正在解析公开视频分享页`, `正在探测可用视频流`, and `正在保存最高质量视频` when the fallback path is active.
+- MVP should not show a stream picker or ask the user to choose a resolution during processing. The default policy is to preserve the highest-quality local video by selecting the largest validated stream.
+- If the largest stream fails and the worker retries a smaller candidate, progress copy should remain low-noise and say that FrameQ is retrying another available video stream.
+- If all fallback candidates fail, the failure copy should explain that the public share page or playable media stream was unavailable, and should ask the user to retry with a public, authorized link.
+
 ## Account and Payment UI
 
 - The toolbar exposes account status as a compact utility control, not as a marketing banner.

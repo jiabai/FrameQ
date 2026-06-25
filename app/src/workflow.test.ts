@@ -279,6 +279,16 @@ describe("workflow state model", () => {
         stage: "video_extracting",
       }),
     ).toBe("视频下载失败，请确认链接可公开访问后重试。原始错误：ERROR: extractor failed");
+
+    expect(
+      formatWorkerError({
+        code: "VIDEO_DOWNLOAD_FAILED",
+        message: "DOUYIN_NO_PLAYABLE_STREAM: public share page returned no playable streams.",
+        stage: "video_extracting",
+      }),
+    ).toBe(
+      "抖音公开视频分享页暂时没有返回可播放的视频流，请确认链接公开可访问后重试。原始错误：DOUYIN_NO_PLAYABLE_STREAM: public share page returned no playable streams.",
+    );
   });
 
   test("formats insight generation failures with actionable recovery guidance", () => {

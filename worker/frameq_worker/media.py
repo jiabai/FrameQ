@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from frameq_worker.douyin_fallback import DouyinFallbackError, download_douyin_video
+
 
 @dataclass(frozen=True)
 class CommandResult:
@@ -17,7 +19,9 @@ class CommandResult:
 
 
 CommandRunner = Callable[[list[str]], CommandResult]
+ProgressCallback = Callable[[dict[str, object]], None]
 DOUYIN_VIDEO_ID_PATTERN = re.compile(r"(?:^|/)video/(\d+)(?:[/?#]|$)")
+DOUYIN_HOST_PATTERN = re.compile(r"https?://(?:www\.douyin\.com|v\.douyin\.com|www\.iesdouyin\.com)/")
 
 
 class CommandExecutionError(RuntimeError):
@@ -109,12 +113,51 @@ def download_video(
     url: str,
     output_dir: Path,
     runner: CommandRunner = run_command,
+    progress_callback: ProgressCallback | None = None,
 ) -> CommandResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     result = runner(build_ytdlp_command(url, output_dir))
     if result.returncode != 0:
+        if should_attempt_douyin_fallback(url, result.stderr or result.stdout):
+            try:
+                video_path = download_douyin_video(
+                    url,
+                    output_dir=output_dir,
+                    progress_callback=progress_callback,
+                )
+            except DouyinFallbackError as exc:
+                fallback_result = CommandResult(
+                    command=["douyin-fallback", url],
+                    returncode=1,
+                    stdout="",
+                    stderr=f"{exc.code}: {exc}",
+                )
+                raise CommandExecutionError(fallback_result) from exc
+            return CommandResult(
+                command=["douyin-fallback", url],
+                returncode=0,
+                stdout=video_path.as_posix(),
+                stderr="",
+            )
         raise CommandExecutionError(result)
     return result
+
+
+def should_attempt_douyin_fallback(url: str, failure_message: str) -> bool:
+    if not DOUYIN_HOST_PATTERN.match(url):
+        return False
+
+    normalized = failure_message.lower()
+    fallback_markers = (
+        "expecting value",
+        "fresh cookies",
+        "aweme/v1/web/aweme/detail",
+        "web detail",
+        "webpage detail",
+        "empty",
+        "json",
+    )
+    return any(marker in normalized for marker in fallback_markers)
 
 
 def probe_media_file(

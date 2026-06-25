@@ -237,6 +237,13 @@ function formatVideoDownloadError(message: string): string {
   ) {
     guidance = "链接可能已过期或无效，请重新复制视频分享链接后再试。";
   } else if (
+    lowerMessage.includes("douyin_no_playable_stream") ||
+    lowerMessage.includes("douyin_stream_download_failed") ||
+    lowerMessage.includes("douyin_share_page_unavailable") ||
+    lowerMessage.includes("douyin_router_data_missing")
+  ) {
+    guidance = "抖音公开视频分享页暂时没有返回可播放的视频流，请确认链接公开可访问后重试。";
+  } else if (
     lowerMessage.includes("login") ||
     lowerMessage.includes("sign in") ||
     lowerMessage.includes("cookie") ||

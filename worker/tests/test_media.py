@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 
 import frameq_worker.media as media
+import pytest
 from frameq_worker.media import (
+    CommandExecutionError,
     CommandResult,
     build_audio_extract_command,
     build_ffprobe_command,
@@ -159,6 +161,63 @@ def test_download_video_creates_output_dir_and_runs_ytdlp_command(tmp_path: Path
             "https://www.douyin.com/video/7524373044106677544",
         ]
     ]
+
+
+def test_download_video_uses_douyin_fallback_for_empty_web_detail_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+    fallback_calls: list[tuple[str, Path]] = []
+
+    def fake_runner(command: list[str]) -> CommandResult:
+        calls.append(command)
+        return CommandResult(
+            command=command,
+            returncode=1,
+            stdout="",
+            stderr="Expecting value: line 1 column 1 (char 0)",
+        )
+
+    def fake_fallback(
+        url: str,
+        output_dir: Path,
+        progress_callback: object | None = None,
+    ) -> Path:
+        fallback_calls.append((url, output_dir))
+        video_path = output_dir / "7653372612151692594.mp4"
+        video_path.write_bytes(b"fallback mp4")
+        return video_path
+
+    monkeypatch.setattr(media, "download_douyin_video", fake_fallback)
+
+    result = download_video(
+        "https://www.douyin.com/video/7653372612151692594",
+        output_dir=tmp_path / "outputs",
+        runner=fake_runner,
+    )
+
+    assert result.command == [
+        "douyin-fallback",
+        "https://www.douyin.com/video/7653372612151692594",
+    ]
+    assert fallback_calls == [
+        ("https://www.douyin.com/video/7653372612151692594", tmp_path / "outputs")
+    ]
+    assert calls[0][0] == "yt-dlp"
+
+
+def test_download_video_preserves_non_douyin_ytdlp_failure(tmp_path: Path) -> None:
+    def fake_runner(command: list[str]) -> CommandResult:
+        return CommandResult(
+            command=command,
+            returncode=1,
+            stdout="",
+            stderr="ERROR: Unsupported URL",
+        )
+
+    with pytest.raises(CommandExecutionError):
+        download_video("https://example.com/video/1", output_dir=tmp_path, runner=fake_runner)
 
 
 def test_probe_media_file_runs_ffprobe_and_parses_stdout() -> None:

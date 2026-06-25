@@ -16,6 +16,71 @@ https://www.douyin.com/video/7524373044106677544
 outputs/7524373044106677544.mp4
 ```
 
+## 2026-06-25 方案修订：Douyin share page fallback
+
+后续实现不再把 `yt-dlp` 视为唯一下载路径。`yt-dlp` 仍然作为第一层通用下载器，但当抖音公开视频出现 web detail JSON 空响应、`Fresh cookies` 或同类解析失败时，FrameQ worker 应进入 Douyin 专用 fallback。
+
+该 fallback 参考 `lib-external/EasyDownload` 的 MIT-licensed 抖音链路，但只移植必要算法，不嵌入整个 Go/Wails 应用：
+
+1. 从 `https://www.douyin.com/video/{aweme_id}` 或已解析短链中提取 `aweme_id`。
+2. 请求 `https://www.iesdouyin.com/share/video/{aweme_id}/?app=aweme`。
+3. 从分享页 HTML 的 `window._ROUTER_DATA` 中读取 `videoInfoRes.item_list[0]`。
+4. 优先使用 `video.bit_rate` 构建候选流；当 `bit_rate` 为空时，使用 `video.play_addr.uri` 对 `1080p`、`720p`、`540p`、`480p`、`360p` 做 ranged GET 探测。
+5. 只接受返回有效 `206 Partial Content`、正数 `Content-Range` 总大小和视频类 `Content-Type` 的候选流。
+6. 多个流可用时，默认下载体积最大的候选流，以保存最高质量本地视频；若体积相同，优先更高清晰度。
+7. 下载完成后仍走现有 `ffprobe` 媒体校验、`ffmpeg` 音频提取、ASR 转写和结果历史流程。
+
+该 fallback 不要求用户提供浏览器 cookies，不处理登录态或验证码，不绕过平台访问限制，只用于用户有权处理且公开视频分享页可访问的内容。
+
+### 信息抓取回退策略
+
+FrameQ 的抖音下载链路应保持“小而可解释”的策略链：
+
+| 顺序 | 路径 | v1 行为 | 进入下一步的条件 |
+|------|------|---------|----------------|
+| 1 | `yt-dlp` | 默认通用下载器 | 抖音公开视频出现 web detail JSON 空响应、`Fresh cookies`、JSON 解析失败或同类公开链接解析失败 |
+| 2 | `iesdouyin.com/share/video/{aweme_id}/?app=aweme` | v1 Douyin fallback 主路径，解析分享页 SSR 中的 `window._ROUTER_DATA` | 分享页不可访问、返回空壳、缺少 `videoInfoRes.item_list[0]` 或没有可用媒体 |
+| 3 | `aweme/detail` / `slidesinfo` | 暂不作为 v1 必选实现，可作为后续兼容图集/混合内容的扩展 | 需要支持图集、混合内容或分享页结构变化时再单独评估 |
+
+fallback 只在已确认是抖音 host 且失败类型匹配时触发。非抖音 URL、私有内容、登录页、验证码页、403/429 限流或平台明确拒绝访问时，应返回结构化失败和可读提示，而不是继续升级为绕过策略。
+
+### 公开页面兼容性请求头
+
+FrameQ 可以为分享页和候选流探测使用固定、最小化的公开页面兼容请求头。默认 `User-Agent` 使用移动 Safari：
+
+```text
+Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1
+```
+
+推荐请求头边界：
+
+- 分享页和详情探测：`User-Agent`、`Accept`、`Accept-Language`、`Origin: https://www.douyin.com`、`Referer: https://www.douyin.com/`。
+- 视频流探测和下载：沿用同一 `User-Agent`、`Referer`、`Origin`，并在探测阶段增加 `Range: bytes=0-1`。
+- 允许进程内临时 `CookieJar` 接收分享页自然下发的匿名 cookie，例如 `ttwid`；不得读取、导入或持久化浏览器 cookie。
+- 不做 UA 池轮换、代理池、浏览器指纹伪造、验证码处理、账号自动化或登录态抓取。
+
+### 候选流和错误分级
+
+候选流处理应遵循防御式校验：
+
+- 只接受 `206 Partial Content`、正数 `Content-Range` 总大小，以及 `video/*` 或 `application/octet-stream` 类型。
+- 对相同 `Content-Range` 总大小的候选流去重，避免多个 ratio 实际落到同一 CDN 资源。
+- 默认按 `size_bytes` 降序选择；大小相同则按 `1080p`、`720p`、`540p`、`480p`、`360p` 的质量优先级选择。
+- 若首选流下载失败或 `ffprobe` 校验失败，自动尝试下一候选流；所有候选失败后再返回错误。
+
+建议错误码或错误原因分层：
+
+| 错误原因 | 含义 |
+|----------|------|
+| `DOUYIN_ID_PARSE_FAILED` | 无法从输入 URL 或短链中提取 `aweme_id` |
+| `DOUYIN_SHARE_PAGE_UNAVAILABLE` | 公开视频分享页不可访问、返回登录/验证码/限流或空壳页面 |
+| `DOUYIN_ROUTER_DATA_MISSING` | 分享页中缺少可解析的 `window._ROUTER_DATA` |
+| `DOUYIN_NO_PLAYABLE_STREAM` | 已拿到页面数据，但没有可验证的视频候选流 |
+| `DOUYIN_STREAM_DOWNLOAD_FAILED` | 候选流下载均失败 |
+| `MEDIA_VALIDATION_FAILED` | 下载文件无法通过现有 `ffprobe` 媒体校验 |
+
+日志和历史记录只应保存原始提交 URL、host、质量标签、候选流大小、短错误摘要和本地输出路径；不得保存完整媒体 CDN URL、cookie、敏感请求头或带 token 的 query 参数。
+
 ## 2. 目标
 
 - 支持通过抖音视频 URL 下载公开视频。
@@ -714,16 +779,9 @@ InsightFlow 结束后建议做基础校验：
 
 处理方式：
 
-```powershell
-yt-dlp --cookies-from-browser chrome `
-  -o "outputs/%(id)s.%(ext)s" `
-  "https://www.douyin.com/video/7524373044106677544"
-```
+FrameQ 产品路径不要求也不引导用户导入浏览器 cookies。对于登录页、验证码、403/429、空壳页面或平台明确拒绝访问的情况，worker 应返回结构化失败，并提示用户更换公开视频链接或稍后重试。
 
-说明：
-
-- `--cookies-from-browser chrome` 可复用本机 Chrome 登录态。
-- 仅适用于用户对该内容有访问权限的情况。
+开发诊断时可以在独立命令行环境中临时验证 `yt-dlp --cookies-from-browser chrome` 是否改善某个样本，但该方式不进入 FrameQ 桌面端默认流程，不持久化 cookie，也不作为对外分发功能。
 
 ### 10.2 下载格式不符合预期
 

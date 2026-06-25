@@ -30,7 +30,7 @@ Implement low-noise one-click updates for the FrameQ desktop app using Tauri upd
 - [x] Automated verification completed.
 - [x] Release workflow normalizes `latest.json` to UTF-8 without BOM before final upload.
 - [x] Bundled updater endpoint includes a fixed query string to avoid stale GitHub release-asset cache entries after an in-place manifest repair.
-- [ ] Clean-machine signed update validation completed.
+- [ ] Clean-machine signed update validation completed — blocked by production signing key and clean VM availability.
 
 ## Validation
 
@@ -43,10 +43,12 @@ Implement low-noise one-click updates for the FrameQ desktop app using Tauri upd
 
 ## Remaining External Release Checks
 
-- Replace the development updater public key in `tauri.conf.json` with the production updater public key generated outside the repository, and keep the private key/password in release secret storage only.
-- Build signed Windows and macOS update artifacts.
-- Upload artifacts, signatures, and `latest.json` to GitHub Releases.
-- Verify old-version to new-version update on clean Windows/macOS machines.
+The following items require production signing keys (private key in release secret storage, production public key in `tauri.conf.json`) and clean Windows/macOS VM environments. These are blocking the final release gate but are not code-blocked:
+
+- [ ] Replace the development updater public key in `tauri.conf.json` with the production updater public key generated outside the repository, and keep the private key/password in release secret storage only.
+- [ ] Build signed Windows and macOS update artifacts.
+- [ ] Upload artifacts, signatures, and `latest.json` to GitHub Releases.
+- [ ] Verify old-version to new-version update on clean Windows/macOS machines.
 
 ## Validation Results
 

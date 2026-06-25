@@ -42,7 +42,7 @@ Make FrameQ installable for ordinary Windows and macOS users without requiring P
 - [x] Previous full Windows x64 NSIS installer produced locally with real bundled runtime/model assets before the lightweight first-run-download direction replaced bundled-model distribution.
 - [x] Lightweight installer direction implemented: `resources/models` removed, first-run ASR model download command/UI added, and worker returns `ASR_MODEL_NOT_DOWNLOADED` when the cache is absent.
 - [x] Automated verification completed.
-- [ ] Clean Windows/macOS install-machine packaging validation completed with lightweight runtime assets and first-run model download.
+- [ ] Clean Windows/macOS install-machine packaging validation completed — blocked by clean VM environments and production signing/notarization credentials.
 
 ## Validation
 

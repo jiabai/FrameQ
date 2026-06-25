@@ -6,13 +6,13 @@ Move insight-topic LLM configuration out of the desktop settings UI and into the
 
 ## Progress
 
-- [ ] Write failing server tests for encrypted LLM config, checkout idempotency, and entitlement quota.
-- [ ] Implement server data model, services, routes, and Admin UI.
-- [ ] Write failing worker/Tauri tests for server-managed checkout and one-charge-per-generation.
-- [ ] Implement worker checkout client and Tauri env/session propagation.
-- [ ] Write failing frontend tests for quota status and settings UI removal.
-- [ ] Implement frontend account quota display and gating.
-- [ ] Run gates and record results.
+- [x] Write failing server tests for encrypted LLM config, checkout idempotency, and entitlement quota.
+- [x] Implement server data model, services, routes, and Admin UI.
+- [x] Write failing worker/Tauri tests for server-managed checkout and one-charge-per-generation.
+- [x] Implement worker checkout client and Tauri env/session propagation.
+- [x] Write failing frontend tests for quota status and settings UI removal.
+- [x] Implement frontend account quota display and gating.
+- [x] Run gates and record results.
 
 ## Decisions
 
@@ -34,3 +34,16 @@ Move insight-topic LLM configuration out of the desktop settings UI and into the
 - `uv run pytest worker\tests`
 - `uv run ruff check worker`
 - `python scripts/validate_agents_docs.py --level WARN`
+
+## Validation Results
+
+2026-06-26 final gates passed:
+
+- `npm --prefix server test` — 32 passed.
+- `npm --prefix server run build` — passed.
+- `npm --prefix app test` — 84 passed.
+- `npm --prefix app run build` — passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` — 31 passed.
+- `uv run pytest worker\tests` — 99 passed.
+- `uv run ruff check worker` — passed.
+- `python scripts/validate_agents_docs.py --level WARN` — 0 errors, 0 warnings.

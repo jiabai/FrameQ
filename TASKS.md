@@ -10,13 +10,15 @@
 
 ## 进行中
 
-- [ ] 实现桌面端一键升级（2026-06-23）— Tauri updater + FrameQ server 动态 manifest；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 验证：server/app/Rust 测试、前端构建、Tauri no-bundle 构建和文档门禁通过后收尾。
+- [x] 实现桌面端一键升级（2026-06-23）— Tauri updater + FrameQ server 动态 manifest；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 代码完成，自动化门禁全部通过（server 32、app 84、Rust 31、worker 99、ruff、build、docs）。⚠️ 干净机签名更新验证需生产签名密钥和 VM 环境，标记为外部阻塞项。
 
 ## 待办
 
-- [ ] 完成干净 Windows VM 与 macOS arm64/x64 真实安装包验证 ✅ 使用轻量 runtime 资源产出安装包，在无 Python/uv/ffmpeg 的干净机器完成首启模型下载、URL → 下载 → ASR 文字稿，并记录签名/公证发布门禁状态。
+- [ ] 完成干净 Windows VM 与 macOS arm64/x64 真实安装包验证 — 使用轻量 runtime 资源产出安装包，在无 Python/uv/ffmpeg 的干净机器完成首启模型下载、URL → 下载 → ASR 文字稿，并记录签名/公证发布门禁状态。⚠️ 需真实 VM 环境和生产签名证书。
+- [ ] 完成桌面端一键升级的干净机签名更新验证 — 替换开发版 updater 公钥为生产公钥，构建签名更新产物，上传 GitHub Releases，在干净机验证旧版本到新版本升级。⚠️ 需生产签名私钥 + 干净 VM。
 
 ## 已完成
+- [x] 实现抖音分享页 fallback 视频下载（2026-06-26）✅ yt-dlp 失败时自动降级为 iesdouyin.com/share/video 分享页解析 + play_addr ratio 探测 + 多候选流下载，支持 6 种分层错误码和流下载失败自动重试；worker/frontend/Rust 测试、构建、ruff、docs 门禁全部通过；线上烟雾测试通过（201.9 MB MP4, 2 streams, AAC 音频）。
 - [x] 增加文字稿要点总结与 Mermaid 思维导图（2026-06-25）✅ 二次确认后一次 AI整理生成 `summary.md`、`mindmap.mmd` 和既有启发话题点；UI 只展示总结和话题点，不展示 Mermaid 源码；worker/Rust/frontend 测试、前端构建和文档门禁通过。
 - [x] Expose four artifacts and split transcript/insight flow (2026-06-22) ✅ 主流程只下载视频、提取音频和生成文字稿；结果区提供视频/音频/文字稿/话题点入口；话题点由确认面板单独启动并消耗额度；app/Rust/worker 测试、前端构建和文档门禁通过。
 - [x] 改为轻量安装包 + 首启 ASR 模型下载（2026-06-19）✅ 安装包不再打入 `resources/models`；新增 SenseVoice Small / VAD 下载助手、Tauri 下载/取消命令、首启下载引导、缺模型 `ASR_MODEL_NOT_DOWNLOADED` 降级错误和可配置下载源；focused worker/Rust/frontend 测试通过

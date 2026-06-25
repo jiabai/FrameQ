@@ -19,6 +19,20 @@
 - Existing legacy top-level `iic/SenseVoiceSmall` and `iic/speech_fsmn_vad_zh-cn-16k-common-pytorch` caches should be migrated or cleaned automatically only when the canonical cache is complete.
 - Unknown user or future model directories under top-level `iic/` must be preserved.
 
+## 2026-06-25 Douyin Share Page Fallback and Highest Quality Video Preservation
+
+- `yt-dlp` remains the first download attempt for supported public video links, but Douyin failures caused by empty web detail JSON, `Fresh cookies` guidance, or web detail parse failure should trigger a Douyin-specific fallback before returning `VIDEO_DOWNLOAD_FAILED`.
+- The fallback derives the `aweme_id` from canonical Douyin URLs or resolved short links, then requests the public share SSR page `https://www.iesdouyin.com/share/video/{aweme_id}/?app=aweme`.
+- The worker should parse `window._ROUTER_DATA` and `videoInfoRes.item_list[0]` from the share page. When `video.bit_rate` is empty, it should use `video.play_addr.uri` to probe `https://aweme.snssdk.com/aweme/v1/play/?video_id={uri}&ratio={ratio}&line=0`.
+- Stream probing must use small ranged GET requests and only accept candidates that return a valid partial media response, a positive content size, and a video-like content type.
+- If multiple playable streams are available, FrameQ should select the largest candidate by `size_bytes` so the saved local video favors highest quality. If sizes tie, choose the higher resolution or quality rank. If the selected candidate later fails download or `ffprobe` validation, the worker should retry the next candidate.
+- The downloaded fallback video should be written as a normal local MP4 under the configured output directory, preferably with the Douyin video ID as the stem, so the existing media selection, history, audio extraction, ASR, and result-location behavior continue unchanged.
+- MVP should not expose a stream picker in the main flow. A future settings option may allow `最高质量` and `转写优先` policies, but the current default is highest-quality preservation.
+- The fallback may use a fixed mobile Safari `User-Agent` and minimal public-page headers to access public share pages. It must not rotate user agents, use proxy pools, spoof browser fingerprints, solve CAPTCHA, automate login, or scrape account-authenticated content.
+- The worker may keep anonymous share-page cookies in memory for one invocation, but must not read browser cookie stores, persist cookies, or include cookies/sensitive headers/full media CDN URLs in history or logs.
+- Fallback failures should be classified into user-readable causes such as ID parse failure, public share page unavailable, router data missing, no playable stream, stream download failure, and media validation failure.
+- The fallback must not collect, persist, or require user browser cookies, and must not attempt to bypass login gates, CAPTCHA, private content restrictions, or platform access controls. It is only for public or user-authorized links that expose a share page and playable media URL.
+
 ## 背景
 
 用户希望在桌面客户端中输入抖音视频 URL，先确认启动本地公开视频下载、音频提取和中文 ASR 转写，再在文字稿完成后单独确认生成可继续思考的要点总结和启发话题点。
@@ -82,6 +96,8 @@
 - 输入合法抖音 URL 后，UI 从输入态切换到处理态，并展示阶段进度。
 - 首页 `确认` 只启动下载视频、提取音频和 ASR 文字稿流程，请求 worker 时 `generate_insights=false`。
 - 下载成功后，`outputs/` 中存在 MP4 文件，`ffprobe` 可识别视频流和音频流。
+- 当 `yt-dlp` 因 Douyin web detail 空响应、`Fresh cookies`、JSON 解析失败或同类公开链接解析问题失败时，worker 应尝试 Douyin share page fallback；fallback 成功时 UI 不进入失败态，后续流程与普通下载一致。
+- Douyin share page fallback 解析出多个候选流时，默认下载体积最大的可用 MP4；若该流下载或媒体校验失败，应自动降级尝试下一候选流，并在所有候选失败后返回结构化 `VIDEO_DOWNLOAD_FAILED`。
 - 音频提取后，`work/` 中存在 16 kHz 单声道 WAV。
 - ASR 成功后，`outputs/` 中存在 transcript `.txt` 和 `.md`。
 - 主流程完成后，结果区显示视频、音频、完整文字稿、要点总结和启发话题点 5 个入口；视频和音频入口在文件管理器中定位对应本地文件。

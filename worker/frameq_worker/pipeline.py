@@ -177,7 +177,12 @@ def run_worker_pipeline(
         18,
     )
     try:
-        download_video(request.url, output_dir=output_dir, runner=command_runner)
+        download_video(
+            request.url,
+            output_dir=output_dir,
+            runner=command_runner,
+            progress_callback=progress_callback,
+        )
     except CommandExecutionError as exc:
         return failed_result(
             code="VIDEO_DOWNLOAD_FAILED",
