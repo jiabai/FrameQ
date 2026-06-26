@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "FrameQ",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "identifier": "com.frameq.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -28,7 +28,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk0N0FDM0IyMjE1MENCMjcKUldRbnkxQWhzc042bEtTMWJidkFUeFZBcHNoM01Ickd6WmpoWURJZ0duMU5oRVNzRTRSSGhnNUoK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBOTY0QTMzNkM2QkRFQjEKUldTeDNtdHNNMHFXdXFaTDMvMkdOZEJPdEJWaWorUmxjQlQ2Sk9wSmtDMitBb25yMGVTN09FaUwK",
       "endpoints": [
         "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1"
       ],
