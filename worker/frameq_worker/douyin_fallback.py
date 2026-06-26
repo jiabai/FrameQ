@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
 
+from frameq_worker.download_reliability import SafeDownloadError, write_http_response_atomically
+
 DOUYIN_MOBILE_USER_AGENT = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
@@ -17,9 +19,13 @@ DOUYIN_MOBILE_USER_AGENT = (
 PLAY_QUALITIES = ("1080p", "720p", "540p", "480p", "360p")
 QUALITY_RANK = {quality: index for index, quality in enumerate(PLAY_QUALITIES)}
 AWEME_ID_PATTERNS = (
-    re.compile(r"(?:^|/)video/(\d+)(?:[/?#]|$)"),
+    re.compile(r"[?&](?:modal_id|aweme_id)=(\d+)(?:[&#]|$)"),
+    re.compile(r"(?:^|/)(?:video|note)/(\d+)(?:[/?#]|$)"),
+    re.compile(r"(?:^|/)share/slides/(\d+)(?:[/?#]|$)"),
     re.compile(r"[?&]aweme_id=(\d+)(?:[&#]|$)"),
 )
+DOUYIN_URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
+DOUYIN_SHORT_HOSTS = {"v.douyin.com"}
 CONTENT_RANGE_TOTAL_PATTERN = re.compile(r"/(\d+)\s*$")
 
 
@@ -88,6 +94,40 @@ def extract_aweme_id(url: str) -> str | None:
         match = pattern.search(url)
         if match:
             return match.group(1)
+    return None
+
+
+def resolve_aweme_id_from_input(
+    raw_input: str,
+    http_client: UrllibDouyinHttpClient | None = None,
+) -> str | None:
+    direct_id = extract_aweme_id(raw_input)
+    if direct_id:
+        return direct_id
+
+    client = http_client or UrllibDouyinHttpClient()
+    for candidate_url in _extract_douyin_urls(raw_input):
+        candidate_id = extract_aweme_id(candidate_url)
+        if candidate_id:
+            return candidate_id
+        if not _is_douyin_short_link(candidate_url):
+            continue
+        try:
+            response = client.get(
+                candidate_url,
+                headers=_public_headers(),
+                timeout_seconds=10.0,
+            )
+        except DouyinFallbackError:
+            continue
+        resolved_id = extract_aweme_id(response.url)
+        if resolved_id:
+            return resolved_id
+        body = response.body.decode("utf-8", errors="replace") if response.body else ""
+        for embedded_url in _extract_douyin_urls(body):
+            embedded_id = extract_aweme_id(embedded_url)
+            if embedded_id:
+                return embedded_id
     return None
 
 
@@ -186,23 +226,13 @@ def download_first_available_candidate(
             _emit_stream_retry(progress_callback, index, sorted_candidates)
             continue
 
-        if response.status not in {200, 206} or not response.body:
-            last_error = DouyinFallbackError(
-                "DOUYIN_STREAM_DOWNLOAD_FAILED",
-                "Douyin stream download returned an empty or unsuccessful response.",
-            )
+        try:
+            write_http_response_atomically(response, output_path)
+        except SafeDownloadError as exc:
+            last_error = exc
             _emit_stream_retry(progress_callback, index, sorted_candidates)
             continue
 
-        if not _is_media_content_type(_header(response.headers, "Content-Type")):
-            last_error = DouyinFallbackError(
-                "DOUYIN_STREAM_DOWNLOAD_FAILED",
-                "Douyin stream download returned a non-media response.",
-            )
-            _emit_stream_retry(progress_callback, index, sorted_candidates)
-            continue
-
-        output_path.write_bytes(response.body)
         return output_path
 
     raise DouyinFallbackError(
@@ -217,14 +247,14 @@ def download_douyin_video(
     http_client: UrllibDouyinHttpClient | None = None,
     progress_callback: object | None = None,
 ) -> Path:
-    aweme_id = extract_aweme_id(url)
+    client = http_client or UrllibDouyinHttpClient()
+    aweme_id = resolve_aweme_id_from_input(url, http_client=client)
     if aweme_id is None:
         raise DouyinFallbackError(
             "DOUYIN_ID_PARSE_FAILED",
             "Could not extract Douyin video ID from URL.",
         )
 
-    client = http_client or UrllibDouyinHttpClient()
     _emit_progress(progress_callback, "正在解析公开视频分享页。", 22)
     share_response = client.get(
         build_share_page_url(aweme_id),
@@ -376,6 +406,31 @@ def _public_headers(extra: Mapping[str, str] | None = None) -> dict[str, str]:
     if extra:
         headers.update(extra)
     return headers
+
+
+def _extract_douyin_urls(raw_input: str) -> list[str]:
+    urls: list[str] = []
+    for match in DOUYIN_URL_PATTERN.finditer(raw_input):
+        candidate = match.group(0).rstrip("，。,.、!！?？)")
+        parsed = urllib.parse.urlparse(candidate)
+        if _is_douyin_host(parsed.hostname or ""):
+            urls.append(candidate)
+    return urls
+
+
+def _is_douyin_short_link(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    return (parsed.hostname or "").lower() in DOUYIN_SHORT_HOSTS
+
+
+def _is_douyin_host(host: str) -> bool:
+    host = host.strip().lower().rstrip(".")
+    return (
+        host == "douyin.com"
+        or host.endswith(".douyin.com")
+        or host == "iesdouyin.com"
+        or host.endswith(".iesdouyin.com")
+    )
 
 
 def _without_range_header(headers: Mapping[str, str]) -> dict[str, str]:

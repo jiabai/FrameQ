@@ -10,10 +10,10 @@ Improve FrameQ's ability to turn public or user-authorized share links into loca
 
 - [x] 2026-06-26: Reviewed the local EasyDownload reference project and selected the transcription-oriented migration scope. Validation: `docs/references/easydownload-transcription-migration.md`.
 - [x] 2026-06-26: Recorded product, architecture, security, and active-plan boundaries before implementation. Validation: `python scripts\validate_agents_docs.py --level WARN` and `git diff --check` passed during the documentation landing change.
-- [ ] 2026-06-26: Implement worker download reliability helpers and tests. Validation: `uv run pytest worker\tests`.
-- [ ] 2026-06-26: Implement Douyin input parsing enhancements and tests. Validation: `uv run pytest worker\tests\test_douyin_fallback.py`.
-- [ ] 2026-06-26: Implement Xiaohongshu public-video fallback and tests. Validation: `uv run pytest worker\tests`.
-- [ ] 2026-06-26: Run full worker/app documentation gates and update Outcomes & Retrospective. Validation: commands listed in Validation and Acceptance.
+- [x] 2026-06-26: Implement worker download reliability helpers and tests. Validation: `uv run pytest worker\tests\test_download_reliability.py -q` and `uv run pytest worker\tests -q` passed.
+- [x] 2026-06-26: Implement Douyin input parsing enhancements and tests. Validation: `uv run pytest worker\tests\test_douyin_fallback.py -q` and `uv run pytest worker\tests -q` passed.
+- [x] 2026-06-26: Implement Xiaohongshu public-video fallback and tests. Validation: `uv run pytest worker\tests\test_xiaohongshu_fallback.py worker\tests\test_media.py -q` and `uv run pytest worker\tests -q` passed.
+- [x] 2026-06-26: Run full worker/app documentation gates and update Outcomes & Retrospective. Validation: `uv run pytest worker\tests -q`, `uv run ruff check worker`, `npm --prefix app test`, `npm --prefix app run build`, `cargo test --manifest-path app\src-tauri\Cargo.toml`, `python scripts\validate_agents_docs.py --level WARN`, and `git diff --check` passed.
 
 ## Surprises & Discoveries
 
@@ -25,6 +25,12 @@ Evidence: FrameQ already has `worker/frameq_worker/douyin_fallback.py` and `docs
 
 Evidence: `docs/product-specs/2026-06-16-douyin-video-transcription-client.md` already accepts Xiaohongshu short links through `yt-dlp`, so a Xiaohongshu fallback can be scoped as a failure recovery path without changing the UI contract.
 
+Evidence: A shared Python helper can validate response status, `Content-Range`, content type, positive size, and maximum-size limits before atomically promoting a `.part` file. This keeps Douyin and Xiaohongshu fallback downloads consistent without changing the worker result contract.
+
+Evidence: Douyin fallback triggering also needed media-layer host detection for share text, not only fallback-layer ID parsing. Otherwise copied share text containing `v.douyin.com` would still stop at the failed `yt-dlp` stage.
+
+Evidence: Xiaohongshu public note data appears in both array and codec-keyed stream shapes under `window.__INITIAL_STATE__`. The worker fallback now handles both shapes but still rejects image-only notes as out of transcription scope.
+
 ## Decision Log
 
 Decision: Keep FrameQ transcription-first and do not add a general download-center product surface. Rationale: The user-selected direction is "转写优先"; extra downloader UI would expand scope, storage behavior, and security review without improving the core transcription path. Date/Author: 2026-06-26 / User + Codex.
@@ -35,9 +41,13 @@ Decision: Explicitly exclude WeChat MITM/proxy, Bilibili login/DASH workflows, b
 
 Decision: Treat Xiaohongshu fallback as video-only failure recovery. Rationale: FrameQ needs playable media for ASR, not image albums or platform archival workflows. Date/Author: 2026-06-26 / Codex.
 
+Decision: Share the safe atomic download helper across platform fallbacks. Rationale: Response validation, `.part` cleanup, max-size guardrails, and retry behavior should be consistent and testable without broadening UI or history contracts. Date/Author: 2026-06-26 / Codex.
+
+Decision: Let the Xiaohongshu fallback attempt any `yt-dlp` failure only after a Xiaohongshu or `xhslink.com` URL is detected in the submitted text. Rationale: Xiaohongshu share text often fails generic URL extraction before a platform-specific parser can resolve it, while host gating prevents non-Xiaohongshu failures from entering this path. Date/Author: 2026-06-26 / Codex.
+
 ## Outcomes & Retrospective
 
-Implementation has not started. This plan currently captures the approved migration scope and guardrails. Residual risk: public platform page structures may change, so worker fallbacks must return structured recoverable errors and must not compensate by adding login, CAPTCHA, proxy, or cookie-persistence behavior.
+Completed. Added `download_reliability.py`, extended Douyin share-text/short-link ID parsing, and added a video-only Xiaohongshu fallback that resolves share text or `xhslink.com`, parses public `window.__INITIAL_STATE__`, chooses a transcription-suitable stream, and stores the MP4 locally through the shared safe writer. Full worker, frontend, build, Rust, docs, and whitespace gates passed on 2026-06-26. Residual risk: public platform page structures may change, so worker fallbacks return structured recoverable errors and must not compensate by adding login, CAPTCHA, proxy, or cookie-persistence behavior.
 
 ## Context and Orientation
 

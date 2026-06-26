@@ -3,11 +3,20 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from frameq_worker.douyin_fallback import DouyinFallbackError, download_douyin_video
+from frameq_worker.douyin_fallback import (
+    DouyinFallbackError,
+    download_douyin_video,
+    extract_aweme_id,
+)
+from frameq_worker.xiaohongshu_fallback import (
+    XiaohongshuFallbackError,
+    download_xiaohongshu_video,
+)
 
 
 @dataclass(frozen=True)
@@ -20,8 +29,9 @@ class CommandResult:
 
 CommandRunner = Callable[[list[str]], CommandResult]
 ProgressCallback = Callable[[dict[str, object]], None]
-DOUYIN_VIDEO_ID_PATTERN = re.compile(r"(?:^|/)video/(\d+)(?:[/?#]|$)")
-DOUYIN_HOST_PATTERN = re.compile(r"https?://(?:www\.douyin\.com|v\.douyin\.com|www\.iesdouyin\.com)/")
+DOUYIN_URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+DOUYIN_HOST_SUFFIXES = ("douyin.com", "iesdouyin.com")
+XIAOHONGSHU_HOST_SUFFIXES = ("xiaohongshu.com", "xhslink.com")
 
 
 class CommandExecutionError(RuntimeError):
@@ -60,8 +70,7 @@ class MediaInfo:
 
 
 def extract_douyin_video_id(url: str) -> str | None:
-    match = DOUYIN_VIDEO_ID_PATTERN.search(url)
-    return match.group(1) if match else None
+    return extract_aweme_id(url)
 
 
 def build_ytdlp_command(url: str, output_dir: Path) -> list[str]:
@@ -139,12 +148,33 @@ def download_video(
                 stdout=video_path.as_posix(),
                 stderr="",
             )
+        if should_attempt_xiaohongshu_fallback(url, result.stderr or result.stdout):
+            try:
+                video_path = download_xiaohongshu_video(
+                    url,
+                    output_dir=output_dir,
+                    progress_callback=progress_callback,
+                )
+            except XiaohongshuFallbackError as exc:
+                fallback_result = CommandResult(
+                    command=["xiaohongshu-fallback", url],
+                    returncode=1,
+                    stdout="",
+                    stderr=f"{exc.code}: {exc}",
+                )
+                raise CommandExecutionError(fallback_result) from exc
+            return CommandResult(
+                command=["xiaohongshu-fallback", url],
+                returncode=0,
+                stdout=video_path.as_posix(),
+                stderr="",
+            )
         raise CommandExecutionError(result)
     return result
 
 
 def should_attempt_douyin_fallback(url: str, failure_message: str) -> bool:
-    if not DOUYIN_HOST_PATTERN.match(url):
+    if not _contains_supported_url(url, DOUYIN_HOST_SUFFIXES):
         return False
 
     normalized = failure_message.lower()
@@ -158,6 +188,22 @@ def should_attempt_douyin_fallback(url: str, failure_message: str) -> bool:
         "json",
     )
     return any(marker in normalized for marker in fallback_markers)
+
+
+def should_attempt_xiaohongshu_fallback(url: str, failure_message: str) -> bool:
+    return bool(failure_message.strip()) and _contains_supported_url(
+        url,
+        XIAOHONGSHU_HOST_SUFFIXES,
+    )
+
+
+def _contains_supported_url(raw_input: str, host_suffixes: tuple[str, ...]) -> bool:
+    for match in DOUYIN_URL_PATTERN.finditer(raw_input):
+        candidate = match.group(0).rstrip("，。,.、!！?？)")
+        host = (urllib.parse.urlparse(candidate).hostname or "").lower().rstrip(".")
+        if any(host == suffix or host.endswith(f".{suffix}") for suffix in host_suffixes):
+            return True
+    return False
 
 
 def probe_media_file(

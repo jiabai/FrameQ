@@ -126,6 +126,33 @@ def test_extract_douyin_video_id_from_standard_video_url() -> None:
     )
 
 
+def test_extract_douyin_video_id_from_note_slides_and_modal_links() -> None:
+    assert (
+        media.extract_douyin_video_id(
+            "https://www.douyin.com/note/123?modal_id=7653372612151692594"
+        )
+        == "7653372612151692594"
+    )
+    assert (
+        media.extract_douyin_video_id("https://www.douyin.com/share/slides/7653372612151692594")
+        == "7653372612151692594"
+    )
+
+
+def test_should_attempt_douyin_fallback_detects_embedded_short_link() -> None:
+    assert media.should_attempt_douyin_fallback(
+        "复制打开抖音 https://v.douyin.com/abc123/ 看看这个视频",
+        "Expecting value: line 1 column 1 (char 0)",
+    )
+
+
+def test_should_attempt_xiaohongshu_fallback_detects_embedded_short_link() -> None:
+    assert media.should_attempt_xiaohongshu_fallback(
+        "share text https://xhslink.com/demo more text",
+        "ERROR: Unsupported URL",
+    )
+
+
 def test_audio_only_ffprobe_result_can_be_reused_for_asr_input() -> None:
     payload = {
         "streams": [{"index": 0, "codec_type": "audio", "codec_name": "pcm_s16le"}],
@@ -205,6 +232,47 @@ def test_download_video_uses_douyin_fallback_for_empty_web_detail_failure(
         ("https://www.douyin.com/video/7653372612151692594", tmp_path / "outputs")
     ]
     assert calls[0][0] == "yt-dlp"
+
+
+def test_download_video_uses_xiaohongshu_fallback_for_supported_link_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fallback_calls: list[tuple[str, Path]] = []
+
+    def fake_runner(command: list[str]) -> CommandResult:
+        return CommandResult(
+            command=command,
+            returncode=1,
+            stdout="",
+            stderr="ERROR: Unsupported URL",
+        )
+
+    def fake_fallback(
+        url: str,
+        output_dir: Path,
+        progress_callback: object | None = None,
+    ) -> Path:
+        fallback_calls.append((url, output_dir))
+        video_path = output_dir / "0123456789abcdef01234568.mp4"
+        video_path.write_bytes(b"xhs fallback mp4")
+        return video_path
+
+    monkeypatch.setattr(media, "download_xiaohongshu_video", fake_fallback)
+
+    result = download_video(
+        "share text https://xhslink.com/demo more text",
+        output_dir=tmp_path / "outputs",
+        runner=fake_runner,
+    )
+
+    assert result.command == [
+        "xiaohongshu-fallback",
+        "share text https://xhslink.com/demo more text",
+    ]
+    assert fallback_calls == [
+        ("share text https://xhslink.com/demo more text", tmp_path / "outputs")
+    ]
 
 
 def test_download_video_preserves_non_douyin_ytdlp_failure(tmp_path: Path) -> None:

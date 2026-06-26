@@ -10,6 +10,7 @@ from frameq_worker.douyin_fallback import (
     download_first_available_candidate,
     extract_aweme_id,
     parse_share_page_router_data,
+    resolve_aweme_id_from_input,
     select_stream_candidates,
 )
 
@@ -38,6 +39,41 @@ class FakeHttpClient:
 def test_extract_aweme_id_accepts_canonical_video_and_aweme_query_links() -> None:
     assert (
         extract_aweme_id("https://www.douyin.com/video/7653372612151692594?from=copy")
+        == "7653372612151692594"
+    )
+    assert (
+        extract_aweme_id("https://www.douyin.com/note/7653372612151692594")
+        == "7653372612151692594"
+    )
+    assert (
+        extract_aweme_id("https://www.douyin.com/share/slides/7653372612151692594")
+        == "7653372612151692594"
+    )
+    assert (
+        extract_aweme_id("https://www.douyin.com/note/123?modal_id=7653372612151692594")
+        == "7653372612151692594"
+    )
+
+
+def test_resolve_aweme_id_from_input_accepts_share_text_and_short_link() -> None:
+    client = FakeHttpClient(
+        {
+            "https://v.douyin.com/abc123/": [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=b"",
+                    url="https://www.douyin.com/video/7653372612151692594",
+                )
+            ]
+        }
+    )
+
+    assert (
+        resolve_aweme_id_from_input(
+            "复制打开抖音，看看这个视频 https://v.douyin.com/abc123/ 更多内容",
+            http_client=client,
+        )
         == "7653372612151692594"
     )
     assert (
