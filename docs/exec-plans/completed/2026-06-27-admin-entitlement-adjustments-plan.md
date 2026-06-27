@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections Progress, Surprises & Discoveri
 
 ## Purpose / Big Picture
 
-Give FrameQ support operations a small, auditable Admin Web workflow for compensating users when product bugs or unstable releases waste paid time or insight-generation quota. Users should simply see their expiry and remaining topic-generation uses increase in the existing desktop account status; they should not see a new payment product, self-service support portal, or any change to local-first media processing.
+Give FrameQ support operations a small, auditable Admin Web workflow for compensating users when product bugs or unstable releases waste entitlement time or insight-generation quota. Users should simply see their expiry and remaining topic-generation uses increase in the existing desktop account status; they should not see a new public unlock product, self-service support portal, or any change to local-first media processing.
 
 ## Progress
 
@@ -47,7 +47,7 @@ Validation: `npm --prefix server test -- tests/llmQuota.test.ts` passed with 7 t
 
 Manual Admin Web acceptance passed on 2026-06-27 using a local seeded Admin Web session. The administrator opened `/admin`, adjusted `acceptance-user@example.com` with `extend_days=7`, `quota_add=5`, reason `bug_compensation`, and note `bug compensation manual smoke`. The page updated the row to expiry `2026/08/03 16:00` and remaining uses `21`, reload showed the append-only audit history row, and `/acceptance/account` reported `entitlement_expires_at=2026-08-03T08:00:00.000Z`, `llm_quota_limit=25`, `llm_quota_used=4`, and `llm_quota_remaining=21`.
 
-Residual risk: This was a local smoke over seeded in-memory data, not a production database operation. The product boundary remains unchanged: no desktop UI change, no new payment product, and no local media or transcript data sent to the server.
+Residual risk: This was a local smoke over seeded in-memory data, not a production database operation. The product boundary remains unchanged: no desktop UI change, no new public unlock product, and no local media or transcript data sent to the server.
 
 ## Context and Orientation
 

@@ -4,9 +4,9 @@
 
 - [x] Add server-managed LLM config and monthly insight quota (2026-06-22) ✅ Admin Web owns encrypted dedicated FrameQ client LLM config and per-user quota editing; desktop checks out one quota use per insight generation; settings no longer exposes LLM fields; server/app/Rust/worker/docs gates passed.
 
-- [x] Replace visible WeChat payment with administrator-issued activation codes (2026-06-21) ✅ Admin OTP login, hash-only one-time 31-day activation codes, desktop redemption, entitlement reuse, Admin Web list/create flow, WeChat routes disabled by default; server/app/Rust/docs gates passed.
+- [x] Use administrator-issued activation codes as the visible entitlement unlock path (2026-06-21) ✅ Admin OTP login, hash-only one-time 31-day activation codes, desktop redemption, entitlement reuse, Admin Web list/create flow, and client-side processing gate; server/app/Rust/docs gates passed.
 
-- [x] Add account login and WeChat 9.9 yuan monthly pass (2026-06-21) ✅ TypeScript Fastify service with Prisma SQLite, email OTP login, desktop deep-link session exchange, WeChat Native order/webhook flow, and client-side processing gate; server/app/Rust/docs gates passed.
+- [x] Add account login and entitlement foundation (2026-06-21) ✅ TypeScript Fastify service with Prisma SQLite, email OTP login, desktop deep-link session exchange, entitlement model, and client-side processing gate; server/app/Rust/docs gates passed.
 
 ## 进行中
 

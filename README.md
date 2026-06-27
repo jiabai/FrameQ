@@ -221,7 +221,7 @@ This file is for local output, ASR, and model-download settings only. Insight-to
 
 ## Server Deployment
 
-The account, activation-code, billing, and server-managed LLM checkout service lives in `server/`.
+The account, activation-code, entitlement, and server-managed LLM checkout service lives in `server/`.
 
 Production domain:
 
@@ -294,7 +294,7 @@ Tauri passes the JSON argument directly. For manual shell smoke tests, stdin scr
 | Path | Role |
 | --- | --- |
 | `app/` | Tauri + React + TypeScript desktop client |
-| `server/` | TypeScript Fastify account, activation-code, billing, and LLM-checkout service |
+| `server/` | TypeScript Fastify account, activation-code, entitlement, and LLM-checkout service |
 | `worker/` | Python worker for download, media validation, audio extraction, ASR, and InsightFlow |
 | `worker/insightflow/` | Embedded InsightFlow topic generation module |
 | `deploy/` | Server deployment runbook plus Nginx and systemd reference configs |
@@ -331,7 +331,7 @@ npm --prefix app run tauri -- build --no-bundle
 
 - FrameQ is for public videos, user-owned videos, or videos the user is authorized to process.
 - FrameQ does not implement bypasses for platform login walls, access controls, CAPTCHA, or privacy restrictions.
-- The account service stores email accounts, OTP metadata, session token hashes, orders, entitlements, webhook audit records, encrypted LLM config, and quota events.
+- The account service stores email accounts, OTP metadata, session token hashes, activation-code records, entitlements, encrypted LLM config, and quota events.
 - The account service must not receive video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents.
 - If insight topic generation is enabled, transcript text may be sent to the server-managed OpenAI-compatible LLM provider.
 - Real `.env` files, SQLite databases, backups, logs, model caches, output files, and secrets stay out of git.

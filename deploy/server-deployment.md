@@ -2,17 +2,16 @@
 
 ## 1. 部署目标
 
-FrameQ server 负责账号邮箱 OTP 登录、桌面端 session、月卡/激活码、管理员后台、LLM 配置下发与话题点额度扣减。桌面端的视频、音频、文字稿和历史记录仍留在用户本机，server 不接收这些文件。
+FrameQ server 负责账号邮箱 OTP 登录、桌面端 session、管理员激活码、管理员后台、LLM 配置下发与话题点额度扣减。桌面端的视频、音频、文字稿和历史记录仍留在用户本机，server 不接收这些文件。
 
 推荐首版生产拓扑：
 
 ```text
 Internet
   -> Nginx :443
-      -> FrameQ server 127.0.0.1:8787
+          -> FrameQ server 127.0.0.1:8787
           -> SQLite server/data/frameq.sqlite
           -> SMTP service
-          -> optional WeChat Pay API / notify callback
 ```
 
 首版按单机单实例部署。原因是 server 使用 SQLite，并且架构文档明确当前是单 writer service instance。不要同时启动多个 server 进程指向同一个 SQLite 文件。
@@ -24,7 +23,6 @@ Internet
 - Nginx 1.22+。
 - 一个解析到服务器的 HTTPS 域名：`frameq.8xf.pro`。
 - 可用 SMTP 账号，用于桌面端和管理员邮箱验证码。
-- 可选：WeChat Pay Native 商户配置。
 
 建议目录：
 
@@ -83,16 +81,6 @@ SMTP_PORT=587
 SMTP_USER=frameq@example.com
 SMTP_PASS=<smtp-password>
 SMTP_FROM=FrameQ <frameq@example.com>
-
-WECHAT_PAY_ENABLED=0
-WECHAT_APP_ID=
-WECHAT_MCH_ID=
-WECHAT_MCH_SERIAL_NO=
-WECHAT_MCH_PRIVATE_KEY=
-WECHAT_NOTIFY_URL=https://frameq.8xf.pro/api/wechat/notify
-WECHAT_API_V3_KEY=
-WECHAT_PLATFORM_CERT_PEM=
-WECHAT_DEV_INSECURE_NOTIFY=0
 ```
 
 生成加密 key 示例：
@@ -105,7 +93,6 @@ openssl rand -hex 32
 
 - `NODE_ENV=production` 会让管理员 cookie 带 `Secure`，因此必须经 HTTPS 访问。
 - `FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY` 丢失后，数据库里已保存的 LLM API key 无法解密。上线后必须备份。
-- `WECHAT_DEV_INSECURE_NOTIFY` 只能本地开发使用，生产必须为 `0`。
 
 ## 5. systemd
 
@@ -162,7 +149,6 @@ curl -I https://frameq.8xf.pro/admin/login
 - 管理员登录后可以生成激活码。
 - 桌面端可以完成邮箱登录并兑换激活码。
 - 如果配置了 LLM，桌面端生成话题点时会扣减一次额度。
-- 如果启用微信支付，微信平台 notify URL 指向 `https://frameq.8xf.pro/api/wechat/notify`。
 
 ## 8. 备份与恢复
 

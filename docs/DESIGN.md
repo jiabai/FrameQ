@@ -8,21 +8,21 @@
 - If the largest stream fails and the worker retries a smaller candidate, progress copy should remain low-noise and say that FrameQ is retrying another available video stream.
 - If all fallback candidates fail, the failure copy should explain that the public share page or playable media stream was unavailable, and should ask the user to retry with a public, authorized link.
 
-## Account and Payment UI
+## Account and Entitlement UI
 
 - The toolbar exposes account status as a compact utility control, not as a marketing banner.
 - Update availability appears as a compact toolbar utility only when action is needed; it must not replace the task monitor or interrupt URL input.
-- Login and payment flows use sheet-style panels consistent with settings/history.
+- Login and activation-code flows use sheet-style panels consistent with settings/history.
 - Browser deep-link return from login must restore and focus the existing desktop window so the account sheet is visible without the user hunting for FrameQ.
-- Account copy must clearly distinguish local processing from server-side account/payment verification.
-- If the user is not entitled, submitting a URL or retrying insights opens the account/payment sheet and does not start worker processing.
+- Account copy must clearly distinguish local processing from server-side account and entitlement verification.
+- If the user is not entitled, submitting a URL or retrying insights opens the account sheet and does not start worker processing.
 - The account sheet shows remaining insight-generation uses when the user is signed in.
 - Desktop settings must not expose insight LLM provider, base URL, API key, model, or timeout; those fields are administrator-managed.
 - Desktop settings should expose the app-local `.env` path for non-LLM local settings and provide a locate-file action.
 - Desktop settings should include an `应用更新` section with manual check, low-noise status copy, progress, `一键升级`, `稍后提醒`, and `重启完成更新` actions.
 - Update installation must be disabled while worker processing or ASR model download is active, with copy explaining that the current task should finish first.
-- The payment sheet shows the monthly price, WeChat scan QR code, order expiration, and refresh status action in a stable layout.
-- Successful payment returns the user to the existing processing workflow without changing the local-first worker UI stages.
+- The account sheet shows email login, activation-code redemption, entitlement expiry, and remaining insight-generation uses in a stable layout.
+- Successful activation-code redemption returns the user to the existing processing workflow without changing the local-first worker UI stages.
 
 ## Admin Web Compensation UI
 

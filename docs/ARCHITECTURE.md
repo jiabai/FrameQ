@@ -75,8 +75,8 @@
 
 ## 2026-06-21 Account and Billing Boundary
 
-- `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, WeChat Native orders, payment webhooks, and entitlement status.
-- The service stores account and billing state in a private SQLite database at `server/data/frameq.sqlite` with WAL mode enabled. It is designed for a single writer service instance.
+- `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, administrator-issued activation codes, entitlement status, Admin Web, and server-managed LLM checkout.
+- The service stores account and entitlement state in a private SQLite database at `server/data/frameq.sqlite` with WAL mode enabled. It is designed for a single writer service instance.
 - The service stores encrypted administrator-managed LLM config for a dedicated FrameQ client supplier key and tracks per-user insight-generation quota.
 - Desktop authentication uses `frameq://auth/callback` deep links. The browser receives a short-lived ticket, and the desktop client exchanges that ticket for an opaque session token.
 - Activation codes are an administrator-issued entitlement source. Codes are redeemed through a signed-in desktop session and extend the same `Entitlement` record used by the processing gate.

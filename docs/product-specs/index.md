@@ -5,7 +5,7 @@
 - `2026-06-27-admin-entitlement-adjustments.md` - Admin Web manual compensation for entitlement expiry and insight-generation quota after support incidents.
 - `2026-06-22-server-managed-llm-quota.md` - Server-managed dedicated client LLM config and 20-use monthly insight quota.
 - `2026-06-21-activation-code-authorization.md` - Account login with administrator-issued activation codes for 31-day processing access.
-- `2026-06-21-account-billing.md` - Account login and WeChat 9.9 yuan monthly pass for paid processing access.
+- `2026-06-21-account-billing.md` - Retired account entitlement draft; current visible unlock path is administrator-issued activation codes.
 
 ## Distribution Spec
 

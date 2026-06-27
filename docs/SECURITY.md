@@ -23,7 +23,7 @@
 
 - Manual entitlement and quota adjustments are restricted to the configured Admin Web account and must reuse HttpOnly admin session cookies plus `x-frameq-csrf` validation.
 - Every successful adjustment must be auditable with administrator email, target user, reason, before/after values, and timestamp. Corrections should create another audit record instead of rewriting the original event.
-- Adjustment notes are operational metadata only. They must not include LLM API keys, cookies, transcripts, private video URLs, local file paths, payment secrets, or sensitive support chat contents.
+- Adjustment notes are operational metadata only. They must not include LLM API keys, cookies, transcripts, private video URLs, local file paths, activation-code plaintext beyond the creation response, or sensitive support chat contents.
 - Server logs should identify adjustment IDs and target users, but should avoid logging free-form notes in full.
 - Manual compensation must never require users to upload videos, audio, transcripts, histories, local model caches, cookies, or desktop configuration files.
 
@@ -71,12 +71,11 @@
 
 ## Account and Billing Service
 
-- The account service stores only email accounts, OTP metadata, session token hashes, orders, entitlements, and webhook audit records.
+- The account service stores only email accounts, OTP metadata, session token hashes, activation-code hashes/prefixes, entitlements, admin sessions, LLM config metadata, and quota events.
 - Desktop session tokens are opaque random values. The server stores SHA-256 hashes only; the desktop client stores the raw token in app-local data under `auth/session.json`.
 - Email OTP codes expire after 10 minutes, allow at most 5 attempts, and must be rate-limited by email and IP.
 - Login deep-link tickets expire after 5 minutes, are single-use, and must be bound to a desktop-generated `state` value.
-- WeChat merchant credentials, APIv3 key, certificate private key, and SMTP credentials must only be configured through the server environment. They must not be bundled into the desktop installer.
-- WeChat payment callbacks must verify signatures, decrypt encrypted resources, and apply entitlement updates idempotently.
+- SMTP credentials and server encryption keys must only be configured through the server environment. They must not be bundled into the desktop installer.
 - Activation codes must be high-entropy, single-use, and stored as hashes only. The full code is displayed once when an administrator creates it.
 - Admin Web access is restricted to `FRAMEQ_ADMIN_EMAIL`, defaults to `lantianye@163.com`, and uses HttpOnly 12-hour sessions. Admin write routes must validate CSRF tokens.
 - The service must not accept uploads or API fields containing video, audio, transcript, insight, cookie, or user-local configuration data.

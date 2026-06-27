@@ -173,7 +173,7 @@ FrameQ-Setup-x.y.z.exe  (约 1.5–2.5 GB)
 
 LLM API Key 属于"密钥不得硬编码"约束，不能入包，也不再由桌面端 `.env` 保存。话题点生成依赖管理员在 FrameQ server Admin Web 中配置的专用客户端 LLM key。
 
-**方案**：首启动只检测本机 ASR 模型和非 LLM 本地设置；话题点功能根据账号状态中的 `llm_configured`、月卡和额度门禁决定是否可用：
+**方案**：首启动只检测本机 ASR 模型和非 LLM 本地设置；话题点功能根据账号状态中的 `llm_configured`、权益和额度门禁决定是否可用：
 - LLM 未由管理员配置 → 文字稿功能正常，话题点入口提示等待管理员配置
 - LLM 已配置且用户有额度 → 二次确认后通过 server-managed checkout 注入 `FRAMEQ_LLM_SOURCE=server` 等临时环境变量
 
