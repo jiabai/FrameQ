@@ -26,6 +26,7 @@
 - The public update endpoint returns only release metadata and artifact URLs; it must not require desktop authentication and must not return user data, account data, LLM keys, or ASR model credentials.
 - `updates.json` may store `lastCheckedAt`, `postponedUntil`, and `skippedVersion` only. It must not store downloaded installers, signatures, private keys, session tokens, video URLs, transcripts, or model cache paths beyond generic update preferences.
 - Updating the app must preserve app-local `models/`, `outputs/`, `work/`, `auth/`, `.env`, and `updates.json`.
+- Waiving mainland China live updater testing does not relax the signature-verification requirement. It only means the GitHub Releases network path is not a v1 release blocker; unsigned or malformed updater artifacts must still be rejected by configuration and release checks.
 
 ## 2026-06-23 LLM Secret Boundary
 

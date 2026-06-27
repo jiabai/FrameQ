@@ -29,6 +29,7 @@
 - Python worker code upgrades together with the desktop application bundle; v1 does not support independent worker hot updates from app-local data.
 - App-local data `updates.json` stores only update preferences such as `lastCheckedAt`, `postponedUntil`, and `skippedVersion`.
 - App-local `models/`, `outputs/`, `work/history.json`, `auth/session.json`, and `.env` are preserved across app updates.
+- Live old-version-to-new-version testing through GitHub Releases is waived for v1 because mainland China access to GitHub is too slow to test reliably. The updater architecture remains in place, but direct fresh-installer distribution is the accepted fallback for users whose network cannot reach GitHub Releases.
 
 ## 2026-06-23 Runtime Configuration Boundary
 

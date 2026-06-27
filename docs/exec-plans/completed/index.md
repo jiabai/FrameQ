@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-06-23-desktop-one-click-updates-plan.md` | Implemented low-noise Tauri updater with GitHub Releases metadata/artifacts; live GitHub updater smoke is waived for v1 because mainland China GitHub access is too slow to test reliably. |
 | `2026-06-26-easydownload-transcription-download-reliability-plan.md` | Added shared safe media download helpers, Douyin share-text parsing, and video-only Xiaohongshu public-link fallback for transcription-first media acquisition. |
 | `2026-06-25-douyin-share-page-fallback-plan.md` | Added a bounded Douyin share-page fallback that selects the largest validated public stream after matching `yt-dlp` failures. |
 | `2026-06-25-transcript-summary-mindmap-plan.md` | Added confirmed AI整理 outputs for transcript summaries and local Mermaid mindmap artifacts. |

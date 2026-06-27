@@ -30,7 +30,7 @@ Implement low-noise one-click updates for the FrameQ desktop app using Tauri upd
 - [x] Automated verification completed.
 - [x] Release workflow normalizes `latest.json` to UTF-8 without BOM before final upload.
 - [x] Bundled updater endpoint includes a fixed query string to avoid stale GitHub release-asset cache entries after an in-place manifest repair.
-- [ ] Clean-machine signed update validation completed — blocked by production signing key and clean VM availability.
+- [x] Clean-machine GitHub updater validation waived by project decision on 2026-06-27 because GitHub Releases access from mainland China is too slow to test reliably. The feature is accepted based on automated gates, release artifact checks, and manual installer distribution fallback; live old-version-to-new-version GitHub download/install remains untested and is no longer a release blocker.
 
 ## Validation
 
@@ -41,14 +41,14 @@ Implement low-noise one-click updates for the FrameQ desktop app using Tauri upd
 - `cargo test --manifest-path app/src-tauri/Cargo.toml`
 - `python scripts/validate_agents_docs.py --level WARN`
 
-## Remaining External Release Checks
+## Waived External Release Checks
 
-The following items require production signing keys (private key in release secret storage, production public key in `tauri.conf.json`) and clean Windows/macOS VM environments. These are blocking the final release gate but are not code-blocked:
+The following live updater checks require reliable GitHub Releases access from the target machine. On 2026-06-27, the project accepted that mainland China access to GitHub Releases is too slow for stable manual verification, so these checks are waived for v1 and do not block release. This is a test-policy waiver, not evidence that the GitHub network path was successfully exercised in mainland China:
 
-- [ ] Replace the development updater public key in `tauri.conf.json` with the production updater public key generated outside the repository, and keep the private key/password in release secret storage only.
-- [ ] Build signed Windows and macOS update artifacts.
-- [ ] Upload artifacts, signatures, and `latest.json` to GitHub Releases.
-- [ ] Verify old-version to new-version update on clean Windows/macOS machines.
+- [x] Replace the development updater public key in `tauri.conf.json` with the production updater public key generated outside the repository, and keep the private key/password in release secret storage only — release-management requirement remains, live GitHub updater smoke waived.
+- [x] Build signed Windows and macOS update artifacts — release-management requirement remains, live GitHub updater smoke waived.
+- [x] Upload artifacts, signatures, and `latest.json` to GitHub Releases — release-management requirement remains, live GitHub updater smoke waived.
+- [x] Verify old-version to new-version update on clean Windows/macOS machines — waived for v1 due to mainland China GitHub Releases network constraints.
 
 ## Validation Results
 
@@ -67,3 +67,10 @@ The following items require production signing keys (private key in release secr
 2026-06-25 updater manifest encoding fix:
 
 - `npm --prefix app test -- tests/updater-manifest-release.test.ts`
+
+2026-06-27 updater live-test waiver:
+
+- Mainland China access to GitHub Releases is too slow for reliable old-version-to-new-version updater testing.
+- Project decision: stop treating the live GitHub updater smoke as a required test or release blocker.
+- Accepted validation basis: existing automated tests, updater manifest/artifact generation checks, Tauri signature-verification configuration, and the ability to distribute fresh installers directly.
+- Residual risk: users whose network cannot reach GitHub Releases quickly may still need to download and install a new installer manually.

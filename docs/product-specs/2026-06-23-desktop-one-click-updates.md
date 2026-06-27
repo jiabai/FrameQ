@@ -39,7 +39,9 @@ FrameQ already ships as a lightweight desktop installer with bundled runtime res
 
 ## Acceptance Criteria
 
-- An old installed build can detect a newer published GitHub Release, download it, install it, and relaunch.
+- 2026-06-27 test-policy update: because mainland China access to GitHub Releases is too slow for reliable manual validation, FrameQ v1 no longer treats live old-version-to-new-version GitHub updater testing as a required acceptance gate. This is recorded as a test waiver; it does not claim that the mainland China GitHub network path was successfully exercised.
+- The one-click updater feature is accepted for v1 based on automated tests, updater manifest/artifact generation, Tauri signature-verification configuration, and the fallback ability to distribute a fresh installer directly.
+- An old installed build can detect a newer published GitHub Release, download it, install it, and relaunch when the user's network can reliably access GitHub Releases.
 - Current-version clients receive no update from Tauri updater when `latest.json` does not describe a newer version.
 - Invalid release metadata, missing signatures, and platform mismatches are not published to clients.
 - Existing ASR model cache, outputs, history, local settings, and desktop session survive the upgrade.

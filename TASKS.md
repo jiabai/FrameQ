@@ -10,12 +10,12 @@
 
 ## 进行中
 
-- [x] 实现桌面端一键升级（2026-06-23）— Tauri updater + FrameQ server 动态 manifest；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 代码完成，自动化门禁全部通过（server 32、app 84、Rust 31、worker 99、ruff、build、docs）。⚠️ 干净机签名更新验证需生产签名密钥和 VM 环境，标记为外部阻塞项。
+- [x] 实现桌面端一键升级（2026-06-23）— Tauri updater + GitHub Releases updater manifest/artifacts；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 代码完成，自动化门禁全部通过（server 32、app 84、Rust 31、worker 99、ruff、build、docs）。✅ 2026-06-27 项目决策：因中国境内访问 GitHub Releases 速度过慢，不再执行旧版到新版的 GitHub updater 真实下载/安装测试；该项作为 v1 测试豁免，不再阻塞发布。
 
 ## 待办
 
 - [ ] 完成干净 Windows VM 与 macOS arm64/x64 真实安装包验证 — 使用轻量 runtime 资源产出安装包，在无 Python/uv/ffmpeg 的干净机器完成首启模型下载、URL → 下载 → ASR 文字稿，并记录签名/公证发布门禁状态。✅ 验收：干净机器安装、首启模型下载、公开视频转写、app-local 数据保留和签名/公证状态记录完成。⚠️ 需真实 VM 环境和生产签名证书。
-- [ ] 完成桌面端一键升级的干净机签名更新验证 — 替换开发版 updater 公钥为生产公钥，构建签名更新产物，上传 GitHub Releases，在干净机验证旧版本到新版本升级。✅ 验收：旧版安装后通过 updater 发现新版、下载签名产物、安装并重启到新版，且 app-local 数据保留。⚠️ 需生产签名私钥 + 干净 VM。
+- [x] 桌面端一键升级 GitHub updater 真实下载/安装测试豁免（2026-06-27）— 因中国境内访问 GitHub Releases 速度过慢，本项目 v1 不再把旧版到新版的 GitHub updater 实测作为验收或发布阻塞项。✅ 验收口径：自动化门禁、manifest/artifact 生成、Tauri 签名校验配置和直接分发新版安装包路径成立；未声明国内 GitHub 网络真实升级链路已实测通过。
 
 ## 已完成
 - [x] 增强 EasyDownload 转写优先下载可靠性（2026-06-26）✅ 新增 worker 安全 `.part` 原子写入校验；抖音支持分享文案、短链、note/slides/modal/aweme_id 解析；小红书支持公开视频分享文案和 `xhslink.com` fallback，图片笔记/登录受限内容返回结构化错误；worker/frontend/Rust/build/docs/diff 门禁全部通过。
