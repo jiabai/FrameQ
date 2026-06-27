@@ -1,5 +1,15 @@
 # Security and Compliance
 
+## 2026-06-27 Xiaohongshu Public Video Fallback Safety Boundary
+
+- Xiaohongshu fallback may request only user-submitted public or user-authorized share links, short links, full note URLs, and their public media URLs.
+- The fallback must not read browser cookies, persist cookies, upload cookies, automate login, solve CAPTCHA, scrape private notes, rotate user agents, use proxy pools, or spoof browser fingerprints.
+- Process-local anonymous cookies naturally issued by a public Xiaohongshu page may exist for one worker invocation only and must not be written to app-local settings, history, logs, UI errors, or FrameQ server requests.
+- Brotli/gzip/deflate decoding must keep a post-decompression size cap so malformed or hostile pages cannot exhaust memory.
+- Streaming/resumable video download helpers must enforce max-size and no-progress limits, keep partial files scoped to the destination `.part`, and preserve any existing completed media file if the new download fails.
+- Full volatile media CDN URLs, cookies, sensitive request headers, `xsec_token`, and authorization material must not be stored in local history or UI error text. Logs may keep short causes, hostnames, quality labels, byte sizes, and local output paths.
+- Image-only notes, unavailable notes, login-gated notes, CAPTCHA-gated notes, private notes, rate-limited pages, malformed page state, oversized videos, stalled downloads, and no-playable-stream cases must return structured recoverable errors rather than attempting to bypass platform controls.
+
 ## 2026-06-27 Admin Entitlement Adjustment Boundary
 
 - Manual entitlement and quota adjustments are restricted to the configured Admin Web account and must reuse HttpOnly admin session cookies plus `x-frameq-csrf` validation.

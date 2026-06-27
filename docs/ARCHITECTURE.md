@@ -1,5 +1,14 @@
 # FrameQ Architecture
 
+## 2026-06-27 Xiaohongshu Video Fallback Completion Boundary
+
+- Xiaohongshu fallback remains worker-owned and video-only. UI and Tauri submit a source string and receive the existing worker result shape; they do not parse Xiaohongshu HTML, select streams, import cookies, or manage downloads.
+- The frontend may accept Xiaohongshu share text, full note URLs, and short links, but all platform interpretation happens inside the Python worker.
+- The worker should port EasyDownload's Xiaohongshu parser/client/downloader ideas into `worker/frameq_worker/xiaohongshu_fallback.py` and shared download helpers, not call or bundle the Go/Wails EasyDownload runtime.
+- `yt-dlp` stays the first attempt. Xiaohongshu fallback runs only after a Xiaohongshu-related failure and only for public or user-authorized video notes.
+- The fallback should preserve `xsec_token`, handle short-link `3xx` and embedded-HTML resolution, decode `gzip`/`br`/`deflate` note pages, parse `window.__INITIAL_STATE__`, rank video streams deterministically, and download through safe streaming `.part` behavior.
+- The fallback must not add image album ZIP output, Live Photo sidecar output, stream picker UI, batch queue, login automation, browser cookie import, CAPTCHA solving, proxy pools, or private-note scraping.
+
 ## 2026-06-27 Admin Entitlement Adjustment Boundary
 
 - Admin Web may manually compensate users by updating the existing `Entitlement` record's expiry and insight-generation quota fields; it must not introduce a separate entitlement source that bypasses the normal processing gate.

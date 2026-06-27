@@ -43,6 +43,17 @@
 - Do not migrate EasyDownload's WeChat MITM/CA/system proxy behavior, Bilibili login/bangumi/DASH workflows, Wails/Vue UI, tray behavior, image proxy, or download-manager product model.
 - The product copy should describe this work as improved public-link compatibility and safer download reliability for transcription, not as platform scraping or archive downloading.
 
+## 2026-06-27 Xiaohongshu Video Fallback Completion
+
+- Xiaohongshu support should accept public video note share text, `xhslink.com` short links, `www.xhslink.com` short links, full `xiaohongshu.com/explore/{note_id}` URLs, and links that carry `xsec_token`.
+- The desktop UI should keep the single input workflow and should not introduce a Xiaohongshu download center, stream picker, image album picker, login flow, cookie import, or proxy setup.
+- Worker fallback should preserve `xsec_token`, resolve short links through standard redirects or embedded HTML URLs, and fetch the public note page through browser-like navigation headers.
+- Worker page parsing should handle `gzip`, Brotli `br`, and zlib/raw `deflate` responses, then extract `window.__INITIAL_STATE__` with the existing JavaScript-to-JSON tolerance.
+- Worker stream selection should align with EasyDownload's video stream model: support list and codec-keyed schemas, deduplicate by quality key, and prefer URL availability, codec rank, official weight, stream type, default stream, resolution, bitrate, size, and backup URL availability.
+- Download should be safe for large videos: streaming `.part` writes, resume-safe range validation, no-progress timeout, 2 GiB maximum video size, backup URL retry, and existing-file preservation on failure.
+- Image-only Xiaohongshu notes, private/login-gated notes, CAPTCHA-gated notes, rate-limited pages, malformed page state, oversized videos, stalled downloads, or no playable video stream should produce structured recoverable `XHS_*` errors with clear Chinese UI guidance.
+- The resulting MP4 should still flow through the existing `ffprobe`, `ffmpeg`, ASR, history, transcript, summary, mindmap, and insight generation pipeline without changing the worker JSON result shape.
+
 ## 背景
 
 用户希望在桌面客户端中输入抖音视频 URL，先确认启动本地公开视频下载、音频提取和中文 ASR 转写，再在文字稿完成后单独确认生成可继续思考的要点总结和启发话题点。

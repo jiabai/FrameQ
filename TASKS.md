@@ -11,6 +11,7 @@
 ## 进行中
 
 - [x] 实现桌面端一键升级（2026-06-23）— Tauri updater + GitHub Releases updater manifest/artifacts；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 代码完成，自动化门禁全部通过（server 32、app 84、Rust 31、worker 99、ruff、build、docs）。✅ 2026-06-27 项目决策：因中国境内访问 GitHub Releases 速度过慢，不再执行旧版到新版的 GitHub updater 真实下载/安装测试；该项作为 v1 测试豁免，不再阻塞发布。
+- [ ] 补完小红书公开视频 fallback（2026-06-27）— 参考 EasyDownload 小红书 parser/client/downloader，补齐分享文本/完整链接/xsec_token/短链解析、Brotli 页面解压、视频流排序、streaming `.part`/Range/超时下载可靠性、note_id 输出选择和 `XHS_*` UI 错误文案；保持视频转写优先，不做图片 ZIP、登录、Cookie、代理或下载中心。✅ 验收：worker/app/Rust/docs/diff 门禁通过，公开视频短链和完整链接 smoke 产出 MP4、音频和文字稿，图片/登录受限内容返回清晰错误。
 
 ## 待办
 
