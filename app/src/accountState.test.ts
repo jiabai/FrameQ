@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { canProcessWithAccount, createGuestAccountStatus } from "./accountState";
+import {
+  canProcessWithAccount,
+  createAccountStatusFailure,
+  createBrowserPreviewAccountStatus,
+  createGuestAccountStatus,
+  isBrowserPreviewRuntime,
+} from "./accountState";
 
 describe("account state", () => {
   test("blocks processing for guests and inactive users", () => {
@@ -39,5 +45,21 @@ describe("account state", () => {
         serverError: null,
       }),
     ).toBe(true);
+  });
+
+  test("blocks processing when account status refresh fails", () => {
+    const status = createAccountStatusFailure("Tauri command failed");
+
+    expect(status.serverError).toBe("Tauri command failed");
+    expect(canProcessWithAccount(status)).toBe(false);
+  });
+
+  test("browser preview account remains limited to browser preview runtime", () => {
+    expect(isBrowserPreviewRuntime({ dev: true, runtimeWindow: {} })).toBe(true);
+    expect(isBrowserPreviewRuntime({ dev: false, runtimeWindow: {} })).toBe(false);
+    expect(isBrowserPreviewRuntime({ dev: true, runtimeWindow: { __TAURI_INTERNALS__: {} } })).toBe(false);
+    expect(isBrowserPreviewRuntime({ dev: true, runtimeWindow: { __TAURI__: {} } })).toBe(false);
+    expect(isBrowserPreviewRuntime({ dev: true, runtimeWindow: null })).toBe(false);
+    expect(canProcessWithAccount(createBrowserPreviewAccountStatus())).toBe(true);
   });
 });

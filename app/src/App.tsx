@@ -54,7 +54,14 @@ import {
   logoutAccount,
   redeemActivationCode,
 } from "./accountClient";
-import { canProcessWithAccount, createGuestAccountStatus, type AccountStatus } from "./accountState";
+import {
+  canProcessWithAccount,
+  createAccountStatusFailure,
+  createBrowserPreviewAccountStatus,
+  createGuestAccountStatus,
+  isBrowserPreviewRuntime,
+  type AccountStatus,
+} from "./accountState";
 import {
   calculateDraggedWindowPosition,
   closeWindow,
@@ -366,21 +373,17 @@ function App() {
       const status = await getAccountStatus();
       setAccount(status);
       setAccountNotice(status.serverError ? `账号状态刷新失败：${status.serverError}` : "");
-    } catch {
-      setAccount({
-        authenticated: true,
-        email: "browser-preview@frameq.local",
-        entitlementStatus: "active",
-        entitlementExpiresAt: null,
-        llmQuotaLimit: 20,
-        llmQuotaUsed: 0,
-        llmQuotaRemaining: 20,
-        llmQuotaResetsAt: null,
-        llmConfigured: true,
-        lastVerifiedAt: null,
-        canProcess: true,
-        serverError: "Browser preview fallback",
-      });
+    } catch (error) {
+      if (isBrowserPreviewRuntime()) {
+        setAccount(createBrowserPreviewAccountStatus());
+        setAccountNotice("浏览器预览模式：使用本地模拟账号。");
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      const serverError = message || "账号状态刷新失败";
+      setAccount(createAccountStatusFailure(serverError));
+      setAccountNotice(`账号状态刷新失败：${serverError}`);
     } finally {
       setAccountLoading(false);
     }

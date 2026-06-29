@@ -30,6 +30,45 @@ export function createGuestAccountStatus(): AccountStatus {
   };
 }
 
+export function createAccountStatusFailure(serverError: string | null): AccountStatus {
+  return {
+    ...createGuestAccountStatus(),
+    serverError,
+  };
+}
+
+export function createBrowserPreviewAccountStatus(): AccountStatus {
+  return {
+    authenticated: true,
+    email: "browser-preview@frameq.local",
+    entitlementStatus: "active",
+    entitlementExpiresAt: null,
+    llmQuotaLimit: 20,
+    llmQuotaUsed: 0,
+    llmQuotaRemaining: 20,
+    llmQuotaResetsAt: null,
+    llmConfigured: true,
+    lastVerifiedAt: null,
+    canProcess: true,
+    serverError: "Browser preview fallback",
+  };
+}
+
+type RuntimeWindow = {
+  __TAURI__?: unknown;
+  __TAURI_INTERNALS__?: unknown;
+};
+
+export function isBrowserPreviewRuntime(
+  options: { dev?: boolean; runtimeWindow?: RuntimeWindow | null } = {},
+): boolean {
+  const dev = options.dev ?? import.meta.env.DEV;
+  const runtimeWindow =
+    options.runtimeWindow ?? (typeof window === "undefined" ? null : (window as RuntimeWindow));
+
+  return Boolean(dev) && runtimeWindow !== null && !("__TAURI__" in runtimeWindow) && !("__TAURI_INTERNALS__" in runtimeWindow);
+}
+
 export function canProcessWithAccount(account: AccountStatus): boolean {
   return account.authenticated && account.entitlementStatus === "active" && account.canProcess;
 }
