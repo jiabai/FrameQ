@@ -75,11 +75,12 @@
 
 ## 2026-06-21 Account and Billing Boundary
 
-- `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, administrator-issued activation codes, entitlement status, Admin Web, and server-managed LLM checkout.
+- `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, administrator-issued activation-code monthly passes, entitlement status, Admin Web, and server-managed LLM checkout.
 - The service stores account and entitlement state in a private SQLite database at `server/data/frameq.sqlite` with WAL mode enabled. It is designed for a single writer service instance.
 - The service stores encrypted administrator-managed LLM config for a dedicated FrameQ client supplier key and tracks per-user insight-generation quota.
 - Desktop authentication uses `frameq://auth/callback` deep links. The browser receives a short-lived ticket, and the desktop client exchanges that ticket for an opaque session token.
-- Activation codes are an administrator-issued entitlement source. Codes are redeemed through a signed-in desktop session and extend the same `Entitlement` record used by the processing gate.
+- The user-facing entitlement is a monthly pass. Activation codes are the current administrator-issued way to open or extend that monthly pass, and they update the same `Entitlement` record used by the processing gate.
+- WeChat purchase is paused because of WeChat approval requirements. Any WeChat payment route must remain disabled and hidden by default unless the product explicitly re-enables that channel.
 - Each activation grants 20 insight-generation uses. The desktop worker checks out one use before generating insights, then calls the LLM supplier directly with the returned config.
 - Admin Web access is limited to the configured administrator email and uses short-lived HttpOnly cookie sessions.
 - The account service never receives video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents. It may store and return the dedicated FrameQ client LLM key.

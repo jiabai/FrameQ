@@ -68,7 +68,7 @@ Supported video link
 - Default release ASR model: `iic/SenseVoiceSmall`.
 - Optional Qwen ASR adapter remains available for development, but ordinary release builds do not install `qwen-asr` by default.
 - Embedded, trimmed InsightFlow module for topic-question generation.
-- Server-managed account, activation-code, LLM checkout, and insight quota service.
+- Server-managed account, activation-code monthly pass entitlement, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
 - Exported artifacts:
   - `outputs/<video_id>.mp4`
   - `work/<video_id>.wav`
@@ -221,7 +221,7 @@ This file is for local output, ASR, and model-download settings only. Insight-to
 
 ## Server Deployment
 
-The account, activation-code, entitlement, and server-managed LLM checkout service lives in `server/`.
+The `server/` service handles account login, activation-code monthly pass entitlement, and server-managed LLM checkout. Users open the 31-day monthly pass by redeeming an administrator-issued activation code; the WeChat purchase channel is paused because of WeChat approval requirements and remains disabled by default.
 
 Production domain:
 
@@ -294,7 +294,7 @@ Tauri passes the JSON argument directly. For manual shell smoke tests, stdin scr
 | Path | Role |
 | --- | --- |
 | `app/` | Tauri + React + TypeScript desktop client |
-| `server/` | TypeScript Fastify account, activation-code, entitlement, and LLM-checkout service |
+| `server/` | TypeScript Fastify account, activation-code monthly pass entitlement, and LLM-checkout service |
 | `worker/` | Python worker for download, media validation, audio extraction, ASR, and InsightFlow |
 | `worker/insightflow/` | Embedded InsightFlow topic generation module |
 | `deploy/` | Server deployment runbook plus Nginx and systemd reference configs |

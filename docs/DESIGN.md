@@ -12,7 +12,7 @@
 
 - The toolbar exposes account status as a compact utility control, not as a marketing banner.
 - Update availability appears as a compact toolbar utility only when action is needed; it must not replace the task monitor or interrupt URL input.
-- Login and activation-code flows use sheet-style panels consistent with settings/history.
+- Login and activation-code monthly pass flows use sheet-style panels consistent with settings/history.
 - Browser deep-link return from login must restore and focus the existing desktop window so the account sheet is visible without the user hunting for FrameQ.
 - Account copy must clearly distinguish local processing from server-side account and entitlement verification.
 - If the user is not entitled, submitting a URL or retrying insights opens the account sheet and does not start worker processing.
@@ -21,8 +21,9 @@
 - Desktop settings should expose the app-local `.env` path for non-LLM local settings and provide a locate-file action.
 - Desktop settings should include an `应用更新` section with manual check, low-noise status copy, progress, `一键升级`, `稍后提醒`, and `重启完成更新` actions.
 - Update installation must be disabled while worker processing or ASR model download is active, with copy explaining that the current task should finish first.
-- The account sheet shows email login, activation-code redemption, entitlement expiry, and remaining insight-generation uses in a stable layout.
-- Successful activation-code redemption returns the user to the existing processing workflow without changing the local-first worker UI stages.
+- The account sheet shows email login, activation-code monthly pass redemption, monthly pass expiry, and remaining insight-generation uses in a stable layout.
+- Successful activation-code redemption opens or extends the monthly pass and returns the user to the existing processing workflow without changing the local-first worker UI stages.
+- WeChat purchase is paused because of WeChat approval requirements, so the desktop UI must not show a WeChat purchase entry by default.
 
 ## Admin Web Compensation UI
 
