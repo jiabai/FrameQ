@@ -103,3 +103,16 @@ Superseded release checks: this full-bundle installer path is no longer the ordi
 - Added Tauri `download_asr_model` / `cancel_asr_model_download` commands and `asr-model-download-progress` event forwarding.
 - Added first-run UI path for missing SenseVoice Small cache; settings can also restart the model download.
 - Added worker `ASR_MODEL_NOT_DOWNLOADED` error after video/audio extraction when the ASR cache is absent.
+
+2026-06-30 macOS x64 local installer packaging:
+
+- Built macOS x64 resources from CPython standalone `3.12.13` and local ffmpeg/ffprobe x86_64 archive without bundling `resources/models`.
+- Fixed installer resource preparation so missing archive inputs fail before resetting resources, `--skip-downloads` does not clear existing resources, and macOS Python standalone launchers are normalized to package-local `python3.12` instead of absolute build-directory symlinks.
+- Fixed packaged worker YouTube extraction by invoking `yt_dlp` through the bundled interpreter with `python -m yt_dlp` instead of relying on an external `yt-dlp` command on `PATH`.
+- Rebuilt the local macOS x64 DMG after the result workspace layout fix so result tiles stay inside the results panel.
+- Added macOS x64 dependency markers for `torch==2.2.2`, `torchaudio==2.2.2`, and `numpy<2`; this avoids unavailable newer Intel macOS PyTorch wheels and the NumPy 2 ABI warning with torch 2.2.2 on Python 3.12.
+- Produced local DMG `app/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/FrameQ_0.2.11_x64.dmg` at 369MB with SHA256 `c22abc1b598cdb8e1f6d5d62e96a1bfe8f0d93a470b7532d9abf7d587bd66239`.
+- Verified `hdiutil verify` succeeds; mounted the DMG read-only and confirmed app, Python 3.12.13, ffmpeg, and ffprobe are x86_64.
+- Verified package-local Python imports `numpy 1.26.4`, `torch 2.2.2`, `torchaudio 2.2.2`, `funasr`, `modelscope`, `yt_dlp`, and `frameq_worker` directly from the mounted DMG; also verified mounted `python -m yt_dlp --version` returns `2026.06.09`.
+- Verified the mounted DMG has no `resources/models` directory and no bundled `__pycache__` files.
+- Local DMG remains unsigned and not notarized; clean-machine install and first-run model download validation remain open release gates.

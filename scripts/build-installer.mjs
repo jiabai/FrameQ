@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createWriteStream, existsSync } from "node:fs";
-import { chmod, copyFile, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, mkdir, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -113,7 +113,7 @@ function run(command, args, description, extraOptions = {}) {
 }
 
 async function ensureGitKeep(path) {
-  await writeFile(join(path, ".gitkeep"), "\r\n");
+  await writeFile(join(path, ".gitkeep"), "\n");
 }
 
 async function downloadArchive(url, destination) {
@@ -176,7 +176,7 @@ async function walkFiles(root) {
     const entryPath = join(root, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await walkFiles(entryPath)));
-    } else if (entry.isFile()) {
+    } else if (entry.isFile() || entry.isSymbolicLink()) {
       files.push(entryPath);
     }
   }
@@ -209,12 +209,14 @@ async function findFirstFile(root, names) {
   return undefined;
 }
 
-async function copyWorkerRuntime(destination) {
-  await resetDirectory(destination);
-  await ensureGitKeep(destination);
-  await copyDirectoryContents(join(repoRoot, "worker", "frameq_worker"), join(destination, "frameq_worker"));
+async function removePythonCaches(root) {
+  for (const file of await walkFiles(root)) {
+    if (file.endsWith(".pyc") || file.endsWith(".pyo")) {
+      await rm(file, { force: true });
+    }
+  }
 
-  const directories = await walkDirectories(destination);
+  const directories = await walkDirectories(root);
   await Promise.all(
     directories
       .filter((directory) => basename(directory) === "__pycache__")
@@ -223,16 +225,52 @@ async function copyWorkerRuntime(destination) {
   );
 }
 
+async function copyWorkerRuntime(destination) {
+  await resetDirectory(destination);
+  await ensureGitKeep(destination);
+  await copyDirectoryContents(join(repoRoot, "worker", "frameq_worker"), join(destination, "frameq_worker"));
+  await removePythonCaches(destination);
+}
+
 async function findPythonExecutable(root) {
   const windowsPython = join(root, "python.exe");
+  const unixPython312 = join(root, "bin", "python3.12");
   const unixPython = join(root, "bin", "python3");
   if (existsSync(windowsPython)) {
     return windowsPython;
+  }
+  if (existsSync(unixPython312)) {
+    return unixPython312;
   }
   if (existsSync(unixPython)) {
     return unixPython;
   }
   throw new Error(`Could not find bundled Python executable under ${root}`);
+}
+
+async function normalizeUnixPythonLaunchers(root) {
+  const binDirectory = join(root, "bin");
+  const versionedLauncher = join(binDirectory, "python3.12");
+  if (!existsSync(versionedLauncher)) {
+    return;
+  }
+
+  for (const launcherName of ["python", "python3"]) {
+    const launcherPath = join(binDirectory, launcherName);
+    await rm(launcherPath, { force: true });
+    await symlink("python3.12", launcherPath);
+  }
+}
+
+function requiredFfmpegBinaries(target) {
+  return target === "windows-x64" ? ["ffmpeg.exe", "ffprobe.exe"] : ["ffmpeg", "ffprobe"];
+}
+
+function requireBundledFfmpeg(root, target) {
+  const missingBinaries = requiredFfmpegBinaries(target).filter((binaryName) => !existsSync(join(root, binaryName)));
+  if (missingBinaries.length > 0) {
+    throw new Error(`Could not find bundled media binaries under ${root}: ${missingBinaries.join(", ")}`);
+  }
 }
 
 function resolveTauriTargetTriple(target) {
@@ -261,6 +299,7 @@ async function copyStandalonePythonFromArchive(archive, destination) {
   const executableParent = dirname(pythonExe);
   const runtimeRoot = basename(executableParent) === "bin" ? dirname(executableParent) : executableParent;
   await copyDirectoryContents(runtimeRoot, destination);
+  await normalizeUnixPythonLaunchers(destination);
 }
 
 async function copyFfmpegFromArchive(archive, destination, target) {
@@ -268,8 +307,7 @@ async function copyFfmpegFromArchive(archive, destination, target) {
   await resetDirectory(extractRoot);
   await expandArchiveFile(archive, extractRoot);
 
-  const requiredBinaries = target === "windows-x64" ? ["ffmpeg.exe", "ffprobe.exe"] : ["ffmpeg", "ffprobe"];
-  for (const binaryName of requiredBinaries) {
+  for (const binaryName of requiredFfmpegBinaries(target)) {
     const binary = await findFirstFile(extractRoot, [binaryName]);
     if (!binary) {
       throw new Error(`${binaryName} was not found in the ffmpeg archive.`);
@@ -315,8 +353,19 @@ async function pruneBundledPythonRuntime(root) {
 }
 
 async function main() {
-  await resetDirectory(resourcesRoot);
+  if (!options.skipDownloads) {
+    requireFileOrUrl(options.pythonStandaloneUrl, "PythonStandaloneUrl");
+    requireFileOrUrl(options.ffmpegArchiveUrl, "FfmpegArchiveUrl");
+  } else {
+    await findPythonExecutable(pythonRoot);
+    requireBundledFfmpeg(binRoot, options.target);
+    await normalizeUnixPythonLaunchers(pythonRoot);
+  }
+
   await resetDirectory(buildRoot);
+  if (!options.skipDownloads) {
+    await resetDirectory(resourcesRoot);
+  }
   await mkdir(pythonRoot, { recursive: true });
   await mkdir(workerRoot, { recursive: true });
   await mkdir(binRoot, { recursive: true });
@@ -347,8 +396,10 @@ async function main() {
   run(pythonExe, ["-m", "pip", "install", "-r", requirementsPath], "Install bundled Python dependencies");
   await pruneBundledPythonRuntime(pythonRoot);
   run(pythonExe, ["-c", "import funasr, modelscope, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
-    env: { PYTHONPATH: workerRoot },
+    env: { PYTHONDONTWRITEBYTECODE: "1", PYTHONPATH: workerRoot },
   });
+  await removePythonCaches(pythonRoot);
+  await removePythonCaches(workerRoot);
 
   if (!options.skipTauriBuild) {
     const tauriTarget = resolveTauriTargetTriple(options.target);

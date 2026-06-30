@@ -148,8 +148,21 @@ describe("Tauri desktop window configuration", () => {
     expect(script).not.toContain("Require-DirectoryWithFiles");
     expect(script).toContain("copyWorkerRuntime(workerRoot)");
     expect(script).toContain('join(repoRoot, "worker", "frameq_worker")');
+    expect(script).toContain("normalizeUnixPythonLaunchers");
+    expect(script).toContain("PYTHONDONTWRITEBYTECODE");
     expect(script).not.toContain("powershell");
     expect(script).not.toContain("pwsh");
+  });
+
+  test("installer script normalizes macOS Python launchers when reusing runtime resources", () => {
+    const script = readFileSync(installerScriptPath, "utf8");
+    const mainScript = script.slice(script.indexOf("async function main()"));
+    const skipDownloadsBranch =
+      mainScript.match(/} else \{([\s\S]*?)\n  \}\n\n  await resetDirectory\(buildRoot\);/)?.[1] ?? "";
+
+    expect(skipDownloadsBranch).toContain("await findPythonExecutable(pythonRoot)");
+    expect(skipDownloadsBranch).toContain("requireBundledFfmpeg(binRoot, options.target)");
+    expect(skipDownloadsBranch).toContain("await normalizeUnixPythonLaunchers(pythonRoot)");
   });
 
   test("installer script has a tracked local settings template to bundle", () => {
@@ -203,7 +216,12 @@ describe("Tauri desktop window configuration", () => {
     const projectDependencies = manifest.match(/dependencies = \[([\s\S]*?)\]\s*\n/)?.[1] ?? "";
 
     expect(projectDependencies).not.toContain("qwen-asr");
+    expect(projectDependencies).toContain("numpy<2");
+    expect(projectDependencies).toContain("torch==2.2.2");
     expect(projectDependencies).toContain("torch>=2.10.0");
+    expect(projectDependencies).toContain("torchaudio==2.2.2");
+    expect(projectDependencies).toContain("torchaudio>=2.10.0");
+    expect(projectDependencies).toContain("platform_machine == 'x86_64'");
     expect(manifest).toContain("[project.optional-dependencies]");
     expect(manifest).toContain('qwen = ["qwen-asr>=0.0.6"]');
   });

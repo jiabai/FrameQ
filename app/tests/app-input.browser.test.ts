@@ -288,19 +288,29 @@ describe("App browser input interactions", () => {
               '<section class="result-workspace result-area" aria-label="结果总览">' +
                 '<div class="result-header"><div><p class="section-label">Results</p><h2>结果工作区</h2></div></div>' +
                 '<div class="result-grid">' +
+                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>视频文件</span><small>已下载，可定位文件</small><em>定位文件</em></button>' +
+                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>音频文件</span><small>WAV 音频，可定位文件</small><em>定位文件</em></button>' +
+                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>完整文字稿</span><small>15,297 字</small><em>打开详情</em></button>' +
+                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>要点总结</span><small>1,065 字</small><em>打开详情</em></button>' +
                   '<button class="result-card result-tile ready"><span class="result-icon"></span><span>启发话题点</span><small>12 个话题点</small><em>打开详情</em></button>' +
-                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>完整文字稿</span><small>3,016 字</small><em>打开详情</em></button>' +
                 '</div>' +
               '</section>';
             const processRect = document.querySelector('.process-monitor').getBoundingClientRect();
-            const resultRect = document.querySelector('.result-workspace').getBoundingClientRect();
+            const result = document.querySelector('.result-workspace');
+            const resultRect = result.getBoundingClientRect();
             const cardHeights = Array.from(document.querySelectorAll('.result-card')).map((card) =>
               Math.round(card.getBoundingClientRect().height)
+            );
+            const cardBottoms = Array.from(document.querySelectorAll('.result-card')).map((card) =>
+              Math.round(card.getBoundingClientRect().bottom)
             );
             return {
               activeLayoutColumns: getComputedStyle(workspace).gridTemplateColumns.trim().split(/\\s+/).length,
               processBottom: Math.round(processRect.bottom),
               resultTop: Math.round(resultRect.top),
+              resultBottom: Math.round(resultRect.bottom),
+              lastResultCardBottom: Math.max(...cardBottoms),
+              resultVerticalOverflow: result.scrollHeight - result.clientHeight,
               maxResultCardHeight: Math.max(...cardHeights),
             };
           })()`,
@@ -312,6 +322,10 @@ describe("App browser input interactions", () => {
       expect(completedLayout.result.value.resultTop).toBeGreaterThan(
         completedLayout.result.value.processBottom,
       );
+      expect(completedLayout.result.value.resultBottom).toBeGreaterThanOrEqual(
+        completedLayout.result.value.lastResultCardBottom,
+      );
+      expect(completedLayout.result.value.resultVerticalOverflow).toBeLessThanOrEqual(1);
       expect(completedLayout.result.value.maxResultCardHeight).toBeLessThanOrEqual(132);
     } finally {
       page.close();

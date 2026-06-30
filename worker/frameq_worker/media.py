@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -104,9 +105,10 @@ def extract_xiaohongshu_note_id(source: str) -> str | None:
 
 def build_ytdlp_command(url: str, output_dir: Path) -> list[str]:
     output_template = (output_dir / "%(id)s.%(ext)s").as_posix()
+    ytdlp_command = [sys.executable, "-m", "yt_dlp"]
     if should_attempt_youtube_processing(url):
         return [
-            "yt-dlp",
+            *ytdlp_command,
             "--no-playlist",
             "-f",
             YOUTUBE_FORMAT_SELECTOR,
@@ -117,7 +119,7 @@ def build_ytdlp_command(url: str, output_dir: Path) -> list[str]:
             url,
         ]
 
-    return ["yt-dlp", "--no-playlist", "-o", output_template, url]
+    return [*ytdlp_command, "--no-playlist", "-o", output_template, url]
 
 
 def build_ffprobe_command(media_path: Path) -> list[str]:

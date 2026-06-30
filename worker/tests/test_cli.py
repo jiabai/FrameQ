@@ -16,14 +16,26 @@ from frameq_worker.cli import (
 from frameq_worker.media import CommandResult
 
 
+def is_ytdlp_command(command: list[str]) -> bool:
+    return len(command) >= 3 and command[1:3] == ["-m", "yt_dlp"]
+
+
+def command_name(command: list[str]) -> str:
+    return "yt-dlp" if is_ytdlp_command(command) else command[0]
+
+
+def ytdlp_output_template(command: list[str]) -> Path:
+    return Path(command[command.index("-o") + 1])
+
+
 class FakeMediaRunner:
     def __init__(self) -> None:
         self.commands: list[list[str]] = []
 
     def __call__(self, command: list[str]) -> CommandResult:
         self.commands.append(command)
-        if command[0] == "yt-dlp":
-            output_template = Path(command[3])
+        if is_ytdlp_command(command):
+            output_template = ytdlp_output_template(command)
             (output_template.parent / "demo.mp4").write_bytes(b"fake video")
             return CommandResult(command=command, returncode=0, stdout="", stderr="")
 
@@ -62,7 +74,7 @@ class ExistingMediaRunner:
 
     def __call__(self, command: list[str]) -> CommandResult:
         self.commands.append(command)
-        if command[0] == "yt-dlp":
+        if is_ytdlp_command(command):
             return CommandResult(command=command, returncode=0, stdout="", stderr="")
 
         if command[0] == "ffprobe":
@@ -120,8 +132,8 @@ class XiaohongshuMediaRunner:
 
     def __call__(self, command: list[str]) -> CommandResult:
         self.commands.append(command)
-        if command[0] == "yt-dlp":
-            output_template = Path(command[3])
+        if is_ytdlp_command(command):
+            output_template = ytdlp_output_template(command)
             downloaded_video = output_template.parent / f"{self.downloaded_stem}.mp4"
             downloaded_video.write_bytes(b"xhs video")
             os.utime(downloaded_video, (2, 2))
@@ -549,7 +561,7 @@ def test_run_worker_once_returns_model_not_ready_without_real_asr(
     assert result["audio_path"] == (tmp_path / "work" / "demo.wav").as_posix()
     assert result["text"] == ""
     assert result["insights"] == []
-    assert [command[0] for command in runner.commands] == ["yt-dlp", "ffprobe", "ffmpeg"]
+    assert [command_name(command) for command in runner.commands] == ["yt-dlp", "ffprobe", "ffmpeg"]
 
 
 def test_run_worker_once_runs_to_partial_completion_with_injected_transcriber(
@@ -610,8 +622,12 @@ def test_run_worker_once_selects_video_by_url_id_and_reuses_valid_audio(
     assert result["status"] == "completed"
     assert result["video_path"] == matching_video.as_posix()
     assert result["audio_path"] == existing_audio.as_posix()
-    assert [command[0] for command in runner.commands] == ["yt-dlp", "ffprobe", "ffprobe"]
-    assert all(command[0] != "ffmpeg" for command in runner.commands)
+    assert [command_name(command) for command in runner.commands] == [
+        "yt-dlp",
+        "ffprobe",
+        "ffprobe",
+    ]
+    assert all(command_name(command) != "ffmpeg" for command in runner.commands)
     assert {
         "stage": "video_extracting",
         "message": "已复用本地音频，跳过音频提取。",
@@ -735,7 +751,7 @@ def test_run_worker_once_flows_youtube_stdout_path_into_existing_media_pipeline(
     assert result["status"] == "completed"
     assert result["video_path"] == downloaded_video.as_posix()
     assert result["audio_path"] == (tmp_path / "work" / "dQw4w9WgXcQ.wav").as_posix()
-    assert [command[0] for command in runner.commands] == ["ffprobe", "ffmpeg"]
+    assert [command_name(command) for command in runner.commands] == ["ffprobe", "ffmpeg"]
 
 
 def test_run_worker_once_uses_configured_output_dir_for_user_artifacts(

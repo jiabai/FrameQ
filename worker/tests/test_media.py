@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 import frameq_worker.media as media
@@ -20,14 +21,18 @@ from frameq_worker.media import (
 )
 
 
+def assert_ytdlp_module_prefix(command: list[str]) -> None:
+    assert command[:3] == [sys.executable, "-m", "yt_dlp"]
+
+
 def test_build_ytdlp_command_downloads_single_video_to_outputs_template() -> None:
     command = build_ytdlp_command(
         "https://www.douyin.com/video/7524373044106677544",
         output_dir=Path("outputs"),
     )
 
-    assert command == [
-        "yt-dlp",
+    assert_ytdlp_module_prefix(command)
+    assert command[3:] == [
         "--no-playlist",
         "-o",
         "outputs/%(id)s.%(ext)s",
@@ -41,7 +46,7 @@ def test_build_ytdlp_command_uses_transcription_first_youtube_format_policy() ->
         output_dir=Path("outputs"),
     )
 
-    assert command[0] == "yt-dlp"
+    assert_ytdlp_module_prefix(command)
     assert "--no-playlist" in command
     assert "-o" in command
     assert "outputs/%(id)s.%(ext)s" in command
@@ -307,14 +312,13 @@ def test_download_video_creates_output_dir_and_runs_ytdlp_command(tmp_path: Path
     )
 
     assert (tmp_path / "outputs").is_dir()
-    assert calls == [
-        [
-            "yt-dlp",
-            "--no-playlist",
-            "-o",
-            (tmp_path / "outputs" / "%(id)s.%(ext)s").as_posix(),
-            "https://www.douyin.com/video/7524373044106677544",
-        ]
+    assert len(calls) == 1
+    assert_ytdlp_module_prefix(calls[0])
+    assert calls[0][3:] == [
+        "--no-playlist",
+        "-o",
+        (tmp_path / "outputs" / "%(id)s.%(ext)s").as_posix(),
+        "https://www.douyin.com/video/7524373044106677544",
     ]
 
 
@@ -359,7 +363,7 @@ def test_download_video_uses_douyin_fallback_for_empty_web_detail_failure(
     assert fallback_calls == [
         ("https://www.douyin.com/video/7653372612151692594", tmp_path / "outputs")
     ]
-    assert calls[0][0] == "yt-dlp"
+    assert_ytdlp_module_prefix(calls[0])
 
 
 def test_download_video_uses_xiaohongshu_fallback_for_supported_link_failure(

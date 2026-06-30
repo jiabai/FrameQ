@@ -1,2 +1,29 @@
-# Generated release resources replace this file during installer builds.
+[project]
+name = "frameq-worker"
+version = "0.1.0"
+description = "Python worker for FrameQ desktop video transcription workflows."
+requires-python = ">=3.11"
+dependencies = [
+    "brotli>=1.2.0",
+    "funasr>=1.2.7",
+    "modelscope>=1.37.1",
+    "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torchaudio==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torchaudio>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "yt-dlp>=2026.6.9",
+]
 
+[project.optional-dependencies]
+qwen = ["qwen-asr>=0.0.6"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["worker"]
+testpaths = ["worker/tests"]
