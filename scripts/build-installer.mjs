@@ -20,6 +20,7 @@ function parseArgs(argv) {
     target: "windows-x64",
     pythonStandaloneUrl: process.env.FRAMEQ_PYTHON_STANDALONE_URL ?? "",
     ffmpegArchiveUrl: process.env.FRAMEQ_FFMPEG_ARCHIVE_URL ?? "",
+    ffprobeArchiveUrl: process.env.FRAMEQ_FFPROBE_ARCHIVE_URL ?? "",
     skipDownloads: false,
     skipTauriBuild: false,
   };
@@ -51,6 +52,10 @@ function parseArgs(argv) {
       case "--ffmpeg-archive-url":
       case "-ffmpegarchiveurl":
         options.ffmpegArchiveUrl = readValue();
+        break;
+      case "--ffprobe-archive-url":
+      case "-ffprobearchiveurl":
+        options.ffprobeArchiveUrl = readValue();
         break;
       case "--skip-downloads":
       case "-skipdownloads":
@@ -302,15 +307,15 @@ async function copyStandalonePythonFromArchive(archive, destination) {
   await normalizeUnixPythonLaunchers(destination);
 }
 
-async function copyFfmpegFromArchive(archive, destination, target) {
-  const extractRoot = join(dirname(archive), "ffmpeg");
+async function copyMediaBinariesFromArchive(archive, destination, target, binaryNames, extractDirectoryName) {
+  const extractRoot = join(dirname(archive), extractDirectoryName);
   await resetDirectory(extractRoot);
   await expandArchiveFile(archive, extractRoot);
 
-  for (const binaryName of requiredFfmpegBinaries(target)) {
+  for (const binaryName of binaryNames) {
     const binary = await findFirstFile(extractRoot, [binaryName]);
     if (!binary) {
-      throw new Error(`${binaryName} was not found in the ffmpeg archive.`);
+      throw new Error(`${binaryName} was not found in the media archive.`);
     }
     const destinationPath = join(destination, binaryName);
     await copyFile(binary, destinationPath);
@@ -318,6 +323,12 @@ async function copyFfmpegFromArchive(archive, destination, target) {
       await chmod(destinationPath, 0o755);
     }
   }
+}
+
+async function copyFfmpegFromArchive(ffmpegArchive, ffprobeArchive, destination, target) {
+  const [ffmpegBinary, ffprobeBinary] = requiredFfmpegBinaries(target);
+  await copyMediaBinariesFromArchive(ffmpegArchive, destination, target, [ffmpegBinary], "ffmpeg");
+  await copyMediaBinariesFromArchive(ffprobeArchive, destination, target, [ffprobeBinary], "ffprobe");
 }
 
 async function pruneBundledPythonRuntime(root) {
@@ -381,7 +392,10 @@ async function main() {
 
     requireFileOrUrl(options.ffmpegArchiveUrl, "FfmpegArchiveUrl");
     const ffmpegArchive = await prepareArchiveInput(options.ffmpegArchiveUrl, buildRoot, "ffmpeg.archive");
-    await copyFfmpegFromArchive(ffmpegArchive, binRoot, options.target);
+    const ffprobeArchive = options.ffprobeArchiveUrl
+      ? await prepareArchiveInput(options.ffprobeArchiveUrl, buildRoot, "ffprobe.archive")
+      : ffmpegArchive;
+    await copyFfmpegFromArchive(ffmpegArchive, ffprobeArchive, binRoot, options.target);
   }
 
   await copyWorkerRuntime(workerRoot);

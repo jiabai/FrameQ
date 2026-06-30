@@ -189,11 +189,12 @@ FRAMEQ_PYTHON_STANDALONE_URL
 FRAMEQ_FFMPEG_ARCHIVE_URL
 FRAMEQ_PYTHON_STANDALONE_URL_ARM64
 FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64
+FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64
 TAURI_SIGNING_PRIVATE_KEY
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 ```
 
-The existing `FRAMEQ_PYTHON_STANDALONE_URL` / `FRAMEQ_FFMPEG_ARCHIVE_URL` pair is used by the Windows job and as the fallback for the macOS Intel job. If those generic secrets point at Windows archives, set `FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64` and `FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64` with macOS x64 archives so the Intel DMG job does not reuse Windows runtime inputs.
+The existing `FRAMEQ_PYTHON_STANDALONE_URL` / `FRAMEQ_FFMPEG_ARCHIVE_URL` pair is used by the Windows job and as the fallback for the macOS Intel job. If those generic secrets point at Windows archives, set `FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64` and `FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64` with macOS x64 archives so the Intel DMG job does not reuse Windows runtime inputs. The Apple Silicon job supports split macOS arm64 media archives: set `FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64` to the ffmpeg archive and `FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64` to the ffprobe archive.
 
 Create or update a release by pushing a `v*` tag or running the workflow manually with a tag such as `v0.1.0`. Draft releases are useful for inspection, but updater clients only resolve `releases/latest/download/latest.json?frameq-updater=1` after the release is published as a non-draft, non-prerelease release.
 

@@ -154,6 +154,16 @@ describe("Tauri desktop window configuration", () => {
     expect(script).not.toContain("pwsh");
   });
 
+  test("installer script can use a separate ffprobe archive when ffmpeg is split", () => {
+    const script = readFileSync(installerScriptPath, "utf8");
+
+    expect(script).toContain("ffprobeArchiveUrl");
+    expect(script).toContain("FRAMEQ_FFPROBE_ARCHIVE_URL");
+    expect(script).toContain("--ffprobe-archive-url");
+    expect(script).toContain("const ffprobeArchive = options.ffprobeArchiveUrl");
+    expect(script).toContain("await copyFfmpegFromArchive(ffmpegArchive, ffprobeArchive, binRoot, options.target)");
+  });
+
   test("installer script normalizes macOS Python launchers when reusing runtime resources", () => {
     const script = readFileSync(installerScriptPath, "utf8");
     const mainScript = script.slice(script.indexOf("async function main()"));
@@ -217,6 +227,7 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("runs-on: macos-15");
     expect(workflow).toContain("FRAMEQ_PYTHON_STANDALONE_URL_ARM64");
     expect(workflow).toContain("FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64");
+    expect(workflow).toContain("FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64");
     expect(workflow).toContain("node scripts/build-installer.mjs --target macos-arm64 --skip-tauri-build");
     expect(workflow).toContain("npm --prefix app run tauri -- build --bundles dmg --target aarch64-apple-darwin");
     expect(workflow).toContain("target/aarch64-apple-darwin/release/bundle/dmg/*.dmg");
