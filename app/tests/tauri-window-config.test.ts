@@ -36,7 +36,7 @@ type TauriConfig = {
 const configPath = resolve(import.meta.dirname, "../src-tauri/tauri.conf.json");
 const capabilityPath = resolve(import.meta.dirname, "../src-tauri/capabilities/default.json");
 const cargoManifestPath = resolve(import.meta.dirname, "../src-tauri/Cargo.toml");
-const installerScriptPath = resolve(import.meta.dirname, "../../scripts/build-installer.ps1");
+const installerScriptPath = resolve(import.meta.dirname, "../../scripts/build-installer.mjs");
 const rootEnvExamplePath = resolve(import.meta.dirname, "../../.env.example");
 const desktopReleaseWorkflowPath = resolve(
   import.meta.dirname,
@@ -146,8 +146,10 @@ describe("Tauri desktop window configuration", () => {
     expect(script).not.toContain("resources\\models");
     expect(script).not.toContain("Copy-SenseVoiceModelCache");
     expect(script).not.toContain("Require-DirectoryWithFiles");
-    expect(script).toContain("Copy-WorkerRuntime $repoRoot $workerRoot");
-    expect(script).toContain('Join-Path $RepoRoot "worker") "frameq_worker"');
+    expect(script).toContain("copyWorkerRuntime(workerRoot)");
+    expect(script).toContain('join(repoRoot, "worker", "frameq_worker")');
+    expect(script).not.toContain("powershell");
+    expect(script).not.toContain("pwsh");
   });
 
   test("installer script has a tracked local settings template to bundle", () => {
@@ -155,7 +157,7 @@ describe("Tauri desktop window configuration", () => {
     const script = readFileSync(installerScriptPath, "utf8");
     const envExample = readFileSync(rootEnvExamplePath, "utf8");
 
-    expect(script).toContain('Join-Path $repoRoot ".env.example"');
+    expect(script).toContain('join(repoRoot, ".env.example")');
     expect(envExample).toContain("FRAMEQ_OUTPUT_DIR=");
     expect(envExample).toContain("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall");
     expect(envExample).not.toContain("FRAMEQ_LLM_API_KEY");
@@ -166,10 +168,12 @@ describe("Tauri desktop window configuration", () => {
   test("installer script maps macOS targets to explicit Tauri triples", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
-    expect(script).toContain("Resolve-TauriTargetTriple");
-    expect(script).toContain('"macos-arm64" { "aarch64-apple-darwin" }');
-    expect(script).toContain('"macos-x64" { "x86_64-apple-darwin" }');
-    expect(script).toContain("npm --prefix $appRoot run tauri -- build --target $tauriTarget");
+    expect(script).toContain("resolveTauriTargetTriple");
+    expect(script).toContain('case "macos-arm64":');
+    expect(script).toContain('return "aarch64-apple-darwin"');
+    expect(script).toContain('case "macos-x64":');
+    expect(script).toContain('return "x86_64-apple-darwin"');
+    expect(script).toContain('"tauri", "--", "build", "--target", tauriTarget');
   });
 
   test("desktop release workflow publishes GitHub-hosted updater metadata", () => {
@@ -182,6 +186,9 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("TAURI_SIGNING_PRIVATE_KEY");
     expect(workflow).toContain("FRAMEQ_PYTHON_STANDALONE_URL");
     expect(workflow).toContain("FRAMEQ_FFMPEG_ARCHIVE_URL");
+    expect(workflow).toContain("node scripts\\build-installer.mjs --target windows-x64 --skip-tauri-build");
+    expect(workflow).not.toContain("shell: pwsh");
+    expect(workflow).not.toContain("build-installer.ps1");
   });
 
   test("installer runtime still includes ModelScope for first-run model download", () => {
@@ -228,7 +235,7 @@ describe("Tauri desktop window configuration", () => {
   test("installer script prunes non-runtime Python artifacts before bundling", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
-    expect(script).toContain("Prune-BundledPythonRuntime $pythonRoot");
+    expect(script).toContain("pruneBundledPythonRuntime(pythonRoot)");
     expect(script).toContain('"*.pdb"');
     expect(script).toContain('"*.lib"');
     expect(script).toContain('"__pycache__"');
@@ -241,7 +248,8 @@ describe("Tauri desktop window configuration", () => {
   test("installer script fails when external build commands fail", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
-    expect(script).toContain("Assert-LastCommandSucceeded");
-    expect(script).toContain('Assert-LastCommandSucceeded "Python runtime smoke test"');
+    expect(script).toContain("function run(command, args, description");
+    expect(script).toContain("Python runtime smoke test");
+    expect(script).toContain("failed with exit code");
   });
 });

@@ -164,13 +164,13 @@ Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_RE
 
 Build unsigned internal installer resources and package:
 
-```powershell
-$env:FRAMEQ_PYTHON_STANDALONE_URL = "D:\archives\python-build-standalone.tar.zst"
-$env:FRAMEQ_FFMPEG_ARCHIVE_URL = "D:\archives\ffmpeg-release.zip"
-powershell -ExecutionPolicy Bypass -File scripts\build-installer.ps1 -Target windows-x64
+```cmd
+set FRAMEQ_PYTHON_STANDALONE_URL=D:\archives\python-build-standalone.tar.zst
+set FRAMEQ_FFMPEG_ARCHIVE_URL=D:\archives\ffmpeg-release.zip
+node scripts\build-installer.mjs --target windows-x64
 ```
 
-The Python and ffmpeg values may be URLs or local archive paths. Use `-Target windows-x64`, `-Target macos-arm64`, or `-Target macos-x64` on the matching build machine. The installer build copies runtime files into `app/src-tauri/resources/`, then runs `tauri build`. Large generated resources stay out of git.
+The Python and ffmpeg values may be URLs or local archive paths. Use `--target windows-x64`, `--target macos-arm64`, or `--target macos-x64` on the matching build machine. The installer build copies runtime files into `app/src-tauri/resources/`, then runs `tauri build`. Large generated resources stay out of git.
 
 The installer does not bundle SenseVoice Small weights. It prunes non-runtime Python debug, cache, test, and header artifacts; keeps `resources/models` out of the bundle; and guides the user through downloading SenseVoice Small into app-local data on first run.
 

@@ -63,7 +63,7 @@ Make FrameQ installable for ordinary Windows and macOS users without requiring P
 - `npm --prefix app test`
 - `npm --prefix app run build`
 - `cargo test --manifest-path app\src-tauri\Cargo.toml`
-- PowerShell parser check for `scripts/build-installer.ps1`
+- Node syntax check for `scripts/build-installer.mjs`
 - `npm --prefix app run tauri -- build --no-bundle`
 
 2026-06-18 release hardening gates passed:
@@ -77,14 +77,14 @@ Make FrameQ installable for ordinary Windows and macOS users without requiring P
 - `cargo test --manifest-path app\src-tauri\Cargo.toml`
 - `npm --prefix app run tauri -- build --no-bundle`
 - `python scripts/validate_agents_docs.py --level WARN`
-- PowerShell parser check for `scripts/build-installer.ps1`
+- Node syntax check for `scripts/build-installer.mjs`
 
 Remaining external release checks require real Python standalone archives, ffmpeg/ffprobe archives, target Windows/macOS machines, network access for first-run model download, and signing/notarization credentials.
 
 2026-06-19 Windows x64 full-bundle packaging smoke before lightweight direction:
 
 - Used Python standalone `cpython-3.12.13+20260610-x86_64-pc-windows-msvc-install_only.tar.gz`, gyan.dev `ffmpeg-release-essentials.zip`, and local SenseVoice Small cache `D:\Github\FrameQ\models\models\iic\SenseVoiceSmall`.
-- `scripts/build-installer.ps1 -Target windows-x64 -SkipTauriBuild` prepared bundled resources and passed the Python runtime smoke test.
+- `node scripts\build-installer.mjs --target windows-x64 --skip-tauri-build` prepared bundled resources and passed the Python runtime smoke test.
 - Bundled resources were reduced from 2.68GB to 1.95GB by excluding Qwen-only packages and pruning non-runtime Python artifacts.
 - Verified bundled Python imports `torch`, `funasr`, `modelscope`, `yt_dlp`, and `frameq_worker`; verified `qwen_asr` is not bundled by default.
 - `npm --prefix app run tauri -- build --target x86_64-pc-windows-msvc` produced `app/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/FrameQ_0.1.0_x64-setup.exe` at 1055.5MB.
@@ -93,7 +93,12 @@ Superseded release checks: this full-bundle installer path is no longer the ordi
 
 2026-06-19 lightweight first-run model download implementation:
 
-- Removed `resources/models` from Tauri bundle resources and from `scripts/build-installer.ps1`.
+- Removed `resources/models` from Tauri bundle resources and from `scripts/build-installer.mjs`.
+
+2026-06-30 packaging shell dependency cleanup:
+
+- Replaced the legacy PowerShell installer script with `scripts/build-installer.mjs` so local installer packaging and GitHub release resource preparation no longer require PowerShell Core or Windows PowerShell.
+- Updated `.github/workflows/desktop-release.yml` to run the installer resource step and updater manifest normalization under `cmd`.
 - Added worker ASR model downloader using ModelScope by default and optional custom archive URL/SHA env vars.
 - Added Tauri `download_asr_model` / `cancel_asr_model_download` commands and `asr-model-download-progress` event forwarding.
 - Added first-run UI path for missing SenseVoice Small cache; settings can also restart the model download.

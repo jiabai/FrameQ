@@ -37,7 +37,7 @@ describe("desktop updater release manifest", () => {
     const workflow = readFileSync(releaseWorkflowPath, "utf8");
 
     expect(workflow).toContain("Normalize updater manifest encoding");
-    expect(workflow).toContain("scripts/normalize-updater-manifest.mjs");
-    expect(workflow).toContain("gh release upload $env:RELEASE_TAG $manifestPath --clobber");
+    expect(workflow).toContain("node scripts\\normalize-updater-manifest.mjs");
+    expect(workflow).toContain('gh release upload "%RELEASE_TAG%" "%MANIFEST_DIR%\\latest.json" --clobber');
   });
 });

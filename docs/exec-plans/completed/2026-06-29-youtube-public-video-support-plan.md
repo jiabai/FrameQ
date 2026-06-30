@@ -24,7 +24,7 @@ Evidence: `app/src/workflow.ts` already performs host-aware URL validation and s
 
 Evidence: `yt-dlp` commonly reports login, age, private/unavailable, and format-selection failures with messages that may include cookie guidance or signed media URLs. FrameQ needs a worker-side sanitizer before surfacing those messages.
 
-Evidence: `app/src-tauri/resources/worker` is ignored and kept as a `.gitkeep` placeholder in the repository. `scripts/build-installer.ps1` resets that directory and copies `worker/frameq_worker` during installer packaging, so the committed source worker remains the packaging source of truth.
+Evidence: `app/src-tauri/resources/worker` is ignored and kept as a `.gitkeep` placeholder in the repository. `scripts/build-installer.mjs` resets that directory and copies `worker/frameq_worker` during installer packaging, so the committed source worker remains the packaging source of truth.
 
 ## Decision Log
 

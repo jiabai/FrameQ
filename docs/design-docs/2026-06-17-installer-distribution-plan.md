@@ -199,9 +199,9 @@ Rust 侧 `process_video` 命令通过环境变量 `FRAMEQ_OUTPUT_DIR` 和 `FRAME
 
 ### 阶段 2：构建脚本
 
-新增 `scripts/build-installer.ps1`（PowerShell，避免 .ps1 中文编码问题则全部用英文注释）：
+新增 `scripts/build-installer.mjs`（Node.js，避免安装包构建依赖 PowerShell Core）：
 
-```powershell
+```text
 # 1. 下载 python-build-standalone
 # 2. 下载 ffmpeg essentials
 # 3. 创建 build-venv 并 pip install 依赖
