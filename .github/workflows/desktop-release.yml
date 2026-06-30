@@ -15,6 +15,16 @@ on:
         required: true
         default: true
         type: boolean
+      build_macos_x64:
+        description: "Build and upload the macOS Intel DMG"
+        required: true
+        default: true
+        type: boolean
+      build_macos_arm64:
+        description: "Build and upload the macOS Apple Silicon DMG"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -89,6 +99,7 @@ jobs:
   macos-x64-dmg-artifact:
     name: macOS Intel DMG artifact
     needs: windows-updater-artifacts
+    if: ${{ github.event_name == 'push' || inputs.build_macos_x64 }}
     runs-on: macos-15-intel
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -132,6 +143,7 @@ jobs:
   macos-arm64-dmg-artifact:
     name: macOS Apple Silicon DMG artifact
     needs: windows-updater-artifacts
+    if: ${{ github.event_name == 'push' || inputs.build_macos_arm64 }}
     runs-on: macos-15
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
