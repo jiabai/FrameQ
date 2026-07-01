@@ -139,13 +139,16 @@ jobs:
       - name: Prepare bundled runtime resources
         run: node scripts/build-installer.mjs --target macos-x64 --skip-tauri-build
 
-      - name: Build macOS Intel DMG
-        run: npm --prefix app run tauri -- build --bundles dmg --target x86_64-apple-darwin
+      - name: Build macOS Intel app bundle
+        run: npm --prefix app run tauri -- build --bundles app --target x86_64-apple-darwin
 
       - name: Verify packaged runtime imports end to end
         run: |
           RES="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app/Contents/Resources/resources"
           PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, modelscope, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+
+      - name: Package macOS Intel DMG
+        run: bash scripts/make-macos-dmg.sh x86_64-apple-darwin FrameQ
 
       - name: Upload macOS Intel DMG
         env:
@@ -189,13 +192,16 @@ jobs:
       - name: Prepare bundled runtime resources
         run: node scripts/build-installer.mjs --target macos-arm64 --skip-tauri-build
 
-      - name: Build macOS Apple Silicon DMG
-        run: npm --prefix app run tauri -- build --bundles dmg --target aarch64-apple-darwin
+      - name: Build macOS Apple Silicon app bundle
+        run: npm --prefix app run tauri -- build --bundles app --target aarch64-apple-darwin
 
       - name: Verify packaged runtime imports end to end
         run: |
           RES="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/FrameQ.app/Contents/Resources/resources"
           PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, modelscope, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+
+      - name: Package macOS Apple Silicon DMG
+        run: bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ
 
       - name: Upload macOS Apple Silicon DMG
         env:

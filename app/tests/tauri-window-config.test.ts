@@ -255,7 +255,9 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("github.event_name == 'push' || inputs.build_macos_x64");
     expect(workflow).toContain("runs-on: macos-15-intel");
     expect(workflow).toContain("node scripts/build-installer.mjs --target macos-x64 --skip-tauri-build");
-    expect(workflow).toContain("npm --prefix app run tauri -- build --bundles dmg --target x86_64-apple-darwin");
+    expect(workflow).toContain("npm --prefix app run tauri -- build --bundles app --target x86_64-apple-darwin");
+    // The DMG is packaged with hdiutil, not Tauri's Finder-driven bundle_dmg.sh.
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh x86_64-apple-darwin FrameQ");
     expect(workflow).toContain("target/x86_64-apple-darwin/release/bundle/dmg/*.dmg");
     // The Intel job re-imports the packaged runtime so a dropped .dylibs folder
     // (delocate output) fails the build before the DMG is uploaded.
@@ -271,7 +273,8 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64");
     expect(workflow).toContain("FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64");
     expect(workflow).toContain("node scripts/build-installer.mjs --target macos-arm64 --skip-tauri-build");
-    expect(workflow).toContain("npm --prefix app run tauri -- build --bundles dmg --target aarch64-apple-darwin");
+    expect(workflow).toContain("npm --prefix app run tauri -- build --bundles app --target aarch64-apple-darwin");
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ");
     expect(workflow).toContain("target/aarch64-apple-darwin/release/bundle/dmg/*.dmg");
     expect(workflow).toContain(
       "aarch64-apple-darwin/release/bundle/macos/FrameQ.app/Contents/Resources/resources",
