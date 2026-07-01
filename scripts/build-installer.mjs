@@ -368,7 +368,14 @@ async function copyMediaBinariesFromArchive(archive, destination, target, binary
   for (const binaryName of binaryNames) {
     const binary = await findFirstFile(extractRoot, [binaryName]);
     if (!binary) {
-      throw new Error(`${binaryName} was not found in the media archive.`);
+      const extractedNames = (await walkFiles(extractRoot)).map((file) => basename(file));
+      const preview =
+        extractedNames.length > 0
+          ? [...new Set(extractedNames)].slice(0, 40).join(", ")
+          : "(archive extracted no files)";
+      throw new Error(
+        `${binaryName} was not found in the media archive (${basename(archive)}). Extracted files: ${preview}`,
+      );
     }
     const destinationPath = join(destination, binaryName);
     await copyFile(binary, destinationPath);
