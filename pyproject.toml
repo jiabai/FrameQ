@@ -26,6 +26,11 @@ dependencies = [
     # LLVM"). Other platforms keep the modern versions funasr resolves.
     "llvmlite==0.45.1 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "numba==0.62.1 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # cryptography (pulled in by the aliyun/oss2 chain) dropped its universal2 and
+    # x86_64 macOS wheels at 49.0.0 (arm64-only), so on Intel pip would build it
+    # from source and link Homebrew's OpenSSL (/usr/local/.../libssl.3.dylib).
+    # Pin mac-x64 below 49 to use the self-contained universal2 wheel instead.
+    "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "yt-dlp>=2026.6.9",
 ]
 

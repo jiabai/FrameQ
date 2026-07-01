@@ -326,6 +326,7 @@ describe("Tauri desktop window configuration", () => {
     // wheels, so pip never source-builds llvmlite (which needs LLVM).
     expect(projectDependencies).toContain("llvmlite==0.45.1");
     expect(projectDependencies).toContain("numba==0.62.1");
+    expect(projectDependencies).toContain("cryptography<49");
     expect(manifest).toContain("[project.optional-dependencies]");
     expect(manifest).toContain('qwen = ["qwen-asr>=0.0.6"]');
   });
@@ -333,9 +334,9 @@ describe("Tauri desktop window configuration", () => {
   test("installer forces llvmlite to install from a prebuilt wheel", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
-    // A source build of llvmlite needs a matching LLVM the runners lack, so the
-    // pip install must refuse to fall back to it.
-    expect(script).toContain('"--only-binary=llvmlite"');
+    // Source builds of llvmlite (needs LLVM) and cryptography (links Homebrew
+    // OpenSSL) leak or fail, so the pip install must refuse to fall back to them.
+    expect(script).toContain('"--only-binary=llvmlite,cryptography"');
   });
 
   test("worker manifest documents the macOS Intel CPython constraint for the torch pin", () => {

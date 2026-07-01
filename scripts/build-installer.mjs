@@ -485,12 +485,13 @@ async function main() {
   run(commandName("uv"), ["export", "--no-dev", "--format", "requirements-txt", "--output-file", requirementsPath], "Export Python requirements");
   run(pythonExe, ["-m", "ensurepip", "--upgrade"], "Install bundled Python pip");
   run(pythonExe, ["-m", "pip", "install", "--upgrade", "pip"], "Upgrade bundled Python pip");
-  // Never source-build llvmlite: it needs a matching LLVM dev install the build
-  // machines lack. If a resolved llvmlite has no wheel for the platform, fail
-  // loudly here instead of hitting an opaque CMake "Could not find LLVM" error.
+  // Force wheels for packages that leak Homebrew libraries when source-built on
+  // the runner: llvmlite needs a matching LLVM (opaque CMake failure otherwise),
+  // and cryptography links Homebrew OpenSSL. Failing loudly here beats shipping a
+  // bundle that breaks on clean Macs.
   run(
     pythonExe,
-    ["-m", "pip", "install", "--only-binary=llvmlite", "-r", requirementsPath],
+    ["-m", "pip", "install", "--only-binary=llvmlite,cryptography", "-r", requirementsPath],
     "Install bundled Python dependencies",
   );
   await pruneBundledPythonRuntime(pythonRoot);
