@@ -1,8 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 import {
   checkForAppUpdate,
+  DEFAULT_RELEASES_URL,
+  getUpdateDelivery,
   getUpdatePreferences,
   installAppUpdate,
+  openReleasesPage,
   relaunchApp,
   saveUpdatePreferences,
   type AppUpdateHandle,
@@ -60,6 +63,39 @@ describe("update client", () => {
     await relaunchApp(runner);
 
     expect(runner).toHaveBeenCalledTimes(1);
+  });
+
+  test("reports macOS as manual-update delivery and defaults elsewhere to in-app updates", async () => {
+    await expect(
+      getUpdateDelivery(async () => ({
+        inAppUpdates: false,
+        releasesUrl: "https://example.com/releases/latest",
+      })),
+    ).resolves.toEqual({
+      inAppUpdates: false,
+      releasesUrl: "https://example.com/releases/latest",
+    });
+
+    // An empty/partial response keeps the existing Windows behavior.
+    await expect(getUpdateDelivery(async () => ({}))).resolves.toEqual({
+      inAppUpdates: true,
+      releasesUrl: DEFAULT_RELEASES_URL,
+    });
+  });
+
+  test("opens the releases page through the opener runner, falling back to the default url", async () => {
+    const opened: string[] = [];
+    const runner = async (url: string) => {
+      opened.push(url);
+    };
+
+    await openReleasesPage("https://example.com/releases/latest", runner);
+    await openReleasesPage("", runner);
+
+    expect(opened).toEqual([
+      "https://example.com/releases/latest",
+      DEFAULT_RELEASES_URL,
+    ]);
   });
 
   test("loads and saves update preferences through Tauri commands", async () => {

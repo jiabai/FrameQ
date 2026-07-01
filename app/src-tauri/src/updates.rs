@@ -4,6 +4,28 @@ use std::path::Path;
 use tauri::{AppHandle, Manager};
 
 const UPDATE_PREFERENCES_FILE_NAME: &str = "updates.json";
+const RELEASES_PAGE_URL: &str = "https://github.com/jiabai/FrameQ/releases/latest";
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UpdateDeliveryView {
+    in_app_updates: bool,
+    releases_url: String,
+}
+
+/// Reports whether the Tauri in-app updater can deliver updates on this platform.
+///
+/// The release pipeline only publishes Windows updater artifacts and a
+/// Windows-only `latest.json`, so macOS ships DMGs that users re-download
+/// manually. Without this gate the updater would falsely report "up to date" on
+/// macOS. Full macOS auto-update is tracked in the tech-debt tracker.
+#[tauri::command]
+pub(crate) fn get_update_delivery() -> UpdateDeliveryView {
+    UpdateDeliveryView {
+        in_app_updates: !cfg!(target_os = "macos"),
+        releases_url: RELEASES_PAGE_URL.to_string(),
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -58,10 +80,22 @@ fn save_update_preferences_to_file(
 #[cfg(test)]
 mod tests {
     use super::{
-        load_update_preferences_from_file, save_update_preferences_to_file, UpdatePreferencesView,
+        get_update_delivery, load_update_preferences_from_file, save_update_preferences_to_file,
+        UpdatePreferencesView,
     };
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn update_delivery_disables_in_app_updates_on_macos_only() {
+        let delivery = get_update_delivery();
+
+        assert_eq!(delivery.in_app_updates, !cfg!(target_os = "macos"));
+        assert_eq!(
+            delivery.releases_url,
+            "https://github.com/jiabai/FrameQ/releases/latest"
+        );
+    }
 
     #[test]
     fn update_preferences_round_trip_uses_app_local_updates_json() {

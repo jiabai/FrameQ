@@ -3,8 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   checkForAppUpdate,
   createDefaultUpdatePreferences,
+  DEFAULT_RELEASES_URL,
+  getUpdateDelivery,
   getUpdatePreferences,
   installAppUpdate,
+  openReleasesPage,
   relaunchApp,
   saveUpdatePreferences,
   type AppUpdateInfo,
@@ -33,7 +36,10 @@ export function useAppUpdateController({
   modelDownloadActive,
 }: UseAppUpdateControllerOptions) {
   const [updateState, setUpdateState] = useState(createInitialUpdateState);
+  const [inAppUpdates, setInAppUpdates] = useState(true);
+  const [deliveryLoaded, setDeliveryLoaded] = useState(false);
   const updateInfoRef = useRef<AppUpdateInfo | null>(null);
+  const releasesUrlRef = useRef<string>(DEFAULT_RELEASES_URL);
   const updatePreferencesRef = useRef<UpdatePreferences>(createDefaultUpdatePreferences());
   const updateBusy = isUpdateBusy(updateState.status);
   const updateInstallBlocked = isUpdateInstallBlocked({
@@ -129,6 +135,37 @@ export function useAppUpdateController({
 
   useEffect(() => {
     let cancelled = false;
+    void (async () => {
+      try {
+        const delivery = await getUpdateDelivery();
+        if (cancelled) {
+          return;
+        }
+        releasesUrlRef.current = delivery.releasesUrl;
+        setInAppUpdates(delivery.inAppUpdates);
+      } catch (error) {
+        console.warn("Failed to load update delivery", error);
+      } finally {
+        if (!cancelled) {
+          setDeliveryLoaded(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Only platforms with in-app updates (Windows) run the silent startup check.
+    // macOS ships DMGs and updates manually, so skip the check to avoid a false
+    // "up to date" result against the Windows-only updater manifest.
+    if (!deliveryLoaded || !inAppUpdates) {
+      return;
+    }
+
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       void loadPreferencesAndCheckForUpdates(() => cancelled);
     }, 2_500);
@@ -137,7 +174,15 @@ export function useAppUpdateController({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [loadPreferencesAndCheckForUpdates]);
+  }, [deliveryLoaded, inAppUpdates, loadPreferencesAndCheckForUpdates]);
+
+  const openReleases = useCallback(async () => {
+    try {
+      await openReleasesPage(releasesUrlRef.current);
+    } catch (error) {
+      setUpdateState((current) => failUpdate(current, error));
+    }
+  }, []);
 
   const restartForUpdate = useCallback(async () => {
     try {
@@ -197,10 +242,12 @@ export function useAppUpdateController({
     updateInstallBlocked,
     updateToolbarVisible,
     updateSpinnerVisible,
+    inAppUpdates,
     checkForUpdates,
     installUpdate,
     postponeUpdateReminder,
     restartForUpdate,
+    openReleases,
   };
 }
 

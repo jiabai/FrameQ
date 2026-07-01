@@ -1094,6 +1094,7 @@ pub fn run() {
             history::get_history,
             updates::get_update_preferences,
             updates::save_update_preferences,
+            updates::get_update_delivery,
             check_first_run,
             download_asr_model,
             cancel_asr_model_download,

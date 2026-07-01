@@ -2,7 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { UpdateDownloadEvent } from "./updateState";
+
+export const DEFAULT_RELEASES_URL = "https://github.com/jiabai/FrameQ/releases/latest";
+
+export type UpdateDelivery = {
+  inAppUpdates: boolean;
+  releasesUrl: string;
+};
+export type UpdateDeliveryRunner = () => Promise<Partial<UpdateDelivery>>;
+export type OpenReleasesRunner = (url: string) => Promise<void>;
 
 export type AppUpdateHandle = {
   version: string;
@@ -34,6 +44,34 @@ const defaultUpdateCheckRunner: UpdateCheckRunner = async () =>
   (await check()) as AppUpdateHandle | null;
 const defaultPreferencesRunner: UpdatePreferencesCommandRunner = (command, args) =>
   invoke(command, args);
+const defaultDeliveryRunner: UpdateDeliveryRunner = async () =>
+  (await invoke("get_update_delivery")) as Partial<UpdateDelivery>;
+const defaultOpenReleasesRunner: OpenReleasesRunner = (url) => openUrl(url);
+
+export async function getUpdateDelivery(
+  runner: UpdateDeliveryRunner = defaultDeliveryRunner,
+): Promise<UpdateDelivery> {
+  return mapUpdateDelivery(await runner());
+}
+
+export async function openReleasesPage(
+  url: string,
+  runner: OpenReleasesRunner = defaultOpenReleasesRunner,
+): Promise<void> {
+  await runner(url && url.length > 0 ? url : DEFAULT_RELEASES_URL);
+}
+
+function mapUpdateDelivery(response: Partial<UpdateDelivery>): UpdateDelivery {
+  return {
+    // Default to in-app updates so an unexpected/missing response keeps the
+    // existing Windows behavior; only an explicit false (macOS) disables them.
+    inAppUpdates: response.inAppUpdates !== false,
+    releasesUrl:
+      typeof response.releasesUrl === "string" && response.releasesUrl.length > 0
+        ? response.releasesUrl
+        : DEFAULT_RELEASES_URL,
+  };
+}
 
 export async function checkForAppUpdate(
   runner: UpdateCheckRunner = defaultUpdateCheckRunner,

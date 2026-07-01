@@ -260,10 +260,12 @@ function App() {
     updateInstallBlocked,
     updateToolbarVisible,
     updateSpinnerVisible,
+    inAppUpdates,
     checkForUpdates,
     installUpdate,
     postponeUpdateReminder,
     restartForUpdate,
+    openReleases,
   } = useAppUpdateController({
     processingActive: isProcessingStage(workflow.stage),
     modelDownloadActive,
@@ -1354,12 +1356,14 @@ function App() {
                 <div className={`update-status-card ${updateState.status}`}>
                   <div>
                     <span className={`model-status-badge ${updateState.status === "failed" ? "missing" : "ready"}`}>
-                      {updateStatusLabel(updateState)}
+                      {inAppUpdates ? updateStatusLabel(updateState) : "手动更新"}
                     </span>
                     <strong>{updateState.availableVersion ? `FrameQ ${updateState.availableVersion}` : "FrameQ stable"}</strong>
                     <small>
-                      {updateState.message ||
-                        "启动后会自动静默检查更新，也可以在这里手动检查。"}
+                      {inAppUpdates
+                        ? updateState.message ||
+                          "启动后会自动静默检查更新，也可以在这里手动检查。"
+                        : "macOS 版本通过发布页手动下载安装，暂未启用应用内自动更新。"}
                     </small>
                     {updateState.notes ? <small>{updateState.notes}</small> : null}
                     {updateInstallBlocked && updateState.status === "available" ? (
@@ -1379,45 +1383,54 @@ function App() {
                   ) : null}
                 </div>
                 <div className="update-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => checkForUpdates({ silent: false })}
-                    disabled={updateBusy}
-                  >
-                    <RotateCcw size={15} />
-                    <span>{updateState.status === "checking" ? "检查中" : "检查更新"}</span>
-                  </button>
-                  {updateState.status === "ready_to_restart" ? (
-                    <button type="button" className="primary-button" onClick={restartForUpdate}>
-                      <RotateCcw size={15} />
-                      <span>重启完成更新</span>
-                    </button>
+                  {inAppUpdates ? (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => checkForUpdates({ silent: false })}
+                        disabled={updateBusy}
+                      >
+                        <RotateCcw size={15} />
+                        <span>{updateState.status === "checking" ? "检查中" : "检查更新"}</span>
+                      </button>
+                      {updateState.status === "ready_to_restart" ? (
+                        <button type="button" className="primary-button" onClick={restartForUpdate}>
+                          <RotateCcw size={15} />
+                          <span>重启完成更新</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={installUpdate}
+                          disabled={
+                            updateBusy ||
+                            updateInstallBlocked ||
+                            !["available", "postponed"].includes(updateState.status)
+                          }
+                        >
+                          <Download size={15} />
+                          <span>一键升级</span>
+                        </button>
+                      )}
+                      {["available", "postponed"].includes(updateState.status) ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={postponeUpdateReminder}
+                          disabled={updateBusy}
+                        >
+                          <span>稍后提醒</span>
+                        </button>
+                      ) : null}
+                    </>
                   ) : (
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={installUpdate}
-                      disabled={
-                        updateBusy ||
-                        updateInstallBlocked ||
-                        !["available", "postponed"].includes(updateState.status)
-                      }
-                    >
+                    <button type="button" className="primary-button" onClick={() => void openReleases()}>
                       <Download size={15} />
-                      <span>一键升级</span>
+                      <span>前往下载页</span>
                     </button>
                   )}
-                  {["available", "postponed"].includes(updateState.status) ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={postponeUpdateReminder}
-                      disabled={updateBusy}
-                    >
-                      <span>稍后提醒</span>
-                    </button>
-                  ) : null}
                 </div>
               </section>
 

@@ -238,6 +238,8 @@ The macOS DMGs (both Intel and Apple Silicon) are **ad-hoc signed but not notari
 
 Removing this one-time prompt entirely requires an Apple Developer Program membership plus notarization, which is intentionally deferred until the desktop app proves commercial demand. Until then, ad-hoc signing keeps the failure mode to a bypassable prompt rather than the non-recoverable "app is damaged" error. See `docs/exec-plans/tech-debt-tracker.md` for the removal condition.
 
+macOS updates are manual for the same reason: the Tauri updater only publishes Windows artifacts and a Windows-only `latest.json`, so the desktop app reports macOS update delivery as manual (`get_update_delivery`). On macOS the app skips the silent update check and the settings sheet shows a **前往下载页** action that opens the releases page, instead of the Windows in-app auto-update flow. Re-download the newer DMG to update.
+
 ## Desktop Local Settings
 
 The desktop app stores non-LLM local settings in its app-local data `.env` file. The settings sheet creates this file when needed, shows its path, and can reveal it in the system file manager.
