@@ -351,6 +351,33 @@ async function copyFfmpegFromArchive(ffmpegArchive, ffprobeArchive, destination,
   await copyMediaBinariesFromArchive(ffprobeArchive, destination, target, [ffprobeBinary], "ffprobe");
 }
 
+async function findSitePackagesDirectories(root) {
+  // Standalone Python uses different site-packages layouts per platform: Windows
+  // keeps Lib/site-packages, while python-build-standalone on macOS/Linux nests it
+  // under lib/python3.<minor>/site-packages. Resolve both so runtime pruning (for
+  // example torch include/share) works regardless of the bundled OS and minor.
+  const directories = [];
+
+  const windowsSitePackages = join(root, "Lib", "site-packages");
+  if (existsSync(windowsSitePackages)) {
+    directories.push(windowsSitePackages);
+  }
+
+  const unixLib = join(root, "lib");
+  if (existsSync(unixLib)) {
+    for (const entry of await readdir(unixLib, { withFileTypes: true })) {
+      if (entry.isDirectory() && /^python3\.\d+$/.test(entry.name)) {
+        const sitePackages = join(unixLib, entry.name, "site-packages");
+        if (existsSync(sitePackages)) {
+          directories.push(sitePackages);
+        }
+      }
+    }
+  }
+
+  return directories;
+}
+
 async function pruneBundledPythonRuntime(root) {
   const prunedFilePatterns = ["*.pdb", "*.lib", "*.pyc", "*.pyo", "*.h", "*.hpp"];
   const prunedExtensions = new Set(prunedFilePatterns.map((pattern) => pattern.slice(1)));
@@ -370,15 +397,15 @@ async function pruneBundledPythonRuntime(root) {
       .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 
-  const exactRuntimePaths = [
-    join("Lib", "site-packages", "torch", "include"),
-    join("Lib", "site-packages", "torch", "share"),
-  ];
+  const prunedSitePackageSubdirectories = [join("torch", "include"), join("torch", "share")];
+  const sitePackagesDirectories = await findSitePackagesDirectories(root);
 
-  for (const relativePath of exactRuntimePaths) {
-    const fullPath = join(root, relativePath);
-    if (existsSync(fullPath) && (await stat(fullPath)).isDirectory()) {
-      await rm(fullPath, { recursive: true, force: true });
+  for (const sitePackages of sitePackagesDirectories) {
+    for (const relativePath of prunedSitePackageSubdirectories) {
+      const fullPath = join(sitePackages, relativePath);
+      if (existsSync(fullPath) && (await stat(fullPath)).isDirectory()) {
+        await rm(fullPath, { recursive: true, force: true });
+      }
     }
   }
 }

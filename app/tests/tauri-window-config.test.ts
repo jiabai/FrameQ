@@ -336,6 +336,18 @@ describe("Tauri desktop window configuration", () => {
     expect(script).not.toContain('"*.pyi"');
   });
 
+  test("installer script prunes torch include/share on both Windows and macOS site-packages layouts", () => {
+    const script = readFileSync(installerScriptPath, "utf8");
+
+    expect(script).toContain("findSitePackagesDirectories");
+    expect(script).toContain('join("torch", "include")');
+    expect(script).toContain('join("torch", "share")');
+    // Windows keeps Lib/site-packages; python-build-standalone on macOS/Linux nests
+    // it under lib/python3.<minor>/site-packages, so both must be resolved.
+    expect(script).toContain('join(root, "Lib", "site-packages")');
+    expect(script).toContain('join(unixLib, entry.name, "site-packages")');
+  });
+
   test("installer script fails when external build commands fail", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
