@@ -500,7 +500,14 @@ async function main() {
   run(commandName("uv"), ["export", "--no-dev", "--format", "requirements-txt", "--output-file", requirementsPath], "Export Python requirements");
   run(pythonExe, ["-m", "ensurepip", "--upgrade"], "Install bundled Python pip");
   run(pythonExe, ["-m", "pip", "install", "--upgrade", "pip"], "Upgrade bundled Python pip");
-  run(pythonExe, ["-m", "pip", "install", "-r", requirementsPath], "Install bundled Python dependencies");
+  // Never source-build llvmlite: it needs a matching LLVM dev install the build
+  // machines lack. If a resolved llvmlite has no wheel for the platform, fail
+  // loudly here instead of hitting an opaque CMake "Could not find LLVM" error.
+  run(
+    pythonExe,
+    ["-m", "pip", "install", "--only-binary=llvmlite", "-r", requirementsPath],
+    "Install bundled Python dependencies",
+  );
   await pruneBundledPythonRuntime(pythonRoot);
   run(pythonExe, ["-c", "import funasr, modelscope, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
     env: { PYTHONDONTWRITEBYTECODE: "1", PYTHONPATH: workerRoot },

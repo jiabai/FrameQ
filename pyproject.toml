@@ -18,6 +18,14 @@ dependencies = [
     "torch>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "torchaudio==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "torchaudio>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # macOS Intel also pins numba/llvmlite (pulled in transitively by funasr) to
+    # the last releases that publish self-contained macOS x86_64 wheels: llvmlite
+    # 0.45.1 and numba 0.62.1. Newer versions (llvmlite >= 0.46, numba >= 0.63)
+    # have no Intel wheel, so pip would compile llvmlite from source, which needs
+    # a matching LLVM dev install the GitHub runner lacks (CMake "Could not find
+    # LLVM"). Other platforms keep the modern versions funasr resolves.
+    "llvmlite==0.45.1 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "numba==0.62.1 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "yt-dlp>=2026.6.9",
 ]
 

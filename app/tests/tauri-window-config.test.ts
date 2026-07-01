@@ -323,8 +323,20 @@ describe("Tauri desktop window configuration", () => {
     expect(projectDependencies).toContain("torchaudio==2.2.2");
     expect(projectDependencies).toContain("torchaudio>=2.10.0");
     expect(projectDependencies).toContain("platform_machine == 'x86_64'");
+    // macOS Intel pins numba/llvmlite to the last releases with prebuilt x86_64
+    // wheels, so pip never source-builds llvmlite (which needs LLVM).
+    expect(projectDependencies).toContain("llvmlite==0.45.1");
+    expect(projectDependencies).toContain("numba==0.62.1");
     expect(manifest).toContain("[project.optional-dependencies]");
     expect(manifest).toContain('qwen = ["qwen-asr>=0.0.6"]');
+  });
+
+  test("installer forces llvmlite to install from a prebuilt wheel", () => {
+    const script = readFileSync(installerScriptPath, "utf8");
+
+    // A source build of llvmlite needs a matching LLVM the runners lack, so the
+    // pip install must refuse to fall back to it.
+    expect(script).toContain('"--only-binary=llvmlite"');
   });
 
   test("worker manifest documents the macOS Intel CPython constraint for the torch pin", () => {
