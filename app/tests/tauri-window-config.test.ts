@@ -21,6 +21,10 @@ type TauriConfig = {
     targets: string[];
     resources: string[];
     createUpdaterArtifacts?: boolean;
+    macOS?: {
+      signingIdentity?: string | null;
+      hardenedRuntime?: boolean;
+    };
   };
   plugins?: {
     updater?: {
@@ -115,6 +119,18 @@ describe("Tauri desktop window configuration", () => {
     ]);
     expect(config.plugins?.updater?.windows?.installMode).toBe("passive");
     expect(config.bundle.resources).not.toContain("resources/models/**/*");
+  });
+
+  test("ad-hoc signs the macOS bundle so downloaded DMGs avoid the damaged-app Gatekeeper failure", () => {
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as TauriConfig;
+
+    // Free ad-hoc signing (no paid Apple Developer ID): re-seals the injected
+    // python/ffmpeg/worker resources so first launch degrades to the bypassable
+    // "unidentified developer" prompt instead of the "app is damaged" dead end.
+    expect(config.bundle.macOS?.signingIdentity).toBe("-");
+    // Hardened runtime enforces library validation, which would block loading the
+    // bundled torch/ffmpeg/python dylibs under an ad-hoc (team-less) signature.
+    expect(config.bundle.macOS?.hardenedRuntime).toBe(false);
   });
 
   test("allows updater and process plugin commands from the main window", () => {

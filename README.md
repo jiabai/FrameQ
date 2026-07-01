@@ -218,6 +218,20 @@ LLM API keys, cloud model credentials, ASR weights, and user-private configurati
 
 The workflow validates and rewrites the uploaded `latest.json` as UTF-8 without BOM before the final release-asset upload, because Tauri updater rejects updater manifests with a BOM as invalid JSON. The bundled updater endpoint includes a fixed query string to avoid stale GitHub release-asset cache entries after a manifest is corrected in place.
 
+### macOS install and Gatekeeper
+
+The macOS DMGs (both Intel and Apple Silicon) are **ad-hoc signed but not notarized**. Ad-hoc signing is free and needs no Apple Developer ID certificate; it re-seals the bundled Python, ffmpeg, and worker resources so the app and its libraries load correctly. It does **not** clear Apple notarization, so the first launch after downloading is still blocked once by Gatekeeper. Ask users to approve it a single time:
+
+- **macOS 15 Sequoia and later:** double-click the app once, dismiss the warning, then open **System Settings → Privacy & Security**, scroll to the FrameQ message, and click **Open Anyway**.
+- **macOS 14 and earlier:** Control-click (right-click) the app in `/Applications` and choose **Open**, then confirm **Open** in the dialog.
+- **Terminal fallback (any version):** remove the download quarantine attribute directly.
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/FrameQ.app
+  ```
+
+Removing this one-time prompt entirely requires an Apple Developer Program membership plus notarization, which is intentionally deferred until the desktop app proves commercial demand. Until then, ad-hoc signing keeps the failure mode to a bypassable prompt rather than the non-recoverable "app is damaged" error. See `docs/exec-plans/tech-debt-tracker.md` for the removal condition.
+
 ## Desktop Local Settings
 
 The desktop app stores non-LLM local settings in its app-local data `.env` file. The settings sheet creates this file when needed, shows its path, and can reveal it in the system file manager.

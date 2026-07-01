@@ -1,12 +1,19 @@
 # Tech Debt Tracker
 
-Last updated: 2026-06-17
+Last updated: 2026-07-01
 
 ## High Priority
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
 | None | No high-priority MVP debt remains after final validation | N/A | N/A |
+
+## Accepted / Deferred
+
+| Topic | Why it matters | Source | Removal Condition |
+|------|----------------|--------|-------------------|
+| macOS notarization deferred | macOS DMGs are ad-hoc signed only (`bundle.macOS.signingIdentity = "-"`, `hardenedRuntime = false`), so first launch still shows a one-time Gatekeeper prompt that users must bypass manually. Full removal needs a paid Apple Developer ID + notarization. Ad-hoc signing is the free mitigation that avoids the non-recoverable "app is damaged" failure. | `app/src-tauri/tauri.conf.json`, README "macOS install and Gatekeeper" | Desktop app shows commercial demand → buy Apple Developer Program, add Developer ID signing + `notarytool` notarization + stapling to the macOS release jobs. |
+| macOS auto-update not wired | `latest.json` only carries Windows platform entries and the macOS jobs upload DMGs without `.app.tar.gz` updater artifacts, so the Tauri updater never offers macOS updates (safe no-op, not a crash). | `.github/workflows/desktop-release.yml`, `app/src-tauri/tauri.conf.json` | Either gate the updater UI off on macOS, or publish `.app.tar.gz` + `.sig` and merge `darwin-*` entries into `latest.json`. |
 
 ## Recently Closed
 
