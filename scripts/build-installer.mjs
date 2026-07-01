@@ -308,28 +308,13 @@ function isMacTarget(target) {
   return target === "macos-arm64" || target === "macos-x64";
 }
 
-async function prepareSelfContainedMacRuntime(pythonRoot, target) {
-  const sitePackagesDirectories = await findSitePackagesDirectories(pythonRoot);
-
-  if (target === "macos-x64") {
-    // Intel lacks prebuilt wheels for some native deps (e.g. llvmlite has no
-    // macOS x86_64 wheel), so pip compiles them from source on the runner and
-    // bakes in Homebrew paths like /usr/local/opt/zstd/lib/libzstd.1.dylib.
-    // delocate copies those libraries into the bundle, rewrites the load
-    // commands to @loader_path, and ad-hoc re-signs the modified binaries so
-    // they load on clean Macs without Homebrew.
-    for (const sitePackages of sitePackagesDirectories) {
-      run(
-        "uvx",
-        ["--from", "delocate", "delocate-path", sitePackages],
-        `Vendor external macOS dylibs in ${sitePackages}`,
-      );
-    }
-  }
-
-  // Guard both arches: fail the build if any bundled library still references a
-  // path outside the app bundle. Runs on the Homebrew-rich runner via static
-  // analysis, so it catches leaks that the import smoke test would hide.
+async function verifyMacRuntimeSelfContained(pythonRoot) {
+  // The macOS runtime relies on upstream-delocated wheels: Intel pins
+  // numba/llvmlite to versions that ship self-contained x86_64 wheels, and torch
+  // and friends bundle their own libraries. Fail the build if any bundled
+  // library still references a path outside the app bundle. This is static
+  // analysis (delocate-listdeps), so it catches leaks even on the Homebrew-rich
+  // runner where an import smoke test would pass.
   run(
     "node",
     [join(scriptDir, "verify-macos-self-contained.mjs"), pythonRoot],
@@ -516,7 +501,7 @@ async function main() {
   await removePythonCaches(workerRoot);
 
   if (isMacTarget(options.target)) {
-    await prepareSelfContainedMacRuntime(pythonRoot, options.target);
+    await verifyMacRuntimeSelfContained(pythonRoot);
   }
 
   if (!options.skipTauriBuild) {

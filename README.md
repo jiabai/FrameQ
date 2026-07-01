@@ -174,12 +174,12 @@ The Python and ffmpeg values may be URLs or local archive paths. Use `--target w
 
 The installer does not bundle SenseVoice Small weights. It prunes non-runtime Python debug, cache, test, and header artifacts; keeps `resources/models` out of the bundle; and guides the user through downloading SenseVoice Small into app-local data on first run.
 
-On the macOS Intel (`macos-x64`) build, some native dependencies (for example `llvmlite`, pulled in transitively by `funasr` → `numba`) have no prebuilt x86_64 wheel, so pip compiles them from source and bakes in Homebrew paths such as `/usr/local/opt/zstd/lib/libzstd.1.dylib`. Those resolve on the CI runner but are missing on clean user Macs. The installer runs `delocate` on the Intel build to copy such libraries into the bundle and rewrite their load commands to `@loader_path`.
+On the macOS Intel (`macos-x64`) build, the newest versions of some native dependencies ship no prebuilt x86_64 wheel — `llvmlite` (pulled in transitively by `funasr` → `numba`) is the notable one, and building it from source needs a matching LLVM install the runners lack. The build therefore pins `numba`/`llvmlite` to the last releases with self-contained macOS x86_64 wheels (see the pins in `pyproject.toml`), and installs with `pip install --only-binary=llvmlite` so a missing wheel fails loudly instead of falling back to a source build that would bake in Homebrew paths (for example `/usr/local/opt/zstd/lib/libzstd.1.dylib`) and break on clean user Macs.
 
-Two build-time checks then guard self-containment, and together they need no clean Mac:
+Two build-time checks then confirm the packaged runtime is self-contained, and together they need no clean Mac:
 
-- `scripts/verify-macos-self-contained.mjs` runs inside the installer build (both arches) and fails if any bundled library still references a non-bundled path (`/usr/local`, `/opt/homebrew`, `/opt/local`). Because `delocate` rewrites those references to `@loader_path`, this also proves the Homebrew copy on the runner can no longer satisfy them.
-- The release workflow then imports the packaged runtime from the built `.app` (`import funasr, modelscope, yt_dlp; import frameq_worker`). Since no external reference remains, this exercises the in-bundle `@loader_path` links and fails if `tauri build` dropped the vendored `.dylibs` folder — before the DMG is uploaded.
+- `scripts/verify-macos-self-contained.mjs` runs inside the installer build (both arches) and fails if any bundled library references a non-bundled path (`/usr/local`, `/opt/homebrew`, `/opt/local`). This is static analysis, so it catches leaks even on the Homebrew-rich runner where an import smoke test would pass.
+- The release workflow then imports the packaged runtime from the built `.app` (`import funasr, modelscope, yt_dlp; import frameq_worker`), which fails if a required library did not make it into the bundle — before the DMG is uploaded.
 
 ### GitHub Releases updater artifacts
 

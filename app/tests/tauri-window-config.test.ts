@@ -284,19 +284,18 @@ describe("Tauri desktop window configuration", () => {
     );
   });
 
-  test("installer vendors and verifies self-contained macOS native dylibs", () => {
+  test("installer verifies the macOS runtime is self-contained", () => {
     const script = readFileSync(installerScriptPath, "utf8");
     const verifyScript = readFileSync(
       resolve(import.meta.dirname, "../../scripts/verify-macos-self-contained.mjs"),
       "utf8",
     );
 
-    // delocate runs only on the Intel target that lacks prebuilt native wheels.
-    expect(script).toContain('target === "macos-x64"');
-    expect(script).toContain('"--from", "delocate", "delocate-path"');
-    // Both macOS arches run the static self-containment guard.
-    expect(script).toContain("prepareSelfContainedMacRuntime");
+    // The runtime relies on upstream self-contained wheels, so the build only
+    // verifies self-containment and never rewrites dylibs with delocate-path.
+    expect(script).toContain("verifyMacRuntimeSelfContained");
     expect(script).toContain("verify-macos-self-contained.mjs");
+    expect(script).not.toContain("delocate-path");
 
     // The guard rejects Homebrew/MacPorts prefixes that break on clean Macs.
     expect(verifyScript).toContain("delocate-listdeps");
