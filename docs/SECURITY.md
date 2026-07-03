@@ -9,6 +9,7 @@
 - Empty transcript saves, path traversal, non-transcript files, and unrelated local paths must fail recoverably.
 - Segment metadata is local-only review data. It must not be sent to FrameQ server unless a future product spec explicitly adds a server workflow.
 - The audio player should use Tauri-validated local paths only. Missing audio must degrade to text editing without attempting remote downloads or network lookups.
+- The Tauri asset protocol may be enabled only for reviewed audio artifacts under app-local `work/`; it must not expose `auth/`, `models/`, `outputs/`, `.env`, update preferences, or arbitrary user directories.
 
 ## 2026-06-29 YouTube Public Video Safety Boundary
 

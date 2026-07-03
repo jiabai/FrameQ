@@ -144,8 +144,15 @@ jobs:
 
       - name: Verify packaged runtime imports end to end
         run: |
-          RES="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app/Contents/Resources/resources"
-          PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, modelscope, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app"
+          RES="$APP/Contents/Resources/resources"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, modelscope, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          if find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
+            echo "Packaged runtime smoke test mutated the signed app bundle." >&2
+            find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=4 "$APP"
 
       - name: Package macOS Intel DMG
         run: bash scripts/make-macos-dmg.sh x86_64-apple-darwin FrameQ
@@ -197,8 +204,15 @@ jobs:
 
       - name: Verify packaged runtime imports end to end
         run: |
-          RES="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/FrameQ.app/Contents/Resources/resources"
-          PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, modelscope, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          APP="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/FrameQ.app"
+          RES="$APP/Contents/Resources/resources"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, modelscope, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          if find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
+            echo "Packaged runtime smoke test mutated the signed app bundle." >&2
+            find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=4 "$APP"
 
       - name: Package macOS Apple Silicon DMG
         run: bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ

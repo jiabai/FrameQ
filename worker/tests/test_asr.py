@@ -1,5 +1,6 @@
 import json
 import os
+import wave
 from pathlib import Path
 
 import pytest
@@ -271,6 +272,63 @@ def test_sensevoice_transcriber_extracts_valid_segments_without_relying_on_speak
             text="third",
             speaker="speaker-b",
         ),
+    )
+
+
+def test_sensevoice_transcriber_builds_segments_from_vad_blocks_when_sentence_info_is_absent(
+    tmp_path: Path,
+) -> None:
+    audio_path = tmp_path / "speech.wav"
+    with wave.open(str(audio_path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(b"\0\0" * 16000 * 33)
+
+    class FakeFrontend:
+        fs = 16000
+
+    class FakeModel:
+        def __init__(self) -> None:
+            self.vad_model = object()
+            self.model = object()
+            self.vad_kwargs: dict[str, object] = {}
+            self.kwargs: dict[str, object] = {
+                "frontend": FakeFrontend(),
+                "device": "cpu",
+                "batch_size": 1,
+            }
+
+        def _reset_runtime_configs(self) -> None:
+            return None
+
+        def inference(
+            self,
+            input: object,
+            model: object,
+            **kwargs: object,
+        ) -> list[dict[str, object]]:
+            if model is self.vad_model:
+                return [{"key": "speech", "value": [[0, 16000], [16000, 33000]]}]
+
+            assert isinstance(input, list)
+            assert len(input) == 2
+            return [
+                {"text": "<|zh|><|withitn|>第一段"},
+                {"text": "<|zh|><|withitn|>第二段"},
+            ]
+
+        def generate(self, **kwargs: object) -> list[dict[str, object]]:
+            raise AssertionError("full-audio fallback should not run when VAD blocks succeed")
+
+    transcriber = SenseVoiceTranscriber(model_factory=lambda **kwargs: FakeModel())
+
+    transcript = transcriber.transcribe(audio_path)
+
+    assert transcript.text == "第一段 第二段"
+    assert transcript.segments == (
+        TranscriptSegment(id="seg-0001", start_ms=0, end_ms=16000, text="第一段"),
+        TranscriptSegment(id="seg-0002", start_ms=16000, end_ms=33000, text="第二段"),
     )
 
 

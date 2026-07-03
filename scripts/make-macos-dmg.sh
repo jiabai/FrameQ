@@ -18,6 +18,14 @@ if [ ! -d "${APP}" ]; then
   exit 1
 fi
 
+if find "${APP}/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
+  echo "Refusing to package ${APP}: Python bytecode cache files would invalidate the signed app bundle." >&2
+  find "${APP}/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) >&2
+  exit 1
+fi
+
+codesign --verify --deep --strict --verbose=4 "${APP}"
+
 case "${TARGET}" in
   x86_64-apple-darwin) ARCH_SUFFIX="x64" ;;
   aarch64-apple-darwin) ARCH_SUFFIX="aarch64" ;;

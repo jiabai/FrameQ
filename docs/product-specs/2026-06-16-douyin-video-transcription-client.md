@@ -5,12 +5,12 @@
 - The `完整文字稿` detail view should become an audio review and correction surface instead of a read-only searchable text preview.
 - The detail toolbar search box should be removed for this view. The user should review by listening, selecting transcript blocks, and editing text directly.
 - When the processed task has a local audio file, the transcript detail view should render a native audio player above the transcript content.
-- When the worker has produced valid transcript time segments, clicking a transcript block should highlight that block, seek the audio player to the block's `start_ms`, and start playback.
+- When the worker has produced valid transcript time segments, clicking a transcript block should highlight that block, seek the audio player to the block's `start_ms`, and start playback. For SenseVoice, these segments may come from sentence timing when available or from directly transcribed FSMN-VAD speech blocks when sentence timing is absent.
 - During playback, the current block highlight should follow the audio time and move to the next block when playback reaches the next segment. Speaker metadata must not affect seek or highlight behavior, including the single-speaker case.
 - Starting an edit should pause audio playback and lock focus to the edited block. Saving should write the official transcript and, if audio was playing before edit, resume playback from the paused position.
-- Editing is block-level for v1. FrameQ should not infer word-level timestamps, character-level timing, or split/merge segments automatically.
+- Editing is block-level for v1. FrameQ should not infer word-level timestamps or character-level timing. SenseVoice may use real FSMN-VAD speech block boundaries, but must not invent timing by distributing text over the audio duration.
 - Saving confirms the edited transcript as the official transcript used by later AI整理 and exported transcript files. Unsaved drafts should be copied by the copy action, but export/location actions should continue to target the official saved file and ask the user to save first when needed.
-- Old tasks without a segment sidecar should still open: the audio player and full-text editor remain available when audio/text files exist, but click-to-seek and playback-following block highlight are disabled.
+- Tasks without a segment sidecar should still open: the audio player and full-text editor remain available when audio/text files exist, but click-to-seek and playback-following block highlight are disabled.
 - Audio-missing tasks should remain editable as text. The UI should show a recoverable local-audio-unavailable state rather than blocking transcript correction.
 
 <!-- 由 vibe-coding-launcher 根据根目录历史方案迁移生成；当前以本文件为 source of truth。 -->

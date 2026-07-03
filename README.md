@@ -179,7 +179,7 @@ On the macOS Intel (`macos-x64`) build, the newest versions of some native depen
 Two build-time checks then confirm the packaged runtime is self-contained, and together they need no clean Mac:
 
 - `scripts/verify-macos-self-contained.mjs` runs inside the installer build (both arches) and fails if any bundled library references a non-bundled path (`/usr/local`, `/opt/homebrew`, `/opt/local`). This is static analysis, so it catches leaks even on the Homebrew-rich runner where an import smoke test would pass.
-- The release workflow then imports the packaged runtime from the built `.app` (`import funasr, modelscope, yt_dlp; import frameq_worker`), which fails if a required library did not make it into the bundle — before the DMG is uploaded.
+- The release workflow then imports the packaged runtime from the built `.app` (`import funasr, modelscope, yt_dlp; import frameq_worker`) with `PYTHONDONTWRITEBYTECODE=1`, which fails if a required library did not make it into the bundle before the DMG is uploaded. The workflow and DMG script also reject `__pycache__` / `.pyc` files and run `codesign --verify --deep --strict` before packaging, because writing bytecode after Tauri signs the `.app` invalidates the bundle and makes downloaded apps appear damaged in Gatekeeper.
 
 ### GitHub Releases updater artifacts
 
@@ -243,7 +243,7 @@ The macOS DMGs (both Intel and Apple Silicon) are **ad-hoc signed but not notari
   xattr -dr com.apple.quarantine /Applications/FrameQ.app
   ```
 
-Removing this one-time prompt entirely requires an Apple Developer Program membership plus notarization, which is intentionally deferred until the desktop app proves commercial demand. Until then, ad-hoc signing keeps the failure mode to a bypassable prompt rather than the non-recoverable "app is damaged" error. See `docs/exec-plans/tech-debt-tracker.md` for the removal condition.
+Removing this one-time prompt entirely requires an Apple Developer Program membership plus notarization, which is intentionally deferred until the desktop app proves commercial demand. Until then, ad-hoc signing keeps the failure mode to a bypassable prompt rather than the non-recoverable "app is damaged" error, as long as the signed `.app` is not modified after signing. See `docs/exec-plans/tech-debt-tracker.md` for the removal condition.
 
 macOS updates are manual for the same reason: the Tauri updater only publishes Windows artifacts and a Windows-only `latest.json`, so the desktop app reports macOS update delivery as manual (`get_update_delivery`). On macOS the app skips the silent update check and the settings sheet shows a **前往下载页** action that opens the releases page, instead of the Windows in-app auto-update flow. Re-download the newer DMG to update.
 

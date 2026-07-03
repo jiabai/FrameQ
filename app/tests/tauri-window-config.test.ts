@@ -16,6 +16,13 @@ type TauriWindowConfig = {
 type TauriConfig = {
   app: {
     windows: TauriWindowConfig[];
+    security?: {
+      csp?: unknown;
+      assetProtocol?: {
+        enable?: boolean;
+        scope?: string[];
+      };
+    };
   };
   bundle: {
     targets: string[];
@@ -108,6 +115,17 @@ describe("Tauri desktop window configuration", () => {
     expect(config.bundle.resources).not.toContain("resources/models/**/*");
   });
 
+  test("allows reviewed audio artifacts to play through Tauri asset URLs", () => {
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as TauriConfig;
+    const manifest = readFileSync(cargoManifestPath, "utf8");
+
+    expect(config.app.security?.assetProtocol).toEqual({
+      enable: true,
+      scope: ["$APPLOCALDATA/work/**"],
+    });
+    expect(manifest).toContain('tauri = { version = "2", features = ["protocol-asset"] }');
+  });
+
   test("enables signed updater artifacts without bundling model resources", () => {
     const config = JSON.parse(readFileSync(configPath, "utf8")) as TauriConfig;
 
@@ -181,6 +199,14 @@ describe("Tauri desktop window configuration", () => {
     // Archives download into per-role directories so URLs that share a leaf name
     // (e.g. evermeet .../ffmpeg/zip and .../ffprobe/zip) cannot overwrite each other.
     expect(script).toContain('basename(fallbackName, ".archive")');
+  });
+
+  test("installer script invokes uv through PATH without requiring a Windows cmd shim", () => {
+    const script = readFileSync(installerScriptPath, "utf8");
+    const commandNameBody = script.match(/function commandName\(name\) \{([\s\S]*?)\r?\n\}/)?.[1] ?? "";
+
+    expect(commandNameBody).toContain('name === "npm"');
+    expect(commandNameBody).not.toContain('name === "uv"');
   });
 
   test("installer script normalizes macOS Python launchers when reusing runtime resources", () => {
@@ -262,8 +288,9 @@ describe("Tauri desktop window configuration", () => {
     // The Intel job re-imports the packaged runtime so a dropped .dylibs folder
     // (delocate output) fails the build before the DMG is uploaded.
     expect(workflow).toContain(
-      "x86_64-apple-darwin/release/bundle/macos/FrameQ.app/Contents/Resources/resources",
+      'APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app"',
     );
+    expect(workflow).toContain('RES="$APP/Contents/Resources/resources"');
 
     expect(workflow).toContain("macos-arm64-dmg-artifact");
     expect(workflow).toContain("build_macos_arm64:");
@@ -277,14 +304,25 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ");
     expect(workflow).toContain("target/aarch64-apple-darwin/release/bundle/dmg/*.dmg");
     expect(workflow).toContain(
-      "aarch64-apple-darwin/release/bundle/macos/FrameQ.app/Contents/Resources/resources",
+      'APP="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/FrameQ.app"',
     );
+    expect(workflow).toContain('RES="$APP/Contents/Resources/resources"');
 
     // Both macOS jobs import the packaged runtime end to end (exercises the
     // delocated @loader_path links inside the built .app).
     expect(workflow).toContain(
       'import funasr, modelscope, yt_dlp; import frameq_worker; print(\'bundled runtime import OK\')',
     );
+  });
+
+  test("desktop release workflow does not mutate signed macOS app bundles during smoke tests", () => {
+    const workflow = readFileSync(desktopReleaseWorkflowPath, "utf8");
+
+    expect(workflow).toContain("PYTHONDONTWRITEBYTECODE=1");
+    expect(workflow).toContain("find \"$APP/Contents/Resources/resources\" \\( -name __pycache__ -o -name '*.pyc' \\)");
+    expect(workflow).toContain("codesign --verify --deep --strict --verbose=4 \"$APP\"");
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh x86_64-apple-darwin FrameQ");
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ");
   });
 
   test("installer verifies the macOS runtime is self-contained", () => {
@@ -305,6 +343,14 @@ describe("Tauri desktop window configuration", () => {
     expect(verifyScript).toContain('"/usr/local/"');
     expect(verifyScript).toContain('"/opt/homebrew/"');
     expect(verifyScript).toContain('"/opt/local/"');
+  });
+
+  test("macOS DMG packaging verifies the signed app bundle before creating the image", () => {
+    const script = readFileSync(resolve(import.meta.dirname, "../../scripts/make-macos-dmg.sh"), "utf8");
+
+    expect(script).toContain("codesign --verify --deep --strict --verbose=4 \"${APP}\"");
+    expect(script).toContain("find \"${APP}/Contents/Resources/resources\" \\( -name __pycache__ -o -name '*.pyc' \\)");
+    expect(script).toContain("Refusing to package");
   });
 
   test("installer runtime still includes ModelScope for first-run model download", () => {

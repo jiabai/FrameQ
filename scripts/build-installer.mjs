@@ -95,7 +95,7 @@ function requireFileOrUrl(value, name) {
 }
 
 function commandName(name) {
-  if (process.platform === "win32" && (name === "npm" || name === "uv")) {
+  if (process.platform === "win32" && name === "npm") {
     return `${name}.cmd`;
   }
   return name;
