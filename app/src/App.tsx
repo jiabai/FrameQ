@@ -1,4 +1,5 @@
 import { FormEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import {
   CheckCircle2,
@@ -13,7 +14,6 @@ import {
   LoaderCircle,
   Play,
   RotateCcw,
-  Search,
   Settings,
   ShieldCheck,
   UserRound,
@@ -79,6 +79,18 @@ import { ModelGuideSheet } from "./features/asrModel/ModelGuideSheet";
 import { useAsrModelDownload } from "./features/asrModel/useAsrModelDownload";
 import { ResultWorkspace } from "./features/results/ResultWorkspace";
 import { useAppUpdateController } from "./features/updates/useAppUpdateController";
+import {
+  loadTranscriptDetail,
+  saveTranscriptEdit,
+  type TranscriptDetailResponse,
+  type TranscriptSegment,
+} from "./transcriptDetailClient";
+import {
+  findActiveTranscriptSegmentId,
+  isTranscriptSegmentEditDisabled,
+  transcriptTextFromSegments,
+  updateTranscriptSegmentText,
+} from "./transcriptReviewState";
 
 const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }> = {
   waiting_input: {
@@ -151,6 +163,13 @@ function formatProgressPercent(value: number): string {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
 
+function formatSegmentTime(startMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(startMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 function asrModelSourceLabel(source: string): string {
   return source === "custom_url" ? "自定义下载源" : "ModelScope";
 }
@@ -211,8 +230,15 @@ function App() {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
   const [insightConfirmOpen, setInsightConfirmOpen] = useState(false);
-  const [detailSearch, setDetailSearch] = useState("");
   const [actionNotice, setActionNotice] = useState("");
+  const [transcriptDetail, setTranscriptDetail] = useState<TranscriptDetailResponse | null>(null);
+  const [transcriptDraft, setTranscriptDraft] = useState("");
+  const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([]);
+  const [transcriptDirty, setTranscriptDirty] = useState(false);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [transcriptSaving, setTranscriptSaving] = useState(false);
+  const [activeTranscriptSegmentId, setActiveTranscriptSegmentId] = useState<string | null>(null);
+  const [editingTranscriptSegmentId, setEditingTranscriptSegmentId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState<LlmConfigDraft>({
     outputDir: "",
@@ -247,6 +273,9 @@ function App() {
   const [historyNotice, setHistoryNotice] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
   const operationIdRef = useRef(0);
+  const transcriptAudioRef = useRef<HTMLAudioElement | null>(null);
+  const transcriptSegmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const resumeTranscriptAfterSaveRef = useRef(false);
   const windowDragSessionRef = useRef<WindowDragSession | null>(null);
   const queuedWindowPositionRef = useRef<WindowPosition | null>(null);
   const windowMoveInFlightRef = useRef(false);
@@ -370,6 +399,77 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (detailTab !== "transcript") {
+      return;
+    }
+
+    if (!workflow.transcriptPath) {
+      setTranscriptDetail(null);
+      setTranscriptDraft(workflow.text);
+      setTranscriptSegments([]);
+      setTranscriptDirty(false);
+      setActiveTranscriptSegmentId(null);
+      setEditingTranscriptSegmentId(null);
+      return;
+    }
+
+    let cancelled = false;
+    setTranscriptLoading(true);
+    setTranscriptDetail(null);
+    setTranscriptDraft(workflow.text);
+    setTranscriptSegments([]);
+    setTranscriptDirty(false);
+    setActiveTranscriptSegmentId(null);
+    setEditingTranscriptSegmentId(null);
+
+    async function loadDetail() {
+      try {
+        const detail = await loadTranscriptDetail(workflow.transcriptPath!, workflow.audioPath);
+        if (cancelled) {
+          return;
+        }
+        setTranscriptDetail(detail);
+        setTranscriptDraft(detail.text || workflow.text);
+        setTranscriptSegments(detail.segments);
+        setActionNotice(
+          detail.audio_path
+            ? ""
+            : "音频文件暂不可用，可以先编辑文字稿；点击保存后会更新正式文字稿。",
+        );
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setTranscriptDetail(null);
+        setTranscriptDraft(workflow.text);
+        setTranscriptSegments([]);
+        setActionNotice(
+          `无法读取文字稿详情，已显示当前结果文本：${error instanceof Error ? error.message : String(error)}`,
+        );
+      } finally {
+        if (!cancelled) {
+          setTranscriptLoading(false);
+        }
+      }
+    }
+
+    void loadDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTab, workflow.audioPath, workflow.text, workflow.transcriptPath]);
+
+  useEffect(() => {
+    if (!activeTranscriptSegmentId) {
+      return;
+    }
+    transcriptSegmentRefs.current[activeTranscriptSegmentId]?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [activeTranscriptSegmentId]);
+
   async function refreshAccountStatus() {
     setAccountLoading(true);
     try {
@@ -481,7 +581,6 @@ function App() {
 
     if (card.action === "open") {
       setActionNotice("");
-      setDetailSearch("");
       setDetailTab(card.id);
       return;
     }
@@ -549,7 +648,7 @@ function App() {
     if (!detailTab) {
       return;
     }
-    const text = getDetailText(detailTab, workflow);
+    const text = detailTab === "transcript" ? transcriptDraft : getDetailText(detailTab, workflow);
     if (!text) {
       setActionNotice("暂无可复制内容。");
       return;
@@ -567,6 +666,10 @@ function App() {
     if (!detailTab) {
       return;
     }
+    if (detailTab === "transcript" && transcriptDirty) {
+      setActionNotice("文字稿有未保存修改，请先保存后再定位正式文件。");
+      return;
+    }
     const exportPath = getExportPath(detailTab, workflow);
     if (!exportPath) {
       setActionNotice("暂无可导出的文件。");
@@ -578,6 +681,103 @@ function App() {
       setActionNotice("已在文件管理器中定位导出文件。");
     } catch {
       setActionNotice(`无法定位文件：${exportPath}`);
+    }
+  }
+
+  async function playTranscriptSegment(segment: TranscriptSegment) {
+    if (editingTranscriptSegmentId) {
+      return;
+    }
+
+    setActiveTranscriptSegmentId(segment.id);
+    const audio = transcriptAudioRef.current;
+    if (!audio || !transcriptDetail?.audio_path) {
+      setActionNotice("当前任务没有可播放的本地音频，只能编辑文字稿。");
+      return;
+    }
+
+    audio.currentTime = segment.start_ms / 1000;
+    try {
+      await audio.play();
+    } catch {
+      setActionNotice("音频无法自动播放，请手动点击播放器继续。");
+    }
+  }
+
+  function handleTranscriptTimeUpdate() {
+    const audio = transcriptAudioRef.current;
+    if (!audio || editingTranscriptSegmentId) {
+      return;
+    }
+    const activeId = findActiveTranscriptSegmentId(transcriptSegments, audio.currentTime);
+    if (activeId) {
+      setActiveTranscriptSegmentId(activeId);
+    }
+  }
+
+  function beginTranscriptSegmentEdit(segmentId: string) {
+    const audio = transcriptAudioRef.current;
+    if (audio && !audio.paused) {
+      resumeTranscriptAfterSaveRef.current = true;
+      audio.pause();
+    }
+    setEditingTranscriptSegmentId(segmentId);
+    setActiveTranscriptSegmentId(segmentId);
+  }
+
+  function updateTranscriptSegmentDraft(segmentId: string, text: string) {
+    setTranscriptSegments((current) => {
+      const next = updateTranscriptSegmentText(current, segmentId, text);
+      setTranscriptDraft(transcriptTextFromSegments(next));
+      return next;
+    });
+    setTranscriptDirty(true);
+  }
+
+  function updateFullTranscriptDraft(text: string) {
+    setTranscriptDraft(text);
+    setTranscriptDirty(true);
+  }
+
+  async function saveTranscriptDraft() {
+    if (!workflow.transcriptPath || transcriptSaving) {
+      return;
+    }
+
+    setTranscriptSaving(true);
+    try {
+      const saved = await saveTranscriptEdit(
+        workflow.transcriptPath,
+        transcriptDraft,
+        transcriptSegments,
+      );
+      setTranscriptDraft(saved.text);
+      setTranscriptDirty(false);
+      setEditingTranscriptSegmentId(null);
+      setTranscriptDetail((current) =>
+        current
+          ? {
+              ...current,
+              text: saved.text,
+              has_original_backup: saved.has_original_backup,
+            }
+          : current,
+      );
+      setWorkflow((current) => ({ ...current, text: saved.text }));
+      setActionNotice("文字稿已保存，后续 AI 整理会使用保存后的正式稿。");
+
+      if (resumeTranscriptAfterSaveRef.current && transcriptAudioRef.current) {
+        resumeTranscriptAfterSaveRef.current = false;
+        try {
+          await transcriptAudioRef.current.play();
+        } catch {
+          setActionNotice("文字稿已保存。音频无法自动继续，请手动点击播放器。");
+        }
+      }
+    } catch (error) {
+      setActionNotice(`保存文字稿失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setTranscriptSaving(false);
     }
   }
 
@@ -814,26 +1014,13 @@ function App() {
   const progressPercent = formatProgressPercent(workflow.progressPercent);
   const detailTitle =
     detailTab === "insights" ? "启发话题点" : detailTab === "summary" ? "要点总结" : "完整文字稿";
-  const detailText = detailTab ? getDetailText(detailTab, workflow) : "";
+  const detailText =
+    detailTab === "transcript" ? transcriptDraft : detailTab ? getDetailText(detailTab, workflow) : "";
   const exportPath = detailTab ? getExportPath(detailTab, workflow) : null;
-  const searchQuery = detailSearch.trim().toLocaleLowerCase();
-  const visibleInsights = searchQuery
-    ? workflow.insights.filter((insight) => insight.toLocaleLowerCase().includes(searchQuery))
-    : workflow.insights;
-  const visibleTranscript =
-    searchQuery && workflow.text
-      ? workflow.text
-          .split(/\n+/)
-          .filter((line) => line.toLocaleLowerCase().includes(searchQuery))
-          .join("\n")
-      : workflow.text;
-  const visibleSummary =
-    searchQuery && workflow.summary
-      ? workflow.summary
-          .split(/\n+/)
-          .filter((line) => line.toLocaleLowerCase().includes(searchQuery))
-          .join("\n")
-      : workflow.summary;
+  const transcriptAudioSrc = transcriptDetail?.audio_path
+    ? convertFileSrc(transcriptDetail.audio_path)
+    : "";
+  const hasTranscriptSegments = transcriptSegments.length > 0;
   const accountHasActiveEntitlement =
     account.authenticated && account.entitlementStatus === "active";
   const accountChipLabel = canProcessWithAccount(account)
@@ -1125,48 +1312,54 @@ function App() {
               <button
                 className={detailTab === "summary" ? "selected" : ""}
                 type="button"
-                onClick={() => {
-                  setDetailSearch("");
-                  setDetailTab("summary");
-                }}
+                onClick={() => setDetailTab("summary")}
               >
                 要点总结
               </button>
               <button
                 className={detailTab === "insights" ? "selected" : ""}
                 type="button"
-                onClick={() => {
-                  setDetailSearch("");
-                  setDetailTab("insights");
-                }}
+                onClick={() => setDetailTab("insights")}
               >
                 启发话题点
               </button>
               <button
                 className={detailTab === "transcript" ? "selected" : ""}
                 type="button"
-                onClick={() => {
-                  setDetailSearch("");
-                  setDetailTab("transcript");
-                }}
+                onClick={() => setDetailTab("transcript")}
               >
                 完整文字稿
               </button>
             </div>
             <div className="modal-tools">
-              <label className="search-box">
-                <Search size={16} />
-                <input
-                  value={detailSearch}
-                  onChange={(event) => setDetailSearch(event.currentTarget.value)}
-                  placeholder="搜索关键词..."
-                />
-              </label>
+              <div className="detail-tool-status">
+                {detailTab === "transcript" ? (
+                  <span>
+                    {transcriptDirty
+                      ? "有未保存修改"
+                      : transcriptDetail?.has_original_backup
+                        ? "已创建原始备份"
+                        : "本地文字稿"}
+                  </span>
+                ) : (
+                  <span>本地结果预览</span>
+                )}
+              </div>
               <div className="tool-actions">
                 <button type="button" onClick={copyDetail} disabled={!detailText}>
                   <Copy size={16} />
                   <span>复制</span>
                 </button>
+                {detailTab === "transcript" ? (
+                  <button
+                    type="button"
+                    onClick={saveTranscriptDraft}
+                    disabled={!workflow.transcriptPath || !transcriptDirty || transcriptSaving}
+                  >
+                    {transcriptSaving ? <LoaderCircle size={16} className="spin" /> : <CheckCircle2 size={16} />}
+                    <span>{transcriptSaving ? "保存中" : "保存"}</span>
+                  </button>
+                ) : null}
                 <button type="button" onClick={exportDetail} disabled={!exportPath}>
                   <Download size={16} />
                   <span>导出</span>
@@ -1176,23 +1369,94 @@ function App() {
             {actionNotice ? <p className="action-notice">{actionNotice}</p> : null}
             <div className="modal-content">
               {detailTab === "summary" ? (
-                <p>{visibleSummary || (searchQuery ? "没有匹配的关键词。" : "要点总结生成后将在这里显示。")}</p>
+                <p>{workflow.summary || "要点总结生成后将在这里显示。"}</p>
               ) : detailTab === "insights" ? (
                 workflow.insights.length > 0 ? (
-                  visibleInsights.length > 0 ? (
-                    <ol>
-                      {visibleInsights.map((insight) => (
-                        <li key={insight}>{insight}</li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p>没有匹配的关键词。</p>
-                  )
+                  <ol>
+                    {workflow.insights.map((insight) => (
+                      <li key={insight}>{insight}</li>
+                    ))}
+                  </ol>
                 ) : (
                   <p>话题点尚未生成。</p>
                 )
               ) : (
-                <p>{visibleTranscript || (searchQuery ? "没有匹配的关键词。" : "文字稿生成后将在这里显示。")}</p>
+                <div className="transcript-review">
+                  {transcriptLoading ? (
+                    <p className="transcript-status">正在读取文字稿详情...</p>
+                  ) : null}
+                  {transcriptAudioSrc ? (
+                    <audio
+                      ref={transcriptAudioRef}
+                      className="transcript-audio"
+                      controls
+                      src={transcriptAudioSrc}
+                      onTimeUpdate={handleTranscriptTimeUpdate}
+                    />
+                  ) : (
+                    <p className="transcript-status">当前任务没有可播放的本地音频。</p>
+                  )}
+                  {hasTranscriptSegments ? (
+                    <div className="transcript-segments">
+                      {transcriptSegments.map((segment) => (
+                        <div
+                          key={segment.id}
+                          ref={(element) => {
+                            transcriptSegmentRefs.current[segment.id] = element;
+                          }}
+                          className={`transcript-segment ${
+                            activeTranscriptSegmentId === segment.id ? "active" : ""
+                          } ${editingTranscriptSegmentId === segment.id ? "editing" : ""}`}
+                        >
+                          <div className="transcript-segment-header">
+                            <button
+                              type="button"
+                              className="transcript-segment-time"
+                              onClick={() => void playTranscriptSegment(segment)}
+                              disabled={!transcriptDetail?.audio_path || Boolean(editingTranscriptSegmentId)}
+                            >
+                              <Play size={14} />
+                              <span>{formatSegmentTime(segment.start_ms)}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button compact-button"
+                              onClick={() => beginTranscriptSegmentEdit(segment.id)}
+                              disabled={isTranscriptSegmentEditDisabled(editingTranscriptSegmentId, segment.id)}
+                            >
+                              编辑
+                            </button>
+                          </div>
+                          {editingTranscriptSegmentId === segment.id ? (
+                            <textarea
+                              value={segment.text}
+                              onChange={(event) =>
+                                updateTranscriptSegmentDraft(segment.id, event.currentTarget.value)
+                              }
+                              autoFocus
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="transcript-segment-text"
+                              onClick={() => void playTranscriptSegment(segment)}
+                            >
+                              {segment.text}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <textarea
+                      className="transcript-full-editor"
+                      value={transcriptDraft}
+                      onFocus={() => beginTranscriptSegmentEdit("full-text")}
+                      onChange={(event) => updateFullTranscriptDraft(event.currentTarget.value)}
+                      placeholder="文字稿生成后将在这里显示。"
+                    />
+                  )}
+                </div>
               )}
             </div>
           </section>

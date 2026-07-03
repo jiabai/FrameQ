@@ -1,5 +1,15 @@
 # Security and Compliance
 
+## 2026-07-03 Transcript Audio Review Local File Boundary
+
+- Transcript review may read only the transcript path and audio path associated with the current task or a local history record. It must not become an arbitrary file browser, text editor, or media player.
+- Tauri transcript commands must validate path shape, file extension, existence, and relationship to known transcript/audio artifacts before returning a playable path or writing edits.
+- `load_transcript_detail` may return transcript text, optional segment metadata, backup status, and a validated local audio path. It must not return cookies, request headers, remote media CDN URLs, LLM keys, or private signing material.
+- `save_transcript_edit` may write the official transcript `.txt`, matching `.md`, optional segment sidecar, and local history preview. The first save should create an original backup once and must not overwrite that backup later.
+- Empty transcript saves, path traversal, non-transcript files, and unrelated local paths must fail recoverably.
+- Segment metadata is local-only review data. It must not be sent to FrameQ server unless a future product spec explicitly adds a server workflow.
+- The audio player should use Tauri-validated local paths only. Missing audio must degrade to text editing without attempting remote downloads or network lookups.
+
 ## 2026-06-29 YouTube Public Video Safety Boundary
 
 - YouTube v1 may request only user-submitted public ordinary video or Shorts links through `yt-dlp`, and only to create one local media file for transcription.

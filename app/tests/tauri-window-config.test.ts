@@ -187,7 +187,7 @@ describe("Tauri desktop window configuration", () => {
     const script = readFileSync(installerScriptPath, "utf8");
     const mainScript = script.slice(script.indexOf("async function main()"));
     const skipDownloadsBranch =
-      mainScript.match(/} else \{([\s\S]*?)\n  \}\n\n  await resetDirectory\(buildRoot\);/)?.[1] ?? "";
+      mainScript.match(/} else \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  await resetDirectory\(buildRoot\);/)?.[1] ?? "";
 
     expect(skipDownloadsBranch).toContain("await findPythonExecutable(pythonRoot)");
     expect(skipDownloadsBranch).toContain("requireBundledFfmpeg(binRoot, options.target)");

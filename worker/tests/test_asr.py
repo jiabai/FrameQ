@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from frameq_worker.asr import (
     QwenAsrTranscriber,
     SenseVoiceTranscriber,
     Transcript,
+    TranscriptSegment,
     build_asr_transcriber,
     build_qwen_asr_transcriber,
     resolve_model_cache_dir,
@@ -58,6 +60,65 @@ def test_transcribe_and_write_uses_transcriber_and_outputs_files(tmp_path: Path)
     assert artifacts.text == "来自 demo.wav 的文字稿"
     assert artifacts.txt_path.exists()
     assert artifacts.md_path.exists()
+    assert artifacts.segments_path is None
+
+
+def test_write_transcript_files_creates_segments_sidecar_when_segments_exist(
+    tmp_path: Path,
+) -> None:
+    artifacts = write_transcript_files(
+        text="first block second block",
+        output_dir=tmp_path / "outputs",
+        output_stem="demo",
+        model="iic/SenseVoiceSmall",
+        segments=(
+            TranscriptSegment(id="seg-0001", start_ms=0, end_ms=1200, text="first block"),
+            TranscriptSegment(
+                id="seg-0002",
+                start_ms=1200,
+                end_ms=2500,
+                text="second block",
+                speaker="spk0",
+            ),
+        ),
+    )
+
+    assert artifacts.segments_path == tmp_path / "outputs" / "demo_transcript_segments.json"
+    payload = json.loads(artifacts.segments_path.read_text(encoding="utf-8"))
+    assert payload == {
+        "segments": [
+            {"id": "seg-0001", "start_ms": 0, "end_ms": 1200, "text": "first block"},
+            {
+                "id": "seg-0002",
+                "start_ms": 1200,
+                "end_ms": 2500,
+                "text": "second block",
+                "speaker": "spk0",
+            },
+        ]
+    }
+
+
+def test_write_transcript_files_removes_stale_segments_sidecar_when_segments_are_absent(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "outputs"
+    output_dir.mkdir()
+    stale_segments_path = output_dir / "demo_transcript_segments.json"
+    stale_segments_path.write_text(
+        '{"segments":[{"id":"seg-0001","start_ms":0,"end_ms":1000,"text":"stale"}]}',
+        encoding="utf-8",
+    )
+
+    artifacts = write_transcript_files(
+        text="fresh transcript without timing",
+        output_dir=output_dir,
+        output_stem="demo",
+        model="iic/SenseVoiceSmall",
+    )
+
+    assert artifacts.segments_path is None
+    assert not stale_segments_path.exists()
 
 
 def test_qwen_asr_transcriber_uses_injected_model_factory() -> None:
@@ -177,6 +238,40 @@ def test_sensevoice_transcriber_uses_funasr_generate_api() -> None:
         "vad_model": "fsmn-vad",
         "vad_kwargs": {"max_single_segment_time": 30000},
     }
+
+
+def test_sensevoice_transcriber_extracts_valid_segments_without_relying_on_speaker() -> None:
+    class FakeModel:
+        def generate(self, **kwargs: object) -> list[dict[str, object]]:
+            return [
+                {
+                    "text": "first second third",
+                    "sentence_info": [
+                        {"start": 0, "end": 1000, "text": "first", "speaker": "solo"},
+                        {"start": 1000, "end": 2300, "text": "second"},
+                        {"start": 2300, "end": 3600, "text": "third", "spk": "speaker-b"},
+                        {"start": 4000, "end": 3900, "text": "invalid"},
+                        {"start": 4500, "end": 5000, "text": "   "},
+                    ],
+                }
+            ]
+
+    transcriber = SenseVoiceTranscriber(model_factory=lambda **kwargs: FakeModel())
+
+    transcript = transcriber.transcribe(Path("work/demo.wav"))
+
+    assert transcript.text == "first second third"
+    assert transcript.segments == (
+        TranscriptSegment(id="seg-0001", start_ms=0, end_ms=1000, text="first", speaker="solo"),
+        TranscriptSegment(id="seg-0002", start_ms=1000, end_ms=2300, text="second"),
+        TranscriptSegment(
+            id="seg-0003",
+            start_ms=2300,
+            end_ms=3600,
+            text="third",
+            speaker="speaker-b",
+        ),
+    )
 
 
 def test_qwen_asr_transcriber_reports_missing_dependency() -> None:

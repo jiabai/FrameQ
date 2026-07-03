@@ -15,6 +15,7 @@ mod updates;
 mod history;
 mod account;
 mod settings;
+mod transcript_detail;
 
 use settings::{
     asr_model_source, configured_env_value, env_path, legacy_local_llm_env_removals,
@@ -1092,6 +1093,8 @@ pub fn run() {
             settings::get_llm_config,
             settings::save_llm_config,
             history::get_history,
+            transcript_detail::load_transcript_detail,
+            transcript_detail::save_transcript_edit,
             updates::get_update_preferences,
             updates::save_update_preferences,
             updates::get_update_delivery,

@@ -926,6 +926,12 @@ h3 {
   gap: 8px;
 }
 
+.detail-tool-status {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  min-width: 160px;
+}
+
 .action-notice {
   color: #476158;
   font-size: 0.86rem;
@@ -987,6 +993,110 @@ h3 {
   gap: 12px;
   margin: 0;
   padding-left: 24px;
+}
+
+.transcript-review {
+  display: grid;
+  gap: 14px;
+  white-space: normal;
+}
+
+.transcript-audio {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 100%;
+}
+
+.transcript-status {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.transcript-segments {
+  display: grid;
+  gap: 10px;
+}
+
+.transcript-segment {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.transcript-segment.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.transcript-segment.editing {
+  background: #fff;
+  border-color: #3b82f6;
+}
+
+.transcript-segment-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.transcript-segment-time,
+.transcript-segment-text {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.transcript-segment-time {
+  color: var(--text-muted);
+  min-height: 28px;
+  padding: 0;
+}
+
+.compact-button {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.transcript-segment-text {
+  color: var(--text);
+  display: block;
+  line-height: 1.74;
+  min-height: 44px;
+  padding: 0;
+  text-align: left;
+  white-space: pre-wrap;
+  width: 100%;
+}
+
+.transcript-segment textarea,
+.transcript-full-editor {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.72;
+  min-height: 120px;
+  outline: none;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.transcript-full-editor {
+  min-height: 420px;
+}
+
+.transcript-segment textarea:focus,
+.transcript-full-editor:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus);
 }
 
 .history-list {

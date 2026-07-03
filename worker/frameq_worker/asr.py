@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Callable
@@ -39,9 +40,30 @@ class ASRUnsupportedModelError(ASRRuntimeError):
 
 
 @dataclass(frozen=True)
+class TranscriptSegment:
+    id: str
+    start_ms: int
+    end_ms: int
+    text: str
+    speaker: str | None = None
+
+    def to_json(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "id": self.id,
+            "start_ms": self.start_ms,
+            "end_ms": self.end_ms,
+            "text": self.text,
+        }
+        if self.speaker:
+            payload["speaker"] = self.speaker
+        return payload
+
+
+@dataclass(frozen=True)
 class Transcript:
     text: str
     language: str = "Chinese"
+    segments: tuple[TranscriptSegment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -49,6 +71,7 @@ class TranscriptArtifacts:
     text: str
     txt_path: Path
     md_path: Path
+    segments_path: Path | None = None
 
 
 class Transcriber(Protocol):
@@ -253,7 +276,9 @@ class SenseVoiceTranscriber:
         if not text.strip():
             raise ASREmptyTranscriptError("ASR returned an empty transcript.")
 
-        return Transcript(text=text.strip(), language=language)
+        segments = _extract_sensevoice_segments(results)
+
+        return Transcript(text=text.strip(), language=language, segments=segments)
 
     def _get_model(self) -> Any:
         if self._model is None:
@@ -296,6 +321,7 @@ def transcribe_and_write(
         output_stem=output_stem,
         model=model,
         source_url=source_url,
+        segments=transcript.segments,
     )
 
 
@@ -305,6 +331,7 @@ def write_transcript_files(
     output_stem: str,
     model: str,
     source_url: str | None = None,
+    segments: tuple[TranscriptSegment, ...] = (),
 ) -> TranscriptArtifacts:
     cleaned_text = text.strip()
     if not cleaned_text:
@@ -313,6 +340,7 @@ def write_transcript_files(
     output_dir.mkdir(parents=True, exist_ok=True)
     txt_path = output_dir / f"{output_stem}_transcript.txt"
     md_path = output_dir / f"{output_stem}_transcript.md"
+    segments_path = output_dir / f"{output_stem}_transcript_segments.json"
 
     txt_path.write_text(f"{cleaned_text}\n", encoding="utf-8")
     md_path.write_text(
@@ -324,7 +352,27 @@ def write_transcript_files(
         encoding="utf-8",
     )
 
-    return TranscriptArtifacts(text=cleaned_text, txt_path=txt_path, md_path=md_path)
+    written_segments_path: Path | None = None
+    if segments:
+        segments_path.write_text(
+            json.dumps(
+                {"segments": [segment.to_json() for segment in segments]},
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        written_segments_path = segments_path
+    else:
+        segments_path.unlink(missing_ok=True)
+
+    return TranscriptArtifacts(
+        text=cleaned_text,
+        txt_path=txt_path,
+        md_path=md_path,
+        segments_path=written_segments_path,
+    )
 
 
 def _extract_text(results: object) -> str:
@@ -349,6 +397,57 @@ def _sensevoice_language(language: str) -> str:
 
 def _clean_sensevoice_text(text: str) -> str:
     return SENSEVOICE_TAG_PATTERN.sub("", text).strip()
+
+
+def _extract_sensevoice_segments(results: object) -> tuple[TranscriptSegment, ...]:
+    sentence_info = _extract_sentence_info(results)
+    segments: list[TranscriptSegment] = []
+    for sentence in sentence_info:
+        if not isinstance(sentence, dict):
+            continue
+        start_ms = _coerce_milliseconds(sentence.get("start", sentence.get("start_ms")))
+        end_ms = _coerce_milliseconds(sentence.get("end", sentence.get("end_ms")))
+        if start_ms is None or end_ms is None or end_ms <= start_ms:
+            continue
+        text = _clean_sensevoice_text(str(sentence.get("text", "")))
+        if not text:
+            continue
+        speaker = sentence.get("speaker", sentence.get("spk"))
+        speaker_text = str(speaker).strip() if speaker is not None else None
+        segments.append(
+            TranscriptSegment(
+                id=f"seg-{len(segments) + 1:04d}",
+                start_ms=start_ms,
+                end_ms=end_ms,
+                text=text,
+                speaker=speaker_text or None,
+            )
+        )
+    return tuple(segments)
+
+
+def _extract_sentence_info(results: object) -> list[object]:
+    if isinstance(results, list) and results:
+        first = results[0]
+        if isinstance(first, dict):
+            sentence_info = first.get("sentence_info", [])
+            return sentence_info if isinstance(sentence_info, list) else []
+        sentence_info = getattr(first, "sentence_info", [])
+        return sentence_info if isinstance(sentence_info, list) else []
+    if isinstance(results, dict):
+        sentence_info = results.get("sentence_info", [])
+        return sentence_info if isinstance(sentence_info, list) else []
+    sentence_info = getattr(results, "sentence_info", [])
+    return sentence_info if isinstance(sentence_info, list) else []
+
+
+def _coerce_milliseconds(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _missing_dependency_message(exc: ModuleNotFoundError, runtime_name: str) -> str:

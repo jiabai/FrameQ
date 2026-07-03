@@ -1,5 +1,16 @@
 # FrameQ Design Guidelines
 
+## 2026-07-03 Transcript Audio Review UX
+
+- The `完整文字稿` detail tab should remove keyword search. The primary review tools are audio playback, block selection, direct editing, save, copy, and locating the saved transcript file.
+- Place the native audio player at the top of the transcript detail content when a validated audio file exists. Keep it compact and persistent above the scrolling transcript blocks.
+- Segment blocks should have stable height behavior, clear hover affordance, one primary selected/highlighted state, and a distinct editing state. Highlight should never depend on speaker count or speaker label.
+- Clicking a non-editing transcript block seeks to that segment and starts audio. Playback should advance the highlight to the next segment and keep the active block visible without abrupt layout shifts.
+- Entering edit mode pauses playback and visually locks the edited block. Saving should show concise success feedback and resume audio only when it was playing before edit.
+- Old tasks without segment timing should show a full-text editor and audio player when possible, with click-to-seek affordances hidden or disabled.
+- If audio is unavailable, show a quiet local-file status while preserving text editing and save actions.
+- Copy should use the current draft text. Export/location should use the saved official transcript and, when unsaved changes exist, prompt the user to save first.
+
 ## 2026-06-29 YouTube Download UX
 
 - YouTube support is invisible inside the existing single-link workflow: no YouTube tab, platform picker, stream picker, playlist queue, login prompt, or cookie prompt.
