@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A local-first desktop workflow for turning public or authorized short-video links into media files, transcripts, and insight prompts.**
+**A local-first desktop workflow for turning public or authorized video links into local media, transcripts, summaries, and insight prompts.**
 
 [![Desktop](https://img.shields.io/badge/Desktop-Tauri-2563eb?style=flat-square)](https://tauri.app/)
 [![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-0ea5e9?style=flat-square)](https://react.dev/)
@@ -16,7 +16,7 @@
 
 ## Overview
 
-FrameQ is a desktop application that keeps video processing local by default. Paste a supported public or authorized video link, and FrameQ coordinates the local worker to download the video, extract audio, transcribe speech with SenseVoice Small, and export usable artifacts. Insight topic generation is a separate, confirmed step that uses the server-managed LLM checkout and quota flow.
+FrameQ is a desktop application that keeps video processing local by default. Paste a supported public or authorized video link, and FrameQ coordinates the local worker to download the video, extract audio, transcribe speech with SenseVoice Small, and export useful files. Summary and insight generation are separate, confirmed steps that use the server-managed LLM checkout and quota flow.
 
 ```text
 Supported video link
@@ -25,7 +25,7 @@ Supported video link
   -> ffmpeg 16 kHz mono audio extraction
   -> SenseVoice Small local transcription
   -> transcript export
-  -> optional confirmed InsightFlow topic generation
+  -> optional confirmed summary, mindmap, and insight generation
 ```
 
 > [!IMPORTANT]
@@ -34,6 +34,7 @@ Supported video link
 ## Contents
 
 - [Why FrameQ](#why-frameq)
+- [Download Latest Release](#download-latest-release)
 - [Current Capabilities](#current-capabilities)
 - [Supported Inputs and Outputs](#supported-inputs-and-outputs)
 - [Architecture](#architecture)
@@ -53,27 +54,29 @@ Supported video link
 | --- | --- |
 | Local-first processing | Videos, audio, transcripts, model caches, and local history stay on the user's machine by default. |
 | Clear workflow states | The UI shows video extraction, transcription, insight generation, completion, partial completion, or failure. |
-| Four artifact entry points | Completed tasks expose video, audio, transcript, and insight-topic cards. Video and audio cards locate files directly. |
-| Two-stage insight generation | Download, audio extraction, and transcription run first. Insight topics require a separate confirmation and quota check. |
-| Recoverable results | If insight generation fails, the transcript remains available and the user can retry only the insight step. |
+| Five result entry points | Completed tasks expose video, audio, transcript, summary, and insight-topic cards. Video and audio cards locate files directly. |
+| Two-stage AI generation | Download, audio extraction, and transcription run first. Summary, mindmap, and insight topics require a separate confirmation and quota check. |
+| Recoverable results | If AI generation fails, the transcript remains available and the user can retry only the AI step. |
 | Auditable project structure | Product specs, architecture notes, design rules, security boundaries, execution plans, and validation scripts are tracked in the repository. |
 
 ## Current Capabilities
 
 - Tauri + React + TypeScript desktop client.
 - Python worker managed by `uv`.
-- Public/authorized video download through `yt-dlp`.
+- Public/authorized video download through `yt-dlp`, with focused fallback paths for Douyin, Xiaohongshu, and ordinary Bilibili videos.
 - Media validation with `ffprobe`.
 - Audio extraction with `ffmpeg`.
 - Default release ASR model: `iic/SenseVoiceSmall`.
 - Optional Qwen ASR adapter remains available for development, but ordinary release builds do not install `qwen-asr` by default.
-- Embedded, trimmed InsightFlow module for topic-question generation.
+- Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
 - Server-managed account, activation-code monthly pass entitlement, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
 - Exported artifacts:
   - `outputs/<video_id>.mp4`
   - `work/<video_id>.wav`
   - `outputs/<video_id>_transcript.txt`
   - `outputs/<video_id>_transcript.md`
+  - `outputs/<video_id>_summary.md`
+  - `outputs/<video_id>_mindmap.mmd`
   - `outputs/<video_id>_insights.json`
   - `outputs/<video_id>_insights.md`
 
@@ -85,12 +88,13 @@ Supported video link
 | Douyin public videos | Long links, short links, share text, `/note/{id}`, `/share/slides/{id}`, `modal_id`, and `aweme_id` inputs when they resolve to a playable public video |
 | Xiaohongshu public video notes | Share text, direct note IDs, full `xiaohongshu.com/explore/{note_id}` links, `xhslink.com` short links, and `www.xhslink.com` short links |
 | Bilibili ordinary public videos | BV links, av links, selected `?p=N` parts, and safe `b23.tv` short links that resolve to ordinary `/video/` pages |
+| YouTube public single videos | `youtube.com/watch?v=...`, `youtu.be/...`, and `youtube.com/shorts/...`; `watch?v=...&list=...` is processed as one video with playlist context ignored |
 | Transcript output | Plain text and Markdown |
-| Insight output | JSON and Markdown |
+| AI output | Summary Markdown, Mermaid mindmap, insight JSON, and insight Markdown |
 | Video and audio viewing | Locate generated files in the system file manager |
 
 > [!NOTE]
-> Platform links may still fail if they are expired, private, region-blocked, login-gated, CAPTCHA-gated, member-only, DRM-protected, or otherwise unavailable to the local worker. FrameQ does not provide platform login, browser-cookie import, proxy setup, stream picking, batch queues, or a download center.
+> Platform links may still fail if they are expired, private, region-blocked, login-gated, CAPTCHA-gated, age-restricted, member-only, DRM-protected, or otherwise unavailable to the local worker. FrameQ does not provide platform login, browser-cookie import, proxy setup, stream picking, batch queues, or a download center.
 
 ## Architecture
 
@@ -160,7 +164,7 @@ app/src-tauri/target/release/app.exe
 
 ## Desktop Release Runtime
 
-Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. SenseVoice Small is the only release-exposed ASR model in the first installer build, but the model cache is downloaded on first run into app-local data.
+Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. Release builds expose SenseVoice Small as the ASR model for ordinary users, and the model cache is downloaded on first run into app-local data.
 
 Build unsigned internal installer resources and package:
 
