@@ -12,17 +12,22 @@ describe("history client", () => {
       calls.push({ command, args });
       return [
         {
+          task_id: "task-1",
           id: "task-1",
           created_at: "2026-06-17T10:00:00Z",
           url: "https://www.douyin.com/video/7646789377271647540",
           status: "completed",
+          task_dir: "D:\\FrameQ\\outputs\\tasks\\task-1",
           output_dir: "D:\\FrameQ\\outputs",
-          video_path: "D:\\FrameQ\\outputs\\task-1.mp4",
-          audio_path: "D:\\FrameQ\\outputs\\task-1.wav",
-          transcript_path: "D:\\FrameQ\\outputs\\task-1_transcript.txt",
-          summary_path: "D:\\FrameQ\\outputs\\task-1_summary.md",
-          mindmap_path: "D:\\FrameQ\\outputs\\task-1_mindmap.mmd",
-          insights_path: "D:\\FrameQ\\outputs\\task-1_insights.json",
+          artifacts: {
+            video: "media/video.mp4",
+            audio: "media/audio.wav",
+            transcript_txt: "transcript/transcript.txt",
+            transcript_md: "transcript/transcript.md",
+            summary: "ai/summary.md",
+            mindmap: "ai/mindmap.mmd",
+            insights: "ai/insights.json",
+          },
           error: null,
           text_preview: "这是一段转写预览",
           insights_count: 2,
@@ -38,17 +43,22 @@ describe("history client", () => {
     expect(calls).toEqual([{ command: "get_history", args: {} }]);
     expect(history).toEqual([
       {
+        taskId: "task-1",
         id: "task-1",
         createdAt: "2026-06-17T10:00:00Z",
         url: "https://www.douyin.com/video/7646789377271647540",
         status: "completed",
+        taskDir: "D:\\FrameQ\\outputs\\tasks\\task-1",
         outputDir: "D:\\FrameQ\\outputs",
-        videoPath: "D:\\FrameQ\\outputs\\task-1.mp4",
-        audioPath: "D:\\FrameQ\\outputs\\task-1.wav",
-        transcriptPath: "D:\\FrameQ\\outputs\\task-1_transcript.txt",
-        summaryPath: "D:\\FrameQ\\outputs\\task-1_summary.md",
-        mindmapPath: "D:\\FrameQ\\outputs\\task-1_mindmap.mmd",
-        insightsPath: "D:\\FrameQ\\outputs\\task-1_insights.json",
+        artifacts: {
+          video: "media/video.mp4",
+          audio: "media/audio.wav",
+          transcript_txt: "transcript/transcript.txt",
+          transcript_md: "transcript/transcript.md",
+          summary: "ai/summary.md",
+          mindmap: "ai/mindmap.mmd",
+          insights: "ai/insights.json",
+        },
         error: null,
         textPreview: "这是一段转写预览",
         insightsCount: 2,
@@ -61,17 +71,19 @@ describe("history client", () => {
 
   test("converts a history item into a workflow worker result", () => {
     const result = historyItemToWorkerResult({
+      taskId: "task-2",
       id: "task-2",
       createdAt: "2026-06-17T11:00:00Z",
       url: "https://www.douyin.com/video/7646789377271647540",
       status: "partial_completed",
+      taskDir: "D:\\FrameQ\\outputs\\tasks\\task-2",
       outputDir: "D:\\FrameQ\\outputs",
-      videoPath: null,
-      audioPath: null,
-      transcriptPath: "D:\\FrameQ\\outputs\\task-2_transcript.txt",
-      summaryPath: "D:\\FrameQ\\outputs\\task-2_summary.md",
-      mindmapPath: "D:\\FrameQ\\outputs\\task-2_mindmap.mmd",
-      insightsPath: null,
+      artifacts: {
+        transcript_txt: "transcript/transcript.txt",
+        transcript_md: "transcript/transcript.md",
+        summary: "ai/summary.md",
+        mindmap: "ai/mindmap.mmd",
+      },
       error: {
         code: "INSIGHTFLOW_CONFIG_MISSING",
         message: "LLM configuration is missing.",
@@ -86,15 +98,17 @@ describe("history client", () => {
 
     expect(result).toEqual({
       status: "partial_completed",
-      video_path: null,
-      audio_path: null,
+      task_id: "task-2",
+      task_dir: "D:\\FrameQ\\outputs\\tasks\\task-2",
+      artifacts: {
+        transcript_txt: "transcript/transcript.txt",
+        transcript_md: "transcript/transcript.md",
+        summary: "ai/summary.md",
+        mindmap: "ai/mindmap.mmd",
+      },
       text: "已经完成的文字稿",
       summary: "# 要点总结",
       insights: [],
-      transcript_path: "D:\\FrameQ\\outputs\\task-2_transcript.txt",
-      summary_path: "D:\\FrameQ\\outputs\\task-2_summary.md",
-      mindmap_path: "D:\\FrameQ\\outputs\\task-2_mindmap.mmd",
-      insights_path: null,
       error: {
         code: "INSIGHTFLOW_CONFIG_MISSING",
         message: "LLM configuration is missing.",

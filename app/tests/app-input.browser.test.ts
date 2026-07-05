@@ -447,15 +447,17 @@ describe("App browser input interactions", () => {
                 if (command === "process_video") {
                   return {
                     status: "completed",
-                    video_path: "C:/FrameQ/outputs/demo.mp4",
-                    audio_path: "C:/FrameQ/work/demo.wav",
+                    task_id: "task-1",
+                    task_dir: "C:/FrameQ/outputs/tasks/task-1",
+                    artifacts: {
+                      video: "media/video.mp4",
+                      audio: "media/audio.wav",
+                      transcript_txt: "transcript/transcript.txt",
+                      transcript_md: "transcript/transcript.md"
+                    },
                     text: "transcript",
                     summary: "",
                     insights: [],
-                    transcript_path: "C:/FrameQ/outputs/demo_transcript.txt",
-                    summary_path: null,
-                    mindmap_path: null,
-                    insights_path: null,
                     error: null
                   };
                 }
@@ -580,12 +582,17 @@ describe("App browser input interactions", () => {
                 if (command === "process_video") {
                   return {
                     status: "completed",
-                    video_path: "C:/FrameQ/outputs/demo.mp4",
-                    audio_path: "C:/FrameQ/work/demo.wav",
+                    task_id: "task-1",
+                    task_dir: "C:/FrameQ/outputs/tasks/task-1",
+                    artifacts: {
+                      video: "media/video.mp4",
+                      audio: "media/audio.wav",
+                      transcript_txt: "transcript/transcript.txt",
+                      transcript_md: "transcript/transcript.md"
+                    },
                     text: "完成后的文字稿",
+                    summary: "",
                     insights: [],
-                    transcript_path: "C:/FrameQ/outputs/demo_transcript.txt",
-                    insights_path: null,
                     error: null
                   };
                 }

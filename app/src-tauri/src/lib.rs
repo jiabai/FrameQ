@@ -15,6 +15,7 @@ mod updates;
 mod history;
 mod account;
 mod settings;
+mod task_manifest;
 mod transcript_detail;
 
 use settings::{
@@ -54,8 +55,7 @@ struct ProcessVideoRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct RetryInsightsRequest {
-    transcript_path: String,
-    text: String,
+    task_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -68,15 +68,12 @@ struct WorkerError {
 #[derive(Debug, Serialize)]
 struct ProcessVideoResult {
     status: String,
-    video_path: Option<String>,
-    audio_path: Option<String>,
+    task_id: Option<String>,
+    task_dir: Option<String>,
+    artifacts: HashMap<String, String>,
     text: String,
     summary: String,
     insights: Vec<String>,
-    transcript_path: Option<String>,
-    summary_path: Option<String>,
-    mindmap_path: Option<String>,
-    insights_path: Option<String>,
     error: Option<WorkerError>,
 }
 
@@ -324,6 +321,7 @@ fn build_worker_command_spec(
     };
     let resource_bin_dir = paths.resource_dir.join("bin");
     let path_value = prepend_to_path(&resource_bin_dir)?;
+    let output_root = task_manifest::configured_output_root(paths)?;
 
     let mut env = vec![
         (
@@ -335,7 +333,7 @@ fn build_worker_command_spec(
         ("PATH".to_string(), path_value),
         (
             OUTPUT_DIR_ENV.to_string(),
-            path_to_env_string(paths.user_data_dir.join("outputs")),
+            path_to_env_string(output_root),
         ),
         (
             WORK_DIR_ENV.to_string(),
@@ -531,15 +529,12 @@ fn process_video_blocking(
     if let Err(error) = apply_configured_asr_model_to_request(&env_path(&paths), &mut request) {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
-            video_path: None,
-            audio_path: None,
+            task_id: None,
+            task_dir: None,
+            artifacts: HashMap::new(),
             text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: None,
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "ASR_MODEL_UNSUPPORTED".to_string(),
                 message: error,
@@ -559,15 +554,12 @@ fn process_video_blocking(
         let _ = terminate_process_tree(worker_pid);
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
-            video_path: None,
-            audio_path: None,
+            task_id: None,
+            task_dir: None,
+            artifacts: HashMap::new(),
             text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: None,
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_ALREADY_RUNNING".to_string(),
                 message: "Another worker process is already running.".to_string(),
@@ -613,15 +605,12 @@ fn process_video_blocking(
     if was_cancelled {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
-            video_path: None,
-            audio_path: None,
+            task_id: None,
+            task_dir: None,
+            artifacts: HashMap::new(),
             text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: None,
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_CANCELLED".to_string(),
                 message: "Worker process was cancelled.".to_string(),
@@ -634,15 +623,12 @@ fn process_video_blocking(
         &output,
         ProcessVideoResult {
             status: "failed".to_string(),
-            video_path: None,
-            audio_path: None,
+            task_id: None,
+            task_dir: None,
+            artifacts: HashMap::new(),
             text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: None,
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_PROCESS_FAILED".to_string(),
                 message: stderr,
@@ -681,15 +667,12 @@ fn retry_insights_blocking(
         let _ = terminate_process_tree(worker_pid);
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "partial_completed".to_string(),
-            video_path: None,
-            audio_path: None,
-            text: request.text,
+            task_id: Some(request.task_id),
+            task_dir: None,
+            artifacts: HashMap::new(),
+            text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: Some(request.transcript_path),
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_ALREADY_RUNNING".to_string(),
                 message: "Another worker process is already running.".to_string(),
@@ -712,15 +695,12 @@ fn retry_insights_blocking(
     if was_cancelled {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "partial_completed".to_string(),
-            video_path: None,
-            audio_path: None,
-            text: request.text,
+            task_id: Some(request.task_id),
+            task_dir: None,
+            artifacts: HashMap::new(),
+            text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: Some(request.transcript_path),
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_CANCELLED".to_string(),
                 message: "Worker process was cancelled.".to_string(),
@@ -733,15 +713,12 @@ fn retry_insights_blocking(
         &output,
         ProcessVideoResult {
             status: "partial_completed".to_string(),
-            video_path: None,
-            audio_path: None,
-            text: request.text,
+            task_id: Some(request.task_id),
+            task_dir: None,
+            artifacts: HashMap::new(),
+            text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: Some(request.transcript_path),
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_PROCESS_FAILED".to_string(),
                 message: String::from_utf8_lossy(&output.stderr).to_string(),
@@ -1133,7 +1110,6 @@ mod tests {
         build_activation_redeem_url, build_auth_login_url, parse_auth_callback_url,
         server_base_url, AuthCallback, ServerManagedLlmInvocation,
     };
-    use super::history::load_history_from_project;
     use super::settings::{
         load_llm_config_from_file, save_llm_config_to_file, supported_asr_models, LlmConfigInput,
     };
@@ -1267,16 +1243,17 @@ mod tests {
     fn parse_worker_stdout_uses_last_json_result_when_stdout_contains_logs() {
         let stdout = r##"[funasr] loading model cache
 Some dependency logged to stdout
-{"status":"completed","text":"ok","summary":"# 要点总结","insights":["topic"],"transcript_path":"outputs/demo.txt","summary_path":"outputs/demo_summary.md","mindmap_path":"outputs/demo_mindmap.mmd","insights_path":"outputs/demo_insights.json","error":null}
+{"status":"completed","task_id":"20260705-153012-douyin-demo","task_dir":"D:/FrameQ/outputs/tasks/20260705-153012-douyin-demo","artifacts":{"transcript_txt":"transcript/transcript.txt","summary":"ai/summary.md","mindmap":"ai/mindmap.mmd","insights":"ai/insights.json"},"text":"ok","summary":"# summary","insights":["topic"],"error":null}
 "##;
 
         let parsed = parse_worker_stdout(stdout.as_bytes()).expect("parse worker result");
 
         assert_eq!(parsed["status"], "completed");
+        assert_eq!(parsed["task_id"], "20260705-153012-douyin-demo");
         assert_eq!(parsed["text"], "ok");
-        assert_eq!(parsed["summary"], "# 要点总结");
-        assert_eq!(parsed["summary_path"], "outputs/demo_summary.md");
-        assert_eq!(parsed["mindmap_path"], "outputs/demo_mindmap.mmd");
+        assert_eq!(parsed["summary"], "# summary");
+        assert_eq!(parsed["artifacts"]["summary"], "ai/summary.md");
+        assert_eq!(parsed["artifacts"]["mindmap"], "ai/mindmap.mmd");
         assert_eq!(parsed["insights"][0], "topic");
     }
 
@@ -1289,15 +1266,12 @@ Some dependency logged to stdout
         };
         let fallback = ProcessVideoResult {
             status: "failed".to_string(),
-            video_path: None,
-            audio_path: None,
+            task_id: None,
+            task_dir: None,
+            artifacts: HashMap::new(),
             text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: None,
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_PROCESS_FAILED".to_string(),
                 message: "third-party stderr".to_string(),
@@ -1314,7 +1288,7 @@ Some dependency logged to stdout
     }
 
     #[test]
-    fn parse_worker_output_fallback_includes_media_path_fields() {
+    fn parse_worker_output_fallback_includes_task_artifact_fields() {
         let output = Output {
             status: exit_status(1),
             stdout: b"not-json".to_vec(),
@@ -1322,15 +1296,12 @@ Some dependency logged to stdout
         };
         let fallback = ProcessVideoResult {
             status: "failed".to_string(),
-            video_path: None,
-            audio_path: None,
+            task_id: None,
+            task_dir: None,
+            artifacts: HashMap::new(),
             text: String::new(),
             summary: String::new(),
             insights: vec![],
-            transcript_path: None,
-            summary_path: None,
-            mindmap_path: None,
-            insights_path: None,
             error: Some(WorkerError {
                 code: "WORKER_PROCESS_FAILED".to_string(),
                 message: "worker failed before returning json".to_string(),
@@ -1341,14 +1312,12 @@ Some dependency logged to stdout
         let parsed = parse_worker_output_or_fallback(&output, fallback)
             .expect("fallback worker result");
 
-        assert!(parsed.get("video_path").is_some());
-        assert!(parsed.get("audio_path").is_some());
-        assert!(parsed.get("summary_path").is_some());
-        assert!(parsed.get("mindmap_path").is_some());
-        assert_eq!(parsed["video_path"], serde_json::Value::Null);
-        assert_eq!(parsed["audio_path"], serde_json::Value::Null);
-        assert_eq!(parsed["summary_path"], serde_json::Value::Null);
-        assert_eq!(parsed["mindmap_path"], serde_json::Value::Null);
+        assert!(parsed.get("task_id").is_some());
+        assert!(parsed.get("task_dir").is_some());
+        assert!(parsed.get("artifacts").is_some());
+        assert_eq!(parsed["task_id"], serde_json::Value::Null);
+        assert_eq!(parsed["task_dir"], serde_json::Value::Null);
+        assert_eq!(parsed["artifacts"], serde_json::json!({}));
     }
 
     #[test]
@@ -1842,77 +1811,6 @@ Some dependency logged to stdout
         assert_eq!(request.model, "iic/SenseVoiceSmall");
     }
 
-    #[test]
-    fn load_history_from_project_reads_items_and_available_result_text() {
-        let project_root = temp_dir("load_history_from_project");
-        let output_dir = project_root.join("outputs");
-        let work_dir = project_root.join("work");
-        fs::create_dir_all(&output_dir).expect("create output dir");
-        fs::create_dir_all(&work_dir).expect("create work dir");
-        let transcript_path = output_dir.join("demo_transcript.txt");
-        let summary_path = output_dir.join("demo_summary.md");
-        let mindmap_path = output_dir.join("demo_mindmap.mmd");
-        let insights_path = output_dir.join("demo_insights.json");
-        fs::write(&transcript_path, "完整文字稿内容").expect("write transcript");
-        fs::write(&summary_path, "# 要点总结\n\n- 历史总结").expect("write summary");
-        fs::write(&mindmap_path, "mindmap\n  root((历史总结))").expect("write mindmap");
-        fs::write(
-            &insights_path,
-            r#"{"file_id":"demo","insights":[{"id":1,"text":"第一个话题点"},{"id":2,"text":"第二个话题点"}]}"#,
-        )
-        .expect("write insights");
-        fs::write(
-            work_dir.join("history.json"),
-            format!(
-                r#"{{
-  "items": [
-    {{
-      "id": "20260617183000-demo",
-      "created_at": "2026-06-17T18:30:00Z",
-      "url": "https://www.douyin.com/video/7646789377271647540",
-      "status": "completed",
-      "output_dir": "{}",
-      "video_path": "{}",
-      "audio_path": "{}",
-      "transcript_path": "{}",
-      "summary_path": "{}",
-      "mindmap_path": "{}",
-      "insights_path": "{}",
-      "error": null,
-      "text_preview": "完整文字稿内容",
-      "insights_count": 2
-    }}
-  ]
-}}"#,
-                path_string(&output_dir),
-                path_string(&output_dir.join("demo.mp4")),
-                path_string(&work_dir.join("demo.wav")),
-                path_string(&transcript_path),
-                path_string(&summary_path),
-                path_string(&mindmap_path),
-                path_string(&insights_path)
-            ),
-        )
-        .expect("write history");
-
-        let history = load_history_from_project(&project_root).expect("load history");
-
-        assert_eq!(history.len(), 1);
-        assert_eq!(history[0].id, "20260617183000-demo");
-        assert_eq!(history[0].status, "completed");
-        assert_eq!(history[0].text, "完整文字稿内容");
-        assert_eq!(history[0].summary, "# 要点总结\n\n- 历史总结");
-        assert_eq!(
-            history[0].summary_path,
-            Some(path_string(&summary_path))
-        );
-        assert_eq!(
-            history[0].mindmap_path,
-            Some(path_string(&mindmap_path))
-        );
-        assert_eq!(history[0].insights, vec!["第一个话题点", "第二个话题点"]);
-    }
-
     fn temp_env_path(test_name: &str) -> PathBuf {
         temp_dir(test_name).join(".env")
     }
@@ -1932,10 +1830,6 @@ Some dependency logged to stdout
         let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
-    }
-
-    fn path_string(path: &std::path::Path) -> String {
-        path.to_string_lossy().replace('\\', "/")
     }
 
     #[cfg(windows)]

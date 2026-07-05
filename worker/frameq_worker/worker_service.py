@@ -15,7 +15,6 @@ from frameq_worker.desktop_contract import (
     SENSEVOICE_REVISION_ENV,
     ProgressCallback,
 )
-from frameq_worker.history import append_history_item, update_history_item_after_insight_retry
 from frameq_worker.insightflow import InsightClient
 from frameq_worker.llm import build_insight_client_from_env
 from frameq_worker.media import CommandRunner, run_command
@@ -23,6 +22,7 @@ from frameq_worker.model_download import ModelDownloadError, download_asr_model_
 from frameq_worker.models import JobStage, ProcessResult, WorkerError
 from frameq_worker.pipeline import (
     failed_result,
+    finalize_task_result,
     resolve_output_dir,
     resolve_work_dir,
     run_insight_generation_step,
@@ -34,6 +34,7 @@ from frameq_worker.requests import (
     parse_retry_insights_request,
     resolve_configured_asr_model,
 )
+from frameq_worker.task_store import ensure_task_dirs, task_context_from_manifest
 
 
 def run_worker_once(
@@ -97,13 +98,6 @@ def run_worker_once(
         environ=runtime_env,
         progress_callback=progress_callback,
     )
-    append_history_item(
-        project_root=root,
-        request=request,
-        result=result,
-        output_dir=resolve_output_dir(root, runtime_env),
-        work_dir=resolve_work_dir(root, runtime_env),
-    )
     return result.to_dict()
 
 
@@ -131,86 +125,63 @@ def retry_insights_once(
         return failed_insight_retry_result(
             code="INVALID_RETRY_PAYLOAD",
             message=str(exc),
-            transcript_path=None,
             text="",
         ).to_dict()
 
-    transcript_path = Path(request.transcript_path)
-    if not transcript_path.is_absolute() and project_root is not None:
-        transcript_path = project_root / transcript_path
-
-    markdown_transcript_path = resolve_markdown_transcript_path(transcript_path)
     root = project_root or Path.cwd()
     runtime_env = load_project_env(root, environ)
     configured_insight_client = insight_client or build_insight_client_from_env(runtime_env)
+    output_dir = resolve_output_dir(root, runtime_env)
     work_dir = resolve_work_dir(root, runtime_env)
-    if not markdown_transcript_path.exists() and configured_insight_client is not None:
-        result = failed_insight_retry_result(
-            code="TRANSCRIPT_MARKDOWN_NOT_FOUND",
-            message="Transcript markdown file is required to regenerate insights.",
-            transcript_path=transcript_path,
-            text=request.text,
-        )
-        update_history_item_after_insight_retry(
-            project_root=root,
-            transcript_path=transcript_path,
-            result=result,
-            work_dir=work_dir,
+    try:
+        task_context = task_context_from_manifest(output_dir, work_dir, request.task_id)
+    except (OSError, json.JSONDecodeError) as exc:
+        return ProcessResult(
+            status=JobStage.PARTIAL_COMPLETED,
+            task_id=request.task_id,
+            error=WorkerError(
+                code="TASK_MANIFEST_NOT_FOUND",
+                message=f"Task manifest is required to regenerate insights: {exc}",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ),
+        ).to_dict()
+    ensure_task_dirs(task_context.paths)
+
+    transcript_text = (
+        task_context.paths.transcript_txt_path.read_text(encoding="utf-8").strip()
+        if task_context.paths.transcript_txt_path.exists()
+        else ""
+    )
+    if not task_context.paths.transcript_md_path.exists() and configured_insight_client is not None:
+        result = finalize_task_result(
+            task_context,
+            failed_insight_retry_result(
+                code="TRANSCRIPT_MARKDOWN_NOT_FOUND",
+                message="Transcript markdown file is required to regenerate insights.",
+                text=transcript_text,
+            ),
         )
         return result.to_dict()
 
     insight_result = run_insight_generation_step(
-        transcript_path=markdown_transcript_path,
-        output_dir=transcript_path.parent,
-        output_stem=derive_output_stem(transcript_path),
-        transcript_text=request.text,
+        transcript_path=task_context.paths.transcript_md_path,
+        output_dir=task_context.paths.ai_dir,
+        output_stem="",
+        transcript_text=transcript_text,
         client=configured_insight_client,
     )
 
-    result = ProcessResult(
-        status=insight_result.status,
-        transcript_path=transcript_path.as_posix(),
-        insights_path=insight_result.insights_path,
-        summary_path=insight_result.summary_path,
-        mindmap_path=insight_result.mindmap_path,
-        text=insight_result.text,
-        summary=insight_result.summary,
-        insights=insight_result.insights,
-        error=insight_result.error,
-    )
-    update_history_item_after_insight_retry(
-        project_root=root,
-        transcript_path=transcript_path,
-        result=result,
-        work_dir=work_dir,
-    )
-    return result.to_dict()
+    return finalize_task_result(task_context, insight_result).to_dict()
 
-
-def resolve_markdown_transcript_path(transcript_path: Path) -> Path:
-    if transcript_path.suffix.lower() == ".md":
-        return transcript_path
-
-    return transcript_path.with_suffix(".md")
-
-
-def derive_output_stem(transcript_path: Path) -> str:
-    transcript_suffix = "_transcript"
-    if transcript_path.stem.endswith(transcript_suffix):
-        return transcript_path.stem[: -len(transcript_suffix)]
-
-    return transcript_path.stem
 
 
 def failed_insight_retry_result(
     code: str,
     message: str,
-    transcript_path: Path | None,
     text: str,
 ) -> ProcessResult:
     return ProcessResult(
         status=JobStage.PARTIAL_COMPLETED,
-        transcript_path=transcript_path.as_posix() if transcript_path else None,
         text=text,
         error=WorkerError(
             code=code,

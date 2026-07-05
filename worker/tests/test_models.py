@@ -11,40 +11,54 @@ def test_process_request_uses_mvp_defaults() -> None:
     assert request.insightflow_mode == "embedded"
 
 
-def test_process_result_serializes_paths_text_and_insights() -> None:
+def test_process_result_serializes_task_artifacts_text_and_insights() -> None:
     result = ProcessResult(
         status=JobStage.COMPLETED,
-        video_path="outputs/7524373044106677544.mp4",
-        audio_path="work/7524373044106677544.wav",
-        transcript_path="outputs/7524373044106677544_transcript.txt",
-        insights_path="outputs/7524373044106677544_insights.json",
-        summary_path="outputs/7524373044106677544_summary.md",
-        mindmap_path="outputs/7524373044106677544_mindmap.mmd",
-        text="示例文字稿",
-        summary="# 要点总结\n\n- 示例要点",
-        insights=["什么能力才是真正的价值分水岭？"],
+        task_id="20260705-153012-douyin-7524373044106677544",
+        task_dir="outputs/tasks/20260705-153012-douyin-7524373044106677544",
+        artifacts={
+            "video": "media/video.mp4",
+            "audio": "media/audio.wav",
+            "transcript_txt": "transcript/transcript.txt",
+            "transcript_md": "transcript/transcript.md",
+            "segments": "transcript/segments.json",
+            "summary": "ai/summary.md",
+            "mindmap": "ai/mindmap.mmd",
+            "insights": "ai/insights.json",
+        },
+        text="transcript",
+        summary="# summary",
+        insights=["question"],
     )
 
     assert result.to_dict() == {
         "status": "completed",
-        "video_path": "outputs/7524373044106677544.mp4",
-        "audio_path": "work/7524373044106677544.wav",
-        "transcript_path": "outputs/7524373044106677544_transcript.txt",
-        "insights_path": "outputs/7524373044106677544_insights.json",
-        "summary_path": "outputs/7524373044106677544_summary.md",
-        "mindmap_path": "outputs/7524373044106677544_mindmap.mmd",
-        "text": "示例文字稿",
-        "summary": "# 要点总结\n\n- 示例要点",
-        "insights": ["什么能力才是真正的价值分水岭？"],
+        "task_id": "20260705-153012-douyin-7524373044106677544",
+        "task_dir": "outputs/tasks/20260705-153012-douyin-7524373044106677544",
+        "artifacts": {
+            "video": "media/video.mp4",
+            "audio": "media/audio.wav",
+            "transcript_txt": "transcript/transcript.txt",
+            "transcript_md": "transcript/transcript.md",
+            "segments": "transcript/segments.json",
+            "summary": "ai/summary.md",
+            "mindmap": "ai/mindmap.mmd",
+            "insights": "ai/insights.json",
+        },
+        "text": "transcript",
+        "summary": "# summary",
+        "insights": ["question"],
         "error": None,
     }
 
 
-def test_partial_result_keeps_transcript_and_structured_error() -> None:
+def test_partial_result_keeps_task_artifacts_and_structured_error() -> None:
     result = ProcessResult(
         status=JobStage.PARTIAL_COMPLETED,
-        transcript_path="outputs/demo_transcript.txt",
-        text="已经完成的文字稿",
+        task_id="20260705-153012-douyin-demo",
+        task_dir="outputs/tasks/20260705-153012-douyin-demo",
+        artifacts={"transcript_txt": "transcript/transcript.txt"},
+        text="finished transcript",
         error=WorkerError(
             code="INSIGHTFLOW_CONFIG_MISSING",
             message="InsightFlow LLM configuration is missing.",
@@ -55,7 +69,9 @@ def test_partial_result_keeps_transcript_and_structured_error() -> None:
     serialized = result.to_dict()
 
     assert serialized["status"] == "partial_completed"
-    assert serialized["text"] == "已经完成的文字稿"
+    assert serialized["task_id"] == "20260705-153012-douyin-demo"
+    assert serialized["artifacts"] == {"transcript_txt": "transcript/transcript.txt"}
+    assert serialized["text"] == "finished transcript"
     assert serialized["error"] == {
         "code": "INSIGHTFLOW_CONFIG_MISSING",
         "message": "InsightFlow LLM configuration is missing.",

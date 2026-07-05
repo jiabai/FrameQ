@@ -37,15 +37,12 @@ describe("desktop/worker contract", () => {
       calls.push({ command, args });
       return {
         status: "completed",
-        video_path: null,
-        audio_path: null,
+        task_id: null,
+        task_dir: null,
+        artifacts: {},
         text: "",
         summary: "",
         insights: [],
-        transcript_path: null,
-        summary_path: null,
-        mindmap_path: null,
-        insights_path: null,
         error: null,
       };
     });

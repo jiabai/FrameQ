@@ -404,7 +404,7 @@ function App() {
       return;
     }
 
-    if (!workflow.transcriptPath) {
+    if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
       setTranscriptDetail(null);
       setTranscriptDraft(workflow.text);
       setTranscriptSegments([]);
@@ -422,10 +422,11 @@ function App() {
     setTranscriptDirty(false);
     setActiveTranscriptSegmentId(null);
     setEditingTranscriptSegmentId(null);
+    const taskId = workflow.taskId;
 
     async function loadDetail() {
       try {
-        const detail = await loadTranscriptDetail(workflow.transcriptPath!, workflow.audioPath);
+        const detail = await loadTranscriptDetail(taskId);
         if (cancelled) {
           return;
         }
@@ -458,7 +459,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [detailTab, workflow.audioPath, workflow.text, workflow.transcriptPath]);
+  }, [detailTab, workflow.artifacts.transcript_txt, workflow.taskId, workflow.text]);
 
   useEffect(() => {
     if (!activeTranscriptSegmentId) {
@@ -612,7 +613,7 @@ function App() {
   }
 
   async function retryInsightGeneration() {
-    if (!workflow.transcriptPath) {
+    if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
       return;
     }
     if (!canProcessWithAccount(account)) {
@@ -620,23 +621,27 @@ function App() {
       return;
     }
 
-    const transcriptPath = workflow.transcriptPath;
-    const transcriptText = workflow.text;
+    const taskId = workflow.taskId;
     const operationId = operationIdRef.current + 1;
     operationIdRef.current = operationId;
     setDetailTab(null);
     setActionNotice("");
     setWorkflow((current) => startInsightRetry(current));
 
-    const result = await retryInsights(transcriptPath, transcriptText);
+    const result = await retryInsights(taskId);
     if (operationIdRef.current !== operationId) {
       return;
     }
     setWorkflow((current) => ({
       ...summarizeWorkerResult({
         ...result,
-        video_path: result.video_path ?? current.videoPath,
-        audio_path: result.audio_path ?? current.audioPath,
+        task_id: result.task_id ?? current.taskId,
+        task_dir: result.task_dir ?? current.taskDir,
+        artifacts: {
+          ...current.artifacts,
+          ...(result.artifacts ?? {}),
+        },
+        text: result.text || current.text,
       }),
       url: current.url,
       submittedUrl: current.submittedUrl,
@@ -740,14 +745,14 @@ function App() {
   }
 
   async function saveTranscriptDraft() {
-    if (!workflow.transcriptPath || transcriptSaving) {
+    if (!workflow.taskId || !workflow.artifacts.transcript_txt || transcriptSaving) {
       return;
     }
 
     setTranscriptSaving(true);
     try {
       const saved = await saveTranscriptEdit(
-        workflow.transcriptPath,
+        workflow.taskId,
         transcriptDraft,
         transcriptSegments,
       );
@@ -763,7 +768,15 @@ function App() {
             }
           : current,
       );
-      setWorkflow((current) => ({ ...current, text: saved.text }));
+      setWorkflow((current) => ({
+        ...current,
+        taskId: saved.task_id || current.taskId,
+        text: saved.text,
+        artifacts: {
+          ...current.artifacts,
+          ...(saved.artifacts ?? {}),
+        },
+      }));
       setActionNotice("文字稿已保存，后续 AI 整理会使用保存后的正式稿。");
 
       if (resumeTranscriptAfterSaveRef.current && transcriptAudioRef.current) {
@@ -1017,6 +1030,7 @@ function App() {
   const detailText =
     detailTab === "transcript" ? transcriptDraft : detailTab ? getDetailText(detailTab, workflow) : "";
   const exportPath = detailTab ? getExportPath(detailTab, workflow) : null;
+  const currentTranscriptPath = getExportPath("transcript", workflow);
   const transcriptAudioSrc = transcriptDetail?.audio_path
     ? convertFileSrc(transcriptDetail.audio_path)
     : "";
@@ -1263,7 +1277,7 @@ function App() {
                 <div>
                   <span className="account-status-label">当前文字稿</span>
                   <strong>{workflow.text ? `${workflow.text.length.toLocaleString("zh-CN")} 字` : "等待文字稿"}</strong>
-                  <small>{workflow.transcriptPath || "文字稿文件生成后才能继续。"}</small>
+                  <small>{currentTranscriptPath || "文字稿文件生成后才能继续。"}</small>
                 </div>
                 <div>
                   <span className="account-status-label">账号额度</span>
@@ -1280,7 +1294,7 @@ function App() {
                 type="button"
                 className="primary-button"
                 onClick={confirmInsightGeneration}
-                disabled={!workflow.transcriptPath || isProcessingStage(workflow.stage)}
+                disabled={!workflow.taskId || !workflow.artifacts.transcript_txt || isProcessingStage(workflow.stage)}
               >
                 <Lightbulb size={16} />
                 <span>确认</span>
@@ -1354,7 +1368,7 @@ function App() {
                   <button
                     type="button"
                     onClick={saveTranscriptDraft}
-                    disabled={!workflow.transcriptPath || !transcriptDirty || transcriptSaving}
+                    disabled={!workflow.taskId || !workflow.artifacts.transcript_txt || !transcriptDirty || transcriptSaving}
                   >
                     {transcriptSaving ? <LoaderCircle size={16} className="spin" /> : <CheckCircle2 size={16} />}
                     <span>{transcriptSaving ? "保存中" : "保存"}</span>

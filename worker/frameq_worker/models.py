@@ -26,8 +26,7 @@ class ProcessRequest:
 
 @dataclass(frozen=True)
 class RetryInsightsRequest:
-    transcript_path: str
-    text: str
+    task_id: str
 
 
 @dataclass(frozen=True)
@@ -47,12 +46,9 @@ class WorkerError:
 @dataclass(frozen=True)
 class ProcessResult:
     status: JobStage
-    video_path: str | None = None
-    audio_path: str | None = None
-    transcript_path: str | None = None
-    insights_path: str | None = None
-    summary_path: str | None = None
-    mindmap_path: str | None = None
+    task_id: str | None = None
+    task_dir: str | None = None
+    artifacts: dict[str, str] = field(default_factory=dict)
     text: str = ""
     summary: str = ""
     insights: list[str] = field(default_factory=list)
@@ -61,12 +57,9 @@ class ProcessResult:
     def to_dict(self) -> dict[str, object]:
         return {
             "status": self.status.value,
-            "video_path": self.video_path,
-            "audio_path": self.audio_path,
-            "transcript_path": self.transcript_path,
-            "insights_path": self.insights_path,
-            "summary_path": self.summary_path,
-            "mindmap_path": self.mindmap_path,
+            "task_id": self.task_id,
+            "task_dir": self.task_dir,
+            "artifacts": self.artifacts,
             "text": self.text,
             "summary": self.summary,
             "insights": self.insights,

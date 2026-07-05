@@ -38,9 +38,8 @@ def test_worker_result_keys_match_desktop_contract() -> None:
     assert result_keys == set(contract["workerResultKeys"])
 
 
-def test_worker_result_contract_includes_summary_and_mindmap_paths() -> None:
+def test_worker_result_contract_includes_task_artifacts() -> None:
     contract = load_contract()
 
     assert "summary" in contract["workerResultKeys"]
-    assert "summary_path" in contract["workerResultKeys"]
-    assert "mindmap_path" in contract["workerResultKeys"]
+    assert "artifacts" in contract["workerResultKeys"]

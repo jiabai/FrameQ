@@ -1,25 +1,22 @@
-use crate::{ensure_runtime_dirs, resolve_runtime_paths};
+use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
-const HISTORY_FILE_NAME: &str = "history.json";
-const TRANSCRIPT_SUFFIX: &str = "_transcript";
 const TRANSCRIPT_SECTION_MARKER: &str = "## Transcript";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoadTranscriptDetailRequest {
-    #[serde(alias = "transcriptPath")]
-    transcript_path: String,
-    #[serde(default, alias = "audioPath")]
-    audio_path: Option<String>,
+    #[serde(alias = "taskId")]
+    task_id: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SaveTranscriptEditRequest {
-    #[serde(alias = "transcriptPath")]
-    transcript_path: String,
+    #[serde(alias = "taskId")]
+    task_id: String,
     text: String,
     #[serde(default)]
     segments: Vec<TranscriptSegmentView>,
@@ -37,6 +34,7 @@ pub(crate) struct TranscriptSegmentView {
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub(crate) struct TranscriptDetailView {
+    task_id: String,
     text: String,
     segments: Vec<TranscriptSegmentView>,
     audio_path: Option<String>,
@@ -45,9 +43,9 @@ pub(crate) struct TranscriptDetailView {
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub(crate) struct SaveTranscriptEditResult {
+    task_id: String,
     text: String,
-    transcript_path: String,
-    segments_path: Option<String>,
+    artifacts: HashMap<String, String>,
     has_original_backup: bool,
 }
 
@@ -58,7 +56,8 @@ pub(crate) fn load_transcript_detail(
 ) -> Result<TranscriptDetailView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    load_transcript_detail_from_project(&paths.user_data_dir, request)
+    let output_root = task_manifest::configured_output_root(&paths)?;
+    load_transcript_detail_from_output_root(&output_root, request)
 }
 
 #[tauri::command]
@@ -68,36 +67,39 @@ pub(crate) fn save_transcript_edit(
 ) -> Result<SaveTranscriptEditResult, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    save_transcript_edit_to_project(&paths.user_data_dir, request)
+    let output_root = task_manifest::configured_output_root(&paths)?;
+    save_transcript_edit_to_output_root(&output_root, request)
 }
 
-pub(crate) fn load_transcript_detail_from_project(
-    project_root: &Path,
+pub(crate) fn load_transcript_detail_from_output_root(
+    output_root: &Path,
     request: LoadTranscriptDetailRequest,
 ) -> Result<TranscriptDetailView, String> {
-    let transcript_path = resolve_existing_transcript_path(project_root, &request.transcript_path)?;
-    ensure_approved_path(project_root, &transcript_path, "transcript_path")?;
+    let (manifest, task_dir) = task_manifest::load_task_manifest(output_root, &request.task_id)?;
+    let transcript_path = task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
+    validate_transcript_txt(&transcript_path)?;
+    task_manifest::validate_task_artifact_path(&task_dir, &transcript_path, "transcript_txt")?;
 
     let text = fs::read_to_string(&transcript_path)
         .map_err(|error| format!("Failed to read transcript: {error}"))?
         .trim()
         .to_string();
-    let segments = read_segments_sidecar(&segments_path_for(&transcript_path))?;
-    let audio_path = match request.audio_path.as_deref().map(str::trim) {
-        Some("") | None => None,
-        Some(raw_path) => resolve_audio_path(project_root, raw_path)?,
-    };
+    let segments_path = task_manifest::artifact_path(&task_dir, &manifest, "segments")?
+        .unwrap_or_else(|| default_segments_path(&task_dir));
+    let segments = read_segments_sidecar(&task_dir, &segments_path)?;
+    let audio_path = load_audio_path(&task_dir, &manifest)?;
 
     Ok(TranscriptDetailView {
+        task_id: request.task_id,
         text,
         segments,
-        audio_path: audio_path.map(|path| path.to_string_lossy().to_string()),
-        has_original_backup: original_txt_backup_path(&transcript_path).is_file(),
+        audio_path,
+        has_original_backup: original_backup_path(&transcript_path).is_file(),
     })
 }
 
-pub(crate) fn save_transcript_edit_to_project(
-    project_root: &Path,
+pub(crate) fn save_transcript_edit_to_output_root(
+    output_root: &Path,
     request: SaveTranscriptEditRequest,
 ) -> Result<SaveTranscriptEditResult, String> {
     let text = request.text.trim();
@@ -105,11 +107,21 @@ pub(crate) fn save_transcript_edit_to_project(
         return Err("Transcript text cannot be empty.".to_string());
     }
 
-    let transcript_path = resolve_existing_transcript_path(project_root, &request.transcript_path)?;
-    ensure_approved_path(project_root, &transcript_path, "transcript_path")?;
-    let md_path = transcript_path.with_extension("md");
-    let segments_path = segments_path_for(&transcript_path);
+    let (mut manifest, task_dir) = task_manifest::load_task_manifest(output_root, &request.task_id)?;
+    let transcript_path = task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
+    validate_transcript_txt(&transcript_path)?;
+    task_manifest::validate_task_artifact_path(&task_dir, &transcript_path, "transcript_txt")?;
 
+    let md_path = task_manifest::artifact_path(&task_dir, &manifest, "transcript_md")?
+        .unwrap_or_else(|| default_transcript_md_path(&task_dir));
+    validate_transcript_md(&md_path)?;
+    let segments_path = task_manifest::artifact_path(&task_dir, &manifest, "segments")?
+        .unwrap_or_else(|| default_segments_path(&task_dir));
+    validate_segments_path(&segments_path)?;
+
+    task_manifest::ensure_artifact_parent(&task_dir, &transcript_path)?;
+    task_manifest::ensure_artifact_parent(&task_dir, &md_path)?;
+    task_manifest::ensure_artifact_parent(&task_dir, &segments_path)?;
     create_original_backups(&transcript_path, &md_path)?;
 
     fs::write(&transcript_path, format!("{text}\n"))
@@ -121,145 +133,62 @@ pub(crate) fn save_transcript_edit_to_project(
     )
     .map_err(|error| format!("Failed to save transcript markdown: {error}"))?;
 
-    let segments_path_result = if request.segments.is_empty() {
-        None
+    if request.segments.is_empty() {
+        if manifest.artifacts.contains_key("segments") {
+            write_segments_sidecar(&segments_path, &[])?;
+        }
     } else {
         write_segments_sidecar(&segments_path, &request.segments)?;
-        Some(segments_path.to_string_lossy().to_string())
-    };
-    update_history_preview(project_root, &transcript_path, text)?;
+        manifest
+            .artifacts
+            .insert("segments".to_string(), "transcript/segments.json".to_string());
+    }
+
+    manifest
+        .artifacts
+        .insert("transcript_txt".to_string(), "transcript/transcript.txt".to_string());
+    manifest
+        .artifacts
+        .insert("transcript_md".to_string(), "transcript/transcript.md".to_string());
+    manifest.text_preview = text.chars().take(180).collect();
+    task_manifest::write_task_manifest(&task_dir, &manifest)?;
 
     Ok(SaveTranscriptEditResult {
+        task_id: request.task_id,
         text: text.to_string(),
-        transcript_path: transcript_path.to_string_lossy().to_string(),
-        segments_path: segments_path_result,
+        artifacts: manifest.artifacts,
         has_original_backup: true,
     })
 }
 
-fn resolve_existing_transcript_path(
-    project_root: &Path,
-    raw_path: &str,
-) -> Result<PathBuf, String> {
-    let candidate = resolve_user_path(project_root, raw_path)?;
-    if !candidate.is_file() {
-        return Err("Transcript file does not exist.".to_string());
-    }
-    if !is_transcript_file(&candidate) {
-        return Err("Path is not a supported transcript file.".to_string());
-    }
-    candidate
-        .canonicalize()
-        .map_err(|error| format!("Failed to resolve transcript path: {error}"))
-}
-
-fn resolve_audio_path(project_root: &Path, raw_path: &str) -> Result<Option<PathBuf>, String> {
-    let candidate = resolve_user_path(project_root, raw_path)?;
-    if !candidate.exists() {
+fn load_audio_path(
+    task_dir: &Path,
+    manifest: &task_manifest::TaskManifest,
+) -> Result<Option<String>, String> {
+    let Some(audio_path) = task_manifest::artifact_path(task_dir, manifest, "audio")? else {
+        return Ok(None);
+    };
+    if !audio_path.exists() {
         return Ok(None);
     }
-    if !is_audio_file(&candidate) {
-        return Err("Path is not a supported audio file.".to_string());
-    }
-    let audio_path = candidate
-        .canonicalize()
-        .map_err(|error| format!("Failed to resolve audio path: {error}"))?;
-    ensure_approved_path(project_root, &audio_path, "audio_path")?;
-    Ok(Some(audio_path))
+    validate_audio_path(&audio_path)?;
+    task_manifest::validate_task_artifact_path(task_dir, &audio_path, "audio")?;
+    Ok(Some(task_manifest::path_to_frontend_string(
+        audio_path
+            .canonicalize()
+            .map_err(|error| format!("Failed to resolve audio: {error}"))?,
+    )))
 }
 
-fn resolve_user_path(project_root: &Path, raw_path: &str) -> Result<PathBuf, String> {
-    let trimmed = raw_path.trim();
-    if trimmed.is_empty() {
-        return Err("Path cannot be empty.".to_string());
-    }
-    let path = PathBuf::from(trimmed);
-    if !path.is_absolute() && has_parent_dir_component(&path) {
-        return Err("Path traversal is not allowed.".to_string());
-    }
-    Ok(if path.is_absolute() {
-        path
-    } else {
-        project_root.join(path)
-    })
-}
-
-fn has_parent_dir_component(path: &Path) -> bool {
-    path.components()
-        .any(|component| matches!(component, Component::ParentDir))
-}
-
-fn ensure_approved_path(project_root: &Path, path: &Path, field: &str) -> Result<(), String> {
-    if is_within_project(project_root, path) || history_references_path(project_root, field, path) {
-        return Ok(());
-    }
-    Err("Path is outside the current task or local history boundary.".to_string())
-}
-
-fn is_within_project(project_root: &Path, path: &Path) -> bool {
-    let Ok(project_root) = project_root.canonicalize() else {
-        return false;
-    };
-    path.starts_with(project_root)
-}
-
-fn history_references_path(project_root: &Path, field: &str, candidate: &Path) -> bool {
-    let history_path = project_root.join("work").join(HISTORY_FILE_NAME);
-    let Ok(content) = fs::read_to_string(history_path) else {
-        return false;
-    };
-    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&content) else {
-        return false;
-    };
-    let Some(items) = payload.get("items").and_then(serde_json::Value::as_array) else {
-        return false;
-    };
-
-    items.iter().any(|item| {
-        item.get(field)
-            .and_then(serde_json::Value::as_str)
-            .and_then(|raw_path| resolve_user_path(project_root, raw_path).ok())
-            .and_then(|path| path.canonicalize().ok())
-            .is_some_and(|path| path == candidate)
-    })
-}
-
-fn is_transcript_file(path: &Path) -> bool {
-    let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
-        return false;
-    };
-    if extension.to_ascii_lowercase() != "txt" {
-        return false;
-    }
-    path.file_stem()
-        .and_then(|stem| stem.to_str())
-        .is_some_and(|stem| stem.ends_with(TRANSCRIPT_SUFFIX))
-}
-
-fn is_audio_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .map(|extension| {
-            matches!(
-                extension.to_ascii_lowercase().as_str(),
-                "wav" | "mp3" | "m4a" | "aac" | "flac" | "ogg"
-            )
-        })
-        .unwrap_or(false)
-}
-
-fn segments_path_for(transcript_path: &Path) -> PathBuf {
-    let stem = transcript_path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or("transcript");
-    transcript_path.with_file_name(format!("{stem}_segments.json"))
-}
-
-fn read_segments_sidecar(path: &Path) -> Result<Vec<TranscriptSegmentView>, String> {
+fn read_segments_sidecar(
+    task_dir: &Path,
+    path: &Path,
+) -> Result<Vec<TranscriptSegmentView>, String> {
     if !path.exists() {
         return Ok(vec![]);
     }
+    validate_segments_path(path)?;
+    task_manifest::validate_task_artifact_path(task_dir, path, "segments")?;
     let Ok(content) = fs::read_to_string(path) else {
         return Ok(vec![]);
     };
@@ -273,7 +202,10 @@ fn read_segments_sidecar(path: &Path) -> Result<Vec<TranscriptSegmentView>, Stri
         return Ok(vec![]);
     };
 
-    Ok(items.iter().filter_map(|item| segment_from_value(item).ok()).collect())
+    Ok(items
+        .iter()
+        .filter_map(|item| segment_from_value(item).ok())
+        .collect())
 }
 
 fn segment_from_value(value: &serde_json::Value) -> Result<TranscriptSegmentView, String> {
@@ -320,10 +252,9 @@ fn write_segments_sidecar(path: &Path, segments: &[TranscriptSegmentView]) -> Re
             return Err("Transcript segment timing is invalid.".to_string());
         }
     }
-    let payload = serde_json::json!({ "segments": segments });
     fs::write(
         path,
-        serde_json::to_string_pretty(&payload)
+        serde_json::to_string_pretty(&serde_json::json!({ "segments": segments }))
             .map_err(|error| format!("Failed to encode transcript segments: {error}"))?
             + "\n",
     )
@@ -331,15 +262,24 @@ fn write_segments_sidecar(path: &Path, segments: &[TranscriptSegmentView]) -> Re
 }
 
 fn create_original_backups(txt_path: &Path, md_path: &Path) -> Result<(), String> {
-    let txt_backup_path = original_txt_backup_path(txt_path);
+    let txt_backup_path = original_backup_path(txt_path);
     if !txt_backup_path.exists() {
+        if let Some(parent) = txt_backup_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| format!("Failed to create transcript backup directory: {error}"))?;
+        }
         fs::copy(txt_path, &txt_backup_path)
             .map_err(|error| format!("Failed to create transcript backup: {error}"))?;
     }
 
     if md_path.exists() {
-        let md_backup_path = original_md_backup_path(md_path);
+        let md_backup_path = original_backup_path(md_path);
         if !md_backup_path.exists() {
+            if let Some(parent) = md_backup_path.parent() {
+                fs::create_dir_all(parent).map_err(|error| {
+                    format!("Failed to create transcript backup directory: {error}")
+                })?;
+            }
             fs::copy(md_path, md_backup_path)
                 .map_err(|error| format!("Failed to create markdown backup: {error}"))?;
         }
@@ -347,20 +287,12 @@ fn create_original_backups(txt_path: &Path, md_path: &Path) -> Result<(), String
     Ok(())
 }
 
-fn original_txt_backup_path(txt_path: &Path) -> PathBuf {
-    backup_path_with_extension(txt_path, "original.txt")
-}
-
-fn original_md_backup_path(md_path: &Path) -> PathBuf {
-    backup_path_with_extension(md_path, "original.md")
-}
-
-fn backup_path_with_extension(path: &Path, extension: &str) -> PathBuf {
-    let stem = path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or("transcript");
-    path.with_file_name(format!("{stem}.{extension}"))
+fn original_backup_path(path: &Path) -> PathBuf {
+    let file_name = path.file_name().unwrap_or_default();
+    path.parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join("original")
+        .join(file_name)
 }
 
 fn format_transcript_markdown(existing_markdown: Option<&str>, text: &str) -> String {
@@ -370,93 +302,89 @@ fn format_transcript_markdown(existing_markdown: Option<&str>, text: &str) -> St
         }
     }
 
-    format!("# 视频文字稿\n\n{TRANSCRIPT_SECTION_MARKER}\n\n{text}\n")
+    format!("# Transcript\n\n{TRANSCRIPT_SECTION_MARKER}\n\n{text}\n")
 }
 
-fn update_history_preview(
-    project_root: &Path,
-    transcript_path: &Path,
-    text: &str,
-) -> Result<(), String> {
-    let history_path = project_root.join("work").join(HISTORY_FILE_NAME);
-    if !history_path.exists() {
-        return Ok(());
+fn default_transcript_md_path(task_dir: &Path) -> PathBuf {
+    task_dir.join("transcript").join("transcript.md")
+}
+
+fn default_segments_path(task_dir: &Path) -> PathBuf {
+    task_dir.join("transcript").join("segments.json")
+}
+
+fn validate_transcript_txt(path: &Path) -> Result<(), String> {
+    if path.file_name().and_then(|name| name.to_str()) == Some("transcript.txt") {
+        Ok(())
+    } else {
+        Err("Task transcript must be transcript/transcript.txt.".to_string())
     }
-    let content = fs::read_to_string(&history_path)
-        .map_err(|error| format!("Failed to read history: {error}"))?;
-    let mut payload: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|error| format!("Failed to parse history: {error}"))?;
-    let Some(items) = payload
-        .get_mut("items")
-        .and_then(serde_json::Value::as_array_mut)
-    else {
-        return Ok(());
+}
+
+fn validate_transcript_md(path: &Path) -> Result<(), String> {
+    if path.file_name().and_then(|name| name.to_str()) == Some("transcript.md") {
+        Ok(())
+    } else {
+        Err("Task markdown transcript must be transcript/transcript.md.".to_string())
+    }
+}
+
+fn validate_segments_path(path: &Path) -> Result<(), String> {
+    if path.file_name().and_then(|name| name.to_str()) == Some("segments.json") {
+        Ok(())
+    } else {
+        Err("Task segments must be transcript/segments.json.".to_string())
+    }
+}
+
+fn validate_audio_path(path: &Path) -> Result<(), String> {
+    let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+        return Err("Audio artifact has no extension.".to_string());
     };
-
-    let preview: String = text.trim().chars().take(180).collect();
-    for item in items {
-        let Some(raw_path) = item
-            .get("transcript_path")
-            .and_then(serde_json::Value::as_str)
-        else {
-            continue;
-        };
-        let Ok(candidate) = resolve_user_path(project_root, raw_path).and_then(|path| {
-            path.canonicalize()
-                .map_err(|error| format!("Failed to resolve history transcript: {error}"))
-        }) else {
-            continue;
-        };
-        if candidate == transcript_path {
-            item["text_preview"] = serde_json::Value::String(preview.clone());
-        }
+    if matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "wav" | "mp3" | "m4a" | "aac" | "flac" | "ogg"
+    ) {
+        Ok(())
+    } else {
+        Err("Path is not a supported audio file.".to_string())
     }
-
-    fs::write(
-        &history_path,
-        serde_json::to_string_pretty(&payload)
-            .map_err(|error| format!("Failed to encode history: {error}"))?
-            + "\n",
-    )
-    .map_err(|error| format!("Failed to save history: {error}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        load_transcript_detail_from_project, save_transcript_edit_to_project,
+        load_transcript_detail_from_output_root, save_transcript_edit_to_output_root,
         LoadTranscriptDetailRequest, SaveTranscriptEditRequest, TranscriptSegmentView,
     };
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn load_detail_reads_text_segments_audio_and_backup_status() {
-        let project_root = temp_dir("load_detail_reads_text_segments_audio");
-        let output_dir = project_root.join("outputs");
-        fs::create_dir_all(&output_dir).expect("create outputs");
-        let transcript_path = output_dir.join("demo_transcript.txt");
-        let segments_path = output_dir.join("demo_transcript_segments.json");
-        let audio_path = project_root.join("work").join("demo.wav");
-        fs::create_dir_all(audio_path.parent().expect("audio parent")).expect("create work");
-        fs::write(&transcript_path, "original text\n").expect("write transcript");
-        fs::write(&audio_path, b"fake wav").expect("write audio");
+        let output_root = temp_dir("load_detail_task");
+        let task_id = "20260705-153012-douyin-7645505408425004329";
+        let task_dir = create_task(&output_root, task_id);
+        fs::write(task_dir.join("transcript").join("transcript.txt"), "original text\n")
+            .expect("write transcript");
+        fs::write(task_dir.join("media").join("audio.wav"), b"fake wav").expect("write audio");
         fs::write(
-            &segments_path,
+            task_dir.join("transcript").join("segments.json"),
             r#"{"segments":[{"id":"seg-0001","start_ms":0,"end_ms":1200,"text":"original text","speaker":"solo"}]}"#,
         )
         .expect("write segments");
+        write_manifest(&task_dir, task_id, true);
 
-        let detail = load_transcript_detail_from_project(
-            &project_root,
+        let detail = load_transcript_detail_from_output_root(
+            &output_root,
             LoadTranscriptDetailRequest {
-                transcript_path: transcript_path.to_string_lossy().to_string(),
-                audio_path: Some(audio_path.to_string_lossy().to_string()),
+                task_id: task_id.to_string(),
             },
         )
         .expect("load detail");
 
+        assert_eq!(detail.task_id, task_id);
         assert_eq!(detail.text, "original text");
         assert_eq!(
             detail.segments,
@@ -468,85 +396,28 @@ mod tests {
                 speaker: Some("solo".to_string()),
             }]
         );
-        assert_eq!(
-            detail.audio_path,
-            Some(
-                audio_path
-                    .canonicalize()
-                    .expect("canonical audio")
-                    .to_string_lossy()
-                    .to_string()
-            )
-        );
+        assert!(detail.audio_path.expect("audio path").ends_with("media/audio.wav"));
         assert!(!detail.has_original_backup);
     }
 
     #[test]
-    fn load_detail_ignores_malformed_segments_sidecar_but_keeps_audio() {
-        let project_root = temp_dir("load_detail_ignores_malformed_segments");
-        let output_dir = project_root.join("outputs");
-        fs::create_dir_all(&output_dir).expect("create outputs");
-        let transcript_path = output_dir.join("demo_transcript.txt");
-        let segments_path = output_dir.join("demo_transcript_segments.json");
-        let audio_path = project_root.join("work").join("demo.wav");
-        fs::create_dir_all(audio_path.parent().expect("audio parent")).expect("create work");
-        fs::write(&transcript_path, "text is still readable\n").expect("write transcript");
-        fs::write(&audio_path, b"fake wav").expect("write audio");
-        fs::write(&segments_path, "{not valid json").expect("write malformed segments");
-
-        let detail = load_transcript_detail_from_project(
-            &project_root,
-            LoadTranscriptDetailRequest {
-                transcript_path: transcript_path.to_string_lossy().to_string(),
-                audio_path: Some(audio_path.to_string_lossy().to_string()),
-            },
-        )
-        .expect("load detail despite malformed sidecar");
-
-        assert_eq!(detail.text, "text is still readable");
-        assert!(detail.segments.is_empty());
-        assert_eq!(
-            detail.audio_path,
-            Some(
-                audio_path
-                    .canonicalize()
-                    .expect("canonical audio")
-                    .to_string_lossy()
-                    .to_string()
-            )
-        );
-    }
-
-    #[test]
-    fn save_detail_creates_backup_once_and_updates_history_preview() {
-        let project_root = temp_dir("save_detail_creates_backup_once");
-        let output_dir = project_root.join("outputs");
-        let work_dir = project_root.join("work");
-        fs::create_dir_all(&output_dir).expect("create outputs");
-        fs::create_dir_all(&work_dir).expect("create work");
-        let transcript_path = output_dir.join("demo_transcript.txt");
-        let md_path = output_dir.join("demo_transcript.md");
-        fs::write(&transcript_path, "first version\n").expect("write transcript");
-        fs::write(&md_path, "# 视频文字稿\n\n## Transcript\n\nfirst version\n")
-            .expect("write markdown");
-        let history_payload = serde_json::json!({
-            "items": [
-                {
-                    "transcript_path": transcript_path.to_string_lossy(),
-                    "text_preview": "first version",
-                }
-            ]
-        });
+    fn save_detail_creates_original_backup_once_and_updates_manifest() {
+        let output_root = temp_dir("save_detail_task");
+        let task_id = "20260705-153012-douyin-7645505408425004329";
+        let task_dir = create_task(&output_root, task_id);
+        fs::write(task_dir.join("transcript").join("transcript.txt"), "first version\n")
+            .expect("write transcript");
         fs::write(
-            work_dir.join("history.json"),
-            serde_json::to_string(&history_payload).expect("encode history"),
+            task_dir.join("transcript").join("transcript.md"),
+            "# Transcript\n\n## Transcript\n\nfirst version\n",
         )
-        .expect("write history");
+        .expect("write markdown");
+        write_manifest(&task_dir, task_id, false);
 
-        let result = save_transcript_edit_to_project(
-            &project_root,
+        let result = save_transcript_edit_to_output_root(
+            &output_root,
             SaveTranscriptEditRequest {
-                transcript_path: transcript_path.to_string_lossy().to_string(),
+                task_id: task_id.to_string(),
                 text: "second version".to_string(),
                 segments: vec![TranscriptSegmentView {
                     id: "seg-0001".to_string(),
@@ -562,71 +433,121 @@ mod tests {
         assert_eq!(result.text, "second version");
         assert!(result.has_original_backup);
         assert_eq!(
-            fs::read_to_string(output_dir.join("demo_transcript.original.txt"))
+            fs::read_to_string(task_dir.join("transcript").join("original").join("transcript.txt"))
                 .expect("read backup"),
             "first version\n"
         );
         assert_eq!(
-            fs::read_to_string(&transcript_path).expect("read saved"),
+            fs::read_to_string(task_dir.join("transcript").join("transcript.txt"))
+                .expect("read saved"),
             "second version\n"
         );
-        assert!(fs::read_to_string(&md_path)
-            .expect("read markdown")
-            .contains("## Transcript\n\nsecond version\n"));
-        assert!(result
-            .segments_path
-            .expect("segments path")
-            .ends_with("demo_transcript_segments.json"));
-        assert!(fs::read_to_string(work_dir.join("history.json"))
-            .expect("read history")
-            .contains(r#""text_preview": "second version""#));
+        assert!(fs::read_to_string(task_dir.join("transcript").join("segments.json"))
+            .expect("read segments")
+            .contains("seg-0001"));
+        let manifest = fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
+        assert!(manifest.contains(r#""text_preview": "second version""#));
+        assert!(manifest.contains(r#""segments": "transcript/segments.json""#));
 
-        save_transcript_edit_to_project(
-            &project_root,
+        save_transcript_edit_to_output_root(
+            &output_root,
             SaveTranscriptEditRequest {
-                transcript_path: transcript_path.to_string_lossy().to_string(),
+                task_id: task_id.to_string(),
                 text: "third version".to_string(),
                 segments: vec![],
             },
         )
         .expect("save again");
-
         assert_eq!(
-            fs::read_to_string(output_dir.join("demo_transcript.original.txt"))
-                .expect("read backup after second save"),
+            fs::read_to_string(task_dir.join("transcript").join("original").join("transcript.txt"))
+                .expect("read backup again"),
             "first version\n"
         );
     }
 
     #[test]
-    fn save_detail_rejects_empty_text_and_non_transcript_files() {
-        let project_root = temp_dir("save_detail_rejects_invalid_input");
-        let output_dir = project_root.join("outputs");
-        fs::create_dir_all(&output_dir).expect("create outputs");
-        let transcript_path = output_dir.join("demo_transcript.txt");
-        let note_path = output_dir.join("note.txt");
-        fs::write(&transcript_path, "text\n").expect("write transcript");
-        fs::write(&note_path, "text\n").expect("write note");
+    fn save_detail_rejects_empty_text_and_path_traversal() {
+        let output_root = temp_dir("save_detail_rejects_invalid");
+        let task_id = "20260705-153012-source-demo";
+        let task_dir = create_task(&output_root, task_id);
+        fs::write(task_dir.join("transcript").join("transcript.txt"), "text\n")
+            .expect("write transcript");
+        write_manifest(&task_dir, task_id, false);
 
-        assert!(save_transcript_edit_to_project(
-            &project_root,
+        assert!(save_transcript_edit_to_output_root(
+            &output_root,
             SaveTranscriptEditRequest {
-                transcript_path: transcript_path.to_string_lossy().to_string(),
+                task_id: task_id.to_string(),
                 text: " ".to_string(),
                 segments: vec![],
             },
         )
         .is_err());
 
-        assert!(save_transcript_edit_to_project(
-            &project_root,
-            SaveTranscriptEditRequest {
-                transcript_path: note_path.to_string_lossy().to_string(),
-                text: "ok".to_string(),
-                segments: vec![],
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 1,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-05T15:30:12Z",
+  "source_url": "https://example.test/video",
+  "status": "completed",
+  "artifacts": {{"transcript_txt": "../outside.txt"}},
+  "error": null,
+  "text_preview": "",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write unsafe manifest");
+
+        assert!(load_transcript_detail_from_output_root(
+            &output_root,
+            LoadTranscriptDetailRequest {
+                task_id: task_id.to_string(),
             },
         )
         .is_err());
+    }
+
+    fn create_task(output_root: &Path, task_id: &str) -> PathBuf {
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("media")).expect("create media dir");
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::create_dir_all(task_dir.join("ai")).expect("create ai dir");
+        task_dir
+    }
+
+    fn write_manifest(task_dir: &Path, task_id: &str, include_segments: bool) {
+        let segments_entry = if include_segments {
+            r#",
+    "segments": "transcript/segments.json""#
+        } else {
+            ""
+        };
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 1,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-05T15:30:12Z",
+  "source_url": "https://www.douyin.com/video/7645505408425004329",
+  "platform": "douyin",
+  "status": "completed",
+  "artifacts": {{
+    "audio": "media/audio.wav",
+    "transcript_txt": "transcript/transcript.txt",
+    "transcript_md": "transcript/transcript.md"{segments_entry}
+  }},
+  "error": null,
+  "text_preview": "original text",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write manifest");
     }
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -634,7 +555,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq_{name}_{unique}"));
+        let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }

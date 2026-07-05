@@ -15,27 +15,24 @@ describe("transcript detail client", () => {
     ) => {
       calls.push({ command, args });
       return {
+        task_id: "task-1",
         text: "transcript",
         segments: [],
-        audio_path: "D:\\FrameQ\\work\\demo.wav",
+        audio_path: "D:\\FrameQ\\outputs\\tasks\\task-1\\media\\audio.wav",
         has_original_backup: false,
       };
     };
 
-    const detail = await loadTranscriptDetail(
-      "D:\\FrameQ\\outputs\\demo_transcript.txt",
-      "D:\\FrameQ\\work\\demo.wav",
-      runner,
-    );
+    const detail = await loadTranscriptDetail("task-1", runner);
 
+    expect(detail.task_id).toBe("task-1");
     expect(detail.text).toBe("transcript");
     expect(calls).toEqual([
       {
         command: "load_transcript_detail",
         args: {
           request: {
-            transcript_path: "D:\\FrameQ\\outputs\\demo_transcript.txt",
-            audio_path: "D:\\FrameQ\\work\\demo.wav",
+            task_id: "task-1",
           },
         },
       },
@@ -47,15 +44,19 @@ describe("transcript detail client", () => {
     const runner = async (command: string, args: unknown) => {
       calls.push({ command, args });
       return {
+        task_id: "task-1",
         text: "updated",
-        transcript_path: "D:\\FrameQ\\outputs\\demo_transcript.txt",
-        segments_path: "D:\\FrameQ\\outputs\\demo_transcript_segments.json",
+        artifacts: {
+          transcript_txt: "transcript/transcript.txt",
+          transcript_md: "transcript/transcript.md",
+          segments: "transcript/segments.json",
+        },
         has_original_backup: true,
       };
     };
 
     await saveTranscriptEdit(
-      "D:\\FrameQ\\outputs\\demo_transcript.txt",
+      "task-1",
       "updated",
       [{ id: "seg-0001", start_ms: 0, end_ms: 1200, text: "updated" }],
       runner,
@@ -66,7 +67,7 @@ describe("transcript detail client", () => {
         command: "save_transcript_edit",
         args: {
           request: {
-            transcript_path: "D:\\FrameQ\\outputs\\demo_transcript.txt",
+            task_id: "task-1",
             text: "updated",
             segments: [{ id: "seg-0001", start_ms: 0, end_ms: 1200, text: "updated" }],
           },

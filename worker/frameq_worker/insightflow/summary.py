@@ -60,8 +60,12 @@ def write_summary_files(
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = output_dir / f"{output_stem}_summary.md"
-    mindmap_path = output_dir / f"{output_stem}_mindmap.mmd"
+    if output_stem:
+        summary_path = output_dir / f"{output_stem}_summary.md"
+        mindmap_path = output_dir / f"{output_stem}_mindmap.mmd"
+    else:
+        summary_path = output_dir / "summary.md"
+        mindmap_path = output_dir / "mindmap.mmd"
     summary_path.write_text(normalized_summary, encoding="utf-8")
     mindmap_path.write_text(normalized_mindmap, encoding="utf-8")
 

@@ -32,8 +32,7 @@ export type ProcessVideoRequest = {
 };
 
 export type RetryInsightsRequest = {
-  transcript_path: string;
-  text: string;
+  task_id: string;
 };
 
 const defaultWorkerRunner: WorkerCommandRunner = (command, args) => invoke(command, args);
@@ -79,13 +78,11 @@ export async function processVideo(
 }
 
 export async function retryInsights(
-  transcriptPath: string,
-  text: string,
+  taskId: string,
   runner: WorkerCommandRunner = defaultWorkerRunner,
 ): Promise<WorkerResult> {
   const request: RetryInsightsRequest = {
-    transcript_path: transcriptPath,
-    text,
+    task_id: taskId,
   };
 
   try {
@@ -93,15 +90,12 @@ export async function retryInsights(
   } catch (error) {
     return {
       status: "partial_completed",
-      video_path: null,
-      audio_path: null,
-      text,
+      task_id: taskId,
+      task_dir: null,
+      artifacts: {},
+      text: "",
       summary: "",
       insights: [],
-      transcript_path: transcriptPath,
-      summary_path: null,
-      mindmap_path: null,
-      insights_path: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: error instanceof Error ? error.message : String(error),
@@ -148,15 +142,12 @@ function parseProgressEvent(payload: unknown): WorkerProgressEvent | null {
 function failedResult(code: string, message: string, stage: WorkflowStage): WorkerResult {
   return {
     status: "failed",
-    video_path: null,
-    audio_path: null,
+    task_id: null,
+    task_dir: null,
+    artifacts: {},
     text: "",
     summary: "",
     insights: [],
-    transcript_path: null,
-    summary_path: null,
-    mindmap_path: null,
-    insights_path: null,
     error: {
       code,
       message,

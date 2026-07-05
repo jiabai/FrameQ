@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
-import type { WorkerErrorResult, WorkerResult, WorkflowStage } from "./workflow";
+import type { TaskArtifacts, WorkerErrorResult, WorkerResult, WorkflowStage } from "./workflow";
 
 export type HistoryErrorResponse = {
   code: string;
@@ -9,17 +9,15 @@ export type HistoryErrorResponse = {
 };
 
 export type HistoryItemResponse = {
+  task_id: string;
   id: string;
   created_at: string;
   url: string;
+  source_url?: string;
   status: WorkerResult["status"];
+  task_dir: string;
   output_dir: string;
-  video_path: string | null;
-  audio_path: string | null;
-  transcript_path: string | null;
-  summary_path?: string | null;
-  mindmap_path?: string | null;
-  insights_path: string | null;
+  artifacts: TaskArtifacts;
   error: HistoryErrorResponse | null;
   text_preview: string;
   insights_count: number;
@@ -29,17 +27,14 @@ export type HistoryItemResponse = {
 };
 
 export type HistoryItem = {
+  taskId: string;
   id: string;
   createdAt: string;
   url: string;
   status: WorkerResult["status"];
+  taskDir: string;
   outputDir: string;
-  videoPath: string | null;
-  audioPath: string | null;
-  transcriptPath: string | null;
-  summaryPath: string | null;
-  mindmapPath: string | null;
-  insightsPath: string | null;
+  artifacts: TaskArtifacts;
   error: WorkerErrorResult | null;
   textPreview: string;
   insightsCount: number;
@@ -65,32 +60,26 @@ export async function getHistory(
 export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
   return {
     status: item.status,
-    video_path: item.videoPath,
-    audio_path: item.audioPath,
+    task_id: item.taskId,
+    task_dir: item.taskDir,
+    artifacts: item.artifacts,
     text: item.text,
     summary: item.summary,
     insights: item.insights,
-    transcript_path: item.transcriptPath,
-    summary_path: item.summaryPath,
-    mindmap_path: item.mindmapPath,
-    insights_path: item.insightsPath,
     error: item.error,
   };
 }
 
 function mapHistoryItemResponse(response: HistoryItemResponse): HistoryItem {
   return {
+    taskId: response.task_id,
     id: response.id,
     createdAt: response.created_at,
     url: response.url,
     status: response.status,
+    taskDir: response.task_dir,
     outputDir: response.output_dir,
-    videoPath: response.video_path,
-    audioPath: response.audio_path,
-    transcriptPath: response.transcript_path,
-    summaryPath: response.summary_path ?? null,
-    mindmapPath: response.mindmap_path ?? null,
-    insightsPath: response.insights_path,
+    artifacts: response.artifacts ?? {},
     error: response.error,
     textPreview: response.text_preview,
     insightsCount: response.insights_count,

@@ -22,15 +22,6 @@ from frameq_worker.desktop_contract import (
     WORK_DIR_ENV,
     ProgressCallback,
 )
-from frameq_worker.history import (
-    HISTORY_FILE_NAME,
-    append_history_item,
-    build_history_error,
-    build_history_item,
-    load_history,
-    normalize_history_path,
-    update_history_item_after_insight_retry,
-)
 from frameq_worker.llm import build_insight_client_from_env
 from frameq_worker.pipeline import (
     VIDEO_SUFFIXES,
@@ -54,9 +45,7 @@ from frameq_worker.requests import (
     resolve_configured_asr_model,
 )
 from frameq_worker.worker_service import (
-    derive_output_stem,
     failed_insight_retry_result,
-    resolve_markdown_transcript_path,
     run_asr_model_download_once,
     should_allow_real_asr,
 )
@@ -64,7 +53,6 @@ from frameq_worker.worker_service import (
 __all__ = [
     "ASR_MODEL_ENV",
     "DEFAULT_ASR_MODEL",
-    "HISTORY_FILE_NAME",
     "MODEL_DIR_ENV",
     "MODEL_DOWNLOAD_EVENT_PREFIX",
     "MODEL_DOWNLOAD_SHA256_ENV",
@@ -77,29 +65,22 @@ __all__ = [
     "VIDEO_SUFFIXES",
     "WORK_DIR_ENV",
     "_optional_env",
-    "append_history_item",
-    "build_history_error",
-    "build_history_item",
     "build_asr_transcriber",
     "build_insight_client_from_env",
     "can_reuse_audio",
-    "derive_output_stem",
     "emit_progress",
     "failed_insight_retry_result",
     "failed_result",
     "find_latest_video",
     "find_new_or_updated_video",
     "find_video_by_stem",
-    "load_history",
     "main",
-    "normalize_history_path",
     "parse_process_request",
     "parse_retry_insights_request",
     "render_model_download_event",
     "render_progress_event",
     "render_result_json",
     "resolve_configured_asr_model",
-    "resolve_markdown_transcript_path",
     "resolve_output_dir",
     "resolve_work_dir",
     "retry_insights_once",
@@ -108,7 +89,6 @@ __all__ = [
     "run_worker_pipeline",
     "should_allow_real_asr",
     "snapshot_video_files",
-    "update_history_item_after_insight_retry",
 ]
 
 

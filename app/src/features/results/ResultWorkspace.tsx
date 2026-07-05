@@ -2,6 +2,7 @@ import { AlertTriangle, FileText, Film, Lightbulb, ListChecks, Volume2 } from "l
 
 import {
   formatWorkerError,
+  hasArtifact,
   type ResultCard,
   type WorkerErrorResult,
   type WorkflowState,
@@ -86,11 +87,11 @@ export function ResultWorkspace({
 
 function getResultMeta(card: ResultCard, workflow: WorkflowState): string {
   if (card.id === "video") {
-    return workflow.videoPath ? "已下载，可定位文件" : "等待视频文件";
+    return hasArtifact(workflow, "video") ? "已下载，可定位文件" : "等待视频文件";
   }
 
   if (card.id === "audio") {
-    return workflow.audioPath ? "WAV 音频，可定位文件" : "等待音频文件";
+    return hasArtifact(workflow, "audio") ? "WAV 音频，可定位文件" : "等待音频文件";
   }
 
   if (card.id === "insights") {

@@ -1,5 +1,13 @@
 # FrameQ Design Guidelines
 
+## 2026-07-05 Task Library and Artifact UX
+
+- Result tiles should represent artifacts within the current task, not independent loose files.
+- The primary locate action should reveal the task folder or the selected manifest artifact inside that folder.
+- History should read as a task library: each row represents one processed source URL, with status, preview, artifact availability, and task folder context.
+- The UI should not mention or expose legacy flat output compatibility. New tasks always use the task folder layout.
+- Export/location actions should use saved manifest artifacts. Unsaved transcript edits should still prompt the user to save before locating the official transcript.
+
 ## 2026-07-03 Transcript Audio Review UX
 
 - The `完整文字稿` detail tab should remove keyword search. The primary review tools are audio playback, block selection, direct editing, save, copy, and locating the saved transcript file.
@@ -81,7 +89,7 @@ UI 必须围绕以下状态组织：
 - 点击结果卡片打开详情浮窗，浮窗内通过 tab 切换内容。
 - 详情浮窗内部内容独立滚动，支持 `Esc` 关闭。
 - 复制按钮复制当前详情 tab 的文本；无内容时置灰。
-- 导出按钮在对应输出文件生成前置灰；启用后定位 `outputs/` 中的已生成文件。
+- 导出按钮在对应 artifact 生成前置灰；启用后定位当前任务目录中的正式 artifact。
 - 进度区优先展示 worker 事件中的具体阶段文案；没有事件时回退到当前阶段默认文案。
 - `要点总结` 或 `启发话题点` 待生成或失败时，点击卡片先打开确认面板；用户在确认面板点击 `确认` 后才触发 AI整理，仅重跑总结、Mermaid mindmap 和话题点生成，不重新下载视频、重新提取音频或重新转写。Mermaid 文本只写入本地文件，不在 UI 中展示或渲染。
 - 取消任务只在处理中显示；点击后必须终止当前 worker 进程树，返回输入态并保留刚提交的 URL。

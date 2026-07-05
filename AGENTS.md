@@ -25,6 +25,7 @@
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
+- 当前任务级产物目录计划：`docs/exec-plans/active/2026-07-05-task-owned-artifact-layout-plan.md`
 - 最近完成执行计划：`docs/exec-plans/completed/2026-06-25-douyin-share-page-fallback-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 

@@ -210,8 +210,12 @@ def write_insight_files(
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    json_path = output_dir / f"{output_stem}_insights.json"
-    md_path = output_dir / f"{output_stem}_insights.md"
+    if output_stem:
+        json_path = output_dir / f"{output_stem}_insights.json"
+        md_path = output_dir / f"{output_stem}_insights.md"
+    else:
+        json_path = output_dir / "insights.json"
+        md_path = output_dir / "insights.md"
 
     payload = {
         "file_id": output_stem,

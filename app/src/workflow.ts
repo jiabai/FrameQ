@@ -24,17 +24,27 @@ export type ResultCard = {
 
 export type DetailTab = ResultCard["id"];
 
+export type TaskArtifactKey =
+  | "video"
+  | "audio"
+  | "transcript_txt"
+  | "transcript_md"
+  | "segments"
+  | "summary"
+  | "mindmap"
+  | "insights"
+  | "insights_md";
+
+export type TaskArtifacts = Partial<Record<TaskArtifactKey, string>>;
+
 export type WorkerResult = {
   status: "completed" | "partial_completed" | "failed";
-  video_path: string | null;
-  audio_path: string | null;
+  task_id: string | null;
+  task_dir: string | null;
+  artifacts: TaskArtifacts;
   text: string;
   summary: string;
   insights: string[];
-  transcript_path: string | null;
-  summary_path: string | null;
-  mindmap_path: string | null;
-  insights_path: string | null;
   error: WorkerErrorResult | null;
 };
 
@@ -60,12 +70,9 @@ export type WorkflowState = {
   text: string;
   summary: string;
   insights: string[];
-  videoPath: string | null;
-  audioPath: string | null;
-  transcriptPath: string | null;
-  summaryPath: string | null;
-  mindmapPath: string | null;
-  insightsPath: string | null;
+  taskId: string | null;
+  taskDir: string | null;
+  artifacts: TaskArtifacts;
   error: WorkerErrorResult | null;
 };
 
@@ -89,12 +96,9 @@ export function createInitialWorkflow(): WorkflowState {
     text: "",
     summary: "",
     insights: [],
-    videoPath: null,
-    audioPath: null,
-    transcriptPath: null,
-    summaryPath: null,
-    mindmapPath: null,
-    insightsPath: null,
+    taskId: null,
+    taskDir: null,
+    artifacts: {},
     error: null,
   };
 }
@@ -259,12 +263,9 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
     text: "",
     summary: "",
     insights: [],
-    videoPath: null,
-    audioPath: null,
-    transcriptPath: null,
-    summaryPath: null,
-    mindmapPath: null,
-    insightsPath: null,
+    taskId: null,
+    taskDir: null,
+    artifacts: {},
     error: null,
   };
 }
@@ -616,12 +617,9 @@ export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
     text: result.text,
     summary: result.summary,
     insights: result.insights,
-    videoPath: result.video_path,
-    audioPath: result.audio_path,
-    transcriptPath: result.transcript_path,
-    summaryPath: result.summary_path,
-    mindmapPath: result.mindmap_path,
-    insightsPath: result.insights_path,
+    taskId: result.task_id,
+    taskDir: result.task_dir,
+    artifacts: result.artifacts ?? {},
     error: result.error,
   };
 }
@@ -641,7 +639,7 @@ export function mergeProgressEvent(
 
 export function getResultCards(state: WorkflowState): ResultCard[] {
   const mediaCards: ResultCard[] = [
-    state.videoPath
+    hasArtifact(state, "video")
       ? {
           id: "video",
           title: "视频文件",
@@ -649,7 +647,7 @@ export function getResultCards(state: WorkflowState): ResultCard[] {
           action: "locate",
         }
       : null,
-    state.audioPath
+    hasArtifact(state, "audio")
       ? {
           id: "audio",
           title: "音频文件",
@@ -660,7 +658,7 @@ export function getResultCards(state: WorkflowState): ResultCard[] {
   ].filter((card): card is ResultCard => card !== null);
 
   const transcriptCard: ResultCard | null =
-    state.transcriptPath || state.text
+    hasArtifact(state, "transcript_txt") || state.text
       ? {
           id: "transcript",
           title: "完整文字稿",
@@ -669,7 +667,7 @@ export function getResultCards(state: WorkflowState): ResultCard[] {
         }
       : null;
   const summaryCard: ResultCard =
-    state.summaryPath || state.summary
+    hasArtifact(state, "summary") || state.summary
       ? {
           id: "summary",
           title: "要点总结",
@@ -702,7 +700,7 @@ export function getResultCards(state: WorkflowState): ResultCard[] {
       ...mediaCards,
       ...(transcriptCard ? [transcriptCard] : []),
       summaryCard,
-      state.insights.length > 0
+      state.insights.length > 0 || hasArtifact(state, "insights") || hasArtifact(state, "insights_md")
         ? {
             id: "insights",
             title: "启发话题点",
@@ -743,20 +741,42 @@ export function getDetailText(tab: DetailTab, state: WorkflowState): string {
 
 export function getExportPath(tab: DetailTab, state: WorkflowState): string | null {
   if (tab === "video") {
-    return state.videoPath;
+    return getTaskArtifactPath(state, "video");
   }
 
   if (tab === "audio") {
-    return state.audioPath;
+    return getTaskArtifactPath(state, "audio");
   }
 
   if (tab === "transcript") {
-    return state.transcriptPath;
+    return getTaskArtifactPath(state, "transcript_txt");
   }
 
   if (tab === "summary") {
-    return state.summaryPath;
+    return getTaskArtifactPath(state, "summary");
   }
 
-  return state.insightsPath;
+  return getTaskArtifactPath(state, "insights_md") ?? getTaskArtifactPath(state, "insights");
+}
+
+export function hasArtifact(state: WorkflowState, key: TaskArtifactKey): boolean {
+  return Boolean(state.taskDir && state.artifacts[key]);
+}
+
+export function getTaskArtifactPath(
+  state: WorkflowState,
+  key: TaskArtifactKey,
+): string | null {
+  const artifact = state.artifacts[key];
+  if (!state.taskDir || !artifact) {
+    return null;
+  }
+  return joinTaskArtifactPath(state.taskDir, artifact);
+}
+
+export function joinTaskArtifactPath(taskDir: string, artifact: string): string {
+  const separator = taskDir.includes("\\") ? "\\" : "/";
+  const normalizedTaskDir = taskDir.replace(/[\\/]+$/, "");
+  const normalizedArtifact = artifact.replace(/^[\\/]+/, "").replace(/[\\/]+/g, separator);
+  return `${normalizedTaskDir}${separator}${normalizedArtifact}`;
 }

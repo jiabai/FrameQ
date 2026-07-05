@@ -8,25 +8,41 @@ import {
   type WorkerCommandRunner,
   type WorkerProgressListener,
 } from "./workerClient";
+import type { WorkerResult } from "./workflow";
+
+const TASK_ID = "20260705-153012-douyin-demo";
+const TASK_DIR = "outputs/tasks/20260705-153012-douyin-demo";
+
+function completedResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
+  const { artifacts, ...rest } = overrides;
+  return {
+    status: "completed",
+    task_id: TASK_ID,
+    task_dir: TASK_DIR,
+    artifacts: {
+      video: "media/video.mp4",
+      audio: "media/audio.wav",
+      transcript_txt: "transcript/transcript.txt",
+      transcript_md: "transcript/transcript.md",
+      summary: "ai/summary.md",
+      mindmap: "ai/mindmap.mmd",
+      insights: "ai/insights.json",
+      ...(artifacts ?? {}),
+    },
+    text: "完整文字稿",
+    summary: "# 要点总结",
+    insights: ["为什么流程编排可能比单点模型能力更关键？"],
+    error: null,
+    ...rest,
+  };
+}
 
 describe("worker client", () => {
   test("invokes the Tauri process_video command with the submitted url", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: WorkerCommandRunner = async (command, args) => {
       calls.push({ command, args });
-      return {
-        status: "completed",
-        video_path: "outputs/demo.mp4",
-        audio_path: "work/demo.wav",
-        text: "完整文字稿",
-        summary: "# 要点总结",
-        insights: ["为什么流程编排可能比单点模型能力更关键？"],
-        transcript_path: "outputs/demo_transcript.txt",
-        summary_path: "outputs/demo_summary.md",
-        mindmap_path: "outputs/demo_mindmap.mmd",
-        insights_path: "outputs/demo_insights.json",
-        error: null,
-      };
+      return completedResult();
     };
 
     const result = await processVideo(
@@ -64,15 +80,12 @@ describe("worker client", () => {
 
     expect(result).toEqual({
       status: "failed",
-      video_path: null,
-      audio_path: null,
+      task_id: null,
+      task_dir: null,
+      artifacts: {},
       text: "",
       summary: "",
       insights: [],
-      transcript_path: null,
-      summary_path: null,
-      mindmap_path: null,
-      insights_path: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "worker process could not start",
@@ -98,18 +111,16 @@ describe("worker client", () => {
         unlistenCalls.push(eventName);
       };
     };
-    const runner: WorkerCommandRunner = async () => ({
-      status: "completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
+    const runner: WorkerCommandRunner = async () => completedResult({
       text: "完整文字稿",
       summary: "",
       insights: [],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: null,
-      mindmap_path: null,
-      insights_path: null,
-      error: null,
+      artifacts: {
+        video: "media/video.mp4",
+        audio: "media/audio.wav",
+        transcript_txt: "transcript/transcript.txt",
+        transcript_md: "transcript/transcript.md",
+      },
     });
 
     await processVideo(
@@ -129,38 +140,25 @@ describe("worker client", () => {
     expect(unlistenCalls).toEqual([WORKER_PROGRESS_EVENT]);
   });
 
-  test("invokes the Tauri retry_insights command with existing transcript data", async () => {
+  test("invokes the Tauri retry_insights command with a task id", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: WorkerCommandRunner = async (command, args) => {
       calls.push({ command, args });
-      return {
-        status: "completed",
-        video_path: "outputs/demo.mp4",
-        audio_path: "work/demo.wav",
+      return completedResult({
         text: "已经完成的文字稿。",
         summary: "# 要点总结",
         insights: ["为什么重试应该只重新生成话题点？"],
-        transcript_path: "outputs/demo_transcript.txt",
-        summary_path: "outputs/demo_summary.md",
-        mindmap_path: "outputs/demo_mindmap.mmd",
-        insights_path: "outputs/demo_insights.json",
-        error: null,
-      };
+      });
     };
 
-    const result = await retryInsights(
-      "outputs/demo_transcript.txt",
-      "已经完成的文字稿。",
-      runner,
-    );
+    const result = await retryInsights(TASK_ID, runner);
 
     expect(calls).toEqual([
       {
         command: "retry_insights",
         args: {
           request: {
-            transcript_path: "outputs/demo_transcript.txt",
-            text: "已经完成的文字稿。",
+            task_id: TASK_ID,
           },
         },
       },
@@ -173,23 +171,16 @@ describe("worker client", () => {
       throw new Error("retry worker process could not start");
     };
 
-    const result = await retryInsights(
-      "outputs/demo_transcript.txt",
-      "已经完成的文字稿。",
-      runner,
-    );
+    const result = await retryInsights(TASK_ID, runner);
 
     expect(result).toEqual({
       status: "partial_completed",
-      video_path: null,
-      audio_path: null,
-      text: "已经完成的文字稿。",
+      task_id: TASK_ID,
+      task_dir: null,
+      artifacts: {},
+      text: "",
       summary: "",
       insights: [],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: null,
-      mindmap_path: null,
-      insights_path: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "retry worker process could not start",

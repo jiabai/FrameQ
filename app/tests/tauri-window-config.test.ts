@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -60,10 +59,6 @@ const workerManifestPath = resolve(import.meta.dirname, "../../pyproject.toml");
 const bundledWorkerCliPath = resolve(
   import.meta.dirname,
   "../src-tauri/resources/worker/frameq_worker/cli.py",
-);
-const bundledWorkerHistoryPath = resolve(
-  import.meta.dirname,
-  "../src-tauri/resources/worker/frameq_worker/history.py",
 );
 const bundledWorkerModelDownloadPath = resolve(
   import.meta.dirname,
@@ -124,7 +119,7 @@ describe("Tauri desktop window configuration", () => {
 
     expect(config.app.security?.assetProtocol).toEqual({
       enable: true,
-      scope: ["$APPLOCALDATA/work/**"],
+      scope: ["$APPLOCALDATA/outputs/**"],
     });
     expect(manifest).toContain('tauri = { version = "2", features = ["protocol-asset"] }');
   });
@@ -213,24 +208,34 @@ describe("Tauri desktop window configuration", () => {
   });
 
   test("installer selects the standalone Python root instead of venv template launchers", async () => {
-    const { findStandalonePythonRuntimeRoot } = await import(pathToFileURL(installerScriptPath).href);
-    const tempRoot = await mkdtemp(join(tmpdir(), "frameq-python-root-"));
-    const runtimeRoot = join(tempRoot, "python");
+    const script = `
+      import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+      import { tmpdir } from "node:os";
+      import { join } from "node:path";
+      import { findStandalonePythonRuntimeRoot } from ${JSON.stringify(pathToFileURL(installerScriptPath).href)};
 
-    try {
-      await mkdir(join(runtimeRoot, "Lib", "venv", "scripts", "nt"), { recursive: true });
-      await writeFile(join(runtimeRoot, "Lib", "venv", "scripts", "nt", "python.exe"), "");
-      await writeFile(join(runtimeRoot, "python.exe"), "");
+      const tempRoot = await mkdtemp(join(tmpdir(), "frameq-python-root-"));
+      const runtimeRoot = join(tempRoot, "python");
+      try {
+        await mkdir(join(runtimeRoot, "Lib", "venv", "scripts", "nt"), { recursive: true });
+        await writeFile(join(runtimeRoot, "Lib", "venv", "scripts", "nt", "python.exe"), "");
+        await writeFile(join(runtimeRoot, "python.exe"), "");
+        const result = await findStandalonePythonRuntimeRoot(tempRoot);
+        if (result.executable !== join(runtimeRoot, "python.exe") || result.runtimeRoot !== runtimeRoot) {
+          throw new Error(JSON.stringify(result));
+        }
+        console.log("ok");
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    `;
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
 
-      const result = await findStandalonePythonRuntimeRoot(tempRoot);
-
-      expect(result).toEqual({
-        executable: join(runtimeRoot, "python.exe"),
-        runtimeRoot,
-      });
-    } finally {
-      await rm(tempRoot, { recursive: true, force: true });
-    }
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout.trim()).toBe("ok");
   });
 
   test("installer script normalizes macOS Python launchers when reusing runtime resources", () => {
@@ -422,16 +427,15 @@ describe("Tauri desktop window configuration", () => {
     expect(manifest).toContain("FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64");
   });
 
-  test("local bundled worker syncs history after insight retry when present", () => {
-    if (!existsSync(bundledWorkerCliPath) || !existsSync(bundledWorkerHistoryPath)) {
+  test("local bundled worker does not expose old history json helpers when present", () => {
+    if (!existsSync(bundledWorkerCliPath)) {
       return;
     }
 
     const workerCli = readFileSync(bundledWorkerCliPath, "utf8");
-    const workerHistory = readFileSync(bundledWorkerHistoryPath, "utf8");
 
-    expect(workerHistory).toContain("def update_history_item_after_insight_retry");
-    expect(workerCli).toContain("update_history_item_after_insight_retry");
+    expect(workerCli).not.toContain("update_history_item_after_insight_retry");
+    expect(workerCli).not.toContain("append_history_item");
   });
 
   test("local bundled worker uses canonical ASR model cache layout when present", () => {

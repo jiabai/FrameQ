@@ -31,13 +31,13 @@ This is a local-first feature. It must not upload transcript/audio data, add rem
    - Add `TranscriptSegment` data shape `{ id, start_ms, end_ms, text, speaker? }`.
    - Extract valid segments from SenseVoice/FunASR `sentence_info`.
    - Drop invalid/empty timing rows. If no valid segments remain, do not create a sidecar.
-   - Write `<stem>_transcript_segments.json` next to transcript outputs when segments exist.
+   - Write `transcript/segments.json` in the current task directory when segments exist.
 
 2. Tauri local IO boundary
-   - Add `load_transcript_detail({ transcript_path, audio_path })`.
+   - Add `load_transcript_detail({ task_id })`.
    - Return transcript text, optional segments, validated audio path, and original-backup status.
-   - Add `save_transcript_edit({ transcript_path, text, segments })`.
-   - Validate transcript/audio paths, reject unrelated files, create original backup once, write `.txt`/`.md`/segments, and update local history preview.
+   - Add `save_transcript_edit({ task_id, text, segments })`.
+   - Resolve transcript/audio artifacts through `frameq-task.json`, reject unrelated files, create original backups once under `transcript/original/`, write `.txt`/`.md`/segments, and update the task manifest preview.
 
 3. Frontend detail view
    - Remove keyword search and filtered transcript state from the detail modal.

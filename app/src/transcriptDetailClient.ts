@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
+import type { TaskArtifacts } from "./workflow";
 
 export type TranscriptSegment = {
   id: string;
@@ -10,6 +11,7 @@ export type TranscriptSegment = {
 };
 
 export type TranscriptDetailResponse = {
+  task_id: string;
   text: string;
   segments: TranscriptSegment[];
   audio_path: string | null;
@@ -17,9 +19,9 @@ export type TranscriptDetailResponse = {
 };
 
 export type SaveTranscriptEditResponse = {
+  task_id: string;
   text: string;
-  transcript_path: string;
-  segments_path: string | null;
+  artifacts: TaskArtifacts;
   has_original_backup: boolean;
 };
 
@@ -32,27 +34,25 @@ const defaultDetailRunner = <T>(command: string, args: InvokeArgs) =>
   invoke<T>(command, args);
 
 export async function loadTranscriptDetail(
-  transcriptPath: string,
-  audioPath: string | null,
+  taskId: string,
   runner: TranscriptDetailCommandRunner<TranscriptDetailResponse> = defaultDetailRunner,
 ): Promise<TranscriptDetailResponse> {
   return runner("load_transcript_detail", {
     request: {
-      transcript_path: transcriptPath,
-      audio_path: audioPath,
+      task_id: taskId,
     },
   });
 }
 
 export async function saveTranscriptEdit(
-  transcriptPath: string,
+  taskId: string,
   text: string,
   segments: TranscriptSegment[],
   runner: TranscriptDetailCommandRunner<SaveTranscriptEditResponse> = defaultDetailRunner,
 ): Promise<SaveTranscriptEditResponse> {
   return runner("save_transcript_edit", {
     request: {
-      transcript_path: transcriptPath,
+      task_id: taskId,
       text,
       segments,
     },

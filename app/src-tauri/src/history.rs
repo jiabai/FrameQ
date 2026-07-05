@@ -1,30 +1,28 @@
+use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager};
+use std::path::Path;
+use tauri::AppHandle;
 
-const HISTORY_FILE_NAME: &str = "history.json";
-
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub(crate) struct HistoryErrorView {
     pub(crate) code: String,
     pub(crate) message: String,
     pub(crate) stage: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub(crate) struct HistoryItemView {
+    pub(crate) task_id: String,
     pub(crate) id: String,
     pub(crate) created_at: String,
     pub(crate) url: String,
+    pub(crate) source_url: String,
     pub(crate) status: String,
+    pub(crate) task_dir: String,
     pub(crate) output_dir: String,
-    pub(crate) video_path: Option<String>,
-    pub(crate) audio_path: Option<String>,
-    pub(crate) transcript_path: Option<String>,
-    pub(crate) summary_path: Option<String>,
-    pub(crate) mindmap_path: Option<String>,
-    pub(crate) insights_path: Option<String>,
+    pub(crate) artifacts: HashMap<String, String>,
     pub(crate) error: Option<HistoryErrorView>,
     pub(crate) text_preview: String,
     pub(crate) insights_count: usize,
@@ -35,130 +33,100 @@ pub(crate) struct HistoryItemView {
 
 #[tauri::command]
 pub(crate) fn get_history(app: AppHandle) -> Result<Vec<HistoryItemView>, String> {
-    let user_data_dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|error| error.to_string())?;
-    ensure_history_runtime_dirs(&user_data_dir)?;
-    load_history_from_project(&user_data_dir)
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    let output_root = task_manifest::configured_output_root(&paths)?;
+    load_history_from_output_root(&output_root)
 }
 
-pub(crate) fn load_history_from_project(project_root: &Path) -> Result<Vec<HistoryItemView>, String> {
-    let history_path = project_root.join("work").join(HISTORY_FILE_NAME);
-    if !history_path.exists() {
-        return Ok(vec![]);
+pub(crate) fn load_history_from_output_root(
+    output_root: &Path,
+) -> Result<Vec<HistoryItemView>, String> {
+    let mut items = Vec::new();
+    for manifest_path in task_manifest::list_task_manifest_paths(output_root)? {
+        if let Some(item) = history_item_from_manifest_path(output_root, &manifest_path)? {
+            items.push(item);
+        }
+    }
+    items.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    Ok(items)
+}
+
+fn history_item_from_manifest_path(
+    output_root: &Path,
+    manifest_path: &Path,
+) -> Result<Option<HistoryItemView>, String> {
+    let (manifest, task_dir) = task_manifest::read_task_manifest_path(manifest_path)?;
+    if manifest.task_id.trim().is_empty() {
+        return Ok(None);
     }
 
-    let content = fs::read_to_string(&history_path).map_err(|error| error.to_string())?;
-    let history: serde_json::Value =
-        serde_json::from_str(&content).map_err(|error| error.to_string())?;
-    let Some(items) = history.get("items").and_then(serde_json::Value::as_array) else {
-        return Ok(vec![]);
-    };
+    let text = read_text_artifact(&task_dir, &manifest, "transcript_txt")?.unwrap_or_default();
+    let summary = read_text_artifact(&task_dir, &manifest, "summary")?.unwrap_or_default();
+    let insights = read_insights_artifact(&task_dir, &manifest)?;
 
-    Ok(items
-        .iter()
-        .filter_map(|item| history_item_from_value(project_root, item))
-        .collect())
-}
-
-fn ensure_history_runtime_dirs(user_data_dir: &Path) -> Result<(), String> {
-    fs::create_dir_all(user_data_dir.join("outputs")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(user_data_dir.join("work")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(user_data_dir.join("models")).map_err(|error| error.to_string())
-}
-
-fn history_item_from_value(
-    project_root: &Path,
-    item: &serde_json::Value,
-) -> Option<HistoryItemView> {
-    let transcript_path = optional_string(item, "transcript_path");
-    let summary_path = optional_string(item, "summary_path");
-    let insights_path = optional_string(item, "insights_path");
-    let text = transcript_path
-        .as_deref()
-        .and_then(|path| read_text_file_if_exists(project_root, path))
-        .unwrap_or_default();
-    let summary = summary_path
-        .as_deref()
-        .and_then(|path| read_text_file_if_exists(project_root, path))
-        .unwrap_or_default();
-    let insights = insights_path
-        .as_deref()
-        .map(|path| read_insights_file_if_exists(project_root, path))
-        .unwrap_or_default();
-
-    Some(HistoryItemView {
-        id: required_string(item, "id")?,
-        created_at: required_string(item, "created_at")?,
-        url: required_string(item, "url")?,
-        status: required_string(item, "status")?,
-        output_dir: required_string(item, "output_dir")?,
-        video_path: optional_string(item, "video_path"),
-        audio_path: optional_string(item, "audio_path"),
-        transcript_path,
-        summary_path,
-        mindmap_path: optional_string(item, "mindmap_path"),
-        insights_path,
-        error: history_error_from_value(item.get("error")),
-        text_preview: optional_string(item, "text_preview").unwrap_or_default(),
-        insights_count: item
-            .get("insights_count")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0) as usize,
+    Ok(Some(HistoryItemView {
+        task_id: manifest.task_id.clone(),
+        id: manifest.task_id,
+        created_at: manifest.created_at,
+        url: manifest.source_url.clone(),
+        source_url: manifest.source_url,
+        status: manifest.status,
+        task_dir: task_manifest::path_to_frontend_string(&task_dir),
+        output_dir: task_manifest::path_to_frontend_string(output_root),
+        artifacts: manifest.artifacts,
+        error: manifest.error.map(|error| HistoryErrorView {
+            code: error.code,
+            message: error.message,
+            stage: error.stage,
+        }),
+        text_preview: manifest.text_preview,
+        insights_count: manifest.insights_count,
         text,
         summary,
         insights,
-    })
+    }))
 }
 
-fn history_error_from_value(value: Option<&serde_json::Value>) -> Option<HistoryErrorView> {
-    let value = value?;
-    if value.is_null() {
-        return None;
-    }
-
-    Some(HistoryErrorView {
-        code: required_string(value, "code")?,
-        message: required_string(value, "message")?,
-        stage: required_string(value, "stage")?,
-    })
-}
-
-fn required_string(value: &serde_json::Value, key: &str) -> Option<String> {
-    value.get(key)?.as_str().map(str::to_string)
-}
-
-fn optional_string(value: &serde_json::Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
-}
-
-fn read_text_file_if_exists(project_root: &Path, raw_path: &str) -> Option<String> {
-    let path = resolve_history_path(project_root, raw_path);
-    fs::read_to_string(path)
+fn read_text_artifact(
+    task_dir: &Path,
+    manifest: &task_manifest::TaskManifest,
+    key: &str,
+) -> Result<Option<String>, String> {
+    let Some(path) = task_manifest::artifact_path(task_dir, manifest, key)? else {
+        return Ok(None);
+    };
+    task_manifest::validate_task_artifact_path(task_dir, &path, key)?;
+    Ok(fs::read_to_string(path)
         .ok()
-        .map(|text| text.trim().to_string())
+        .map(|text| text.trim().to_string()))
 }
 
-fn read_insights_file_if_exists(project_root: &Path, raw_path: &str) -> Vec<String> {
-    let path = resolve_history_path(project_root, raw_path);
+fn read_insights_artifact(
+    task_dir: &Path,
+    manifest: &task_manifest::TaskManifest,
+) -> Result<Vec<String>, String> {
+    let Some(path) = task_manifest::artifact_path(task_dir, manifest, "insights")? else {
+        return Ok(vec![]);
+    };
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    task_manifest::validate_task_artifact_path(task_dir, &path, "insights")?;
     let Ok(content) = fs::read_to_string(path) else {
-        return vec![];
+        return Ok(vec![]);
     };
     let Ok(payload) = serde_json::from_str::<serde_json::Value>(&content) else {
-        return vec![];
+        return Ok(vec![]);
     };
     let Some(insights) = payload
         .get("insights")
         .and_then(serde_json::Value::as_array)
     else {
-        return vec![];
+        return Ok(vec![]);
     };
 
-    insights
+    Ok(insights
         .iter()
         .filter_map(|item| {
             item.as_str().map(str::to_string).or_else(|| {
@@ -167,14 +135,102 @@ fn read_insights_file_if_exists(project_root: &Path, raw_path: &str) -> Vec<Stri
                     .map(str::to_string)
             })
         })
-        .collect()
+        .collect())
 }
 
-fn resolve_history_path(project_root: &Path, raw_path: &str) -> PathBuf {
-    let path = PathBuf::from(raw_path);
-    if path.is_absolute() {
-        path
-    } else {
-        project_root.join(path)
+#[cfg(test)]
+mod tests {
+    use super::load_history_from_output_root;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn load_history_from_output_root_reads_task_manifests() {
+        let output_root = temp_dir("history_from_manifests");
+        let task_id = "20260705-153012-douyin-7645505408425004329";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::create_dir_all(task_dir.join("ai")).expect("create ai dir");
+        fs::write(task_dir.join("transcript").join("transcript.txt"), "full transcript\n")
+            .expect("write transcript");
+        fs::write(task_dir.join("ai").join("summary.md"), "# summary\n").expect("write summary");
+        fs::write(
+            task_dir.join("ai").join("insights.json"),
+            r#"{"insights":[{"text":"first topic"}]}"#,
+        )
+        .expect("write insights");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 1,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-05T15:30:12Z",
+  "source_url": "https://www.douyin.com/video/7645505408425004329",
+  "platform": "douyin",
+  "status": "completed",
+  "artifacts": {{
+    "transcript_txt": "transcript/transcript.txt",
+    "summary": "ai/summary.md",
+    "insights": "ai/insights.json"
+  }},
+  "error": null,
+  "text_preview": "full transcript",
+  "insights_count": 1
+}}"#
+            ),
+        )
+        .expect("write manifest");
+
+        let history = load_history_from_output_root(&output_root).expect("load history");
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].task_id, task_id);
+        assert_eq!(
+            history[0].url,
+            "https://www.douyin.com/video/7645505408425004329"
+        );
+        assert_eq!(history[0].text, "full transcript");
+        assert_eq!(history[0].summary, "# summary");
+        assert_eq!(history[0].insights, vec!["first topic"]);
+        assert_eq!(history[0].artifacts["summary"], "ai/summary.md");
+    }
+
+    #[test]
+    fn load_history_rejects_artifact_path_traversal() {
+        let output_root = temp_dir("history_rejects_traversal");
+        let task_id = "20260705-153012-source-demo";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(&task_dir).expect("create task dir");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 1,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-05T15:30:12Z",
+  "source_url": "https://example.test/video",
+  "status": "completed",
+  "artifacts": {{"transcript_txt": "../outside.txt"}},
+  "error": null,
+  "text_preview": "",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write manifest");
+
+        assert!(load_history_from_output_root(&output_root).is_err());
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
     }
 }

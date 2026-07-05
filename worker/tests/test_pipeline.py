@@ -6,32 +6,29 @@ from frameq_worker.pipeline import run_asr_transcript_step, run_insight_generati
 
 class FakeTranscriber:
     def transcribe(self, audio_path: Path, language: str = "Chinese") -> Transcript:
-        return Transcript(text="这是一段可用于后续 InsightFlow 的文字稿。", language=language)
+        return Transcript(text="transcript for insight generation", language=language)
 
 
-def test_run_asr_transcript_step_returns_process_result_with_transcript_paths(
-    tmp_path: Path,
-) -> None:
+def test_run_asr_transcript_step_returns_task_style_artifacts(tmp_path: Path) -> None:
     audio_path = tmp_path / "work" / "demo.wav"
     audio_path.parent.mkdir()
     audio_path.write_bytes(b"fake wav")
 
     result = run_asr_transcript_step(
         audio_path=audio_path,
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
+        output_dir=tmp_path / "task" / "transcript",
+        output_stem="",
         transcriber=FakeTranscriber(),
-    )
+    ).to_dict()
 
-    serialized = result.to_dict()
-
-    assert serialized["status"] == "video_transcribing"
-    assert serialized["text"] == "这是一段可用于后续 InsightFlow 的文字稿。"
-    assert serialized["transcript_path"] == (
-        tmp_path / "outputs" / "demo_transcript.txt"
-    ).as_posix()
-    assert (tmp_path / "outputs" / "demo_transcript.txt").read_text(encoding="utf-8").strip()
-    assert (tmp_path / "outputs" / "demo_transcript.md").read_text(encoding="utf-8").strip()
+    assert result["status"] == "video_transcribing"
+    assert result["text"] == "transcript for insight generation"
+    assert result["artifacts"] == {
+        "transcript_txt": "transcript.txt",
+        "transcript_md": "transcript.md",
+    }
+    assert (tmp_path / "task" / "transcript" / "transcript.txt").read_text(encoding="utf-8").strip()
+    assert (tmp_path / "task" / "transcript" / "transcript.md").read_text(encoding="utf-8").strip()
 
 
 def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path) -> None:
@@ -45,8 +42,8 @@ def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path)
 
     result = run_asr_transcript_step(
         audio_path=audio_path,
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
+        output_dir=tmp_path / "task" / "transcript",
+        output_stem="",
         transcriber=EmptyTranscriber(),
     )
 
@@ -60,25 +57,23 @@ def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path)
 class FakeInsightClient:
     def generate(self, prompt: str) -> str:
         if "Mermaid mindmap" in prompt:
-            return "mindmap\n  root((流程编排))\n    上下文能力"
-        if "根据文字稿原文和 Mermaid 思维导图" in prompt:
-            return "# 要点总结\n\n## 总览\n流程编排和上下文能力共同影响 AI 落地。"
-        if "话题分段规划师" in prompt:
+            return "mindmap\n  root((pipeline))"
+        if "Mermaid" in prompt and "Transcript" in prompt:
+            return "# summary\n\npipeline summary"
+        if "topic" in prompt.lower() or "question_count" in prompt:
             return (
-                '[{"title":"流程编排","summary":"流程编排影响 AI 落地",'
-                '"excerpt":"流程编排和上下文能力共同影响 AI 落地。","question_count":1}]'
+                '[{"title":"pipeline","summary":"summary","excerpt":"excerpt",'
+                '"question_count":1}]'
             )
-        return '["为什么流程编排可能比单点模型能力更关键？"]'
+        return '["pipeline question"]'
 
 
 class SummaryOnlyClient:
     def generate(self, prompt: str) -> str:
         if "Mermaid mindmap" in prompt:
-            return "mindmap\n  root((总结成功))"
-        if "根据文字稿原文和 Mermaid 思维导图" in prompt:
-            return "# 要点总结\n\n## 总览\n总结已生成。"
-        if "话题分段规划师" in prompt:
-            return "not json"
+            return "mindmap\n  root((summary))"
+        if "Mermaid" in prompt and "Transcript" in prompt:
+            return "# summary\n\nsummary only"
         return "not json"
 
 
@@ -86,60 +81,53 @@ class InsightsOnlyClient:
     def generate(self, prompt: str) -> str:
         if "Mermaid mindmap" in prompt:
             return "graph TD\n  A-->B"
-        if "话题分段规划师" in prompt:
-            return (
-                '[{"title":"话题","summary":"话题摘要",'
-                '"excerpt":"话题原文片段","question_count":1}]'
-            )
-        return '["为什么成功的一侧结果应该被保留？"]'
+        if "topic" in prompt.lower() or "question_count" in prompt:
+            return '[{"title":"topic","summary":"summary","excerpt":"excerpt","question_count":1}]'
+        return '["insight only"]'
 
 
-def test_run_insight_generation_step_returns_completed_result(tmp_path: Path) -> None:
-    transcript_path = tmp_path / "outputs" / "demo_transcript.md"
-    transcript_path.parent.mkdir()
-    transcript_path.write_text("# 视频文字稿\n\n这是一段文字稿。", encoding="utf-8")
+def test_run_insight_generation_step_returns_task_style_artifacts(tmp_path: Path) -> None:
+    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
 
     result = run_insight_generation_step(
         transcript_path=transcript_path,
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        transcript_text="这是一段文字稿。",
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        transcript_text="transcript text",
         client=FakeInsightClient(),
-    )
+    ).to_dict()
 
-    serialized = result.to_dict()
-
-    assert serialized["status"] == "completed"
-    assert serialized["text"] == "这是一段文字稿。"
-    assert serialized["summary"] == (
-        "# 要点总结\n\n## 总览\n流程编排和上下文能力共同影响 AI 落地。\n"
-    )
-    assert serialized["summary_path"] == (tmp_path / "outputs" / "demo_summary.md").as_posix()
-    assert serialized["mindmap_path"] == (tmp_path / "outputs" / "demo_mindmap.mmd").as_posix()
-    assert serialized["insights"] == ["为什么流程编排可能比单点模型能力更关键？"]
-    assert serialized["insights_path"] == (tmp_path / "outputs" / "demo_insights.json").as_posix()
+    assert result["status"] == "completed"
+    assert result["summary"].startswith("#")
+    assert result["insights"] == ["pipeline question"]
+    assert result["artifacts"] == {
+        "summary": "summary.md",
+        "mindmap": "mindmap.mmd",
+        "insights": "insights.json",
+        "insights_md": "insights.md",
+    }
 
 
 def test_run_insight_generation_step_without_client_returns_partial_completed(
     tmp_path: Path,
 ) -> None:
-    transcript_path = tmp_path / "outputs" / "demo_transcript.md"
-    transcript_path.parent.mkdir()
-    transcript_path.write_text("# 视频文字稿\n\n这是一段文字稿。", encoding="utf-8")
+    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
 
     result = run_insight_generation_step(
         transcript_path=transcript_path,
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        transcript_text="这是一段文字稿。",
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        transcript_text="transcript text",
         client=None,
-    )
+    ).to_dict()
 
-    serialized = result.to_dict()
-
-    assert serialized["status"] == "partial_completed"
-    assert serialized["text"] == "这是一段文字稿。"
-    assert serialized["error"] == {
+    assert result["status"] == "partial_completed"
+    assert result["text"] == "transcript text"
+    assert result["error"] == {
         "code": "INSIGHTFLOW_CONFIG_MISSING",
         "message": "InsightFlow LLM client is not configured.",
         "stage": "insights_generating",
@@ -149,43 +137,45 @@ def test_run_insight_generation_step_without_client_returns_partial_completed(
 def test_run_insight_generation_step_preserves_summary_when_insights_fail(
     tmp_path: Path,
 ) -> None:
-    transcript_path = tmp_path / "outputs" / "demo_transcript.md"
-    transcript_path.parent.mkdir()
-    transcript_path.write_text("# 视频文字稿\n\n这是一段文字稿。", encoding="utf-8")
+    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
 
     result = run_insight_generation_step(
         transcript_path=transcript_path,
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        transcript_text="这是一段文字稿。",
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        transcript_text="transcript text",
         client=SummaryOnlyClient(),
     ).to_dict()
 
     assert result["status"] == "partial_completed"
-    assert result["summary_path"] == (tmp_path / "outputs" / "demo_summary.md").as_posix()
-    assert result["mindmap_path"] == (tmp_path / "outputs" / "demo_mindmap.mmd").as_posix()
-    assert result["insights_path"] is None
+    assert result["artifacts"] == {
+        "summary": "summary.md",
+        "mindmap": "mindmap.mmd",
+    }
     assert result["error"]["code"] == "INSIGHTFLOW_EMPTY_RESULT"
 
 
 def test_run_insight_generation_step_preserves_insights_when_summary_fails(
     tmp_path: Path,
 ) -> None:
-    transcript_path = tmp_path / "outputs" / "demo_transcript.md"
-    transcript_path.parent.mkdir()
-    transcript_path.write_text("# 视频文字稿\n\n这是一段文字稿。", encoding="utf-8")
+    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
 
     result = run_insight_generation_step(
         transcript_path=transcript_path,
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        transcript_text="这是一段文字稿。",
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        transcript_text="transcript text",
         client=InsightsOnlyClient(),
     ).to_dict()
 
     assert result["status"] == "partial_completed"
-    assert result["summary_path"] is None
-    assert result["mindmap_path"] is None
-    assert result["insights_path"] == (tmp_path / "outputs" / "demo_insights.json").as_posix()
-    assert result["insights"] == ["为什么成功的一侧结果应该被保留？"]
+    assert result["artifacts"] == {
+        "insights": "insights.json",
+        "insights_md": "insights.md",
+    }
+    assert result["insights"] == ["insight only"]
     assert result["error"]["code"] == "INSIGHTFLOW_INVALID_MINDMAP"

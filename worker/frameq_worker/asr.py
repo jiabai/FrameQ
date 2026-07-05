@@ -347,9 +347,14 @@ def write_transcript_files(
         raise ASREmptyTranscriptError("ASR returned an empty transcript.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    txt_path = output_dir / f"{output_stem}_transcript.txt"
-    md_path = output_dir / f"{output_stem}_transcript.md"
-    segments_path = output_dir / f"{output_stem}_transcript_segments.json"
+    if output_stem:
+        txt_path = output_dir / f"{output_stem}_transcript.txt"
+        md_path = output_dir / f"{output_stem}_transcript.md"
+        segments_path = output_dir / f"{output_stem}_transcript_segments.json"
+    else:
+        txt_path = output_dir / "transcript.txt"
+        md_path = output_dir / "transcript.md"
+        segments_path = output_dir / "segments.json"
 
     txt_path.write_text(f"{cleaned_text}\n", encoding="utf-8")
     md_path.write_text(

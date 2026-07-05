@@ -15,7 +15,36 @@ import {
   startProcessing,
   startInsightRetry,
   summarizeWorkerResult,
+  type WorkerResult,
 } from "./workflow";
+
+const TASK_ID = "20260705-153012-douyin-demo";
+const TASK_DIR = "outputs/tasks/20260705-153012-douyin-demo";
+const DEFAULT_ARTIFACTS = {
+  video: "media/video.mp4",
+  audio: "media/audio.wav",
+  transcript_txt: "transcript/transcript.txt",
+  transcript_md: "transcript/transcript.md",
+  summary: "ai/summary.md",
+  mindmap: "ai/mindmap.mmd",
+  insights: "ai/insights.json",
+  insights_md: "ai/insights.md",
+} satisfies WorkerResult["artifacts"];
+
+function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
+  const { artifacts, ...rest } = overrides;
+  return {
+    status: "completed",
+    task_id: TASK_ID,
+    task_dir: TASK_DIR,
+    artifacts: artifacts ?? DEFAULT_ARTIFACTS,
+    text: "完整文字稿",
+    summary: "# 要点总结",
+    insights: ["第一个话题点"],
+    error: null,
+    ...rest,
+  };
+}
 
 describe("workflow state model", () => {
   test("allows supported Douyin and Xiaohongshu video urls to be submitted", () => {
@@ -107,19 +136,11 @@ describe("workflow state model", () => {
   });
 
   test("completed worker result exposes both result cards", () => {
-    const state = summarizeWorkerResult({
-      status: "completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
+    const state = summarizeWorkerResult(workerResult({
       text: "完整文字稿",
       summary: "# 要点总结\n\n## 总览\n这是总结。",
       insights: ["为什么流程编排可能比单点模型能力更关键？"],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: "outputs/demo_summary.md",
-      mindmap_path: "outputs/demo_mindmap.mmd",
-      insights_path: "outputs/demo_insights.json",
-      error: null,
-    });
+    }));
 
     expect(state.stage).toBe("completed");
     expect(getResultCards(state).map((card) => card.id)).toEqual([
@@ -132,19 +153,18 @@ describe("workflow state model", () => {
   });
 
   test("completed transcript-only worker result marks insights pending", () => {
-    const state = summarizeWorkerResult({
+    const state = summarizeWorkerResult(workerResult({
       status: "completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
       text: "已经完成的文字稿",
       summary: "",
       insights: [],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: null,
-      mindmap_path: null,
-      insights_path: null,
-      error: null,
-    });
+      artifacts: {
+        video: DEFAULT_ARTIFACTS.video,
+        audio: DEFAULT_ARTIFACTS.audio,
+        transcript_txt: DEFAULT_ARTIFACTS.transcript_txt,
+        transcript_md: DEFAULT_ARTIFACTS.transcript_md,
+      },
+    }));
 
     expect(getResultCards(state)).toEqual([
       {
@@ -181,23 +201,25 @@ describe("workflow state model", () => {
   });
 
   test("partial worker result keeps artifacts and marks insights retryable", () => {
-    const state = summarizeWorkerResult({
+    const state = summarizeWorkerResult(workerResult({
       status: "partial_completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
       text: "已经完成的文字稿",
       summary: "# 要点总结\n\n## 总览\n已生成总结。",
       insights: [],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: "outputs/demo_summary.md",
-      mindmap_path: "outputs/demo_mindmap.mmd",
-      insights_path: null,
+      artifacts: {
+        video: DEFAULT_ARTIFACTS.video,
+        audio: DEFAULT_ARTIFACTS.audio,
+        transcript_txt: DEFAULT_ARTIFACTS.transcript_txt,
+        transcript_md: DEFAULT_ARTIFACTS.transcript_md,
+        summary: DEFAULT_ARTIFACTS.summary,
+        mindmap: DEFAULT_ARTIFACTS.mindmap,
+      },
       error: {
         code: "INSIGHTFLOW_CONFIG_MISSING",
         message: "InsightFlow LLM configuration is missing.",
         stage: "insights_generating",
       },
-    });
+    }));
 
     expect(state.stage).toBe("partial_completed");
     expect(getResultCards(state)).toEqual([
@@ -235,23 +257,25 @@ describe("workflow state model", () => {
   });
 
   test("partial insight failure exposes a visible workflow error", () => {
-    const state = summarizeWorkerResult({
+    const state = summarizeWorkerResult(workerResult({
       status: "partial_completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
       text: "已经完成的文字稿",
       summary: "# 要点总结\n\n## 总览\n已生成总结。",
       insights: [],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: "outputs/demo_summary.md",
-      mindmap_path: "outputs/demo_mindmap.mmd",
-      insights_path: null,
+      artifacts: {
+        video: DEFAULT_ARTIFACTS.video,
+        audio: DEFAULT_ARTIFACTS.audio,
+        transcript_txt: DEFAULT_ARTIFACTS.transcript_txt,
+        transcript_md: DEFAULT_ARTIFACTS.transcript_md,
+        summary: DEFAULT_ARTIFACTS.summary,
+        mindmap: DEFAULT_ARTIFACTS.mindmap,
+      },
       error: {
         code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
         message: "LLM request failed with HTTP 400.",
         stage: "insights_generating",
       },
-    });
+    }));
 
     expect(getVisibleWorkflowError(state)).toEqual({
       code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
@@ -484,19 +508,11 @@ describe("workflow state model", () => {
   });
 
   test("formats detail text for clipboard copying", () => {
-    const state = summarizeWorkerResult({
-      status: "completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
+    const state = summarizeWorkerResult(workerResult({
       text: "完整文字稿",
       summary: "# 要点总结\n\n- 第一个要点",
       insights: ["第一个话题点", "第二个话题点"],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: "outputs/demo_summary.md",
-      mindmap_path: "outputs/demo_mindmap.mmd",
-      insights_path: "outputs/demo_insights.json",
-      error: null,
-    });
+    }));
 
     expect(getDetailText("transcript", state)).toBe("完整文字稿");
     expect(getDetailText("summary", state)).toBe("# 要点总结\n\n- 第一个要点");
@@ -504,25 +520,17 @@ describe("workflow state model", () => {
   });
 
   test("selects generated export path for each detail tab", () => {
-    const state = summarizeWorkerResult({
-      status: "completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
+    const state = summarizeWorkerResult(workerResult({
       text: "完整文字稿",
       summary: "# 要点总结",
       insights: ["第一个话题点"],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: "outputs/demo_summary.md",
-      mindmap_path: "outputs/demo_mindmap.mmd",
-      insights_path: "outputs/demo_insights.md",
-      error: null,
-    });
+    }));
 
-    expect(getExportPath("video", state)).toBe("outputs/demo.mp4");
-    expect(getExportPath("audio", state)).toBe("work/demo.wav");
-    expect(getExportPath("transcript", state)).toBe("outputs/demo_transcript.txt");
-    expect(getExportPath("summary", state)).toBe("outputs/demo_summary.md");
-    expect(getExportPath("insights", state)).toBe("outputs/demo_insights.md");
+    expect(getExportPath("video", state)).toBe(`${TASK_DIR}/media/video.mp4`);
+    expect(getExportPath("audio", state)).toBe(`${TASK_DIR}/media/audio.wav`);
+    expect(getExportPath("transcript", state)).toBe(`${TASK_DIR}/transcript/transcript.txt`);
+    expect(getExportPath("summary", state)).toBe(`${TASK_DIR}/ai/summary.md`);
+    expect(getExportPath("insights", state)).toBe(`${TASK_DIR}/ai/insights.md`);
     expect(getExportPath("insights", createInitialWorkflow())).toBeNull();
     expect(getExportPath("summary", createInitialWorkflow())).toBeNull();
   });
@@ -546,23 +554,25 @@ describe("workflow state model", () => {
   });
 
   test("starts an insight retry without discarding the existing transcript", () => {
-    const state = summarizeWorkerResult({
+    const state = summarizeWorkerResult(workerResult({
       status: "partial_completed",
-      video_path: "outputs/demo.mp4",
-      audio_path: "work/demo.wav",
       text: "已经完成的文字稿。",
       summary: "# 要点总结\n\n## 总览\n旧总结会保留。",
       insights: [],
-      transcript_path: "outputs/demo_transcript.txt",
-      summary_path: "outputs/demo_summary.md",
-      mindmap_path: "outputs/demo_mindmap.mmd",
-      insights_path: null,
+      artifacts: {
+        video: DEFAULT_ARTIFACTS.video,
+        audio: DEFAULT_ARTIFACTS.audio,
+        transcript_txt: DEFAULT_ARTIFACTS.transcript_txt,
+        transcript_md: DEFAULT_ARTIFACTS.transcript_md,
+        summary: DEFAULT_ARTIFACTS.summary,
+        mindmap: DEFAULT_ARTIFACTS.mindmap,
+      },
       error: {
         code: "INSIGHTFLOW_CONFIG_MISSING",
         message: "InsightFlow LLM client is not configured.",
         stage: "insights_generating",
       },
-    });
+    }));
 
     const retrying = startInsightRetry(state);
 
@@ -573,11 +583,13 @@ describe("workflow state model", () => {
     expect(retrying.progressPercent).toBe(88);
     expect(retrying.text).toBe("已经完成的文字稿。");
     expect(retrying.summary).toBe("# 要点总结\n\n## 总览\n旧总结会保留。");
-    expect(retrying.videoPath).toBe("outputs/demo.mp4");
-    expect(retrying.audioPath).toBe("work/demo.wav");
-    expect(retrying.transcriptPath).toBe("outputs/demo_transcript.txt");
-    expect(retrying.summaryPath).toBe("outputs/demo_summary.md");
-    expect(retrying.mindmapPath).toBe("outputs/demo_mindmap.mmd");
+    expect(retrying.taskId).toBe(TASK_ID);
+    expect(retrying.taskDir).toBe(TASK_DIR);
+    expect(retrying.artifacts.video).toBe("media/video.mp4");
+    expect(retrying.artifacts.audio).toBe("media/audio.wav");
+    expect(retrying.artifacts.transcript_txt).toBe("transcript/transcript.txt");
+    expect(retrying.artifacts.summary).toBe("ai/summary.md");
+    expect(retrying.artifacts.mindmap).toBe("ai/mindmap.mmd");
     expect(retrying.error).toBeNull();
   });
 

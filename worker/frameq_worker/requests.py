@@ -33,15 +33,11 @@ def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
     if not isinstance(payload, dict):
         raise ValueError("Retry payload must be a JSON object.")
 
-    transcript_path = payload.get("transcript_path")
-    if not isinstance(transcript_path, str) or not transcript_path.strip():
-        raise ValueError("Retry payload must include a non-empty transcript_path.")
+    task_id = payload.get("task_id")
+    if not isinstance(task_id, str) or not task_id.strip():
+        raise ValueError("Retry payload must include a non-empty task_id.")
 
-    text = payload.get("text")
-    if not isinstance(text, str) or not text.strip():
-        raise ValueError("Retry payload must include non-empty transcript text.")
-
-    return RetryInsightsRequest(transcript_path=transcript_path.strip(), text=text)
+    return RetryInsightsRequest(task_id=task_id.strip())
 
 
 def resolve_configured_asr_model(
