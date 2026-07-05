@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from frameq_worker.asr import Transcript
-from frameq_worker.desktop_contract import OUTPUT_DIR_ENV, WORK_DIR_ENV
+from frameq_worker.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
 from frameq_worker.media import CommandResult
 from frameq_worker.models import ProcessRequest
 from frameq_worker.pipeline import run_worker_pipeline
@@ -33,7 +33,7 @@ class FakeInsightClient:
 
 def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path) -> None:
     output_root = tmp_path / "outputs"
-    work_root = tmp_path / "work"
+    cache_root = tmp_path / "cache"
 
     def runner(command: list[str]) -> CommandResult:
         if "-m" in command and "yt_dlp" in command:
@@ -88,7 +88,7 @@ def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path
         allow_real_asr=True,
         environ={
             OUTPUT_DIR_ENV: output_root.as_posix(),
-            WORK_DIR_ENV: work_root.as_posix(),
+            CACHE_DIR_ENV: cache_root.as_posix(),
         },
     ).to_dict()
 
@@ -125,7 +125,7 @@ def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path
 
 def test_retry_insights_uses_task_manifest_and_updates_same_task(tmp_path: Path) -> None:
     output_root = tmp_path / "outputs"
-    work_root = tmp_path / "work"
+    cache_root = tmp_path / "cache"
     task_id = "20260705-153012-douyin-7524373044106677544"
     task_dir = output_root / "tasks" / task_id
     transcript_dir = task_dir / "transcript"
@@ -166,7 +166,7 @@ def test_retry_insights_uses_task_manifest_and_updates_same_task(tmp_path: Path)
         insight_client=FakeInsightClient(),
         environ={
             OUTPUT_DIR_ENV: output_root.as_posix(),
-            WORK_DIR_ENV: work_root.as_posix(),
+            CACHE_DIR_ENV: cache_root.as_posix(),
         },
     )
 

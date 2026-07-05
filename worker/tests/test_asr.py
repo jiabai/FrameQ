@@ -47,7 +47,7 @@ def test_write_transcript_files_creates_non_empty_txt_and_markdown(tmp_path: Pat
 
 
 def test_transcribe_and_write_uses_transcriber_and_outputs_files(tmp_path: Path) -> None:
-    audio_path = tmp_path / "work" / "demo.wav"
+    audio_path = tmp_path / "cache" / "demo.wav"
     audio_path.parent.mkdir()
     audio_path.write_bytes(b"fake wav")
 
@@ -128,7 +128,7 @@ def test_qwen_asr_transcriber_uses_injected_model_factory() -> None:
 
     class FakeModel:
         def transcribe(self, audio: str, language: str) -> list[FakeResult]:
-            assert audio == "work/demo.wav"
+            assert audio == "cache/demo.wav"
             assert language == "Chinese"
             return [FakeResult()]
 
@@ -144,7 +144,7 @@ def test_qwen_asr_transcriber_uses_injected_model_factory() -> None:
         max_inference_batch_size=4,
     )
 
-    transcript = transcriber.transcribe(Path("work/demo.wav"))
+    transcript = transcriber.transcribe(Path("cache/demo.wav"))
 
     assert transcript == Transcript(text="模型返回的文字稿", language="Chinese")
     assert received_kwargs == {
@@ -208,7 +208,7 @@ def test_build_asr_transcriber_selects_sensevoice_for_small(
 def test_sensevoice_transcriber_uses_funasr_generate_api() -> None:
     class FakeModel:
         def generate(self, **kwargs: object) -> list[dict[str, str]]:
-            assert kwargs["input"] == "work/demo.wav"
+            assert kwargs["input"] == "cache/demo.wav"
             assert kwargs["language"] == "zh"
             assert kwargs["use_itn"] is True
             assert kwargs["batch_size_s"] == 60
@@ -229,7 +229,7 @@ def test_sensevoice_transcriber_uses_funasr_generate_api() -> None:
         model_kwargs={"model_cache_dir": "models"},
     )
 
-    transcript = transcriber.transcribe(Path("work/demo.wav"))
+    transcript = transcriber.transcribe(Path("cache/demo.wav"))
 
     assert transcript == Transcript(text="SenseVoice 识别出的文字稿", language="Chinese")
     assert received_kwargs == {
@@ -259,7 +259,7 @@ def test_sensevoice_transcriber_extracts_valid_segments_without_relying_on_speak
 
     transcriber = SenseVoiceTranscriber(model_factory=lambda **kwargs: FakeModel())
 
-    transcript = transcriber.transcribe(Path("work/demo.wav"))
+    transcript = transcriber.transcribe(Path("cache/demo.wav"))
 
     assert transcript.text == "first second third"
     assert transcript.segments == (
@@ -339,7 +339,7 @@ def test_qwen_asr_transcriber_reports_missing_dependency() -> None:
     transcriber = QwenAsrTranscriber(model_factory=missing_factory)
 
     with pytest.raises(ASRDependencyError) as error:
-        transcriber.transcribe(Path("work/demo.wav"))
+        transcriber.transcribe(Path("cache/demo.wav"))
 
     assert error.value.code == "ASR_DEPENDENCY_MISSING"
 
@@ -351,7 +351,7 @@ def test_sensevoice_transcriber_reports_missing_transitive_dependency() -> None:
     transcriber = SenseVoiceTranscriber(model_factory=missing_factory)
 
     with pytest.raises(ASRDependencyError) as error:
-        transcriber.transcribe(Path("work/demo.wav"))
+        transcriber.transcribe(Path("cache/demo.wav"))
 
     assert error.value.code == "ASR_DEPENDENCY_MISSING"
     assert str(error.value) == (
@@ -371,6 +371,6 @@ def test_qwen_asr_transcriber_rejects_empty_text() -> None:
     transcriber = QwenAsrTranscriber(model_factory=lambda **kwargs: EmptyModel())
 
     with pytest.raises(ASRRuntimeError) as error:
-        transcriber.transcribe(Path("work/demo.wav"))
+        transcriber.transcribe(Path("cache/demo.wav"))
 
     assert error.value.code == "ASR_EMPTY_TRANSCRIPT"

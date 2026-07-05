@@ -211,7 +211,7 @@ def test_run_worker_once_runs_to_partial_completion_with_injected_transcriber(
         .strip()
     )
     assert transcript == "desktop transcript"
-    assert not (tmp_path / "work" / "history.json").exists()
+    assert not (tmp_path / "cache" / "history.json").exists()
 
 
 def test_run_worker_once_generates_ai_artifacts_in_same_task(tmp_path: Path) -> None:
@@ -233,8 +233,8 @@ def test_run_worker_once_generates_ai_artifacts_in_same_task(tmp_path: Path) -> 
     assert manifest_from_result(result)["insights_count"] == 1
 
 
-def test_run_worker_once_uses_configured_output_and_work_roots(tmp_path: Path) -> None:
-    custom_work_dir = tmp_path / "app-data" / "work"
+def test_run_worker_once_uses_configured_output_and_cache_roots(tmp_path: Path) -> None:
+    custom_cache_dir = tmp_path / "app-data" / "cache"
     custom_output_dir = tmp_path / "app-data" / "outputs"
 
     result = run_worker_once(
@@ -245,17 +245,17 @@ def test_run_worker_once_uses_configured_output_and_work_roots(tmp_path: Path) -
         insight_client=FakeInsightClient(),
         environ={
             "FRAMEQ_OUTPUT_DIR": custom_output_dir.as_posix(),
-            "FRAMEQ_WORK_DIR": custom_work_dir.as_posix(),
+            "FRAMEQ_CACHE_DIR": custom_cache_dir.as_posix(),
         },
     )
 
     assert result["status"] == "completed"
     assert task_dir_from_result(result).parent == custom_output_dir / "tasks"
-    assert (custom_work_dir / "tasks" / str(result["task_id"]) / "download").is_dir()
-    assert not (custom_work_dir / "history.json").exists()
+    assert (custom_cache_dir / "tasks" / str(result["task_id"]) / "download").is_dir()
+    assert not (custom_cache_dir / "history.json").exists()
 
 
-def test_run_worker_once_uses_download_stdout_inside_task_work_dir(
+def test_run_worker_once_uses_download_stdout_inside_task_cache_dir(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -31,7 +31,7 @@ const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 const ASR_MODEL_DOWNLOAD_EVENT_NAME: &str = "asr-model-download-progress";
 const MODEL_DOWNLOAD_EVENT_PREFIX: &str = "FRAMEQ_MODEL_DOWNLOAD ";
 const OUTPUT_DIR_ENV: &str = "FRAMEQ_OUTPUT_DIR";
-const WORK_DIR_ENV: &str = "FRAMEQ_WORK_DIR";
+const CACHE_DIR_ENV: &str = "FRAMEQ_CACHE_DIR";
 const MODEL_DIR_ENV: &str = "FRAMEQ_MODEL_DIR";
 const RESOURCE_DIR_ENV: &str = "FRAMEQ_RESOURCE_DIR";
 const USER_DATA_DIR_ENV: &str = "FRAMEQ_USER_DATA_DIR";
@@ -40,6 +40,8 @@ const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
 #[cfg(target_os = "windows")]
 const WINDOWS_CREATE_NO_WINDOW: u32 = 0x08000000;
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
+const CACHE_DIR_NAME: &str = "cache";
+const LEGACY_TEMP_DIR_NAME: &str = "work";
 const DESKTOP_LOG_DIR_NAME: &str = "logs";
 const DESKTOP_LOG_FILE_NAME: &str = "frameq-desktop.log";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
@@ -272,10 +274,35 @@ fn resource_dir_has_runtime(resource_dir: &Path) -> bool {
 
 pub(crate) fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
     fs::create_dir_all(paths.user_data_dir.join("outputs")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(paths.user_data_dir.join("work")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(paths.user_data_dir.join(CACHE_DIR_NAME))
+        .map_err(|error| error.to_string())?;
     fs::create_dir_all(paths.user_data_dir.join(DESKTOP_LOG_DIR_NAME))
         .map_err(|error| error.to_string())?;
+    remove_legacy_app_local_temp_dir(paths)?;
     fs::create_dir_all(asr_model_dir(paths)).map_err(|error| error.to_string())
+}
+
+fn remove_legacy_app_local_temp_dir(paths: &RuntimePaths) -> Result<(), String> {
+    let legacy_path = paths.user_data_dir.join(LEGACY_TEMP_DIR_NAME);
+    if !legacy_path.exists() {
+        return Ok(());
+    }
+
+    let user_data_dir = paths
+        .user_data_dir
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let canonical_legacy = legacy_path.canonicalize().map_err(|error| error.to_string())?;
+    if canonical_legacy == user_data_dir || !canonical_legacy.starts_with(&user_data_dir) {
+        return Err("Refusing to remove legacy temporary directory outside app-local data".into());
+    }
+
+    let metadata = fs::symlink_metadata(&legacy_path).map_err(|error| error.to_string())?;
+    if metadata.is_dir() {
+        fs::remove_dir_all(&legacy_path).map_err(|error| error.to_string())
+    } else {
+        fs::remove_file(&legacy_path).map_err(|error| error.to_string())
+    }
 }
 
 fn desktop_log_path(paths: &RuntimePaths) -> PathBuf {
@@ -592,8 +619,8 @@ fn build_worker_command_spec(
         ("PATH".to_string(), path_value),
         (OUTPUT_DIR_ENV.to_string(), path_to_env_string(output_root)),
         (
-            WORK_DIR_ENV.to_string(),
-            path_to_env_string(paths.user_data_dir.join("work")),
+            CACHE_DIR_ENV.to_string(),
+            path_to_env_string(paths.user_data_dir.join(CACHE_DIR_NAME)),
         ),
         (
             MODEL_DIR_ENV.to_string(),
@@ -784,6 +811,7 @@ fn process_video_blocking(
 ) -> Result<serde_json::Value, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
+    let output_root = task_manifest::configured_output_root(&paths)?;
     if let Err(error) = apply_configured_asr_model_to_request(&env_path(&paths), &mut request) {
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "failed".to_string(),
@@ -799,6 +827,14 @@ fn process_video_blocking(
                 stage: "video_transcribing".to_string(),
             }),
         }));
+    }
+    if let Some(cached) = cached_process_result_for_request(&output_root, &request)? {
+        let _ = append_desktop_log(
+            &paths,
+            "worker.process_video.cache_hit",
+            &summarize_worker_result_for_log(&cached),
+        );
+        return Ok(cached);
     }
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
     let llm_invocation = account::server_managed_llm_invocation(&paths)?;
@@ -916,6 +952,154 @@ fn process_video_blocking(
         &summarize_worker_result_for_log(&parsed),
     );
     Ok(parsed)
+}
+
+fn cached_process_result_for_request(
+    output_root: &Path,
+    request: &ProcessVideoRequest,
+) -> Result<Option<serde_json::Value>, String> {
+    let requested_source_url = normalize_cache_source_url(&request.url);
+    if requested_source_url.is_empty() {
+        return Ok(None);
+    }
+
+    let mut newest_cached: Option<(String, serde_json::Value)> = None;
+    for manifest_path in task_manifest::list_task_manifest_paths(output_root)? {
+        let Ok((manifest, task_dir)) = task_manifest::read_task_manifest_path(&manifest_path)
+        else {
+            continue;
+        };
+        if !reusable_task_manifest_matches(&manifest, &requested_source_url, request) {
+            continue;
+        }
+        let Some((created_at, cached)) = cached_process_result_from_manifest(&task_dir, manifest)?
+        else {
+            continue;
+        };
+        if newest_cached
+            .as_ref()
+            .is_none_or(|(current_created_at, _)| created_at > *current_created_at)
+        {
+            newest_cached = Some((created_at, cached));
+        }
+    }
+
+    Ok(newest_cached.map(|(_, value)| value))
+}
+
+fn reusable_task_manifest_matches(
+    manifest: &task_manifest::TaskManifest,
+    requested_source_url: &str,
+    request: &ProcessVideoRequest,
+) -> bool {
+    if !matches!(manifest.status.as_str(), "completed" | "partial_completed") {
+        return false;
+    }
+    if normalize_cache_source_url(&manifest.source_url) != requested_source_url {
+        return false;
+    }
+    let manifest_model = manifest.model.trim();
+    let request_model = request.model.trim();
+    manifest_model.is_empty() || request_model.is_empty() || manifest_model == request_model
+}
+
+fn cached_process_result_from_manifest(
+    task_dir: &Path,
+    manifest: task_manifest::TaskManifest,
+) -> Result<Option<(String, serde_json::Value)>, String> {
+    let artifacts = cached_existing_artifacts(task_dir, &manifest);
+    if !artifacts.contains_key("transcript_txt") {
+        return Ok(None);
+    }
+
+    let text = read_cached_text_artifact(task_dir, &manifest, "transcript_txt").unwrap_or_default();
+    let summary = read_cached_text_artifact(task_dir, &manifest, "summary").unwrap_or_default();
+    let insights = read_cached_insights_artifact(task_dir, &manifest);
+    let status = manifest.status;
+    let task_id = manifest.task_id;
+    let created_at = manifest.created_at;
+    let error = manifest.error.map(|error| WorkerError {
+        code: error.code,
+        message: error.message,
+        stage: error.stage,
+    });
+
+    let value = serde_json::json!(ProcessVideoResult {
+        status,
+        task_id: Some(task_id),
+        task_dir: Some(path_to_env_string(task_dir)),
+        artifacts,
+        text,
+        summary,
+        insights,
+        error,
+    });
+    Ok(Some((created_at, value)))
+}
+
+fn cached_existing_artifacts(
+    task_dir: &Path,
+    manifest: &task_manifest::TaskManifest,
+) -> HashMap<String, String> {
+    manifest
+        .artifacts
+        .iter()
+        .filter_map(|(key, raw_path)| {
+            let relative = task_manifest::validate_relative_artifact_path(raw_path, key).ok()?;
+            let path = task_dir.join(relative);
+            if !path.is_file()
+                || task_manifest::validate_task_artifact_path(task_dir, &path, key).is_err()
+            {
+                return None;
+            }
+            Some((key.clone(), raw_path.clone()))
+        })
+        .collect()
+}
+
+fn read_cached_text_artifact(
+    task_dir: &Path,
+    manifest: &task_manifest::TaskManifest,
+    key: &str,
+) -> Option<String> {
+    let path = task_manifest::artifact_path(task_dir, manifest, key).ok()??;
+    task_manifest::validate_task_artifact_path(task_dir, &path, key).ok()?;
+    fs::read_to_string(path)
+        .ok()
+        .map(|text| text.trim().to_string())
+}
+
+fn read_cached_insights_artifact(
+    task_dir: &Path,
+    manifest: &task_manifest::TaskManifest,
+) -> Vec<String> {
+    let Some(content) = read_cached_text_artifact(task_dir, manifest, "insights") else {
+        return vec![];
+    };
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return vec![];
+    };
+    let Some(insights) = payload
+        .get("insights")
+        .and_then(serde_json::Value::as_array)
+    else {
+        return vec![];
+    };
+
+    insights
+        .iter()
+        .filter_map(|item| {
+            item.as_str().map(str::to_string).or_else(|| {
+                item.get("text")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            })
+        })
+        .collect()
+}
+
+fn normalize_cache_source_url(value: &str) -> String {
+    value.trim().to_string()
 }
 
 #[tauri::command]
@@ -1431,7 +1615,8 @@ mod tests {
     use super::{
         activate_main_window_for_deep_link, append_desktop_log,
         apply_configured_asr_model_to_request, asr_model_available,
-        build_model_download_command_spec, build_worker_command_spec, desktop_log_path,
+        build_model_download_command_spec, build_worker_command_spec,
+        cached_process_result_for_request, desktop_log_path, ensure_runtime_dirs,
         normalize_resource_dir, parse_worker_output_or_fallback, parse_worker_stdout,
         path_to_env_string, run_blocking_worker_command, sanitize_diagnostic_text,
         summarize_worker_result_for_log, DeepLinkActivationWindow, ProcessVideoRequest,
@@ -1628,6 +1813,132 @@ mod tests {
     }
 
     #[test]
+    fn ensure_runtime_dirs_creates_app_local_cache_dir() {
+        let root = temp_dir("ensure_runtime_dirs_creates_app_local_cache_dir");
+        let paths = RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("user-data"),
+        };
+        let legacy_temp_dir = paths.user_data_dir.join(super::LEGACY_TEMP_DIR_NAME);
+        fs::create_dir_all(&legacy_temp_dir).expect("create legacy temp dir");
+        fs::write(legacy_temp_dir.join("history.json"), "{}").expect("write legacy temp file");
+
+        ensure_runtime_dirs(&paths).expect("ensure runtime dirs");
+
+        assert!(paths.user_data_dir.join("outputs").is_dir());
+        assert!(paths.user_data_dir.join("cache").is_dir());
+        assert!(paths.user_data_dir.join("logs").is_dir());
+        assert!(!legacy_temp_dir.exists());
+    }
+
+    #[test]
+    fn cached_process_result_reuses_completed_task_for_same_source_url() {
+        let output_root = temp_dir("cached_process_result_reuses_completed_task");
+        let task_id = "20260705-153012-youtube-dQw4w9WgXcQ";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::create_dir_all(task_dir.join("ai")).expect("create ai dir");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "cached transcript\n",
+        )
+        .expect("write transcript");
+        fs::write(task_dir.join("ai").join("summary.md"), "# cached summary\n")
+            .expect("write summary");
+        fs::write(
+            task_dir.join("ai").join("insights.json"),
+            r#"{"insights":[{"text":"cached topic"}]}"#,
+        )
+        .expect("write insights");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 1,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-05T15:30:12Z",
+  "source_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "platform": "youtube",
+  "status": "completed",
+  "artifacts": {{
+    "transcript_txt": "transcript/transcript.txt",
+    "summary": "ai/summary.md",
+    "insights": "ai/insights.json"
+  }},
+  "error": null,
+  "text_preview": "cached transcript",
+  "insights_count": 1
+}}"#
+            ),
+        )
+        .expect("write manifest");
+
+        let request = ProcessVideoRequest {
+            url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string(),
+            language: "Chinese".to_string(),
+            output_formats: vec!["txt".to_string(), "md".to_string()],
+            model: "iic/SenseVoiceSmall".to_string(),
+            generate_insights: true,
+            insightflow_mode: "embedded".to_string(),
+        };
+
+        let cached = cached_process_result_for_request(&output_root, &request)
+            .expect("read cached result")
+            .expect("same URL should reuse cached task");
+
+        assert_eq!(cached["status"], "completed");
+        assert_eq!(cached["task_id"], task_id);
+        assert_eq!(
+            cached["task_dir"],
+            path_to_env_string(output_root.join("tasks").join(task_id))
+        );
+        assert_eq!(cached["text"], "cached transcript");
+        assert_eq!(cached["summary"], "# cached summary");
+        assert_eq!(cached["insights"][0], "cached topic");
+    }
+
+    #[test]
+    fn cached_process_result_ignores_unusable_history_without_blocking_new_url() {
+        let output_root = temp_dir("cached_process_result_ignores_unusable_history");
+        let task_id = "20260705-153012-youtube-missing";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(&task_dir).expect("create task dir");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 1,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-05T15:30:12Z",
+  "source_url": "https://www.youtube.com/watch?v=missing",
+  "platform": "youtube",
+  "status": "completed",
+  "artifacts": {{
+    "transcript_txt": "transcript/transcript.txt"
+  }},
+  "error": null,
+  "text_preview": "",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write manifest");
+        let request = ProcessVideoRequest {
+            url: "https://www.youtube.com/watch?v=new-video".to_string(),
+            language: "Chinese".to_string(),
+            output_formats: vec!["txt".to_string(), "md".to_string()],
+            model: "iic/SenseVoiceSmall".to_string(),
+            generate_insights: true,
+            insightflow_mode: "embedded".to_string(),
+        };
+
+        let cached = cached_process_result_for_request(&output_root, &request)
+            .expect("broken history should not block processing");
+
+        assert!(cached.is_none());
+    }
+
+    #[test]
     fn blocking_worker_command_runs_on_background_thread() {
         let caller_thread = std::thread::current().id();
 
@@ -1756,8 +2067,8 @@ Some dependency logged to stdout
             Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/outputs".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_WORK_DIR"),
-            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/work".to_string())
+            env.get("FRAMEQ_CACHE_DIR"),
+            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/cache".to_string())
         );
         assert_eq!(
             env.get("FRAMEQ_MODEL_DIR"),
@@ -2191,7 +2502,7 @@ Some dependency logged to stdout
         );
         assert_eq!(super::DEFAULT_ASR_MODEL, contract["asr"]["defaultModel"]);
         assert_eq!(super::OUTPUT_DIR_ENV, contract["env"]["outputDir"]);
-        assert_eq!(super::WORK_DIR_ENV, contract["env"]["workDir"]);
+        assert_eq!(super::CACHE_DIR_ENV, contract["env"]["cacheDir"]);
         assert_eq!(super::MODEL_DIR_ENV, contract["env"]["modelDir"]);
     }
 

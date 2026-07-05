@@ -23,8 +23,8 @@ from frameq_worker.models import JobStage, ProcessResult, WorkerError
 from frameq_worker.pipeline import (
     failed_result,
     finalize_task_result,
+    resolve_cache_dir,
     resolve_output_dir,
-    resolve_work_dir,
     run_insight_generation_step,
     run_worker_pipeline,
 )
@@ -132,9 +132,9 @@ def retry_insights_once(
     runtime_env = load_project_env(root, environ)
     configured_insight_client = insight_client or build_insight_client_from_env(runtime_env)
     output_dir = resolve_output_dir(root, runtime_env)
-    work_dir = resolve_work_dir(root, runtime_env)
+    cache_dir = resolve_cache_dir(root, runtime_env)
     try:
-        task_context = task_context_from_manifest(output_dir, work_dir, request.task_id)
+        task_context = task_context_from_manifest(output_dir, cache_dir, request.task_id)
     except (OSError, json.JSONDecodeError) as exc:
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,

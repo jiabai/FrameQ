@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import frameq_worker.cli as cli
 from frameq_worker.asr import DEFAULT_ASR_MODEL
 from frameq_worker.cli import (
     MODEL_DIR_ENV,
     MODEL_DOWNLOAD_EVENT_PREFIX,
     OUTPUT_DIR_ENV,
     PROGRESS_EVENT_PREFIX,
-    WORK_DIR_ENV,
 )
 from frameq_worker.models import JobStage, ProcessResult
 
@@ -26,7 +26,8 @@ def test_worker_constants_match_desktop_contract() -> None:
     assert MODEL_DOWNLOAD_EVENT_PREFIX == contract["events"]["asrModelDownloadPrefix"]
     assert DEFAULT_ASR_MODEL == contract["asr"]["defaultModel"]
     assert OUTPUT_DIR_ENV == contract["env"]["outputDir"]
-    assert WORK_DIR_ENV == contract["env"]["workDir"]
+    assert contract["env"].get("cacheDir") == "FRAMEQ_CACHE_DIR"
+    assert getattr(cli, "CACHE_DIR_ENV", None) == contract["env"]["cacheDir"]
     assert MODEL_DIR_ENV == contract["env"]["modelDir"]
 
 

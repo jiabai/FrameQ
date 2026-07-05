@@ -88,7 +88,7 @@ def test_build_ffprobe_command_outputs_json_for_media_file() -> None:
 def test_build_audio_extract_command_outputs_asr_friendly_wav() -> None:
     command = build_audio_extract_command(
         Path("outputs/7524373044106677544.mp4"),
-        Path("work/7524373044106677544.wav"),
+        Path("cache/7524373044106677544.wav"),
     )
 
     assert command == [
@@ -103,7 +103,7 @@ def test_build_audio_extract_command_outputs_asr_friendly_wav() -> None:
         "16000",
         "-c:a",
         "pcm_s16le",
-        "work/7524373044106677544.wav",
+        "cache/7524373044106677544.wav",
     ]
 
 
@@ -523,11 +523,11 @@ def test_extract_audio_creates_parent_dir_and_runs_ffmpeg(tmp_path: Path) -> Non
 
     extract_audio(
         tmp_path / "outputs" / "demo.mp4",
-        tmp_path / "work" / "demo.wav",
+        tmp_path / "cache" / "demo.wav",
         runner=fake_runner,
     )
 
-    assert (tmp_path / "work").is_dir()
+    assert (tmp_path / "cache").is_dir()
     assert calls == [
         [
             "ffmpeg",
@@ -541,6 +541,6 @@ def test_extract_audio_creates_parent_dir_and_runs_ffmpeg(tmp_path: Path) -> Non
             "16000",
             "-c:a",
             "pcm_s16le",
-            (tmp_path / "work" / "demo.wav").as_posix(),
+            (tmp_path / "cache" / "demo.wav").as_posix(),
         ]
     ]

@@ -10,7 +10,7 @@ class FakeTranscriber:
 
 
 def test_run_asr_transcript_step_returns_task_style_artifacts(tmp_path: Path) -> None:
-    audio_path = tmp_path / "work" / "demo.wav"
+    audio_path = tmp_path / "cache" / "demo.wav"
     audio_path.parent.mkdir()
     audio_path.write_bytes(b"fake wav")
 
@@ -36,7 +36,7 @@ def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path)
         def transcribe(self, audio_path: Path, language: str = "Chinese") -> Transcript:
             return Transcript(text=" ", language=language)
 
-    audio_path = tmp_path / "work" / "demo.wav"
+    audio_path = tmp_path / "cache" / "demo.wav"
     audio_path.parent.mkdir()
     audio_path.write_bytes(b"fake wav")
 

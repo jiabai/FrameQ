@@ -4,7 +4,7 @@
 
 - The Tauri desktop layer owns app-local diagnostic logs at `logs/frameq-desktop.log`.
 - Diagnostics record desktop command lifecycle, worker exit status, task id, structured error code, and sanitized short messages.
-- Worker task diagnostics remain under app-local `work/tasks/<task_id>/` when task-specific temporary evidence is needed; desktop logs are global support evidence, not user artifacts.
+- Worker task diagnostics remain under app-local `cache/tasks/<task_id>/` when task-specific temporary evidence is needed; desktop logs are global support evidence, not user artifacts.
 - YouTube extraction may explicitly enable local JavaScript runtimes supported by `yt-dlp` (`deno`, `node`, `quickjs`, `bun`) but must still run as a worker-owned public-link download policy.
 - Release packages bundle Deno in `resources/bin` so clean Windows and macOS machines have a local JavaScript runtime available for `yt-dlp` YouTube player evaluation.
 
@@ -12,10 +12,11 @@
 
 - A processing run is now a first-class task. The worker creates `<output_root>/tasks/<task_id>/frameq-task.json` and writes all final user artifacts under that same task directory.
 - Final artifacts use stable names inside task folders: `media/video.mp4`, `media/audio.wav`, `transcript/transcript.txt`, `transcript/transcript.md`, `transcript/segments.json`, `ai/summary.md`, `ai/mindmap.mmd`, `ai/insights.json`, and `ai/insights.md`.
-- App-local `work/tasks/<task_id>/` owns temporary downloads, partial files, media merge scratch space, and diagnostics. It is not the user-facing artifact contract.
-- `frameq-task.json` is the source of truth for desktop history and artifact lookup. Any index under app-local `work/` is a rebuildable cache, not the authority.
+- App-local `cache/tasks/<task_id>/` owns temporary downloads, partial files, media merge scratch space, and diagnostics. It is not the user-facing artifact contract.
+- `frameq-task.json` is the source of truth for desktop history and artifact lookup. Any app-local cache index is rebuildable, not the authority.
+- Tauri may satisfy a repeated source URL from an existing completed or partial-completed task manifest when the transcript artifact still exists. This cache hit returns the existing task result before worker launch; unusable or broken old tasks are skipped.
 - Tauri commands should resolve artifacts from `task_id` and manifest-relative paths only. They must not accept arbitrary transcript/audio/result paths for normal task operations.
-- The old flat-output/history contract is intentionally retired for new builds. Old `outputs/*` files and `work/history.json` records do not need migration or compatibility behavior.
+- The old flat-output/history contract is intentionally retired for new builds. Legacy flat outputs and legacy app-local history records do not need migration or compatibility behavior.
 
 ## 2026-07-03 Transcript Detail and Audio Review Boundary
 
@@ -91,7 +92,7 @@
 - The desktop updater endpoint is `https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1`; release automation uploads `latest.json`, the NSIS installer, and signed updater bundles to the published GitHub Release.
 - Python worker code upgrades together with the desktop application bundle; v1 does not support independent worker hot updates from app-local data.
 - App-local data `updates.json` stores only update preferences such as `lastCheckedAt`, `postponedUntil`, and `skippedVersion`.
-- App-local `models/`, `outputs/`, `work/`, `auth/session.json`, and `.env` are preserved across app updates.
+- App-local `models/`, `outputs/`, `cache/`, `auth/session.json`, and `.env` are preserved across app updates.
 - Live old-version-to-new-version testing through GitHub Releases is waived for v1 because mainland China access to GitHub is too slow to test reliably. The updater architecture remains in place, but direct fresh-installer distribution is the accepted fallback for users whose network cannot reach GitHub Releases.
 
 ## 2026-06-23 Runtime Configuration Boundary
@@ -140,13 +141,13 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
 | app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...`; legacy top-level `iic/...` is migrated/cleaned best-effort |
 | app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的 `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `frameq-task.json` | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
-| app-local data `work/` | 每任务下载缓存、中间拼接、调试日志和临时产物 | 运行时生成；由 `FRAMEQ_WORK_DIR` 指向 |
+| app-local data `cache/` | 每任务下载缓存、中间拼接、调试日志和临时产物 | 运行时生成；由 `FRAMEQ_CACHE_DIR` 指向 |
 | app-local data `updates.json` | 桌面更新偏好，不含用户内容或签名私钥 | 记录检查时间、稍后提醒时间和跳过版本 |
 | app-local data `.env` | 本机非 LLM 运行配置，不提交仓库；设置页可定位该文件，缺失时自动创建注释模板 | 支持输出目录、ASR 模型选择和模型下载覆盖；InsightFlow LLM 配置由 server 管理，不从 dotenv 读取 |
 
 ## 模块关系
 
-下面这张图描述一次任务在代码中的真实调用链：`app/src` 触发 Tauri command，Tauri 通过 IPC 调用 `worker/frameq_worker` 的 facade，facade 按阶段调度 `media` / `asr` / `insightflow` / 平台 fallback 模块，写入 app-local data 的 `outputs/`、`work/`、`models/`。`server/` 不在主流程调用链上，仅在 `retry_insights` 二次确认时通过 server-managed LLM checkout env 注入 LLM 配置。节点旁的 `<br/>` 标注是该模块最先要打开的 2-3 个关键文件，方便顺着图找到入口。
+下面这张图描述一次任务在代码中的真实调用链：`app/src` 触发 Tauri command，Tauri 通过 IPC 调用 `worker/frameq_worker` 的 facade，facade 按阶段调度 `media` / `asr` / `insightflow` / 平台 fallback 模块，写入 app-local data 的 `outputs/`、`cache/`、`models/`。`server/` 不在主流程调用链上，仅在 `retry_insights` 二次确认时通过 server-managed LLM checkout env 注入 LLM 配置。节点旁的 `<br/>` 标注是该模块最先要打开的 2-3 个关键文件，方便顺着图找到入口。
 
 ```mermaid
 graph LR
@@ -170,7 +171,7 @@ graph LR
 
   subgraph "app-local data (本机可写)"
     D1["outputs/tasks/&lt;task_id&gt;/<br/>frameq-task.json<br/>media · transcript · ai"]
-    D2["work/tasks/&lt;task_id&gt;/<br/>下载缓存 · 临时产物"]
+    D2["cache/tasks/&lt;task_id&gt;/<br/>下载缓存 · 临时产物"]
     D3["models/<br/>ASR 缓存<br/>iic/SenseVoiceSmall"]
   end
 
@@ -188,14 +189,13 @@ graph LR
   W1 --> F2
   W1 --> F3
   W2 -->|yt-dlp · ffprobe · ffmpeg| D1
-  W2 -->|中间音频 · history| D2
+  W2 -->|下载缓存 · 临时产物| D2
   W2 -->|ASR 加载| D3
   W3 -->|总结 · mindmap · 话题点| D1
   W4 -.->|仅 retry_insights 阶段| S1
   S1 -->|注入 LLM env| S2
   S2 -.->|OpenAI-compatible 调用| W3
   A2 -->|读取历史 / 写盘路径| D1
-  A2 -->|读取历史| D2
 ```
 
 阅读路径：
@@ -235,7 +235,7 @@ graph LR
 - worker 通过结构化 JSON 返回状态、路径、文本、话题点和错误码。
 - `process_video` 主流程默认只负责视频下载、音频提取和 ASR 文字稿；`retry_insights`/AI整理流程在用户二次确认后单独运行，生成要点总结、Mermaid mindmap 和启发话题点，并且是唯一需要 server-managed LLM checkout 的本地 worker 调用。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
-- 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `work/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
+- 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `cache/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。
 - 话题点失败不得阻断文字稿结果，客户端进入 `部分完成` 状态。
 

@@ -71,14 +71,15 @@ Supported video link
 - Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
 - Server-managed account, activation-code monthly pass entitlement, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
 - Exported artifacts:
-  - `outputs/<video_id>.mp4`
-  - `work/<video_id>.wav`
-  - `outputs/<video_id>_transcript.txt`
-  - `outputs/<video_id>_transcript.md`
-  - `outputs/<video_id>_summary.md`
-  - `outputs/<video_id>_mindmap.mmd`
-  - `outputs/<video_id>_insights.json`
-  - `outputs/<video_id>_insights.md`
+  - `outputs/tasks/<task_id>/media/video.mp4`
+  - `outputs/tasks/<task_id>/media/audio.wav`
+  - `outputs/tasks/<task_id>/transcript/transcript.txt`
+  - `outputs/tasks/<task_id>/transcript/transcript.md`
+  - `outputs/tasks/<task_id>/ai/summary.md`
+  - `outputs/tasks/<task_id>/ai/mindmap.mmd`
+  - `outputs/tasks/<task_id>/ai/insights.json`
+  - `outputs/tasks/<task_id>/ai/insights.md`
+  - app-local `cache/tasks/<task_id>/` for temporary downloads and scratch files
 
 ## Supported Inputs and Outputs
 
@@ -107,7 +108,7 @@ flowchart LR
   Worker --> Probe["ffprobe"]
   Worker --> Audio["ffmpeg"]
   Worker --> ASR["SenseVoice Small"]
-  Worker --> Files["outputs/ and work/"]
+  Worker --> Files["outputs/tasks/ and app-local cache/"]
   Files --> App
 
   App --> Account["Account and Quota API"]
@@ -336,8 +337,8 @@ Tauri passes the JSON argument directly. For manual shell smoke tests, stdin scr
 | `worker/` | Python worker for download, media validation, audio extraction, ASR, and InsightFlow |
 | `worker/insightflow/` | Embedded InsightFlow topic generation module |
 | `deploy/` | Server deployment runbook plus Nginx and systemd reference configs |
-| `outputs/` | Generated videos, transcripts, and insight files |
-| `work/` | Intermediate audio, local history, and temporary files |
+| `outputs/` | Task-owned videos, transcripts, summaries, mindmaps, insight files, and task manifests |
+| app-local `cache/` | Temporary downloads, scratch files, and rebuildable task cache |
 | `models/` | Local ASR model cache |
 | `docs/` | Architecture, design, security, product specs, and execution plans |
 | `AGENTS.md` | AI collaboration entry map |

@@ -10,7 +10,7 @@
   },
   "env": {
     "outputDir": "FRAMEQ_OUTPUT_DIR",
-    "workDir": "FRAMEQ_WORK_DIR",
+    "cacheDir": "FRAMEQ_CACHE_DIR",
     "modelDir": "FRAMEQ_MODEL_DIR"
   },
   "workerResultKeys": [

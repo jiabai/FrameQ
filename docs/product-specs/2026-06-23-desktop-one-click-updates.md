@@ -10,7 +10,7 @@ FrameQ already ships as a lightweight desktop installer with bundled runtime res
 - When a newer stable release exists, the toolbar and settings sheet show a low-noise update reminder.
 - The user can download, install, and restart into the new release from the desktop app.
 - Python worker code is upgraded together with the desktop application bundle; v1 does not support independent worker hot updates.
-- App-local data remains untouched across upgrades, including `models/`, `outputs/`, `work/history.json`, `auth/session.json`, and app-local `.env`.
+- App-local data remains untouched across upgrades, including `models/`, `outputs/`, `cache/`, `auth/session.json`, and app-local `.env`.
 
 ## User-visible Requirements
 

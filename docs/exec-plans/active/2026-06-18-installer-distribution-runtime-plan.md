@@ -9,7 +9,7 @@ Make FrameQ installable for ordinary Windows and macOS users without requiring P
 - Do not bundle SenseVoice Small in the ordinary-user installer; expose it as the only release ASR model and download it on first run.
 - Keep Qwen adapter code but hide Qwen from release UI until separately packaged and verified.
 - Use Tauri resource directory for read-only bundled runtime files.
-- Use Tauri app-local data directory for `.env`, default `outputs/tasks/<task_id>/`, `work/tasks/<task_id>/`, and writable model/cache data.
+- Use Tauri app-local data directory for `.env`, default `outputs/tasks/<task_id>/`, `cache/tasks/<task_id>/`, and writable model/cache data.
 - Build unsigned internal installer packages first; public release signing/notarization remains a release gate.
 - Installer builds do not require model resources; first-run model status must check app-local data for `MODEL_VERSION.txt`, SenseVoice `model.pt`, and VAD `model.pt`.
 - Default model download source is ModelScope; release operators may configure `FRAMEQ_ASR_MODEL_DOWNLOAD_URL` and `FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256` for a custom archive.
@@ -20,9 +20,9 @@ Make FrameQ installable for ordinary Windows and macOS users without requiring P
 ## Implementation Tasks
 
 - Update governance and product specs for lightweight installer plus first-run ASR model download.
-- Add tests for release runtime command construction, app-local config/task artifact paths, worker work/output env behavior, and release-visible ASR model list.
+- Add tests for release runtime command construction, app-local config/task artifact paths, worker cache/output env behavior, and release-visible ASR model list.
 - Replace Rust repo-root/`uv` worker spawning with bundled Python/resource-dir spawning.
-- Redirect config, task artifacts, work, and model cache to app-local data by default.
+- Redirect config, task artifacts, temporary cache, and model cache to app-local data by default.
 - Add first-run command/UI paths for local ASR model readiness and account/server LLM readiness guidance; desktop `.env` must not collect LLM configuration.
 - Add build-installer scripts and Tauri resource packaging entries for Windows and macOS.
 - Harden installer packaging so model resources are excluded from ordinary-user resources and macOS arm64/x64 use explicit target triples.

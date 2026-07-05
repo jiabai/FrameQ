@@ -17,7 +17,7 @@ TASK_SCHEMA_VERSION = 1
 @dataclass(frozen=True)
 class TaskPaths:
     output_root: Path
-    work_root: Path
+    cache_root: Path
     task_id: str
 
     @property
@@ -25,12 +25,12 @@ class TaskPaths:
         return self.output_root / "tasks" / self.task_id
 
     @property
-    def work_task_dir(self) -> Path:
-        return self.work_root / "tasks" / self.task_id
+    def cache_task_dir(self) -> Path:
+        return self.cache_root / "tasks" / self.task_id
 
     @property
     def download_dir(self) -> Path:
-        return self.work_task_dir / "download"
+        return self.cache_task_dir / "download"
 
     @property
     def media_dir(self) -> Path:
@@ -106,14 +106,14 @@ class TaskContext:
 def create_task_context(
     request: ProcessRequest,
     output_root: Path,
-    work_root: Path,
+    cache_root: Path,
     now: datetime | None = None,
 ) -> TaskContext:
     created = (now or datetime.now(UTC)).astimezone(UTC)
     platform, source_slug = detect_platform_and_source_slug(request.url)
     timestamp = created.strftime("%Y%m%d-%H%M%S")
     task_id = f"{timestamp}-{platform}-{source_slug}"
-    paths = TaskPaths(output_root=output_root, work_root=work_root, task_id=task_id)
+    paths = TaskPaths(output_root=output_root, cache_root=cache_root, task_id=task_id)
     return TaskContext(
         request=request,
         paths=paths,
@@ -249,7 +249,7 @@ def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-def task_context_from_manifest(output_root: Path, work_root: Path, task_id: str) -> TaskContext:
+def task_context_from_manifest(output_root: Path, cache_root: Path, task_id: str) -> TaskContext:
     manifest = load_task_manifest(output_root, task_id)
     source_url = str(manifest.get("source_url") or "")
     model = str(manifest.get("model") or "iic/SenseVoiceSmall")
@@ -260,7 +260,7 @@ def task_context_from_manifest(output_root: Path, work_root: Path, task_id: str)
     )
     return TaskContext(
         request=ProcessRequest(url=source_url, model=model),
-        paths=TaskPaths(output_root=output_root, work_root=work_root, task_id=task_id),
+        paths=TaskPaths(output_root=output_root, cache_root=cache_root, task_id=task_id),
         platform=platform,
         created_at=created_at,
         app_version=str(manifest.get("app_version") or "app"),

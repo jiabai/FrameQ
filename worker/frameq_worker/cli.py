@@ -11,6 +11,7 @@ from frameq_worker import worker_service as worker_service_module
 from frameq_worker.asr import DEFAULT_ASR_MODEL, build_asr_transcriber
 from frameq_worker.desktop_contract import (
     ASR_MODEL_ENV,
+    CACHE_DIR_ENV,
     MODEL_DIR_ENV,
     MODEL_DOWNLOAD_EVENT_PREFIX,
     MODEL_DOWNLOAD_SHA256_ENV,
@@ -19,7 +20,6 @@ from frameq_worker.desktop_contract import (
     OUTPUT_DIR_ENV,
     PROGRESS_EVENT_PREFIX,
     SENSEVOICE_REVISION_ENV,
-    WORK_DIR_ENV,
     ProgressCallback,
 )
 from frameq_worker.llm import build_insight_client_from_env
@@ -31,8 +31,8 @@ from frameq_worker.pipeline import (
     find_latest_video,
     find_new_or_updated_video,
     find_video_by_stem,
+    resolve_cache_dir,
     resolve_output_dir,
-    resolve_work_dir,
     run_worker_pipeline,
     snapshot_video_files,
 )
@@ -52,6 +52,7 @@ from frameq_worker.worker_service import (
 
 __all__ = [
     "ASR_MODEL_ENV",
+    "CACHE_DIR_ENV",
     "DEFAULT_ASR_MODEL",
     "MODEL_DIR_ENV",
     "MODEL_DOWNLOAD_EVENT_PREFIX",
@@ -63,7 +64,6 @@ __all__ = [
     "ProgressCallback",
     "SENSEVOICE_REVISION_ENV",
     "VIDEO_SUFFIXES",
-    "WORK_DIR_ENV",
     "_optional_env",
     "build_asr_transcriber",
     "build_insight_client_from_env",
@@ -80,9 +80,9 @@ __all__ = [
     "render_model_download_event",
     "render_progress_event",
     "render_result_json",
+    "resolve_cache_dir",
     "resolve_configured_asr_model",
     "resolve_output_dir",
-    "resolve_work_dir",
     "retry_insights_once",
     "run_asr_model_download_once",
     "run_worker_once",

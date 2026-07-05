@@ -3,10 +3,10 @@
 ## 2026-07-05 Task-Owned Artifact Layout
 
 - Each new processing run should create one task-owned output directory under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`.
-- FrameQ no longer treats flat `outputs/*.mp4`, `outputs/*_transcript.txt`, or app-local `work/history.json` as the product contract for new tasks.
+- FrameQ no longer treats flat `outputs/*.mp4`, `outputs/*_transcript.txt`, or legacy app-local history records as the product contract for new tasks.
 - The task directory should be the user-visible folder for final artifacts: media, transcript, transcript timing, AI summary, mindmap, insights, and `frameq-task.json`.
 - `frameq-task.json` is the task source of truth. It should record task identity, source URL, platform, status, model, version metadata, relative artifact paths, error, preview, and insight count.
-- App-local `work/tasks/<task_id>/` is reserved for temporary downloads, partial files, merge scratch space, and diagnostics. These files should not be mixed into the user-visible task output folder.
+- App-local `cache/tasks/<task_id>/` is reserved for temporary downloads, partial files, merge scratch space, and diagnostics. These files should not be mixed into the user-visible task output folder.
 - The desktop history panel becomes a task library built from task manifests. Old flat-output tasks and old `history.json` records are intentionally ignored by this redesign.
 - Transcript review, save, retry AI整理, copy, export, and locate actions should operate by `task_id` and manifest artifacts, not by arbitrary local transcript or audio paths.
 
@@ -156,7 +156,7 @@
 - 模型权重默认缓存到 app-local data `models/`，可通过 `FRAMEQ_MODEL_DIR` 覆盖；该目录是 ModelScope cache root，SenseVoice/FunASR 的实际文件位于其 `models/iic/...` 子树。下载/加载进度 UX 完成前，UI 必须给出可行动错误提示。
 - SenseVoice 真实推理依赖 `funasr`；当依赖缺失、模型不可下载或模型 ID 不受支持时，worker 必须返回结构化 ASR 错误，不得让 UI 白屏或卡死。
 - SenseVoice 处理长音频时必须启用 `fsmn-vad` 切分和长音频合并参数，并在写入文字稿前移除 `<|...|>` 控制标签。
-- 历史任务库从 `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/frameq-task.json` 读取；新版本不再读取旧 `work/history.json`。
+- 历史任务库从 `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/frameq-task.json` 读取；新版本不再读取旧版 app-local history。
 - `frameq-task.json` 只记录任务元数据、相对 artifact 路径、错误码、预览和计数，不得包含 LLM API key、cookies 或完整敏感请求头。
 
 ## 验收标准
@@ -166,7 +166,7 @@
 - 下载成功后，`<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/media/video.mp4` 存在，`ffprobe` 可识别视频流和音频流。
 - 当 `yt-dlp` 因 Douyin web detail 空响应、`Fresh cookies`、JSON 解析失败或同类公开链接解析问题失败时，worker 应尝试 Douyin share page fallback；fallback 成功时 UI 不进入失败态，后续流程与普通下载一致。
 - Douyin share page fallback 解析出多个候选流时，默认下载体积最大的可用 MP4；若该流下载或媒体校验失败，应自动降级尝试下一候选流，并在所有候选失败后返回结构化 `VIDEO_DOWNLOAD_FAILED`。
-- 音频提取后，当前 task 目录的 `media/audio.wav` 中存在 16 kHz 单声道 WAV；临时下载和中间文件保留在 app-local `work/tasks/<task_id>/`。
+- 音频提取后，当前 task 目录的 `media/audio.wav` 中存在 16 kHz 单声道 WAV；临时下载和中间文件保留在 app-local `cache/tasks/<task_id>/`。
 - ASR 成功后，当前 task 目录的 `transcript/` 中存在 `transcript.txt`、`transcript.md`，有合法时间轴时存在 `segments.json`。
 - 主流程完成后，结果区显示视频、音频、完整文字稿、要点总结和启发话题点 5 个入口；视频和音频入口在文件管理器中定位对应本地文件。
 - 主流程完成后，要点总结和启发话题点入口显示待生成状态；点击后打开确认面板，用户再次点击 `确认` 才启动生成。
@@ -180,7 +180,7 @@
 - 要点总结或话题点待生成/失败时，点击对应入口都应进入确认面板；确认后仅运行要点总结、Mermaid mindmap 和话题点生成，不重新下载视频、提取音频或重新转写。
 - app-local data `.env` 只承载本机 ASR、输出目录和模型下载覆盖；话题点生成不得从 dotenv 读取 LLM key 或 model。
 - 管理员在 server 端保存 LLM base URL、API key、model 和 timeout 后，后续话题点生成应通过 server-managed checkout 使用该配置；主流程不携带 LLM checkout env。
-- 用户在 UI 设置中保存输出目录后，后续完整处理生成的视频、音频、文字稿、要点总结、Mermaid mindmap 和话题点文件应写入该目录下的 `tasks/<task_id>/`；临时下载和中间产物仍写入 app-local `work/tasks/<task_id>/`。
+- 用户在 UI 设置中保存输出目录后，后续完整处理生成的视频、音频、文字稿、要点总结、Mermaid mindmap 和话题点文件应写入该目录下的 `tasks/<task_id>/`；临时下载和中间产物仍写入 app-local `cache/tasks/<task_id>/`。
 - 设置 UI 必须提示：这里只管理本机 ASR 和输出目录；AI 整理确认面板必须提示文字稿片段会发送到管理员配置的云端 LLM 服务。
 - 历史入口应展示最近任务列表；每条历史至少包含 URL、状态、时间、输出目录、文字稿路径、要点总结路径、Mermaid mindmap 路径、话题点路径和错误码或摘要。
 - 点击历史中的可用结果应打开与当前结果一致的详情浮窗；导出按钮应定位历史项记录的实际文件路径。

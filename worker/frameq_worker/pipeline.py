@@ -13,7 +13,7 @@ from frameq_worker.asr import (
     resolve_model_cache_dir,
     transcribe_and_write,
 )
-from frameq_worker.desktop_contract import OUTPUT_DIR_ENV, WORK_DIR_ENV, ProgressCallback
+from frameq_worker.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV, ProgressCallback
 from frameq_worker.insightflow import (
     InsightClient,
     InsightGenerationError,
@@ -196,8 +196,8 @@ def run_worker_pipeline(
     progress_callback: ProgressCallback | None = None,
 ) -> ProcessResult:
     output_dir = resolve_output_dir(project_root, environ)
-    work_dir = resolve_work_dir(project_root, environ)
-    task_context = create_task_context(request, output_root=output_dir, work_root=work_dir)
+    cache_dir = resolve_cache_dir(project_root, environ)
+    task_context = create_task_context(request, output_root=output_dir, cache_root=cache_dir)
     ensure_task_dirs(task_context.paths)
     download_dir = task_context.paths.download_dir
     video_id = extract_douyin_video_id(request.url) or extract_xiaohongshu_note_id(request.url)
@@ -396,16 +396,16 @@ def resolve_output_dir(project_root: Path, environ: dict[str, str] | None = None
     return project_root / output_dir
 
 
-def resolve_work_dir(project_root: Path, environ: dict[str, str] | None = None) -> Path:
+def resolve_cache_dir(project_root: Path, environ: dict[str, str] | None = None) -> Path:
     env = environ if environ is not None else {}
-    configured_path = env.get(WORK_DIR_ENV, "").strip()
+    configured_path = env.get(CACHE_DIR_ENV, "").strip()
     if not configured_path:
-        return project_root / "work"
+        return project_root / "cache"
 
-    work_dir = Path(configured_path)
-    if work_dir.is_absolute():
-        return work_dir
-    return project_root / work_dir
+    cache_dir = Path(configured_path)
+    if cache_dir.is_absolute():
+        return cache_dir
+    return project_root / cache_dir
 
 
 def find_latest_video(output_dir: Path) -> Path | None:
