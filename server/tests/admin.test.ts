@@ -182,7 +182,7 @@ describe("admin activation code routes", () => {
     expect(response.body).toContain("llm-quota-table");
     expect(response.body).toContain("entitlement-adjustment-table");
     expect(response.body).toContain("权益调整");
-    expect(response.body).toContain("增加话题点次数");
+    expect(response.body).toContain("增加 LLM API 调用次数");
     expect(response.body).toContain("延长天数");
     expect(response.body).toContain(`data-user-id="${user.id}"`);
     expect(response.body).toContain('value="15"');

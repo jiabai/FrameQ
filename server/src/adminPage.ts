@@ -139,7 +139,7 @@ export function renderAdminPage(input: {
           const remaining = entitlement
             ? Math.max(0, entitlement.llmQuotaLimit - entitlement.llmQuotaUsed)
             : 0;
-          return `<tr data-user-id="${escapeHtml(user.id)}"><td>${escapeHtml(user.email)}</td><td><span class="adjustment-expiry">${formatDate(entitlement?.expiresAt)}</span></td><td><span class="adjustment-remaining">${remaining}</span></td><td><input class="adjustment-extend-days" type="number" min="0" max="365" value="0" aria-label="延长天数" /></td><td><input class="adjustment-quota-add" type="number" min="0" max="100000" value="0" aria-label="增加话题点次数" /></td><td><select class="adjustment-reason" aria-label="调整原因"><option value="bug_compensation">bug 补偿</option><option value="support_goodwill">客服关怀</option><option value="manual_repair">手工修复</option><option value="other">其他</option></select></td><td><input class="adjustment-note" type="text" maxlength="1024" placeholder="版本/工单/备注" /></td><td><button class="secondary-button adjustment-save" type="button" data-user-id="${escapeHtml(user.id)}">保存</button><span class="adjustment-status"></span></td></tr>`;
+          return `<tr data-user-id="${escapeHtml(user.id)}"><td>${escapeHtml(user.email)}</td><td><span class="adjustment-expiry">${formatDate(entitlement?.expiresAt)}</span></td><td><span class="adjustment-remaining">${remaining}</span></td><td><input class="adjustment-extend-days" type="number" min="0" max="365" value="0" aria-label="延长天数" /></td><td><input class="adjustment-quota-add" type="number" min="0" max="100000" value="0" aria-label="增加 LLM API 调用次数" /></td><td><select class="adjustment-reason" aria-label="调整原因"><option value="bug_compensation">bug 补偿</option><option value="support_goodwill">客服关怀</option><option value="manual_repair">手工修复</option><option value="other">其他</option></select></td><td><input class="adjustment-note" type="text" maxlength="1024" placeholder="版本/工单/备注" /></td><td><button class="secondary-button adjustment-save" type="button" data-user-id="${escapeHtml(user.id)}">保存</button><span class="adjustment-status"></span></td></tr>`;
         })
         .join("")
     : `<tr><td colspan="8" class="empty-cell">暂无用户</td></tr>`;
@@ -260,7 +260,7 @@ export function renderAdminPage(input: {
         <div class="table-heading">
           <div>
             <p class="eyebrow">LLM quota</p>
-            <h2>话题点次数</h2>
+            <h2>LLM API 调用次数</h2>
           </div>
         </div>
         <div class="table-wrap">
@@ -280,7 +280,7 @@ export function renderAdminPage(input: {
         </div>
         <div class="table-wrap">
           <table id="entitlement-adjustment-table">
-            <thead><tr><th>邮箱</th><th>当前到期</th><th>剩余次数</th><th>延长天数</th><th>增加话题点次数</th><th>原因</th><th>备注</th><th>操作</th></tr></thead>
+            <thead><tr><th>邮箱</th><th>当前到期</th><th>剩余次数</th><th>延长天数</th><th>增加 LLM API 调用次数</th><th>原因</th><th>备注</th><th>操作</th></tr></thead>
             <tbody>${adjustmentRows}</tbody>
           </table>
         </div>

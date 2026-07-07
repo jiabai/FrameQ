@@ -20,6 +20,7 @@ import {
   advanceGenerationStep,
   backGenerationStep,
   cancelProfileSetupInFlow,
+  getQuotaDisclosureCopy,
   selectGenerationOption,
   startGenerationPreferenceEditing,
   startProfileSetupInFlow,
@@ -312,7 +313,7 @@ function ConfirmationStep({
       <p className="settings-warning privacy-callout">
         <ShieldCheck size={16} />
         <span>
-          确认后会把文字稿片段发送到管理员配置的云端 LLM；偏好快照只用于启发话题点，不用于要点总结或 Mermaid mindmap。
+          确认后会把文字稿片段发送到管理员配置的云端 LLM，用于生成要点总结、Mermaid mindmap 和启发话题点；偏好快照只用于启发话题点，不用于要点总结或 Mermaid mindmap。
         </span>
       </p>
       <div className="confirm-summary preference-confirm-grid">
@@ -324,7 +325,7 @@ function ConfirmationStep({
         <div>
           <span className="account-status-label">账号额度</span>
           <strong>{accountQuotaRemaining} 次可用</strong>
-          <small>确认后消耗 1 次，失败或部分失败也扣除。</small>
+          <small>{getQuotaDisclosureCopy()}</small>
         </div>
       </div>
       <SummaryGroup title="灵感档案" lines={summarizeInspirationProfile(flow.profile)} />

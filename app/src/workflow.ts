@@ -295,7 +295,7 @@ export function startInsightRetry(state: WorkflowState): WorkflowState {
     ...state,
     stage: "insights_generating",
     showUrlInput: false,
-    statusMessage: "正在生成要点总结和启发话题点；如已配置云端 LLM，文字稿会发送到该服务。",
+    statusMessage: "正在生成要点总结、Mermaid mindmap 和启发话题点；如已配置云端 LLM，文字稿会发送到该服务。",
     progressPercent: 88,
     error: null,
   };

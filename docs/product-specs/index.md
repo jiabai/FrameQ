@@ -2,7 +2,7 @@
 
 ## Account and Billing Spec
 
-- `2026-06-27-admin-entitlement-adjustments.md` - Admin Web manual compensation for entitlement expiry and insight-generation quota after support incidents.
+- `2026-06-27-admin-entitlement-adjustments.md` - Admin Web manual compensation for entitlement expiry and LLM API-call quota after support incidents.
 - `2026-06-22-server-managed-llm-quota.md` - Server-managed dedicated client LLM config and 20-use monthly insight quota.
 - `2026-06-21-activation-code-authorization.md` - Account login with administrator-issued activation codes for 31-day monthly pass access.
 - `2026-06-21-account-billing.md` - Retired self-serve WeChat purchase draft; current visible unlock path is administrator-issued activation-code monthly passes while WeChat purchase is paused.
@@ -31,4 +31,4 @@ Product specs describe user-visible intent and boundaries before implementation 
 
 | File | Scope |
 |------|-------|
-| `2026-06-16-douyin-video-transcription-client.md` | MVP 桌面客户端：输入抖音 URL，输出最高质量公开视频、文字稿、要点总结和启发话题点；包含 Douyin share page fallback 行为 |
+| `2026-06-16-douyin-video-transcription-client.md` | MVP 桌面客户端：输入抖音 URL，输出最高质量公开视频、文字稿、要点总结、Mermaid mindmap 和启发话题点；包含 Douyin share page fallback 行为 |

@@ -89,15 +89,18 @@ class ServerManagedInsightClient:
     request_id: str
     timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS
     transport: Transport | None = None
-    _client: OpenAICompatibleInsightClient | None = field(default=None, init=False, repr=False)
+    _call_index: int = field(default=0, init=False, repr=False)
 
     def generate(self, prompt: str) -> str:
-        if self._client is None:
-            self._client = self._checkout_client()
-        return self._client.generate(prompt)
+        client = self._checkout_client(self._next_call_request_id())
+        return client.generate(prompt)
 
-    def _checkout_client(self) -> OpenAICompatibleInsightClient:
-        payload = {"request_id": self.request_id}
+    def _next_call_request_id(self) -> str:
+        self._call_index += 1
+        return derive_per_call_request_id(self.request_id, self._call_index)
+
+    def _checkout_client(self, request_id: str) -> OpenAICompatibleInsightClient:
+        payload = {"request_id": request_id}
         request = Request(
             url=self.checkout_url,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -138,6 +141,14 @@ class ServerManagedInsightClient:
             timeout_seconds=float(config["timeout_seconds"]),
             transport=self.transport,
         )
+
+
+def derive_per_call_request_id(request_id_seed: str, call_index: int) -> str:
+    suffix = f"-call-{call_index:04d}"
+    max_request_id_length = 160
+    if len(request_id_seed) + len(suffix) <= max_request_id_length:
+        return f"{request_id_seed}{suffix}"
+    return f"{request_id_seed[: max_request_id_length - len(suffix)]}{suffix}"
 
 
 def build_insight_client_from_env(env: Mapping[str, str]) -> InsightClient | None:
@@ -210,7 +221,7 @@ def _managed_checkout_http_error(error: urllib.error.HTTPError) -> InsightGenera
     if error.code == 403:
         return InsightGenerationError(
             "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE",
-            "No insight-generation uses are available for this account.",
+            "No cloud LLM API-call uses are available for this account.",
         )
     if detail == "LLM_CONFIG_MISSING":
         return InsightGenerationError(

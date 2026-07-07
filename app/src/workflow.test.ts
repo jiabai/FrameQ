@@ -519,7 +519,7 @@ describe("workflow state model", () => {
     expect(
       formatWorkerError({
         code: "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE",
-        message: "No insight-generation uses are available for this account.",
+        message: "No cloud LLM API-call uses are available for this account.",
         stage: "insights_generating",
       }),
     ).toBe("话题点额度不足，请续费或请管理员调整额度后重试。");
@@ -651,7 +651,7 @@ describe("workflow state model", () => {
 
     expect(retrying.stage).toBe("insights_generating");
     expect(retrying.statusMessage).toBe(
-      "正在生成要点总结和启发话题点；如已配置云端 LLM，文字稿会发送到该服务。",
+      "正在生成要点总结、Mermaid mindmap 和启发话题点；如已配置云端 LLM，文字稿会发送到该服务。",
     );
     expect(retrying.progressPercent).toBe(88);
     expect(retrying.text).toBe("已经完成的文字稿。");

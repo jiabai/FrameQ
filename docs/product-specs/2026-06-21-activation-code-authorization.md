@@ -4,7 +4,7 @@
 
 FrameQ's first small-user release should keep the email account login flow and use administrator-issued activation codes as the visible monthly pass unlock path.
 
-The monthly pass is the user-facing entitlement name: one successful activation grants 31 days of processing access plus the configured insight-generation quota. The activation code is the current distribution and redemption method for that monthly pass. WeChat purchase remains a future purchase channel, but it is paused for the first release because of WeChat approval requirements; any WeChat payment code may remain in the repository but must stay disabled and hidden from ordinary users by default.
+The monthly pass is the user-facing entitlement name: one successful activation grants 31 days of processing access plus the configured LLM API-call quota. The activation code is the current distribution and redemption method for that monthly pass. WeChat purchase remains a future purchase channel, but it is paused for the first release because of WeChat approval requirements; any WeChat payment code may remain in the repository but must stay disabled and hidden from ordinary users by default.
 
 ## Goals
 

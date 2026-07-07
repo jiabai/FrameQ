@@ -59,7 +59,7 @@ export function AccountSheet({
           <p className="settings-warning privacy-callout">
             <ShieldCheck size={16} />
             <span>
-              账号服务只验证登录、激活码、授权状态和话题点次数；视频、音频、文字稿和历史记录仍保留在本机，LLM 配置由管理员统一管理。
+              账号服务只验证登录、激活码、授权状态和 LLM API 调用额度；视频、音频、文字稿和历史记录仍保留在本机，LLM 配置由管理员统一管理。
             </span>
           </p>
           <div className={`account-status-card ${canProcessWithAccount(account) ? "active" : "inactive"}`}>
@@ -73,20 +73,20 @@ export function AccountSheet({
           {account.authenticated ? (
             <div className="account-quota-grid">
               <div>
-                <span className="account-status-label">话题点次数</span>
+                <span className="account-status-label">LLM API 调用额度</span>
                 <strong>
                   {account.llmQuotaRemaining} / {account.llmQuotaLimit}
                 </strong>
                 <small>
                   {account.llmQuotaResetsAt
                     ? `随授权到期重置：${formatHistoryDate(account.llmQuotaResetsAt)}`
-                    : "激活后获得次数"}
+                    : "激活后获得 LLM API 调用次数"}
                 </small>
               </div>
               <div>
                 <span className="account-status-label">LLM 配置</span>
                 <strong>{account.llmConfigured ? "已就绪" : "待管理员配置"}</strong>
-                <small>客户端会在 AI 整理前自动领取本次配置。</small>
+                <small>客户端会在每次云端 LLM 调用前自动授权并领取配置。</small>
               </div>
             </div>
           ) : null}

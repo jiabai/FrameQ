@@ -53,6 +53,11 @@ from frameq_worker.task_store import (
 )
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
+CLOUD_LLM_AI_ORGANIZING_MESSAGE = (
+    "正在使用配置的 LLM 生成要点总结、Mermaid mindmap 和启发话题点，"
+    "文字稿会发送到该服务。"
+)
+LOCAL_AI_ORGANIZING_MESSAGE = "正在生成要点总结、Mermaid mindmap 和启发话题点。"
 
 
 def run_asr_transcript_step(
@@ -396,9 +401,9 @@ def run_worker_pipeline(
         emit_progress(
             progress_callback,
             JobStage.INSIGHTS_GENERATING,
-            "正在使用配置的 LLM 生成要点总结和启发话题点，文字稿会发送到该服务。"
+            CLOUD_LLM_AI_ORGANIZING_MESSAGE
             if insight_client is not None
-            else "正在生成要点总结和启发话题点。",
+            else LOCAL_AI_ORGANIZING_MESSAGE,
             88,
         )
         insight_result = run_insight_generation_step(
@@ -491,9 +496,9 @@ def run_worker_pipeline(
     emit_progress(
         progress_callback,
         JobStage.INSIGHTS_GENERATING,
-        "正在使用配置的 LLM 生成要点总结和启发话题点，文字稿会发送到该服务。"
+        CLOUD_LLM_AI_ORGANIZING_MESSAGE
         if insight_client is not None
-        else "正在生成要点总结和启发话题点。",
+        else LOCAL_AI_ORGANIZING_MESSAGE,
         88,
     )
     insight_result = run_insight_generation_step(

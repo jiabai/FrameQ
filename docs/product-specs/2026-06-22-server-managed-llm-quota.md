@@ -11,7 +11,7 @@ FrameQ should let paid users generate insight topics without configuring an LLM 
 - A use is consumed per cloud LLM chat-completion/API call attempt, not per AI整理 generation attempt. A single confirmed AI整理 run may therefore consume multiple uses when the worker generates Mermaid mindmap, summary, topic planning, and insight-topic details through separate LLM calls.
 - The desktop/worker/server accounting boundary must authorize or record one quota use for each supplier LLM API call attempt. Reusing the same per-call checkout/request ID must not double-charge that same call attempt.
 - Renewing before expiry extends entitlement and adds 20 more uses; reactivating after expiry starts a fresh 31-day window with 20 uses and 0 used.
-- Account status shows entitlement and remaining insight-generation uses.
+- Account status shows entitlement and remaining LLM API-call uses.
 - Users with no entitlement, expired entitlement, no remaining uses, or missing server LLM config cannot start new processing or retry insight generation.
 
 ## Security Boundary

@@ -129,14 +129,16 @@ def test_openai_compatible_client_classifies_provider_content_filter_errors() ->
     )
 
 
-def test_server_managed_client_checkouts_once_and_reuses_returned_config() -> None:
+def test_server_managed_client_checkouts_each_generate_with_per_call_ids() -> None:
     calls: list[Request] = []
+    checkout_ids: list[str] = []
 
     def fake_transport(request: Request, timeout: float) -> bytes:
         calls.append(request)
         if request.full_url == "http://127.0.0.1:8787/api/desktop/llm/checkouts":
             assert request.get_header("Authorization") == "Bearer desktop-token"
-            assert json.loads(request.data.decode("utf-8")) == {"request_id": "run-12345678"}  # type: ignore[union-attr]
+            checkout_payload = json.loads(request.data.decode("utf-8"))  # type: ignore[union-attr]
+            checkout_ids.append(checkout_payload["request_id"])
             return json.dumps(
                 {
                     "provider": "openai_compatible",
@@ -160,9 +162,10 @@ def test_server_managed_client_checkouts_once_and_reuses_returned_config() -> No
 
     assert client.generate("first prompt") == '["topic"]'
     assert client.generate("second prompt") == '["topic"]'
-    assert [request.full_url for request in calls].count(
-        "http://127.0.0.1:8787/api/desktop/llm/checkouts",
-    ) == 1
+    assert checkout_ids == [
+        "run-12345678-call-0001",
+        "run-12345678-call-0002",
+    ]
 
 
 def test_build_insight_client_from_env_supports_server_managed_mode() -> None:

@@ -137,7 +137,7 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
   },
   insights_generating: {
     title: "AI 整理中",
-    body: "正在使用云端 LLM 生成要点总结和启发话题点。",
+    body: "正在使用云端 LLM 生成要点总结、Mermaid mindmap 和启发话题点。",
   },
   completed: {
     title: "文字稿完成",
@@ -218,7 +218,7 @@ function accountProcessBlockerMessage(account: AccountStatus, actionLabel: strin
   }
 
   if (account.llmQuotaRemaining <= 0) {
-    return "启发话题点次数已用完，请联系管理员补充额度或兑换新的激活码。";
+    return "LLM API 调用额度已用完，请联系管理员补充额度或兑换新的激活码。";
   }
 
   return `当前账号暂不能${actionLabel}，请刷新账号状态后重试。`;
@@ -736,7 +736,7 @@ function App() {
 
   async function confirmInsightPreferences(preferences: GenerationPreferences) {
     if (!canProcessWithAccount(account)) {
-      openAccountPanel(accountProcessBlockerMessage(account, "生成要点总结和启发话题点"));
+      openAccountPanel(accountProcessBlockerMessage(account, "生成要点总结、Mermaid mindmap 和启发话题点"));
       return;
     }
 
@@ -764,7 +764,7 @@ function App() {
       return;
     }
     if (!canProcessWithAccount(account)) {
-      openAccountPanel(accountProcessBlockerMessage(account, "生成要点总结和启发话题点"));
+      openAccountPanel(accountProcessBlockerMessage(account, "生成要点总结、Mermaid mindmap 和启发话题点"));
       return;
     }
 
@@ -1284,7 +1284,7 @@ function App() {
     : account.authenticated
       ? accountHasActiveEntitlement
         ? account.llmConfigured
-          ? "次数不足"
+          ? "LLM 额度不足"
           : "待配置"
         : "激活"
       : "登录";
@@ -1293,7 +1293,7 @@ function App() {
     : account.authenticated
       ? accountHasActiveEntitlement
         ? account.llmConfigured
-          ? "话题点次数不足"
+          ? "LLM API 调用额度不足"
           : "等待管理员配置 LLM"
         : "未激活"
       : "未登录";

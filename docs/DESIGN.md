@@ -59,12 +59,12 @@
 - Browser deep-link return from login must restore and focus the existing desktop window so the account sheet is visible without the user hunting for FrameQ.
 - Account copy must clearly distinguish local processing from server-side account and entitlement verification.
 - If the user is not entitled, submitting a URL or retrying insights opens the account sheet and does not start worker processing.
-- The account sheet shows remaining insight-generation uses when the user is signed in.
+- The account sheet shows remaining LLM API-call uses when the user is signed in.
 - Desktop settings must not expose insight LLM provider, base URL, API key, model, or timeout; those fields are administrator-managed.
 - Desktop settings should expose the app-local `.env` path for non-LLM local settings and provide a locate-file action.
 - Desktop settings should include an `应用更新` section with manual check, low-noise status copy, progress, `一键升级`, `稍后提醒`, and `重启完成更新` actions.
 - Update installation must be disabled while worker processing or ASR model download is active, with copy explaining that the current task should finish first.
-- The account sheet shows email login, activation-code monthly pass redemption, monthly pass expiry, and remaining insight-generation uses in a stable layout.
+- The account sheet shows email login, activation-code monthly pass redemption, monthly pass expiry, and remaining LLM API-call uses in a stable layout.
 - Successful activation-code redemption opens or extends the monthly pass and returns the user to the existing processing workflow without changing the local-first worker UI stages.
 - WeChat purchase is paused because of WeChat approval requirements, so the desktop UI must not show a WeChat purchase entry by default.
 
@@ -73,7 +73,7 @@
 - Admin Web should expose manual compensation as a compact support operation, not as a public pricing or sales surface.
 - User rows should make current entitlement expiry, quota limit, used quota, and remaining quota easy to scan before adjustment.
 - Compensation controls must require a reason and should support a short optional note for bug ID, release version, or support context.
-- Additive operations should be visually distinct: "延长天数" and "增加话题点次数" should not look like destructive overwrite controls.
+- Additive operations should be visually distinct: "延长天数" and "增加 LLM API 调用次数" should not look like destructive overwrite controls.
 - After saving, the row should show the refreshed expiry and remaining quota, plus a short success or validation message.
 - Recent adjustment history should be visible to the administrator so repeated compensation can be spotted before applying another change.
 

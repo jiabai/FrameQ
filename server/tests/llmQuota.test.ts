@@ -88,7 +88,7 @@ describe("server-managed LLM config and quota", () => {
     expect(JSON.stringify(store)).not.toContain("client-secret-key");
   });
 
-  test("desktop checkout consumes one quota and is idempotent by request id", async () => {
+  test("desktop checkout consumes per request id and replays are idempotent", async () => {
     const store = new MemoryStore();
     await createAdminSession(store);
     const { sessionToken } = await createAuthorizedUser(store);
@@ -112,6 +112,16 @@ describe("server-managed LLM config and quota", () => {
       quota_remaining: 19,
     });
 
+    const secondCall = await app.inject({
+      method: "POST",
+      url: "/api/desktop/llm/checkouts",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { request_id: "insights-run-1-call-0002" },
+    });
+
+    expect(secondCall.statusCode).toBe(200);
+    expect(secondCall.json()).toMatchObject({ quota_remaining: 18 });
+
     const replay = await app.inject({
       method: "POST",
       url: "/api/desktop/llm/checkouts",
@@ -120,10 +130,10 @@ describe("server-managed LLM config and quota", () => {
     });
 
     expect(replay.statusCode).toBe(200);
-    expect(replay.json()).toMatchObject({ quota_remaining: 19 });
+    expect(replay.json()).toMatchObject({ quota_remaining: 18 });
     await expect(store.getEntitlement(store.users[0]!.id)).resolves.toMatchObject({
       llmQuotaLimit: 20,
-      llmQuotaUsed: 1,
+      llmQuotaUsed: 2,
     });
   });
 
