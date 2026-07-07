@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use tauri::{Emitter, Manager, WebviewWindow};
+use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
 mod account;
 mod asr_model;
+mod deep_link;
 mod diagnostics;
 mod history;
 mod insight_preferences;
@@ -52,39 +53,6 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-trait DeepLinkActivationWindow {
-    fn unminimize_window(&self) -> Result<(), String>;
-    fn show_window(&self) -> Result<(), String>;
-    fn focus_window(&self) -> Result<(), String>;
-    fn emit_deep_link_args(&self, argv: Vec<String>) -> Result<(), String>;
-}
-
-impl DeepLinkActivationWindow for WebviewWindow {
-    fn unminimize_window(&self) -> Result<(), String> {
-        self.unminimize().map_err(|error| error.to_string())
-    }
-
-    fn show_window(&self) -> Result<(), String> {
-        self.show().map_err(|error| error.to_string())
-    }
-
-    fn focus_window(&self) -> Result<(), String> {
-        self.set_focus().map_err(|error| error.to_string())
-    }
-
-    fn emit_deep_link_args(&self, argv: Vec<String>) -> Result<(), String> {
-        self.emit("frameq-deep-link-args", argv)
-            .map_err(|error| error.to_string())
-    }
-}
-
-fn activate_main_window_for_deep_link<W: DeepLinkActivationWindow>(window: &W, argv: Vec<String>) {
-    let _ = window.unminimize_window();
-    let _ = window.show_window();
-    let _ = window.focus_window();
-    let _ = window.emit_deep_link_args(argv);
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -92,7 +60,7 @@ pub fn run() {
         .manage(Arc::new(asr_model::ModelDownloadProcessState::default()))
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
-                activate_main_window_for_deep_link(&window, argv);
+                deep_link::activate_main_window_for_deep_link(&window, argv);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -151,65 +119,11 @@ mod tests {
         build_activation_redeem_url, build_auth_login_url, parse_auth_callback_url,
         server_base_url, AuthCallback,
     };
+    use super::path_to_env_string;
     use super::settings::{load_llm_config_from_file, save_llm_config_to_file, LlmConfigInput};
-    use super::{activate_main_window_for_deep_link, path_to_env_string, DeepLinkActivationWindow};
-    use std::cell::RefCell;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[derive(Default)]
-    struct FakeDeepLinkWindow {
-        actions: RefCell<Vec<String>>,
-    }
-
-    impl FakeDeepLinkWindow {
-        fn record(&self, action: &str) {
-            self.actions.borrow_mut().push(action.to_string());
-        }
-    }
-
-    impl DeepLinkActivationWindow for FakeDeepLinkWindow {
-        fn unminimize_window(&self) -> Result<(), String> {
-            self.record("unminimize");
-            Ok(())
-        }
-
-        fn show_window(&self) -> Result<(), String> {
-            self.record("show");
-            Ok(())
-        }
-
-        fn focus_window(&self) -> Result<(), String> {
-            self.record("focus");
-            Ok(())
-        }
-
-        fn emit_deep_link_args(&self, argv: Vec<String>) -> Result<(), String> {
-            self.record(&format!("emit:{}", argv.join("|")));
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn deep_link_activation_brings_existing_main_window_forward() {
-        let window = FakeDeepLinkWindow::default();
-
-        activate_main_window_for_deep_link(
-            &window,
-            vec!["frameq://auth/callback?ticket=flt_abc&state=state-1".to_string()],
-        );
-
-        assert_eq!(
-            window.actions.into_inner(),
-            vec![
-                "unminimize",
-                "show",
-                "focus",
-                "emit:frameq://auth/callback?ticket=flt_abc&state=state-1",
-            ]
-        );
-    }
 
     #[test]
     fn auth_login_url_includes_state_and_redirect_scheme() {
