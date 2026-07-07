@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   advanceGenerationStep,
   backGenerationStep,
+  cancelProfileSetupInFlow,
   createInsightPreferenceFlow,
   selectGenerationOption,
   skipProfileSetupInFlow,
@@ -95,6 +96,41 @@ describe("insight preference flow", () => {
     }));
 
     expect(startProfileSetupInFlow(flow).screen).toBe("profile_form");
+  });
+
+  test("cancelling required profile setup returns to the intro without skipping", () => {
+    const flow = startProfileSetupInFlow(
+      createInsightPreferenceFlow(preferenceState({
+        profile: null,
+        profileSkipped: false,
+        profileStatus: "missing",
+        defaultGenerationPreferences: null,
+      })),
+    );
+
+    const cancelled = cancelProfileSetupInFlow(flow);
+
+    expect(cancelled?.screen).toBe("profile_intro");
+    expect(cancelled?.profileSkipped).toBe(false);
+    expect(cancelled?.profileResetRequired).toBe(false);
+  });
+
+  test("cancelling invalid profile reset does not continue to generation", () => {
+    const flow = startProfileSetupInFlow(
+      createInsightPreferenceFlow(preferenceState({
+        profile: null,
+        profileSkipped: false,
+        profileStatus: "invalid",
+        profileError: "灵感档案需要重新设置",
+        defaultGenerationPreferences: DEFAULT_GENERATION,
+      })),
+    );
+
+    const cancelled = cancelProfileSetupInFlow(flow);
+
+    expect(cancelled?.screen).toBe("profile_intro");
+    expect(cancelled?.profileResetRequired).toBe(true);
+    expect(cancelled?.generationPreferences).toEqual(DEFAULT_GENERATION);
   });
 
   test("requires selections before advancing required generation steps", () => {

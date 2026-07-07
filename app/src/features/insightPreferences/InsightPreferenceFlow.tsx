@@ -19,6 +19,7 @@ import {
 import {
   advanceGenerationStep,
   backGenerationStep,
+  cancelProfileSetupInFlow,
   selectGenerationOption,
   startGenerationPreferenceEditing,
   startProfileSetupInFlow,
@@ -91,7 +92,14 @@ export function InsightPreferenceFlow({
           <InspirationProfileForm
             initialProfile={flow.profile}
             busy={busy}
-            onCancel={() => onFlowChange(startGenerationPreferenceEditing(flow))}
+            onCancel={() => {
+              const nextFlow = cancelProfileSetupInFlow(flow);
+              if (nextFlow) {
+                onFlowChange(nextFlow);
+                return;
+              }
+              onCancel();
+            }}
             onSave={onSaveProfile}
           />
         ) : null}

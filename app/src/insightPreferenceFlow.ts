@@ -96,6 +96,31 @@ export function startProfileSetupInFlow(
   });
 }
 
+export function cancelProfileSetupInFlow(
+  flow: InsightPreferenceFlowState,
+): InsightPreferenceFlowState | null {
+  const profileSetupRequired = flow.profileResetRequired || (!flow.profile && !flow.profileSkipped);
+  if (profileSetupRequired) {
+    return withDerivedState({
+      ...flow,
+      screen: "profile_intro",
+      currentStep: "goal",
+      currentStepIndex: 0,
+    });
+  }
+
+  if (flow.defaultGenerationPreferences) {
+    return withDerivedState({
+      ...flow,
+      screen: "default_summary",
+      currentStep: "goal",
+      currentStepIndex: 0,
+    });
+  }
+
+  return null;
+}
+
 export function startGenerationPreferenceEditing(
   flow: InsightPreferenceFlowState,
 ): InsightPreferenceFlowState {
