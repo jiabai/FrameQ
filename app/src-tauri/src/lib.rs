@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::fs;
+use std::io::{BufRead, BufReader};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, Window};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 mod account;
+mod diagnostics;
 mod history;
 mod insight_preferences;
 mod runtime;
@@ -28,6 +28,10 @@ pub(crate) use runtime::{
     USER_DATA_DIR_ENV,
 };
 
+pub(crate) use diagnostics::{
+    append_desktop_log, sanitize_diagnostic_text, summarize_worker_result_for_log, truncate_for_log,
+};
+
 use settings::{
     asr_model_source, configured_env_value, env_path, legacy_local_llm_env_removals,
     parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_DOWNLOAD_SHA256_ENV,
@@ -42,7 +46,6 @@ const MODEL_DOWNLOAD_EVENT_PREFIX: &str = "FRAMEQ_MODEL_DOWNLOAD ";
 #[cfg(target_os = "windows")]
 const WINDOWS_CREATE_NO_WINDOW: u32 = 0x08000000;
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
-const DESKTOP_LOG_FILE_NAME: &str = "frameq-desktop.log";
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
 const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL];
@@ -233,173 +236,6 @@ impl ModelDownloadProcessState {
 
         false
     }
-}
-
-fn desktop_log_path(paths: &RuntimePaths) -> PathBuf {
-    paths
-        .user_data_dir
-        .join(DESKTOP_LOG_DIR_NAME)
-        .join(DESKTOP_LOG_FILE_NAME)
-}
-
-fn append_desktop_log(paths: &RuntimePaths, event: &str, detail: &str) -> Result<(), String> {
-    let log_path = desktop_log_path(paths);
-    if let Some(parent) = log_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
-        .map_err(|error| error.to_string())?;
-    let line = format!(
-        "{} event={} {}\n",
-        diagnostic_timestamp(),
-        sanitize_log_token(event),
-        sanitize_diagnostic_text(detail)
-    );
-    file.write_all(line.as_bytes())
-        .map_err(|error| error.to_string())
-}
-
-fn diagnostic_timestamp() -> String {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| format!("unix_ms={}", duration.as_millis()))
-        .unwrap_or_else(|_| "unix_ms=unknown".to_string())
-}
-
-fn sanitize_log_token(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-') {
-                character
-            } else {
-                '_'
-            }
-        })
-        .collect()
-}
-
-fn sanitize_diagnostic_text(text: &str) -> String {
-    let redacted_lines = text
-        .lines()
-        .map(redact_sensitive_line)
-        .collect::<Vec<_>>()
-        .join(" | ");
-    let without_media_urls = redact_youtube_media_urls(&redacted_lines);
-    let without_cookie_cli_hints = redact_cookie_cli_hints(&without_media_urls);
-    collapse_log_whitespace(&without_cookie_cli_hints)
-}
-
-fn redact_sensitive_line(line: &str) -> String {
-    let trimmed = line.trim_start();
-    let sensitive_prefixes = [
-        "FRAMEQ_LLM_API_KEY=",
-        "FRAMEQ_LLM_SESSION_TOKEN=",
-        "Authorization:",
-        "Cookie:",
-        "Set-Cookie:",
-    ];
-
-    for prefix in sensitive_prefixes {
-        if trimmed.starts_with(prefix) {
-            let leading_len = line.len() - trimmed.len();
-            return format!("{}{}[redacted]", &line[..leading_len], prefix);
-        }
-    }
-
-    line.to_string()
-}
-
-fn redact_youtube_media_urls(text: &str) -> String {
-    text.split_whitespace()
-        .map(|token| {
-            if token.contains("googlevideo.com") || token.contains("videoplayback") {
-                "[youtube media url removed]"
-            } else {
-                token
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn redact_cookie_cli_hints(text: &str) -> String {
-    let mut output = Vec::new();
-    let mut skip_cookie_hint = false;
-
-    for token in text.split_whitespace() {
-        let normalized = token.trim_matches(|character: char| {
-            matches!(
-                character,
-                '"' | '\'' | ',' | ';' | ':' | '(' | ')' | '[' | ']'
-            )
-        });
-        if normalized.starts_with("--cookies") {
-            skip_cookie_hint = true;
-            continue;
-        }
-        if skip_cookie_hint {
-            if token.ends_with('.') || token.ends_with('|') {
-                skip_cookie_hint = false;
-            }
-            continue;
-        }
-        output.push(token);
-    }
-
-    output.join(" ")
-}
-
-fn collapse_log_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn summarize_worker_result_for_log(value: &serde_json::Value) -> String {
-    let mut parts = Vec::new();
-    parts.push(format!(
-        "status={}",
-        value
-            .get("status")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("unknown")
-    ));
-
-    if let Some(task_id) = value.get("task_id").and_then(serde_json::Value::as_str) {
-        parts.push(format!("task_id={task_id}"));
-    }
-
-    if let Some(error) = value.get("error").and_then(serde_json::Value::as_object) {
-        if let Some(code) = error.get("code").and_then(serde_json::Value::as_str) {
-            parts.push(format!("error_code={code}"));
-        }
-        if let Some(stage) = error.get("stage").and_then(serde_json::Value::as_str) {
-            parts.push(format!("error_stage={stage}"));
-        }
-        if let Some(message) = error.get("message").and_then(serde_json::Value::as_str) {
-            parts.push(format!(
-                "error_message={}",
-                truncate_for_log(&sanitize_diagnostic_text(message), 500)
-            ));
-        }
-    }
-
-    parts.join(" ")
-}
-
-fn truncate_for_log(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_string();
-    }
-
-    value
-        .chars()
-        .take(max_chars.saturating_sub(3))
-        .collect::<String>()
-        + "..."
 }
 
 fn worker_command_log_detail(spec: &WorkerCommandSpec, kind: &str) -> String {
@@ -1521,12 +1357,10 @@ mod tests {
         load_llm_config_from_file, save_llm_config_to_file, supported_asr_models, LlmConfigInput,
     };
     use super::{
-        activate_main_window_for_deep_link, append_desktop_log,
-        apply_configured_asr_model_to_request, asr_model_available,
-        build_model_download_command_spec, build_worker_command_spec,
-        cached_process_result_for_request, desktop_log_path, parse_worker_output_or_fallback,
-        parse_worker_stdout, path_to_env_string, run_blocking_worker_command,
-        sanitize_diagnostic_text, summarize_worker_result_for_log, DeepLinkActivationWindow,
+        activate_main_window_for_deep_link, apply_configured_asr_model_to_request,
+        asr_model_available, build_model_download_command_spec, build_worker_command_spec,
+        cached_process_result_for_request, parse_worker_output_or_fallback, parse_worker_stdout,
+        path_to_env_string, run_blocking_worker_command, DeepLinkActivationWindow,
         ProcessVideoRequest, ProcessVideoResult, RetryInsightsRequest, RuntimePaths,
         WorkerCommandSpec, WorkerError, WorkerInvocation, WorkerProcessState,
     };
@@ -1641,82 +1475,6 @@ mod tests {
         assert_eq!(state.current_pid(), Some(10));
         state.clear_current(10);
         assert_eq!(state.current_pid(), None);
-    }
-
-    #[test]
-    fn desktop_log_path_lives_under_app_local_logs() {
-        let root = temp_dir("desktop_log_path_lives_under_app_local_logs");
-        let paths = RuntimePaths {
-            resource_dir: root.join("resources"),
-            user_data_dir: root.join("app-data"),
-        };
-
-        assert_eq!(
-            desktop_log_path(&paths),
-            paths.user_data_dir.join("logs").join("frameq-desktop.log")
-        );
-    }
-
-    #[test]
-    fn desktop_log_redacts_sensitive_values_before_writing() {
-        let root = temp_dir("desktop_log_redacts_sensitive_values_before_writing");
-        let paths = RuntimePaths {
-            resource_dir: root.join("resources"),
-            user_data_dir: root.join("app-data"),
-        };
-
-        append_desktop_log(
-            &paths,
-            "worker.finish",
-            "FRAMEQ_LLM_API_KEY=sk-secret\nFRAMEQ_LLM_SESSION_TOKEN=session-token\nhttps://rr1---sn.googlevideo.com/videoplayback?sig=SECRET Use --cookies cookies.txt.",
-        )
-        .expect("write desktop log");
-
-        let log = fs::read_to_string(desktop_log_path(&paths)).expect("read desktop log");
-        assert!(log.contains("worker.finish"));
-        assert!(log.contains("[redacted]"));
-        assert!(log.contains("[youtube media url removed]"));
-        assert!(!log.contains("sk-secret"));
-        assert!(!log.contains("session-token"));
-        assert!(!log.contains("sig=SECRET"));
-        assert!(!log.contains("--cookies"));
-    }
-
-    #[test]
-    fn worker_result_log_summary_includes_status_task_and_sanitized_error() {
-        let result = serde_json::json!({
-            "status": "failed",
-            "task_id": "20260705-120000-youtube-demo",
-            "error": {
-                "code": "VIDEO_DOWNLOAD_FAILED",
-                "stage": "video_extracting",
-                "message": "YOUTUBE_LOGIN_REQUIRED: https://rr1---sn.googlevideo.com/videoplayback?sig=SECRET Use --cookies cookies.txt."
-            }
-        });
-
-        let summary = summarize_worker_result_for_log(&result);
-
-        assert!(summary.contains("status=failed"));
-        assert!(summary.contains("task_id=20260705-120000-youtube-demo"));
-        assert!(summary.contains("error_code=VIDEO_DOWNLOAD_FAILED"));
-        assert!(summary.contains("error_stage=video_extracting"));
-        assert!(summary.contains("[youtube media url removed]"));
-        assert!(!summary.contains("sig=SECRET"));
-        assert!(!summary.contains("--cookies"));
-    }
-
-    #[test]
-    fn diagnostic_text_redacts_llm_and_cookie_material() {
-        let sanitized = sanitize_diagnostic_text(
-            "FRAMEQ_LLM_API_KEY=secret\nFRAMEQ_LLM_SESSION_TOKEN=token\nAuthorization: Bearer abc\nCookie: SID=1\n--cookies-from-browser chrome",
-        );
-
-        assert!(sanitized.contains("[redacted]"));
-        assert!(!sanitized.contains("secret"));
-        assert!(!sanitized.contains("token"));
-        assert!(!sanitized.contains("Bearer abc"));
-        assert!(!sanitized.contains("SID=1"));
-        assert!(!sanitized.contains("--cookies-from-browser"));
     }
 
     #[test]
