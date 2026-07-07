@@ -139,8 +139,11 @@ mod tests {
         let task_dir = output_root.join("tasks").join(task_id);
         fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
         fs::create_dir_all(task_dir.join("ai")).expect("create ai dir");
-        fs::write(task_dir.join("transcript").join("transcript.txt"), "full transcript\n")
-            .expect("write transcript");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "full transcript\n",
+        )
+        .expect("write transcript");
         fs::write(task_dir.join("ai").join("summary.md"), "# summary\n").expect("write summary");
         fs::write(
             task_dir.join("ai").join("insights.json"),

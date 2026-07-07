@@ -37,7 +37,10 @@ pub(crate) struct UpdatePreferencesView {
 
 #[tauri::command]
 pub(crate) fn get_update_preferences(app: AppHandle) -> Result<UpdatePreferencesView, String> {
-    let user_data_dir = app.path().app_local_data_dir().map_err(|error| error.to_string())?;
+    let user_data_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?;
     load_update_preferences_from_file(&user_data_dir.join(UPDATE_PREFERENCES_FILE_NAME))
 }
 
@@ -46,7 +49,10 @@ pub(crate) fn save_update_preferences(
     app: AppHandle,
     preferences: UpdatePreferencesView,
 ) -> Result<UpdatePreferencesView, String> {
-    let user_data_dir = app.path().app_local_data_dir().map_err(|error| error.to_string())?;
+    let user_data_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?;
     save_update_preferences_to_file(
         &user_data_dir.join(UPDATE_PREFERENCES_FILE_NAME),
         preferences,

@@ -725,7 +725,7 @@ describe("App desktop sheet structure", () => {
 
       expect(sheet.result.value).toEqual({
         hasSheetPanel: true,
-        groupedSections: 4,
+        groupedSections: 5,
         hasConfigFileSection: true,
         hasUpdateSection: true,
         hasInspirationSection: true,
@@ -734,6 +734,131 @@ describe("App desktop sheet structure", () => {
         hasStickyFooter: true,
         hasScrollableBody: true,
       });
+    } finally {
+      page.close();
+    }
+  }, 10_000);
+
+  test("shows and clears audio playback cache from settings", async () => {
+    const target = await requestJson<CdpTarget>(
+      cdpPort,
+      `/json/new?${encodeURIComponent(appUrl)}`,
+      "PUT",
+    );
+    const page = await connectToCdp(target.webSocketDebuggerUrl);
+
+    try {
+      await page.send("Page.enable");
+      await page.send("Runtime.enable");
+      await page.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `
+          (() => {
+            window.__FRAMEQ_TEST_COMMANDS__ = [];
+            window.__TAURI_INTERNALS__ = {
+              invoke: async (command, args) => {
+                window.__FRAMEQ_TEST_COMMANDS__.push({ command, args });
+                if (command === "get_llm_config") {
+                  return {
+                    output_dir: "D:/FrameQ/outputs",
+                    asr_model: "iic/SenseVoiceSmall",
+                    supported_asr_models: ["iic/SenseVoiceSmall"],
+                    config_path: "C:/Users/demo/AppData/Local/FrameQ/.env"
+                  };
+                }
+                if (command === "get_audio_review_cache_usage") {
+                  return {
+                    size_bytes: 1572864,
+                    cache_path: "C:/Users/demo/AppData/Local/FrameQ/outputs/.frameq-audio-review"
+                  };
+                }
+                if (command === "clear_audio_review_cache") {
+                  return {
+                    size_bytes: 0,
+                    cache_path: "C:/Users/demo/AppData/Local/FrameQ/outputs/.frameq-audio-review"
+                  };
+                }
+                if (command === "check_first_run") {
+                  return {
+                    user_data_dir: "C:/Users/demo/AppData/Local/FrameQ",
+                    default_output_dir: "C:/Users/demo/AppData/Local/FrameQ/outputs",
+                    asr_model: "iic/SenseVoiceSmall",
+                    asr_model_dir: "C:/Users/demo/AppData/Local/FrameQ/models",
+                    asr_model_available: true,
+                    asr_model_source: "modelscope"
+                  };
+                }
+                if (command === "get_account_status") {
+                  return {
+                    authenticated: false,
+                    email: null,
+                    entitlement_status: "none",
+                    entitlement_expires_at: null,
+                    llm_quota_limit: 0,
+                    llm_quota_used: 0,
+                    llm_quota_remaining: 0,
+                    llm_quota_resets_at: null,
+                    llm_configured: false,
+                    last_verified_at: null,
+                    can_process: false,
+                    server_error: null
+                  };
+                }
+                if (command === "plugin:deep-link|get_current") {
+                  return [];
+                }
+                if (command === "plugin:event|listen") {
+                  return 1;
+                }
+                if (command === "plugin:event|unlisten") {
+                  return null;
+                }
+                throw new Error("Unexpected command: " + command);
+              },
+              convertFileSrc: (filePath) => filePath
+            };
+          })();
+        `,
+      });
+      const loaded = page.waitForEvent("Page.loadEventFired");
+      await page.send("Page.navigate", { url: appUrl });
+      await loaded;
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.app-shell')) && getComputedStyle(document.querySelector('.app-shell')).display === 'grid'",
+      );
+
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('button[aria-label=\"应用设置\"]').click()",
+      });
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.audio-cache-settings-section')) && document.querySelector('.audio-cache-settings-section')?.textContent.includes('1.5 MB')",
+      );
+
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('.audio-cache-settings-section button').click()",
+      });
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('.audio-cache-settings-section')?.textContent.includes('0 B')",
+      );
+
+      const commands = await page.send<{ result: { value: Record<string, unknown> } }>(
+        "Runtime.evaluate",
+        {
+          expression: `({
+            commands: window.__FRAMEQ_TEST_COMMANDS__.map((entry) => entry.command),
+            hasAudioCacheSection: Boolean(document.querySelector('.audio-cache-settings-section')),
+            text: document.querySelector('.audio-cache-settings-section')?.textContent ?? ''
+          })`,
+          returnByValue: true,
+        },
+      );
+
+      expect(commands.result.value.commands).toContain("get_audio_review_cache_usage");
+      expect(commands.result.value.commands).toContain("clear_audio_review_cache");
+      expect(commands.result.value.hasAudioCacheSection).toBe(true);
+      expect(commands.result.value.text).toContain("0 B");
     } finally {
       page.close();
     }

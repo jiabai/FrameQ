@@ -18,7 +18,7 @@
 - `2026-07-05-repeat-url-task-reuse.md` - Reuse an existing completed local task when the same public video URL is submitted again.
 - `2026-07-05-youtube-js-runtime-packaging.md` - Bundle Deno as the packaged JavaScript runtime needed by `yt-dlp` for clean-machine YouTube extraction.
 - `2026-07-05-desktop-diagnostics-logs.md` - Local desktop diagnostics log for installer/runtime debugging, including YouTube JavaScript runtime failures.
-- `2026-06-23-desktop-one-click-updates.md` — 桌面端低打扰升级提醒、一键升级、FrameQ server 动态更新 manifest。
+- `2026-06-23-desktop-one-click-updates.md` - Low-noise desktop update reminders and one-click upgrades via GitHub Releases static `latest.json`.
 - `2026-06-18-installer-distribution.md` — 普通用户安装即用分发：内置 runtime，首启下载 SenseVoice Small，用户数据目录和首启配置体验。
 
 <!-- 由 vibe-coding-launcher 生成。 -->

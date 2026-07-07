@@ -45,7 +45,10 @@
 - Empty transcript saves, path traversal, non-transcript files, and unrelated local paths must fail recoverably.
 - Segment metadata is local-only review data. It must not be sent to FrameQ server unless a future product spec explicitly adds a server workflow.
 - The audio player should use Tauri-validated local paths only. Missing audio must degrade to text editing without attempting remote downloads or network lookups.
-- The Tauri asset protocol may be enabled only for reviewed audio artifacts under app-local `outputs/tasks/<task_id>/`; it must not expose `auth/`, `models/`, `.env`, update preferences, temporary `cache/`, or arbitrary user directories.
+- For custom output roots, Tauri may create a playback copy under app-local `outputs/.frameq-audio-review/<task_id>/` only after validating the original manifest-declared audio artifact. This cache is not an authority and must be rebuildable from the original task artifact.
+- Manual playback-cache cleanup must not accept arbitrary paths. It must canonicalize the target, delete only app-local `outputs/.frameq-audio-review`, and never delete `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/` artifacts or app-local `cache/`, `models/`, `auth/`, `.env`, or update preferences.
+- Playback-cache size reporting is local UI state only. It must not upload audio paths, source paths, transcripts, or cache metadata to FrameQ server.
+- The Tauri asset protocol may be enabled only for reviewed audio artifacts under app-local `outputs/tasks/<task_id>/` or Tauri-controlled playback copies under app-local `outputs/.frameq-audio-review/<task_id>/`; it must not expose `auth/`, `models/`, `.env`, update preferences, temporary `cache/`, or arbitrary user directories.
 
 ## 2026-06-29 YouTube Public Video Safety Boundary
 

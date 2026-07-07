@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from frameq_worker.asr import DEFAULT_ASR_MODEL, resolve_asr_model_name
 from frameq_worker.desktop_contract import ASR_MODEL_ENV
 from frameq_worker.models import (
@@ -148,6 +150,8 @@ GENERATION_FIELD_OPTIONS: dict[str, set[str]] = {
     },
 }
 
+TASK_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]+$")
+
 
 def parse_process_request(payload: object) -> ProcessRequest:
     if not isinstance(payload, dict):
@@ -180,9 +184,12 @@ def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
     task_id = payload.get("task_id")
     if not isinstance(task_id, str) or not task_id.strip():
         raise ValueError("Retry payload must include a non-empty task_id.")
+    task_id = task_id.strip()
+    if not TASK_ID_PATTERN.fullmatch(task_id):
+        raise ValueError("Retry payload task_id must be a single task directory name.")
 
     return RetryInsightsRequest(
-        task_id=task_id.strip(),
+        task_id=task_id,
         preference_snapshot=parse_preference_snapshot(payload.get("preference_snapshot")),
     )
 

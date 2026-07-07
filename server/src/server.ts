@@ -515,6 +515,8 @@ export function buildServer(dependencies: ServerDependencies) {
     };
   });
 
+  // Reserved for a future server-hosted update manifest. Current desktop builds
+  // use Tauri's GitHub Releases `latest.json` endpoint configured in tauri.conf.json.
   app.get("/api/desktop/updates/:target/:arch/:currentVersion", async (request, reply) => {
     const params = request.params as {
       target?: string;

@@ -85,3 +85,18 @@ def test_retry_request_rejects_invalid_preference_snapshot_options() -> None:
                 "preference_snapshot": snapshot,
             }
         )
+
+
+@pytest.mark.parametrize(
+    "task_id",
+    [
+        "../outside",
+        "nested/task",
+        "nested\\task",
+        "C:/FrameQ/task",
+        "20260705-153012-douyin-demo/../outside",
+    ],
+)
+def test_retry_request_rejects_task_id_path_traversal(task_id: str) -> None:
+    with pytest.raises(ValueError, match="task_id"):
+        parse_retry_insights_request({"task_id": task_id})

@@ -3,7 +3,9 @@ import {
   ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
   cancelAsrModelDownload,
   checkFirstRun,
+  clearAudioReviewCache,
   downloadAsrModel,
+  getAudioReviewCacheUsage,
   getLlmConfig,
   saveLlmConfig,
   type SettingsCommandRunner,
@@ -118,6 +120,37 @@ describe("settings client", () => {
       outputDir: "D:\\FrameQ\\outputs",
       configPath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
     });
+  });
+
+  test("loads and clears audio review cache usage through Tauri", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      if (command === "get_audio_review_cache_usage") {
+        return {
+          size_bytes: 1_572_864,
+          cache_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs\\.frameq-audio-review",
+        };
+      }
+      return {
+        size_bytes: 0,
+        cache_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs\\.frameq-audio-review",
+      };
+    };
+
+    await expect(getAudioReviewCacheUsage(runner)).resolves.toEqual({
+      sizeBytes: 1_572_864,
+      cachePath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs\\.frameq-audio-review",
+    });
+    await expect(clearAudioReviewCache(runner)).resolves.toEqual({
+      sizeBytes: 0,
+      cachePath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs\\.frameq-audio-review",
+    });
+
+    expect(calls).toEqual([
+      { command: "get_audio_review_cache_usage", args: {} },
+      { command: "clear_audio_review_cache", args: {} },
+    ]);
   });
 
   test("maps Tauri errors to settings errors", async () => {

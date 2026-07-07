@@ -10,6 +10,7 @@ pub(crate) const USER_DATA_DIR_ENV: &str = "FRAMEQ_USER_DATA_DIR";
 pub(crate) const ALLOW_REAL_ASR_ENV: &str = "FRAMEQ_ALLOW_REAL_ASR";
 pub(crate) const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
 pub(crate) const CACHE_DIR_NAME: &str = "cache";
+pub(crate) const AUDIO_REVIEW_CACHE_DIR_NAME: &str = ".frameq-audio-review";
 pub(crate) const LEGACY_TEMP_DIR_NAME: &str = "work";
 pub(crate) const DESKTOP_LOG_DIR_NAME: &str = "logs";
 

@@ -15,6 +15,7 @@ export type TranscriptDetailResponse = {
   text: string;
   segments: TranscriptSegment[];
   audio_path: string | null;
+  audio_asset_path: string | null;
   has_original_backup: boolean;
 };
 

@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Settings,
   ShieldCheck,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -44,8 +45,11 @@ import {
 } from "./workflow";
 import { cancelProcess, processVideo, retryInsights } from "./workerClient";
 import {
+  clearAudioReviewCache,
+  getAudioReviewCacheUsage,
   getLlmConfig,
   saveLlmConfig,
+  type AudioReviewCacheUsage,
   type LlmConfigDraft,
 } from "./settingsClient";
 import { getHistory, historyItemToWorkerResult, type HistoryItem } from "./historyClient";
@@ -193,6 +197,22 @@ function formatProgressPercent(value: number): string {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
 
+function formatByteSize(value: number): string {
+  const bytes = Math.max(0, value);
+  if (bytes < 1024) {
+    return `${Math.round(bytes)} B`;
+  }
+  const units = ["KB", "MB", "GB"];
+  let size = bytes / 1024;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const precision = size >= 10 ? 0 : 1;
+  return `${size.toFixed(precision)} ${units[unitIndex]}`;
+}
+
 function formatSegmentTime(startMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(startMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -282,6 +302,8 @@ function App() {
   });
   const [settingsSupportedAsrModels, setSettingsSupportedAsrModels] = useState(defaultAsrModels);
   const [settingsConfigPath, setSettingsConfigPath] = useState("");
+  const [audioReviewCacheUsage, setAudioReviewCacheUsage] =
+    useState<AudioReviewCacheUsage | null>(null);
   const [settingsNotice, setSettingsNotice] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -471,7 +493,7 @@ function App() {
         setTranscriptDraft(detail.text || workflow.text);
         setTranscriptSegments(detail.segments);
         setActionNotice(
-          detail.audio_path
+          detail.audio_asset_path
             ? ""
             : "音频文件暂不可用，可以先编辑文字稿；点击保存后会更新正式文字稿。",
         );
@@ -843,7 +865,7 @@ function App() {
 
     setActiveTranscriptSegmentId(segment.id);
     const audio = transcriptAudioRef.current;
-    if (!audio || !transcriptDetail?.audio_path) {
+    if (!audio || !transcriptDetail?.audio_asset_path) {
       setActionNotice("当前任务没有可播放的本地音频，只能编辑文字稿。");
       return;
     }
@@ -889,7 +911,7 @@ function App() {
 
   async function toggleTranscriptAudio() {
     const audio = transcriptAudioRef.current;
-    if (!audio || !transcriptDetail?.audio_path) {
+    if (!audio || !transcriptDetail?.audio_asset_path) {
       setActionNotice("当前任务没有可播放的本地音频，只能编辑文字稿。");
       return;
     }
@@ -909,7 +931,7 @@ function App() {
 
   function seekTranscriptAudio(deltaSeconds: number) {
     const audio = transcriptAudioRef.current;
-    if (!audio || !transcriptDetail?.audio_path) {
+    if (!audio || !transcriptDetail?.audio_asset_path) {
       return;
     }
 
@@ -1110,7 +1132,10 @@ function App() {
     setSettingsLoading(true);
     setSettingsNotice("正在读取配置。");
     try {
-      const config = await getLlmConfig();
+      const [config, audioCacheUsage] = await Promise.all([
+        getLlmConfig(),
+        getAudioReviewCacheUsage(),
+      ]);
       setSettingsDraft({
         outputDir: config.outputDir,
         asrModel: config.asrModel,
@@ -1119,6 +1144,7 @@ function App() {
         config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
       );
       setSettingsConfigPath(config.configPath);
+      setAudioReviewCacheUsage(audioCacheUsage);
       setSettingsNotice(successNotice ?? "已读取本机 ASR 与输出目录设置。");
     } catch (error) {
       setSettingsNotice(`读取配置失败：${error instanceof Error ? error.message : String(error)}`);
@@ -1152,6 +1178,20 @@ function App() {
 
   function updateSettingsDraft(field: keyof LlmConfigDraft, value: string) {
     setSettingsDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  async function clearAudioReviewCacheFromSettings() {
+    setSettingsSaving(true);
+    setSettingsNotice("");
+    try {
+      const usage = await clearAudioReviewCache();
+      setAudioReviewCacheUsage(usage);
+      setSettingsNotice("音频播放缓存已清理；原始任务音频不会被删除。");
+    } catch (error) {
+      setSettingsNotice(`清理音频播放缓存失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSettingsSaving(false);
+    }
   }
 
   async function locateSettingsConfigFile() {
@@ -1259,8 +1299,8 @@ function App() {
   const exportPath = detailTab ? getExportPath(detailTab, workflow) : null;
   const currentTranscriptPath = getExportPath("transcript", workflow);
   const transcriptSourceLabel = getTranscriptSourceLabel(workflow);
-  const transcriptAudioSrc = transcriptDetail?.audio_path
-    ? convertFileSrc(transcriptDetail.audio_path)
+  const transcriptAudioSrc = transcriptDetail?.audio_asset_path
+    ? convertFileSrc(transcriptDetail.audio_asset_path)
     : "";
   const transcriptAudioProgress = audioProgressPercent(transcriptAudioCurrentTime, transcriptAudioDuration);
   const transcriptAudioScrubberMax =
@@ -1711,7 +1751,7 @@ function App() {
                               type="button"
                               className="transcript-segment-time"
                               onClick={() => void playTranscriptSegment(segment)}
-                              disabled={!transcriptDetail?.audio_path || Boolean(editingTranscriptSegmentId)}
+                              disabled={!transcriptDetail?.audio_asset_path || Boolean(editingTranscriptSegmentId)}
                             >
                               <Play size={14} />
                               <span>{formatSegmentTime(segment.start_ms)}</span>
@@ -1933,6 +1973,27 @@ function App() {
                   >
                     <FolderOpen size={15} />
                     <span>定位文件</span>
+                  </button>
+                </div>
+              </section>
+
+              <section className="sheet-form-section audio-cache-settings-section">
+                <div className="form-section-heading">
+                  <h3>音频播放缓存</h3>
+                  <p>外部输出目录的音频会复制到 app-local outputs 供播放器读取；清理不会删除原始任务音频。</p>
+                </div>
+                <div className="config-file-row audio-cache-row">
+                  <code title={audioReviewCacheUsage?.cachePath ?? ""}>
+                    音频播放缓存：{formatByteSize(audioReviewCacheUsage?.sizeBytes ?? 0)}
+                  </code>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={clearAudioReviewCacheFromSettings}
+                    disabled={settingsLoading || settingsSaving || !audioReviewCacheUsage}
+                  >
+                    <Trash2 size={15} />
+                    <span>清理播放缓存</span>
                   </button>
                 </div>
               </section>

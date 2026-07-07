@@ -54,6 +54,16 @@ export type LlmConfigResponse = {
   config_path: string;
 };
 
+export type AudioReviewCacheUsage = {
+  sizeBytes: number;
+  cachePath: string;
+};
+
+export type AudioReviewCacheUsageResponse = {
+  size_bytes: number;
+  cache_path: string;
+};
+
 export type SettingsCommandRunner = (
   command: string,
   args: InvokeArgs,
@@ -79,6 +89,22 @@ export async function saveLlmConfig(
         asr_model: draft.asrModel,
       },
     })) as LlmConfigResponse,
+  );
+}
+
+export async function getAudioReviewCacheUsage(
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<AudioReviewCacheUsage> {
+  return mapAudioReviewCacheUsageResponse(
+    (await runner("get_audio_review_cache_usage", {})) as AudioReviewCacheUsageResponse,
+  );
+}
+
+export async function clearAudioReviewCache(
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<AudioReviewCacheUsage> {
+  return mapAudioReviewCacheUsageResponse(
+    (await runner("clear_audio_review_cache", {})) as AudioReviewCacheUsageResponse,
   );
 }
 
@@ -119,5 +145,14 @@ function mapFirstRunStatusResponse(response: FirstRunStatusResponse): FirstRunSt
     asrModelDir: response.asr_model_dir,
     asrModelAvailable: response.asr_model_available,
     asrModelSource: response.asr_model_source,
+  };
+}
+
+function mapAudioReviewCacheUsageResponse(
+  response: AudioReviewCacheUsageResponse,
+): AudioReviewCacheUsage {
+  return {
+    sizeBytes: response.size_bytes,
+    cachePath: response.cache_path,
   };
 }

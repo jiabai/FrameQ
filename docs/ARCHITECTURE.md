@@ -46,6 +46,8 @@
 - Existing transcript `.txt` and `.md` files remain the official text artifacts. The segment sidecar is optional enhancement metadata, so old tasks and ASR outputs without valid timing keep working as full-text review.
 - Tauri owns `load_transcript_detail` and `save_transcript_edit` commands. These commands validate local transcript/audio paths, read/write only approved transcript artifacts, create the first original backup, and update local history previews after save.
 - Tauri must not expose arbitrary file playback or arbitrary text-file write commands. Frontend audio playback may only use paths returned by the validated detail command.
+- When a configured output root is outside app-local data, Tauri may create a rebuildable playback cache under app-local `outputs/.frameq-audio-review/<task_id>/` from the validated manifest audio artifact. The frontend should play `audio_asset_path`; `audio_path` remains the original task artifact path.
+- Settings UI owns manual playback-cache management: it queries Tauri for `.frameq-audio-review` size and calls a clear command. Tauri must delete only that canonical app-local playback cache, never `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/` artifacts.
 - The frontend owns the native audio element, current segment selection, playback-following highlight, edit pause/resume behavior, dirty state, copy-from-draft behavior, and save feedback.
 - Later AI整理 must read the saved official transcript, not an unsaved frontend draft.
 
@@ -174,7 +176,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 graph LR
   subgraph "app/ (Tauri + React + TS)"
     A1["app/src/<br/>workflow.ts<br/>settingsClient.ts<br/>historyClient.ts"]
-    A2["app/src-tauri/src/<br/>commands/*<br/>resources/"]
+    A2["app/src-tauri/src/<br/>lib.rs<br/>video_processing.rs<br/>settings.rs / history.rs"]
   end
 
   subgraph "worker/frameq_worker/"
@@ -221,7 +223,7 @@ graph LR
 
 阅读路径：
 
-- 改 UI 状态或历史展示：`app/src/workflow.ts` → `app/src/historyClient.ts` → `app/src-tauri/src/commands/`。
+- 改 UI 状态或历史展示：`app/src/workflow.ts` → `app/src/historyClient.ts` → `app/src-tauri/src/video_processing.rs` / `history.rs` / `settings.rs`。
 - 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
 - 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `model_download.py` → `app-local data models/`。
 - 改话题点 / 总结 / mindmap：`worker/frameq_worker/insightflow/` → `llm.py`。
@@ -233,7 +235,7 @@ graph LR
 - `AGENTS.md`：AI 协作入口地图和最高优先级约束摘要。
 - `docs/product-specs/index.md`：产品规格入口；根目录历史方案已迁移进 `docs/` 并删除。
 - `docs/product-specs/2026-06-16-douyin-video-transcription-client.md`：首个用户可见 MVP 规格。
-- `docs/exec-plans/active/2026-06-16-mvp-desktop-client-plan.md`：首个实现计划。
+- `docs/exec-plans/active/2026-06-18-installer-distribution-runtime-plan.md`：当前 active 执行计划；首个 MVP 计划已归档到 `docs/exec-plans/completed/2026-06-16-mvp-desktop-client-plan.md`。
 - `ruff.toml`：Python worker 初始 lint 约束。
 - `pyproject.toml`：Python worker 项目元数据和 `uv` 依赖入口（初始化后维护）。
 - `app/src/workflow.ts`：前端工作流状态模型。

@@ -143,7 +143,8 @@ pub(crate) async fn complete_auth_flow(
     fs::create_dir_all(account_auth_dir(&paths)).map_err(|error| error.to_string())?;
     write_account_session(&account_session_path(&paths), &exchange)?;
     let _ = fs::remove_file(account_pending_state_path(&paths));
-    let status = get_account_status_from_server(&server_base_url(), &exchange.session_token).await?;
+    let status =
+        get_account_status_from_server(&server_base_url(), &exchange.session_token).await?;
     Ok(CompleteAuthFlowResult {
         authenticated: true,
         email: exchange.email,
@@ -233,13 +234,19 @@ pub(crate) async fn create_wechat_checkout(app: AppHandle) -> Result<WechatCheck
     let paths = resolve_runtime_paths(&app)?;
     let session = require_account_session(&paths)?;
     let response = reqwest::Client::new()
-        .post(format!("{}/api/desktop/billing/wechat-native", server_base_url()))
+        .post(format!(
+            "{}/api/desktop/billing/wechat-native",
+            server_base_url()
+        ))
         .bearer_auth(session.session_token)
         .send()
         .await
         .map_err(|error| error.to_string())?;
     if !response.status().is_success() {
-        return Err(format!("Checkout failed with status {}.", response.status()));
+        return Err(format!(
+            "Checkout failed with status {}.",
+            response.status()
+        ));
     }
     let checkout = response
         .json::<ServerWechatCheckout>()
@@ -273,7 +280,10 @@ pub(crate) async fn get_checkout_status(
         .await
         .map_err(|error| error.to_string())?;
     if !response.status().is_success() {
-        return Err(format!("Order status failed with status {}.", response.status()));
+        return Err(format!(
+            "Order status failed with status {}.",
+            response.status()
+        ));
     }
     let status = response
         .json::<ServerCheckoutStatus>()
@@ -411,7 +421,10 @@ async fn exchange_auth_ticket(
         .await
         .map_err(|error| error.to_string())?;
     if !response.status().is_success() {
-        return Err(format!("Login exchange failed with status {}.", response.status()));
+        return Err(format!(
+            "Login exchange failed with status {}.",
+            response.status()
+        ));
     }
     response
         .json::<SessionExchangeResponse>()
@@ -424,13 +437,19 @@ async fn get_account_status_from_server(
     session_token: &str,
 ) -> Result<ServerAccountStatus, String> {
     let response = reqwest::Client::new()
-        .get(format!("{}/api/desktop/account", server_base_url.trim_end_matches('/')))
+        .get(format!(
+            "{}/api/desktop/account",
+            server_base_url.trim_end_matches('/')
+        ))
         .bearer_auth(session_token)
         .send()
         .await
         .map_err(|error| error.to_string())?;
     if !response.status().is_success() {
-        return Err(format!("Account status failed with status {}.", response.status()));
+        return Err(format!(
+            "Account status failed with status {}.",
+            response.status()
+        ));
     }
     response
         .json::<ServerAccountStatus>()

@@ -156,7 +156,8 @@ pub(crate) fn configured_output_root(paths: &RuntimePaths) -> Result<PathBuf, St
 }
 
 pub(crate) fn configured_output_root_from_project(project_root: &Path) -> Result<PathBuf, String> {
-    let config_values = settings::parse_dotenv_values(&project_root.join(settings::DOTENV_FILE_NAME))?;
+    let config_values =
+        settings::parse_dotenv_values(&project_root.join(settings::DOTENV_FILE_NAME))?;
     let output_root = settings::configured_env_value(&config_values, OUTPUT_DIR_ENV)
         .map(PathBuf::from)
         .unwrap_or_else(|| project_root.join("outputs"));
@@ -217,10 +218,7 @@ pub(crate) fn read_task_manifest_path(path: &Path) -> Result<(TaskManifest, Path
     Ok((manifest, task_dir))
 }
 
-pub(crate) fn write_task_manifest(
-    task_dir: &Path,
-    manifest: &TaskManifest,
-) -> Result<(), String> {
+pub(crate) fn write_task_manifest(task_dir: &Path, manifest: &TaskManifest) -> Result<(), String> {
     fs::write(
         task_dir.join(TASK_MANIFEST_FILE_NAME),
         serde_json::to_string_pretty(manifest)
@@ -273,7 +271,8 @@ pub(crate) fn ensure_artifact_parent(task_dir: &Path, path: &Path) -> Result<(),
     let parent = path
         .parent()
         .ok_or_else(|| "Artifact path has no parent directory.".to_string())?;
-    fs::create_dir_all(parent).map_err(|error| format!("Failed to create artifact directory: {error}"))?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Failed to create artifact directory: {error}"))?;
 
     let task_dir = task_dir
         .canonicalize()
@@ -288,14 +287,19 @@ pub(crate) fn ensure_artifact_parent(task_dir: &Path, path: &Path) -> Result<(),
     }
 }
 
-pub(crate) fn validate_relative_artifact_path(raw_path: &str, field: &str) -> Result<PathBuf, String> {
+pub(crate) fn validate_relative_artifact_path(
+    raw_path: &str,
+    field: &str,
+) -> Result<PathBuf, String> {
     let trimmed = raw_path.trim();
     if trimmed.is_empty() {
         return Err(format!("{field} artifact path cannot be empty."));
     }
     let path = PathBuf::from(trimmed);
     if path.is_absolute() || has_forbidden_component(&path) {
-        return Err(format!("{field} artifact path must stay inside the task directory."));
+        return Err(format!(
+            "{field} artifact path must stay inside the task directory."
+        ));
     }
     Ok(path)
 }
@@ -306,7 +310,11 @@ fn validate_task_id(task_id: &str) -> Result<String, String> {
         return Err("Task id cannot be empty.".to_string());
     }
     let path = Path::new(task_id);
-    if path.is_absolute() || has_forbidden_component(path) || task_id.contains('/') || task_id.contains('\\') {
+    if path.is_absolute()
+        || has_forbidden_component(path)
+        || task_id.contains('/')
+        || task_id.contains('\\')
+    {
         return Err("Task id must be a single directory name.".to_string());
     }
     Ok(task_id.to_string())

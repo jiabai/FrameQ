@@ -41,7 +41,10 @@ pub(crate) fn get_window_position(window: Window) -> Result<WindowPositionView, 
 }
 
 #[tauri::command]
-pub(crate) fn set_window_position(window: Window, position: WindowPositionView) -> Result<(), String> {
+pub(crate) fn set_window_position(
+    window: Window,
+    position: WindowPositionView,
+) -> Result<(), String> {
     window
         .set_position(PhysicalPosition::new(position.x, position.y))
         .map_err(|error| error.to_string())

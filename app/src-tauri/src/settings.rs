@@ -4,7 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
-use crate::{ensure_runtime_dirs, path_to_env_string, resolve_runtime_paths, RuntimePaths};
+use crate::{
+    ensure_runtime_dirs, path_to_env_string, resolve_runtime_paths, RuntimePaths,
+    AUDIO_REVIEW_CACHE_DIR_NAME,
+};
 
 pub(crate) const DOTENV_FILE_NAME: &str = ".env";
 pub(crate) const LLM_PROVIDER_ENV: &str = "FRAMEQ_LLM_PROVIDER";
@@ -63,6 +66,12 @@ pub(crate) struct LlmConfigView {
     pub(crate) config_path: String,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct AudioReviewCacheUsageView {
+    pub(crate) size_bytes: u64,
+    pub(crate) cache_path: String,
+}
+
 #[tauri::command]
 pub(crate) fn get_llm_config(app: AppHandle) -> Result<LlmConfigView, String> {
     let paths = resolve_runtime_paths(&app)?;
@@ -80,11 +89,32 @@ pub(crate) fn save_llm_config(
     save_llm_config_to_file(&env_path(&paths), config)
 }
 
+#[tauri::command]
+pub(crate) fn get_audio_review_cache_usage(
+    app: AppHandle,
+) -> Result<AudioReviewCacheUsageView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    audio_review_cache_usage_from_outputs(&paths.user_data_dir.join("outputs"))
+}
+
+#[tauri::command]
+pub(crate) fn clear_audio_review_cache(
+    app: AppHandle,
+) -> Result<AudioReviewCacheUsageView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    clear_audio_review_cache_from_outputs(&paths.user_data_dir.join("outputs"))
+}
+
 pub(crate) fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
     ensure_app_settings_dotenv(path)?;
     let values = parse_dotenv_values(path)?;
     Ok(LlmConfigView {
-        output_dir: values.get(crate::OUTPUT_DIR_ENV).cloned().unwrap_or_default(),
+        output_dir: values
+            .get(crate::OUTPUT_DIR_ENV)
+            .cloned()
+            .unwrap_or_default(),
         asr_model: resolve_asr_model_value(values.get(ASR_MODEL_ENV).cloned())?,
         supported_asr_models: supported_asr_models(),
         config_path: path_to_env_string(path),
@@ -100,7 +130,10 @@ pub(crate) fn save_llm_config_to_file(
     let asr_model = resolve_asr_model_value(Some(config.asr_model))?;
     write_dotenv_updates_removing(
         path,
-        &[(crate::OUTPUT_DIR_ENV, output_dir), (ASR_MODEL_ENV, asr_model)],
+        &[
+            (crate::OUTPUT_DIR_ENV, output_dir),
+            (ASR_MODEL_ENV, asr_model),
+        ],
         &[
             LLM_PROVIDER_ENV,
             LLM_BASE_URL_ENV,
@@ -114,6 +147,81 @@ pub(crate) fn save_llm_config_to_file(
 
 pub(crate) fn env_path(paths: &RuntimePaths) -> PathBuf {
     paths.user_data_dir.join(DOTENV_FILE_NAME)
+}
+
+pub(crate) fn audio_review_cache_usage_from_outputs(
+    outputs_root: &Path,
+) -> Result<AudioReviewCacheUsageView, String> {
+    let outputs_root = ensure_canonical_dir(outputs_root, "app-local outputs directory")?;
+    let cache_dir = audio_review_cache_dir(&outputs_root);
+    Ok(AudioReviewCacheUsageView {
+        size_bytes: directory_size_bytes(&cache_dir)?,
+        cache_path: path_to_env_string(cache_dir),
+    })
+}
+
+pub(crate) fn clear_audio_review_cache_from_outputs(
+    outputs_root: &Path,
+) -> Result<AudioReviewCacheUsageView, String> {
+    let outputs_root = ensure_canonical_dir(outputs_root, "app-local outputs directory")?;
+    let cache_dir = audio_review_cache_dir(&outputs_root);
+    if cache_dir.exists() {
+        let metadata = fs::symlink_metadata(&cache_dir)
+            .map_err(|error| format!("Failed to inspect audio playback cache: {error}"))?;
+        if metadata.file_type().is_symlink() {
+            return Err("Refusing to clear symlinked audio playback cache.".to_string());
+        }
+        let canonical_cache = cache_dir
+            .canonicalize()
+            .map_err(|error| format!("Failed to resolve audio playback cache: {error}"))?;
+        if canonical_cache == outputs_root || !canonical_cache.starts_with(&outputs_root) {
+            return Err(
+                "Refusing to clear audio playback cache outside app-local outputs.".to_string(),
+            );
+        }
+        if metadata.is_dir() {
+            fs::remove_dir_all(&cache_dir)
+                .map_err(|error| format!("Failed to clear audio playback cache: {error}"))?;
+        } else {
+            fs::remove_file(&cache_dir)
+                .map_err(|error| format!("Failed to clear audio playback cache file: {error}"))?;
+        }
+    }
+    audio_review_cache_usage_from_outputs(&outputs_root)
+}
+
+fn audio_review_cache_dir(outputs_root: &Path) -> PathBuf {
+    outputs_root.join(AUDIO_REVIEW_CACHE_DIR_NAME)
+}
+
+fn ensure_canonical_dir(path: &Path, label: &str) -> Result<PathBuf, String> {
+    fs::create_dir_all(path).map_err(|error| format!("Failed to create {label}: {error}"))?;
+    path.canonicalize()
+        .map_err(|error| format!("Failed to resolve {label}: {error}"))
+}
+
+fn directory_size_bytes(path: &Path) -> Result<u64, String> {
+    if !path.exists() {
+        return Ok(0);
+    }
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("Failed to inspect audio playback cache: {error}"))?;
+    if metadata.file_type().is_symlink() {
+        return Ok(0);
+    }
+    if metadata.is_file() {
+        return Ok(metadata.len());
+    }
+
+    let mut size = 0;
+    for entry in fs::read_dir(path)
+        .map_err(|error| format!("Failed to read audio playback cache: {error}"))?
+    {
+        let entry =
+            entry.map_err(|error| format!("Failed to read audio playback cache: {error}"))?;
+        size += directory_size_bytes(&entry.path())?;
+    }
+    Ok(size)
 }
 
 pub(crate) fn legacy_local_llm_env_removals() -> Vec<String> {
@@ -275,4 +383,58 @@ fn sanitize_optional_env_value(value: String, label: &str) -> Result<String, Str
     }
 
     Ok(value.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{audio_review_cache_usage_from_outputs, clear_audio_review_cache_from_outputs};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn audio_review_cache_usage_and_clear_only_touch_playback_cache() {
+        let outputs_root = temp_dir("audio_review_cache_usage_and_clear");
+        let cache_dir = outputs_root.join(".frameq-audio-review");
+        let task_audio = outputs_root
+            .join("tasks")
+            .join("task-1")
+            .join("media")
+            .join("audio.wav");
+        fs::create_dir_all(cache_dir.join("task-1")).expect("create cache dir");
+        fs::create_dir_all(task_audio.parent().expect("task audio parent"))
+            .expect("create task dir");
+        fs::write(cache_dir.join("task-1").join("audio.wav"), [1_u8; 5])
+            .expect("write cached audio");
+        fs::write(cache_dir.join("task-1").join("metadata.json"), [2_u8; 7])
+            .expect("write cache metadata");
+        fs::write(&task_audio, [3_u8; 11]).expect("write original task audio");
+
+        let usage = audio_review_cache_usage_from_outputs(&outputs_root).expect("read cache usage");
+
+        assert_eq!(usage.size_bytes, 12);
+        assert!(usage.cache_path.ends_with("outputs/.frameq-audio-review"));
+
+        let cleared =
+            clear_audio_review_cache_from_outputs(&outputs_root).expect("clear audio cache");
+
+        assert_eq!(cleared.size_bytes, 0);
+        assert!(!cache_dir.exists());
+        assert_eq!(
+            fs::read(task_audio).expect("read original task audio"),
+            [3_u8; 11]
+        );
+    }
+
+    fn temp_dir(test_name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let dir = std::env::temp_dir()
+            .join(format!("frameq-{test_name}-{unique}"))
+            .join("outputs");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
 }

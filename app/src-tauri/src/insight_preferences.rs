@@ -58,7 +58,9 @@ struct InsightPreferencesFile {
 }
 
 #[tauri::command]
-pub(crate) fn get_insight_preferences(app: AppHandle) -> Result<InsightPreferenceStateView, String> {
+pub(crate) fn get_insight_preferences(
+    app: AppHandle,
+) -> Result<InsightPreferenceStateView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     load_insight_preferences_from_file(&insight_preferences_path(&paths))
@@ -75,14 +77,18 @@ pub(crate) fn save_inspiration_profile(
 }
 
 #[tauri::command]
-pub(crate) fn skip_inspiration_profile(app: AppHandle) -> Result<InsightPreferenceStateView, String> {
+pub(crate) fn skip_inspiration_profile(
+    app: AppHandle,
+) -> Result<InsightPreferenceStateView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     skip_inspiration_profile_to_file(&insight_preferences_path(&paths))
 }
 
 #[tauri::command]
-pub(crate) fn clear_inspiration_profile(app: AppHandle) -> Result<InsightPreferenceStateView, String> {
+pub(crate) fn clear_inspiration_profile(
+    app: AppHandle,
+) -> Result<InsightPreferenceStateView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     clear_inspiration_profile_to_file(&insight_preferences_path(&paths))
@@ -106,7 +112,11 @@ pub(crate) fn load_insight_preferences_from_file(
     path: &Path,
 ) -> Result<InsightPreferenceStateView, String> {
     if !path.exists() {
-        return Ok(state_from_file(path, InsightPreferencesFile::default(), false));
+        return Ok(state_from_file(
+            path,
+            InsightPreferencesFile::default(),
+            false,
+        ));
     }
 
     let mut file = read_preferences_file(path)?;
@@ -552,11 +562,9 @@ mod tests {
     fn save_default_generation_preferences_validates_ids_before_writing() {
         let path = temp_file("default_generation_preferences");
 
-        let saved = save_default_generation_preferences_to_file(
-            &path,
-            valid_generation_preferences(),
-        )
-        .expect("save defaults");
+        let saved =
+            save_default_generation_preferences_to_file(&path, valid_generation_preferences())
+                .expect("save defaults");
         assert_eq!(
             saved.default_generation_preferences,
             Some(valid_generation_preferences())
@@ -564,8 +572,8 @@ mod tests {
 
         let mut invalid = valid_generation_preferences();
         invalid.goal = "内容创作".to_string();
-        let error =
-            save_default_generation_preferences_to_file(&path, invalid).expect_err("reject default");
+        let error = save_default_generation_preferences_to_file(&path, invalid)
+            .expect_err("reject default");
 
         assert!(error.contains("Invalid default generation preferences"));
     }

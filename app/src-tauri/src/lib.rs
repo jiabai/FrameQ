@@ -19,9 +19,9 @@ mod worker_command;
 
 pub(crate) use runtime::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
-    resolve_runtime_paths, RuntimePaths, ALLOW_REAL_ASR_ENV, CACHE_DIR_ENV, CACHE_DIR_NAME,
-    DESKTOP_LOG_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV, OUTPUT_DIR_ENV, RESOURCE_DIR_ENV,
-    USER_DATA_DIR_ENV,
+    resolve_runtime_paths, RuntimePaths, ALLOW_REAL_ASR_ENV, AUDIO_REVIEW_CACHE_DIR_NAME,
+    CACHE_DIR_ENV, CACHE_DIR_NAME, DESKTOP_LOG_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV,
+    OUTPUT_DIR_ENV, RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,
 };
 
 pub(crate) use diagnostics::{
@@ -81,6 +81,8 @@ pub fn run() {
             video_processing::cancel_process,
             settings::get_llm_config,
             settings::save_llm_config,
+            settings::get_audio_review_cache_usage,
+            settings::clear_audio_review_cache,
             insight_preferences::get_insight_preferences,
             insight_preferences::save_inspiration_profile,
             insight_preferences::skip_inspiration_profile,

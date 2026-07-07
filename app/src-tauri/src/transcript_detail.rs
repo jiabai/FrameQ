@@ -2,11 +2,11 @@ use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
 const TRANSCRIPT_SECTION_MARKER: &str = "## Transcript";
-
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoadTranscriptDetailRequest {
     #[serde(alias = "taskId")]
@@ -38,6 +38,7 @@ pub(crate) struct TranscriptDetailView {
     text: String,
     segments: Vec<TranscriptSegmentView>,
     audio_path: Option<String>,
+    audio_asset_path: Option<String>,
     has_original_backup: bool,
 }
 
@@ -57,7 +58,7 @@ pub(crate) fn load_transcript_detail(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    load_transcript_detail_from_output_root(&output_root, request)
+    load_transcript_detail_from_roots(&output_root, &paths.user_data_dir.join("outputs"), request)
 }
 
 #[tauri::command]
@@ -71,12 +72,22 @@ pub(crate) fn save_transcript_edit(
     save_transcript_edit_to_output_root(&output_root, request)
 }
 
+#[cfg(test)]
 pub(crate) fn load_transcript_detail_from_output_root(
     output_root: &Path,
     request: LoadTranscriptDetailRequest,
 ) -> Result<TranscriptDetailView, String> {
+    load_transcript_detail_from_roots(output_root, output_root, request)
+}
+
+pub(crate) fn load_transcript_detail_from_roots(
+    output_root: &Path,
+    audio_asset_root: &Path,
+    request: LoadTranscriptDetailRequest,
+) -> Result<TranscriptDetailView, String> {
     let (manifest, task_dir) = task_manifest::load_task_manifest(output_root, &request.task_id)?;
-    let transcript_path = task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
+    let transcript_path =
+        task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
     validate_transcript_txt(&transcript_path)?;
     task_manifest::validate_task_artifact_path(&task_dir, &transcript_path, "transcript_txt")?;
 
@@ -87,13 +98,17 @@ pub(crate) fn load_transcript_detail_from_output_root(
     let segments_path = task_manifest::artifact_path(&task_dir, &manifest, "segments")?
         .unwrap_or_else(|| default_segments_path(&task_dir));
     let segments = read_segments_sidecar(&task_dir, &segments_path)?;
-    let audio_path = load_audio_path(&task_dir, &manifest)?;
+    let audio_paths = load_audio_paths(&task_dir, &manifest, audio_asset_root, &manifest.task_id)?;
+    let (audio_path, audio_asset_path) = audio_paths
+        .map(|paths| (Some(paths.source_path), Some(paths.asset_path)))
+        .unwrap_or((None, None));
 
     Ok(TranscriptDetailView {
         task_id: request.task_id,
         text,
         segments,
         audio_path,
+        audio_asset_path,
         has_original_backup: original_backup_path(&transcript_path).is_file(),
     })
 }
@@ -107,8 +122,10 @@ pub(crate) fn save_transcript_edit_to_output_root(
         return Err("Transcript text cannot be empty.".to_string());
     }
 
-    let (mut manifest, task_dir) = task_manifest::load_task_manifest(output_root, &request.task_id)?;
-    let transcript_path = task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
+    let (mut manifest, task_dir) =
+        task_manifest::load_task_manifest(output_root, &request.task_id)?;
+    let transcript_path =
+        task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
     validate_transcript_txt(&transcript_path)?;
     task_manifest::validate_task_artifact_path(&task_dir, &transcript_path, "transcript_txt")?;
 
@@ -139,17 +156,20 @@ pub(crate) fn save_transcript_edit_to_output_root(
         }
     } else {
         write_segments_sidecar(&segments_path, &request.segments)?;
-        manifest
-            .artifacts
-            .insert("segments".to_string(), "transcript/segments.json".to_string());
+        manifest.artifacts.insert(
+            "segments".to_string(),
+            "transcript/segments.json".to_string(),
+        );
     }
 
-    manifest
-        .artifacts
-        .insert("transcript_txt".to_string(), "transcript/transcript.txt".to_string());
-    manifest
-        .artifacts
-        .insert("transcript_md".to_string(), "transcript/transcript.md".to_string());
+    manifest.artifacts.insert(
+        "transcript_txt".to_string(),
+        "transcript/transcript.txt".to_string(),
+    );
+    manifest.artifacts.insert(
+        "transcript_md".to_string(),
+        "transcript/transcript.md".to_string(),
+    );
     manifest.text_preview = text.chars().take(180).collect();
     task_manifest::write_task_manifest(&task_dir, &manifest)?;
 
@@ -161,10 +181,17 @@ pub(crate) fn save_transcript_edit_to_output_root(
     })
 }
 
-fn load_audio_path(
+struct AudioPlaybackPaths {
+    source_path: String,
+    asset_path: String,
+}
+
+fn load_audio_paths(
     task_dir: &Path,
     manifest: &task_manifest::TaskManifest,
-) -> Result<Option<String>, String> {
+    audio_asset_root: &Path,
+    task_id: &str,
+) -> Result<Option<AudioPlaybackPaths>, String> {
     let Some(audio_path) = task_manifest::artifact_path(task_dir, manifest, "audio")? else {
         return Ok(None);
     };
@@ -173,11 +200,141 @@ fn load_audio_path(
     }
     validate_audio_path(&audio_path)?;
     task_manifest::validate_task_artifact_path(task_dir, &audio_path, "audio")?;
-    Ok(Some(task_manifest::path_to_frontend_string(
-        audio_path
-            .canonicalize()
-            .map_err(|error| format!("Failed to resolve audio: {error}"))?,
-    )))
+    let source_path = audio_path
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve audio: {error}"))?;
+    let asset_path = ensure_audio_asset_path(&source_path, audio_asset_root, task_id)?;
+    Ok(Some(AudioPlaybackPaths {
+        source_path: task_manifest::path_to_frontend_string(source_path),
+        asset_path: task_manifest::path_to_frontend_string(asset_path),
+    }))
+}
+
+fn ensure_audio_asset_path(
+    source_path: &Path,
+    audio_asset_root: &Path,
+    task_id: &str,
+) -> Result<PathBuf, String> {
+    let audio_asset_root = ensure_canonical_dir(audio_asset_root, "audio playback asset root")?;
+    if source_path.starts_with(&audio_asset_root) {
+        return Ok(source_path.to_path_buf());
+    }
+
+    let extension = source_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .ok_or_else(|| "Audio artifact has no extension.".to_string())?
+        .to_ascii_lowercase();
+    let asset_dir = audio_asset_root
+        .join(crate::AUDIO_REVIEW_CACHE_DIR_NAME)
+        .join(task_id);
+    fs::create_dir_all(&asset_dir)
+        .map_err(|error| format!("Failed to create audio playback directory: {error}"))?;
+    let asset_dir = asset_dir
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve audio playback directory: {error}"))?;
+    if !asset_dir.starts_with(&audio_asset_root) {
+        return Err(
+            "Refusing to create audio playback asset outside app-local outputs.".to_string(),
+        );
+    }
+
+    let asset_path = asset_dir.join(format!("audio.{extension}"));
+    copy_audio_asset(source_path, &asset_dir, &asset_path, &extension)?;
+    validate_audio_asset_path(&asset_path, &audio_asset_root)
+}
+
+fn copy_audio_asset(
+    source_path: &Path,
+    asset_dir: &Path,
+    asset_path: &Path,
+    extension: &str,
+) -> Result<(), String> {
+    prepare_audio_asset_path(asset_path)?;
+    let temp_path = asset_dir.join(format!(".audio-{}.{}.tmp", uuid::Uuid::new_v4(), extension));
+    let mut source_file = fs::File::open(source_path)
+        .map_err(|error| format!("Failed to read source audio for playback: {error}"))?;
+    let mut temp_file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .map_err(|error| format!("Failed to create temporary audio playback asset: {error}"))?;
+
+    if let Err(error) = io::copy(&mut source_file, &mut temp_file) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("Failed to copy audio for playback: {error}"));
+    }
+    drop(temp_file);
+
+    if let Err(error) = fs::rename(&temp_path, asset_path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("Failed to install audio playback asset: {error}"));
+    }
+
+    Ok(())
+}
+
+fn prepare_audio_asset_path(asset_path: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(asset_path) {
+        Ok(metadata) => {
+            if is_link_or_reparse_point(&metadata) {
+                return Err("Refusing to replace linked audio playback asset.".to_string());
+            }
+            if !metadata.is_file() {
+                return Err("Refusing to replace non-file audio playback asset.".to_string());
+            }
+            fs::remove_file(asset_path)
+                .map_err(|error| format!("Failed to replace audio playback asset: {error}"))
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Failed to inspect audio playback asset: {error}")),
+    }
+}
+
+fn validate_audio_asset_path(
+    asset_path: &Path,
+    audio_asset_root: &Path,
+) -> Result<PathBuf, String> {
+    let metadata = fs::symlink_metadata(asset_path)
+        .map_err(|error| format!("Failed to inspect audio playback asset: {error}"))?;
+    if is_link_or_reparse_point(&metadata) {
+        return Err("Refusing to expose linked audio playback asset.".to_string());
+    }
+    if !metadata.is_file() {
+        return Err("Refusing to expose non-file audio playback asset.".to_string());
+    }
+
+    let asset_path = asset_path
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve audio playback asset: {error}"))?;
+    if asset_path.starts_with(audio_asset_root) {
+        Ok(asset_path)
+    } else {
+        Err("Refusing to expose audio playback asset outside app-local outputs.".to_string())
+    }
+}
+
+fn is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink() || is_windows_reparse_point(metadata)
+}
+
+#[cfg(windows)]
+fn is_windows_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+fn ensure_canonical_dir(path: &Path, label: &str) -> Result<PathBuf, String> {
+    fs::create_dir_all(path).map_err(|error| format!("Failed to create {label}: {error}"))?;
+    path.canonicalize()
+        .map_err(|error| format!("Failed to resolve {label}: {error}"))
 }
 
 fn read_segments_sidecar(
@@ -265,8 +422,9 @@ fn create_original_backups(txt_path: &Path, md_path: &Path) -> Result<(), String
     let txt_backup_path = original_backup_path(txt_path);
     if !txt_backup_path.exists() {
         if let Some(parent) = txt_backup_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| format!("Failed to create transcript backup directory: {error}"))?;
+            fs::create_dir_all(parent).map_err(|error| {
+                format!("Failed to create transcript backup directory: {error}")
+            })?;
         }
         fs::copy(txt_path, &txt_backup_path)
             .map_err(|error| format!("Failed to create transcript backup: {error}"))?;
@@ -354,8 +512,9 @@ fn validate_audio_path(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        load_transcript_detail_from_output_root, save_transcript_edit_to_output_root,
-        LoadTranscriptDetailRequest, SaveTranscriptEditRequest, TranscriptSegmentView,
+        load_transcript_detail_from_output_root, load_transcript_detail_from_roots,
+        save_transcript_edit_to_output_root, LoadTranscriptDetailRequest,
+        SaveTranscriptEditRequest, TranscriptSegmentView,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -366,8 +525,11 @@ mod tests {
         let output_root = temp_dir("load_detail_task");
         let task_id = "20260705-153012-douyin-7645505408425004329";
         let task_dir = create_task(&output_root, task_id);
-        fs::write(task_dir.join("transcript").join("transcript.txt"), "original text\n")
-            .expect("write transcript");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "original text\n",
+        )
+        .expect("write transcript");
         fs::write(task_dir.join("media").join("audio.wav"), b"fake wav").expect("write audio");
         fs::write(
             task_dir.join("transcript").join("segments.json"),
@@ -396,8 +558,148 @@ mod tests {
                 speaker: Some("solo".to_string()),
             }]
         );
-        assert!(detail.audio_path.expect("audio path").ends_with("media/audio.wav"));
+        assert!(detail
+            .audio_path
+            .expect("audio path")
+            .ends_with("media/audio.wav"));
         assert!(!detail.has_original_backup);
+    }
+
+    #[test]
+    fn load_detail_copies_external_output_audio_to_app_local_playback_path() {
+        let output_root = temp_dir("load_detail_external_output_root");
+        let app_local_outputs = temp_dir("load_detail_app_local_outputs");
+        let task_id = "20260705-153012-douyin-7645505408425004329";
+        let task_dir = create_task(&output_root, task_id);
+        let source_audio_path = task_dir.join("media").join("audio.wav");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "original text\n",
+        )
+        .expect("write transcript");
+        fs::write(&source_audio_path, b"fake wav").expect("write audio");
+        write_manifest(&task_dir, task_id, false);
+
+        let detail = load_transcript_detail_from_roots(
+            &output_root,
+            &app_local_outputs,
+            LoadTranscriptDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect("load detail");
+
+        let audio_path = detail.audio_path.expect("audio path");
+        let audio_asset_path = detail.audio_asset_path.expect("audio asset path");
+        assert!(audio_path.ends_with("media/audio.wav"));
+        assert!(audio_asset_path.ends_with(
+            ".frameq-audio-review/20260705-153012-douyin-7645505408425004329/audio.wav"
+        ));
+        assert_ne!(audio_path, audio_asset_path);
+        let app_local_outputs = app_local_outputs
+            .canonicalize()
+            .expect("resolve app-local outputs")
+            .to_string_lossy()
+            .replace('\\', "/");
+        assert!(audio_asset_path.starts_with(&app_local_outputs));
+        assert_eq!(
+            fs::read(audio_asset_path).expect("read copied audio"),
+            b"fake wav"
+        );
+    }
+
+    #[test]
+    fn load_detail_replaces_existing_cache_link_without_overwriting_link_target() {
+        let output_root = temp_dir("load_detail_replaces_cache_link_output");
+        let app_local_outputs = temp_dir("load_detail_replaces_cache_link_app_local");
+        let outside_dir = temp_dir("load_detail_replaces_cache_link_outside");
+        let task_id = "20260705-153012-douyin-7645505408425004329";
+        let task_dir = create_task(&output_root, task_id);
+        let source_audio_path = task_dir.join("media").join("audio.wav");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "original text\n",
+        )
+        .expect("write transcript");
+        fs::write(&source_audio_path, b"fake wav").expect("write audio");
+        write_manifest(&task_dir, task_id, false);
+
+        let asset_dir = app_local_outputs
+            .join(crate::AUDIO_REVIEW_CACHE_DIR_NAME)
+            .join(task_id);
+        fs::create_dir_all(&asset_dir).expect("create asset dir");
+        let outside_target = outside_dir.join("outside.wav");
+        fs::write(&outside_target, b"do not overwrite").expect("write outside target");
+        let asset_path = asset_dir.join("audio.wav");
+        fs::hard_link(&outside_target, &asset_path).expect("create cache hard link");
+
+        let detail = load_transcript_detail_from_roots(
+            &output_root,
+            &app_local_outputs,
+            LoadTranscriptDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect("load detail");
+
+        assert!(detail
+            .audio_asset_path
+            .expect("audio asset path")
+            .ends_with(
+                ".frameq-audio-review/20260705-153012-douyin-7645505408425004329/audio.wav"
+            ));
+        assert_eq!(
+            fs::read(&outside_target).expect("read outside target"),
+            b"do not overwrite"
+        );
+        assert_eq!(
+            fs::read(&asset_path).expect("read copied audio"),
+            b"fake wav"
+        );
+    }
+
+    #[test]
+    fn load_detail_rejects_symlinked_audio_cache_target_before_copying() {
+        let output_root = temp_dir("load_detail_rejects_symlinked_cache_output");
+        let app_local_outputs = temp_dir("load_detail_rejects_symlinked_cache_app_local");
+        let outside_dir = temp_dir("load_detail_rejects_symlinked_cache_outside");
+        let task_id = "20260705-153012-douyin-7645505408425004329";
+        let task_dir = create_task(&output_root, task_id);
+        let source_audio_path = task_dir.join("media").join("audio.wav");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "original text\n",
+        )
+        .expect("write transcript");
+        fs::write(&source_audio_path, b"fake wav").expect("write audio");
+        write_manifest(&task_dir, task_id, false);
+
+        let asset_dir = app_local_outputs
+            .join(crate::AUDIO_REVIEW_CACHE_DIR_NAME)
+            .join(task_id);
+        fs::create_dir_all(&asset_dir).expect("create asset dir");
+        let outside_target = outside_dir.join("outside.wav");
+        fs::write(&outside_target, b"do not overwrite").expect("write outside target");
+        let asset_path = asset_dir.join("audio.wav");
+        if let Err(error) = create_file_symlink(&outside_target, &asset_path) {
+            eprintln!("skipping symlink regression; symlink creation is unavailable: {error}");
+            return;
+        }
+
+        let error = load_transcript_detail_from_roots(
+            &output_root,
+            &app_local_outputs,
+            LoadTranscriptDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect_err("reject symlinked cache target");
+
+        assert!(error.contains("linked audio playback asset"));
+        assert_eq!(
+            fs::read(&outside_target).expect("read outside target"),
+            b"do not overwrite"
+        );
     }
 
     #[test]
@@ -405,8 +707,11 @@ mod tests {
         let output_root = temp_dir("save_detail_task");
         let task_id = "20260705-153012-douyin-7645505408425004329";
         let task_dir = create_task(&output_root, task_id);
-        fs::write(task_dir.join("transcript").join("transcript.txt"), "first version\n")
-            .expect("write transcript");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "first version\n",
+        )
+        .expect("write transcript");
         fs::write(
             task_dir.join("transcript").join("transcript.md"),
             "# Transcript\n\n## Transcript\n\nfirst version\n",
@@ -433,8 +738,13 @@ mod tests {
         assert_eq!(result.text, "second version");
         assert!(result.has_original_backup);
         assert_eq!(
-            fs::read_to_string(task_dir.join("transcript").join("original").join("transcript.txt"))
-                .expect("read backup"),
+            fs::read_to_string(
+                task_dir
+                    .join("transcript")
+                    .join("original")
+                    .join("transcript.txt")
+            )
+            .expect("read backup"),
             "first version\n"
         );
         assert_eq!(
@@ -442,10 +752,13 @@ mod tests {
                 .expect("read saved"),
             "second version\n"
         );
-        assert!(fs::read_to_string(task_dir.join("transcript").join("segments.json"))
-            .expect("read segments")
-            .contains("seg-0001"));
-        let manifest = fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
+        assert!(
+            fs::read_to_string(task_dir.join("transcript").join("segments.json"))
+                .expect("read segments")
+                .contains("seg-0001")
+        );
+        let manifest =
+            fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
         assert!(manifest.contains(r#""text_preview": "second version""#));
         assert!(manifest.contains(r#""segments": "transcript/segments.json""#));
 
@@ -459,8 +772,13 @@ mod tests {
         )
         .expect("save again");
         assert_eq!(
-            fs::read_to_string(task_dir.join("transcript").join("original").join("transcript.txt"))
-                .expect("read backup again"),
+            fs::read_to_string(
+                task_dir
+                    .join("transcript")
+                    .join("original")
+                    .join("transcript.txt")
+            )
+            .expect("read backup again"),
             "first version\n"
         );
     }
@@ -558,5 +876,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
+    }
+
+    #[cfg(windows)]
+    fn create_file_symlink(source: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(source, link)
+    }
+
+    #[cfg(unix)]
+    fn create_file_symlink(source: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(source, link)
     }
 }

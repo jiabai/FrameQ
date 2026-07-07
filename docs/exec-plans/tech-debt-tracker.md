@@ -1,12 +1,21 @@
 # Tech Debt Tracker
 
-Last updated: 2026-07-03
+Last updated: 2026-07-07
 
 ## High Priority
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
 | None | No high-priority MVP debt remains after final validation | N/A | N/A |
+
+## Completed / Resolved
+
+### Manual Audio Playback Cache Management
+
+- Status: completed.
+- Resolution: Settings now shows the app-local audio playback cache size and provides a clear action backed by canonicalized Tauri commands.
+- Safety boundary: clearing removes only app-local `outputs/.frameq-audio-review`, preserves source task artifacts under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`, and the cache regenerates when transcript detail is opened again.
+- Evidence: `app/src/App.tsx`, `app/src/settingsClient.ts`, `app/src-tauri/src/settings.rs`, `app/src-tauri/src/transcript_detail.rs`, and focused audio cache tests.
 
 ## Accepted / Deferred
 
