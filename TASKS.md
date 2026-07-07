@@ -2,7 +2,7 @@
 
 ## Account and Billing
 
-- [x] Add server-managed LLM config and monthly insight quota (2026-06-22) ✅ Admin Web owns encrypted dedicated FrameQ client LLM config and per-user quota editing; desktop checks out one quota use per insight generation; settings no longer exposes LLM fields; server/app/Rust/worker/docs gates passed.
+- [x] Add server-managed LLM config and monthly insight quota (2026-06-22) ✅ Admin Web owns encrypted dedicated FrameQ client LLM config and per-user quota editing; desktop accounts quota per cloud LLM API call attempt; settings no longer exposes LLM fields; server/app/Rust/worker/docs gates passed.
 
 - [x] Use administrator-issued activation codes as the visible entitlement unlock path (2026-06-21) ✅ Admin OTP login, hash-only one-time 31-day activation codes, desktop redemption, entitlement reuse, Admin Web list/create flow, and client-side processing gate; server/app/Rust/docs gates passed.
 

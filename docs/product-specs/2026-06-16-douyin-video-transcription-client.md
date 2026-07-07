@@ -179,7 +179,7 @@
 - ASR 成功后，当前 task 目录的 `transcript/` 中存在 `transcript.txt`、`transcript.md`，有合法时间轴时存在 `segments.json`。
 - 主流程完成后，结果区显示视频、音频、完整文字稿、要点总结和启发话题点 5 个入口；视频和音频入口在文件管理器中定位对应本地文件。
 - 主流程完成后，要点总结和启发话题点入口显示待生成状态；点击后打开确认面板，用户再次点击 `确认` 才启动生成。
-- AI 整理开始时才使用 server-managed LLM checkout 和消耗 1 次话题点额度；主流程不得携带 checkout env 或消耗额度。
+- AI 整理开始后才使用 server-managed LLM checkout；主流程不得携带 checkout env 或消耗额度。AI 整理额度按云端 LLM API 调用尝试计费，1 次额度对应 1 次 chat-completion/API 调用尝试，而不是 1 次 AI整理任务包。
 - 用户在 UI 设置中保存 ASR 模型后，后续完整处理请求应使用保存后的 ASR 模型；历史记录和 transcript markdown 中应保留任务实际使用的模型名。
 - AI 整理成功后，当前 task 目录的 `ai/` 中存在 `summary.md`、`mindmap.mmd`、`insights.json` 和 `insights.md`。
 - 话题点生成应先请求 LLM 规划话题段，并在逐话题生成问题时包含“读完就知道可以从哪个角度思考”“问题长度尽量控制在一行可读范围内”等表达优化约束。
@@ -247,8 +247,8 @@
 
 ## 2026-06-25 Transcript Summary and Mermaid Mindmap
 
-- After transcript completion, the existing second confirmation starts one AI整理 run that generates both `要点总结` and `启发话题点` using the server-managed LLM checkout.
-- The AI整理 run consumes one existing insight-generation quota use, even though it may make multiple internal LLM prompts.
+- After transcript completion, the existing second confirmation starts one AI整理 run that generates `要点总结`, local Mermaid mindmap, and `启发话题点` using server-managed LLM checkout.
+- The AI整理 run consumes quota per underlying cloud LLM API call attempt. A single AI整理 run may make multiple LLM calls, and each attempted call consumes one quota use.
 - The worker should first generate a Mermaid `mindmap` text from the transcript, then generate a layered Markdown summary from the original transcript and that Mermaid mindmap.
 - The UI shows the summary content as a result card and detail tab, but must not display or render the Mermaid source.
 - Summary artifacts are written under the current task's `ai/summary.md`; Mermaid text is written to `ai/mindmap.mmd`.

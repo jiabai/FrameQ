@@ -7,7 +7,7 @@ Add a confirmed AI整理 flow that generates a Markdown summary, local Mermaid m
 ## Decisions
 
 - Keep the existing `retry_insights` Tauri command and server-managed LLM checkout.
-- One user confirmation consumes one existing insight-generation quota use.
+- Superseded quota note: current specs count one use per cloud LLM API call attempt, so one confirmation may consume multiple uses.
 - Write `<stem>_summary.md` and `<stem>_mindmap.mmd` to the configured output directory.
 - UI displays summary content but never displays or renders Mermaid source.
 - Preserve whichever AI artifact succeeds if summary or insight generation partially fails.

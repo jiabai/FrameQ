@@ -45,7 +45,7 @@ The source implementation now provides an end-to-end personalized insight flow w
 
 Automated validation passed on 2026-07-07: `npm --prefix app test` (138 tests), `npm --prefix app run build`, `uv run pytest worker\tests` (141 tests), `uv run ruff check worker`, and `cargo test --manifest-path app\src-tauri\Cargo.toml` (50 tests).
 
-Residual risk: the manual quota-consuming desktop regression was not run in this session because it requires a real completed transcript task plus an authenticated quota checkout path. Packaged worker mirroring was inspected and skipped because the mirror directory is absent.
+Residual risk: the manual quota-consuming desktop regression was not run in this session because it requires a real completed transcript task plus authenticated per-LLM-call quota accounting. Packaged worker mirroring was inspected and skipped because the mirror directory is absent.
 
 ## Context and Orientation
 
@@ -141,6 +141,6 @@ Residual risk: the manual quota-consuming desktop regression was not run in this
 - Server boundary:
   - Inspect `server/` diff and confirm no new user preference, transcript, or insight persistence endpoint/field was added.
 - Manual regression:
-  - Start from a transcript-only completed task, skip first-use profile, complete six-step preferences, confirm AI整理, verify summary/mindmap are generated generically, insights show match reasons, quota is consumed once, and task-local artifacts remain under the task directory.
-  - Reopen the same task, use `换个方向`, confirm again, verify another AI整理 attempt consumes another quota use and updates insights without asking for long-term profile again.
+  - Start from a transcript-only completed task, skip first-use profile, complete six-step preferences, confirm AI整理, verify summary/mindmap are generated generically, insights show match reasons, quota is consumed once per cloud LLM API call attempt, and task-local artifacts remain under the task directory.
+  - Reopen the same task, use `换个方向`, confirm again, verify the new AI整理 attempt consumes quota again according to its cloud LLM API call attempts and updates insights without asking for long-term profile again.
   - Clear `我的灵感档案`, start a new task's AI整理, verify first-use setup appears again and old task artifacts are unchanged.

@@ -7,8 +7,9 @@ FrameQ should let paid users generate insight topics without configuring an LLM 
 - Desktop settings no longer expose insight LLM base URL, API key, model, or timeout.
 - Admin Web can configure provider, base URL, model, timeout, and the dedicated FrameQ client API key.
 - The LLM API key is encrypted before being stored in SQLite and is never fully displayed in Admin responses.
-- Each 31-day activation grants 20 insight-generation uses.
-- A generation attempt consumes 1 use when it starts, even if the worker makes multiple underlying chat-completion calls.
+- Each 31-day activation grants 20 LLM API-call uses.
+- A use is consumed per cloud LLM chat-completion/API call attempt, not per AI整理 generation attempt. A single confirmed AI整理 run may therefore consume multiple uses when the worker generates Mermaid mindmap, summary, topic planning, and insight-topic details through separate LLM calls.
+- The desktop/worker/server accounting boundary must authorize or record one quota use for each supplier LLM API call attempt. Reusing the same per-call checkout/request ID must not double-charge that same call attempt.
 - Renewing before expiry extends entitlement and adds 20 more uses; reactivating after expiry starts a fresh 31-day window with 20 uses and 0 used.
 - Account status shows entitlement and remaining insight-generation uses.
 - Users with no entitlement, expired entitlement, no remaining uses, or missing server LLM config cannot start new processing or retry insight generation.
@@ -23,7 +24,7 @@ FrameQ should let paid users generate insight topics without configuring an LLM 
 ## Acceptance Criteria
 
 - Admin can save and replace the LLM config, including a new API key, without the key being exposed back in full.
-- A desktop user can redeem an activation code and see 20 available insight uses.
-- Starting insight generation checks out one use and receives LLM config.
-- Reusing the same checkout request ID does not double-charge.
+- A desktop user can redeem an activation code and see 20 available LLM API-call uses.
+- Starting AI整理 checks account/config readiness before the first LLM call, then consumes quota per LLM API call attempt made during that AI整理.
+- Reusing the same per-call checkout/request ID does not double-charge that same LLM API call attempt.
 - When uses reach 0, the desktop client blocks new processing and retry with an account-panel explanation.

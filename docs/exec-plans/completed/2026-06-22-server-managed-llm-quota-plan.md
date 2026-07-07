@@ -8,7 +8,7 @@ Move insight-topic LLM configuration out of the desktop settings UI and into the
 
 - [x] Write failing server tests for encrypted LLM config, checkout idempotency, and entitlement quota.
 - [x] Implement server data model, services, routes, and Admin UI.
-- [x] Write failing worker/Tauri tests for server-managed checkout and one-charge-per-generation.
+- [x] Write failing worker/Tauri tests for server-managed checkout behavior; quota semantics were later superseded by per-LLM-call accounting.
 - [x] Implement worker checkout client and Tauri env/session propagation.
 - [x] Write failing frontend tests for quota status and settings UI removal.
 - [x] Implement frontend account quota display and gating.
@@ -16,9 +16,9 @@ Move insight-topic LLM configuration out of the desktop settings UI and into the
 
 ## Decisions
 
-- Each activation grants 20 insight-generation uses.
-- Checkout charges at generation start.
-- One visible insight-generation attempt consumes one use, regardless of internal LLM request count.
+- Historical note: at the time of this plan, each activation granted 20 insight-generation uses; current product specs define them as 20 cloud LLM API-call attempts.
+- Historical note: at the time of this plan, checkout charged at generation start; current specs require charge/record per cloud LLM API call attempt.
+- Superseded: quota is now per cloud LLM API call attempt; one visible AI整理 attempt may consume multiple uses.
 - Pre-expiry renewal adds 20 uses; post-expiry reactivation resets used count and grants 20 uses.
 - Admin edits remaining uses directly.
 - The supplier key is a dedicated FrameQ client key; it can be revoked or rotated outside FrameQ if abused.
