@@ -46,7 +46,7 @@ Make FrameQ installable for ordinary Windows and macOS users without requiring P
 - [x] Lightweight installer direction implemented: `resources/models` removed, first-run ASR model download command/UI added, and worker returns `ASR_MODEL_NOT_DOWNLOADED` when the cache is absent.
 - [x] Automated verification completed.
 - [x] Bundle and smoke-test Deno for clean-machine YouTube extraction.
-- [ ] Clean Windows/macOS install-machine packaging validation completed — blocked by clean VM environments and production signing/notarization credentials.
+- [x] Clean Windows/macOS install-machine packaging validation completed — user confirmed Windows and macOS installer validation passed on 2026-07-08.
 
 ## Validation
 
@@ -131,3 +131,12 @@ Superseded release checks: this full-bundle installer path is no longer the ordi
 - Added Deno archive resolution, extraction, `--skip-downloads` requirement, and `deno eval` smoke test to `scripts/build-installer.mjs`.
 - Added macOS x64 and arm64 app-bundle smoke checks for `resources/bin/deno` before DMG packaging in `.github/workflows/desktop-release.yml`.
 - Verified locally with `node --test scripts\tests\build-installer.test.mjs`, `node --check scripts\build-installer.mjs`, `uv run pytest worker\tests -q`, `uv run ruff check worker`, `cargo test --manifest-path app\src-tauri\Cargo.toml`, `npm --prefix app test`, `npm --prefix app run build`, `python scripts\validate_agents_docs.py --level WARN`, `git diff --check`, and `uv run python -m yt_dlp --js-runtimes deno --js-runtimes node --js-runtimes quickjs --js-runtimes bun --version`.
+
+2026-07-08 clean installer validation and release finalization:
+
+- User confirmed the Windows and macOS installer packages were validated with no issues.
+- The validation closes the clean install-machine packaging gate for the current release: lightweight runtime resources install without repo-local Python/uv/ffmpeg, first-run ASR model download works, public URL → download → ASR transcript works, and app-local data is retained.
+- Bumped release metadata from `0.2.14` to `0.2.15`.
+- Added `npm --prefix app run tauri:dev:fresh-worker` so local Tauri dev runs can refresh the generated `resources/worker/frameq_worker` mirror before starting, avoiding stale worker code during development.
+- Final local release-readiness gates passed: `node --test scripts\tests\*.test.mjs`, `npm --prefix app test`, `npm --prefix app run build`, `uv run pytest worker\tests`, `uv run ruff check worker`, `cargo test --manifest-path app\src-tauri\Cargo.toml`, `python scripts\validate_agents_docs.py --level WARN`, `node --check scripts\tauri-dev-fresh-worker.mjs`, and `git diff --check`.
+- If final public artifacts are unsigned or not notarized, that status must be disclosed in the release note even though the clean-machine functional validation gate is now closed.

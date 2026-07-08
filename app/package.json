@@ -1,14 +1,15 @@
 {
   "name": "app",
   "private": true,
-  "version": "0.2.14",
+  "version": "0.2.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:dev:fresh-worker": "node ../scripts/tauri-dev-fresh-worker.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
