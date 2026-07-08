@@ -84,6 +84,7 @@ import { AccountSheet } from "./features/account/AccountSheet";
 import { ModelGuideSheet } from "./features/asrModel/ModelGuideSheet";
 import { useAsrModelDownload } from "./features/asrModel/useAsrModelDownload";
 import { InsightPreferenceFlow } from "./features/insightPreferences/InsightPreferenceFlow";
+import { MarkdownContent } from "./features/results/MarkdownContent";
 import { ResultWorkspace } from "./features/results/ResultWorkspace";
 import { useAppUpdateController } from "./features/updates/useAppUpdateController";
 import {
@@ -1720,7 +1721,7 @@ function App() {
             {actionNotice ? <p className="action-notice">{actionNotice}</p> : null}
             <div className="modal-content">
               {detailTab === "summary" ? (
-                <p>{workflow.summary || "要点总结生成后将在这里显示。"}</p>
+                <MarkdownContent markdown={workflow.summary} emptyText="要点总结生成后将在这里显示。" />
               ) : detailTab === "insights" ? (
                 workflow.insights.length > 0 ? (
                   <ol className="insight-detail-list">

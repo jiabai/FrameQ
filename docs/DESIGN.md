@@ -100,6 +100,7 @@ UI 必须围绕以下状态组织：
 
 ## UI Rules
 
+- The `要点总结` detail tab must render `summary.md` through the sanitized Markdown renderer with GitHub Flavored Markdown support; raw HTML and Mermaid source must not be rendered in the UI.
 - 主按钮文案固定为 `确认`。
 - 处理和完成态不再显示 URL 输入区域。
 - 完成态主界面展示 `视频文件`、`音频文件`、`完整文字稿`、`要点总结` 和 `启发灵感` 5 个产物入口；视频和音频入口只定位本地文件，不打开详情浮窗。

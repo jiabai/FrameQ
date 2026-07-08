@@ -259,6 +259,7 @@
 - The AI整理 run consumes quota per underlying cloud LLM API call attempt. A single AI整理 run may make multiple LLM calls, and each attempted call consumes one quota use.
 - The worker should first generate a Mermaid `mindmap` text from the transcript, then generate a layered Markdown summary from the original transcript and that Mermaid mindmap.
 - The UI shows the summary content as a result card and detail tab, but must not display or render the Mermaid source.
+- The summary detail tab renders `summary.md` as sanitized Markdown with GitHub Flavored Markdown support; raw HTML from the Markdown source must not pass through to the UI.
 - Summary artifacts are written under the current task's `ai/summary.md`; Mermaid text is written to `ai/mindmap.mmd`.
 - Task manifests should preserve `summary`, `mindmap`, and summary text loading so completed tasks can reopen the summary detail.
 - If summary generation succeeds but topic generation fails, the summary remains available and the task is `partial_completed`; if topic generation succeeds but summary generation fails, topic output remains available and the task is `partial_completed`.

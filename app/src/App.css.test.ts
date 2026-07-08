@@ -76,6 +76,19 @@ describe("App result workspace layout styles", () => {
     expect(appTsx).not.toContain("controls\n");
   });
 
+  test("renders summary markdown through the markdown content component", () => {
+    const markdownRule = getRuleBody([".markdown-content"]);
+    const headingRule = getRuleBody([".markdown-content :is(h1, h2, h3, h4)"]);
+    const tableRule = getRuleBody([".markdown-content table"]);
+
+    expect(appTsx).toContain("MarkdownContent");
+    expect(appTsx).toContain('markdown={workflow.summary}');
+    expect(markdownRule).toContain("white-space: normal;");
+    expect(markdownRule).toContain("overflow-wrap: anywhere;");
+    expect(headingRule).toContain("line-height: 1.35;");
+    expect(tableRule).toContain("overflow-x: auto;");
+  });
+
   test("keeps the custom audio review bar quiet and compact", () => {
     const barRule = getRuleBody([".audio-review-bar"]);
     const controlRule = getRuleBody([".audio-play-button", ".audio-review-actions button"]);
