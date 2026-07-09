@@ -1,0 +1,386 @@
+import type { SetStateAction } from "react";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import type { AccountStatus } from "../../accountState";
+import type {
+  GenerationPreferences,
+  InspirationProfile,
+  PreferenceSnapshot,
+} from "../../insightPreferences";
+import type { InsightPreferenceState } from "../../insightPreferencesClient";
+import type {
+  InsightRetryTarget,
+  WorkflowState,
+} from "../../workflow";
+import type { InsightGenerationController } from "./useInsightGenerationController";
+
+type StateUpdater<T> = T | ((current: T) => T);
+
+type HookHarness = {
+  resetRender: () => void;
+  useCallback: <T extends (...args: never[]) => unknown>(callback: T) => T;
+  useState: <T>(initialValue: T | (() => T)) => [T, (next: StateUpdater<T>) => void];
+};
+
+type OpenAccountPanel = (notice?: string) => void;
+
+type RetryInsightGeneration = (
+  target: InsightRetryTarget,
+  preferenceSnapshot: PreferenceSnapshot | null,
+  account: AccountStatus,
+  openAccountPanel: OpenAccountPanel,
+  onRetryCompleted?: () => void | Promise<void>,
+) => Promise<void>;
+
+type ControllerCallbacks = {
+  setActionNotice: (value: SetStateAction<string>) => void;
+  closeSettings: () => void;
+  closeDetail: () => void;
+  openAccountPanel: OpenAccountPanel;
+  refreshAccountStatus: () => Promise<void>;
+  retryInsightGeneration: RetryInsightGeneration;
+  aiBlockerMessage: (account: AccountStatus, actionLabel: string) => string;
+};
+
+const mocks = vi.hoisted(() => ({
+  getInsightPreferences: vi.fn<() => Promise<InsightPreferenceState>>(),
+  saveDefaultGenerationPreferences:
+    vi.fn<(preferences: GenerationPreferences) => Promise<InsightPreferenceState>>(),
+  saveInspirationProfile:
+    vi.fn<(profile: InspirationProfile) => Promise<InsightPreferenceState>>(),
+  skipInspirationProfile: vi.fn<() => Promise<InsightPreferenceState>>(),
+}));
+
+vi.mock("../../insightPreferencesClient", () => ({
+  getInsightPreferences: mocks.getInsightPreferences,
+  saveDefaultGenerationPreferences: mocks.saveDefaultGenerationPreferences,
+  saveInspirationProfile: mocks.saveInspirationProfile,
+  skipInspirationProfile: mocks.skipInspirationProfile,
+}));
+
+const PROFILE: InspirationProfile = {
+  role: "marketing_sales",
+  domain: "marketing_sales",
+  stage: "manager",
+  cityContext: "new_tier1_city",
+  genderPerspective: "unspecified",
+  platforms: ["douyin"],
+  defaultStyles: ["direct_sharp"],
+  defaultAvoid: [],
+};
+
+const GENERATION_PREFERENCES: GenerationPreferences = {
+  goal: "content_creation",
+  scenario: "short_video",
+  angles: ["topic_angle"],
+  audience: "beginners",
+  styles: ["direct_sharp"],
+  avoid: [],
+};
+
+function createHookHarness(): HookHarness {
+  const states: unknown[] = [];
+  let cursor = 0;
+
+  return {
+    resetRender: () => {
+      cursor = 0;
+    },
+    useCallback: (callback) => callback,
+    useState: <T,>(initialValue: T | (() => T)) => {
+      const stateIndex = cursor;
+      cursor += 1;
+      if (states.length <= stateIndex) {
+        states[stateIndex] =
+          typeof initialValue === "function"
+            ? (initialValue as () => T)()
+            : initialValue;
+      }
+      const setState = (next: StateUpdater<T>) => {
+        states[stateIndex] =
+          typeof next === "function"
+            ? (next as (current: T) => T)(states[stateIndex] as T)
+            : next;
+      };
+      return [states[stateIndex] as T, setState];
+    },
+  };
+}
+
+function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
+  return {
+    stage: "partial_completed",
+    url: "https://example.test/video",
+    submittedUrl: "https://example.test/video",
+    showUrlInput: false,
+    statusMessage: "",
+    progressPercent: 100,
+    text: "transcript body",
+    summary: "",
+    insights: [],
+    taskId: "task-1",
+    taskDir: "D:/FrameQ/tasks/task-1",
+    artifacts: {
+      transcript_txt: "transcript/transcript.txt",
+    },
+    transcript: null,
+    error: null,
+    ...overrides,
+  };
+}
+
+function createAccount(overrides: Partial<AccountStatus> = {}): AccountStatus {
+  return {
+    authenticated: true,
+    email: "user@example.test",
+    entitlementStatus: "active",
+    entitlementExpiresAt: "2026-07-22T08:00:00.000Z",
+    llmQuotaLimit: 20,
+    llmQuotaUsed: 1,
+    llmQuotaRemaining: 19,
+    llmQuotaResetsAt: "2026-07-22T08:00:00.000Z",
+    llmConfigured: true,
+    lastVerifiedAt: "2026-07-09T08:00:00.000Z",
+    canProcess: true,
+    canGenerateAi: true,
+    serverError: null,
+    ...overrides,
+  };
+}
+
+function createInsightPreferences(
+  overrides: Partial<InsightPreferenceState> = {},
+): InsightPreferenceState {
+  return {
+    profile: PROFILE,
+    profileSkipped: false,
+    profileStatus: "valid",
+    profileError: null,
+    defaultGenerationPreferences: null,
+    preferencesPath: "D:/FrameQ/app-data/insight-preferences.json",
+    ...overrides,
+  };
+}
+
+function createCallbacks(): ControllerCallbacks {
+  return {
+    setActionNotice: vi.fn(),
+    closeSettings: vi.fn(),
+    closeDetail: vi.fn(),
+    openAccountPanel: vi.fn(),
+    refreshAccountStatus: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    retryInsightGeneration: vi.fn<RetryInsightGeneration>().mockResolvedValue(undefined),
+    aiBlockerMessage: vi.fn((_, actionLabel) => `blocked: ${actionLabel}`),
+  };
+}
+
+async function createController(options: {
+  workflow?: WorkflowState;
+  account?: AccountStatus;
+  callbacks?: Partial<ControllerCallbacks>;
+} = {}): Promise<{
+  render: () => InsightGenerationController;
+  callbacks: ControllerCallbacks;
+  account: AccountStatus;
+}> {
+  const harness = createHookHarness();
+  const callbacks = { ...createCallbacks(), ...options.callbacks };
+  const workflow = options.workflow ?? createWorkflow();
+  const account = options.account ?? createAccount();
+
+  vi.doMock("react", () => ({
+    useCallback: harness.useCallback,
+    useState: harness.useState,
+  }));
+  const { useInsightGenerationController } = await import("./useInsightGenerationController");
+
+  return {
+    render: () => {
+      harness.resetRender();
+      return useInsightGenerationController({
+        workflow,
+        account,
+        setActionNotice: callbacks.setActionNotice,
+        closeSettings: callbacks.closeSettings,
+        closeDetail: callbacks.closeDetail,
+        openAccountPanel: callbacks.openAccountPanel,
+        refreshAccountStatus: callbacks.refreshAccountStatus,
+        retryInsightGeneration: callbacks.retryInsightGeneration,
+        aiBlockerMessage: callbacks.aiBlockerMessage,
+      });
+    },
+    callbacks,
+    account,
+  };
+}
+
+describe("useInsightGenerationController", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    for (const mock of Object.values(mocks)) {
+      mock.mockReset();
+    }
+  });
+
+  test("does not open summary confirmation without a task and transcript", async () => {
+    const { render, callbacks } = await createController({
+      workflow: createWorkflow({ taskId: null, artifacts: {} }),
+    });
+
+    let controller = render();
+    controller.openSummaryConfirmation();
+    controller = render();
+
+    expect(controller.summaryConfirmOpen).toBe(false);
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith(
+      "文字稿生成后才能继续生成要点总结。",
+    );
+  });
+
+  test("opens summary confirmation when task and transcript are available", async () => {
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    controller.openSummaryConfirmation();
+    controller = render();
+
+    expect(controller.summaryConfirmOpen).toBe(true);
+    expect(callbacks.setActionNotice).not.toHaveBeenCalled();
+  });
+
+  test("opens the account panel when summary generation is blocked by account state", async () => {
+    const blockedAccount = createAccount({ canGenerateAi: false });
+    const { render, callbacks } = await createController({ account: blockedAccount });
+
+    const controller = render();
+    await controller.confirmSummaryGeneration();
+
+    expect(callbacks.aiBlockerMessage).toHaveBeenCalledWith(
+      blockedAccount,
+      "生成要点总结",
+    );
+    expect(callbacks.openAccountPanel).toHaveBeenCalledWith("blocked: 生成要点总结");
+    expect(callbacks.retryInsightGeneration).not.toHaveBeenCalled();
+  });
+
+  test("confirms summary generation for an eligible account", async () => {
+    const { render, callbacks, account } = await createController();
+
+    let controller = render();
+    controller.openSummaryConfirmation();
+    controller = render();
+    expect(controller.summaryConfirmOpen).toBe(true);
+
+    await controller.confirmSummaryGeneration();
+    controller = render();
+
+    expect(controller.summaryConfirmOpen).toBe(false);
+    expect(callbacks.retryInsightGeneration).toHaveBeenCalledWith(
+      "summary",
+      null,
+      account,
+      callbacks.openAccountPanel,
+      callbacks.refreshAccountStatus,
+    );
+    expect(callbacks.openAccountPanel).not.toHaveBeenCalled();
+  });
+
+  test("does not open insight preference flow without a task and transcript", async () => {
+    const { render, callbacks } = await createController({
+      workflow: createWorkflow({ taskId: null, artifacts: {} }),
+    });
+
+    let controller = render();
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+
+    expect(controller.insightPreferenceFlow).toBeNull();
+    expect(mocks.getInsightPreferences).not.toHaveBeenCalled();
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith(
+      "文字稿生成后才能继续生成启发灵感。",
+    );
+  });
+
+  test("creates insight preference flow after loading saved preferences", async () => {
+    const preferences = createInsightPreferences({
+      profile: null,
+      profileSkipped: true,
+      profileStatus: "skipped",
+    });
+    mocks.getInsightPreferences.mockResolvedValueOnce(preferences);
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    const openFlow = controller.openInsightPreferenceFlow();
+    controller = render();
+    expect(controller.insightPreferenceBusy).toBe(true);
+
+    await openFlow;
+    controller = render();
+
+    expect(mocks.getInsightPreferences).toHaveBeenCalledTimes(1);
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith("");
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).toEqual(
+      expect.objectContaining({
+        screen: "generation_step",
+        profile: null,
+        profileSkipped: true,
+      }),
+    );
+  });
+
+  test("opens generation preference editing from detail", async () => {
+    mocks.getInsightPreferences.mockResolvedValueOnce(
+      createInsightPreferences({ defaultGenerationPreferences: GENERATION_PREFERENCES }),
+    );
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    await controller.openDirectionEditorFromDetail();
+    controller = render();
+
+    expect(callbacks.closeDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.getInsightPreferences).toHaveBeenCalledTimes(1);
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).toEqual(
+      expect.objectContaining({
+        screen: "generation_step",
+        currentStep: "goal",
+        generationPreferences: GENERATION_PREFERENCES,
+      }),
+    );
+  });
+
+  test("saves generation preferences and retries insight generation", async () => {
+    const savedPreferences = createInsightPreferences({
+      defaultGenerationPreferences: GENERATION_PREFERENCES,
+    });
+    mocks.getInsightPreferences.mockResolvedValueOnce(createInsightPreferences());
+    mocks.saveDefaultGenerationPreferences.mockResolvedValueOnce(savedPreferences);
+    const { render, callbacks, account } = await createController();
+
+    let controller = render();
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+    expect(controller.insightPreferenceFlow).not.toBeNull();
+
+    await controller.confirmInsightPreferences(GENERATION_PREFERENCES);
+    controller = render();
+
+    expect(mocks.saveDefaultGenerationPreferences).toHaveBeenCalledWith(
+      GENERATION_PREFERENCES,
+    );
+    expect(controller.insightPreferenceFlow).toBeNull();
+    expect(callbacks.retryInsightGeneration).toHaveBeenCalledWith(
+      "insights",
+      expect.objectContaining({
+        profile: PROFILE,
+        profileSkipped: false,
+        generationPreferences: GENERATION_PREFERENCES,
+      }),
+      account,
+      callbacks.openAccountPanel,
+      callbacks.refreshAccountStatus,
+    );
+  });
+});
