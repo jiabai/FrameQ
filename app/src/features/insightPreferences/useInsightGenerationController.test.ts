@@ -329,6 +329,27 @@ describe("useInsightGenerationController", () => {
     );
   });
 
+  test("surfaces insight preference load errors when opening the flow", async () => {
+    mocks.getInsightPreferences.mockRejectedValueOnce(new Error("preferences unavailable"));
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    const openFlow = controller.openInsightPreferenceFlow();
+    controller = render();
+    expect(controller.insightPreferenceBusy).toBe(true);
+
+    await openFlow;
+    controller = render();
+
+    expect(mocks.getInsightPreferences).toHaveBeenCalledTimes(1);
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).toBeNull();
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith("");
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
+      "无法读取本地偏好：preferences unavailable",
+    );
+  });
+
   test("opens generation preference editing from detail", async () => {
     mocks.getInsightPreferences.mockResolvedValueOnce(
       createInsightPreferences({ defaultGenerationPreferences: GENERATION_PREFERENCES }),
@@ -348,6 +369,51 @@ describe("useInsightGenerationController", () => {
         currentStep: "goal",
         generationPreferences: GENERATION_PREFERENCES,
       }),
+    );
+  });
+
+  test("closes detail and surfaces preference load errors when editing from detail", async () => {
+    mocks.getInsightPreferences.mockRejectedValueOnce(new Error("preferences locked"));
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    const openEditor = controller.openDirectionEditorFromDetail();
+    controller = render();
+    expect(controller.insightPreferenceBusy).toBe(true);
+
+    await openEditor;
+    controller = render();
+
+    expect(callbacks.closeDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.getInsightPreferences).toHaveBeenCalledTimes(1);
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).toBeNull();
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
+      "无法读取本地偏好：preferences locked",
+    );
+  });
+
+  test("surfaces summary retry failures after closing the confirmation", async () => {
+    const retryInsightGeneration = vi
+      .fn<RetryInsightGeneration>()
+      .mockRejectedValueOnce(new Error("worker failed"));
+    const { render, callbacks } = await createController({
+      callbacks: { retryInsightGeneration },
+    });
+
+    let controller = render();
+    controller.openSummaryConfirmation();
+    controller = render();
+    expect(controller.summaryConfirmOpen).toBe(true);
+
+    await controller.confirmSummaryGeneration();
+    controller = render();
+
+    expect(controller.summaryConfirmOpen).toBe(false);
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(callbacks.retryInsightGeneration).toHaveBeenCalledTimes(1);
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
+      "启动要点总结失败：worker failed",
     );
   });
 
@@ -381,6 +447,103 @@ describe("useInsightGenerationController", () => {
       account,
       callbacks.openAccountPanel,
       callbacks.refreshAccountStatus,
+    );
+  });
+
+  test("surfaces default preference save failures and keeps the flow open", async () => {
+    mocks.getInsightPreferences.mockResolvedValueOnce(createInsightPreferences());
+    mocks.saveDefaultGenerationPreferences.mockRejectedValueOnce(new Error("save failed"));
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+    expect(controller.insightPreferenceFlow).not.toBeNull();
+
+    await controller.confirmInsightPreferences(GENERATION_PREFERENCES);
+    controller = render();
+
+    expect(mocks.saveDefaultGenerationPreferences).toHaveBeenCalledWith(
+      GENERATION_PREFERENCES,
+    );
+    expect(callbacks.retryInsightGeneration).not.toHaveBeenCalled();
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).not.toBeNull();
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
+      "启动启发灵感失败：save failed",
+    );
+  });
+
+  test("surfaces insight retry failures after saving preferences", async () => {
+    const retryInsightGeneration = vi
+      .fn<RetryInsightGeneration>()
+      .mockRejectedValueOnce(new Error("retry failed"));
+    const savedPreferences = createInsightPreferences({
+      defaultGenerationPreferences: GENERATION_PREFERENCES,
+    });
+    mocks.getInsightPreferences.mockResolvedValueOnce(createInsightPreferences());
+    mocks.saveDefaultGenerationPreferences.mockResolvedValueOnce(savedPreferences);
+    const { render, callbacks } = await createController({
+      callbacks: { retryInsightGeneration },
+    });
+
+    let controller = render();
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+
+    await controller.confirmInsightPreferences(GENERATION_PREFERENCES);
+    controller = render();
+
+    expect(mocks.saveDefaultGenerationPreferences).toHaveBeenCalledWith(
+      GENERATION_PREFERENCES,
+    );
+    expect(callbacks.retryInsightGeneration).toHaveBeenCalledTimes(1);
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).toBeNull();
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
+      "启动启发灵感失败：retry failed",
+    );
+  });
+
+  test("surfaces profile skip failures and keeps the current flow", async () => {
+    mocks.getInsightPreferences.mockResolvedValueOnce(createInsightPreferences());
+    mocks.skipInspirationProfile.mockRejectedValueOnce(new Error("skip failed"));
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+    const currentFlow = controller.insightPreferenceFlow;
+    expect(currentFlow).not.toBeNull();
+
+    await controller.skipCurrentProfileSetup();
+    controller = render();
+
+    expect(mocks.skipInspirationProfile).toHaveBeenCalledTimes(1);
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).toEqual(currentFlow);
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
+      "保存跳过状态失败：skip failed",
+    );
+  });
+
+  test("surfaces profile save failures and resets busy state", async () => {
+    mocks.saveInspirationProfile.mockRejectedValueOnce(new Error("profile save failed"));
+    const { render, callbacks } = await createController();
+
+    let controller = render();
+    const saveProfile = controller.saveCurrentProfile(PROFILE);
+    controller = render();
+    expect(controller.insightPreferenceBusy).toBe(true);
+
+    await saveProfile;
+    controller = render();
+
+    expect(mocks.saveInspirationProfile).toHaveBeenCalledWith(PROFILE);
+    expect(controller.insightPreferenceBusy).toBe(false);
+    expect(controller.insightPreferenceFlow).toBeNull();
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
+      "保存灵感档案失败：profile save failed",
     );
   });
 });
