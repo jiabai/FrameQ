@@ -47,6 +47,19 @@ def test_worker_result_contract_includes_task_artifacts() -> None:
     assert "transcript" in contract["workerResultKeys"]
 
 
+def test_process_video_contract_is_transcript_only_and_retry_insights_is_ai_path() -> None:
+    contract = load_contract()
+
+    assert contract["processVideo"] == {
+        "defaultGenerateInsights": False,
+        "serverManagedLlmCheckout": False,
+    }
+    assert contract["aiGeneration"] == {
+        "command": "retry_insights",
+        "serverManagedLlmCheckout": True,
+    }
+
+
 def test_structured_insight_contract_keys_match_worker_model() -> None:
     contract = load_contract()
     insight = Insight(

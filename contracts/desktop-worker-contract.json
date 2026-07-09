@@ -8,6 +8,14 @@
   "asr": {
     "defaultModel": "iic/SenseVoiceSmall"
   },
+  "processVideo": {
+    "defaultGenerateInsights": false,
+    "serverManagedLlmCheckout": false
+  },
+  "aiGeneration": {
+    "command": "retry_insights",
+    "serverManagedLlmCheckout": true
+  },
   "env": {
     "outputDir": "FRAMEQ_OUTPUT_DIR",
     "cacheDir": "FRAMEQ_CACHE_DIR",

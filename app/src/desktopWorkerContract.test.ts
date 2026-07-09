@@ -14,6 +14,14 @@ type DesktopWorkerContract = {
   asr: {
     defaultModel: string;
   };
+  processVideo: {
+    defaultGenerateInsights: boolean;
+    serverManagedLlmCheckout: boolean;
+  };
+  aiGeneration: {
+    command: string;
+    serverManagedLlmCheckout: boolean;
+  };
   insightResult: {
     schemaVersion: number;
     itemKeys: string[];
@@ -57,6 +65,36 @@ describe("desktop/worker contract", () => {
     expect(calls[0]?.args).toMatchObject({
       request: {
         model: contract.asr.defaultModel,
+      },
+    });
+  });
+
+  test("documents process_video as transcript-only and retry_insights as the AI path", async () => {
+    const contract = loadContract();
+    const calls: Array<{ command: string; args: unknown }> = [];
+
+    await processVideo("https://www.douyin.com/video/7524373044106677544", async (command, args) => {
+      calls.push({ command, args });
+      return {
+        status: "completed",
+        task_id: null,
+        task_dir: null,
+        artifacts: {},
+        text: "",
+        summary: "",
+        insights: [],
+        transcript: null,
+        error: null,
+      };
+    });
+
+    expect(contract.processVideo.defaultGenerateInsights).toBe(false);
+    expect(contract.processVideo.serverManagedLlmCheckout).toBe(false);
+    expect(contract.aiGeneration.command).toBe("retry_insights");
+    expect(contract.aiGeneration.serverManagedLlmCheckout).toBe(true);
+    expect(calls[0]?.args).toMatchObject({
+      request: {
+        generate_insights: false,
       },
     });
   });

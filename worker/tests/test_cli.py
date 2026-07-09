@@ -187,7 +187,7 @@ def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Pa
     assert [command_name(command) for command in runner.commands] == ["yt-dlp", "ffprobe", "ffmpeg"]
 
 
-def test_run_worker_once_runs_to_partial_completion_with_injected_transcriber(
+def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
     tmp_path: Path,
 ) -> None:
     result = run_worker_once(
@@ -197,8 +197,10 @@ def test_run_worker_once_runs_to_partial_completion_with_injected_transcriber(
         transcriber=FakeTranscriber(),
     )
 
-    assert result["status"] == "partial_completed"
+    assert result["status"] == "completed"
     assert result["text"] == "desktop transcript"
+    assert result["summary"] == ""
+    assert result["insights"] == []
     assert result["artifacts"] == {
         "video": "media/video.mp4",
         "audio": "media/audio.wav",
@@ -216,7 +218,12 @@ def test_run_worker_once_runs_to_partial_completion_with_injected_transcriber(
 
 def test_run_worker_once_generates_ai_artifacts_in_same_task(tmp_path: Path) -> None:
     result = run_worker_once(
-        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        json.dumps(
+            {
+                "url": "https://www.douyin.com/video/7524373044106677544",
+                "generate_insights": True,
+            }
+        ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
@@ -239,7 +246,12 @@ def test_run_worker_once_uses_configured_output_and_cache_roots(tmp_path: Path) 
     custom_output_dir = tmp_path / "app-data" / "outputs"
 
     result = run_worker_once(
-        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        json.dumps(
+            {
+                "url": "https://www.douyin.com/video/7524373044106677544",
+                "generate_insights": True,
+            }
+        ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
@@ -359,7 +371,7 @@ def test_run_worker_once_uses_configured_asr_model_from_user_data_env(
 
     transcript_md = task_dir_from_result(result) / "transcript" / "transcript.md"
 
-    assert result["status"] == "partial_completed"
+    assert result["status"] == "completed"
     assert captured == {
         "model_name": "iic/SenseVoiceSmall",
         "cache_dir": tmp_path / "models",

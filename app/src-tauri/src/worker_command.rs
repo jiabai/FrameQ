@@ -255,21 +255,8 @@ pub(crate) fn build_worker_command_spec(
 fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> bool {
     match invocation {
         WorkerInvocation::RetryInsights(_) => true,
-        WorkerInvocation::ProcessVideo(payload) => {
-            process_video_request_generates_insights(payload)
-        }
+        WorkerInvocation::ProcessVideo(_) => false,
     }
-}
-
-fn process_video_request_generates_insights(payload: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(payload)
-        .ok()
-        .and_then(|value| {
-            value
-                .get("generate_insights")
-                .and_then(serde_json::Value::as_bool)
-        })
-        .unwrap_or(true)
 }
 
 #[cfg(target_os = "windows")]
@@ -613,7 +600,7 @@ Some dependency logged to stdout
     }
 
     #[test]
-    fn worker_command_spec_includes_server_managed_llm_checkout_env() {
+    fn worker_command_spec_skips_server_managed_llm_for_process_video_even_if_payload_requests_ai() {
         let paths = RuntimePaths {
             resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
             user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
@@ -623,6 +610,33 @@ Some dependency logged to stdout
         let spec = build_worker_command_spec(
             &paths,
             WorkerInvocation::ProcessVideo(request_json.to_string()),
+            Some(ServerManagedLlmInvocation {
+                server_base_url: "http://127.0.0.1:8787".to_string(),
+                session_token: "desktop-token".to_string(),
+                request_id: "llm-run-12345678".to_string(),
+            }),
+        )
+        .expect("build worker command spec");
+        let env = spec.env_map();
+
+        assert_removes_legacy_local_llm_env(&spec);
+        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), None);
+        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_URL"), None);
+        assert_eq!(env.get("FRAMEQ_LLM_SESSION_TOKEN"), None);
+        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_REQUEST_ID"), None);
+    }
+
+    #[test]
+    fn worker_command_spec_includes_server_managed_llm_checkout_env_for_retry_insights() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
+            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
+        };
+        let request_json = r#"{"task_id":"20260705-153012-douyin-demo","target":"summary"}"#;
+
+        let spec = build_worker_command_spec(
+            &paths,
+            WorkerInvocation::RetryInsights(request_json.to_string()),
             Some(ServerManagedLlmInvocation {
                 server_base_url: "http://127.0.0.1:8787".to_string(),
                 session_token: "desktop-token".to_string(),
@@ -646,33 +660,6 @@ Some dependency logged to stdout
             env.get("FRAMEQ_LLM_CHECKOUT_REQUEST_ID"),
             Some(&"llm-run-12345678".to_string())
         );
-    }
-
-    #[test]
-    fn worker_command_spec_skips_server_managed_llm_for_transcript_only_process() {
-        let paths = RuntimePaths {
-            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
-            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
-        };
-        let request_json = r#"{"url":"https://www.douyin.com/video/7524373044106677544","generate_insights":false}"#;
-
-        let spec = build_worker_command_spec(
-            &paths,
-            WorkerInvocation::ProcessVideo(request_json.to_string()),
-            Some(ServerManagedLlmInvocation {
-                server_base_url: "http://127.0.0.1:8787".to_string(),
-                session_token: "desktop-token".to_string(),
-                request_id: "llm-run-12345678".to_string(),
-            }),
-        )
-        .expect("build worker command spec");
-        let env = spec.env_map();
-
-        assert_removes_legacy_local_llm_env(&spec);
-        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), None);
-        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_URL"), None);
-        assert_eq!(env.get("FRAMEQ_LLM_SESSION_TOKEN"), None);
-        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_REQUEST_ID"), None);
     }
 
     #[cfg(windows)]

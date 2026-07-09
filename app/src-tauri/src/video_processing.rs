@@ -107,11 +107,10 @@ fn process_video_blocking(
         return Ok(cached);
     }
     let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
-    let llm_invocation = account::server_managed_llm_invocation(&paths)?;
     let spec = build_worker_command_spec(
         &paths,
         WorkerInvocation::ProcessVideo(request_json),
-        llm_invocation,
+        None,
     )?;
     let _ = append_desktop_log(
         &paths,

@@ -172,7 +172,7 @@ def parse_process_request(payload: object) -> ProcessRequest:
         language=str(payload.get("language", "Chinese")),
         output_formats=tuple(output_formats),
         model=str(payload.get("model", DEFAULT_ASR_MODEL)),
-        generate_insights=bool(payload.get("generate_insights", True)),
+        generate_insights=bool(payload.get("generate_insights", False)),
         insightflow_mode=str(payload.get("insightflow_mode", "embedded")),
     )
 
