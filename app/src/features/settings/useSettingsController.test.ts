@@ -209,6 +209,55 @@ describe("useSettingsController", () => {
     expect(controller.settingsNotice).toContain("灵感档案状态暂不可用");
   });
 
+  test("surfaces config load failures and resets loading state", async () => {
+    mocks.getLlmConfig.mockRejectedValueOnce(new Error("config unavailable"));
+    mocks.getAudioReviewCacheUsage.mockResolvedValueOnce(createAudioCacheUsage());
+    mocks.getInsightPreferences.mockResolvedValueOnce(createInsightPreferences());
+    const { render } = await createController();
+
+    let controller = render();
+    const load = controller.openSettings();
+    controller = render();
+    expect(controller.settingsOpen).toBe(true);
+    expect(controller.settingsLoading).toBe(true);
+
+    await load;
+    controller = render();
+
+    expect(controller.settingsLoading).toBe(false);
+    expect(controller.settingsNotice).toBe("读取配置失败：config unavailable");
+  });
+
+  test("surfaces audio cache usage load failures and resets loading state", async () => {
+    mocks.getLlmConfig.mockResolvedValueOnce(createLlmConfig());
+    mocks.getAudioReviewCacheUsage.mockRejectedValueOnce(new Error("cache unavailable"));
+    mocks.getInsightPreferences.mockResolvedValueOnce(createInsightPreferences());
+    const { render } = await createController();
+
+    let controller = render();
+    const load = controller.openSettings();
+    controller = render();
+    expect(controller.settingsLoading).toBe(true);
+
+    await load;
+    controller = render();
+
+    expect(controller.settingsLoading).toBe(false);
+    expect(controller.settingsNotice).toBe("读取配置失败：cache unavailable");
+  });
+
+  test("uses the provided success notice when settings load succeeds", async () => {
+    mockSettingsLoad();
+    const { render } = await createController();
+
+    let controller = render();
+    await controller.loadSettings("自定义设置读取完成。");
+    controller = render();
+
+    expect(controller.settingsLoading).toBe(false);
+    expect(controller.settingsNotice).toBe("自定义设置读取完成。");
+  });
+
   test("saves draft settings and refreshes saved config metadata", async () => {
     const savedConfig = createLlmConfig({
       outputDir: "D:/FrameQ/new-output",
@@ -243,6 +292,25 @@ describe("useSettingsController", () => {
     expect(controller.settingsNotice).toContain("配置已保存");
   });
 
+  test("surfaces save failures and resets saving state", async () => {
+    mocks.saveLlmConfig.mockRejectedValueOnce(new Error("disk full"));
+    const { render } = await createController();
+
+    let controller = render();
+    const event = createSubmitEvent();
+    const save = controller.submitSettings(event);
+    controller = render();
+    expect(controller.settingsSaving).toBe(true);
+
+    await save;
+    controller = render();
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mocks.saveLlmConfig).toHaveBeenCalledTimes(1);
+    expect(controller.settingsSaving).toBe(false);
+    expect(controller.settingsNotice).toBe("保存失败：disk full");
+  });
+
   test("clears audio review cache and refreshes cache usage", async () => {
     const clearedUsage = createAudioCacheUsage({ sizeBytes: 0 });
     mocks.clearAudioReviewCache.mockResolvedValueOnce(clearedUsage);
@@ -256,6 +324,23 @@ describe("useSettingsController", () => {
     expect(controller.settingsSaving).toBe(false);
     expect(controller.audioReviewCacheUsage).toEqual(clearedUsage);
     expect(controller.settingsNotice).toContain("缓存已清理");
+  });
+
+  test("surfaces audio cache clear failures and resets saving state", async () => {
+    mocks.clearAudioReviewCache.mockRejectedValueOnce(new Error("permission denied"));
+    const { render } = await createController();
+
+    let controller = render();
+    const clearCache = controller.clearAudioReviewCacheFromSettings();
+    controller = render();
+    expect(controller.settingsSaving).toBe(true);
+
+    await clearCache;
+    controller = render();
+
+    expect(mocks.clearAudioReviewCache).toHaveBeenCalledTimes(1);
+    expect(controller.settingsSaving).toBe(false);
+    expect(controller.settingsNotice).toBe("清理音频播放缓存失败：permission denied");
   });
 
   test("locates the settings config file when a path is loaded", async () => {
@@ -278,6 +363,21 @@ describe("useSettingsController", () => {
     expect(controller.settingsNotice).toContain("定位本机配置文件");
   });
 
+  test("surfaces settings config locate failures", async () => {
+    const { config } = mockSettingsLoad();
+    mocks.revealItemInDir.mockRejectedValueOnce(new Error("shell unavailable"));
+    const { render } = await createController();
+
+    let controller = render();
+    await controller.openSettings();
+    controller = render();
+    await controller.locateSettingsConfigFile();
+    controller = render();
+
+    expect(mocks.revealItemInDir).toHaveBeenCalledWith(config.configPath);
+    expect(controller.settingsNotice).toBe("定位配置文件失败：shell unavailable");
+  });
+
   test("clears inspiration profile from settings and refreshes preference state", async () => {
     const clearedPreferences = createInsightPreferences({
       profileSkipped: false,
@@ -295,5 +395,22 @@ describe("useSettingsController", () => {
     expect(controller.settingsSaving).toBe(false);
     expect(controller.settingsInsightPreferences).toEqual(clearedPreferences);
     expect(controller.settingsNotice).toContain("已清空灵感档案");
+  });
+
+  test("surfaces inspiration profile clear failures and resets saving state", async () => {
+    mocks.clearInspirationProfile.mockRejectedValueOnce(new Error("profile locked"));
+    const { render } = await createController();
+
+    let controller = render();
+    const clearProfile = controller.clearProfileFromSettings();
+    controller = render();
+    expect(controller.settingsSaving).toBe(true);
+
+    await clearProfile;
+    controller = render();
+
+    expect(mocks.clearInspirationProfile).toHaveBeenCalledTimes(1);
+    expect(controller.settingsSaving).toBe(false);
+    expect(controller.settingsNotice).toBe("清空失败：profile locked");
   });
 });
