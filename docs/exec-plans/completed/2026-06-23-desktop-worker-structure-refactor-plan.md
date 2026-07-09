@@ -28,6 +28,7 @@ Make desktop client, Tauri bridge, and Python worker code easier to change by sp
 - [x] Full verification completed.
 - [x] 2026-07-09: P2 God Component follow-up completed for the frontend shell. `App.tsx` now composes extracted account, task processing, transcript detail, settings, history, window chrome, and insight generation controllers while preserving behavior. Validation: `npm --prefix app test`, `npm --prefix app run build`, and `git diff --check`.
 - [x] 2026-07-09: P2 hook-level testing first round completed for the extracted orchestration hooks. Added main-path and key-gate coverage for `useHistoryController`, `useSettingsController`, and `useInsightGenerationController`; remaining hook error branches and lightweight harness limitations are tracked in `docs/exec-plans/tech-debt-tracker.md`.
+- [x] 2026-07-10: P2 hook-level testing second round completed for error branches. Added focused coverage for `useInsightGenerationController` key error branches and `useSettingsController` load/save/cache/location/profile error branches; remaining history concurrency and lightweight harness limitations are tracked in `docs/exec-plans/tech-debt-tracker.md`.
 
 ## Validation
 
@@ -69,4 +70,6 @@ Residual risk: `npm --prefix app run lint` remains unavailable because the app p
 
 2026-07-09 P2 frontend follow-up: The God Component split is closed. `App.tsx` remains the composition root and still owns startup/deep-link effects, `openCard` / `locateArtifact`, global `actionNotice`, and Sheet/Flow composition. Remaining risk is tracked in `docs/exec-plans/tech-debt-tracker.md`: automated UI/E2E smoke coverage is missing, and orchestration hooks still need hook-level tests before future wiring-heavy changes.
 
-2026-07-09 P2 hook testing follow-up: The first hook-level testing round is closed. `useHistoryController`, `useSettingsController`, and `useInsightGenerationController` now have focused Vitest coverage for main paths and key gates. Deferred testing risk remains for insight generation preference read/save/retry/profile save-skip failures, settings load/save/cache/location/profile failures, history concurrent/repeated open behavior, and the fact that the lightweight hook harness does not exercise real React scheduling or component interactions.
+2026-07-09 P2 hook testing follow-up: The first hook-level testing round closed main-path and key-gate coverage for `useHistoryController`, `useSettingsController`, and `useInsightGenerationController`. At that point, insight generation and settings error branches remained deferred.
+
+2026-07-10 P2 hook testing second-round follow-up: The error-branch testing round is closed. `useInsightGenerationController` now covers key preference read/save/retry/profile save-skip failure paths, and `useSettingsController` covers load/save/cache/location/profile failure paths. Deferred testing risk remains for `useHistoryController` concurrent/repeated open behavior and the fact that the lightweight hook harness does not exercise real React scheduling, DOM/Sheet interactions, or end-to-end UI behavior.

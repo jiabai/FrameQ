@@ -2,6 +2,8 @@
 
 ## Refactoring and Technical Debt
 
+- [x] P2 orchestration hooks 错误分支测试已补强（2026-07-10）✅ 新增 `useInsightGenerationController` 关键错误分支和 `useSettingsController` load/save/cache/location/profile 错误分支覆盖；阶段审查通过 `npm --prefix app test`（27 files / 184 tests）、`npm --prefix app run build` 和 `git diff --check`。剩余 `useHistoryController` 并发/重复打开场景与轻量 hook harness 限制已登记在 `docs/exec-plans/tech-debt-tracker.md`。
+
 - [x] P2 orchestration hooks 主路径测试已补强（2026-07-09）✅ 新增 `useHistoryController`、`useSettingsController`、`useInsightGenerationController` hook 级单测，覆盖主路径和关键 gate；阶段审查通过 `npm --prefix app test`（27 files / 170 tests）、`npm --prefix app run build` 和 `git diff --check`。下一轮建议优先补 `useInsightGenerationController` preference 读取/保存/retry/profile save-skip 错误分支，其次补 `useSettingsController` load/save/cache/location/profile 错误分支；剩余测试债已登记在 `docs/exec-plans/tech-debt-tracker.md`。
 
 - [x] Close P2 God Component refactor (2026-07-09) ✅ Split `app/src/App.tsx` into focused account, workflow, transcript detail, settings, history, window chrome, and insight generation controllers. Final state: `App.tsx` is a composition root with `actionNotice`, startup/deep-link glue, `openCard` / `locateArtifact`, and Sheet/Flow composition retained. Validation passed: `npm --prefix app test`, `npm --prefix app run build`, and `git diff --check`. Remaining risks and next-stage priorities are tracked in `docs/exec-plans/tech-debt-tracker.md`.
