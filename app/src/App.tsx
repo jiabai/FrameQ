@@ -21,7 +21,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import {
   canSubmitUrl,
@@ -58,19 +58,8 @@ import {
 import { getHistory, historyItemToWorkerResult, type HistoryItem } from "./historyClient";
 import type { UpdateState } from "./updateState";
 import {
-  beginAuthFlow,
-  completeAuthFlow,
-  getAccountStatus,
-  logoutAccount,
-  redeemActivationCode,
-} from "./accountClient";
-import {
   canGenerateAiWithAccount,
   canProcessWithAccount,
-  createAccountStatusFailure,
-  createBrowserPreviewAccountStatus,
-  createGuestAccountStatus,
-  isBrowserPreviewRuntime,
   type AccountStatus,
 } from "./accountState";
 import {
@@ -85,6 +74,7 @@ import {
   type WindowPosition,
 } from "./windowChrome";
 import { AccountSheet } from "./features/account/AccountSheet";
+import { useAccountController } from "./features/account/useAccountController";
 import { ModelGuideSheet } from "./features/asrModel/ModelGuideSheet";
 import { useAsrModelDownload } from "./features/asrModel/useAsrModelDownload";
 import { InsightPreferenceFlow } from "./features/insightPreferences/InsightPreferenceFlow";
@@ -417,12 +407,32 @@ function App() {
     startAsrModelDownload,
     cancelCurrentAsrModelDownload,
   } = useAsrModelDownload();
-  const [account, setAccount] = useState<AccountStatus>(createGuestAccountStatus);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [accountNotice, setAccountNotice] = useState("");
-  const [accountLoading, setAccountLoading] = useState(false);
-  const [activationCodeDraft, setActivationCodeDraft] = useState("");
-  const [activationRedeeming, setActivationRedeeming] = useState(false);
+  const {
+    account,
+    accountOpen,
+    accountNotice,
+    accountLoading,
+    activationCodeDraft,
+    activationRedeeming,
+    accountChipLabel,
+    accountStatusText,
+    closeAccountPanel,
+    handleAuthCallback,
+    openAccountPanel,
+    redeemActivationCodeFromInput,
+    refreshAccountStatus,
+    setActivationCodeDraft,
+    signOutAccount,
+    startLoginFlow,
+  } = useAccountController({
+    formatHistoryDate,
+    onSignedOut: () => {
+      if (isProcessingStage(workflow.stage)) {
+        void cancelProcess();
+      }
+      resetWorkflow();
+    },
+  });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [historyNotice, setHistoryNotice] = useState("");
@@ -534,10 +544,6 @@ function App() {
   }, [openModelGuide, refreshAsrModelStatus]);
 
   useEffect(() => {
-    void refreshAccountStatus();
-  }, []);
-
-  useEffect(() => {
     let unlisten: (() => void) | null = null;
     let cancelled = false;
 
@@ -566,7 +572,7 @@ function App() {
         unlisten();
       }
     };
-  }, []);
+  }, [handleAuthCallback]);
 
   useEffect(() => {
     if (detailTab !== "transcript") {
@@ -639,52 +645,6 @@ function App() {
       behavior: "smooth",
     });
   }, [activeTranscriptSegmentId]);
-
-  async function refreshAccountStatus() {
-    setAccountLoading(true);
-    try {
-      const status = await getAccountStatus();
-      setAccount(status);
-      setAccountNotice(status.serverError ? `账号状态刷新失败：${status.serverError}` : "");
-    } catch (error) {
-      if (isBrowserPreviewRuntime()) {
-        setAccount(createBrowserPreviewAccountStatus());
-        setAccountNotice("浏览器预览模式：使用本地模拟账号。");
-        return;
-      }
-
-      const message = error instanceof Error ? error.message : String(error);
-      const serverError = message || "账号状态刷新失败";
-      setAccount(createAccountStatusFailure(serverError));
-      setAccountNotice(`账号状态刷新失败：${serverError}`);
-    } finally {
-      setAccountLoading(false);
-    }
-  }
-
-  async function handleAuthCallback(callbackUrl: string) {
-    if (!callbackUrl.startsWith("frameq://auth/callback")) {
-      return;
-    }
-    setAccountOpen(true);
-    setAccountLoading(true);
-    setAccountNotice("正在完成登录...");
-    try {
-      await completeAuthFlow(callbackUrl);
-      await refreshAccountStatus();
-      setAccountNotice("登录已完成。");
-    } catch (error) {
-      setAccountNotice(`登录失败：${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setAccountLoading(false);
-    }
-  }
-
-  function openAccountPanel(notice?: string) {
-    setAccountOpen(true);
-    setAccountNotice(notice ?? "");
-    void refreshAccountStatus();
-  }
 
   async function submitUrl(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1211,59 +1171,6 @@ function App() {
     await loadSettings();
   }
 
-  async function startLoginFlow() {
-    setAccountLoading(true);
-    setAccountNotice("正在打开登录页面...");
-    try {
-      const auth = await beginAuthFlow();
-      await openUrl(auth.authUrl);
-      setAccountNotice("登录页面已打开。请在浏览器中输入邮箱验证码，完成后会自动回到 FrameQ。");
-    } catch (error) {
-      setAccountNotice(`无法开始登录：${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setAccountLoading(false);
-    }
-  }
-
-  async function redeemActivationCodeFromInput() {
-    const code = activationCodeDraft.trim();
-    if (!code) {
-      setAccountNotice("请输入激活码。");
-      return;
-    }
-    setActivationRedeeming(true);
-    setAccountNotice("");
-    try {
-      const status = await redeemActivationCode(code);
-      setAccount(status);
-      setActivationCodeDraft("");
-      setAccountNotice("激活成功，授权已生效。");
-    } catch (error) {
-      setAccountNotice(`激活失败：${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setActivationRedeeming(false);
-    }
-  }
-
-  async function signOutAccount() {
-    setAccountLoading(true);
-    try {
-      await logoutAccount();
-      if (isProcessingStage(workflow.stage)) {
-        void cancelProcess();
-      }
-      resetWorkflow();
-      setAccount(createGuestAccountStatus());
-      setActivationCodeDraft("");
-      setAccountNotice("");
-      setAccountOpen(false);
-    } catch (error) {
-      setAccountNotice(`退出登录失败：${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setAccountLoading(false);
-    }
-  }
-
   async function loadSettings(successNotice?: string) {
     setSettingsLoading(true);
     setSettingsNotice("正在读取配置。");
@@ -1462,26 +1369,6 @@ function App() {
     }
   }, [transcriptAudioSrc]);
 
-  const accountHasActiveEntitlement =
-    account.authenticated && account.entitlementStatus === "active";
-  const accountChipLabel = canProcessWithAccount(account)
-    ? "授权有效"
-    : account.authenticated
-      ? accountHasActiveEntitlement
-        ? account.llmConfigured
-          ? "LLM 额度不足"
-          : "待配置"
-        : "激活"
-      : "登录";
-  const accountStatusText = canProcessWithAccount(account)
-    ? `授权有效${account.entitlementExpiresAt ? `至 ${formatHistoryDate(account.entitlementExpiresAt)}` : ""}`
-    : account.authenticated
-      ? accountHasActiveEntitlement
-        ? account.llmConfigured
-          ? "LLM API 调用额度不足"
-          : "等待管理员配置 LLM"
-        : "未激活"
-      : "未登录";
   return (
     <main className="app-shell">
       <section className="desktop-window" aria-label="FrameQ 桌面窗口">
@@ -1656,7 +1543,7 @@ function App() {
         activationCodeDraft={activationCodeDraft}
         activationRedeeming={activationRedeeming}
         formatHistoryDate={formatHistoryDate}
-        onClose={() => setAccountOpen(false)}
+        onClose={closeAccountPanel}
         onActivationCodeChange={setActivationCodeDraft}
         onRedeemActivationCode={redeemActivationCodeFromInput}
         onSignOut={signOutAccount}
