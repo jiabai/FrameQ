@@ -20,8 +20,8 @@
 - [x] 2026-07-11: After user authorization, committed and pushed `08032c9`; run `29108030194` executed both original matrix jobs. The real parent-child process-group fixture passed on macOS and Ubuntu, while each full Cargo job failed on the same six Windows-only test fixtures.
 - [x] 2026-07-11: User clarified Linux is not a supported FrameQ platform. Changed the workflow contract red→green and reduced the workflow to one `macos-latest` job; no Linux dependency installation remains.
 - [x] 2026-07-11: Replaced Windows-drive test paths with platform-native fixture paths and made the packaged Python layout assertion use `bundled_python_path`; no production runtime or ProcessSupervisor implementation changed.
-- [ ] Push the minimal follow-up and record a complete green macOS Cargo job URL/ID.
-- [ ] Only after the hosted macOS job passes, close the macOS cancellation verification debt and archive this plan.
+- [x] 2026-07-11: Pushed the minimal follow-up as `b3cc6b3`; GitHub run `29108659472`, job `86415372457`, completed successfully on `macos-latest` with 90/90 Cargo tests.
+- [x] 2026-07-11: Confirmed the hosted log explicitly executed `unix_termination_stops_a_parent_and_child_in_the_managed_process_group ... ok`; closed the macOS cancellation verification debt and archived this plan.
 
 ## Task 1: Workflow contract TDD
 
@@ -50,9 +50,9 @@
 
 - [x] Wait for explicit user authorization before the initial commit or push.
 - [x] Inspect run `29108030194`: the macOS Unix fixture passed; the full job failed 84 passed / 6 failed because test-only paths encoded Windows drive syntax and `python.exe`. The original Ubuntu job showed the same six failures and also passed the Unix fixture, but Linux evidence is not a product gate.
-- [ ] Push the follow-up and inspect the macOS job log for both the named fixture and successful full Cargo result.
-- [ ] Record workflow run URL, run ID, commit SHA, and macOS job result.
-- [ ] Close the macOS verification technical debt only when the complete hosted job is green; otherwise keep it open with failure evidence and remediation status.
+- [x] Push the follow-up and inspect the macOS job log for both the named fixture and successful full Cargo result.
+- [x] Record workflow run URL `https://github.com/jiabai/FrameQ/actions/runs/29108659472`, run ID `29108659472`, job ID `86415372457`, commit `b3cc6b3e2fc0ed31b98deeecb5ae7f6917de6d58`, and successful macOS result.
+- [x] Close the macOS verification technical debt after the complete hosted job passed 90/90 and the real fixture was present as `ok` in the log.
 
 ## Decisions
 
@@ -95,9 +95,9 @@
 - `cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check`: passed.
 - Initial GitHub run `29108030194` at `08032c9`: macOS fixture passed, but the full macOS job failed 84/90 due to six test-only Windows path assumptions. Ubuntu produced the same six failures and also passed the Unix fixture; it was removed after Linux was declared unsupported.
 - After the macOS-only/test-fixture follow-up: Windows Rust 90/90, app 205/205 plus build, worker 249/249 plus Ruff, server 57/57 plus build, scripts 9/9, Rustfmt, docs, and diff checks passed locally.
-- Follow-up GitHub-hosted macOS run: pending push and green result.
+- Follow-up GitHub-hosted macOS run `29108659472`, job `86415372457`, commit `b3cc6b3e2fc0ed31b98deeecb5ae7f6917de6d58`: 90/90 passed; `unix_termination_stops_a_parent_and_child_in_the_managed_process_group ... ok`.
 
-## Residual Risk
+## Outcome
 
-- Until one complete hosted macOS Cargo job is green, macOS TERM-to-KILL verification remains open release debt. The named fixture passing inside a failed full job is useful evidence but does not satisfy the complete gate.
-- GitHub-hosted macOS runner image changes may later expose an OS-specific race; the workflow should remain a release-readiness signal after initial evidence.
+- The supported macOS path now has native hosted evidence for complete Cargo compilation/testing and real parent-plus-child process-group termination. The workflow remains read-only and has no installer, signing, release, payment, LLM, media download, or credential steps.
+- Linux was removed from the workflow and release claims after the product decision that it is unsupported. The remaining operational risk is future GitHub macOS runner-image drift or timing-specific cancellation behavior; retaining this workflow as a release-readiness signal detects those regressions.

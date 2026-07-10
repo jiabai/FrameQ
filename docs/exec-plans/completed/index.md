@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-11-unix-process-supervisor-ci-validation-plan.md` | Verified the real macOS ProcessSupervisor parent-child process-group cancellation fixture in a complete 90-test hosted Cargo run; Linux is not a supported target. |
 | `2026-07-10-worker-stdin-request-transport-plan.md` | Removed raw source URLs and serialized requests from worker argv/environment by using bounded supervised stdin delivery. |
 | `2026-07-08-split-summary-insights-generation-plan.md` | Split summary/mindmap and inspiration generation into independent target-scoped actions with artifact-preserving manifest updates. |
 | `2026-07-10-history-task-restore-ownership-plan.md` | Moved history restore into the workflow controller, blocked active task switches, and isolated stale callbacks from restored task identity. |
