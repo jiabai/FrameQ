@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import re
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
 
 from frameq_worker.models import PreferenceSnapshot, ProcessRequest, ProcessResult
+from frameq_worker.source_identity import (
+    SOURCE_PRIVACY_MIGRATION_VERSION,
+    SourceIdentity,
+    canonical_url_for_persistence,
+    migrate_legacy_source_data,
+    source_identity_from_manifest,
+)
 
 TASK_MANIFEST_FILE_NAME = "frameq-task.json"
-TASK_SCHEMA_VERSION = 2
+TASK_SCHEMA_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -95,9 +100,10 @@ class TaskPaths:
 
 @dataclass(frozen=True)
 class TaskContext:
-    request: ProcessRequest
     paths: TaskPaths
+    source_identity: SourceIdentity | None
     platform: str
+    model: str
     created_at: str
     worker_version: str = "app"
     app_version: str = "app"
@@ -109,19 +115,26 @@ class TaskContext:
 
 def create_task_context(
     request: ProcessRequest,
+    source_identity: SourceIdentity,
     output_root: Path,
     cache_root: Path,
     now: datetime | None = None,
 ) -> TaskContext:
     created = (now or datetime.now(UTC)).astimezone(UTC)
-    platform, source_slug = detect_platform_and_source_slug(request.url)
+    canonical_url_for_persistence(source_identity)
+    platform = source_identity.platform
+    part_suffix = ""
+    if source_identity.effective_part and source_identity.effective_part > 1:
+        part_suffix = f"-p{source_identity.effective_part}"
+    source_slug = f"{source_identity.stable_id[: 80 - len(part_suffix)]}{part_suffix}"
     timestamp = created.strftime("%Y%m%d-%H%M%S")
     task_id = f"{timestamp}-{platform}-{source_slug}"
     paths = TaskPaths(output_root=output_root, cache_root=cache_root, task_id=task_id)
     return TaskContext(
-        request=request,
         paths=paths,
+        source_identity=source_identity,
         platform=platform,
+        model=request.model,
         created_at=created.isoformat(timespec="seconds").replace("+00:00", "Z"),
     )
 
@@ -134,56 +147,6 @@ def ensure_task_dirs(paths: TaskPaths) -> None:
         paths.download_dir,
     ]:
         directory.mkdir(parents=True, exist_ok=True)
-
-
-def detect_platform_and_source_slug(source: str) -> tuple[str, str]:
-    parsed = urlparse(source if "://" in source else f"https://{source}")
-    host = parsed.hostname.lower() if parsed.hostname else ""
-    path = parsed.path
-    if host.endswith("douyin.com"):
-        match = re.search(r"/(?:video|note|share/slides)/(\d+)", path)
-        source_id = match.group(1) if match else parse_first_numeric_query(parsed.query)
-        return "douyin", safe_slug(source_id or short_hash(source))
-    if (
-        host.endswith("xiaohongshu.com")
-        or host.endswith("xhslink.com")
-        or re.fullmatch(r"[0-9a-fA-F]{24}", source)
-    ):
-        match = re.search(r"([0-9a-fA-F]{24})", source)
-        return "xiaohongshu", safe_slug(match.group(1).lower() if match else short_hash(source))
-    if host.endswith("bilibili.com") or host.endswith("b23.tv"):
-        match = re.search(r"/video/(BV[0-9A-Za-z]+|av\d+)", path, re.IGNORECASE)
-        return "bilibili", safe_slug(match.group(1) if match else short_hash(source))
-    if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be"}:
-        source_id = ""
-        if host in {"youtu.be", "www.youtu.be"}:
-            source_id = path.strip("/").split("/")[0]
-        elif path.rstrip("/") == "/watch":
-            source_id = parse_qs(parsed.query).get("v", [""])[0]
-        else:
-            match = re.search(r"/shorts/([A-Za-z0-9_-]+)", path)
-            source_id = match.group(1) if match else ""
-        return "youtube", safe_slug(source_id or short_hash(source))
-    return "source", short_hash(source)
-
-
-def parse_first_numeric_query(query: str) -> str | None:
-    values = parse_qs(query)
-    for key in ["modal_id", "aweme_id"]:
-        value = values.get(key, [""])[0]
-        if value.isdigit():
-            return value
-    return None
-
-
-def safe_slug(value: str) -> str:
-    normalized = re.sub(r"[^0-9A-Za-z_-]+", "-", value.strip())
-    normalized = normalized.strip("-_")
-    return normalized[:80] or "source"
-
-
-def short_hash(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 
 def task_artifacts_for_existing_files(paths: TaskPaths) -> dict[str, str]:
@@ -227,18 +190,27 @@ def result_with_task(
 
 
 def write_task_manifest(context: TaskContext, result: ProcessResult) -> None:
+    source_identity = context.source_identity
+    canonical_url = canonical_url_for_persistence(source_identity)
     context.paths.task_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": TASK_SCHEMA_VERSION,
+        "source_privacy_migration_version": SOURCE_PRIVACY_MIGRATION_VERSION,
+        "source_privacy_quarantined": False,
         "task_id": context.task_id,
         "created_at": context.created_at,
         "updated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "source_url": context.request.url,
+        "source_url": canonical_url or "",
+        **(
+            {"source_identity": source_identity.to_manifest_dict()}
+            if source_identity is not None
+            else {}
+        ),
         "platform": context.platform,
         "status": result.status.value,
         "app_version": context.app_version,
         "worker_version": context.worker_version,
-        "model": context.request.model,
+        "model": context.model,
         "transcript": result.transcript.to_dict() if result.transcript else None,
         "artifacts": result.artifacts,
         "error": result.error.to_dict() if result.error else None,
@@ -263,23 +235,76 @@ def write_preference_snapshot_artifact(
 
 
 def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
-    manifest_path = output_root / "tasks" / task_id / TASK_MANIFEST_FILE_NAME
+    manifest_path = _validated_task_manifest_path(output_root, task_id)
+    migrate_legacy_source_data(output_root, task_id=task_id)
+    manifest_path = _validated_task_manifest_path(output_root, task_id)
     return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def _validated_task_manifest_path(output_root: Path, task_id: str) -> Path:
+    task_id_path = Path(task_id)
+    if (
+        task_id_path.is_absolute()
+        or len(task_id_path.parts) != 1
+        or task_id_path.name != task_id
+        or task_id in {"", ".", ".."}
+    ):
+        raise ValueError("Task id must be a single directory name.")
+
+    tasks_root = (output_root / "tasks").resolve()
+    task_dir = output_root / "tasks" / task_id
+    manifest_path = task_dir / TASK_MANIFEST_FILE_NAME
+    if (
+        _is_link_or_junction(task_dir)
+        or _is_link_or_junction(manifest_path)
+        or not task_dir.is_dir()
+        or not manifest_path.is_file()
+    ):
+        raise ValueError("Task storage is unavailable or linked.")
+    try:
+        if not task_dir.resolve().is_relative_to(tasks_root):
+            raise ValueError("Task storage is outside the configured output root.")
+    except OSError as exc:
+        raise ValueError("Task storage could not be resolved.") from exc
+    return manifest_path
+
+
+def _is_link_or_junction(path: Path) -> bool:
+    is_junction = getattr(os.path, "isjunction", lambda _path: False)
+    return path.is_symlink() or bool(is_junction(path))
 
 
 def task_context_from_manifest(output_root: Path, cache_root: Path, task_id: str) -> TaskContext:
     manifest = load_task_manifest(output_root, task_id)
-    source_url = str(manifest.get("source_url") or "")
+    if manifest.get("source_privacy_quarantined") is True:
+        raise ValueError("Task is quarantined because its identifier contains source credentials.")
+    if (
+        manifest.get("source_privacy_migration_version")
+        != SOURCE_PRIVACY_MIGRATION_VERSION
+    ):
+        raise ValueError("Task source privacy migration is incomplete.")
+    source_identity = source_identity_from_manifest(manifest.get("source_identity"))
+    source_url = manifest.get("source_url")
+    if source_identity is not None:
+        if source_url != source_identity.canonical_url:
+            raise ValueError("Task source identity is inconsistent.")
+    elif source_url != "" or "source_identity" in manifest:
+        raise ValueError("Task source identity is unavailable or invalid.")
     model = str(manifest.get("model") or "iic/SenseVoiceSmall")
-    platform = str(manifest.get("platform") or "source")
+    platform = (
+        source_identity.platform
+        if source_identity
+        else str(manifest.get("platform") or "source")
+    )
     created_at = str(
         manifest.get("created_at")
         or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
     )
     return TaskContext(
-        request=ProcessRequest(url=source_url, model=model),
         paths=TaskPaths(output_root=output_root, cache_root=cache_root, task_id=task_id),
+        source_identity=source_identity,
         platform=platform,
+        model=model,
         created_at=created_at,
         app_version=str(manifest.get("app_version") or "app"),
         worker_version=str(manifest.get("worker_version") or "app"),

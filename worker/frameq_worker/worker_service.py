@@ -36,6 +36,11 @@ from frameq_worker.requests import (
     parse_retry_insights_request,
     resolve_configured_asr_model,
 )
+from frameq_worker.source_identity import (
+    SourceIdentityError,
+    migrate_legacy_source_data,
+    resolve_source_request,
+)
 from frameq_worker.task_store import (
     ensure_task_dirs,
     load_task_manifest,
@@ -115,6 +120,45 @@ def run_worker_once(
     return result.to_dict()
 
 
+def resolve_source_identity_once(request_json: str) -> dict[str, object]:
+    try:
+        payload = json.loads(request_json)
+    except json.JSONDecodeError:
+        return {
+            "status": "failed",
+            "error": {"code": "INVALID_SOURCE_IDENTITY_JSON"},
+        }
+    raw_url = payload.get("url") if isinstance(payload, dict) else None
+    if not isinstance(raw_url, str) or not raw_url.strip():
+        return {
+            "status": "failed",
+            "error": {"code": "INVALID_SOURCE_IDENTITY_PAYLOAD"},
+        }
+    try:
+        identity = resolve_source_request(raw_url).identity
+    except SourceIdentityError:
+        return {
+            "status": "failed",
+            "error": {"code": "SOURCE_IDENTITY_UNAVAILABLE"},
+        }
+    return {
+        "status": "completed",
+        "source_url": identity.canonical_url,
+        "source_identity": identity.to_manifest_dict(),
+    }
+
+
+def migrate_source_data_once(
+    project_root: Path | None = None,
+    environ: dict[str, str] | None = None,
+) -> dict[str, object]:
+    root = project_root or Path.cwd()
+    runtime_env = load_project_env(root, environ)
+    output_dir = resolve_output_dir(root, runtime_env)
+    report = migrate_legacy_source_data(output_dir)
+    return {"status": "completed", "migration": report.to_dict()}
+
+
 def retry_insights_once(
     request_json: str,
     project_root: Path | None = None,
@@ -153,13 +197,12 @@ def retry_insights_once(
     try:
         task_context = task_context_from_manifest(output_dir, cache_dir, request.task_id)
         manifest = load_task_manifest(output_dir, request.task_id)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError):
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,
-            task_id=request.task_id,
             error=WorkerError(
                 code="TASK_MANIFEST_NOT_FOUND",
-                message=f"Task manifest is required to regenerate insights: {exc}",
+                message="A safe task manifest is required to regenerate insights.",
                 stage=JobStage.INSIGHTS_GENERATING,
             ),
         ).to_dict()
@@ -170,28 +213,10 @@ def retry_insights_once(
             request.preference_snapshot,
         )
 
-    transcript_text = (
-        task_context.paths.transcript_txt_path.read_text(encoding="utf-8").strip()
-        if task_context.paths.transcript_txt_path.exists()
-        else ""
-    )
-    if not task_context.paths.transcript_md_path.exists() and configured_insight_client is not None:
-        result = finalize_task_result(
-            task_context,
-            failed_insight_retry_result(
-                code="TRANSCRIPT_MARKDOWN_NOT_FOUND",
-                message="Transcript markdown file is required to regenerate insights.",
-                text=transcript_text,
-                transcript=transcript_metadata_from_manifest(manifest),
-            ),
-        )
-        return result.to_dict()
-
     insight_result = run_insight_generation_step(
-        transcript_path=task_context.paths.transcript_md_path,
+        transcript_txt_path=task_context.paths.transcript_txt_path,
         output_dir=task_context.paths.ai_dir,
         output_stem="",
-        transcript_text=transcript_text,
         client=configured_insight_client,
         transcript=transcript_metadata_from_manifest(manifest),
         preference_snapshot=request.preference_snapshot,

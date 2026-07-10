@@ -21,13 +21,15 @@ use std::sync::Mutex;
 #[cfg(target_os = "windows")]
 const WINDOWS_CREATE_NO_WINDOW: u32 = 0x08000000;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) enum WorkerInvocation {
     ProcessVideo(String),
     RetryInsights(String),
+    ResolveSourceIdentity(String),
+    MigrateSourceData,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct WorkerCommandSpec {
     pub(crate) program: PathBuf,
     pub(crate) args: Vec<String>,
@@ -116,7 +118,10 @@ fn redact_worker_args_for_log(args: &[String]) -> Vec<String> {
         }
 
         redacted.push(arg.clone());
-        if arg == "--request-json" || arg == "--retry-insights-json" {
+        if arg == "--request-json"
+            || arg == "--retry-insights-json"
+            || arg == "--resolve-source-json"
+        {
             redact_next = true;
         }
     }
@@ -187,9 +192,17 @@ pub(crate) fn build_worker_command_spec(
     server_managed_llm: Option<account::ServerManagedLlmInvocation>,
 ) -> Result<WorkerCommandSpec, String> {
     let include_server_managed_llm = worker_invocation_uses_server_managed_llm(&invocation);
-    let (flag, payload) = match invocation {
-        WorkerInvocation::ProcessVideo(payload) => ("--request-json", payload),
-        WorkerInvocation::RetryInsights(payload) => ("--retry-insights-json", payload),
+    let args = match invocation {
+        WorkerInvocation::ProcessVideo(payload) => {
+            vec!["--request-json".to_string(), payload]
+        }
+        WorkerInvocation::RetryInsights(payload) => {
+            vec!["--retry-insights-json".to_string(), payload]
+        }
+        WorkerInvocation::ResolveSourceIdentity(payload) => {
+            vec!["--resolve-source-json".to_string(), payload]
+        }
+        WorkerInvocation::MigrateSourceData => vec!["--migrate-source-data".to_string()],
     };
     let resource_bin_dir = paths.resource_dir.join("bin");
     let path_value = prepend_to_path(&resource_bin_dir)?;
@@ -240,22 +253,40 @@ pub(crate) fn build_worker_command_spec(
 
     Ok(WorkerCommandSpec {
         program: bundled_python_path(&paths.resource_dir),
-        args: vec![
-            "-m".to_string(),
-            "frameq_worker".to_string(),
-            flag.to_string(),
-            payload,
-        ],
+        args: [vec!["-m".to_string(), "frameq_worker".to_string()], args].concat(),
         env,
         env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),
     })
 }
 
+pub(crate) fn migrate_legacy_source_data_if_needed(paths: &RuntimePaths) -> Result<(), String> {
+    let output_root = task_manifest::configured_output_root(paths)?;
+    if !task_manifest::has_legacy_source_data(&output_root)? {
+        return Ok(());
+    }
+    let spec = build_worker_command_spec(paths, WorkerInvocation::MigrateSourceData, None)?;
+    let output = spawn_worker_command(spec)?
+        .wait_with_output()
+        .map_err(|_| "Source metadata migration worker failed to finish.".to_string())?;
+    if !output.status.success() {
+        return Err("Source metadata migration worker failed.".to_string());
+    }
+    let result = parse_worker_stdout(&output.stdout)
+        .map_err(|_| "Source metadata migration returned an invalid result.".to_string())?;
+    if result.get("status").and_then(serde_json::Value::as_str) == Some("completed") {
+        Ok(())
+    } else {
+        Err("Source metadata migration did not complete.".to_string())
+    }
+}
+
 fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> bool {
     match invocation {
         WorkerInvocation::RetryInsights(_) => true,
-        WorkerInvocation::ProcessVideo(_) => false,
+        WorkerInvocation::ProcessVideo(_)
+        | WorkerInvocation::ResolveSourceIdentity(_)
+        | WorkerInvocation::MigrateSourceData => false,
     }
 }
 
@@ -315,6 +346,7 @@ pub(crate) fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, St
         .take(3)
         .collect::<Vec<_>>()
         .join("\n");
+    let preview = sanitize_diagnostic_text(&preview);
     let detail = last_error.unwrap_or_else(|| "stdout did not contain JSON".to_string());
     Err(format!(
         "Worker stdout did not contain a structured JSON result: {detail}. stdout preview: {preview}"
@@ -381,7 +413,8 @@ pub(crate) fn terminate_process_tree(pid: u32) -> Result<(), String> {
 mod tests {
     use super::{
         build_worker_command_spec, parse_worker_output_or_fallback, parse_worker_stdout,
-        run_blocking_worker_command, WorkerCommandSpec, WorkerInvocation, WorkerProcessState,
+        redact_worker_args_for_log, run_blocking_worker_command, WorkerCommandSpec,
+        WorkerInvocation, WorkerProcessState,
     };
     use crate::account::ServerManagedLlmInvocation;
     use crate::{ProcessVideoResult, RuntimePaths, WorkerError};
@@ -407,6 +440,22 @@ mod tests {
         ] {
             assert!(!spec.env_remove.iter().any(|value| value == key));
         }
+    }
+
+    #[test]
+    fn source_identity_preflight_payload_is_redacted_from_logs() {
+        let secret_payload = r#"{"url":"https://xhslink.com/o/demo?xsec_token=review-secret"}"#;
+        let redacted = redact_worker_args_for_log(&[
+            "-m".to_string(),
+            "frameq_worker".to_string(),
+            "--resolve-source-json".to_string(),
+            secret_payload.to_string(),
+        ])
+        .join(" ");
+
+        assert!(redacted.contains("[json-payload]"));
+        assert!(!redacted.contains("review-secret"));
+        assert!(!redacted.contains("xsec_token"));
     }
 
     #[test]
@@ -600,7 +649,8 @@ Some dependency logged to stdout
     }
 
     #[test]
-    fn worker_command_spec_skips_server_managed_llm_for_process_video_even_if_payload_requests_ai() {
+    fn worker_command_spec_skips_server_managed_llm_for_process_video_even_if_payload_requests_ai()
+    {
         let paths = RuntimePaths {
             resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
             user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),

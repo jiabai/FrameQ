@@ -1,5 +1,14 @@
 # Security and Compliance
 
+## 2026-07-10 Source URL Secret Boundary
+
+- A submitted source URL is credential-bearing input even when it points to public content. `xsec_token`, access/session/auth tokens, signatures, expiries, cookies encoded in queries, URL userinfo, and fragments must be treated as secrets or volatile request material.
+- `SourceRequest.download_url` is transient request material for frontend-to-Tauri IPC, the current full-worker command, and the downloader/fallback argument. A cache-only worker preflight may also receive the raw submission transiently but may return only validated `SourceIdentity`. Neither request object has a persistence/result serialization path; worker command payload logging must be redacted, and the raw URL must not enter `frameq-task.json`, transcript files, results, progress events, history, desktop logs, UI errors, cloud prompts, or server requests.
+- `canonical_url` is reconstructed from an allowlisted platform identifier and is the only source URL allowed beyond the current download boundary. Canonicalization must drop userinfo, fragments, and every query field except Bilibili's non-default part selector.
+- Downloader stderr and fallback exceptions are untrusted because tools may echo the original URL. Only structured error codes and source-identity-sanitized public messages may cross into results or diagnostics.
+- Cloud AI receives only the saved task-root `transcript/transcript.txt` text selected by the user action after exact-path and link/reparse-point validation. Transcript Markdown metadata, alternate same-named text files, source URLs, manifest contents, local paths, and downloader diagnostics are forbidden prompt inputs.
+- Legacy task cleanup is bounded to discovered manifests, declared or conventional task-local transcript Markdown metadata, and declared or conventional FrameQ AI artifacts below the configured output task root. Canonicalizable fields, supplemental manifest values, and standalone credential assignments are rewritten locally, and old AI echoes of recovered source credentials are redacted; history returns no task content if migration is incomplete. Read/write/interruption failures preserve retryable manifest state, and corrupt manifest reads are isolated without weakening traversal/link failures. Automatic cleanup does not scan transcript body text, media, exported files, user-managed backups, arbitrary directories, or old log archives. Directory names containing recovered secret values are quarantined from product reads instead of being renamed unsafely.
+
 ## 2026-07-06 Insight Preference Privacy Boundary
 
 - `我的灵感档案` and per-run generation preferences are local desktop data by default and must not be uploaded to FrameQ server.
@@ -21,7 +30,7 @@
 
 ## 2026-07-05 Task Artifact Path Boundary
 
-- Task manifests may contain local artifact paths only as relative paths under the owning task directory. Absolute paths, `..`, path traversal, remote URLs, cookies, headers, or credentials must be rejected.
+- Task-manifest artifact-path fields may contain local paths only as relative paths under the owning task directory. Absolute paths, `..`, path traversal, remote URLs, cookies, headers, or credentials must be rejected; the allowlisted `source_identity.canonical_url` is source metadata, not an artifact path.
 - Tauri task commands must resolve `task_id` to a manifest under the configured output root and must verify every resolved artifact path remains inside that task directory.
 - Repeated URL task reuse may read only local manifests and manifest-relative artifacts under the configured output root. It must not trust failed tasks, missing artifacts, traversal paths, remote URLs, cookies, headers, or credentials.
 - Transcript review and save commands should receive `task_id`, not arbitrary transcript/audio paths. The audio player and text editor may access only manifest-declared artifacts for that task.
@@ -92,7 +101,7 @@
 - FrameQ must not migrate EasyDownload's WeChat MITM, certificate authority installation, system proxy changes, or administrator-elevation behavior.
 - Worker fallbacks may use fixed compatibility headers and process-local anonymous cookies naturally issued by a public share page for one invocation only. Those cookies must not be read from browser stores, written to disk, sent to FrameQ server, or stored in history/logs.
 - Bilibili ordinary public-video DASH assembly is allowed only when it can run without login or cookies and produces one local MP4 for transcription. Bilibili login, QR login, SESSDATA handling, PGC/bangumi, member-only behavior, DRM, and downloader-oriented workflows remain out of scope.
-- Safe download helpers must avoid logging cookies, sensitive headers, authorization material, or full volatile media CDN URLs. Logs and history may keep the original submitted URL, hostnames, short error causes, quality labels, byte sizes, and local output paths.
+- Safe download helpers must avoid logging cookies, sensitive headers, authorization material, submitted/download URLs, or full volatile media CDN URLs. Logs may keep platform names, hostnames, short sanitized error causes, quality labels, byte sizes, task ids, and local output paths; history may keep only canonical source identities.
 - When a link is unavailable, login-gated, CAPTCHA-gated, private, image-only, or has no playable video stream, the worker must return structured recoverable errors rather than attempting to bypass access controls.
 
 ## 2026-06-25 Douyin Share Page Fallback Boundary
@@ -102,7 +111,7 @@
 - The fallback may use a fixed mobile Safari user agent and minimal public-page headers for compatibility with public share pages. It must not use user-agent rotation, proxy pools, browser fingerprint spoofing, CAPTCHA solving, login automation, or account-authenticated scraping.
 - A process-local cookie jar may accept anonymous cookies naturally set by the public share page, such as `ttwid`, but those cookies must be discarded after the worker invocation and must not be written to history, logs, app-local settings, or server requests.
 - The fallback must not attempt to solve CAPTCHA, defeat login gates, bypass private content restrictions, or automate account-authenticated scraping.
-- Worker logs, history records, and UI errors must not store cookies, sensitive request headers, or full media CDN URLs when those URLs contain volatile request tokens. Logs may keep the original submitted URL, short error summaries, hostnames, stream quality labels, byte sizes, and local output paths.
+- Worker logs, history records, and UI errors must not store submitted/download URLs, cookies, sensitive request headers, or full media CDN URLs when those URLs contain volatile request tokens. Logs may keep canonical platform identifiers, short sanitized error summaries, hostnames, stream quality labels, byte sizes, task ids, and local output paths.
 - Downloaded video, extracted audio, transcripts, summaries, mindmaps, and topic outputs remain local artifacts under the configured output/cache directories; no fallback media data is sent to the FrameQ server.
 
 ## 2026-06-23 Desktop Update Boundary

@@ -26,7 +26,7 @@
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前安装包发布计划：`docs/exec-plans/active/2026-06-18-installer-distribution-runtime-plan.md`
-- 最近完成执行计划：`docs/exec-plans/completed/2026-07-07-personalized-insight-preferences-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-07-10-source-url-privacy-boundary-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

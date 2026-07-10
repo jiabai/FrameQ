@@ -185,6 +185,34 @@ def test_parse_xiaohongshu_input_accepts_3xx_location_and_https_retry() -> None:
     ]
 
 
+def test_parse_xiaohongshu_short_link_rejects_token_only_resolved_url() -> None:
+    token_value = "0123456789abcdef01234567"
+    short_url = "https://xhslink.com/token-only"
+    client = FakeHttpClient(
+        {
+            short_url: [
+                HttpResponse(
+                    status=302,
+                    headers={
+                        "Location": (
+                            "https://www.xiaohongshu.com/explore"
+                            f"?xsec_token={token_value}"
+                        )
+                    },
+                    body=b"",
+                    url=short_url,
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(XiaohongshuFallbackError) as exc_info:
+        parse_xiaohongshu_input(short_url, http_client=client)
+
+    assert exc_info.value.code == "XHS_ID_PARSE_FAILED"
+    assert token_value not in str(exc_info.value)
+
+
 def test_page_headers_request_brotli_navigation_compatibility() -> None:
     headers = _page_headers()
 

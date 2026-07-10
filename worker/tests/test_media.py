@@ -594,6 +594,26 @@ def test_download_video_preserves_non_douyin_ytdlp_failure(tmp_path: Path) -> No
         download_video("https://example.com/video/1", output_dir=tmp_path, runner=fake_runner)
 
 
+def test_command_execution_error_message_never_echoes_sensitive_source_url() -> None:
+    raw_url = (
+        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+        "?xsec_token=review-secret"
+    )
+    error = CommandExecutionError(
+        CommandResult(
+            command=["yt-dlp", raw_url],
+            returncode=1,
+            stdout="",
+            stderr=f"ERROR: failed to download {raw_url}",
+        )
+    )
+
+    message = str(error)
+    assert "review-secret" not in message
+    assert "xsec_token" not in message
+    assert raw_url not in message
+
+
 def test_probe_media_file_runs_ffprobe_and_parses_stdout() -> None:
     payload = {
         "streams": [

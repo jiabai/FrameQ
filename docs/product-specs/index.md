@@ -13,6 +13,7 @@
 
 ## Distribution Spec
 
+- `2026-07-10-source-url-privacy-boundary.md` - Separate process-local download URLs from safe canonical source identities and keep raw/sensitive URL metadata out of persistence, history, diagnostics, and cloud AI prompts.
 - `2026-07-05-processing-toolbar-new-task-guard.md` - Disable the toolbar new-task/reset action while a video task is actively processing.
 - `2026-07-05-app-local-cache-dir-rename.md` - Use `cache/` for the app-local temporary task area and retire the legacy worker env contract.
 - `2026-07-05-repeat-url-task-reuse.md` - Reuse an existing completed local task when the same public video URL is submitted again.

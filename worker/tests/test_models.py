@@ -9,13 +9,19 @@ from frameq_worker.models import (
 
 
 def test_process_request_uses_mvp_defaults() -> None:
-    request = ProcessRequest(url="https://www.douyin.com/video/7524373044106677544")
+    sensitive_url = (
+        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+        "?xsec_token=review-secret"
+    )
+    request = ProcessRequest(url=sensitive_url)
 
     assert request.language == "Chinese"
     assert request.output_formats == ("txt", "md")
     assert request.model == "iic/SenseVoiceSmall"
     assert request.generate_insights is False
     assert request.insightflow_mode == "embedded"
+    assert "review-secret" not in repr(request)
+    assert "xsec_token" not in repr(request)
 
 
 def test_process_result_serializes_task_artifacts_text_and_insights() -> None:

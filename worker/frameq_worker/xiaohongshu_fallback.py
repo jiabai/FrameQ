@@ -472,16 +472,8 @@ def _parse_xhs_note_url(raw_url: str) -> XiaohongshuParseResult | None:
     if not _is_acceptable_xhs_host(host):
         raise XiaohongshuFallbackError("XHS_URL_INVALID", "Unsupported Xiaohongshu host.")
 
-    note_id = _first_note_id(parsed.path)
+    note_id = _note_id_from_path(parsed.path)
     query = urllib.parse.parse_qs(parsed.query)
-    if note_id is None:
-        for values in query.values():
-            for value in values:
-                note_id = _first_note_id(value)
-                if note_id is not None:
-                    break
-            if note_id is not None:
-                break
     if note_id is None:
         raise XiaohongshuFallbackError(
             "XHS_ID_PARSE_FAILED",
@@ -496,9 +488,17 @@ def _parse_xhs_note_url(raw_url: str) -> XiaohongshuParseResult | None:
     )
 
 
-def _first_note_id(value: str) -> str | None:
-    match = XHS_NOTE_ID_PATTERN.search(value)
-    return match.group(0).lower() if match else None
+def _note_id_from_path(path: str) -> str | None:
+    segments = [segment for segment in path.split("/") if segment]
+    candidate = ""
+    if len(segments) == 2 and segments[0].lower() == "explore":
+        candidate = segments[1]
+    elif len(segments) == 3 and [part.lower() for part in segments[:2]] == [
+        "discovery",
+        "item",
+    ]:
+        candidate = segments[2]
+    return candidate.lower() if XHS_NOTE_ID_PATTERN.fullmatch(candidate) else None
 
 
 def _is_xhs_short_link(url: str) -> bool:

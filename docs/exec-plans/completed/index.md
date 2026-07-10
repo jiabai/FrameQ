@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-10-source-url-privacy-boundary-plan.md` | Added transient download URL separation, canonical persisted source identity, pure-text AI input, safe cache/history matching, and bounded legacy artifact cleanup/quarantine. |
 | `2026-07-07-tauri-lib-module-split-plan.md` | Split the oversized Tauri `lib.rs` into focused runtime, diagnostics, worker command, ASR model, video processing, and deep-link modules without behavior changes. |
 | `2026-07-07-personalized-insight-preferences-plan.md` | Add local inspiration profile, six-step per-run generation preferences, confirmation snapshot, and structured personalized insight-topic results without server-side preference storage. |
 | `2026-07-07-per-llm-call-quota-plan.md` | Aligned server-managed LLM quota accounting with the per-cloud-LLM-API-call quota definition. |

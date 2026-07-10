@@ -1,5 +1,14 @@
 # FrameQ Architecture
 
+## 2026-07-10 Source Identity and AI Input Boundary
+
+- The worker owns one source boundary for every request. `SourceRequest` contains transient `download_url` for the current downloader/fallback call and has no persistence/result serialization path. The raw submission crosses IPC and redacted worker command payloads only for a cache-only identity preflight or the current full processing call. The separate persistable `SourceIdentity` contains only version, platform, stable id, effective part, and canonical URL.
+- Canonical URLs are reconstructed from allowlisted stable platform identifiers: Xiaohongshu note ID, Bilibili BV/av ID plus non-default `p`, YouTube video ID, or Douyin video/work ID. Userinfo, fragments, and non-allowlisted query fields never cross the canonicalization boundary.
+- Supported short links are resolved in the worker, then canonicalized from the resolved stable ID. The original short link remains only the current download input. A failed resolution cannot promote the raw URL to persistent identity.
+- Task creation, transcript writing, and manifest writing accept only a worker-validated `SourceIdentity`. Cache matching and history defensively validate the persisted identity but do not regenerate platform canonical URLs in Tauri. A desktop preflight identity is cache-only advisory data and is never injected into the full worker request.
+- `transcript/transcript.txt` under the same task root as `ai/` is the official AI input artifact. Summary, Mermaid mindmap, topic planning, per-topic insights, and retries validate that exact path before reading its plain text body; `transcript.md`, alternate same-named files, and linked/reparse-point targets must not be used as prompt sources.
+- Legacy task manifests are migrated only below the configured output task root. Safely recoverable platform URLs, supplemental manifest metadata, known transcript Markdown metadata, and known AI artifacts are rewritten/redacted with bounded task-local paths and atomic compare-before-replace writes; otherwise UI/history receives no artifacts and source-based reuse is disabled. Read/write/interruption failure leaves the original manifest retryable, while a task id containing a recovered secret value is quarantined rather than renamed automatically.
+
 ## 2026-07-09 Account Processing and AI Gate Boundary
 
 - `/api/desktop/account` returns two capability fields with different responsibilities. `can_process` means the authenticated desktop user has an active entitlement and may start local video extraction, audio extraction, and ASR transcription.
@@ -42,7 +51,7 @@
 - Final artifacts use stable names inside task folders: `media/video.mp4`, `media/audio.wav`, `transcript/transcript.txt`, `transcript/transcript.md`, `transcript/segments.json`, `ai/summary.md`, `ai/mindmap.mmd`, `ai/insights.json`, and `ai/insights.md`.
 - App-local `cache/tasks/<task_id>/` owns temporary downloads, partial files, media merge scratch space, and diagnostics. It is not the user-facing artifact contract.
 - `frameq-task.json` is the source of truth for desktop history and artifact lookup. Any app-local cache index is rebuildable, not the authority.
-- Tauri may satisfy a repeated source URL from an existing completed or partial-completed task manifest when the transcript artifact still exists. This cache hit returns the existing task result before worker launch; unusable or broken old tasks are skipped.
+- Tauri may satisfy a repeated canonical source identity from an existing completed or partial-completed task manifest when the transcript artifact still exists. Exact canonical URLs can hit before Python launch; variants and short links may invoke the worker's lightweight identity preflight, but a hit returns before download/transcode/ASR and unusable or broken old tasks are skipped.
 - Tauri commands should resolve artifacts from `task_id` and manifest-relative paths only. They must not accept arbitrary transcript/audio/result paths for normal task operations.
 - The old flat-output/history contract is intentionally retired for new builds. Legacy flat outputs and legacy app-local history records do not need migration or compatibility behavior.
 
@@ -51,8 +60,8 @@
 - The worker may request public platform subtitle files for YouTube and Bilibili `yt-dlp` success paths before loading ASR. This is a worker-owned transcript optimization, not a new UI platform crawler or download workflow.
 - Subtitle probing runs after media validation/audio extraction and before ASR model readiness/loading checks. This preserves the current `media/video.mp4`, `media/audio.wav`, audio review, result cards, and history behavior while skipping only ASR model load/inference when subtitles are usable.
 - Bilibili public fallback does not fetch or reuse subtitles in v1. If `yt-dlp` fails and `download_bilibili_video` succeeds, the task continues through the existing ASR path.
-- Subtitle parsing writes the same official `transcript/transcript.txt`, `transcript/transcript.md`, and `transcript/segments.json` artifacts as ASR. Later AI整理 continues to read the official saved transcript.
-- `frameq-task.json` schema version 2 keeps top-level `model` as the configured ASR fallback model and adds `transcript: { source, language, engine }` for the actual transcript source. Schema version 1 manifests without `transcript` are treated as ASR-sourced for history restore.
+- Subtitle parsing writes the same official `transcript/transcript.txt`, `transcript/transcript.md`, and `transcript/segments.json` artifacts as ASR. Later AI整理 reads only the official saved `transcript.txt` body.
+- `frameq-task.json` schema version 3 keeps top-level `model`, `transcript: { source, language, engine }`, canonical `source_url`, and the structured `source_identity`. Schema versions 1 and 2 remain readable; version 1 manifests without `transcript` are treated as ASR-sourced, while missing source identity triggers bounded migration or a no-link placeholder.
 - Raw `.vtt` / `.srt` files remain temporary files in `cache/tasks/<task_id>/download/` and are not user-facing artifacts or manifest paths.
 
 ## 2026-07-03 Transcript Detail and Audio Review Boundary

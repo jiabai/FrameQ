@@ -9,6 +9,7 @@ from frameq_worker.cli import (
     PROGRESS_EVENT_PREFIX,
     render_progress_event,
     render_result_json,
+    resolve_source_identity_once,
     run_worker_once,
 )
 from frameq_worker.media import CommandResult
@@ -160,6 +161,75 @@ def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> 
 def test_render_helpers_emit_json_and_progress_prefix() -> None:
     assert json.loads(render_result_json({"status": "completed"})) == {"status": "completed"}
     assert render_progress_event({"stage": "video_extracting"}).startswith(PROGRESS_EVENT_PREFIX)
+
+
+def test_source_identity_preflight_returns_only_safe_identity() -> None:
+    result = resolve_source_identity_once(
+        json.dumps(
+            {
+                "url": (
+                    "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+                    "?xsec_token=review-secret&source=web#comments"
+                )
+            }
+        )
+    )
+
+    assert result["status"] == "completed"
+    assert result["source_url"] == (
+        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+    )
+    serialized = json.dumps(result)
+    assert "review-secret" not in serialized
+    assert "xsec_token" not in serialized
+
+
+def test_migration_cli_reports_counts_without_logging_sensitive_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output_root = tmp_path / "outputs"
+    task_id = "legacy-cli-migration"
+    task_dir = output_root / "tasks" / task_id
+    task_dir.mkdir(parents=True)
+    (task_dir / "frameq-task.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "task_id": task_id,
+                "source_url": (
+                    "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+                    "?xsec_token=review-secret"
+                ),
+                "platform": "xiaohongshu",
+                "status": "completed",
+                "artifacts": {},
+                "error": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    migrate_once = cli.migrate_source_data_once
+    monkeypatch.setattr(
+        cli,
+        "migrate_source_data_once",
+        lambda **_kwargs: migrate_once(
+            project_root=tmp_path,
+            environ={"FRAMEQ_OUTPUT_DIR": output_root.as_posix()},
+        ),
+    )
+
+    exit_code = cli.main(["--migrate-source-data"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["status"] == "completed"
+    assert payload["migration"]["migrated_manifests"] == 1
+    combined_output = captured.out + captured.err
+    assert "review-secret" not in combined_output
+    assert "xsec_token" not in combined_output
 
 
 def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Path) -> None:

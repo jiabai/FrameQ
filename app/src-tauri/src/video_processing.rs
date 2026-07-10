@@ -3,10 +3,11 @@ use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, AS
 use crate::task_manifest;
 use crate::{
     append_desktop_log, build_worker_command_spec, ensure_runtime_dirs,
-    parse_worker_output_or_fallback, path_to_env_string, resolve_runtime_paths,
-    run_blocking_worker_command, spawn_worker_command, summarize_worker_result_for_log,
-    terminate_process_tree, worker_command_log_detail, worker_exit_log_detail, WorkerInvocation,
-    WorkerProcessState, PROGRESS_EVENT_NAME, PROGRESS_EVENT_PREFIX,
+    migrate_legacy_source_data_if_needed, parse_worker_output_or_fallback, parse_worker_stdout,
+    path_to_env_string, resolve_runtime_paths, run_blocking_worker_command, spawn_worker_command,
+    summarize_worker_result_for_log, terminate_process_tree, worker_command_log_detail,
+    worker_exit_log_detail, WorkerInvocation, WorkerProcessState, PROGRESS_EVENT_NAME,
+    PROGRESS_EVENT_PREFIX,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -16,7 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State, Window};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 pub(crate) struct ProcessVideoRequest {
     url: String,
     language: String,
@@ -98,6 +99,7 @@ fn process_video_blocking(
             }),
         }));
     }
+    let _ = migrate_legacy_source_data_if_needed(&paths);
     if let Some(cached) = cached_process_result_for_request(&output_root, &request)? {
         let _ = append_desktop_log(
             &paths,
@@ -106,12 +108,22 @@ fn process_video_blocking(
         );
         return Ok(cached);
     }
-    let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
-    let spec = build_worker_command_spec(
-        &paths,
-        WorkerInvocation::ProcessVideo(request_json),
-        None,
-    )?;
+    let resolved_source_identity = resolve_source_identity_for_cache(&paths, &request.url);
+    if let Some(source_identity) = resolved_source_identity.as_ref() {
+        if let Some(cached) =
+            cached_process_result_for_identity(&output_root, &request, source_identity)?
+        {
+            let _ = append_desktop_log(
+                &paths,
+                "worker.process_video.cache_hit",
+                &summarize_worker_result_for_log(&cached),
+            );
+            return Ok(cached);
+        }
+    }
+    let request_json = serialize_process_video_request(&request)?;
+    let spec =
+        build_worker_command_spec(&paths, WorkerInvocation::ProcessVideo(request_json), None)?;
     let _ = append_desktop_log(
         &paths,
         "worker.process_video.start",
@@ -213,7 +225,7 @@ fn process_video_blocking(
             transcript: None,
             error: Some(WorkerError {
                 code: "WORKER_PROCESS_FAILED".to_string(),
-                message: stderr,
+                message: "Worker process failed before returning a structured result.".to_string(),
                 stage: "video_extracting".to_string(),
             }),
         },
@@ -230,18 +242,44 @@ fn cached_process_result_for_request(
     output_root: &Path,
     request: &ProcessVideoRequest,
 ) -> Result<Option<serde_json::Value>, String> {
-    let requested_source_url = normalize_cache_source_url(&request.url);
+    let requested_source_url = request.url.trim();
     if requested_source_url.is_empty() {
         return Ok(None);
     }
 
+    cached_process_result(output_root, request, Some(requested_source_url), None)
+}
+
+fn serialize_process_video_request(request: &ProcessVideoRequest) -> Result<String, String> {
+    serde_json::to_string(request).map_err(|_| "Failed to encode worker request.".to_string())
+}
+
+fn cached_process_result_for_identity(
+    output_root: &Path,
+    request: &ProcessVideoRequest,
+    source_identity: &task_manifest::SourceIdentity,
+) -> Result<Option<serde_json::Value>, String> {
+    cached_process_result(output_root, request, None, Some(source_identity))
+}
+
+fn cached_process_result(
+    output_root: &Path,
+    request: &ProcessVideoRequest,
+    requested_source_url: Option<&str>,
+    requested_identity: Option<&task_manifest::SourceIdentity>,
+) -> Result<Option<serde_json::Value>, String> {
     let mut newest_cached: Option<(String, serde_json::Value)> = None;
     for manifest_path in task_manifest::list_task_manifest_paths(output_root)? {
         let Ok((manifest, task_dir)) = task_manifest::read_task_manifest_path(&manifest_path)
         else {
             continue;
         };
-        if !reusable_task_manifest_matches(&manifest, &requested_source_url, request) {
+        if !reusable_task_manifest_matches(
+            &manifest,
+            requested_source_url,
+            requested_identity,
+            request,
+        ) {
             continue;
         }
         let Some((created_at, cached)) = cached_process_result_from_manifest(&task_dir, manifest)?
@@ -261,13 +299,28 @@ fn cached_process_result_for_request(
 
 fn reusable_task_manifest_matches(
     manifest: &task_manifest::TaskManifest,
-    requested_source_url: &str,
+    requested_source_url: Option<&str>,
+    requested_identity: Option<&task_manifest::SourceIdentity>,
     request: &ProcessVideoRequest,
 ) -> bool {
-    if !matches!(manifest.status.as_str(), "completed" | "partial_completed") {
+    if !manifest.source_privacy_ready()
+        || !matches!(manifest.status.as_str(), "completed" | "partial_completed")
+    {
         return false;
     }
-    if normalize_cache_source_url(&manifest.source_url) != requested_source_url {
+    let source_matches = match requested_identity {
+        Some(identity) => {
+            identity.is_safe()
+                && manifest
+                    .safe_source_identity()
+                    .and_then(task_manifest::SourceIdentity::equality_key)
+                    == identity.equality_key()
+        }
+        None => {
+            requested_source_url.is_some_and(|source_url| manifest.safe_source_url() == source_url)
+        }
+    };
+    if !source_matches {
         return false;
     }
     let manifest_model = manifest.model.trim();
@@ -279,6 +332,9 @@ fn cached_process_result_from_manifest(
     task_dir: &Path,
     manifest: task_manifest::TaskManifest,
 ) -> Result<Option<(String, serde_json::Value)>, String> {
+    if !manifest.source_privacy_ready() {
+        return Ok(None);
+    }
     let artifacts = cached_existing_artifacts(task_dir, &manifest);
     if !artifacts.contains_key("transcript_txt") {
         return Ok(None);
@@ -292,8 +348,8 @@ fn cached_process_result_from_manifest(
     let task_id = manifest.task_id;
     let created_at = manifest.created_at;
     let error = manifest.error.as_ref().map(|error| WorkerError {
-        code: error.code.clone(),
-        message: error.message.clone(),
+        code: error.safe_code(),
+        message: error.safe_message(),
         stage: error.stage.clone(),
     });
 
@@ -356,8 +412,27 @@ fn read_cached_insights_artifact(
     task_manifest::parse_insights_payload(&payload)
 }
 
-fn normalize_cache_source_url(value: &str) -> String {
-    value.trim().to_string()
+fn resolve_source_identity_for_cache(
+    paths: &crate::RuntimePaths,
+    raw_url: &str,
+) -> Option<task_manifest::SourceIdentity> {
+    let payload = serde_json::json!({"url": raw_url}).to_string();
+    let spec = build_worker_command_spec(
+        paths,
+        WorkerInvocation::ResolveSourceIdentity(payload),
+        None,
+    )
+    .ok()?;
+    let output = spawn_worker_command(spec).ok()?.wait_with_output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = parse_worker_stdout(&output.stdout).ok()?;
+    let identity = serde_json::from_value::<task_manifest::SourceIdentity>(
+        value.get("source_identity")?.clone(),
+    )
+    .ok()?;
+    identity.is_safe().then_some(identity)
 }
 
 #[tauri::command]
@@ -377,7 +452,8 @@ fn retry_insights_blocking(
 ) -> Result<serde_json::Value, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    let request_json = serde_json::to_string(&request).map_err(|error| error.to_string())?;
+    let request_json = serde_json::to_string(&request)
+        .map_err(|_| "Failed to encode worker request.".to_string())?;
     let llm_invocation = account::server_managed_llm_invocation(&paths)?;
     let spec = build_worker_command_spec(
         &paths,
@@ -395,7 +471,7 @@ fn retry_insights_blocking(
         let _ = terminate_process_tree(worker_pid);
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "partial_completed".to_string(),
-            task_id: Some(request.task_id),
+            task_id: None,
             task_dir: None,
             artifacts: HashMap::new(),
             text: String::new(),
@@ -431,11 +507,11 @@ fn retry_insights_blocking(
         let _ = append_desktop_log(
             &paths,
             "worker.retry_insights.cancelled",
-            &format!("pid={worker_pid} task_id={}", request.task_id),
+            &format!("pid={worker_pid}"),
         );
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "partial_completed".to_string(),
-            task_id: Some(request.task_id),
+            task_id: None,
             task_dir: None,
             artifacts: HashMap::new(),
             text: String::new(),
@@ -454,7 +530,7 @@ fn retry_insights_blocking(
         &output,
         ProcessVideoResult {
             status: "partial_completed".to_string(),
-            task_id: Some(request.task_id),
+            task_id: None,
             task_dir: None,
             artifacts: HashMap::new(),
             text: String::new(),
@@ -463,7 +539,8 @@ fn retry_insights_blocking(
             transcript: None,
             error: Some(WorkerError {
                 code: "WORKER_PROCESS_FAILED".to_string(),
-                message: stderr,
+                message: "AI generation worker failed before returning a structured result."
+                    .to_string(),
                 stage: "insights_generating".to_string(),
             }),
         },
@@ -520,10 +597,11 @@ fn apply_configured_asr_model_to_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_configured_asr_model_to_request, cached_process_result_for_request,
-        ProcessVideoRequest, RetryInsightsRequest,
+        apply_configured_asr_model_to_request, cached_process_result_for_identity,
+        cached_process_result_for_request, serialize_process_video_request, ProcessVideoRequest,
+        RetryInsightsRequest,
     };
-    use crate::path_to_env_string;
+    use crate::{path_to_env_string, task_manifest::SourceIdentity};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -551,10 +629,18 @@ mod tests {
             task_dir.join("frameq-task.json"),
             format!(
                 r#"{{
-  "schema_version": 2,
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
   "task_id": "{task_id}",
   "created_at": "2026-07-05T15:30:12Z",
   "source_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "source_identity": {{
+    "version": 1,
+    "platform": "youtube",
+    "stable_id": "dQw4w9WgXcQ",
+    "effective_part": null,
+    "canonical_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  }},
   "platform": "youtube",
   "status": "completed",
   "model": "iic/SenseVoiceSmall",
@@ -606,6 +692,146 @@ mod tests {
     }
 
     #[test]
+    fn cached_process_result_matches_sensitive_request_by_canonical_identity() {
+        let output_root = temp_dir("cached_process_result_matches_canonical_identity");
+        let note_id = "64a1b2c3d4e5f67890123456";
+        let task_id = "20260710-120000-xiaohongshu-64a1b2c3d4e5f67890123456";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "cached transcript\n",
+        )
+        .expect("write transcript");
+        let canonical_url = format!("https://www.xiaohongshu.com/explore/{note_id}");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-10T12:00:00Z",
+  "source_url": "{canonical_url}",
+  "source_identity": {{
+    "version": 1,
+    "platform": "xiaohongshu",
+    "stable_id": "{note_id}",
+    "effective_part": null,
+    "canonical_url": "{canonical_url}"
+  }},
+  "platform": "xiaohongshu",
+  "status": "completed",
+  "model": "iic/SenseVoiceSmall",
+  "artifacts": {{"transcript_txt": "transcript/transcript.txt"}},
+  "error": null,
+  "text_preview": "cached transcript",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write manifest");
+        let request = ProcessVideoRequest {
+            url: format!("{canonical_url}?xsec_token=review-secret&source=web"),
+            language: "Chinese".to_string(),
+            output_formats: vec!["txt".to_string(), "md".to_string()],
+            model: "iic/SenseVoiceSmall".to_string(),
+            generate_insights: false,
+            insightflow_mode: "embedded".to_string(),
+        };
+        let identity = SourceIdentity {
+            version: 1,
+            platform: "xiaohongshu".to_string(),
+            stable_id: note_id.to_string(),
+            effective_part: None,
+            canonical_url,
+        };
+
+        assert!(cached_process_result_for_request(&output_root, &request)
+            .expect("exact lookup")
+            .is_none());
+        let cached = cached_process_result_for_identity(&output_root, &request, &identity)
+            .expect("canonical lookup")
+            .expect("canonical identity should reuse cached task");
+
+        assert_eq!(cached["task_id"], task_id);
+        let serialized = cached.to_string();
+        assert!(!serialized.contains("review-secret"));
+        assert!(!serialized.contains("xsec_token"));
+    }
+
+    #[test]
+    fn process_request_serialization_never_includes_preflight_source_identity() {
+        let request = ProcessVideoRequest {
+            url: "https://xhslink.com/short?xsec_token=review-secret".to_string(),
+            language: "Chinese".to_string(),
+            output_formats: vec!["txt".to_string(), "md".to_string()],
+            model: "iic/SenseVoiceSmall".to_string(),
+            generate_insights: false,
+            insightflow_mode: "embedded".to_string(),
+        };
+
+        let encoded = serialize_process_video_request(&request).expect("serialize request");
+        let payload: serde_json::Value = serde_json::from_str(&encoded).expect("request json");
+
+        assert_eq!(payload["url"], request.url);
+        assert!(payload.get("source_identity").is_none());
+    }
+
+    #[test]
+    fn cached_process_result_never_reuses_quarantined_task() {
+        let output_root = temp_dir("cached_process_result_rejects_quarantine");
+        let task_id = "20260710-120000-xiaohongshu-review-secret";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "cached transcript\n",
+        )
+        .expect("write transcript");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
+  "source_privacy_quarantined": true,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-10T12:00:00Z",
+  "source_url": "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456",
+  "source_identity": {{
+    "version": 1,
+    "platform": "xiaohongshu",
+    "stable_id": "64a1b2c3d4e5f67890123456",
+    "effective_part": null,
+    "canonical_url": "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+  }},
+  "platform": "xiaohongshu",
+  "status": "completed",
+  "model": "iic/SenseVoiceSmall",
+  "artifacts": {{"transcript_txt": "transcript/transcript.txt"}},
+  "error": null,
+  "text_preview": "cached transcript",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write manifest");
+        let request = ProcessVideoRequest {
+            url: "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456".to_string(),
+            language: "Chinese".to_string(),
+            output_formats: vec!["txt".to_string()],
+            model: "iic/SenseVoiceSmall".to_string(),
+            generate_insights: false,
+            insightflow_mode: "embedded".to_string(),
+        };
+
+        assert!(cached_process_result_for_request(&output_root, &request)
+            .expect("cache lookup")
+            .is_none());
+    }
+
+    #[test]
     fn cached_process_result_ignores_insights_without_v1_schema() {
         let output_root = temp_dir("cached_process_result_ignores_insights_without_schema");
         let task_id = "20260705-153012-youtube-dQw4w9WgXcQ";
@@ -628,10 +854,18 @@ mod tests {
             task_dir.join("frameq-task.json"),
             format!(
                 r#"{{
-  "schema_version": 2,
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
   "task_id": "{task_id}",
   "created_at": "2026-07-05T15:30:12Z",
   "source_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "source_identity": {{
+    "version": 1,
+    "platform": "youtube",
+    "stable_id": "dQw4w9WgXcQ",
+    "effective_part": null,
+    "canonical_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  }},
   "platform": "youtube",
   "status": "completed",
   "artifacts": {{
@@ -736,10 +970,7 @@ mod tests {
             serde_json::from_value(payload).expect("deserialize retry request");
         let serialized = serde_json::to_value(&request).expect("serialize retry request");
 
-        assert_eq!(
-            serialized["target"],
-            "insights"
-        );
+        assert_eq!(serialized["target"], "insights");
         assert_eq!(
             serialized["preference_snapshot"]["generationPreferences"]["goal"],
             "content_creation"

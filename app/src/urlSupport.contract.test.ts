@@ -46,7 +46,7 @@ describe("platform URL support contract", () => {
       .map((contractCase) => contractCase.knownAsymmetry)
       .filter((value): value is string => value !== null);
 
-    expect(contract.schemaVersion).toBe(1);
+    expect(contract.schemaVersion).toBe(2);
     expect(contract.intent).toBe("drift-detection-only");
     expect(contract.networkPolicy).toBe("fake-clients-only");
     expect([...new Set(referencedAsymmetries)].sort()).toEqual(

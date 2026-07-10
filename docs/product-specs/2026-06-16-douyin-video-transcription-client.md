@@ -5,7 +5,7 @@
 - Each new processing run should create one task-owned output directory under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`.
 - FrameQ no longer treats flat `outputs/*.mp4`, `outputs/*_transcript.txt`, or legacy app-local history records as the product contract for new tasks.
 - The task directory should be the user-visible folder for final artifacts: media, transcript, transcript timing, AI summary, mindmap, insights, and `frameq-task.json`.
-- `frameq-task.json` is the task source of truth. It should record task identity, source URL, platform, status, model, version metadata, relative artifact paths, error, preview, and insight count.
+- `frameq-task.json` is the task source of truth. It should record task identity, canonical source URL, platform, status, model, version metadata, relative artifact paths, error, preview, and insight count; the process-local download URL must never be serialized.
 - App-local `cache/tasks/<task_id>/` is reserved for temporary downloads, partial files, merge scratch space, and diagnostics. These files should not be mixed into the user-visible task output folder.
 - The desktop history panel becomes a task library built from task manifests. Old flat-output tasks and old `history.json` records are intentionally ignored by this redesign.
 - Transcript review, save, retry AI整理, copy, export, and locate actions should operate by `task_id` and manifest artifacts, not by arbitrary local transcript or audio paths.
@@ -99,7 +99,7 @@
 
 - Xiaohongshu support should accept public video note share text, `xhslink.com` short links, `www.xhslink.com` short links, full `xiaohongshu.com/explore/{note_id}` URLs, and links that carry `xsec_token`.
 - The desktop UI should keep the single input workflow and should not introduce a Xiaohongshu download center, stream picker, image album picker, login flow, cookie import, or proxy setup.
-- Worker fallback should preserve `xsec_token`, resolve short links through standard redirects or embedded HTML URLs, and fetch the public note page through browser-like navigation headers.
+- Worker fallback should preserve `xsec_token` only inside the current process-local download URL, resolve short links through standard redirects or embedded HTML URLs, and fetch the public note page through browser-like navigation headers. The token and raw URL must not enter artifacts, history, diagnostics, UI errors, or prompts.
 - Worker page parsing should handle `gzip`, Brotli `br`, and zlib/raw `deflate` responses, then extract `window.__INITIAL_STATE__` with the existing JavaScript-to-JSON tolerance.
 - Worker stream selection should align with EasyDownload's video stream model: support list and codec-keyed schemas, deduplicate by quality key, and prefer URL availability, codec rank, official weight, stream type, default stream, resolution, bitrate, size, and backup URL availability.
 - Download should be safe for large videos: streaming `.part` writes, resume-safe range validation, no-progress timeout, 2 GiB maximum video size, backup URL retry, and existing-file preservation on failure.
@@ -110,7 +110,7 @@
 
 - Bilibili support should accept ordinary public video URLs in BV and av forms, plus safe `b23.tv` short links that resolve to ordinary `/video/` pages.
 - The desktop UI should keep the single input workflow and should not introduce a Bilibili download center, stream picker, quality selector, batch queue, login flow, QR login, cookie import, or proxy setup.
-- Worker fallback should parse BV/av IDs, preserve the submitted source for history, resolve safe short links with finite redirect depth, and select one part from `?p=N` or the first part by default.
+- Worker fallback should parse normalized BV/av IDs, persist only the canonical source identity for history, resolve safe short links with finite redirect depth, and select one part from `?p=N` or the first part by default.
 - Worker metadata lookup should use public Bilibili Web APIs for ordinary videos: `x/web-interface/view` for title/pages/cid and `x/player/playurl` with DASH flags for video/audio stream URLs.
 - Worker stream selection should align with EasyDownload's public-video model: parse camelCase and snake_case URL fields, merge backup URLs, prefer AV1 over HEVC over H.264, choose higher bandwidth within the same codec, and choose the highest-bandwidth audio stream.
 - Download should be safe for DASH media: video/audio `.m4s` streaming `.part` writes, resume-safe range validation where available, no-progress timeout, maximum-size guardrails, backup URL retry, and existing-file preservation on failure.
@@ -174,7 +174,7 @@
 - SenseVoice 真实推理依赖 `funasr`；当依赖缺失、模型不可下载或模型 ID 不受支持时，worker 必须返回结构化 ASR 错误，不得让 UI 白屏或卡死。
 - SenseVoice 处理长音频时必须启用 `fsmn-vad` 切分和长音频合并参数，并在写入文字稿前移除 `<|...|>` 控制标签。
 - 历史任务库从 `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/frameq-task.json` 读取；新版本不再读取旧版 app-local history。
-- `frameq-task.json` 只记录任务元数据、相对 artifact 路径、错误码、预览和计数，不得包含 LLM API key、cookies 或完整敏感请求头。
+- `frameq-task.json` 只记录任务元数据、canonical source URL、相对 artifact 路径、错误码、预览和计数，不得包含 download URL、`xsec_token`、LLM API key、cookies 或完整敏感请求头。
 
 ## 验收标准
 
@@ -185,6 +185,7 @@
 - Douyin share page fallback 解析出多个候选流时，默认下载体积最大的可用 MP4；若该流下载或媒体校验失败，应自动降级尝试下一候选流，并在所有候选失败后返回结构化 `VIDEO_DOWNLOAD_FAILED`。
 - 音频提取后，当前 task 目录的 `media/audio.wav` 中存在 16 kHz 单声道 WAV；临时下载和中间文件保留在 app-local `cache/tasks/<task_id>/`。
 - ASR 成功后，当前 task 目录的 `transcript/` 中存在 `transcript.txt`、`transcript.md`，有合法时间轴时存在 `segments.json`。
+- `transcript.md` 的 Source URL 和 `frameq-task.json.source_url` 只能是 canonical URL；要点总结、mindmap、topic planner、insights 和 retry 只读取用户保存后的 `transcript.txt` 正文。
 - 主流程完成后，结果区显示视频、音频、完整文字稿、要点总结、启发灵感这 5 个入口；Mermaid mindmap 保存为本地 `.mmd` 文件但不作为单独入口展示；视频和音频入口在文件管理器中定位对应本地文件。
 - 主流程完成后，要点总结、启发灵感入口显示待生成状态；点击 `要点总结` 后打开轻量确认面板，只生成 `summary.md` 和隐藏的 `mindmap.mmd`；点击 `启发灵感` 后进入灵感偏好流程，只生成 `insights.json` 和 `insights.md`。
 - AI 生成开始后才使用 server-managed LLM checkout；主流程不得携带 checkout env 或消耗额度。额度按云端 LLM API 调用尝试计费，1 次额度对应 1 次 chat-completion/API 调用尝试；要点总结和启发灵感各自按实际调用次数扣除。
@@ -201,7 +202,7 @@
 - 设置 UI 必须提示：这里只管理本机 ASR 和输出目录；要点总结和启发灵感确认流程必须提示文字稿片段会发送到管理员配置的云端 LLM 服务。
 - 历史入口应展示最近任务列表；每条历史至少包含 URL、状态、时间、输出目录、文字稿路径、要点总结路径、Mermaid mindmap 路径、灵感路径和错误码或摘要。
 - 点击历史中的可用结果应打开与当前结果一致的详情浮窗；导出按钮应定位历史项记录的实际文件路径。
-- 处理中点击取消时，桌面端终止当前 worker 进程树，UI 返回输入态并保留已提交 URL；取消后的晚到结果不会覆盖界面。
+- 处理中点击取消时，桌面端终止当前 worker 进程树，UI 返回输入态并可在当前输入框内保留用户刚提交的 URL；该瞬时输入不得复制到历史、错误或诊断日志。取消后的晚到结果不会覆盖界面。
 - 结果详情浮窗可在 `要点总结`、`启发灵感` 和 `完整文字稿` 间切换，并支持复制和导出；视频和音频不进入详情浮窗，只定位本地文件，Mermaid 文本不进入详情浮窗。
 
 ## 2026-06-17 Repeat URL Local Media Reuse
@@ -257,7 +258,7 @@
 
 - After transcript completion, `要点总结` and `启发灵感` are independent user-triggered generations. `要点总结` writes `summary.md` plus local Mermaid `mindmap.mmd`; `启发灵感` writes `insights.json` and `insights.md`.
 - Each generation consumes quota per underlying cloud LLM API call attempt. Running both outputs may consume multiple calls, but one output no longer implicitly triggers the other.
-- The worker should first generate a Mermaid `mindmap` text from the transcript, then generate a layered Markdown summary from the original transcript and that Mermaid mindmap.
+- The worker should first generate a Mermaid `mindmap` text from the official saved `transcript.txt`, then generate a layered Markdown summary from that same saved text and the Mermaid mindmap.
 - The UI shows the summary content as a result card and detail tab, but must not display or render the Mermaid source.
 - The summary detail tab renders `summary.md` as sanitized Markdown with GitHub Flavored Markdown support; raw HTML from the Markdown source must not pass through to the UI.
 - Summary artifacts are written under the current task's `ai/summary.md`; Mermaid text is written to `ai/mindmap.mmd`.

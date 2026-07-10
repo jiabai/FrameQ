@@ -1,7 +1,24 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "intent": "drift-detection-only",
   "networkPolicy": "fake-clients-only",
+  "sourceIdentity": {
+    "version": 1,
+    "equalityKey": ["platform", "stable_id", "effective_part"],
+    "canonicalFormats": {
+      "douyin": "https://www.douyin.com/video/<aweme_id>",
+      "xiaohongshu": "https://www.xiaohongshu.com/explore/<note_id>",
+      "bilibili": "https://www.bilibili.com/video/<BV_or_av_id>[?p=N_when_N_gt_1]",
+      "youtube": "https://www.youtube.com/watch?v=<video_id>"
+    },
+    "forbiddenPersistentParts": [
+      "download_url",
+      "userinfo",
+      "fragment",
+      "xsec_token",
+      "credential_or_signature_query_parameters"
+    ]
+  },
   "knownAsymmetries": {
     "douyin-short-link-failure-gated": "Frontend admission and the fallback parser accept a Douyin short link, while worker fallback dispatch requires a recognized yt-dlp failure marker when the URL has no aweme ID.",
     "douyin-resolved-host-worker-only": "Worker dispatch and parsing accept resolved iesdouyin.com video URLs, while frontend admission remains limited to douyin.com hosts.",

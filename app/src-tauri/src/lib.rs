@@ -34,10 +34,10 @@ pub(crate) use asr_model::{DEFAULT_ASR_MODEL, SUPPORTED_ASR_MODELS};
 pub(crate) use asr_model::{ASR_MODEL_DOWNLOAD_EVENT_NAME, MODEL_DOWNLOAD_EVENT_PREFIX};
 
 pub(crate) use worker_command::{
-    build_worker_command_spec, parse_worker_output_or_fallback, parse_worker_stdout,
-    run_blocking_worker_command, spawn_worker_command, terminate_process_tree,
-    worker_command_log_detail, worker_exit_log_detail, WorkerCommandSpec, WorkerInvocation,
-    WorkerProcessState,
+    build_worker_command_spec, migrate_legacy_source_data_if_needed,
+    parse_worker_output_or_fallback, parse_worker_stdout, run_blocking_worker_command,
+    spawn_worker_command, terminate_process_tree, worker_command_log_detail,
+    worker_exit_log_detail, WorkerCommandSpec, WorkerInvocation, WorkerProcessState,
 };
 
 pub(crate) use video_processing::{CancelProcessResult, ProcessVideoResult};

@@ -19,6 +19,7 @@ from frameq_worker.asr import (
     write_transcript_files,
 )
 from frameq_worker.models import TranscriptMetadata
+from frameq_worker.source_identity import SourceIdentity, SourceIdentityError, identify_source
 
 
 class FakeTranscriber:
@@ -31,8 +32,14 @@ def test_write_transcript_files_creates_non_empty_txt_and_markdown(tmp_path: Pat
         text="这里是从视频语音中识别出的完整文字内容。",
         output_dir=tmp_path / "outputs",
         output_stem="7524373044106677544",
-        model="Qwen/Qwen3-ASR-0.6B",
-        source_url="https://www.douyin.com/video/7524373044106677544",
+        metadata=TranscriptMetadata(
+            source="asr",
+            engine="Qwen/Qwen3-ASR-0.6B",
+            source_identity=identify_source(
+                "https://www.douyin.com/video/7524373044106677544",
+                allow_network=False,
+            ),
+        ),
     )
 
     assert (
@@ -58,15 +65,45 @@ def test_write_transcript_files_records_platform_subtitle_metadata(
             source="subtitle",
             language="zh-Hans",
             engine=None,
-            source_url="https://www.youtube.com/watch?v=demo",
+            source_identity=identify_source(
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                allow_network=False,
+            ),
         ),
     )
 
     markdown = artifacts.md_path.read_text(encoding="utf-8")
     assert "- Transcript Source: Platform subtitle" in markdown
     assert "- Subtitle Language: zh-Hans" in markdown
-    assert "- Source URL: https://www.youtube.com/watch?v=demo" in markdown
+    assert "- Source URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ" in markdown
     assert "Model:" not in markdown
+
+
+def test_write_transcript_files_rejects_unsafe_source_identity_before_writing(
+    tmp_path: Path,
+) -> None:
+    unsafe_identity = SourceIdentity(
+        platform="xiaohongshu",
+        stable_id="64a1b2c3d4e5f67890123456",
+        canonical_url=(
+            "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+            "?xsec_token=review-secret"
+        ),
+    )
+
+    with pytest.raises(SourceIdentityError, match="safe for persistence"):
+        write_transcript_files(
+            text="official transcript",
+            output_dir=tmp_path,
+            output_stem="",
+            metadata=TranscriptMetadata(
+                source="subtitle",
+                source_identity=unsafe_identity,
+            ),
+        )
+
+    assert not (tmp_path / "transcript.txt").exists()
+    assert not (tmp_path / "transcript.md").exists()
 
 
 def test_transcribe_and_write_uses_transcriber_and_outputs_files(tmp_path: Path) -> None:

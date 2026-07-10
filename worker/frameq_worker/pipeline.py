@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -29,8 +30,6 @@ from frameq_worker.media import (
     CommandRunner,
     download_video,
     extract_audio,
-    extract_douyin_video_id,
-    extract_xiaohongshu_note_id,
     probe_media_file,
 )
 from frameq_worker.model_download import (
@@ -45,6 +44,13 @@ from frameq_worker.models import (
     ProcessResult,
     TranscriptMetadata,
     WorkerError,
+)
+from frameq_worker.source_identity import (
+    SourceIdentity,
+    SourceIdentityError,
+    SourceRequest,
+    resolve_source_request,
+    sanitize_source_text,
 )
 from frameq_worker.subtitles import find_subtitle_transcript
 from frameq_worker.task_store import (
@@ -67,6 +73,7 @@ LOCAL_AI_ORGANIZING_MESSAGE = "正在生成 AI 结果。"
 @dataclass(frozen=True)
 class PipelineContext:
     task_context: TaskContext
+    source_request: SourceRequest
     download_dir: Path
     video_id: str | None
     media_files_before_download: dict[str, tuple[int, int]]
@@ -84,7 +91,7 @@ def run_asr_transcript_step(
     output_stem: str,
     transcriber: Transcriber | None = None,
     model: str = DEFAULT_ASR_MODEL,
-    source_url: str | None = None,
+    source_identity: SourceIdentity | None = None,
 ) -> ProcessResult:
     asr = transcriber or QwenAsrTranscriber(model_name=model)
 
@@ -95,7 +102,7 @@ def run_asr_transcript_step(
             output_stem=output_stem,
             transcriber=asr,
             model=model,
-            source_url=source_url,
+            source_identity=source_identity,
         )
     except ASRError as exc:
         return ProcessResult(
@@ -123,7 +130,7 @@ def run_asr_transcript_step(
             source="asr",
             language=None,
             engine=model,
-            source_url=source_url,
+            source_identity=source_identity,
         ),
     )
 
@@ -132,7 +139,7 @@ def run_subtitle_transcript_step(
     download_dir: Path,
     output_dir: Path,
     output_stem: str,
-    source_url: str,
+    source_identity: SourceIdentity,
 ) -> ProcessResult | None:
     subtitle = find_subtitle_transcript(download_dir)
     if subtitle is None:
@@ -142,7 +149,7 @@ def run_subtitle_transcript_step(
         source="subtitle",
         language=subtitle.language,
         engine=None,
-        source_url=source_url,
+        source_identity=source_identity,
     )
     try:
         artifacts = write_transcript_files(
@@ -172,37 +179,58 @@ def run_subtitle_transcript_step(
 
 
 def run_insight_generation_step(
-    transcript_path: Path,
+    transcript_txt_path: Path,
     output_dir: Path,
     output_stem: str,
-    transcript_text: str,
     client: InsightClient | None,
     transcript: TranscriptMetadata | None = None,
     preference_snapshot: PreferenceSnapshot | None = None,
     target: InsightGenerationTarget = "all",
 ) -> ProcessResult:
-    if client is None:
+    is_junction = getattr(os.path, "isjunction", lambda _path: False)
+    expected_transcript_path = output_dir.parent / "transcript" / "transcript.txt"
+    if (
+        transcript_txt_path.absolute() != expected_transcript_path.absolute()
+        or transcript_txt_path.is_symlink()
+        or transcript_txt_path.parent.is_symlink()
+        or transcript_txt_path.parent.parent.is_symlink()
+        or is_junction(transcript_txt_path)
+        or is_junction(transcript_txt_path.parent)
+        or is_junction(transcript_txt_path.parent.parent)
+    ):
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,
-            text=transcript_text,
+            text="",
             transcript=transcript,
             error=WorkerError(
-                code="INSIGHTFLOW_CONFIG_MISSING",
-                message="InsightFlow LLM client is not configured.",
+                code="TRANSCRIPT_TEXT_PATH_INVALID",
+                message="Official transcript.txt is required for AI generation.",
                 stage=JobStage.INSIGHTS_GENERATING,
             ),
         )
 
     try:
-        markdown = transcript_path.read_text(encoding="utf-8")
-    except OSError as exc:
+        transcript_body = transcript_txt_path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,
-            text=transcript_text,
+            text="",
             transcript=transcript,
             error=WorkerError(
-                code="TRANSCRIPT_MARKDOWN_NOT_FOUND",
-                message=str(exc),
+                code="TRANSCRIPT_TEXT_NOT_FOUND",
+                message="Official transcript text could not be read.",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ),
+        )
+
+    if client is None:
+        return ProcessResult(
+            status=JobStage.PARTIAL_COMPLETED,
+            text=transcript_body,
+            transcript=transcript,
+            error=WorkerError(
+                code="INSIGHTFLOW_CONFIG_MISSING",
+                message="InsightFlow LLM client is not configured.",
                 stage=JobStage.INSIGHTS_GENERATING,
             ),
         )
@@ -214,7 +242,7 @@ def run_insight_generation_step(
     if target in {"all", "summary"}:
         try:
             summary_artifacts = generate_summary_from_markdown(
-                markdown=markdown,
+                markdown=transcript_body,
                 output_dir=output_dir,
                 output_stem=output_stem,
                 client=client,
@@ -225,7 +253,7 @@ def run_insight_generation_step(
     if target in {"all", "insights"}:
         try:
             insight_artifacts = generate_insights_from_markdown(
-                markdown=markdown,
+                markdown=transcript_body,
                 output_dir=output_dir,
                 output_stem=output_stem,
                 client=client,
@@ -257,7 +285,7 @@ def run_insight_generation_step(
                 else {}
             ),
         },
-        text=transcript_text,
+        text=transcript_body,
         summary=summary_artifacts.summary if summary_artifacts else "",
         insights=insight_artifacts.insights if insight_artifacts else [],
         transcript=transcript,
@@ -278,13 +306,22 @@ def prepare_pipeline_context(
 ) -> PipelineContext:
     output_dir = resolve_output_dir(project_root, environ)
     cache_dir = resolve_cache_dir(project_root, environ)
-    task_context = create_task_context(request, output_root=output_dir, cache_root=cache_dir)
+    source_request = resolve_source_request(
+        request.url,
+    )
+    task_context = create_task_context(
+        request,
+        source_identity=source_request.identity,
+        output_root=output_dir,
+        cache_root=cache_dir,
+    )
     ensure_task_dirs(task_context.paths)
     download_dir = task_context.paths.download_dir
-    video_id = extract_douyin_video_id(request.url) or extract_xiaohongshu_note_id(request.url)
+    video_id = source_request.identity.stable_id
     media_files_before_download = snapshot_video_files(download_dir)
     return PipelineContext(
         task_context=task_context,
+        source_request=source_request,
         download_dir=download_dir,
         video_id=video_id,
         media_files_before_download=media_files_before_download,
@@ -292,7 +329,6 @@ def prepare_pipeline_context(
 
 
 def download_and_select_video(
-    request: ProcessRequest,
     context: PipelineContext,
     command_runner: CommandRunner,
     progress_callback: ProgressCallback | None,
@@ -305,7 +341,7 @@ def download_and_select_video(
     )
     try:
         download_result = download_video(
-            request.url,
+            context.source_request.download_url,
             output_dir=context.download_dir,
             runner=command_runner,
             progress_callback=progress_callback,
@@ -315,7 +351,7 @@ def download_and_select_video(
             context.task_context,
             failed_result(
                 code="VIDEO_DOWNLOAD_FAILED",
-                message=str(exc),
+                message=sanitize_source_text(str(exc), context.source_request),
                 stage=JobStage.VIDEO_EXTRACTING,
             ),
         )
@@ -360,12 +396,12 @@ def validate_and_copy_video(
 ) -> ProcessResult | None:
     try:
         media_info = probe_media_file(video_path, runner=command_runner)
-    except CommandExecutionError as exc:
+    except CommandExecutionError:
         return finalize_task_result(
             task_context,
             failed_result(
                 code="MEDIA_VALIDATION_FAILED",
-                message=str(exc),
+                message="Downloaded media could not be validated.",
                 stage=JobStage.VIDEO_EXTRACTING,
             ),
         )
@@ -424,7 +460,6 @@ def try_subtitle_transcript_stage(
     download_result: CommandResult,
     download_dir: Path,
     task_context: TaskContext,
-    request: ProcessRequest,
     progress_callback: ProgressCallback | None,
 ) -> ProcessResult | None:
     emit_progress(
@@ -440,7 +475,7 @@ def try_subtitle_transcript_stage(
             download_dir=download_dir,
             output_dir=task_context.paths.transcript_dir,
             output_stem="",
-            source_url=request.url,
+            source_identity=task_context.source_identity,
         )
     )
     if subtitle_result is not None:
@@ -538,7 +573,7 @@ def run_asr_transcript_stage(
         output_stem="",
         transcriber=prepared_transcriber,
         model=request.model,
-        source_url=request.url,
+        source_identity=task_context.source_identity,
     )
 
 
@@ -559,7 +594,6 @@ def complete_without_ai_stage(
 
 def run_optional_ai_generation_stage(
     task_context: TaskContext,
-    transcript_text: str,
     transcript: TranscriptMetadata | None,
     insight_client: InsightClient | None,
     progress_callback: ProgressCallback | None,
@@ -573,10 +607,9 @@ def run_optional_ai_generation_stage(
         88,
     )
     insight_result = run_insight_generation_step(
-        transcript_path=task_context.paths.transcript_md_path,
+        transcript_txt_path=task_context.paths.transcript_txt_path,
         output_dir=task_context.paths.ai_dir,
         output_stem="",
-        transcript_text=transcript_text,
         client=insight_client,
         transcript=transcript,
     )
@@ -600,7 +633,6 @@ def finalize_transcript_stage(
 
     return run_optional_ai_generation_stage(
         task_context=task_context,
-        transcript_text=transcript_text,
         transcript=transcript,
         insight_client=insight_client,
         progress_callback=progress_callback,
@@ -618,12 +650,24 @@ def run_worker_pipeline(
     progress_callback: ProgressCallback | None = None,
     transcriber_factory: TranscriberFactory | None = None,
 ) -> ProcessResult:
-    pipeline_context = prepare_pipeline_context(request, project_root, environ)
+    try:
+        pipeline_context = prepare_pipeline_context(request, project_root, environ)
+    except SourceIdentityError:
+        return failed_result(
+            code="SOURCE_IDENTITY_UNAVAILABLE",
+            message="Could not identify a supported stable video source.",
+            stage=JobStage.VIDEO_EXTRACTING,
+        )
+    except OSError:
+        return failed_result(
+            code="TASK_STORAGE_UNAVAILABLE",
+            message="Task storage could not be prepared.",
+            stage=JobStage.VIDEO_EXTRACTING,
+        )
     task_context = pipeline_context.task_context
     download_dir = pipeline_context.download_dir
 
     downloaded_video = download_and_select_video(
-        request=request,
         context=pipeline_context,
         command_runner=command_runner,
         progress_callback=progress_callback,
@@ -655,7 +699,6 @@ def run_worker_pipeline(
         download_result=download_result,
         download_dir=download_dir,
         task_context=task_context,
-        request=request,
         progress_callback=progress_callback,
     )
     if subtitle_result is not None:

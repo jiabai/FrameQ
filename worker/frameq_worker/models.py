@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
+from frameq_worker.source_identity import SourceIdentity
+
 RetryInsightTarget = Literal["summary", "insights"]
 InsightGenerationTarget = Literal["all", "summary", "insights"]
 
@@ -20,7 +22,7 @@ class JobStage(StrEnum):
 
 @dataclass(frozen=True)
 class ProcessRequest:
-    url: str
+    url: str = field(repr=False)
     language: str = "Chinese"
     output_formats: tuple[str, ...] = ("txt", "md")
     model: str = "iic/SenseVoiceSmall"
@@ -174,7 +176,11 @@ class TranscriptMetadata:
     source: Literal["asr", "subtitle"]
     language: str | None = None
     engine: str | None = None
-    source_url: str | None = None
+    source_identity: SourceIdentity | None = field(default=None, repr=False)
+
+    @property
+    def source_url(self) -> str | None:
+        return self.source_identity.canonical_url if self.source_identity else None
 
     def to_dict(self) -> dict[str, str | None]:
         return {

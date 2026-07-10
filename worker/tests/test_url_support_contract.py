@@ -128,7 +128,7 @@ def test_contract_is_drift_only_and_freezes_all_known_asymmetries() -> None:
         if contract_case["knownAsymmetry"] is not None
     }
 
-    assert contract["schemaVersion"] == 1
+    assert contract["schemaVersion"] == 2
     assert contract["intent"] == "drift-detection-only"
     assert contract["networkPolicy"] == "fake-clients-only"
     assert referenced_asymmetries == set(contract["knownAsymmetries"])

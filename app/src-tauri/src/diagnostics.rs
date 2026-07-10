@@ -65,7 +65,9 @@ pub(crate) fn sanitize_diagnostic_text(text: &str) -> String {
         .collect::<Vec<_>>()
         .join(" | ");
     let without_media_urls = redact_youtube_media_urls(&redacted_lines);
-    let without_cookie_cli_hints = redact_cookie_cli_hints(&without_media_urls);
+    let without_source_urls = redact_http_urls(&without_media_urls);
+    let without_credentials = redact_credential_assignments(&without_source_urls);
+    let without_cookie_cli_hints = redact_cookie_cli_hints(&without_credentials);
     collapse_log_whitespace(&without_cookie_cli_hints)
 }
 
@@ -94,6 +96,55 @@ fn redact_youtube_media_urls(text: &str) -> String {
         .map(|token| {
             if token.contains("googlevideo.com") || token.contains("videoplayback") {
                 "[youtube media url removed]"
+            } else {
+                token
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn redact_http_urls(text: &str) -> String {
+    text.split_whitespace()
+        .map(|token| {
+            let normalized = token.to_ascii_lowercase();
+            if normalized.contains("http://") || normalized.contains("https://") {
+                "[url removed]"
+            } else {
+                token
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn redact_credential_assignments(text: &str) -> String {
+    const SENSITIVE_MARKERS: [&str; 14] = [
+        "xsec_token=",
+        "access_token=",
+        "session_token=",
+        "token=",
+        "signature=",
+        "sig=",
+        "authorization=",
+        "cookie=",
+        "password=",
+        "passwd=",
+        "credential=",
+        "secret=",
+        "auth=",
+        "key=",
+    ];
+    text.split_whitespace()
+        .map(|token| {
+            let normalized = token.to_ascii_lowercase();
+            if normalized.contains("[redacted]") {
+                token
+            } else if SENSITIVE_MARKERS
+                .iter()
+                .any(|marker| normalized.contains(marker))
+            {
+                "[credential removed]"
             } else {
                 token
             }
@@ -262,6 +313,30 @@ mod tests {
         assert!(!sanitized.contains("Bearer abc"));
         assert!(!sanitized.contains("SID=1"));
         assert!(!sanitized.contains("--cookies-from-browser"));
+    }
+
+    #[test]
+    fn diagnostic_text_redacts_embedded_sensitive_source_url() {
+        let sanitized = sanitize_diagnostic_text(
+            "ERROR downloader failed https://www.xiaohongshu.com/explore/demo?xsec_token=review-secret xsec_token=review-secret",
+        );
+
+        assert!(!sanitized.contains("review-secret"));
+        assert!(!sanitized.contains("xsec_token"));
+        assert!(!sanitized.contains("xiaohongshu.com"));
+        assert!(sanitized.contains("[url removed]"));
+    }
+
+    #[test]
+    fn diagnostic_text_redacts_uppercase_url_with_userinfo() {
+        let sanitized = sanitize_diagnostic_text(
+            "ERROR HTTPS://alice:review-secret@www.xiaohongshu.com/explore/demo",
+        );
+
+        assert!(!sanitized.contains("review-secret"));
+        assert!(!sanitized.contains("alice"));
+        assert!(!sanitized.contains("xiaohongshu.com"));
+        assert!(sanitized.contains("[url removed]"));
     }
 
     fn temp_dir(test_name: &str) -> PathBuf {

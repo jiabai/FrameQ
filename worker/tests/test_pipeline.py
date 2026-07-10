@@ -149,15 +149,14 @@ class CapturingInsightClient:
 
 
 def test_run_insight_generation_step_returns_task_style_artifacts(tmp_path: Path) -> None:
-    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
-    transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
+    transcript_txt_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_txt_path.parent.mkdir(parents=True)
+    transcript_txt_path.write_text("transcript text", encoding="utf-8")
 
     result = run_insight_generation_step(
-        transcript_path=transcript_path,
+        transcript_txt_path=transcript_txt_path,
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
-        transcript_text="transcript text",
         client=FakeInsightClient(),
     ).to_dict()
 
@@ -173,17 +172,82 @@ def test_run_insight_generation_step_returns_task_style_artifacts(tmp_path: Path
     }
 
 
-def test_run_insight_generation_step_can_generate_only_summary(tmp_path: Path) -> None:
-    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
-    transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
+def test_run_insight_generation_step_rejects_transcript_markdown_without_prompt(
+    tmp_path: Path,
+) -> None:
+    transcript_md_path = tmp_path / "task" / "transcript" / "transcript.md"
+    transcript_md_path.parent.mkdir(parents=True)
+    transcript_md_path.write_text(
+        "# Transcript\n\n## Metadata\n\n- Source URL: https://example.test/?token=secret",
+        encoding="utf-8",
+    )
     client = CapturingInsightClient()
 
     result = run_insight_generation_step(
-        transcript_path=transcript_path,
+        transcript_txt_path=transcript_md_path,
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
-        transcript_text="transcript text",
+        client=client,
+    ).to_dict()
+
+    assert result["status"] == "partial_completed"
+    assert result["error"] == {
+        "code": "TRANSCRIPT_TEXT_PATH_INVALID",
+        "message": "Official transcript.txt is required for AI generation.",
+        "stage": "insights_generating",
+    }
+    assert client.prompts == []
+
+
+def test_run_insight_generation_step_rejects_same_named_nonofficial_file(
+    tmp_path: Path,
+) -> None:
+    nonofficial_path = tmp_path / "metadata" / "transcript.txt"
+    nonofficial_path.parent.mkdir(parents=True)
+    nonofficial_path.write_text("Metadata: xsec_token=review-secret", encoding="utf-8")
+    client = CapturingInsightClient()
+
+    result = run_insight_generation_step(
+        transcript_txt_path=nonofficial_path,
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        client=client,
+    ).to_dict()
+
+    assert result["error"]["code"] == "TRANSCRIPT_TEXT_PATH_INVALID"
+    assert client.prompts == []
+
+
+def test_run_insight_generation_step_rejects_other_task_transcript(
+    tmp_path: Path,
+) -> None:
+    nonofficial_path = tmp_path / "other-task" / "transcript" / "transcript.txt"
+    nonofficial_path.parent.mkdir(parents=True)
+    nonofficial_path.write_text("xsec_token=review-secret", encoding="utf-8")
+    client = CapturingInsightClient()
+
+    result = run_insight_generation_step(
+        transcript_txt_path=nonofficial_path,
+        output_dir=tmp_path / "expected-task" / "ai",
+        output_stem="",
+        client=client,
+    ).to_dict()
+
+    assert result["error"]["code"] == "TRANSCRIPT_TEXT_PATH_INVALID"
+    assert result["text"] == ""
+    assert client.prompts == []
+
+
+def test_run_insight_generation_step_can_generate_only_summary(tmp_path: Path) -> None:
+    transcript_txt_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_txt_path.parent.mkdir(parents=True)
+    transcript_txt_path.write_text("transcript text", encoding="utf-8")
+    client = CapturingInsightClient()
+
+    result = run_insight_generation_step(
+        transcript_txt_path=transcript_txt_path,
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
         client=client,
         target="summary",
     ).to_dict()
@@ -199,16 +263,15 @@ def test_run_insight_generation_step_can_generate_only_summary(tmp_path: Path) -
 
 
 def test_run_insight_generation_step_can_generate_only_insights(tmp_path: Path) -> None:
-    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
-    transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
+    transcript_txt_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_txt_path.parent.mkdir(parents=True)
+    transcript_txt_path.write_text("transcript text", encoding="utf-8")
     client = CapturingInsightClient()
 
     result = run_insight_generation_step(
-        transcript_path=transcript_path,
+        transcript_txt_path=transcript_txt_path,
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
-        transcript_text="transcript text",
         client=client,
         preference_snapshot=preference_snapshot(),
         target="insights",
@@ -229,16 +292,15 @@ def test_run_insight_generation_step_can_generate_only_insights(tmp_path: Path) 
 def test_run_insight_generation_step_scopes_preferences_to_insight_prompts(
     tmp_path: Path,
 ) -> None:
-    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
-    transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
+    transcript_txt_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_txt_path.parent.mkdir(parents=True)
+    transcript_txt_path.write_text("transcript text", encoding="utf-8")
     client = CapturingInsightClient()
 
     run_insight_generation_step(
-        transcript_path=transcript_path,
+        transcript_txt_path=transcript_txt_path,
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
-        transcript_text="transcript text",
         client=client,
         preference_snapshot=preference_snapshot(),
     )
@@ -252,15 +314,14 @@ def test_run_insight_generation_step_scopes_preferences_to_insight_prompts(
 def test_run_insight_generation_step_without_client_returns_partial_completed(
     tmp_path: Path,
 ) -> None:
-    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
-    transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
+    transcript_txt_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_txt_path.parent.mkdir(parents=True)
+    transcript_txt_path.write_text("transcript text", encoding="utf-8")
 
     result = run_insight_generation_step(
-        transcript_path=transcript_path,
+        transcript_txt_path=transcript_txt_path,
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
-        transcript_text="transcript text",
         client=None,
     ).to_dict()
 
@@ -276,15 +337,14 @@ def test_run_insight_generation_step_without_client_returns_partial_completed(
 def test_run_insight_generation_step_preserves_summary_when_insights_fail(
     tmp_path: Path,
 ) -> None:
-    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
-    transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
+    transcript_txt_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_txt_path.parent.mkdir(parents=True)
+    transcript_txt_path.write_text("transcript text", encoding="utf-8")
 
     result = run_insight_generation_step(
-        transcript_path=transcript_path,
+        transcript_txt_path=transcript_txt_path,
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
-        transcript_text="transcript text",
         client=SummaryOnlyClient(),
     ).to_dict()
 
@@ -299,15 +359,14 @@ def test_run_insight_generation_step_preserves_summary_when_insights_fail(
 def test_run_insight_generation_step_preserves_insights_when_summary_fails(
     tmp_path: Path,
 ) -> None:
-    transcript_path = tmp_path / "task" / "transcript" / "transcript.md"
-    transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("# Transcript\n\ntranscript text", encoding="utf-8")
+    transcript_txt_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_txt_path.parent.mkdir(parents=True)
+    transcript_txt_path.write_text("transcript text", encoding="utf-8")
 
     result = run_insight_generation_step(
-        transcript_path=transcript_path,
+        transcript_txt_path=transcript_txt_path,
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
-        transcript_text="transcript text",
         client=InsightsOnlyClient(),
     ).to_dict()
 

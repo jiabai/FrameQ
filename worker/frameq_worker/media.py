@@ -75,8 +75,19 @@ URL_TRAILING_PUNCTUATION = " \t\r\n\"'<>[]{}()，。！？；：、,.;:!?"
 
 class CommandExecutionError(RuntimeError):
     def __init__(self, result: CommandResult) -> None:
-        super().__init__(result.stderr or f"Command failed with exit code {result.returncode}")
+        error_code = _structured_error_code(result.stderr)
+        message = (
+            f"{error_code}: Media download command failed."
+            if error_code
+            else f"Media command failed with exit code {result.returncode}."
+        )
+        super().__init__(message)
         self.result = result
+
+
+def _structured_error_code(message: str) -> str | None:
+    prefix = message.partition(":")[0].strip()
+    return prefix if re.fullmatch(r"[A-Z][A-Z0-9_]+", prefix) else None
 
 
 @dataclass(frozen=True)

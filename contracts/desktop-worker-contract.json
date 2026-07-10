@@ -16,6 +16,16 @@
     "command": "retry_insights",
     "serverManagedLlmCheckout": true
   },
+  "sourceIdentity": {
+    "preflightCommand": "resolve_source_json",
+    "preflightScope": "cache_lookup_only",
+    "processRequestAcceptsPreflightIdentity": false,
+    "manifestSchemaVersion": 3,
+    "manifestSourceUrl": "canonical_url_only",
+    "downloadUrlTransport": "transient_request_json_only",
+    "rawSourcePreflightTransport": "transient_cache_preflight_json_only",
+    "aiTranscriptArtifact": "transcript/transcript.txt"
+  },
   "env": {
     "outputDir": "FRAMEQ_OUTPUT_DIR",
     "cacheDir": "FRAMEQ_CACHE_DIR",

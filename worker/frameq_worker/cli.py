@@ -45,6 +45,8 @@ from frameq_worker.requests import (
 )
 from frameq_worker.worker_service import (
     failed_insight_retry_result,
+    migrate_source_data_once,
+    resolve_source_identity_once,
     run_asr_model_download_once,
     should_allow_real_asr,
 )
@@ -74,6 +76,7 @@ __all__ = [
     "find_new_or_updated_video",
     "find_video_by_stem",
     "main",
+    "migrate_source_data_once",
     "parse_process_request",
     "parse_retry_insights_request",
     "render_model_download_event",
@@ -82,6 +85,7 @@ __all__ = [
     "resolve_cache_dir",
     "resolve_configured_asr_model",
     "resolve_output_dir",
+    "resolve_source_identity_once",
     "retry_insights_once",
     "run_asr_model_download_once",
     "run_worker_once",
@@ -135,6 +139,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Download the release ASR model cache into FRAMEQ_MODEL_DIR.",
     )
+    request_group.add_argument(
+        "--resolve-source-json",
+        help="Resolve one process-local source URL into a safe source identity.",
+    )
+    request_group.add_argument(
+        "--migrate-source-data",
+        action="store_true",
+        help="Migrate legacy task source metadata under FRAMEQ_OUTPUT_DIR.",
+    )
     args = parser.parse_args(argv)
 
     is_model_download = args.download_asr_model
@@ -145,6 +158,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     elif args.retry_insights_json:
         result = retry_insights_once(args.retry_insights_json, project_root=Path.cwd())
+    elif args.resolve_source_json:
+        result = resolve_source_identity_once(args.resolve_source_json)
+    elif args.migrate_source_data:
+        result = migrate_source_data_once(project_root=Path.cwd())
     else:
         result = run_worker_once(
             args.request_json,
