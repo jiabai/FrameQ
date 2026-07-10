@@ -4,10 +4,11 @@ use crate::task_manifest;
 use crate::{
     append_desktop_log, build_worker_command_spec, ensure_runtime_dirs,
     migrate_legacy_source_data_if_needed, parse_worker_output_or_fallback, parse_worker_stdout,
-    path_to_env_string, resolve_runtime_paths, run_blocking_worker_command, spawn_worker_command,
-    summarize_worker_result_for_log, terminate_process_tree, worker_command_log_detail,
-    worker_exit_log_detail, CancelProcessResult, ProcessPhase, ProcessSupervisors,
-    WorkerInvocation, PROGRESS_EVENT_NAME, PROGRESS_EVENT_PREFIX,
+    path_to_env_string, resolve_runtime_paths, run_blocking_worker_command,
+    spawn_supervised_worker_command, summarize_worker_result_for_log, terminate_process_tree,
+    worker_command_log_detail, worker_exit_log_detail, CancelProcessResult, ProcessPhase,
+    ProcessSupervisors, SupervisedSpawnError, WorkerInvocation, PROGRESS_EVENT_NAME,
+    PROGRESS_EVENT_PREFIX,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -102,7 +103,22 @@ fn process_video_blocking(
         );
         return Ok(cached);
     }
-    let resolved_source_identity = resolve_source_identity_for_cache(&paths, &request.url);
+    let resolved_source_identity =
+        match resolve_source_identity_for_cache(&paths, &request.url, &process_state.video) {
+            Ok(identity) => identity,
+            Err(SupervisedSpawnError::Cancelled) => {
+                return Ok(cancelled_worker_result("video_extracting", "failed"));
+            }
+            Err(SupervisedSpawnError::AlreadyRunning) => {
+                return Ok(worker_already_running_result("video_extracting", "failed"));
+            }
+            Err(SupervisedSpawnError::Failed(_)) => {
+                return Ok(worker_transport_failure_result(
+                    "video_extracting",
+                    "failed",
+                ));
+            }
+        };
     if let Some(source_identity) = resolved_source_identity.as_ref() {
         if let Some(cached) =
             cached_process_result_for_identity(&output_root, &request, source_identity)?
@@ -123,26 +139,23 @@ fn process_video_blocking(
         "worker.process_video.start",
         &worker_command_log_detail(&spec, "process_video"),
     );
-    let mut child = spawn_worker_command(spec)?;
-    let worker_pid = child.id();
-    let Some(worker_instance) = process_state.video.start(worker_pid) else {
-        let _ = terminate_process_tree(worker_pid);
-        return Ok(serde_json::json!(ProcessVideoResult {
-            status: "failed".to_string(),
-            task_id: None,
-            task_dir: None,
-            artifacts: HashMap::new(),
-            text: String::new(),
-            summary: String::new(),
-            insights: vec![],
-            transcript: None,
-            error: Some(WorkerError {
-                code: "WORKER_ALREADY_RUNNING".to_string(),
-                message: "Another worker process is already running.".to_string(),
-                stage: "video_extracting".to_string(),
-            }),
-        }));
-    };
+    let (mut child, worker_instance) =
+        match spawn_supervised_worker_command(spec, &process_state.video) {
+            Ok(spawned) => spawned,
+            Err(SupervisedSpawnError::Cancelled) => {
+                return Ok(cancelled_worker_result("video_extracting", "failed"));
+            }
+            Err(SupervisedSpawnError::AlreadyRunning) => {
+                return Ok(worker_already_running_result("video_extracting", "failed"));
+            }
+            Err(SupervisedSpawnError::Failed(_)) => {
+                return Ok(worker_transport_failure_result(
+                    "video_extracting",
+                    "failed",
+                ));
+            }
+        };
+    let worker_pid = worker_instance.pid;
 
     let Some(stderr) = child.stderr.take() else {
         process_state.video.finish(worker_instance.instance_id);
@@ -421,24 +434,46 @@ fn read_cached_insights_artifact(
 fn resolve_source_identity_for_cache(
     paths: &crate::RuntimePaths,
     raw_url: &str,
-) -> Option<task_manifest::SourceIdentity> {
+    supervisor: &crate::worker_command::ProcessSupervisor,
+) -> Result<Option<task_manifest::SourceIdentity>, SupervisedSpawnError> {
     let payload = serde_json::json!({"url": raw_url}).to_string();
     let spec = build_worker_command_spec(
         paths,
         WorkerInvocation::ResolveSourceIdentity(payload),
         None,
     )
-    .ok()?;
-    let output = spawn_worker_command(spec).ok()?.wait_with_output().ok()?;
-    if !output.status.success() {
-        return None;
+    .map_err(SupervisedSpawnError::Failed)?;
+    let (child, instance) = spawn_supervised_worker_command(spec, supervisor)?;
+    let output = match child.wait_with_output() {
+        Ok(output) => output,
+        Err(_) => {
+            let phase = supervisor.finish(instance.instance_id);
+            return if phase == Some(ProcessPhase::Cancelling) {
+                Err(SupervisedSpawnError::Cancelled)
+            } else {
+                Err(SupervisedSpawnError::Failed(
+                    "Source identity worker failed to finish.".to_string(),
+                ))
+            };
+        }
+    };
+    if supervisor.finish(instance.instance_id) == Some(ProcessPhase::Cancelling) {
+        return Err(SupervisedSpawnError::Cancelled);
     }
-    let value = parse_worker_stdout(&output.stdout).ok()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let Some(value) = parse_worker_stdout(&output.stdout).ok() else {
+        return Ok(None);
+    };
     let identity = serde_json::from_value::<task_manifest::SourceIdentity>(
-        value.get("source_identity")?.clone(),
+        value
+            .get("source_identity")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
     )
-    .ok()?;
-    identity.is_safe().then_some(identity)
+    .ok();
+    Ok(identity.filter(task_manifest::SourceIdentity::is_safe))
 }
 
 #[tauri::command]
@@ -471,26 +506,29 @@ fn retry_insights_blocking(
         "worker.retry_insights.start",
         &worker_command_log_detail(&spec, "retry_insights"),
     );
-    let child = spawn_worker_command(spec)?;
-    let worker_pid = child.id();
-    let Some(worker_instance) = process_state.video.start(worker_pid) else {
-        let _ = terminate_process_tree(worker_pid);
-        return Ok(serde_json::json!(ProcessVideoResult {
-            status: "partial_completed".to_string(),
-            task_id: None,
-            task_dir: None,
-            artifacts: HashMap::new(),
-            text: String::new(),
-            summary: String::new(),
-            insights: vec![],
-            transcript: None,
-            error: Some(WorkerError {
-                code: "WORKER_ALREADY_RUNNING".to_string(),
-                message: "Another worker process is already running.".to_string(),
-                stage: "insights_generating".to_string(),
-            }),
-        }));
+    let (child, worker_instance) = match spawn_supervised_worker_command(spec, &process_state.video)
+    {
+        Ok(spawned) => spawned,
+        Err(SupervisedSpawnError::Cancelled) => {
+            return Ok(cancelled_worker_result(
+                "insights_generating",
+                "partial_completed",
+            ));
+        }
+        Err(SupervisedSpawnError::AlreadyRunning) => {
+            return Ok(worker_already_running_result(
+                "insights_generating",
+                "partial_completed",
+            ));
+        }
+        Err(SupervisedSpawnError::Failed(_)) => {
+            return Ok(worker_transport_failure_result(
+                "insights_generating",
+                "partial_completed",
+            ));
+        }
     };
+    let worker_pid = worker_instance.pid;
 
     let output = match child.wait_with_output() {
         Ok(output) => output,
@@ -569,6 +607,56 @@ fn retry_insights_blocking(
         &summarize_worker_result_for_log(&parsed),
     );
     Ok(parsed)
+}
+
+fn worker_failure_result(
+    status: &str,
+    stage: &str,
+    code: &str,
+    message: &str,
+) -> serde_json::Value {
+    serde_json::json!(ProcessVideoResult {
+        status: status.to_string(),
+        task_id: None,
+        task_dir: None,
+        artifacts: HashMap::new(),
+        text: String::new(),
+        summary: String::new(),
+        insights: vec![],
+        transcript: None,
+        error: Some(WorkerError {
+            code: code.to_string(),
+            message: message.to_string(),
+            stage: stage.to_string(),
+        }),
+    })
+}
+
+fn cancelled_worker_result(stage: &str, status: &str) -> serde_json::Value {
+    worker_failure_result(
+        status,
+        stage,
+        "WORKER_CANCELLED",
+        "Worker process was cancelled.",
+    )
+}
+
+fn worker_already_running_result(stage: &str, status: &str) -> serde_json::Value {
+    worker_failure_result(
+        status,
+        stage,
+        "WORKER_ALREADY_RUNNING",
+        "Another worker process is already running.",
+    )
+}
+
+fn worker_transport_failure_result(stage: &str, status: &str) -> serde_json::Value {
+    worker_failure_result(
+        status,
+        stage,
+        "WORKER_REQUEST_TRANSPORT_FAILED",
+        "Worker request could not be delivered.",
+    )
 }
 
 #[tauri::command]

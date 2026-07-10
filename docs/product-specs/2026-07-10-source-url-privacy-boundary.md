@@ -13,8 +13,9 @@ task artifacts, history, diagnostics, UI errors, or cloud LLM prompts.
     download and platform fallback calls. It may temporarily contain parameters such as
     `xsec_token`, has no durable/result serializer, and must not be copied into results,
     manifests, transcript metadata, history, logs, progress events, or errors. The raw
-    value still crosses frontend-to-Tauri IPC and the redacted full-worker command
-    transport solely for the current processing call.
+    value crosses frontend-to-Tauri IPC and a one-shot desktop-to-worker stdin pipe solely
+    for the current processing or cache-only identity-resolution call. It must not appear
+    in worker argv or environment variables.
   - `SourceIdentity` contains only `version`, `platform`, `stable_id`, optional
     `effective_part`, and `canonical_url`. It is the only source object that may be
     persisted, displayed, returned to history, or compared for task reuse.
@@ -34,10 +35,31 @@ task artifacts, history, diagnostics, UI errors, or cloud LLM prompts.
 - For supported platform short links, the worker resolves the public redirect first when
   resolution is available and derives `canonical_url` from the resolved stable ID. A
   failed short-link resolution must not make the original short URL persistable.
-- Before a full worker starts, Tauri may pass the submitted URL to a separate transient,
-  cache-only identity preflight. That process returns only a validated `SourceIdentity`;
-  its raw payload is redacted from logs and its result is never injected into the full
-  processing request.
+- Before a full worker starts, Tauri may pass the submitted URL through stdin to a
+  separate transient, cache-only identity preflight. That process returns only a
+  validated `SourceIdentity`; its raw payload is absent from argv, environment variables,
+  and logs, and its result is never injected into the full processing request.
+
+## Desktop-to-Worker Request Transport
+
+- Production Tauri worker command specifications carry only fixed mode flags in argv.
+  Serialized process-video, source-identity preflight, and AI-retry request objects are
+  held in the desktop process, written once to a child stdin pipe after spawn, and then
+  the pipe is closed before waiting for output.
+- Request JSON must never be placed in a worker argument, environment variable, command
+  log detail, spawn error, or process-termination diagnostic. Command construction uses
+  an argument vector and never invokes a shell.
+- The worker CLI exposes explicit stdin modes for controlled development use. URL-bearing
+  legacy JSON argv modes are not a production fallback and are removed from the supported
+  request path; fixed no-payload operations such as model download and bounded legacy
+  migration remain ordinary flags.
+- Empty, oversized, unreadable, or malformed stdin is rejected with a fixed structured
+  error that does not echo the payload or parser input. The desktop likewise maps stdin
+  pipe/write failures to fixed sanitized errors and terminates the just-spawned process
+  group before returning.
+- Stdin ownership does not change `ProcessSupervisor`: Windows keeps tree termination,
+  Unix keeps the isolated process group and TERM-to-KILL escalation, and `wait_with_output`
+  must never retain an open request pipe that can block worker completion or cancellation.
 
 ## Persistence and AI Input
 
@@ -108,3 +130,7 @@ task artifacts, history, diagnostics, UI errors, or cloud LLM prompts.
   functional after canonicalization.
 - A recursive scan of persisted task results finds no original sensitive URL,
   `xsec_token`, or fixture token value.
+- Rust command-spec and real-child probes show that a request containing
+  `xsec_token=review-secret` reaches worker stdin while neither argv nor environment
+  contains the raw URL, parameter name, or token value. Success, structured failure, and
+  cancellation retain the existing terminal semantics with stdin closed.

@@ -1,3 +1,4 @@
+import io
 import json
 from pathlib import Path
 
@@ -131,12 +132,133 @@ def test_main_returns_zero_for_structured_worker_failures(monkeypatch, capsys) -
         },
     )
 
-    exit_code = cli.main(["--request-json", "{}"])
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO("{}"))
+    exit_code = cli.main(["--request-stdin"])
 
     assert exit_code == 0
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "failed"
     assert output["error"]["code"] == "ASR_MODEL_NOT_DOWNLOADED"
+
+
+def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
+    payload = json.dumps(
+        {
+            "url": (
+                "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+                "?xsec_token=review-secret"
+            )
+        }
+    )
+    captured: dict[str, str] = {}
+
+    def fake_run_worker_once(request_json: str, **_kwargs: object) -> dict[str, object]:
+        captured["request_json"] = request_json
+        return {"status": "completed"}
+
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
+    monkeypatch.setattr(cli, "run_worker_once", fake_run_worker_once)
+
+    exit_code = cli.main(["--request-stdin"])
+
+    assert exit_code == 0
+    assert json.loads(captured["request_json"])["url"].endswith(
+        "?xsec_token=review-secret"
+    )
+    assert "review-secret" not in capsys.readouterr().err
+
+
+def test_main_rejects_invalid_stdin_without_echoing_payload(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli.sys,
+        "stdin",
+        io.StringIO('{"url":"https://example.test/?xsec_token=review-secret"'),
+    )
+
+    exit_code = cli.main(["--request-stdin"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "WORKER_STDIN_INVALID"
+    assert "review-secret" not in captured.out + captured.err
+    assert "xsec_token" not in captured.out + captured.err
+
+
+def test_main_resolves_source_identity_from_stdin_without_echoing_secret(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        cli.sys,
+        "stdin",
+        io.StringIO(
+            json.dumps(
+                {
+                    "url": (
+                        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+                        "?xsec_token=review-secret#comments"
+                    )
+                }
+            )
+        ),
+    )
+
+    exit_code = cli.main(["--resolve-source-stdin"])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["status"] == "completed"
+    assert result["source_identity"]["canonical_url"].endswith(
+        "/64a1b2c3d4e5f67890123456"
+    )
+    assert "review-secret" not in captured.out + captured.err
+    assert "xsec_token" not in captured.out + captured.err
+
+
+def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
+    payload = json.dumps({"task_id": "safe-task", "target": "summary"})
+    captured: dict[str, str] = {}
+
+    def fake_retry_insights_once(
+        request_json: str,
+        **_kwargs: object,
+    ) -> dict[str, object]:
+        captured["request_json"] = request_json
+        return {"status": "completed"}
+
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
+    monkeypatch.setattr(cli, "retry_insights_once", fake_retry_insights_once)
+
+    exit_code = cli.main(["--retry-insights-stdin"])
+
+    assert exit_code == 0
+    assert json.loads(captured["request_json"]) == {
+        "task_id": "safe-task",
+        "target": "summary",
+    }
+    assert "safe-task" not in capsys.readouterr().err
+
+
+def test_main_rejects_oversized_stdin_without_echoing_secret(monkeypatch, capsys) -> None:
+    oversized = json.dumps(
+        {
+            "url": "https://example.test/?xsec_token=review-secret",
+            "padding": "x" * cli.MAX_STDIN_REQUEST_BYTES,
+        }
+    )
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO(oversized))
+
+    exit_code = cli.main(["--request-stdin"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["error"]["code"] == "WORKER_STDIN_INVALID"
+    assert "review-secret" not in captured.out + captured.err
+    assert "xsec_token" not in captured.out + captured.err
 
 
 def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> None:

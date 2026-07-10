@@ -13,6 +13,7 @@ use crate::{
 use serde::Serialize;
 #[cfg(test)]
 use std::collections::HashMap;
+use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 #[cfg(target_os = "windows")]
@@ -25,6 +26,7 @@ use std::time::Duration;
 
 #[cfg(target_os = "windows")]
 const WINDOWS_CREATE_NO_WINDOW: u32 = 0x08000000;
+const MAX_WORKER_STDIN_PAYLOAD_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone)]
 pub(crate) enum WorkerInvocation {
@@ -38,9 +40,17 @@ pub(crate) enum WorkerInvocation {
 pub(crate) struct WorkerCommandSpec {
     pub(crate) program: PathBuf,
     pub(crate) args: Vec<String>,
+    pub(crate) stdin_payload: Option<String>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) env_remove: Vec<String>,
     pub(crate) current_dir: PathBuf,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum SupervisedSpawnError {
+    AlreadyRunning,
+    Cancelled,
+    Failed(String),
 }
 
 impl WorkerCommandSpec {
@@ -270,7 +280,7 @@ pub(crate) fn termination_command_spec(
 }
 
 pub(crate) fn worker_command_log_detail(spec: &WorkerCommandSpec, kind: &str) -> String {
-    let args = redact_worker_args_for_log(&spec.args).join(" ");
+    let args = spec.args.join(" ");
     format!(
         "kind={kind} program={} current_dir={} args={} {}",
         path_to_env_string(&spec.program),
@@ -278,29 +288,6 @@ pub(crate) fn worker_command_log_detail(spec: &WorkerCommandSpec, kind: &str) ->
         args,
         js_runtime_diagnostics(spec)
     )
-}
-
-fn redact_worker_args_for_log(args: &[String]) -> Vec<String> {
-    let mut redacted = Vec::with_capacity(args.len());
-    let mut redact_next = false;
-
-    for arg in args {
-        if redact_next {
-            redacted.push("[json-payload]".to_string());
-            redact_next = false;
-            continue;
-        }
-
-        redacted.push(arg.clone());
-        if arg == "--request-json"
-            || arg == "--retry-insights-json"
-            || arg == "--resolve-source-json"
-        {
-            redact_next = true;
-        }
-    }
-
-    redacted
 }
 
 pub(crate) fn worker_exit_log_detail(pid: u32, output: &Output, stderr: &str) -> String {
@@ -366,18 +353,24 @@ pub(crate) fn build_worker_command_spec(
     server_managed_llm: Option<account::ServerManagedLlmInvocation>,
 ) -> Result<WorkerCommandSpec, String> {
     let include_server_managed_llm = worker_invocation_uses_server_managed_llm(&invocation);
-    let args = match invocation {
+    let (args, stdin_payload) = match invocation {
         WorkerInvocation::ProcessVideo(payload) => {
-            vec!["--request-json".to_string(), payload]
+            (vec!["--request-stdin".to_string()], Some(payload))
         }
         WorkerInvocation::RetryInsights(payload) => {
-            vec!["--retry-insights-json".to_string(), payload]
+            (vec!["--retry-insights-stdin".to_string()], Some(payload))
         }
         WorkerInvocation::ResolveSourceIdentity(payload) => {
-            vec!["--resolve-source-json".to_string(), payload]
+            (vec!["--resolve-source-stdin".to_string()], Some(payload))
         }
-        WorkerInvocation::MigrateSourceData => vec!["--migrate-source-data".to_string()],
+        WorkerInvocation::MigrateSourceData => (vec!["--migrate-source-data".to_string()], None),
     };
+    if stdin_payload
+        .as_ref()
+        .is_some_and(|payload| payload.len() > MAX_WORKER_STDIN_PAYLOAD_BYTES)
+    {
+        return Err("Worker request stdin payload was too large.".to_string());
+    }
     let resource_bin_dir = paths.resource_dir.join("bin");
     let path_value = prepend_to_path(&resource_bin_dir)?;
     let output_root = task_manifest::configured_output_root(paths)?;
@@ -428,6 +421,7 @@ pub(crate) fn build_worker_command_spec(
     Ok(WorkerCommandSpec {
         program: bundled_python_path(&paths.resource_dir),
         args: [vec!["-m".to_string(), "frameq_worker".to_string()], args].concat(),
+        stdin_payload,
         env,
         env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),
@@ -493,21 +487,88 @@ fn configure_child_process_group(command: &mut Command) {
     }
 }
 
-pub(crate) fn spawn_worker_command(spec: WorkerCommandSpec) -> Result<std::process::Child, String> {
-    let mut command = Command::new(spec.program);
+fn spawn_worker_process(
+    spec: WorkerCommandSpec,
+) -> Result<(std::process::Child, Option<String>), String> {
+    let WorkerCommandSpec {
+        program,
+        args,
+        stdin_payload,
+        env,
+        env_remove,
+        current_dir,
+    } = spec;
+    let mut command = Command::new(program);
     hide_child_console_window(&mut command);
     configure_child_process_group(&mut command);
-    for key in spec.env_remove {
+    for key in env_remove {
         command.env_remove(key);
     }
     command
-        .args(spec.args)
-        .envs(spec.env)
-        .current_dir(spec.current_dir)
+        .args(args)
+        .envs(env)
+        .current_dir(current_dir)
+        .stdin(if stdin_payload.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    command.spawn().map_err(|error| error.to_string())
+    command
+        .spawn()
+        .map(|child| (child, stdin_payload))
+        .map_err(|error| error.to_string())
+}
+
+fn deliver_worker_stdin(
+    child: &mut std::process::Child,
+    stdin_payload: Option<String>,
+) -> Result<(), String> {
+    let Some(payload) = stdin_payload else {
+        return Ok(());
+    };
+    child
+        .stdin
+        .take()
+        .ok_or(())
+        .and_then(|mut stdin| stdin.write_all(payload.as_bytes()).map_err(|_| ()))
+        .map_err(|_| "Failed to deliver worker request through stdin.".to_string())
+}
+
+pub(crate) fn spawn_worker_command(spec: WorkerCommandSpec) -> Result<std::process::Child, String> {
+    let (mut child, stdin_payload) = spawn_worker_process(spec)?;
+    if let Err(error) = deliver_worker_stdin(&mut child, stdin_payload) {
+        let _ = terminate_process_tree(child.id());
+        let _ = child.wait();
+        return Err(error);
+    }
+    Ok(child)
+}
+
+pub(crate) fn spawn_supervised_worker_command(
+    spec: WorkerCommandSpec,
+    supervisor: &ProcessSupervisor,
+) -> Result<(std::process::Child, ProcessInstance), SupervisedSpawnError> {
+    let (mut child, stdin_payload) =
+        spawn_worker_process(spec).map_err(SupervisedSpawnError::Failed)?;
+    let Some(instance) = supervisor.start(child.id()) else {
+        let _ = terminate_process_tree(child.id());
+        let _ = child.wait();
+        return Err(SupervisedSpawnError::AlreadyRunning);
+    };
+    if let Err(error) = deliver_worker_stdin(&mut child, stdin_payload) {
+        let terminal_phase = supervisor.finish(instance.instance_id);
+        let _ = terminate_process_tree(instance.process_group_id.unwrap_or(instance.pid));
+        let _ = child.wait();
+        return if terminal_phase == Some(ProcessPhase::Cancelling) {
+            Err(SupervisedSpawnError::Cancelled)
+        } else {
+            Err(SupervisedSpawnError::Failed(error))
+        };
+    }
+    Ok((child, instance))
 }
 
 pub(crate) fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, String> {
@@ -633,13 +694,14 @@ fn process_group_exists(pid: u32) -> Result<bool, String> {
 mod tests {
     use super::{
         build_worker_command_spec, parse_worker_output_or_fallback, parse_worker_stdout,
-        redact_worker_args_for_log, run_blocking_worker_command, termination_command_spec,
-        CancelClaim, CancelRequestOutcome, ProcessPhase, ProcessPlatform, ProcessSignal,
-        ProcessSupervisor, ProcessSupervisors, WorkerCommandSpec, WorkerInvocation,
+        run_blocking_worker_command, spawn_worker_command, termination_command_spec, CancelClaim,
+        CancelRequestOutcome, ProcessPhase, ProcessPlatform, ProcessSignal, ProcessSupervisor,
+        ProcessSupervisors, WorkerCommandSpec, WorkerInvocation,
     };
     use crate::account::ServerManagedLlmInvocation;
     use crate::{ProcessVideoResult, RuntimePaths, WorkerError};
     use std::collections::HashMap;
+    use std::io::Read;
     use std::path::PathBuf;
     #[cfg(unix)]
     use std::process::Command;
@@ -663,22 +725,6 @@ mod tests {
         ] {
             assert!(!spec.env_remove.iter().any(|value| value == key));
         }
-    }
-
-    #[test]
-    fn source_identity_preflight_payload_is_redacted_from_logs() {
-        let secret_payload = r#"{"url":"https://xhslink.com/o/demo?xsec_token=review-secret"}"#;
-        let redacted = redact_worker_args_for_log(&[
-            "-m".to_string(),
-            "frameq_worker".to_string(),
-            "--resolve-source-json".to_string(),
-            secret_payload.to_string(),
-        ])
-        .join(" ");
-
-        assert!(redacted.contains("[json-payload]"));
-        assert!(!redacted.contains("review-secret"));
-        assert!(!redacted.contains("xsec_token"));
     }
 
     #[test]
@@ -938,10 +984,11 @@ Some dependency logged to stdout
             spec.program,
             PathBuf::from("C:/Program Files/FrameQ/resources/python/python.exe")
         );
-        assert_eq!(
-            spec.args,
-            vec!["-m", "frameq_worker", "--request-json", request_json,]
-        );
+        assert_eq!(spec.args, vec!["-m", "frameq_worker", "--request-stdin"]);
+        assert_eq!(spec.stdin_payload.as_deref(), Some(request_json));
+        assert!(!spec.args.join(" ").contains(request_json));
+        assert!(!spec.args.join(" ").contains("xsec_token"));
+        assert!(!env.values().any(|value| value.contains(request_json)));
         assert!(!spec.program.to_string_lossy().contains("uv"));
         assert!(!spec.args.iter().any(|arg| arg == "uv"));
         assert_eq!(
@@ -968,6 +1015,271 @@ Some dependency logged to stdout
         assert_eq!(env.get("MODELSCOPE_OFFLINE"), Some(&"1".to_string()));
         assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(spec.current_dir, paths.user_data_dir);
+    }
+
+    #[test]
+    fn serialized_worker_requests_never_enter_argv_or_environment() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
+            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
+        };
+        let secret = "review-secret";
+        let cases = [
+            (
+                WorkerInvocation::ProcessVideo(format!(
+                    r#"{{"url":"https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456?xsec_token={secret}"}}"#
+                )),
+                "--request-stdin",
+            ),
+            (
+                WorkerInvocation::ResolveSourceIdentity(format!(
+                    r#"{{"url":"https://xhslink.com/demo?xsec_token={secret}"}}"#
+                )),
+                "--resolve-source-stdin",
+            ),
+            (
+                WorkerInvocation::RetryInsights(
+                    r#"{"task_id":"safe-task","target":"summary"}"#.to_string(),
+                ),
+                "--retry-insights-stdin",
+            ),
+        ];
+
+        for (invocation, expected_mode) in cases {
+            let spec = build_worker_command_spec(&paths, invocation, None)
+                .expect("build stdin worker command");
+            assert_eq!(
+                spec.args,
+                vec![
+                    "-m".to_string(),
+                    "frameq_worker".to_string(),
+                    expected_mode.to_string()
+                ]
+            );
+            assert!(!spec.args.iter().any(|value| value.contains(secret)));
+            assert!(!spec.args.iter().any(|value| value.contains("xsec_token")));
+            assert!(!spec.env.iter().any(|(_, value)| value.contains(secret)));
+            assert!(!spec
+                .env
+                .iter()
+                .any(|(_, value)| value.contains("xsec_token")));
+            let log = super::worker_command_log_detail(&spec, "privacy_probe");
+            assert!(!log.contains(secret));
+            assert!(!log.contains("xsec_token"));
+        }
+    }
+
+    #[test]
+    fn oversized_worker_stdin_payload_fails_without_echoing_content() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
+            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
+        };
+        let payload = format!("review-secret{}", "x".repeat(1024 * 1024));
+
+        let error = match build_worker_command_spec(
+            &paths,
+            WorkerInvocation::ProcessVideo(payload),
+            None,
+        ) {
+            Ok(_) => panic!("oversized stdin payload unexpectedly accepted"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error, "Worker request stdin payload was too large.");
+        assert!(!error.contains("review-secret"));
+    }
+
+    #[test]
+    fn spawned_worker_receives_sensitive_request_only_through_stdin() {
+        const PROBE_ENV: &str = "FRAMEQ_STDIN_REQUEST_PROBE";
+        const TEST_NAME: &str =
+            "worker_command::tests::spawned_worker_receives_sensitive_request_only_through_stdin";
+        const SECRET: &str = "review-secret";
+
+        if std::env::var_os(PROBE_ENV).is_some() {
+            let mut stdin = String::new();
+            std::io::stdin()
+                .read_to_string(&mut stdin)
+                .expect("probe reads stdin");
+            let argv = std::env::args().collect::<Vec<_>>().join(" ");
+            let env_contains_secret = std::env::vars().any(|(_, value)| value.contains(SECRET));
+            println!(
+                "{}",
+                serde_json::json!({
+                    "stdin_received": stdin.contains(SECRET),
+                    "argv_contains_secret": argv.contains(SECRET),
+                    "env_contains_secret": env_contains_secret,
+                })
+            );
+            return;
+        }
+
+        let payload = format!(
+            r#"{{"url":"https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456?xsec_token={SECRET}"}}"#
+        );
+        let spec = WorkerCommandSpec {
+            program: std::env::current_exe().expect("resolve test executable"),
+            args: vec![
+                "--exact".to_string(),
+                TEST_NAME.to_string(),
+                "--nocapture".to_string(),
+            ],
+            stdin_payload: Some(payload.clone()),
+            env: vec![(PROBE_ENV.to_string(), "1".to_string())],
+            env_remove: vec![],
+            current_dir: std::env::current_dir().expect("resolve test directory"),
+        };
+
+        assert!(!spec.args.iter().any(|value| value.contains(SECRET)));
+        assert!(!spec.env.iter().any(|(_, value)| value.contains(SECRET)));
+        let output = spawn_worker_command(spec)
+            .expect("spawn stdin probe")
+            .wait_with_output()
+            .expect("wait for stdin probe");
+        assert!(output.status.success());
+        let stdout = String::from_utf8(output.stdout).expect("probe stdout is utf-8");
+        let result = stdout
+            .lines()
+            .find_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .expect("probe emits JSON result");
+
+        assert_eq!(result["stdin_received"], true);
+        assert_eq!(result["argv_contains_secret"], false);
+        assert_eq!(result["env_contains_secret"], false);
+        assert!(!stdout.contains(SECRET));
+        assert!(!String::from_utf8_lossy(&output.stderr).contains(SECRET));
+    }
+
+    #[test]
+    fn stdin_delivery_failure_is_sanitized_and_reaps_the_child() {
+        const PROBE_ENV: &str = "FRAMEQ_STDIN_FAILURE_PROBE";
+        const TEST_NAME: &str =
+            "worker_command::tests::stdin_delivery_failure_is_sanitized_and_reaps_the_child";
+        const SECRET: &str = "review-secret";
+
+        if std::env::var_os(PROBE_ENV).is_some() {
+            return;
+        }
+
+        let spec = WorkerCommandSpec {
+            program: std::env::current_exe().expect("resolve test executable"),
+            args: vec![
+                "--exact".to_string(),
+                TEST_NAME.to_string(),
+                "--nocapture".to_string(),
+            ],
+            stdin_payload: Some(SECRET.repeat(256 * 1024)),
+            env: vec![(PROBE_ENV.to_string(), "1".to_string())],
+            env_remove: vec![],
+            current_dir: std::env::current_dir().expect("resolve test directory"),
+        };
+
+        let error = match spawn_worker_command(spec) {
+            Ok(mut child) => {
+                let _ = child.wait();
+                panic!("stdin delivery unexpectedly succeeded")
+            }
+            Err(error) => error,
+        };
+        assert_eq!(error, "Failed to deliver worker request through stdin.");
+        assert!(!error.contains(SECRET));
+    }
+
+    #[test]
+    fn stdin_worker_remains_cancellable_after_request_delivery() {
+        const PROBE_ENV: &str = "FRAMEQ_STDIN_CANCELLATION_PROBE";
+        const TEST_NAME: &str =
+            "worker_command::tests::stdin_worker_remains_cancellable_after_request_delivery";
+
+        if std::env::var_os(PROBE_ENV).is_some() {
+            let mut stdin = Vec::new();
+            std::io::stdin()
+                .read_to_end(&mut stdin)
+                .expect("cancellation probe reads stdin");
+            assert!(!stdin.is_empty());
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            return;
+        }
+
+        let spec = WorkerCommandSpec {
+            program: std::env::current_exe().expect("resolve test executable"),
+            args: vec![
+                "--exact".to_string(),
+                TEST_NAME.to_string(),
+                "--nocapture".to_string(),
+            ],
+            stdin_payload: Some("x".repeat(256 * 1024)),
+            env: vec![(PROBE_ENV.to_string(), "1".to_string())],
+            env_remove: vec![],
+            current_dir: std::env::current_dir().expect("resolve test directory"),
+        };
+        let child = spawn_worker_command(spec).expect("spawn cancellable stdin worker");
+        let supervisor = ProcessSupervisor::default();
+        let instance = supervisor.start(child.id()).expect("claim stdin worker");
+
+        assert!(matches!(
+            supervisor.request_cancel(|current| {
+                super::terminate_process_tree(current.process_group_id.unwrap_or(current.pid))
+            }),
+            CancelRequestOutcome::Signalled(current) if current == instance
+        ));
+        let output = child
+            .wait_with_output()
+            .expect("reap cancelled stdin worker");
+        assert!(!output.status.success());
+        assert_eq!(
+            supervisor.finish(instance.instance_id),
+            Some(ProcessPhase::Cancelling)
+        );
+    }
+
+    #[test]
+    fn supervised_stdin_worker_can_be_cancelled_while_delivery_is_blocked() {
+        const PROBE_ENV: &str = "FRAMEQ_STDIN_BLOCKED_DELIVERY_PROBE";
+        const TEST_NAME: &str = "worker_command::tests::supervised_stdin_worker_can_be_cancelled_while_delivery_is_blocked";
+
+        if std::env::var_os(PROBE_ENV).is_some() {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            return;
+        }
+
+        let spec = WorkerCommandSpec {
+            program: std::env::current_exe().expect("resolve test executable"),
+            args: vec![
+                "--exact".to_string(),
+                TEST_NAME.to_string(),
+                "--nocapture".to_string(),
+            ],
+            stdin_payload: Some("x".repeat(256 * 1024)),
+            env: vec![(PROBE_ENV.to_string(), "1".to_string())],
+            env_remove: vec![],
+            current_dir: std::env::current_dir().expect("resolve test directory"),
+        };
+        let supervisor = std::sync::Arc::new(ProcessSupervisor::default());
+        let operation_supervisor = std::sync::Arc::clone(&supervisor);
+        let operation = std::thread::spawn(move || {
+            super::spawn_supervised_worker_command(spec, &operation_supervisor)
+        });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while supervisor.current().is_none() && std::time::Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        let instance = supervisor
+            .current()
+            .expect("blocked delivery is supervised");
+
+        assert!(matches!(
+            supervisor.request_cancel(|current| {
+                super::terminate_process_tree(current.process_group_id.unwrap_or(current.pid))
+            }),
+            CancelRequestOutcome::Signalled(current) if current == instance
+        ));
+        assert!(matches!(
+            operation.join().expect("delivery thread completes"),
+            Err(super::SupervisedSpawnError::Cancelled)
+        ));
+        assert_eq!(supervisor.current(), None);
     }
 
     #[cfg(target_os = "windows")]
@@ -1001,6 +1313,7 @@ Some dependency logged to stdout
         let env = spec.env_map();
 
         assert_removes_legacy_local_llm_env(&spec);
+        assert_eq!(spec.stdin_payload.as_deref(), Some(request_json));
         assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), None);
         assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_URL"), None);
         assert_eq!(env.get("FRAMEQ_LLM_SESSION_TOKEN"), None);
@@ -1028,6 +1341,7 @@ Some dependency logged to stdout
         let env = spec.env_map();
 
         assert_removes_legacy_local_llm_env(&spec);
+        assert_eq!(spec.stdin_payload.as_deref(), Some(request_json));
         assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), Some(&"server".to_string()));
         assert_eq!(
             env.get("FRAMEQ_LLM_CHECKOUT_URL"),

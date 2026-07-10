@@ -123,6 +123,7 @@ fn build_model_download_command_spec(
             "frameq_worker".to_string(),
             "--download-asr-model".to_string(),
         ],
+        stdin_payload: None,
         env,
         env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),

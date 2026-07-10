@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from io import TextIOBase
 from pathlib import Path
 
 from frameq_worker import worker_service as worker_service_module
@@ -94,6 +95,56 @@ __all__ = [
     "snapshot_video_files",
 ]
 
+MAX_STDIN_REQUEST_BYTES = 1024 * 1024
+
+
+class StdinRequestError(ValueError):
+    pass
+
+
+def read_stdin_request(stream: TextIOBase) -> str:
+    reader = getattr(stream, "buffer", stream)
+    raw = reader.read(MAX_STDIN_REQUEST_BYTES + 1)
+    if isinstance(raw, bytes):
+        if len(raw) > MAX_STDIN_REQUEST_BYTES:
+            raise StdinRequestError
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise StdinRequestError from exc
+    else:
+        if len(raw.encode("utf-8")) > MAX_STDIN_REQUEST_BYTES:
+            raise StdinRequestError
+        text = raw
+    if not text.strip():
+        raise StdinRequestError
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise StdinRequestError from exc
+    if not isinstance(payload, dict):
+        raise StdinRequestError
+    return json.dumps(payload, ensure_ascii=True)
+
+
+def stdin_failure_result(mode: str) -> dict[str, object]:
+    stage = "insights_generating" if mode == "retry_insights" else "waiting_input"
+    return {
+        "status": "failed",
+        "task_id": None,
+        "task_dir": None,
+        "artifacts": {},
+        "text": "",
+        "summary": "",
+        "insights": [],
+        "transcript": None,
+        "error": {
+            "code": "WORKER_STDIN_INVALID",
+            "message": "Worker request stdin was invalid.",
+            "stage": stage,
+        },
+    }
+
 
 def run_worker_once(*args: object, **kwargs: object) -> dict[str, object]:
     kwargs.setdefault("transcriber_factory", build_asr_transcriber)
@@ -129,10 +180,15 @@ def print_model_download_event(event: dict[str, object]) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run one FrameQ worker request.")
     request_group = parser.add_mutually_exclusive_group(required=True)
-    request_group.add_argument("--request-json", help="Serialized ProcessRequest payload.")
     request_group.add_argument(
-        "--retry-insights-json",
-        help="Serialized RetryInsightsRequest payload.",
+        "--request-stdin",
+        action="store_true",
+        help="Read one ProcessRequest JSON object from stdin.",
+    )
+    request_group.add_argument(
+        "--retry-insights-stdin",
+        action="store_true",
+        help="Read one RetryInsightsRequest JSON object from stdin.",
     )
     request_group.add_argument(
         "--download-asr-model",
@@ -140,8 +196,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Download the release ASR model cache into FRAMEQ_MODEL_DIR.",
     )
     request_group.add_argument(
-        "--resolve-source-json",
-        help="Resolve one process-local source URL into a safe source identity.",
+        "--resolve-source-stdin",
+        action="store_true",
+        help="Read one source-identity request JSON object from stdin.",
     )
     request_group.add_argument(
         "--migrate-source-data",
@@ -151,20 +208,39 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     is_model_download = args.download_asr_model
+    stdin_mode = next(
+        (
+            mode
+            for enabled, mode in [
+                (args.request_stdin, "process_video"),
+                (args.retry_insights_stdin, "retry_insights"),
+                (args.resolve_source_stdin, "resolve_source_identity"),
+            ]
+            if enabled
+        ),
+        None,
+    )
+    request_json: str | None = None
+    if stdin_mode is not None:
+        try:
+            request_json = read_stdin_request(sys.stdin)
+        except (OSError, StdinRequestError):
+            print(render_result_json(stdin_failure_result(stdin_mode)))
+            return 1
     if is_model_download:
         result = run_asr_model_download_once(
             project_root=Path.cwd(),
             progress_callback=print_model_download_event,
         )
-    elif args.retry_insights_json:
-        result = retry_insights_once(args.retry_insights_json, project_root=Path.cwd())
-    elif args.resolve_source_json:
-        result = resolve_source_identity_once(args.resolve_source_json)
+    elif args.retry_insights_stdin:
+        result = retry_insights_once(request_json or "{}", project_root=Path.cwd())
+    elif args.resolve_source_stdin:
+        result = resolve_source_identity_once(request_json or "{}")
     elif args.migrate_source_data:
         result = migrate_source_data_once(project_root=Path.cwd())
     else:
         result = run_worker_once(
-            args.request_json,
+            request_json or "{}",
             project_root=Path.cwd(),
             progress_callback=print_progress_event,
         )
