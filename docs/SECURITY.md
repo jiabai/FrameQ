@@ -12,7 +12,7 @@
 - Windows cancellation uses the fixed `taskkill /T /F` argument vector. Unix cancellation uses a fixed `kill` argument vector directed at the worker-created process group, first `TERM` and then bounded-grace `KILL` only if the group remains. No shell interpolation is permitted.
 - A delivered termination signal is not proof of a final cancelled state. State rollback after a signal error and terminal cleanup after child observation must match the same instance ID, so stale cancellation/exit handling cannot hide a real result or interfere with a newer process.
 - Cancellation must preserve existing task artifacts, cache, and model files. It must not log raw worker arguments, source URLs, credentials, descendant command lines, or arbitrary termination diagnostics; public UI status uses structured cancellation states rather than parsing error text.
-- The Unix parent-plus-child fixture is conditional on a Unix host. Windows command/state coverage does not prove macOS/Linux signal delivery; release validation on those platforms remains required before making a platform-specific release claim.
+- The Unix parent-plus-child fixture is conditional on a Unix host. Windows command/state coverage does not prove macOS signal delivery, so the supported macOS release requires native-host validation. Linux is not a supported release platform and is not a release gate.
 
 ## 2026-07-10 Entitlement Transaction Integrity Boundary
 

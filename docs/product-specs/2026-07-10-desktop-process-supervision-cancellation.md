@@ -17,17 +17,18 @@ The desktop currently records a worker or ASR model-download PID in two separate
 - `ProcessSupervisor` is the only in-process authority for a current worker/model-download child. It owns a monotonically increasing running-instance identifier, PID, and phase: `Running` or `Cancelling`; absence is the finished state.
 - Cancellation atomically claims a matching `Running` instance before issuing any signal. A second request for the same instance reports that cancellation is already in progress; stale finish/clear operations must match the running-instance identifier, not only a PID.
 - Windows uses `taskkill /PID <pid> /T /F` for the full tree.
-- macOS/Linux spawn the worker in a new process group. Cancellation sends TERM to the negative PGID, waits only for a bounded TERM-to-KILL escalation grace period, and sends KILL to the same group if descendants remain. Command arguments are constructed from supervisor-owned numeric IDs and never through a shell.
+- macOS spawns the worker in a new process group. Cancellation sends TERM to the negative PGID, waits only for a bounded TERM-to-KILL escalation grace period, and sends KILL to the same group if descendants remain. Command arguments are constructed from supervisor-owned numeric IDs and never through a shell.
 - Signal delivery is distinct from terminal observation. A successful signal produces `cancelling`; only the eventual child result establishes whether the terminal state is cancelled or a real completion/failure.
 
 ## Scope and Non-goals
 
 - Video workers and ASR model downloads use the same supervisor semantics. Worker-created `yt-dlp`, FFmpeg, and fallback descendants are included through the process group/tree.
+- Supported desktop release platforms are Windows and macOS. Linux packaging, release validation, and support claims are out of scope.
 - IPC may expose structured cancellation status, but frontend code must not infer process state from error-message text.
 - This does not add external process-management dependencies, change output cleanup policy, alter server billing/entitlement/admin behavior, invoke real payment APIs, or make a production payment claim.
 
 ## Acceptance Criteria
 
 - Tests cover failed termination, duplicate cancel, finish/cancel races, stale instance state, Windows tree command construction, Unix process-group TERM/KILL command construction, and shared worker/ASR semantics.
-- Unix-only tests verify a controlled parent-plus-child fixture is terminated as a group; Windows reports that this live Unix check is not executable on the current platform.
+- The macOS CI suite executes the Unix-gated controlled parent-plus-child fixture and verifies that it is terminated as a group; Windows reports that this live process-group check is not executable on the current platform.
 - Frontend tests prove a failed cancel does not reset the workflow and a confirmed cancellation does; model-download state follows the same lifecycle.

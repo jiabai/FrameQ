@@ -110,7 +110,10 @@ pub(crate) fn path_to_env_string(path: impl AsRef<Path>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_runtime_dirs, normalize_resource_dir, RuntimePaths, LEGACY_TEMP_DIR_NAME};
+    use super::{
+        bundled_python_path, ensure_runtime_dirs, normalize_resource_dir, RuntimePaths,
+        LEGACY_TEMP_DIR_NAME,
+    };
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -139,8 +142,10 @@ mod tests {
         let root = temp_dir("normalize_resource_dir_uses_packaged_resources_subdir");
         let install_root = root.join("FrameQ");
         let resources = install_root.join("resources");
-        fs::create_dir_all(resources.join("python")).expect("create packaged python dir");
-        fs::write(resources.join("python").join("python.exe"), "python").expect("write python");
+        let python = bundled_python_path(&resources);
+        fs::create_dir_all(python.parent().expect("packaged python parent"))
+            .expect("create packaged python dir");
+        fs::write(python, "python").expect("write python");
 
         assert_eq!(normalize_resource_dir(install_root), resources);
     }

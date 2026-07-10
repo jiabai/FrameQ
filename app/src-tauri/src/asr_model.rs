@@ -323,11 +323,18 @@ pub(crate) fn cancel_asr_model_download(
 mod tests {
     use super::{asr_model_available, build_model_download_command_spec};
     use crate::settings::supported_asr_models;
-    use crate::{RuntimePaths, WorkerCommandSpec};
+    use crate::{bundled_python_path, path_to_env_string, RuntimePaths, WorkerCommandSpec};
     use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn command_test_paths() -> RuntimePaths {
+        RuntimePaths {
+            resource_dir: PathBuf::from("frameq-test").join("resources"),
+            user_data_dir: PathBuf::from("frameq-test").join("user-data"),
+        }
+    }
 
     fn assert_removes_legacy_local_llm_env(spec: &WorkerCommandSpec) {
         for key in [
@@ -438,10 +445,7 @@ mod tests {
 
     #[test]
     fn model_download_command_spec_uses_bundled_python_and_user_model_dir() {
-        let paths = RuntimePaths {
-            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
-            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
-        };
+        let paths = command_test_paths();
         let spec = build_model_download_command_spec(
             &paths,
             &HashMap::from([
@@ -458,10 +462,7 @@ mod tests {
         .expect("build download command spec");
         let env = spec.env_map();
 
-        assert_eq!(
-            spec.program,
-            PathBuf::from("C:/Program Files/FrameQ/resources/python/python.exe")
-        );
+        assert_eq!(spec.program, bundled_python_path(&paths.resource_dir));
         assert_eq!(
             spec.args,
             vec!["-m", "frameq_worker", "--download-asr-model"]
@@ -470,7 +471,7 @@ mod tests {
         assert!(!spec.args.iter().any(|arg| arg == "uv"));
         assert_eq!(
             env.get("FRAMEQ_MODEL_DIR"),
-            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/models".to_string())
+            Some(&path_to_env_string(paths.user_data_dir.join("models")))
         );
         assert_eq!(
             env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_URL"),

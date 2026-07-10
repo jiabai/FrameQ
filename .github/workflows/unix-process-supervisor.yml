@@ -1,4 +1,4 @@
-name: Unix ProcessSupervisor
+name: macOS ProcessSupervisor
 
 on:
   push:
@@ -22,33 +22,12 @@ concurrency:
 
 jobs:
   cargo-test:
-    name: ${{ matrix.os }} Cargo tests
-    runs-on: ${{ matrix.os }}
+    name: macOS Cargo tests
+    runs-on: macos-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Tauri test dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable

@@ -699,13 +699,22 @@ mod tests {
         ProcessSupervisors, WorkerCommandSpec, WorkerInvocation,
     };
     use crate::account::ServerManagedLlmInvocation;
-    use crate::{ProcessVideoResult, RuntimePaths, WorkerError};
+    use crate::{
+        bundled_python_path, path_to_env_string, ProcessVideoResult, RuntimePaths, WorkerError,
+    };
     use std::collections::HashMap;
     use std::io::Read;
     use std::path::PathBuf;
     #[cfg(unix)]
     use std::process::Command;
     use std::process::Output;
+
+    fn command_test_paths() -> RuntimePaths {
+        RuntimePaths {
+            resource_dir: PathBuf::from("frameq-test").join("resources"),
+            user_data_dir: PathBuf::from("frameq-test").join("user-data"),
+        }
+    }
 
     fn assert_removes_legacy_local_llm_env(spec: &WorkerCommandSpec) {
         for key in [
@@ -966,10 +975,7 @@ Some dependency logged to stdout
 
     #[test]
     fn worker_command_spec_uses_bundled_python_and_app_local_data() {
-        let paths = RuntimePaths {
-            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
-            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
-        };
+        let paths = command_test_paths();
         let request_json = r#"{"url":"https://www.douyin.com/video/7524373044106677544"}"#;
 
         let spec = build_worker_command_spec(
@@ -980,10 +986,7 @@ Some dependency logged to stdout
         .expect("build worker command spec");
         let env = spec.env_map();
 
-        assert_eq!(
-            spec.program,
-            PathBuf::from("C:/Program Files/FrameQ/resources/python/python.exe")
-        );
+        assert_eq!(spec.program, bundled_python_path(&paths.resource_dir));
         assert_eq!(spec.args, vec!["-m", "frameq_worker", "--request-stdin"]);
         assert_eq!(spec.stdin_payload.as_deref(), Some(request_json));
         assert!(!spec.args.join(" ").contains(request_json));
@@ -993,23 +996,23 @@ Some dependency logged to stdout
         assert!(!spec.args.iter().any(|arg| arg == "uv"));
         assert_eq!(
             env.get("PYTHONPATH"),
-            Some(&"C:/Program Files/FrameQ/resources/worker".to_string())
+            Some(&path_to_env_string(paths.resource_dir.join("worker")))
         );
         assert_eq!(
             env.get("FRAMEQ_OUTPUT_DIR"),
-            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/outputs".to_string())
+            Some(&path_to_env_string(paths.user_data_dir.join("outputs")))
         );
         assert_eq!(
             env.get("FRAMEQ_CACHE_DIR"),
-            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/cache".to_string())
+            Some(&path_to_env_string(paths.user_data_dir.join("cache")))
         );
         assert_eq!(
             env.get("FRAMEQ_MODEL_DIR"),
-            Some(&"C:/Users/demo/AppData/Local/com.frameq.desktop/models".to_string())
+            Some(&path_to_env_string(paths.user_data_dir.join("models")))
         );
         assert_eq!(
             env.get("FRAMEQ_RESOURCE_DIR"),
-            Some(&"C:/Program Files/FrameQ/resources".to_string())
+            Some(&path_to_env_string(&paths.resource_dir))
         );
         assert_eq!(env.get("FRAMEQ_ALLOW_REAL_ASR"), Some(&"1".to_string()));
         assert_eq!(env.get("MODELSCOPE_OFFLINE"), Some(&"1".to_string()));
@@ -1019,10 +1022,7 @@ Some dependency logged to stdout
 
     #[test]
     fn serialized_worker_requests_never_enter_argv_or_environment() {
-        let paths = RuntimePaths {
-            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
-            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
-        };
+        let paths = command_test_paths();
         let secret = "review-secret";
         let cases = [
             (
@@ -1294,10 +1294,7 @@ Some dependency logged to stdout
     #[test]
     fn worker_command_spec_skips_server_managed_llm_for_process_video_even_if_payload_requests_ai()
     {
-        let paths = RuntimePaths {
-            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
-            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
-        };
+        let paths = command_test_paths();
         let request_json = r#"{"url":"https://www.douyin.com/video/7524373044106677544","generate_insights":true}"#;
 
         let spec = build_worker_command_spec(
@@ -1322,10 +1319,7 @@ Some dependency logged to stdout
 
     #[test]
     fn worker_command_spec_includes_server_managed_llm_checkout_env_for_retry_insights() {
-        let paths = RuntimePaths {
-            resource_dir: PathBuf::from("C:/Program Files/FrameQ/resources"),
-            user_data_dir: PathBuf::from("C:/Users/demo/AppData/Local/com.frameq.desktop"),
-        };
+        let paths = command_test_paths();
         let request_json = r#"{"task_id":"20260705-153012-douyin-demo","target":"summary"}"#;
 
         let spec = build_worker_command_spec(

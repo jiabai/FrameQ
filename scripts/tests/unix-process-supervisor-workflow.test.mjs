@@ -14,20 +14,14 @@ const supervisorPath = resolve(
   "app/src-tauri/src/worker_command.rs",
 );
 
-test("runs the Unix ProcessSupervisor fixture on Ubuntu and macOS without privileged product integrations", async () => {
+test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux or privileged product integrations", async () => {
   const workflow = await readFile(workflowPath, "utf8");
-  const hostedRunners = [...workflow.matchAll(/^\s+- (.+-latest)\s*$/gm)].map(
-    ([, runner]) => runner,
-  );
-
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /permissions:\s*\r?\n\s+contents: read/);
-  assert.deepEqual(hostedRunners, ["ubuntu-latest", "macos-latest"]);
+  assert.match(workflow, /runs-on:\s*macos-latest/);
   assert.match(workflow, /timeout-minutes:\s*30/);
   assert.match(workflow, /uses:\s*actions\/checkout@v4/);
   assert.match(workflow, /uses:\s*dtolnay\/rust-toolchain@stable/);
-  assert.match(workflow, /if:\s*runner\.os == 'Linux'/);
-  assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
   assert.match(
     workflow,
     /run:\s*cargo test --manifest-path app\/src-tauri\/Cargo\.toml/,
@@ -36,6 +30,7 @@ test("runs the Unix ProcessSupervisor fixture on Ubuntu and macOS without privil
   assert.doesNotMatch(workflow, /pull_request_target:/);
   assert.doesNotMatch(workflow, /secrets\./);
   assert.doesNotMatch(workflow, /contents:\s*write/);
+  assert.doesNotMatch(workflow, /ubuntu|apt-get|libwebkit/i);
   assert.doesNotMatch(workflow, /tauri-action|gh release|WECHAT|LLM|yt-dlp|ffmpeg/i);
 });
 
