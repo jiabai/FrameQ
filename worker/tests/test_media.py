@@ -511,6 +511,76 @@ def test_download_video_classifies_youtube_failure_without_cookie_guidance(
     assert "--cookies" not in error.value.result.stderr
 
 
+def test_download_video_keeps_youtube_media_when_subtitle_download_fails(
+    tmp_path: Path,
+) -> None:
+    def fake_runner(command: list[str]) -> CommandResult:
+        video_path = tmp_path / "dQw4w9WgXcQ.mp4"
+        video_path.write_bytes(b"downloaded mp4")
+        return CommandResult(
+            command=command,
+            returncode=1,
+            stdout="",
+            stderr=(
+                "WARNING: The extractor specified to use impersonation for this download, "
+                "but no impersonate target is available. "
+                "ERROR: Unable to download video subtitles for 'zh-Hans': "
+                "HTTP Error 429: Too Many Requests"
+            ),
+        )
+
+    result = download_video(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        output_dir=tmp_path,
+        runner=fake_runner,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == (tmp_path / "dQw4w9WgXcQ.mp4").as_posix()
+
+
+def test_download_video_retries_youtube_without_subtitles_after_subtitle_failure(
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str]) -> CommandResult:
+        calls.append(command)
+        if len(calls) == 1:
+            return CommandResult(
+                command=command,
+                returncode=1,
+                stdout="",
+                stderr=(
+                    "ERROR: Unable to download video subtitles for 'zh-Hans': "
+                    "HTTP Error 429: Too Many Requests"
+                ),
+            )
+
+        video_path = tmp_path / "dQw4w9WgXcQ.mp4"
+        video_path.write_bytes(b"downloaded mp4")
+        return CommandResult(
+            command=command,
+            returncode=0,
+            stdout=video_path.as_posix(),
+            stderr="",
+        )
+
+    result = download_video(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        output_dir=tmp_path,
+        runner=fake_runner,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == (tmp_path / "dQw4w9WgXcQ.mp4").as_posix()
+    assert len(calls) == 2
+    assert "--write-subs" in calls[0]
+    assert "--write-auto-subs" in calls[0]
+    assert "--write-subs" not in calls[1]
+    assert "--write-auto-subs" not in calls[1]
+
+
 def test_download_video_preserves_non_douyin_ytdlp_failure(tmp_path: Path) -> None:
     def fake_runner(command: list[str]) -> CommandResult:
         return CommandResult(

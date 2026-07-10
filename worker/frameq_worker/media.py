@@ -53,6 +53,7 @@ YOUTUBE_FORMAT_SELECTOR = (
     "best[height<=720]/best"
 )
 YOUTUBE_JS_RUNTIMES = ("deno", "node", "quickjs", "bun")
+DOWNLOADED_MEDIA_SUFFIXES = (".mp4", ".mkv", ".webm", ".mov", ".m4v")
 PLATFORM_SUBTITLE_ARGS = [
     "--write-subs",
     "--write-auto-subs",
@@ -126,10 +127,16 @@ def extract_xiaohongshu_note_id(source: str) -> str | None:
     return match.group(0).lower() if match else None
 
 
-def build_ytdlp_command(url: str, output_dir: Path) -> list[str]:
+def build_ytdlp_command(
+    url: str,
+    output_dir: Path,
+    *,
+    include_subtitles: bool = True,
+) -> list[str]:
     output_template = (output_dir / "%(id)s.%(ext)s").as_posix()
     ytdlp_command = [sys.executable, "-m", "yt_dlp"]
     if should_attempt_youtube_processing(url):
+        subtitle_args = PLATFORM_SUBTITLE_ARGS if include_subtitles else []
         return [
             *ytdlp_command,
             "--no-playlist",
@@ -142,14 +149,16 @@ def build_ytdlp_command(url: str, output_dir: Path) -> list[str]:
                 for runtime in YOUTUBE_JS_RUNTIMES
                 for value in ("--js-runtimes", runtime)
             ],
-            *PLATFORM_SUBTITLE_ARGS,
+            *subtitle_args,
             "-o",
             output_template,
             url,
         ]
 
     subtitle_args = (
-        PLATFORM_SUBTITLE_ARGS if _contains_supported_url(url, BILIBILI_HOST_SUFFIXES) else []
+        PLATFORM_SUBTITLE_ARGS
+        if include_subtitles and _contains_supported_url(url, BILIBILI_HOST_SUFFIXES)
+        else []
     )
     return [*ytdlp_command, "--no-playlist", *subtitle_args, "-o", output_template, url]
 
@@ -204,6 +213,20 @@ def download_video(
     result = runner(build_ytdlp_command(url, output_dir))
     if result.returncode != 0:
         failure_message = result.stderr or result.stdout
+        is_youtube_video = should_attempt_youtube_processing(url)
+        if is_youtube_video and _is_youtube_subtitle_download_failure(failure_message):
+            downloaded_media = _find_downloaded_media_file(output_dir)
+            if downloaded_media is not None:
+                return CommandResult(
+                    command=result.command,
+                    returncode=0,
+                    stdout=downloaded_media.as_posix(),
+                    stderr=result.stderr,
+                )
+            result = runner(build_ytdlp_command(url, output_dir, include_subtitles=False))
+            if result.returncode == 0:
+                return result
+            failure_message = result.stderr or result.stdout
         for strategy in FALLBACK_DOWNLOAD_STRATEGIES:
             if not strategy.should_attempt(url, failure_message):
                 continue
@@ -223,10 +246,25 @@ def download_video(
                 stdout=video_path.as_posix(),
                 stderr="",
             )
-        if should_attempt_youtube_processing(url):
+        if is_youtube_video:
             raise CommandExecutionError(classify_youtube_download_failure(result))
         raise CommandExecutionError(result)
     return result
+
+
+def _is_youtube_subtitle_download_failure(message: str) -> bool:
+    return "unable to download video subtitles" in message.lower()
+
+
+def _find_downloaded_media_file(output_dir: Path) -> Path | None:
+    candidates = [
+        path
+        for path in output_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in DOWNLOADED_MEDIA_SUFFIXES
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
 def should_attempt_douyin_fallback(url: str, failure_message: str) -> bool:
