@@ -3,8 +3,16 @@ import { readFileSync } from "node:fs";
 
 const appCss = readFileSync(new URL("./App.css", import.meta.url), "utf-8");
 const appTsx = readFileSync(new URL("./App.tsx", import.meta.url), "utf-8");
-const resultDetailSheetTsx = readFileSync(
-  new URL("./features/transcript/ResultDetailSheet.tsx", import.meta.url),
+const localTranscriptWorkspaceTsx = readFileSync(
+  new URL("./features/transcript/LocalTranscriptWorkspace.tsx", import.meta.url),
+  "utf-8",
+);
+const transcriptReviewPanelTsx = readFileSync(
+  new URL("./features/transcript/TranscriptReviewPanel.tsx", import.meta.url),
+  "utf-8",
+);
+const aiResultDetailSheetTsx = readFileSync(
+  new URL("./features/results/AiResultDetailSheet.tsx", import.meta.url),
   "utf-8",
 );
 const transcriptDetailControllerTs = readFileSync(
@@ -29,52 +37,49 @@ function getRuleBody(selectors: string[]): string {
 }
 
 describe("App result workspace layout styles", () => {
-  test("stacks the header, error message, and result cards in normal vertical flow", () => {
-    const baseResultAreaRule = getRuleBody([".result-workspace", ".result-area"]);
-    const activeResultAreaRule = getRuleBody([
-      ".workspace.active-layout .result-workspace",
-      ".workspace.active-layout .result-area",
-    ]);
+  test("stacks the task banner above a domain-specific workspace grid", () => {
+    const activeWorkspaceRule = getRuleBody([".workspace.active-layout"]);
+    const taskLayoutRule = getRuleBody([".task-workspace-layout"]);
 
-    expect(baseResultAreaRule).toContain("display: flex;");
-    expect(baseResultAreaRule).toContain("flex-direction: column;");
-    expect(activeResultAreaRule).not.toContain("grid-template-rows");
+    expect(activeWorkspaceRule).toContain("display: flex;");
+    expect(activeWorkspaceRule).toContain("flex-direction: column;");
+    expect(activeWorkspaceRule).toContain("align-items: stretch;");
+    expect(taskLayoutRule).toContain("display: grid;");
+    expect(taskLayoutRule).toContain("minmax(0, 1.62fr) minmax(360px, 1fr)");
+  });
+
+  test("does not retain selectors from the deleted generic result workspace", () => {
+    for (const selector of [
+      ".result-workspace",
+      ".result-card",
+      ".result-grid",
+      ".result-tile",
+      ".result-placeholder",
+    ]) {
+      expect(appCss).not.toContain(selector);
+    }
   });
 
   test("lets the active workspace expand across maximized desktop windows", () => {
     const activeWorkspaceRule = getRuleBody([".workspace.active-layout"]);
-    const activeResultAreaRule = getRuleBody([
-      ".workspace.active-layout .result-workspace",
-      ".workspace.active-layout .result-area",
-    ]);
-    const activeGridRule = getRuleBody([".workspace.active-layout .result-grid"]);
+    const taskLayoutRule = getRuleBody([".task-workspace-layout"]);
 
-    expect(activeWorkspaceRule).toContain("grid-template-columns: minmax(0, 1fr);");
-    expect(activeWorkspaceRule).toContain("justify-content: stretch;");
+    expect(activeWorkspaceRule).toContain("justify-content: flex-start;");
     expect(activeWorkspaceRule).not.toContain("1120px");
-    expect(activeResultAreaRule).toContain("align-self: start;");
-    expect(activeResultAreaRule).toContain("min-height: auto;");
-    expect(activeGridRule).toContain("repeat(auto-fit, minmax(360px, 1fr))");
+    expect(taskLayoutRule).not.toContain("max-width");
+    expect(taskLayoutRule).toContain("min-width: 0;");
   });
 
-  test("keeps the desktop surfaces on a macOS-like layered visual system", () => {
+  test("uses restrained shared panel tokens without decorative effects in the new workspaces", () => {
     const rootRule = getRuleBody([":root"]);
-    const toolbarRule = getRuleBody([".app-toolbar", ".topbar"]);
-    const panelRule = getRuleBody([
-      ".command-panel",
-      ".process-monitor",
-      ".result-workspace",
-      ".input-pane",
-      ".process-pane",
-      ".result-area",
-    ]);
-    const resultCardHoverRule = getRuleBody([".result-card:hover"]);
+    const panelRule = getRuleBody([".task-domain-workspace"]);
 
     expect(rootRule).toContain("--shadow-panel");
-    expect(toolbarRule).toContain("saturate");
-    expect(panelRule).toContain("var(--shadow-panel)");
-    expect(panelRule).toContain("backdrop-filter");
-    expect(resultCardHoverRule).toContain("translateY(-1px)");
+    expect(panelRule).toContain("background: var(--surface-raised);");
+    expect(panelRule).toContain("border: 1px solid var(--border);");
+    expect(panelRule).toContain("box-shadow: var(--shadow-panel-quiet);");
+    expect(panelRule).not.toContain("gradient");
+    expect(panelRule).not.toContain("backdrop-filter");
   });
 
   test("keeps account status and cancel controls in the desktop toolbar system", () => {
@@ -98,8 +103,10 @@ describe("App result workspace layout styles", () => {
   });
 
   test("uses explicit task copy for the processing cancel action", () => {
-    expect(appTsx).toContain('workflow.stage === "cancelling" ? "正在取消" : "取消任务"');
-    expect(appTsx).toContain('disabled={workflow.stage === "cancelling"}');
+    expect(localTranscriptWorkspaceTsx).toContain(
+      'workflow.stage === "cancelling" ? "正在取消" : "取消本地处理"',
+    );
+    expect(localTranscriptWorkspaceTsx).toContain('disabled={workflow.stage === "cancelling"}');
   });
 
   test("routes sign-out cancellation through the workflow controller", () => {
@@ -113,11 +120,47 @@ describe("App result workspace layout styles", () => {
     expect(appTsx).not.toContain("setWorkflow({");
   });
 
+  test("clamps history titles and keeps metadata aligned across wide and narrow layouts", () => {
+    const listRule = getRuleBody([".history-list"]);
+    const itemRule = getRuleBody([".history-item"]);
+    const mainRule = getRuleBody([".history-item-main"]);
+    const titleRule = getRuleBody([".history-title"]);
+    const metaRule = getRuleBody([".history-meta"]);
+    const outputRule = getRuleBody([".history-meta-output"]);
+    const outputValueRule = getRuleBody([".history-meta-output .history-meta-value"]);
+    const resultRule = getRuleBody([".history-meta-result"]);
+
+    expect(listRule).toContain("display: flex;");
+    expect(listRule).toContain("flex-direction: column;");
+    expect(listRule).toContain("align-items: stretch;");
+    expect(itemRule).toContain("display: flex;");
+    expect(itemRule).toContain("flex: 0 0 auto;");
+    expect(itemRule).toContain("flex-direction: column;");
+    expect(mainRule).toContain("display: flex;");
+    expect(mainRule).toContain("flex-direction: column;");
+    expect(titleRule).toContain("-webkit-line-clamp: 2;");
+    expect(titleRule).toContain("overflow: hidden;");
+    expect(titleRule).toContain("overflow-wrap: anywhere;");
+    expect(titleRule).not.toContain("min-height");
+    expect(titleRule).not.toContain("max-height");
+    expect(metaRule).toContain("display: grid;");
+    expect(metaRule).toContain("grid-template-columns: max-content minmax(0, 1fr) max-content;");
+    expect(outputRule).toContain("min-width: 0;");
+    expect(outputValueRule).toContain("overflow: hidden;");
+    expect(outputValueRule).toContain("text-overflow: ellipsis;");
+    expect(outputValueRule).toContain("white-space: nowrap;");
+    expect(resultRule).toContain("justify-self: end;");
+    expect(metaRule).toContain("flex: 0 0 auto;");
+    expect(appCss).toMatch(
+      /@media \(max-width: 720px\)[\s\S]*?\.history-meta\s*\{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) max-content;[\s\S]*?\.history-meta-output\s*\{[\s\S]*?grid-column: 1 \/ -1;/,
+    );
+  });
+
   test("uses a custom compact audio review bar instead of the browser audio controls", () => {
-    expect(resultDetailSheetTsx).toContain('className="audio-review-bar"');
-    expect(resultDetailSheetTsx).toContain('className="transcript-audio-engine"');
-    expect(resultDetailSheetTsx).not.toContain('className="transcript-audio"');
-    expect(resultDetailSheetTsx).not.toContain("controls\n");
+    expect(transcriptReviewPanelTsx).toContain('className="audio-review-bar"');
+    expect(transcriptReviewPanelTsx).toContain('className="transcript-audio-engine"');
+    expect(transcriptReviewPanelTsx).not.toContain('className="transcript-audio"');
+    expect(transcriptReviewPanelTsx).not.toContain("controls\n");
   });
 
   test("renders summary markdown through the markdown content component", () => {
@@ -125,8 +168,8 @@ describe("App result workspace layout styles", () => {
     const headingRule = getRuleBody([".markdown-content :is(h1, h2, h3, h4)"]);
     const tableRule = getRuleBody([".markdown-content table"]);
 
-    expect(resultDetailSheetTsx).toContain("MarkdownContent");
-    expect(resultDetailSheetTsx).toContain('markdown={workflow.summary}');
+    expect(aiResultDetailSheetTsx).toContain("MarkdownContent");
+    expect(aiResultDetailSheetTsx).toContain('markdown={workflow.summary}');
     expect(markdownRule).toContain("white-space: normal;");
     expect(markdownRule).toContain("overflow-wrap: anywhere;");
     expect(headingRule).toContain("line-height: 1.35;");
@@ -142,8 +185,8 @@ describe("App result workspace layout styles", () => {
     const webkitTrackRule = getRuleBody([".audio-review-scrubber::-webkit-slider-runnable-track"]);
     const webkitThumbRule = getRuleBody([".audio-review-scrubber::-webkit-slider-thumb"]);
 
-    expect(resultDetailSheetTsx).not.toContain('className="audio-review-actions"');
-    expect(resultDetailSheetTsx).toContain("transcriptAudioScrubberStyle");
+    expect(transcriptReviewPanelTsx).not.toContain('className="audio-review-actions"');
+    expect(transcriptReviewPanelTsx).toContain("transcriptAudioScrubberStyle");
     expect(transcriptDetailControllerTs).toContain("--audio-progress");
     expect(barRule).toContain("grid-template-columns: auto minmax(0, 1fr);");
     expect(barRule).toContain("min-height: 64px;");

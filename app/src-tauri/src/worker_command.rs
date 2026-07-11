@@ -33,7 +33,6 @@ pub(crate) enum WorkerInvocation {
     ProcessVideo(String),
     RetryInsights(String),
     ResolveSourceIdentity(String),
-    MigrateSourceData,
 }
 
 #[derive(Clone)]
@@ -363,7 +362,6 @@ pub(crate) fn build_worker_command_spec(
         WorkerInvocation::ResolveSourceIdentity(payload) => {
             (vec!["--resolve-source-stdin".to_string()], Some(payload))
         }
-        WorkerInvocation::MigrateSourceData => (vec!["--migrate-source-data".to_string()], None),
     };
     if stdin_payload
         .as_ref()
@@ -428,33 +426,11 @@ pub(crate) fn build_worker_command_spec(
     })
 }
 
-pub(crate) fn migrate_legacy_source_data_if_needed(paths: &RuntimePaths) -> Result<(), String> {
-    let output_root = task_manifest::configured_output_root(paths)?;
-    if !task_manifest::has_legacy_source_data(&output_root)? {
-        return Ok(());
-    }
-    let spec = build_worker_command_spec(paths, WorkerInvocation::MigrateSourceData, None)?;
-    let output = spawn_worker_command(spec)?
-        .wait_with_output()
-        .map_err(|_| "Source metadata migration worker failed to finish.".to_string())?;
-    if !output.status.success() {
-        return Err("Source metadata migration worker failed.".to_string());
-    }
-    let result = parse_worker_stdout(&output.stdout)
-        .map_err(|_| "Source metadata migration returned an invalid result.".to_string())?;
-    if result.get("status").and_then(serde_json::Value::as_str) == Some("completed") {
-        Ok(())
-    } else {
-        Err("Source metadata migration did not complete.".to_string())
-    }
-}
-
 fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> bool {
     match invocation {
         WorkerInvocation::RetryInsights(_) => true,
         WorkerInvocation::ProcessVideo(_)
-        | WorkerInvocation::ResolveSourceIdentity(_)
-        | WorkerInvocation::MigrateSourceData => false,
+        | WorkerInvocation::ResolveSourceIdentity(_) => false,
     }
 }
 
@@ -1292,10 +1268,9 @@ Some dependency logged to stdout
     }
 
     #[test]
-    fn worker_command_spec_skips_server_managed_llm_for_process_video_even_if_payload_requests_ai()
-    {
+    fn worker_command_spec_skips_server_managed_llm_for_process_video() {
         let paths = command_test_paths();
-        let request_json = r#"{"url":"https://www.douyin.com/video/7524373044106677544","generate_insights":true}"#;
+        let request_json = r#"{"url":"https://www.douyin.com/video/7524373044106677544"}"#;
 
         let spec = build_worker_command_spec(
             &paths,

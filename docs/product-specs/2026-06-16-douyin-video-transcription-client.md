@@ -1,5 +1,11 @@
 # Douyin Video Transcription Desktop Client
 
+> UI result presentation is superseded by
+> `2026-07-11-local-transcript-ai-workspaces.md`: one task now uses separate local-transcript and
+> AI-generation workspaces. History compatibility and current-task eligibility are governed by the
+> strict History vNext specification; older schema compatibility statements below are historical and
+> do not authorize runtime migration or loading of unsupported tasks.
+
 ## 2026-07-05 Task-Owned Artifact Layout
 
 - Each new processing run should create one task-owned output directory under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`.
@@ -130,8 +136,8 @@
 - 下载并校验公开视频，输出标准 MP4 文件。
 - 提取 16 kHz 单声道 WAV 音频并调用本地 ASR 模型转写中文语音；默认模型为 `iic/SenseVoiceSmall`，并支持选择 Qwen3-ASR。
 - 在文字稿完成后，由用户分别确认生成要点总结和启发灵感；要点总结会同时写入隐藏的 Mermaid 思维导图本地文件。
-- 在桌面 UI 中展示进度、结果总览、详情浮窗、复制和导出入口。
-- 在结果总览中提供视频、音频、完整文字稿、要点总结、启发灵感这 5 个入口；Mermaid mindmap 作为本地 `.mmd` 文件保存但不作为单独入口展示；视频和音频入口定位本地文件。
+- 在桌面 UI 中展示本地处理进度、任务状态横幅、两个领域工作区、复制和导出入口。
+- 同一 taskId 下，左侧本地工作区提供视频/音频定位与文字稿校对，右侧 AI 工作区提供要点总结和启发灵感两个独立 target；Mermaid mindmap 作为 summary 的本地附属文件保存，不提供独立生成入口。
 - 支持导出文字稿 `txt` / `md`、要点总结 `md`，以及灵感 `json` / `md`；Mermaid 思维导图仅保存为本地 `.mmd` 文件，不展示或渲染。
 - 记录已操作任务历史，允许用户从历史中查看任务状态、打开结果详情并定位已生成文件。
 - 允许用户在桌面设置中配置后续任务的结果输出目录。
@@ -179,14 +185,14 @@
 ## 验收标准
 
 - 输入合法抖音 URL 后，UI 从输入态切换到处理态，并展示阶段进度。
-- 首页 `确认` 只启动下载视频、提取音频和 ASR 文字稿流程，请求 worker 时 `generate_insights=false`。
+- 首页 `确认` 只启动下载视频、提取音频和 ASR 文字稿流程；`process_video` 契约不包含任何 AI 生成字段。
 - 下载成功后，`<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/media/video.mp4` 存在，`ffprobe` 可识别视频流和音频流。
 - 当 `yt-dlp` 因 Douyin web detail 空响应、`Fresh cookies`、JSON 解析失败或同类公开链接解析问题失败时，worker 应尝试 Douyin share page fallback；fallback 成功时 UI 不进入失败态，后续流程与普通下载一致。
 - Douyin share page fallback 解析出多个候选流时，默认下载体积最大的可用 MP4；若该流下载或媒体校验失败，应自动降级尝试下一候选流，并在所有候选失败后返回结构化 `VIDEO_DOWNLOAD_FAILED`。
 - 音频提取后，当前 task 目录的 `media/audio.wav` 中存在 16 kHz 单声道 WAV；临时下载和中间文件保留在 app-local `cache/tasks/<task_id>/`。
 - ASR 成功后，当前 task 目录的 `transcript/` 中存在 `transcript.txt`、`transcript.md`，有合法时间轴时存在 `segments.json`。
 - `transcript.md` 的 Source URL 和 `frameq-task.json.source_url` 只能是 canonical URL；要点总结、mindmap、topic planner、insights 和 retry 只读取用户保存后的 `transcript.txt` 正文。
-- 主流程完成后，结果区显示视频、音频、完整文字稿、要点总结、启发灵感这 5 个入口；Mermaid mindmap 保存为本地 `.mmd` 文件但不作为单独入口展示；视频和音频入口在文件管理器中定位对应本地文件。
+- 主流程完成后，左侧本地工作区显示视频/音频操作和可校对文字稿，右侧 AI 工作区显示要点总结与启发灵感两个独立 target；Mermaid mindmap 保存为本地 `.mmd` 附属文件且没有独立云端生成入口。
 - 主流程完成后，要点总结、启发灵感入口显示待生成状态；点击 `要点总结` 后打开轻量确认面板，只生成 `summary.md` 和隐藏的 `mindmap.mmd`；点击 `启发灵感` 后进入灵感偏好流程，只生成 `insights.json` 和 `insights.md`。
 - AI 生成开始后才使用 server-managed LLM checkout；主流程不得携带 checkout env 或消耗额度。额度按云端 LLM API 调用尝试计费，1 次额度对应 1 次 chat-completion/API 调用尝试；要点总结和启发灵感各自按实际调用次数扣除。
 - 用户在 UI 设置中保存 ASR 模型后，后续完整处理请求应使用保存后的 ASR 模型；历史记录和 transcript markdown 中应保留任务实际使用的模型名。
@@ -201,9 +207,9 @@
 - 用户在 UI 设置中保存输出目录后，后续完整处理生成的视频、音频、文字稿、要点总结、Mermaid mindmap 和灵感文件应写入该目录下的 `tasks/<task_id>/`；临时下载和中间产物仍写入 app-local `cache/tasks/<task_id>/`。
 - 设置 UI 必须提示：这里只管理本机 ASR 和输出目录；要点总结和启发灵感确认流程必须提示文字稿片段会发送到管理员配置的云端 LLM 服务。
 - 历史入口应展示最近任务列表；每条历史至少包含 URL、状态、时间、输出目录、文字稿路径、要点总结路径、Mermaid mindmap 路径、灵感路径和错误码或摘要。
-- 点击历史中的可用结果应打开与当前结果一致的详情浮窗；导出按钮应定位历史项记录的实际文件路径。
+- 当前安全历史任务的详情加载完成后，应恢复同一 taskId 的两个工作区；文字稿直接在左侧校对，AI 结果使用各自的轻量详情，导出按钮定位该任务记录的实际文件路径。
 - 处理中点击取消时，桌面端终止当前 worker 进程树，UI 返回输入态并可在当前输入框内保留用户刚提交的 URL；该瞬时输入不得复制到历史、错误或诊断日志。取消后的晚到结果不会覆盖界面。
-- 结果详情浮窗可在 `要点总结`、`启发灵感` 和 `完整文字稿` 间切换，并支持复制和导出；视频和音频不进入详情浮窗，只定位本地文件，Mermaid 文本不进入详情浮窗。
+- `完整文字稿` 不进入 AI 详情容器；`要点总结` 和 `启发灵感` 可分别打开轻量详情并支持复制和导出，视频和音频只定位本地文件，Mermaid 文本不进入 UI。
 
 ## 2026-06-17 Repeat URL Local Media Reuse
 
@@ -259,8 +265,8 @@
 - After transcript completion, `要点总结` and `启发灵感` are independent user-triggered generations. `要点总结` writes `summary.md` plus local Mermaid `mindmap.mmd`; `启发灵感` writes `insights.json` and `insights.md`.
 - Each generation consumes quota per underlying cloud LLM API call attempt. Running both outputs may consume multiple calls, but one output no longer implicitly triggers the other.
 - The worker should first generate a Mermaid `mindmap` text from the official saved `transcript.txt`, then generate a layered Markdown summary from that same saved text and the Mermaid mindmap.
-- The UI shows the summary content as a result card and detail tab, but must not display or render the Mermaid source.
-- The summary detail tab renders `summary.md` as sanitized Markdown with GitHub Flavored Markdown support; raw HTML from the Markdown source must not pass through to the UI.
+- The AI workspace shows summary as its own target card and may open a target-specific detail sheet, but must not display or render the Mermaid source.
+- The summary detail sheet renders `summary.md` as sanitized Markdown with GitHub Flavored Markdown support; raw HTML from the Markdown source must not pass through to the UI.
 - Summary artifacts are written under the current task's `ai/summary.md`; Mermaid text is written to `ai/mindmap.mmd`.
 - Task manifests should preserve `summary`, `mindmap`, and summary text loading so completed tasks can reopen the summary detail.
 - If one output succeeds and the other is pending or failed, the successful artifact remains available and the task manifest preserves its paths and content preview data.

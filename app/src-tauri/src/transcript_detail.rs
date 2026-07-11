@@ -1,6 +1,5 @@
 use crate::{
-    ensure_runtime_dirs, migrate_legacy_source_data_if_needed, resolve_runtime_paths,
-    task_manifest, CACHE_DIR_NAME,
+    ensure_runtime_dirs, resolve_runtime_paths, task_manifest, CACHE_DIR_NAME,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -61,7 +60,6 @@ pub(crate) fn load_transcript_detail(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    migrate_legacy_source_data_if_needed(&paths)?;
     load_transcript_detail_from_roots(
         &output_root,
         &paths.user_data_dir.join("outputs"),
@@ -78,7 +76,6 @@ pub(crate) fn save_transcript_edit(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    migrate_legacy_source_data_if_needed(&paths)?;
     save_transcript_edit_to_output_root(&output_root, request)
 }
 
@@ -217,13 +214,8 @@ pub(crate) fn save_transcript_edit_to_output_root(
 }
 
 fn ensure_task_source_privacy_ready(manifest: &task_manifest::TaskManifest) -> Result<(), String> {
-    if manifest.source_privacy_quarantined {
-        return Err(
-            "Task is quarantined because its legacy source identity was unsafe.".to_string(),
-        );
-    }
     if !manifest.source_privacy_ready() {
-        return Err("Task source metadata must be safely migrated before access.".to_string());
+        return Err("Task is unavailable in the current history format.".to_string());
     }
     Ok(())
 }
@@ -980,7 +972,7 @@ mod tests {
         )
         .expect_err("legacy source must be migrated first");
 
-        assert!(error.contains("safely migrated"));
+        assert!(error.contains("current history format"));
         assert!(!task_dir.join("transcript").join("original").exists());
     }
 
@@ -1022,7 +1014,7 @@ mod tests {
             },
         )
         .expect_err("quarantined transcript load must fail");
-        assert!(load_error.contains("quarantined"));
+        assert!(load_error.contains("current history format"));
 
         let save_error = save_transcript_edit_to_output_root(
             &output_root,
@@ -1033,7 +1025,7 @@ mod tests {
             },
         )
         .expect_err("quarantined transcript save must fail");
-        assert!(save_error.contains("quarantined"));
+        assert!(save_error.contains("current history format"));
         assert_eq!(
             fs::read_to_string(task_dir.join("transcript").join("transcript.txt"))
                 .expect("read unchanged transcript"),

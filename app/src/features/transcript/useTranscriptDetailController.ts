@@ -62,6 +62,9 @@ export function useTranscriptDetailController({
   const transcriptAudioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptSegmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const resumeTranscriptAfterSaveRef = useRef(false);
+  const transcriptLoadTaskIdRef = useRef<string | null>(null);
+  const currentTaskIdRef = useRef(workflow.taskId);
+  currentTaskIdRef.current = workflow.taskId;
 
   const openDetailTab = useCallback((tab: DetailTab | null) => {
     setDetailTab(tab);
@@ -72,11 +75,8 @@ export function useTranscriptDetailController({
   }, []);
 
   useEffect(() => {
-    if (detailTab !== "transcript") {
-      return;
-    }
-
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
+      transcriptLoadTaskIdRef.current = null;
       setTranscriptDetail(null);
       setTranscriptDraft(workflow.text);
       setTranscriptSegments([]);
@@ -85,6 +85,11 @@ export function useTranscriptDetailController({
       setEditingTranscriptSegmentId(null);
       return;
     }
+
+    if (transcriptLoadTaskIdRef.current === workflow.taskId) {
+      return;
+    }
+    transcriptLoadTaskIdRef.current = workflow.taskId;
 
     let cancelled = false;
     setTranscriptLoading(true);
@@ -131,7 +136,7 @@ export function useTranscriptDetailController({
     return () => {
       cancelled = true;
     };
-  }, [detailTab, setActionNotice, workflow.artifacts.transcript_txt, workflow.taskId, workflow.text]);
+  }, [setActionNotice, workflow.artifacts.transcript_txt, workflow.taskId, workflow.text]);
 
   useEffect(() => {
     if (!activeTranscriptSegmentId) {
@@ -188,6 +193,19 @@ export function useTranscriptDetailController({
     }
   }, [detailTab, setActionNotice, transcriptDraft, workflow]);
 
+  const copyTranscript = useCallback(async () => {
+    if (!transcriptDraft) {
+      setActionNotice("暂无可复制内容。");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(transcriptDraft);
+      setActionNotice("已复制到剪贴板。");
+    } catch {
+      setActionNotice("复制失败，请手动选择文字稿复制。");
+    }
+  }, [setActionNotice, transcriptDraft]);
+
   const exportDetail = useCallback(async () => {
     if (!detailTab) {
       return;
@@ -209,6 +227,24 @@ export function useTranscriptDetailController({
       setActionNotice(`无法定位文件：${detailExportPath}`);
     }
   }, [detailTab, setActionNotice, transcriptDirty, workflow]);
+
+  const exportTranscript = useCallback(async () => {
+    if (transcriptDirty) {
+      setActionNotice("文字稿有未保存修改，请先保存后再定位正式文件。");
+      return;
+    }
+    const transcriptPath = getExportPath("transcript", workflow);
+    if (!transcriptPath) {
+      setActionNotice("暂无可导出的文字稿文件。");
+      return;
+    }
+    try {
+      await revealItemInDir(transcriptPath);
+      setActionNotice("已在文件管理器中定位文字稿文件。");
+    } catch {
+      setActionNotice("无法定位文字稿文件。");
+    }
+  }, [setActionNotice, transcriptDirty, workflow]);
 
   const playTranscriptSegment = useCallback(
     async (segment: TranscriptSegment) => {
@@ -338,13 +374,20 @@ export function useTranscriptDetailController({
       return;
     }
 
+    const expectedTaskId = workflow.taskId;
     setTranscriptSaving(true);
     try {
       const saved = await saveTranscriptEdit(
-        workflow.taskId,
+        expectedTaskId,
         transcriptDraft,
         transcriptSegments,
       );
+      if (
+        currentTaskIdRef.current !== expectedTaskId ||
+        saved.task_id !== expectedTaskId
+      ) {
+        return;
+      }
       setTranscriptDraft(saved.text);
       setTranscriptDirty(false);
       setEditingTranscriptSegmentId(null);
@@ -357,7 +400,7 @@ export function useTranscriptDetailController({
             }
           : current,
       );
-      applyTranscriptSave(workflow.taskId, saved);
+      applyTranscriptSave(expectedTaskId, saved);
       setActionNotice("文字稿已保存，后续 AI 整理会使用保存后的正式稿。");
 
       if (resumeTranscriptAfterSaveRef.current && transcriptAudioRef.current) {
@@ -419,7 +462,9 @@ export function useTranscriptDetailController({
     transcriptAudioScrubberStyle,
     hasTranscriptSegments,
     copyDetail,
+    copyTranscript,
     exportDetail,
+    exportTranscript,
     saveTranscriptDraft,
     playTranscriptSegment,
     handleTranscriptAudioMetadata,

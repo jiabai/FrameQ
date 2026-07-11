@@ -109,7 +109,13 @@ const defaultResponses: Record<string, unknown> = {
     },
     preferencesPath: "C:/FrameQ/insight-preferences.json",
   },
-  get_history: [firstHistoryTask, secondHistoryTask],
+  get_history: [firstHistoryTask, secondHistoryTask].map(
+    ({ text: _text, summary: _summary, transcript: _transcript, insights: _insights, ...item }) => item,
+  ),
+  get_history_detail: {
+    "history-task-a": firstHistoryTask,
+    "history-task-b": secondHistoryTask,
+  },
   process_video: {
     status: "completed",
     task_id: "live-task",
@@ -172,7 +178,6 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
           if (command === "plugin:deep-link|get_current") return Promise.resolve([]);
           if (command === "plugin:event|listen") return Promise.resolve(1);
           if (command === "plugin:event|unlisten") return Promise.resolve(null);
-
           if (Object.prototype.hasOwnProperty.call(scenario.rejectedCommands, command)) {
             return Promise.reject(new Error(scenario.rejectedCommands[command]));
           }
@@ -181,8 +186,18 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
               (pending[command] ||= []).push({ resolve, reject });
             });
           }
+          if (command === "get_history_detail") {
+            const taskId = args?.request?.task_id;
+            return Promise.resolve(scenario.responses.get_history_detail?.[taskId]);
+          }
           if (command === "load_transcript_detail") {
             const taskId = args?.request?.task_id;
+            if (scenario.responses.load_transcript_detail) {
+              return Promise.resolve({
+                ...scenario.responses.load_transcript_detail,
+                task_id: taskId,
+              });
+            }
             const text = taskId === "history-task-b"
               ? "历史任务乙完整文字稿"
               : "历史任务甲完整文字稿";

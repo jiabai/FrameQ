@@ -29,7 +29,6 @@ export type ProcessVideoRequest = {
   language: string;
   output_formats: string[];
   model: string;
-  generate_insights: boolean;
   insightflow_mode: string;
 };
 
@@ -53,7 +52,6 @@ export async function processVideo(
     language: "Chinese",
     output_formats: ["txt", "md"],
     model: "iic/SenseVoiceSmall",
-    generate_insights: false,
     insightflow_mode: "embedded",
   };
 

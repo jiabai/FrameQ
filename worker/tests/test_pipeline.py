@@ -2,8 +2,6 @@ from pathlib import Path
 
 from frameq_worker.asr import Transcript
 from frameq_worker.pipeline import (
-    CLOUD_LLM_AI_ORGANIZING_MESSAGE,
-    LOCAL_AI_ORGANIZING_MESSAGE,
     run_asr_transcript_step,
     run_insight_generation_step,
 )
@@ -87,15 +85,6 @@ def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path)
         "message": "ASR returned an empty transcript.",
         "stage": "video_transcribing",
     }
-
-
-def test_ai_organizing_progress_messages_do_not_describe_bundled_generation() -> None:
-    assert "AI 结果" in CLOUD_LLM_AI_ORGANIZING_MESSAGE
-    assert "AI 结果" in LOCAL_AI_ORGANIZING_MESSAGE
-    assert "要点总结、Mermaid mindmap 和启发灵感" not in CLOUD_LLM_AI_ORGANIZING_MESSAGE
-    assert "要点总结、Mermaid mindmap 和启发灵感" not in LOCAL_AI_ORGANIZING_MESSAGE
-    assert "启发话题点" not in CLOUD_LLM_AI_ORGANIZING_MESSAGE
-    assert "启发话题点" not in LOCAL_AI_ORGANIZING_MESSAGE
 
 
 class FakeInsightClient:

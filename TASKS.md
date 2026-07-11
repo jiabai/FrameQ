@@ -1,8 +1,13 @@
 # Tasks
 
+## Active UI Work
+
+- [x] Remove the retired process-video automatic-AI contract (2026-07-11) — Deleted `generate_insights` from frontend, strict Rust IPC/stdin DTO, Python request model/parser, service and local pipeline; explicit legacy payloads fail safely; `retry_insights` remains the only AI client, checkout, quota and artifact path. ✅ TDD: frontend contract RED, Rust strict-deserialization RED and Python parser/service RED preceded implementation; final gates passed App 230, Rust 92, worker 230, server 57, scripts 9, Ruff, builds, docs and diff checks. ExecPlan: `docs/exec-plans/active/2026-07-11-local-transcript-ai-workspaces-plan.md`.
+- [x] Reorganize one task into local transcript and AI generation workspaces (2026-07-11) — Keep one task ID while separating local media/audio review/transcript correction from independently confirmed summary and inspiration targets. Preserve worker, quota, SourceIdentity, stdin, ProcessSupervisor, and strict History vNext boundaries. ExecPlan: `docs/exec-plans/active/2026-07-11-local-transcript-ai-workspaces-plan.md`. ✅ Acceptance: App 230, Rust 92, worker 230, server 57, scripts 9 and all build/lint/docs/diff gates pass; 19 CDP smoke tests plus native Windows/WebView2 fresh-worker acceptance cover real audio/segment review, transcript save/revert, file reveal, dual-column/narrow layout, AI confirmation-before-call, cancellation placement, same-task history, and stale-save isolation.
+
 ## Refactoring and Technical Debt
 
-- [x] P2 worker pipeline/media 结构性重构已收口（2026-07-10）✅ `run_worker_pipeline` 已拆为高层编排，媒体下载/选择、视频校验、音频准备、字幕/ASR、可选 AI finalize 下沉到阶段函数；`media.py` 下载 fallback 由 `DownloadStrategy` + `FALLBACK_DOWNLOAD_STRATEGIES` 驱动，保持 Douyin -> Xiaohongshu -> Bilibili 顺序和 YouTube 原失败分类路径。阶段审查通过 `uv run pytest worker\tests`（154 tests）、`uv run ruff check worker` 和 `git diff --check`。真实平台 smoke、未来新增平台前是否抽 `download_strategies.py`、Python 3.13 `pydub/audioop` 风险已登记在 `docs/exec-plans/tech-debt-tracker.md`。
+- [x] P2 worker pipeline/media 结构性重构已收口（2026-07-10）✅ `run_worker_pipeline` 已拆为高层编排，媒体下载/选择、视频校验、音频准备和字幕/ASR finalize 下沉到阶段函数；原可选 AI finalize 后续已删除，AI 仅由 `retry_insights` 进入。`media.py` 下载 fallback 由 `DownloadStrategy` + `FALLBACK_DOWNLOAD_STRATEGIES` 驱动，保持 Douyin -> Xiaohongshu -> Bilibili 顺序和 YouTube 原失败分类路径。阶段审查通过 `uv run pytest worker\tests`（154 tests）、`uv run ruff check worker` 和 `git diff --check`。真实平台 smoke、未来新增平台前是否抽 `download_strategies.py`、Python 3.13 `pydub/audioop` 风险已登记在 `docs/exec-plans/tech-debt-tracker.md`。
 
 - [x] P2 orchestration hooks 错误分支测试已补强（2026-07-10）✅ 新增 `useInsightGenerationController` 关键错误分支和 `useSettingsController` load/save/cache/location/profile 错误分支覆盖；阶段审查通过 `npm --prefix app test`（27 files / 184 tests）、`npm --prefix app run build` 和 `git diff --check`。剩余 `useHistoryController` 并发/重复打开场景与轻量 hook harness 限制已登记在 `docs/exec-plans/tech-debt-tracker.md`。
 
@@ -21,6 +26,8 @@
 - [x] Add account login and entitlement foundation (2026-06-21) ✅ TypeScript Fastify service with Prisma SQLite, email OTP login, desktop deep-link session exchange, entitlement model, and client-side processing gate; server/app/Rust/docs gates passed.
 
 ## 进行中
+
+- [x] 实现 History vNext 严格边界（2026-07-11）— 仅接受当前安全 schema v3 manifest；列表只读 manifest，点击后按需读取单任务详情；移除 Rust/Python 后台迁移及旧 schema 兼容路径；旧目录只物理留存并与历史、缓存、详情、编辑和 retry 隔离。✅ 验收：临时探针 supported=1、ignored=1、list 1.687ms、约 1.8MB 单任务 detail 12.094ms；原生 app-local 验收 supported=5、ignored=1、list 1-7ms、detail 4-37ms 且历史打开不启动 Python；app 230、Rust 92、worker 230、server 57、scripts 9、ruff/build/docs/diff 全部通过。
 
 - [x] 补齐 React/UI 自动化 smoke（2026-07-11）✅ 复用现有 Vite + CDP 与 mock Tauri bridge，新增设置加载/失败/缓存清理、processing/retry/cancelling 历史只读、稳定恢复、延迟文字稿保存隔离和 summary/insights target 确认；focused 16/16 连续通过，app 211、Rust 90、worker 249、server 57、scripts 9 及构建/lint 门禁通过。真实 Tauri WebView、安装包和 OS 行为仍明确保留为残余风险。
 

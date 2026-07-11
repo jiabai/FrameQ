@@ -46,7 +46,6 @@ from frameq_worker.requests import (
 )
 from frameq_worker.worker_service import (
     failed_insight_retry_result,
-    migrate_source_data_once,
     resolve_source_identity_once,
     run_asr_model_download_once,
     should_allow_real_asr,
@@ -77,7 +76,6 @@ __all__ = [
     "find_new_or_updated_video",
     "find_video_by_stem",
     "main",
-    "migrate_source_data_once",
     "parse_process_request",
     "parse_retry_insights_request",
     "render_model_download_event",
@@ -148,7 +146,6 @@ def stdin_failure_result(mode: str) -> dict[str, object]:
 
 def run_worker_once(*args: object, **kwargs: object) -> dict[str, object]:
     kwargs.setdefault("transcriber_factory", build_asr_transcriber)
-    kwargs.setdefault("insight_client_factory", build_insight_client_from_env)
     return worker_service_module.run_worker_once(*args, **kwargs)
 
 
@@ -200,11 +197,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Read one source-identity request JSON object from stdin.",
     )
-    request_group.add_argument(
-        "--migrate-source-data",
-        action="store_true",
-        help="Migrate legacy task source metadata under FRAMEQ_OUTPUT_DIR.",
-    )
     args = parser.parse_args(argv)
 
     is_model_download = args.download_asr_model
@@ -236,8 +228,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = retry_insights_once(request_json or "{}", project_root=Path.cwd())
     elif args.resolve_source_stdin:
         result = resolve_source_identity_once(request_json or "{}")
-    elif args.migrate_source_data:
-        result = migrate_source_data_once(project_root=Path.cwd())
     else:
         result = run_worker_once(
             request_json or "{}",

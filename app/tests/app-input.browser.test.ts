@@ -2,7 +2,7 @@ import react from "@vitejs/plugin-react";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createServer, type ViteDevServer } from "vite";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -144,8 +144,7 @@ describe("App browser input interactions", () => {
             videoUrlAriaLabel: document.querySelector('#video-url')?.getAttribute('aria-label') ?? '',
             videoUrlPlaceholder: document.querySelector('#video-url')?.getAttribute('placeholder') ?? '',
             hasCommandPanel: Boolean(document.querySelector('.command-panel')),
-            hasResultWorkspace: Boolean(document.querySelector('.result-workspace')),
-            hasQuietPlaceholder: Boolean(document.querySelector('.result-placeholder')),
+            hasTaskWorkspaces: Boolean(document.querySelector('.task-workspace-layout')),
             primaryButtonText: document.querySelector('.primary-button')?.textContent.trim() ?? '',
             commandPanelWidth: Math.round(document.querySelector('.command-panel')?.getBoundingClientRect().width ?? 0),
             desktopWindowWidth: Math.round(document.querySelector('.desktop-window')?.getBoundingClientRect().width ?? 0)
@@ -168,8 +167,7 @@ describe("App browser input interactions", () => {
         videoUrlAriaLabel: "视频 URL",
         videoUrlPlaceholder: "粘贴抖音或小红书视频链接",
         hasCommandPanel: true,
-        hasResultWorkspace: false,
-        hasQuietPlaceholder: false,
+        hasTaskWorkspaces: false,
         primaryButtonText: "确认",
       });
       expect(structure.result.value.commandPanelWidth).toBeGreaterThanOrEqual(720);
@@ -202,7 +200,7 @@ describe("App browser input interactions", () => {
       await loaded;
       await waitForRuntimeCondition(
         page,
-        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.result-workspace')",
+        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.task-workspace-layout')",
       );
 
       await page.send("Runtime.evaluate", {
@@ -215,7 +213,7 @@ describe("App browser input interactions", () => {
       });
       await waitForRuntimeCondition(
         page,
-        "Boolean(document.querySelector('.process-monitor')) && Boolean(document.querySelector('.result-workspace'))",
+        "Boolean(document.querySelector('.local-transcript-workspace')) && Boolean(document.querySelector('.ai-generation-workspace'))",
       );
 
       const afterSubmit = await page.send<{ result: { value: Record<string, unknown> } }>(
@@ -223,16 +221,14 @@ describe("App browser input interactions", () => {
         {
           expression: `({
             hasCommandPanel: Boolean(document.querySelector('.command-panel')),
-            hasProcessMonitor: Boolean(document.querySelector('.process-monitor')),
-            hasResultWorkspace: Boolean(document.querySelector('.result-workspace')),
-            monitorTitle: document.querySelector('.process-monitor h2')?.textContent ?? '',
+            hasLocalWorkspace: Boolean(document.querySelector('.local-transcript-workspace')),
+            hasAiWorkspace: Boolean(document.querySelector('.ai-generation-workspace')),
+            localTitle: document.querySelector('.local-transcript-workspace h2')?.textContent ?? '',
             toolbarStageBadges: document.querySelectorAll('.app-toolbar .stage-badge').length,
-            resultHeaderStageBadges: document.querySelectorAll('.result-header .stage-badge').length,
-            activeLayoutColumns: getComputedStyle(document.querySelector('.workspace')).gridTemplateColumns.trim().split(/\\s+/).length,
-            processBottom: Math.round(document.querySelector('.process-monitor').getBoundingClientRect().bottom),
-            resultTop: Math.round(document.querySelector('.result-workspace').getBoundingClientRect().top),
-            processWidth: Math.round(document.querySelector('.process-monitor').getBoundingClientRect().width),
-            resultWidth: Math.round(document.querySelector('.result-workspace').getBoundingClientRect().width)
+            localProgressSteps: document.querySelectorAll('.local-progress > span').length,
+            activeLayoutDisplay: getComputedStyle(document.querySelector('.workspace')).display,
+            localTop: Math.round(document.querySelector('.local-transcript-workspace').getBoundingClientRect().top),
+            aiTop: Math.round(document.querySelector('.ai-generation-workspace').getBoundingClientRect().top)
           })`,
           returnByValue: true,
         },
@@ -240,99 +236,14 @@ describe("App browser input interactions", () => {
 
       expect(afterSubmit.result.value).toMatchObject({
         hasCommandPanel: false,
-        hasProcessMonitor: true,
-        hasResultWorkspace: true,
-        monitorTitle: "视频提取中",
+        hasLocalWorkspace: true,
+        hasAiWorkspace: true,
+        localTitle: "本地转录",
         toolbarStageBadges: 0,
-        resultHeaderStageBadges: 0,
-        activeLayoutColumns: 1,
+        localProgressSteps: 2,
+        activeLayoutDisplay: "flex",
       });
-      expect(afterSubmit.result.value.resultTop).toBeGreaterThan(afterSubmit.result.value.processBottom);
-      expect(afterSubmit.result.value.resultWidth).toBe(afterSubmit.result.value.processWidth);
-    } finally {
-      await page.close();
-    }
-  }, 10_000);
-
-  test("stacks the completed task monitor above compact result tiles", async () => {
-    const target = await requestJson<CdpTarget>(
-      cdpPort,
-      `/json/new?${encodeURIComponent(appUrl)}`,
-      "PUT",
-    );
-    const page = await connectToCdp(target.webSocketDebuggerUrl);
-
-    try {
-      await page.send("Page.enable");
-      await page.send("Runtime.enable");
-      await page.send("Emulation.setDeviceMetricsOverride", {
-        width: 1180,
-        height: 760,
-        deviceScaleFactor: 1,
-        mobile: false,
-      });
-      const loaded = page.waitForEvent("Page.loadEventFired");
-      await page.send("Page.navigate", { url: appUrl });
-      await loaded;
-      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.workspace'))");
-
-      const completedLayout = await page.send<{ result: { value: Record<string, unknown> } }>(
-        "Runtime.evaluate",
-        {
-          expression: `(() => {
-            const workspace = document.querySelector('.workspace');
-            workspace.className = 'workspace active-layout';
-            workspace.innerHTML =
-              '<div class="workflow-column">' +
-                '<section class="process-monitor process-pane completed" aria-label="处理进度">' +
-                  '<div class="process-heading"><div><p class="section-label">Task monitor</p><h2>文字稿完成</h2></div></div>' +
-                  '<div class="progress-summary"><div><span class="progress-value">100%</span><p>结果已可查看和导出</p></div><div class="progress-track"><span class="progress-fill completed"></span></div></div>' +
-                  '<div class="steps"><div class="step complete"><span class="step-dot"></span><span>视频提取中</span></div><div class="step complete"><span class="step-dot"></span><span>视频转译中</span></div><div class="step complete"><span class="step-dot"></span><span>灵感生成中</span></div></div>' +
-                  '<p class="status-line worker-message">文字稿和启发灵感已准备好。</p>' +
-                '</section>' +
-              '</div>' +
-              '<section class="result-workspace result-area" aria-label="结果总览">' +
-                '<div class="result-header"><div><p class="section-label">Results</p><h2>结果工作区</h2></div></div>' +
-                '<div class="result-grid">' +
-                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>视频文件</span><small>已下载，可定位文件</small><em>定位文件</em></button>' +
-                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>音频文件</span><small>WAV 音频，可定位文件</small><em>定位文件</em></button>' +
-                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>完整文字稿</span><small>15,297 字</small><em>打开详情</em></button>' +
-                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>要点总结</span><small>1,065 字</small><em>打开详情</em></button>' +
-                  '<button class="result-card result-tile ready"><span class="result-icon"></span><span>启发灵感</span><small>12 条灵感</small><em>打开详情</em></button>' +
-                '</div>' +
-              '</section>';
-            const processRect = document.querySelector('.process-monitor').getBoundingClientRect();
-            const result = document.querySelector('.result-workspace');
-            const resultRect = result.getBoundingClientRect();
-            const cardHeights = Array.from(document.querySelectorAll('.result-card')).map((card) =>
-              Math.round(card.getBoundingClientRect().height)
-            );
-            const cardBottoms = Array.from(document.querySelectorAll('.result-card')).map((card) =>
-              Math.round(card.getBoundingClientRect().bottom)
-            );
-            return {
-              activeLayoutColumns: getComputedStyle(workspace).gridTemplateColumns.trim().split(/\\s+/).length,
-              processBottom: Math.round(processRect.bottom),
-              resultTop: Math.round(resultRect.top),
-              resultBottom: Math.round(resultRect.bottom),
-              lastResultCardBottom: Math.max(...cardBottoms),
-              resultVerticalOverflow: result.scrollHeight - result.clientHeight,
-              maxResultCardHeight: Math.max(...cardHeights),
-            };
-          })()`,
-          returnByValue: true,
-        },
-      );
-
-      expect(completedLayout.result.value.activeLayoutColumns).toBe(1);
-      expect(completedLayout.result.value.resultTop).toBeGreaterThan(
-        completedLayout.result.value.processBottom,
-      );
-      expect(completedLayout.result.value.resultBottom).toBeGreaterThanOrEqual(
-        completedLayout.result.value.lastResultCardBottom,
-      );
-      expect(completedLayout.result.value.resultVerticalOverflow).toBeLessThanOrEqual(1);
-      expect(completedLayout.result.value.maxResultCardHeight).toBeLessThanOrEqual(132);
+      expect(afterSubmit.result.value.localTop).toBe(afterSubmit.result.value.aiTop);
     } finally {
       await page.close();
     }
@@ -482,7 +393,7 @@ describe("App browser input interactions", () => {
       await loaded;
       await waitForRuntimeCondition(
         page,
-        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.result-workspace')",
+        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.task-workspace-layout')",
       );
 
       await page.send("Runtime.evaluate", {
@@ -629,7 +540,7 @@ describe("App browser input interactions", () => {
       await loaded;
       await waitForRuntimeCondition(
         page,
-        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.result-workspace')",
+        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.task-workspace-layout')",
       );
 
       await page.send("Runtime.evaluate", {
@@ -642,7 +553,7 @@ describe("App browser input interactions", () => {
       });
       await waitForRuntimeCondition(
         page,
-        "Boolean(document.querySelector('.result-workspace')) && !document.querySelector('.command-panel')",
+        "Boolean(document.querySelector('.task-workspace-layout')) && !document.querySelector('.command-panel')",
       );
 
       await page.send("Runtime.evaluate", {
@@ -657,7 +568,7 @@ describe("App browser input interactions", () => {
       });
       await waitForRuntimeCondition(
         page,
-        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.result-workspace') && !document.querySelector('.account-sheet')",
+        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.task-workspace-layout') && !document.querySelector('.account-sheet')",
       );
 
       const afterSignOut = await page.send<{ result: { value: Record<string, unknown> } }>(
@@ -665,7 +576,7 @@ describe("App browser input interactions", () => {
         {
           expression: `({
             hasCommandPanel: Boolean(document.querySelector('.command-panel')),
-            hasResultWorkspace: Boolean(document.querySelector('.result-workspace')),
+            hasTaskWorkspaces: Boolean(document.querySelector('.task-workspace-layout')),
             hasAccountSheet: Boolean(document.querySelector('.account-sheet')),
             accountChipActive: Boolean(document.querySelector('.account-chip.active')),
             videoUrlValue: document.querySelector('#video-url')?.value ?? null,
@@ -677,7 +588,7 @@ describe("App browser input interactions", () => {
 
       expect(afterSignOut.result.value).toMatchObject({
         hasCommandPanel: true,
-        hasResultWorkspace: false,
+        hasTaskWorkspaces: false,
         hasAccountSheet: false,
         accountChipActive: false,
         videoUrlValue: "",
@@ -990,7 +901,295 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
     } finally {
       await failedPage.close();
     }
-  }, 20_000);
+  }, 30_000);
+
+  test("renders one task as aligned local transcript and AI workspaces and stacks them below 1100px", async () => {
+    const page = await openUiSmokePage({
+      responses: {
+        load_transcript_detail: {
+          text: "本地文字稿第一段。本地文字稿第二段。",
+          segments: [
+            { id: "segment-1", start_ms: 0, end_ms: 5000, text: "本地文字稿第一段。" },
+            { id: "segment-2", start_ms: 5000, end_ms: 9000, text: "本地文字稿第二段。" },
+          ],
+          audio_path: "C:/FrameQ/outputs/tasks/history-task-a/media/audio.wav",
+          audio_asset_path: "C:/FrameQ/cache/audio-review/history-task-a.wav",
+          has_original_backup: false,
+        },
+      },
+    });
+
+    try {
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 1366,
+        height: 960,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForRuntimeCondition(page, "window.innerWidth === 1366");
+      await openSmokeHistory(page);
+      await clickSelector(page, ".history-item");
+      await waitForRuntimeCondition(page, "!document.querySelector('.history-sheet')");
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.task-workspace-layout')) && document.querySelectorAll('.task-domain-workspace').length === 2 && Boolean(document.querySelector('.audio-review-bar')) && document.querySelectorAll('.transcript-segment').length === 2",
+      );
+
+      const wide = await evaluateValue<{
+        columns: number;
+        topDelta: number;
+        localRatio: number;
+        aiWidth: number;
+        localWidth: number;
+        layoutWidth: number;
+        viewportWidth: number;
+        sameTask: boolean;
+        completionBanner: boolean;
+        localScrollable: boolean;
+      }>(
+        page,
+        `(() => {
+          const layout = document.querySelector('.task-workspace-layout');
+          const local = document.querySelector('.local-transcript-workspace');
+          const ai = document.querySelector('.ai-generation-workspace');
+          const review = document.querySelector('.transcript-review-scroll');
+          const localRect = local.getBoundingClientRect();
+          const aiRect = ai.getBoundingClientRect();
+          return {
+            columns: getComputedStyle(layout).gridTemplateColumns.split(' ').length,
+            topDelta: Math.abs(localRect.top - aiRect.top),
+            localRatio: localRect.width / (localRect.width + aiRect.width),
+            aiWidth: aiRect.width,
+            localWidth: localRect.width,
+            layoutWidth: layout.getBoundingClientRect().width,
+            viewportWidth: window.innerWidth,
+            sameTask: local.dataset.taskId === ai.dataset.taskId && local.dataset.taskId === 'history-task-a',
+            completionBanner: document.querySelector('.task-status-banner')?.textContent.includes('视频、音频和文字稿已保存在本机') ?? false,
+            localScrollable: review ? ['auto', 'scroll'].includes(getComputedStyle(review).overflowY) : false
+          };
+        })()`,
+      );
+      await captureTaskWorkspaceScreenshot(page, "wide");
+      if (process.env.FRAMEQ_REPORT_TASK_WORKSPACES === "1") {
+        console.info(`task-workspace-wide: ${JSON.stringify(wide)}`);
+      }
+
+      expect(wide.columns).toBe(2);
+      expect(wide.topDelta).toBeLessThanOrEqual(1);
+      expect(wide.localRatio).toBeGreaterThanOrEqual(0.58);
+      expect(wide.localRatio).toBeLessThanOrEqual(0.66);
+      expect(wide.aiWidth).toBeGreaterThanOrEqual(360);
+      expect(wide.sameTask).toBe(true);
+      expect(wide.completionBanner).toBe(true);
+      expect(wide.localScrollable).toBe(true);
+
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 900,
+        height: 1000,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "window.innerWidth === 900 && getComputedStyle(document.querySelector('.task-workspace-layout')).gridTemplateColumns.split(' ').length === 1",
+      );
+      const narrow = await evaluateValue<{
+        stacked: boolean;
+        contained: boolean;
+      }>(
+        page,
+        `(() => {
+          const layout = document.querySelector('.task-workspace-layout');
+          const local = document.querySelector('.local-transcript-workspace').getBoundingClientRect();
+          const ai = document.querySelector('.ai-generation-workspace').getBoundingClientRect();
+          return {
+            stacked: ai.top > local.bottom,
+            contained: layout.scrollWidth <= layout.clientWidth + 1
+          };
+        })()`,
+      );
+      await captureTaskWorkspaceScreenshot(page, "narrow");
+      writeTaskWorkspaceGeometry({ wide, narrow });
+      expect(narrow).toEqual({ stacked: true, contained: true });
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("keeps long history card titles clamped and metadata aligned responsively", async () => {
+    const baseHistoryItem = {
+      task_id: "history-layout-base",
+      id: "history-layout-base",
+      created_at: "2026-07-11T08:00:00.000Z",
+      url: "https://www.youtube.com/watch?v=abcdefghijk",
+      status: "completed",
+      task_dir: "C:/FrameQ/outputs/tasks/history-layout-base",
+      output_dir: "C:/FrameQ/outputs",
+      artifacts: { transcript_txt: "transcript/transcript.txt" },
+      error: null,
+      text_preview: "History layout fixture",
+      insights_count: 3,
+    };
+    const historyItems = [
+      {
+        ...baseHistoryItem,
+        task_id: "history-layout-zh",
+        id: "history-layout-zh",
+        text_preview:
+          "这是一段用于验证历史卡片两行截断和高度一致性的超长中文文字稿预览内容，需要足够长以稳定超出两行显示区域".repeat(4),
+      },
+      {
+        ...baseHistoryItem,
+        task_id: "history-layout-en",
+        id: "history-layout-en",
+        text_preview:
+          "AnEnglishTranscriptPreviewWithOneVeryLongUnbrokenWordThatMustClampWithoutExpandingTheHistoryCardHeightBeyondTwoLines".repeat(4),
+      },
+      {
+        ...baseHistoryItem,
+        task_id: "history-layout-url",
+        id: "history-layout-url",
+        text_preview: "",
+        url: "https://youtu.be/abcdefghijk",
+        output_dir:
+          "C:/FrameQ/outputs/a-very-long-safe-history-directory/with/many/nested/segments/for/ellipsis",
+      },
+    ];
+    const page = await openUiSmokePage({ responses: { get_history: historyItems } });
+
+    try {
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 1366,
+        height: 1000,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForRuntimeCondition(page, "window.innerWidth === 1366");
+      await openSmokeHistory(page, historyItems.length);
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('.history-sheet').style.height = '720px'",
+      });
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('.history-sheet').getBoundingClientRect().height === 720 && document.querySelectorAll('.history-title').length === 3 && getComputedStyle(document.querySelector('.history-meta')).gridTemplateColumns.split(' ').length === 3",
+      );
+
+      const wide = await evaluateValue<{
+        titlesClamped: boolean;
+        outputEllipsized: boolean;
+        metaAligned: boolean;
+        cards: Array<{
+          height: number;
+          metadataBottomInset: number;
+          statusTitleGap: number;
+          titleMetadataGap: number;
+        }>;
+      }>(
+        page,
+        `(() => {
+          const cards = Array.from(document.querySelectorAll('.history-item'));
+          const titles = Array.from(document.querySelectorAll('.history-title'));
+          const output = document.querySelector('.history-meta-output[title*="a-very-long-safe"] .history-meta-value');
+          const metaRows = Array.from(document.querySelectorAll('.history-meta'));
+          return {
+            titlesClamped: titles.slice(0, 2).every((title) => {
+              const style = getComputedStyle(title);
+              return style.webkitLineClamp === '2' && title.scrollHeight > title.clientHeight;
+            }),
+            outputEllipsized: output.scrollWidth > output.clientWidth && getComputedStyle(output).textOverflow === 'ellipsis',
+            metaAligned: metaRows.every((meta) => {
+              const time = meta.querySelector('.history-meta-time').getBoundingClientRect();
+              const result = meta.querySelector('.history-meta-result').getBoundingClientRect();
+              return Math.abs(time.top - result.top) <= 1 && result.right <= meta.getBoundingClientRect().right + 1;
+            }),
+            cards: cards.map((card) => {
+              const cardRect = card.getBoundingClientRect();
+              const statusRect = card.querySelector('.history-status').getBoundingClientRect();
+              const titleRect = card.querySelector('.history-title').getBoundingClientRect();
+              const metadataRect = card.querySelector('.history-meta').getBoundingClientRect();
+              return {
+                height: cardRect.height,
+                metadataBottomInset: cardRect.bottom - metadataRect.bottom,
+                statusTitleGap: titleRect.top - statusRect.bottom,
+                titleMetadataGap: metadataRect.top - titleRect.bottom
+              };
+            })
+          };
+        })()`,
+      );
+      await captureHistoryLayoutScreenshot(page, "wide");
+      reportHistoryLayoutGeometry("wide", wide);
+
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 640,
+        height: 1000,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "window.innerWidth === 640 && getComputedStyle(document.querySelector('.history-meta')).gridTemplateColumns.split(' ').length === 2",
+      );
+      const narrow = await evaluateValue<{
+        outputOnSecondRow: boolean;
+        contained: boolean;
+        statusAligned: boolean;
+        cards: Array<{
+          height: number;
+          metadataBottomInset: number;
+          statusTitleGap: number;
+          titleMetadataGap: number;
+        }>;
+      }>(
+        page,
+        `(() => {
+          const cards = Array.from(document.querySelectorAll('.history-item'));
+          const metas = Array.from(document.querySelectorAll('.history-meta'));
+          const statusLefts = cards.map((card) => card.querySelector('.history-status').getBoundingClientRect().left);
+          return {
+            outputOnSecondRow: metas.every((meta) => {
+              const time = meta.querySelector('.history-meta-time').getBoundingClientRect();
+              const output = meta.querySelector('.history-meta-output').getBoundingClientRect();
+              return output.top > time.bottom - 1;
+            }),
+            contained: cards.every((card) => card.scrollWidth <= card.clientWidth + 1),
+            statusAligned: Math.max(...statusLefts) - Math.min(...statusLefts) <= 1,
+            cards: cards.map((card) => {
+              const cardRect = card.getBoundingClientRect();
+              const statusRect = card.querySelector('.history-status').getBoundingClientRect();
+              const titleRect = card.querySelector('.history-title').getBoundingClientRect();
+              const metadataRect = card.querySelector('.history-meta').getBoundingClientRect();
+              return {
+                height: cardRect.height,
+                metadataBottomInset: cardRect.bottom - metadataRect.bottom,
+                statusTitleGap: titleRect.top - statusRect.bottom,
+                titleMetadataGap: metadataRect.top - titleRect.bottom
+              };
+            })
+          };
+        })()`,
+      );
+      await captureHistoryLayoutScreenshot(page, "narrow");
+      reportHistoryLayoutGeometry("narrow", narrow);
+      expect(wide.titlesClamped).toBe(true);
+      expect(wide.outputEllipsized).toBe(true);
+      expect(wide.metaAligned).toBe(true);
+      expect(wide.cards.every((card) => card.height < 150)).toBe(true);
+      expect(wide.cards[2].height).toBeLessThan(wide.cards[0].height);
+      expect(wide.cards.every((card) => card.metadataBottomInset >= 11 && card.metadataBottomInset <= 15)).toBe(true);
+      expect(wide.cards.every((card) => card.statusTitleGap >= 6 && card.statusTitleGap <= 10)).toBe(true);
+      expect(wide.cards.every((card) => card.titleMetadataGap >= 7 && card.titleMetadataGap <= 11)).toBe(true);
+      expect(narrow.outputOnSecondRow).toBe(true);
+      expect(narrow.contained).toBe(true);
+      expect(narrow.statusAligned).toBe(true);
+      expect(narrow.cards.every((card) => card.height < 180)).toBe(true);
+      expect(narrow.cards.every((card) => card.metadataBottomInset >= 11 && card.metadataBottomInset <= 15)).toBe(true);
+      expect(narrow.cards.every((card) => card.statusTitleGap >= 6 && card.statusTitleGap <= 10)).toBe(true);
+      expect(narrow.cards.every((card) => card.titleMetadataGap >= 7 && card.titleMetadataGap <= 11)).toBe(true);
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
 
   test("keeps history read-only during processing and restores one stable completed task", async () => {
     const page = await openUiSmokePage({ deferredCommands: ["process_video"] });
@@ -1006,20 +1205,127 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       await resolveUiSmokeCommand(page, "process_video");
       await waitForRuntimeCondition(
         page,
-        "document.querySelectorAll('.history-item:not([disabled])').length === 2 && document.body.innerText.includes('视频、音频和文字稿已可查看')",
+        "document.querySelectorAll('.history-item:not([disabled])').length === 2 && document.body.innerText.includes('视频、音频和文字稿已保存在本机')",
       );
       await clickButtonContaining(page, ".history-item", "历史任务甲文字稿");
       await waitForRuntimeCondition(page, "!document.querySelector('.history-sheet')");
-      await clickButtonContaining(page, ".result-card", "完整文字稿");
       await waitForRuntimeCondition(
         page,
         "document.querySelector('.transcript-full-editor')?.value === '历史任务甲完整文字稿'",
       );
 
-      const load = (await readUiSmokeCommands(page)).find(
-        (entry) => entry.command === "load_transcript_detail",
-      );
+      const load = (await readUiSmokeCommands(page))
+        .filter((entry) => entry.command === "load_transcript_detail")
+        .at(-1);
       expect(load?.args).toMatchObject({ request: { task_id: "history-task-a" } });
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
+  test("keeps local transcript usable when AI is unavailable or quota is exhausted", async () => {
+    for (const account of [
+      {
+        authenticated: true,
+        email: "ui-smoke@frameq.local",
+        entitlement_status: "active",
+        entitlement_expires_at: null,
+        llm_quota_limit: 20,
+        llm_quota_used: 20,
+        llm_quota_remaining: 0,
+        llm_quota_resets_at: null,
+        llm_configured: true,
+        last_verified_at: null,
+        can_process: true,
+        can_generate_ai: false,
+        server_error: null,
+      },
+      {
+        authenticated: true,
+        email: "ui-smoke@frameq.local",
+        entitlement_status: "active",
+        entitlement_expires_at: null,
+        llm_quota_limit: 20,
+        llm_quota_used: 0,
+        llm_quota_remaining: 20,
+        llm_quota_resets_at: null,
+        llm_configured: false,
+        last_verified_at: null,
+        can_process: true,
+        can_generate_ai: false,
+        server_error: null,
+      },
+    ]) {
+      const page = await openUiSmokePage({ responses: { get_account_status: account } });
+      try {
+        await restoreSmokeHistoryItem(page, "历史任务甲文字稿");
+        await waitForRuntimeCondition(
+          page,
+          "Boolean(document.querySelector('.ai-availability-blocker')) && Boolean(document.querySelector('.transcript-full-editor'))",
+        );
+        const state = await evaluateValue<Record<string, unknown>>(
+          page,
+          `({
+            blocker: document.querySelector('.ai-availability-blocker')?.textContent ?? '',
+            disabledTargets: document.querySelectorAll('.ai-target-card .primary-button:disabled').length,
+            localTask: document.querySelector('.local-transcript-workspace')?.dataset.taskId ?? '',
+            localEditorDisabled: document.querySelector('.transcript-full-editor')?.disabled ?? null
+          })`,
+        );
+        expect(state.disabledTargets).toBe(2);
+        expect(state.localTask).toBe("history-task-a");
+        expect(state.localEditorDisabled).toBe(false);
+        expect(String(state.blocker)).toMatch(/额度已用完|暂不可用/);
+      } finally {
+        await page.close();
+      }
+    }
+  }, 20_000);
+
+  test("keeps an AI target failure in the right workspace while the local transcript remains ready", async () => {
+    const page = await openUiSmokePage({ deferredCommands: ["retry_insights"] });
+    try {
+      await restoreSmokeHistoryItem(page, "历史任务甲文字稿");
+      await clickButtonContaining(page, '[data-ai-target="summary"] button', "确认生成");
+      await clickButtonContaining(page, '[aria-label="确认要点总结"] .primary-button', "确认");
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('[data-ai-target=\"summary\"]')?.classList.contains('generating')",
+      );
+      await resolveUiSmokeCommand(page, "retry_insights", {
+        status: "partial_completed",
+        task_id: "history-task-a",
+        task_dir: "C:/FrameQ/outputs/tasks/history-task-a",
+        artifacts: {},
+        text: "",
+        summary: "",
+        insights: [],
+        transcript: null,
+        error: {
+          code: "INSIGHTFLOW_EMPTY_SUMMARY",
+          message: "No summary returned.",
+          stage: "insights_generating",
+        },
+      });
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('[data-ai-target=\"summary\"]')?.classList.contains('failed')",
+      );
+      const state = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          localReady: document.querySelector('.local-transcript-workspace .workspace-status-badge')?.textContent === '本地完成',
+          localError: Boolean(document.querySelector('.local-workspace-error')),
+          aiError: document.querySelector('[data-ai-target="summary"] .ai-target-error')?.textContent ?? '',
+          insightsFailed: document.querySelector('[data-ai-target="insights"]')?.classList.contains('failed') ?? false
+        })`,
+      );
+      expect(state).toMatchObject({
+        localReady: true,
+        localError: false,
+        aiError: "INSIGHTFLOW_EMPTY_SUMMARY",
+        insightsFailed: false,
+      });
     } finally {
       await page.close();
     }
@@ -1030,7 +1336,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
 
     try {
       await submitSmokeVideo(page);
-      await clickButtonContaining(page, ".process-monitor button", "取消任务");
+      await clickButtonContaining(page, ".local-progress button", "取消本地处理");
       await waitForRuntimeCondition(page, "document.body.innerText.includes('正在取消')");
       await openSmokeHistory(page);
       await waitForRuntimeCondition(
@@ -1049,7 +1355,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
         page,
         `({
           hasInput: Boolean(document.querySelector('.command-panel')),
-          hasResults: Boolean(document.querySelector('.result-workspace')),
+          hasResults: Boolean(document.querySelector('.task-workspace-layout')),
           draft: document.querySelector('#video-url')?.value ?? ''
         })`,
       );
@@ -1065,19 +1371,17 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
 
     try {
       await restoreSmokeHistoryItem(page, "历史任务甲文字稿");
-      await clickButtonContaining(page, ".result-card", "完整文字稿");
       await waitForRuntimeCondition(
         page,
         "document.querySelector('.transcript-full-editor')?.value === '历史任务甲完整文字稿'",
       );
       await replaceTextAreaValue(page, ".transcript-full-editor", "甲任务延迟保存后的长文字稿内容");
-      await clickButtonContaining(page, ".detail-sheet .tool-actions button", "保存");
+      await clickButtonContaining(page, ".transcript-action-bar button", "保存");
       await waitForRuntimeCondition(
         page,
         "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.save_transcript_edit?.length)",
       );
 
-      await clickSelector(page, 'button[aria-label="关闭详情"]');
       await restoreSmokeHistoryItem(page, "历史任务乙文字稿");
       await resolveUiSmokeCommand(page, "save_transcript_edit", {
         task_id: "history-task-a",
@@ -1087,12 +1391,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       });
       await waitForRuntimeCondition(
         page,
-        "Array.from(document.querySelectorAll('.result-card')).some((card) => card.textContent.includes('完整文字稿') && card.textContent.includes('10 字'))",
-      );
-      await clickButtonContaining(page, ".result-card", "完整文字稿");
-      await waitForRuntimeCondition(
-        page,
-        "document.querySelector('.transcript-full-editor')?.value === '历史任务乙完整文字稿'",
+        "document.querySelector('.local-transcript-workspace')?.dataset.taskId === 'history-task-b' && document.querySelector('.transcript-full-editor')?.value === '历史任务乙完整文字稿'",
       );
 
       const transcriptLoads = (await readUiSmokeCommands(page)).filter(
@@ -1114,13 +1413,34 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
 
     try {
       await restoreSmokeHistoryItem(page, "历史任务甲文字稿");
-      await clickButtonContaining(page, ".result-card", "要点总结");
+      await clickButtonContaining(page, '[data-ai-target="summary"] button', "确认生成");
       await waitForRuntimeCondition(page, "Boolean(document.querySelector('[aria-label=\"确认要点总结\"]'))");
       await clickButtonContaining(page, '[aria-label="确认要点总结"] .primary-button', "确认");
       await waitForRuntimeCondition(
         page,
         "window.__FRAMEQ_UI_SMOKE__.commands.some((entry) => entry.command === 'retry_insights' && entry.args?.request?.target === 'summary')",
       );
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('[data-ai-target=\"summary\"]')?.classList.contains('generating') && document.body.innerText.includes('AI 正在使用已保存版本')",
+      );
+      const generatingState = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          transcriptVisible: Boolean(document.querySelector('.transcript-full-editor')),
+          transcriptReadOnly: document.querySelector('.transcript-full-editor')?.disabled ?? false,
+          saveDisabled: document.querySelector('.transcript-action-bar .primary-button')?.disabled ?? false,
+          aiCancelVisible: Boolean(document.querySelector('.ai-generation-workspace .ai-cancel-button')),
+          localCancelVisible: Boolean(document.querySelector('.local-transcript-workspace .danger-soft'))
+        })`,
+      );
+      expect(generatingState).toMatchObject({
+        transcriptVisible: true,
+        transcriptReadOnly: true,
+        saveDisabled: true,
+        aiCancelVisible: true,
+        localCancelVisible: false,
+      });
       await openSmokeHistory(page);
       await waitForRuntimeCondition(
         page,
@@ -1133,7 +1453,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       );
       await clickSelector(page, 'button[aria-label="关闭历史"]');
 
-      await clickButtonContaining(page, ".result-card", "启发灵感");
+      await clickButtonContaining(page, '[data-ai-target="insights"] button', "选择并确认");
       await waitForRuntimeCondition(page, "document.body.innerText.includes('直接生成')");
       await clickButtonContaining(page, ".preference-flow-sheet .primary-button", "直接生成");
       await waitForRuntimeCondition(page, "Boolean(document.querySelector('[aria-label=\"确认启发灵感\"]'))");
@@ -1352,6 +1672,7 @@ async function connectToCdp(webSocketDebuggerUrl: string) {
             if (!response.ok) {
               throw new Error(`Could not close CDP target: ${response.status}`);
             }
+            await waitForCdpTargetClosed(targetId);
           }
         } finally {
           socket.close();
@@ -1428,6 +1749,18 @@ function requestJson<T>(port: number, path: string, method = "GET"): Promise<T> 
     req.on("error", reject);
     req.end();
   });
+}
+
+async function waitForCdpTargetClosed(targetId: string): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const targets = await requestJson<Array<{ id: string }>>(cdpPort, "/json/list");
+    if (!targets.some((target) => target.id === targetId)) {
+      return;
+    }
+    await delay(25);
+  }
+  throw new Error(`CDP target did not close: ${targetId}`);
 }
 
 function chromeDiagnostics() {
@@ -1524,7 +1857,7 @@ async function openUiSmokePage(scenario: UiSmokeScenario): Promise<CdpPage> {
     await waitForRuntimeCondition(
       page,
       "window.__FRAMEQ_UI_SMOKE__?.ready === true && Boolean(document.querySelector('.app-shell'))",
-      10_000,
+      15_000,
     );
     return page;
   } catch (error) {
@@ -1566,6 +1899,63 @@ async function evaluateValue<T>(page: CdpPage, expression: string): Promise<T> {
   return evaluated.result.value;
 }
 
+async function captureHistoryLayoutScreenshot(
+  page: CdpPage,
+  viewport: "wide" | "narrow",
+): Promise<void> {
+  if (process.env.FRAMEQ_CAPTURE_HISTORY_LAYOUT !== "1") {
+    return;
+  }
+  const screenshot = await page.send<{ data: string }>("Page.captureScreenshot", {
+    format: "png",
+    captureBeyondViewport: false,
+  });
+  const screenshotDir = resolve(appRoot, "..", ".tmp", "history-layout");
+  mkdirSync(screenshotDir, { recursive: true });
+  writeFileSync(
+    join(screenshotDir, `history-layout-${viewport}.png`),
+    Buffer.from(screenshot.data, "base64"),
+  );
+}
+
+async function captureTaskWorkspaceScreenshot(
+  page: CdpPage,
+  viewport: "wide" | "narrow",
+): Promise<void> {
+  if (process.env.FRAMEQ_CAPTURE_TASK_WORKSPACES !== "1") {
+    return;
+  }
+  const screenshot = await page.send<{ data: string }>("Page.captureScreenshot", {
+    format: "png",
+    captureBeyondViewport: false,
+  });
+  const screenshotDir = resolve(appRoot, "..", ".tmp", "task-workspaces");
+  mkdirSync(screenshotDir, { recursive: true });
+  writeFileSync(
+    join(screenshotDir, `task-workspaces-${viewport}.png`),
+    Buffer.from(screenshot.data, "base64"),
+  );
+}
+
+function writeTaskWorkspaceGeometry(geometry: unknown): void {
+  if (process.env.FRAMEQ_REPORT_TASK_WORKSPACES !== "1") {
+    return;
+  }
+  const outputDir = resolve(appRoot, "..", ".tmp", "task-workspaces");
+  mkdirSync(outputDir, { recursive: true });
+  writeFileSync(
+    join(outputDir, "task-workspaces-geometry.json"),
+    `${JSON.stringify(geometry, null, 2)}\n`,
+    "utf-8",
+  );
+}
+
+function reportHistoryLayoutGeometry(viewport: string, geometry: unknown): void {
+  if (process.env.FRAMEQ_REPORT_HISTORY_GEOMETRY === "1") {
+    console.info(`history-layout-${viewport}: ${JSON.stringify(geometry)}`);
+  }
+}
+
 async function readUiSmokeCommands(page: CdpPage): Promise<UiSmokeCommand[]> {
   return evaluateValue<UiSmokeCommand[]>(
     page,
@@ -1594,15 +1984,15 @@ async function submitSmokeVideo(page: CdpPage): Promise<void> {
   await clickSelector(page, ".primary-button");
   await waitForRuntimeCondition(
     page,
-    "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.process_video?.length) && Boolean(document.querySelector('.process-monitor'))",
+    "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.process_video?.length) && Boolean(document.querySelector('.local-transcript-workspace'))",
   );
 }
 
-async function openSmokeHistory(page: CdpPage): Promise<void> {
+async function openSmokeHistory(page: CdpPage, expectedItems = 2): Promise<void> {
   await clickSelector(page, 'button[aria-label="查看历史"]');
   await waitForRuntimeCondition(
     page,
-    "Boolean(document.querySelector('.history-sheet')) && document.querySelectorAll('.history-item').length === 2",
+    `Boolean(document.querySelector('.history-sheet')) && document.querySelectorAll('.history-item').length === ${expectedItems}`,
   );
 }
 

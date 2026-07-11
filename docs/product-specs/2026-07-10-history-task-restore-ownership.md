@@ -8,7 +8,7 @@ The workflow controller protects active worker and AI-retry callbacks with an op
 
 - The workflow controller is the sole owner of task-identity replacement. It exposes a semantic `restoreHistoryItem` action and does not expose a generic workflow setter to App, History, or other features.
 - History can still be opened while a workflow is active, but its task rows are read-only and disabled with accessible explanatory copy. Video processing, AI retry, and `cancelling` are all active states; selecting a history row in any of them is rejected without changing the current workflow or cancelling the active task.
-- When the workflow is stable, restoring history invalidates the prior operation ID, resets task-scoped transient UI, and replaces the entire task state from exactly one history item. Task ID, directory, artifacts, text, summary, and insights must remain from that same item.
+- When the workflow is stable, selecting a lightweight history row first loads that current-safe task through `get_history_detail(taskId)`. Only the latest completed detail response is forwarded to the workflow controller; restoration then invalidates the prior operation ID, resets task-scoped transient UI, and replaces the entire task state from exactly that detail. Task ID, directory, artifacts, text, summary, and insights must remain from the same selected task.
 - After a successful restore, any stale progress or terminal result from an older operation is ignored by the existing operation-ID guard.
 - Task-local editing remains supported through a constrained callback that applies a transcript save only when its expected task ID is still current. It cannot replace a task identity or merge a save from an old task into a newly restored task.
 

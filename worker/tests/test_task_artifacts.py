@@ -111,12 +111,10 @@ def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path
     result = run_worker_pipeline(
         request=ProcessRequest(
             url="https://www.douyin.com/video/7524373044106677544",
-            generate_insights=False,
         ),
         project_root=tmp_path,
         command_runner=runner,
         transcriber=FakeTranscriber(),
-        insight_client=None,
         allow_real_asr=True,
         environ={
             OUTPUT_DIR_ENV: output_root.as_posix(),
@@ -169,7 +167,7 @@ def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path
     assert manifest["text_preview"] == "task transcript"
 
 
-def test_sensitive_xhs_download_url_never_crosses_persistence_or_prompt_boundary(
+def test_sensitive_xhs_download_url_never_crosses_local_process_boundary(
     tmp_path: Path,
 ) -> None:
     output_root = tmp_path / "outputs"
@@ -218,39 +216,11 @@ def test_sensitive_xhs_download_url_never_crosses_persistence_or_prompt_boundary
             return CommandResult(command=command, returncode=0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {command}")
 
-    class CapturingInsightClient:
-        def __init__(self) -> None:
-            self.prompts: list[str] = []
-
-        def generate(self, prompt: str) -> str:
-            self.prompts.append(prompt)
-            if "Mermaid mindmap" in prompt:
-                return "mindmap\n  root((official body))"
-            if "根据文字稿原文和 Mermaid 思维导图" in prompt:
-                return "# summary\n\nofficial body summary"
-            if "question_count" in prompt:
-                return json.dumps(
-                    [
-                        {
-                            "title": "topic",
-                            "summary": "task transcript",
-                            "excerpt": "task transcript",
-                            "question_count": 1,
-                        }
-                    ]
-                )
-            return (
-                '[{"topic":"question","matchReason":"matched",'
-                '"followUpQuestions":["next"],"suitableUse":"content planning"}]'
-            )
-
-    insight_client = CapturingInsightClient()
     result = run_worker_pipeline(
-        request=ProcessRequest(url=raw_url, generate_insights=True),
+        request=ProcessRequest(url=raw_url),
         project_root=tmp_path,
         command_runner=runner,
         transcriber=FakeTranscriber(),
-        insight_client=insight_client,
         allow_real_asr=True,
         environ={
             OUTPUT_DIR_ENV: output_root.as_posix(),
@@ -261,12 +231,11 @@ def test_sensitive_xhs_download_url_never_crosses_persistence_or_prompt_boundary
     assert result["status"] == "completed"
     assert len(download_commands) == 1
     assert raw_url in download_commands[0]
-    assert len(insight_client.prompts) == 4
-    for prompt in insight_client.prompts:
-        assert "task transcript" in prompt
-        assert secret not in prompt
-        assert "xsec_token" not in prompt
-        assert raw_url not in prompt
+    assert result["summary"] == ""
+    assert result["insights"] == []
+    assert "summary" not in result["artifacts"]
+    assert "mindmap" not in result["artifacts"]
+    assert "insights" not in result["artifacts"]
 
     task_dir = Path(str(result["task_dir"]))
     transcript_md = (task_dir / "transcript" / "transcript.md").read_text(
@@ -277,6 +246,7 @@ def test_sensitive_xhs_download_url_never_crosses_persistence_or_prompt_boundary
     manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
     assert manifest["source_url"] == canonical_url
     assert manifest["source_identity"]["canonical_url"] == canonical_url
+    assert list((task_dir / "ai").iterdir()) == []
     persisted = "\n".join(
         path.read_text(encoding="utf-8", errors="ignore")
         for path in task_dir.rglob("*")
@@ -336,12 +306,10 @@ def test_worker_pipeline_uses_platform_subtitle_before_asr_model_ready(
     result = run_worker_pipeline(
         request=ProcessRequest(
             url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            generate_insights=False,
         ),
         project_root=tmp_path,
         command_runner=runner,
         transcriber=None,
-        insight_client=None,
         allow_real_asr=False,
         environ={
             OUTPUT_DIR_ENV: output_root.as_posix(),
@@ -389,10 +357,19 @@ def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path
     (task_dir / "frameq-task.json").write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 3,
+                "source_privacy_migration_version": 2,
+                "source_privacy_quarantined": False,
                 "task_id": task_id,
                 "created_at": "2026-07-05T15:30:12Z",
                 "source_url": "https://www.douyin.com/video/7524373044106677544",
+                "source_identity": {
+                    "version": 1,
+                    "platform": "douyin",
+                    "stable_id": "7524373044106677544",
+                    "effective_part": None,
+                    "canonical_url": "https://www.douyin.com/video/7524373044106677544",
+                },
                 "platform": "douyin",
                 "status": "partial_completed",
                 "app_version": "app",
@@ -593,10 +570,19 @@ def test_retry_summary_target_preserves_existing_insights_count(tmp_path: Path) 
     (task_dir / "frameq-task.json").write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 3,
+                "source_privacy_migration_version": 2,
+                "source_privacy_quarantined": False,
                 "task_id": task_id,
                 "created_at": "2026-07-05T15:30:12Z",
                 "source_url": "https://www.douyin.com/video/7524373044106677544",
+                "source_identity": {
+                    "version": 1,
+                    "platform": "douyin",
+                    "stable_id": "7524373044106677544",
+                    "effective_part": None,
+                    "canonical_url": "https://www.douyin.com/video/7524373044106677544",
+                },
                 "platform": "douyin",
                 "status": "completed",
                 "app_version": "app",
@@ -666,10 +652,19 @@ def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> Non
     (task_dir / "frameq-task.json").write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 3,
+                "source_privacy_migration_version": 2,
+                "source_privacy_quarantined": False,
                 "task_id": task_id,
                 "created_at": "2026-07-05T15:30:12Z",
                 "source_url": "https://www.douyin.com/video/7524373044106677544",
+                "source_identity": {
+                    "version": 1,
+                    "platform": "douyin",
+                    "stable_id": "7524373044106677544",
+                    "effective_part": None,
+                    "canonical_url": "https://www.douyin.com/video/7524373044106677544",
+                },
                 "platform": "douyin",
                 "status": "completed",
                 "app_version": "app",

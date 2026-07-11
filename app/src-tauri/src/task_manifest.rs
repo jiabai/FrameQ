@@ -8,7 +8,8 @@ use url::Url;
 pub(crate) const TASK_MANIFEST_FILE_NAME: &str = "frameq-task.json";
 pub(crate) const TASKS_DIR_NAME: &str = "tasks";
 const SOURCE_IDENTITY_VERSION: u64 = 1;
-const SOURCE_PRIVACY_MIGRATION_VERSION: u64 = 2;
+pub(crate) const TASK_SCHEMA_VERSION: u64 = 3;
+pub(crate) const SOURCE_PRIVACY_MIGRATION_VERSION: u64 = 2;
 const MAX_CANONICAL_URL_LENGTH: usize = 2_048;
 const MAX_SOURCE_STABLE_ID_LENGTH: usize = 80;
 const MAX_SOURCE_QUERY_PAIRS: usize = 1;
@@ -365,7 +366,7 @@ fn required_trimmed_string(value: &serde_json::Value, key: &str) -> Option<Strin
 impl TaskManifest {
     pub(crate) fn safe_source_identity(&self) -> Option<&SourceIdentity> {
         if self.source_privacy_quarantined
-            || self.schema_version < 3
+            || self.schema_version != TASK_SCHEMA_VERSION
             || self.source_privacy_migration_version != SOURCE_PRIVACY_MIGRATION_VERSION
         {
             return None;
@@ -390,38 +391,14 @@ impl TaskManifest {
     }
 
     pub(crate) fn source_privacy_ready(&self) -> bool {
-        !self.source_privacy_quarantined && self.source_privacy_migration_complete()
-    }
-
-    fn source_privacy_migration_complete(&self) -> bool {
-        if self.schema_version < 3
-            || self.source_privacy_migration_version != SOURCE_PRIVACY_MIGRATION_VERSION
-        {
-            return false;
-        }
-        if self.source_privacy_quarantined {
-            return true;
-        }
-        self.safe_source_identity().is_some()
-            || (self.source_url.trim().is_empty() && self.source_identity.is_none())
+        self.schema_version == TASK_SCHEMA_VERSION
+            && self.source_privacy_migration_version == SOURCE_PRIVACY_MIGRATION_VERSION
+            && !self.source_privacy_quarantined
+            && self.safe_source_identity().is_some()
     }
 
     pub(crate) fn transcript_metadata(&self) -> Option<TranscriptMetadata> {
-        self.transcript.clone().or_else(|| {
-            if self.schema_version <= 1 {
-                Some(TranscriptMetadata {
-                    source: "asr".to_string(),
-                    language: None,
-                    engine: if self.model.trim().is_empty() {
-                        None
-                    } else {
-                        Some(self.model.clone())
-                    },
-                })
-            } else {
-                None
-            }
-        })
+        self.transcript.clone()
     }
 }
 
@@ -492,21 +469,6 @@ pub(crate) fn list_task_manifest_paths(output_root: &Path) -> Result<Vec<PathBuf
         }
     }
     Ok(paths)
-}
-
-pub(crate) fn has_legacy_source_data(output_root: &Path) -> Result<bool, String> {
-    for path in list_task_manifest_paths(output_root)? {
-        let Ok(content) = fs::read_to_string(path) else {
-            continue;
-        };
-        let Ok(manifest) = serde_json::from_str::<TaskManifest>(&content) else {
-            continue;
-        };
-        if !manifest.source_privacy_migration_complete() {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 pub(crate) fn read_task_manifest_path(path: &Path) -> Result<(TaskManifest, PathBuf), String> {
@@ -681,8 +643,8 @@ fn is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        has_legacy_source_data, parse_insight_view, validate_task_artifact_path, SourceIdentity,
-        TaskManifest, TaskManifestError,
+        parse_insight_view, validate_task_artifact_path, SourceIdentity, TaskManifest,
+        TaskManifestError,
     };
     use serde_json::json;
     use std::fs;
@@ -703,7 +665,7 @@ mod tests {
     }
 
     #[test]
-    fn safe_source_identity_requires_completed_migration_and_matching_source_url() {
+    fn safe_source_identity_requires_current_schema_marker_and_matching_source_url() {
         let base = json!({
             "schema_version": 3,
             "source_privacy_migration_version": 2,
@@ -855,35 +817,6 @@ mod tests {
         let manifest: TaskManifest = serde_json::from_value(value).expect("manifest");
         let encoded = serde_json::to_value(manifest).expect("encoded manifest");
         assert_eq!(encoded["future_worker_field"]["enabled"], true);
-    }
-
-    #[test]
-    fn legacy_scan_flags_schema_three_source_identity_mismatch() {
-        let output_root = temp_dir("legacy-scan-schema-three-mismatch");
-        let task_dir = output_root.join("tasks").join("task");
-        fs::create_dir_all(&task_dir).expect("create task dir");
-        fs::write(
-            task_dir.join("frameq-task.json"),
-            serde_json::to_string(&json!({
-                "schema_version": 3,
-                "source_privacy_migration_version": 2,
-                "task_id": "task",
-                "created_at": "2026-07-10T12:00:00Z",
-                "source_url": "https://www.youtube.com/watch?v=abcDEF_123-&token=secret",
-                "source_identity": {
-                    "version": 1,
-                    "platform": "youtube",
-                    "stable_id": "abcDEF_123-",
-                    "effective_part": null,
-                    "canonical_url": "https://www.youtube.com/watch?v=abcDEF_123-"
-                },
-                "status": "completed"
-            }))
-            .expect("encode manifest"),
-        )
-        .expect("write manifest");
-
-        assert!(has_legacy_source_data(&output_root).expect("scan legacy data"));
     }
 
     #[test]

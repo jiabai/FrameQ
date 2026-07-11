@@ -55,25 +55,28 @@ def test_process_request_does_not_accept_preference_snapshot() -> None:
     assert not hasattr(request, "preference_snapshot")
 
 
-def test_process_request_defaults_to_transcript_only() -> None:
+def test_process_request_has_no_ai_generation_field() -> None:
     request = parse_process_request(
         {
             "url": "https://www.douyin.com/video/7524373044106677544",
         }
     )
 
-    assert request.generate_insights is False
+    assert not hasattr(request, "generate_insights")
 
 
-def test_process_request_preserves_explicit_generate_insights_flag() -> None:
-    request = parse_process_request(
-        {
-            "url": "https://www.douyin.com/video/7524373044106677544",
-            "generate_insights": True,
-        }
-    )
+def test_process_request_rejects_retired_ai_generation_field_without_echoing_input() -> None:
+    with pytest.raises(ValueError) as error:
+        parse_process_request(
+            {
+                "url": "https://user:review-secret@www.example.com/private",
+                "generate_insights": True,
+            }
+        )
 
-    assert request.generate_insights is True
+    assert str(error.value) == "Process request contains an unsupported field."
+    assert "review-secret" not in str(error.value)
+    assert "https://" not in str(error.value)
 
 
 def test_retry_request_parses_preference_snapshot() -> None:

@@ -15,7 +15,6 @@ type DesktopWorkerContract = {
     defaultModel: string;
   };
   processVideo: {
-    defaultGenerateInsights: boolean;
     serverManagedLlmCheckout: boolean;
   };
   aiGeneration: {
@@ -88,15 +87,11 @@ describe("desktop/worker contract", () => {
       };
     });
 
-    expect(contract.processVideo.defaultGenerateInsights).toBe(false);
+    expect(contract.processVideo).not.toHaveProperty("defaultGenerateInsights");
     expect(contract.processVideo.serverManagedLlmCheckout).toBe(false);
     expect(contract.aiGeneration.command).toBe("retry_insights");
     expect(contract.aiGeneration.serverManagedLlmCheckout).toBe(true);
-    expect(calls[0]?.args).toMatchObject({
-      request: {
-        generate_insights: false,
-      },
-    });
+    expect(calls[0]?.args).not.toHaveProperty("request.generate_insights");
   });
 
   test("matches the structured insight result item contract", () => {

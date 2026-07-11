@@ -38,7 +38,6 @@ from frameq_worker.requests import (
 )
 from frameq_worker.source_identity import (
     SourceIdentityError,
-    migrate_legacy_source_data,
     resolve_source_request,
 )
 from frameq_worker.task_store import (
@@ -56,9 +55,7 @@ def run_worker_once(
     project_root: Path | None = None,
     command_runner: CommandRunner = run_command,
     transcriber: Transcriber | None = None,
-    insight_client: InsightClient | None = None,
     transcriber_factory: TranscriberFactory | None = None,
-    insight_client_factory: InsightClientFactory | None = None,
     allow_real_asr: bool | None = None,
     environ: dict[str, str] | None = None,
     progress_callback: ProgressCallback | None = None,
@@ -101,15 +98,11 @@ def run_worker_once(
             ),
         ).to_dict()
 
-    configured_insight_client = insight_client or (
-        insight_client_factory or build_insight_client_from_env
-    )(runtime_env)
     result = run_worker_pipeline(
         request=request,
         project_root=root,
         command_runner=command_runner,
         transcriber=transcriber,
-        insight_client=configured_insight_client,
         allow_real_asr=should_allow_real_asr(runtime_env)
         if allow_real_asr is None
         else allow_real_asr,
@@ -146,17 +139,6 @@ def resolve_source_identity_once(request_json: str) -> dict[str, object]:
         "source_url": identity.canonical_url,
         "source_identity": identity.to_manifest_dict(),
     }
-
-
-def migrate_source_data_once(
-    project_root: Path | None = None,
-    environ: dict[str, str] | None = None,
-) -> dict[str, object]:
-    root = project_root or Path.cwd()
-    runtime_env = load_project_env(root, environ)
-    output_dir = resolve_output_dir(root, runtime_env)
-    report = migrate_legacy_source_data(output_dir)
-    return {"status": "completed", "migration": report.to_dict()}
 
 
 def retry_insights_once(
@@ -336,14 +318,6 @@ def transcript_metadata_from_manifest(manifest: dict[str, object]) -> Transcript
                 engine=engine if isinstance(engine, str) else None,
             )
 
-    schema_version = manifest.get("schema_version")
-    if schema_version == 1 or schema_version == "1":
-        model = manifest.get("model")
-        return TranscriptMetadata(
-            source="asr",
-            language=None,
-            engine=model if isinstance(model, str) and model.strip() else None,
-        )
     return None
 
 

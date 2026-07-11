@@ -1,5 +1,52 @@
 # FrameQ Architecture
 
+## 2026-07-11 Local Transcript and AI Workspace Boundary
+
+- One workflow task remains the only identity and artifact aggregate, but the desktop UI
+  projects it into `LocalTranscriptWorkspace` and `AiGenerationWorkspace`. App composes the
+  workspaces; `useTaskProcessingController` remains the sole task-identity owner.
+- A typed `activeAiTarget` identifies `summary`, `insights`, or no active AI request. Local
+  progress is projected only from download/media/transcription stages. AI progress, errors,
+  availability, quota, and cancellation placement are projected into the target-specific AI
+  workspace, so an AI run never hides a usable local transcript.
+- `TranscriptReviewPanel` is a presentation extraction backed by the existing transcript
+  detail controller and Tauri commands. Audio review, task-root path validation, backup,
+  save, and stale-task guards remain single implementations.
+- Summary and inspiration use separate target view models and confirmation flows. Summary
+  continues to generate summary plus its attached local Mermaid file with no preference
+  snapshot; inspiration alone may carry the confirmed snapshot. AI result viewing is
+  separate from transcript review.
+- The existing worker stage and ProcessSupervisor cancellation contract remain unchanged.
+  Selectors use `cancellingFromStage` and typed target state to place the single cancellation
+  action in the owning workspace without manufacturing a terminal result.
+- Strict History vNext detail restoration installs one complete task before either workspace
+  renders. Both projections therefore share the same task ID, and existing operation/detail/
+  save guards reject stale callbacks before state projection.
+
+## 2026-07-11 History vNext Strict Read Boundary
+
+- `frameq-task.json` schema v3 is the only history authority. Every history, cache,
+  transcript, edit, and retry read first requires the current privacy marker, an
+  allowlisted canonical SourceIdentity matching `source_url`, and
+  `source_privacy_quarantined != true`. Schema v1/v2, missing markers, invalid identities,
+  malformed manifests, and linked/reparse storage are unsupported external legacy data.
+- `get_history` is a Rust-only manifest projection. It returns lightweight
+  `HistoryListItem` values and never reads transcript, summary, insights, or transcript
+  metadata artifacts. It records only sanitized aggregate counts and stage elapsed time;
+  opening history never starts Python.
+- `get_history_detail(taskId)` performs one strict task-id/manifest validation and then
+  reads artifacts for only the selected supported task. History detail responses are
+  sequenced by the history controller; only the newest selected response may be forwarded
+  to `useTaskProcessingController`, which remains the sole task-identity owner.
+- Runtime migration is removed end to end. Tauri has no migration invocation, worker
+  command, or process-video/history/transcript migration hook; Python has no migration CLI
+  mode. Unsupported directories are not rewritten, indexed, renamed, quarantined, or
+  deleted. Their physical retention and manual backup/deletion remain outside product
+  history.
+- Cache lookup, transcript detail/save, and AI retry reuse the same strict current-task
+  predicate. They fail closed before artifact reads and never derive compatibility data
+  from an old `source_url`.
+
 ## 2026-07-10 History Task-Restore Ownership Boundary
 
 - `useTaskProcessingController` is the only owner that may replace a workflow task identity. It exposes semantic actions for stable history restoration, waiting-input URL drafts, and a guarded task-local transcript-save result; it must not expose its internal React setter to App, history, or detail features.
@@ -33,7 +80,7 @@
 - Supported short links are resolved in the worker, then canonicalized from the resolved stable ID. The original short link remains only the current download input. A failed resolution cannot promote the raw URL to persistent identity.
 - Task creation, transcript writing, and manifest writing accept only a worker-validated `SourceIdentity`. Cache matching and history defensively validate the persisted identity but do not regenerate platform canonical URLs in Tauri. A desktop preflight identity is cache-only advisory data and is never injected into the full worker request.
 - `transcript/transcript.txt` under the same task root as `ai/` is the official AI input artifact. Summary, Mermaid mindmap, topic planning, per-topic insights, and retries validate that exact path before reading its plain text body; `transcript.md`, alternate same-named files, and linked/reparse-point targets must not be used as prompt sources.
-- Legacy task manifests are migrated only below the configured output task root. Safely recoverable platform URLs, supplemental manifest metadata, known transcript Markdown metadata, and known AI artifacts are rewritten/redacted with bounded task-local paths and atomic compare-before-replace writes; otherwise UI/history receives no artifacts and source-based reuse is disabled. Read/write/interruption failure leaves the original manifest retryable, while a task id containing a recovered secret value is quarantined rather than renamed automatically.
+- Unsupported legacy task directories are physically retained but excluded from every product read. FrameQ does not migrate, redact, repair, rename, index, or delete them; users may manage backups or deletion outside the product.
 
 ## 2026-07-09 Account Processing and AI Gate Boundary
 
@@ -41,7 +88,12 @@
 - `can_process` must not depend on `llm_configured` or `llm_quota_remaining`; local transcription is allowed to degrade independently when cloud AI is unavailable.
 - `can_generate_ai` means the authenticated desktop user has an active entitlement, server-managed LLM config is available, and LLM API-call quota remains.
 - The desktop UI uses `can_process` only for submitting a new video URL. It uses `can_generate_ai` for confirmed `summary` and `insights` generation.
-- `process_video` remains transcript-only by default and must not request server-managed LLM checkout. `retry_insights` is the AI generation path that can require checkout and quota.
+- `process_video` has no AI field or AI branch. Its frontend type, strict Tauri IPC request,
+  explicit worker-stdin DTO, Python `ProcessRequest`, and local pipeline omit
+  `generate_insights`; a payload containing that retired field is rejected rather than normalized.
+  The command never constructs an AI client or receives checkout. `retry_insights` is the only
+  command that may construct an AI client, enter `run_insight_generation_step`, require checkout,
+  or consume quota.
 
 ## 2026-07-08 Split Summary and Inspiration Generation Boundary
 
@@ -307,7 +359,7 @@ graph LR
 - UI 只编排任务和展示状态，不直接调用 `yt-dlp`、`ffmpeg`、ASR 或 LLM。
 - UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
-- `process_video` 主流程默认只负责视频下载、音频提取和 ASR 文字稿；`retry_insights` 在用户二次确认后按 `summary` 或 `insights` 目标单独运行，并且是唯一需要 server-managed LLM checkout 的本地 worker 调用。
+- `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和 pipeline 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary` 或 `insights` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
 - 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `cache/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。

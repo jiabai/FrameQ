@@ -3,7 +3,7 @@ use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, AS
 use crate::task_manifest;
 use crate::{
     append_desktop_log, build_worker_command_spec, ensure_runtime_dirs,
-    migrate_legacy_source_data_if_needed, parse_worker_output_or_fallback, parse_worker_stdout,
+    parse_worker_output_or_fallback, parse_worker_stdout,
     path_to_env_string, resolve_runtime_paths, run_blocking_worker_command,
     spawn_supervised_worker_command, summarize_worker_result_for_log, terminate_process_tree,
     worker_command_log_detail, worker_exit_log_detail, CancelProcessResult, ProcessPhase,
@@ -18,14 +18,23 @@ use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State, Window};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ProcessVideoRequest {
     url: String,
     language: String,
     output_formats: Vec<String>,
     model: String,
-    generate_insights: bool,
     insightflow_mode: String,
+}
+
+#[derive(Serialize)]
+struct ProcessVideoWorkerRequest<'a> {
+    url: &'a str,
+    language: &'a str,
+    output_formats: &'a [String],
+    model: &'a str,
+    insightflow_mode: &'a str,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -94,7 +103,6 @@ fn process_video_blocking(
             }),
         }));
     };
-    let _ = migrate_legacy_source_data_if_needed(&paths);
     if let Some(cached) = cached_process_result_for_request(&output_root, &request)? {
         let _ = append_desktop_log(
             &paths,
@@ -270,7 +278,14 @@ fn cached_process_result_for_request(
 }
 
 fn serialize_process_video_request(request: &ProcessVideoRequest) -> Result<String, String> {
-    serde_json::to_string(request).map_err(|_| "Failed to encode worker request.".to_string())
+    serde_json::to_string(&ProcessVideoWorkerRequest {
+        url: &request.url,
+        language: &request.language,
+        output_formats: &request.output_formats,
+        model: &request.model,
+        insightflow_mode: &request.insightflow_mode,
+    })
+    .map_err(|_| "Failed to encode worker request.".to_string())
 }
 
 fn cached_process_result_for_identity(
@@ -753,7 +768,6 @@ mod tests {
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string(), "md".to_string()],
             model: "iic/SenseVoiceSmall".to_string(),
-            generate_insights: true,
             insightflow_mode: "embedded".to_string(),
         };
 
@@ -822,7 +836,6 @@ mod tests {
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string(), "md".to_string()],
             model: "iic/SenseVoiceSmall".to_string(),
-            generate_insights: false,
             insightflow_mode: "embedded".to_string(),
         };
         let identity = SourceIdentity {
@@ -853,7 +866,6 @@ mod tests {
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string(), "md".to_string()],
             model: "iic/SenseVoiceSmall".to_string(),
-            generate_insights: false,
             insightflow_mode: "embedded".to_string(),
         };
 
@@ -862,6 +874,27 @@ mod tests {
 
         assert_eq!(payload["url"], request.url);
         assert!(payload.get("source_identity").is_none());
+        assert!(payload.get("generate_insights").is_none());
+    }
+
+    #[test]
+    fn process_request_rejects_retired_ai_generation_field_without_echoing_source() {
+        let raw = r#"{
+          "url":"https://user:review-secret@example.com/private",
+          "language":"Chinese",
+          "output_formats":["txt","md"],
+          "model":"iic/SenseVoiceSmall",
+          "generate_insights":true,
+          "insightflow_mode":"embedded"
+        }"#;
+
+        let error = match serde_json::from_str::<ProcessVideoRequest>(raw) {
+            Ok(_) => panic!("retired process-video AI field must be rejected"),
+            Err(error) => error.to_string(),
+        };
+
+        assert!(!error.contains("review-secret"));
+        assert!(!error.contains("https://"));
     }
 
     #[test]
@@ -908,7 +941,6 @@ mod tests {
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string()],
             model: "iic/SenseVoiceSmall".to_string(),
-            generate_insights: false,
             insightflow_mode: "embedded".to_string(),
         };
 
@@ -972,7 +1004,6 @@ mod tests {
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string(), "md".to_string()],
             model: "iic/SenseVoiceSmall".to_string(),
-            generate_insights: true,
             insightflow_mode: "embedded".to_string(),
         };
 
@@ -1019,7 +1050,6 @@ mod tests {
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string(), "md".to_string()],
             model: "iic/SenseVoiceSmall".to_string(),
-            generate_insights: true,
             insightflow_mode: "embedded".to_string(),
         };
 
@@ -1073,7 +1103,6 @@ mod tests {
             language: "Chinese".to_string(),
             output_formats: vec!["txt".to_string(), "md".to_string()],
             model: "iic/SenseVoiceSmall".to_string(),
-            generate_insights: true,
             insightflow_mode: "embedded".to_string(),
         };
 

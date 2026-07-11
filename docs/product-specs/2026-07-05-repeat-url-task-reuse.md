@@ -14,6 +14,8 @@ that source.
   immediately.
 - Failed, cancelled, missing-artifact, corrupted, or different-model tasks are
   not reused; FrameQ starts a new processing run in those cases.
+- Schema v1/v2, missing-marker, quarantined, invalid-identity, and otherwise unsupported
+  legacy tasks are never reused or repaired. Only current safe v3 manifests participate.
 - Reuse is local-only. No server lookup, account login, cookie import, or remote
   media check is introduced.
 

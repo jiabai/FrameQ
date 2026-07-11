@@ -1,9 +1,9 @@
 import { Clock3, FileText, FolderOpen, X } from "lucide-react";
 
-import type { HistoryItem } from "../../historyClient";
+import type { HistoryListItem } from "../../historyClient";
 import type { HistoryController } from "./useHistoryController";
 
-const historyStatusCopy: Record<HistoryItem["status"], string> = {
+const historyStatusCopy: Record<HistoryListItem["status"], string> = {
   completed: "已完成",
   partial_completed: "部分完成",
   failed: "失败",
@@ -75,18 +75,32 @@ export function HistorySheet({
                 <span className={`history-status ${item.status}`}>
                   {historyStatusCopy[item.status]}
                 </span>
-                <strong>{item.textPreview || item.url}</strong>
+                <strong
+                  className={`history-title ${
+                    item.textPreview ? "history-title-preview" : "history-title-url"
+                  }`}
+                  title={item.textPreview || item.url}
+                >
+                  {item.textPreview || item.url}
+                </strong>
               </div>
               <div className="history-meta">
-                <span>
+                <span className="history-meta-time">
                   <Clock3 size={13} />
-                  {formatHistoryDate(item.createdAt)}
+                  <span className="history-meta-value">{formatHistoryDate(item.createdAt)}</span>
                 </span>
-                <span>
+                <span className="history-meta-output" title={item.outputDir || "outputs"}>
                   <FolderOpen size={13} />
-                  {item.outputDir || "outputs"}
+                  <span className="history-meta-value">{item.outputDir || "outputs"}</span>
                 </span>
-                <span>{item.error ? item.error.code : `${item.insightsCount} 条灵感`}</span>
+                <span
+                  className="history-meta-result"
+                  title={item.error ? item.error.code : `${item.insightsCount} 条灵感`}
+                >
+                  <span className="history-meta-value">
+                    {item.error ? item.error.code : `${item.insightsCount} 条灵感`}
+                  </span>
+                </span>
               </div>
             </button>
           ))}

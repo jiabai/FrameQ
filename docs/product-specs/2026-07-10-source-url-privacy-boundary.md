@@ -51,8 +51,8 @@ task artifacts, history, diagnostics, UI errors, or cloud LLM prompts.
   an argument vector and never invokes a shell.
 - The worker CLI exposes explicit stdin modes for controlled development use. URL-bearing
   legacy JSON argv modes are not a production fallback and are removed from the supported
-  request path; fixed no-payload operations such as model download and bounded legacy
-  migration remain ordinary flags.
+  request path; fixed no-payload model download remains an ordinary flag. There is no
+  production or development migration mode for legacy task source data.
 - Empty, oversized, unreadable, or malformed stdin is rejected with a fixed structured
   error that does not echo the payload or parser input. The desktop likewise maps stdin
   pipe/write failures to fixed sanitized errors and terminates the just-spawned process
@@ -66,8 +66,8 @@ task artifacts, history, diagnostics, UI errors, or cloud LLM prompts.
 - `transcript/transcript.md` may show only `canonical_url` as its Source URL.
 - New `frameq-task.json` files use schema version 3. `source_url` stores only
   `canonical_url`, and `source_identity` stores the exact allowlisted identity fields.
-  Schema versions 1 and 2 remain readable but are never treated as proof that their
-  `source_url` is already safe.
+  Schema versions 1 and 2 are unsupported legacy data and are never read by history,
+  cache, transcript actions, or AI retry.
 - Every AI generation starts by rereading the complete official saved
   task-root `transcript/transcript.txt` body after exact-path and link/reparse-point
   validation. The current invocation may derive bounded chunks or excerpts from that
@@ -79,40 +79,24 @@ task artifacts, history, diagnostics, UI errors, or cloud LLM prompts.
   downloader stderr or command arguments containing the original URL must not be copied
   into manifests, UI errors, or desktop logs.
 
-## Cache, History, and Compatibility
+## Cache and History
 
 - Request-to-task matching compares the structured identity key
   `(platform, stable_id, effective_part)`, not raw submitted URL strings. An exact safe
   canonical URL can hit before worker launch; URL variants and supported short links may
   run a lightweight source-identity preflight, but a cache hit must never enter media
   download, audio extraction, or ASR.
-- Existing schema-version 1 or 2 manifests without source-identity metadata remain
-  readable. When a legacy `source_url` can be safely canonicalized, FrameQ rewrites that
-  field in place at the bounded manifest-read boundary before returning history or using
-  it for cache matching.
+- Product reads accept only schema v3 manifests with the current privacy marker, a valid
+  canonical SourceIdentity, and no quarantine flag. Legacy, incomplete, quarantined, or
+  malformed manifests remain physically untouched and are excluded from history, cache,
+  transcript actions, and AI retry.
 - Source-identity preflight output is advisory for desktop cache lookup only. It is never
   injected into the full processing request; on a cache miss, the worker independently
   resolves the submitted download URL before creating a task or persisting identity.
-- If a legacy URL cannot be mapped to a supported stable identity, FrameQ exposes an
-  unavailable/no-link placeholder and disables source-based reuse for that manifest. It
-  must not return a merely stripped arbitrary host/path as a canonical identity.
-- Migration is limited to local `frameq-task.json` files discovered under the configured
-  output root, FrameQ's declared or conventional task-local transcript Markdown files,
-  and declared or conventional FrameQ AI artifacts (`summary`, `mindmap`, `insights`, and
-  `insights_md`). It removes the legacy raw source URL and known credential parameter
-  names/values without scanning arbitrary transcript body text, media, old diagnostic
-  logs, exported copies, user-managed backups, or arbitrary directories.
-- Manifest supplemental values and standalone credential assignments inside the bounded
-  migration scope are sanitized even when the old manifest has no recoverable
-  `source_url`. Read, write, or interruption failures must preserve a retryable original
-  manifest state, and linked/junction/reparse-point artifacts must not be followed.
-- `source_privacy_migration_version: 2` represents this final cleanup contract. Tasks
-  marked by the earlier version 1 cleanup are rechecked once so the stronger supplemental
-  field and standalone-assignment sanitation is actually applied.
-- A legacy task whose directory/task id itself contains a recovered sensitive parameter
-  value is quarantined from history, reuse, transcript actions, and AI retry. FrameQ does
-  not automatically rename that directory because task/cache references and concurrent
-  readers make an in-place rename unsafe.
+- FrameQ does not canonicalize, rewrite, mark, rename, redact, index, or delete unsupported
+  legacy directories. Users may back up or delete those physical files themselves. Normal
+  diagnostics report only aggregate ignored counts and elapsed time, never legacy task ids,
+  paths, URLs, manifest fields, or artifact content.
 
 ## Acceptance
 
@@ -126,8 +110,8 @@ task artifacts, history, diagnostics, UI errors, or cloud LLM prompts.
 - Canonicalization regression cases cover Xiaohongshu, Douyin, Bilibili, YouTube,
   supported short links, userinfo, fragments, and credential/signature query parameters.
 - Insight retry uses user-edited `transcript.txt` content.
-- Cache reuse, history loading, legacy manifests, and existing non-sensitive URLs remain
-  functional after canonicalization.
+- Cache reuse, history loading, and existing current safe URLs remain functional after
+  canonicalization; legacy manifests are deliberately unsupported.
 - A recursive scan of persisted task results finds no original sensitive URL,
   `xsec_token`, or fixture token value.
 - Rust command-spec and real-child probes show that a request containing

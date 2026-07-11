@@ -26,7 +26,6 @@ class ProcessRequest:
     language: str = "Chinese"
     output_formats: tuple[str, ...] = ("txt", "md")
     model: str = "iic/SenseVoiceSmall"
-    generate_insights: bool = False
     insightflow_mode: str = "embedded"
 
 

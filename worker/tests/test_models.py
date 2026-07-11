@@ -18,7 +18,7 @@ def test_process_request_uses_mvp_defaults() -> None:
     assert request.language == "Chinese"
     assert request.output_formats == ("txt", "md")
     assert request.model == "iic/SenseVoiceSmall"
-    assert request.generate_insights is False
+    assert not hasattr(request, "generate_insights")
     assert request.insightflow_mode == "embedded"
     assert "review-secret" not in repr(request)
     assert "xsec_token" not in repr(request)

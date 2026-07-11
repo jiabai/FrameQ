@@ -72,6 +72,9 @@ export type ToolbarNewTaskButtonState = {
 export type WorkflowState = {
   stage: WorkflowStage;
   cancellingFromStage: Exclude<WorkflowStage, "waiting_input" | "cancelling" | "completed" | "partial_completed" | "failed"> | null;
+  activeAiTarget: InsightRetryTarget | null;
+  aiErrorTarget: InsightRetryTarget | null;
+  aiTargetErrors: Partial<Record<InsightRetryTarget, WorkerErrorResult>>;
   url: string;
   submittedUrl: string;
   showUrlInput: boolean;
@@ -86,15 +89,13 @@ export type WorkflowState = {
   transcript: TranscriptMetadata | null;
   error: WorkerErrorResult | null;
 };
-const PROGRESS_STEP_LABELS: Array<Pick<ProgressStep, "id" | "label">> = [
-  { id: "video_extracting", label: "视频提取中" },
-  { id: "video_transcribing", label: "视频转译中" },
-  { id: "insights_generating", label: "AI 整理中" },
-];
 export function createInitialWorkflow(): WorkflowState {
   return {
     stage: "waiting_input",
     cancellingFromStage: null,
+    activeAiTarget: null,
+    aiErrorTarget: null,
+    aiTargetErrors: {},
     url: "",
     submittedUrl: "",
     showUrlInput: true,
@@ -115,6 +116,9 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
     ...state,
     stage: "video_extracting",
     cancellingFromStage: null,
+    activeAiTarget: null,
+    aiErrorTarget: null,
+    aiTargetErrors: {},
     url,
     submittedUrl: url,
     showUrlInput: false,
@@ -131,10 +135,15 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
 }
 
 export function startInsightRetry(state: WorkflowState, target: InsightRetryTarget): WorkflowState {
+  const aiTargetErrors = { ...state.aiTargetErrors };
+  delete aiTargetErrors[target];
   return {
     ...state,
     stage: "insights_generating",
     cancellingFromStage: null,
+    activeAiTarget: target,
+    aiErrorTarget: state.aiErrorTarget === target ? null : state.aiErrorTarget,
+    aiTargetErrors,
     showUrlInput: false,
     statusMessage:
       target === "summary"
@@ -188,27 +197,6 @@ export function confirmProcessingCancellation(state: WorkflowState): WorkflowSta
   };
 }
 
-export function getProgressSteps(state: WorkflowState): ProgressStep[] {
-  const progressStage = state.stage === "cancelling" ? state.cancellingFromStage : state.stage;
-  const activeIndex = PROGRESS_STEP_LABELS.findIndex((step) => step.id === progressStage);
-
-  return PROGRESS_STEP_LABELS.map((step, index) => {
-    if (state.stage === "completed" || state.stage === "partial_completed") {
-      return { ...step, state: "complete" };
-    }
-
-    if (activeIndex === -1) {
-      return { ...step, state: "pending" };
-    }
-
-    if (index < activeIndex) {
-      return { ...step, state: "complete" };
-    }
-
-    return { ...step, state: index === activeIndex ? "active" : "pending" };
-  });
-}
-
 export function isProcessingStage(stage: WorkflowStage): boolean {
   return (
     stage === "video_extracting" ||
@@ -241,7 +229,10 @@ export function getVisibleWorkflowError(state: WorkflowState): WorkerErrorResult
   return state.stage === "failed" || state.stage === "partial_completed" ? state.error : null;
 }
 
-export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
+export function summarizeWorkerResult(
+  result: WorkerResult,
+  failedAiTarget: InsightRetryTarget | null = null,
+): WorkflowState {
   return {
     ...createInitialWorkflow(),
     stage: result.status,
@@ -256,6 +247,31 @@ export function summarizeWorkerResult(result: WorkerResult): WorkflowState {
     artifacts: result.artifacts ?? {},
     transcript: result.transcript ?? null,
     error: result.error,
+    aiErrorTarget:
+      result.error?.stage === "insights_generating" ? failedAiTarget : null,
+    aiTargetErrors:
+      result.error?.stage === "insights_generating" && failedAiTarget
+        ? { [failedAiTarget]: result.error }
+        : {},
+  };
+}
+
+export function finishInsightRetry(
+  state: WorkflowState,
+  result: WorkerResult,
+  target: InsightRetryTarget,
+): WorkflowState {
+  const next = summarizeWorkerResult(result);
+  const aiTargetErrors = { ...state.aiTargetErrors };
+  if (result.error?.stage === "insights_generating") {
+    aiTargetErrors[target] = result.error;
+  } else {
+    delete aiTargetErrors[target];
+  }
+  return {
+    ...next,
+    aiErrorTarget: result.error?.stage === "insights_generating" ? target : null,
+    aiTargetErrors,
   };
 }
 

@@ -1,5 +1,52 @@
 # Security and Compliance
 
+## 2026-07-11 Workspace Data-Flow Disclosure
+
+- The local and AI workspaces are two UI projections of one task, not two storage or network
+  pipelines. Video, audio, raw source URL, complete transcript, task manifest, and local
+  preferences remain on the desktop and must not be sent to FrameQ server.
+- The local workspace may read local media/transcript artifacts only through existing
+  validated task-root Tauri commands. Extracting `TranscriptReviewPanel` must not duplicate
+  path resolution, relax link/reparse checks, or bypass expected-task save guards.
+- The AI workspace may initiate cloud generation only after target-specific confirmation.
+  The worker rereads the saved official `transcript/transcript.txt` and sends only allowed
+  transcript chunks to the checked-out LLM supplier. Video and audio are never uploaded.
+- Preference snapshots are allowed only for the confirmed inspiration target. Summary and
+  its attached Mermaid generation must always receive no preference snapshot.
+- While AI uses the saved transcript, the editor and save action are disabled to prevent UI
+  ambiguity about which version was sent. Playback, scrolling, and local file location do
+  not alter the prompt input and remain available.
+- Target status, errors, logs, browser fixtures, screenshots, and accessibility labels must
+  not include raw source URLs, credentials, complete prompt text, or complete transcript
+  content.
+- Local processing and AI generation are separate command capabilities, not a boolean mode.
+  `process_video` must not define, parse, normalize, or forward a `generate_insights` field and
+  must never construct an LLM client. Explicit use of the retired field is rejected with fixed
+  `INVALID_REQUEST_PAYLOAD` semantics without echoing the request or source URL.
+- Only confirmed `retry_insights` may receive checkout material, construct an AI client, write AI
+  artifacts, or consume quota. A direct worker invocation cannot recover the retired automatic-AI
+  branch through a compatibility parser or environment setting.
+
+## 2026-07-11 Unsupported Legacy Task Isolation Boundary
+
+- Only a schema v3 manifest with the current source-privacy marker, a present and
+  allowlisted canonical SourceIdentity matching `source_url`, and no quarantine flag may
+  enter history, cache reuse, transcript load/save, detail, or AI retry.
+- Schema v1/v2, missing-marker, quarantined, malformed, invalid-identity, symlink,
+  junction, and reparse-point tasks are unsupported legacy data. Product code fails closed
+  before artifact reads and must not return their task id, directory name, source URL,
+  error detail, preview, or artifact content to UI, logs, or diagnostics.
+- Unsupported directories remain physically untouched. FrameQ does not start a migration
+  worker, rewrite manifests/artifacts, add markers, rename directories, backfill indexes,
+  quarantine data, or delete files. Users may back up or delete those directories manually
+  outside the product.
+- History list diagnostics may contain only the fixed stage name, aggregate supported and
+  ignored counts, and elapsed milliseconds. They must not identify ignored entries. History
+  list and repeated opens are Rust-only and must never create a Python process.
+- `get_history_detail(taskId)` reads only the latest explicitly selected supported task,
+  after strict task-id and no-link validation. Stale responses are discarded before they
+  reach the workflow controller.
+
 ## 2026-07-10 Desktop Task-Identity Isolation Boundary
 
 - Desktop workflow state is task-scoped user data. A history selection must not replace task identity while a worker, AI retry, or cancellation operation is active, because late callbacks could otherwise expose one task's transcript, artifacts, summary, or insights in another task's UI.
@@ -33,7 +80,9 @@
 - `canonical_url` is reconstructed from an allowlisted platform identifier and is the only source URL allowed beyond the current download boundary. Canonicalization must drop userinfo, fragments, and every query field except Bilibili's non-default part selector.
 - Downloader stderr and fallback exceptions are untrusted because tools may echo the original URL. Only structured error codes and source-identity-sanitized public messages may cross into results or diagnostics.
 - Cloud AI receives only the saved task-root `transcript/transcript.txt` text selected by the user action after exact-path and link/reparse-point validation. Transcript Markdown metadata, alternate same-named text files, source URLs, manifest contents, local paths, and downloader diagnostics are forbidden prompt inputs.
-- Legacy task cleanup is bounded to discovered manifests, declared or conventional task-local transcript Markdown metadata, and declared or conventional FrameQ AI artifacts below the configured output task root. Canonicalizable fields, supplemental manifest values, and standalone credential assignments are rewritten locally, and old AI echoes of recovered source credentials are redacted; history returns no task content if migration is incomplete. Read/write/interruption failures preserve retryable manifest state, and corrupt manifest reads are isolated without weakening traversal/link failures. Automatic cleanup does not scan transcript body text, media, exported files, user-managed backups, arbitrary directories, or old log archives. Directory names containing recovered secret values are quarantined from product reads instead of being renamed unsafely.
+- Unsupported legacy task data is never migrated or inspected beyond the minimum manifest
+  eligibility check. Physical legacy files, exported copies, backups, and old logs remain
+  outside automatic product mutation and require user-managed backup or deletion.
 
 ## 2026-07-06 Insight Preference Privacy Boundary
 
@@ -61,7 +110,8 @@
 - Repeated URL task reuse may read only local manifests and manifest-relative artifacts under the configured output root. It must not trust failed tasks, missing artifacts, traversal paths, remote URLs, cookies, headers, or credentials.
 - Transcript review and save commands should receive `task_id`, not arbitrary transcript/audio paths. The audio player and text editor may access only manifest-declared artifacts for that task.
 - App-local `cache/tasks/<task_id>/` may store temporary or diagnostic files, but the UI should not expose it as a browseable artifact folder.
-- Legacy flat output files and legacy app-local history records are not trusted task authorities after this redesign.
+- Legacy flat output files, old app-local history records, and non-current task manifests
+  are not trusted task authorities and have no compatibility reader.
 
 ## 2026-07-05 Platform Subtitle Safety Boundary
 
@@ -193,7 +243,9 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 - `outputs/tasks/<task_id>/` 存放用户最终产物和 `frameq-task.json`，默认不提交仓库。
 - 用户可通过 `FRAMEQ_OUTPUT_DIR` 将最终任务目录写入自定义本地目录；该目录内容不由仓库管理，用户需要自行保护其中的公开视频、音频、文字稿和灵感文件。
 - `cache/tasks/<task_id>/` 存放下载缓存、中间文件和调试产物，默认不提交仓库；它不得作为历史或正式产物真相源。
-- `frameq-task.json` 是任务库索引和 artifact 真相源；旧版 app-local history 记录不再被新版本读取或信任。
+- 只有满足当前 schema v3、source-privacy marker 和 canonical SourceIdentity 契约的
+  `frameq-task.json` 才是任务库索引和 artifact 真相源；旧版记录与目录仅物理留存，
+  不再被新版本读取、迁移或信任。
 - `models/` 存放模型权重缓存，默认不提交仓库。
 - `updates.json` 只存放更新检查偏好，默认不提交仓库；不得包含用户内容、账号 session、release signing private key 或下载包二进制。
 - 对外分发安装包不内置 ASR 模型权重；首启下载的核心本地 ASR 模型（首版 SenseVoice Small）和运行期可写缓存、输出、历史、`.env` 必须写入 app-local data，不得写入安装目录。

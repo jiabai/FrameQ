@@ -72,20 +72,15 @@ function requireResolver<T>(resolver: ((value: T) => void) | null): (value: T) =
 function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
   return {
     taskId: "history-task",
-    id: "history-task",
-    createdAt: "2026-07-10T00:00:00.000Z",
     url: "https://www.example.test/history-video",
     status: "completed",
     taskDir: "D:/FrameQ/outputs/tasks/history-task",
-    outputDir: "D:/FrameQ/outputs",
     artifacts: {
       transcript_txt: "transcript/transcript.txt",
       summary: "ai/summary.md",
       insights: "ai/insights.json",
     },
     error: null,
-    textPreview: "history preview",
-    insightsCount: 1,
     text: "history transcript",
     summary: "history summary",
     transcript: { source: "asr", language: "Chinese", engine: "SenseVoice" },
@@ -371,10 +366,9 @@ describe("useTaskProcessingController history restore", () => {
           resolveRetry = resolve;
         }),
     );
-    const source = createHistoryItem({ taskId: "source-task", id: "source-task" });
+    const source = createHistoryItem({ taskId: "source-task" });
     const rejected = createHistoryItem({
       taskId: "other-task",
-      id: "other-task",
       text: "other transcript",
       summary: "other summary",
       artifacts: { transcript_txt: "other/transcript.txt" },
@@ -423,6 +417,50 @@ describe("useTaskProcessingController history restore", () => {
     expect(controller.workflow.text).toBe("history transcript");
     expect(controller.workflow.insights[0]?.topic).toBe("fresh insight");
     expect(controller.workflow.text).not.toBe("other transcript");
+  });
+
+  test("attributes a partial AI retry failure to its typed target and keeps the transcript", async () => {
+    retryInsightsMock.mockResolvedValue(
+      createWorkerResult({
+        status: "partial_completed",
+        task_id: "source-task",
+        text: "",
+        summary: "",
+        insights: [],
+        error: {
+          code: "INSIGHTFLOW_EMPTY_SUMMARY",
+          message: "No summary returned.",
+          stage: "insights_generating",
+        },
+      }),
+    );
+    const source = createHistoryItem({
+      taskId: "source-task",
+      summary: "",
+      artifacts: { transcript_txt: "transcript/transcript.txt" },
+      insights: [],
+    });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+
+    const retry = controller.retryInsightGeneration(
+      "summary",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+    expect(controller.workflow.activeAiTarget).toBe("summary");
+
+    await retry;
+    controller = render();
+
+    expect(controller.workflow.stage).toBe("partial_completed");
+    expect(controller.workflow.activeAiTarget).toBeNull();
+    expect(controller.workflow.aiErrorTarget).toBe("summary");
+    expect(controller.workflow.text).toBe("history transcript");
   });
 
   test("rejects history restore while cancelling and accepts the natural terminal result", async () => {
@@ -521,10 +559,9 @@ describe("useTaskProcessingController history restore", () => {
   });
 
   test("applies transcript saves only to the still-current task after history restoration", async () => {
-    const first = createHistoryItem({ taskId: "first-task", id: "first-task" });
+    const first = createHistoryItem({ taskId: "first-task" });
     const second = createHistoryItem({
       taskId: "second-task",
-      id: "second-task",
       text: "second transcript",
       artifacts: { transcript_txt: "second/transcript.txt" },
     });

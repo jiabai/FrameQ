@@ -9,7 +9,6 @@
     "defaultModel": "iic/SenseVoiceSmall"
   },
   "processVideo": {
-    "defaultGenerateInsights": false,
     "serverManagedLlmCheckout": false
   },
   "aiGeneration": {

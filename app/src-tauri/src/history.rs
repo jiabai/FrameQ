@@ -1,10 +1,10 @@
-use crate::{
-    ensure_runtime_dirs, migrate_legacy_source_data_if_needed, resolve_runtime_paths, task_manifest,
-};
+use crate::{append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, task_manifest};
+use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::time::Instant;
 use tauri::AppHandle;
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
@@ -15,19 +15,39 @@ pub(crate) struct HistoryErrorView {
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
-pub(crate) struct HistoryItemView {
+pub(crate) struct HistoryListErrorView {
+    pub(crate) code: String,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub(crate) struct HistoryListItemView {
     pub(crate) task_id: String,
     pub(crate) id: String,
     pub(crate) created_at: String,
     pub(crate) url: String,
-    pub(crate) source_url: String,
     pub(crate) status: String,
     pub(crate) task_dir: String,
     pub(crate) output_dir: String,
     pub(crate) artifacts: HashMap<String, String>,
-    pub(crate) error: Option<HistoryErrorView>,
+    pub(crate) error: Option<HistoryListErrorView>,
     pub(crate) text_preview: String,
     pub(crate) insights_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct HistoryDetailRequest {
+    #[serde(alias = "taskId")]
+    task_id: String,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub(crate) struct HistoryDetailView {
+    pub(crate) task_id: String,
+    pub(crate) url: String,
+    pub(crate) status: String,
+    pub(crate) task_dir: String,
+    pub(crate) artifacts: HashMap<String, String>,
+    pub(crate) error: Option<HistoryErrorView>,
     pub(crate) text: String,
     pub(crate) summary: String,
     pub(crate) transcript: Option<task_manifest::TranscriptMetadata>,
@@ -35,28 +55,69 @@ pub(crate) struct HistoryItemView {
 }
 
 #[tauri::command]
-pub(crate) fn get_history(app: AppHandle) -> Result<Vec<HistoryItemView>, String> {
+pub(crate) fn get_history(app: AppHandle) -> Result<Vec<HistoryListItemView>, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    let _ = migrate_legacy_source_data_if_needed(&paths);
-    load_history_from_output_root(&output_root)
+    let started = Instant::now();
+    let (items, ignored) = load_history_with_stats(&output_root)?;
+    let _ = append_desktop_log(
+        &paths,
+        "history.list",
+        &format!(
+            "supported_count={} ignored_count={} elapsed_ms={}",
+            items.len(),
+            ignored,
+            started.elapsed().as_millis()
+        ),
+    );
+    Ok(items)
 }
 
+#[tauri::command]
+pub(crate) fn get_history_detail(
+    app: AppHandle,
+    request: HistoryDetailRequest,
+) -> Result<HistoryDetailView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    let output_root = task_manifest::configured_output_root(&paths)?;
+    let started = Instant::now();
+    let result = load_history_detail_from_output_root(&output_root, request);
+    let _ = append_desktop_log(
+        &paths,
+        "history.detail",
+        &format!(
+            "outcome={} elapsed_ms={}",
+            if result.is_ok() { "completed" } else { "rejected" },
+            started.elapsed().as_millis()
+        ),
+    );
+    result
+}
+
+#[cfg(test)]
 pub(crate) fn load_history_from_output_root(
     output_root: &Path,
-) -> Result<Vec<HistoryItemView>, String> {
+) -> Result<Vec<HistoryListItemView>, String> {
+    load_history_with_stats(output_root).map(|(items, _)| items)
+}
+
+fn load_history_with_stats(
+    output_root: &Path,
+) -> Result<(Vec<HistoryListItemView>, usize), String> {
     let mut items = Vec::new();
+    let mut ignored = 0;
     for manifest_path in task_manifest::list_task_manifest_paths(output_root)? {
         match history_item_from_manifest_path(output_root, &manifest_path) {
             Ok(Some(item)) => items.push(item),
-            Ok(None) => continue,
-            Err(error) if is_isolatable_manifest_read_error(&error) => continue,
+            Ok(None) => ignored += 1,
+            Err(error) if is_isolatable_manifest_read_error(&error) => ignored += 1,
             Err(error) => return Err(error),
         }
     }
     items.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-    Ok(items)
+    Ok((items, ignored))
 }
 
 fn is_isolatable_manifest_read_error(error: &str) -> bool {
@@ -69,48 +130,65 @@ fn is_isolatable_manifest_read_error(error: &str) -> bool {
 fn history_item_from_manifest_path(
     output_root: &Path,
     manifest_path: &Path,
-) -> Result<Option<HistoryItemView>, String> {
+) -> Result<Option<HistoryListItemView>, String> {
     let (manifest, task_dir) = task_manifest::read_task_manifest_path(manifest_path)?;
-    if manifest.task_id.trim().is_empty()
-        || manifest.source_privacy_quarantined
-        || !manifest.source_privacy_ready()
-    {
+    let expected_task_dir = match task_manifest::task_dir_for(output_root, &manifest.task_id) {
+        Ok(path) => path,
+        Err(_) => return Ok(None),
+    };
+    if expected_task_dir != task_dir || !manifest.source_privacy_ready() {
         return Ok(None);
     }
+    let artifacts = manifest.safe_artifacts();
 
+    let safe_source_url = manifest.safe_source_url().to_string();
+    Ok(Some(HistoryListItemView {
+        task_id: manifest.task_id.clone(),
+        id: manifest.task_id,
+        created_at: manifest.created_at,
+        url: safe_source_url,
+        status: manifest.status,
+        task_dir: task_manifest::path_to_frontend_string(&task_dir),
+        output_dir: task_manifest::path_to_frontend_string(output_root),
+        artifacts,
+        error: manifest
+            .error
+            .map(|error| HistoryListErrorView { code: error.safe_code() }),
+        text_preview: manifest.text_preview,
+        insights_count: manifest.insights_count,
+    }))
+}
+
+pub(crate) fn load_history_detail_from_output_root(
+    output_root: &Path,
+    request: HistoryDetailRequest,
+) -> Result<HistoryDetailView, String> {
+    let (manifest, task_dir) = task_manifest::load_task_manifest(output_root, &request.task_id)?;
+    if !manifest.source_privacy_ready() {
+        return Err("History task is unavailable.".to_string());
+    }
     let text = read_text_artifact(&task_dir, &manifest, "transcript_txt")?.unwrap_or_default();
     let summary = read_text_artifact(&task_dir, &manifest, "summary")?.unwrap_or_default();
     let insights = read_insights_artifact(&task_dir, &manifest)?;
     let transcript = manifest.transcript_metadata();
     let artifacts = manifest.safe_artifacts();
-
     let safe_source_url = manifest.safe_source_url().to_string();
-    Ok(Some(HistoryItemView {
-        task_id: manifest.task_id.clone(),
-        id: manifest.task_id,
-        created_at: manifest.created_at,
-        url: safe_source_url.clone(),
-        source_url: safe_source_url,
+    Ok(HistoryDetailView {
+        task_id: manifest.task_id,
+        url: safe_source_url,
         status: manifest.status,
         task_dir: task_manifest::path_to_frontend_string(&task_dir),
-        output_dir: task_manifest::path_to_frontend_string(output_root),
         artifacts,
-        error: manifest.error.map(|error| {
-            let code = error.safe_code();
-            let message = error.safe_message();
-            HistoryErrorView {
-                code,
-                message,
-                stage: error.stage,
-            }
+        error: manifest.error.map(|error| HistoryErrorView {
+            code: error.safe_code(),
+            message: error.safe_message(),
+            stage: error.stage,
         }),
-        text_preview: manifest.text_preview,
-        insights_count: manifest.insights_count,
         text,
         summary,
         transcript,
         insights,
-    }))
+    })
 }
 
 fn read_text_artifact(
@@ -149,10 +227,14 @@ fn read_insights_artifact(
 
 #[cfg(test)]
 mod tests {
-    use super::load_history_from_output_root;
+    use crate::task_manifest;
+    use super::{
+        load_history_detail_from_output_root, load_history_from_output_root,
+        load_history_with_stats, HistoryDetailRequest,
+    };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::path::{Path, PathBuf};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn load_history_from_output_root_reads_task_manifests() {
@@ -163,10 +245,14 @@ mod tests {
         fs::create_dir_all(task_dir.join("ai")).expect("create ai dir");
         fs::write(
             task_dir.join("transcript").join("transcript.txt"),
-            "full transcript\n",
+            format!("full transcript\n{}", "body ".repeat(200_000)),
         )
         .expect("write transcript");
-        fs::write(task_dir.join("ai").join("summary.md"), "# summary\n").expect("write summary");
+        fs::write(
+            task_dir.join("ai").join("summary.md"),
+            format!("# summary\n{}", "summary ".repeat(100_000)),
+        )
+        .expect("write summary");
         fs::write(
             task_dir.join("ai").join("insights.json"),
             r#"{"schemaVersion":1,"insights":[{"id":1,"topic":"first topic","matchReason":"matched","followUpQuestions":["next question"],"suitableUse":"content planning","sourceChunkId":7}]}"#,
@@ -204,28 +290,59 @@ mod tests {
         )
         .expect("write manifest");
 
-        let history = load_history_from_output_root(&output_root).expect("load history");
+        let legacy_dir = output_root.join("tasks").join("unsupported-legacy");
+        fs::create_dir_all(&legacy_dir).expect("create legacy dir");
+        fs::write(
+            legacy_dir.join("frameq-task.json"),
+            r#"{"schema_version":2,"task_id":"unsupported-legacy","created_at":"2026-07-01T00:00:00Z","source_url":"https://example.test/?xsec_token=review-secret","status":"completed"}"#,
+        )
+        .expect("write legacy manifest");
+
+        let list_started = Instant::now();
+        let (history, ignored) = load_history_with_stats(&output_root).expect("load history");
+        let list_elapsed = list_started.elapsed();
 
         assert_eq!(history.len(), 1);
+        assert_eq!(ignored, 1);
         assert_eq!(history[0].task_id, task_id);
         assert_eq!(
             history[0].url,
             "https://www.douyin.com/video/7645505408425004329"
         );
-        assert_eq!(history[0].text, "full transcript");
-        assert_eq!(history[0].summary, "# summary");
-        assert_eq!(history[0].insights[0].topic, "first topic");
-        assert_eq!(history[0].insights[0].match_reason, "matched");
+        let detail_started = Instant::now();
+        let detail = load_history_detail_from_output_root(
+            &output_root,
+            HistoryDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect("load detail");
+        let detail_elapsed = detail_started.elapsed();
+        assert!(detail.text.starts_with("full transcript"));
+        assert!(detail.text.len() > 900_000);
+        assert!(detail.summary.starts_with("# summary"));
+        assert!(detail.summary.len() > 700_000);
+        assert_eq!(detail.insights[0].topic, "first topic");
+        assert_eq!(detail.insights[0].match_reason, "matched");
         assert_eq!(
-            history[0].insights[0].follow_up_questions,
+            detail.insights[0].follow_up_questions,
             vec!["next question"]
         );
-        assert_eq!(history[0].insights[0].source_chunk_id, Some(7));
+        assert_eq!(detail.insights[0].source_chunk_id, Some(7));
         assert_eq!(history[0].artifacts["summary"], "ai/summary.md");
         assert!(!history[0].artifacts.contains_key("debug_url"));
-        assert!(!serde_json::to_string(&history)
-            .expect("serialize history")
-            .contains("review-secret"));
+        let serialized_list = serde_json::to_string(&history).expect("serialize history");
+        assert!(!serialized_list.contains("review-secret"));
+        assert!(!serialized_list.contains("body body body"));
+        assert!(!serialized_list.contains("# summary"));
+        assert!(!serialized_list.contains("first topic"));
+        println!(
+            "history_vnext_probe supported={} ignored={} list_us={} detail_us={}",
+            history.len(),
+            ignored,
+            list_elapsed.as_micros(),
+            detail_elapsed.as_micros()
+        );
     }
 
     #[test]
@@ -257,9 +374,10 @@ mod tests {
         )
         .expect("write manifest");
 
-        let history = load_history_from_output_root(&output_root).expect("load history");
+        let (history, ignored) = load_history_with_stats(&output_root).expect("load history");
 
         assert!(history.is_empty());
+        assert_eq!(ignored, 1);
         let serialized = serde_json::to_string(&history).expect("serialize history");
         assert!(!serialized.contains("review-secret"));
         assert!(!serialized.contains("xsec_token"));
@@ -355,9 +473,10 @@ mod tests {
         )
         .expect("write manifest");
 
-        let history = load_history_from_output_root(&output_root).expect("load history");
+        let (history, ignored) = load_history_with_stats(&output_root).expect("load history");
 
         assert!(history.is_empty());
+        assert_eq!(ignored, 1);
         let serialized = serde_json::to_string(&history).expect("serialize history");
         assert!(!serialized.contains("review-secret"));
         assert!(!serialized.contains("xsec_token"));
@@ -396,7 +515,51 @@ mod tests {
     }
 
     #[test]
-    fn load_history_rejects_artifact_path_traversal() {
+    fn load_history_accepts_only_exact_current_schema_with_source_identity() {
+        let output_root = temp_dir("history_strict_current_schema");
+        for (task_id, schema_version, source_url, source_identity) in [
+            (
+                "legacy-v1",
+                1,
+                "https://example.test/?xsec_token=review-secret",
+                "",
+            ),
+            ("missing-identity", 3, "", ""),
+            (
+                "future-schema",
+                4,
+                "https://www.youtube.com/watch?v=abcdefghijk",
+                r#", "source_identity": {"version":1,"platform":"youtube","stable_id":"abcdefghijk","effective_part":null,"canonical_url":"https://www.youtube.com/watch?v=abcdefghijk"}"#,
+            ),
+        ] {
+            let task_dir = output_root.join("tasks").join(task_id);
+            fs::create_dir_all(&task_dir).expect("create task dir");
+            fs::write(
+                task_dir.join("frameq-task.json"),
+                format!(
+                    r#"{{"schema_version":{schema_version},"source_privacy_migration_version":2,"source_privacy_quarantined":false,"task_id":"{task_id}","created_at":"2026-07-11T00:00:00Z","source_url":"{source_url}"{source_identity},"status":"completed","artifacts":{{}},"error":null,"text_preview":"safe preview","insights_count":0}}"#,
+                ),
+            )
+            .expect("write manifest");
+        }
+
+        let (history, ignored) = load_history_with_stats(&output_root).expect("load history");
+
+        assert!(history.is_empty());
+        assert_eq!(ignored, 3);
+        let error = load_history_detail_from_output_root(
+            &output_root,
+            HistoryDetailRequest {
+                task_id: "legacy-v1".to_string(),
+            },
+        )
+        .expect_err("legacy detail must be rejected");
+        assert_eq!(error, "History task is unavailable.");
+        assert!(!error.contains("review-secret"));
+    }
+
+    #[test]
+    fn load_history_list_does_not_read_or_validate_artifact_files() {
         let output_root = temp_dir("history_rejects_traversal");
         let task_id = "20260705-153012-source-demo";
         let task_dir = output_root.join("tasks").join(task_id);
@@ -427,7 +590,9 @@ mod tests {
         )
         .expect("write manifest");
 
-        assert!(load_history_from_output_root(&output_root).is_err());
+        let history = load_history_from_output_root(&output_root).expect("list manifest only");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].task_id, task_id);
     }
 
     #[test]
@@ -443,7 +608,11 @@ mod tests {
         let history = load_history_from_output_root(&output_root).expect("load history");
 
         assert_eq!(history.len(), 1);
-        assert!(history[0].insights.is_empty());
+        let detail = load_history_detail_from_output_root(
+            &output_root,
+            HistoryDetailRequest { task_id: task_id.to_string() },
+        ).expect("load detail");
+        assert!(detail.insights.is_empty());
     }
 
     #[test]
@@ -459,7 +628,28 @@ mod tests {
         let history = load_history_from_output_root(&output_root).expect("load history");
 
         assert_eq!(history.len(), 1);
-        assert!(history[0].insights.is_empty());
+        let detail = load_history_detail_from_output_root(
+            &output_root,
+            HistoryDetailRequest { task_id: task_id.to_string() },
+        ).expect("load detail");
+        assert!(detail.insights.is_empty());
+    }
+
+    #[test]
+    fn optional_workspace_history_count_probe_is_manifest_only() {
+        let Ok(project_root) = std::env::var("FRAMEQ_HISTORY_PROBE_PROJECT_ROOT") else {
+            return;
+        };
+        let output_root = task_manifest::configured_output_root_from_project(Path::new(&project_root))
+            .expect("resolve configured output root");
+        let started = Instant::now();
+        let (items, ignored) = load_history_with_stats(&output_root).expect("count history");
+        println!(
+            "history_workspace_probe supported={} ignored={} list_us={}",
+            items.len(),
+            ignored,
+            started.elapsed().as_micros()
+        );
     }
 
     fn write_task_with_insights_payload(

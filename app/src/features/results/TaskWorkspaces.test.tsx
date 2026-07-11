@@ -1,0 +1,239 @@
+import { createRef } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test, vi } from "vitest";
+
+import { createGuestAccountStatus } from "../../accountState";
+import {
+  startInsightRetry,
+  summarizeWorkerResult,
+  type WorkflowState,
+} from "../../workflow";
+import { createTaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
+import type { TranscriptDetailController } from "../transcript/useTranscriptDetailController";
+import { LocalTranscriptWorkspace } from "../transcript/LocalTranscriptWorkspace";
+import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
+import { TaskStatusBanner } from "./TaskStatusBanner";
+
+function readyWorkflow(): WorkflowState {
+  return summarizeWorkerResult({
+    status: "completed",
+    task_id: "same-task",
+    task_dir: "D:/FrameQ/outputs/tasks/same-task",
+    artifacts: {
+      video: "media/video.mp4",
+      audio: "media/audio.wav",
+      transcript_txt: "transcript/transcript.txt",
+      transcript_md: "transcript/transcript.md",
+    },
+    text: "第一段正式文字稿。第二段正式文字稿。",
+    summary: "",
+    insights: [],
+    transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
+    error: null,
+  });
+}
+
+function aiAccount(quota = 8) {
+  return {
+    ...createGuestAccountStatus(),
+    authenticated: true,
+    entitlementStatus: "active",
+    llmConfigured: true,
+    llmQuotaLimit: 10,
+    llmQuotaUsed: 10 - quota,
+    llmQuotaRemaining: quota,
+    canProcess: true,
+    canGenerateAi: quota > 0,
+  };
+}
+
+function transcriptController(): TranscriptDetailController {
+  return {
+    detailTab: null,
+    openDetailTab: vi.fn(),
+    closeDetail: vi.fn(),
+    detailTitle: "完整文字稿",
+    detailText: "第一段正式文字稿。第二段正式文字稿。",
+    exportPath: "D:/FrameQ/outputs/tasks/same-task/transcript/transcript.txt",
+    currentTranscriptPath: "D:/FrameQ/outputs/tasks/same-task/transcript/transcript.txt",
+    transcriptDetail: {
+      task_id: "same-task",
+      text: "第一段正式文字稿。第二段正式文字稿。",
+      segments: [
+        { id: "segment-1", start_ms: 0, end_ms: 5000, text: "第一段正式文字稿。" },
+        { id: "segment-2", start_ms: 5000, end_ms: 9000, text: "第二段正式文字稿。" },
+      ],
+      audio_asset_path: "D:/FrameQ/outputs/tasks/same-task/media/audio.wav",
+      audio_path: "D:/FrameQ/outputs/tasks/same-task/media/audio.wav",
+      has_original_backup: true,
+      artifacts: { transcript_txt: "transcript/transcript.txt" },
+      transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
+    },
+    transcriptDraft: "第一段正式文字稿。第二段正式文字稿。",
+    transcriptSegments: [
+      { id: "segment-1", start_ms: 0, end_ms: 5000, text: "第一段正式文字稿。" },
+      { id: "segment-2", start_ms: 5000, end_ms: 9000, text: "第二段正式文字稿。" },
+    ],
+    transcriptDirty: false,
+    transcriptLoading: false,
+    transcriptSaving: false,
+    activeTranscriptSegmentId: null,
+    editingTranscriptSegmentId: null,
+    transcriptAudioCurrentTime: 0,
+    transcriptAudioDuration: 9,
+    transcriptAudioPlaying: false,
+    transcriptAudioRef: createRef<HTMLAudioElement>(),
+    transcriptSegmentRefs: { current: {} },
+    transcriptSourceLabel: "来源：本地 ASR",
+    transcriptAudioSrc: "asset://audio.wav",
+    transcriptAudioProgress: 0,
+    transcriptAudioScrubberMax: 9,
+    transcriptAudioScrubberStyle: { "--audio-progress": "0%" },
+    hasTranscriptSegments: true,
+    copyDetail: vi.fn(),
+    copyTranscript: vi.fn(),
+    exportDetail: vi.fn(),
+    exportTranscript: vi.fn(),
+    saveTranscriptDraft: vi.fn(),
+    playTranscriptSegment: vi.fn(),
+    handleTranscriptAudioMetadata: vi.fn(),
+    handleTranscriptTimeUpdate: vi.fn(),
+    handleTranscriptAudioPlay: vi.fn(),
+    handleTranscriptAudioPause: vi.fn(),
+    toggleTranscriptAudio: vi.fn(),
+    scrubTranscriptAudio: vi.fn(),
+    beginTranscriptSegmentEdit: vi.fn(),
+    updateTranscriptSegmentDraft: vi.fn(),
+    updateFullTranscriptDraft: vi.fn(),
+  } as unknown as TranscriptDetailController;
+}
+
+describe("task domain workspaces", () => {
+  test("renders a local completion banner and two labelled workspaces for the same task", () => {
+    const workflow = readyWorkflow();
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <>
+        <TaskStatusBanner model={model.banner} />
+        <LocalTranscriptWorkspace
+          workflow={workflow}
+          model={model.local}
+          controller={transcriptController()}
+          actionNotice=""
+          onLocateArtifact={vi.fn()}
+          onCancel={vi.fn()}
+        />
+        <AiGenerationWorkspace
+          workflow={workflow}
+          model={model.ai}
+          quotaRemaining={8}
+          onSummaryAction={vi.fn()}
+          onInsightsAction={vi.fn()}
+          onViewTarget={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </>,
+    );
+
+    expect(markup).toContain('aria-label="任务状态"');
+    expect(markup).toContain("视频、音频和文字稿已保存在本机");
+    expect(markup).toContain('aria-label="本地文字稿工作区"');
+    expect(markup).toContain('data-task-id="same-task"');
+    expect(markup).toContain('aria-label="AI 整理工作区"');
+    expect(markup.match(/data-task-id="same-task"/g)).toHaveLength(2);
+  });
+
+  test("local workspace is audio-first with compact file actions and inline transcript review", () => {
+    const workflow = readyWorkflow();
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        workflow={workflow}
+        model={model.local}
+        controller={transcriptController()}
+        actionNotice=""
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="音频回听工具栏"');
+    expect(markup).toContain('class="local-artifact-toolbar"');
+    expect(markup).toContain("定位视频");
+    expect(markup).toContain("定位音频");
+    expect(markup).toContain('class="transcript-review-panel"');
+    expect(markup).toContain("第一段正式文字稿。");
+    expect(markup).toContain('class="transcript-action-bar"');
+    expect(markup).not.toContain("result-grid");
+  });
+
+  test("AI workspace has independent summary and inspiration targets without a mindmap target", () => {
+    const workflow = readyWorkflow();
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <AiGenerationWorkspace
+        workflow={workflow}
+        model={model.ai}
+        quotaRemaining={8}
+        onSummaryAction={vi.fn()}
+        onInsightsAction={vi.fn()}
+        onViewTarget={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("AI 整理");
+    expect(markup).toContain("确认后仅发送文字稿片段，视频和音频不会上传");
+    expect(markup).toContain('data-ai-target="summary"');
+    expect(markup).toContain("要点总结");
+    expect(markup).toContain("同时生成思维导图文件");
+    expect(markup).toContain('data-ai-target="insights"');
+    expect(markup).toContain("启发灵感");
+    expect(markup).not.toContain('data-ai-target="mindmap"');
+  });
+
+  test("AI generation keeps transcript review visible but disables editing and saving", () => {
+    const workflow = startInsightRetry(readyWorkflow(), "summary");
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        workflow={workflow}
+        model={model.local}
+        controller={transcriptController()}
+        actionNotice=""
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("AI 正在使用已保存版本");
+    expect(markup).toContain("第一段正式文字稿。");
+    expect(markup).toContain('aria-label="播放音频"');
+    expect(markup).toMatch(/>编辑<\/button>/);
+    expect(markup).toMatch(/disabled=""[^>]*>编辑<\/button>/);
+    expect(markup).toContain('class="primary-button" disabled=""');
+    expect(markup).toContain("<span>保存</span>");
+  });
+
+  test("quota exhaustion is explained in the AI workspace without disabling local review", () => {
+    const workflow = readyWorkflow();
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount(0));
+    const markup = renderToStaticMarkup(
+      <AiGenerationWorkspace
+        workflow={workflow}
+        model={model.ai}
+        quotaRemaining={0}
+        notice="无法读取本次 AI 偏好"
+        onSummaryAction={vi.fn()}
+        onInsightsAction={vi.fn()}
+        onViewTarget={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("AI 调用额度已用完");
+    expect(markup).toContain('class="ai-workspace-notice"');
+    expect(markup).toContain("无法读取本次 AI 偏好");
+    expect(markup).toContain('disabled=""');
+  });
+});

@@ -61,6 +61,14 @@ export function useInsightGenerationController({
   const [insightPreferenceFlow, setInsightPreferenceFlow] =
     useState<InsightPreferenceFlowState | null>(null);
   const [insightPreferenceBusy, setInsightPreferenceBusy] = useState(false);
+  const [aiActionNotice, setAiActionNotice] = useState("");
+  const reportAiNotice = useCallback(
+    (notice: string) => {
+      setAiActionNotice(notice);
+      setActionNotice(notice);
+    },
+    [setActionNotice],
+  );
 
   const closeSummaryConfirmation = useCallback(() => {
     setSummaryConfirmOpen(false);
@@ -73,34 +81,36 @@ export function useInsightGenerationController({
   const resetInsightGenerationUi = useCallback(() => {
     setSummaryConfirmOpen(false);
     setInsightPreferenceFlow(null);
-  }, []);
+    reportAiNotice("");
+  }, [reportAiNotice]);
 
   const openInsightPreferenceFlow = useCallback(async () => {
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      setActionNotice("文字稿生成后才能继续生成启发灵感。");
+      reportAiNotice("文字稿生成后才能继续生成启发灵感。");
       return;
     }
 
     setInsightPreferenceBusy(true);
-    setActionNotice("");
+    reportAiNotice("");
     try {
       const preferences = await getInsightPreferences();
       setInsightPreferenceFlow(createInsightPreferenceFlow(preferences));
     } catch (error) {
-      setActionNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
+      reportAiNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setInsightPreferenceBusy(false);
     }
-  }, [setActionNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
+  }, [reportAiNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
 
   const openSummaryConfirmation = useCallback(() => {
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      setActionNotice("文字稿生成后才能继续生成要点总结。");
+      reportAiNotice("文字稿生成后才能继续生成要点总结。");
       return;
     }
 
+    reportAiNotice("");
     setSummaryConfirmOpen(true);
-  }, [setActionNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
+  }, [reportAiNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
 
   const confirmSummaryGeneration = useCallback(async () => {
     if (!canGenerateAiWithAccount(account)) {
@@ -112,7 +122,7 @@ export function useInsightGenerationController({
     try {
       await retryInsightGeneration("summary", null, account, openAccountPanel, refreshAccountStatus);
     } catch (error) {
-      setActionNotice(`启动要点总结失败：${error instanceof Error ? error.message : String(error)}`);
+      reportAiNotice(`启动要点总结失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }, [
     account,
@@ -120,41 +130,41 @@ export function useInsightGenerationController({
     openAccountPanel,
     refreshAccountStatus,
     retryInsightGeneration,
-    setActionNotice,
+    reportAiNotice,
   ]);
 
   const openProfileEditorFromSettings = useCallback(async () => {
     closeSettings();
     setInsightPreferenceBusy(true);
-    setActionNotice("");
+    reportAiNotice("");
     try {
       const preferences = await getInsightPreferences();
       setInsightPreferenceFlow(startProfileSetupInFlow(createInsightPreferenceFlow(preferences)));
     } catch (error) {
-      setActionNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
+      reportAiNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setInsightPreferenceBusy(false);
     }
-  }, [closeSettings, setActionNotice]);
+  }, [closeSettings, reportAiNotice]);
 
   const openDirectionEditorFromDetail = useCallback(async () => {
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      setActionNotice("文字稿生成后才能重新选择方向。");
+      reportAiNotice("文字稿生成后才能重新选择方向。");
       return;
     }
 
     closeDetail();
     setInsightPreferenceBusy(true);
-    setActionNotice("");
+    reportAiNotice("");
     try {
       const preferences = await getInsightPreferences();
       setInsightPreferenceFlow(startGenerationPreferenceEditing(createInsightPreferenceFlow(preferences)));
     } catch (error) {
-      setActionNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
+      reportAiNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setInsightPreferenceBusy(false);
     }
-  }, [closeDetail, setActionNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
+  }, [closeDetail, reportAiNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
 
   const skipCurrentProfileSetup = useCallback(async () => {
     if (!insightPreferenceFlow) {
@@ -165,11 +175,11 @@ export function useInsightGenerationController({
       await skipInspirationProfile();
       setInsightPreferenceFlow(skipProfileSetupInFlow(insightPreferenceFlow));
     } catch (error) {
-      setActionNotice(`保存跳过状态失败：${error instanceof Error ? error.message : String(error)}`);
+      reportAiNotice(`保存跳过状态失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setInsightPreferenceBusy(false);
     }
-  }, [insightPreferenceFlow, setActionNotice]);
+  }, [insightPreferenceFlow, reportAiNotice]);
 
   const saveCurrentProfile = useCallback(
     async (profile: InspirationProfile) => {
@@ -178,12 +188,12 @@ export function useInsightGenerationController({
         const preferences = await saveInspirationProfile(profile);
         setInsightPreferenceFlow(startGenerationPreferenceEditing(createInsightPreferenceFlow(preferences)));
       } catch (error) {
-        setActionNotice(`保存灵感档案失败：${error instanceof Error ? error.message : String(error)}`);
+        reportAiNotice(`保存灵感档案失败：${error instanceof Error ? error.message : String(error)}`);
       } finally {
         setInsightPreferenceBusy(false);
       }
     },
-    [setActionNotice],
+    [reportAiNotice],
   );
 
   const confirmInsightPreferences = useCallback(
@@ -212,7 +222,7 @@ export function useInsightGenerationController({
           refreshAccountStatus,
         );
       } catch (error) {
-        setActionNotice(`启动启发灵感失败：${error instanceof Error ? error.message : String(error)}`);
+        reportAiNotice(`启动启发灵感失败：${error instanceof Error ? error.message : String(error)}`);
       } finally {
         setInsightPreferenceBusy(false);
       }
@@ -224,11 +234,12 @@ export function useInsightGenerationController({
       openAccountPanel,
       refreshAccountStatus,
       retryInsightGeneration,
-      setActionNotice,
+      reportAiNotice,
     ],
   );
 
   return {
+    aiActionNotice,
     summaryConfirmOpen,
     insightPreferenceFlow,
     insightPreferenceBusy,

@@ -1,5 +1,28 @@
 # FrameQ Design Guidelines
 
+## Local Transcript and AI Workspaces
+
+- After submission, use one full-width task-status banner followed by two domain workspaces.
+  At 1100 px and wider, local transcript review occupies about 62% and AI generation about
+  38% with a 360 px minimum AI width; below 1100 px they stack local-first.
+- Both regions use `--surface-raised`, `--border`, `--shadow-panel-quiet`, and
+  `--radius-lg`, with equal top alignment and visual weight. Use 16 px padding, 12 px gaps,
+  20-22 px headings, 14-16 px body text, and controls at least 40 px high.
+- The local workspace places a compact audio bar first, a compact video/audio file-action
+  row second, a bounded scrolling transcript segment review in the body, and a stable
+  edit/save/copy/export footer. Media and transcript are not three large cards.
+- The AI workspace uses a quiet availability/privacy header and two compact target cards:
+  `要点总结（同时生成思维导图文件）` and `启发灵感`. Each owns its status, quota copy,
+  confirm/retry/view actions, progress, and error.
+- AI generation leaves the local workspace readable and playable while disabling transcript
+  edit/save with `AI 正在使用已保存版本`. A target failure stays in that target card.
+- The completion banner says video, audio, and transcript are saved locally. AI copy says
+  confirmation sends transcript fragments only and never implies video/audio upload.
+- Do not use gradient backgrounds, glass stacks, decorative motion, equal-height filler,
+  or a global loading card. Colors express state only: restrained success/local file colors,
+  existing primary blue for AI actions, and restrained danger for errors. Respect reduced
+  motion.
+
 ## 2026-07-10 History Restore While Processing
 
 - The history panel may stay open during a running, retrying, or cancelling task, but its task rows are visibly read-only native disabled buttons with a short explanation. Disabled rows must not be reachable as selectable controls by keyboard.
@@ -32,7 +55,7 @@
 
 ## 2026-07-03 Transcript Audio Review UX
 
-- The `完整文字稿` detail tab should remove keyword search. The primary review tools are audio playback, block selection, direct editing, save, copy, and locating the saved transcript file.
+- The inline `TranscriptReviewPanel` should omit keyword search. Its primary review tools are audio playback, block selection, direct editing, save, copy, export, and locating the saved transcript file.
 - Place the native audio player at the top of the transcript detail content when a validated audio file exists. Keep it compact and persistent above the scrolling transcript blocks.
 - Segment blocks should have stable height behavior, clear hover affordance, one primary selected/highlighted state, and a distinct editing state. Highlight should never depend on speaker count or speaker label.
 - Clicking a non-editing transcript block seeks to that segment and starts audio. Playback should advance the highlight to the next segment and keep the active block visible without abrupt layout shifts.
@@ -101,20 +124,20 @@ UI 必须围绕以下状态组织：
 | `正在取消` | 保留当前任务、URL、阶段进度和结果区，取消按钮显示“正在取消”并禁用；等待 worker 或模型下载给出真实终态 |
 | `视频提取中` | 隐藏输入区，展示下载、校验和音频提取进度 |
 | `视频转译中` | 展示 ASR 进度、当前 ASR 模型识别文案，以及模型缓存/加载状态 |
-| `AI 整理中` | 可先展示文字稿，正在生成的要点总结或启发灵感卡片显示生成中 |
-| `文字稿完成` | 主界面展示结果总览卡片，不直接铺满全文 |
+| `AI 整理中` | 左侧继续展示可阅读、可回听但不可编辑的已保存文字稿；右侧对应 AI target 显示生成中 |
+| `文字稿完成` | 展示本地保存横幅、左侧文字稿校对工作区和右侧 AI 整理工作区 |
 | `部分完成` | 保留文字稿和已成功生成的 AI 产物，要点总结/灵感卡片展示失败态和重试入口 |
 | `失败` | 展示结构化错误原因、重试入口和可修改 URL 路径 |
 
 ## UI Rules
 
-- The `要点总结` detail tab must render `summary.md` through the sanitized Markdown renderer with GitHub Flavored Markdown support; raw HTML and Mermaid source must not be rendered in the UI.
+- The target-specific `要点总结` detail sheet must render `summary.md` through the sanitized Markdown renderer with GitHub Flavored Markdown support; raw HTML and Mermaid source must not be rendered in the UI.
 - 主按钮文案固定为 `确认`。
 - 处理和完成态不再显示 URL 输入区域。
-- 完成态主界面展示 `视频文件`、`音频文件`、`完整文字稿`、`要点总结` 和 `启发灵感` 5 个产物入口；视频和音频入口只定位本地文件，不打开详情浮窗。
-- 点击结果卡片打开详情浮窗，浮窗内通过 tab 切换内容。
-- 详情浮窗内部内容独立滚动，支持 `Esc` 关闭。
-- 复制按钮复制当前详情 tab 的文本；无内容时置灰。
+- 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载 `要点总结` 和 `启发灵感` 两个独立 target 卡片。
+- 文字稿直接在左侧工作区审阅，不进入共享 Tab；AI 结果可打开各自的轻量详情 sheet，不与文字稿共用容器。
+- AI 详情 sheet 内部内容独立滚动，支持 `Esc` 关闭。
+- 复制按钮只复制当前工作区或当前 AI 详情的文本；无内容时置灰。
 - 导出按钮在对应 artifact 生成前置灰；启用后定位当前任务目录中的正式 artifact。
 - 进度区优先展示 worker 事件中的具体阶段文案；没有事件时回退到当前阶段默认文案。
 - `要点总结` 或 `启发灵感` 待生成或失败时，点击卡片先打开各自确认流程；`要点总结` 确认后只生成总结和隐藏 Mermaid mindmap，`启发灵感` 确认后只生成灵感，不重新下载视频、重新提取音频或重新转写。Mermaid 文本只写入本地文件，不在 UI 中展示或渲染。
@@ -148,9 +171,11 @@ UI 必须围绕以下状态组织：
 - 等待输入态的单张输入卡应与桌面窗口比例协调，在默认桌面窗口宽度下使用宽松表单宽度，而不是窄小网页表单。
 - 处理态和完成态采用上下排列：task monitor 在上，结果工作区在下；避免两个大卡片左右并排导致内容被横向割裂。
 - 处理态使用 task monitor：阶段 timeline、百分比、worker 事件文案和取消按钮必须在同一信息层级内可扫描。
-- 完成态使用紧凑 document/result tiles：展示 `视频文件`、`音频文件`、`完整文字稿`、`要点总结` 和 `启发灵感` 5 个结果入口，不直接铺满全文，也不把入口卡拉成大面积空白卡；总结和灵感未生成时显示待生成状态和确认入口。
+- 完成态使用全宽状态横幅与 62/38 双工作区：左侧是紧凑媒体操作、可滚动文字稿和固定校对操作栏，右侧是两个独立 AI target 卡片；低于 1100 px 时按本地工作区、AI 工作区顺序纵向堆叠。
 - 设置面板使用 macOS sheet 质感：分组表单、本地隐私提示、内部滚动和底部固定操作区。
 - 历史面板使用紧凑列表：状态 badge、摘要、时间、输出目录和结果数量/错误码必须可快速扫描。
+- 历史卡片主标题必须区分文字稿预览与来源 URL fallback，最多显示两行；卡片按内容自然高度排列，单行标题不得为视觉等高预留第二行空白。截断内容仍需通过原生可访问文本和 `title` 保留完整值。
+- 历史卡片元信息在宽布局固定为“时间 / 可省略输出目录 / 结果数量或错误码”三列；窄布局将输出目录移到第二行，状态和结果项不得因长路径或长标题溢出、重叠或漂移。
 - 视觉 token 优先使用浅中性背景、系统字体、1px 边框、低阴影、短反馈动画和清晰 focus ring。
 - 不使用装饰性 3D、背景大渐变、漂浮色块、营销 hero 或会削弱工具可读性的强氛围图。
 

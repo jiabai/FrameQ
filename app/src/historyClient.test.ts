@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   getHistory,
+  getHistoryDetail,
   historyItemToWorkerResult,
   type HistoryCommandRunner,
 } from "./historyClient";
@@ -49,14 +50,6 @@ describe("history client", () => {
           error: null,
           text_preview: "这是一段转写预览",
           insights_count: 2,
-          text: "这是一段完整文字稿",
-          summary: "# 要点总结\n\n- 历史总结",
-          transcript: {
-            source: "subtitle",
-            language: "zh-Hans",
-            engine: null,
-          },
-          insights: [FIRST_INSIGHT, SECOND_INSIGHT],
         },
       ];
     };
@@ -85,27 +78,44 @@ describe("history client", () => {
         error: null,
         textPreview: "这是一段转写预览",
         insightsCount: 2,
-        text: "这是一段完整文字稿",
-        summary: "# 要点总结\n\n- 历史总结",
-        transcript: {
-          source: "subtitle",
-          language: "zh-Hans",
-          engine: null,
-        },
-        insights: [FIRST_INSIGHT, SECOND_INSIGHT],
       },
     ]);
+  });
+
+  test("loads one history detail only after a task is selected", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner = async (command: string, args: unknown) => {
+      calls.push({ command, args });
+      return {
+        task_id: "task-detail",
+        url: "https://www.youtube.com/watch?v=abcdefghijk",
+        status: "completed" as const,
+        task_dir: "D:/FrameQ/outputs/tasks/task-detail",
+        artifacts: { transcript_txt: "transcript/transcript.txt" },
+        error: null,
+        text: "selected transcript body",
+        summary: "selected summary",
+        transcript: null,
+        insights: [FIRST_INSIGHT, SECOND_INSIGHT],
+      };
+    };
+
+    const detail = await getHistoryDetail("task-detail", runner);
+
+    expect(calls).toEqual([
+      { command: "get_history_detail", args: { request: { task_id: "task-detail" } } },
+    ]);
+    expect(detail.text).toBe("selected transcript body");
+    expect(detail.summary).toBe("selected summary");
+    expect(detail.insights).toEqual([FIRST_INSIGHT, SECOND_INSIGHT]);
   });
 
   test("converts a history item into a workflow worker result", () => {
     const result = historyItemToWorkerResult({
       taskId: "task-2",
-      id: "task-2",
-      createdAt: "2026-06-17T11:00:00Z",
       url: "https://www.douyin.com/video/7646789377271647540",
       status: "partial_completed",
       taskDir: "D:\\FrameQ\\outputs\\tasks\\task-2",
-      outputDir: "D:\\FrameQ\\outputs",
       artifacts: {
         transcript_txt: "transcript/transcript.txt",
         transcript_md: "transcript/transcript.md",
@@ -117,8 +127,6 @@ describe("history client", () => {
         message: "LLM configuration is missing.",
         stage: "insights_generating",
       },
-      textPreview: "已经完成的文字稿",
-      insightsCount: 0,
       text: "已经完成的文字稿",
       summary: "# 要点总结",
       transcript: {

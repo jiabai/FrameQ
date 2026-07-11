@@ -10,6 +10,8 @@
 
 ## Desktop Runtime Spec
 
+- `2026-07-11-local-transcript-ai-workspaces.md` - One task with separate inline local transcript review and independently confirmed AI summary/inspiration workspaces.
+- `2026-07-11-history-vnext-strict-boundary.md` - Strict manifest-only history listing plus on-demand detail for current safe v3 tasks; unsupported legacy data remains physically untouched and product-isolated.
 - `2026-07-10-history-task-restore-ownership.md` - Controller-owned history restoration that rejects active workflow switches and prevents stale operation overwrite.
 - `2026-07-10-desktop-process-supervision-cancellation.md` - Truthful cancellable worker/model-download lifecycle with platform process-tree termination and preservation of partial local artifacts.
 

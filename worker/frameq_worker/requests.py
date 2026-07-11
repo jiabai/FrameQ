@@ -156,6 +156,8 @@ TASK_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]+$")
 def parse_process_request(payload: object) -> ProcessRequest:
     if not isinstance(payload, dict):
         raise ValueError("Request payload must be a JSON object.")
+    if "generate_insights" in payload:
+        raise ValueError("Process request contains an unsupported field.")
 
     url = payload.get("url")
     if not isinstance(url, str) or not url.strip():
@@ -172,7 +174,6 @@ def parse_process_request(payload: object) -> ProcessRequest:
         language=str(payload.get("language", "Chinese")),
         output_formats=tuple(output_formats),
         model=str(payload.get("model", DEFAULT_ASR_MODEL)),
-        generate_insights=bool(payload.get("generate_insights", False)),
         insightflow_mode=str(payload.get("insightflow_mode", "embedded")),
     )
 

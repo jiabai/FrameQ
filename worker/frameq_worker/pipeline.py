@@ -64,12 +64,6 @@ from frameq_worker.task_store import (
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 TranscriberFactory = Callable[[str, Path], Transcriber]
-CLOUD_LLM_AI_ORGANIZING_MESSAGE = (
-    "正在使用配置的 LLM 生成 AI 结果，文字稿会发送到该服务。"
-)
-LOCAL_AI_ORGANIZING_MESSAGE = "正在生成 AI 结果。"
-
-
 @dataclass(frozen=True)
 class PipelineContext:
     task_context: TaskContext
@@ -577,7 +571,7 @@ def run_asr_transcript_stage(
     )
 
 
-def complete_without_ai_stage(
+def complete_transcript_stage(
     task_context: TaskContext,
     transcript_text: str,
     transcript: TranscriptMetadata | None,
@@ -592,59 +586,11 @@ def complete_without_ai_stage(
     )
 
 
-def run_optional_ai_generation_stage(
-    task_context: TaskContext,
-    transcript: TranscriptMetadata | None,
-    insight_client: InsightClient | None,
-    progress_callback: ProgressCallback | None,
-) -> ProcessResult:
-    emit_progress(
-        progress_callback,
-        JobStage.INSIGHTS_GENERATING,
-        CLOUD_LLM_AI_ORGANIZING_MESSAGE
-        if insight_client is not None
-        else LOCAL_AI_ORGANIZING_MESSAGE,
-        88,
-    )
-    insight_result = run_insight_generation_step(
-        transcript_txt_path=task_context.paths.transcript_txt_path,
-        output_dir=task_context.paths.ai_dir,
-        output_stem="",
-        client=insight_client,
-        transcript=transcript,
-    )
-    return finalize_task_result(task_context, insight_result)
-
-
-def finalize_transcript_stage(
-    task_context: TaskContext,
-    transcript_text: str,
-    transcript: TranscriptMetadata | None,
-    generate_insights: bool,
-    insight_client: InsightClient | None,
-    progress_callback: ProgressCallback | None,
-) -> ProcessResult:
-    if not generate_insights:
-        return complete_without_ai_stage(
-            task_context=task_context,
-            transcript_text=transcript_text,
-            transcript=transcript,
-        )
-
-    return run_optional_ai_generation_stage(
-        task_context=task_context,
-        transcript=transcript,
-        insight_client=insight_client,
-        progress_callback=progress_callback,
-    )
-
-
 def run_worker_pipeline(
     request: ProcessRequest,
     project_root: Path,
     command_runner: CommandRunner,
     transcriber: Transcriber | None,
-    insight_client: InsightClient | None,
     allow_real_asr: bool,
     environ: dict[str, str],
     progress_callback: ProgressCallback | None = None,
@@ -702,13 +648,10 @@ def run_worker_pipeline(
         progress_callback=progress_callback,
     )
     if subtitle_result is not None:
-        return finalize_transcript_stage(
+        return complete_transcript_stage(
             task_context=task_context,
             transcript_text=subtitle_result.text,
             transcript=subtitle_result.transcript,
-            generate_insights=request.generate_insights,
-            insight_client=insight_client,
-            progress_callback=progress_callback,
         )
 
     transcript_result = run_asr_transcript_stage(
@@ -725,13 +668,10 @@ def run_worker_pipeline(
     if transcript_result.status == JobStage.FAILED:
         return finalize_task_result(task_context, transcript_result)
 
-    return finalize_transcript_stage(
+    return complete_transcript_stage(
         task_context=task_context,
         transcript_text=transcript_result.text,
         transcript=transcript_result.transcript,
-        generate_insights=request.generate_insights,
-        insight_client=insight_client,
-        progress_callback=progress_callback,
     )
 
 

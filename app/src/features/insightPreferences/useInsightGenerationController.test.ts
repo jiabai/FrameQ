@@ -110,6 +110,9 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
   return {
     stage: "partial_completed",
     cancellingFromStage: null,
+    activeAiTarget: null,
+    aiErrorTarget: null,
+    aiTargetErrors: {},
     url: "https://example.test/video",
     submittedUrl: "https://example.test/video",
     showUrlInput: false,
@@ -245,7 +248,7 @@ describe("useInsightGenerationController", () => {
     controller = render();
 
     expect(controller.summaryConfirmOpen).toBe(true);
-    expect(callbacks.setActionNotice).not.toHaveBeenCalled();
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith("");
   });
 
   test("opens the account panel when summary generation is blocked by account state", async () => {

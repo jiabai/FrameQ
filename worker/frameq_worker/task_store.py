@@ -11,7 +11,6 @@ from frameq_worker.source_identity import (
     SOURCE_PRIVACY_MIGRATION_VERSION,
     SourceIdentity,
     canonical_url_for_persistence,
-    migrate_legacy_source_data,
     source_identity_from_manifest,
 )
 
@@ -101,7 +100,7 @@ class TaskPaths:
 @dataclass(frozen=True)
 class TaskContext:
     paths: TaskPaths
-    source_identity: SourceIdentity | None
+    source_identity: SourceIdentity
     platform: str
     model: str
     created_at: str
@@ -201,11 +200,7 @@ def write_task_manifest(context: TaskContext, result: ProcessResult) -> None:
         "created_at": context.created_at,
         "updated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "source_url": canonical_url or "",
-        **(
-            {"source_identity": source_identity.to_manifest_dict()}
-            if source_identity is not None
-            else {}
-        ),
+        "source_identity": source_identity.to_manifest_dict(),
         "platform": context.platform,
         "status": result.status.value,
         "app_version": context.app_version,
@@ -236,9 +231,20 @@ def write_preference_snapshot_artifact(
 
 def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
     manifest_path = _validated_task_manifest_path(output_root, task_id)
-    migrate_legacy_source_data(output_root, task_id=task_id)
-    manifest_path = _validated_task_manifest_path(output_root, task_id)
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    source_identity = source_identity_from_manifest(manifest.get("source_identity"))
+    if source_identity is None:
+        raise ValueError("Task is unavailable in the current history format.")
+    if (
+        manifest.get("schema_version") != TASK_SCHEMA_VERSION
+        or manifest.get("source_privacy_migration_version")
+        != SOURCE_PRIVACY_MIGRATION_VERSION
+        or manifest.get("source_privacy_quarantined") is True
+        or source_identity is None
+        or manifest.get("source_url") != source_identity.canonical_url
+    ):
+        raise ValueError("Task is unavailable in the current history format.")
+    return manifest
 
 
 def _validated_task_manifest_path(output_root: Path, task_id: str) -> Path:
@@ -276,13 +282,6 @@ def _is_link_or_junction(path: Path) -> bool:
 
 def task_context_from_manifest(output_root: Path, cache_root: Path, task_id: str) -> TaskContext:
     manifest = load_task_manifest(output_root, task_id)
-    if manifest.get("source_privacy_quarantined") is True:
-        raise ValueError("Task is quarantined because its identifier contains source credentials.")
-    if (
-        manifest.get("source_privacy_migration_version")
-        != SOURCE_PRIVACY_MIGRATION_VERSION
-    ):
-        raise ValueError("Task source privacy migration is incomplete.")
     source_identity = source_identity_from_manifest(manifest.get("source_identity"))
     source_url = manifest.get("source_url")
     if source_identity is not None:

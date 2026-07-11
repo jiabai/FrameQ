@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useRef, useState } from "react";
 
 import type { AccountStatus } from "../../accountState";
 import { canGenerateAiWithAccount, canProcessWithAccount } from "../../accountState";
@@ -8,10 +8,8 @@ import {
   canSubmitUrl,
   confirmProcessingCancellation,
   createInitialWorkflow,
-  getProgressSteps,
-  getResultCards,
+  finishInsightRetry,
   getToolbarNewTaskButtonState,
-  getVisibleWorkflowError,
   isProcessingStage,
   mergeProgressEvent,
   normalizeSubmitUrl,
@@ -48,9 +46,6 @@ export function useTaskProcessingController({
   const cancellationOperationIdRef = useRef<number | null>(null);
 
   const canSubmit = canSubmitUrl(workflow.url);
-  const progressSteps = useMemo(() => getProgressSteps(workflow), [workflow]);
-  const resultCards = useMemo(() => getResultCards(workflow), [workflow]);
-  const visibleWorkflowError = getVisibleWorkflowError(workflow);
   const toolbarNewTaskButtonState = getToolbarNewTaskButtonState(workflow.stage);
   const canRestoreHistory = !isProcessingStage(workflow.stage);
 
@@ -230,18 +225,22 @@ export function useTaskProcessingController({
         return;
       }
       setWorkflow((current) => ({
-        ...summarizeWorkerResult({
-          ...result,
-          task_id: result.task_id ?? current.taskId,
-          task_dir: result.task_dir ?? current.taskDir,
-          artifacts: {
-            ...current.artifacts,
-            ...(result.artifacts ?? {}),
+        ...finishInsightRetry(
+          current,
+          {
+            ...result,
+            task_id: result.task_id ?? current.taskId,
+            task_dir: result.task_dir ?? current.taskDir,
+            artifacts: {
+              ...current.artifacts,
+              ...(result.artifacts ?? {}),
+            },
+            text: result.text || current.text,
+            summary: result.summary || current.summary,
+            insights: result.insights.length > 0 ? result.insights : current.insights,
           },
-          text: result.text || current.text,
-          summary: result.summary || current.summary,
-          insights: result.insights.length > 0 ? result.insights : current.insights,
-        }),
+          target,
+        ),
         url: current.url,
         submittedUrl: current.submittedUrl,
       }));
@@ -261,9 +260,6 @@ export function useTaskProcessingController({
     canSubmit,
     canRestoreHistory,
     historyRestoreUnavailableMessage: HISTORY_RESTORE_UNAVAILABLE_MESSAGE,
-    progressSteps,
-    resultCards,
-    visibleWorkflowError,
     toolbarNewTaskButtonState,
     cancelCurrentProcessing,
     resetWorkflow,

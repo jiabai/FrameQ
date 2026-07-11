@@ -1,3 +1,4 @@
+import inspect
 import io
 import json
 from pathlib import Path
@@ -306,52 +307,9 @@ def test_source_identity_preflight_returns_only_safe_identity() -> None:
     assert "xsec_token" not in serialized
 
 
-def test_migration_cli_reports_counts_without_logging_sensitive_values(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    output_root = tmp_path / "outputs"
-    task_id = "legacy-cli-migration"
-    task_dir = output_root / "tasks" / task_id
-    task_dir.mkdir(parents=True)
-    (task_dir / "frameq-task.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 2,
-                "task_id": task_id,
-                "source_url": (
-                    "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
-                    "?xsec_token=review-secret"
-                ),
-                "platform": "xiaohongshu",
-                "status": "completed",
-                "artifacts": {},
-                "error": None,
-            }
-        ),
-        encoding="utf-8",
-    )
-    migrate_once = cli.migrate_source_data_once
-    monkeypatch.setattr(
-        cli,
-        "migrate_source_data_once",
-        lambda **_kwargs: migrate_once(
-            project_root=tmp_path,
-            environ={"FRAMEQ_OUTPUT_DIR": output_root.as_posix()},
-        ),
-    )
-
-    exit_code = cli.main(["--migrate-source-data"])
-    captured = capsys.readouterr()
-
-    assert exit_code == 0
-    payload = json.loads(captured.out)
-    assert payload["status"] == "completed"
-    assert payload["migration"]["migrated_manifests"] == 1
-    combined_output = captured.out + captured.err
-    assert "review-secret" not in combined_output
-    assert "xsec_token" not in combined_output
+def test_migration_cli_mode_is_not_supported() -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["--migrate-source-data"])
 
 
 def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Path) -> None:
@@ -381,7 +339,16 @@ def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Pa
 
 def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def fail_if_ai_client_is_built(_env: dict[str, str]) -> object:
+        raise AssertionError("process_video must not construct an AI client")
+
+    monkeypatch.setattr(
+        cli.worker_service_module,
+        "build_insight_client_from_env",
+        fail_if_ai_client_is_built,
+    )
     result = run_worker_once(
         json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
         project_root=tmp_path,
@@ -408,29 +375,37 @@ def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
     assert not (tmp_path / "cache" / "history.json").exists()
 
 
-def test_run_worker_once_generates_ai_artifacts_in_same_task(tmp_path: Path) -> None:
+def test_run_worker_once_rejects_retired_ai_field_without_echoing_request(
+    tmp_path: Path,
+) -> None:
+    raw_url = "https://user:review-secret@example.com/private"
     result = run_worker_once(
         json.dumps(
             {
-                "url": "https://www.douyin.com/video/7524373044106677544",
+                "url": raw_url,
                 "generate_insights": True,
             }
         ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
-        insight_client=FakeInsightClient(),
     )
 
-    assert result["status"] == "completed"
-    assert result["summary"].startswith("#")
-    assert result["insights"][0]["topic"] == "desktop question"
-    assert result["insights"][0]["matchReason"]
-    assert result["artifacts"]["summary"] == "ai/summary.md"
-    assert result["artifacts"]["mindmap"] == "ai/mindmap.mmd"
-    assert result["artifacts"]["insights"] == "ai/insights.json"
-    assert (task_dir_from_result(result) / "ai" / "summary.md").is_file()
-    assert manifest_from_result(result)["insights_count"] == 1
+    serialized = json.dumps(result, ensure_ascii=False)
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "INVALID_REQUEST_PAYLOAD"
+    assert result["error"]["message"] == "Process request contains an unsupported field."
+    assert "review-secret" not in serialized
+    assert raw_url not in serialized
+
+
+def test_process_video_service_and_pipeline_expose_no_ai_client_parameters() -> None:
+    service_parameters = inspect.signature(
+        cli.worker_service_module.run_worker_once
+    ).parameters
+    assert "insight_client" not in service_parameters
+    assert "insight_client_factory" not in service_parameters
+    assert "insight_client" not in inspect.signature(pipeline.run_worker_pipeline).parameters
 
 
 def test_run_worker_once_uses_configured_output_and_cache_roots(tmp_path: Path) -> None:
@@ -441,13 +416,11 @@ def test_run_worker_once_uses_configured_output_and_cache_roots(tmp_path: Path) 
         json.dumps(
             {
                 "url": "https://www.douyin.com/video/7524373044106677544",
-                "generate_insights": True,
             }
         ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
-        insight_client=FakeInsightClient(),
         environ={
             "FRAMEQ_OUTPUT_DIR": custom_output_dir.as_posix(),
             "FRAMEQ_CACHE_DIR": custom_cache_dir.as_posix(),
@@ -487,7 +460,6 @@ def test_run_worker_once_uses_download_stdout_inside_task_cache_dir(
         json.dumps(
             {
                 "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                "generate_insights": False,
             }
         ),
         project_root=tmp_path,

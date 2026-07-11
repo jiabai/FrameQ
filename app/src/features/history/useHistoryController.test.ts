@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { HistoryItem } from "../../historyClient";
+import type { HistoryItem, HistoryListItem } from "../../historyClient";
 import type { HistoryController } from "./useHistoryController";
 
 type StateUpdater<T> = T | ((current: T) => T);
@@ -7,13 +7,16 @@ type StateUpdater<T> = T | ((current: T) => T);
 type HookHarness = {
   resetRender: () => void;
   useCallback: <T extends (...args: never[]) => unknown>(callback: T) => T;
+  useRef: <T>(initialValue: T) => { current: T };
   useState: <T>(initialValue: T | (() => T)) => [T, (next: StateUpdater<T>) => void];
 };
 
-const getHistoryMock = vi.fn<() => Promise<HistoryItem[]>>();
+const getHistoryMock = vi.fn<() => Promise<HistoryListItem[]>>();
+const getHistoryDetailMock = vi.fn<(taskId: string) => Promise<HistoryItem>>();
 
 vi.mock("../../historyClient", () => ({
   getHistory: getHistoryMock,
+  getHistoryDetail: getHistoryDetailMock,
 }));
 
 function createHookHarness(): HookHarness {
@@ -25,6 +28,14 @@ function createHookHarness(): HookHarness {
       cursor = 0;
     },
     useCallback: (callback) => callback,
+    useRef: <T,>(initialValue: T) => {
+      const stateIndex = cursor;
+      cursor += 1;
+      if (states.length <= stateIndex) {
+        states[stateIndex] = { current: initialValue };
+      }
+      return states[stateIndex] as { current: T };
+    },
     useState: <T,>(initialValue: T | (() => T)) => {
       const stateIndex = cursor;
       cursor += 1;
@@ -45,7 +56,7 @@ function createHookHarness(): HookHarness {
   };
 }
 
-function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
+function createHistoryItem(overrides: Partial<HistoryListItem> = {}): HistoryListItem {
   return {
     taskId: "task-1",
     id: "task-1",
@@ -58,11 +69,22 @@ function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
     error: null,
     textPreview: "demo transcript",
     insightsCount: 0,
+    ...overrides,
+  };
+}
+
+function createHistoryDetail(taskId = "task-1"): HistoryItem {
+  return {
+    taskId,
+    url: "https://example.test/video",
+    status: "completed",
+    taskDir: `D:/FrameQ/tasks/${taskId}`,
+    artifacts: { transcript_txt: "transcript/transcript.txt" },
+    error: null,
     text: "demo transcript body",
     summary: "",
     transcript: null,
     insights: [],
-    ...overrides,
   };
 }
 
@@ -75,6 +97,7 @@ async function createController(
   const harness = createHookHarness();
   vi.doMock("react", () => ({
     useCallback: harness.useCallback,
+    useRef: harness.useRef,
     useState: harness.useState,
   }));
   const { useHistoryController } = await import("./useHistoryController");
@@ -92,6 +115,7 @@ describe("useHistoryController", () => {
   beforeEach(() => {
     vi.resetModules();
     getHistoryMock.mockReset();
+    getHistoryDetailMock.mockReset();
   });
 
   test("opens history and loads items", async () => {
@@ -149,7 +173,9 @@ describe("useHistoryController", () => {
 
   test("selects a history item and closes the sheet", async () => {
     const item = createHistoryItem({ id: "selected-task" });
+    const detail = createHistoryDetail(item.taskId);
     getHistoryMock.mockResolvedValueOnce([item]);
+    getHistoryDetailMock.mockResolvedValueOnce(detail);
     const { render, onHistoryItemSelected } = await createController();
 
     let controller = render();
@@ -157,10 +183,37 @@ describe("useHistoryController", () => {
     controller = render();
     expect(controller.historyOpen).toBe(true);
 
-    controller.openHistoryItem(item);
+    await controller.openHistoryItem(item);
     controller = render();
 
-    expect(onHistoryItemSelected).toHaveBeenCalledWith(item);
+    expect(getHistoryDetailMock).toHaveBeenCalledWith(item.taskId);
+    expect(onHistoryItemSelected).toHaveBeenCalledWith(detail);
     expect(controller.historyOpen).toBe(false);
+  });
+
+  test("ignores an older detail response after a newer history selection", async () => {
+    const first = createHistoryItem({ taskId: "first", id: "first" });
+    const second = createHistoryItem({ taskId: "second", id: "second" });
+    let resolveFirst!: (value: HistoryItem) => void;
+    let resolveSecond!: (value: HistoryItem) => void;
+    getHistoryDetailMock
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveFirst = resolve; }),
+      )
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveSecond = resolve; }),
+      );
+    const { render, onHistoryItemSelected } = await createController();
+    const controller = render();
+
+    const firstLoad = controller.openHistoryItem(first);
+    const secondLoad = controller.openHistoryItem(second);
+    resolveSecond(createHistoryDetail("second"));
+    await secondLoad;
+    resolveFirst(createHistoryDetail("first"));
+    await firstLoad;
+
+    expect(onHistoryItemSelected).toHaveBeenCalledTimes(1);
+    expect(onHistoryItemSelected).toHaveBeenCalledWith(createHistoryDetail("second"));
   });
 });

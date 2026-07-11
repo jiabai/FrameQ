@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import {
-  CheckCircle2,
-  Circle,
   Download,
   History as HistoryIcon,
   ListChecks,
@@ -18,11 +16,11 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import {
   getExportPath,
-  getInsightRetryTargetForCard,
   isProcessingStage,
-  type ResultCard,
+  type TaskArtifactKey,
   type WorkflowState,
 } from "./workflow";
+import { createTaskWorkspaceViewModel } from "./taskWorkspaceViewModel";
 import type { HistoryItem } from "./historyClient";
 import type { UpdateState } from "./updateState";
 import {
@@ -37,10 +35,12 @@ import { HistorySheet } from "./features/history/HistorySheet";
 import { useHistoryController } from "./features/history/useHistoryController";
 import { InsightPreferenceFlow } from "./features/insightPreferences/InsightPreferenceFlow";
 import { useInsightGenerationController } from "./features/insightPreferences/useInsightGenerationController";
-import { ResultWorkspace } from "./features/results/ResultWorkspace";
+import { AiGenerationWorkspace } from "./features/results/AiGenerationWorkspace";
+import { AiResultDetailSheet } from "./features/results/AiResultDetailSheet";
+import { TaskStatusBanner } from "./features/results/TaskStatusBanner";
 import { SettingsSheet } from "./features/settings/SettingsSheet";
 import { useSettingsController } from "./features/settings/useSettingsController";
-import { ResultDetailSheet } from "./features/transcript/ResultDetailSheet";
+import { LocalTranscriptWorkspace } from "./features/transcript/LocalTranscriptWorkspace";
 import { useTranscriptDetailController } from "./features/transcript/useTranscriptDetailController";
 import { useWindowChromeController } from "./features/window/useWindowChromeController";
 import { useTaskProcessingController } from "./features/workflow/useTaskProcessingController";
@@ -81,24 +81,9 @@ const stageCopy: Record<WorkflowState["stage"], { title: string; body: string }>
   },
 };
 
-const stageTitles = Object.fromEntries(
-  Object.entries(stageCopy).map(([stage, copy]) => [stage, copy.title]),
-) as Record<WorkflowState["stage"], string>;
-
 const asrModelLabels: Record<string, string> = {
   "Qwen/Qwen3-ASR-0.6B": "Qwen3-ASR 0.6B",
   "iic/SenseVoiceSmall": "SenseVoice Small",
-};
-
-const stageSummary: Record<WorkflowState["stage"], string> = {
-  waiting_input: "准备接收一个公开视频链接",
-  cancelling: "正在终止当前任务及其子进程",
-  video_extracting: "正在准备媒体文件",
-  video_transcribing: "正在生成本地文字稿",
-  insights_generating: "正在生成所选 AI 结果",
-  completed: "视频、音频和文字稿已可查看",
-  partial_completed: "文字稿已保留，可重试失败的 AI 结果",
-  failed: "处理未完成，请查看原因",
 };
 
 function formatHistoryDate(value: string): string {
@@ -203,9 +188,6 @@ function App() {
     canSubmit,
     canRestoreHistory,
     historyRestoreUnavailableMessage,
-    progressSteps,
-    resultCards,
-    visibleWorkflowError,
     toolbarNewTaskButtonState,
     cancelCurrentProcessing,
     resetWorkflow,
@@ -260,7 +242,12 @@ function App() {
       resetWorkflow();
     },
   });
+  const taskWorkspaceModel = useMemo(
+    () => createTaskWorkspaceViewModel(workflow, account),
+    [account, workflow],
+  );
   const {
+    aiActionNotice,
     summaryConfirmOpen,
     insightPreferenceFlow,
     insightPreferenceBusy,
@@ -434,33 +421,8 @@ function App() {
     };
   }, [handleAuthCallback]);
 
-  function openCard(card: ResultCard) {
-    if (card.action === "locate") {
-      void locateArtifact(card);
-      return;
-    }
-
-    if (card.action === "open") {
-      setActionNotice("");
-      openDetailTab(card.id);
-      return;
-    }
-
-    if (card.action === "confirm") {
-      setActionNotice("");
-      const target = getInsightRetryTargetForCard(card);
-      if (target === "summary") {
-        openSummaryConfirmation();
-        return;
-      }
-      if (target === "insights") {
-        void openInsightPreferenceFlow();
-      }
-    }
-  }
-
-  async function locateArtifact(card: ResultCard) {
-    const artifactPath = getExportPath(card.id, workflow);
+  async function locateArtifact(artifact: Extract<TaskArtifactKey, "video" | "audio">) {
+    const artifactPath = getExportPath(artifact, workflow);
     if (!artifactPath) {
       setActionNotice("暂无可定位的文件。");
       return;
@@ -475,7 +437,6 @@ function App() {
   }
 
   const activeCopy = stageCopy[workflow.stage];
-  const progressPercent = formatProgressPercent(workflow.progressPercent);
 
   return (
     <main className="app-shell">
@@ -554,8 +515,8 @@ function App() {
           className={`workspace ${workflow.showUrlInput ? "waiting-layout" : "active-layout"}`}
           aria-label="视频处理工作区"
         >
-          <div className="workflow-column">
-            {workflow.showUrlInput ? (
+          {workflow.showUrlInput ? (
+            <div className="workflow-column">
               <form
                 className="command-panel input-pane"
                 onSubmit={(event) => submitUrl(event, account, openAccountPanel)}
@@ -585,68 +546,35 @@ function App() {
                 </div>
                 <p className="status-line">{activeCopy.body}</p>
               </form>
-            ) : (
-              <section className={`process-monitor process-pane ${workflow.stage}`} aria-label="处理进度">
-                <div className="process-heading">
-                  <div>
-                    <p className="section-label">Task monitor</p>
-                    <h2>{activeCopy.title}</h2>
-                  </div>
-                  {isProcessingStage(workflow.stage) ? (
-                    <button
-                      className="secondary-button danger-soft"
-                      type="button"
-                      onClick={cancelCurrentProcessing}
-                      disabled={workflow.stage === "cancelling"}
-                    >
-                      <X size={17} />
-                      <span>{workflow.stage === "cancelling" ? "正在取消" : "取消任务"}</span>
-                    </button>
-                  ) : null}
-                </div>
-
-                <div className="progress-summary">
-                  <div>
-                    <span className="progress-value">{progressPercent}</span>
-                    <p>{stageSummary[workflow.stage]}</p>
-                  </div>
-                  <div className="progress-track">
-                    <span
-                      className={`progress-fill ${workflow.stage}`}
-                      style={{ width: workflow.progressPercent ? progressPercent : undefined }}
-                    />
-                  </div>
-                </div>
-
-                <div className="steps" aria-label="处理阶段">
-                  {progressSteps.map((step) => (
-                    <div className={`step ${step.state}`} key={step.id}>
-                      <span className="step-dot">
-                        {step.state === "complete" ? (
-                          <CheckCircle2 size={14} />
-                        ) : step.state === "active" ? (
-                          <LoaderCircle size={14} />
-                        ) : (
-                          <Circle size={14} />
-                        )}
-                      </span>
-                      <span>{step.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="status-line worker-message">{workflow.statusMessage || activeCopy.body}</p>
-              </section>
-            )}
-          </div>
-
-          <ResultWorkspace
-            workflow={workflow}
-            resultCards={resultCards}
-            visibleWorkflowError={visibleWorkflowError}
-            actionNotice={actionNotice}
-            stageTitles={stageTitles}
-            onOpenCard={openCard}
-          />
+            </div>
+          ) : (
+            <>
+              <TaskStatusBanner model={taskWorkspaceModel.banner} />
+              <div className="task-workspace-layout">
+                <LocalTranscriptWorkspace
+                  workflow={workflow}
+                  model={taskWorkspaceModel.local}
+                  controller={transcriptDetailController}
+                  actionNotice={aiActionNotice ? "" : actionNotice}
+                  onLocateArtifact={(artifact) => void locateArtifact(artifact)}
+                  onCancel={() => void cancelCurrentProcessing()}
+                />
+                <AiGenerationWorkspace
+                  workflow={workflow}
+                  model={taskWorkspaceModel.ai}
+                  quotaRemaining={account.llmQuotaRemaining}
+                  notice={aiActionNotice}
+                  onSummaryAction={openSummaryConfirmation}
+                  onInsightsAction={() => void openInsightPreferenceFlow()}
+                  onViewTarget={(target) => {
+                    setActionNotice("");
+                    openDetailTab(target);
+                  }}
+                  onCancel={() => void cancelCurrentProcessing()}
+                />
+              </div>
+            </>
+          )}
         </section>
       </section>
 
@@ -770,11 +698,11 @@ function App() {
         />
       ) : null}
 
-      <ResultDetailSheet
+      <AiResultDetailSheet
         actionNotice={actionNotice}
         controller={transcriptDetailController}
         workflow={workflow}
-        onOpenDirectionEditorFromDetail={openDirectionEditorFromDetail}
+        onOpenDirectionEditor={openDirectionEditorFromDetail}
       />
 
       <HistorySheet

@@ -91,12 +91,12 @@ describe("worker client", () => {
             language: "Chinese",
             output_formats: ["txt", "md"],
             model: "iic/SenseVoiceSmall",
-            generate_insights: false,
             insightflow_mode: "embedded",
           },
         },
       },
     ]);
+    expect(calls[0]?.args).not.toHaveProperty("request.generate_insights");
     expect(calls[0]?.args).not.toHaveProperty("request.preference_snapshot");
     expect(result.status).toBe("completed");
   });

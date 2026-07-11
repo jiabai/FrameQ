@@ -51,7 +51,6 @@ def test_process_video_contract_is_transcript_only_and_retry_insights_is_ai_path
     contract = load_contract()
 
     assert contract["processVideo"] == {
-        "defaultGenerateInsights": False,
         "serverManagedLlmCheckout": False,
     }
     assert contract["aiGeneration"] == {
