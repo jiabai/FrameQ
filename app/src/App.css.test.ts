@@ -179,22 +179,34 @@ describe("App result workspace layout styles", () => {
   test("keeps the transcript audio review bar in the requested single-line player style", () => {
     const barRule = getRuleBody([".audio-review-bar"]);
     const playButtonRule = getRuleBody([".audio-play-button"]);
-    const timelineRule = getRuleBody([".audio-review-timeline"]);
     const clockRule = getRuleBody([".audio-review-clock"]);
     const scrubberRule = getRuleBody([".audio-review-scrubber"]);
     const webkitTrackRule = getRuleBody([".audio-review-scrubber::-webkit-slider-runnable-track"]);
     const webkitThumbRule = getRuleBody([".audio-review-scrubber::-webkit-slider-thumb"]);
 
     expect(transcriptReviewPanelTsx).not.toContain('className="audio-review-actions"');
+    expect(transcriptReviewPanelTsx).not.toContain('className="audio-review-timeline"');
+    expect(transcriptReviewPanelTsx).toMatch(
+      /className="audio-review-bar"[\s\S]*?<button[\s\S]*?<\/button>\s*<input[\s\S]*?className="audio-review-scrubber"[\s\S]*?\/>\s*<div className="audio-review-clock">/,
+    );
     expect(transcriptReviewPanelTsx).toContain("transcriptAudioScrubberStyle");
     expect(transcriptDetailControllerTs).toContain("--audio-progress");
-    expect(barRule).toContain("grid-template-columns: auto minmax(0, 1fr);");
-    expect(barRule).toContain("min-height: 64px;");
+    expect(barRule).toContain("grid-template-columns: 48px minmax(0, 1fr) max-content;");
+    expect(barRule).toContain("align-items: center;");
+    expect(barRule).toContain("column-gap: 16px;");
+    expect(barRule).toContain("min-height: 72px;");
     expect(barRule).toContain("padding: 12px 16px;");
     expect(playButtonRule).toContain("height: 48px;");
     expect(playButtonRule).toContain("width: 48px;");
-    expect(timelineRule).toContain("grid-template-columns: minmax(0, 1fr) max-content;");
+    expect(playButtonRule).not.toContain("transform");
+    expect(scrubberRule).toContain("display: block;");
+    expect(scrubberRule).toContain("min-width: 0;");
+    expect(scrubberRule).toContain("align-self: center;");
+    expect(clockRule).toContain("justify-self: end;");
+    expect(clockRule).toContain("min-width: 0;");
     expect(clockRule).toContain("font-variant-numeric: tabular-nums;");
+    expect(clockRule).toContain("line-height: 1;");
+    expect(clockRule).not.toContain("min-width: 126px;");
     expect(clockRule).toContain("font-weight: 760;");
     expect(scrubberRule).toContain("appearance: none;");
     expect(webkitTrackRule).toContain("#2388f2");
@@ -203,6 +215,30 @@ describe("App result workspace layout styles", () => {
     expect(webkitThumbRule).toContain("background: transparent;");
     expect(webkitThumbRule).toContain("height: 18px;");
     expect(webkitThumbRule).toContain("width: 18px;");
+    expect(webkitThumbRule).not.toMatch(/margin(?:-top)?:\s*-/);
+  });
+
+  test("uses a dedicated accessible 32px transcript segment edit control", () => {
+    const editRule = getRuleBody([".transcript-segment-edit"]);
+    const editFeedbackRule = getRuleBody([
+      ".transcript-segment-edit:not(:disabled):hover",
+      ".transcript-segment-edit:focus-visible",
+    ]);
+
+    expect(transcriptReviewPanelTsx).toContain(
+      'className="secondary-button compact-button transcript-segment-edit"',
+    );
+    expect(transcriptReviewPanelTsx).toContain('aria-label="编辑此片段"');
+    expect(transcriptReviewPanelTsx).toContain('title="编辑"');
+    expect(editRule).toContain("height: 32px;");
+    expect(editRule).toContain("min-height: 32px;");
+    expect(editRule).toContain("width: 32px;");
+    expect(editRule).toContain("min-width: 32px;");
+    expect(editRule).toContain("padding: 0;");
+    expect(editRule).toContain("align-items: center;");
+    expect(editRule).toContain("justify-content: center;");
+    expect(editFeedbackRule).toContain("background: #eef7ff;");
+    expect(editFeedbackRule).toContain("border-color: #b8dcff;");
   });
 
   test("keeps the settings sheet grouped and scannable", () => {

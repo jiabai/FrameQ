@@ -1,5 +1,5 @@
-import { CheckCircle2, Copy, Download, LoaderCircle, Pause, Play } from "lucide-react";
-import type { ReactNode } from "react";
+import { CheckCircle2, Copy, Download, LoaderCircle, Pause, Pencil, Play } from "lucide-react";
+import { type ReactNode, useRef } from "react";
 
 import { clampAudioTime, formatAudioClock } from "../../audioReviewBarState";
 import { isTranscriptSegmentEditDisabled } from "../../transcriptReviewState";
@@ -59,9 +59,11 @@ export function TranscriptReviewPanel({
     toggleTranscriptAudio,
     scrubTranscriptAudio,
     beginTranscriptSegmentEdit,
+    endTranscriptSegmentEdit,
     updateTranscriptSegmentDraft,
     updateFullTranscriptDraft,
   } = controller;
+  const transcriptEditButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   return (
     <div className="transcript-review-panel">
@@ -92,25 +94,23 @@ export function TranscriptReviewPanel({
             >
               {transcriptAudioPlaying ? <Pause size={16} /> : <Play size={16} />}
             </button>
-            <div className="audio-review-timeline">
-              <input
-                className="audio-review-scrubber"
-                type="range"
-                min={0}
-                max={transcriptAudioScrubberMax}
-                step={0.1}
-                style={transcriptAudioScrubberStyle}
-                value={clampAudioTime(transcriptAudioCurrentTime, transcriptAudioScrubberMax)}
-                onChange={scrubTranscriptAudio}
-                disabled={transcriptAudioDuration <= 0}
-                aria-label="音频进度"
-                aria-valuetext={`${formatAudioClock(transcriptAudioCurrentTime)}，${Math.round(transcriptAudioProgress)}%`}
-              />
-              <div className="audio-review-clock">
-                <span>{formatAudioClock(transcriptAudioCurrentTime)}</span>
-                <span aria-hidden="true"> / </span>
-                <span>{formatAudioClock(transcriptAudioDuration)}</span>
-              </div>
+            <input
+              className="audio-review-scrubber"
+              type="range"
+              min={0}
+              max={transcriptAudioScrubberMax}
+              step={0.1}
+              style={transcriptAudioScrubberStyle}
+              value={clampAudioTime(transcriptAudioCurrentTime, transcriptAudioScrubberMax)}
+              onChange={scrubTranscriptAudio}
+              disabled={transcriptAudioDuration <= 0}
+              aria-label="音频进度"
+              aria-valuetext={`${formatAudioClock(transcriptAudioCurrentTime)}，${Math.round(transcriptAudioProgress)}%`}
+            />
+            <div className="audio-review-clock">
+              <span>{formatAudioClock(transcriptAudioCurrentTime)}</span>
+              <span aria-hidden="true"> / </span>
+              <span>{formatAudioClock(transcriptAudioDuration)}</span>
             </div>
           </div>
         </>
@@ -142,18 +142,33 @@ export function TranscriptReviewPanel({
                     <span>{formatSegmentTime(segment.start_ms)}</span>
                   </button>
                   <button
+                    ref={(element) => {
+                      transcriptEditButtonRefs.current[segment.id] = element;
+                    }}
                     type="button"
-                    className="secondary-button compact-button"
+                    className="secondary-button compact-button transcript-segment-edit"
                     onClick={() => beginTranscriptSegmentEdit(segment.id)}
                     disabled={editingDisabled || isTranscriptSegmentEditDisabled(editingTranscriptSegmentId, segment.id)}
+                    aria-label="编辑此片段"
+                    title="编辑"
                   >
-                    编辑
+                    <Pencil size={16} />
                   </button>
                 </div>
                 {editingTranscriptSegmentId === segment.id ? (
                   <textarea
                     value={segment.text}
                     onChange={(event) => updateTranscriptSegmentDraft(segment.id, event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Escape" || event.nativeEvent.isComposing) {
+                        return;
+                      }
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const editButton = transcriptEditButtonRefs.current[segment.id];
+                      endTranscriptSegmentEdit();
+                      editButton?.focus();
+                    }}
                     disabled={editingDisabled}
                     autoFocus
                   />

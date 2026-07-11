@@ -355,6 +355,11 @@ export function useTranscriptDetailController({
     setActiveTranscriptSegmentId(segmentId);
   }, []);
 
+  const endTranscriptSegmentEdit = useCallback(() => {
+    resumeTranscriptAfterSaveRef.current = false;
+    setEditingTranscriptSegmentId(null);
+  }, []);
+
   const updateTranscriptSegmentDraft = useCallback((segmentId: string, text: string) => {
     setTranscriptSegments((current) => {
       const next = updateTranscriptSegmentText(current, segmentId, text);
@@ -474,6 +479,7 @@ export function useTranscriptDetailController({
     toggleTranscriptAudio,
     scrubTranscriptAudio,
     beginTranscriptSegmentEdit,
+    endTranscriptSegmentEdit,
     updateTranscriptSegmentDraft,
     updateFullTranscriptDraft,
   };

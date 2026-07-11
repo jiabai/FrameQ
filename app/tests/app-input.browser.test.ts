@@ -946,6 +946,9 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
         sameTask: boolean;
         completionBanner: boolean;
         localScrollable: boolean;
+        audioDirectChildren: number;
+        audioCenterSpread: number;
+        audioPaddingDelta: number;
       }>(
         page,
         `(() => {
@@ -953,8 +956,17 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
           const local = document.querySelector('.local-transcript-workspace');
           const ai = document.querySelector('.ai-generation-workspace');
           const review = document.querySelector('.transcript-review-scroll');
+          const audioBar = document.querySelector('.audio-review-bar');
+          const playButton = audioBar.querySelector('.audio-play-button');
+          const scrubber = audioBar.querySelector('.audio-review-scrubber');
+          const clock = audioBar.querySelector('.audio-review-clock');
           const localRect = local.getBoundingClientRect();
           const aiRect = ai.getBoundingClientRect();
+          const audioBarRect = audioBar.getBoundingClientRect();
+          const playRect = playButton.getBoundingClientRect();
+          const scrubberRect = scrubber.getBoundingClientRect();
+          const clockRect = clock.getBoundingClientRect();
+          const audioCenters = [playRect, scrubberRect, clockRect].map((rect) => rect.top + rect.height / 2);
           return {
             columns: getComputedStyle(layout).gridTemplateColumns.split(' ').length,
             topDelta: Math.abs(localRect.top - aiRect.top),
@@ -965,7 +977,12 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
             viewportWidth: window.innerWidth,
             sameTask: local.dataset.taskId === ai.dataset.taskId && local.dataset.taskId === 'history-task-a',
             completionBanner: document.querySelector('.task-status-banner')?.textContent.includes('视频、音频和文字稿已保存在本机') ?? false,
-            localScrollable: review ? ['auto', 'scroll'].includes(getComputedStyle(review).overflowY) : false
+            localScrollable: review ? ['auto', 'scroll'].includes(getComputedStyle(review).overflowY) : false,
+            audioDirectChildren: audioBar.children.length,
+            audioCenterSpread: Math.max(...audioCenters) - Math.min(...audioCenters),
+            audioPaddingDelta: Math.abs(
+              (playRect.left - audioBarRect.left) - (audioBarRect.right - clockRect.right)
+            )
           };
         })()`,
       );
@@ -982,6 +999,9 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       expect(wide.sameTask).toBe(true);
       expect(wide.completionBanner).toBe(true);
       expect(wide.localScrollable).toBe(true);
+      expect(wide.audioDirectChildren).toBe(3);
+      expect(wide.audioCenterSpread).toBeLessThanOrEqual(1);
+      expect(wide.audioPaddingDelta).toBeLessThanOrEqual(1);
 
       await page.send("Emulation.setDeviceMetricsOverride", {
         width: 900,
@@ -1400,6 +1420,84 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       expect(transcriptLoads.at(-1)?.args).toMatchObject({
         request: { task_id: "history-task-b" },
       });
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
+  test("Escape exits segment editing without saving while composing Escape stays local", async () => {
+    const page = await openUiSmokePage({
+      responses: {
+        load_transcript_detail: {
+          text: "第一段原稿。",
+          segments: [{ id: "segment-1", start_ms: 0, end_ms: 3000, text: "第一段原稿。" }],
+          audio_path: "C:/FrameQ/outputs/tasks/history-task-a/media/audio.wav",
+          audio_asset_path: "C:/FrameQ/cache/audio-review/history-task-a.wav",
+          has_original_backup: false,
+        },
+      },
+    });
+
+    try {
+      await restoreSmokeHistoryItem(page, "历史任务甲文字稿");
+      await waitForRuntimeCondition(page, "document.querySelectorAll('.transcript-segment-edit').length === 1");
+      await clickSelector(page, ".transcript-segment-edit");
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.transcript-segment textarea'))");
+      await replaceTextAreaValue(page, ".transcript-segment textarea", "第一段保留草稿。");
+
+      const composingState = await evaluateValue<Record<string, unknown>>(
+        page,
+        `(() => {
+          const textarea = document.querySelector('.transcript-segment textarea');
+          window.__frameqEscapeBubbled = 0;
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') window.__frameqEscapeBubbled += 1;
+          });
+          const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+          Object.defineProperty(event, 'isComposing', { value: true });
+          textarea.dispatchEvent(event);
+          return {
+            editing: Boolean(document.querySelector('.transcript-segment textarea')),
+            value: document.querySelector('.transcript-segment textarea')?.value,
+            bubbled: window.__frameqEscapeBubbled
+          };
+        })()`,
+      );
+      expect(composingState).toMatchObject({
+        editing: true,
+        value: "第一段保留草稿。",
+        bubbled: 1,
+      });
+
+      await page.send("Runtime.evaluate", {
+        expression: `(() => {
+          window.__frameqEscapeBubbled = 0;
+          document.querySelector('.transcript-segment textarea')
+            .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        })()`,
+      });
+      await waitForRuntimeCondition(page, "!document.querySelector('.transcript-segment textarea')");
+      await waitForRuntimeCondition(
+        page,
+        "document.activeElement?.matches('.transcript-segment-edit')",
+      );
+
+      const finalState = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          text: document.querySelector('.transcript-segment-text')?.textContent,
+          saveEnabled: !document.querySelector('.transcript-action-bar .primary-button')?.disabled,
+          bubbled: window.__frameqEscapeBubbled
+        })`,
+      );
+      expect(finalState).toMatchObject({
+        text: "第一段保留草稿。",
+        saveEnabled: true,
+        bubbled: 0,
+      });
+      const commands = await readUiSmokeCommands(page);
+      expect(commands.some((entry) => entry.command === "save_transcript_edit")).toBe(false);
+      expect(commands.some((entry) => entry.command === "retry_insights")).toBe(false);
     } finally {
       await page.close();
     }

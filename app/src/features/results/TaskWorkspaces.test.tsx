@@ -103,6 +103,7 @@ function transcriptController(): TranscriptDetailController {
     toggleTranscriptAudio: vi.fn(),
     scrubTranscriptAudio: vi.fn(),
     beginTranscriptSegmentEdit: vi.fn(),
+    endTranscriptSegmentEdit: vi.fn(),
     updateTranscriptSegmentDraft: vi.fn(),
     updateFullTranscriptDraft: vi.fn(),
   } as unknown as TranscriptDetailController;
@@ -209,8 +210,16 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("AI 正在使用已保存版本");
     expect(markup).toContain("第一段正式文字稿。");
     expect(markup).toContain('aria-label="播放音频"');
-    expect(markup).toMatch(/>编辑<\/button>/);
-    expect(markup).toMatch(/disabled=""[^>]*>编辑<\/button>/);
+    expect(markup).toContain(
+      'class="secondary-button compact-button transcript-segment-edit"',
+    );
+    expect(markup).toContain('aria-label="编辑此片段"');
+    expect(markup).toContain('title="编辑"');
+    expect(markup).toContain('class="lucide lucide-pencil"');
+    expect(markup).not.toMatch(/>编辑<\/button>/);
+    expect(markup).toMatch(
+      /class="secondary-button compact-button transcript-segment-edit"[^>]*disabled=""[^>]*aria-label="编辑此片段"/,
+    );
     expect(markup).toContain('class="primary-button" disabled=""');
     expect(markup).toContain("<span>保存</span>");
   });
