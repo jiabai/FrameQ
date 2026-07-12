@@ -240,6 +240,12 @@ The workflow validates and rewrites the uploaded `latest.json` as UTF-8 without 
 
 The macOS DMGs (both Intel and Apple Silicon) are **ad-hoc signed but not notarized**. Ad-hoc signing is free and needs no Apple Developer ID certificate; it re-seals the bundled Python, ffmpeg, and worker resources so the app and its libraries load correctly. It does **not** clear Apple notarization, so the first launch after downloading is still blocked once by Gatekeeper. Ask users to approve it a single time:
 
+The approved v0.2.16 policy permits this distribution only for personal development, a small user
+group, or an open-source tool with prominent disclosure. It must not be described as Developer ID
+signed, notarized, App Store reviewed, or suitable for silent enterprise deployment. A broader
+consumer/commercial release that removes the manual Gatekeeper step still requires Developer ID
+signing and notarization.
+
 - **macOS 15 Sequoia and later:** double-click the app once, dismiss the warning, then open **System Settings → Privacy & Security**, scroll to the FrameQ message, and click **Open Anyway**.
 - **macOS 14 and earlier:** Control-click (right-click) the app in `/Applications` and choose **Open**, then confirm **Open** in the dialog.
 - **Terminal fallback (any version):** remove the download quarantine attribute directly.

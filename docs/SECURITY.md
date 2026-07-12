@@ -1,5 +1,21 @@
 # Security and Compliance
 
+## 2026-07-12 Open-Source macOS Release Boundary
+
+- FrameQ v0.2.16 may use ad-hoc-signed, non-notarized macOS DMGs only for the explicitly approved
+  personal-development, small-user, and open-source distribution model. The release page must
+  disclose the one-time Gatekeeper approval before presenting feature highlights.
+- Ad-hoc signing is an integrity seal, not Apple identity verification. Release notes and UI/docs
+  must not claim Developer ID signing, notarization, App Store review, or silent enterprise
+  deployment support.
+- The macOS build must verify the final `.app` with `codesign --verify --deep --strict` before DMG
+  upload. Runtime import smoke must not mutate the signed bundle with `.pyc` or `__pycache__` files.
+- Release artifacts must not contain Apple signing/notarization credentials, Tauri updater private
+  keys, `.env` files, LLM keys, payment credentials, ASR model weights, user configuration, logs,
+  history tasks, transcripts, or other user artifacts.
+- Apple Developer ID signing plus notarization and stapling remain required before removing the
+  Gatekeeper disclosure or expanding to a no-manual-step consumer/commercial distribution.
+
 ## 2026-07-11 Workspace Data-Flow Disclosure
 
 - The local and AI workspaces are two UI projections of one task, not two storage or network
