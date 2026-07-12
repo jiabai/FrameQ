@@ -44,8 +44,14 @@ test("builds one manual internal Intel macOS artifact with native tests and read
     /run:\s*>-[\s\S]{0,120}npm --prefix app run tauri -- build --bundles app[\s\S]{0,80}--target x86_64-apple-darwin/,
   );
   assert.match(workflow, /createUpdaterArtifacts\":false/);
-  assert.match(workflow, /file "\$APP\/Contents\/MacOS\/FrameQ"/);
-  assert.match(workflow, /lipo -archs "\$APP\/Contents\/MacOS\/FrameQ"/);
+  assert.match(
+    workflow,
+    /EXECUTABLE="\$\(\/usr\/libexec\/PlistBuddy -c 'Print :CFBundleExecutable' "\$APP\/Contents\/Info\.plist"\)"/,
+  );
+  assert.match(workflow, /BIN="\$APP\/Contents\/MacOS\/\$EXECUTABLE"/);
+  assert.match(workflow, /test -f "\$BIN"/);
+  assert.match(workflow, /file "\$BIN"/);
+  assert.match(workflow, /lipo -archs "\$BIN"/);
   assert.match(workflow, /import funasr, modelscope, yt_dlp; import frameq_worker/);
   assert.match(workflow, /bundled deno OK/);
   assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$APP"/);

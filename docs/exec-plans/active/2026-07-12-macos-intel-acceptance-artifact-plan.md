@@ -35,6 +35,10 @@ installer scripts, `actions/upload-artifact@v4`, GitHub CLI.
   workflow is not dispatchable until it exists on the default branch. User approved one temporary
   push trigger restricted to the exact acceptance branch; its contract was verified RED then 2/2
   GREEN and must be removed after the hosted run.
+- [x] 2026-07-12: Hosted run `29186407302` passed the complete Intel Cargo suite, runtime resource
+  preparation, and Tauri app build, then failed before packaging because the verification step
+  hard-coded the bundle executable name. Added a RED contract for `CFBundleExecutable`, changed
+  verification to resolve it from `Info.plist`, and restored focused GREEN 2/2.
 
 ## Task 1: Lock the workflow contract with TDD
 
@@ -113,17 +117,17 @@ build products are not staged.
 
 **Files:** all approved files from the permanent-deletion feature and this CI acceptance addition.
 
-- [ ] **Step 1: Commit the verified implementation**
+- [x] **Step 1: Commit the verified implementation**
 
 Stage only approved source, test, workflow, and documentation files. Commit with a message that
 describes permanent History deletion and Intel macOS acceptance. Do not amend or rewrite the design
 commit.
 
-- [ ] **Step 2: Push the feature branch**
+- [x] **Step 2: Push the feature branch**
 
 Push `codex/history-delete-macos-intel-acceptance` to `origin` without force.
 
-- [ ] **Step 3: Trigger the manual workflow for the feature branch**
+- [x] **Step 3: Trigger the hosted workflow for the feature branch**
 
 Run:
 

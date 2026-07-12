@@ -75,9 +75,11 @@ jobs:
         run: |
           APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app"
           RES="$APP/Contents/Resources/resources"
-          BIN="$APP/Contents/MacOS/FrameQ"
-          file "$APP/Contents/MacOS/FrameQ"
-          test "$(lipo -archs "$APP/Contents/MacOS/FrameQ")" = "x86_64"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+          BIN="$APP/Contents/MacOS/$EXECUTABLE"
+          test -f "$BIN"
+          file "$BIN"
+          test "$(lipo -archs "$BIN")" = "x86_64"
           PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, modelscope, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
           DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/frameq-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
           if find "$RES" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
