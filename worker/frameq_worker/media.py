@@ -221,7 +221,8 @@ def download_video(
     progress_callback: ProgressCallback | None = None,
 ) -> CommandResult:
     output_dir.mkdir(parents=True, exist_ok=True)
-    result = runner(build_ytdlp_command(url, output_dir))
+    download_command = build_ytdlp_command(url, output_dir)
+    result = runner(download_command)
     if result.returncode != 0:
         failure_message = result.stderr or result.stdout
         is_youtube_video = should_attempt_youtube_processing(url)
@@ -234,7 +235,19 @@ def download_video(
                     stdout=downloaded_media.as_posix(),
                     stderr=result.stderr,
                 )
-            result = runner(build_ytdlp_command(url, output_dir, include_subtitles=False))
+            download_command = build_ytdlp_command(
+                url,
+                output_dir,
+                include_subtitles=False,
+            )
+            result = runner(download_command)
+            if result.returncode == 0:
+                return result
+            failure_message = result.stderr or result.stdout
+        if is_youtube_video and _structured_error_code(
+            classify_youtube_download_failure(result).stderr,
+        ) == "YOUTUBE_DOWNLOAD_FAILED":
+            result = runner(download_command)
             if result.returncode == 0:
                 return result
             failure_message = result.stderr or result.stdout
