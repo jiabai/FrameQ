@@ -64,7 +64,8 @@ test("builds one manual internal Intel macOS artifact with native tests and read
     /bash scripts\/make-macos-dmg\.sh x86_64-apple-darwin FrameQ/,
   );
   assert.match(workflow, /shasum -a 256 "\$DMG" > "\$DMG\.sha256"/);
-  assert.match(workflow, /uses:\s*actions\/upload-artifact@v4/);
+  assert.match(workflow, /uses:\s*actions\/upload-artifact@v6/);
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@(?:v4|v5)/);
   assert.match(workflow, /retention-days:\s*7/);
   assert.match(workflow, /if-no-files-found:\s*error/);
   assert.match(workflow, /path:\s*\|[\s\S]*\.dmg[\s\S]*\.dmg\.sha256/);

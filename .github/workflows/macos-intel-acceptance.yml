@@ -97,7 +97,7 @@ jobs:
           echo "name=frameq-macos-intel-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
 
       - name: Upload internal Intel DMG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: |

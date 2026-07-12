@@ -14,7 +14,8 @@ flows, and it must not create or modify a GitHub Release.
 
 - [x] 2026-07-12: Confirmed the warning sources and reviewed official Node.js 24-capable versions.
   Validation: repository scan found checkout v4, setup-node v4, and setup-uv v6 in three workflows;
-  official action metadata confirms checkout v5, setup-node v5, and setup-uv v8 use Node.js 24.
+  official action metadata confirms checkout v5, setup-node v5, setup-uv v8.3.2, and
+  upload-artifact v6 use Node.js 24.
 - [x] 2026-07-12: Updated workflow contract tests first and recorded RED against the old actions.
   Validation: focused suite had 3 expected failures for Desktop Release, Intel acceptance, and
   ProcessSupervisor action versions while the other 3 boundary tests passed.
@@ -38,6 +39,9 @@ flows, and it must not create or modify a GitHub Release.
   use with `Unable to resolve action astral-sh/setup-uv@v8`. The official setup-uv README publishes
   immutable commit `11f9893b081a58869d3b5fccaea48c9e9e46f990` for v8.3.2 instead of a floating
   `v8` tag.
+- Evidence: the first otherwise-successful Intel acceptance run `29197962507` exposed one more
+  hosted warning from `actions/upload-artifact@v4`. The warning is not observable from the initial
+  checkout/setup scan alone; the action's official v6 release changes `runs.using` to Node.js 24.
 
 ## Decision Log
 
@@ -46,6 +50,10 @@ flows, and it must not create or modify a GitHub Release.
   smallest Node.js 24-capable major upgrades; setup-uv v8.3.2 explicitly declares `using: node24`
   but does not publish a resolvable floating `v8` tag, so the official README's commit-SHA form is
   both functional and supply-chain safer. Date/Author: 2026-07-12 / User + Codex.
+- Decision: Upgrade Intel artifact upload from `actions/upload-artifact@v4` to v6, not v5.
+  Rationale: official action metadata shows v5 still declares Node.js 20, while v6 is the smallest
+  compatible major that defaults to Node.js 24; the hosted GitHub runner already exceeds its
+  minimum runner requirement. Date/Author: 2026-07-12 / Codex.
 - Decision: Do not trigger Desktop Release. Rationale: contract tests can protect its YAML shape,
   and real Node.js 24 execution is safely proven by the non-release ProcessSupervisor and Intel
   acceptance workflows without creating assets or release state. Date/Author: 2026-07-12 / Codex.
@@ -72,8 +80,8 @@ dependency policy. Commit-SHA pinning remains a separate supply-chain hardening 
 
 ## Plan of Work
 
-1. Add/modify focused workflow tests to require checkout v5, setup-node v5, and setup-uv v8 and to
-   reject their Node.js 20-era versions.
+1. Add/modify focused workflow tests to require checkout v5, setup-node v5, setup-uv v8.3.2, and
+   upload-artifact v6 and to reject their Node.js 20-era versions.
 2. Run the focused tests and confirm RED against the current YAML.
 3. Update only the `uses:` action references in the three workflows.
 4. Run focused tests, all script tests, documentation validation, and `git diff --check`.
