@@ -1,6 +1,9 @@
 name: macOS Intel Acceptance Artifact
 
 on:
+  push:
+    branches:
+      - codex/history-delete-macos-intel-acceptance
   workflow_dispatch:
 
 permissions:

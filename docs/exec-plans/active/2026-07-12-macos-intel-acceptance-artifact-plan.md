@@ -31,6 +31,10 @@ installer scripts, `actions/upload-artifact@v4`, GitHub CLI.
   script contracts passed 11/11; the three required macOS x64 runtime secret names exist.
 - [x] 2026-07-12: Local gates passed before push: app 256/256 plus build, Rust 104/104, worker
   231/231 plus Ruff, server 57/57 plus build, docs 0/0, and diff check.
+- [x] 2026-07-12: The first manual dispatch attempt returned GitHub API 404 because a newly added
+  workflow is not dispatchable until it exists on the default branch. User approved one temporary
+  push trigger restricted to the exact acceptance branch; its contract was verified RED then 2/2
+  GREEN and must be removed after the hosted run.
 
 ## Task 1: Lock the workflow contract with TDD
 
@@ -184,6 +188,10 @@ force. Do not publish a release or merge to `main` in this task.
 - Decision: Use repository runtime archive secrets but no Apple credentials. Rationale: the app
   bundle needs its normal embedded runtime, while internal acceptance does not justify Developer ID
   signing or notarization. Date: 2026-07-12.
+- Decision: Bootstrap the first run with a temporary push trigger restricted to
+  `codex/history-delete-macos-intel-acceptance`, then remove it after artifact verification.
+  Rationale: GitHub rejects `workflow_dispatch` for a new workflow absent from the default branch;
+  this preserves branch isolation without merging or creating a release. Date: 2026-07-12.
 
 ## Validation
 

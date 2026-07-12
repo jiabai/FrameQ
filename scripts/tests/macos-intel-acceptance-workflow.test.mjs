@@ -18,7 +18,10 @@ test("builds one manual internal Intel macOS artifact with native tests and read
   const workflow = await readFile(workflowPath, "utf8");
 
   assert.match(workflow, /^name:\s*macOS Intel Acceptance Artifact/m);
-  assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:\s*$/m);
+  assert.match(
+    workflow,
+    /^on:\s*\r?\n\s+push:\s*\r?\n\s+branches:\s*\r?\n\s+- codex\/history-delete-macos-intel-acceptance\s*\r?\n\s+workflow_dispatch:\s*$/m,
+  );
   assert.match(workflow, /permissions:\s*\r?\n\s+contents:\s*read/);
   assert.match(workflow, /runs-on:\s*macos-15-intel/);
   assert.match(workflow, /timeout-minutes:\s*90/);
@@ -65,7 +68,7 @@ test("builds one manual internal Intel macOS artifact with native tests and read
     "FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64",
   ]);
 
-  assert.doesNotMatch(workflow, /^\s+(push|pull_request|schedule|release):/m);
+  assert.doesNotMatch(workflow, /^\s+(pull_request|schedule|release):/m);
   assert.doesNotMatch(workflow, /contents:\s*write/);
   assert.doesNotMatch(workflow, /gh release|tauri-action|desktop-release/i);
   assert.doesNotMatch(workflow, /TAURI_SIGNING|APPLE_|NOTARY|DEVELOPER_ID/i);
