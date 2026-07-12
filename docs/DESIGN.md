@@ -6,14 +6,24 @@
   At 1100 px and wider, local transcript review occupies about 62% and AI generation about
   38% with a 360 px minimum AI width; below 1100 px they stack local-first.
 - Both regions use `--surface-raised`, `--border`, `--shadow-panel-quiet`, and
-  `--radius-lg`, with equal top alignment and visual weight. Use 16 px padding, 12 px gaps,
+  `--radius-lg`, with equal top alignment; the saved local transcript remains the primary work
+  surface and optional AI stays visually quieter. Use 16 px padding, 12 px gaps,
   20-22 px headings, 14-16 px body text, and controls at least 40 px high.
 - The local workspace places a compact audio bar first, a compact video/audio file-action
   row second, a bounded scrolling transcript segment review in the body, and a stable
   edit/save/copy/export footer. Media and transcript are not three large cards.
-- The AI workspace uses a quiet availability/privacy header and two compact target cards:
-  `要点总结（同时生成思维导图文件）` and `启发灵感`. Each owns its status, quota copy,
-  confirm/retry/view actions, progress, and error.
+- Transcript segments share one quiet list boundary and adjacent dividers; they are not separate
+  rounded cards. Playback uses a pale row background with an inset left accent, editing uses a
+  contained white editor, and the external focus halo is reserved for keyboard focus.
+- The AI workspace uses a quiet availability/privacy header and one grouped list containing two
+  semantic target rows: `要点总结（同时生成思维导图文件）` and `启发灵感`. Each owns its status,
+  quota copy, confirm/retry/view actions, progress, and error without another independent card
+  border or radius.
+- Chinese workspace headings are the only visible workspace titles. The task banner owns ready
+  completion, so ready local and optional AI workspace badges are omitted; processing, failure,
+  waiting, generating, and every target-level lifecycle state remain visible.
+- Pending and retry AI target actions use a quiet scoped secondary-blue treatment. The final
+  confirmation-sheet submit remains the primary action.
 - AI generation leaves the local workspace readable and playable while disabling transcript
   edit/save with `AI 正在使用已保存版本`. A target failure stays in that target card.
 - The completion banner says video, audio, and transcript are saved locally. AI copy says
@@ -22,6 +32,22 @@
   or a global loading card. Colors express state only: restrained success/local file colors,
   existing primary blue for AI actions, and restrained danger for errors. Respect reduced
   motion.
+
+## Desktop Density, History, and Toolbar
+
+- Active-task layout follows a 24/16/12 rhythm: 24 px between major regions, 16 px between sibling
+  workspaces, and 12 px inside domain modules. Tightly related status/title pairs may use 8 px.
+- Shared `h1`/`h2` headings use weight 700, `h3` uses 650, and small eyebrow/section labels use no
+  more than 700. `--text-soft` must remain readable at 0.72-0.78rem without competing with primary
+  copy.
+- History sheets use intrinsic height for short lists and the shared sheet max-height for long
+  lists. Only `.history-list` scrolls when content exceeds the available height; tests must not
+  assign a fixed sheet height to manufacture layout evidence.
+- The labelled account chip remains a separate compact status control. Persistent History,
+  Settings, and New Task icon buttons share one quiet toolbar utility group with equal control
+  sizes; the temporary update action remains separate.
+- Short transcript content does not change the local workspace height strategy and must not be
+  padded with decorative or equal-height filler.
 
 ## 2026-07-10 History Restore While Processing
 

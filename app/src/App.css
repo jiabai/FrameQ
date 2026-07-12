@@ -25,7 +25,7 @@
   --surface-raised: rgba(255, 255, 255, 0.94);
   --text: #1d1d1f;
   --text-muted: #6e6e73;
-  --text-soft: #8b8f98;
+  --text-soft: #747982;
   --border: rgba(60, 60, 67, 0.14);
   --border-strong: rgba(60, 60, 67, 0.24);
   --hairline: rgba(255, 255, 255, 0.72);
@@ -47,6 +47,9 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 14px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
   --toolbar-height: 58px;
 }
 
@@ -208,7 +211,7 @@ select:focus-visible {
 .section-label {
   color: var(--text-soft);
   font-size: 0.72rem;
-  font-weight: 760;
+  font-weight: 700;
   letter-spacing: 0;
   line-height: 1.15;
   margin: 0 0 3px;
@@ -225,21 +228,21 @@ p {
 h1 {
   color: var(--text);
   font-size: 1rem;
-  font-weight: 720;
+  font-weight: 700;
   line-height: 1.2;
 }
 
 h2 {
   color: var(--text);
   font-size: 1.12rem;
-  font-weight: 720;
+  font-weight: 700;
   line-height: 1.25;
 }
 
 h3 {
   color: var(--text);
   font-size: 0.94rem;
-  font-weight: 720;
+  font-weight: 650;
 }
 
 .history-status {
@@ -282,8 +285,12 @@ h3 {
 }
 
 .account-chip {
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: none;
   font-size: 0.82rem;
-  min-width: 92px;
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 9px;
 }
 
 .update-chip {
@@ -294,7 +301,7 @@ h3 {
 }
 
 .account-chip.active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 241, 245, 0.9));
+  background: rgba(255, 255, 255, 0.62);
   border-color: var(--border);
   color: #34363b;
 }
@@ -326,6 +333,32 @@ h3 {
 .tool-actions button:active,
 .primary-button:active {
   transform: translateY(1px);
+}
+
+.toolbar-tool-group {
+  align-items: center;
+  background: rgba(238, 241, 246, 0.72);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+}
+
+.toolbar-tool-group .icon-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  height: 32px;
+  min-height: 32px;
+  width: 32px;
+}
+
+.toolbar-tool-group .icon-button:hover,
+.toolbar-tool-group .icon-button:focus-visible {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .primary-button {
@@ -396,6 +429,7 @@ h3 {
   align-items: stretch;
   display: flex;
   flex-direction: column;
+  gap: var(--space-6);
   justify-content: flex-start;
 }
 
@@ -1009,7 +1043,7 @@ h3 {
 
 .markdown-content :is(h1, h2, h3, h4) {
   color: var(--text);
-  font-weight: 760;
+  font-weight: 700;
   line-height: 1.35;
   margin: 8px 0 0;
 }
@@ -1279,27 +1313,34 @@ h3 {
 }
 
 .transcript-segments {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   display: grid;
-  gap: 10px;
+  gap: 0;
+  overflow: hidden;
 }
 
 .transcript-segment {
-  background: rgba(255, 255, 255, 0.74);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: grid;
   gap: 10px;
   padding: 12px;
 }
 
+.transcript-segment + .transcript-segment {
+  border-top: 1px solid var(--border);
+}
+
 .transcript-segment.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--focus);
+  background: #eef6ff;
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
 .transcript-segment.editing {
   background: #fff;
-  border-color: #3b82f6;
+  box-shadow: none;
 }
 
 .transcript-segment-header {
@@ -1387,9 +1428,9 @@ h3 {
 .history-list {
   align-items: stretch;
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
   min-height: 0;
   overflow: auto;
   padding: 14px 18px 18px;
@@ -1405,7 +1446,7 @@ h3 {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--space-3);
   min-height: 92px;
   padding: 13px;
   text-align: left;
@@ -1842,6 +1883,20 @@ h3 {
   padding: 12px 13px;
 }
 
+.settings-basic-note {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.settings-basic-note svg {
+  flex: 0 0 auto;
+}
+
 .sheet-form-section {
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -2029,7 +2084,7 @@ h3 {
 .task-workspace-layout {
   align-items: start;
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
   grid-template-columns: minmax(0, 1.62fr) minmax(360px, 1fr);
   min-width: 0;
 }
@@ -2042,7 +2097,7 @@ h3 {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
   padding: 16px;
 }
@@ -2116,7 +2171,7 @@ h3 {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 0;
 }
 
@@ -2202,27 +2257,33 @@ h3 {
 }
 
 .ai-target-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   display: grid;
-  gap: 12px;
+  gap: 0;
+  overflow: hidden;
 }
 
 .ai-target-card {
-  background: #fafbfc;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: grid;
   gap: 10px;
   padding: 14px;
 }
 
+.ai-target-card + .ai-target-card {
+  border-top: 1px solid var(--border);
+}
+
 .ai-target-card.generating,
 .ai-target-card.cancelling {
-  border-color: rgba(10, 132, 255, 0.3);
+  background: #f7fbff;
 }
 
 .ai-target-card.failed {
   background: #fff8f7;
-  border-color: rgba(199, 53, 44, 0.22);
 }
 
 .ai-target-heading {
@@ -2269,6 +2330,19 @@ h3 {
 
 .ai-target-actions {
   justify-content: flex-end;
+}
+
+.ai-target-action {
+  background: #eef6ff;
+  border-color: rgba(10, 132, 255, 0.24);
+  box-shadow: none;
+  color: #075c9f;
+}
+
+.ai-target-action:not(:disabled):hover,
+.ai-target-action:focus-visible {
+  background: #e2f1ff;
+  border-color: #8cc8ff;
 }
 
 .ai-cancel-button {

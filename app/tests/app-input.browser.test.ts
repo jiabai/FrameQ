@@ -644,7 +644,7 @@ describe("App desktop sheet structure", () => {
             hasSettingsNav: Boolean(document.querySelector('.settings-nav')),
             selectedNavCount: document.querySelectorAll('.settings-nav-item.selected').length,
             hasLocateConfigButton: Boolean(document.querySelector('.config-file-row button')),
-            hasPrivacyCallout: Boolean(document.querySelector('.privacy-callout')),
+            hasBasicNotice: Boolean(document.querySelector('.settings-basic-note')),
             hasStickyFooter: Boolean(document.querySelector('.sheet-footer')),
             hasScrollableBody: getComputedStyle(document.querySelector('.settings-sections')).overflowY === 'auto'
           })`,
@@ -664,7 +664,7 @@ describe("App desktop sheet structure", () => {
         hasSettingsNav: true,
         selectedNavCount: 1,
         hasLocateConfigButton: false,
-        hasPrivacyCallout: true,
+        hasBasicNotice: true,
         hasStickyFooter: true,
         hasScrollableBody: true,
       });
@@ -682,6 +682,7 @@ describe("App desktop sheet structure", () => {
             groupedSections: document.querySelectorAll('.sheet-form-section').length,
             hasBasicSection: Boolean(document.querySelector('#settings-basic')),
             hasInspirationSection: Boolean(document.querySelector('#settings-inspiration')),
+            hasBasicNotice: Boolean(document.querySelector('.settings-basic-note')),
             selectedNavText: document.querySelector('.settings-nav-item.selected')?.textContent ?? '',
             actionDisplay: getComputedStyle(document.querySelector('.inspiration-settings-actions')).display,
             actionWrap: getComputedStyle(document.querySelector('.inspiration-settings-actions')).flexWrap,
@@ -700,6 +701,7 @@ describe("App desktop sheet structure", () => {
         groupedSections: 1,
         hasBasicSection: false,
         hasInspirationSection: true,
+        hasBasicNotice: false,
         actionDisplay: "flex",
         actionWrap: "nowrap",
         clearButtonColor: "rgb(52, 54, 59)",
@@ -824,6 +826,7 @@ describe("App desktop sheet structure", () => {
           expression: `({
             commands: window.__FRAMEQ_TEST_COMMANDS__.map((entry) => entry.command),
             hasAudioCacheSection: Boolean(document.querySelector('.audio-cache-settings-section')),
+            hasBasicNotice: Boolean(document.querySelector('.settings-basic-note')),
             text: document.querySelector('.audio-cache-settings-section')?.textContent ?? ''
           })`,
           returnByValue: true,
@@ -833,6 +836,7 @@ describe("App desktop sheet structure", () => {
       expect(commands.result.value.commands).toContain("get_audio_review_cache_usage");
       expect(commands.result.value.commands).toContain("clear_audio_review_cache");
       expect(commands.result.value.hasAudioCacheSection).toBe(true);
+      expect(commands.result.value.hasBasicNotice).toBe(false);
       expect(commands.result.value.text).toContain("0 B");
     } finally {
       await page.close();
@@ -949,6 +953,13 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
         audioDirectChildren: number;
         audioCenterSpread: number;
         audioPaddingDelta: number;
+        segmentListBordered: boolean;
+        segmentRowsBorderless: boolean;
+        targetListBordered: boolean;
+        targetRowsBorderless: boolean;
+        noEnglishEyebrows: boolean;
+        noRedundantWorkspaceStatus: boolean;
+        quietTargetActions: boolean;
       }>(
         page,
         `(() => {
@@ -960,6 +971,10 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
           const playButton = audioBar.querySelector('.audio-play-button');
           const scrubber = audioBar.querySelector('.audio-review-scrubber');
           const clock = audioBar.querySelector('.audio-review-clock');
+          const segmentList = document.querySelector('.transcript-segments');
+          const segments = [...document.querySelectorAll('.transcript-segment')];
+          const targetList = document.querySelector('.ai-target-list');
+          const targetRows = [...document.querySelectorAll('.ai-target-card')];
           const localRect = local.getBoundingClientRect();
           const aiRect = ai.getBoundingClientRect();
           const audioBarRect = audioBar.getBoundingClientRect();
@@ -982,7 +997,14 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
             audioCenterSpread: Math.max(...audioCenters) - Math.min(...audioCenters),
             audioPaddingDelta: Math.abs(
               (playRect.left - audioBarRect.left) - (audioBarRect.right - clockRect.right)
-            )
+            ),
+            segmentListBordered: parseFloat(getComputedStyle(segmentList).borderTopWidth) === 1,
+            segmentRowsBorderless: segments.every((item) => parseFloat(getComputedStyle(item).borderLeftWidth) === 0),
+            targetListBordered: parseFloat(getComputedStyle(targetList).borderTopWidth) === 1,
+            targetRowsBorderless: targetRows.every((item) => parseFloat(getComputedStyle(item).borderLeftWidth) === 0),
+            noEnglishEyebrows: !document.body.innerText.includes('LOCAL TRANSCRIPT') && !document.body.innerText.includes('CLOUD AI'),
+            noRedundantWorkspaceStatus: !document.querySelector('.local-transcript-workspace .workspace-status-badge') && !document.querySelector('.ai-generation-workspace .workspace-status-badge'),
+            quietTargetActions: document.querySelectorAll('.ai-target-action').length === 2
           };
         })()`,
       );
@@ -1002,6 +1024,13 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       expect(wide.audioDirectChildren).toBe(3);
       expect(wide.audioCenterSpread).toBeLessThanOrEqual(1);
       expect(wide.audioPaddingDelta).toBeLessThanOrEqual(1);
+      expect(wide.segmentListBordered).toBe(true);
+      expect(wide.segmentRowsBorderless).toBe(true);
+      expect(wide.targetListBordered).toBe(true);
+      expect(wide.targetRowsBorderless).toBe(true);
+      expect(wide.noEnglishEyebrows).toBe(true);
+      expect(wide.noRedundantWorkspaceStatus).toBe(true);
+      expect(wide.quietTargetActions).toBe(true);
 
       await page.send("Emulation.setDeviceMetricsOverride", {
         width: 900,
@@ -1035,6 +1064,55 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       await page.close();
     }
   }, 30_000);
+
+  test("keeps the labelled account chip and grouped toolbar utilities aligned", async () => {
+    const page = await openUiSmokePage({});
+
+    try {
+      for (const width of [1366, 720]) {
+        await page.send("Emulation.setDeviceMetricsOverride", {
+          width,
+          height: 900,
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        await waitForRuntimeCondition(page, `window.innerWidth === ${width}`);
+        const geometry = await evaluateValue<{
+          accountHeight: number;
+          centerDelta: number;
+          toolCount: number;
+          toolSizeSpread: number;
+          toolbarContained: boolean;
+        }>(
+          page,
+          `(() => {
+            const toolbar = document.querySelector('.app-toolbar');
+            const account = document.querySelector('.account-chip').getBoundingClientRect();
+            const group = document.querySelector('.toolbar-tool-group').getBoundingClientRect();
+            const tools = [...document.querySelectorAll('.toolbar-tool-group .icon-button')]
+              .map((item) => item.getBoundingClientRect());
+            return {
+              accountHeight: account.height,
+              centerDelta: Math.abs(
+                (account.top + account.height / 2) - (group.top + group.height / 2)
+              ),
+              toolCount: tools.length,
+              toolSizeSpread: Math.max(...tools.map((rect) => rect.width)) - Math.min(...tools.map((rect) => rect.width)),
+              toolbarContained: toolbar.scrollWidth <= toolbar.clientWidth + 1
+            };
+          })()`,
+        );
+
+        expect(geometry.accountHeight).toBe(32);
+        expect(geometry.centerDelta).toBeLessThanOrEqual(1);
+        expect(geometry.toolCount).toBe(3);
+        expect(geometry.toolSizeSpread).toBeLessThanOrEqual(1);
+        expect(geometry.toolbarContained).toBe(true);
+      }
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
 
   test("keeps long history card titles clamped and metadata aligned responsively", async () => {
     const baseHistoryItem = {
@@ -1086,18 +1164,18 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       });
       await waitForRuntimeCondition(page, "window.innerWidth === 1366");
       await openSmokeHistory(page, historyItems.length);
-      await page.send("Runtime.evaluate", {
-        expression: "document.querySelector('.history-sheet').style.height = '720px'",
-      });
       await waitForRuntimeCondition(
         page,
-        "document.querySelector('.history-sheet').getBoundingClientRect().height === 720 && document.querySelectorAll('.history-title').length === 3 && getComputedStyle(document.querySelector('.history-meta')).gridTemplateColumns.split(' ').length === 3",
+        "document.querySelectorAll('.history-title').length === 3 && getComputedStyle(document.querySelector('.history-meta')).gridTemplateColumns.split(' ').length === 3",
       );
 
       const wide = await evaluateValue<{
         titlesClamped: boolean;
         outputEllipsized: boolean;
         metaAligned: boolean;
+        sheetHeight: number;
+        listBottomPadding: number;
+        listScrollable: boolean;
         cards: Array<{
           height: number;
           metadataBottomInset: number;
@@ -1111,6 +1189,10 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
           const titles = Array.from(document.querySelectorAll('.history-title'));
           const output = document.querySelector('.history-meta-output[title*="a-very-long-safe"] .history-meta-value');
           const metaRows = Array.from(document.querySelectorAll('.history-meta'));
+          const sheetRect = document.querySelector('.history-sheet').getBoundingClientRect();
+          const list = document.querySelector('.history-list');
+          const listRect = list.getBoundingClientRect();
+          const lastCardRect = cards[cards.length - 1].getBoundingClientRect();
           return {
             titlesClamped: titles.slice(0, 2).every((title) => {
               const style = getComputedStyle(title);
@@ -1122,6 +1204,9 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
               const result = meta.querySelector('.history-meta-result').getBoundingClientRect();
               return Math.abs(time.top - result.top) <= 1 && result.right <= meta.getBoundingClientRect().right + 1;
             }),
+            sheetHeight: sheetRect.height,
+            listBottomPadding: listRect.bottom - lastCardRect.bottom,
+            listScrollable: list.scrollHeight > list.clientHeight,
             cards: cards.map((card) => {
               const cardRect = card.getBoundingClientRect();
               const statusRect = card.querySelector('.history-status').getBoundingClientRect();
@@ -1194,18 +1279,74 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       expect(wide.titlesClamped).toBe(true);
       expect(wide.outputEllipsized).toBe(true);
       expect(wide.metaAligned).toBe(true);
+      expect(wide.sheetHeight).toBeLessThan(600);
+      expect(wide.listBottomPadding).toBeGreaterThanOrEqual(16);
+      expect(wide.listBottomPadding).toBeLessThanOrEqual(20);
+      expect(wide.listScrollable).toBe(false);
       expect(wide.cards.every((card) => card.height < 150)).toBe(true);
       expect(wide.cards[2].height).toBeLessThan(wide.cards[0].height);
       expect(wide.cards.every((card) => card.metadataBottomInset >= 11 && card.metadataBottomInset <= 15)).toBe(true);
       expect(wide.cards.every((card) => card.statusTitleGap >= 6 && card.statusTitleGap <= 10)).toBe(true);
-      expect(wide.cards.every((card) => card.titleMetadataGap >= 7 && card.titleMetadataGap <= 11)).toBe(true);
+      expect(wide.cards.every((card) => card.titleMetadataGap >= 11 && card.titleMetadataGap <= 13)).toBe(true);
       expect(narrow.outputOnSecondRow).toBe(true);
       expect(narrow.contained).toBe(true);
       expect(narrow.statusAligned).toBe(true);
       expect(narrow.cards.every((card) => card.height < 180)).toBe(true);
       expect(narrow.cards.every((card) => card.metadataBottomInset >= 11 && card.metadataBottomInset <= 15)).toBe(true);
       expect(narrow.cards.every((card) => card.statusTitleGap >= 6 && card.statusTitleGap <= 10)).toBe(true);
-      expect(narrow.cards.every((card) => card.titleMetadataGap >= 7 && card.titleMetadataGap <= 11)).toBe(true);
+      expect(narrow.cards.every((card) => card.titleMetadataGap >= 11 && card.titleMetadataGap <= 13)).toBe(true);
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
+  test("keeps a long history list inside the sheet maximum and scrolls only the list", async () => {
+    const historyItems = Array.from({ length: 14 }, (_, index) => ({
+      task_id: `history-scroll-${index}`,
+      id: `history-scroll-${index}`,
+      created_at: "2026-07-11T08:00:00.000Z",
+      url: `https://www.youtube.com/watch?v=demo${index.toString().padStart(7, "0")}`,
+      status: "completed",
+      task_dir: `C:/FrameQ/outputs/tasks/history-scroll-${index}`,
+      output_dir: "C:/FrameQ/outputs",
+      artifacts: { transcript_txt: "transcript/transcript.txt" },
+      error: null,
+      text_preview: `第 ${index + 1} 条安全历史任务文字稿预览`,
+      insights_count: index,
+    }));
+    const page = await openUiSmokePage({ responses: { get_history: historyItems } });
+
+    try {
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 1366,
+        height: 720,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForRuntimeCondition(page, "window.innerWidth === 1366 && window.innerHeight === 720");
+      await openSmokeHistory(page, historyItems.length);
+      const geometry = await evaluateValue<{
+        sheetHeight: number;
+        sheetBottom: number;
+        viewportHeight: number;
+        listScrollable: boolean;
+      }>(
+        page,
+        `(() => {
+          const sheet = document.querySelector('.history-sheet').getBoundingClientRect();
+          const list = document.querySelector('.history-list');
+          return {
+            sheetHeight: sheet.height,
+            sheetBottom: sheet.bottom,
+            viewportHeight: window.innerHeight,
+            listScrollable: list.scrollHeight > list.clientHeight
+          };
+        })()`,
+      );
+
+      expect(geometry.sheetHeight).toBeLessThanOrEqual(635);
+      expect(geometry.sheetBottom).toBeLessThanOrEqual(geometry.viewportHeight - 24 + 1);
+      expect(geometry.listScrollable).toBe(true);
     } finally {
       await page.close();
     }
@@ -1287,7 +1428,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
           page,
           `({
             blocker: document.querySelector('.ai-availability-blocker')?.textContent ?? '',
-            disabledTargets: document.querySelectorAll('.ai-target-card .primary-button:disabled').length,
+            disabledTargets: document.querySelectorAll('.ai-target-card .ai-target-action:disabled').length,
             localTask: document.querySelector('.local-transcript-workspace')?.dataset.taskId ?? '',
             localEditorDisabled: document.querySelector('.transcript-full-editor')?.disabled ?? null
           })`,
@@ -1334,7 +1475,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       const state = await evaluateValue<Record<string, unknown>>(
         page,
         `({
-          localReady: document.querySelector('.local-transcript-workspace .workspace-status-badge')?.textContent === '本地完成',
+          localReady: Boolean(document.querySelector('.local-transcript-workspace .transcript-review-panel')),
           localError: Boolean(document.querySelector('.local-workspace-error')),
           aiError: document.querySelector('[data-ai-target="summary"] .ai-target-error')?.textContent ?? '',
           insightsFailed: document.querySelector('[data-ai-target="insights"]')?.classList.contains('failed') ?? false

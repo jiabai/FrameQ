@@ -10,6 +10,8 @@
 
 ## Desktop Runtime Spec
 
+- `2026-07-12-desktop-density-history-toolbar-polish.md` - Intrinsic History height, clearer secondary typography, consistent active-workspace rhythm, and a quieter grouped desktop toolbar without lifecycle or data changes.
+- `2026-07-12-task-workspace-visual-hierarchy.md` - Restrained hierarchy cleanup for local transcript and AI workspaces without changing their product, privacy, or workflow boundaries.
 - `2026-07-11-local-transcript-ai-workspaces.md` - One task with separate inline local transcript review and independently confirmed AI summary/inspiration workspaces.
 - `2026-07-11-history-vnext-strict-boundary.md` - Strict manifest-only history listing plus on-demand detail for current safe v3 tasks; unsupported legacy data remains physically untouched and product-isolated.
 - `2026-07-10-history-task-restore-ownership.md` - Controller-owned history restoration that rejects active workflow switches and prevents stale operation overwrite.

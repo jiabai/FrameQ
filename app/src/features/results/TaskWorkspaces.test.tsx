@@ -4,6 +4,8 @@ import { describe, expect, test, vi } from "vitest";
 
 import { createGuestAccountStatus } from "../../accountState";
 import {
+  createInitialWorkflow,
+  startProcessing,
   startInsightRetry,
   summarizeWorkerResult,
   type WorkflowState,
@@ -142,6 +144,80 @@ describe("task domain workspaces", () => {
     expect(markup).toContain('data-task-id="same-task"');
     expect(markup).toContain('aria-label="AI 整理工作区"');
     expect(markup.match(/data-task-id="same-task"/g)).toHaveLength(2);
+    expect(markup).toContain("文字稿校对");
+    expect(markup).toContain("AI 整理");
+    expect(markup).not.toContain("Local transcript");
+    expect(markup).not.toContain("Cloud AI");
+    expect(markup).not.toContain(">本地完成</span>");
+    expect(markup).not.toContain(">可选</span>");
+    expect(markup.match(/class="ai-target-status"/g)).toHaveLength(2);
+  });
+
+  test("keeps meaningful workspace statuses for active and constrained states", () => {
+    const processingWorkflow = startProcessing(createInitialWorkflow(), "https://example.invalid/video");
+    const processingModel = createTaskWorkspaceViewModel(processingWorkflow, aiAccount());
+    const processingMarkup = renderToStaticMarkup(
+      <>
+        <LocalTranscriptWorkspace
+          workflow={processingWorkflow}
+          model={processingModel.local}
+          controller={transcriptController()}
+          actionNotice=""
+          onLocateArtifact={vi.fn()}
+          onCancel={vi.fn()}
+        />
+        <AiGenerationWorkspace
+          workflow={processingWorkflow}
+          model={processingModel.ai}
+          quotaRemaining={8}
+          onSummaryAction={vi.fn()}
+          onInsightsAction={vi.fn()}
+          onViewTarget={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </>,
+    );
+    expect(processingMarkup).toContain(">处理中</span>");
+    expect(processingMarkup).toContain(">等待文字稿</span>");
+
+    const failedWorkflow = summarizeWorkerResult({
+      status: "failed",
+      task_id: null,
+      task_dir: null,
+      artifacts: {},
+      text: "",
+      summary: "",
+      insights: [],
+      transcript: null,
+      error: { code: "MEDIA_DOWNLOAD_FAILED", message: "failed", stage: "video_extracting" },
+    });
+    const failedModel = createTaskWorkspaceViewModel(failedWorkflow, aiAccount());
+    const failedMarkup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        workflow={failedWorkflow}
+        model={failedModel.local}
+        controller={transcriptController()}
+        actionNotice=""
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(failedMarkup).toContain(">处理失败</span>");
+
+    const generatingWorkflow = startInsightRetry(readyWorkflow(), "summary");
+    const generatingModel = createTaskWorkspaceViewModel(generatingWorkflow, aiAccount());
+    const generatingMarkup = renderToStaticMarkup(
+      <AiGenerationWorkspace
+        workflow={generatingWorkflow}
+        model={generatingModel.ai}
+        quotaRemaining={8}
+        onSummaryAction={vi.fn()}
+        onInsightsAction={vi.fn()}
+        onViewTarget={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(generatingMarkup).toContain(">生成中</span>");
   });
 
   test("local workspace is audio-first with compact file actions and inline transcript review", () => {
@@ -165,6 +241,7 @@ describe("task domain workspaces", () => {
     expect(markup).toContain('class="transcript-review-panel"');
     expect(markup).toContain("第一段正式文字稿。");
     expect(markup).toContain('class="transcript-action-bar"');
+    expect(markup.match(/class="transcript-segment /g)).toHaveLength(2);
     expect(markup).not.toContain("result-grid");
   });
 
@@ -189,11 +266,14 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("要点总结");
     expect(markup).toContain("同时生成思维导图文件");
     expect(markup).toContain('data-ai-target="insights"');
+    expect(markup.match(/<article class="ai-target-card/g)).toHaveLength(2);
     expect(markup).toContain("启发灵感");
     expect(markup).toContain("AI Credits 余额：8");
     expect(markup).toContain("一次 AI 整理可能消耗多个 Credits。");
     expect(markup).not.toContain("当前可用 8 次");
     expect(markup).not.toContain('data-ai-target="mindmap"');
+    expect(markup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(2);
+    expect(markup).not.toContain('class="primary-button"');
   });
 
   test("AI generation keeps transcript review visible but disables editing and saving", () => {

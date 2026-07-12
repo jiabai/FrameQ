@@ -30,10 +30,11 @@ export function LocalTranscriptWorkspace({
     >
       <header className="domain-workspace-header">
         <div>
-          <p className="section-label">Local transcript</p>
           <h2>{model.phase === "ready" ? "文字稿校对" : "本地转录"}</h2>
         </div>
-        <span className={`workspace-status-badge ${model.phase}`}>{localStatusLabel(model.phase)}</span>
+        {model.phase !== "ready" ? (
+          <span className={`workspace-status-badge ${model.phase}`}>{localStatusLabel(model.phase)}</span>
+        ) : null}
       </header>
 
       {model.phase === "processing" ? (

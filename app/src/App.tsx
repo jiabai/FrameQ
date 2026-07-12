@@ -493,22 +493,24 @@ function App() {
                 <span>{updateToolbarLabel(updateState)}</span>
               </button>
             ) : null}
-            <button className="icon-button" type="button" onClick={openHistory} aria-label="查看历史">
-              <HistoryIcon size={17} />
-            </button>
-            <button className="icon-button" type="button" onClick={openSettings} aria-label="应用设置">
-              <Settings size={17} />
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              onClick={startNewTaskFromToolbar}
-              aria-label={toolbarNewTaskButtonState.ariaLabel}
-              title={toolbarNewTaskButtonState.title}
-              disabled={toolbarNewTaskButtonState.disabled}
-            >
-              <RotateCcw size={17} />
-            </button>
+            <div className="toolbar-tool-group" role="group" aria-label="任务工具">
+              <button className="icon-button" type="button" onClick={openHistory} aria-label="查看历史">
+                <HistoryIcon size={17} />
+              </button>
+              <button className="icon-button" type="button" onClick={openSettings} aria-label="应用设置">
+                <Settings size={17} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={startNewTaskFromToolbar}
+                aria-label={toolbarNewTaskButtonState.ariaLabel}
+                title={toolbarNewTaskButtonState.title}
+                disabled={toolbarNewTaskButtonState.disabled}
+              >
+                <RotateCcw size={17} />
+              </button>
+            </div>
           </div>
         </header>
 

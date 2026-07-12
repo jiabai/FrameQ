@@ -2,6 +2,8 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-12-desktop-density-history-toolbar-polish-plan.md` | Made History intrinsically sized, clarified secondary typography and active-task rhythm, and grouped compact desktop toolbar utilities. |
+| `2026-07-12-task-workspace-visual-hierarchy-plan.md` | Reduced nested card weight, clarified status ownership, removed duplicate eyebrow labels, quieted pre-confirmation AI actions, and separated transcript playback/edit/focus states. |
 | `2026-07-11-ai-credits-terminology-plan.md` | Replaced misleading generation-count wording with transparent AI Credits balance and variable-cost disclosure without changing quota accounting. |
 | `2026-07-11-local-transcript-ai-workspaces-plan.md` | Split one task into independent local transcript and confirmed AI-generation workspaces, and made `retry_insights` the sole AI command. |
 | `2026-07-11-history-vnext-strict-boundary-plan.md` | Replaced legacy-compatible history with schema-v3 manifest-only list/detail loading and complete product isolation of unsupported task data. |

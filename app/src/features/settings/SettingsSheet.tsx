@@ -216,60 +216,59 @@ export function SettingsSheet({
             </nav>
 
             <div className="settings-sections">
-              <p className="settings-warning privacy-callout">
-                <ShieldCheck size={16} />
-                <span>
-                  这里仅管理本机 ASR 模型和输出目录。AI 结果 LLM 由管理员在服务端统一配置，客户端无需手动填写 API Key。
-                </span>
-              </p>
-
               {settingsCategory === "basic" ? (
-                <section id="settings-basic" className="sheet-form-section">
-                  <div className="form-section-heading">
-                    <h3>模型与输出</h3>
-                    <p>这些设置只影响后续任务。</p>
-                  </div>
-                  <label className="field-row">
-                    <span>ASR 模型</span>
-                    <select
-                      value={settingsDraft.asrModel}
-                      onChange={(event) => updateSettingsDraft("asrModel", event.currentTarget.value)}
-                      disabled={settingsLoading || settingsSaving}
-                    >
-                      {settingsSupportedAsrModels.map((model) => (
-                        <option value={model} key={model}>
-                          {asrModelLabels[model] ?? model}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="model-settings-row">
-                    <div>
-                      <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
-                        {asrModelStatus.available ? "ASR 模型已就绪" : "ASR 模型未下载"}
-                      </span>
-                      <small>{asrModelStatus.modelDir || "app-local data/models"}</small>
+                <>
+                  <p className="settings-basic-note">
+                    <ShieldCheck size={15} />
+                    <span>这里只管理本机 ASR 与输出目录；AI 配置由服务端统一管理。</span>
+                  </p>
+                  <section id="settings-basic" className="sheet-form-section">
+                    <div className="form-section-heading">
+                      <h3>模型与输出</h3>
+                      <p>这些设置只影响后续任务。</p>
                     </div>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => void onStartAsrModelDownload()}
-                      disabled={asrModelStatus.available || modelDownloadActive}
-                    >
-                      <Download size={15} />
-                      <span>{modelDownloadActive ? "下载中" : "下载 ASR 模型"}</span>
-                    </button>
-                  </div>
-                  <label className="field-row">
-                    <span>输出目录</span>
-                    <input
-                      value={settingsDraft.outputDir}
-                      onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
-                      placeholder="留空使用 outputs/"
-                      disabled={settingsLoading || settingsSaving}
-                    />
-                  </label>
-                </section>
+                    <label className="field-row">
+                      <span>ASR 模型</span>
+                      <select
+                        value={settingsDraft.asrModel}
+                        onChange={(event) => updateSettingsDraft("asrModel", event.currentTarget.value)}
+                        disabled={settingsLoading || settingsSaving}
+                      >
+                        {settingsSupportedAsrModels.map((model) => (
+                          <option value={model} key={model}>
+                            {asrModelLabels[model] ?? model}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="model-settings-row">
+                      <div>
+                        <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
+                          {asrModelStatus.available ? "ASR 模型已就绪" : "ASR 模型未下载"}
+                        </span>
+                        <small>{asrModelStatus.modelDir || "app-local data/models"}</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => void onStartAsrModelDownload()}
+                        disabled={asrModelStatus.available || modelDownloadActive}
+                      >
+                        <Download size={15} />
+                        <span>{modelDownloadActive ? "下载中" : "下载 ASR 模型"}</span>
+                      </button>
+                    </div>
+                    <label className="field-row">
+                      <span>输出目录</span>
+                      <input
+                        value={settingsDraft.outputDir}
+                        onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
+                        placeholder="留空使用 outputs/"
+                        disabled={settingsLoading || settingsSaving}
+                      />
+                    </label>
+                  </section>
+                </>
               ) : null}
 
               {settingsCategory === "inspiration" ? (

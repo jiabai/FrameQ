@@ -40,14 +40,13 @@ export function AiGenerationWorkspace({
     >
       <header className="domain-workspace-header">
         <div>
-          <p className="section-label">Cloud AI</p>
           <h2>AI 整理</h2>
         </div>
         {model.activeTarget ? (
           <span className="workspace-status-badge active">生成中</span>
-        ) : (
-          <span className="workspace-status-badge">{model.phase === "waiting_transcript" ? "等待文字稿" : "可选"}</span>
-        )}
+        ) : model.phase === "waiting_transcript" ? (
+          <span className="workspace-status-badge">等待文字稿</span>
+        ) : null}
       </header>
 
       <p className="ai-privacy-copy">确认后仅发送文字稿片段，视频和音频不会上传。</p>
@@ -143,7 +142,7 @@ function AiTargetCard({
             查看结果
           </button>
         ) : (
-          <button type="button" className="primary-button" onClick={onAction} disabled={disabled}>
+          <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={disabled}>
             {actionLabel}
           </button>
         )}
