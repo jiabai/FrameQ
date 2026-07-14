@@ -99,6 +99,15 @@ model LlmConfig {
   updatedAt       DateTime
 }
 
+model AnysearchConfig {
+  id              String   @id
+  mcpUrl          String
+  encryptedApiKey String
+  apiKeyLast4     String
+  createdAt       DateTime
+  updatedAt       DateTime
+}
+
 model LlmUsageEvent {
   id            String   @id
   userId        String

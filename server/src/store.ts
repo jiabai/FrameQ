@@ -74,6 +74,15 @@ export type LlmConfigRecord = {
   updatedAt: Date;
 };
 
+export type AnysearchConfigRecord = {
+  id: string;
+  mcpUrl: string;
+  encryptedApiKey: string;
+  apiKeyLast4: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type LlmUsageEventRecord = {
   id: string;
   userId: string;
@@ -179,6 +188,11 @@ export type Store = {
   consumeLlmQuota(userId: string, requestId: string, now: Date): Promise<{ entitlement: EntitlementRecord; reused: boolean } | null>;
   getLlmConfig(): Promise<LlmConfigRecord | null>;
   upsertLlmConfig(input: Omit<LlmConfigRecord, "id" | "createdAt" | "updatedAt">, now: Date): Promise<LlmConfigRecord>;
+  getAnysearchConfig(): Promise<AnysearchConfigRecord | null>;
+  upsertAnysearchConfig(
+    input: Omit<AnysearchConfigRecord, "id" | "createdAt" | "updatedAt">,
+    now: Date,
+  ): Promise<AnysearchConfigRecord>;
   createActivationCode(input: Omit<ActivationCodeRecord, "id">): Promise<ActivationCodeRecord>;
   findActivationCodeByHash(codeHash: string): Promise<ActivationCodeRecord | null>;
   markActivationCodeRedeemed(codeHash: string, userId: string, redeemedAt: Date): Promise<ActivationCodeRecord | null>;
@@ -218,6 +232,7 @@ export class MemoryStore implements Store {
   orders: OrderRecord[] = [];
   entitlements: EntitlementRecord[] = [];
   llmConfig: LlmConfigRecord | null = null;
+  anysearchConfig: AnysearchConfigRecord | null = null;
   llmUsageEvents: LlmUsageEventRecord[] = [];
   activationCodes: ActivationCodeRecord[] = [];
   adminSessions: AdminSessionRecord[] = [];
@@ -512,6 +527,27 @@ export class MemoryStore implements Store {
       updatedAt: now,
     };
     return this.llmConfig;
+  }
+
+  async getAnysearchConfig(): Promise<AnysearchConfigRecord | null> {
+    return this.anysearchConfig;
+  }
+
+  async upsertAnysearchConfig(
+    input: Omit<AnysearchConfigRecord, "id" | "createdAt" | "updatedAt">,
+    now: Date,
+  ): Promise<AnysearchConfigRecord> {
+    if (this.anysearchConfig) {
+      this.anysearchConfig = { ...this.anysearchConfig, ...input, updatedAt: now };
+      return this.anysearchConfig;
+    }
+    this.anysearchConfig = {
+      ...input,
+      id: "default",
+      createdAt: now,
+      updatedAt: now,
+    };
+    return this.anysearchConfig;
   }
 
   async createActivationCode(input: Omit<ActivationCodeRecord, "id">): Promise<ActivationCodeRecord> {

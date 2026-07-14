@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { ActivationCodeService } from "./activation.js";
 import { AdminAuthService, adminSessionMaxAgeSeconds } from "./adminAuth.js";
+import { AnysearchConfigService } from "./anysearchConfig.js";
 import { renderAdminLoginPage, renderAdminPage } from "./adminPage.js";
 import { AuthService } from "./auth.js";
 import { BillingService, type NativePaymentResult } from "./billing.js";
@@ -31,8 +32,6 @@ export type ServerDependencies = {
   llmConfigEncryptionKey?: string;
   releaseManifest?: DesktopReleaseManifest | null;
   releaseManifestPath?: string;
-  anysearchMcpUrl?: string;
-  anysearchApiKey?: string | null;
   now?: () => Date;
 };
 
@@ -66,6 +65,12 @@ const adminLlmConfigSchema = z.object({
   model: z.string().min(1).max(256),
   api_key: z.string().max(4096).optional(),
   timeout_seconds: z.number().int().min(1).max(600),
+});
+
+const adminAnysearchConfigSchema = z.object({
+  mcp_url: z.string().min(1).max(2048),
+  api_key: z.string().max(4096).optional(),
+  clear_api_key: z.boolean().optional(),
 });
 
 const llmCheckoutSchema = z.object({
@@ -116,6 +121,11 @@ export function buildServer(dependencies: ServerDependencies) {
     now,
     encryptionKey: dependencies.llmConfigEncryptionKey ?? process.env.FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY,
   });
+  const anysearchConfig = new AnysearchConfigService({
+    store: dependencies.store,
+    now,
+    encryptionKey: dependencies.llmConfigEncryptionKey ?? process.env.FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY,
+  });
   const billing = new BillingService({
     store: dependencies.store,
     now,
@@ -133,8 +143,6 @@ export function buildServer(dependencies: ServerDependencies) {
     loadDesktopReleaseManifest(
       dependencies.releaseManifestPath ?? process.env.FRAMEQ_RELEASE_MANIFEST_PATH,
     );
-  const anysearchMcpUrl = (dependencies.anysearchMcpUrl ?? process.env.FRAMEQ_ANYSEARCH_MCP_URL ?? "").trim();
-  const anysearchApiKey = (dependencies.anysearchApiKey ?? process.env.FRAMEQ_ANYSEARCH_API_KEY ?? "").trim();
 
   app.removeContentTypeParser("application/json");
   app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
@@ -224,6 +232,7 @@ export function buildServer(dependencies: ServerDependencies) {
     }
     const csrfToken = cookies.get("frameq_admin_csrf") ?? "";
     const publicLlmConfig = await llmConfig.getPublicConfig();
+    const publicAnysearchConfig = await anysearchConfig.getPublicConfig();
     const users = await dependencies.store.listUsers();
     const entitlements = new Map(
       await Promise.all(
@@ -240,6 +249,7 @@ export function buildServer(dependencies: ServerDependencies) {
       users,
       entitlements,
       llmConfig: publicLlmConfig,
+      anysearchConfig: publicAnysearchConfig,
       activationCodes: codes,
       entitlementAdjustments,
     });
@@ -294,6 +304,32 @@ export function buildServer(dependencies: ServerDependencies) {
         timeoutSeconds: parsed.data.timeout_seconds,
       });
       return publicLlmConfigResponse(saved);
+    } catch (error) {
+      return reply.code(400).send({ error: publicError(error) });
+    }
+  });
+
+  app.post("/admin/api/anysearch-config", async (request, reply) => {
+    const cookies = parseCookies(request.headers.cookie);
+    const session = await adminAuth.authenticate(cookies.get("frameq_admin_session") ?? null);
+    if (!session) {
+      return reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
+    }
+    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
+    if (!adminAuth.validateCsrf(session, csrfToken)) {
+      return reply.code(403).send({ error: "CSRF_INVALID" });
+    }
+    const parsed = adminAnysearchConfigSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "INVALID_REQUEST" });
+    }
+    try {
+      const saved = await anysearchConfig.saveConfig({
+        mcpUrl: parsed.data.mcp_url,
+        apiKey: parsed.data.api_key,
+        clearApiKey: parsed.data.clear_api_key,
+      });
+      return publicAnysearchConfigResponse(saved);
     } catch (error) {
       return reply.code(400).send({ error: publicError(error) });
     }
@@ -469,12 +505,13 @@ export function buildServer(dependencies: ServerDependencies) {
     if (!session) {
       return reply.code(401).send({ error: "AUTH_REQUIRED" });
     }
-    if (!anysearchMcpUrl) {
+    const cfg = await anysearchConfig.getDesktopConfig();
+    if (!cfg) {
       return reply.code(400).send({ error: "ANYSEARCH_CONFIG_MISSING" });
     }
     return {
-      mcp_url: anysearchMcpUrl,
-      api_key: anysearchApiKey || null,
+      mcp_url: cfg.mcpUrl,
+      api_key: cfg.apiKey,
     };
   });
 
@@ -646,6 +683,21 @@ function publicLlmConfigResponse(config: {
     base_url: config.baseUrl,
     model: config.model,
     timeout_seconds: config.timeoutSeconds,
+    has_api_key: config.hasApiKey,
+    api_key_last4: config.apiKeyLast4,
+    updated_at: config.updatedAt?.toISOString() ?? null,
+  };
+}
+
+function publicAnysearchConfigResponse(config: {
+  mcpUrl: string;
+  hasApiKey: boolean;
+  apiKeyLast4: string;
+  updatedAt: Date | null;
+}) {
+  return {
+    ok: true,
+    mcp_url: config.mcpUrl,
     has_api_key: config.hasApiKey,
     api_key_last4: config.apiKeyLast4,
     updated_at: config.updatedAt?.toISOString() ?? null,
