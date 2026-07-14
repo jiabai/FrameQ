@@ -192,8 +192,12 @@ export function renderLoginPage(): string {
           });
           fallback.href = data.redirect_url;
           fallback.style.display = "block";
+          fallback.textContent = "点击此处打开 FrameQ 客户端";
           setStatus("验证成功，正在打开 FrameQ 客户端...");
-          window.location.href = data.redirect_url;
+          window.open(data.redirect_url, "_blank");
+          setTimeout(() => {
+            setStatus("如果没有自动跳转，请点击下方链接打开 FrameQ 客户端。");
+          }, 1500);
         } catch (error) {
           setStatus(error instanceof Error ? error.message : "验证失败，请重试。", true);
         } finally {

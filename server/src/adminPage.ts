@@ -201,36 +201,53 @@ export function renderAdminPage(input: {
         <div class="metric"><span>可兑换激活码</span><strong>${availableCodes}</strong></div>
       </section>
 
-      <section class="admin-panel create-panel">
-        <div>
+      <section class="admin-panel config-panel">
+        <header class="config-head">
           <p class="eyebrow">LLM config</p>
           <h2>Dedicated FrameQ client LLM</h2>
           <p class="muted">This key is sent to entitled desktop clients at runtime. Use a dedicated revocable supplier key, not a master key.</p>
-        </div>
-        <form id="llm-config-form" class="llm-config-grid">
-          <label class="field compact"><span>Provider</span><input id="llm-provider" value="${escapeHtml(input.llmConfig.provider)}" /></label>
-          <label class="field compact"><span>Base URL</span><input id="llm-base-url" value="${escapeHtml(input.llmConfig.baseUrl)}" /></label>
-          <label class="field compact"><span>Model</span><input id="llm-model" value="${escapeHtml(input.llmConfig.model)}" /></label>
-          <label class="field compact"><span>Timeout seconds</span><input id="llm-timeout" type="number" min="1" max="600" value="${input.llmConfig.timeoutSeconds}" /></label>
-          <label class="field compact"><span>Client API key</span><input id="llm-api-key" type="password" placeholder="${input.llmConfig.hasApiKey ? `Saved key ending ${escapeHtml(input.llmConfig.apiKeyLast4)}` : "Enter dedicated client key"}" /></label>
-          <button id="save-llm-config" class="primary-button" type="submit">Save LLM config</button>
+        </header>
+        <form id="llm-config-form" class="config-form">
+          <div class="config-fields">
+            <label class="field compact"><span>Provider</span><input id="llm-provider" value="${escapeHtml(input.llmConfig.provider)}" /></label>
+            <label class="field compact"><span>Base URL</span><input id="llm-base-url" value="${escapeHtml(input.llmConfig.baseUrl)}" /></label>
+            <label class="field compact"><span>Model</span><input id="llm-model" value="${escapeHtml(input.llmConfig.model)}" /></label>
+            <label class="field compact"><span>Timeout seconds</span><input id="llm-timeout" type="number" min="1" max="600" value="${input.llmConfig.timeoutSeconds}" /></label>
+            <label class="field compact field-wide"><span>Client API key</span><input id="llm-api-key" type="password" placeholder="${input.llmConfig.hasApiKey ? `Saved key ending ${escapeHtml(input.llmConfig.apiKeyLast4)}` : "Enter dedicated client key"}" /></label>
+          </div>
+          <div class="config-actions">
+            <p id="llm-config-status" class="status-message" role="status"></p>
+            <button id="save-llm-config" class="primary-button compact-button" type="submit">保存配置</button>
+          </div>
         </form>
-        <p id="llm-config-status" class="status-message" role="status"></p>
       </section>
 
-      <section class="admin-panel create-panel">
-        <div>
+      <section class="admin-panel config-panel">
+        <header class="config-head">
           <p class="eyebrow">Anysearch config</p>
           <h2>生成文字稿联网检索（Anysearch MCP）</h2>
-          <p class="muted">「生成文字稿」联网检索使用的 streamable-http MCP 地址与可选 key。不填 key 并勾选「匿名访问」即以匿名方式检索；填入新 key 会自动覆盖旧 key。</p>
-        </div>
-        <form id="anysearch-config-form" class="llm-config-grid">
-          <label class="field compact"><span>MCP URL</span><input id="anysearch-mcp-url" value="${escapeHtml(input.anysearchConfig.mcpUrl)}" /></label>
-          <label class="field compact"><span>API key</span><input id="anysearch-api-key" type="password" placeholder="${input.anysearchConfig.hasApiKey ? `Saved key ending ${escapeHtml(input.anysearchConfig.apiKeyLast4)}` : "Enter anysearch key"}" /></label>
-          <label class="field compact checkbox-field"><input id="anysearch-anonymous" type="checkbox" ${input.anysearchConfig.hasApiKey ? "" : "checked"} /><span>匿名访问（无 key）</span></label>
-          <button id="save-anysearch-config" class="primary-button" type="submit">Save anysearch config</button>
+          <p class="muted">「生成文字稿」联网检索使用的 streamable-http MCP 地址与可选 key。不填 key 并开启「匿名访问」即以匿名方式检索；填入新 key 会自动覆盖旧 key。</p>
+        </header>
+        <form id="anysearch-config-form" class="config-form">
+          <div class="config-fields">
+            <label class="field compact field-wide"><span>MCP URL</span><input id="anysearch-mcp-url" value="${escapeHtml(input.anysearchConfig.mcpUrl)}" /></label>
+            <label class="field compact field-wide"><span>API key</span><input id="anysearch-api-key" type="password" placeholder="${input.anysearchConfig.hasApiKey ? `Saved key ending ${escapeHtml(input.anysearchConfig.apiKeyLast4)}` : "Enter anysearch key"}" /></label>
+          </div>
+          <label class="option-row">
+            <span class="toggle-switch">
+              <input id="anysearch-anonymous" type="checkbox" ${input.anysearchConfig.hasApiKey ? "" : "checked"} />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </span>
+            <span class="option-text">
+              <strong>匿名访问</strong>
+              <small>不填 API key，以匿名方式检索</small>
+            </span>
+          </label>
+          <div class="config-actions">
+            <p id="anysearch-config-status" class="status-message" role="status"></p>
+            <button id="save-anysearch-config" class="primary-button compact-button" type="submit">保存配置</button>
+          </div>
         </form>
-        <p id="anysearch-config-status" class="status-message" role="status"></p>
       </section>
 
       <section class="admin-panel create-panel">
@@ -646,7 +663,59 @@ function adminStyles(): string {
     .metric strong { color: var(--text); font-size: 1.8rem; line-height: 1; }
     .admin-panel { box-shadow: none; display: grid; gap: 14px; padding: 18px; }
     .create-panel { grid-template-columns: minmax(0, 1fr) auto; }
-    .llm-config-grid { display: grid; gap: 10px; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .config-panel { gap: 18px; }
+    .config-head { display: grid; gap: 4px; }
+    .config-form { display: grid; gap: 16px; }
+    .config-fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .field-wide { grid-column: 1 / -1; }
+    .compact-button { min-height: 36px; padding: 0 18px; font-size: 0.86rem; }
+    .option-row {
+      align-items: flex-start;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      display: flex;
+      gap: 12px;
+      padding: 12px 14px;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .option-row:hover { background: #ffffff; border-color: var(--border-strong); }
+    .option-text { display: grid; gap: 2px; }
+    .option-text strong { color: var(--text); font-size: 0.9rem; font-weight: 680; }
+    .option-text small { color: var(--muted); font-size: 0.8rem; }
+    .config-actions {
+      align-items: center;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 14px;
+      justify-content: flex-end;
+      padding-top: 14px;
+    }
+    .config-actions .status-message { margin-right: auto; }
+    .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; margin-top: 1px; }
+    .toggle-switch input { cursor: pointer; inset: 0; margin: 0; opacity: 0; position: absolute; z-index: 2; }
+    .toggle-track {
+      background-color: #c2c9d3;
+      border-radius: 999px;
+      inset: 0;
+      position: absolute;
+      transition: background-color 0.2s ease;
+    }
+    .toggle-thumb {
+      background-color: #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      height: 18px;
+      left: 2px;
+      position: absolute;
+      top: 2px;
+      transition: transform 0.2s ease;
+      width: 18px;
+    }
+    .toggle-switch input:checked ~ .toggle-track { background-color: var(--primary); }
+    .toggle-switch input:checked ~ .toggle-track .toggle-thumb { transform: translateX(18px); }
+    .toggle-switch input:focus-visible ~ .toggle-track { box-shadow: 0 0 0 3px rgba(22, 104, 220, 0.18); }
     .create-controls { align-items: end; display: flex; gap: 10px; }
     .unit-input { align-items: center; display: grid; grid-template-columns: minmax(84px, 1fr) auto; }
     .unit-input input { border-bottom-right-radius: 0; border-top-right-radius: 0; }
@@ -717,12 +786,14 @@ function adminStyles(): string {
       .inline-action-field,
       .metrics-grid,
       .create-panel,
-      .llm-config-grid { grid-template-columns: 1fr; }
+      .config-fields { grid-template-columns: 1fr; }
       .admin-shell { padding: 18px; }
       .admin-header { align-items: start; flex-direction: column; }
       .admin-session { align-items: stretch; flex-direction: column; width: 100%; }
       .session-chip { text-align: center; }
       .create-controls { align-items: stretch; flex-direction: column; }
+      .config-actions { align-items: stretch; flex-direction: column; }
+      .config-actions .status-message { margin-right: 0; text-align: center; }
       .primary-button,
       .secondary-button { width: 100%; }
       .created-code-card { grid-template-columns: 1fr; }
