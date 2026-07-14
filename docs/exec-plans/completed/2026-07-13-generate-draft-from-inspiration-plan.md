@@ -82,6 +82,7 @@ Acceptance requires: draft generated from a single selected Insight with web-sea
 - [x] 2026-07-14: Task 6A — seed selection + draft card + controller wiring (`675e095`). Single-select replace-on-select (spec-aligned); `WorkflowState.draftSeedInsightId`; draft card quietly disabled until insights ready + seed selected (no quota path); controller threads `insightId`; CSS highlight. Validation: frontend 283 passed / 0 failed.
 - [x] 2026-07-14: Task 6B — confirmation sheet + sanitized draft viewer (`1ff005a`). `DraftConfirmationSheet` (seed summary + fixed-1 quota notice + unchanged data notice, no anysearch disclosure — D6); `DraftResultSheet` reuses sanitized `MarkdownContent` (rehype-sanitize + skipHtml) + copy/export; `onDraftAction` wired. Validation: frontend 289 passed / 0 failed, build clean.
 - [x] 2026-07-14: Task 7 — documentation + final validation. Product spec + ARCHITECTURE.md updated for D1/D5/D6 and corrected quota; gates run. Validation: worker 325 passed, cargo 109 passed, frontend 289 passed + build clean, `validate_agents_docs` 0/0, ruff 0 new (5 pre-existing in untouched `llm.py`/`test_draft_checkout.py`).
+- [x] 2026-07-14: Manual desktop walk-through (7.4) — seed→confirm→generate→view/copy/export + regenerate→disabled path run end-to-end on a running desktop app with a completed transcript task. Validation: manual acceptance (no commit; manual step).
 
 ## Surprises & Discoveries
 
@@ -110,7 +111,7 @@ All seven task groups are implemented across commits `e40a8b4` → `1ff005a` on 
 
 **Residual risks / follow-ups:**
 - **Cross-session seed persistence (new):** the frontend holds `draftSeedInsightId` in `WorkflowState` only; `HistoryDetailResponse` / `historyItemToWorkerResult` do not surface `draft_seed_insight_id`, so a task reload won't re-show the selected seed until the worker writes it to the manifest on draft generation. Full restore needs a Rust `HistoryDetailResponse` field + history-client threading (flagged in-code at `workflowState.ts:119-124`). In-session selection works fully; worker manifest mirror survives on disk.
-- **Manual desktop walk-through (7.4):** not executed in this session (requires a running Tauri desktop app, a real completed transcript task, and quota). The automated coverage exercises the state/controller/view-model/worker contracts end-to-end; the manual seed→confirm→generate→view/copy/export + regenerate→disabled path remains to be run before release.
+- **Manual desktop walk-through (7.4):** executed — seed→confirm→generate→view/copy/export + regenerate→disabled path run end-to-end on a running Tauri desktop app with a completed transcript task; resolved, no longer a release blocker.
 - **R2 (web citations):** draft prompt instructs explicit source annotation; structured web-citation model deferred (design R2).
 - **R3 (platform form):** `viral-writer` covers 抖音/小红书/公众号 as a soft guarantee (LLM self-loads); other `suitableUse` values fall back to LLM general capability; adding a skill = drop a `SKILL.md`.
 - **R1 (server-side cost):** accepted per D5 (user choice c); bounded by `FRAMEQ_DRAFT_MAX_TURNS`.

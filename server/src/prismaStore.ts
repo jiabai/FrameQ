@@ -6,6 +6,7 @@ import type {
   AdminEntitlementAdjustmentRecord,
   EntitlementAdjustmentApplication,
   AdminSessionRecord,
+  AnysearchConfigRecord,
   DesktopLoginTicketRecord,
   EmailOtpRecord,
   EntitlementRecord,
@@ -316,6 +317,28 @@ export class PrismaStore implements Store {
       },
     });
     return config as LlmConfigRecord;
+  }
+
+  async getAnysearchConfig(): Promise<AnysearchConfigRecord | null> {
+    const config = await this.prisma.anysearchConfig.findUnique({ where: { id: "default" } });
+    return config as AnysearchConfigRecord | null;
+  }
+
+  async upsertAnysearchConfig(
+    input: Omit<AnysearchConfigRecord, "id" | "createdAt" | "updatedAt">,
+    now: Date,
+  ): Promise<AnysearchConfigRecord> {
+    const config = await this.prisma.anysearchConfig.upsert({
+      where: { id: "default" },
+      update: { ...input, updatedAt: now },
+      create: {
+        ...input,
+        id: "default",
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    return config as AnysearchConfigRecord;
   }
 
   async createActivationCode(input: Omit<ActivationCodeRecord, "id">): Promise<ActivationCodeRecord> {

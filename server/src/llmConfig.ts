@@ -130,7 +130,7 @@ function normalizeTimeout(timeoutSeconds: number): number {
   return timeoutSeconds;
 }
 
-function requireEncryptionKey(rawKey: string | undefined): Buffer {
+export function requireEncryptionKey(rawKey: string | undefined): Buffer {
   const key = rawKey?.trim();
   if (!key) {
     throw new Error("FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY is required.");

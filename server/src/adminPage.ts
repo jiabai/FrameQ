@@ -5,6 +5,7 @@ import type {
   UserRecord,
 } from "./store.js";
 import type { PublicLlmConfig } from "./llmConfig.js";
+import type { PublicAnysearchConfig } from "./anysearchConfig.js";
 
 export function renderAdminLoginPage(): string {
   return `<!doctype html>
@@ -107,6 +108,7 @@ export function renderAdminPage(input: {
   users: UserRecord[];
   entitlements: Map<string, EntitlementRecord | null>;
   llmConfig: PublicLlmConfig;
+  anysearchConfig: PublicAnysearchConfig;
   activationCodes: ActivationCodeRecord[];
   entitlementAdjustments: AdminEntitlementAdjustmentRecord[];
 }): string {
@@ -214,6 +216,21 @@ export function renderAdminPage(input: {
           <button id="save-llm-config" class="primary-button" type="submit">Save LLM config</button>
         </form>
         <p id="llm-config-status" class="status-message" role="status"></p>
+      </section>
+
+      <section class="admin-panel create-panel">
+        <div>
+          <p class="eyebrow">Anysearch config</p>
+          <h2>生成文字稿联网检索（Anysearch MCP）</h2>
+          <p class="muted">「生成文字稿」联网检索使用的 streamable-http MCP 地址与可选 key。不填 key 并勾选「匿名访问」即以匿名方式检索；填入新 key 会自动覆盖旧 key。</p>
+        </div>
+        <form id="anysearch-config-form" class="llm-config-grid">
+          <label class="field compact"><span>MCP URL</span><input id="anysearch-mcp-url" value="${escapeHtml(input.anysearchConfig.mcpUrl)}" /></label>
+          <label class="field compact"><span>API key</span><input id="anysearch-api-key" type="password" placeholder="${input.anysearchConfig.hasApiKey ? `Saved key ending ${escapeHtml(input.anysearchConfig.apiKeyLast4)}` : "Enter anysearch key"}" /></label>
+          <label class="field compact checkbox-field"><input id="anysearch-anonymous" type="checkbox" ${input.anysearchConfig.hasApiKey ? "" : "checked"} /><span>匿名访问（无 key）</span></label>
+          <button id="save-anysearch-config" class="primary-button" type="submit">Save anysearch config</button>
+        </form>
+        <p id="anysearch-config-status" class="status-message" role="status"></p>
       </section>
 
       <section class="admin-panel create-panel">
@@ -351,6 +368,42 @@ export function renderAdminPage(input: {
           }),
         });
         setLlmConfigStatus(response.ok ? "LLM config saved." : "Could not save LLM config.", response.ok ? "success" : "error");
+      });
+
+      const anysearchConfigForm = document.getElementById("anysearch-config-form");
+      const anysearchConfigStatus = document.getElementById("anysearch-config-status");
+      const anysearchApiKeyInput = document.getElementById("anysearch-api-key");
+      const anysearchAnonymous = document.getElementById("anysearch-anonymous");
+
+      function setAnysearchConfigStatus(message, tone = "neutral") {
+        anysearchConfigStatus.textContent = message;
+        anysearchConfigStatus.dataset.tone = tone;
+      }
+
+      // 填入新 key 时自动取消「匿名访问」，避免 clear 覆盖刚输入的 key。
+      anysearchApiKeyInput.addEventListener("input", () => {
+        if (anysearchApiKeyInput.value.length > 0) {
+          anysearchAnonymous.checked = false;
+        }
+      });
+
+      anysearchConfigForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        setAnysearchConfigStatus("Saving anysearch config...");
+        const payload = {
+          mcp_url: document.getElementById("anysearch-mcp-url").value,
+          api_key: anysearchApiKeyInput.value,
+          clear_api_key: anysearchAnonymous.checked,
+        };
+        const response = await fetch("/admin/api/anysearch-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-frameq-csrf": csrfToken },
+          body: JSON.stringify(payload),
+        });
+        setAnysearchConfigStatus(
+          response.ok ? "Anysearch config saved." : "Could not save anysearch config.",
+          response.ok ? "success" : "error",
+        );
       });
 
       document.querySelectorAll(".adjustment-save").forEach((button) => {
@@ -535,6 +588,7 @@ function adminStyles(): string {
     .admin-form { display: grid; gap: 14px; }
     .field { color: #333946; display: grid; font-size: 0.88rem; font-weight: 680; gap: 7px; }
     .field.compact { min-width: 180px; }
+    .checkbox-field { align-items: center; display: flex; flex-direction: row; gap: 8px; }
     input {
       background: #ffffff;
       border: 1px solid var(--border-strong);
