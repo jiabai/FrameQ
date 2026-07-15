@@ -20,6 +20,7 @@
 - EasyDownload 小红书 fallback 参考：`docs/references/easydownload-xiaohongshu-fallback.md`
 - EasyDownload Bilibili fallback 参考：`docs/references/easydownload-bilibili-fallback.md`
 - EasyDownload MITM/CA/管理员提权参考(未来可选项):`docs/references/easydownload-mitm-ca-design.md`
+- 海外宣传与分发合规研究参考：`docs/references/overseas-marketing-compliance.md`
 - 执行清单：`TASKS.md`
 - 工作流：`WORKFLOW.md`
 - 完成门禁：`docs/EXECUTION_GATES.md`
