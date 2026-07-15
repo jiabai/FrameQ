@@ -209,6 +209,9 @@ export function useTaskProcessingController({
       openAccountPanel: OpenAccountPanel,
       onRetryCompleted?: () => void,
       insightId?: number,
+      // User-selected draft platform id (9-id vocabulary). Forwarded only for
+      // target="draft"; absent for summary/insights (worker rejects it there).
+      platform?: string,
     ) => {
       if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
         return;
@@ -233,7 +236,14 @@ export function useTaskProcessingController({
       onRetryStarted();
       setWorkflow((current) => startInsightRetry(current, target));
 
-      const result = await retryInsights(taskId, target, preferenceSnapshot, undefined, insightId);
+      const result = await retryInsights(
+        taskId,
+        target,
+        preferenceSnapshot,
+        undefined,
+        insightId,
+        platform,
+      );
       if (operationIdRef.current !== operationId) {
         return;
       }
@@ -275,7 +285,7 @@ export function useTaskProcessingController({
     ],
   );
 
-  // 6.2: select/clear the single draft seed insight. Pass null to clear.
+  // Select/clear the single draft seed insight. Pass null to clear.
   const setDraftSeedInsightId = useCallback((insightId: number | null) => {
     setWorkflow((current) => ({ ...current, draftSeedInsightId: insightId }));
   }, []);

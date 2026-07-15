@@ -20,7 +20,7 @@ from agent_runtime.provider.sources.openai_source import ProviderOpenAIOfficial
 from agent_runtime.tools.func_tool_manager import FunctionToolManager
 
 from frameq_worker.insightflow.prompt import (
-    _platform_label_for_suitable_use,
+    _platform_label_for_draft_platform,
     build_draft_from_inspiration_prompt,
 )
 from frameq_worker.llm import (
@@ -30,7 +30,7 @@ from frameq_worker.llm import (
 )
 from frameq_worker.models import Insight, PreferenceSnapshot
 
-# FRAMEQ_DRAFT_MAX_TURNS 缺省值；核心层不读 env，只收 max_turns 形参（design.md D10）。
+# FRAMEQ_DRAFT_MAX_TURNS 缺省值；核心层不读 env，只收 max_turns 形参。
 _DEFAULT_MAX_TURNS = 40
 
 def build_llm_provider(env: Mapping[str, str]) -> ProviderOpenAIOfficial:
@@ -58,7 +58,7 @@ def build_llm_provider(env: Mapping[str, str]) -> ProviderOpenAIOfficial:
             pass
 
     # 思考模型（deepseek-r1 / glm-z1 等）的思考链计入输出预算：ReAct runner 不透传
-    # max_tokens，故经 provider 官方的 custom_extra_body 注入点下发（总纲 line 42/165）。
+    # max_tokens，故经 provider 官方的 custom_extra_body 注入点下发。
     # 默认不设——由 FRAMEQ_LLM_MAX_TOKENS 显式开启，避免对非思考模型强加截断。
     max_tokens_raw = env.get("FRAMEQ_LLM_MAX_TOKENS", "").strip()
     if max_tokens_raw:
@@ -115,28 +115,27 @@ _SYSTEM_PROMPT_HEAD = (
     "再按目标平台文体写出一份完整、可直接发布的稿子。\n"
 )
 
-# 1.2b: spec-mandated fixed fallback phrase — appears verbatim in the system prompt
-# and is asserted in tests. Treat as a single source of truth.
+# 固定回退措辞——在 system prompt 中原样出现，并被测试断言。作为单一事实源。
 _RETRIEVAL_FALLBACK_PHRASE = "直接基于灵感 + 要点总结（若有）继续成稿"
 
 
 def _summary_is_present(summary: str | None) -> bool:
-    """1.2b: summary「在场」判定——非 None 且 strip 后非空。
+    """summary「在场」判定：非 None 且 strip 后非空。
 
     系统侧与用户侧 prompt 必须共用同一语义，避免 ``"   "`` 这类纯空白被一侧判为在场、
-    另一侧判为缺失而给出互相矛盾的信号（I-2）。"""
+    另一侧判为缺失而给出互相矛盾的信号。"""
     return summary is not None and summary.strip() > ""
 
 
 def _summary_grounding_clause(summary: str | None) -> str:
-    """1.2b: 要点总结 仅作为可选 grounding 提及；summary 不在场（None / 纯空白）时整体省略。"""
+    """要点总结 仅作为可选 grounding 提及；summary 不在场（None / 纯空白）时整体省略。"""
     if not _summary_is_present(summary):
         return ""
     return "（必要时可参考附带的要点总结作为原视频观点 grounding）"
 
 
 def _build_planning_guidance(summary: str | None) -> str:
-    """1.2b: 文案以「灵感」为成稿依据；要点总结作为可选 grounding 出现或省略；
+    """文案以「灵感」为成稿依据；要点总结作为可选 grounding 出现或省略；
     检索失败回退措辞统一为「基于灵感 + 要点总结（若有）继续成稿」（「若有」在两种
     情况下都成立：在场则使用，不在场则略过）。"""
     grounding_clause = _summary_grounding_clause(summary)
@@ -159,9 +158,9 @@ def _build_planning_guidance(summary: str | None) -> str:
     )
 
 
-def _build_system_prompt(insight: Insight, summary: str | None = None) -> str:
-    """1.2 / 1.3: 目标平台来自 ``Insight.suitable_use``；公众号 ↔ 微信公众号 对齐。"""
-    platform_label = _platform_label_for_suitable_use(insight.suitable_use)
+def _build_system_prompt(platform: str, summary: str | None = None) -> str:
+    """目标平台来自用户在确认页选择的 platform id；映射见 prompt 模块。"""
+    platform_label = _platform_label_for_draft_platform(platform)
     return (
         _SYSTEM_PROMPT_HEAD
         + f"目标平台：{platform_label}。\n"
@@ -173,9 +172,13 @@ def _build_user_prompt(
     insight: Insight,
     preference_snapshot: PreferenceSnapshot | None,
     summary: str | None = None,
+    *,
+    platform: str,
 ) -> str:
-    """1.2: 种子 prompt 委托 ``build_draft_from_inspiration_prompt`` 构造。"""
-    return build_draft_from_inspiration_prompt(insight, preference_snapshot, summary)
+    """种子 prompt 委托 ``build_draft_from_inspiration_prompt`` 构造。"""
+    return build_draft_from_inspiration_prompt(
+        insight, preference_snapshot, summary, platform=platform
+    )
 
 
 def _build_submit_draft_tool(sink: DraftSink) -> FunctionTool:
@@ -257,6 +260,7 @@ async def generate_draft(
     insight: Insight,
     preference_snapshot: PreferenceSnapshot | None,
     summary: str | None,
+    platform: str,
     draft_sink: DraftSink,
     session_id: str | None = None,
 ) -> str:
@@ -270,8 +274,8 @@ async def generate_draft(
     )
 
     request_obj = ProviderRequest(
-        prompt=_build_user_prompt(insight, preference_snapshot, summary),
-        system_prompt=_build_system_prompt(insight, summary),
+        prompt=_build_user_prompt(insight, preference_snapshot, summary, platform=platform),
+        system_prompt=_build_system_prompt(platform, summary),
         func_tool=tools,
         session_id=session_id,
         contexts=[],
@@ -412,6 +416,7 @@ async def _run_async(
     insight: Insight,
     preference_snapshot: PreferenceSnapshot | None,
     summary: str | None,
+    platform: str,
     env: Mapping[str, str],
 ) -> str:
     planning_on = _planning_enabled(env)
@@ -450,6 +455,7 @@ async def _run_async(
             insight=insight,
             preference_snapshot=preference_snapshot,
             summary=summary,
+            platform=platform,
             draft_sink=draft_sink,
         )
     finally:
@@ -463,7 +469,8 @@ def run_draft(
     insight: Insight,
     preference_snapshot: PreferenceSnapshot | None,
     summary: str | None,
+    platform: str,
     env: Mapping[str, str] | None = None,
 ) -> str:
     resolved_env: Mapping[str, str] = os.environ if env is None else env
-    return asyncio.run(_run_async(insight, preference_snapshot, summary, resolved_env))
+    return asyncio.run(_run_async(insight, preference_snapshot, summary, platform, resolved_env))

@@ -11,7 +11,7 @@ from agent_runtime.tools.func_tool_manager import FunctionToolManager
 from frameq_worker.draft_agent import build_anysearch_mcp_config, run_draft
 from frameq_worker.models import Insight
 
-# 硬编码样本（闭环步骤用）。新种子以 Insight 形态喂入 run_draft（Task 1.2）。
+# 硬编码样本（闭环步骤用）。新种子以 Insight 形态喂入 run_draft。
 _TOPIC = "远程办公如何重塑团队协作"
 _SUMMARY = (
     "1. 远程办公提升了员工的自主性与时间弹性，通勤成本下降；\n"
@@ -70,7 +70,7 @@ def run_closed_loop(env: Mapping[str, str]) -> None:
         f"[run] insight.topic={_TOPIC!r}\n[run] suitable_use={_PLATFORM!r} "
         f"planning={planning_flag!r} max_turns={max_turns!r}",
     )
-    draft = run_draft(_SEED_INSIGHT, None, _SUMMARY, env)
+    draft = run_draft(_SEED_INSIGHT, None, _SUMMARY, _PLATFORM, env)
     print("\n[run] ===== 成稿结果 =====")
     print(draft)
 

@@ -37,6 +37,9 @@ export type RetryInsightsRequest = {
   target: RetryInsightTarget;
   preference_snapshot?: PreferenceSnapshot;
   insight_id?: number;
+  // User-selected draft platform id (9-id vocabulary). Present only for
+  // target="draft"; never sent for summary/insights (the worker rejects it).
+  platform?: string;
 };
 
 const defaultWorkerRunner: WorkerCommandRunner = (command, args) => invoke(command, args);
@@ -86,17 +89,23 @@ export async function retryInsights(
   preferenceSnapshot: PreferenceSnapshot | null = null,
   runner: WorkerCommandRunner = defaultWorkerRunner,
   insightId?: number,
+  platform?: string,
 ): Promise<WorkerResult> {
   const request: RetryInsightsRequest = {
     task_id: taskId,
     target,
   };
-  // Draft generation reads the preference snapshot from disk (design A1), so it
+  // Draft generation reads the preference snapshot from disk, so it
   // MUST NOT carry preference_snapshot on the wire. It selects the seed via
-  // insight_id. Summary/insights keep their existing preference_snapshot behavior.
+  // insight_id and carries the user-selected platform. Summary/
+  // insights keep their existing preference_snapshot behavior and never carry
+  // platform (the worker rejects it on non-draft targets).
   if (target === "draft") {
     if (insightId !== undefined) {
       request.insight_id = insightId;
+    }
+    if (platform !== undefined) {
+      request.platform = platform;
     }
   } else if (preferenceSnapshot) {
     request.preference_snapshot = preferenceSnapshot;

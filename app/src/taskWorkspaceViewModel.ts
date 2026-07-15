@@ -104,7 +104,7 @@ function aiTargetStatus(
         : Boolean(workflow.insights.length || workflow.artifacts.insights || workflow.artifacts.insights_md);
 
   if (target === "draft") {
-    // 6.1: the draft card needs a selectable seed insight. It is quietly locked
+    // The draft card needs a selectable seed insight. It is quietly locked
     // until (a) insights are ready AND (b) the user has selected exactly one
     // seed (workflow.draftSeedInsightId). When locked it must NOT expose an LLM
     // entry or consume quota. This does NOT infer the draft target from status

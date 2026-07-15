@@ -325,6 +325,58 @@ export const INSIGHT_PREFERENCE_FIELDS: Record<PreferenceField, FieldConfig> = {
   ...GENERATION_FIELD_CONFIGS,
 };
 
+// --- Draft platform selection ----------------------------------------------
+// 9 stable English ids shared with the worker's DRAFT_PLATFORM_IDS. The selector
+// needs DISTINCT display labels per id (the worker's
+// _DRAFT_PLATFORM_LABELS collapses the short-video group to a single 抖音 form
+// label for the prompt; those form labels are NOT selector labels). For the 5
+// ids reused from INSIGHT_PREFERENCE_FIELDS.platforms the labels intentionally
+// match the profile selector.
+export type DraftPlatformId =
+  | "wechat_official_account"
+  | "xiaohongshu"
+  | "wechat_channels"
+  | "douyin"
+  | "tiktok"
+  | "twitter"
+  | "bilibili"
+  | "youtube"
+  | "other";
+
+export type DraftPlatformOption = {
+  id: DraftPlatformId;
+  label: string;
+};
+
+export const DRAFT_PLATFORMS: readonly DraftPlatformOption[] = [
+  { id: "wechat_official_account", label: "公众号" },
+  { id: "xiaohongshu", label: "小红书" },
+  { id: "wechat_channels", label: "视频号" },
+  { id: "douyin", label: "抖音" },
+  { id: "tiktok", label: "Tiktok" },
+  { id: "twitter", label: "X(Twitter)" },
+  { id: "bilibili", label: "B站" },
+  { id: "youtube", label: "Youtube" },
+  { id: "other", label: "其他" },
+];
+
+export const DRAFT_PLATFORM_IDS: ReadonlySet<DraftPlatformId> = new Set(
+  DRAFT_PLATFORMS.map((option) => option.id),
+);
+
+// Preselect only when the profile has exactly one platform AND that id is
+// in the 9-id draft vocabulary (identity mapping — id unchanged). 0 / ≥2 /
+// single-unmappable (podcast / course_community / internal_sharing) ⇒ "other".
+export function deriveDefaultDraftPlatform(
+  profilePlatforms: readonly string[] | string[] | null | undefined,
+): DraftPlatformId {
+  if (!profilePlatforms || profilePlatforms.length !== 1) {
+    return "other";
+  }
+  const onlyPlatform = profilePlatforms[0] as DraftPlatformId;
+  return DRAFT_PLATFORM_IDS.has(onlyPlatform) ? onlyPlatform : "other";
+}
+
 export function validateInspirationProfile(value: unknown): InspirationProfile | null {
   if (!isRecord(value)) {
     return null;

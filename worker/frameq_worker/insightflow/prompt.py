@@ -269,41 +269,64 @@ def build_summary_prompt(
 """
 
 
-# suitableUse 形态/平台名映射（v1 viral-writer 覆盖 抖音/小红书/公众号）。
-# 公众号 ↔ 微信公众号 名称对齐（Task 1.3）：在成稿 prompt 里以对外规范名呈现。
-_SUITABLE_USE_PLATFORM_LABELS: dict[str, str] = {
-    "公众号": "微信公众号",
-    "抖音": "抖音",
-    "小红书": "小红书",
-    "视频号": "视频号",
+# draft 目标平台词表：9 个稳定英文 id。映射表 + 透传显示名 + 合法 id 集合
+# 同处定义，作为单一事实源——requests.parse_retry_insights_request 也导入
+# DRAFT_PLATFORM_IDS 做校验，避免前后端两份词表漂移。
+_DRAFT_PLATFORM_LABELS: dict[str, str] = {
+    "wechat_official_account": "微信公众号",
+    "xiaohongshu": "小红书",
+    # 短视频系（视频号 / 抖音 / Tiktok / X）统一走「抖音」文体。
+    "wechat_channels": "抖音",
+    "douyin": "抖音",
+    "tiktok": "抖音",
+    "twitter": "抖音",
 }
 
+# 透传分支：取显示名原样写进 prompt「目标平台：{显示名}」，不挂特定文体（兜底）。
+_DRAFT_PLATFORM_PASSTHROUGH_LABELS: dict[str, str] = {
+    "bilibili": "B站",
+    "youtube": "Youtube",
+    "other": "其他",
+}
 
-def _platform_label_for_suitable_use(suitable_use: str) -> str:
-    """Map ``Insight.suitable_use`` to a canonical platform label for the draft
-    prompt. Unknown values fall back to the raw ``suitable_use`` string (non-v1
-    platforms fall back to LLM general capability — no fabrication)."""
-    return _SUITABLE_USE_PLATFORM_LABELS.get(suitable_use, suitable_use)
+# 9-id 合法词表（映射键 ∪ 透传键）。词表外 id 视为非法，由 request 校验拦截。
+DRAFT_PLATFORM_IDS: frozenset[str] = frozenset(
+    _DRAFT_PLATFORM_LABELS.keys() | _DRAFT_PLATFORM_PASSTHROUGH_LABELS.keys()
+)
+
+
+def _platform_label_for_draft_platform(platform_id: str) -> str:
+    """Map a user-selected draft platform id to the prompt「目标平台」form label.
+
+    短视频系合并到「抖音」；公众号→微信公众号；小红书→小红书；bilibili/youtube/other
+    取透传显示名。词表外的 id（校验上游已拦）原样透传，绝不臆造平台文体。
+    """
+    if platform_id in _DRAFT_PLATFORM_LABELS:
+        return _DRAFT_PLATFORM_LABELS[platform_id]
+    return _DRAFT_PLATFORM_PASSTHROUGH_LABELS.get(platform_id, platform_id)
 
 
 def build_draft_from_inspiration_prompt(
     seed: Insight,
     preference_snapshot: PreferenceSnapshot | None,
     summary: str | None = None,
+    *,
+    platform: str,
 ) -> str:
     """构造「生成文字稿」种子 prompt。
 
     字段映射：
     - ``seed.topic`` → 中央议题 / 标题方向。
     - ``seed.follow_up_questions`` → 章节骨架 / 子论点。
-    - ``seed.suitable_use`` → 体裁与目标平台（公众号 ↔ 微信公众号 对齐；驱动 skill）。
+    - ``platform`` → 目标平台（用户在确认页所选 id；经 ``_platform_label_for_draft_platform``
+      映射成文体标签，不再读 ``seed.suitable_use``）。
     - ``seed.match_reason`` → 目标感锚点，防跑题。
     - ``preference_snapshot`` → 偏好（语气/受众/角度/回避）。缺失 → 不进行个性化，
       绝不臆造角色 / 领域 / 风格。
     - ``seed.source_chunk_id`` → 仅作溯源标注；其文字稿片段正文一律不进入 prompt。
     - ``summary`` → 可选的原视频要点总结 grounding；为 None 时整体省略。
     """
-    platform_label = _platform_label_for_suitable_use(seed.suitable_use)
+    platform_label = _platform_label_for_draft_platform(platform)
 
     skeleton_lines = "\n".join(
         f"- {q}" for q in seed.follow_up_questions
@@ -333,7 +356,7 @@ def build_draft_from_inspiration_prompt(
         )
 
     summary_section = ""
-    # 「在场」语义与 draft_agent._summary_is_present 保持一致（I-2）：非 None 且 strip 后
+    # 「在场」语义与 draft_agent._summary_is_present 保持一致：非 None 且 strip 后
     # 非空。纯空白 summary 按缺失处理，避免与系统侧 prompt 矛盾。
     if summary is not None and summary.strip():
         summary_section = (

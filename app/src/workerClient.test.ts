@@ -317,6 +317,57 @@ describe("worker client", () => {
     expect(request).not.toHaveProperty("insight_id");
   });
 
+  test("sends platform alongside insight_id for the draft target without preference_snapshot", async () => {
+    // target="draft" carries the user-selected platform; it still MUST NOT
+    // carry preference_snapshot (the worker reads it from disk).
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return completedResult({ draft: "# 草稿" });
+    };
+
+    await retryInsights(TASK_ID, "draft", null, runner, 7, "xiaohongshu");
+
+    const request = (calls[0]?.args as { request: Record<string, unknown> }).request;
+    expect(request.target).toBe("draft");
+    expect(request.insight_id).toBe(7);
+    expect(request.platform).toBe("xiaohongshu");
+    expect(request).not.toHaveProperty("preference_snapshot");
+  });
+
+  test("omits platform for the draft target when none is supplied", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return completedResult({ draft: "# 草稿" });
+    };
+
+    await retryInsights(TASK_ID, "draft", null, runner, 7);
+
+    const request = (calls[0]?.args as { request: Record<string, unknown> }).request;
+    expect(request.insight_id).toBe(7);
+    expect(request).not.toHaveProperty("platform");
+    expect(request).not.toHaveProperty("preference_snapshot");
+  });
+
+  test("never sends platform for the non-draft targets even when one is supplied", async () => {
+    // The worker rejects platform on summary/insights (design 7.1); the client
+    // must not put it on the wire for those targets.
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return completedResult();
+    };
+
+    await retryInsights(TASK_ID, "insights", PREFERENCE_SNAPSHOT, runner, undefined, "douyin");
+
+    const request = (calls[0]?.args as { request: Record<string, unknown> }).request;
+    expect(request.target).toBe("insights");
+    expect(request.preference_snapshot).toEqual(PREFERENCE_SNAPSHOT);
+    expect(request).not.toHaveProperty("platform");
+    expect(request).not.toHaveProperty("insight_id");
+  });
+
   test("invokes the Tauri cancel_process command", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: CancelCommandRunner = async (command, args) => {

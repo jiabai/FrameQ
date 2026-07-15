@@ -9,7 +9,7 @@ type AiResultDetailSheetProps = {
   controller: TranscriptDetailController;
   workflow: WorkflowState;
   onOpenDirectionEditor: () => void | Promise<void>;
-  // 6.2: select/clear the single draft seed insight. The selected id lives on
+  // Select/clear the single draft seed insight. The selected id lives on
   // workflow.draftSeedInsightId; these callbacks mutate it via the controller.
   onSelectDraftSeed?: (insightId: number) => void;
   onClearDraftSeed?: () => void;

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  DRAFT_PLATFORM_IDS,
+  DRAFT_PLATFORMS,
   buildPreferenceSnapshot,
+  deriveDefaultDraftPlatform,
   getOptionLabel,
   summarizeGenerationPreferences,
   summarizeInspirationProfile,
@@ -122,5 +125,71 @@ describe("insight preferences", () => {
         { id: "bilibili", label: "B站" },
       ],
     });
+  });
+});
+
+describe("draft platform selection", () => {
+  test("DRAFT_PLATFORMS exposes exactly the 9 stable ids with distinct display labels", () => {
+    // 9-id vocabulary shared with the worker: the selector must
+    // surface every draft platform the worker accepts, no more, no less.
+    expect(DRAFT_PLATFORMS.map((option) => option.id)).toEqual([
+      "wechat_official_account",
+      "xiaohongshu",
+      "wechat_channels",
+      "douyin",
+      "tiktok",
+      "twitter",
+      "bilibili",
+      "youtube",
+      "other",
+    ]);
+
+    const labelsById = Object.fromEntries(
+      DRAFT_PLATFORMS.map((option) => [option.id, option.label]),
+    );
+    expect(labelsById).toEqual({
+      wechat_official_account: "公众号",
+      xiaohongshu: "小红书",
+      wechat_channels: "视频号",
+      douyin: "抖音",
+      tiktok: "Tiktok",
+      twitter: "X(Twitter)",
+      bilibili: "B站",
+      youtube: "Youtube",
+      other: "其他",
+    });
+
+    // DRAFT_PLATFORM_IDS must match the 9 selector ids (used by derivation + by
+    // callers that need O(1) membership checks).
+    expect(DRAFT_PLATFORM_IDS).toBeInstanceOf(Set);
+    expect([...DRAFT_PLATFORM_IDS].sort()).toEqual(
+      Object.keys(labelsById).sort(),
+    );
+  });
+
+  test("deriveDefaultDraftPlatform preselects the single mappable profile platform (identity)", () => {
+    expect(deriveDefaultDraftPlatform(["xiaohongshu"])).toBe("xiaohongshu");
+    expect(deriveDefaultDraftPlatform(["douyin"])).toBe("douyin");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other when the profile has no platforms", () => {
+    expect(deriveDefaultDraftPlatform([])).toBe("other");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other when the profile has two or more platforms", () => {
+    expect(deriveDefaultDraftPlatform(["xiaohongshu", "douyin"])).toBe("other");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other for a single unmappable platform id", () => {
+    // podcast / course_community / internal_sharing are profile-only ids not in
+    // the 9-id draft vocabulary → cannot be identity-mapped.
+    expect(deriveDefaultDraftPlatform(["podcast"])).toBe("other");
+    expect(deriveDefaultDraftPlatform(["course_community"])).toBe("other");
+    expect(deriveDefaultDraftPlatform(["internal_sharing"])).toBe("other");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other for null or undefined input", () => {
+    expect(deriveDefaultDraftPlatform(null)).toBe("other");
+    expect(deriveDefaultDraftPlatform(undefined)).toBe("other");
   });
 });

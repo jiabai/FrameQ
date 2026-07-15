@@ -177,7 +177,7 @@ function AiTargetCard({
 }
 
 /**
- * 6.1: the copy shown when the draft target card is quietly locked. Draft needs
+ * The copy shown when the draft target card is quietly locked. Draft needs
  * a seed insight: if no inspiration has been generated yet, prompt for that;
  * otherwise prompt to select one as the seed.
  */

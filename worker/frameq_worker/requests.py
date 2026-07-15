@@ -4,6 +4,7 @@ import re
 
 from frameq_worker.asr import DEFAULT_ASR_MODEL, resolve_asr_model_name
 from frameq_worker.desktop_contract import ASR_MODEL_ENV
+from frameq_worker.insightflow.prompt import DRAFT_PLATFORM_IDS
 from frameq_worker.models import (
     GenerationPreferences,
     InspirationProfile,
@@ -202,7 +203,13 @@ def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
         # the frontend MUST NOT send it.
         raise ValueError("preference_snapshot is not allowed for draft target.")
 
+    # platform：请求级字段，仅 target="draft" 携带；非 draft target 出现即非法。
+    raw_platform = payload.get("platform")
+    if target != "draft" and raw_platform is not None:
+        raise ValueError("platform is only allowed for draft target.")
+
     insight_id: int | None = None
+    platform: str | None = None
     if target == "draft":
         # seed is a single Insight id, validated against insights.json in the worker.
         if "insight_id" not in payload or payload.get("insight_id") is None:
@@ -213,11 +220,26 @@ def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
             raise ValueError("Retry payload insight_id must be an integer.")
         insight_id = raw_insight_id
 
+        # platform 校验在 checkout 之前：缺失 / 非字符串 / 空白 / 非 9-id 词表
+        # 均抛 ValueError（→ INVALID_RETRY_PAYLOAD，不消耗额度）。
+        if raw_platform is None:
+            raise ValueError("Retry payload platform is required for draft target.")
+        if not isinstance(raw_platform, str):
+            raise ValueError("Retry payload platform must be a string.")
+        platform = raw_platform.strip()
+        if not platform:
+            raise ValueError("Retry payload platform must be a non-empty string.")
+        if platform not in DRAFT_PLATFORM_IDS:
+            raise ValueError(
+                "Retry payload platform must be a known draft platform id."
+            )
+
     return RetryInsightsRequest(
         task_id=task_id,
         target=target,
         preference_snapshot=parse_preference_snapshot(payload.get("preference_snapshot")),
         insight_id=insight_id,
+        platform=platform,
     )
 
 

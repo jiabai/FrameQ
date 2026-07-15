@@ -264,9 +264,11 @@ def checkout_llm_config_once(
 
 
 def parse_anysearch_checkout_response(raw_response: bytes) -> dict[str, str]:
-    """解析 anysearch checkout 响应 ``{mcp_url, api_key?}``（shape 与 LLM checkout 不同，独立解析）。
+    """解析 anysearch checkout 响应 ``{mcp_url, api_key?}``（shape 与 LLM checkout
+    不同，独立解析）。
 
-    ``api_key`` 缺 / null → 返回值**不含**该键（匿名访问）。调用方据此决定是否设 ``ANYSEARCH_API_KEY``。
+    ``api_key`` 缺 / null → 返回值**不含**该键（匿名访问）。调用方据此决定是否设
+    ``ANYSEARCH_API_KEY``。
     """
     try:
         payload = json.loads(raw_response.decode("utf-8"))
@@ -316,7 +318,8 @@ def checkout_anysearch_config_once(
 
 
 def _anysearch_checkout_http_error(error: urllib.error.HTTPError) -> RuntimeError:
-    """anysearch checkout HTTP 错误翻译：``_extract_error_code`` 抠 code、raise 中性 ``RuntimeError``。"""
+    """anysearch checkout HTTP 错误翻译：``_extract_error_code`` 抠 code、raise 中性
+    ``RuntimeError``。"""
     code = _extract_error_code(error)
     if error.code == 401:
         return RuntimeError("anysearch checkout 需要登录（鉴权失败，401）。")

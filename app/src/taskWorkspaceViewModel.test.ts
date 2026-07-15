@@ -369,7 +369,7 @@ describe("task workspace view model", () => {
   });
 
   test("keeps the draft card locked when insights are ready but no seed is selected", () => {
-    // 6.1: the draft target card is quietly disabled until a seed insight is
+    // The draft target card is quietly disabled until a seed insight is
     // picked. Insights exist, but without a seed the draft card stays locked
     // (no LLM entry, no quota consumption).
     const workflow = summarizeWorkerResult(

@@ -356,7 +356,7 @@ def run_draft_generation_step(
     # Resolve at call time so tests can patch frameq_worker.worker_service.run_draft.
     runner = draft_runner if draft_runner is not None else run_draft
     try:
-        draft_text = runner(seed, preference_snapshot, summary, runtime_env)
+        draft_text = runner(seed, preference_snapshot, summary, request.platform, runtime_env)
     except Exception as exc:  # noqa: BLE001 - wraps LLM / MCP / agent-loop failures.
         return _draft_step_failed(
             code="DRAFT_GENERATION_FAILED",

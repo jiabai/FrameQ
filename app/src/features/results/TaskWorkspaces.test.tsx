@@ -286,7 +286,7 @@ describe("task domain workspaces", () => {
   });
 
   test("draft target card is quietly disabled until an inspiration seed is selected", () => {
-    // 6.1: with no insights generated, the draft card must not expose an LLM
+    // With no insights generated, the draft card must not expose an LLM
     // entry or consume quota. The generate action is disabled.
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
@@ -366,7 +366,7 @@ describe("task domain workspaces", () => {
   });
 
   test("inspiration detail sheet exposes a replace-on-select seed affordance for each insight", () => {
-    // 6.2: the seed selection is single-select but selecting another insight
+    // The seed selection is single-select but selecting another insight
     // replaces the current seed (radio behaviour) rather than blocking it.
     const workflow: WorkflowState = {
       ...readyWorkflow(),

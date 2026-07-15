@@ -283,7 +283,12 @@ def test_retry_draft_success_sets_seed_id_in_manifest(tmp_path: Path) -> None:
     with patch("frameq_worker.worker_service.run_draft", return_value="# 完整稿子"):
         result = retry_insights_once(
             json.dumps(
-                {"task_id": TASK_ID, "target": "draft", "insight_id": INSIGHT_ID},
+                {
+                    "task_id": TASK_ID,
+                    "target": "draft",
+                    "insight_id": INSIGHT_ID,
+                    "platform": "douyin",
+                },
                 ensure_ascii=False,
             ),
             project_root=tmp_path,

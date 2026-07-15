@@ -158,7 +158,11 @@ def _write_task_skeleton(
 
 
 def _draft_request(insight_id: int | None = INSIGHT_ID) -> str:
-    payload: dict[str, object] = {"task_id": TASK_ID, "target": "draft"}
+    payload: dict[str, object] = {
+        "task_id": TASK_ID,
+        "target": "draft",
+        "platform": "douyin",
+    }
     if insight_id is not None:
         payload["insight_id"] = insight_id
     return json.dumps(payload, ensure_ascii=False)
@@ -191,10 +195,11 @@ def test_draft_branch_success_writes_draft_md_and_populates_process_result(
 
     captured: dict[str, object] = {}
 
-    def fake_run_draft(insight, preference_snapshot, summary, env):
+    def fake_run_draft(insight, preference_snapshot, summary, platform, env):
         captured["insight"] = insight
         captured["snapshot"] = preference_snapshot
         captured["summary"] = summary
+        captured["platform"] = platform
         captured["env"] = env
         return "# 完整稿子\n\n正文"
 
@@ -210,6 +215,8 @@ def test_draft_branch_success_writes_draft_md_and_populates_process_result(
     seed: Insight = captured["insight"]  # type: ignore[assignment]
     assert seed.id == INSIGHT_ID
     assert seed.topic == "如何把长视频拆成短视频"
+    # platform 是请求级字段，原样透传给 runner（来自 _draft_request 的 "douyin"）。
+    assert captured["platform"] == "douyin"
     # Preference snapshot read from disk — not sent over the wire.
     assert isinstance(captured["snapshot"], PreferenceSnapshot)
     # Summary read from disk (optional grounding).
@@ -313,9 +320,10 @@ def test_draft_branch_missing_preference_snapshot_degrades_to_none(tmp_path: Pat
 
     captured: dict[str, object] = {}
 
-    def fake_run_draft(insight, preference_snapshot, summary, env):
+    def fake_run_draft(insight, preference_snapshot, summary, platform, env):
         captured["snapshot"] = preference_snapshot
         captured["summary"] = summary
+        captured["platform"] = platform
         return "# 稿子正文"
 
     with patch("frameq_worker.worker_service.run_draft", side_effect=fake_run_draft):
@@ -329,6 +337,8 @@ def test_draft_branch_missing_preference_snapshot_degrades_to_none(tmp_path: Pat
     assert captured["snapshot"] is None
     # Missing summary → None too.
     assert captured["summary"] is None
+    # platform 仍透传（请求级字段，与磁盘态无关）。
+    assert captured["platform"] == "douyin"
     assert result["draft"] == "# 稿子正文"
     assert result["error"] is None
 
@@ -341,7 +351,7 @@ def test_draft_branch_missing_preference_snapshot_degrades_to_none(tmp_path: Pat
 def test_draft_branch_run_draft_exception_wraps_as_generation_failed(tmp_path: Path) -> None:
     _write_task_skeleton(tmp_path)
 
-    def boom(insight, preference_snapshot, summary, env):
+    def boom(insight, preference_snapshot, summary, platform, env):
         raise RuntimeError("missing FRAMEQ_LLM_API_KEY")
 
     with patch("frameq_worker.worker_service.run_draft", side_effect=boom):

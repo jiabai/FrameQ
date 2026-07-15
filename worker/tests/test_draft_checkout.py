@@ -29,7 +29,8 @@ LLM_CHECKOUT_RESPONSE = {
 
 
 def _make_transport(*, llm_response=None, anysearch_response=None, recorded=None):
-    """fake transport：按 checkout URL 返回固定 bytes；可注入 Exception 模拟失败；可选记录 request。"""
+    """fake transport：按 checkout URL 返回固定 bytes；可注入 Exception 模拟失败；可选记录
+    request。"""
 
     def transport(request: Request, timeout: float) -> bytes:
         if recorded is not None:
@@ -253,7 +254,8 @@ def test_checkout_llm_config_once_uses_request_id_verbatim_no_per_call_suffix() 
         "timeout_seconds": 33,
     }
     body = json.loads(recorded[0].data.decode("utf-8"))  # type: ignore[union-attr]
-    # request_id verbatim——无 -call-NNNN 后缀（区别于 ServerManagedInsightClient.derive_per_call_request_id）。
+    # request_id verbatim——无 -call-NNNN 后缀（区别于
+    # ServerManagedInsightClient.derive_per_call_request_id）。
     assert body == {"request_id": "draft-seed-12345"}
 
 

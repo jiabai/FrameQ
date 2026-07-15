@@ -21,6 +21,7 @@
 
 ## AI Insight Spec
 
+- `2026-07-15-draft-platform-selection.md` - Delta on `生成文字稿`: user-visible, editable 9-option target platform on the confirmation page (defaulted from the inspiration profile), replacing `suitable_use` as the platform source with a new platform→form mapping (视频号/抖音/Tiktok/X→抖音).
 - `2026-07-12-generate-draft-from-inspiration.md` - Third AI整理 target card `生成文字稿`: turn a single user-selected `Insight` from `启发灵感` into a new draft, with strict single-seed, quota, and local-first privacy boundaries.
 - `2026-07-06-personalized-insight-preferences.md` - Option-based inspiration profile and per-run six-step generation preferences for more personalized insight topics.
 

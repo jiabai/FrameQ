@@ -685,12 +685,57 @@ describe("useTaskProcessingController draft target wiring", () => {
     );
 
     expect(retryInsightsMock).toHaveBeenCalledTimes(1);
+    // No platform forwarded when the caller omits it (trailing undefined).
     expect(retryInsightsMock).toHaveBeenCalledWith(
       "source-task",
       "draft",
       null,
       undefined,
       7,
+      undefined,
+    );
+  });
+
+  test("forwards the user-selected platform to retryInsights for the draft target", async () => {
+    retryInsightsMock.mockResolvedValue(
+      createWorkerResult({ draft: "# 草稿正文" }),
+    );
+    const source = createHistoryItem({
+      taskId: "source-task",
+      insights: [
+        {
+          id: 7,
+          topic: "seed insight",
+          matchReason: "reason",
+          followUpQuestions: ["q"],
+          suitableUse: "use",
+          sourceChunkId: null,
+        },
+      ],
+    });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+
+    await controller.retryInsightGeneration(
+      "draft",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+      undefined,
+      7,
+      "xiaohongshu",
+    );
+
+    expect(retryInsightsMock).toHaveBeenCalledTimes(1);
+    expect(retryInsightsMock).toHaveBeenCalledWith(
+      "source-task",
+      "draft",
+      null,
+      undefined,
+      7,
+      "xiaohongshu",
     );
   });
 

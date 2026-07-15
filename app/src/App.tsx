@@ -15,6 +15,7 @@ import {
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import { getAiCreditsCostHint } from "./aiCreditsCopy";
+import type { DraftPlatformId } from "./insightPreferences";
 import {
   getExportPath,
   getTaskArtifactPath,
@@ -165,7 +166,7 @@ function updateToolbarLabel(state: UpdateState): string {
 
 function App() {
   const [actionNotice, setActionNotice] = useState("");
-  // 6.3 / 6.4: draft confirmation + draft viewer sheet state. The
+  // Draft confirmation + draft viewer sheet state. The
   // confirmation sheet is opened by the draft card's generate action; the
   // viewer is opened by the draft card's view action (`onViewTarget("draft")`).
   const [draftConfirmOpen, setDraftConfirmOpen] = useState(false);
@@ -293,24 +294,29 @@ function App() {
   });
   resetInsightGenerationUiRef.current = resetInsightGenerationUi;
 
-  // 6.3: confirm draft generation — calls the draft retry path with the
-  // selected seed insight id. Cancel (closeSheet) does NOT call the worker,
-  // so it costs no quota. retryInsightGeneration handles the account/quota
-  // gate (opens the account panel if blocked) and the insights_generating
-  // progress phase. The draft viewer opens once the result arrives.
-  const confirmDraftGeneration = useCallback(() => {
-    setDraftConfirmOpen(false);
-    void retryInsightGeneration(
-      "draft",
-      null,
-      account,
-      openAccountPanel,
-      undefined,
-      workflow.draftSeedInsightId ?? undefined,
-    );
-  }, [account, openAccountPanel, retryInsightGeneration, workflow.draftSeedInsightId]);
+  // Confirm draft generation — calls the draft retry path with the
+  // selected seed insight id and the user-selected target platform. Cancel
+  // (closeSheet) does NOT call the worker, so it costs no quota.
+  // retryInsightGeneration handles the account/quota gate (opens the account
+  // panel if blocked) and the insights_generating progress phase. The draft
+  // viewer opens once the result arrives.
+  const confirmDraftGeneration = useCallback(
+    (platform: DraftPlatformId) => {
+      setDraftConfirmOpen(false);
+      void retryInsightGeneration(
+        "draft",
+        null,
+        account,
+        openAccountPanel,
+        undefined,
+        workflow.draftSeedInsightId ?? undefined,
+        platform,
+      );
+    },
+    [account, openAccountPanel, retryInsightGeneration, workflow.draftSeedInsightId],
+  );
 
-  // 6.4: copy the draft markdown to the clipboard (mirrors the shared
+  // Copy the draft markdown to the clipboard (mirrors the shared
   // AiResultDetailSheet copyDetail path).
   const copyDraft = useCallback(async () => {
     const text = workflow.draft.trim();
@@ -326,7 +332,7 @@ function App() {
     }
   }, [setActionNotice, workflow.draft]);
 
-  // 6.4: locate `ai/draft.md` in the file manager (mirrors the shared sheet's
+  // Locate `ai/draft.md` in the file manager (mirrors the shared sheet's
   // exportDetail, which calls revealItemInDir on the artifact path).
   const exportDraft = useCallback(async () => {
     const draftPath = getTaskArtifactPath(workflow, "draft");
@@ -659,7 +665,7 @@ function App() {
                   onSummaryAction={openSummaryConfirmation}
                   onInsightsAction={() => void openInsightPreferenceFlow()}
                   onDraftAction={() => {
-                    // 6.3: open the draft confirmation sheet (does NOT start
+                    // Open the draft confirmation sheet (does NOT start
                     // generation — that only happens on confirm, so cancel
                     // costs no quota).
                     setActionNotice("");
@@ -667,7 +673,7 @@ function App() {
                   }}
                   onViewTarget={(target) => {
                     setActionNotice("");
-                    // 6.4: draft has its own viewer (separate from the shared
+                    // Draft has its own viewer (separate from the shared
                     // summary/insights detail tab). Summary and insights still
                     // route through the shared AI detail sheet.
                     if (target === "summary" || target === "insights") {

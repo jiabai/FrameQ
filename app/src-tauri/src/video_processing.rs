@@ -48,6 +48,11 @@ pub(crate) struct RetryInsightsRequest {
     // byte-identical to the pre-draft worker contract.
     #[serde(skip_serializing_if = "Option::is_none")]
     insight_id: Option<i64>,
+    // User-selected draft platform id; present only for target="draft". Omitted on
+    // the wire for summary/insights so those requests stay byte-identical to the
+    // pre-platform worker contract (same skip pattern as insight_id).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -732,6 +737,7 @@ mod tests {
             target: "draft".to_string(),
             preference_snapshot: None,
             insight_id: Some(7),
+            platform: None,
         };
         let serialized = serde_json::to_value(&request).expect("serialize retry request");
 
@@ -750,6 +756,7 @@ mod tests {
             target: "insights".to_string(),
             preference_snapshot: None,
             insight_id: None,
+            platform: None,
         };
         let serialized = serde_json::to_value(&request).expect("serialize retry request");
 
@@ -773,6 +780,56 @@ mod tests {
 
         assert_eq!(serialized["target"], "draft");
         assert_eq!(serialized["insight_id"], 42);
+        assert!(serialized.get("preference_snapshot").is_none());
+    }
+
+    #[test]
+    fn retry_insights_request_serializes_platform_for_draft_target() {
+        let request = RetryInsightsRequest {
+            task_id: "20260714-100000-douyin-demo".to_string(),
+            target: "draft".to_string(),
+            preference_snapshot: None,
+            insight_id: Some(7),
+            platform: Some("douyin".to_string()),
+        };
+        let serialized = serde_json::to_value(&request).expect("serialize retry request");
+
+        assert_eq!(serialized["target"], "draft");
+        assert_eq!(serialized["platform"], "douyin");
+    }
+
+    #[test]
+    fn retry_insights_request_omits_platform_when_none() {
+        let request = RetryInsightsRequest {
+            task_id: "20260714-100000-douyin-demo".to_string(),
+            target: "insights".to_string(),
+            preference_snapshot: None,
+            insight_id: None,
+            platform: None,
+        };
+        let serialized = serde_json::to_value(&request).expect("serialize retry request");
+
+        assert!(
+            serialized.get("platform").is_none(),
+            "platform key must be absent when None so non-draft requests stay byte-identical on the wire"
+        );
+    }
+
+    #[test]
+    fn retry_insights_request_round_trips_platform_for_draft() {
+        let payload = serde_json::json!({
+            "task_id": "20260714-100000-douyin-demo",
+            "target": "draft",
+            "insight_id": 42,
+            "platform": "xiaohongshu"
+        });
+
+        let request: RetryInsightsRequest =
+            serde_json::from_value(payload).expect("deserialize draft retry request");
+        let serialized = serde_json::to_value(&request).expect("serialize draft retry request");
+
+        assert_eq!(serialized["target"], "draft");
+        assert_eq!(serialized["platform"], "xiaohongshu");
         assert!(serialized.get("preference_snapshot").is_none());
     }
 

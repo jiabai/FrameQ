@@ -13,7 +13,7 @@ type DraftResultSheetProps = {
 };
 
 /**
- * 6.4: the draft result viewer. A SEPARATE container from the transcript —
+ * The draft result viewer. A SEPARATE container from the transcript —
  * it renders `workflow.draft` through the shared sanitized GFM renderer
  * (`MarkdownContent`: remark-gfm + rehype-sanitize + skipHtml), so raw HTML
  * is stripped and Mermaid source renders as a plain code block, not a
