@@ -358,6 +358,20 @@ def run_draft_generation_step(
     try:
         draft_text = runner(seed, preference_snapshot, summary, request.platform, runtime_env)
     except Exception as exc:  # noqa: BLE001 - wraps LLM / MCP / agent-loop failures.
+        import sys as _sys, traceback as _tb
+        _stack = [exc]; _leaves = []
+        while _stack:
+            _e = _stack.pop()
+            if hasattr(_e, "exceptions"):
+                _stack.extend(_e.exceptions)
+            else:
+                _leaves.append(_e)
+        for _i, _lf in enumerate(_leaves):
+            _sys.stderr.write(f"===DRAFT_LEAF[{_i}] {type(_lf).__name__}: {_lf}===\n")
+            for _fr in _tb.extract_tb(_lf.__traceback__)[-4:]:
+                _sys.stderr.write(f"  {_fr.filename}:{_fr.lineno} in {_fr.name}  ||  {_fr.line or ''}\n")
+        _sys.stderr.write("===DRAFT_DEBUG top===\n")
+        _tb.print_exception(type(exc), exc, exc.__traceback__)
         return _draft_step_failed(
             code="DRAFT_GENERATION_FAILED",
             message=str(exc),

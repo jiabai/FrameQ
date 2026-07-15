@@ -49,4 +49,4 @@ pythonpath = ["worker"]
 testpaths = ["worker/tests"]
 
 [tool.uv.sources]
-agent-runtime = { git = "https://github.com/ArMiku/agent-runtime-template.git", tag = "0.1.0" }
+agent-runtime = { git = "https://github.com/ArMiku/agent-runtime-template.git", tag = "0.1.1" }
