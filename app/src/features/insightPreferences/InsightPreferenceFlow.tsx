@@ -8,19 +8,26 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { useMemo } from "react";
 import {
   INSIGHT_PREFERENCE_FIELDS,
-  summarizeGenerationPreferences,
-  summarizeInspirationProfile,
   type GenerationPreferenceField,
   type GenerationPreferences,
   type InspirationProfile,
 } from "../../insightPreferences";
+import type { SupportedLocale } from "../../i18n/locale";
+import { countTextUnits, formatWordCount } from "../../i18n/formatters";
+import {
+  getPreferenceCopy,
+  getPreferenceFieldPresentation,
+  interpolatePreferenceCopy,
+  summarizeGenerationPreferences,
+  summarizeInspirationProfile,
+} from "../../i18n/preferencePresentation";
 import {
   advanceGenerationStep,
   backGenerationStep,
   cancelProfileSetupInFlow,
-  getQuotaDisclosureCopy,
   selectGenerationOption,
   startGenerationPreferenceEditing,
   startProfileSetupInFlow,
@@ -28,13 +35,17 @@ import {
   type InsightPreferenceFlowState,
 } from "../../insightPreferenceFlow";
 import { InspirationProfileForm } from "./InspirationProfileForm";
+import { OutputLanguageField } from "./OutputLanguageField";
+import { useModalFocus } from "../modal/useModalFocus";
 
 type InsightPreferenceFlowProps = {
   flow: InsightPreferenceFlowState;
   busy: boolean;
   accountQuotaRemaining: number;
-  transcriptLength: number;
+  transcriptText: string;
   transcriptPath: string | null;
+  locale: SupportedLocale;
+  outputLanguage: SupportedLocale;
   onFlowChange: (flow: InsightPreferenceFlowState) => void;
   onSkipProfile: () => void;
   onSaveProfile: (profile: InspirationProfile) => void;
@@ -46,24 +57,29 @@ export function InsightPreferenceFlow({
   flow,
   busy,
   accountQuotaRemaining,
-  transcriptLength,
+  transcriptText,
   transcriptPath,
+  locale,
+  outputLanguage,
   onFlowChange,
   onSkipProfile,
   onSaveProfile,
   onConfirm,
   onCancel,
 }: InsightPreferenceFlowProps) {
+  const preferenceModalRef = useModalFocus<HTMLElement>(true);
+  const copy = getPreferenceCopy(locale).flow;
   const title =
     flow.screen === "profile_intro" || flow.screen === "profile_form"
-      ? "我的灵感档案"
+      ? copy.titleProfile
       : flow.screen === "confirmation"
-        ? "确认启发灵感"
-        : "本次生成偏好";
+        ? copy.titleConfirmation
+        : copy.titleGeneration;
 
   return (
     <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={onCancel}>
       <section
+        ref={preferenceModalRef}
         className="sheet-panel detail-modal preference-flow-sheet"
         aria-label={title}
         role="dialog"
@@ -72,16 +88,17 @@ export function InsightPreferenceFlow({
       >
         <header className="modal-header sheet-header">
           <div>
-            <p className="section-label">Insight direction</p>
+            <p className="section-label">{copy.sectionLabel}</p>
             <h2>{title}</h2>
           </div>
-          <button className="icon-button" type="button" onClick={onCancel} aria-label="关闭偏好流程">
+          <button className="icon-button" type="button" onClick={onCancel} aria-label={copy.closeAria}>
             <X size={18} />
           </button>
         </header>
 
         {flow.screen === "profile_intro" ? (
           <ProfileIntro
+            locale={locale}
             resetRequired={flow.profileResetRequired}
             busy={busy}
             onStart={() => onFlowChange(startProfileSetupInFlow(flow))}
@@ -91,6 +108,7 @@ export function InsightPreferenceFlow({
 
         {flow.screen === "profile_form" ? (
           <InspirationProfileForm
+            locale={locale}
             initialProfile={flow.profile}
             busy={busy}
             onCancel={() => {
@@ -107,6 +125,7 @@ export function InsightPreferenceFlow({
 
         {flow.screen === "default_summary" ? (
           <DefaultSummary
+            locale={locale}
             flow={flow}
             busy={busy}
             onDirect={() => onFlowChange(useDefaultGenerationPreferences(flow))}
@@ -117,6 +136,7 @@ export function InsightPreferenceFlow({
 
         {flow.screen === "generation_step" ? (
           <GenerationStep
+            locale={locale}
             flow={flow}
             busy={busy}
             onFlowChange={onFlowChange}
@@ -125,10 +145,12 @@ export function InsightPreferenceFlow({
 
         {flow.screen === "confirmation" ? (
           <ConfirmationStep
+            locale={locale}
+            outputLanguage={outputLanguage}
             flow={flow}
             busy={busy}
             accountQuotaRemaining={accountQuotaRemaining}
-            transcriptLength={transcriptLength}
+            transcriptText={transcriptText}
             transcriptPath={transcriptPath}
             onBack={() => onFlowChange(startGenerationPreferenceEditing(flow))}
             onConfirm={() => onConfirm(flow.generationPreferences)}
@@ -141,36 +163,39 @@ export function InsightPreferenceFlow({
 }
 
 function ProfileIntro({
+  locale,
   resetRequired,
   busy,
   onStart,
   onSkip,
 }: {
+  locale: SupportedLocale;
   resetRequired: boolean;
   busy: boolean;
   onStart: () => void;
   onSkip: () => void;
 }) {
+  const copy = getPreferenceCopy(locale).flow;
   return (
     <div className="preference-flow-content">
       <div className="preference-panel">
         <UserRound size={20} />
         <div>
-          <strong>{resetRequired ? "灵感档案需要重新设置" : "先设置一次长期语境"}</strong>
+          <strong>{resetRequired ? copy.introResetTitle : copy.introTitle}</strong>
           <p>
             {resetRequired
-              ? "当前本地档案无法用于生成。"
-              : "可设置角色、领域、城市语境和常用平台。"}
+              ? copy.introResetDescription
+              : copy.introDescription}
           </p>
         </div>
       </div>
       <div className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onSkip} disabled={busy}>
-          <span>{busy ? "处理中" : "跳过"}</span>
+          <span>{busy ? copy.processing : copy.skip}</span>
         </button>
         <button type="button" className="primary-button" onClick={onStart} disabled={busy}>
           <UserRound size={16} />
-          <span>开始设置</span>
+          <span>{copy.startSetup}</span>
         </button>
       </div>
     </div>
@@ -178,41 +203,47 @@ function ProfileIntro({
 }
 
 function DefaultSummary({
+  locale,
   flow,
   busy,
   onDirect,
   onModify,
   onEditProfile,
 }: {
+  locale: SupportedLocale;
   flow: InsightPreferenceFlowState;
   busy: boolean;
   onDirect: () => void;
   onModify: () => void;
   onEditProfile: () => void;
 }) {
+  const copy = getPreferenceCopy(locale).flow;
   return (
     <div className="preference-flow-content">
-      <SummaryGroup title="灵感档案" lines={summarizeInspirationProfile(flow.profile)} />
       <SummaryGroup
-        title="默认生成偏好"
+        title={copy.profileGroupTitle}
+        lines={summarizeInspirationProfile(flow.profile, locale)}
+      />
+      <SummaryGroup
+        title={copy.defaultGenerationGroupTitle}
         lines={
           flow.defaultGenerationPreferences
-            ? summarizeGenerationPreferences(flow.defaultGenerationPreferences)
+            ? summarizeGenerationPreferences(flow.defaultGenerationPreferences, locale)
             : []
         }
       />
       <div className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onEditProfile} disabled={busy}>
           <UserRound size={16} />
-          <span>编辑档案</span>
+          <span>{copy.editProfile}</span>
         </button>
         <button type="button" className="secondary-button" onClick={onModify} disabled={busy}>
           <RotateCcw size={16} />
-          <span>修改方向</span>
+          <span>{copy.modifyDirection}</span>
         </button>
         <button type="button" className="primary-button" onClick={onDirect} disabled={busy}>
           <ChevronRight size={16} />
-          <span>直接生成</span>
+          <span>{copy.generateDirectly}</span>
         </button>
       </div>
     </div>
@@ -220,15 +251,19 @@ function DefaultSummary({
 }
 
 function GenerationStep({
+  locale,
   flow,
   busy,
   onFlowChange,
 }: {
+  locale: SupportedLocale;
   flow: InsightPreferenceFlowState;
   busy: boolean;
   onFlowChange: (flow: InsightPreferenceFlowState) => void;
 }) {
   const config = INSIGHT_PREFERENCE_FIELDS[flow.currentStep];
+  const presentation = getPreferenceFieldPresentation(locale, flow.currentStep);
+  const copy = getPreferenceCopy(locale).flow;
   const rawValue = flow.generationPreferences[flow.currentStep];
   const selectedValues = Array.isArray(rawValue) ? rawValue : [rawValue];
   const maxReached = Array.isArray(rawValue) && rawValue.length >= config.max;
@@ -237,11 +272,16 @@ function GenerationStep({
   return (
     <div className="preference-flow-content">
       <div className="preference-step-header">
-        <span>{flow.currentStepIndex + 1} / 6</span>
-        <h3>{config.label}</h3>
+        <span>
+          {interpolatePreferenceCopy(copy.stepProgress, {
+            current: flow.currentStepIndex + 1,
+            total: 6,
+          })}
+        </span>
+        <h3>{presentation.label}</h3>
       </div>
       <div className="preference-options large">
-        {config.options.map((option) => {
+        {presentation.options.map((option) => {
           const selected = selectedValues.includes(option.id);
           return (
             <button
@@ -273,7 +313,7 @@ function GenerationStep({
           onClick={() => onFlowChange(backGenerationStep(flow))}
         >
           <ArrowLeft size={16} />
-          <span>上一步</span>
+          <span>{copy.previous}</span>
         </button>
         <button
           type="button"
@@ -282,7 +322,7 @@ function GenerationStep({
           onClick={() => onFlowChange(advanceGenerationStep(flow))}
         >
           <ChevronRight size={16} />
-          <span>{isFinalStep ? "完成选择" : "下一步"}</span>
+          <span>{isFinalStep ? copy.completeSelection : copy.next}</span>
         </button>
       </div>
     </div>
@@ -290,60 +330,79 @@ function GenerationStep({
 }
 
 function ConfirmationStep({
+  locale,
+  outputLanguage,
   flow,
   busy,
   accountQuotaRemaining,
-  transcriptLength,
+  transcriptText,
   transcriptPath,
   onBack,
   onConfirm,
   onCancel,
 }: {
+  locale: SupportedLocale;
+  outputLanguage: SupportedLocale;
   flow: InsightPreferenceFlowState;
   busy: boolean;
   accountQuotaRemaining: number;
-  transcriptLength: number;
+  transcriptText: string;
   transcriptPath: string | null;
   onBack: () => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const copy = getPreferenceCopy(locale).flow;
+  const transcriptUnitCount = useMemo(
+    () => countTextUnits(transcriptText, locale),
+    [locale, transcriptText],
+  );
   return (
     <div className="preference-flow-content">
       <p className="settings-warning privacy-callout">
         <ShieldCheck size={16} />
-        <span>
-          确认后会把文字稿片段和本次偏好发送到管理员配置的云端 LLM，用于生成启发灵感。
-        </span>
+        <span>{copy.privacyInsights}</span>
       </p>
       <div className="confirm-summary preference-confirm-grid">
         <div>
-          <span className="account-status-label">当前文字稿</span>
-          <strong>{transcriptLength > 0 ? `${transcriptLength.toLocaleString("zh-CN")} 字` : "等待文字稿"}</strong>
-          <small>{transcriptPath || "文字稿文件生成后才能继续。"}</small>
+          <span className="account-status-label">{copy.currentTranscript}</span>
+          <strong>
+            {transcriptUnitCount > 0
+              ? formatWordCount(transcriptUnitCount, locale)
+              : copy.waitingTranscript}
+          </strong>
+          <small>{transcriptPath || copy.transcriptUnavailable}</small>
         </div>
         <div>
-          <span className="account-status-label">AI Credits</span>
-          <strong>余额 {accountQuotaRemaining}</strong>
-          <small>{getQuotaDisclosureCopy()}</small>
+          <span className="account-status-label">{copy.creditsLabel}</span>
+          <strong>
+            {interpolatePreferenceCopy(copy.creditsBalance, {
+              count: new Intl.NumberFormat(locale).format(accountQuotaRemaining),
+            })}
+          </strong>
+          <small>{copy.quotaDisclosure}</small>
         </div>
+        <OutputLanguageField locale={locale} outputLanguage={outputLanguage} />
       </div>
-      <SummaryGroup title="灵感档案" lines={summarizeInspirationProfile(flow.profile)} />
       <SummaryGroup
-        title="本次生成偏好"
-        lines={summarizeGenerationPreferences(flow.generationPreferences)}
+        title={copy.profileGroupTitle}
+        lines={summarizeInspirationProfile(flow.profile, locale)}
+      />
+      <SummaryGroup
+        title={copy.currentGenerationGroupTitle}
+        lines={summarizeGenerationPreferences(flow.generationPreferences, locale)}
       />
       <div className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
-          <span>取消</span>
+          <span>{copy.cancel}</span>
         </button>
         <button type="button" className="secondary-button" onClick={onBack} disabled={busy}>
           <ArrowLeft size={16} />
-          <span>返回修改</span>
+          <span>{copy.backToEdit}</span>
         </button>
         <button type="button" className="primary-button" onClick={onConfirm} disabled={busy}>
           <Lightbulb size={16} />
-          <span>{busy ? "启动中" : "确认"}</span>
+          <span>{busy ? copy.starting : copy.confirm}</span>
         </button>
       </div>
     </div>

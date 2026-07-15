@@ -25,7 +25,9 @@ or ProcessSupervisor internals.
 - The process-video worker never constructs an LLM client, reads LLM checkout configuration,
   enters an AI progress stage, or writes summary, mindmap, insights, or preference artifacts.
   It completes immediately after the local transcript is finalized.
-- `retry_insights(taskId, target)` is the only AI-generation command. Only this command may
+- `retryInsights({ taskId, target, outputLanguage, preferenceSnapshot? })` is the only
+  AI-generation command. `outputLanguage` is the actual supported UI locale frozen at final
+  confirmation. Only this command may
   receive server-managed checkout configuration, consume quota, construct an AI client, and
   invoke `run_insight_generation_step` for `summary` or `insights` after explicit confirmation.
 - No legacy process-video AI branch, dual-format parser, compatibility field, or silent fallback
@@ -76,8 +78,9 @@ or ProcessSupervisor internals.
 - Summary is labelled `要点总结（同时生成思维导图文件）`. Summary still generates
   summary plus the hidden/local Mermaid file. There is no independent mindmap target or
   cloud-generation button.
-- Inspiration alone may open the preference flow and send a preference snapshot. Summary
-  always invokes `retry_insights("summary", null)` and must never carry a snapshot.
+- Inspiration alone may open the preference flow and send a preference snapshot. Summary always
+  invokes `retryInsights({ taskId, target: "summary", outputLanguage })` and must never carry a
+  snapshot. Both targets require the confirmation-time `outputLanguage` under contract v2.
 - Each target keeps its existing independent confirmation. Opening a flow consumes no
   Credits; confirmed generation consumes one Credit per actual supplier API-call attempt.
   The UI calls the balance `AI Credits` and explicitly states that one confirmed generation

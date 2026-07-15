@@ -1,15 +1,19 @@
 import { FileAudio, Film, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
+import { isSupportedLocale } from "../../i18n/locale";
+import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { TaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import type { TaskArtifactKey, WorkflowState } from "../../workflow";
 import { TranscriptReviewPanel } from "./TranscriptReviewPanel";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
+import { WorkerErrorNotice } from "../results/WorkerErrorNotice";
 
 type LocalTranscriptWorkspaceProps = {
   workflow: WorkflowState;
   model: TaskWorkspaceViewModel["local"];
   controller: TranscriptDetailController;
-  actionNotice: string;
+  actionNotice: UiMessage | null;
   onLocateArtifact: (artifact: Extract<TaskArtifactKey, "video" | "audio">) => void;
   onCancel: () => void;
 };
@@ -22,74 +26,134 @@ export function LocalTranscriptWorkspace({
   onLocateArtifact,
   onCancel,
 }: LocalTranscriptWorkspaceProps) {
+  const { t, i18n } = useTranslation("transcript");
+  const locale = isSupportedLocale(i18n.resolvedLanguage)
+    ? i18n.resolvedLanguage
+    : "en-US";
+  const renderedActionNotice = renderUiMessage(locale, actionNotice);
+
   return (
     <section
       className="task-domain-workspace local-transcript-workspace"
-      aria-label="本地文字稿工作区"
+      aria-label={t("workspace.ariaLabel")}
       data-task-id={model.taskId ?? undefined}
     >
       <header className="domain-workspace-header">
         <div>
-          <h2>{model.phase === "ready" ? "文字稿校对" : "本地转录"}</h2>
+          <h2>
+            {model.phase === "ready"
+              ? t("workspace.reviewTitle")
+              : t("workspace.transcriptionTitle")}
+          </h2>
         </div>
         {model.phase !== "ready" ? (
-          <span className={`workspace-status-badge ${model.phase}`}>{localStatusLabel(model.phase)}</span>
+          <span className={`workspace-status-badge ${model.phase}`}>
+            {t(localStatusKey(model.phase))}
+          </span>
         ) : null}
       </header>
 
       {model.phase === "processing" ? (
-        <div className="local-progress" aria-label="本地处理进度">
+        <div className="local-progress" aria-label={t("workspace.progressLabel")}>
           {model.progressSteps.map((step) => (
-            <span className={step.state} key={step.id}>{step.label}</span>
+            <span className={step.state} key={step.id}>
+              {t(localProgressStepKey(step.id))}
+            </span>
           ))}
-          <button className="secondary-button danger-soft" type="button" onClick={onCancel} disabled={workflow.stage === "cancelling"}>
+          <button
+            className="secondary-button danger-soft"
+            type="button"
+            onClick={onCancel}
+            disabled={workflow.stage === "cancelling"}
+          >
             <X size={16} />
-            <span>{workflow.stage === "cancelling" ? "正在取消" : "取消本地处理"}</span>
+            <span>
+              {workflow.stage === "cancelling"
+                ? t("workspace.cancelling")
+                : t("workspace.cancel")}
+            </span>
           </button>
         </div>
       ) : null}
 
-      {actionNotice ? <p className="action-notice">{actionNotice}</p> : null}
-
-      {model.canReview ? (
-        <>
-          <TranscriptReviewPanel
-            workflow={workflow}
-            controller={controller}
-            editingDisabled={!model.canEdit}
-            readOnlyReason={model.readOnlyReason}
-            artifactToolbar={(
-              <div className="local-artifact-toolbar" aria-label="本地文件操作">
-                <button type="button" className="secondary-button" onClick={() => onLocateArtifact("video")} disabled={!workflow.artifacts.video}>
-                  <Film size={16} />
-                  <span>定位视频</span>
-                </button>
-                <button type="button" className="secondary-button" onClick={() => onLocateArtifact("audio")} disabled={!workflow.artifacts.audio}>
-                  <FileAudio size={16} />
-                  <span>定位音频</span>
-                </button>
-              </div>
-            )}
-          />
-        </>
-      ) : model.phase !== "processing" ? (
-        <p className="workspace-empty-copy">文字稿生成后可在这里回听、校对和保存。</p>
+      {renderedActionNotice ? (
+        <p className="action-notice" role="status" aria-live="polite">
+          {renderedActionNotice}
+        </p>
       ) : null}
 
-      {model.error ? <p className="local-workspace-error">{model.error.code}</p> : null}
+      {model.canReview ? (
+        <TranscriptReviewPanel
+          workflow={workflow}
+          controller={controller}
+          editingDisabled={!model.canEdit}
+          readOnlyReason={
+            model.readOnly ? t("review.readOnlyDuringAi") : null
+          }
+          artifactToolbar={(
+            <div
+              className="local-artifact-toolbar"
+              aria-label={t("workspace.artifactActions")}
+            >
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => onLocateArtifact("video")}
+                disabled={!workflow.artifacts.video}
+              >
+                <Film size={16} />
+                <span>{t("workspace.locateVideo")}</span>
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => onLocateArtifact("audio")}
+                disabled={!workflow.artifacts.audio}
+              >
+                <FileAudio size={16} />
+                <span>{t("workspace.locateAudio")}</span>
+              </button>
+            </div>
+          )}
+        />
+      ) : model.phase !== "processing" ? (
+        <p className="workspace-empty-copy">{t("workspace.empty")}</p>
+      ) : null}
+
+      {model.error ? (
+        <WorkerErrorNotice
+          error={model.error}
+          locale={locale}
+          className="local-workspace-error"
+        />
+      ) : null}
     </section>
   );
 }
 
-function localStatusLabel(phase: TaskWorkspaceViewModel["local"]["phase"]): string {
+function localStatusKey(
+  phase: TaskWorkspaceViewModel["local"]["phase"],
+):
+  | "workspace.status.processing"
+  | "workspace.status.ready"
+  | "workspace.status.failed"
+  | "workspace.status.waiting" {
   switch (phase) {
     case "processing":
-      return "处理中";
+      return "workspace.status.processing";
     case "ready":
-      return "本地完成";
+      return "workspace.status.ready";
     case "failed":
-      return "处理失败";
+      return "workspace.status.failed";
     default:
-      return "等待开始";
+      return "workspace.status.waiting";
   }
+}
+
+function localProgressStepKey(
+  stage: TaskWorkspaceViewModel["local"]["progressSteps"][number]["id"],
+): "workspace.progressSteps.videoExtracting" | "workspace.progressSteps.videoTranscribing" {
+  return stage === "video_transcribing"
+    ? "workspace.progressSteps.videoTranscribing"
+    : "workspace.progressSteps.videoExtracting";
 }

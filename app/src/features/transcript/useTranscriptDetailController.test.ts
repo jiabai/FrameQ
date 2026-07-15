@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createInitialWorkflow } from "../../workflowState";
 import type { WorkflowState } from "../../workflow";
+import type { UiMessage } from "../../i18n/uiMessage";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
 
 type StateUpdater<T> = T | ((current: T) => T);
@@ -98,6 +99,7 @@ function readyWorkflow(): WorkflowState {
 async function createController(): Promise<{
   render: () => TranscriptDetailController;
   applyTranscriptSave: ReturnType<typeof vi.fn>;
+  setActionNotice: ReturnType<typeof vi.fn>;
 }> {
   const harness = createHookHarness();
   vi.doMock("react", () => ({
@@ -108,17 +110,24 @@ async function createController(): Promise<{
   }));
   const { useTranscriptDetailController } = await import("./useTranscriptDetailController");
   const applyTranscriptSave = vi.fn();
-  const setActionNotice = vi.fn<(value: SetStateAction<string>) => void>();
+  const setActionNotice = vi.fn<
+    (value: SetStateAction<UiMessage | null>) => void
+  >();
   const workflow = readyWorkflow();
   const render = () => {
     harness.resetRender();
-    return useTranscriptDetailController({ workflow, applyTranscriptSave, setActionNotice });
+    return useTranscriptDetailController({
+      workflow,
+      locale: "zh-CN",
+      applyTranscriptSave,
+      setActionNotice,
+    });
   };
 
   render();
   await vi.waitFor(() => expect(mocks.loadTranscriptDetail).toHaveBeenCalledOnce());
   await vi.waitFor(() => expect(render().transcriptSegments).toHaveLength(1));
-  return { render, applyTranscriptSave };
+  return { render, applyTranscriptSave, setActionNotice };
 }
 
 describe("useTranscriptDetailController segment editing", () => {
@@ -204,5 +213,23 @@ describe("useTranscriptDetailController segment editing", () => {
     expect(audio.pause).toHaveBeenCalledOnce();
     expect(audio.removeAttribute).toHaveBeenCalledWith("src");
     expect(audio.load).toHaveBeenCalledOnce();
+  });
+
+  test("uses a stable localized code when saving fails without exposing raw details", async () => {
+    mocks.saveTranscriptEdit.mockRejectedValueOnce(
+      new Error("Authorization: Bearer secret at C:/private/transcript.txt"),
+    );
+    const { render, setActionNotice } = await createController();
+    let controller = render();
+    controller.updateFullTranscriptDraft("Edited user transcript");
+    controller = render();
+
+    await controller.saveTranscriptDraft();
+
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.saveFailed",
+    });
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");
   });
 });

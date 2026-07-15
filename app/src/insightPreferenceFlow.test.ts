@@ -179,10 +179,10 @@ describe("insight preference flow", () => {
   });
 
   test("confirmation Credits copy explains variable per-call cost", () => {
-    const copy = getQuotaDisclosureCopy();
+    const copy = getQuotaDisclosureCopy("zh-CN");
 
     expect(copy).toContain("1 AI Credit = 1 次云端 LLM API 调用尝试");
-    expect(copy).toContain("一次 AI 整理可能消耗多个 Credits");
+    expect(copy).toContain("一次智能提炼可能消耗多个 Credits");
     expect(copy).toContain("按实际云端 LLM API 调用扣除 Credits");
     expect(copy).toContain("失败、超时或部分失败的已发起调用仍会扣除 Credits");
     expect(copy).not.toContain("次额度");

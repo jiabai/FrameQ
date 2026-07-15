@@ -6,6 +6,7 @@ import tarfile
 import zipfile
 from pathlib import Path
 
+import frameq_worker.model_download as model_download
 import pytest
 from frameq_worker.model_download import (
     ARCHIVE_INVALID_ERROR_CODE,
@@ -77,6 +78,15 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
             )
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "model.pt").write_bytes(b"model")
+        callback_type = kwargs["progress_callbacks"][0]
+        filename = (
+            r"C:\review-secret\model.pt"
+            if kwargs["model_id"] == SENSEVOICE_MODEL_ID
+            else "secret=review-secret.bin"
+        )
+        callback = callback_type(filename, 10)
+        callback.update(5)
+        callback.end()
         return str(kwargs["cache_dir"])
 
     result = download_asr_model_cache(
@@ -107,8 +117,33 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
     assert validate_asr_model_cache(tmp_path)
     assert not (tmp_path / "iic" / "SenseVoiceSmall").exists()
     assert not (tmp_path / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch").exists()
-    assert events[0]["status"] == "started"
-    assert events[-1]["status"] == "completed"
+    assert [event["message_code"] for event in events] == [
+        "model.download.preparing",
+        "model.primary.downloading",
+        "model.file.downloading",
+        "model.file.completed",
+        "model.vad.downloading",
+        "model.file.downloading",
+        "model.file.completed",
+        "model.download.completed",
+    ]
+    assert events[0] == {
+        "status": "started",
+        "progress": 0,
+        "message_code": "model.download.preparing",
+        "message_args": {"model": SENSEVOICE_MODEL_ID},
+    }
+    assert events[-1] == {
+        "status": "completed",
+        "progress": 100,
+        "message_code": "model.download.completed",
+        "message_args": {"model": SENSEVOICE_MODEL_ID},
+    }
+    assert [
+        event["current_file"] for event in events if "current_file" in event
+    ] == ["model.pt", "model.pt", "model-file", "model-file"]
+    assert all("message" not in event for event in events)
+    assert "review-secret" not in repr(events)
 
 
 def test_normalize_asr_model_cache_layout_migrates_legacy_only_cache(
@@ -168,16 +203,59 @@ def test_download_asr_model_cache_extracts_custom_archive_layout(tmp_path: Path)
                 archive.write(file_path, file_path.relative_to(archive_root))
 
     target = tmp_path / "target-cache"
+    events: list[dict[str, object]] = []
     result = download_asr_model_cache(
         cache_dir=target,
         download_url=str(archive_path),
-        progress_callback=lambda event: None,
+        progress_callback=events.append,
     )
 
     assert result == target
     assert validate_asr_model_cache(target)
     sensevoice_model = target / "models" / "iic" / "SenseVoiceSmall" / "model.pt"
     assert sensevoice_model.read_bytes() == b"sensevoice"
+    assert [event["message_code"] for event in events] == [
+        "model.download.preparing",
+        "model.archive.reading",
+        "model.archive.extracting",
+        "model.download.completed",
+    ]
+    assert all("message" not in event for event in events)
+
+
+def test_download_asr_model_cache_emits_remote_archive_code_without_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive_root = tmp_path / "archive-root"
+    create_valid_cache(archive_root)
+    archive_path = tmp_path / "sensevoice-cache.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        for file_path in archive_root.rglob("*"):
+            if file_path.is_file():
+                archive.write(file_path, file_path.relative_to(archive_root))
+
+    def fake_urlretrieve(url: str, destination: Path) -> tuple[str, None]:
+        assert url == "https://models.example/cache.zip?token=review-secret"
+        Path(destination).write_bytes(archive_path.read_bytes())
+        return str(destination), None
+
+    monkeypatch.setattr(model_download.urllib.request, "urlretrieve", fake_urlretrieve)
+    events: list[dict[str, object]] = []
+
+    download_asr_model_cache(
+        cache_dir=tmp_path / "target-cache",
+        download_url="https://models.example/cache.zip?token=review-secret",
+        progress_callback=events.append,
+    )
+
+    assert [event["message_code"] for event in events] == [
+        "model.download.preparing",
+        "model.archive.downloading",
+        "model.archive.extracting",
+        "model.download.completed",
+    ]
+    assert "review-secret" not in repr(events)
 
 
 def test_download_asr_model_cache_rejects_tar_symlink_members(tmp_path: Path) -> None:
@@ -227,3 +305,27 @@ def test_download_asr_model_cache_rejects_zip_symlink_members(tmp_path: Path) ->
 
     assert exc_info.value.code == ARCHIVE_INVALID_ERROR_CODE
     assert "unsupported" in exc_info.value.message
+
+
+def test_model_emit_without_callback_returns_before_event_validation() -> None:
+    model_download._emit(
+        None,
+        "not.a.registered-code",
+        "not-a-status",
+        -1,
+        current_file="C:unsafe.pt",
+    )
+
+
+def test_modelscope_callback_without_consumer_skips_filename_sanitizing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_sanitized(filename: object) -> str:
+        raise AssertionError(f"must not sanitize without a consumer: {filename!r}")
+
+    monkeypatch.setattr(model_download, "safe_current_file_basename", fail_if_sanitized)
+    callback_type = model_download._make_modelscope_progress_callback(None, 10, 72)
+    callback = callback_type("malformed-model-name", 10)
+
+    callback.update(5)
+    callback.end()

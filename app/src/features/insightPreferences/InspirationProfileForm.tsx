@@ -7,8 +7,15 @@ import {
   type InspirationProfile,
   type ProfileField,
 } from "../../insightPreferences";
+import type { SupportedLocale } from "../../i18n/locale";
+import {
+  getPreferenceCopy,
+  getPreferenceFieldPresentation,
+  interpolatePreferenceCopy,
+} from "../../i18n/preferencePresentation";
 
 type InspirationProfileFormProps = {
+  locale: SupportedLocale;
   initialProfile: InspirationProfile | null;
   busy: boolean;
   onCancel: () => void;
@@ -27,11 +34,13 @@ const EMPTY_PROFILE: InspirationProfile = {
 };
 
 export function InspirationProfileForm({
+  locale,
   initialProfile,
   busy,
   onCancel,
   onSave,
 }: InspirationProfileFormProps) {
+  const copy = getPreferenceCopy(locale).flow;
   const [draft, setDraft] = useState<InspirationProfile>(initialProfile ?? EMPTY_PROFILE);
   const validProfile = validateInspirationProfile(draft);
 
@@ -69,6 +78,7 @@ export function InspirationProfileForm({
       <div className="preference-form-grid">
         {PROFILE_FIELD_ORDER.map((field) => {
           const config = INSIGHT_PREFERENCE_FIELDS[field];
+          const presentation = getPreferenceFieldPresentation(locale, field);
           const rawValue = draft[field];
           const selectedValues = Array.isArray(rawValue) ? rawValue : [rawValue];
           const maxReached = Array.isArray(rawValue) && rawValue.length >= config.max;
@@ -76,11 +86,15 @@ export function InspirationProfileForm({
           return (
             <section className="preference-field" key={field}>
               <div className="preference-field-header">
-                <span>{config.label}</span>
-                {config.mode === "multi" ? <small>最多 {config.max} 个</small> : null}
+                <span>{presentation.label}</span>
+                {config.mode === "multi" ? (
+                  <small>
+                    {interpolatePreferenceCopy(copy.maxSelections, { count: config.max })}
+                  </small>
+                ) : null}
               </div>
               <div className="preference-options">
-                {config.options.map((option) => {
+                {presentation.options.map((option) => {
                   const selected = selectedValues.includes(option.id);
                   return (
                     <button
@@ -109,7 +123,7 @@ export function InspirationProfileForm({
       <div className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
           <X size={16} />
-          <span>取消</span>
+          <span>{copy.cancel}</span>
         </button>
         <button
           type="button"
@@ -122,7 +136,7 @@ export function InspirationProfileForm({
           }}
         >
           <CheckCircle2 size={16} />
-          <span>{busy ? "保存中" : "保存档案"}</span>
+          <span>{busy ? copy.saving : copy.saveProfile}</span>
         </button>
       </div>
     </div>

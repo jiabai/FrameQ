@@ -26,7 +26,7 @@
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 执行计划：无；新工作应先在 `docs/exec-plans/active/` 创建并登记。
-- 最近完成执行计划：`docs/exec-plans/completed/2026-07-12-github-actions-node24-upgrade-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-07-15-desktop-i18n-ai-output-language-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

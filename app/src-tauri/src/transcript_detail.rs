@@ -1,6 +1,4 @@
-use crate::{
-    ensure_runtime_dirs, resolve_runtime_paths, task_manifest, CACHE_DIR_NAME,
-};
+use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest, CACHE_DIR_NAME};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;

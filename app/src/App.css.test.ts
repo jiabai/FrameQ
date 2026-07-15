@@ -197,7 +197,7 @@ describe("App result workspace layout styles", () => {
     ]);
 
     expect(appTsx).toMatch(
-      /className="toolbar-tool-group"[\s\S]*?aria-label="查看历史"[\s\S]*?aria-label="应用设置"[\s\S]*?aria-label=\{toolbarNewTaskButtonState\.ariaLabel\}/,
+      /className="toolbar-tool-group"[\s\S]*?aria-label=\{tCommon\("toolbar\.history"\)\}[\s\S]*?aria-label=\{tCommon\("toolbar\.settings"\)\}[\s\S]*?aria-label=\{toolbarNewTaskAriaLabel\}/,
     );
     expect(appTsx).toContain("<span>{accountChipLabel}</span>");
     expect(accountRule).toContain("min-width: 0;");
@@ -215,9 +215,8 @@ describe("App result workspace layout styles", () => {
   });
 
   test("uses explicit task copy for the processing cancel action", () => {
-    expect(localTranscriptWorkspaceTsx).toContain(
-      'workflow.stage === "cancelling" ? "正在取消" : "取消本地处理"',
-    );
+    expect(localTranscriptWorkspaceTsx).toContain('t("workspace.cancelling")');
+    expect(localTranscriptWorkspaceTsx).toContain('t("workspace.cancel")');
     expect(localTranscriptWorkspaceTsx).toContain('disabled={workflow.stage === "cancelling"}');
   });
 
@@ -366,8 +365,8 @@ describe("App result workspace layout styles", () => {
     expect(transcriptReviewPanelTsx).toContain(
       'className="secondary-button compact-button transcript-segment-edit"',
     );
-    expect(transcriptReviewPanelTsx).toContain('aria-label="编辑此片段"');
-    expect(transcriptReviewPanelTsx).toContain('title="编辑"');
+    expect(transcriptReviewPanelTsx).toContain('aria-label={t("review.editSegment")}');
+    expect(transcriptReviewPanelTsx).toContain('title={t("review.edit")}');
     expect(editRule).toContain("height: 32px;");
     expect(editRule).toContain("min-height: 32px;");
     expect(editRule).toContain("width: 32px;");
@@ -451,9 +450,7 @@ describe("App result workspace layout styles", () => {
     expect(settingsSheetTsx).toMatch(
       /settingsCategory === "basic"[\s\S]*?className="settings-basic-note"[\s\S]*?id="settings-basic"/,
     );
-    expect(settingsSheetTsx).toContain(
-      "这里只管理本机 ASR 与输出目录；AI 配置由服务端统一管理。",
-    );
+    expect(settingsSheetTsx).toContain('tSettings("basic.privacy")');
     expect(settingsSheetTsx).not.toContain(
       "AI 结果 LLM 由管理员在服务端统一配置，客户端无需手动填写 API Key。",
     );

@@ -318,16 +318,18 @@ import json
 from pathlib import Path
 from frameq_worker.cli import retry_insights_once
 
-transcript_path = "outputs/7524373044106677544_transcript.txt"
-text = Path(transcript_path).read_text(encoding="utf-8")
 result = retry_insights_once(
-    json.dumps({"transcript_path": transcript_path, "text": text}),
+    json.dumps({
+        "task_id": "<existing-safe-task-id>",
+        "target": "insights",
+        "output_language": "zh-CN",
+    }),
     project_root=Path.cwd(),
 )
 print(json.dumps({
     "status": result["status"],
     "insights_count": len(result["insights"]),
-    "insights_path": result["insights_path"],
+    "insights_path": result["artifacts"].get("insights"),
 }, ensure_ascii=False, indent=2))
 '@ | uv run python -
 ```

@@ -1,5 +1,37 @@
 # Security and Compliance
 
+## 2026-07-15 Localization and AI Output-Language Boundary
+
+- `ui-preferences.json` must remain app-local and contain only schema version plus the closed language
+  preference enum. It must not contain account/session data, source URLs, output/model paths,
+  inspiration preferences, transcripts, prompts, or generated content, and it must never be sent to
+  FrameQ server.
+- All locale resources must be bundled. UI locale selection and switching must make no
+  translation-resource network request or introduce a remote translation or telemetry provider.
+- Worker/model progress producers must accept only contract-registered codes and closed per-key
+  argument schemas. Public model IDs must be enumerated; language must be a 2-35 character safe tag;
+  attempt/total must be integers from 1 through 100; unknown args must be rejected. `current_file`
+  must be 1-255 characters, reject separators/control characters/`.`/`..`, be required only by the
+  two model-file codes, and be forbidden otherwise. Consumers must drop an invalid event and record
+  only its safe code; they must not render worker prose as fallback.
+- URL, full path, Cookie, credential, request headers, prompt, transcript, preference prose, and
+  generated content must remain forbidden in events and diagnostics; the shared registry names these
+  as `url`, `full_path`, `cookie`, `credential`, `transcript_content`, `prompt`, `generated_content`,
+  `request_headers`, and `preference_prose`.
+- `output_language` must be one of three enum values in a closed request whose target is
+  `summary | insights`; only `insights` may carry the optional object preference snapshot. The worker
+  must map the enum to fixed internal prompt instructions; arbitrary UI strings must never be used.
+  Missing, invalid, target-incompatible, or additional fields must fail with a fixed non-echoing error.
+- Diagnostic logs may record target, validated output locale, stable message/error code, and safe
+  aggregate values only. They must not record the LLM prompt, transcript snippets, generated body,
+  full preference snapshot, or raw request payload.
+- Raw worker/provider errors require the existing sanitization boundary before they can appear in an
+  optional technical-details disclosure. Unknown progress natural language is discarded rather than
+  displayed or logged as a fallback.
+- AI language compliance must add no detection, translation, or retry call. The LLM supplier must
+  receive no new user content beyond the already confirmed target data; AI Credits and server
+  checkout must stay on the existing per-call boundary.
+
 ## 2026-07-12 Open-Source macOS Release Boundary
 
 - FrameQ v0.2.16 may use ad-hoc-signed, non-notarized macOS DMGs only for the explicitly approved

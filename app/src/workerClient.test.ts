@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   WORKER_PROGRESS_EVENT,
   cancelProcess,
@@ -137,8 +137,8 @@ describe("worker client", () => {
         id: 1,
         payload: {
           stage: "video_transcribing",
-          message: "正在加载模型并开始转写。",
           progress: 68,
+          message_code: "asr.transcribe.running",
         },
       });
       return async () => {
@@ -167,11 +167,80 @@ describe("worker client", () => {
     expect(progressEvents).toEqual([
       {
         stage: "video_transcribing",
-        message: "正在加载模型并开始转写。",
         progress: 68,
+        message: { messageCode: "asr.transcribe.running", args: {} },
       },
     ]);
     expect(unlistenCalls).toEqual([WORKER_PROGRESS_EVENT]);
+  });
+
+  test("drops invalid progress without exposing payload prose and records only a safe code", async () => {
+    const progressEvents: unknown[] = [];
+    const diagnostics: string[] = [];
+    const listener: WorkerProgressListener = async (eventName, handler) => {
+      for (const payload of [
+        {
+          stage: "video_extracting",
+          progress: 20,
+          message_code: "video.download.preparing",
+          message: "raw https://secret.example/private",
+        },
+        {
+          stage: "video_extracting",
+          progress: 20,
+          message_code: "https://secret.example/private",
+        },
+      ]) {
+        handler({ event: eventName, id: 1, payload });
+      }
+      return () => undefined;
+    };
+
+    await processVideo(
+      "https://www.douyin.com/video/7524373044106677544",
+      async () => completedResult(),
+      (event) => progressEvents.push(event),
+      listener,
+      (code) => diagnostics.push(code),
+    );
+
+    expect(progressEvents).toEqual([]);
+    expect(diagnostics).toEqual(["video.download.preparing", "invalid"]);
+    expect(JSON.stringify(diagnostics)).not.toContain("secret.example");
+  });
+
+  test("applies a structurally safe unknown progress code with generic rendering data and records the code", async () => {
+    const progressEvents: unknown[] = [];
+    const diagnostics: string[] = [];
+    const listener: WorkerProgressListener = async (eventName, handler) => {
+      handler({
+        event: eventName,
+        id: 1,
+        payload: {
+          stage: "video_transcribing",
+          progress: 72,
+          message_code: "future.action.running",
+        },
+      });
+      return () => undefined;
+    };
+
+    await processVideo(
+      "https://www.douyin.com/video/7524373044106677544",
+      async () => completedResult(),
+      (event) => progressEvents.push(event),
+      listener,
+      (code) => diagnostics.push(code),
+    );
+
+    expect(progressEvents).toEqual([
+      {
+        stage: "video_transcribing",
+        progress: 72,
+        message: { messageCode: "future.action.running", args: {} },
+      },
+    ]);
+    expect(diagnostics).toEqual(["future.action.running"]);
   });
 
   test("invokes the Tauri retry_insights command for summary generation", async () => {
@@ -190,7 +259,10 @@ describe("worker client", () => {
       });
     };
 
-    const result = await retryInsights(TASK_ID, "summary", null, runner);
+    const result = await retryInsights(
+      { taskId: TASK_ID, target: "summary", outputLanguage: "zh-TW" },
+      runner,
+    );
 
     expect(calls).toEqual([
       {
@@ -199,6 +271,7 @@ describe("worker client", () => {
           request: {
             task_id: TASK_ID,
             target: "summary",
+            output_language: "zh-TW",
           },
         },
       },
@@ -213,7 +286,15 @@ describe("worker client", () => {
       return completedResult();
     };
 
-    const result = await retryInsights(TASK_ID, "insights", PREFERENCE_SNAPSHOT, runner);
+    const result = await retryInsights(
+      {
+        taskId: TASK_ID,
+        target: "insights",
+        outputLanguage: "en-US",
+        preferenceSnapshot: PREFERENCE_SNAPSHOT,
+      },
+      runner,
+    );
 
     expect(calls).toEqual([
       {
@@ -222,6 +303,7 @@ describe("worker client", () => {
           request: {
             task_id: TASK_ID,
             target: "insights",
+            output_language: "en-US",
             preference_snapshot: PREFERENCE_SNAPSHOT,
           },
         },
@@ -235,7 +317,10 @@ describe("worker client", () => {
       throw new Error("retry worker process could not start");
     };
 
-    const result = await retryInsights(TASK_ID, "summary", null, runner);
+    const result = await retryInsights(
+      { taskId: TASK_ID, target: "summary", outputLanguage: "zh-CN" },
+      runner,
+    );
 
     expect(result).toEqual({
       status: "partial_completed",
@@ -252,6 +337,74 @@ describe("worker client", () => {
         stage: "insights_generating",
       },
     });
+  });
+
+  test("accepts exactly the three output languages without a compatibility default", async () => {
+    const languages: string[] = [];
+    const runner: WorkerCommandRunner = async (_command, args) => {
+      languages.push(
+        ((args as { request: { output_language: string } }).request).output_language,
+      );
+      return completedResult();
+    };
+
+    for (const outputLanguage of ["zh-CN", "zh-TW", "en-US"] as const) {
+      await retryInsights({ taskId: TASK_ID, target: "summary", outputLanguage }, runner);
+    }
+
+    expect(languages).toEqual(["zh-CN", "zh-TW", "en-US"]);
+  });
+
+  test("rejects invalid retry payloads before invoking the runner with a fixed safe error", async () => {
+    const runner = vi.fn<WorkerCommandRunner>();
+    const invalidPayloads: unknown[] = [
+      { taskId: TASK_ID, target: "summary" },
+      { taskId: TASK_ID, target: "summary", outputLanguage: "system" },
+      { taskId: TASK_ID, target: "summary", outputLanguage: "fr-FR" },
+      { taskId: "../private", target: "summary", outputLanguage: "en-US" },
+      {
+        taskId: TASK_ID,
+        target: "summary",
+        outputLanguage: "en-US",
+        preferenceSnapshot: PREFERENCE_SNAPSHOT,
+      },
+      {
+        taskId: TASK_ID,
+        target: "insights",
+        outputLanguage: "en-US",
+        preferenceSnapshot: null,
+      },
+      {
+        taskId: TASK_ID,
+        target: "insights",
+        outputLanguage: "en-US",
+        preferenceSnapshot: "prompt-secret-value",
+      },
+      {
+        taskId: TASK_ID,
+        target: "insights",
+        outputLanguage: "en-US",
+        preferenceSnapshot: new Date("2026-07-15T00:00:00.000Z"),
+      },
+      {
+        taskId: TASK_ID,
+        target: "summary",
+        outputLanguage: "en-US",
+        extra: "request-secret-value",
+      },
+    ];
+
+    for (const payload of invalidPayloads) {
+      const result = await retryInsights(payload as never, runner);
+      expect(result.error).toEqual({
+        code: "INVALID_RETRY_PAYLOAD",
+        message: "",
+        stage: "insights_generating",
+      });
+      expect(JSON.stringify(result)).not.toContain("secret-value");
+    }
+
+    expect(runner).not.toHaveBeenCalled();
   });
 
   test("invokes the Tauri cancel_process command", async () => {

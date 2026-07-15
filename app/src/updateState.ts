@@ -13,12 +13,12 @@ export type UpdateState = {
   status: UpdateStatus;
   availableVersion: string | null;
   notes: string;
-  message: string;
+  message: UiMessage | null;
   progress: number;
   downloadedBytes: number;
   totalBytes: number | null;
   postponedUntil: number | null;
-  error: string | null;
+  error: SafeTechnicalDetails | null;
 };
 
 export type UpdateInfo = {
@@ -49,7 +49,7 @@ export function createInitialUpdateState(): UpdateState {
     status: "idle",
     availableVersion: null,
     notes: "",
-    message: "",
+    message: null,
     progress: 0,
     downloadedBytes: 0,
     totalBytes: null,
@@ -64,7 +64,7 @@ export function markUpdateAvailable(state: UpdateState, update: UpdateInfo): Upd
     status: "available",
     availableVersion: update.version,
     notes: update.notes ?? "",
-    message: `发现新版本 ${update.version}。`,
+    message: uiMessage("updates.state.available", { version: update.version }),
     progress: 0,
     downloadedBytes: 0,
     totalBytes: null,
@@ -77,7 +77,7 @@ export function startUpdateCheck(state: UpdateState): UpdateState {
   return {
     ...state,
     status: "checking",
-    message: "正在检查更新。",
+    message: uiMessage("updates.state.checking"),
     error: null,
   };
 }
@@ -86,7 +86,7 @@ export function markUpdateUpToDate(state: UpdateState): UpdateState {
   return {
     ...state,
     status: "up_to_date",
-    message: "当前已是最新版本。",
+    message: uiMessage("updates.state.upToDate"),
     progress: 0,
     downloadedBytes: 0,
     totalBytes: null,
@@ -98,7 +98,7 @@ export function startUpdateDownload(state: UpdateState): UpdateState {
   return {
     ...state,
     status: "downloading",
-    message: "正在下载更新。",
+    message: uiMessage("updates.state.downloading"),
     progress: 0,
     downloadedBytes: 0,
     totalBytes: null,
@@ -118,7 +118,7 @@ export function applyUpdateDownloadEvent(
       totalBytes,
       downloadedBytes: 0,
       progress: 0,
-      message: "正在下载更新。",
+      message: uiMessage("updates.state.downloading"),
     };
   }
 
@@ -130,7 +130,7 @@ export function applyUpdateDownloadEvent(
       status: "downloading",
       downloadedBytes,
       progress: calculateProgress(downloadedBytes, state.totalBytes),
-      message: "正在下载更新。",
+      message: uiMessage("updates.state.downloading"),
     };
   }
 
@@ -138,7 +138,7 @@ export function applyUpdateDownloadEvent(
     ...state,
     status: "installing",
     progress: 100,
-    message: "正在安装更新。",
+    message: uiMessage("updates.state.installing"),
   };
 }
 
@@ -147,7 +147,7 @@ export function markUpdateReadyToRestart(state: UpdateState): UpdateState {
     ...state,
     status: "ready_to_restart",
     progress: 100,
-    message: "更新已安装，重启后生效。",
+    message: uiMessage("updates.state.readyToRestart"),
     error: null,
   };
 }
@@ -157,8 +157,8 @@ export function failUpdate(state: UpdateState, error: unknown): UpdateState {
   return {
     ...state,
     status: "failed",
-    message: `更新失败：${message}`,
-    error: message,
+    message: uiMessage("updates.state.failed"),
+    error: extractSafeTechnicalDetails({ message }),
   };
 }
 
@@ -170,7 +170,7 @@ export function postponeUpdate(
   return {
     ...state,
     status: "postponed",
-    message: "已稍后提醒。",
+    message: uiMessage("updates.state.postponed"),
     postponedUntil: nowMs + durationMs,
   };
 }
@@ -205,3 +205,8 @@ function calculateProgress(downloadedBytes: number, totalBytes: number | null): 
 
   return Math.max(0, Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)));
 }
+import { uiMessage, type UiMessage } from "./i18n/uiMessage";
+import {
+  extractSafeTechnicalDetails,
+  type SafeTechnicalDetails,
+} from "./safeTechnicalDetails";

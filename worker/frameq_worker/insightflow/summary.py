@@ -6,6 +6,7 @@ from pathlib import Path
 from frameq_worker.insightflow.generator import InsightClient, InsightGenerationError
 from frameq_worker.insightflow.prompt import build_mindmap_prompt, build_summary_prompt
 from frameq_worker.insightflow.splitter import MarkdownSplitter
+from frameq_worker.output_language import OutputLanguage, output_language_semantics
 
 
 @dataclass(frozen=True)
@@ -21,22 +22,32 @@ def generate_summary_from_markdown(
     output_dir: Path,
     output_stem: str,
     client: InsightClient,
+    output_language: OutputLanguage,
     splitter: MarkdownSplitter | None = None,
 ) -> SummaryArtifacts:
     chunks = (splitter or MarkdownSplitter()).split(markdown)
     if not chunks:
         raise InsightGenerationError("INSIGHTFLOW_EMPTY_TRANSCRIPT", "Transcript is empty.")
 
-    raw_mindmap = client.generate(build_mindmap_prompt(markdown))
+    raw_mindmap = client.generate(
+        build_mindmap_prompt(markdown, output_language=output_language)
+    )
     mindmap = normalize_mermaid_mindmap(raw_mindmap)
-    raw_summary = client.generate(build_summary_prompt(markdown, mindmap))
-    summary = normalize_summary_markdown(raw_summary)
+    raw_summary = client.generate(
+        build_summary_prompt(
+            markdown,
+            mindmap,
+            output_language=output_language,
+        )
+    )
+    summary = normalize_summary_markdown(raw_summary, output_language)
 
     return write_summary_files(
         summary=summary,
         mindmap=mindmap,
         output_dir=output_dir,
         output_stem=output_stem,
+        output_language=output_language,
     )
 
 
@@ -45,8 +56,9 @@ def write_summary_files(
     mindmap: str,
     output_dir: Path,
     output_stem: str,
+    output_language: OutputLanguage,
 ) -> SummaryArtifacts:
-    normalized_summary = normalize_summary_markdown(summary)
+    normalized_summary = normalize_summary_markdown(summary, output_language)
     normalized_mindmap = normalize_mermaid_mindmap(mindmap)
     if not normalized_summary:
         raise InsightGenerationError(
@@ -77,12 +89,16 @@ def write_summary_files(
     )
 
 
-def normalize_summary_markdown(raw_summary: str) -> str:
+def normalize_summary_markdown(
+    raw_summary: str,
+    output_language: OutputLanguage,
+) -> str:
     summary = _strip_code_fence(raw_summary).strip()
     if not summary:
         return ""
     if not summary.startswith("#"):
-        summary = f"# 要点总结\n\n{summary}"
+        title = output_language_semantics(output_language).summary_title
+        summary = f"# {title}\n\n{summary}"
     return f"{summary.rstrip()}\n"
 
 

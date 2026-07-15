@@ -11,6 +11,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 
 from frameq_worker.download_reliability import SafeDownloadError, write_http_response_atomically
+from frameq_worker.progress_events import build_worker_progress_event
 
 DOUYIN_MOBILE_USER_AGENT = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) "
@@ -255,7 +256,7 @@ def download_douyin_video(
             "Could not extract Douyin video ID from URL.",
         )
 
-    _emit_progress(progress_callback, "正在解析公开视频分享页。", 22)
+    _emit_progress(progress_callback, "douyin.page.resolving", 22)
     share_response = client.get(
         build_share_page_url(aweme_id),
         headers=_public_headers(),
@@ -268,7 +269,7 @@ def download_douyin_video(
         )
 
     item = parse_share_page_router_data(share_response.body.decode("utf-8", errors="replace"))
-    _emit_progress(progress_callback, "正在探测可用视频流。", 26)
+    _emit_progress(progress_callback, "douyin.stream.probing", 26)
     candidates = collect_stream_candidates(item, http_client=client)
     if not candidates:
         raise DouyinFallbackError(
@@ -276,7 +277,7 @@ def download_douyin_video(
             "Douyin public share page returned no playable streams.",
         )
 
-    _emit_progress(progress_callback, "正在保存最高质量视频。", 30)
+    _emit_progress(progress_callback, "douyin.video.saving", 30)
     return download_first_available_candidate(
         aweme_id=aweme_id,
         candidates=candidates,
@@ -478,16 +479,21 @@ def _is_media_content_type(content_type: str | None) -> bool:
     return normalized.startswith("video/") or normalized == "application/octet-stream"
 
 
-def _emit_progress(progress_callback: object | None, message: str, progress: int) -> None:
+def _emit_progress(
+    progress_callback: object | None,
+    message_code: str,
+    progress: int,
+    message_args: dict[str, int] | None = None,
+) -> None:
     if not callable(progress_callback):
         return
-    progress_callback(
-        {
-            "stage": "video_extracting",
-            "message": message,
-            "progress": progress,
-        }
+    event = build_worker_progress_event(
+        message_code,
+        stage="video_extracting",
+        progress=progress,
+        message_args=message_args,
     )
+    progress_callback(event)
 
 
 def _emit_stream_retry(
@@ -495,10 +501,15 @@ def _emit_stream_retry(
     failed_index: int,
     candidates: list[DouyinStreamCandidate],
 ) -> None:
-    if failed_index >= len(candidates) - 1:
+    if not callable(progress_callback) or failed_index >= len(candidates) - 1:
+        return
+    attempt = failed_index + 2
+    total = len(candidates)
+    if not 1 <= attempt <= total <= 100:
         return
     _emit_progress(
         progress_callback,
-        "最高质量视频流暂不可用，正在尝试另一个可用视频流。",
+        "douyin.stream.retrying",
         30,
+        message_args={"attempt": attempt, "total": total},
     )

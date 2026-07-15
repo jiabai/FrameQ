@@ -2005,6 +2005,27 @@ h3 {
   flex: 0 0 auto;
 }
 
+.language-settings-section {
+  border-color: var(--border-strong);
+}
+
+.locale-recovery-notice {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 11px 13px;
+  pointer-events: none;
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  z-index: 1000;
+}
+
 .sheet-form-section {
   background: var(--surface-raised);
   border: 1px solid var(--border);

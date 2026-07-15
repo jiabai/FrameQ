@@ -6,6 +6,7 @@ import type {
 } from "../../settingsClient";
 import type { InsightPreferenceState } from "../../insightPreferencesClient";
 import type { SettingsController } from "./useSettingsController";
+import { uiMessage } from "../../i18n/uiMessage";
 
 type StateUpdater<T> = T | ((current: T) => T);
 
@@ -169,7 +170,7 @@ describe("useSettingsController", () => {
     controller = render();
     expect(controller.settingsOpen).toBe(true);
     expect(controller.settingsLoading).toBe(true);
-    expect(controller.settingsNotice).not.toBe("");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.reading" });
 
     await load;
     controller = render();
@@ -186,7 +187,7 @@ describe("useSettingsController", () => {
     expect(controller.settingsConfigPath).toBe(config.configPath);
     expect(controller.audioReviewCacheUsage).toEqual(audioCacheUsage);
     expect(controller.settingsInsightPreferences).toEqual(insightPreferences);
-    expect(controller.settingsNotice).toContain("灵感档案设置");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.loadedAll" });
   });
 
   test("keeps base settings available when insight preferences fail to load", async () => {
@@ -206,7 +207,9 @@ describe("useSettingsController", () => {
     });
     expect(controller.audioReviewCacheUsage).toEqual(audioCacheUsage);
     expect(controller.settingsInsightPreferences).toBeNull();
-    expect(controller.settingsNotice).toContain("灵感档案状态暂不可用");
+    expect(controller.settingsNotice).toEqual({
+      messageCode: "settings.notice.loadedWithoutPreferences",
+    });
   });
 
   test("surfaces config load failures and resets loading state", async () => {
@@ -225,7 +228,8 @@ describe("useSettingsController", () => {
     controller = render();
 
     expect(controller.settingsLoading).toBe(false);
-    expect(controller.settingsNotice).toBe("读取配置失败：config unavailable");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.loadFailed" });
+    expect(JSON.stringify(controller.settingsNotice)).not.toContain("config unavailable");
   });
 
   test("surfaces audio cache usage load failures and resets loading state", async () => {
@@ -243,7 +247,7 @@ describe("useSettingsController", () => {
     controller = render();
 
     expect(controller.settingsLoading).toBe(false);
-    expect(controller.settingsNotice).toBe("读取配置失败：cache unavailable");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.loadFailed" });
   });
 
   test("uses the provided success notice when settings load succeeds", async () => {
@@ -251,11 +255,12 @@ describe("useSettingsController", () => {
     const { render } = await createController();
 
     let controller = render();
-    await controller.loadSettings("自定义设置读取完成。");
+    const successNotice = uiMessage("settings.notice.saved");
+    await controller.loadSettings(successNotice);
     controller = render();
 
     expect(controller.settingsLoading).toBe(false);
-    expect(controller.settingsNotice).toBe("自定义设置读取完成。");
+    expect(controller.settingsNotice).toEqual(successNotice);
   });
 
   test("saves draft settings and refreshes saved config metadata", async () => {
@@ -289,7 +294,7 @@ describe("useSettingsController", () => {
     });
     expect(controller.settingsSupportedAsrModels).toEqual(savedConfig.supportedAsrModels);
     expect(controller.settingsConfigPath).toBe(savedConfig.configPath);
-    expect(controller.settingsNotice).toContain("配置已保存");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.saved" });
   });
 
   test("surfaces save failures and resets saving state", async () => {
@@ -308,7 +313,8 @@ describe("useSettingsController", () => {
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(mocks.saveLlmConfig).toHaveBeenCalledTimes(1);
     expect(controller.settingsSaving).toBe(false);
-    expect(controller.settingsNotice).toBe("保存失败：disk full");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.saveFailed" });
+    expect(JSON.stringify(controller.settingsNotice)).not.toContain("disk full");
   });
 
   test("clears audio review cache and refreshes cache usage", async () => {
@@ -323,7 +329,7 @@ describe("useSettingsController", () => {
     expect(mocks.clearAudioReviewCache).toHaveBeenCalledTimes(1);
     expect(controller.settingsSaving).toBe(false);
     expect(controller.audioReviewCacheUsage).toEqual(clearedUsage);
-    expect(controller.settingsNotice).toContain("缓存已清理");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.cacheCleared" });
   });
 
   test("surfaces audio cache clear failures and resets saving state", async () => {
@@ -340,7 +346,9 @@ describe("useSettingsController", () => {
 
     expect(mocks.clearAudioReviewCache).toHaveBeenCalledTimes(1);
     expect(controller.settingsSaving).toBe(false);
-    expect(controller.settingsNotice).toBe("清理音频播放缓存失败：permission denied");
+    expect(controller.settingsNotice).toEqual({
+      messageCode: "settings.notice.cacheClearFailed",
+    });
   });
 
   test("locates the settings config file when a path is loaded", async () => {
@@ -352,7 +360,9 @@ describe("useSettingsController", () => {
     await controller.locateSettingsConfigFile();
     controller = render();
     expect(mocks.revealItemInDir).not.toHaveBeenCalled();
-    expect(controller.settingsNotice).toContain("配置文件路径");
+    expect(controller.settingsNotice).toEqual({
+      messageCode: "settings.notice.configPathUnavailable",
+    });
 
     await controller.openSettings();
     controller = render();
@@ -360,7 +370,7 @@ describe("useSettingsController", () => {
     controller = render();
 
     expect(mocks.revealItemInDir).toHaveBeenCalledWith(config.configPath);
-    expect(controller.settingsNotice).toContain("定位本机配置文件");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.configLocated" });
   });
 
   test("surfaces settings config locate failures", async () => {
@@ -375,7 +385,9 @@ describe("useSettingsController", () => {
     controller = render();
 
     expect(mocks.revealItemInDir).toHaveBeenCalledWith(config.configPath);
-    expect(controller.settingsNotice).toBe("定位配置文件失败：shell unavailable");
+    expect(controller.settingsNotice).toEqual({
+      messageCode: "settings.notice.configLocateFailed",
+    });
   });
 
   test("clears inspiration profile from settings and refreshes preference state", async () => {
@@ -394,7 +406,7 @@ describe("useSettingsController", () => {
     expect(mocks.clearInspirationProfile).toHaveBeenCalledTimes(1);
     expect(controller.settingsSaving).toBe(false);
     expect(controller.settingsInsightPreferences).toEqual(clearedPreferences);
-    expect(controller.settingsNotice).toContain("已清空灵感档案");
+    expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.profileCleared" });
   });
 
   test("surfaces inspiration profile clear failures and resets saving state", async () => {
@@ -411,6 +423,8 @@ describe("useSettingsController", () => {
 
     expect(mocks.clearInspirationProfile).toHaveBeenCalledTimes(1);
     expect(controller.settingsSaving).toBe(false);
-    expect(controller.settingsNotice).toBe("清空失败：profile locked");
+    expect(controller.settingsNotice).toEqual({
+      messageCode: "settings.notice.profileClearFailed",
+    });
   });
 });

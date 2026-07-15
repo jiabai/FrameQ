@@ -7,27 +7,23 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import type { AsrModelStatus } from "../asrModel/types";
 import type { UpdateState } from "../../updateState";
 import type { InsightPreferenceState } from "../../insightPreferencesClient";
+import type { SupportedLocale } from "../../i18n/locale";
+import { formatBytes, selectPluralCategory } from "../../i18n/formatters";
+import { renderUiMessage } from "../../i18n/uiMessage";
 import {
+  getPreferenceCopy,
+  interpolatePreferenceCopy,
   summarizeGenerationPreferences,
   summarizeInspirationProfile,
-} from "../../insightPreferences";
+} from "../../i18n/preferencePresentation";
 import type { SettingsCategory, SettingsController } from "./useSettingsController";
-
-const settingsNavItems: Array<{
-  id: SettingsCategory;
-  label: string;
-  description: string;
-}> = [
-  { id: "basic", label: "基础", description: "模型与输出" },
-  { id: "inspiration", label: "灵感", description: "档案与偏好" },
-  { id: "storage", label: "缓存", description: "本机临时区" },
-  { id: "updates", label: "更新", description: "版本维护" },
-  { id: "advanced", label: "高级", description: "配置文件" },
-];
+import { LanguagePreferenceField } from "./LanguagePreferenceField";
+import { useModalFocus } from "../modal/useModalFocus";
 
 type SettingsSheetProps = {
   controller: SettingsController;
@@ -46,95 +42,91 @@ type SettingsSheetProps = {
   onPostponeUpdateReminder: () => void | Promise<void>;
   onRestartForUpdate: () => void | Promise<void>;
   onOpenReleases: () => void | Promise<void>;
+  locale: SupportedLocale;
 };
 
-function formatByteSize(value: number): string {
-  const bytes = Math.max(0, value);
-  if (bytes < 1024) {
-    return `${Math.round(bytes)} B`;
-  }
-  const units = ["KB", "MB", "GB"];
-  let size = bytes / 1024;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  const precision = size >= 10 ? 0 : 1;
-  return `${size.toFixed(precision)} ${units[unitIndex]}`;
-}
-
-function updateStatusLabel(state: UpdateState): string {
-  const labels: Record<UpdateState["status"], string> = {
-    idle: "未检查",
-    checking: "检查中",
-    available: "可升级",
-    downloading: "下载中",
-    installing: "安装中",
-    ready_to_restart: "待重启",
-    up_to_date: "已是最新",
-    failed: "检查失败",
-    postponed: "稍后提醒",
-  };
-
-  return labels[state.status];
-}
-
-function settingsProfileStatusLabel(state: InsightPreferenceState | null, loading: boolean): string {
+function settingsProfileStatusLabel(
+  state: InsightPreferenceState | null,
+  loading: boolean,
+  locale: SupportedLocale,
+): string {
+  const copy = getPreferenceCopy(locale).settings;
   if (!state) {
-    return loading ? "读取中" : "暂不可用";
+    return loading ? copy.statusReading : copy.statusUnavailable;
   }
 
   if (state.profileStatus === "valid") {
-    return "已设置";
+    return copy.statusReady;
   }
 
   if (state.profileStatus === "skipped") {
-    return "已跳过";
+    return copy.statusSkipped;
   }
 
   if (state.profileStatus === "invalid") {
-    return "需要重设";
+    return copy.statusResetRequired;
   }
 
-  return "未设置";
+  return copy.statusNotSet;
 }
 
 function settingsProfileStatusTone(state: InsightPreferenceState | null): "ready" | "missing" {
   return state?.profileStatus === "valid" ? "ready" : "missing";
 }
 
-function settingsProfileSummaryLines(state: InsightPreferenceState | null, loading: boolean): string[] {
+function settingsProfileSummaryLines(
+  state: InsightPreferenceState | null,
+  loading: boolean,
+  locale: SupportedLocale,
+): string[] {
+  const copy = getPreferenceCopy(locale).settings;
   if (!state) {
-    return [loading ? "读取后显示灵感档案状态" : "灵感档案状态暂不可用"];
+    return [loading ? copy.summaryLoading : copy.summaryUnavailable];
   }
 
   if (state.profileStatus === "invalid") {
-    return [state.profileError || "灵感档案需要重新设置"];
+    return [copy.profileResetRequired];
   }
 
   if (state.profileStatus === "valid") {
-    const summary = summarizeInspirationProfile(state.profile);
+    const summary = summarizeInspirationProfile(state.profile, locale);
     if (summary.length > 3) {
-      return [...summary.slice(0, 3), `还有 ${summary.length - 3} 项，编辑时可查看`];
+      const remainingCount = summary.length - 3;
+      const remainingTemplate =
+        selectPluralCategory(remainingCount, locale) === "one"
+          ? copy.moreItems_one
+          : copy.moreItems_other;
+      return [
+        ...summary.slice(0, 3),
+        interpolatePreferenceCopy(remainingTemplate, { count: remainingCount }),
+      ];
     }
     return summary;
   }
 
-  return ["未设置灵感档案"];
+  return [copy.profileNotSet];
 }
 
-function settingsGenerationPreferenceLines(state: InsightPreferenceState | null, loading: boolean): string[] {
+function settingsGenerationPreferenceLines(
+  state: InsightPreferenceState | null,
+  loading: boolean,
+  locale: SupportedLocale,
+): string[] {
+  const copy = getPreferenceCopy(locale).settings;
   if (!state) {
-    return [loading ? "读取后显示默认生成偏好" : "默认生成偏好暂不可用"];
+    return [loading ? copy.defaultLoading : copy.defaultUnavailable];
   }
 
   if (!state.defaultGenerationPreferences) {
-    return ["尚未保存默认生成偏好"];
+    return [copy.defaultNotSaved];
   }
 
-  const summary = summarizeGenerationPreferences(state.defaultGenerationPreferences);
-  return [`已保存默认生成偏好（${summary.length} 项）`];
+  const summary = summarizeGenerationPreferences(state.defaultGenerationPreferences, locale);
+  const savedTemplate =
+    selectPluralCategory(summary.length, locale) === "one"
+      ? copy.defaultSaved_one
+      : copy.defaultSaved_other;
+  return [interpolatePreferenceCopy(savedTemplate, { count: summary.length })];
 }
 
 export function SettingsSheet({
@@ -154,7 +146,43 @@ export function SettingsSheet({
   onPostponeUpdateReminder,
   onRestartForUpdate,
   onOpenReleases,
+  locale,
 }: SettingsSheetProps) {
+  const { t: tSettings } = useTranslation("settings");
+  const { t: tUpdates } = useTranslation("updates");
+  const { t: tCommon } = useTranslation("common");
+  const preferenceCopy = getPreferenceCopy(locale).settings;
+  const localizedSettingsNavItems: Array<{
+    id: SettingsCategory;
+    label: string;
+    description: string;
+  }> = [
+    {
+      id: "basic",
+      label: tSettings("navigation.basic.label"),
+      description: tSettings("navigation.basic.description"),
+    },
+    {
+      id: "inspiration" as const,
+      label: preferenceCopy.navLabel,
+      description: preferenceCopy.navDescription,
+    },
+    {
+      id: "storage",
+      label: tSettings("navigation.storage.label"),
+      description: tSettings("navigation.storage.description"),
+    },
+    {
+      id: "updates",
+      label: tSettings("navigation.updates.label"),
+      description: tSettings("navigation.updates.description"),
+    },
+    {
+      id: "advanced",
+      label: tSettings("navigation.advanced.label"),
+      description: tSettings("navigation.advanced.description"),
+    },
+  ];
   const {
     settingsOpen,
     settingsCategory,
@@ -174,6 +202,10 @@ export function SettingsSheet({
     clearProfileFromSettings,
     locateSettingsConfigFile,
   } = controller;
+  const settingsModalRef = useModalFocus<HTMLElement>(settingsOpen);
+  const renderedSettingsNotice = renderUiMessage(locale, settingsNotice);
+  const renderedUpdateMessage = renderUiMessage(locale, updateState.message);
+  const updateProgress = Math.max(0, Math.min(100, updateState.progress));
 
   if (!settingsOpen) {
     return null;
@@ -182,25 +214,31 @@ export function SettingsSheet({
   return (
     <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={closeSettings}>
       <section
+        ref={settingsModalRef}
         className="sheet-panel detail-modal settings-modal settings-sheet"
-        aria-label="应用设置"
+        aria-label={tSettings("sheet.ariaLabel")}
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="modal-header sheet-header">
           <div>
-            <p className="section-label">FrameQ</p>
-            <h2>应用设置</h2>
+            <p className="section-label">{tCommon("appName")}</p>
+            <h2>{tSettings("sheet.title")}</h2>
           </div>
-          <button className="icon-button" type="button" onClick={closeSettings} aria-label="关闭设置">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={closeSettings}
+            aria-label={tSettings("sheet.closeAria")}
+          >
             <X size={18} />
           </button>
         </header>
         <form id="settings-form" className="settings-form" onSubmit={submitSettings}>
           <div className="settings-layout" data-active-settings-category={settingsCategory}>
-            <nav className="settings-nav" aria-label="设置分类">
-              {settingsNavItems.map((item) => (
+            <nav className="settings-nav" aria-label={tSettings("navigation.ariaLabel")}>
+              {localizedSettingsNavItems.map((item) => (
                 <button
                   type="button"
                   key={item.id}
@@ -218,17 +256,18 @@ export function SettingsSheet({
             <div className="settings-sections">
               {settingsCategory === "basic" ? (
                 <>
+                  <LanguagePreferenceField />
                   <p className="settings-basic-note">
                     <ShieldCheck size={15} />
-                    <span>这里只管理本机 ASR 与输出目录；AI 配置由服务端统一管理。</span>
+                    <span>{tSettings("basic.privacy")}</span>
                   </p>
                   <section id="settings-basic" className="sheet-form-section">
                     <div className="form-section-heading">
-                      <h3>模型与输出</h3>
-                      <p>这些设置只影响后续任务。</p>
+                      <h3>{tSettings("basic.heading")}</h3>
+                      <p>{tSettings("basic.description")}</p>
                     </div>
                     <label className="field-row">
-                      <span>ASR 模型</span>
+                      <span>{tSettings("basic.asrModel")}</span>
                       <select
                         value={settingsDraft.asrModel}
                         onChange={(event) => updateSettingsDraft("asrModel", event.currentTarget.value)}
@@ -244,9 +283,13 @@ export function SettingsSheet({
                     <div className="model-settings-row">
                       <div>
                         <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
-                          {asrModelStatus.available ? "ASR 模型已就绪" : "ASR 模型未下载"}
+                          {asrModelStatus.available
+                            ? tSettings("basic.modelReady")
+                            : tSettings("basic.modelMissing")}
                         </span>
-                        <small>{asrModelStatus.modelDir || "app-local data/models"}</small>
+                        <small>
+                          {asrModelStatus.modelDir || tSettings("basic.defaultModelPath")}
+                        </small>
                       </div>
                       <button
                         type="button"
@@ -255,15 +298,19 @@ export function SettingsSheet({
                         disabled={asrModelStatus.available || modelDownloadActive}
                       >
                         <Download size={15} />
-                        <span>{modelDownloadActive ? "下载中" : "下载 ASR 模型"}</span>
+                        <span>
+                          {modelDownloadActive
+                            ? tSettings("basic.downloading")
+                            : tSettings("basic.downloadModel")}
+                        </span>
                       </button>
                     </div>
                     <label className="field-row">
-                      <span>输出目录</span>
+                      <span>{tSettings("basic.outputDirectory")}</span>
                       <input
                         value={settingsDraft.outputDir}
                         onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
-                        placeholder="留空使用 outputs/"
+                        placeholder={tSettings("basic.outputPlaceholder")}
                         disabled={settingsLoading || settingsSaving}
                       />
                     </label>
@@ -274,17 +321,25 @@ export function SettingsSheet({
               {settingsCategory === "inspiration" ? (
                 <section id="settings-inspiration" className="sheet-form-section inspiration-settings-section">
                   <div className="form-section-heading">
-                    <h3>灵感档案</h3>
-                    <p>只保存在本机，用于后续启发灵感生成。</p>
+                    <h3>{preferenceCopy.heading}</h3>
+                    <p>{preferenceCopy.description}</p>
                   </div>
                   <div className="settings-status-card inspiration-profile-card">
                     <div>
                       <span className={`model-status-badge ${settingsProfileStatusTone(settingsInsightPreferences)}`}>
-                        {settingsProfileStatusLabel(settingsInsightPreferences, settingsLoading)}
+                        {settingsProfileStatusLabel(
+                          settingsInsightPreferences,
+                          settingsLoading,
+                          locale,
+                        )}
                       </span>
-                      <strong>我的灵感档案</strong>
+                      <strong>{preferenceCopy.profileCardTitle}</strong>
                       <div className="settings-summary-list">
-                        {settingsProfileSummaryLines(settingsInsightPreferences, settingsLoading).map((line, index) => (
+                        {settingsProfileSummaryLines(
+                          settingsInsightPreferences,
+                          settingsLoading,
+                          locale,
+                        ).map((line, index) => (
                           <span key={`${line}-${index}`}>{line}</span>
                         ))}
                       </div>
@@ -297,7 +352,7 @@ export function SettingsSheet({
                         disabled={settingsLoading || settingsSaving}
                       >
                         <UserRound size={15} />
-                        <span>编辑灵感档案</span>
+                        <span>{preferenceCopy.editProfile}</span>
                       </button>
                       <button
                         type="button"
@@ -306,17 +361,18 @@ export function SettingsSheet({
                         disabled={settingsLoading || settingsSaving}
                       >
                         <X size={15} />
-                        <span>清空档案</span>
+                        <span>{preferenceCopy.clearProfile}</span>
                       </button>
                     </div>
                   </div>
                   <div className="settings-status-card quiet">
                     <div>
-                      <strong>默认生成偏好</strong>
+                      <strong>{preferenceCopy.defaultGenerationTitle}</strong>
                       <div className="settings-summary-list">
                         {settingsGenerationPreferenceLines(
                           settingsInsightPreferences,
                           settingsLoading,
+                          locale,
                         ).map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
                       </div>
                     </div>
@@ -327,12 +383,14 @@ export function SettingsSheet({
               {settingsCategory === "storage" ? (
                 <section id="settings-storage" className="sheet-form-section audio-cache-settings-section">
                   <div className="form-section-heading">
-                    <h3>存储与缓存</h3>
-                    <p>临时播放缓存保存在 app-local cache/.frameq-audio-review；清理不会删除原始任务音频。</p>
+                    <h3>{tSettings("storage.heading")}</h3>
+                    <p>{tSettings("storage.description")}</p>
                   </div>
                   <div className="config-file-row audio-cache-row">
                     <code title={audioReviewCacheUsage?.cachePath ?? ""}>
-                      音频播放缓存：{formatByteSize(audioReviewCacheUsage?.sizeBytes ?? 0)}
+                      {tSettings("storage.audioCache", {
+                        size: formatBytes(audioReviewCacheUsage?.sizeBytes ?? 0, locale),
+                      })}
                     </code>
                     <button
                       type="button"
@@ -341,7 +399,7 @@ export function SettingsSheet({
                       disabled={settingsLoading || settingsSaving || !audioReviewCacheUsage}
                     >
                       <Trash2 size={15} />
-                      <span>清理播放缓存</span>
+                      <span>{tSettings("storage.clear")}</span>
                     </button>
                   </div>
                 </section>
@@ -350,35 +408,49 @@ export function SettingsSheet({
               {settingsCategory === "updates" ? (
                 <section id="settings-updates" className="sheet-form-section update-settings-section">
                   <div className="form-section-heading">
-                    <h3>应用更新</h3>
-                    <p>FrameQ 会升级桌面端和内置 worker；模型缓存和本机产物保持在 app-local data。</p>
+                    <h3>{tUpdates("section.heading")}</h3>
+                    <p>{tUpdates("section.description")}</p>
                   </div>
                   <div className={`update-status-card ${updateState.status}`}>
                     <div>
                       <span className={`model-status-badge ${updateState.status === "failed" ? "missing" : "ready"}`}>
-                        {inAppUpdates ? updateStatusLabel(updateState) : "手动更新"}
+                        {inAppUpdates
+                          ? tUpdates(`status.${updateState.status}`)
+                          : tUpdates("section.manualStatus")}
                       </span>
-                      <strong>{updateState.availableVersion ? `FrameQ ${updateState.availableVersion}` : "FrameQ stable"}</strong>
+                      <strong>
+                        {updateState.availableVersion
+                          ? tUpdates("section.versionLabel", {
+                              version: updateState.availableVersion,
+                            })
+                          : tUpdates("section.stableVersion")}
+                      </strong>
                       <small>
                         {inAppUpdates
-                          ? updateState.message ||
-                            "启动后会自动静默检查更新，也可以在这里手动检查。"
-                          : "macOS 版本通过发布页手动下载安装，暂未启用应用内自动更新。"}
+                          ? renderedUpdateMessage || tUpdates("section.defaultMessage")
+                          : tUpdates("section.manualMessage")}
                       </small>
                       {updateState.notes ? <small>{updateState.notes}</small> : null}
                       {updateInstallBlocked && updateState.status === "available" ? (
-                        <small>当前任务或模型下载完成后才能安装更新。</small>
+                        <small>{tUpdates("section.installBlocked")}</small>
                       ) : null}
                     </div>
                     {updateState.status === "downloading" || updateState.status === "installing" ? (
-                      <div className="update-progress">
+                      <div
+                        className="update-progress"
+                        role="progressbar"
+                        aria-label={tUpdates("section.downloadProgressAria")}
+                        aria-valuenow={updateProgress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
                         <div className="progress-track">
                           <span
                             className="progress-fill video_transcribing"
-                            style={{ width: `${updateState.progress}%` }}
+                            style={{ width: `${updateProgress}%` }}
                           />
                         </div>
-                        <small>{formatProgressPercent(updateState.progress)}</small>
+                        <small>{formatProgressPercent(updateProgress)}</small>
                       </div>
                     ) : null}
                   </div>
@@ -392,12 +464,16 @@ export function SettingsSheet({
                           disabled={updateBusy}
                         >
                           <RotateCcw size={15} />
-                          <span>{updateState.status === "checking" ? "检查中" : "检查更新"}</span>
+                          <span>
+                            {updateState.status === "checking"
+                              ? tUpdates("action.checking")
+                              : tUpdates("action.check")}
+                          </span>
                         </button>
                         {updateState.status === "ready_to_restart" ? (
                           <button type="button" className="primary-button" onClick={() => void onRestartForUpdate()}>
                             <RotateCcw size={15} />
-                            <span>重启完成更新</span>
+                            <span>{tUpdates("action.restart")}</span>
                           </button>
                         ) : (
                           <button
@@ -411,7 +487,7 @@ export function SettingsSheet({
                             }
                           >
                             <Download size={15} />
-                            <span>一键升级</span>
+                            <span>{tUpdates("action.install")}</span>
                           </button>
                         )}
                         {["available", "postponed"].includes(updateState.status) ? (
@@ -421,14 +497,14 @@ export function SettingsSheet({
                             onClick={() => void onPostponeUpdateReminder()}
                             disabled={updateBusy}
                           >
-                            <span>稍后提醒</span>
+                            <span>{tUpdates("action.postpone")}</span>
                           </button>
                         ) : null}
                       </>
                     ) : (
                       <button type="button" className="primary-button" onClick={() => void onOpenReleases()}>
                         <Download size={15} />
-                        <span>前往下载页</span>
+                        <span>{tUpdates("action.releases")}</span>
                       </button>
                     )}
                   </div>
@@ -438,11 +514,13 @@ export function SettingsSheet({
               {settingsCategory === "advanced" ? (
                 <section id="settings-advanced" className="sheet-form-section settings-config-file-section">
                   <div className="form-section-heading">
-                    <h3>本机配置文件</h3>
-                    <p>高级本机设置保存在 app-local data 的 .env 文件中，LLM 配置仍由服务端统一管理。</p>
+                    <h3>{tSettings("advanced.heading")}</h3>
+                    <p>{tSettings("advanced.description")}</p>
                   </div>
                   <div className="config-file-row">
-                    <code title={settingsConfigPath}>{settingsConfigPath || "读取后显示配置文件路径"}</code>
+                    <code title={settingsConfigPath}>
+                      {settingsConfigPath || tSettings("advanced.pathPending")}
+                    </code>
                     <button
                       type="button"
                       className="secondary-button"
@@ -450,19 +528,27 @@ export function SettingsSheet({
                       disabled={settingsLoading || !settingsConfigPath}
                     >
                       <FolderOpen size={15} />
-                      <span>定位文件</span>
+                      <span>{tSettings("advanced.locate")}</span>
                     </button>
                   </div>
                 </section>
               ) : null}
 
-              {settingsNotice ? <p className="action-notice inline-notice">{settingsNotice}</p> : null}
+              {renderedSettingsNotice ? (
+                <p
+                  className="action-notice inline-notice"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {renderedSettingsNotice}
+                </p>
+              ) : null}
             </div>
           </div>
         </form>
         <div className="settings-actions sheet-footer">
           <button type="button" className="secondary-button" onClick={closeSettings}>
-            <span>关闭</span>
+            <span>{tSettings("footer.close")}</span>
           </button>
           <button
             className="primary-button"
@@ -470,7 +556,9 @@ export function SettingsSheet({
             form="settings-form"
             disabled={settingsLoading || settingsSaving}
           >
-            <span>{settingsSaving ? "保存中" : "保存配置"}</span>
+            <span>
+              {settingsSaving ? tSettings("footer.saving") : tSettings("footer.save")}
+            </span>
           </button>
         </div>
       </section>

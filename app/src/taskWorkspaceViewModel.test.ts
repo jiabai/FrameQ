@@ -4,6 +4,7 @@ import { createGuestAccountStatus, type AccountStatus } from "./accountState";
 import {
   createInitialWorkflow,
   finishInsightRetry,
+  mergeProgressEvent,
   requestProcessingCancellation,
   startInsightRetry,
   startProcessing,
@@ -69,16 +70,40 @@ describe("task workspace view model", () => {
     expect(model.cancellationOwner).toBe("local");
   });
 
+  test("keeps semantic worker progress in the view model until render time", () => {
+    const workflow = mergeProgressEvent(
+      startProcessing(
+        createInitialWorkflow(),
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      ),
+      {
+        stage: "video_transcribing",
+        progress: 60,
+        message: { messageCode: "asr.transcribe.running", args: {} },
+      },
+    );
+
+    const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
+
+    expect(model.banner.progressMessage).toEqual({
+      messageCode: "asr.transcribe.running",
+      args: {},
+    });
+    expect(model.banner.message).toBeNull();
+  });
+
   test("a saved local transcript unlocks both independent AI targets for the same task", () => {
     const workflow = summarizeWorkerResult(transcriptResult());
 
     const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
 
     expect(model.banner.kind).toBe("local_complete");
-    expect(model.banner.message).toContain("视频、音频和文字稿已保存在本机");
+    expect(model.banner.message).toEqual({
+      messageCode: "workflow.banner.localCompleteMessage",
+    });
     expect(model.local.phase).toBe("ready");
     expect(model.local.taskId).toBe(TASK_ID);
-    expect(model.local.readOnlyReason).toBeNull();
+    expect(model.local.readOnly).toBe(false);
     expect(model.ai.phase).toBe("ready");
     expect(model.ai.taskId).toBe(TASK_ID);
     expect(model.ai.summary.status).toBe("available");
@@ -148,7 +173,7 @@ describe("task workspace view model", () => {
     expect(model.local.phase).toBe("ready");
     expect(model.local.canReview).toBe(true);
     expect(model.local.canEdit).toBe(false);
-    expect(model.local.readOnlyReason).toBe("AI 正在使用已保存版本");
+    expect(model.local.readOnly).toBe(true);
     expect(model.ai.summary.status).toBe("generating");
     expect(model.ai.insights.status).toBe("available");
     expect(model.cancellationOwner).toBe("ai");
@@ -270,7 +295,10 @@ describe("task workspace view model", () => {
     const model = createTaskWorkspaceViewModel(state, entitledAccount());
 
     expect(model.banner.kind).toBe("local_failed");
-    expect(model.banner.message).toContain("VIDEO_DOWNLOAD_FAILED");
+    expect(model.banner.message).toEqual({
+      messageCode: "workflow.banner.localFailedWithCode",
+      args: { code: "VIDEO_DOWNLOAD_FAILED" },
+    });
     expect(model.local.phase).toBe("failed");
   });
 });

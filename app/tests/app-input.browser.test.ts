@@ -94,6 +94,7 @@ describe("App browser input interactions", () => {
       await waitForRuntimeCondition(
         page,
         "Boolean(document.querySelector('.app-shell')) && getComputedStyle(document.querySelector('.app-shell')).display === 'grid'",
+        15_000,
       );
 
       const structure = await page.send<{ result: { value: Record<string, unknown> } }>(
@@ -139,7 +140,7 @@ describe("App browser input interactions", () => {
         showsLocalFirstCopy: false,
         visibleUrlLabels: 0,
         videoUrlAriaLabel: "视频 URL",
-        videoUrlPlaceholder: "粘贴抖音或小红书视频链接",
+        videoUrlPlaceholder: "粘贴受支持的公开视频链接",
         hasCommandPanel: true,
         hasTaskWorkspaces: false,
         primaryButtonText: "确认",
@@ -150,7 +151,7 @@ describe("App browser input interactions", () => {
     } finally {
       await page.close();
     }
-  }, 10_000);
+  }, 20_000);
 
   test("shows the processing workspace only after the URL is submitted", async () => {
     const target = await requestJson<CdpTarget>(
@@ -299,6 +300,16 @@ describe("App browser input interactions", () => {
               unregisterCallback: () => {},
               invoke: async (command, args) => {
                 window.__FRAMEQ_TEST_COMMANDS__.push({ command, args });
+                if (command === "get_ui_preferences") {
+                  return { schemaVersion: 1, language: "system", recovered: false };
+                }
+                if (command === "save_ui_preferences") {
+                  return {
+                    schemaVersion: 1,
+                    language: args?.preferences?.language,
+                    recovered: false
+                  };
+                }
                 if (command === "check_first_run") {
                   return {
                     user_data_dir: "C:/FrameQ",
@@ -432,6 +443,16 @@ describe("App browser input interactions", () => {
               },
               invoke: async (command, args) => {
                 window.__FRAMEQ_TEST_COMMANDS__.push({ command, args });
+                if (command === "get_ui_preferences") {
+                  return { schemaVersion: 1, language: "system", recovered: false };
+                }
+                if (command === "save_ui_preferences") {
+                  return {
+                    schemaVersion: 1,
+                    language: args?.preferences?.language,
+                    recovered: false
+                  };
+                }
                 if (command === "check_first_run") {
                   return {
                     user_data_dir: "C:/FrameQ",
@@ -582,6 +603,9 @@ describe("App desktop sheet structure", () => {
     try {
       await page.send("Page.enable");
       await page.send("Runtime.enable");
+      await page.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: createUiSmokeBridgeScript({}),
+      });
       await page.send("Page.navigate", { url: appUrl });
       await waitForRuntimeCondition(
         page,
@@ -609,6 +633,8 @@ describe("App desktop sheet structure", () => {
             selectedNavCount: document.querySelectorAll('.settings-nav-item.selected').length,
             hasLocateConfigButton: Boolean(document.querySelector('.config-file-row button')),
             hasBasicNotice: Boolean(document.querySelector('.settings-basic-note')),
+            hasLanguageSelector: Boolean(document.querySelector('#ui-language-preference')),
+            languageSectionIsFirst: document.querySelector('.settings-sections')?.firstElementChild?.classList.contains('language-settings-section') ?? false,
             hasStickyFooter: Boolean(document.querySelector('.sheet-footer')),
             hasScrollableBody: getComputedStyle(document.querySelector('.settings-sections')).overflowY === 'auto'
           })`,
@@ -618,7 +644,7 @@ describe("App desktop sheet structure", () => {
 
       expect(sheet.result.value).toEqual({
         hasSheetPanel: true,
-        groupedSections: 1,
+        groupedSections: 2,
         activeCategory: "basic",
         hasBasicSection: true,
         hasConfigFileSection: false,
@@ -629,8 +655,52 @@ describe("App desktop sheet structure", () => {
         selectedNavCount: 1,
         hasLocateConfigButton: false,
         hasBasicNotice: true,
+        hasLanguageSelector: true,
+        languageSectionIsFirst: true,
         hasStickyFooter: true,
         hasScrollableBody: true,
+      });
+
+      const languageSwitch = await page.send<{
+        result: { value: { asrModel: string; outputDir: string } };
+      }>("Runtime.evaluate", {
+        expression: `(() => {
+          const asrModel = document.querySelector('#settings-basic select')?.value ?? '';
+          const outputDir = document.querySelector('#settings-basic input')?.value ?? '';
+          const selector = document.querySelector('#ui-language-preference');
+          selector.value = 'zh-TW';
+          selector.dispatchEvent(new Event('change', { bubbles: true }));
+          return { asrModel, outputDir };
+        })()`,
+        returnByValue: true,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "document.documentElement.lang === 'zh-TW' && document.querySelector('.language-settings-section h3')?.textContent.includes('介面')",
+      );
+      const afterLanguageSwitch = await page.send<{
+        result: { value: Record<string, unknown> };
+      }>("Runtime.evaluate", {
+        expression: `({
+          preference: document.querySelector('#ui-language-preference')?.value,
+          lang: document.documentElement.lang,
+          dir: document.documentElement.dir,
+          asrModel: document.querySelector('#settings-basic select')?.value ?? '',
+          outputDir: document.querySelector('#settings-basic input')?.value ?? '',
+          saveCall: window.__FRAMEQ_UI_SMOKE__.commands.find((entry) => entry.command === 'save_ui_preferences')
+        })`,
+        returnByValue: true,
+      });
+      expect(afterLanguageSwitch.result.value).toMatchObject({
+        preference: "zh-TW",
+        lang: "zh-TW",
+        dir: "ltr",
+        asrModel: languageSwitch.result.value.asrModel,
+        outputDir: languageSwitch.result.value.outputDir,
+        saveCall: {
+          command: "save_ui_preferences",
+          args: { preferences: { language: "zh-TW" } },
+        },
       });
 
       await page.send("Runtime.evaluate", {
@@ -648,6 +718,9 @@ describe("App desktop sheet structure", () => {
             hasInspirationSection: Boolean(document.querySelector('#settings-inspiration')),
             hasBasicNotice: Boolean(document.querySelector('.settings-basic-note')),
             selectedNavText: document.querySelector('.settings-nav-item.selected')?.textContent ?? '',
+            inspirationHeading: document.querySelector('#settings-inspiration .form-section-heading h3')?.textContent ?? '',
+            profileTitle: document.querySelector('.inspiration-profile-card strong')?.textContent ?? '',
+            editProfileText: document.querySelector('.profile-edit-button')?.textContent ?? '',
             actionDisplay: getComputedStyle(document.querySelector('.inspiration-settings-actions')).display,
             actionWrap: getComputedStyle(document.querySelector('.inspiration-settings-actions')).flexWrap,
             clearButtonColor: getComputedStyle(document.querySelector('.profile-clear-button')).color,
@@ -666,6 +739,10 @@ describe("App desktop sheet structure", () => {
         hasBasicSection: false,
         hasInspirationSection: true,
         hasBasicNotice: false,
+        selectedNavText: expect.stringContaining("靈感"),
+        inspirationHeading: "靈感檔案",
+        profileTitle: "我的靈感檔案",
+        editProfileText: expect.stringContaining("編輯靈感檔案"),
         actionDisplay: "flex",
         actionWrap: "nowrap",
         clearButtonColor: "rgb(52, 54, 59)",
@@ -694,6 +771,16 @@ describe("App desktop sheet structure", () => {
             window.__TAURI_INTERNALS__ = {
               invoke: async (command, args) => {
                 window.__FRAMEQ_TEST_COMMANDS__.push({ command, args });
+                if (command === "get_ui_preferences") {
+                  return { schemaVersion: 1, language: "system", recovered: false };
+                }
+                if (command === "save_ui_preferences") {
+                  return {
+                    schemaVersion: 1,
+                    language: args?.preferences?.language,
+                    recovered: false
+                  };
+                }
                 if (command === "get_llm_config") {
                   return {
                     output_dir: "D:/FrameQ/outputs",
@@ -852,7 +939,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       await clickSelector(failedPage, 'button[aria-label="应用设置"]');
       await waitForRuntimeCondition(
         failedPage,
-        "document.querySelector('.settings-sheet .inline-notice')?.textContent.includes('读取配置失败：settings unavailable')",
+        "document.querySelector('.settings-sheet .inline-notice')?.textContent.includes('读取配置失败，请稍后重试。')",
       );
       const failureState = await evaluateValue<Record<string, unknown>>(
         failedPage,
@@ -861,13 +948,215 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
           saveDisabled: document.querySelector('.settings-sheet .sheet-footer .primary-button')?.disabled ?? null
         })`,
       );
-      expect(failureState.notice).toContain("读取配置失败：settings unavailable");
+      expect(failureState.notice).toContain("读取配置失败，请稍后重试。");
+      expect(failureState.notice).not.toContain("settings unavailable");
       expect(failureState.saveDisabled).toBe(false);
       expectForbiddenProductCommandsAbsent(await readUiSmokeCommands(failedPage));
     } finally {
       await failedPage.close();
     }
   }, 30_000);
+
+  test("keeps the English settings UI usable at the 720 by 640 minimum window", async () => {
+    const page = await openUiSmokePage({});
+
+    try {
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 720,
+        height: 640,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "window.innerWidth === 720 && window.innerHeight === 640",
+      );
+      await clickSelector(page, 'button[aria-label="应用设置"]');
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('#ui-language-preference'))");
+      await page.send("Runtime.evaluate", {
+        expression: `(() => {
+          const selector = document.querySelector('#ui-language-preference');
+          selector.value = 'en-US';
+          selector.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "document.documentElement.lang === 'en-US' && document.body.innerText.includes('Interface & AI result language')",
+      );
+
+      const layout = await evaluateValue<Record<string, unknown>>(
+        page,
+        `(() => {
+          const sheet = document.querySelector('.settings-sheet');
+          const sections = document.querySelector('.settings-sections');
+          const saveButton = document.querySelector('.settings-sheet .sheet-footer .primary-button');
+          const sheetRect = sheet.getBoundingClientRect();
+          const saveRect = saveButton.getBoundingClientRect();
+          const offscreenControls = Array.from(
+            sheet.querySelectorAll('button, input, select, a[href]')
+          ).filter((element) => {
+            const rect = element.getBoundingClientRect();
+            const visible = rect.width > 0 && rect.height > 0;
+            return visible && (rect.left < -1 || rect.right > window.innerWidth + 1);
+          }).length;
+          return {
+            documentLanguage: document.documentElement.lang,
+            documentWidth: document.documentElement.scrollWidth,
+            bodyWidth: document.body.scrollWidth,
+            viewportWidth: window.innerWidth,
+            sheetLeft: sheetRect.left,
+            sheetRight: sheetRect.right,
+            saveTop: saveRect.top,
+            saveBottom: saveRect.bottom,
+            viewportHeight: window.innerHeight,
+            offscreenControls,
+            sectionsOverflowY: getComputedStyle(sections).overflowY,
+            saveText: saveButton.textContent ?? ''
+          };
+        })()`,
+      );
+
+      expect(layout).toMatchObject({
+        documentLanguage: "en-US",
+        viewportWidth: 720,
+        viewportHeight: 640,
+        offscreenControls: 0,
+        sectionsOverflowY: "auto",
+        saveText: "Save settings",
+      });
+      expect(Number(layout.documentWidth)).toBeLessThanOrEqual(720);
+      expect(Number(layout.bodyWidth)).toBeLessThanOrEqual(720);
+      expect(Number(layout.sheetLeft)).toBeGreaterThanOrEqual(0);
+      expect(Number(layout.sheetRight)).toBeLessThanOrEqual(720);
+      expect(Number(layout.saveTop)).toBeGreaterThanOrEqual(0);
+      expect(Number(layout.saveBottom)).toBeLessThanOrEqual(640);
+      expectForbiddenProductCommandsAbsent(await readUiSmokeCommands(page));
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
+  test("traps modal keyboard focus and restores the settings trigger on close", async () => {
+    const page = await openUiSmokePage({});
+
+    try {
+      await page.send("Runtime.evaluate", {
+        expression: `(() => {
+          const trigger = document.querySelector('button[aria-label="应用设置"]');
+          trigger.focus();
+          trigger.click();
+        })()`,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.settings-sheet'))",
+      );
+
+      expect(
+        await evaluateValue<Record<string, boolean>>(
+          page,
+          `(() => {
+            const dialog = document.querySelector('.settings-sheet');
+            const background = document.querySelector('.desktop-window');
+            return {
+              focusInside: dialog.contains(document.activeElement),
+              backgroundInert: background.inert === true,
+            };
+          })()`,
+        ),
+      ).toEqual({ focusInside: true, backgroundInert: true });
+
+      await page.send("Runtime.evaluate", {
+        expression: `(() => {
+          const dialog = document.querySelector('.settings-sheet');
+          const focusable = [...dialog.querySelectorAll(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+          )].filter((element) => element.getClientRects().length > 0 && !element.closest('[inert]'));
+          focusable.at(-1)?.focus();
+        })()`,
+      });
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Tab",
+        code: "Tab",
+        windowsVirtualKeyCode: 9,
+      });
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Tab",
+        code: "Tab",
+        windowsVirtualKeyCode: 9,
+      });
+      expect(
+        await evaluateValue<boolean>(
+          page,
+          `(() => {
+            const dialog = document.querySelector('.settings-sheet');
+            const focusable = [...dialog.querySelectorAll(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+            )].filter((element) => element.getClientRects().length > 0 && !element.closest('[inert]'));
+            return document.activeElement === focusable[0];
+          })()`,
+        ),
+      ).toBe(true);
+
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Tab",
+        code: "Tab",
+        windowsVirtualKeyCode: 9,
+        modifiers: 8,
+      });
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Tab",
+        code: "Tab",
+        windowsVirtualKeyCode: 9,
+        modifiers: 8,
+      });
+      expect(
+        await evaluateValue<boolean>(
+          page,
+          `(() => {
+            const dialog = document.querySelector('.settings-sheet');
+            const focusable = [...dialog.querySelectorAll(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+            )].filter((element) => element.getClientRects().length > 0 && !element.closest('[inert]'));
+            return document.activeElement === focusable.at(-1);
+          })()`,
+        ),
+      ).toBe(true);
+
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Escape",
+        code: "Escape",
+        windowsVirtualKeyCode: 27,
+      });
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Escape",
+        code: "Escape",
+        windowsVirtualKeyCode: 27,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "!document.querySelector('.settings-sheet')",
+      );
+      expect(
+        await evaluateValue<Record<string, boolean | string>>(
+          page,
+          `(() => ({
+            restoredLabel: document.activeElement?.getAttribute('aria-label') ?? '',
+            backgroundInert: document.querySelector('.desktop-window').inert === true,
+          }))()`,
+        ),
+      ).toEqual({ restoredLabel: "应用设置", backgroundInert: false });
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
 
   test("renders one task as aligned local transcript and AI workspaces and stacks them below 1100px", async () => {
     const page = await openUiSmokePage({
@@ -1362,7 +1651,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
           page,
           "document.activeElement?.getAttribute('aria-label') ?? ''",
         ),
-      ).toBe("永久删除此历史任务");
+      ).toBe("永久删除历史任务：历史任务乙文字稿");
       await clickSelector(page, ".history-item-delete:focus");
       await waitForRuntimeCondition(page, "Boolean(document.querySelector('.history-delete-confirm'))");
       await page.send("Input.dispatchKeyEvent", {
@@ -1594,7 +1883,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
       expect(state).toMatchObject({
         localReady: true,
         localError: false,
-        aiError: "INSIGHTFLOW_EMPTY_SUMMARY",
+        aiError: "生成失败。错误码：INSIGHTFLOW_EMPTY_SUMMARY",
         insightsFailed: false,
       });
     } finally {
@@ -1620,7 +1909,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         page,
         "Boolean(document.querySelector('.command-panel')) && document.querySelectorAll('.history-item-select:not(:disabled)').length === 2 && document.querySelectorAll('.history-item-delete:not(:disabled)').length === 2",
       );
-      await clickSelector(page, 'button[aria-label="关闭历史"]');
+      await clickSelector(page, ".history-sheet .sheet-header .icon-button");
       await waitForRuntimeCondition(page, "!document.querySelector('.history-sheet')");
       const state = await evaluateValue<Record<string, unknown>>(
         page,
@@ -1658,7 +1947,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         page,
         "document.querySelectorAll('.history-item-delete:disabled').length === 2 && document.body.innerText.includes('文字稿正在保存')",
       );
-      await clickSelector(page, 'button[aria-label="关闭历史"]');
+      await clickSelector(page, ".history-sheet .sheet-header .icon-button");
       await waitForRuntimeCondition(page, "!document.querySelector('.history-sheet')");
 
       await restoreSmokeHistoryItem(page, "历史任务乙文字稿");
@@ -1762,24 +2051,52 @@ describe("App controller-owned lifecycle UI smoke", () => {
     }
   }, 15_000);
 
-  test("routes summary and inspiration confirmations to separate mocked retry targets", async () => {
+  test("freezes confirmed output language across locale changes and uses the new locale next time", async () => {
     const page = await openUiSmokePage({
-      deferredCommands: ["retry_insights"],
+      deferredCommands: ["retry_insights", "save_default_generation_preferences"],
       responses: { retry_insights: completedSummaryResult() },
     });
 
     try {
+      await clickSelector(page, ".toolbar-tool-group > button:nth-of-type(2)");
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('#ui-language-preference'))");
+      await page.send("Runtime.evaluate", {
+        expression: `(() => {
+          const selector = document.querySelector('#ui-language-preference');
+          selector.value = 'zh-TW';
+          selector.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`,
+      });
+      await waitForRuntimeCondition(page, "document.documentElement.lang === 'zh-TW'");
+      await clickSelector(page, ".settings-sheet .sheet-header .icon-button");
+
       await restoreSmokeHistoryItem(page, "历史任务甲文字稿");
-      await clickButtonContaining(page, '[data-ai-target="summary"] button', "确认生成");
-      await waitForRuntimeCondition(page, "Boolean(document.querySelector('[aria-label=\"确认要点总结\"]'))");
-      await clickButtonContaining(page, '[aria-label="确认要点总结"] .primary-button', "确认");
+      await clickSelector(page, '[data-ai-target="summary"] .ai-target-action');
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.preference-flow-sheet [data-output-language]'))",
+      );
+      const summaryLanguage = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          documentLanguage: document.documentElement.lang,
+          outputLanguage: document.querySelector('.preference-flow-sheet [data-output-language]')?.dataset.outputLanguage ?? '',
+          label: document.querySelector('.preference-flow-sheet [data-output-language]')?.textContent ?? ''
+        })`,
+      );
+      expect(summaryLanguage).toMatchObject({
+        documentLanguage: "zh-TW",
+        outputLanguage: "zh-TW",
+      });
+      expect(String(summaryLanguage.label)).toContain("繁體中文");
+      await clickSelector(page, ".preference-flow-sheet .sheet-footer .primary-button");
       await waitForRuntimeCondition(
         page,
         "window.__FRAMEQ_UI_SMOKE__.commands.some((entry) => entry.command === 'retry_insights' && entry.args?.request?.target === 'summary')",
       );
       await waitForRuntimeCondition(
         page,
-        "document.querySelector('[data-ai-target=\"summary\"]')?.classList.contains('generating') && document.body.innerText.includes('AI 正在使用已保存版本')",
+        "document.querySelector('[data-ai-target=\"summary\"]')?.classList.contains('generating')",
       );
       const generatingState = await evaluateValue<Record<string, unknown>>(
         page,
@@ -1808,34 +2125,93 @@ describe("App controller-owned lifecycle UI smoke", () => {
         page,
         "document.querySelectorAll('.history-item-select:not(:disabled)').length === 2 && document.querySelectorAll('.history-item-delete:not(:disabled)').length === 2",
       );
-      await clickSelector(page, 'button[aria-label="关闭历史"]');
+      await clickSelector(page, ".history-sheet .sheet-header .icon-button");
 
-      await clickButtonContaining(page, '[data-ai-target="insights"] button', "选择并确认");
-      await waitForRuntimeCondition(page, "document.body.innerText.includes('直接生成')");
-      await clickButtonContaining(page, ".preference-flow-sheet .primary-button", "直接生成");
-      await waitForRuntimeCondition(page, "Boolean(document.querySelector('[aria-label=\"确认启发灵感\"]'))");
-      await clickButtonContaining(page, '[aria-label="确认启发灵感"] .primary-button', "确认");
+      await clickSelector(page, '[data-ai-target="insights"] .ai-target-action');
+      await waitForRuntimeCondition(page, "document.body.innerText.includes('直接產生')");
+      await clickButtonContaining(page, ".preference-flow-sheet .primary-button", "直接產生");
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('.preference-flow-sheet [data-output-language=\"zh-TW\"]')?.textContent.includes('繁體中文')",
+      );
+      await clickSelector(page, ".preference-flow-sheet .sheet-footer .primary-button");
+      await waitForRuntimeCondition(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.pending.save_default_generation_preferences?.length === 1",
+      );
+
+      await clickSelector(page, ".toolbar-tool-group > button:nth-of-type(2)");
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('#ui-language-preference'))");
+      await page.send("Runtime.evaluate", {
+        expression: `(() => {
+          const selector = document.querySelector('#ui-language-preference');
+          selector.value = 'en-US';
+          selector.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "document.documentElement.lang === 'en-US' && document.querySelector('.preference-flow-sheet [data-output-language=\"zh-TW\"]')?.textContent.includes('Traditional Chinese (Taiwan)')",
+      );
+      await clickSelector(page, ".settings-sheet .sheet-header .icon-button");
+
+      await resolveUiSmokeCommand(page, "save_default_generation_preferences");
       await waitForRuntimeCondition(
         page,
         "window.__FRAMEQ_UI_SMOKE__.commands.filter((entry) => entry.command === 'retry_insights').length === 2",
       );
+      await resolveUiSmokeCommand(page, "retry_insights");
+
+      await clickSelector(page, '[data-ai-target="insights"] .ai-target-action');
+      await waitForRuntimeCondition(page, "document.body.innerText.includes('Generate now')");
+      await clickButtonContaining(page, ".preference-flow-sheet .primary-button", "Generate now");
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('.preference-flow-sheet [data-output-language=\"en-US\"]')?.textContent.includes('English (US)')",
+      );
+      await clickButtonContaining(page, ".preference-flow-sheet .primary-button", "Confirm");
+      await waitForRuntimeCondition(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.pending.save_default_generation_preferences?.length === 1",
+      );
+      await resolveUiSmokeCommand(page, "save_default_generation_preferences");
+      await waitForRuntimeCondition(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.commands.filter((entry) => entry.command === 'retry_insights').length === 3",
+      );
 
       const commands = await readUiSmokeCommands(page);
       const retries = commands.filter((entry) => entry.command === "retry_insights");
-      expect(retries).toHaveLength(2);
+      expect(retries).toHaveLength(3);
       expect(retries[0].args).toMatchObject({
-        request: { task_id: "history-task-a", target: "summary" },
+        request: {
+          task_id: "history-task-a",
+          target: "summary",
+          output_language: "zh-TW",
+        },
       });
       expect((retries[0].args.request as Record<string, unknown>).preference_snapshot).toBeUndefined();
       expect(retries[1].args).toMatchObject({
         request: {
           task_id: "history-task-a",
           target: "insights",
+          output_language: "zh-TW",
           preference_snapshot: {
             generationPreferences: expect.any(Object),
           },
         },
       });
+      expect(retries[2].args).toMatchObject({
+        request: {
+          task_id: "history-task-a",
+          target: "insights",
+          output_language: "en-US",
+          preference_snapshot: {
+            generationPreferences: expect.any(Object),
+          },
+        },
+      });
+      await resolveUiSmokeCommand(page, "retry_insights");
       expectForbiddenProductCommandsAbsent(commands);
     } finally {
       await page.close();
@@ -2393,7 +2769,7 @@ async function submitSmokeVideo(page: CdpPage): Promise<void> {
 }
 
 async function openSmokeHistory(page: CdpPage, expectedItems = 2): Promise<void> {
-  await clickSelector(page, 'button[aria-label="查看历史"]');
+  await clickSelector(page, ".toolbar-tool-group > button:nth-of-type(1)");
   await waitForRuntimeCondition(
     page,
     `Boolean(document.querySelector('.history-sheet')) && document.querySelectorAll('.history-item').length === ${expectedItems}`,

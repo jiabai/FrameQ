@@ -99,7 +99,7 @@ describe("useAsrModelDownload cancellation", () => {
     downloadAsrModelMock.mockImplementation(() => new Promise(() => undefined));
     cancelAsrModelDownloadMock.mockResolvedValue({
       status: "failed",
-      error: "tree termination failed",
+      error: "tree termination failed; Authorization: Bearer super-secret",
     });
     const render = await createModelDownloadHook();
 
@@ -107,14 +107,26 @@ describe("useAsrModelDownload cancellation", () => {
     void hook.startAsrModelDownload();
     await Promise.resolve();
     hook = render();
-    expect(hook.modelDownloadProgress.status).toBe("started");
+    expect(hook.modelDownloadProgress.phase).toBe("running");
+    expect(hook.modelDownloadProgress.wireStatus).toBeNull();
+    expect(hook.modelDownloadProgress.message).toEqual({
+      messageCode: "model.download.preparing",
+      args: { model: "iic/SenseVoiceSmall" },
+    });
 
     await hook.cancelCurrentAsrModelDownload();
     hook = render();
 
     expect(cancelAsrModelDownloadMock).toHaveBeenCalledTimes(1);
-    expect(hook.modelDownloadProgress.status).toBe("started");
-    expect(hook.modelDownloadProgress.message).toContain("tree termination failed");
+    expect(hook.modelDownloadProgress.phase).toBe("running");
+    expect(hook.modelDownloadProgress.message).toEqual({
+      messageCode: "model.download.preparing",
+      args: { model: "iic/SenseVoiceSmall" },
+    });
+    expect(hook.modelDownloadNotice).toEqual({
+      messageCode: "asrModel.notice.cancelFailed",
+    });
+    expect(JSON.stringify(hook.modelDownloadNotice)).not.toContain("super-secret");
     expect(hook.modelDownloadActive).toBe(true);
   });
 
@@ -136,7 +148,8 @@ describe("useAsrModelDownload cancellation", () => {
     hook = render();
     await hook.cancelCurrentAsrModelDownload();
     hook = render();
-    expect(hook.modelDownloadProgress.status).toBe("cancelling");
+    expect(hook.modelDownloadProgress.phase).toBe("cancelling");
+    expect(hook.modelDownloadProgress.wireStatus).toBeNull();
     expect(hook.modelDownloadActive).toBe(true);
 
     requireResolver<{ started: false; status: "cancelled" }>(resolveDownload)({
@@ -146,7 +159,395 @@ describe("useAsrModelDownload cancellation", () => {
     await download;
     hook = render();
 
-    expect(hook.modelDownloadProgress.status).toBe("cancelled");
+    expect(hook.modelDownloadProgress.phase).toBe("cancelled");
     expect(hook.modelDownloadActive).toBe(false);
+  });
+
+  test("does not start the worker after cancellation while listener registration is pending", async () => {
+    let resolveListener: ((value: () => void) => void) | null = null;
+    const unlisten = vi.fn();
+    listenMock.mockImplementation(
+      () =>
+        new Promise<() => void>((resolve) => {
+          resolveListener = resolve;
+        }),
+    );
+    downloadAsrModelMock.mockResolvedValue({ started: false, status: "cancelled" });
+    cancelAsrModelDownloadMock.mockResolvedValue({
+      status: "failed",
+      error: "nothing was running",
+    });
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    const download = hook.startAsrModelDownload();
+    hook = render();
+    await hook.cancelCurrentAsrModelDownload();
+
+    requireResolver(resolveListener)(unlisten);
+    await download;
+    hook = render();
+
+    expect(downloadAsrModelMock).not.toHaveBeenCalled();
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(hook.modelDownloadProgress.phase).toBe("cancelled");
+    expect(hook.modelDownloadProgress.message).toEqual({
+      messageCode: "model.download.cancelled",
+      args: {},
+    });
+    expect(hook.modelDownloadNotice).toEqual({
+      messageCode: "asrModel.notice.cancelled",
+    });
+    expect(hook.modelDownloadActive).toBe(false);
+  });
+
+  test("keeps a completed wire event after the download invoke resolves", async () => {
+    let progressHandler: ((event: { payload: unknown }) => void) | null = null;
+    let resolveDownload:
+      | ((value: { started: true; status: "completed" }) => void)
+      | null = null;
+    const unlisten = vi.fn();
+    listenMock.mockImplementation(async (_eventName, handler) => {
+      progressHandler = handler;
+      return unlisten;
+    });
+    downloadAsrModelMock.mockImplementation(
+      () =>
+        new Promise<{ started: true; status: "completed" }>((resolve) => {
+          resolveDownload = resolve;
+        }),
+    );
+    checkFirstRunMock.mockResolvedValue({
+      asrModel: "iic/SenseVoiceSmall",
+      asrModelDir: "safe-model-dir",
+      asrModelAvailable: false,
+      asrModelSource: "modelscope",
+    });
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    const download = hook.startAsrModelDownload();
+    await Promise.resolve();
+
+    requireResolver(progressHandler)({
+      payload: {
+        status: "completed",
+        progress: 100,
+        message_code: "model.download.completed",
+        message_args: { model: "iic/SenseVoiceSmall" },
+      },
+    });
+    hook = render();
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "completed",
+      wireStatus: "completed",
+      message: {
+        messageCode: "model.download.completed",
+        args: { model: "iic/SenseVoiceSmall" },
+      },
+      progress: 100,
+    });
+
+    requireResolver(resolveDownload)({ started: true, status: "completed" });
+    await download;
+    hook = render();
+
+    expect(checkFirstRunMock).not.toHaveBeenCalled();
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "completed",
+      wireStatus: "completed",
+      message: {
+        messageCode: "model.download.completed",
+        args: { model: "iic/SenseVoiceSmall" },
+      },
+      progress: 100,
+    });
+    expect(hook.modelDownloadNotice).toBeNull();
+    expect(hook.modelDownloadActive).toBe(false);
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps a cancelled wire event after the download invoke rejects", async () => {
+    let progressHandler: ((event: { payload: unknown }) => void) | null = null;
+    let rejectDownload: ((reason: Error) => void) | null = null;
+    const unlisten = vi.fn();
+    listenMock.mockImplementation(async (_eventName, handler) => {
+      progressHandler = handler;
+      return unlisten;
+    });
+    downloadAsrModelMock.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectDownload = reject;
+        }),
+    );
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    const download = hook.startAsrModelDownload();
+    await Promise.resolve();
+
+    requireResolver(progressHandler)({
+      payload: {
+        status: "cancelled",
+        progress: 58,
+        message_code: "model.download.cancelled",
+      },
+    });
+    hook = render();
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "cancelled",
+      wireStatus: "cancelled",
+      message: { messageCode: "model.download.cancelled", args: {} },
+      progress: 58,
+    });
+
+    requireResolver(rejectDownload)(new Error("late invoke failure"));
+    await download;
+    hook = render();
+
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "cancelled",
+      wireStatus: "cancelled",
+      message: { messageCode: "model.download.cancelled", args: {} },
+      progress: 58,
+    });
+    expect(hook.modelDownloadNotice).toBeNull();
+    expect(hook.modelDownloadActive).toBe(false);
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps the local cancelling phase when a late non-terminal wire event arrives", async () => {
+    let progressHandler: ((event: { payload: unknown }) => void) | null = null;
+    let resolveCancellation: ((value: { status: "cancelling" }) => void) | null = null;
+    listenMock.mockImplementation(async (_eventName, handler) => {
+      progressHandler = handler;
+      return () => undefined;
+    });
+    downloadAsrModelMock.mockImplementation(() => new Promise(() => undefined));
+    cancelAsrModelDownloadMock.mockImplementation(
+      () =>
+        new Promise<{ status: "cancelling" }>((resolve) => {
+          resolveCancellation = resolve;
+        }),
+    );
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    void hook.startAsrModelDownload();
+    await Promise.resolve();
+    hook = render();
+    const cancellation = hook.cancelCurrentAsrModelDownload();
+    hook = render();
+    expect(hook.modelDownloadProgress.phase).toBe("cancelling");
+
+    requireResolver(progressHandler)({
+      payload: {
+        status: "downloading",
+        progress: 64,
+        message_code: "model.file.downloading",
+        current_file: "model.pt",
+      },
+    });
+    hook = render();
+
+    expect(hook.modelDownloadProgress.phase).toBe("cancelling");
+    expect(hook.modelDownloadProgress.progress).toBe(64);
+    expect(hook.modelDownloadProgress.message).toEqual({
+      messageCode: "model.cancel.requested",
+      args: {},
+    });
+    expect(hook.modelDownloadActive).toBe(true);
+
+    requireResolver(resolveCancellation)({ status: "cancelling" });
+    await cancellation;
+  });
+
+  test("keeps a terminal event when an older cancel failure resolves later", async () => {
+    let progressHandler: ((event: { payload: unknown }) => void) | null = null;
+    let resolveCancellation:
+      | ((value: { status: "failed"; error: string }) => void)
+      | null = null;
+    listenMock.mockImplementation(async (_eventName, handler) => {
+      progressHandler = handler;
+      return () => undefined;
+    });
+    downloadAsrModelMock.mockImplementation(() => new Promise(() => undefined));
+    cancelAsrModelDownloadMock.mockImplementation(
+      () =>
+        new Promise<{ status: "failed"; error: string }>((resolve) => {
+          resolveCancellation = resolve;
+        }),
+    );
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    void hook.startAsrModelDownload();
+    await Promise.resolve();
+    hook = render();
+    const cancellation = hook.cancelCurrentAsrModelDownload();
+
+    requireResolver(progressHandler)({
+      payload: {
+        status: "cancelled",
+        progress: 73,
+        message_code: "model.download.cancelled",
+      },
+    });
+    hook = render();
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "cancelled",
+      wireStatus: "cancelled",
+      message: { messageCode: "model.download.cancelled", args: {} },
+      progress: 73,
+    });
+
+    requireResolver(resolveCancellation)({
+      status: "failed",
+      error: "Authorization: Bearer stale-secret",
+    });
+    await cancellation;
+    hook = render();
+
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "cancelled",
+      wireStatus: "cancelled",
+      message: { messageCode: "model.download.cancelled", args: {} },
+      progress: 73,
+    });
+    expect(hook.modelDownloadNotice).not.toEqual({
+      messageCode: "asrModel.notice.cancelFailed",
+    });
+    expect(JSON.stringify(hook)).not.toContain("stale-secret");
+  });
+
+  test("resumes from the newest non-terminal progress after cancellation fails", async () => {
+    let progressHandler: ((event: { payload: unknown }) => void) | null = null;
+    let resolveCancellation:
+      | ((value: { status: "failed"; error: string }) => void)
+      | null = null;
+    listenMock.mockImplementation(async (_eventName, handler) => {
+      progressHandler = handler;
+      return () => undefined;
+    });
+    downloadAsrModelMock.mockImplementation(() => new Promise(() => undefined));
+    cancelAsrModelDownloadMock.mockImplementation(
+      () =>
+        new Promise<{ status: "failed"; error: string }>((resolve) => {
+          resolveCancellation = resolve;
+        }),
+    );
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    void hook.startAsrModelDownload();
+    await Promise.resolve();
+    hook = render();
+    const cancellation = hook.cancelCurrentAsrModelDownload();
+
+    requireResolver(progressHandler)({
+      payload: {
+        status: "downloading",
+        progress: 64,
+        message_code: "model.file.downloading",
+        current_file: "model.pt",
+      },
+    });
+    requireResolver(resolveCancellation)({
+      status: "failed",
+      error: "tree termination failed",
+    });
+    await cancellation;
+    hook = render();
+
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "running",
+      wireStatus: "downloading",
+      message: {
+        messageCode: "model.file.downloading",
+        args: {},
+      },
+      progress: 64,
+      currentFile: "model.pt",
+    });
+    expect(hook.modelDownloadNotice).toEqual({
+      messageCode: "asrModel.notice.cancelFailed",
+    });
+  });
+
+  test("applies only strict wire events and does not refresh state or time for invalid payloads", async () => {
+    let progressHandler: ((event: { payload: unknown }) => void) | null = null;
+    listenMock.mockImplementation(async (_eventName, handler) => {
+      progressHandler = handler;
+      return () => undefined;
+    });
+    downloadAsrModelMock.mockImplementation(() => new Promise(() => undefined));
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    void hook.startAsrModelDownload();
+    await Promise.resolve();
+    hook = render();
+    const validHandler = requireResolver(progressHandler);
+
+    validHandler({
+      payload: {
+        status: "downloading",
+        progress: 42,
+        message_code: "model.file.downloading",
+        current_file: "model.pt",
+      },
+    });
+    hook = render();
+    expect(hook.modelDownloadProgress).toEqual({
+      phase: "running",
+      wireStatus: "downloading",
+      progress: 42,
+      message: { messageCode: "model.file.downloading", args: {} },
+      currentFile: "model.pt",
+    });
+    const validState = hook.modelDownloadProgress;
+    const timeCallsAfterValidEvent = now.mock.calls.length;
+
+    validHandler({
+      payload: {
+        status: "downloading",
+        progress: 99,
+        message_code: "model.file.downloading",
+        current_file: "../private/model.pt",
+        message: "raw https://secret.example/private",
+      },
+    });
+    hook = render();
+
+    expect(hook.modelDownloadProgress).toBe(validState);
+    expect(hook.modelDownloadStalled).toBe(false);
+    expect(now).toHaveBeenCalledTimes(timeCallsAfterValidEvent);
+    expect(warning).toHaveBeenLastCalledWith(
+      "Dropped invalid model download progress event: model.file.downloading",
+    );
+    expect(JSON.stringify(warning.mock.calls)).not.toContain("secret.example");
+
+    validHandler({
+      payload: {
+        status: "downloading",
+        progress: 55,
+        message_code: "future.action.running",
+      },
+    });
+    hook = render();
+
+    expect(hook.modelDownloadProgress.message).toEqual({
+      messageCode: "future.action.running",
+      args: {},
+    });
+    expect(warning).toHaveBeenLastCalledWith(
+      "Unknown model download progress code: future.action.running",
+    );
+
+    now.mockRestore();
+    warning.mockRestore();
   });
 });

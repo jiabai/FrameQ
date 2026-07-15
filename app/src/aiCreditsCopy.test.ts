@@ -8,14 +8,21 @@ import {
 } from "./aiCreditsCopy";
 
 describe("AI Credits copy", () => {
-  test("describes the balance and variable per-generation cost without promising action counts", () => {
-    expect(formatAiCreditsBalance(8)).toBe("AI Credits 余额：8");
-    expect(formatAiCreditsAllocation(8, 20)).toBe("AI Credits：8 / 20");
-    expect(getAiCreditsCostHint()).toBe("一次 AI 整理可能消耗多个 Credits。");
+  test.each([
+    ["zh-CN", "AI Credits 余额：8", "AI Credits：8 / 20", "一次智能提炼可能消耗多个 Credits。"],
+    ["zh-TW", "AI Credits 餘額：8", "AI Credits：8 / 20", "一次 AI 提煉可能消耗多個 Credits。"],
+    ["en-US", "AI Credits balance: 8", "AI Credits: 8 / 20", "One AI Synthesis run may use multiple Credits."],
+  ] as const)(
+    "describes balance and variable cost in %s without promising action counts",
+    (locale, balance, allocation, hint) => {
+      expect(formatAiCreditsBalance(8, locale)).toBe(balance);
+      expect(formatAiCreditsAllocation(8, 20, locale)).toBe(allocation);
+      expect(getAiCreditsCostHint(locale)).toBe(hint);
 
-    const disclosure = getAiCreditsDisclosureCopy();
-    expect(disclosure).toContain("1 AI Credit = 1 次云端 LLM API 调用尝试");
-    expect(disclosure).toContain("一次 AI 整理可能消耗多个 Credits");
-    expect(disclosure).not.toContain("确认后消耗 1 次");
-  });
+      const disclosure = getAiCreditsDisclosureCopy(locale);
+      expect(disclosure).toContain("1 AI Credit");
+      expect(disclosure).toContain("LLM API");
+      expect(disclosure).not.toContain("确认后消耗 1 次");
+    },
+  );
 });

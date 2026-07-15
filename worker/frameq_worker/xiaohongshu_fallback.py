@@ -20,6 +20,7 @@ from frameq_worker.download_reliability import (
     write_http_response_atomically,
     write_http_stream_atomically,
 )
+from frameq_worker.progress_events import build_worker_progress_event
 
 XHS_DESKTOP_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -250,7 +251,7 @@ def download_xiaohongshu_video(
     client = http_client or UrllibXiaohongshuHttpClient()
     parsed = parse_xiaohongshu_input(raw_input, http_client=client)
 
-    _emit_progress(progress_callback, "正在解析小红书公开视频页面。", 22)
+    _emit_progress(progress_callback, "xiaohongshu.page.resolving", 22)
     page_response = client.get(
         build_explore_url(parsed.note_id, parsed.xsec_token),
         headers=_page_headers(),
@@ -274,7 +275,7 @@ def download_xiaohongshu_video(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{parsed.note_id}.mp4"
-    _emit_progress(progress_callback, "正在保存小红书公开视频。", 30)
+    _emit_progress(progress_callback, "xiaohongshu.video.saving", 30)
     return _download_first_available_stream(
         candidates,
         output_path=output_path,
@@ -857,16 +858,21 @@ def _optional_int(mapping: Mapping[str, object], key: str) -> int | None:
     return value if value else None
 
 
-def _emit_progress(progress_callback: object | None, message: str, progress: int) -> None:
+def _emit_progress(
+    progress_callback: object | None,
+    message_code: str,
+    progress: int,
+    message_args: dict[str, int] | None = None,
+) -> None:
     if not callable(progress_callback):
         return
-    progress_callback(
-        {
-            "stage": "video_extracting",
-            "message": message,
-            "progress": progress,
-        }
+    event = build_worker_progress_event(
+        message_code,
+        stage="video_extracting",
+        progress=progress,
+        message_args=message_args,
     )
+    progress_callback(event)
 
 
 def _emit_stream_retry(
@@ -874,6 +880,15 @@ def _emit_stream_retry(
     failed_index: int,
     candidates: list[XiaohongshuStreamCandidate],
 ) -> None:
-    if failed_index >= len(candidates) - 1:
+    if not callable(progress_callback) or failed_index >= len(candidates) - 1:
         return
-    _emit_progress(progress_callback, "当前小红书视频流暂不可用，正在尝试备用视频流。", 30)
+    attempt = failed_index + 2
+    total = len(candidates)
+    if not 1 <= attempt <= total <= 100:
+        return
+    _emit_progress(
+        progress_callback,
+        "xiaohongshu.stream.retrying",
+        30,
+        message_args={"attempt": attempt, "total": total},
+    )

@@ -1,5 +1,34 @@
 # FrameQ Architecture
 
+## 2026-07-15 Desktop i18n and AI Output-Language Boundary
+
+- The desktop localization implementation must support exactly `zh-CN`, `zh-TW`, and `en-US`
+  through bundled `i18next + react-i18next` resources. `system` must remain a persisted preference,
+  not a worker locale, and resolve to one supported locale before rendering or AI confirmation.
+- Tauri must be the only owner of app-local `ui-preferences.json` schema v1. The file must contain
+  only the language preference, fail safely to `system` with recovery metadata, and remain separate
+  from `.env`, server/account state, task manifests, History, and inspiration preferences.
+- Desktop startup must use a neutral FrameQ shell and a bounded 1.5-second preference read. Timeout
+  or failure must mount once with resolved system language and ignore a late result. Sequenced saves
+  must preserve the most recent successfully persisted rollback anchor.
+- `contracts/desktop-worker-contract.json` v2 declares a closed `retry_insights` request schema and
+  no old-call default. TypeScript, Rust, and Python runtime boundaries must still implement and test
+  rejection of missing, invalid, target-incompatible, or additional fields before closeout.
+- Final summary/insights confirmation must freeze the actual resolved UI locale for that request.
+  Summary text, Mermaid labels, topic planning, and Insight user-visible fields must receive fixed
+  enum-derived language semantics. Existing ASR language, subtitles, transcripts, artifacts,
+  History, caches, and task manifests must remain unchanged.
+- Worker and model-download producers must emit only contract-registered `domain.action.state` codes
+  and closed safe args; consumers must drop invalid events and record only the safe code. Model codes
+  must uniquely determine status and whether a bounded cross-platform basename `current_file` is
+  required or forbidden. URL, full path, Cookie, credential, transcript, prompt, generated content,
+  request headers, and preference prose must remain forbidden.
+- `cancelling` is a desktop ProcessSupervisor/UI transition, not a worker-progress wire stage; the
+  shared stage enum and Python/Rust/TypeScript worker boundaries therefore reject it on that channel.
+- Language adherence must remain a best-effort prompt constraint. FrameQ must add no output-language
+  detector, translation, or automatic retry, preserving server-managed LLM data flow and AI Credits
+  per-call accounting.
+
 ## 2026-07-12 History Task Permanent Deletion Boundary
 
 - `delete_history_task(taskId)` is the only product deletion command. The frontend sends no path;

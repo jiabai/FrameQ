@@ -6,7 +6,9 @@ import {
   clearAudioReviewCache,
   downloadAsrModel,
   getAudioReviewCacheUsage,
+  getUiPreferences,
   getLlmConfig,
+  saveUiPreferences,
   saveLlmConfig,
   type SettingsCommandRunner,
 } from "./settingsClient";
@@ -164,5 +166,62 @@ describe("settings client", () => {
     await expect(saveLlmConfig({ outputDir: "", asrModel: "iic/SenseVoiceSmall" }, runner)).rejects.toThrow(
       "Unsupported ASR model",
     );
+  });
+
+  test("strictly loads and maps UI preferences from Tauri", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return { schemaVersion: 1, language: "zh-TW", recovered: false };
+    };
+
+    await expect(getUiPreferences(runner)).resolves.toEqual({
+      schemaVersion: 1,
+      language: "zh-TW",
+      recovered: false,
+    });
+    expect(calls).toEqual([{ command: "get_ui_preferences", args: {} }]);
+  });
+
+  test("saves only the UI language preference through the exact command envelope", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return { schemaVersion: 1, language: "system", recovered: false };
+    };
+
+    await expect(saveUiPreferences("system", runner)).resolves.toEqual({
+      schemaVersion: 1,
+      language: "system",
+      recovered: false,
+    });
+    expect(calls).toEqual([
+      {
+        command: "save_ui_preferences",
+        args: { preferences: { language: "system" } },
+      },
+    ]);
+  });
+
+  test.each([
+    null,
+    {},
+    { schemaVersion: 2, language: "system", recovered: false },
+    { schemaVersion: 1, language: "fr-FR", recovered: false },
+    { schemaVersion: 1, language: "system", recovered: "false" },
+    { schemaVersion: 1, language: "system", recovered: false, extra: true },
+  ])("rejects malformed UI preference responses without echoing payloads", async (payload) => {
+    const runner: SettingsCommandRunner = async () => payload;
+    await expect(getUiPreferences(runner)).rejects.toThrow(
+      "INVALID_UI_PREFERENCES_RESPONSE",
+    );
+  });
+
+  test("uses an immediate in-memory UI-preferences mock outside Tauri", async () => {
+    await expect(getUiPreferences()).resolves.toMatchObject({
+      schemaVersion: 1,
+      language: "system",
+      recovered: false,
+    });
   });
 });

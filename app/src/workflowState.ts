@@ -1,20 +1,21 @@
 import type { Insight } from "./insightPreferences";
+import { uiMessage, type UiMessage } from "./i18n/uiMessage";
+import type {
+  ProgressMessageDescriptor,
+  WorkerProgressEvent,
+  WorkflowStage,
+} from "./desktopWorkerProtocol";
 
-export type WorkflowStage =
-  | "waiting_input"
-  | "cancelling"
-  | "video_extracting"
-  | "video_transcribing"
-  | "insights_generating"
-  | "completed"
-  | "partial_completed"
-  | "failed";
+export type {
+  ProgressMessageDescriptor,
+  WorkerProgressEvent,
+  WorkflowStage,
+} from "./desktopWorkerProtocol";
 
 export type ProgressStepState = "pending" | "active" | "complete";
 
 export type ProgressStep = {
   id: WorkflowStage;
-  label: string;
   state: ProgressStepState;
 };
 export type TaskArtifactKey =
@@ -55,18 +56,12 @@ export type WorkerErrorResult = {
   stage: WorkflowStage;
 };
 
-export type WorkerProgressEvent = {
-  stage: WorkflowStage;
-  message: string;
-  progress: number;
-};
-
 export type InsightRetryTarget = "summary" | "insights";
 
 export type ToolbarNewTaskButtonState = {
   disabled: boolean;
-  ariaLabel: string;
-  title: string;
+  ariaLabel: UiMessage;
+  title: UiMessage;
 };
 
 export type WorkflowState = {
@@ -78,7 +73,8 @@ export type WorkflowState = {
   url: string;
   submittedUrl: string;
   showUrlInput: boolean;
-  statusMessage: string;
+  statusMessage: UiMessage | null;
+  progressMessage: ProgressMessageDescriptor | null;
   progressPercent: number;
   text: string;
   summary: string;
@@ -99,7 +95,8 @@ export function createInitialWorkflow(): WorkflowState {
     url: "",
     submittedUrl: "",
     showUrlInput: true,
-    statusMessage: "",
+    statusMessage: null,
+    progressMessage: null,
     progressPercent: 0,
     text: "",
     summary: "",
@@ -122,7 +119,8 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
     url,
     submittedUrl: url,
     showUrlInput: false,
-    statusMessage: "正在下载视频并准备媒体文件。",
+    statusMessage: null,
+    progressMessage: { messageCode: "video.download.preparing", args: {} },
     progressPercent: 12,
     text: "",
     summary: "",
@@ -145,10 +143,14 @@ export function startInsightRetry(state: WorkflowState, target: InsightRetryTarg
     aiErrorTarget: state.aiErrorTarget === target ? null : state.aiErrorTarget,
     aiTargetErrors,
     showUrlInput: false,
-    statusMessage:
-      target === "summary"
-        ? "正在生成要点总结和 Mermaid mindmap；文字稿片段会发送到管理员配置的云端 LLM 服务。"
-        : "正在生成启发灵感；文字稿片段和本次偏好会发送到管理员配置的云端 LLM 服务。",
+    statusMessage: null,
+    progressMessage: {
+      messageCode:
+        target === "summary"
+          ? "insights.summary.generating"
+          : "insights.topics.generating",
+      args: {},
+    },
     progressPercent: 88,
     error: null,
   };
@@ -172,21 +174,22 @@ export function requestProcessingCancellation(state: WorkflowState): WorkflowSta
     ...state,
     stage: "cancelling",
     cancellingFromStage,
-    statusMessage: "正在取消任务，请等待当前进程结束。",
+    statusMessage: null,
+    progressMessage: { messageCode: "task.cancel.requested", args: {} },
     error: null,
   };
 }
 
 export function restoreProcessingAfterCancellationFailure(
   state: WorkflowState,
-  message: string,
 ): WorkflowState {
   const stage = state.cancellingFromStage ?? "video_extracting";
   return {
     ...state,
     stage,
     cancellingFromStage: null,
-    statusMessage: `取消失败：${message}`,
+    statusMessage: uiMessage("workflow.cancellation.failed"),
+    progressMessage: null,
   };
 }
 
@@ -210,15 +213,15 @@ export function getToolbarNewTaskButtonState(stage: WorkflowStage): ToolbarNewTa
   if (isProcessingStage(stage)) {
     return {
       disabled: true,
-      ariaLabel: "处理中不可开始新任务，请先取消或等待完成",
-      title: "处理中不可开始新任务，请先取消或等待完成",
+      ariaLabel: uiMessage("workflow.toolbar.newTaskUnavailable"),
+      title: uiMessage("workflow.toolbar.newTaskUnavailable"),
     };
   }
 
   return {
     disabled: false,
-    ariaLabel: "开始新任务",
-    title: "开始新任务",
+    ariaLabel: uiMessage("workflow.toolbar.newTask"),
+    title: uiMessage("workflow.toolbar.newTask"),
   };
 }
 export function getVisibleWorkflowError(state: WorkflowState): WorkerErrorResult | null {
@@ -237,7 +240,8 @@ export function summarizeWorkerResult(
     ...createInitialWorkflow(),
     stage: result.status,
     showUrlInput: false,
-    statusMessage: "",
+    statusMessage: null,
+    progressMessage: null,
     progressPercent: result.status === "failed" ? 35 : 100,
     text: result.text,
     summary: result.summary,
@@ -275,14 +279,18 @@ export function finishInsightRetry(
   };
 }
 
-export function getTranscriptSourceLabel(state: WorkflowState): string | null {
+export function getTranscriptSourceLabel(state: WorkflowState): UiMessage | null {
   if (!state.transcript) {
     return null;
   }
   if (state.transcript.source === "subtitle") {
-    return `来源：平台字幕${state.transcript.language ? `（${state.transcript.language}）` : ""}`;
+    return state.transcript.language
+      ? uiMessage("transcript.review.source.subtitleWithLanguage", {
+          language: state.transcript.language,
+        })
+      : uiMessage("transcript.review.source.subtitle");
   }
-  return "来源：本地 ASR";
+  return uiMessage("transcript.review.source.asr");
 }
 
 export function mergeProgressEvent(
@@ -293,7 +301,7 @@ export function mergeProgressEvent(
     ...state,
     stage: event.stage,
     showUrlInput: false,
-    statusMessage: event.message,
-    progressPercent: Math.max(0, Math.min(100, event.progress)),
+    progressMessage: event.message,
+    progressPercent: event.progress,
   };
 }

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
+from frameq_worker.output_language import OutputLanguage
 from frameq_worker.source_identity import SourceIdentity
 
 RetryInsightTarget = Literal["summary", "insights"]
@@ -133,6 +134,7 @@ class PreferenceSnapshot:
 class RetryInsightsRequest:
     task_id: str
     target: RetryInsightTarget
+    output_language: OutputLanguage
     preference_snapshot: PreferenceSnapshot | None = None
 
 

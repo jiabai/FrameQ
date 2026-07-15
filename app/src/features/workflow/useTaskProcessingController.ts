@@ -22,17 +22,19 @@ import {
 } from "../../workflow";
 import { cancelProcess, processVideo, retryInsights } from "../../workerClient";
 import type { PreferenceSnapshot } from "../../insightPreferences";
+import type { SupportedLocale } from "../../i18n/locale";
+import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
-type OpenAccountPanel = (notice?: string) => void;
+type OpenAccountPanel = (notice?: UiMessage) => void;
 
 export const HISTORY_RESTORE_UNAVAILABLE_MESSAGE =
-  "当前任务仍在处理中，完成或取消确认后才能恢复历史任务。";
+  uiMessage("history.disabled.selectionWhileProcessing");
 
 type UseTaskProcessingControllerOptions = {
   onResetTaskUi: () => void;
   onRetryStarted: () => void;
-  processBlockerMessage: (account: AccountStatus, actionLabel: string) => string;
-  aiBlockerMessage: (account: AccountStatus, actionLabel: string) => string;
+  processBlockerMessage: (account: AccountStatus) => UiMessage;
+  aiBlockerMessage: (account: AccountStatus) => UiMessage;
 };
 
 export function useTaskProcessingController({
@@ -144,7 +146,7 @@ export function useTaskProcessingController({
         return;
       }
       if (!canProcessWithAccount(account)) {
-        openAccountPanel(processBlockerMessage(account, "开始新任务"));
+        openAccountPanel(processBlockerMessage(account));
         return;
       }
       const submittedUrl = normalizeSubmitUrl(workflow.url);
@@ -193,10 +195,7 @@ export function useTaskProcessingController({
     if (result.status === "failed") {
       cancellationOperationIdRef.current = null;
       setWorkflow((current) =>
-        restoreProcessingAfterCancellationFailure(
-          current,
-          result.error || "无法终止当前进程树。",
-        ),
+        restoreProcessingAfterCancellationFailure(current),
       );
     }
   }, []);
@@ -204,6 +203,7 @@ export function useTaskProcessingController({
   const retryInsightGeneration = useCallback(
     async (
       target: InsightRetryTarget,
+      outputLanguage: SupportedLocale,
       preferenceSnapshot: PreferenceSnapshot | null,
       account: AccountStatus,
       openAccountPanel: OpenAccountPanel,
@@ -213,12 +213,7 @@ export function useTaskProcessingController({
         return;
       }
       if (!canGenerateAiWithAccount(account)) {
-        openAccountPanel(
-          aiBlockerMessage(
-            account,
-            target === "summary" ? "生成要点总结" : "生成启发灵感",
-          ),
-        );
+        openAccountPanel(aiBlockerMessage(account));
         return;
       }
 
@@ -228,7 +223,13 @@ export function useTaskProcessingController({
       onRetryStarted();
       setWorkflow((current) => startInsightRetry(current, target));
 
-      const result = await retryInsights(taskId, target, preferenceSnapshot);
+      const result = await retryInsights(
+        target === "summary"
+          ? { taskId, target, outputLanguage }
+          : preferenceSnapshot
+            ? { taskId, target, outputLanguage, preferenceSnapshot }
+            : { taskId, target, outputLanguage },
+      );
       if (operationIdRef.current !== operationId) {
         return;
       }

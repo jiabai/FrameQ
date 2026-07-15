@@ -6,7 +6,9 @@ import pytest
 from frameq_worker.xiaohongshu_fallback import (
     HttpResponse,
     XiaohongshuFallbackError,
+    XiaohongshuStreamCandidate,
     _decode_response_body,
+    _download_first_available_stream,
     _page_headers,
     download_xiaohongshu_video,
     parse_video_stream_candidates,
@@ -247,6 +249,7 @@ def test_parse_video_stream_candidates_prefers_best_transcription_stream() -> No
 def test_download_xiaohongshu_video_fetches_page_and_downloads_best_stream(
     tmp_path: Path,
 ) -> None:
+    events: list[dict[str, object]] = []
     client = FakeHttpClient(
         {
             f"https://www.xiaohongshu.com/explore/{NOTE_ID}?xsec_token=token123": [
@@ -272,6 +275,7 @@ def test_download_xiaohongshu_video_fetches_page_and_downloads_best_stream(
         f"https://www.xiaohongshu.com/explore/{NOTE_ID}?xsec_token=token123",
         output_dir=tmp_path,
         http_client=client,
+        progress_callback=events.append,
     )
 
     assert path == tmp_path / f"{NOTE_ID}.mp4"
@@ -280,6 +284,19 @@ def test_download_xiaohongshu_video_fetches_page_and_downloads_best_stream(
         f"https://www.xiaohongshu.com/explore/{NOTE_ID}?xsec_token=token123",
         "https://cdn.example/h265.mp4",
     ]
+    assert events == [
+        {
+            "stage": "video_extracting",
+            "progress": 22,
+            "message_code": "xiaohongshu.page.resolving",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 30,
+            "message_code": "xiaohongshu.video.saving",
+        },
+    ]
+    assert all("message" not in event for event in events)
 
 
 def test_download_xiaohongshu_video_uses_streaming_download_when_available(
@@ -343,6 +360,108 @@ def test_download_xiaohongshu_video_retries_backup_stream(tmp_path: Path) -> Non
     path = download_xiaohongshu_video(NOTE_ID, output_dir=tmp_path, http_client=client)
 
     assert path.read_bytes() == b"backup mp4"
+
+
+def test_download_xiaohongshu_video_emits_one_based_candidate_retry(
+    tmp_path: Path,
+) -> None:
+    page_url = f"https://www.xiaohongshu.com/explore/{NOTE_ID}"
+    blocked = lambda url: HttpResponse(  # noqa: E731 - compact fake response factory
+        status=200,
+        headers={"Content-Type": "text/html"},
+        body=b"<html>blocked</html>",
+        url=url,
+    )
+    client = FakeHttpClient(
+        {
+            page_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=wrap_initial_state(video_state()),
+                    url=page_url,
+                )
+            ],
+            "https://cdn.example/h265.mp4": [
+                blocked("https://cdn.example/h265.mp4")
+            ],
+            "https://cdn.example/h265-backup.mp4": [
+                blocked("https://cdn.example/h265-backup.mp4")
+            ],
+            "https://cdn.example/h264.mp4": [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "video/mp4"},
+                    body=b"fallback candidate",
+                    url="https://cdn.example/h264.mp4",
+                )
+            ],
+        }
+    )
+    events: list[dict[str, object]] = []
+
+    path = download_xiaohongshu_video(
+        NOTE_ID,
+        output_dir=tmp_path,
+        http_client=client,
+        progress_callback=events.append,
+    )
+
+    assert path.read_bytes() == b"fallback candidate"
+    assert events[-1] == {
+        "stage": "video_extracting",
+        "progress": 30,
+        "message_code": "xiaohongshu.stream.retrying",
+        "message_args": {"attempt": 2, "total": 2},
+    }
+
+
+@pytest.mark.parametrize("with_callback", [False, True])
+def test_xiaohongshu_retry_progress_does_not_interrupt_more_than_100_candidates(
+    tmp_path: Path,
+    with_callback: bool,
+) -> None:
+    candidates = [
+        XiaohongshuStreamCandidate(
+            quality_key=f"quality-{index}",
+            url=f"https://cdn.example/{index}.mp4",
+            size_bytes=10_000 - index,
+        )
+        for index in range(101)
+    ]
+    client = FakeHttpClient(
+        {
+            candidates[0].url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=b"<html>blocked</html>",
+                    url=candidates[0].url,
+                )
+            ],
+            candidates[1].url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "video/mp4"},
+                    body=b"second candidate",
+                    url=candidates[1].url,
+                )
+            ],
+        }
+    )
+    events: list[dict[str, object]] = []
+    output_path = tmp_path / "video.mp4"
+
+    result = _download_first_available_stream(
+        candidates,
+        output_path=output_path,
+        http_client=client,
+        progress_callback=events.append if with_callback else None,
+    )
+
+    assert result.read_bytes() == b"second candidate"
+    assert [call[0] for call in client.calls] == [candidates[0].url, candidates[1].url]
+    assert events == []
 
 
 def test_download_xiaohongshu_video_rejects_image_only_note(tmp_path: Path) -> None:

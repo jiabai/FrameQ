@@ -10,6 +10,7 @@
 
 ## Desktop Runtime Spec
 
+- `2026-07-15-desktop-i18n-ai-output-language.md` - Offline bundled Simplified Chinese, Traditional Chinese, and US English UI; app-local language preference; structured progress codes; and strict confirmation-time AI output language.
 - `2026-07-12-history-task-permanent-deletion.md` - Explicit irreversible deletion of one supported History vNext task and its playback cache, with strict task-ID/path validation and truthful partial-failure semantics.
 - `2026-07-12-desktop-density-history-toolbar-polish.md` - Intrinsic History height, clearer secondary typography, consistent active-workspace rhythm, and a quieter grouped desktop toolbar without lifecycle or data changes.
 - `2026-07-12-task-workspace-visual-hierarchy.md` - Restrained hierarchy cleanup for local transcript and AI workspaces without changing their product, privacy, or workflow boundaries.

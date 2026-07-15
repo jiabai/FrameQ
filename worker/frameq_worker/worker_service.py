@@ -31,6 +31,7 @@ from frameq_worker.pipeline import (
     run_worker_pipeline,
 )
 from frameq_worker.requests import (
+    INVALID_RETRY_PAYLOAD_MESSAGE,
     optional_env,
     parse_process_request,
     parse_retry_insights_request,
@@ -162,10 +163,10 @@ def retry_insights_once(
 
     try:
         request = parse_retry_insights_request(payload)
-    except ValueError as exc:
+    except ValueError:
         return failed_insight_retry_result(
             code="INVALID_RETRY_PAYLOAD",
-            message=str(exc),
+            message=INVALID_RETRY_PAYLOAD_MESSAGE,
             text="",
         ).to_dict()
 
@@ -203,6 +204,7 @@ def retry_insights_once(
         transcript=transcript_metadata_from_manifest(manifest),
         preference_snapshot=request.preference_snapshot,
         target=request.target,
+        output_language=request.output_language,
     )
 
     return finalize_task_result(

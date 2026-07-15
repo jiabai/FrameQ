@@ -36,6 +36,10 @@ from frameq_worker.pipeline import (
     run_worker_pipeline,
     snapshot_video_files,
 )
+from frameq_worker.progress_events import (
+    validate_model_progress_event,
+    validate_worker_progress_event,
+)
 from frameq_worker.requests import (
     optional_env as _optional_env,
 )
@@ -159,11 +163,13 @@ def render_result_json(result: dict[str, object]) -> str:
 
 
 def render_progress_event(event: dict[str, object]) -> str:
-    return f"{PROGRESS_EVENT_PREFIX}{json.dumps(event, ensure_ascii=True)}"
+    validated = validate_worker_progress_event(event)
+    return f"{PROGRESS_EVENT_PREFIX}{json.dumps(validated, ensure_ascii=True)}"
 
 
 def render_model_download_event(event: dict[str, object]) -> str:
-    return f"{MODEL_DOWNLOAD_EVENT_PREFIX}{json.dumps(event, ensure_ascii=True)}"
+    validated = validate_model_progress_event(event)
+    return f"{MODEL_DOWNLOAD_EVENT_PREFIX}{json.dumps(validated, ensure_ascii=True)}"
 
 
 def print_progress_event(event: dict[str, object]) -> None:

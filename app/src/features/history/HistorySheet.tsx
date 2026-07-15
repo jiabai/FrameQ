@@ -1,26 +1,48 @@
 import { Clock3, FileText, FolderOpen, Trash2, TriangleAlert, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import type { HistoryListItem } from "../../historyClient";
+import { formatDateTime, formatNumber } from "../../i18n/formatters";
+import { useLocale } from "../../i18n/LocaleProvider";
+import type { SupportedLocale } from "../../i18n/locale";
+import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
+import { useModalFocus } from "../modal/useModalFocus";
 import type { HistoryController } from "./useHistoryController";
 
-const historyStatusCopy: Record<HistoryListItem["status"], string> = {
-  completed: "已完成",
-  partial_completed: "部分完成",
-  failed: "失败",
+const historyStatusKeys: Record<
+  HistoryListItem["status"],
+  "status.completed" | "status.partial_completed" | "status.failed"
+> = {
+  completed: "status.completed",
+  partial_completed: "status.partial_completed",
+  failed: "status.failed",
 };
 
 type HistorySheetProps = {
   controller: HistoryController;
-  formatHistoryDate: (value: string) => string;
   selectionDisabled: boolean;
-  selectionDisabledReason: string;
+  selectionDisabledReason: UiMessage;
   deletionDisabled: boolean;
-  deletionDisabledReason: string;
+  deletionDisabledReason: UiMessage;
 };
+
+function areUiMessagesEqual(left: UiMessage, right: UiMessage): boolean {
+  return (
+    left.messageCode === right.messageCode &&
+    JSON.stringify(left.args ?? {}) === JSON.stringify(right.args ?? {})
+  );
+}
+
+function formatHistoryTimestamp(
+  value: string,
+  locale: SupportedLocale,
+): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : formatDateTime(date, locale);
+}
 
 export function HistorySheet({
   controller,
-  formatHistoryDate,
   selectionDisabled,
   selectionDisabledReason,
   deletionDisabled,
@@ -39,6 +61,25 @@ export function HistorySheet({
     cancelHistoryItemDeletion,
     confirmHistoryItemDeletion,
   } = controller;
+  const { t } = useTranslation("history");
+  const { resolvedLocale } = useLocale();
+  const historyModalRef = useModalFocus<HTMLElement>(historyOpen);
+  const historyDeleteModalRef = useModalFocus<HTMLElement>(
+    Boolean(historyDeleteCandidate),
+  );
+  const renderedNotice = renderUiMessage(resolvedLocale, historyNotice);
+  const renderedSelectionDisabledReason = renderUiMessage(
+    resolvedLocale,
+    selectionDisabledReason,
+  );
+  const renderedDeletionDisabledReason = renderUiMessage(
+    resolvedLocale,
+    deletionDisabledReason,
+  );
+  const disabledReasonsAreEqual = areUiMessagesEqual(
+    selectionDisabledReason,
+    deletionDisabledReason,
+  );
 
   if (!historyOpen) {
     return null;
@@ -47,8 +88,9 @@ export function HistorySheet({
   return (
     <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={closeHistory}>
       <section
+        ref={historyModalRef}
         className="sheet-panel detail-modal history-modal history-sheet"
-        aria-label="历史任务"
+        aria-label={t("sheet.ariaLabel")}
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
@@ -62,28 +104,43 @@ export function HistorySheet({
       >
         <header className="modal-header sheet-header">
           <div>
-            <p className="section-label">History</p>
-            <h2>历史任务</h2>
+            <p className="section-label">{t("sheet.eyebrow")}</p>
+            <h2>{t("sheet.title")}</h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={closeHistory}
-            aria-label="关闭历史"
+            aria-label={t("sheet.closeAriaLabel")}
             disabled={historyDeleting}
           >
             <X size={18} />
           </button>
         </header>
-        {historyNotice ? <p className="action-notice">{historyNotice}</p> : null}
-        {selectionDisabled ? (
-          <p id="history-selection-disabled-reason" className="action-notice" role="status">
-            {selectionDisabledReason}
+        {renderedNotice ? (
+          <p className="action-notice" role="status" aria-live="polite">
+            {renderedNotice}
           </p>
         ) : null}
-        {deletionDisabled && (!selectionDisabled || deletionDisabledReason !== selectionDisabledReason) ? (
-          <p id="history-deletion-disabled-reason" className="action-notice" role="status">
-            {deletionDisabledReason}
+        {selectionDisabled ? (
+          <p
+            id="history-selection-disabled-reason"
+            className="action-notice"
+            role="status"
+            aria-live="polite"
+          >
+            {renderedSelectionDisabledReason}
+          </p>
+        ) : null}
+        {deletionDisabled &&
+        (!selectionDisabled || !disabledReasonsAreEqual) ? (
+          <p
+            id="history-deletion-disabled-reason"
+            className="action-notice"
+            role="status"
+            aria-live="polite"
+          >
+            {renderedDeletionDisabledReason}
           </p>
         ) : null}
         <div className="history-list">
@@ -103,7 +160,7 @@ export function HistorySheet({
               >
                 <div className="history-item-main">
                   <span className={`history-status ${item.status}`}>
-                    {historyStatusCopy[item.status]}
+                    {t(historyStatusKeys[item.status])}
                   </span>
                   <strong
                     className={`history-title ${
@@ -117,18 +174,37 @@ export function HistorySheet({
                 <div className="history-meta">
                   <span className="history-meta-time">
                     <Clock3 size={13} />
-                    <span className="history-meta-value">{formatHistoryDate(item.createdAt)}</span>
+                    <span className="history-meta-value">
+                      {formatHistoryTimestamp(item.createdAt, resolvedLocale)}
+                    </span>
                   </span>
-                  <span className="history-meta-output" title={item.outputDir || "outputs"}>
+                  <span
+                    className="history-meta-output"
+                    title={item.outputDir || t("item.outputFallback")}
+                  >
                     <FolderOpen size={13} />
-                    <span className="history-meta-value">{item.outputDir || "outputs"}</span>
+                    <span className="history-meta-value">
+                      {item.outputDir || t("item.outputFallback")}
+                    </span>
                   </span>
                   <span
                     className="history-meta-result"
-                    title={item.error ? item.error.code : `${item.insightsCount} 条灵感`}
+                    title={
+                      item.error
+                        ? item.error.code
+                        : t("item.insights", {
+                            count: item.insightsCount,
+                            formattedCount: formatNumber(item.insightsCount, resolvedLocale),
+                          })
+                    }
                   >
                     <span className="history-meta-value">
-                      {item.error ? item.error.code : `${item.insightsCount} 条灵感`}
+                      {item.error
+                        ? item.error.code
+                        : t("item.insights", {
+                            count: item.insightsCount,
+                            formattedCount: formatNumber(item.insightsCount, resolvedLocale),
+                          })}
                     </span>
                   </span>
                 </div>
@@ -138,11 +214,13 @@ export function HistorySheet({
                 type="button"
                 onClick={() => requestHistoryItemDeletion(item)}
                 disabled={deletionDisabled || historyDeleting}
-                aria-label="永久删除此历史任务"
-                title="永久删除"
+                aria-label={t("item.deleteAriaLabel", {
+                  title: item.textPreview || item.url,
+                })}
+                title={t("item.deleteTitle")}
                 aria-describedby={
                   deletionDisabled
-                    ? selectionDisabled && deletionDisabledReason === selectionDisabledReason
+                    ? selectionDisabled && disabledReasonsAreEqual
                       ? "history-selection-disabled-reason"
                       : "history-deletion-disabled-reason"
                     : undefined
@@ -155,7 +233,7 @@ export function HistorySheet({
           {!historyLoading && historyItems.length === 0 ? (
             <div className="history-empty">
               <FileText size={18} />
-              <span>还没有可查看的历史任务。</span>
+              <span>{t("empty")}</span>
             </div>
           ) : null}
         </div>
@@ -166,18 +244,17 @@ export function HistorySheet({
             onClick={historyDeleting ? undefined : cancelHistoryItemDeletion}
           >
             <section
+              ref={historyDeleteModalRef}
               className="history-delete-confirm"
               role="alertdialog"
               aria-modal="true"
-              aria-label="确认永久删除历史任务"
+              aria-label={t("confirm.ariaLabel")}
               onClick={(event) => event.stopPropagation()}
             >
               <TriangleAlert size={22} />
               <div>
-                <h3>永久删除此任务？</h3>
-                <p>
-                  将删除该任务的视频、音频、文字稿、AI 结果和播放缓存，并立即释放空间。此操作无法恢复。
-                </p>
+                <h3>{t("confirm.title")}</h3>
+                <p>{t("confirm.body")}</p>
               </div>
               <div className="history-delete-confirm-actions">
                 <button
@@ -187,7 +264,7 @@ export function HistorySheet({
                   disabled={historyDeleting}
                   autoFocus
                 >
-                  取消
+                  {t("confirm.cancel")}
                 </button>
                 <button
                   className="danger-button"
@@ -195,7 +272,7 @@ export function HistorySheet({
                   onClick={() => void confirmHistoryItemDeletion()}
                   disabled={historyDeleting}
                 >
-                  {historyDeleting ? "正在永久删除" : "永久删除"}
+                  {historyDeleting ? t("confirm.deleting") : t("confirm.delete")}
                 </button>
               </div>
             </section>

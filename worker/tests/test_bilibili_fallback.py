@@ -271,11 +271,13 @@ def test_download_bilibili_video_downloads_dash_and_merges_selected_part(
             "https://cdn.example/audio-high.m4s": [b"audio bytes"],
         },
     )
+    events: list[dict[str, object]] = []
     path = download_bilibili_video(
         f"https://www.bilibili.com/video/{BVID}?p=2",
         output_dir=tmp_path,
         command_runner=fake_runner,
         http_client=client,
+        progress_callback=events.append,
     )
 
     assert path == tmp_path / f"{BVID}_p2.mp4"
@@ -293,6 +295,34 @@ def test_download_bilibili_video_downloads_dash_and_merges_selected_part(
     ]
     assert not (tmp_path / f"{BVID}_p2_video.m4s").exists()
     assert not (tmp_path / f"{BVID}_p2_audio.m4s").exists()
+    assert events == [
+        {
+            "stage": "video_extracting",
+            "progress": 22,
+            "message_code": "bilibili.metadata.resolving",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 26,
+            "message_code": "bilibili.stream.probing",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 30,
+            "message_code": "bilibili.video.downloading",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 32,
+            "message_code": "bilibili.audio.downloading",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 34,
+            "message_code": "bilibili.media.merging",
+        },
+    ]
+    assert all("message" not in event for event in events)
 
 
 def test_download_bilibili_video_rejects_drm_and_missing_part(tmp_path: Path) -> None:

@@ -11,7 +11,6 @@ from frameq_worker.asr import (
     ASRError,
     QwenAsrTranscriber,
     Transcriber,
-    asr_model_display_name,
     build_asr_transcriber,
     resolve_model_cache_dir,
     transcribe_and_write,
@@ -44,6 +43,12 @@ from frameq_worker.models import (
     ProcessResult,
     TranscriptMetadata,
     WorkerError,
+)
+from frameq_worker.output_language import OutputLanguage
+from frameq_worker.progress_events import (
+    build_worker_progress_event,
+    normalize_language_tag,
+    normalize_model_arg,
 )
 from frameq_worker.source_identity import (
     SourceIdentity,
@@ -177,6 +182,7 @@ def run_insight_generation_step(
     output_dir: Path,
     output_stem: str,
     client: InsightClient | None,
+    output_language: OutputLanguage,
     transcript: TranscriptMetadata | None = None,
     preference_snapshot: PreferenceSnapshot | None = None,
     target: InsightGenerationTarget = "all",
@@ -240,6 +246,7 @@ def run_insight_generation_step(
                 output_dir=output_dir,
                 output_stem=output_stem,
                 client=client,
+                output_language=output_language,
             )
         except InsightGenerationError as exc:
             generation_error = exc
@@ -251,6 +258,7 @@ def run_insight_generation_step(
                 output_dir=output_dir,
                 output_stem=output_stem,
                 client=client,
+                output_language=output_language,
                 preference_snapshot=preference_snapshot,
             )
         except InsightGenerationError as exc:
@@ -330,7 +338,7 @@ def download_and_select_video(
     emit_progress(
         progress_callback,
         JobStage.VIDEO_EXTRACTING,
-        "正在下载视频并准备媒体文件。",
+        "video.download.preparing",
         18,
     )
     try:
@@ -353,7 +361,7 @@ def download_and_select_video(
     emit_progress(
         progress_callback,
         JobStage.VIDEO_EXTRACTING,
-        "正在校验视频和音频流。",
+        "video.stream.validating",
         34,
     )
     video_path = find_video_from_download_stdout(download_result.stdout, context.download_dir)
@@ -423,7 +431,7 @@ def prepare_audio(
     emit_progress(
         progress_callback,
         JobStage.VIDEO_EXTRACTING,
-        "正在提取 16 kHz 单声道音频。",
+        "audio.extract.running",
         48,
     )
     audio_path = task_context.paths.audio_path
@@ -431,7 +439,7 @@ def prepare_audio(
         emit_progress(
             progress_callback,
             JobStage.VIDEO_EXTRACTING,
-            "已复用本地音频，跳过音频提取。",
+            "audio.extract.reused",
             50,
         )
         return audio_path
@@ -459,7 +467,7 @@ def try_subtitle_transcript_stage(
     emit_progress(
         progress_callback,
         JobStage.VIDEO_TRANSCRIBING,
-        "正在检测平台字幕。",
+        "subtitle.detect.running",
         58,
     )
     subtitle_result = (
@@ -476,8 +484,9 @@ def try_subtitle_transcript_stage(
         emit_progress(
             progress_callback,
             JobStage.VIDEO_TRANSCRIBING,
-            f"已检测到 {subtitle_result.transcript.language} 字幕，跳过 ASR。",
+            "subtitle.detect.found",
             68,
+            message_args=_subtitle_language_args(subtitle_result.transcript.language),
         )
     return subtitle_result
 
@@ -504,8 +513,9 @@ def prepare_asr_transcriber_stage(
     emit_progress(
         progress_callback,
         JobStage.VIDEO_TRANSCRIBING,
-        f"正在准备 {asr_model_display_name(request.model)} 模型缓存。",
+        "asr.cache.preparing",
         58,
+        message_args=_asr_model_args(request.model),
     )
     model_cache_dir = resolve_model_cache_dir(project_root=project_root, environ=environ)
     normalize_asr_model_cache_layout(model_cache_dir)
@@ -540,7 +550,7 @@ def run_asr_transcript_stage(
     emit_progress(
         progress_callback,
         JobStage.VIDEO_TRANSCRIBING,
-        "未检测到字幕，开始 ASR。",
+        "asr.transcribe.starting",
         58,
     )
     prepared_transcriber = prepare_asr_transcriber_stage(
@@ -558,7 +568,7 @@ def run_asr_transcript_stage(
     emit_progress(
         progress_callback,
         JobStage.VIDEO_TRANSCRIBING,
-        "正在加载模型并开始转写。",
+        "asr.transcribe.running",
         68,
     )
     return run_asr_transcript_step(
@@ -830,16 +840,28 @@ def finalize_task_result(context: TaskContext, result: ProcessResult) -> Process
 def emit_progress(
     callback: ProgressCallback | None,
     stage: JobStage,
-    message: str,
+    message_code: str,
     progress: int,
+    message_args: dict[str, str | int] | None = None,
 ) -> None:
+    event = build_worker_progress_event(
+        message_code,
+        stage=stage.value,
+        progress=progress,
+        message_args=message_args,
+    )
     if callback is None:
         return
+    callback(event)
 
-    callback(
-        {
-            "stage": stage.value,
-            "message": message,
-            "progress": progress,
-        }
-    )
+
+def _subtitle_language_args(language: object) -> dict[str, str]:
+    return {"language": normalize_language_tag(language) or "und"}
+
+
+def _asr_model_args(model: object) -> dict[str, str] | None:
+    # The release desktop currently exposes and bundles only SenseVoice. The Qwen
+    # adapter remains a hidden dev/future path, so it deliberately uses generic
+    # progress instead of expanding the release progress-model allowlist.
+    normalized = normalize_model_arg(model)
+    return {"model": normalized} if normalized is not None else None

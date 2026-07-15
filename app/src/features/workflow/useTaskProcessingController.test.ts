@@ -130,8 +130,8 @@ async function createController() {
       return useTaskProcessingController({
         onResetTaskUi,
         onRetryStarted: vi.fn(),
-        processBlockerMessage: () => "blocked",
-        aiBlockerMessage: () => "blocked",
+        processBlockerMessage: () => ({ messageCode: "account.notice.processingUnavailable" }),
+        aiBlockerMessage: () => ({ messageCode: "account.notice.aiUnavailable" }),
       });
     },
     onResetTaskUi,
@@ -170,7 +170,9 @@ describe("useTaskProcessingController cancellation", () => {
     expect(cancelProcessMock).toHaveBeenCalledTimes(1);
     expect(onResetTaskUi).not.toHaveBeenCalled();
     expect(controller.workflow.stage).toBe("video_extracting");
-    expect(controller.workflow.statusMessage).toContain("tree termination failed");
+    expect(controller.workflow.statusMessage).toEqual({
+      messageCode: "workflow.cancellation.failed",
+    });
   });
 
   test("claims a user cancellation once while the signal request is pending", async () => {
@@ -345,7 +347,7 @@ describe("useTaskProcessingController history restore", () => {
     expect(controller.canRestoreHistory).toBe(false);
     requireResolver<WorkerProgressEvent>(progress)({
       stage: "video_transcribing",
-      message: "active progress",
+      message: { messageCode: "asr.transcribe.running", args: {} },
       progress: 60,
     });
     requireResolver<WorkerResult>(resolveWorker)(createWorkerResult());
@@ -381,12 +383,18 @@ describe("useTaskProcessingController history restore", () => {
 
     const retry = controller.retryInsightGeneration(
       "insights",
+      "en-US",
       null,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
     controller = render();
     expect(controller.workflow.stage).toBe("insights_generating");
+    expect(retryInsightsMock).toHaveBeenCalledWith({
+      taskId: "source-task",
+      target: "insights",
+      outputLanguage: "en-US",
+    });
     expect(controller.restoreHistoryItem(rejected)).toBe(false);
     requireResolver<WorkerResult>(resolveRetry)(
       createWorkerResult({
@@ -447,12 +455,18 @@ describe("useTaskProcessingController history restore", () => {
 
     const retry = controller.retryInsightGeneration(
       "summary",
+      "zh-TW",
       null,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
     controller = render();
     expect(controller.workflow.activeAiTarget).toBe("summary");
+    expect(retryInsightsMock).toHaveBeenCalledWith({
+      taskId: "source-task",
+      target: "summary",
+      outputLanguage: "zh-TW",
+    });
 
     await retry;
     controller = render();
@@ -594,7 +608,7 @@ describe("useTaskProcessingController history restore", () => {
     controller = render();
     requireResolver<WorkerProgressEvent>(progress)({
       stage: "video_transcribing",
-      message: "late old progress",
+      message: { messageCode: "asr.transcribe.running", args: {} },
       progress: 80,
     });
     requireResolver<WorkerResult>(resolveWorker)(createWorkerResult());

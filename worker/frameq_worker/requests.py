@@ -14,6 +14,7 @@ from frameq_worker.models import (
     ProcessRequest,
     RetryInsightsRequest,
 )
+from frameq_worker.output_language import is_output_language
 
 PROFILE_FIELD_OPTIONS: dict[str, set[str]] = {
     "role": {
@@ -151,6 +152,10 @@ GENERATION_FIELD_OPTIONS: dict[str, set[str]] = {
 }
 
 TASK_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]+$")
+RETRY_REQUEST_FIELDS = frozenset(
+    {"task_id", "target", "output_language", "preference_snapshot"}
+)
+INVALID_RETRY_PAYLOAD_MESSAGE = "Retry request payload was invalid."
 
 
 def parse_process_request(payload: object) -> ProcessRequest:
@@ -179,29 +184,43 @@ def parse_process_request(payload: object) -> ProcessRequest:
 
 
 def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
-    if not isinstance(payload, dict):
-        raise ValueError("Retry payload must be a JSON object.")
+    try:
+        return _parse_retry_insights_request(payload)
+    except (TypeError, ValueError):
+        raise ValueError(INVALID_RETRY_PAYLOAD_MESSAGE) from None
+
+
+def _parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
+    if not isinstance(payload, dict) or set(payload) - RETRY_REQUEST_FIELDS:
+        raise ValueError
 
     task_id = payload.get("task_id")
     if not isinstance(task_id, str) or not task_id.strip():
-        raise ValueError("Retry payload must include a non-empty task_id.")
+        raise ValueError
     task_id = task_id.strip()
     if not TASK_ID_PATTERN.fullmatch(task_id):
-        raise ValueError("Retry payload task_id must be a single task directory name.")
+        raise ValueError
 
     target = payload.get("target")
-    if not isinstance(target, str) or not target.strip():
-        raise ValueError("Retry payload must include target.")
-    target = target.strip()
     if target not in {"summary", "insights"}:
-        raise ValueError("Retry payload target must be summary or insights.")
-    if target == "summary" and payload.get("preference_snapshot") is not None:
-        raise ValueError("preference_snapshot is only allowed for insights target.")
+        raise ValueError
+
+    output_language = payload.get("output_language")
+    if not is_output_language(output_language):
+        raise ValueError
+
+    preference_snapshot = None
+    if "preference_snapshot" in payload:
+        raw_preference_snapshot = payload["preference_snapshot"]
+        if target != "insights" or not isinstance(raw_preference_snapshot, dict):
+            raise ValueError
+        preference_snapshot = parse_preference_snapshot(raw_preference_snapshot)
 
     return RetryInsightsRequest(
         task_id=task_id,
         target=target,
-        preference_snapshot=parse_preference_snapshot(payload.get("preference_snapshot")),
+        output_language=output_language,
+        preference_snapshot=preference_snapshot,
     )
 
 

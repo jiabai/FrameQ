@@ -437,8 +437,7 @@ pub(crate) fn build_worker_command_spec(
 fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> bool {
     match invocation {
         WorkerInvocation::RetryInsights(_) => true,
-        WorkerInvocation::ProcessVideo(_)
-        | WorkerInvocation::ResolveSourceIdentity(_) => false,
+        WorkerInvocation::ProcessVideo(_) | WorkerInvocation::ResolveSourceIdentity(_) => false,
     }
 }
 
@@ -1026,7 +1025,8 @@ Some dependency logged to stdout
             ),
             (
                 WorkerInvocation::RetryInsights(
-                    r#"{"task_id":"safe-task","target":"summary"}"#.to_string(),
+                    r#"{"task_id":"safe-task","target":"summary","output_language":"en-US"}"#
+                        .to_string(),
                 ),
                 "--retry-insights-stdin",
             ),
@@ -1306,7 +1306,7 @@ Some dependency logged to stdout
     #[test]
     fn worker_command_spec_includes_server_managed_llm_checkout_env_for_retry_insights() {
         let paths = command_test_paths();
-        let request_json = r#"{"task_id":"20260705-153012-douyin-demo","target":"summary"}"#;
+        let request_json = r#"{"task_id":"20260705-153012-douyin-demo","target":"summary","output_language":"en-US"}"#;
 
         let spec = build_worker_command_spec(
             &paths,

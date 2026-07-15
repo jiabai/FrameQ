@@ -24,10 +24,13 @@ import {
   skipInspirationProfile,
 } from "../../insightPreferencesClient";
 import type { InsightRetryTarget, WorkflowState } from "../../workflow";
+import type { SupportedLocale } from "../../i18n/locale";
+import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
-type OpenAccountPanel = (notice?: string) => void;
+type OpenAccountPanel = (notice?: UiMessage) => void;
 type RetryInsightGeneration = (
   target: InsightRetryTarget,
+  outputLanguage: SupportedLocale,
   preferenceSnapshot: PreferenceSnapshot | null,
   account: AccountStatus,
   openAccountPanel: OpenAccountPanel,
@@ -37,13 +40,14 @@ type RetryInsightGeneration = (
 type UseInsightGenerationControllerOptions = {
   workflow: WorkflowState;
   account: AccountStatus;
-  setActionNotice: Dispatch<SetStateAction<string>>;
+  setActionNotice: Dispatch<SetStateAction<UiMessage | null>>;
   closeSettings: () => void;
   closeDetail: () => void;
   openAccountPanel: OpenAccountPanel;
   refreshAccountStatus: () => Promise<void>;
+  outputLanguage: SupportedLocale;
   retryInsightGeneration: RetryInsightGeneration;
-  aiBlockerMessage: (account: AccountStatus, actionLabel: string) => string;
+  aiBlockerMessage: (account: AccountStatus) => UiMessage;
 };
 
 export function useInsightGenerationController({
@@ -54,6 +58,7 @@ export function useInsightGenerationController({
   closeDetail,
   openAccountPanel,
   refreshAccountStatus,
+  outputLanguage,
   retryInsightGeneration,
   aiBlockerMessage,
 }: UseInsightGenerationControllerOptions) {
@@ -61,9 +66,11 @@ export function useInsightGenerationController({
   const [insightPreferenceFlow, setInsightPreferenceFlow] =
     useState<InsightPreferenceFlowState | null>(null);
   const [insightPreferenceBusy, setInsightPreferenceBusy] = useState(false);
-  const [aiActionNotice, setAiActionNotice] = useState("");
+  const [confirmedOutputLanguage, setConfirmedOutputLanguage] =
+    useState<SupportedLocale | null>(null);
+  const [aiActionNotice, setAiActionNotice] = useState<UiMessage | null>(null);
   const reportAiNotice = useCallback(
-    (notice: string) => {
+    (notice: UiMessage | null) => {
       setAiActionNotice(notice);
       setActionNotice(notice);
     },
@@ -76,27 +83,30 @@ export function useInsightGenerationController({
 
   const closeInsightPreferenceFlow = useCallback(() => {
     setInsightPreferenceFlow(null);
+    setConfirmedOutputLanguage(null);
   }, []);
 
   const resetInsightGenerationUi = useCallback(() => {
     setSummaryConfirmOpen(false);
     setInsightPreferenceFlow(null);
-    reportAiNotice("");
+    setConfirmedOutputLanguage(null);
+    reportAiNotice(null);
   }, [reportAiNotice]);
 
   const openInsightPreferenceFlow = useCallback(async () => {
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      reportAiNotice("文字稿生成后才能继续生成启发灵感。");
+      reportAiNotice(uiMessage("preferences.notice.transcriptRequiredInsights"));
       return;
     }
 
+    setConfirmedOutputLanguage(null);
     setInsightPreferenceBusy(true);
-    reportAiNotice("");
+    reportAiNotice(null);
     try {
       const preferences = await getInsightPreferences();
       setInsightPreferenceFlow(createInsightPreferenceFlow(preferences));
-    } catch (error) {
-      reportAiNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      reportAiNotice(uiMessage("preferences.notice.preferencesReadFailed"));
     } finally {
       setInsightPreferenceBusy(false);
     }
@@ -104,30 +114,39 @@ export function useInsightGenerationController({
 
   const openSummaryConfirmation = useCallback(() => {
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      reportAiNotice("文字稿生成后才能继续生成要点总结。");
+      reportAiNotice(uiMessage("preferences.notice.transcriptRequiredSummary"));
       return;
     }
 
-    reportAiNotice("");
+    reportAiNotice(null);
     setSummaryConfirmOpen(true);
   }, [reportAiNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
 
   const confirmSummaryGeneration = useCallback(async () => {
+    const confirmedOutputLanguage = outputLanguage;
     if (!canGenerateAiWithAccount(account)) {
-      openAccountPanel(aiBlockerMessage(account, "生成要点总结"));
+      openAccountPanel(aiBlockerMessage(account));
       return;
     }
 
     setSummaryConfirmOpen(false);
     try {
-      await retryInsightGeneration("summary", null, account, openAccountPanel, refreshAccountStatus);
-    } catch (error) {
-      reportAiNotice(`启动要点总结失败：${error instanceof Error ? error.message : String(error)}`);
+      await retryInsightGeneration(
+        "summary",
+        confirmedOutputLanguage,
+        null,
+        account,
+        openAccountPanel,
+        refreshAccountStatus,
+      );
+    } catch {
+      reportAiNotice(uiMessage("preferences.notice.summaryStartFailed"));
     }
   }, [
     account,
     aiBlockerMessage,
     openAccountPanel,
+    outputLanguage,
     refreshAccountStatus,
     retryInsightGeneration,
     reportAiNotice,
@@ -136,12 +155,12 @@ export function useInsightGenerationController({
   const openProfileEditorFromSettings = useCallback(async () => {
     closeSettings();
     setInsightPreferenceBusy(true);
-    reportAiNotice("");
+    reportAiNotice(null);
     try {
       const preferences = await getInsightPreferences();
       setInsightPreferenceFlow(startProfileSetupInFlow(createInsightPreferenceFlow(preferences)));
-    } catch (error) {
-      reportAiNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      reportAiNotice(uiMessage("preferences.notice.preferencesReadFailed"));
     } finally {
       setInsightPreferenceBusy(false);
     }
@@ -149,18 +168,18 @@ export function useInsightGenerationController({
 
   const openDirectionEditorFromDetail = useCallback(async () => {
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      reportAiNotice("文字稿生成后才能重新选择方向。");
+      reportAiNotice(uiMessage("preferences.notice.transcriptRequiredDirection"));
       return;
     }
 
     closeDetail();
     setInsightPreferenceBusy(true);
-    reportAiNotice("");
+    reportAiNotice(null);
     try {
       const preferences = await getInsightPreferences();
       setInsightPreferenceFlow(startGenerationPreferenceEditing(createInsightPreferenceFlow(preferences)));
-    } catch (error) {
-      reportAiNotice(`无法读取本地偏好：${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      reportAiNotice(uiMessage("preferences.notice.preferencesReadFailed"));
     } finally {
       setInsightPreferenceBusy(false);
     }
@@ -174,8 +193,8 @@ export function useInsightGenerationController({
     try {
       await skipInspirationProfile();
       setInsightPreferenceFlow(skipProfileSetupInFlow(insightPreferenceFlow));
-    } catch (error) {
-      reportAiNotice(`保存跳过状态失败：${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      reportAiNotice(uiMessage("preferences.notice.skipSaveFailed"));
     } finally {
       setInsightPreferenceBusy(false);
     }
@@ -187,8 +206,8 @@ export function useInsightGenerationController({
       try {
         const preferences = await saveInspirationProfile(profile);
         setInsightPreferenceFlow(startGenerationPreferenceEditing(createInsightPreferenceFlow(preferences)));
-      } catch (error) {
-        reportAiNotice(`保存灵感档案失败：${error instanceof Error ? error.message : String(error)}`);
+      } catch {
+        reportAiNotice(uiMessage("preferences.notice.profileSaveFailed"));
       } finally {
         setInsightPreferenceBusy(false);
       }
@@ -198,11 +217,13 @@ export function useInsightGenerationController({
 
   const confirmInsightPreferences = useCallback(
     async (preferences: GenerationPreferences) => {
+      const confirmedOutputLanguage = outputLanguage;
       if (!canGenerateAiWithAccount(account)) {
-        openAccountPanel(aiBlockerMessage(account, "生成启发灵感"));
+        openAccountPanel(aiBlockerMessage(account));
         return;
       }
 
+      setConfirmedOutputLanguage(confirmedOutputLanguage);
       setInsightPreferenceBusy(true);
       try {
         const preferenceSnapshot = insightPreferenceFlow
@@ -216,14 +237,16 @@ export function useInsightGenerationController({
         setInsightPreferenceFlow(null);
         await retryInsightGeneration(
           "insights",
+          confirmedOutputLanguage,
           preferenceSnapshot,
           account,
           openAccountPanel,
           refreshAccountStatus,
         );
-      } catch (error) {
-        reportAiNotice(`启动启发灵感失败：${error instanceof Error ? error.message : String(error)}`);
+      } catch {
+        reportAiNotice(uiMessage("preferences.notice.insightsStartFailed"));
       } finally {
+        setConfirmedOutputLanguage(null);
         setInsightPreferenceBusy(false);
       }
     },
@@ -232,6 +255,7 @@ export function useInsightGenerationController({
       aiBlockerMessage,
       insightPreferenceFlow,
       openAccountPanel,
+      outputLanguage,
       refreshAccountStatus,
       retryInsightGeneration,
       reportAiNotice,
@@ -243,6 +267,7 @@ export function useInsightGenerationController({
     summaryConfirmOpen,
     insightPreferenceFlow,
     insightPreferenceBusy,
+    confirmedOutputLanguage,
     setInsightPreferenceFlow,
     closeSummaryConfirmation,
     closeInsightPreferenceFlow,

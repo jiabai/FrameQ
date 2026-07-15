@@ -14,10 +14,11 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   getDetailText,
   getExportPath,
-  getTranscriptSourceLabel,
   type DetailTab,
   type WorkflowState,
 } from "../../workflow";
+import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
+import type { SupportedLocale } from "../../i18n/locale";
 import {
   loadTranscriptDetail,
   saveTranscriptEdit,
@@ -38,12 +39,14 @@ import {
 
 type UseTranscriptDetailControllerOptions = {
   workflow: WorkflowState;
+  locale: SupportedLocale;
   applyTranscriptSave: (expectedTaskId: string | null, saved: SaveTranscriptEditResponse) => void;
-  setActionNotice: Dispatch<SetStateAction<string>>;
+  setActionNotice: Dispatch<SetStateAction<UiMessage | null>>;
 };
 
 export function useTranscriptDetailController({
   workflow,
+  locale,
   applyTranscriptSave,
   setActionNotice,
 }: UseTranscriptDetailControllerOptions) {
@@ -112,19 +115,17 @@ export function useTranscriptDetailController({
         setTranscriptSegments(detail.segments);
         setActionNotice(
           detail.audio_asset_path
-            ? ""
-            : "音频文件暂不可用，可以先编辑文字稿；点击保存后会更新正式文字稿。",
+            ? null
+            : uiMessage("transcript.notice.audioUnavailableEdit"),
         );
-      } catch (error) {
+      } catch {
         if (cancelled) {
           return;
         }
         setTranscriptDetail(null);
         setTranscriptDraft(workflow.text);
         setTranscriptSegments([]);
-        setActionNotice(
-          `无法读取文字稿详情，已显示当前结果文本：${error instanceof Error ? error.message : String(error)}`,
-        );
+        setActionNotice(uiMessage("transcript.notice.detailLoadFallback"));
       } finally {
         if (!cancelled) {
           setTranscriptLoading(false);
@@ -148,13 +149,14 @@ export function useTranscriptDetailController({
     });
   }, [activeTranscriptSegmentId]);
 
-  const detailTitle =
-    detailTab === "insights" ? "启发灵感" : detailTab === "summary" ? "要点总结" : "完整文字稿";
   const detailText =
-    detailTab === "transcript" ? transcriptDraft : detailTab ? getDetailText(detailTab, workflow) : "";
+    detailTab === "transcript"
+      ? transcriptDraft
+      : detailTab
+        ? getDetailText(detailTab, workflow, locale)
+        : "";
   const exportPath = detailTab ? getExportPath(detailTab, workflow) : null;
   const currentTranscriptPath = getExportPath("transcript", workflow);
-  const transcriptSourceLabel = getTranscriptSourceLabel(workflow);
   const transcriptAudioSrc = transcriptDetail?.audio_asset_path
     ? convertFileSrc(transcriptDetail.audio_asset_path)
     : "";
@@ -179,30 +181,33 @@ export function useTranscriptDetailController({
     if (!detailTab) {
       return;
     }
-    const text = detailTab === "transcript" ? transcriptDraft : getDetailText(detailTab, workflow);
+    const text =
+      detailTab === "transcript"
+        ? transcriptDraft
+        : getDetailText(detailTab, workflow, locale);
     if (!text) {
-      setActionNotice("暂无可复制内容。");
+      setActionNotice(uiMessage("transcript.notice.nothingToCopy"));
       return;
     }
 
     try {
       await navigator.clipboard.writeText(text);
-      setActionNotice("已复制到剪贴板。");
+      setActionNotice(uiMessage("transcript.notice.copied"));
     } catch {
-      setActionNotice("复制失败，请手动选择内容复制。");
+      setActionNotice(uiMessage("transcript.notice.copyFailed"));
     }
-  }, [detailTab, setActionNotice, transcriptDraft, workflow]);
+  }, [detailTab, locale, setActionNotice, transcriptDraft, workflow]);
 
   const copyTranscript = useCallback(async () => {
     if (!transcriptDraft) {
-      setActionNotice("暂无可复制内容。");
+      setActionNotice(uiMessage("transcript.notice.nothingToCopy"));
       return;
     }
     try {
       await navigator.clipboard.writeText(transcriptDraft);
-      setActionNotice("已复制到剪贴板。");
+      setActionNotice(uiMessage("transcript.notice.copied"));
     } catch {
-      setActionNotice("复制失败，请手动选择文字稿复制。");
+      setActionNotice(uiMessage("transcript.notice.transcriptCopyFailed"));
     }
   }, [setActionNotice, transcriptDraft]);
 
@@ -211,38 +216,38 @@ export function useTranscriptDetailController({
       return;
     }
     if (detailTab === "transcript" && transcriptDirty) {
-      setActionNotice("文字稿有未保存修改，请先保存后再定位正式文件。");
+      setActionNotice(uiMessage("transcript.notice.unsavedLocate"));
       return;
     }
     const detailExportPath = getExportPath(detailTab, workflow);
     if (!detailExportPath) {
-      setActionNotice("暂无可导出的文件。");
+      setActionNotice(uiMessage("transcript.notice.noExport"));
       return;
     }
 
     try {
       await revealItemInDir(detailExportPath);
-      setActionNotice("已在文件管理器中定位导出文件。");
+      setActionNotice(uiMessage("transcript.notice.exportLocated"));
     } catch {
-      setActionNotice(`无法定位文件：${detailExportPath}`);
+      setActionNotice(uiMessage("transcript.notice.exportLocateFailed"));
     }
   }, [detailTab, setActionNotice, transcriptDirty, workflow]);
 
   const exportTranscript = useCallback(async () => {
     if (transcriptDirty) {
-      setActionNotice("文字稿有未保存修改，请先保存后再定位正式文件。");
+      setActionNotice(uiMessage("transcript.notice.unsavedLocate"));
       return;
     }
     const transcriptPath = getExportPath("transcript", workflow);
     if (!transcriptPath) {
-      setActionNotice("暂无可导出的文字稿文件。");
+      setActionNotice(uiMessage("transcript.notice.noTranscriptExport"));
       return;
     }
     try {
       await revealItemInDir(transcriptPath);
-      setActionNotice("已在文件管理器中定位文字稿文件。");
+      setActionNotice(uiMessage("transcript.notice.transcriptLocated"));
     } catch {
-      setActionNotice("无法定位文字稿文件。");
+      setActionNotice(uiMessage("transcript.notice.transcriptLocateFailed"));
     }
   }, [setActionNotice, transcriptDirty, workflow]);
 
@@ -255,7 +260,7 @@ export function useTranscriptDetailController({
       const audio = transcriptAudioRef.current;
       if (!audio || !transcriptDetail?.audio_asset_path) {
         setActiveTranscriptSegmentId(segment.id);
-        setActionNotice("当前任务没有可播放的本地音频，只能编辑文字稿。");
+        setActionNotice(uiMessage("transcript.notice.audioUnavailable"));
         return;
       }
 
@@ -272,7 +277,7 @@ export function useTranscriptDetailController({
       try {
         await audio.play();
       } catch {
-        setActionNotice("音频无法自动播放，请点击回听工具条继续。");
+        setActionNotice(uiMessage("transcript.notice.audioAutoplayFailed"));
       }
     },
     [activeTranscriptSegmentId, editingTranscriptSegmentId, setActionNotice, transcriptDetail?.audio_asset_path],
@@ -310,7 +315,7 @@ export function useTranscriptDetailController({
   const toggleTranscriptAudio = useCallback(async () => {
     const audio = transcriptAudioRef.current;
     if (!audio || !transcriptDetail?.audio_asset_path) {
-      setActionNotice("当前任务没有可播放的本地音频，只能编辑文字稿。");
+      setActionNotice(uiMessage("transcript.notice.audioUnavailable"));
       return;
     }
 
@@ -323,7 +328,7 @@ export function useTranscriptDetailController({
     try {
       await audio.play();
     } catch {
-      setActionNotice("音频无法播放，请确认本地音频文件仍然存在。");
+      setActionNotice(uiMessage("transcript.notice.audioPlaybackFailed"));
     }
   }, [setActionNotice, transcriptDetail?.audio_asset_path]);
 
@@ -406,18 +411,18 @@ export function useTranscriptDetailController({
           : current,
       );
       applyTranscriptSave(expectedTaskId, saved);
-      setActionNotice("文字稿已保存，后续 AI 整理会使用保存后的正式稿。");
+      setActionNotice(uiMessage("transcript.notice.saved"));
 
       if (resumeTranscriptAfterSaveRef.current && transcriptAudioRef.current) {
         resumeTranscriptAfterSaveRef.current = false;
         try {
           await transcriptAudioRef.current.play();
         } catch {
-          setActionNotice("文字稿已保存。音频无法自动继续，请手动点击播放器。");
+          setActionNotice(uiMessage("transcript.notice.savedAutoplayFailed"));
         }
       }
-    } catch (error) {
-      setActionNotice(`保存文字稿失败：${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      setActionNotice(uiMessage("transcript.notice.saveFailed"));
     } finally {
       setTranscriptSaving(false);
     }
@@ -460,7 +465,6 @@ export function useTranscriptDetailController({
     detailTab,
     openDetailTab,
     closeDetail,
-    detailTitle,
     detailText,
     exportPath,
     currentTranscriptPath,
@@ -477,7 +481,6 @@ export function useTranscriptDetailController({
     transcriptAudioPlaying,
     transcriptAudioRef,
     transcriptSegmentRefs,
-    transcriptSourceLabel,
     transcriptAudioSrc,
     transcriptAudioProgress,
     transcriptAudioScrubberMax,

@@ -20,6 +20,7 @@ from frameq_worker.download_reliability import (
     write_http_response_atomically,
     write_http_stream_atomically,
 )
+from frameq_worker.progress_events import build_worker_progress_event
 
 BILIBILI_DESKTOP_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -317,7 +318,7 @@ def download_bilibili_video(
     runner = command_runner or _run_command
     parsed = parse_bilibili_input(raw_input, http_client=client)
 
-    _emit_progress(progress_callback, "正在解析 Bilibili 公开视频信息。", 22)
+    _emit_progress(progress_callback, "bilibili.metadata.resolving", 22)
     view_response = client.get(
         build_video_info_url(parsed.id_kind, parsed.video_id),
         headers=_api_headers(),
@@ -331,7 +332,7 @@ def download_bilibili_video(
         )
     selected_page = video_info.pages[parsed.part_index]
 
-    _emit_progress(progress_callback, "正在探测 Bilibili 可用 DASH 流。", 26)
+    _emit_progress(progress_callback, "bilibili.stream.probing", 26)
     playurl_response = client.get(
         build_playurl_url(video_info.bvid, selected_page.cid),
         headers=_api_headers(),
@@ -355,19 +356,19 @@ def download_bilibili_video(
     merge_temp_path = output_dir / f"{stem}.merge.mp4"
 
     try:
-        _emit_progress(progress_callback, "正在下载 Bilibili DASH 视频流。", 30)
+        _emit_progress(progress_callback, "bilibili.video.downloading", 30)
         _download_first_available_url(
             [selection.video_url, *selection.video_backup_urls],
             video_temp_path,
             client,
         )
-        _emit_progress(progress_callback, "正在下载 Bilibili DASH 音频流。", 32)
+        _emit_progress(progress_callback, "bilibili.audio.downloading", 32)
         _download_first_available_url(
             [selection.audio_url, *selection.audio_backup_urls],
             audio_temp_path,
             client,
         )
-        _emit_progress(progress_callback, "正在合并 Bilibili 视频和音频。", 34)
+        _emit_progress(progress_callback, "bilibili.media.merging", 34)
         _merge_dash_files(video_temp_path, audio_temp_path, merge_temp_path, runner)
         os.replace(merge_temp_path, output_path)
     except BilibiliFallbackError:
@@ -920,13 +921,16 @@ def _get_int(mapping: Mapping[str, object], key: str) -> int:
         return 0
 
 
-def _emit_progress(progress_callback: object | None, message: str, progress: int) -> None:
+def _emit_progress(
+    progress_callback: object | None,
+    message_code: str,
+    progress: int,
+) -> None:
+    event = build_worker_progress_event(
+        message_code,
+        stage="video_extracting",
+        progress=progress,
+    )
     if not callable(progress_callback):
         return
-    progress_callback(
-        {
-            "stage": "video_extracting",
-            "message": message,
-            "progress": progress,
-        }
-    )
+    progress_callback(event)

@@ -1,3 +1,6 @@
+use crate::progress_event::{
+    cancelled_model_download_event, invalid_progress_log_detail, validate_model_download_event,
+};
 use crate::settings::{
     asr_model_source, configured_env_value, env_path, legacy_local_llm_env_removals,
     parse_dotenv_values, ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV,
@@ -194,12 +197,27 @@ fn download_asr_model_blocking(
         return Err("Could not capture ASR model download stderr.".to_string());
     };
     let progress_window = window.clone();
+    let progress_paths = paths.clone();
     let stderr_reader = std::thread::spawn(move || {
         let mut diagnostic_lines = Vec::new();
         for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             if let Some(raw_event) = line.strip_prefix(MODEL_DOWNLOAD_EVENT_PREFIX) {
-                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw_event) {
+                let parsed = serde_json::from_str::<serde_json::Value>(raw_event).ok();
+                if let Some(payload) = parsed
+                    .as_ref()
+                    .and_then(|payload| validate_model_download_event(payload).ok())
+                {
                     let _ = progress_window.emit(ASR_MODEL_DOWNLOAD_EVENT_NAME, payload);
+                } else {
+                    let detail = parsed
+                        .as_ref()
+                        .map(invalid_progress_log_detail)
+                        .unwrap_or_else(|| "message_code=invalid".to_string());
+                    let _ = append_desktop_log(
+                        &progress_paths,
+                        "worker.model_progress.invalid",
+                        &detail,
+                    );
                 }
             } else if !line.trim().is_empty() {
                 diagnostic_lines.push(line);
@@ -260,11 +278,7 @@ fn download_asr_model_blocking(
         );
         let _ = window.emit(
             ASR_MODEL_DOWNLOAD_EVENT_NAME,
-            serde_json::json!({
-                "status": "cancelled",
-                "message": "ASR model download was cancelled.",
-                "progress": 0
-            }),
+            cancelled_model_download_event(),
         );
         return Ok(AsrModelDownloadResult {
             started: false,
@@ -321,7 +335,9 @@ pub(crate) fn cancel_asr_model_download(
 
 #[cfg(test)]
 mod tests {
-    use super::{asr_model_available, build_model_download_command_spec};
+    use super::{
+        asr_model_available, build_model_download_command_spec, cancelled_model_download_event,
+    };
     use crate::settings::supported_asr_models;
     use crate::{bundled_python_path, path_to_env_string, RuntimePaths, WorkerCommandSpec};
     use std::collections::HashMap;
@@ -362,6 +378,17 @@ mod tests {
             supported_asr_models(),
             vec!["iic/SenseVoiceSmall".to_string()]
         );
+    }
+
+    #[test]
+    fn synthesized_model_cancellation_uses_structured_contract_event() {
+        let payload = cancelled_model_download_event();
+
+        assert_eq!(payload["status"], "cancelled");
+        assert_eq!(payload["progress"], 0);
+        assert_eq!(payload["message_code"], "model.download.cancelled");
+        assert!(payload.get("message").is_none());
+        assert!(payload.get("current_file").is_none());
     }
 
     #[test]

@@ -1,26 +1,46 @@
 import type { Insight } from "./insightPreferences";
+import type { SupportedLocale } from "./i18n/locale";
+import { resources } from "./i18n/resources";
 import type { TaskArtifactKey, WorkflowState } from "./workflowState";
 
 export type DetailTab = "summary" | "insights" | "transcript";
 export type ExportTarget = DetailTab | "video" | "audio";
 
-export function getDetailText(tab: DetailTab, state: WorkflowState): string {
+export function getDetailText(
+  tab: DetailTab,
+  state: WorkflowState,
+  locale: SupportedLocale,
+): string {
   if (tab === "transcript") {
     return state.text.trim();
   }
   if (tab === "summary") {
     return state.summary.trim();
   }
-  return state.insights.map(formatInsightForCopy).join("\n\n");
+  return state.insights
+    .map((insight, index) => formatInsightForCopy(insight, index, locale))
+    .join("\n\n");
 }
 
-function formatInsightForCopy(insight: Insight, index: number): string {
+function formatInsightForCopy(
+  insight: Insight,
+  index: number,
+  locale: SupportedLocale,
+): string {
+  const copy = resources[locale].synthesis.detail;
+  const separator = copy.fieldSeparator;
+  const questions = new Intl.ListFormat(locale, {
+    style: "long",
+    type: "conjunction",
+  }).format(insight.followUpQuestions);
   return [
     `${index + 1}. ${insight.topic}`,
-    `匹配理由：${insight.matchReason}`,
-    `启发问题：${insight.followUpQuestions.join("；")}`,
-    `适合用途：${insight.suitableUse}`,
-    insight.sourceChunkId === null ? "" : `来源片段：${insight.sourceChunkId}`,
+    `${copy.matchReason}${separator}${insight.matchReason}`,
+    `${copy.questions}${separator}${questions}`,
+    `${copy.suitableUse}${separator}${insight.suitableUse}`,
+    insight.sourceChunkId === null
+      ? ""
+      : `${copy.sourceChunk}${separator}${insight.sourceChunkId}`,
   ]
     .filter(Boolean)
     .join("\n");

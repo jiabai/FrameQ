@@ -3,10 +3,14 @@ from pathlib import Path
 import pytest
 from frameq_worker.douyin_fallback import (
     DOUYIN_MOBILE_USER_AGENT,
+    PLAY_QUALITIES,
     DouyinFallbackError,
     DouyinStreamCandidate,
     HttpResponse,
+    build_play_url,
+    build_share_page_url,
     collect_stream_candidates,
+    download_douyin_video,
     download_first_available_candidate,
     extract_aweme_id,
     parse_share_page_router_data,
@@ -222,6 +226,119 @@ def test_download_first_available_candidate_retries_next_stream_on_failure(
     assert [call[0] for call in client.calls] == [first.url, second.url]
     assert {
         "stage": "video_extracting",
-        "message": "最高质量视频流暂不可用，正在尝试另一个可用视频流。",
         "progress": 30,
+        "message_code": "douyin.stream.retrying",
+        "message_args": {"attempt": 2, "total": 2},
     } in events
+
+
+@pytest.mark.parametrize("with_callback", [False, True])
+def test_retry_progress_never_interrupts_more_than_100_real_candidates(
+    tmp_path: Path,
+    with_callback: bool,
+) -> None:
+    candidates = [
+        DouyinStreamCandidate(
+            "1080p",
+            f"https://cdn.example/{index}.mp4",
+            10_000 - index,
+        )
+        for index in range(101)
+    ]
+    client = FakeHttpClient(
+        {
+            candidates[0].url: [TimeoutError("timed out")],
+            candidates[1].url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "video/mp4"},
+                    body=b"second candidate",
+                    url=candidates[1].url,
+                )
+            ],
+        }
+    )
+    events: list[dict[str, object]] = []
+
+    path = download_first_available_candidate(
+        aweme_id="7653372612151692594",
+        candidates=candidates,
+        output_dir=tmp_path,
+        http_client=client,
+        progress_callback=events.append if with_callback else None,
+    )
+
+    assert path.read_bytes() == b"second candidate"
+    assert [call[0] for call in client.calls] == [candidates[0].url, candidates[1].url]
+    assert events == []
+
+
+def test_download_douyin_video_emits_closed_structured_progress(tmp_path: Path) -> None:
+    aweme_id = "7653372612151692594"
+    video_uri = "v0200fg10000demo"
+    share_html = f"""
+    <script>window._ROUTER_DATA = {{
+      "loaderData": {{"video_(id)/page": {{"videoInfoRes": {{"item_list": [{{
+        "aweme_id": "{aweme_id}",
+        "video": {{"play_addr": {{"uri": "{video_uri}"}}}}
+      }}]}}}}}}
+    }};</script>
+    """
+    responses: dict[str, list[HttpResponse | Exception]] = {
+        build_share_page_url(aweme_id): [
+            HttpResponse(200, {"Content-Type": "text/html"}, share_html.encode(), "share")
+        ],
+        "https://cdn.example/video.mp4": [
+            HttpResponse(
+                200,
+                {"Content-Type": "video/mp4"},
+                b"video",
+                "https://cdn.example/video.mp4",
+            )
+        ],
+    }
+    for quality in PLAY_QUALITIES:
+        play_url = build_play_url(video_uri, quality)
+        if quality == "1080p":
+            responses[play_url] = [
+                HttpResponse(
+                    206,
+                    {
+                        "Content-Type": "video/mp4",
+                        "Content-Range": "bytes 0-1/5000",
+                    },
+                    b"ok",
+                    "https://cdn.example/video.mp4",
+                )
+            ]
+        else:
+            responses[play_url] = [HttpResponse(404, {}, b"", play_url)]
+    client = FakeHttpClient(responses)
+    events: list[dict[str, object]] = []
+
+    result = download_douyin_video(
+        f"https://www.douyin.com/video/{aweme_id}",
+        output_dir=tmp_path,
+        http_client=client,
+        progress_callback=events.append,
+    )
+
+    assert result.read_bytes() == b"video"
+    assert events == [
+        {
+            "stage": "video_extracting",
+            "progress": 22,
+            "message_code": "douyin.page.resolving",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 26,
+            "message_code": "douyin.stream.probing",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 30,
+            "message_code": "douyin.video.saving",
+        },
+    ]
+    assert all("message" not in event for event in events)

@@ -4,6 +4,14 @@ export type ModelDownloadOperationSnapshot = {
   phase: "running" | "cancelling" | "finished";
 };
 
+export type AsrModelDownloadLocalPhase =
+  | "idle"
+  | "running"
+  | "cancelling"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
 export const MODEL_DOWNLOAD_STALLED_MS = 45_000;
 
 export function shouldApplyModelDownloadUpdate({

@@ -1,14 +1,15 @@
 use crate::account;
+use crate::progress_event::{invalid_progress_log_detail, validate_worker_progress_event};
 use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::task_manifest;
+use crate::worker_command::ProcessSupervisor;
 use crate::{
     append_desktop_log, build_worker_command_spec, ensure_runtime_dirs,
-    parse_worker_output_or_fallback, parse_worker_stdout,
-    path_to_env_string, resolve_runtime_paths, run_blocking_worker_command,
-    spawn_supervised_worker_command, summarize_worker_result_for_log, terminate_process_tree,
-    worker_command_log_detail, worker_exit_log_detail, CancelProcessResult, ProcessPhase,
-    ProcessSupervisors, SupervisedSpawnError, WorkerInvocation, PROGRESS_EVENT_NAME,
-    PROGRESS_EVENT_PREFIX,
+    parse_worker_output_or_fallback, parse_worker_stdout, path_to_env_string,
+    resolve_runtime_paths, run_blocking_worker_command, spawn_supervised_worker_command,
+    summarize_worker_result_for_log, terminate_process_tree, worker_command_log_detail,
+    worker_exit_log_detail, CancelProcessResult, ProcessPhase, ProcessSupervisors,
+    SupervisedSpawnError, WorkerInvocation, PROGRESS_EVENT_NAME, PROGRESS_EVENT_PREFIX,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,12 +38,89 @@ struct ProcessVideoWorkerRequest<'a> {
     insightflow_mode: &'a str,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+pub(crate) const INVALID_RETRY_PAYLOAD: &str = "INVALID_RETRY_PAYLOAD";
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+pub(crate) enum RetryInsightsTarget {
+    #[serde(rename = "summary")]
+    Summary,
+    #[serde(rename = "insights")]
+    Insights,
+}
+
+impl RetryInsightsTarget {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Summary => "summary",
+            Self::Insights => "insights",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+pub(crate) enum OutputLanguage {
+    #[serde(rename = "zh-CN")]
+    ZhCn,
+    #[serde(rename = "zh-TW")]
+    ZhTw,
+    #[serde(rename = "en-US")]
+    EnUs,
+}
+
+impl OutputLanguage {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ZhCn => "zh-CN",
+            Self::ZhTw => "zh-TW",
+            Self::EnUs => "en-US",
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 pub(crate) struct RetryInsightsRequest {
     task_id: String,
-    target: String,
+    target: RetryInsightsTarget,
+    output_language: OutputLanguage,
     #[serde(skip_serializing_if = "Option::is_none")]
     preference_snapshot: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetryInsightsWireRequest {
+    task_id: String,
+    target: RetryInsightsTarget,
+    output_language: OutputLanguage,
+    preference_snapshot: Option<serde_json::Value>,
+}
+
+pub(crate) fn parse_retry_insights_request(
+    payload: serde_json::Value,
+) -> Result<RetryInsightsRequest, String> {
+    if payload
+        .as_object()
+        .and_then(|object| object.get("preference_snapshot"))
+        .is_some_and(|snapshot| !snapshot.is_object())
+    {
+        return Err(INVALID_RETRY_PAYLOAD.to_string());
+    }
+    let wire: RetryInsightsWireRequest =
+        serde_json::from_value(payload).map_err(|_| INVALID_RETRY_PAYLOAD.to_string())?;
+    if wire
+        .preference_snapshot
+        .as_ref()
+        .is_some_and(|snapshot| !snapshot.is_object())
+        || (wire.target == RetryInsightsTarget::Summary && wire.preference_snapshot.is_some())
+    {
+        return Err(INVALID_RETRY_PAYLOAD.to_string());
+    }
+    Ok(RetryInsightsRequest {
+        task_id: wire.task_id,
+        target: wire.target,
+        output_language: wire.output_language,
+        preference_snapshot: wire.preference_snapshot,
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -171,12 +249,23 @@ fn process_video_blocking(
         return Err("Could not capture worker stderr.".to_string());
     };
     let progress_window = window.clone();
+    let progress_paths = paths.clone();
     let stderr_reader = std::thread::spawn(move || {
         let mut diagnostic_lines = Vec::new();
         for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             if let Some(raw_event) = line.strip_prefix(PROGRESS_EVENT_PREFIX) {
-                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw_event) {
+                let parsed = serde_json::from_str::<serde_json::Value>(raw_event).ok();
+                if let Some(payload) = parsed
+                    .as_ref()
+                    .and_then(|payload| validate_worker_progress_event(payload).ok())
+                {
                     let _ = progress_window.emit(PROGRESS_EVENT_NAME, payload);
+                } else {
+                    let detail = parsed
+                        .as_ref()
+                        .map(invalid_progress_log_detail)
+                        .unwrap_or_else(|| "message_code=invalid".to_string());
+                    let _ = append_desktop_log(&progress_paths, "worker.progress.invalid", &detail);
                 }
             } else if !line.trim().is_empty() {
                 diagnostic_lines.push(line);
@@ -493,15 +582,21 @@ fn resolve_source_identity_for_cache(
 
 #[tauri::command]
 pub(crate) async fn retry_insights(
+    window: Window,
     app: AppHandle,
     process_state: State<'_, Arc<ProcessSupervisors>>,
-    request: RetryInsightsRequest,
+    request: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+    let request = parse_retry_insights_request(request)?;
     let process_state = Arc::clone(process_state.inner());
-    run_blocking_worker_command(move || retry_insights_blocking(app, process_state, request)).await
+    run_blocking_worker_command(move || {
+        retry_insights_blocking(window, app, process_state, request)
+    })
+    .await
 }
 
 fn retry_insights_blocking(
+    window: Window,
     app: AppHandle,
     process_state: Arc<ProcessSupervisors>,
     request: RetryInsightsRequest,
@@ -519,31 +614,58 @@ fn retry_insights_blocking(
     let _ = append_desktop_log(
         &paths,
         "worker.retry_insights.start",
-        &worker_command_log_detail(&spec, "retry_insights"),
+        &retry_diagnostic_detail(&request, "started", None),
     );
-    let (child, worker_instance) = match spawn_supervised_worker_command(spec, &process_state.video)
-    {
-        Ok(spawned) => spawned,
-        Err(SupervisedSpawnError::Cancelled) => {
-            return Ok(cancelled_worker_result(
-                "insights_generating",
-                "partial_completed",
-            ));
-        }
-        Err(SupervisedSpawnError::AlreadyRunning) => {
-            return Ok(worker_already_running_result(
-                "insights_generating",
-                "partial_completed",
-            ));
-        }
-        Err(SupervisedSpawnError::Failed(_)) => {
-            return Ok(worker_transport_failure_result(
-                "insights_generating",
-                "partial_completed",
-            ));
-        }
-    };
+    let (mut child, worker_instance) =
+        match spawn_supervised_worker_command(spec, &process_state.video) {
+            Ok(spawned) => spawned,
+            Err(SupervisedSpawnError::Cancelled) => {
+                return Ok(cancelled_worker_result(
+                    "insights_generating",
+                    "partial_completed",
+                ));
+            }
+            Err(SupervisedSpawnError::AlreadyRunning) => {
+                return Ok(worker_already_running_result(
+                    "insights_generating",
+                    "partial_completed",
+                ));
+            }
+            Err(SupervisedSpawnError::Failed(_)) => {
+                return Ok(worker_transport_failure_result(
+                    "insights_generating",
+                    "partial_completed",
+                ));
+            }
+        };
     let worker_pid = worker_instance.pid;
+
+    let Some(stderr) = child.stderr.take() else {
+        process_state.video.finish(worker_instance.instance_id);
+        let _ = terminate_process_tree(worker_pid);
+        return Err("Could not capture worker stderr.".to_string());
+    };
+    let progress_paths = paths.clone();
+    let stderr_reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            let Some(raw_event) = line.strip_prefix(PROGRESS_EVENT_PREFIX) else {
+                continue;
+            };
+            let parsed = serde_json::from_str::<serde_json::Value>(raw_event).ok();
+            if let Some(payload) = parsed
+                .as_ref()
+                .and_then(|payload| validate_worker_progress_event(payload).ok())
+            {
+                let _ = window.emit(PROGRESS_EVENT_NAME, payload);
+            } else {
+                let detail = parsed
+                    .as_ref()
+                    .map(invalid_progress_log_detail)
+                    .unwrap_or_else(|| "message_code=invalid".to_string());
+                let _ = append_desktop_log(&progress_paths, "worker.progress.invalid", &detail);
+            }
+        }
+    });
 
     let output = match child.wait_with_output() {
         Ok(output) => output,
@@ -552,12 +674,22 @@ fn retry_insights_blocking(
             return Err(error.to_string());
         }
     };
-    let terminal_phase = process_state.video.finish(worker_instance.instance_id);
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let terminal_phase =
+        finish_retry_after_reader(&process_state.video, worker_instance.instance_id, || {
+            let _ = stderr_reader.join();
+        });
     let _ = append_desktop_log(
         &paths,
         "worker.retry_insights.exit",
-        &worker_exit_log_detail(worker_pid, &output, &stderr),
+        &retry_diagnostic_detail(
+            &request,
+            if output.status.success() {
+                "exited"
+            } else {
+                "failed"
+            },
+            (!output.status.success()).then_some("WORKER_EXIT_FAILED"),
+        ),
     );
 
     let parsed = match parse_worker_stdout(&output.stdout) {
@@ -569,7 +701,7 @@ fn retry_insights_blocking(
         let _ = append_desktop_log(
             &paths,
             "worker.retry_insights.result",
-            &summarize_worker_result_for_log(&parsed),
+            &retry_result_log_detail(&request, &parsed),
         );
         return Ok(parsed);
     }
@@ -578,7 +710,7 @@ fn retry_insights_blocking(
         let _ = append_desktop_log(
             &paths,
             "worker.retry_insights.cancelled",
-            &format!("pid={worker_pid}"),
+            &retry_diagnostic_detail(&request, "cancelled", Some("WORKER_CANCELLED")),
         );
         return Ok(serde_json::json!(ProcessVideoResult {
             status: "partial_completed".to_string(),
@@ -619,9 +751,77 @@ fn retry_insights_blocking(
     let _ = append_desktop_log(
         &paths,
         "worker.retry_insights.result",
-        &summarize_worker_result_for_log(&parsed),
+        &retry_result_log_detail(&request, &parsed),
     );
     Ok(parsed)
+}
+
+fn finish_retry_after_reader<F>(
+    supervisor: &ProcessSupervisor,
+    instance_id: u64,
+    join_reader: F,
+) -> Option<ProcessPhase>
+where
+    F: FnOnce(),
+{
+    let terminal_phase = supervisor.finish(instance_id);
+    join_reader();
+    terminal_phase
+}
+
+fn retry_diagnostic_detail(
+    request: &RetryInsightsRequest,
+    status: &str,
+    error_code: Option<&str>,
+) -> String {
+    let mut detail = format!(
+        "target={} output_language={} status={}",
+        request.target.as_str(),
+        request.output_language.as_str(),
+        safe_retry_status(status)
+    );
+    if let Some(error_code) = error_code {
+        detail.push_str(" error_code=");
+        detail.push_str(&safe_retry_error_code(error_code));
+    }
+    detail
+}
+
+fn retry_result_log_detail(request: &RetryInsightsRequest, result: &serde_json::Value) -> String {
+    let status = result
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("unknown");
+    let error_code = result
+        .get("error")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|error| error.get("code"))
+        .and_then(serde_json::Value::as_str);
+    retry_diagnostic_detail(request, status, error_code)
+}
+
+fn safe_retry_status(status: &str) -> &'static str {
+    match status {
+        "started" => "started",
+        "exited" => "exited",
+        "completed" => "completed",
+        "partial_completed" => "partial_completed",
+        "failed" => "failed",
+        "cancelled" => "cancelled",
+        _ => "unknown",
+    }
+}
+
+fn safe_retry_error_code(code: &str) -> String {
+    if (1..=64).contains(&code.len())
+        && code
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+    {
+        code.to_string()
+    } else {
+        "INVALID_ERROR_CODE".to_string()
+    }
 }
 
 fn worker_failure_result(
@@ -699,12 +899,17 @@ fn apply_configured_asr_model_to_request(
 mod tests {
     use super::{
         apply_configured_asr_model_to_request, cached_process_result_for_identity,
-        cached_process_result_for_request, serialize_process_video_request, ProcessVideoRequest,
-        RetryInsightsRequest,
+        cached_process_result_for_request, finish_retry_after_reader, parse_retry_insights_request,
+        retry_result_log_detail, serialize_process_video_request, ProcessVideoRequest,
+        INVALID_RETRY_PAYLOAD,
     };
+    use crate::worker_command::{CancelRequestOutcome, ProcessSupervisor};
     use crate::{path_to_env_string, task_manifest::SourceIdentity};
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::{mpsc, Arc};
+    use std::thread;
+    use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -1064,6 +1269,7 @@ mod tests {
         let payload = serde_json::json!({
             "task_id": "20260705-153012-douyin-demo",
             "target": "insights",
+            "output_language": "zh-TW",
             "preference_snapshot": {
                 "profile": null,
                 "profileSkipped": true,
@@ -1082,16 +1288,174 @@ mod tests {
             }
         });
 
-        let request: RetryInsightsRequest =
-            serde_json::from_value(payload).expect("deserialize retry request");
+        let request = parse_retry_insights_request(payload).expect("deserialize retry request");
         let serialized = serde_json::to_value(&request).expect("serialize retry request");
 
         assert_eq!(serialized["target"], "insights");
+        assert_eq!(serialized["output_language"], "zh-TW");
         assert_eq!(
             serialized["preference_snapshot"]["generationPreferences"]["goal"],
             "content_creation"
         );
         assert_eq!(serialized["preference_snapshot"]["profileSkipped"], true);
+    }
+
+    #[test]
+    fn retry_insights_request_rejects_missing_or_invalid_output_language() {
+        for payload in [
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "summary"
+            }),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "summary",
+                "output_language": "fr-FR"
+            }),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "summary",
+                "output_language": 7
+            }),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "draft",
+                "output_language": "en-US"
+            }),
+            serde_json::json!({
+                "task_id": 7,
+                "target": "summary",
+                "output_language": "en-US"
+            }),
+        ] {
+            let error = parse_retry_insights_request(payload).expect_err("reject retry request");
+            assert_eq!(error, INVALID_RETRY_PAYLOAD);
+        }
+    }
+
+    #[test]
+    fn retry_insights_request_rejects_unknown_fields_and_summary_snapshot() {
+        for payload in [
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "summary",
+                "output_language": "en-US",
+                "legacy_default": true
+            }),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "summary",
+                "output_language": "en-US",
+                "preference_snapshot": {}
+            }),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "insights",
+                "output_language": "en-US",
+                "preference_snapshot": null
+            }),
+        ] {
+            let error = parse_retry_insights_request(payload).expect_err("reject retry request");
+            assert_eq!(error, INVALID_RETRY_PAYLOAD);
+        }
+    }
+
+    #[test]
+    fn retry_insights_request_accepts_exactly_three_output_languages() {
+        for output_language in ["zh-CN", "zh-TW", "en-US"] {
+            let payload = serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "summary",
+                "output_language": output_language
+            });
+
+            let request = parse_retry_insights_request(payload).expect("valid retry request");
+            let serialized = serde_json::to_value(request).expect("serialize retry request");
+
+            assert_eq!(serialized["output_language"], output_language);
+        }
+    }
+
+    #[test]
+    fn retry_insights_request_rejects_non_object_snapshot_without_echoing_input() {
+        let payload = serde_json::json!({
+            "task_id": "task-secret-value",
+            "target": "insights",
+            "output_language": "en-US",
+            "preference_snapshot": "prompt-secret-value"
+        });
+
+        let error = parse_retry_insights_request(payload).expect_err("reject snapshot");
+
+        assert_eq!(error, INVALID_RETRY_PAYLOAD);
+        assert!(!error.contains("task-secret-value"));
+        assert!(!error.contains("prompt-secret-value"));
+    }
+
+    #[test]
+    fn retry_result_diagnostic_contains_only_validated_target_language_status_and_code() {
+        let request = parse_retry_insights_request(serde_json::json!({
+            "task_id": "private-task-id",
+            "target": "insights",
+            "output_language": "zh-CN",
+            "preference_snapshot": {"prompt": "private-preference"}
+        }))
+        .expect("valid retry request");
+        let result = serde_json::json!({
+            "status": "partial_completed",
+            "task_id": "private-task-id",
+            "summary": "private generated body",
+            "error": {
+                "code": "LLM_REQUEST_FAILED",
+                "message": "provider said prompt-secret https://secret.example"
+            }
+        });
+
+        let detail = retry_result_log_detail(&request, &result);
+
+        assert_eq!(
+            detail,
+            "target=insights output_language=zh-CN status=partial_completed error_code=LLM_REQUEST_FAILED"
+        );
+        for forbidden in [
+            "private-task-id",
+            "private-preference",
+            "private generated body",
+            "provider said",
+            "prompt-secret",
+            "https://",
+        ] {
+            assert!(!detail.contains(forbidden));
+        }
+    }
+
+    #[test]
+    fn exited_retry_is_not_cancellable_while_stderr_reader_finishes() {
+        let supervisor = Arc::new(ProcessSupervisor::default());
+        let instance = supervisor.start(42_424).expect("start retry worker");
+        let (reader_entered_tx, reader_entered_rx) = mpsc::channel();
+        let (release_reader_tx, release_reader_rx) = mpsc::channel();
+        let cleanup_supervisor = Arc::clone(&supervisor);
+        let cleanup = thread::spawn(move || {
+            finish_retry_after_reader(&cleanup_supervisor, instance.instance_id, || {
+                reader_entered_tx.send(()).expect("signal reader join");
+                release_reader_rx.recv().expect("release reader join");
+            })
+        });
+
+        reader_entered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("reader join started");
+        let mut terminator_called = false;
+        let cancellation = supervisor.request_cancel(|_| {
+            terminator_called = true;
+            Ok(())
+        });
+        release_reader_tx.send(()).expect("release reader");
+        cleanup.join().expect("join cleanup thread");
+
+        assert_eq!(cancellation, CancelRequestOutcome::NotRunning);
+        assert!(!terminator_called);
     }
 
     #[test]

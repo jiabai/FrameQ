@@ -1,14 +1,39 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-US" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <title>FrameQ</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: #f3f5f8;
+      }
+
+      .frameq-bootstrap-shell {
+        align-items: center;
+        color: #27292e;
+        display: flex;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        font-size: 1rem;
+        font-weight: 700;
+        height: 100%;
+        justify-content: center;
+        letter-spacing: -0.01em;
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="frameq-bootstrap-shell" aria-label="FrameQ">FrameQ</div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

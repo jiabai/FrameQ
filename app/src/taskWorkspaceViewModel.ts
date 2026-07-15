@@ -2,10 +2,13 @@ import {
   canGenerateAiWithAccount,
   type AccountStatus,
 } from "./accountState";
+import { uiMessage, type UiMessage } from "./i18n/uiMessage";
 import type {
   InsightRetryTarget,
+  ProgressMessageDescriptor,
   ProgressStep,
   WorkflowState,
+  WorkflowStage,
 } from "./workflowState";
 
 export type WorkspaceCancellationOwner = "local" | "ai" | null;
@@ -26,10 +29,17 @@ export type AiTargetViewModel = {
   errorCode: string | null;
 };
 
-const LOCAL_PROGRESS_STEPS: Array<Pick<ProgressStep, "id" | "label">> = [
-  { id: "video_extracting", label: "视频提取中" },
-  { id: "video_transcribing", label: "文字稿转译中" },
+const LOCAL_PROGRESS_STEPS: Array<Pick<ProgressStep, "id">> = [
+  { id: "video_extracting" },
+  { id: "video_transcribing" },
 ];
+
+export type TaskStatusBannerViewModel = {
+  kind: "local_complete" | "local_failed" | "local_processing" | "idle";
+  stage: WorkflowStage;
+  message: UiMessage | null;
+  progressMessage: ProgressMessageDescriptor | null;
+};
 
 function hasSavedTranscript(workflow: WorkflowState): boolean {
   return Boolean(
@@ -143,22 +153,30 @@ export function createTaskWorkspaceViewModel(
       : "ready";
 
   return {
-    banner: transcriptReady
-      ? {
-          kind: "local_complete" as const,
-          message: "视频、音频和文字稿已保存在本机。",
-        }
-      : localPhase === "failed"
+    banner: {
+      ...(transcriptReady
         ? {
-            kind: "local_failed" as const,
-            message: workflow.error?.code
-              ? `本地处理失败：${workflow.error.code}`
-              : "本地处理失败。",
+            kind: "local_complete" as const,
+            message: uiMessage("workflow.banner.localCompleteMessage"),
+            progressMessage: null,
           }
-        : {
-            kind: localProcessing ? ("local_processing" as const) : ("idle" as const),
-            message: workflow.statusMessage,
-          },
+        : localPhase === "failed"
+          ? {
+              kind: "local_failed" as const,
+              message: workflow.error?.code
+                ? uiMessage("workflow.banner.localFailedWithCode", {
+                    code: workflow.error.code,
+                  })
+                : uiMessage("workflow.banner.localFailedMessage"),
+              progressMessage: null,
+            }
+          : {
+              kind: localProcessing ? ("local_processing" as const) : ("idle" as const),
+              message: workflow.progressMessage === null ? workflow.statusMessage : null,
+              progressMessage: workflow.progressMessage,
+            }),
+      stage: workflow.stage,
+    } satisfies TaskStatusBannerViewModel,
     cancellationOwner: cancellationOwner(workflow),
     local: {
       taskId: workflow.taskId,
@@ -166,7 +184,7 @@ export function createTaskWorkspaceViewModel(
       progressSteps: localProgressSteps(workflow),
       canReview: transcriptReady,
       canEdit: transcriptReady && !readOnly,
-      readOnlyReason: readOnly ? "AI 正在使用已保存版本" : null,
+      readOnly,
       error: !transcriptReady && workflow.error?.stage !== "insights_generating"
         ? workflow.error
         : null,

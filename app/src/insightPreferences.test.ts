@@ -1,14 +1,17 @@
 import { describe, expect, test } from "vitest";
 import {
   buildPreferenceSnapshot,
-  getOptionLabel,
-  summarizeGenerationPreferences,
-  summarizeInspirationProfile,
+  isPreferenceOptionId,
   validateGenerationPreferences,
   validateInspirationProfile,
   type GenerationPreferences,
   type InspirationProfile,
 } from "./insightPreferences";
+import {
+  getPreferenceFieldPresentation,
+  summarizeGenerationPreferences,
+  summarizeInspirationProfile,
+} from "./i18n/preferencePresentation";
 
 const VALID_PROFILE: InspirationProfile = {
   role: "marketing_sales",
@@ -33,8 +36,15 @@ const VALID_GENERATION_PREFERENCES: GenerationPreferences = {
 describe("insight preferences", () => {
   test("validates a complete inspiration profile with field-scoped option ids", () => {
     expect(validateInspirationProfile(VALID_PROFILE)).toEqual(VALID_PROFILE);
-    expect(getOptionLabel("role", "marketing_sales")).toBe("市场/销售");
-    expect(getOptionLabel("domain", "marketing_sales")).toBe("市场销售");
+    expect(isPreferenceOptionId("role", "marketing_sales")).toBe(true);
+    expect(getPreferenceFieldPresentation("zh-CN", "role").options).toContainEqual({
+      id: "marketing_sales",
+      label: "市场/销售",
+    });
+    expect(getPreferenceFieldPresentation("zh-CN", "domain").options).toContainEqual({
+      id: "marketing_sales",
+      label: "市场销售",
+    });
   });
 
   test("rejects invalid inspiration profiles instead of silently defaulting them", () => {
@@ -80,7 +90,7 @@ describe("insight preferences", () => {
   });
 
   test("renders concise summaries from current option labels", () => {
-    expect(summarizeInspirationProfile(VALID_PROFILE)).toEqual([
+    expect(summarizeInspirationProfile(VALID_PROFILE, "zh-CN")).toEqual([
       "我的角色：市场/销售",
       "职业领域：市场销售",
       "年龄/阶段：管理者",
@@ -89,7 +99,7 @@ describe("insight preferences", () => {
       "默认表达偏好：直接犀利",
     ]);
 
-    expect(summarizeGenerationPreferences(VALID_GENERATION_PREFERENCES)).toEqual([
+    expect(summarizeGenerationPreferences(VALID_GENERATION_PREFERENCES, "zh-CN")).toEqual([
       "本次目标：内容创作",
       "使用场景：发短视频",
       "关注角度：选题角度、实操建议",

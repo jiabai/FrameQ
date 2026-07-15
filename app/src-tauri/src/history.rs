@@ -89,7 +89,11 @@ pub(crate) fn get_history_detail(
         "history.detail",
         &format!(
             "outcome={} elapsed_ms={}",
-            if result.is_ok() { "completed" } else { "rejected" },
+            if result.is_ok() {
+                "completed"
+            } else {
+                "rejected"
+            },
             started.elapsed().as_millis()
         ),
     );
@@ -151,9 +155,9 @@ fn history_item_from_manifest_path(
         task_dir: task_manifest::path_to_frontend_string(&task_dir),
         output_dir: task_manifest::path_to_frontend_string(output_root),
         artifacts,
-        error: manifest
-            .error
-            .map(|error| HistoryListErrorView { code: error.safe_code() }),
+        error: manifest.error.map(|error| HistoryListErrorView {
+            code: error.safe_code(),
+        }),
         text_preview: manifest.text_preview,
         insights_count: manifest.insights_count,
     }))
@@ -227,11 +231,11 @@ fn read_insights_artifact(
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manifest;
     use super::{
         load_history_detail_from_output_root, load_history_from_output_root,
         load_history_with_stats, HistoryDetailRequest,
     };
+    use crate::task_manifest;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -610,8 +614,11 @@ mod tests {
         assert_eq!(history.len(), 1);
         let detail = load_history_detail_from_output_root(
             &output_root,
-            HistoryDetailRequest { task_id: task_id.to_string() },
-        ).expect("load detail");
+            HistoryDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect("load detail");
         assert!(detail.insights.is_empty());
     }
 
@@ -630,8 +637,11 @@ mod tests {
         assert_eq!(history.len(), 1);
         let detail = load_history_detail_from_output_root(
             &output_root,
-            HistoryDetailRequest { task_id: task_id.to_string() },
-        ).expect("load detail");
+            HistoryDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect("load detail");
         assert!(detail.insights.is_empty());
     }
 
@@ -640,8 +650,9 @@ mod tests {
         let Ok(project_root) = std::env::var("FRAMEQ_HISTORY_PROBE_PROJECT_ROOT") else {
             return;
         };
-        let output_root = task_manifest::configured_output_root_from_project(Path::new(&project_root))
-            .expect("resolve configured output root");
+        let output_root =
+            task_manifest::configured_output_root_from_project(Path::new(&project_root))
+                .expect("resolve configured output root");
         let started = Instant::now();
         let (items, ignored) = load_history_with_stats(&output_root).expect("count history");
         println!(

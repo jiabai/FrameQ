@@ -1,9 +1,252 @@
 {
+  "contractVersion": 2,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "FRAMEQ_PROGRESS ",
     "asrModelDownloadProgress": "asr-model-download-progress",
     "asrModelDownloadPrefix": "FRAMEQ_MODEL_DOWNLOAD "
+  },
+  "progressEvents": {
+    "invalidEventPolicy": {
+      "producer": "reject",
+      "consumer": "drop_and_record_code"
+    },
+    "fieldSchemas": {
+      "stage": {
+        "type": "string",
+        "enum": [
+          "waiting_input",
+          "video_extracting",
+          "video_transcribing",
+          "insights_generating",
+          "completed",
+          "partial_completed",
+          "failed"
+        ]
+      },
+      "progress": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100
+      }
+    },
+    "messageArgs": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": [
+            "iic/SenseVoiceSmall",
+            "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35,
+          "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false,
+      "constraints": {
+        "attemptMustNotExceedTotal": true
+      },
+      "forbiddenContent": [
+        "url",
+        "full_path",
+        "cookie",
+        "credential",
+        "transcript_content",
+        "prompt",
+        "generated_content",
+        "request_headers",
+        "preference_prose"
+      ]
+    },
+    "worker": {
+      "requiredFields": [
+        "stage",
+        "progress",
+        "message_code"
+      ],
+      "optionalFields": [
+        "message_args"
+      ],
+      "messageCodes": {
+        "video.download.preparing": {
+          "allowedArgs": []
+        },
+        "video.stream.validating": {
+          "allowedArgs": []
+        },
+        "audio.extract.running": {
+          "allowedArgs": []
+        },
+        "audio.extract.reused": {
+          "allowedArgs": []
+        },
+        "subtitle.detect.running": {
+          "allowedArgs": []
+        },
+        "subtitle.detect.found": {
+          "allowedArgs": [
+            "language"
+          ]
+        },
+        "asr.cache.preparing": {
+          "allowedArgs": [
+            "model"
+          ]
+        },
+        "asr.transcribe.starting": {
+          "allowedArgs": []
+        },
+        "asr.transcribe.running": {
+          "allowedArgs": []
+        },
+        "douyin.page.resolving": {
+          "allowedArgs": []
+        },
+        "douyin.stream.probing": {
+          "allowedArgs": []
+        },
+        "douyin.video.saving": {
+          "allowedArgs": []
+        },
+        "douyin.stream.retrying": {
+          "allowedArgs": [
+            "attempt",
+            "total"
+          ]
+        },
+        "xiaohongshu.page.resolving": {
+          "allowedArgs": []
+        },
+        "xiaohongshu.video.saving": {
+          "allowedArgs": []
+        },
+        "xiaohongshu.stream.retrying": {
+          "allowedArgs": [
+            "attempt",
+            "total"
+          ]
+        },
+        "bilibili.metadata.resolving": {
+          "allowedArgs": []
+        },
+        "bilibili.stream.probing": {
+          "allowedArgs": []
+        },
+        "bilibili.video.downloading": {
+          "allowedArgs": []
+        },
+        "bilibili.audio.downloading": {
+          "allowedArgs": []
+        },
+        "bilibili.media.merging": {
+          "allowedArgs": []
+        }
+      }
+    },
+    "asrModelDownload": {
+      "requiredFields": [
+        "status",
+        "progress",
+        "message_code"
+      ],
+      "optionalFields": [
+        "current_file",
+        "message_args"
+      ],
+      "fieldSchemas": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "started",
+            "downloading",
+            "extracting",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "current_file": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^(?!\\.{1,2}$)(?=[A-Za-z0-9._+() -]{1,255}$)(?=.*[A-Za-z0-9])[A-Za-z0-9._+()-](?:[A-Za-z0-9._+() -]{0,253}[A-Za-z0-9_+()-])?$"
+        }
+      },
+      "messageCodes": {
+        "model.download.preparing": {
+          "status": "started",
+          "current_file": "forbidden",
+          "allowedArgs": [
+            "model"
+          ]
+        },
+        "model.download.completed": {
+          "status": "completed",
+          "current_file": "forbidden",
+          "allowedArgs": [
+            "model"
+          ]
+        },
+        "model.download.cancelled": {
+          "status": "cancelled",
+          "current_file": "forbidden",
+          "allowedArgs": []
+        },
+        "model.primary.downloading": {
+          "status": "downloading",
+          "current_file": "forbidden",
+          "allowedArgs": [
+            "model"
+          ]
+        },
+        "model.vad.downloading": {
+          "status": "downloading",
+          "current_file": "forbidden",
+          "allowedArgs": [
+            "model"
+          ]
+        },
+        "model.archive.extracting": {
+          "status": "extracting",
+          "current_file": "forbidden",
+          "allowedArgs": []
+        },
+        "model.archive.reading": {
+          "status": "downloading",
+          "current_file": "forbidden",
+          "allowedArgs": []
+        },
+        "model.archive.downloading": {
+          "status": "downloading",
+          "current_file": "forbidden",
+          "allowedArgs": []
+        },
+        "model.file.downloading": {
+          "status": "downloading",
+          "current_file": "required",
+          "allowedArgs": []
+        },
+        "model.file.completed": {
+          "status": "downloading",
+          "current_file": "required",
+          "allowedArgs": []
+        }
+      }
+    }
   },
   "asr": {
     "defaultModel": "iic/SenseVoiceSmall"
@@ -13,7 +256,55 @@
   },
   "aiGeneration": {
     "command": "retry_insights",
-    "serverManagedLlmCheckout": true
+    "serverManagedLlmCheckout": true,
+    "request": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "target",
+        "output_language"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "insights"
+          ]
+        },
+        "output_language": {
+          "type": "string",
+          "enum": [
+            "zh-CN",
+            "zh-TW",
+            "en-US"
+          ]
+        },
+        "preference_snapshot": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "preference_snapshot"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "const": "insights"
+              }
+            }
+          }
+        }
+      ]
+    }
   },
   "sourceIdentity": {
     "preflightCommand": "resolve_source_json",

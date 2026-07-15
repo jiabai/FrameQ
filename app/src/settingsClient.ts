@@ -1,5 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
+import type {
+  AsrModelDownloadWireStatus,
+  ProgressMessageDescriptor,
+} from "./desktopWorkerProtocol";
+import { isLanguagePreference, type LanguagePreference } from "./i18n/locale";
+import type { AsrModelDownloadLocalPhase } from "./modelDownloadState";
+
+export {
+  ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
+  parseAsrModelDownloadProgressEvent,
+} from "./desktopWorkerProtocol";
 
 export type LlmConfig = {
   outputDir: string;
@@ -42,8 +53,9 @@ export type CancelAsrModelDownloadResult = {
 };
 
 export type AsrModelDownloadProgress = {
-  status: string;
-  message: string;
+  phase: AsrModelDownloadLocalPhase;
+  wireStatus: AsrModelDownloadWireStatus | null;
+  message: ProgressMessageDescriptor | null;
   progress: number;
   currentFile?: string;
 };
@@ -70,8 +82,59 @@ export type SettingsCommandRunner = (
   args: InvokeArgs,
 ) => Promise<unknown>;
 
+export type UiPreferencesView = {
+  schemaVersion: 1;
+  language: LanguagePreference;
+  recovered: boolean;
+};
+
 const defaultSettingsRunner: SettingsCommandRunner = (command, args) => invoke(command, args);
-export const ASR_MODEL_DOWNLOAD_PROGRESS_EVENT = "asr-model-download-progress";
+let browserUiPreferences: UiPreferencesView = {
+  schemaVersion: 1,
+  language: "system",
+  recovered: false,
+};
+
+function hasTauriRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
+}
+
+const defaultUiPreferencesRunner: SettingsCommandRunner = async (command, args) => {
+  if (hasTauriRuntime()) {
+    return invoke(command, args);
+  }
+
+  if (command === "get_ui_preferences") {
+    return { ...browserUiPreferences };
+  }
+  if (command === "save_ui_preferences") {
+    const language = (args as { preferences?: { language?: unknown } }).preferences?.language;
+    if (!isLanguagePreference(language)) {
+      throw new Error("INVALID_UI_PREFERENCES_REQUEST");
+    }
+    browserUiPreferences = { schemaVersion: 1, language, recovered: false };
+    return { ...browserUiPreferences };
+  }
+  throw new Error("UNSUPPORTED_UI_PREFERENCES_COMMAND");
+};
+
+export async function getUiPreferences(
+  runner: SettingsCommandRunner = defaultUiPreferencesRunner,
+): Promise<UiPreferencesView> {
+  return mapUiPreferencesResponse(await runner("get_ui_preferences", {}));
+}
+
+export async function saveUiPreferences(
+  language: LanguagePreference,
+  runner: SettingsCommandRunner = defaultUiPreferencesRunner,
+): Promise<UiPreferencesView> {
+  return mapUiPreferencesResponse(
+    await runner("save_ui_preferences", { preferences: { language } }),
+  );
+}
 
 export async function getLlmConfig(
   runner: SettingsCommandRunner = defaultSettingsRunner,
@@ -155,5 +218,28 @@ function mapAudioReviewCacheUsageResponse(
   return {
     sizeBytes: response.size_bytes,
     cachePath: response.cache_path,
+  };
+}
+
+function mapUiPreferencesResponse(response: unknown): UiPreferencesView {
+  if (!response || typeof response !== "object" || Array.isArray(response)) {
+    throw new Error("INVALID_UI_PREFERENCES_RESPONSE");
+  }
+
+  const record = response as Record<string, unknown>;
+  const expectedKeys = ["language", "recovered", "schemaVersion"];
+  if (
+    JSON.stringify(Object.keys(record).sort()) !== JSON.stringify(expectedKeys) ||
+    record.schemaVersion !== 1 ||
+    !isLanguagePreference(record.language) ||
+    typeof record.recovered !== "boolean"
+  ) {
+    throw new Error("INVALID_UI_PREFERENCES_RESPONSE");
+  }
+
+  return {
+    schemaVersion: 1,
+    language: record.language,
+    recovered: record.recovered,
   };
 }

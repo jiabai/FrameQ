@@ -1,11 +1,12 @@
 import {
-  getOptionLabel,
+  isPreferenceOptionId,
   type GenerationPreferenceField,
   type GenerationPreferences,
   type InspirationProfile,
 } from "./insightPreferences";
 import type { InsightPreferenceState } from "./insightPreferencesClient";
 import { getAiCreditsDisclosureCopy } from "./aiCreditsCopy";
+import type { SupportedLocale } from "./i18n/locale";
 
 export type InsightPreferenceFlowScreen =
   | "profile_intro"
@@ -74,8 +75,8 @@ export function createInsightPreferenceFlow(
   });
 }
 
-export function getQuotaDisclosureCopy(): string {
-  return getAiCreditsDisclosureCopy();
+export function getQuotaDisclosureCopy(locale: SupportedLocale): string {
+  return getAiCreditsDisclosureCopy(locale);
 }
 
 export function skipProfileSetupInFlow(
@@ -156,7 +157,7 @@ export function selectGenerationOption(
   field: GenerationPreferenceField,
   id: string,
 ): InsightPreferenceFlowState {
-  if (!getOptionLabel(field, id)) {
+  if (!isPreferenceOptionId(field, id)) {
     return flow;
   }
 
@@ -228,7 +229,7 @@ function canAdvanceGenerationStep(
   step: GenerationPreferenceField,
 ): boolean {
   if (step === "goal" || step === "scenario" || step === "audience") {
-    return Boolean(preferences[step] && getOptionLabel(step, preferences[step]));
+    return Boolean(preferences[step] && isPreferenceOptionId(step, preferences[step]));
   }
   if (step === "angles") {
     return preferences.angles.length >= 1 && preferences.angles.length <= 3;

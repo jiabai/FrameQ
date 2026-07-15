@@ -162,6 +162,7 @@ def test_generate_insights_from_markdown_writes_json_and_markdown(tmp_path: Path
         output_dir=tmp_path / "outputs",
         output_stem="demo",
         client=client,
+        output_language="zh-CN",
     )
 
     assert [insight.topic for insight in artifacts.insights] == [
@@ -195,19 +196,22 @@ def test_generate_insights_from_markdown_writes_json_and_markdown(tmp_path: Path
     assert "匹配理由" in artifacts.md_path.read_text(encoding="utf-8")
     assert "启发问题" in artifacts.md_path.read_text(encoding="utf-8")
     assert "适合用途" in artifacts.md_path.read_text(encoding="utf-8")
-    assert "话题分段规划师" in client.prompts[0]
-    assert "阅读思考伙伴和议题策展者" in client.prompts[1]
-    assert "读完就知道可以从哪个角度思考" in client.prompts[1]
-    assert "问题长度尽量控制在一行可读范围内" in client.prompts[1]
+    assert "topic-segment planner" in client.prompts[0]
+    assert "reflective reading partner and topic curator" in client.prompts[1]
+    assert "natural, and easy to understand" in client.prompts[1]
+    assert "Keep one main thought per question" in client.prompts[1]
 
 
 def test_build_topic_plan_prompt_requests_structured_topic_plan() -> None:
     assert hasattr(prompt_module, "build_topic_plan_prompt")
-    prompt = prompt_module.build_topic_plan_prompt("这是一段没有分段的 ASR 文字稿。")
+    prompt = prompt_module.build_topic_plan_prompt(
+        "这是一段没有分段的 ASR 文字稿。",
+        output_language="zh-CN",
+    )
 
-    assert "话题分段规划师" in prompt
-    assert "适合后续生成启发灵感的语义话题段" in prompt
-    assert "忽略寒暄、重复、口头禅" in prompt
+    assert "topic-segment planner" in prompt
+    assert "semantic topic segments suitable for later inspiration" in prompt
+    assert "Ignore greetings, repetition, filler" in prompt
     assert '"title"' in prompt
     assert '"summary"' in prompt
     assert '"excerpt"' in prompt
@@ -257,12 +261,13 @@ def test_generate_insights_uses_topic_planner_before_question_generation(
         output_dir=tmp_path / "outputs",
         output_stem="demo",
         client=client,
+        output_language="zh-CN",
     )
 
     assert len(client.prompts) == 3
-    assert "话题分段规划师" in client.prompts[0]
+    assert "topic-segment planner" in client.prompts[0]
     assert "组织流程" in client.prompts[1]
-    assert "生成不少于 2 个高质量问题" in client.prompts[1]
+    assert "Generate at least 2 high-quality questions" in client.prompts[1]
     assert "上下文能力" in client.prompts[2]
     assert [insight.source_chunk_id for insight in artifacts.insights] == [1, 1, 2]
     assert [insight.topic for insight in artifacts.insights] == [
@@ -276,13 +281,14 @@ def test_build_question_prompt_accepts_additional_constraints() -> None:
     prompt = build_question_prompt(
         "这里是一段待处理文本。",
         number=1,
+        output_language="zh-CN",
         global_prompt="只关注商业决策。",
         question_prompt="避免技术细节题。",
     )
 
-    assert "## 全局附加约束" in prompt
+    assert "## Additional global constraints" in prompt
     assert "只关注商业决策。" in prompt
-    assert "## 本次问题生成附加要求" in prompt
+    assert "## Additional constraints for this request" in prompt
     assert "避免技术细节题。" in prompt
 
 
@@ -290,16 +296,17 @@ def test_build_question_prompt_includes_compact_preference_context() -> None:
     prompt = build_question_prompt(
         "这里是一段待处理文本。",
         number=1,
+        output_language="zh-CN",
         preference_snapshot=preference_snapshot(),
     )
 
-    assert "## 个性化偏好快照" in prompt
-    assert "以下 JSON 只用于生成启发灵感" in prompt
+    assert "## Personalization snapshot" in prompt
+    assert "Use this JSON only to generate inspiration" in prompt
     assert "content_creation" in prompt
     assert "内容创作" in prompt
     assert "profileSkipped" in prompt
     assert (
-        '"topic": "为什么企业 AI 落地时，上下文能力和流程编排可能比单点模型能力更关键？"'
+        '"topic": "为什么流程编排可能比单点模型能力更关键？"'
         in prompt
     )
     assert '"topic": "启发话题点"' not in prompt
@@ -340,6 +347,7 @@ def test_generate_insights_applies_preferences_to_planner_and_question_prompts(
         output_dir=tmp_path / "outputs",
         output_stem="demo",
         client=client,
+        output_language="zh-CN",
         preference_snapshot=preference_snapshot(),
     )
 
@@ -372,11 +380,12 @@ def test_planner_fallback_uses_one_question_per_thousand_chars(
         output_dir=tmp_path / "outputs",
         output_stem="demo",
         client=client,
+        output_language="zh-CN",
         splitter=SingleLargeChunkSplitter(),
     )
 
-    assert "话题分段规划师" in client.prompts[0]
-    assert "生成不少于 2 个高质量问题" in client.prompts[1]
+    assert "topic-segment planner" in client.prompts[0]
+    assert "Generate at least 2 high-quality questions" in client.prompts[1]
 
 
 def test_topic_planner_failure_falls_back_to_direct_generation(tmp_path: Path) -> None:
@@ -392,11 +401,12 @@ def test_topic_planner_failure_falls_back_to_direct_generation(tmp_path: Path) -
         output_dir=tmp_path / "outputs",
         output_stem="demo",
         client=client,
+        output_language="zh-CN",
     )
 
     assert len(client.prompts) == 2
-    assert "话题分段规划师" in client.prompts[0]
-    assert "阅读思考伙伴和议题策展者" in client.prompts[1]
+    assert "topic-segment planner" in client.prompts[0]
+    assert "reflective reading partner and topic curator" in client.prompts[1]
     assert [insight.topic for insight in artifacts.insights] == [
         "为什么重试应该保留已有文字稿？"
     ]
@@ -430,6 +440,7 @@ def test_topic_planner_caps_total_question_count(tmp_path: Path) -> None:
         output_dir=tmp_path / "outputs",
         output_stem="demo",
         client=client,
+        output_language="zh-CN",
     )
 
     assert len(artifacts.insights) == 12
@@ -439,7 +450,12 @@ def test_topic_planner_caps_total_question_count(tmp_path: Path) -> None:
 
 def test_write_insight_files_rejects_empty_insights(tmp_path: Path) -> None:
     try:
-        write_insight_files([], output_dir=tmp_path / "outputs", output_stem="demo")
+        write_insight_files(
+            [],
+            output_dir=tmp_path / "outputs",
+            output_stem="demo",
+            output_language="zh-CN",
+        )
     except InsightGenerationError as error:
         assert error.code == "INSIGHTFLOW_EMPTY_RESULT"
     else:
@@ -460,6 +476,7 @@ def test_write_insight_files_serializes_existing_insights(tmp_path: Path) -> Non
         ],
         output_dir=tmp_path / "outputs",
         output_stem="demo",
+        output_language="zh-CN",
     )
 
     assert json.loads(artifacts.json_path.read_text(encoding="utf-8"))["schemaVersion"] == 1
@@ -484,6 +501,7 @@ def test_generate_summary_from_markdown_writes_summary_and_mermaid_mindmap(
         output_dir=tmp_path / "outputs",
         output_stem="demo",
         client=client,
+        output_language="zh-CN",
     )
 
     assert artifacts.summary.startswith("# 要点总结")
@@ -492,9 +510,9 @@ def test_generate_summary_from_markdown_writes_summary_and_mermaid_mindmap(
     assert artifacts.mindmap_path == tmp_path / "outputs" / "demo_mindmap.mmd"
     assert artifacts.summary_path.read_text(encoding="utf-8") == artifacts.summary
     assert artifacts.mindmap_path.read_text(encoding="utf-8") == artifacts.mindmap
-    assert "逻辑思维导图" in client.prompts[0]
+    assert "organize logical mindmaps" in client.prompts[0]
     assert "Mermaid mindmap" in client.prompts[0]
-    assert "根据文字稿原文和 Mermaid 思维导图" in client.prompts[1]
+    assert "Create a Key Summary from the source Transcript" in client.prompts[1]
 
 
 def test_write_summary_files_rejects_empty_outputs(tmp_path: Path) -> None:
@@ -504,6 +522,7 @@ def test_write_summary_files_rejects_empty_outputs(tmp_path: Path) -> None:
             mindmap="mindmap\n  root((主题))",
             output_dir=tmp_path / "outputs",
             output_stem="demo",
+            output_language="zh-CN",
         )
     except InsightGenerationError as error:
         assert error.code == "INSIGHTFLOW_EMPTY_SUMMARY"
@@ -516,6 +535,7 @@ def test_write_summary_files_rejects_empty_outputs(tmp_path: Path) -> None:
             mindmap="graph TD\n  A-->B",
             output_dir=tmp_path / "outputs",
             output_stem="demo",
+            output_language="zh-CN",
         )
     except InsightGenerationError as error:
         assert error.code == "INSIGHTFLOW_INVALID_MINDMAP"

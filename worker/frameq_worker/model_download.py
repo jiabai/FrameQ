@@ -14,6 +14,11 @@ from pathlib import Path
 from modelscope.hub.callback import ProgressCallback as ModelScopeProgressCallback
 from modelscope.hub.snapshot_download import snapshot_download
 
+from frameq_worker.progress_events import (
+    build_model_progress_event,
+    safe_current_file_basename,
+)
+
 SENSEVOICE_MODEL_ID = "iic/SenseVoiceSmall"
 VAD_MODEL_ID = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
 DEFAULT_SENSEVOICE_REVISION = "master"
@@ -161,7 +166,13 @@ def download_asr_model_cache(
 ) -> Path:
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    _emit(progress_callback, "started", "正在准备 SenseVoice Small 模型下载。", 0)
+    _emit(
+        progress_callback,
+        "model.download.preparing",
+        "started",
+        0,
+        message_args={"model": SENSEVOICE_MODEL_ID},
+    )
 
     if download_url:
         _download_custom_archive(
@@ -187,7 +198,13 @@ def download_asr_model_cache(
             "Downloaded ASR model cache is incomplete.",
         )
 
-    _emit(progress_callback, "completed", "SenseVoice Small 模型已下载完成。", 100)
+    _emit(
+        progress_callback,
+        "model.download.completed",
+        "completed",
+        100,
+        message_args={"model": SENSEVOICE_MODEL_ID},
+    )
     return cache_dir
 
 
@@ -200,7 +217,13 @@ def _download_from_modelscope(
 ) -> None:
     sensevoice_revision = revision or DEFAULT_SENSEVOICE_REVISION
     modelscope_cache_dir = _canonical_model_root(cache_dir)
-    _emit(progress_callback, "downloading", "正在从 ModelScope 下载 SenseVoice Small。", 8)
+    _emit(
+        progress_callback,
+        "model.primary.downloading",
+        "downloading",
+        8,
+        message_args={"model": SENSEVOICE_MODEL_ID},
+    )
     snapshot_downloader(
         model_id=SENSEVOICE_MODEL_ID,
         revision=sensevoice_revision,
@@ -209,7 +232,13 @@ def _download_from_modelscope(
         progress_callbacks=[_make_modelscope_progress_callback(progress_callback, 10, 72)],
     )
 
-    _emit(progress_callback, "downloading", "正在从 ModelScope 下载 VAD 伴随模型。", 82)
+    _emit(
+        progress_callback,
+        "model.vad.downloading",
+        "downloading",
+        82,
+        message_args={"model": VAD_MODEL_ID},
+    )
     snapshot_downloader(
         model_id=VAD_MODEL_ID,
         revision=DEFAULT_SENSEVOICE_REVISION,
@@ -233,7 +262,7 @@ def _download_custom_archive(
 
         extract_dir = temp_dir / "extract"
         extract_dir.mkdir()
-        _emit(progress_callback, "extracting", "正在解压 ASR 模型归档。", 76)
+        _emit(progress_callback, "model.archive.extracting", "extracting", 76)
         _extract_archive_safely(archive_path, extract_dir)
         if not (extract_dir / "models" / "iic" / "SenseVoiceSmall" / "model.pt").is_file():
             raise ModelDownloadError(
@@ -262,11 +291,11 @@ def _resolve_archive(
 ) -> Path:
     local_path = Path(download_url)
     if local_path.is_file():
-        _emit(progress_callback, "downloading", "正在读取本地 ASR 模型归档。", 20)
+        _emit(progress_callback, "model.archive.reading", "downloading", 20)
         return local_path
 
     archive_path = temp_dir / "model-archive"
-    _emit(progress_callback, "downloading", "正在下载 ASR 模型归档。", 20)
+    _emit(progress_callback, "model.archive.downloading", "downloading", 20)
     try:
         urllib.request.urlretrieve(download_url, archive_path)  # noqa: S310 - URL is release/user configured.
     except OSError as exc:
@@ -382,6 +411,8 @@ def _make_modelscope_progress_callback(
             self.downloaded = 0
 
         def update(self, size: int) -> None:
+            if progress_callback is None:
+                return
             self.downloaded += size
             if self.file_size > 0:
                 file_progress = min(1.0, self.downloaded / self.file_size)
@@ -390,19 +421,21 @@ def _make_modelscope_progress_callback(
                 progress = start
             _emit(
                 progress_callback,
+                "model.file.downloading",
                 "downloading",
-                f"正在下载 {self.filename}",
                 min(99, progress),
-                current_file=self.filename,
+                current_file=safe_current_file_basename(self.filename),
             )
 
         def end(self) -> None:
+            if progress_callback is None:
+                return
             _emit(
                 progress_callback,
+                "model.file.completed",
                 "downloading",
-                f"{self.filename} 下载完成",
                 min(99, start + span),
-                current_file=self.filename,
+                current_file=safe_current_file_basename(self.filename),
             )
 
     return FrameQModelScopeProgressCallback
@@ -410,18 +443,19 @@ def _make_modelscope_progress_callback(
 
 def _emit(
     callback: ModelDownloadEventCallback | None,
+    message_code: str,
     status: str,
-    message: str,
     progress: int,
     current_file: str | None = None,
+    message_args: dict[str, str | int] | None = None,
 ) -> None:
     if callback is None:
         return
-    event: dict[str, object] = {
-        "status": status,
-        "message": message,
-        "progress": max(0, min(100, progress)),
-    }
-    if current_file:
-        event["current_file"] = current_file
+    event = build_model_progress_event(
+        message_code,
+        status=status,
+        progress=progress,
+        current_file=current_file,
+        message_args=message_args,
+    )
     callback(event)

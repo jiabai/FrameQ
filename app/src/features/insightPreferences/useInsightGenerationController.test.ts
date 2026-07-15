@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { SetStateAction } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AccountStatus } from "../../accountState";
@@ -7,6 +8,8 @@ import type {
   PreferenceSnapshot,
 } from "../../insightPreferences";
 import type { InsightPreferenceState } from "../../insightPreferencesClient";
+import type { SupportedLocale } from "../../i18n/locale";
+import type { UiMessage } from "../../i18n/uiMessage";
 import type {
   InsightRetryTarget,
   WorkflowState,
@@ -21,10 +24,11 @@ type HookHarness = {
   useState: <T>(initialValue: T | (() => T)) => [T, (next: StateUpdater<T>) => void];
 };
 
-type OpenAccountPanel = (notice?: string) => void;
+type OpenAccountPanel = (notice?: UiMessage) => void;
 
 type RetryInsightGeneration = (
   target: InsightRetryTarget,
+  outputLanguage: SupportedLocale,
   preferenceSnapshot: PreferenceSnapshot | null,
   account: AccountStatus,
   openAccountPanel: OpenAccountPanel,
@@ -32,13 +36,13 @@ type RetryInsightGeneration = (
 ) => Promise<void>;
 
 type ControllerCallbacks = {
-  setActionNotice: (value: SetStateAction<string>) => void;
+  setActionNotice: (value: SetStateAction<UiMessage | null>) => void;
   closeSettings: () => void;
   closeDetail: () => void;
   openAccountPanel: OpenAccountPanel;
   refreshAccountStatus: () => Promise<void>;
   retryInsightGeneration: RetryInsightGeneration;
-  aiBlockerMessage: (account: AccountStatus, actionLabel: string) => string;
+  aiBlockerMessage: (account: AccountStatus) => UiMessage;
 };
 
 const mocks = vi.hoisted(() => ({
@@ -116,7 +120,8 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
     url: "https://example.test/video",
     submittedUrl: "https://example.test/video",
     showUrlInput: false,
-    statusMessage: "",
+    statusMessage: null,
+    progressMessage: null,
     progressPercent: 100,
     text: "transcript body",
     summary: "",
@@ -173,7 +178,9 @@ function createCallbacks(): ControllerCallbacks {
     openAccountPanel: vi.fn(),
     refreshAccountStatus: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     retryInsightGeneration: vi.fn<RetryInsightGeneration>().mockResolvedValue(undefined),
-    aiBlockerMessage: vi.fn((_, actionLabel) => `blocked: ${actionLabel}`),
+    aiBlockerMessage: vi.fn(() => ({
+      messageCode: "account.notice.aiUnavailable",
+    })),
   };
 }
 
@@ -181,8 +188,10 @@ async function createController(options: {
   workflow?: WorkflowState;
   account?: AccountStatus;
   callbacks?: Partial<ControllerCallbacks>;
+  outputLanguage?: SupportedLocale;
 } = {}): Promise<{
   render: () => InsightGenerationController;
+  setOutputLanguage: (locale: SupportedLocale) => void;
   callbacks: ControllerCallbacks;
   account: AccountStatus;
 }> {
@@ -190,6 +199,7 @@ async function createController(options: {
   const callbacks = { ...createCallbacks(), ...options.callbacks };
   const workflow = options.workflow ?? createWorkflow();
   const account = options.account ?? createAccount();
+  let outputLanguage = options.outputLanguage ?? "en-US";
 
   vi.doMock("react", () => ({
     useCallback: harness.useCallback,
@@ -208,9 +218,13 @@ async function createController(options: {
         closeDetail: callbacks.closeDetail,
         openAccountPanel: callbacks.openAccountPanel,
         refreshAccountStatus: callbacks.refreshAccountStatus,
+        outputLanguage,
         retryInsightGeneration: callbacks.retryInsightGeneration,
         aiBlockerMessage: callbacks.aiBlockerMessage,
       });
+    },
+    setOutputLanguage: (locale) => {
+      outputLanguage = locale;
     },
     callbacks,
     account,
@@ -235,9 +249,9 @@ describe("useInsightGenerationController", () => {
     controller = render();
 
     expect(controller.summaryConfirmOpen).toBe(false);
-    expect(callbacks.setActionNotice).toHaveBeenCalledWith(
-      "文字稿生成后才能继续生成要点总结。",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith({
+      messageCode: "preferences.notice.transcriptRequiredSummary",
+    });
   });
 
   test("opens summary confirmation when task and transcript are available", async () => {
@@ -248,7 +262,7 @@ describe("useInsightGenerationController", () => {
     controller = render();
 
     expect(controller.summaryConfirmOpen).toBe(true);
-    expect(callbacks.setActionNotice).toHaveBeenCalledWith("");
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith(null);
   });
 
   test("opens the account panel when summary generation is blocked by account state", async () => {
@@ -258,11 +272,10 @@ describe("useInsightGenerationController", () => {
     const controller = render();
     await controller.confirmSummaryGeneration();
 
-    expect(callbacks.aiBlockerMessage).toHaveBeenCalledWith(
-      blockedAccount,
-      "生成要点总结",
-    );
-    expect(callbacks.openAccountPanel).toHaveBeenCalledWith("blocked: 生成要点总结");
+    expect(callbacks.aiBlockerMessage).toHaveBeenCalledWith(blockedAccount);
+    expect(callbacks.openAccountPanel).toHaveBeenCalledWith({
+      messageCode: "account.notice.aiUnavailable",
+    });
     expect(callbacks.retryInsightGeneration).not.toHaveBeenCalled();
   });
 
@@ -280,12 +293,29 @@ describe("useInsightGenerationController", () => {
     expect(controller.summaryConfirmOpen).toBe(false);
     expect(callbacks.retryInsightGeneration).toHaveBeenCalledWith(
       "summary",
+      "en-US",
       null,
       account,
       callbacks.openAccountPanel,
       callbacks.refreshAccountStatus,
     );
     expect(callbacks.openAccountPanel).not.toHaveBeenCalled();
+  });
+
+  test("sends a non-default actual locale for summary generation", async () => {
+    const { render, callbacks } = await createController({ outputLanguage: "zh-TW" });
+
+    const controller = render();
+    await controller.confirmSummaryGeneration();
+
+    expect(callbacks.retryInsightGeneration).toHaveBeenCalledWith(
+      "summary",
+      "zh-TW",
+      null,
+      expect.any(Object),
+      callbacks.openAccountPanel,
+      callbacks.refreshAccountStatus,
+    );
   });
 
   test("does not open insight preference flow without a task and transcript", async () => {
@@ -299,9 +329,9 @@ describe("useInsightGenerationController", () => {
 
     expect(controller.insightPreferenceFlow).toBeNull();
     expect(mocks.getInsightPreferences).not.toHaveBeenCalled();
-    expect(callbacks.setActionNotice).toHaveBeenCalledWith(
-      "文字稿生成后才能继续生成启发灵感。",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith({
+      messageCode: "preferences.notice.transcriptRequiredInsights",
+    });
   });
 
   test("creates insight preference flow after loading saved preferences", async () => {
@@ -322,7 +352,7 @@ describe("useInsightGenerationController", () => {
     controller = render();
 
     expect(mocks.getInsightPreferences).toHaveBeenCalledTimes(1);
-    expect(callbacks.setActionNotice).toHaveBeenCalledWith("");
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith(null);
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(controller.insightPreferenceFlow).toEqual(
       expect.objectContaining({
@@ -348,10 +378,10 @@ describe("useInsightGenerationController", () => {
     expect(mocks.getInsightPreferences).toHaveBeenCalledTimes(1);
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(controller.insightPreferenceFlow).toBeNull();
-    expect(callbacks.setActionNotice).toHaveBeenCalledWith("");
-    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
-      "无法读取本地偏好：preferences unavailable",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenCalledWith(null);
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "preferences.notice.preferencesReadFailed",
+    });
   });
 
   test("opens generation preference editing from detail", async () => {
@@ -392,9 +422,9 @@ describe("useInsightGenerationController", () => {
     expect(mocks.getInsightPreferences).toHaveBeenCalledTimes(1);
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(controller.insightPreferenceFlow).toBeNull();
-    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
-      "无法读取本地偏好：preferences locked",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "preferences.notice.preferencesReadFailed",
+    });
   });
 
   test("surfaces summary retry failures after closing the confirmation", async () => {
@@ -416,9 +446,9 @@ describe("useInsightGenerationController", () => {
     expect(controller.summaryConfirmOpen).toBe(false);
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(callbacks.retryInsightGeneration).toHaveBeenCalledTimes(1);
-    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
-      "启动要点总结失败：worker failed",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "preferences.notice.summaryStartFailed",
+    });
   });
 
   test("saves generation preferences and retries insight generation", async () => {
@@ -443,6 +473,7 @@ describe("useInsightGenerationController", () => {
     expect(controller.insightPreferenceFlow).toBeNull();
     expect(callbacks.retryInsightGeneration).toHaveBeenCalledWith(
       "insights",
+      "en-US",
       expect.objectContaining({
         profile: PROFILE,
         profileSkipped: false,
@@ -451,6 +482,77 @@ describe("useInsightGenerationController", () => {
       account,
       callbacks.openAccountPanel,
       callbacks.refreshAccountStatus,
+    );
+  });
+
+  test("freezes insight output language before deferred preference save and uses the new locale next time", async () => {
+    let resolveFirstSave: ((value: InsightPreferenceState) => void) | undefined;
+    mocks.getInsightPreferences.mockResolvedValue(createInsightPreferences());
+    mocks.saveDefaultGenerationPreferences
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstSave = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        createInsightPreferences({ defaultGenerationPreferences: GENERATION_PREFERENCES }),
+      );
+    const { render, setOutputLanguage, callbacks } = await createController({
+      outputLanguage: "en-US",
+    });
+
+    let controller = render();
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+    const firstConfirmation = controller.confirmInsightPreferences(GENERATION_PREFERENCES);
+    controller = render();
+    expect(controller.confirmedOutputLanguage).toBe("en-US");
+
+    setOutputLanguage("zh-TW");
+    controller = render();
+    expect(controller.confirmedOutputLanguage).toBe("en-US");
+    resolveFirstSave?.(
+      createInsightPreferences({ defaultGenerationPreferences: GENERATION_PREFERENCES }),
+    );
+    await firstConfirmation;
+    controller = render();
+    expect(controller.confirmedOutputLanguage).toBeNull();
+
+    expect(callbacks.retryInsightGeneration).toHaveBeenNthCalledWith(
+      1,
+      "insights",
+      "en-US",
+      expect.any(Object),
+      expect.any(Object),
+      callbacks.openAccountPanel,
+      callbacks.refreshAccountStatus,
+    );
+
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+    await controller.confirmInsightPreferences(GENERATION_PREFERENCES);
+    expect(callbacks.retryInsightGeneration).toHaveBeenNthCalledWith(
+      2,
+      "insights",
+      "zh-TW",
+      expect.any(Object),
+      expect.any(Object),
+      callbacks.openAccountPanel,
+      callbacks.refreshAccountStatus,
+    );
+  });
+
+  test("freezes both final confirmation locales on the first handler line", () => {
+    const source = readFileSync(
+      new URL("./useInsightGenerationController.ts", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(
+      /const confirmSummaryGeneration = useCallback\(async \(\) => \{\s*const confirmedOutputLanguage = outputLanguage;/,
+    );
+    expect(source).toMatch(
+      /async \(preferences: GenerationPreferences\) => \{\s*const confirmedOutputLanguage = outputLanguage;/,
     );
   });
 
@@ -473,8 +575,54 @@ describe("useInsightGenerationController", () => {
     expect(callbacks.retryInsightGeneration).not.toHaveBeenCalled();
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(controller.insightPreferenceFlow).not.toBeNull();
-    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
-      "启动启发灵感失败：save failed",
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "preferences.notice.insightsStartFailed",
+    });
+  });
+
+  test("restores the current locale after a deferred save failure and uses it on the next confirmation", async () => {
+    let rejectFirstSave: ((reason: Error) => void) | undefined;
+    mocks.getInsightPreferences.mockResolvedValue(createInsightPreferences());
+    mocks.saveDefaultGenerationPreferences
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectFirstSave = reject;
+          }),
+      )
+      .mockResolvedValueOnce(
+        createInsightPreferences({ defaultGenerationPreferences: GENERATION_PREFERENCES }),
+      );
+    const { render, setOutputLanguage, callbacks } = await createController({
+      outputLanguage: "en-US",
+    });
+
+    let controller = render();
+    await controller.openInsightPreferenceFlow();
+    controller = render();
+    const firstConfirmation = controller.confirmInsightPreferences(GENERATION_PREFERENCES);
+    controller = render();
+    expect(controller.confirmedOutputLanguage).toBe("en-US");
+
+    setOutputLanguage("zh-TW");
+    controller = render();
+    expect(controller.confirmedOutputLanguage).toBe("en-US");
+    rejectFirstSave?.(new Error("save failed"));
+    await firstConfirmation;
+    controller = render();
+
+    expect(controller.confirmedOutputLanguage).toBeNull();
+    expect(controller.insightPreferenceFlow).not.toBeNull();
+    expect(callbacks.retryInsightGeneration).not.toHaveBeenCalled();
+
+    await controller.confirmInsightPreferences(GENERATION_PREFERENCES);
+    expect(callbacks.retryInsightGeneration).toHaveBeenCalledWith(
+      "insights",
+      "zh-TW",
+      expect.any(Object),
+      expect.any(Object),
+      callbacks.openAccountPanel,
+      callbacks.refreshAccountStatus,
     );
   });
 
@@ -504,9 +652,9 @@ describe("useInsightGenerationController", () => {
     expect(callbacks.retryInsightGeneration).toHaveBeenCalledTimes(1);
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(controller.insightPreferenceFlow).toBeNull();
-    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
-      "启动启发灵感失败：retry failed",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "preferences.notice.insightsStartFailed",
+    });
   });
 
   test("surfaces profile skip failures and keeps the current flow", async () => {
@@ -526,9 +674,9 @@ describe("useInsightGenerationController", () => {
     expect(mocks.skipInspirationProfile).toHaveBeenCalledTimes(1);
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(controller.insightPreferenceFlow).toEqual(currentFlow);
-    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
-      "保存跳过状态失败：skip failed",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "preferences.notice.skipSaveFailed",
+    });
   });
 
   test("surfaces profile save failures and resets busy state", async () => {
@@ -546,8 +694,8 @@ describe("useInsightGenerationController", () => {
     expect(mocks.saveInspirationProfile).toHaveBeenCalledWith(PROFILE);
     expect(controller.insightPreferenceBusy).toBe(false);
     expect(controller.insightPreferenceFlow).toBeNull();
-    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith(
-      "保存灵感档案失败：profile save failed",
-    );
+    expect(callbacks.setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "preferences.notice.profileSaveFailed",
+    });
   });
 });

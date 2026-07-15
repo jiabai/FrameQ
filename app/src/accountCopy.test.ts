@@ -6,6 +6,11 @@ const accountCopyFiles = [
   ["AccountSheet.tsx", new URL("./features/account/AccountSheet.tsx", import.meta.url)],
 ] as const;
 
+const accountCreditCopyFiles = [
+  ["accountResources.ts", new URL("./i18n/accountResources.ts", import.meta.url)],
+  ["synthesisResources.ts", new URL("./i18n/synthesisResources.ts", import.meta.url)],
+] as const;
+
 describe("account copy", () => {
   test("uses activation and authorization wording instead of monthly-pass wording", () => {
     for (const [label, url] of accountCopyFiles) {
@@ -16,7 +21,7 @@ describe("account copy", () => {
   });
 
   test("describes the AI balance as Credits rather than generation times", () => {
-    for (const [label, url] of accountCopyFiles) {
+    for (const [label, url] of accountCreditCopyFiles) {
       const content = readFileSync(url, "utf8");
 
       expect(content, label).toContain("AI Credits");

@@ -1,5 +1,31 @@
 # FrameQ Design Guidelines
 
+## Desktop Language and AI Result Language
+
+- Settings > Basic starts with `界面与 AI 结果语言` and offers Follow System, Simplified Chinese,
+  Traditional Chinese, and English. Selection updates the visible UI immediately; only the latest
+  failed save may roll back the optimistic choice and show a localized notice.
+- A neutral startup shell contains only `FrameQ`. It must not flash one locale before the saved or
+  resolved locale mounts, and preference recovery remains a non-blocking notice rather than a modal.
+- The product glossary fixes `智能提炼 / AI 提煉 / AI Synthesis`, `本地文字稿 / 本機逐字稿 /
+  Local Transcript`, `要点总结 / 重點摘要 / Key Summary`, and `启发灵感 / 靈感啟發 /
+  Inspiration`. Traditional Chinese uses its own reviewed copy; runtime conversion is not allowed.
+- Visible copy and `aria-label`/`title`/`placeholder` text resolve from feature namespaces. Progress
+  and notices render from semantic codes so an on-screen message changes with the locale; raw worker
+  prose is not primary UI copy.
+- Summary and Inspiration confirmation surfaces show `本次输出语言` (localized) with the actual
+  resolved locale name before the final action can consume AI Credits. Changing UI language after
+  confirmation does not relabel the language requested by that in-flight generation.
+- Known errors lead with localized actionable guidance. Allowlisted sanitized diagnostics may
+  appear only inside a localized collapsed technical-details disclosure. Invalid progress events
+  are dropped without changing visible state; structurally valid unknown codes use the matching
+  stage/status generic fallback. Both paths record only a safe code and never render worker prose.
+- At `720x640`, English expansion must wrap and scroll without horizontal overflow, clipped actions,
+  or unreachable keyboard focus. Locale changes must not clear URL, output/ASR settings, transcript
+  edits, preference flows, current tasks, or existing AI results.
+- `FrameQ`, `AI Credits`, ASR, LLM, Mermaid, model names, platform brands, paths, emails, user content,
+  subtitles, transcripts, and historical AI results are not translated.
+
 ## Local Transcript and AI Workspaces
 
 - After submission, use one full-width task-status banner followed by two domain workspaces.
@@ -19,7 +45,7 @@
   semantic target rows: `要点总结（同时生成思维导图文件）` and `启发灵感`. Each owns its status,
   quota copy, confirm/retry/view actions, progress, and error without another independent card
   border or radius.
-- Chinese workspace headings are the only visible workspace titles. The task banner owns ready
+- Workspace headings use the current locale and remain the only visible workspace titles. The task banner owns ready
   completion, so ready local and optional AI workspace badges are omitted; processing, failure,
   waiting, generating, and every target-level lifecycle state remain visible.
 - Pending and retry AI target actions use a quiet scoped secondary-blue treatment. The final

@@ -150,7 +150,7 @@ function mapHistoryDetailResponse(response: HistoryDetailResponse): HistoryItem 
   const error = response.error
     ? {
         code: response.error.code,
-        message: response.error.message ?? `Previous task failed (${response.error.code}).`,
+        message: response.error.message ?? "",
         stage: response.error.stage ?? "waiting_input",
       }
     : null;

@@ -2,8 +2,19 @@ import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Event } from "@tauri-apps/api/event";
-import type { PreferenceSnapshot } from "./insightPreferences";
-import type { WorkerProgressEvent, WorkerResult, WorkflowStage } from "./workflow";
+import {
+  WORKER_PROGRESS_EVENT,
+  parseRetryInsightsInput,
+  parseWorkerProgressEvent,
+  type RetryInsightsInput,
+  type RetryInsightsWireRequest,
+  type WorkerProgressEvent,
+  type WorkflowStage,
+} from "./desktopWorkerProtocol";
+import type { WorkerResult } from "./workflow";
+
+export { WORKER_PROGRESS_EVENT } from "./desktopWorkerProtocol";
+export type { RetryInsightsInput } from "./desktopWorkerProtocol";
 
 export type CancelProcessResult = {
   status: "cancelling" | "already_cancelling" | "not_running" | "failed";
@@ -20,8 +31,8 @@ export type WorkerProgressListener = (
   handler: (event: Event<unknown>) => void,
 ) => Promise<() => void | Promise<void>>;
 export type WorkerProgressHandler = (event: WorkerProgressEvent) => void;
+export type ProgressDiagnosticRecorder = (safeCode: string) => void;
 
-export const WORKER_PROGRESS_EVENT = "worker-progress";
 export type RetryInsightTarget = "summary" | "insights";
 
 export type ProcessVideoRequest = {
@@ -32,20 +43,20 @@ export type ProcessVideoRequest = {
   insightflow_mode: string;
 };
 
-export type RetryInsightsRequest = {
-  task_id: string;
-  target: RetryInsightTarget;
-  preference_snapshot?: PreferenceSnapshot;
-};
+export type RetryInsightsRequest = RetryInsightsWireRequest;
 
 const defaultWorkerRunner: WorkerCommandRunner = (command, args) => invoke(command, args);
 const defaultCancelRunner: CancelCommandRunner = (command, args) => invoke(command, args);
+const defaultProgressDiagnosticRecorder: ProgressDiagnosticRecorder = (safeCode) => {
+  console.warn(`Dropped invalid worker progress event: ${safeCode}`);
+};
 
 export async function processVideo(
   url: string,
   runner: WorkerCommandRunner = defaultWorkerRunner,
   onProgress?: WorkerProgressHandler,
   progressListener: WorkerProgressListener = listen,
+  recordInvalidProgress: ProgressDiagnosticRecorder = defaultProgressDiagnosticRecorder,
 ): Promise<WorkerResult> {
   const request: ProcessVideoRequest = {
     url,
@@ -56,10 +67,15 @@ export async function processVideo(
   };
 
   const unlisten = onProgress
-    ? await progressListener(WORKER_PROGRESS_EVENT, (event) => {
-        const progressEvent = parseProgressEvent(event.payload);
-        if (progressEvent) {
-          onProgress(progressEvent);
+      ? await progressListener(WORKER_PROGRESS_EVENT, (event) => {
+        const parsed = parseWorkerProgressEvent(event.payload);
+        if (parsed.kind === "invalid") {
+          recordInvalidProgress(parsed.diagnosticCode);
+        } else {
+          if (parsed.kind === "unknown") {
+            recordInvalidProgress(parsed.diagnosticCode);
+          }
+          onProgress(parsed.event);
         }
       })
     : null;
@@ -80,25 +96,20 @@ export async function processVideo(
 }
 
 export async function retryInsights(
-  taskId: string,
-  target: RetryInsightTarget,
-  preferenceSnapshot: PreferenceSnapshot | null = null,
+  input: RetryInsightsInput,
   runner: WorkerCommandRunner = defaultWorkerRunner,
 ): Promise<WorkerResult> {
-  const request: RetryInsightsRequest = {
-    task_id: taskId,
-    target,
-  };
-  if (preferenceSnapshot) {
-    request.preference_snapshot = preferenceSnapshot;
+  const parsed = parseRetryInsightsInput(input);
+  if (parsed.kind === "invalid") {
+    return invalidRetryPayloadResult(parsed.taskId);
   }
 
   try {
-    return await runner("retry_insights", { request });
+    return await runner("retry_insights", { request: parsed.request });
   } catch (error) {
     return {
       status: "partial_completed",
-      task_id: taskId,
+      task_id: parsed.request.task_id,
       task_dir: null,
       artifacts: {},
       text: "",
@@ -127,27 +138,6 @@ export async function cancelProcess(
   }
 }
 
-function parseProgressEvent(payload: unknown): WorkerProgressEvent | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const event = payload as Partial<WorkerProgressEvent>;
-  if (
-    typeof event.stage !== "string" ||
-    typeof event.message !== "string" ||
-    typeof event.progress !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    stage: event.stage as WorkflowStage,
-    message: event.message,
-    progress: event.progress,
-  };
-}
-
 function failedResult(code: string, message: string, stage: WorkflowStage): WorkerResult {
   return {
     status: "failed",
@@ -162,6 +152,24 @@ function failedResult(code: string, message: string, stage: WorkflowStage): Work
       code,
       message,
       stage,
+    },
+  };
+}
+
+function invalidRetryPayloadResult(taskId: string | null): WorkerResult {
+  return {
+    status: "partial_completed",
+    task_id: taskId,
+    task_dir: null,
+    artifacts: {},
+    text: "",
+    summary: "",
+    insights: [],
+    transcript: null,
+    error: {
+      code: "INVALID_RETRY_PAYLOAD",
+      message: "",
+      stage: "insights_generating",
     },
   };
 }

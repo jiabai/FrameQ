@@ -18,6 +18,8 @@
 
 ## Non-goals
 
+- 本规格仍是未来独立功能；2026-07-15 桌面多语言实施不新增 `draft` target、命令或 artifact，
+  只为未来草稿请求规定与其他 AI target 相同的必填 `output_language`。
 - 不做"多选灵感合并成一篇文字稿"；种子严格为单条 `Insight`。
 - 不做自由文本 prompt 编辑器或"复制灵感 → 粘贴进某页面"的桥接；种子选取是结构化的应用内动作。
 - 不把 AI 生成的草稿写回 `transcript.txt` 或复用 transcript artifact，避免污染本地优先的"正式文字稿"概念。
@@ -57,6 +59,8 @@
 
 `生成文字稿` 确认页展示：
 
+- **本次输出语言**：展示确认时解析后的实际 UI locale（简体中文、繁體中文或 English），
+  不显示 `system` 字样；点击最终确认时冻结该值。
 - **种子摘要**：灵感 #N + `topic` 全文。
 - **额度说明**：`1 次额度 = 1 次云端 LLM API 调用尝试`；确认页不得固定显示为 `1 次`，应说明本次生成会按实际 LLM 调用次数扣除。
 - **数据提示**：将把所选灵感的字段（`topic` / `followUpQuestions` / `suitableUse` / `matchReason`）与本次任务局部偏好快照发送给管理员配置的云端 LLM 服务；**不会**上传视频、音频或原文全量；偏好快照只随 `生成文字稿` 请求发送，不随 `要点总结` 或 Mermaid mindmap 请求发送。
@@ -88,8 +92,10 @@
 
 ## Prompt Strategy
 
-worker 生成草稿时应新增 `build_draft_from_inspiration_prompt(seed: Insight, preference_snapshot)`（位于 `worker/frameq_worker/insightflow/prompt.py`），类比 `build_summary_prompt`，并遵守以下规则：
+worker 生成草稿时应新增 `build_draft_from_inspiration_prompt(seed: Insight, preference_snapshot, output_language)`（位于 `worker/frameq_worker/insightflow/prompt.py`），类比 `build_summary_prompt`，并遵守以下规则：
 
+- **输出语言**：`output_language` 必须复用共享的 `zh-CN | zh-TW | en-US` 闭集，使用固定
+  enum 派生的语言指令覆盖标题、正文和所有用户可见生成内容；不得把任意 UI 字符串直接拼为指令。
 - **输入**：单条 `Insight` 的结构化字段 + 任务局部 `PreferenceSnapshot`。不拼接 transcript 片段、视频、音频或 URL。
 - **角色**：把一条可迁移的议题问句延展为一篇完整、可直接使用的成稿/文字稿。
 - **骨架**：`topic` 作为中央议题 / 标题方向；`followUpQuestions` 作为章节结构 / 子论点展开角度。
@@ -110,6 +116,9 @@ worker 生成草稿时应新增 `build_draft_from_inspiration_prompt(seed: Insig
 
 - 这是 `AI整理` 的信息架构扩展，不是 worker 流水线重写。它不得改变 `process_video`、stdin 传输、server 权益/额度职责、`SourceIdentity`、任务存储或 `ProcessSupervisor` 内部。
 - **唯一新增 AI 命令**：`generate_draft_from_insight(task_id, insight_id)`（或由 `retry_insights` 扩展 `target="draft"`）。只有该命令可接收 server-managed checkout 配置、消耗额度、构造 AI client 并调用 LLM。
+- 无论采用独立命令还是扩展 target，未来 stdin request 都必须包含确认时冻结的
+  `output_language: "zh-CN" | "zh-TW" | "en-US"`；TypeScript、Rust、Python 拒绝缺失或非法值，
+  不允许旧调用默认语言。实现 draft 时须显式升级共享 contract 的 target 能力。
 - worker 仅接收选中 `Insight` 的结构化字段 + 任务局部偏好快照；不读取、传递或拼接 transcript 片段（除非未来显式开启 grounding 并经用户确认）。
 - **类型化状态**：前端 `activeAiTarget` 扩展为 `"summary" | "insights" | "draft" | null`；UI 行为不得从状态文案推断 target。底层仍复用 `insights_generating` 阶段，target 归属为 `draft`。
 - 本地进度与 AI target 状态为分离的视图模型投影；AI 生成期间本地投影保持 ready（transcript 可用）。
@@ -130,6 +139,8 @@ worker 生成草稿时应新增 `build_draft_from_inspiration_prompt(seed: Insig
 - `启发灵感` 列表中每条灵感提供 `选为文字稿种子` 单选；选中后高亮并同步到 `生成文字稿` 卡片显示种子摘要；仅允许选 1 条，可清除。
 - `activeAiTarget` 类型扩展为 `"summary" | "insights" | "draft" | null`；UI 不依赖状态文案推断 target。
 - `生成文字稿` 确认页展示种子摘要、额度说明（1 次额度 = 1 次 LLM 调用尝试，按实际调用扣除）与数据提示（只发灵感字段 + 任务局部偏好快照，不上传视频/音频/原文全量）。
+- `生成文字稿` 确认页展示实际输出语言；最终确认冻结并发送共享 enum 的
+  `output_language`，生成中切换 UI 不改变该请求，重试使用重试确认时的新语言。
 - 确认后才触发 worker 新命令；草稿生成按实际 LLM 调用次数扣除额度；失败/超时/不可解析不返还；取消不扣。
 - worker 仅接收选中 `Insight` 结构化字段 + 任务局部偏好快照；不发送 transcript 片段、视频、音频或 URL；`sourceChunkId` 仅作溯源标注，不作为 LLM 输入。
 - 草稿写入 `{stem}_draft.md`；`ProcessResult` 含 `draft`，manifest 含 `draft_path` / `has_draft`；UI 提供查看/复制/导出，且不与官方 transcript 共用容器。

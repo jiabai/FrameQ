@@ -7,6 +7,7 @@ import {
   type HistoryItem,
   type HistoryListItem,
 } from "../../historyClient";
+import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
 type UseHistoryControllerOptions = {
   onHistoryItemSelected: (item: HistoryItem) => void;
@@ -21,14 +22,16 @@ export function useHistoryController({
 }: UseHistoryControllerOptions) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryListItem[]>([]);
-  const [historyNotice, setHistoryNotice] = useState("");
+  const [historyNotice, setHistoryNotice] = useState<UiMessage | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyDeleteCandidate, setHistoryDeleteCandidate] = useState<HistoryListItem | null>(null);
   const [historyDeleting, setHistoryDeleting] = useState(false);
+  const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
   const deleteRequestPendingRef = useRef(false);
 
   const closeHistory = useCallback(() => {
+    listRequestIdRef.current += 1;
     detailRequestIdRef.current += 1;
     setHistoryOpen(false);
     if (!deleteRequestPendingRef.current) {
@@ -37,29 +40,39 @@ export function useHistoryController({
   }, []);
 
   const openHistory = useCallback(async () => {
+    const requestId = listRequestIdRef.current + 1;
+    listRequestIdRef.current = requestId;
     detailRequestIdRef.current += 1;
     setHistoryDeleteCandidate(null);
     setHistoryOpen(true);
     setHistoryLoading(true);
     setHistoryItems([]);
-    setHistoryNotice("正在读取历史记录。");
+    setHistoryNotice(uiMessage("history.notice.loading"));
     try {
       const items = await getHistory();
+      if (listRequestIdRef.current !== requestId) {
+        return;
+      }
       setHistoryItems(items);
-      setHistoryNotice(items.length > 0 ? "" : "暂无历史任务。");
-    } catch (error) {
-      setHistoryNotice(`读取历史失败：${error instanceof Error ? error.message : String(error)}`);
+      setHistoryNotice(items.length > 0 ? null : uiMessage("history.notice.empty"));
+    } catch {
+      if (listRequestIdRef.current === requestId) {
+        setHistoryNotice(uiMessage("history.notice.loadFailed"));
+      }
     } finally {
-      setHistoryLoading(false);
+      if (listRequestIdRef.current === requestId) {
+        setHistoryLoading(false);
+      }
     }
   }, []);
 
   const openHistoryItem = useCallback(
     async (item: HistoryListItem) => {
+      listRequestIdRef.current += 1;
       const requestId = detailRequestIdRef.current + 1;
       detailRequestIdRef.current = requestId;
       setHistoryLoading(true);
-      setHistoryNotice("正在读取历史任务详情。");
+      setHistoryNotice(uiMessage("history.notice.detailLoading"));
       try {
         const detail = await getHistoryDetail(item.taskId);
         if (detailRequestIdRef.current !== requestId) {
@@ -67,12 +80,10 @@ export function useHistoryController({
         }
         onHistoryItemSelected(detail);
         setHistoryOpen(false);
-        setHistoryNotice("");
-      } catch (error) {
+        setHistoryNotice(null);
+      } catch {
         if (detailRequestIdRef.current === requestId) {
-          setHistoryNotice(
-            `读取历史任务详情失败：${error instanceof Error ? error.message : String(error)}`,
-          );
+          setHistoryNotice(uiMessage("history.notice.detailFailed"));
         }
       } finally {
         if (detailRequestIdRef.current === requestId) {
@@ -84,9 +95,10 @@ export function useHistoryController({
   );
 
   const requestHistoryItemDeletion = useCallback((item: HistoryListItem) => {
+    listRequestIdRef.current += 1;
     detailRequestIdRef.current += 1;
     setHistoryDeleteCandidate(item);
-    setHistoryNotice("");
+    setHistoryNotice(null);
   }, []);
 
   const cancelHistoryItemDeletion = useCallback(() => {
@@ -101,25 +113,36 @@ export function useHistoryController({
     }
     const taskId = historyDeleteCandidate.taskId;
     deleteRequestPendingRef.current = true;
+    const listRequestId = listRequestIdRef.current + 1;
+    listRequestIdRef.current = listRequestId;
     detailRequestIdRef.current += 1;
     setHistoryDeleting(true);
-    setHistoryNotice("正在永久删除任务。");
+    setHistoryNotice(uiMessage("history.notice.deleting"));
     onPrepareHistoryItemDeletion(taskId);
     try {
       await deleteHistoryTask(taskId);
+      listRequestIdRef.current += 1;
       setHistoryItems((current) => current.filter((item) => item.taskId !== taskId));
       setHistoryDeleteCandidate(null);
-      setHistoryNotice("任务已永久删除。");
+      setHistoryNotice(uiMessage("history.notice.deleted"));
       onHistoryItemDeleted(taskId);
     } catch {
+      if (listRequestIdRef.current !== listRequestId) {
+        return;
+      }
+      const recoveryRequestId = listRequestIdRef.current + 1;
+      listRequestIdRef.current = recoveryRequestId;
       try {
-        setHistoryItems(await getHistory());
+        const items = await getHistory();
+        if (listRequestIdRef.current === recoveryRequestId) {
+          setHistoryItems(items);
+        }
       } catch {
         // Keep the last safe list when the follow-up manifest projection is unavailable.
       }
-      setHistoryNotice(
-        "未能完整删除任务。部分文件可能仍被其他程序占用，请关闭相关文件后重试。",
-      );
+      if (listRequestIdRef.current === recoveryRequestId) {
+        setHistoryNotice(uiMessage("history.notice.deleteFailed"));
+      }
     } finally {
       deleteRequestPendingRef.current = false;
       setHistoryDeleting(false);

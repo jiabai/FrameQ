@@ -9,10 +9,12 @@ mod diagnostics;
 mod history;
 mod history_deletion;
 mod insight_preferences;
+mod progress_event;
 mod runtime;
 mod settings;
 mod task_manifest;
 mod transcript_detail;
+mod ui_preferences;
 mod updates;
 mod video_processing;
 mod window_chrome;
@@ -35,14 +37,15 @@ pub(crate) use asr_model::{DEFAULT_ASR_MODEL, SUPPORTED_ASR_MODELS};
 pub(crate) use asr_model::{ASR_MODEL_DOWNLOAD_EVENT_NAME, MODEL_DOWNLOAD_EVENT_PREFIX};
 
 pub(crate) use worker_command::{
-    build_worker_command_spec, parse_worker_output_or_fallback, parse_worker_stdout, request_process_cancellation,
-    run_blocking_worker_command, spawn_supervised_worker_command, spawn_worker_command,
-    terminate_process_tree, worker_command_log_detail, worker_exit_log_detail, CancelProcessResult,
-    ProcessPhase, ProcessSupervisors, SupervisedSpawnError, WorkerCommandSpec, WorkerInvocation,
+    build_worker_command_spec, parse_worker_output_or_fallback, parse_worker_stdout,
+    request_process_cancellation, run_blocking_worker_command, spawn_supervised_worker_command,
+    spawn_worker_command, terminate_process_tree, worker_command_log_detail,
+    worker_exit_log_detail, CancelProcessResult, ProcessPhase, ProcessSupervisors,
+    SupervisedSpawnError, WorkerCommandSpec, WorkerInvocation,
 };
 
-pub(crate) use video_processing::ProcessVideoResult;
 pub(crate) use history_deletion::HistoryDeletionState;
+pub(crate) use video_processing::ProcessVideoResult;
 
 #[cfg(test)]
 pub(crate) use video_processing::WorkerError;
@@ -85,6 +88,8 @@ pub fn run() {
             settings::save_llm_config,
             settings::get_audio_review_cache_usage,
             settings::clear_audio_review_cache,
+            ui_preferences::get_ui_preferences,
+            ui_preferences::save_ui_preferences,
             insight_preferences::get_insight_preferences,
             insight_preferences::save_inspiration_profile,
             insight_preferences::skip_inspiration_profile,
@@ -313,6 +318,7 @@ mod tests {
         )
         .expect("parse desktop worker contract");
 
+        assert_eq!(contract["contractVersion"], 2);
         assert_eq!(
             super::PROGRESS_EVENT_NAME,
             contract["events"]["workerProgress"]

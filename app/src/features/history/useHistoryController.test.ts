@@ -145,7 +145,7 @@ describe("useHistoryController", () => {
     expect(controller.historyOpen).toBe(true);
     expect(controller.historyLoading).toBe(true);
     expect(controller.historyItems).toEqual([]);
-    expect(controller.historyNotice).not.toBe("");
+    expect(controller.historyNotice).toEqual({ messageCode: "history.notice.loading" });
 
     await load;
     controller = render();
@@ -153,7 +153,7 @@ describe("useHistoryController", () => {
     expect(controller.historyOpen).toBe(true);
     expect(controller.historyLoading).toBe(false);
     expect(controller.historyItems).toEqual([item]);
-    expect(controller.historyNotice).toBe("");
+    expect(controller.historyNotice).toBeNull();
   });
 
   test("shows an empty notice when history has no items", async () => {
@@ -167,11 +167,11 @@ describe("useHistoryController", () => {
     expect(controller.historyOpen).toBe(true);
     expect(controller.historyLoading).toBe(false);
     expect(controller.historyItems).toEqual([]);
-    expect(controller.historyNotice).not.toBe("");
+    expect(controller.historyNotice).toEqual({ messageCode: "history.notice.empty" });
   });
 
   test("keeps the sheet open and surfaces load errors", async () => {
-    getHistoryMock.mockRejectedValueOnce(new Error("disk unavailable"));
+    getHistoryMock.mockRejectedValueOnce(new Error("disk unavailable private-token"));
     const { render } = await createController();
 
     let controller = render();
@@ -181,7 +181,46 @@ describe("useHistoryController", () => {
     expect(controller.historyOpen).toBe(true);
     expect(controller.historyLoading).toBe(false);
     expect(controller.historyItems).toEqual([]);
-    expect(controller.historyNotice).toContain("disk unavailable");
+    expect(controller.historyNotice).toEqual({ messageCode: "history.notice.loadFailed" });
+    expect(JSON.stringify(controller.historyNotice)).not.toContain("private-token");
+  });
+
+  test("ignores a closed list request after the history sheet is reopened", async () => {
+    let resolveFirst!: (value: HistoryListItem[]) => void;
+    let resolveSecond!: (value: HistoryListItem[]) => void;
+    getHistoryMock
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveFirst = resolve; }),
+      )
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveSecond = resolve; }),
+      );
+    const { render } = await createController();
+
+    let controller = render();
+    const firstLoad = controller.openHistory();
+    controller = render();
+    controller.closeHistory();
+    controller = render();
+    const secondLoad = controller.openHistory();
+
+    resolveFirst([createHistoryItem({ taskId: "stale", id: "stale" })]);
+    await firstLoad;
+    controller = render();
+    expect(controller.historyOpen).toBe(true);
+    expect(controller.historyLoading).toBe(true);
+    expect(controller.historyItems).toEqual([]);
+    expect(controller.historyNotice).toEqual({
+      messageCode: "history.notice.loading",
+    });
+
+    const newest = createHistoryItem({ taskId: "newest", id: "newest" });
+    resolveSecond([newest]);
+    await secondLoad;
+    controller = render();
+    expect(controller.historyLoading).toBe(false);
+    expect(controller.historyItems).toEqual([newest]);
+    expect(controller.historyNotice).toBeNull();
   });
 
   test("selects a history item and closes the sheet", async () => {
@@ -290,8 +329,48 @@ describe("useHistoryController", () => {
     expect(onHistoryItemDeleted).not.toHaveBeenCalled();
     expect(controller.historyItems).toEqual([item]);
     expect(controller.historyDeleteCandidate).toEqual(item);
-    expect(controller.historyNotice).toContain("部分文件可能");
-    expect(controller.historyNotice).not.toContain("review-secret");
+    expect(controller.historyNotice).toEqual({ messageCode: "history.notice.deleteFailed" });
+    expect(JSON.stringify(controller.historyNotice)).not.toContain("review-secret");
+  });
+
+  test("does not let a deletion recovery list overwrite a reopened sheet", async () => {
+    const item = createHistoryItem();
+    let resolveRecovery!: (value: HistoryListItem[]) => void;
+    let resolveReopen!: (value: HistoryListItem[]) => void;
+    getHistoryMock
+      .mockResolvedValueOnce([item])
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveRecovery = resolve; }),
+      )
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveReopen = resolve; }),
+      );
+    deleteHistoryTaskMock.mockRejectedValueOnce(new Error("delete failed"));
+    const { render } = await createController();
+
+    let controller = render();
+    await controller.openHistory();
+    controller = render();
+    controller.requestHistoryItemDeletion(item);
+    controller = render();
+    const deletion = controller.confirmHistoryItemDeletion();
+    await vi.waitFor(() => expect(getHistoryMock).toHaveBeenCalledTimes(2));
+
+    controller = render();
+    controller.closeHistory();
+    controller = render();
+    const reopened = controller.openHistory();
+    const newest = createHistoryItem({ taskId: "newest", id: "newest" });
+    resolveReopen([newest]);
+    await reopened;
+
+    resolveRecovery([createHistoryItem({ taskId: "stale", id: "stale" })]);
+    await deletion;
+    controller = render();
+
+    expect(controller.historyOpen).toBe(true);
+    expect(controller.historyItems).toEqual([newest]);
+    expect(controller.historyNotice).toBeNull();
   });
 
   test("claims one deletion request and invalidates an older detail response", async () => {

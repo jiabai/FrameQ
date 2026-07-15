@@ -39,6 +39,11 @@ const secondHistoryTask = {
 };
 
 const defaultResponses: Record<string, unknown> = {
+  get_ui_preferences: {
+    schemaVersion: 1,
+    language: "zh-CN",
+    recovered: false,
+  },
   check_first_run: {
     user_data_dir: "C:/FrameQ",
     default_output_dir: "C:/FrameQ/outputs",
@@ -228,6 +233,13 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
             return Promise.resolve({
               ...scenario.responses.get_insight_preferences,
               defaultGenerationPreferences: args?.preferences
+            });
+          }
+          if (command === "save_ui_preferences") {
+            return Promise.resolve({
+              schemaVersion: 1,
+              language: args?.preferences?.language,
+              recovered: false
             });
           }
           if (command === "retry_insights") {

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   applyUpdateDownloadEvent,
   createInitialUpdateState,
+  failUpdate,
   isUpdateInstallBlocked,
   markUpdateAvailable,
   markUpdateReadyToRestart,
@@ -21,7 +22,23 @@ describe("desktop update state", () => {
       progress: 0,
       availableVersion: "0.2.0",
       notes: "修复 worker 转写稳定性并改进升级体验。",
+      message: {
+        messageCode: "updates.state.available",
+        args: { version: "0.2.0" },
+      },
     });
+  });
+
+  test("stores semantic failure copy and only allowlisted technical details", () => {
+    const state = failUpdate(
+      createInitialUpdateState(),
+      new Error("Authorization: Bearer secret at C:/private/file; HTTP 503 ETIMEDOUT"),
+    );
+
+    expect(state.message).toEqual({ messageCode: "updates.state.failed" });
+    expect(state.error).toEqual({ httpStatus: 503, errno: "ETIMEDOUT" });
+    expect(JSON.stringify(state)).not.toContain("secret");
+    expect(JSON.stringify(state)).not.toContain("C:/private");
   });
 
   test("tracks download byte progress from Tauri updater events", () => {

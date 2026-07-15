@@ -23,9 +23,9 @@ class FakeInsightClient:
 
     def generate(self, prompt: str) -> str:
         self.prompts.append(prompt)
-        if "Mermaid mindmap" in prompt:
+        if "organize logical mindmaps" in prompt:
             return "mindmap\n  root((retry))"
-        if "根据文字稿原文和 Mermaid 思维导图" in prompt:
+        if "You are a summary editor" in prompt:
             return "# summary\n\nretry summary"
         if "question_count" in prompt:
             return (
@@ -394,6 +394,7 @@ def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path
             {
                 "task_id": task_id,
                 "target": "insights",
+                "output_language": "en-US",
                 "preference_snapshot": valid_preference_snapshot(),
             },
             ensure_ascii=False,
@@ -420,6 +421,7 @@ def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path
     )
     assert preference_snapshot["generationPreferences"]["goal"] == "content_creation"
     assert preference_snapshot["profileSkipped"] is True
+    assert "output_language" not in preference_snapshot
     assert insight_client.prompts
     for prompt in insight_client.prompts:
         assert "user edited official transcript" in prompt
@@ -432,6 +434,7 @@ def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path
     assert manifest["artifacts"] == result["artifacts"]
     assert manifest["artifacts"]["preference_snapshot"] == "ai/preference-snapshot.json"
     assert manifest["insights_count"] == 1
+    assert "output_language" not in manifest
 
 
 def test_retry_quarantined_task_never_returns_sensitive_task_id(tmp_path: Path) -> None:
@@ -457,7 +460,13 @@ def test_retry_quarantined_task_never_returns_sensitive_task_id(tmp_path: Path) 
     )
 
     result = retry_insights_once(
-        json.dumps({"task_id": task_id, "target": "insights"}),
+        json.dumps(
+            {
+                "task_id": task_id,
+                "target": "insights",
+                "output_language": "zh-CN",
+            }
+        ),
         project_root=tmp_path,
         insight_client=None,
         environ={OUTPUT_DIR_ENV: output_root.as_posix()},
@@ -517,7 +526,13 @@ def test_retry_rejects_linked_transcript_before_reading_or_persisting_target(
     monkeypatch.setattr(Path, "is_symlink", simulated_link)
 
     result = retry_insights_once(
-        json.dumps({"task_id": task_id, "target": "summary"}),
+        json.dumps(
+            {
+                "task_id": task_id,
+                "target": "summary",
+                "output_language": "zh-CN",
+            }
+        ),
         project_root=tmp_path,
         insight_client=FakeInsightClient(),
         environ={
@@ -608,6 +623,7 @@ def test_retry_summary_target_preserves_existing_insights_count(tmp_path: Path) 
             {
                 "task_id": task_id,
                 "target": "summary",
+                "output_language": "en-US",
             },
             ensure_ascii=False,
         ),
@@ -631,6 +647,7 @@ def test_retry_summary_target_preserves_existing_insights_count(tmp_path: Path) 
     assert manifest["status"] == "completed"
     assert manifest["artifacts"] == result["artifacts"]
     assert manifest["insights_count"] == 1
+    assert "output_language" not in manifest
 
 
 def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> None:
@@ -690,6 +707,7 @@ def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> Non
             {
                 "task_id": task_id,
                 "target": "insights",
+                "output_language": "zh-TW",
                 "preference_snapshot": valid_preference_snapshot(),
             },
             ensure_ascii=False,
@@ -714,3 +732,4 @@ def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> Non
     assert manifest["status"] == "completed"
     assert manifest["artifacts"] == result["artifacts"]
     assert manifest["insights_count"] == 1
+    assert "output_language" not in manifest

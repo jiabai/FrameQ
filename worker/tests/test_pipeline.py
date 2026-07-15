@@ -1,11 +1,16 @@
 from pathlib import Path
 
+import pytest
 from frameq_worker.asr import Transcript
+from frameq_worker.media import CommandResult
 from frameq_worker.pipeline import (
     run_asr_transcript_step,
     run_insight_generation_step,
+    try_subtitle_transcript_stage,
 )
 from frameq_worker.requests import parse_preference_snapshot
+from frameq_worker.source_identity import SourceIdentity
+from frameq_worker.task_store import TaskContext, TaskPaths
 
 
 class FakeTranscriber:
@@ -87,9 +92,54 @@ def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path)
     }
 
 
+@pytest.mark.parametrize("subtitle_language", ["unknown", "secret"])
+def test_subtitle_found_progress_always_uses_a_safe_language_arg(
+    tmp_path: Path,
+    subtitle_language: str,
+) -> None:
+    paths = TaskPaths(
+        output_root=tmp_path / "outputs",
+        cache_root=tmp_path / "cache",
+        task_id="subtitle-language-test",
+    )
+    paths.download_dir.mkdir(parents=True)
+    paths.transcript_dir.mkdir(parents=True)
+    (paths.download_dir / f"video.{subtitle_language}.srt").write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\nsubtitle text\n",
+        encoding="utf-8",
+    )
+    context = TaskContext(
+        paths=paths,
+        source_identity=SourceIdentity(
+            platform="youtube",
+            stable_id="dQw4w9WgXcQ",
+            canonical_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        ),
+        platform="youtube",
+        model="iic/SenseVoiceSmall",
+        created_at="2026-07-15T00:00:00Z",
+    )
+    events: list[dict[str, object]] = []
+
+    result = try_subtitle_transcript_stage(
+        CommandResult(["yt-dlp"], 0, "", ""),
+        paths.download_dir,
+        context,
+        events.append,
+    )
+
+    assert result is not None
+    assert events[-1] == {
+        "stage": "video_transcribing",
+        "progress": 68,
+        "message_code": "subtitle.detect.found",
+        "message_args": {"language": "und"},
+    }
+
+
 class FakeInsightClient:
     def generate(self, prompt: str) -> str:
-        if "Mermaid mindmap" in prompt:
+        if "organize logical mindmaps" in prompt:
             return "mindmap\n  root((pipeline))"
         if "Mermaid" in prompt and "Transcript" in prompt:
             return "# summary\n\npipeline summary"
@@ -103,7 +153,7 @@ class FakeInsightClient:
 
 class SummaryOnlyClient:
     def generate(self, prompt: str) -> str:
-        if "Mermaid mindmap" in prompt:
+        if "organize logical mindmaps" in prompt:
             return "mindmap\n  root((summary))"
         if "Mermaid" in prompt and "Transcript" in prompt:
             return "# summary\n\nsummary only"
@@ -112,7 +162,7 @@ class SummaryOnlyClient:
 
 class InsightsOnlyClient:
     def generate(self, prompt: str) -> str:
-        if "Mermaid mindmap" in prompt:
+        if "organize logical mindmaps" in prompt:
             return "graph TD\n  A-->B"
         if "question_count" in prompt:
             return '[{"title":"topic","summary":"summary","excerpt":"excerpt","question_count":1}]'
@@ -125,7 +175,7 @@ class CapturingInsightClient:
 
     def generate(self, prompt: str) -> str:
         self.prompts.append(prompt)
-        if "Mermaid mindmap" in prompt:
+        if "organize logical mindmaps" in prompt:
             return "mindmap\n  root((pipeline))"
         if "Mermaid" in prompt and "Transcript" in prompt:
             return "# summary\n\npipeline summary"
@@ -147,6 +197,7 @@ def test_run_insight_generation_step_returns_task_style_artifacts(tmp_path: Path
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=FakeInsightClient(),
+        output_language="zh-CN",
     ).to_dict()
 
     assert result["status"] == "completed"
@@ -177,6 +228,7 @@ def test_run_insight_generation_step_rejects_transcript_markdown_without_prompt(
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=client,
+        output_language="zh-CN",
     ).to_dict()
 
     assert result["status"] == "partial_completed"
@@ -201,6 +253,7 @@ def test_run_insight_generation_step_rejects_same_named_nonofficial_file(
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=client,
+        output_language="zh-CN",
     ).to_dict()
 
     assert result["error"]["code"] == "TRANSCRIPT_TEXT_PATH_INVALID"
@@ -220,6 +273,7 @@ def test_run_insight_generation_step_rejects_other_task_transcript(
         output_dir=tmp_path / "expected-task" / "ai",
         output_stem="",
         client=client,
+        output_language="zh-CN",
     ).to_dict()
 
     assert result["error"]["code"] == "TRANSCRIPT_TEXT_PATH_INVALID"
@@ -238,6 +292,7 @@ def test_run_insight_generation_step_can_generate_only_summary(tmp_path: Path) -
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=client,
+        output_language="zh-CN",
         target="summary",
     ).to_dict()
 
@@ -262,6 +317,7 @@ def test_run_insight_generation_step_can_generate_only_insights(tmp_path: Path) 
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=client,
+        output_language="zh-CN",
         preference_snapshot=preference_snapshot(),
         target="insights",
     ).to_dict()
@@ -291,6 +347,7 @@ def test_run_insight_generation_step_scopes_preferences_to_insight_prompts(
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=client,
+        output_language="zh-CN",
         preference_snapshot=preference_snapshot(),
     )
 
@@ -312,6 +369,7 @@ def test_run_insight_generation_step_without_client_returns_partial_completed(
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=None,
+        output_language="zh-CN",
     ).to_dict()
 
     assert result["status"] == "partial_completed"
@@ -335,6 +393,7 @@ def test_run_insight_generation_step_preserves_summary_when_insights_fail(
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=SummaryOnlyClient(),
+        output_language="zh-CN",
     ).to_dict()
 
     assert result["status"] == "partial_completed"
@@ -357,6 +416,7 @@ def test_run_insight_generation_step_preserves_insights_when_summary_fails(
         output_dir=tmp_path / "task" / "ai",
         output_stem="",
         client=InsightsOnlyClient(),
+        output_language="zh-CN",
     ).to_dict()
 
     assert result["status"] == "partial_completed"

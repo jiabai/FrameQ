@@ -1,7 +1,15 @@
 import { Download, ShieldCheck, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
+import { formatPercent } from "../../i18n/formatters";
+import { useLocale } from "../../i18n/LocaleProvider";
+import { renderAsrModelDownloadMessage } from "../../i18n/progressMessages";
+import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { AsrModelDownloadProgress } from "../../settingsClient";
+import { useModalFocus } from "../modal/useModalFocus";
 import type { AsrModelStatus } from "./types";
+
+const DEFAULT_MODEL_DIRECTORY = "app-local data/models";
 
 type ModelGuideSheetProps = {
   open: boolean;
@@ -9,10 +17,8 @@ type ModelGuideSheetProps = {
   asrModelStatus: AsrModelStatus;
   asrModelLabels: Record<string, string>;
   modelDownloadProgress: AsrModelDownloadProgress;
-  modelDownloadNotice: string;
+  modelDownloadNotice: UiMessage | null;
   modelDownloadStalled: boolean;
-  formatProgressPercent: (value: number) => string;
-  asrModelSourceLabel: (source: string) => string;
   onClose: () => void;
   onStartDownload: () => void;
   onCancelDownload: () => void;
@@ -26,12 +32,27 @@ export function ModelGuideSheet({
   modelDownloadProgress,
   modelDownloadNotice,
   modelDownloadStalled,
-  formatProgressPercent,
-  asrModelSourceLabel,
   onClose,
   onStartDownload,
   onCancelDownload,
 }: ModelGuideSheetProps) {
+  const { t } = useTranslation("asrModel");
+  const { resolvedLocale } = useLocale();
+  const modelGuideModalRef = useModalFocus<HTMLElement>(open);
+  const progressMessage = renderAsrModelDownloadMessage(
+    resolvedLocale,
+    modelDownloadProgress,
+  );
+  const noticeText = renderUiMessage(resolvedLocale, modelDownloadNotice);
+  const source =
+    asrModelStatus.source === "custom_url"
+      ? t("source.customUrl")
+      : asrModelStatus.source === "modelscope"
+        ? t("source.modelScope")
+        : asrModelStatus.source;
+  const progressValue = Math.max(0, Math.min(100, modelDownloadProgress.progress));
+  const progressPercent = formatPercent(progressValue / 100, resolvedLocale);
+
   if (!open) {
     return null;
   }
@@ -47,22 +68,23 @@ export function ModelGuideSheet({
       }}
     >
       <section
+        ref={modelGuideModalRef}
         className="sheet-panel detail-modal model-guide-modal model-guide-sheet"
-        aria-label="ASR 模型下载"
+        aria-label={t("guide.ariaLabel")}
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="modal-header sheet-header">
           <div>
-            <p className="section-label">ASR model</p>
-            <h2>下载 ASR 模型</h2>
+            <p className="section-label">{t("guide.eyebrow")}</p>
+            <h2>{t("guide.title")}</h2>
           </div>
           <button
             className="icon-button"
             type="button"
             onClick={onClose}
-            aria-label="关闭 ASR 模型下载"
+            aria-label={t("guide.close")}
             disabled={modelDownloadActive}
           >
             <X size={18} />
@@ -71,43 +93,63 @@ export function ModelGuideSheet({
         <div className="model-guide-content">
           <p className="settings-warning privacy-callout">
             <ShieldCheck size={16} />
-            <span>ASR 在本机运行，首次使用前需要下载 ASR 模型缓存。下载完成后可离线转写。</span>
+            <span>{t("guide.privacy")}</span>
           </p>
           <div className="model-status-card">
             <div>
-              <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
-                {asrModelStatus.available ? "已就绪" : "需要下载"}
+              <span
+                className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}
+              >
+                {asrModelStatus.available
+                  ? t("guide.status.ready")
+                  : t("guide.status.missing")}
               </span>
-              <strong>{asrModelLabels[asrModelStatus.model] ?? asrModelStatus.model}</strong>
-              <small>来源：{asrModelSourceLabel(asrModelStatus.source)}</small>
-              <small>保存位置：{asrModelStatus.modelDir || "app-local data/models"}</small>
+              <strong>
+                {asrModelLabels[asrModelStatus.model] ?? asrModelStatus.model}
+              </strong>
+              <small>{t("guide.sourceLabel", { source })}</small>
+              <small>
+                {t("guide.storageLabel", {
+                  modelDir:
+                    asrModelStatus.modelDir || DEFAULT_MODEL_DIRECTORY,
+                })}
+              </small>
             </div>
           </div>
-          <div className="model-download-progress">
+          <div
+            className="model-download-progress"
+            role="progressbar"
+            aria-label={t("guide.downloadProgressAria")}
+            aria-valuenow={progressValue}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div className="progress-summary compact">
               <div>
-                <span className="progress-value">
-                  {formatProgressPercent(modelDownloadProgress.progress)}
-                </span>
-                <p>{modelDownloadProgress.message || "等待开始下载。"}</p>
+                <span className="progress-value">{progressPercent}</span>
+                <p>{progressMessage}</p>
               </div>
               <div className="progress-track">
                 <span
                   className="progress-fill video_transcribing"
-                  style={{ width: `${modelDownloadProgress.progress}%` }}
+                  style={{ width: `${progressValue}%` }}
                 />
               </div>
             </div>
             {modelDownloadProgress.currentFile ? (
-              <small className="model-current-file">{modelDownloadProgress.currentFile}</small>
+              <small className="model-current-file">
+                {modelDownloadProgress.currentFile}
+              </small>
             ) : null}
           </div>
-          {modelDownloadNotice ? (
-            <p className="action-notice inline-notice">{modelDownloadNotice}</p>
+          {noticeText ? (
+            <p className="action-notice inline-notice" role="status" aria-live="polite">
+              {noticeText}
+            </p>
           ) : null}
-          {!modelDownloadNotice && modelDownloadStalled ? (
-            <p className="action-notice inline-notice">
-              下载进度暂时没有变化，可能是 ModelScope 网络较慢。可以继续等待，或取消后稍后重试。
+          {!noticeText && modelDownloadStalled ? (
+            <p className="action-notice inline-notice" role="status" aria-live="polite">
+              {t("guide.stalled")}
             </p>
           ) : null}
         </div>
@@ -118,12 +160,16 @@ export function ModelGuideSheet({
             onClick={onClose}
             disabled={modelDownloadActive}
           >
-            <span>稍后下载</span>
+            <span>{t("guide.later")}</span>
           </button>
           {modelDownloadActive ? (
-            <button type="button" className="secondary-button danger-soft" onClick={onCancelDownload}>
+            <button
+              type="button"
+              className="secondary-button danger-soft"
+              onClick={onCancelDownload}
+            >
               <X size={16} />
-              <span>取消下载</span>
+              <span>{t("guide.cancel")}</span>
             </button>
           ) : (
             <button
@@ -133,7 +179,11 @@ export function ModelGuideSheet({
               disabled={asrModelStatus.available}
             >
               <Download size={16} />
-              <span>{asrModelStatus.available ? "已下载" : "下载 ASR 模型"}</span>
+              <span>
+                {asrModelStatus.available
+                  ? t("guide.downloaded")
+                  : t("guide.download")}
+              </span>
             </button>
           )}
         </div>

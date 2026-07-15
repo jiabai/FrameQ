@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { uiMessage } from "../../i18n/uiMessage";
+import { extractSafeTechnicalDetails } from "../../safeTechnicalDetails";
 
 import {
   checkForAppUpdate,
@@ -41,6 +43,8 @@ export function useAppUpdateController({
   const updateInfoRef = useRef<AppUpdateInfo | null>(null);
   const releasesUrlRef = useRef<string>(DEFAULT_RELEASES_URL);
   const updatePreferencesRef = useRef<UpdatePreferences>(createDefaultUpdatePreferences());
+  const updateCheckRequestSequenceRef = useRef(0);
+  const updateInstallActiveRef = useRef(false);
   const updateBusy = isUpdateBusy(updateState.status);
   const updateInstallBlocked = isUpdateInstallBlocked({
     processingActive,
@@ -56,19 +60,33 @@ export function useAppUpdateController({
     };
     updatePreferencesRef.current = next;
     void saveUpdatePreferences(next).catch((error) => {
-      console.warn("Failed to save update preferences", error);
+      logSafeUpdateWarning("UPDATE_PREFERENCES_SAVE_FAILED", error);
     });
+  }, []);
+
+  const invalidateUpdateChecks = useCallback(() => {
+    updateCheckRequestSequenceRef.current += 1;
   }, []);
 
   const checkForUpdates = useCallback(
     async (options: { silent?: boolean; isCancelled?: () => boolean } = {}) => {
+      if (updateInstallActiveRef.current) {
+        return;
+      }
+
+      const requestSequence = updateCheckRequestSequenceRef.current + 1;
+      updateCheckRequestSequenceRef.current = requestSequence;
+      const canCommit = () =>
+        updateCheckRequestSequenceRef.current === requestSequence &&
+        !options.isCancelled?.();
+
       if (!options.silent) {
         persistUpdatePreferences({ postponedUntil: null });
       }
       setUpdateState((current) => startUpdateCheck(current));
       try {
         const update = await checkForAppUpdate();
-        if (options.isCancelled?.()) {
+        if (!canCommit()) {
           return;
         }
 
@@ -96,7 +114,7 @@ export function useAppUpdateController({
           }),
         );
       } catch (error) {
-        if (options.isCancelled?.()) {
+        if (!canCommit()) {
           return;
         }
 
@@ -123,7 +141,7 @@ export function useAppUpdateController({
           return;
         }
       } catch (error) {
-        console.warn("Failed to load update preferences", error);
+        logSafeUpdateWarning("UPDATE_PREFERENCES_LOAD_FAILED", error);
       }
 
       if (!isCancelled()) {
@@ -144,7 +162,7 @@ export function useAppUpdateController({
         releasesUrlRef.current = delivery.releasesUrl;
         setInAppUpdates(delivery.inAppUpdates);
       } catch (error) {
-        console.warn("Failed to load update delivery", error);
+        logSafeUpdateWarning("UPDATE_DELIVERY_LOAD_FAILED", error);
       } finally {
         if (!cancelled) {
           setDeliveryLoaded(true);
@@ -177,20 +195,22 @@ export function useAppUpdateController({
   }, [deliveryLoaded, inAppUpdates, loadPreferencesAndCheckForUpdates]);
 
   const openReleases = useCallback(async () => {
+    invalidateUpdateChecks();
     try {
       await openReleasesPage(releasesUrlRef.current);
     } catch (error) {
       setUpdateState((current) => failUpdate(current, error));
     }
-  }, []);
+  }, [invalidateUpdateChecks]);
 
   const restartForUpdate = useCallback(async () => {
+    invalidateUpdateChecks();
     try {
       await relaunchApp();
     } catch (error) {
       setUpdateState((current) => failUpdate(current, error));
     }
-  }, []);
+  }, [invalidateUpdateChecks]);
 
   const installUpdate = useCallback(async () => {
     if (updateState.status === "ready_to_restart") {
@@ -198,14 +218,19 @@ export function useAppUpdateController({
       return;
     }
 
+    if (updateInstallActiveRef.current) {
+      return;
+    }
+
     if (updateInstallBlocked) {
       setUpdateState((current) => ({
         ...current,
-        message: "当前任务或模型下载完成后再安装更新。",
+        message: uiMessage("updates.state.installBlocked"),
       }));
       return;
     }
 
+    invalidateUpdateChecks();
     let update = updateInfoRef.current;
     if (!update) {
       await checkForUpdates({ silent: false });
@@ -216,6 +241,8 @@ export function useAppUpdateController({
       return;
     }
 
+    invalidateUpdateChecks();
+    updateInstallActiveRef.current = true;
     setUpdateState((current) => startUpdateDownload(current));
     try {
       await installAppUpdate(update, (event) => {
@@ -223,18 +250,20 @@ export function useAppUpdateController({
       });
       setUpdateState((current) => markUpdateReadyToRestart(current));
     } catch (error) {
+      updateInstallActiveRef.current = false;
       setUpdateState((current) => failUpdate(current, error));
     }
-  }, [checkForUpdates, restartForUpdate, updateInstallBlocked, updateState.status]);
+  }, [checkForUpdates, invalidateUpdateChecks, restartForUpdate, updateInstallBlocked, updateState.status]);
 
   const postponeUpdateReminder = useCallback(() => {
+    invalidateUpdateChecks();
     const next = postponeUpdate(updateState, 24 * 60 * 60 * 1000);
     setUpdateState(next);
     persistUpdatePreferences({
       postponedUntil: next.postponedUntil,
       skippedVersion: null,
     });
-  }, [persistUpdatePreferences, updateState]);
+  }, [invalidateUpdateChecks, persistUpdatePreferences, updateState]);
 
   return {
     updateState,
@@ -257,4 +286,30 @@ function isUpdateBusy(status: string): boolean {
 
 function isUpdateActionVisible(status: string): boolean {
   return status === "available" || status === "downloading" || status === "installing" || status === "ready_to_restart";
+}
+
+export type UpdateWarningCode =
+  | "UPDATE_PREFERENCES_SAVE_FAILED"
+  | "UPDATE_PREFERENCES_LOAD_FAILED"
+  | "UPDATE_DELIVERY_LOAD_FAILED";
+
+export function logSafeUpdateWarning(code: UpdateWarningCode, error: unknown): void {
+  const errorRecord = isUnknownRecord(error) ? error : null;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : errorRecord?.message;
+  const details = extractSafeTechnicalDetails({
+    errorCode: errorRecord?.code,
+    stageCode: errorRecord?.stageCode,
+    message,
+  });
+
+  console.warn(code, details);
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

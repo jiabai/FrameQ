@@ -8,7 +8,9 @@ import frameq_worker.pipeline as pipeline
 import pytest
 from frameq_worker.asr import Transcript
 from frameq_worker.cli import (
+    MODEL_DOWNLOAD_EVENT_PREFIX,
     PROGRESS_EVENT_PREFIX,
+    render_model_download_event,
     render_progress_event,
     render_result_json,
     resolve_source_identity_once,
@@ -220,7 +222,13 @@ def test_main_resolves_source_identity_from_stdin_without_echoing_secret(
 
 
 def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
-    payload = json.dumps({"task_id": "safe-task", "target": "summary"})
+    payload = json.dumps(
+        {
+            "task_id": "safe-task",
+            "target": "summary",
+            "output_language": "en-US",
+        }
+    )
     captured: dict[str, str] = {}
 
     def fake_retry_insights_once(
@@ -239,6 +247,7 @@ def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
     assert json.loads(captured["request_json"]) == {
         "task_id": "safe-task",
         "target": "summary",
+        "output_language": "en-US",
     }
     assert "safe-task" not in capsys.readouterr().err
 
@@ -283,7 +292,36 @@ def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> 
 
 def test_render_helpers_emit_json_and_progress_prefix() -> None:
     assert json.loads(render_result_json({"status": "completed"})) == {"status": "completed"}
-    assert render_progress_event({"stage": "video_extracting"}).startswith(PROGRESS_EVENT_PREFIX)
+    rendered = render_progress_event(
+        {
+            "stage": "video_extracting",
+            "progress": 18,
+            "message_code": "video.download.preparing",
+        }
+    )
+
+    assert rendered.startswith(PROGRESS_EVENT_PREFIX)
+    assert json.loads(rendered.removeprefix(PROGRESS_EVENT_PREFIX)) == {
+        "stage": "video_extracting",
+        "progress": 18,
+        "message_code": "video.download.preparing",
+    }
+
+    model_rendered = render_model_download_event(
+        {
+            "status": "started",
+            "progress": 0,
+            "message_code": "model.download.preparing",
+            "message_args": {"model": "iic/SenseVoiceSmall"},
+        }
+    )
+    assert model_rendered.startswith(MODEL_DOWNLOAD_EVENT_PREFIX)
+    assert json.loads(model_rendered.removeprefix(MODEL_DOWNLOAD_EVENT_PREFIX)) == {
+        "status": "started",
+        "progress": 0,
+        "message_code": "model.download.preparing",
+        "message_args": {"model": "iic/SenseVoiceSmall"},
+    }
 
 
 def test_source_identity_preflight_returns_only_safe_identity() -> None:
@@ -341,6 +379,8 @@ def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    events: list[dict[str, object]] = []
+
     def fail_if_ai_client_is_built(_env: dict[str, str]) -> object:
         raise AssertionError("process_video must not construct an AI client")
 
@@ -354,6 +394,7 @@ def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
+        progress_callback=events.append,
     )
 
     assert result["status"] == "completed"
@@ -373,6 +414,39 @@ def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
     )
     assert transcript == "desktop transcript"
     assert not (tmp_path / "cache" / "history.json").exists()
+    assert events == [
+        {
+            "stage": "video_extracting",
+            "progress": 18,
+            "message_code": "video.download.preparing",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 34,
+            "message_code": "video.stream.validating",
+        },
+        {
+            "stage": "video_extracting",
+            "progress": 48,
+            "message_code": "audio.extract.running",
+        },
+        {
+            "stage": "video_transcribing",
+            "progress": 58,
+            "message_code": "subtitle.detect.running",
+        },
+        {
+            "stage": "video_transcribing",
+            "progress": 58,
+            "message_code": "asr.transcribe.starting",
+        },
+        {
+            "stage": "video_transcribing",
+            "progress": 68,
+            "message_code": "asr.transcribe.running",
+        },
+    ]
+    assert all("message" not in event for event in events)
 
 
 def test_run_worker_once_rejects_retired_ai_field_without_echoing_request(
@@ -475,6 +549,8 @@ def test_run_worker_once_uses_download_stdout_inside_task_cache_dir(
 def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extraction(
     tmp_path: Path,
 ) -> None:
+    events: list[dict[str, object]] = []
+
     def fail_build_asr_transcriber(model_name: str, cache_dir: Path) -> FakeTranscriber:
         raise AssertionError("ASR model should be validated before loading")
 
@@ -484,6 +560,7 @@ def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extrac
         command_runner=FakeMediaRunner(),
         transcriber_factory=fail_build_asr_transcriber,
         allow_real_asr=True,
+        progress_callback=events.append,
     )
 
     assert result["status"] == "failed"
@@ -495,6 +572,12 @@ def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extrac
         "code": "ASR_MODEL_NOT_DOWNLOADED",
         "message": "SenseVoice Small model is not downloaded yet.",
         "stage": "video_transcribing",
+    }
+    assert events[-1] == {
+        "stage": "video_transcribing",
+        "progress": 58,
+        "message_code": "asr.cache.preparing",
+        "message_args": {"model": "iic/SenseVoiceSmall"},
     }
 
 
@@ -537,3 +620,36 @@ def test_run_worker_once_uses_configured_asr_model_from_user_data_env(
         "cache_dir": tmp_path / "models",
     }
     assert "- Model: iic/SenseVoiceSmall" in transcript_md.read_text(encoding="utf-8")
+
+
+def test_hidden_dev_qwen_adapter_does_not_expand_release_progress_model_enum(
+    tmp_path: Path,
+) -> None:
+    create_valid_asr_cache(tmp_path / "models")
+    events: list[dict[str, object]] = []
+
+    result = run_worker_once(
+        json.dumps(
+            {
+                "url": "https://www.douyin.com/video/7524373044106677544",
+                "model": "Qwen/Qwen3-ASR-0.6B",
+            }
+        ),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        transcriber_factory=lambda model_name, cache_dir: FakeTranscriber(),
+        allow_real_asr=True,
+        progress_callback=events.append,
+    )
+
+    assert result["status"] == "completed"
+    cache_event = next(
+        event
+        for event in events
+        if event["message_code"] == "asr.cache.preparing"
+    )
+    assert cache_event == {
+        "stage": "video_transcribing",
+        "progress": 58,
+        "message_code": "asr.cache.preparing",
+    }

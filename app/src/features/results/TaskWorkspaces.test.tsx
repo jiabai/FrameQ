@@ -1,6 +1,6 @@
 import { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test, vi } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 
 import { createGuestAccountStatus } from "../../accountState";
 import {
@@ -15,6 +15,8 @@ import type { TranscriptDetailController } from "../transcript/useTranscriptDeta
 import { LocalTranscriptWorkspace } from "../transcript/LocalTranscriptWorkspace";
 import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
 import { TaskStatusBanner } from "./TaskStatusBanner";
+import { initializeI18n } from "../../i18n/i18n";
+import type { SupportedLocale } from "../../i18n/locale";
 
 function readyWorkflow(): WorkflowState {
   return summarizeWorkerResult({
@@ -112,6 +114,10 @@ function transcriptController(): TranscriptDetailController {
 }
 
 describe("task domain workspaces", () => {
+  beforeAll(async () => {
+    await initializeI18n("zh-CN");
+  });
+
   test("renders a local completion banner and two labelled workspaces for the same task", () => {
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
@@ -122,7 +128,7 @@ describe("task domain workspaces", () => {
           workflow={workflow}
           model={model.local}
           controller={transcriptController()}
-          actionNotice=""
+          actionNotice={null}
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
         />
@@ -139,6 +145,9 @@ describe("task domain workspaces", () => {
     );
 
     expect(markup).toContain('aria-label="任务状态"');
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).toContain('aria-atomic="true"');
     expect(markup).toContain("视频、音频和文字稿已保存在本机");
     expect(markup).toContain('aria-label="本地文字稿工作区"');
     expect(markup).toContain('data-task-id="same-task"');
@@ -162,7 +171,7 @@ describe("task domain workspaces", () => {
           workflow={processingWorkflow}
           model={processingModel.local}
           controller={transcriptController()}
-          actionNotice=""
+          actionNotice={null}
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
         />
@@ -197,7 +206,7 @@ describe("task domain workspaces", () => {
         workflow={failedWorkflow}
         model={failedModel.local}
         controller={transcriptController()}
-        actionNotice=""
+          actionNotice={null}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -228,7 +237,7 @@ describe("task domain workspaces", () => {
         workflow={workflow}
         model={model.local}
         controller={transcriptController()}
-        actionNotice=""
+          actionNotice={null}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -264,12 +273,12 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("确认后仅发送文字稿片段，视频和音频不会上传");
     expect(markup).toContain('data-ai-target="summary"');
     expect(markup).toContain("要点总结");
-    expect(markup).toContain("同时生成思维导图文件");
+    expect(markup).toContain("同时生成 Mermaid 思维导图文件");
     expect(markup).toContain('data-ai-target="insights"');
     expect(markup.match(/<article class="ai-target-card/g)).toHaveLength(2);
     expect(markup).toContain("启发灵感");
     expect(markup).toContain("AI Credits 余额：8");
-    expect(markup).toContain("一次 AI 整理可能消耗多个 Credits。");
+    expect(markup).toContain("一次智能提炼可能消耗多个 Credits。");
     expect(markup).not.toContain("当前可用 8 次");
     expect(markup).not.toContain('data-ai-target="mindmap"');
     expect(markup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(2);
@@ -284,7 +293,7 @@ describe("task domain workspaces", () => {
         workflow={workflow}
         model={model.local}
         controller={transcriptController()}
-        actionNotice=""
+          actionNotice={null}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -315,7 +324,7 @@ describe("task domain workspaces", () => {
         workflow={workflow}
         model={model.ai}
         quotaRemaining={0}
-        notice="无法读取本次 AI 偏好"
+        notice={{ messageCode: "preferences.notice.preferencesReadFailed" }}
         onSummaryAction={vi.fn()}
         onInsightsAction={vi.fn()}
         onViewTarget={vi.fn()}
@@ -325,7 +334,78 @@ describe("task domain workspaces", () => {
 
     expect(markup).toContain("AI Credits 已用完");
     expect(markup).toContain('class="ai-workspace-notice"');
-    expect(markup).toContain("无法读取本次 AI 偏好");
+    expect(markup).toContain("无法读取本地偏好，请稍后重试。");
     expect(markup).toContain('disabled=""');
+  });
+
+  test.each([
+    ["zh-CN", "本地文字稿工作区", "文字稿校对", "播放音频", "编辑此片段", "复制", "导出", "保存"],
+    ["zh-TW", "本機逐字稿工作區", "逐字稿校對", "播放音訊", "編輯此片段", "複製", "匯出", "儲存"],
+    ["en-US", "Local Transcript workspace", "Transcript Review", "Play audio", "Edit this segment", "Copy", "Export", "Save"],
+  ] as const)(
+    "localizes transcript controls and audio accessibility copy in %s",
+    async (locale, workspaceLabel, title, playAudio, editSegment, copy, exportLabel, save) => {
+      await initializeI18n(locale as SupportedLocale);
+      const workflow = readyWorkflow();
+      const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+      const markup = renderToStaticMarkup(
+        <LocalTranscriptWorkspace
+          workflow={workflow}
+          model={model.local}
+          controller={transcriptController()}
+          actionNotice={null}
+          onLocateArtifact={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+
+      expect(markup).toContain(`aria-label="${workspaceLabel}"`);
+      expect(markup).toContain(title);
+      expect(markup).toContain(`aria-label="${playAudio}"`);
+      expect(markup).toContain(`aria-label="${editSegment}"`);
+      expect(markup).toContain(`>${copy}</span>`);
+      expect(markup).toContain(`>${exportLabel}</span>`);
+      expect(markup).toContain(`>${save}</span>`);
+      expect(markup).toContain("第一段正式文字稿。");
+
+      await initializeI18n("zh-CN");
+    },
+  );
+
+  test("shows a localized generic worker error with only a safe code", async () => {
+    await initializeI18n("en-US");
+    const failedWorkflow = summarizeWorkerResult({
+      status: "failed",
+      task_id: null,
+      task_dir: null,
+      artifacts: {},
+      text: "",
+      summary: "",
+      insights: [],
+      transcript: null,
+      error: {
+        code: "FUTURE_WORKER_FAILURE",
+        message: "Authorization: Bearer super-secret at C:/private/transcript.txt",
+        stage: "video_transcribing",
+      },
+    });
+    const model = createTaskWorkspaceViewModel(failedWorkflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        workflow={failedWorkflow}
+        model={model.local}
+        controller={transcriptController()}
+          actionNotice={null}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("The operation failed. Try again later.");
+    expect(markup).toContain("Technical details");
+    expect(markup).toContain("FUTURE_WORKER_FAILURE");
+    expect(markup).not.toContain("super-secret");
+    expect(markup).not.toContain("C:/private");
+    await initializeI18n("zh-CN");
   });
 });

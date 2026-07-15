@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import {
@@ -16,70 +16,205 @@ import {
   isBrowserPreviewRuntime,
   type AccountStatus,
 } from "../../accountState";
+import { formatDateTime } from "../../i18n/formatters";
+import { useLocale } from "../../i18n/LocaleProvider";
+import type { SupportedLocale } from "../../i18n/locale";
+import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
 type UseAccountControllerOptions = {
-  formatHistoryDate: (value: string) => string;
   onSignedOut: () => void;
 };
 
+export const ACCOUNT_STATUS_UNAVAILABLE_CODE = "ACCOUNT_STATUS_UNAVAILABLE";
+
+export type AccountNotice = UiMessage | null;
+
+function sanitizeAccountStatus(status: AccountStatus): AccountStatus {
+  return status.serverError
+    ? { ...status, serverError: ACCOUNT_STATUS_UNAVAILABLE_CODE }
+    : status;
+}
+
+function formatAccountDate(
+  value: string | null,
+  locale: SupportedLocale,
+): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : formatDateTime(date, locale);
+}
+
+function getAccountChipMessage(account: AccountStatus): UiMessage {
+  const hasActiveEntitlement =
+    account.authenticated && account.entitlementStatus === "active";
+  if (canProcessWithAccount(account)) {
+    return uiMessage("account.chip.authorized");
+  }
+  if (!account.authenticated) {
+    return uiMessage("account.chip.signIn");
+  }
+  if (!hasActiveEntitlement) {
+    return uiMessage("account.chip.activationRequired");
+  }
+  return uiMessage(
+    account.llmConfigured
+      ? "account.chip.quotaInsufficient"
+      : "account.chip.configurationPending",
+  );
+}
+
+function getAccountStatusMessage(
+  account: AccountStatus,
+  locale: SupportedLocale,
+): UiMessage {
+  const hasActiveEntitlement =
+    account.authenticated && account.entitlementStatus === "active";
+  if (canProcessWithAccount(account)) {
+    const expiresAt = formatAccountDate(account.entitlementExpiresAt, locale);
+    return expiresAt
+      ? uiMessage("account.status.authorizationActiveUntil", { date: expiresAt })
+      : uiMessage("account.status.authorizationActive");
+  }
+  if (!account.authenticated) {
+    return uiMessage("account.status.signedOut");
+  }
+  if (!hasActiveEntitlement) {
+    return uiMessage("account.status.notActivated");
+  }
+  return uiMessage(
+    account.llmConfigured
+      ? "account.status.quotaInsufficient"
+      : "account.status.configurationPending",
+  );
+}
+
 export function useAccountController({
-  formatHistoryDate,
   onSignedOut,
 }: UseAccountControllerOptions) {
+  const { resolvedLocale } = useLocale();
   const [account, setAccount] = useState<AccountStatus>(createGuestAccountStatus);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [accountNotice, setAccountNotice] = useState("");
+  const [accountNotice, setAccountNotice] = useState<AccountNotice>(null);
   const [accountLoading, setAccountLoading] = useState(false);
   const [activationCodeDraft, setActivationCodeDraft] = useState("");
   const [activationRedeeming, setActivationRedeeming] = useState(false);
+  const refreshRequestIdRef = useRef(0);
+  const activeOperationIdRef = useRef(0);
+  const activeOperationPendingRef = useRef<number | null>(null);
 
-  const refreshAccountStatus = useCallback(async () => {
+  const beginActiveOperation = useCallback(() => {
+    const operationId = activeOperationIdRef.current + 1;
+    activeOperationIdRef.current = operationId;
+    activeOperationPendingRef.current = operationId;
+    refreshRequestIdRef.current += 1;
+    return operationId;
+  }, []);
+
+  const finishActiveOperation = useCallback((operationId: number) => {
+    if (activeOperationPendingRef.current !== operationId) {
+      return false;
+    }
+    activeOperationPendingRef.current = null;
+    return true;
+  }, []);
+
+  const runAccountStatusRefresh = useCallback(async (
+    activeOperationId: number | null,
+  ) => {
+    if (
+      activeOperationId === null
+        ? activeOperationPendingRef.current !== null
+        : activeOperationPendingRef.current !== activeOperationId
+    ) {
+      return;
+    }
+
+    const requestId = refreshRequestIdRef.current + 1;
+    refreshRequestIdRef.current = requestId;
+    const canCommit = () =>
+      refreshRequestIdRef.current === requestId &&
+      (activeOperationId === null
+        ? activeOperationPendingRef.current === null
+        : activeOperationPendingRef.current === activeOperationId);
+
     setAccountLoading(true);
     try {
       const status = await getAccountStatus();
-      setAccount(status);
-      setAccountNotice(status.serverError ? `账号状态刷新失败：${status.serverError}` : "");
-    } catch (error) {
+      if (!canCommit()) {
+        return;
+      }
+      setAccount(sanitizeAccountStatus(status));
+      setAccountNotice(
+        status.serverError
+          ? uiMessage("account.notice.statusRefreshFailed")
+          : null,
+      );
+    } catch {
+      if (!canCommit()) {
+        return;
+      }
       if (isBrowserPreviewRuntime()) {
-        setAccount(createBrowserPreviewAccountStatus());
-        setAccountNotice("浏览器预览模式：使用本地模拟账号。");
+        setAccount({
+          ...createBrowserPreviewAccountStatus(),
+          serverError: null,
+        });
+        setAccountNotice(uiMessage("account.notice.browserPreview"));
         return;
       }
 
-      const message = error instanceof Error ? error.message : String(error);
-      const serverError = message || "账号状态刷新失败";
-      setAccount(createAccountStatusFailure(serverError));
-      setAccountNotice(`账号状态刷新失败：${serverError}`);
+      setAccount(
+        createAccountStatusFailure(ACCOUNT_STATUS_UNAVAILABLE_CODE),
+      );
+      setAccountNotice(uiMessage("account.notice.statusRefreshFailed"));
     } finally {
-      setAccountLoading(false);
+      if (canCommit()) {
+        setAccountLoading(false);
+      }
     }
   }, []);
+
+  const refreshAccountStatus = useCallback(
+    () => runAccountStatusRefresh(null),
+    [runAccountStatusRefresh],
+  );
 
   const handleAuthCallback = useCallback(
     async (callbackUrl: string) => {
       if (!callbackUrl.startsWith("frameq://auth/callback")) {
         return;
       }
+      const operationId = beginActiveOperation();
+      setActivationRedeeming(false);
       setAccountOpen(true);
       setAccountLoading(true);
-      setAccountNotice("正在完成登录...");
+      setAccountNotice(uiMessage("account.notice.loginCompleting"));
       try {
         await completeAuthFlow(callbackUrl);
-        await refreshAccountStatus();
-        setAccountNotice("登录已完成。");
-      } catch (error) {
-        setAccountNotice(`登录失败：${error instanceof Error ? error.message : String(error)}`);
+        if (activeOperationPendingRef.current === operationId) {
+          await runAccountStatusRefresh(operationId);
+        }
+        if (activeOperationPendingRef.current === operationId) {
+          setAccountNotice(uiMessage("account.notice.loginComplete"));
+        }
+      } catch {
+        if (activeOperationPendingRef.current === operationId) {
+          setAccountNotice(uiMessage("account.notice.loginFailed"));
+        }
       } finally {
-        setAccountLoading(false);
+        if (finishActiveOperation(operationId)) {
+          setAccountLoading(false);
+        }
       }
     },
-    [refreshAccountStatus],
+    [beginActiveOperation, finishActiveOperation, runAccountStatusRefresh],
   );
 
   const openAccountPanel = useCallback(
-    (notice?: string) => {
+    (notice?: UiMessage) => {
       setAccountOpen(true);
-      setAccountNotice(notice ?? "");
+      setAccountNotice(notice ?? null);
       void refreshAccountStatus();
     },
     [refreshAccountStatus],
@@ -90,83 +225,96 @@ export function useAccountController({
   }, []);
 
   const startLoginFlow = useCallback(async () => {
+    const operationId = beginActiveOperation();
+    setActivationRedeeming(false);
     setAccountLoading(true);
-    setAccountNotice("正在打开登录页面...");
+    setAccountNotice(uiMessage("account.notice.loginOpening"));
     try {
       const auth = await beginAuthFlow();
       await openUrl(auth.authUrl);
-      setAccountNotice("登录页面已打开。请在浏览器中输入邮箱验证码，完成后会自动回到 FrameQ。");
-    } catch (error) {
-      setAccountNotice(`无法开始登录：${error instanceof Error ? error.message : String(error)}`);
+      if (activeOperationPendingRef.current === operationId) {
+        setAccountNotice(uiMessage("account.notice.loginOpened"));
+      }
+    } catch {
+      if (activeOperationPendingRef.current === operationId) {
+        setAccountNotice(uiMessage("account.notice.loginStartFailed"));
+      }
     } finally {
-      setAccountLoading(false);
+      if (finishActiveOperation(operationId)) {
+        setAccountLoading(false);
+      }
     }
-  }, []);
+  }, [beginActiveOperation, finishActiveOperation]);
 
   const redeemActivationCodeFromInput = useCallback(async () => {
     const code = activationCodeDraft.trim();
     if (!code) {
-      setAccountNotice("请输入激活码。");
+      setAccountNotice(uiMessage("account.notice.activationRequired"));
       return;
     }
+    const operationId = beginActiveOperation();
+    setAccountLoading(false);
     setActivationRedeeming(true);
-    setAccountNotice("");
+    setAccountNotice(null);
     try {
       const status = await redeemActivationCode(code);
-      setAccount(status);
-      setActivationCodeDraft("");
-      setAccountNotice("激活成功，授权已生效。");
-    } catch (error) {
-      setAccountNotice(`激活失败：${error instanceof Error ? error.message : String(error)}`);
+      if (activeOperationPendingRef.current === operationId) {
+        setAccount(sanitizeAccountStatus(status));
+        setActivationCodeDraft("");
+        setAccountNotice(uiMessage("account.notice.activationSuccess"));
+      }
+    } catch {
+      if (activeOperationPendingRef.current === operationId) {
+        setAccountNotice(uiMessage("account.notice.activationFailed"));
+      }
     } finally {
-      setActivationRedeeming(false);
+      if (finishActiveOperation(operationId)) {
+        setActivationRedeeming(false);
+      }
     }
-  }, [activationCodeDraft]);
+  }, [activationCodeDraft, beginActiveOperation, finishActiveOperation]);
 
   const signOutAccount = useCallback(async () => {
+    const operationId = beginActiveOperation();
+    setActivationRedeeming(false);
     setAccountLoading(true);
     try {
       await logoutAccount();
-      onSignedOut();
-      setAccount(createGuestAccountStatus());
-      setActivationCodeDraft("");
-      setAccountNotice("");
-      setAccountOpen(false);
-    } catch (error) {
-      setAccountNotice(`退出登录失败：${error instanceof Error ? error.message : String(error)}`);
+      if (activeOperationPendingRef.current === operationId) {
+        onSignedOut();
+        setAccount(createGuestAccountStatus());
+        setActivationCodeDraft("");
+        setAccountNotice(null);
+        setAccountOpen(false);
+      }
+    } catch {
+      if (activeOperationPendingRef.current === operationId) {
+        setAccountNotice(uiMessage("account.notice.signOutFailed"));
+      }
     } finally {
-      setAccountLoading(false);
+      if (finishActiveOperation(operationId)) {
+        setAccountLoading(false);
+      }
     }
-  }, [onSignedOut]);
+  }, [beginActiveOperation, finishActiveOperation, onSignedOut]);
 
   useEffect(() => {
     void refreshAccountStatus();
   }, [refreshAccountStatus]);
 
-  const { accountChipLabel, accountStatusText } = useMemo(() => {
-    const accountHasActiveEntitlement =
-      account.authenticated && account.entitlementStatus === "active";
-    const chipLabel = canProcessWithAccount(account)
-      ? "授权有效"
-      : account.authenticated
-        ? accountHasActiveEntitlement
-          ? account.llmConfigured
-            ? "LLM 额度不足"
-            : "待配置"
-          : "激活"
-        : "登录";
-    const statusText = canProcessWithAccount(account)
-      ? `授权有效${account.entitlementExpiresAt ? `至 ${formatHistoryDate(account.entitlementExpiresAt)}` : ""}`
-      : account.authenticated
-        ? accountHasActiveEntitlement
-          ? account.llmConfigured
-            ? "LLM API 调用额度不足"
-            : "等待管理员配置 LLM"
-          : "未激活"
-        : "未登录";
-
-    return { accountChipLabel: chipLabel, accountStatusText: statusText };
-  }, [account, formatHistoryDate]);
+  const { accountChipLabel, accountStatusText } = useMemo(
+    () => ({
+      accountChipLabel: renderUiMessage(
+        resolvedLocale,
+        getAccountChipMessage(account),
+      ),
+      accountStatusText: renderUiMessage(
+        resolvedLocale,
+        getAccountStatusMessage(account, resolvedLocale),
+      ),
+    }),
+    [account, resolvedLocale],
+  );
 
   return {
     account,

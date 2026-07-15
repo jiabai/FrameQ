@@ -2,6 +2,16 @@
 
 ## Active UI Work
 
+- [x] Add desktop i18n and confirmation-time AI output language (2026-07-15) — ✅ Acceptance: bundle `zh-CN`,
+  `zh-TW`, and `en-US`; persist `system | locale` in app-local `ui-preferences.json`; localize UI,
+  progress, accessibility, known errors, and History navigation/chrome; require strict contract-v2
+  `output_language` for new summary/mindmap/insights requests without translating ASR, subtitles,
+  historical user content, or existing AI artifacts and without extra LLM calls or AI Credits. ExecPlan:
+  `docs/exec-plans/completed/2026-07-15-desktop-i18n-ai-output-language-plan.md`. ✅ App 488,
+  browser 25, Rust 134, worker 363, scripts 22, build/Tauri/docs/diff gates, Windows native
+  WebView language switching/restart, and 28-file packaged-worker equality passed. macOS native
+  behavior and real-provider language adherence remain explicitly unverified residual risks.
+
 - [x] Upgrade GitHub Actions from Node.js 20-era runtimes (2026-07-12) ✅ Checkout v5, setup-node
   v5, setup-uv v8.3.2, and upload-artifact v6 now use Node.js 24. ✅ Focused workflow contracts
   passed 6/6, the complete script suite passed 15/15, hosted ProcessSupervisor run `29199050303`
