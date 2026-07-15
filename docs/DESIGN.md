@@ -191,7 +191,7 @@ UI 必须围绕以下状态组织：
 
 ## UI Rules
 
-- The target-specific `要点总结` detail sheet must render `summary.md` through the sanitized Markdown renderer with GitHub Flavored Markdown support; raw HTML and Mermaid source must not be rendered in the UI.
+- `要点总结` 的独立 AI 详情 sheet 必须通过经净化的 GitHub Flavored Markdown 渲染器展示 `summary.md`；不得渲染 Markdown 中的原始 HTML 或 Mermaid 源码。
 - 主按钮文案固定为 `确认`。
 - 处理和完成态不再显示 URL 输入区域。
 - 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载 `要点总结` 和 `启发灵感` 两个独立 target 卡片。

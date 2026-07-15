@@ -11,6 +11,8 @@
 - 项目方案：`docs/product-specs/index.md`（根目录历史方案已迁移进 `docs/` 并删除）
 - 架构：`docs/ARCHITECTURE.md`
 - 设计规范：`docs/DESIGN.md`
+- Web 宣传站设计规范：`docs/design-docs/web-marketing-site-design.md`
+- Web 宣传站设计参考：`design-system/README.md`
 - 安全规范：`docs/SECURITY.md`
 - 核心信念：`docs/design-docs/core-beliefs.md`
 - EasyDownload 抖音 fallback 参考：`docs/references/easydownload-douyin-fallback.md`
