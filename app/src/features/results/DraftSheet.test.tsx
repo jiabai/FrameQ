@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   summarizeWorkerResult,
@@ -92,10 +94,43 @@ describe("DraftConfirmationSheet", () => {
   });
 });
 
+// Mocks for DraftResultSheet tests (loadDraftDetail is mocked at module level
+// because DraftResultSheet calls it inside useEffect).
+const draftMocks = vi.hoisted(() => ({
+  loadDraftDetail: vi.fn(),
+  saveDraftEdit: vi.fn(),
+}));
+
+vi.mock("../../draftDetailClient", () => ({
+  loadDraftDetail: draftMocks.loadDraftDetail,
+  saveDraftEdit: draftMocks.saveDraftEdit,
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  revealItemInDir: vi.fn(),
+}));
+
 describe("DraftResultSheet", () => {
-  test("renders draft markdown via sanitized GFM (strips raw HTML, renders mermaid as code)", () => {
-    const workflow = workflowWithSeed();
-    workflow.draft = `# 文字稿标题
+  beforeEach(() => {
+    draftMocks.loadDraftDetail.mockReset();
+    draftMocks.saveDraftEdit.mockReset();
+    draftMocks.loadDraftDetail.mockResolvedValue({
+      task_id: "task-draft",
+      markdown: "# 文字稿标题\n\n正文段落。\n",
+      has_original_backup: false,
+      draft_seed_insight_id: null,
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("renders draft markdown via sanitized GFM (strips raw HTML, renders mermaid as code)", async () => {
+    // loadDraftDetail returns markdown with GFM, Mermaid, and XSS payloads.
+    draftMocks.loadDraftDetail.mockResolvedValue({
+      task_id: "task-draft",
+      markdown: `# 文字稿标题
 
 正文段落。
 
@@ -104,69 +139,78 @@ graph TD; A-->B
 \`\`\`
 
 <script>alert("xss")</script>
-<img src=x onerror="alert(1)">`;
+<img src=x onerror="alert(1)">`,
+      has_original_backup: false,
+      draft_seed_insight_id: null,
+    });
+
+    const workflow = workflowWithSeed();
+    workflow.draft = "# fallback";
     workflow.artifacts.draft = "ai/draft.md";
 
-    const markup = renderToStaticMarkup(
+    render(
       <DraftResultSheet
         open
         workflow={workflow}
-        actionNotice=""
-        onCopy={vi.fn()}
-        onExport={vi.fn()}
+        onSaved={vi.fn()}
+        onRegenerate={vi.fn()}
         onClose={vi.fn()}
       />,
     );
 
+    await waitFor(() => expect(draftMocks.loadDraftDetail).toHaveBeenCalledOnce());
+
+    const preview = screen.getByTestId("markdown-preview");
+
     // GFM heading renders.
-    expect(markup).toContain("<h1>文字稿标题</h1>");
+    expect(preview.innerHTML).toContain("<h1>文字稿标题</h1>");
     // Mermaid source renders as a fenced code block (plain text, language
-    // tagged), NOT a rendered diagram — the `graph TD; A-->B` text appears
-    // inside <code>, HTML-escaped to `--&gt;`.
-    expect(markup).toContain('class="language-mermaid"');
-    expect(markup).toContain("graph TD; A--&gt;B");
-    expect(markup).not.toContain("class=\"mermaid\"");
-    // Raw HTML payload is stripped: no <script> element, no onerror attribute,
-    // and the alert() payload is gone entirely.
-    expect(markup).not.toContain("<script>");
-    expect(markup).not.toContain("alert");
-    expect(markup).not.toContain("onerror");
+    // tagged), NOT a rendered diagram.
+    expect(preview.innerHTML).toContain('class="language-mermaid"');
+    expect(preview.innerHTML).toContain("graph TD; A--&gt;B");
+    expect(preview.innerHTML).not.toContain("class=\"mermaid\"");
+    // Raw HTML payload is stripped: no <script> element, no onerror attribute.
+    expect(preview.innerHTML).not.toContain("<script>");
+    expect(preview.innerHTML).not.toContain("alert");
+    expect(preview.innerHTML).not.toContain("onerror");
   });
 
-  test("exposes copy + export actions and is a separate container from the transcript", () => {
+  test("exposes copy + download + export + regenerate actions and is a separate container from the transcript", async () => {
     const workflow = workflowWithSeed();
     workflow.draft = "文字稿正文。";
     workflow.artifacts.draft = "ai/draft.md";
 
-    const markup = renderToStaticMarkup(
+    render(
       <DraftResultSheet
         open
         workflow={workflow}
-        actionNotice=""
-        onCopy={vi.fn()}
-        onExport={vi.fn()}
+        onSaved={vi.fn()}
+        onRegenerate={vi.fn()}
         onClose={vi.fn()}
       />,
     );
 
-    expect(markup).toContain("复制");
-    expect(markup).toContain("导出");
+    await waitFor(() => expect(draftMocks.loadDraftDetail).toHaveBeenCalledOnce());
+
+    expect(screen.getByRole("button", { name: /复制/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "下载" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "导出" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /重新生成/ })).toBeTruthy();
     // The draft viewer is its own dialog (separate container from transcript).
-    expect(markup).toContain('role="dialog"');
-    expect(markup).toContain('aria-label="文字稿详情"');
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("dialog").getAttribute("aria-label")).toBe("文字稿详情");
   });
 
   test("renders nothing when open is false", () => {
-    const markup = renderToStaticMarkup(
+    const { container } = render(
       <DraftResultSheet
         open={false}
         workflow={workflowWithSeed()}
-        actionNotice=""
-        onCopy={vi.fn()}
-        onExport={vi.fn()}
+        onSaved={vi.fn()}
+        onRegenerate={vi.fn()}
         onClose={vi.fn()}
       />,
     );
-    expect(markup).toBe("");
+    expect(container.innerHTML).toBe("");
   });
 });

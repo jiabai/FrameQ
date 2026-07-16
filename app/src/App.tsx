@@ -18,7 +18,6 @@ import { getAiCreditsCostHint } from "./aiCreditsCopy";
 import type { DraftPlatformId } from "./insightPreferences";
 import {
   getExportPath,
-  getTaskArtifactPath,
   isProcessingStage,
   type TaskArtifactKey,
   type WorkflowState,
@@ -207,6 +206,7 @@ function App() {
     resetWorkflow,
     updateUrlDraft,
     applyTranscriptSave,
+    applyDraftSave,
     completeHistoryTaskDeletion,
     restoreHistoryItem,
     retryInsightGeneration,
@@ -316,37 +316,6 @@ function App() {
     [account, openAccountPanel, retryInsightGeneration, workflow.draftSeedInsightId],
   );
 
-  // Copy the draft markdown to the clipboard (mirrors the shared
-  // AiResultDetailSheet copyDetail path).
-  const copyDraft = useCallback(async () => {
-    const text = workflow.draft.trim();
-    if (!text) {
-      setActionNotice("暂无可复制内容。");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setActionNotice("已复制到剪贴板。");
-    } catch {
-      setActionNotice("复制失败，请手动选择内容复制。");
-    }
-  }, [setActionNotice, workflow.draft]);
-
-  // Locate `ai/draft.md` in the file manager (mirrors the shared sheet's
-  // exportDetail, which calls revealItemInDir on the artifact path).
-  const exportDraft = useCallback(async () => {
-    const draftPath = getTaskArtifactPath(workflow, "draft");
-    if (!draftPath) {
-      setActionNotice("暂无可导出的文件。");
-      return;
-    }
-    try {
-      await revealItemInDir(draftPath);
-      setActionNotice("已在文件管理器中定位导出文件。");
-    } catch {
-      setActionNotice(`无法定位文件：${draftPath}`);
-    }
-  }, [setActionNotice, workflow]);
   const handleHistoryItemSelected = useCallback(
     (item: HistoryItem) => {
       restoreHistoryItem(item);
@@ -832,9 +801,10 @@ function App() {
       <DraftResultSheet
         open={draftResultOpen}
         workflow={workflow}
-        actionNotice={actionNotice}
-        onCopy={() => void copyDraft()}
-        onExport={() => void exportDraft()}
+        onSaved={applyDraftSave}
+        onRegenerate={() => {
+          // TODO(Task 5): wire regenerate
+        }}
         onClose={() => setDraftResultOpen(false)}
       />
 

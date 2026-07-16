@@ -8,6 +8,7 @@ import {
   canSubmitUrl,
   confirmProcessingCancellation,
   createInitialWorkflow,
+  editDraft,
   finishInsightRetry,
   getToolbarNewTaskButtonState,
   isProcessingStage,
@@ -19,6 +20,7 @@ import {
   startProcessing,
   summarizeWorkerResult,
   type InsightRetryTarget,
+  type TaskArtifacts,
 } from "../../workflow";
 import { cancelProcess, processVideo, retryInsights } from "../../workerClient";
 import type { PreferenceSnapshot } from "../../insightPreferences";
@@ -80,6 +82,16 @@ export function useTaskProcessingController({
           },
         };
       });
+    },
+    [],
+  );
+
+  const applyDraftSave = useCallback(
+    (markdown: string, artifacts: TaskArtifacts) => {
+      setWorkflow((current) => ({
+        ...editDraft(current, markdown),
+        artifacts: { ...current.artifacts, ...artifacts },
+      }));
     },
     [],
   );
@@ -300,6 +312,7 @@ export function useTaskProcessingController({
     resetWorkflow,
     updateUrlDraft,
     applyTranscriptSave,
+    applyDraftSave,
     completeHistoryTaskDeletion,
     restoreHistoryItem,
     retryInsightGeneration,
