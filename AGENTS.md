@@ -28,7 +28,7 @@
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
-- 当前 active 执行计划：无；新工作应先在 `docs/exec-plans/active/` 创建并登记。
+- 当前 active 执行计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
 - 最近完成执行计划：`docs/exec-plans/completed/2026-07-15-desktop-i18n-ai-output-language-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 

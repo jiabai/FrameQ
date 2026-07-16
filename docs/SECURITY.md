@@ -1,5 +1,36 @@
 # Security and Compliance
 
+## 2026-07-16 Local Media Path and Artifact Boundary
+
+- The complete local source path is sensitive. It may exist only in the Rust selection store, the
+  bounded one-shot worker stdin pipe, and worker memory while opening the source. It is forbidden in
+  React/JavaScript, IPC responses, argv, environment variables, manifests, task IDs, artifact names,
+  History, progress, errors, technical details, logs, transcript exports, prompts, and cloud traffic.
+- The native picker is not an authorization by path string. Rust returns a random opaque UUID token
+  and keeps one non-persisted matching selection. Processing rejects stale/fabricated tokens and
+  revalidates absolute ordinary-file status, allowlisted extension, nonzero size, no symlink,
+  junction, or reparse point, plus unchanged size and modification time before worker launch.
+- A safe display name is basename-only, strips separators, control characters, and Unicode
+  bidi/directional formatting controls, is bounded to 160 characters while preserving extension, and
+  falls back when empty. It may be displayed/persisted locally for History but is forbidden from
+  diagnostics and AI prompts. Tokens are never persisted or logged.
+- Contract v3 local requests are closed and non-echoing. Rust and Python reject missing, additional,
+  invalid, mismatched-kind, changed, linked, malformed, or missing-stream sources through fixed codes.
+  Raw ffprobe/FFmpeg commands, stdout/stderr, payloads, and operating-system errors must pass the
+  existing sanitizer and cannot be returned as primary or technical UI text if they expose a path.
+- File-dialog filters and extensions are not trusted content validation. The worker probes stream
+  structure and requires video+audio for a video source or audio for an audio source. Cover art does
+  not grant video classification. No shell interpolation is permitted for copy, probe, or conversion.
+- Video and WAV outputs use generic task-root-derived names and partial/temporary writes. Only
+  validated final artifacts enter the manifest. Path resolution, link/reparse checks, deletion,
+  playback, and file-location commands retain the existing strict task-root boundary.
+- A local manifest is accepted only when exactly one safe source variant holds. URL requires the
+  existing canonical SourceIdentity predicate; local requires empty URL/null identity and closed safe
+  metadata. Unrecognized variants remain product-isolated and physically untouched.
+- Media never goes to FrameQ server or the LLM provider. Existing confirmed AI may read the saved
+  transcript but receives no local filename, path, selection token, media bytes, or manifest. Logs may
+  record only safe aggregate kind/extension/size-or-duration buckets, stage, elapsed time, and code.
+
 ## 2026-07-15 Localization and AI Output-Language Boundary
 
 - `ui-preferences.json` must remain app-local and contain only schema version plus the closed language

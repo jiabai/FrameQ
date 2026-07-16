@@ -1,5 +1,30 @@
 # FrameQ Design Guidelines
 
+## Local Media Input and Source-Aware Workspace
+
+- Keep one input composer. Add a keyboard-accessible `+` control at the left that opens a one-item
+  local video/audio menu and then the native single-file dialog. Cancelling the dialog changes no
+  state and displays no error; choosing a file does not start processing or consume AI Credits.
+- A selected file appears as a removable chip with media-kind icon, safe basename, localized size,
+  and accessible remove action. Its presence makes the retained URL draft inactive; removal restores
+  that draft. A replacement file replaces the chip, and locale changes clear neither source.
+- The existing confirmation action and account gate start the active URL or local source. Menu,
+  dismissal, chip removal, busy/disabled state, focus restoration, and Escape behavior must work by
+  keyboard and remain reachable at `720x640` in all three locales.
+- Local progress is source-aware without inventing a second workflow. Video presents validation,
+  copy, audio extraction/normalization, and transcription; audio presents validation, normalization,
+  and transcription. Copy must consistently describe import/local processing, never remote media
+  upload.
+- Video completion names locally saved video, audio, and transcript. Audio completion names only
+  audio and transcript, and an audio task does not render a disabled, placeholder, or unavailable
+  Locate Video control.
+- History rows identify local tasks using the safe basename and localized media kind, while URL tasks
+  retain canonical URL presentation. Local source filenames remain user content: do not translate
+  them, place them in locale resources, or send them to AI.
+- Use the existing compact task workspace and artifact rows; the feature must not add decorative
+  upload cards, drag/drop zones, batch queues, progress dashboards, gradients, or motion. Respect
+  reduced motion and existing focus/color tokens.
+
 ## Desktop Language and AI Result Language
 
 - Settings > Basic starts with `界面与 AI 结果语言` and offers Follow System, Simplified Chinese,

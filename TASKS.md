@@ -2,6 +2,13 @@
 
 ## Active UI Work
 
+- [ ] Add single-file local video/audio import (2026-07-16) — ✅ Acceptance: accept MP4/M4V/MOV/MKV/AVI/WMV/WebM
+  and MP3/WAV/M4A/AAC/FLAC/OGG/Opus/WMA through a Rust-owned native picker and opaque selection
+  token; preserve video containers, normalize every source to 16 kHz mono 16-bit PCM WAV, create no
+  video artifact for audio tasks, keep full paths out of React/persistence/logs/cloud, and extend
+  strict schema-v3 History with a closed local-source variant. ExecPlan:
+  `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
+
 - [x] Add desktop i18n and confirmation-time AI output language (2026-07-15) — ✅ Acceptance: bundle `zh-CN`,
   `zh-TW`, and `en-US`; persist `system | locale` in app-local `ui-preferences.json`; localize UI,
   progress, accessibility, known errors, and History navigation/chrome; require strict contract-v2

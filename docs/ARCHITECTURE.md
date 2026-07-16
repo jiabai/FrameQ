@@ -1,5 +1,32 @@
 # FrameQ Architecture
 
+## 2026-07-16 Local Media Import Boundary
+
+- URL processing remains the existing `process_video` capability. Local processing is an independent
+  `process_local_media` command, but both share the ProcessSupervisor video lane, cancellation
+  semantics, normalized-WAV ASR path, task lifecycle, and separately confirmed AI targets.
+- The native Tauri picker accepts one allowlisted file. Rust owns the complete absolute path in one
+  non-persisted current selection and returns React only a random token, sanitized basename, kind,
+  extension, and size. A replacement token invalidates the old selection; processing revalidates
+  ordinary-file/no-link status, nonzero size, extension, size, and modification time.
+- The local path crosses into the bundled worker only through a bounded one-shot
+  `--process-local-media-stdin` request. It must not enter frontend state, argv, environment variables,
+  results, progress, errors, logs, manifests, transcript exports, prompts, or cloud requests.
+- `contracts/desktop-worker-contract.json` v3 adds a closed local-media request plus registered local
+  progress/error codes while preserving the existing URL request. TypeScript, Rust, Python, and the
+  packaged worker mirror must reject drift and invalid/additional values consistently.
+- Every local source is decoded into official `media/audio.wav` as 16 kHz mono signed 16-bit PCM
+  before SenseVoice. Video requires video+audio streams, preserves original bytes as generic
+  `media/video.<ext>`, and ignores subtitles. Audio requires an audio stream, retains no original
+  copy, and owns no video artifact. Partial artifacts are validated before manifest registration.
+- Manifest schema v3 gains a closed `local_file` source variant with empty URL, null SourceIdentity,
+  and safe local-only basename/kind/extension. Existing or absent `source_kind` retains the current
+  strict URL predicate. History and task source models become discriminated unions; older clients
+  ignore unrecognized local tasks without mutation.
+- A local task supports the existing History detail/restore/delete, normalized-audio playback,
+  transcript editing, artifact location, and confirmed summary/inspiration flows. AI receives the
+  saved transcript under existing rules and never receives local filename, path, token, or manifest.
+
 ## 2026-07-15 Desktop i18n and AI Output-Language Boundary
 
 - The desktop localization implementation must support exactly `zh-CN`, `zh-TW`, and `en-US`
