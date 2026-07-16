@@ -56,6 +56,10 @@ export function DraftResultSheet({
   const [notice, setNotice] = useState("");
   const [detailSeedId, setDetailSeedId] = useState<number | null>(null);
   const loadTaskIdRef = useRef<string | null>(null);
+  const draftFallbackRef = useRef(workflow.draft);
+
+  // Keep the fallback ref in sync without triggering effect reruns.
+  draftFallbackRef.current = workflow.draft;
 
   // ---- Open: load from disk ----
 
@@ -71,7 +75,7 @@ export function DraftResultSheet({
 
     let cancelled = false;
     setLoading(true);
-    setBuffer(workflow.draft);
+    setBuffer(draftFallbackRef.current);
     setDirty(false);
     setNotice("");
 
@@ -85,7 +89,7 @@ export function DraftResultSheet({
         setDetailSeedId(detail.draft_seed_insight_id);
       } catch (error) {
         if (cancelled) return;
-        setBuffer(workflow.draft);
+        setBuffer(draftFallbackRef.current);
         setNotice(
           `无法读取草稿，已显示当前结果：${error instanceof Error ? error.message : String(error)}`,
         );
@@ -100,7 +104,7 @@ export function DraftResultSheet({
     return () => {
       cancelled = true;
     };
-  }, [open, workflow.taskId, workflow.draft]);
+  }, [open, workflow.taskId]);
 
   // ---- Edit handler ----
 
@@ -169,7 +173,7 @@ export function DraftResultSheet({
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [buffer, dirty, workflow.taskId]);
 
   // ---- Export (locate file on disk) ----

@@ -398,7 +398,13 @@ def test_draft_branch_failure_keeps_existing_ai_artifacts(tmp_path: Path) -> Non
 
 
 def _original_draft_path(tmp_path: Path) -> Path:
-    return _task_dir(tmp_path) / "ai" / "original" / "draft.md"
+    from frameq_worker.task_store import TaskPaths
+
+    return TaskPaths(
+        output_root=tmp_path / "outputs",
+        cache_root=tmp_path / "cache",
+        task_id=TASK_ID,
+    ).draft_original_path
 
 
 def test_draft_branch_success_deletes_stale_original_backup(tmp_path: Path) -> None:

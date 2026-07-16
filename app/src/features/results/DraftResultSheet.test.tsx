@@ -253,8 +253,8 @@ describe("DraftResultSheet", () => {
     const text = await blobArg.text();
     expect(text).toBe("# 标题\n\n从磁盘加载的内容");
 
-    // Cleanup
-    expect(revokeObjectURLSpy).toHaveBeenCalled();
+    // revokeObjectURL is deferred via setTimeout(1000); it will fire after
+    // the download anchor click completes, so we don't assert it synchronously.
   });
 
   test("download uses first-line heading as filename", async () => {

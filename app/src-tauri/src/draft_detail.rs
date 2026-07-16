@@ -127,7 +127,6 @@ pub(crate) fn save_draft_edit_to_output_root(
     manifest
         .artifacts
         .insert("draft".into(), "ai/draft.md".into());
-    manifest.draft_preview = text.chars().take(180).collect();
     task_manifest::write_task_manifest(&task_dir, &manifest)?;
 
     Ok(SaveDraftEditResult {
@@ -236,6 +235,7 @@ mod tests {
 
         assert_eq!(detail.markdown, "");
         assert!(!detail.has_original_backup);
+        assert_eq!(detail.draft_seed_insight_id, None);
     }
 
     #[test]
@@ -255,6 +255,7 @@ mod tests {
 
         assert_eq!(detail.markdown, "");
         assert!(!detail.has_original_backup);
+        assert_eq!(detail.draft_seed_insight_id, None);
     }
 
     #[test]
@@ -328,7 +329,7 @@ mod tests {
             "user edited draft\n"
         );
         let manifest = fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
-        assert!(manifest.contains(r#""draft_preview": "user edited draft""#));
+        assert!(manifest.contains(r#""draft": "ai/draft.md""#));
     }
 
     #[test]
@@ -514,6 +515,59 @@ mod tests {
             },
         )
         .is_err());
+    }
+
+    #[test]
+    fn save_detail_rejects_path_traversal_without_writing() {
+        let output_root = temp_dir("draft_save_rejects_traversal");
+        let task_id = "20260705-153012-douyin-traversal";
+        let task_dir = create_task(&output_root, task_id);
+        fs::write(task_dir.join("ai").join("draft.md"), "original\n").expect("write draft");
+
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-05T15:30:12Z",
+  "source_url": "https://www.douyin.com/video/7645505408425004329",
+  "source_identity": {{
+    "version": 1,
+    "platform": "douyin",
+    "stable_id": "7645505408425004329",
+    "effective_part": null,
+    "canonical_url": "https://www.douyin.com/video/7645505408425004329"
+  }},
+  "platform": "douyin",
+  "status": "completed",
+  "artifacts": {{
+    "draft": "../outside.txt"
+  }},
+  "error": null,
+  "text_preview": "",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write unsafe manifest");
+
+        let error = save_draft_edit_to_output_root(
+            &output_root,
+            SaveDraftEditRequest {
+                task_id: task_id.to_string(),
+                markdown: "should not be written".to_string(),
+            },
+        )
+        .expect_err("save with path traversal must fail");
+
+        assert!(error.contains("outside") || error.contains("path") || error.contains("directory"));
+        assert_eq!(
+            fs::read_to_string(task_dir.join("ai").join("draft.md")).expect("read unchanged"),
+            "original\n"
+        );
+        assert!(!task_dir.join("ai").join("original").exists());
     }
 
     // --- Test helpers ---

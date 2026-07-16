@@ -87,7 +87,7 @@
 - **非空校验**：`markdown.trim()` 为空则报错（对齐 transcript 拒空文本）。
 - **一次性 original 备份**：`ai/original/draft.md` 不存在时拷贝当前 `ai/draft.md`（仅首次编辑存，后续不覆盖）。
 - `fs::write(ai/draft.md, "{markdown}\n")` 原子写。
-- 更新 manifest：确保 `draft_path` / `has_draft` 在场；写 `draft_preview`（首 180 字符，类比 `text_preview`）；`draft_seed_insight_id` 不动。
+- 更新 manifest：确保 `draft_path` / `has_draft` 在场；`draft_seed_insight_id` 不动。draft 历史预览（`draft_preview`）暂不实现：当前无消费者，worker 重写 manifest 会丢失；待历史视图需要时再加，并给 worker 端一个真实来源。
 - 返回 `SaveDraftEditResult { task_id, markdown, artifacts, has_original_backup }`。
 
 ### 5.3 安全约束（与 transcript 完全对齐）
@@ -135,7 +135,7 @@
   - `save_draft_edit(app, SaveDraftEditRequest{task_id, markdown}) -> Result<SaveDraftEditResult, String>`。
   - draft artifact key = `"draft"`，路径 `{task_dir}/ai/draft.md`，original 备份 `{task_dir}/ai/original/draft.md`。
   - 安全校验全部复用 `task_manifest`（`required_artifact_path` / `validate_task_artifact_path` / `ensure_artifact_parent`）+ 本文件内 `ensure_task_source_privacy_ready` / `reject_linked_artifact_target`（从 `transcript_detail.rs` 抽公共或复制）。
-- **`task_manifest`**：draft artifact 路径解析 / 校验复用既有（`draft_path` 已在 manifest schema）；`draft_seed_insight_id` 读取；新增 `draft_preview` 写入（类比 `text_preview`）。
+- **`task_manifest`**：draft artifact 路径解析 / 校验复用既有（`draft_path` 已在 manifest schema）；`draft_seed_insight_id` 读取。`draft_preview` 已移除（无消费者、worker 重写会丢失；待需要时再加）。
 - **`lib.rs`**：注册 `load_draft_detail` / `save_draft_edit` 两个命令到 `invoke_handler`。
 
 ### 9.2 前端（`app/src`）

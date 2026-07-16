@@ -16,6 +16,9 @@ export function handleRegenerateDraft(
   setDraftSeedInsightId: (id: number | null) => void,
 ): void {
   if (draftEdited) {
+    // Deliberate short-term tradeoff: this is the only native browser dialog in the
+    // app. Accepted as-is for now; replace with a shared ConfirmDialog (extracted
+    // from HistorySheet AlertDialog) when UX consistency is addressed.
     const ok = window.confirm(
       "重新生成将丢弃当前编辑内容（包括已保存的草稿文件），是否继续？",
     );

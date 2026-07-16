@@ -293,8 +293,6 @@ pub(crate) struct TaskManifest {
     #[serde(default)]
     pub(crate) text_preview: String,
     #[serde(default)]
-    pub(crate) draft_preview: String,
-    #[serde(default)]
     pub(crate) draft_seed_insight_id: Option<i64>,
     #[serde(default)]
     pub(crate) insights_count: usize,

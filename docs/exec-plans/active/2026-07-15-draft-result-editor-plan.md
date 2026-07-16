@@ -35,7 +35,7 @@
 
 1. tauri 本地 IO 边界（`app/src-tauri/src/draft_detail.rs` 新增）
    - `load_draft_detail({ task_id })`：解析路径 → `ensure_task_source_privacy_ready` → `required_artifact_path("draft")` → 路径 / 软链校验 → 读 `ai/draft.md` → 返回 `{ task_id, markdown, has_original_backup, draft_seed_insight_id }`（seed id 从 manifest 读）。
-   - `save_draft_edit({ task_id, markdown })`：同校验 → 非空校验 → 首次编辑前一次性备份到 `ai/original/draft.md` → `fs::write(ai/draft.md)` → 更新 manifest（`draft_path` / `has_draft` / `draft_preview`）→ 返回 `{ task_id, markdown, artifacts, has_original_backup }`。
+   - `save_draft_edit({ task_id, markdown })`：同校验 → 非空校验 → 首次编辑前一次性备份到 `ai/original/draft.md` → `fs::write(ai/draft.md)` → 更新 manifest（`draft_path` / `has_draft`）→ 返回 `{ task_id, markdown, artifacts, has_original_backup }`。
    - 安全校验全复用 `task_manifest`（`required_artifact_path` / `validate_task_artifact_path` / `ensure_artifact_parent`）+ `ensure_task_source_privacy_ready` / `reject_linked_artifact_target`（与 `transcript_detail.rs` 抽公共或复制）。
    - `lib.rs` 注册两个命令到 `invoke_handler`。
    - 单测覆盖：load 读内容 + backup 状态 + seed id；save 一次性备份 + 写盘 + manifest 更新；路径穿越 / 软链 / 隔离任务 / 空文本均 recoverable 拒绝。
@@ -72,7 +72,7 @@
   - `git diff --check`
 - tauri（`app/src-tauri`）
   - `load_draft_detail` 读出 markdown + backup 状态 + seed id。
-  - `save_draft_edit` 首次编辑生成 `ai/original/draft.md`，再次编辑不覆盖；写盘 + 更新 manifest（`draft_path` / `has_draft` / `draft_preview`）。
+  - `save_draft_edit` 首次编辑生成 `ai/original/draft.md`，再次编辑不覆盖；写盘 + 更新 manifest（`draft_path` / `has_draft`）。
   - 路径穿越、软链目标、隔离 / quarantined 任务、空文本均 recoverable 失败，不写半文件。
   - `cargo test --manifest-path app/src-tauri/Cargo.toml`
 - 前端（`app`）

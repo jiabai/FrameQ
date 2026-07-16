@@ -66,7 +66,7 @@
 
 - 编辑落盘覆盖 `{task_dir}/ai/draft.md`，与 transcript / summary / insights / mindmap 并列、互不覆盖。
 - 首次编辑前一次性备份 AI 原产出到 `{task_dir}/ai/original/draft.md`（仅一次，对齐 `transcript/original/`）。
-- 任务 manifest 维持父规格的 `draft_path` / `has_draft` / `draft_seed_insight_id`；新增 `draft_preview`（首 180 字符，类比 `text_preview`）用于历史展示。
+- 任务 manifest 维持父规格的 `draft_path` / `has_draft` / `draft_seed_insight_id`。`draft_preview` 已移除（无消费者、worker 重写会丢失；待需要时再加）。
 - 草稿、original 备份、偏好快照均属本地任务产物，**不上传 FrameQ server**。
 
 ## Architecture Boundary
