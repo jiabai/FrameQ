@@ -9,7 +9,7 @@
 - 左右分栏：左侧 `textarea` 编辑 markdown 原文，右侧 `MarkdownContent` 实时预览。
 - 编辑落盘覆盖本地 `ai/draft.md`（走受约束的本地 tauri 命令，**不上 server**）。
 - 「复制」「下载」基于编辑器当前文本（markdown 原文）；「导出（定位文件）」降级保留。
-- 「重新生成」：默认一键复用上次种子 + 偏好快照（平台重新推导），缺失退化到完整选择 UI；编辑过则二次确认。
+- 「重新生成」：重走首次生成的确认页流程（重选 / 确认种子 + 偏好 + 平台），与第一次逻辑完全一致；编辑过则二次确认。
 
 本能力仍服从桌面端本地优先工作流与父规格的全部边界。与 [`2026-07-15-draft-platform-selection`](./2026-07-15-draft-platform-selection.md) 正交：本规格不改平台链路，平台仍按那份规格的「请求态」处理。
 
@@ -49,17 +49,18 @@
 
 ## Regeneration
 
-在结果视图新增「重新生成」入口（`workflow.draft` 非空或 `has_draft` 时可用），复用父规格的确认 / 额度 / 监督 / 取消与 `partial_completed` 降级：
+在结果视图新增「重新生成」入口（`workflow.draft` 非空或 `has_draft` 时可用），**逻辑与第一次生成完全一致**——重走确认页，不做静默一键复用：
 
-1. **dirty 拦截**：若 `workflow.draftEdited === true`（用户已手改），弹二次确认「将丢弃当前编辑（含已落盘的 `ai/draft.md`），是否继续？」；取消则不动。
-2. **默认一键复用**（种子可得时）：
-   - 种子：当次会话用 `workflow.draftSeedInsightId`；历史用 `load_draft_detail` 回传的 `draft_seed_insight_id`。
-   - 偏好快照：前端**不携带**（父规格 Architecture Boundary），worker 从 `ai/preference-snapshot.json` 读，天然复用当初生成该灵感时的快照。
-   - 平台：**重新从灵感档案推导默认**（platform-selection 第 5 节规则），不持久化、不复用上次手动改选值。
-   - 经既有 `retry_insights`（`target="draft"`，带 `insight_id` + `platform`）触发 worker。
-3. **退化到完整选择 UI**（种子缺失 / 失效时）：打开 `DraftConfirmationSheet`，重选种子 + 偏好 + 平台，走首次生成流程。
-4. **额度 / 账号校验照走**：`canGenerateAiWithAccount` 不通过则提示 / 开账户面板；每次重生 checkout 扣 1 额度，不论成败不返还（父规格 Quota Consumption 不变）。
+1. **dirty 拦截**：若 `workflow.draftEdited === true`（用户已手改），弹二次确认「将丢弃当前编辑（含已落盘的 `ai/draft.md`），是否继续？」；取消则不发起调用、不扣额度。
+2. **打开 `DraftConfirmationSheet`**（与首次生成同一个确认页）：
+   - 种子：预选当前 `draftSeedInsightId`（当次会话）或 `load_draft_detail` 回传的 `draft_seed_insight_id`（历史）。
+   - 偏好快照：前端**不携带**（父规格 Architecture Boundary），worker 从 `ai/preference-snapshot.json` 读，与首次一致。
+   - 平台：确认页按 platform-selection 规则从档案推导默认，用户可改选。
+3. 用户在确认页点「确认」→ 经既有 `retry_insights`（`target="draft"`，带 `insight_id` + `platform`）触发 worker。
+4. 复用父规格的确认 / 额度 / 监督 / 取消与 `partial_completed` 降级；每次重生 checkout 扣 1 额度，不论成败不返还（父规格 Quota Consumption 不变）。
 5. **重生成功**：`finishInsightRetry(target="draft")` 重置 `workflow.draftEdited = false`，并把 `ai/original/draft.md` 刷新为新 AI 产出（下次编辑的新基线）。
+
+种子失效（如 `启发灵感` 已重生成、id 变化）时，按首次生成纪律要求用户先在 `启发灵感` 重选种子，不静默用错误种子（父规格 `DRAFT_SEED_INVALID` 纪律不变）。
 
 ## Data and Storage（增补父规格同名章节）
 
@@ -75,7 +76,7 @@
 - 安全校验与 transcript 详情同源：路径穿越（`validate_task_artifact_path`）、软链 / reparse point（`reject_linked_artifact_target`）、隔离 / 旧格式任务（`ensure_task_source_privacy_ready`）、空内容（trim 后为空拒绝）；全部 recoverable，不写半文件。
 - 重新生成复用既有 `retry_insights` 的 `target="draft"` 分支（父规格触发方式不变），不新增独立 Tauri 命令；偏好快照仍由 worker 从盘读，前端 draft 请求不重发。
 - 类型化状态：前端 `activeAiTarget` 仍为 `"summary" | "insights" | "draft" | null`，新增 `workflow.draftEdited` 仅供 dirty 判定，不影响 target 归属或阶段。
-- 平台仍是请求态：重生时重新推导默认，不持久化、不回写档案、不上 server（platform-selection 不变）。
+- 平台仍是请求态：重生重走确认页，平台在确认页重新选定（与首次一致），不持久化、不回写档案、不上 server（platform-selection 不变）。
 
 ## Validation Rules (new)
 
@@ -83,7 +84,7 @@
 - `ai/original/draft.md` 仅在首次编辑时创建一次；后续编辑不覆盖；重新生成成功后刷新为新 AI 产出。
 - 「下载」/「导出」在 `draftEdited === true` 时必须先提示保存；保存成功后清 dirty。
 - 重新生成在 `draftEdited === true` 时必须二次确认；取消则不发起 worker 调用、不扣额度。
-- 重新生成的种子 `insight_id` 必须在当前任务 `insights.json` 中存在；失效（如灵感已重生成、id 变化）时退化到完整选择 UI，不得静默用错误种子（父规格 `DRAFT_SEED_INVALID` 纪律不变）。
+- 重新生成重走首次确认页；种子 `insight_id` 必须在当前任务 `insights.json` 中存在，失效（如灵感已重生成、id 变化）时要求先在 `启发灵感` 重选种子，不得静默用错误种子（父规格 `DRAFT_SEED_INVALID` 纪律不变）。
 - 重新生成仍过配额 / 账号预检；预检未通过不开始、不扣额度（父规格不变）。
 
 ## Acceptance Criteria
@@ -93,7 +94,7 @@
 - 编辑落盘覆盖 `ai/draft.md`；首次编辑前生成 `ai/original/draft.md` 备份，后续编辑不覆盖 original。
 - 「复制」「下载」均基于编辑器当前文本（markdown 原文）；下载产出 `.md` 文件，文件名为首行标题或 `{taskId}.md`。
 - 「导出（定位文件）」在本地有 `taskDir` 时作为次要入口保留；dirty 时「下载」/「导出」提示先保存。
-- 「重新生成」入口在结果视图可用：种子可得时一键复用（种子 + 偏好快照从盘读 + 平台重新推导）经 `retry_insights(target="draft")` 触发；种子缺失 / 失效时退化到 `DraftConfirmationSheet` 完整选择 UI。
+- 「重新生成」入口在结果视图可用：重走首次确认页 `DraftConfirmationSheet`（种子预选 + 偏好从盘读 + 平台确认页选定）→ `retry_insights(target="draft")`；与第一次生成逻辑完全一致。
 - `draftEdited === true` 时重新生成弹二次确认，取消不发起调用、不扣额度。
 - 重新生成过配额 / 账号预检；每次重生 checkout 扣 1 额度、不论成败不返还（父规格额度模型不变）。
 - 重新生成成功后 `workflow.draftEdited` 重置为 `false`，`ai/original/draft.md` 刷新为新基线。

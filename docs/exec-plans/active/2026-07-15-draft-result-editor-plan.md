@@ -2,7 +2,7 @@
 
 ## Purpose
 
-把 `生成文字稿` 的结果视图从**只读预览**改造为**左右分栏可编辑器**：左侧 `textarea` 编辑 markdown 原文、右侧 `MarkdownContent` 实时预览；编辑落盘覆盖本地 `ai/draft.md`（不走 server）；「复制 / 下载」基于编辑器当前文本，「导出（定位文件）」降级保留；新增「重新生成」入口（默认一键复用上次种子 + 偏好快照，平台重新推导，缺失退化到完整选择 UI；编辑过则二次确认）。
+把 `生成文字稿` 的结果视图从**只读预览**改造为**左右分栏可编辑器**：左侧 `textarea` 编辑 markdown 原文、右侧 `MarkdownContent` 实时预览；编辑落盘覆盖本地 `ai/draft.md`（不走 server）；「复制 / 下载」基于编辑器当前文本，「导出（定位文件）」降级保留；新增「重新生成」入口（重走首次确认页流程，与第一次逻辑完全一致；编辑过则二次确认）。
 
 本地优先特性：不新增 server 接口、不上传草稿、不暴露任意文件读写，落盘走与 transcript 详情同源的受约束 tauri 命令。
 
@@ -14,19 +14,19 @@
 - [ ] tauri：`load_draft_detail` / `save_draft_edit` 命令（照搬 `transcript_detail.rs` 安全模式）。
 - [ ] 前端：`DraftResultSheet` 改造为左右分栏编辑器 + 工具区。
 - [ ] 前端：`workflowState` 加 `draftEdited` + 重生 dirty 重置。
-- [ ] 前端：重新生成接线（一键复用 + 缺失退化）。
+- [ ] 前端：重新生成接线（编辑过二次确认 → 重走首次确认页）。
 - [ ] 各层验证命令通过或残留风险记录。
 
 ## Surprises
 
 - 2026-07-15：`HistoryDetailView`（`app/src-tauri/src/history.rs:44`）既不带 `draft` 也不带 `draft_seed_insight_id`——从历史重开任务时 `workflow.draft` 为空，**当前历史里根本看不到草稿**。解法：编辑器打开时按需 `load_draft_detail` 从盘读，顺带修此旧缺口（不在父规格验收里，但本方案一并解决）。
-- 2026-07-15：平台是请求态、不持久化（platform-selection 锁定），故「一键复用上次平台」无存储来源；重生时平台改为「重新从档案推导默认」，手动改选的平台不跨重生保留（用户已知悉，R1）。
+- 2026-07-15：平台是请求态、不持久化（platform-selection 锁定）；重生重走首次确认页，平台在确认页重新选定（与首次一致），不做「复用上次平台」，故无存储来源问题（R1）。
 
 ## Decision Log
 
 - 2026-07-15：编辑归属 = 写回 `workflow.draft` **并落盘覆盖 `ai/draft.md`**（盘问 Q1）。
 - 2026-07-15：重生与手改冲突 = 编辑过则二次确认，确认后覆盖（盘问 Q2）；dirty 判定用 `draftEdited` 标志（编辑置 true、重生成功置 false），辅以 `ai/original/draft.md` 一次性备份作基线 / 恢复点。
-- 2026-07-15：重生输入 = 默认一键复用种子 + 偏好快照（worker 从盘读），平台重新推导；种子缺失退化到完整选择 UI（盘问 Q3）。
+- 2026-07-15：重生输入 = 重走首次确认页（`DraftConfirmationSheet`：种子预选 + 偏好从盘读 + 平台确认页选定），与第一次逻辑完全一致；不做静默一键复用（盘问 Q3 初选一键复用，用户后改为重走确认页）。
 - 2026-07-15：下载 / 导出 = 复制 + 下载（Blob，源=编辑器当前文本）为主，「导出（定位文件）」降级保留（盘问 Q4）；dirty 时下载 / 导出提示先保存（对齐 transcript 决策）。
 - 2026-07-15：左侧裸 `textarea`、右侧复用 `MarkdownContent`，零新依赖（盘问 Q5）。
 - 2026-07-15：落盘走本地 tauri 命令，**不上 server**（父规格红线）；安全模式照搬 `transcript_detail.rs`。
@@ -54,9 +54,10 @@
    - 窄屏（modal）退化为上下堆叠。
 
 4. 重新生成接线（`App.tsx` / `useInsightGenerationController.ts`）
-   - `regenerateDraft` 入口：`draftEdited` 时先二次确认。
-   - 种子可得（`workflow.draftSeedInsightId` 或 `load_draft_detail` 回传）→ 一键 `retry_insights(target="draft", insight_id, platform=推导默认)`；偏好快照前端不传（worker 从盘读）；过 `canGenerateAiWithAccount` / 配额校验。
-   - 种子缺失 → 打开 `DraftConfirmationSheet` 走完整选择 UI（选种子 + 偏好 + 平台）。
+   - `regenerateDraft` 入口：`draftEdited` 时先二次确认，随后打开 `DraftConfirmationSheet`（与首次生成同一个确认页）。
+   - 确认页：种子预选当前 `draftSeedInsightId`（当次会话）或 `load_draft_detail` 回传值（历史）；偏好快照前端不传（worker 从盘读）；平台在确认页按 platform-selection 推导默认并可改选。
+   - 用户确认 → `retry_insights(target="draft", insight_id, platform)`；过 `canGenerateAiWithAccount` / 配额校验。
+   - 种子失效 → 按首次纪律要求先在 `启发灵感` 重选种子。
    - 重生成功：`finishInsightRetry("draft")` 重置 `draftEdited=false`；`ai/original/draft.md` 刷新为新基线。
 
 5. 兼容与恢复
@@ -78,7 +79,7 @@
   - 结果视图左右分栏渲染；编辑实时更新右侧预览。
   - 复制 / 下载基于编辑器当前文本；下载产出 `.md`（文件名正确）；导出降级保留。
   - dirty 时下载 / 导出提示先保存；保存后清 dirty。
-  - 重新生成：种子可得一键复用、缺失退化、编辑过二次确认；重生成功重置 dirty。
+  - 重新生成：重走首次确认页（种子预选 + 偏好从盘读 + 平台确认页选定）、编辑过二次确认；重生成功重置 dirty。
   - 历史任务可加载并编辑草稿。
   - `npm --prefix app test`
   - `npm --prefix app run build`
