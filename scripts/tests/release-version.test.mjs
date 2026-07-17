@@ -44,11 +44,11 @@ async function createVersionFixture(versions) {
   return root;
 }
 
-test("desktop release version sources agree on v0.2.16", async () => {
+test("desktop release version sources agree on v0.2.17", async () => {
   const versions = await readReleaseVersions(repositoryRoot);
 
-  assert.doesNotThrow(() => assertReleaseVersion(versions, "0.2.16"));
-  assert.deepEqual(new Set(Object.values(versions)), new Set(["0.2.16"]));
+  assert.doesNotThrow(() => assertReleaseVersion(versions, "0.2.17"));
+  assert.deepEqual(new Set(Object.values(versions)), new Set(["0.2.17"]));
 });
 
 test("release version mismatch reports only stable source labels", async () => {

@@ -1,11 +1,12 @@
 {
   "name": "app",
   "private": true,
-  "version": "0.2.16",
+  "version": "0.2.17",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "lint": "tsc --noEmit && node ../scripts/check-i18n-literals.mjs",
     "test": "vitest run --no-file-parallelism",
     "preview": "vite preview",
     "tauri": "tauri",

@@ -27,6 +27,7 @@
 
 ## Distribution Spec
 
+- `2026-07-17-v0.2.17-desktop-i18n-release.md` - Stable v0.2.17 three-platform release policy for the completed desktop localization and confirmation-time AI output-language work, with draft-first artifact validation and unchanged macOS Gatekeeper disclosure.
 - `2026-07-12-v0.2.16-open-source-release.md` - Stable v0.2.16 GitHub Release policy for personal-development, small-user, and open-source distribution with explicit ad-hoc macOS Gatekeeper disclosure and draft-first artifact validation.
 - `2026-07-10-source-url-privacy-boundary.md` - Separate process-local download URLs from safe canonical source identities and keep raw/sensitive URL metadata out of persistence, history, diagnostics, and cloud AI prompts.
 - `2026-07-05-processing-toolbar-new-task-guard.md` - Disable the toolbar new-task/reset action while a video task is actively processing.

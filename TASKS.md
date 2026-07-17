@@ -2,6 +2,12 @@
 
 ## Active UI Work
 
+- [ ] Prepare FrameQ v0.2.17 desktop i18n release (2026-07-17) — ✅ Acceptance: synchronize five version sources,
+  restore the documented app lint gate, write reviewed Gatekeeper-first release notes, run complete
+  local release validation, and leave tag/Draft/publication as separate checkpoints. Local-media
+  import remains outside this release. ExecPlan:
+  `docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`.
+
 - [ ] Add single-file local video/audio import (2026-07-16) — ✅ Acceptance: accept MP4/M4V/MOV/MKV/AVI/WMV/WebM
   and MP3/WAV/M4A/AAC/FLAC/OGG/Opus/WMA through a Rust-owned native picker and opaque selection
   token; preserve video containers, normalize every source to 16 kHz mono 16-bit PCM WAV, create no
