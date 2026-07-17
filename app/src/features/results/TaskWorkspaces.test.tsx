@@ -229,6 +229,61 @@ describe("task domain workspaces", () => {
     expect(generatingMarkup).toContain(">生成中</span>");
   });
 
+  test("shows motion only for the active local processing stage", () => {
+    const extractingWorkflow = startProcessing(
+      createInitialWorkflow(),
+      "https://example.invalid/video",
+    );
+    const extractingModel = createTaskWorkspaceViewModel(extractingWorkflow, aiAccount());
+    const extractingMarkup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        workflow={extractingWorkflow}
+        model={extractingModel.local}
+        controller={transcriptController()}
+        actionNotice={null}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(extractingMarkup).toMatch(
+      /<span class="active"><svg[^>]*lucide-loader-circle spin/,
+    );
+    expect(extractingMarkup).not.toMatch(
+      /<span class="pending"><svg[^>]*lucide-loader-circle spin/,
+    );
+
+    const transcribingWorkflow: WorkflowState = {
+      ...extractingWorkflow,
+      stage: "video_transcribing",
+    };
+    const transcribingModel = createTaskWorkspaceViewModel(transcribingWorkflow, aiAccount());
+    const transcribingMarkup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        workflow={transcribingWorkflow}
+        model={transcribingModel.local}
+        controller={transcriptController()}
+        actionNotice={null}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(transcribingMarkup).toMatch(
+      /<span class="complete"><svg[^>]*lucide-circle-check/,
+    );
+    expect(transcribingMarkup).toMatch(
+      /<span class="active"><svg[^>]*lucide-loader-circle spin/,
+    );
+  });
+
+  test("keeps the idle task banner static", () => {
+    const model = createTaskWorkspaceViewModel(createInitialWorkflow(), aiAccount());
+    const markup = renderToStaticMarkup(<TaskStatusBanner model={model.banner} />);
+
+    expect(markup).not.toContain('class="lucide lucide-loader-circle spin"');
+  });
+
   test("local workspace is audio-first with compact file actions and inline transcript review", () => {
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());

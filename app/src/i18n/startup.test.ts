@@ -55,7 +55,7 @@ describe("startup locale resolution", () => {
     });
   });
 
-  test("falls back to system locale on read failure", async () => {
+  test("falls back to English on read failure", async () => {
     await expect(
       resolveStartupLocale({
         readPreferences: async () => {
@@ -64,8 +64,8 @@ describe("startup locale resolution", () => {
         getSystemLanguages: () => ["zh-Hans-SG"],
       }),
     ).resolves.toEqual({
-      preference: "system",
-      resolvedLocale: "zh-CN",
+      preference: "en-US",
+      resolvedLocale: "en-US",
       persistedAnchor: null,
       notice: { messageCode: "bootstrap.preferencesReadFailed" },
     });
@@ -76,7 +76,7 @@ describe("startup locale resolution", () => {
     const pending = deferred<UiPreferencesView>();
     const resultPromise = resolveStartupLocale({
       readPreferences: () => pending.promise,
-      getSystemLanguages: () => ["en-US"],
+      getSystemLanguages: () => ["zh-CN"],
     });
 
     await vi.advanceTimersByTimeAsync(1499);
@@ -89,7 +89,7 @@ describe("startup locale resolution", () => {
 
     await vi.advanceTimersByTimeAsync(1);
     await expect(resultPromise).resolves.toEqual({
-      preference: "system",
+      preference: "en-US",
       resolvedLocale: "en-US",
       persistedAnchor: null,
       notice: { messageCode: "bootstrap.preferencesReadTimedOut" },
@@ -115,7 +115,7 @@ describe("startup locale resolution", () => {
     await vi.advanceTimersByTimeAsync(1500);
     await startPromise;
     expect(initialize).toHaveBeenCalledOnce();
-    expect(initialize).toHaveBeenCalledWith("zh-CN");
+    expect(initialize).toHaveBeenCalledWith("en-US");
     expect(mount).toHaveBeenCalledOnce();
 
     pending.resolve(preferences("en-US"));

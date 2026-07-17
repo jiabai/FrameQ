@@ -2281,19 +2281,34 @@ h3 {
 }
 
 .local-progress > span {
+  align-items: center;
   background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
+  display: flex;
   font-size: 0.88rem;
+  gap: 8px;
   min-height: 40px;
   padding: 10px 12px;
+}
+
+.local-progress > span svg {
+  flex: 0 0 auto;
+}
+
+.local-progress > span.complete svg {
+  color: var(--success);
 }
 
 .local-progress > span.active {
   border-color: rgba(10, 132, 255, 0.32);
   color: var(--primary-pressed);
   font-weight: 700;
+}
+
+.local-progress > span.active svg {
+  color: var(--primary);
 }
 
 .transcript-review-panel {
@@ -2494,6 +2509,11 @@ h3 {
   max-width: 860px;
 }
 
+.spin {
+  animation: spin 1s linear infinite;
+  transform-origin: center;
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -2504,7 +2524,22 @@ h3 {
   }
 }
 
+@keyframes processing-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.42;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: processing-pulse 1.8s ease-in-out infinite !important;
+  }
+
   *,
   *::before,
   *::after {

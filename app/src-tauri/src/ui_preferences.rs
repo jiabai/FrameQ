@@ -124,7 +124,7 @@ pub(crate) fn save_ui_preferences_to_file(
 fn default_view(recovered: bool) -> UiPreferencesView {
     UiPreferencesView {
         schema_version: UI_PREFERENCES_SCHEMA_VERSION,
-        language: LanguagePreference::System,
+        language: LanguagePreference::EnUs,
         recovered,
     }
 }
@@ -285,13 +285,13 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn missing_ui_preferences_default_to_system_without_recovery() {
+    fn missing_ui_preferences_default_to_english_without_recovery() {
         let path = temp_file("missing");
 
         let view = load_ui_preferences_from_file(&path).expect("missing preference is normal");
 
         assert_eq!(view.schema_version, 1);
-        assert_eq!(view.language, LanguagePreference::System);
+        assert_eq!(view.language, LanguagePreference::EnUs);
         assert!(!view.recovered);
         assert!(!path.exists());
     }
@@ -334,7 +334,7 @@ mod tests {
 
             let view = load_ui_preferences_from_file(&path).expect("recover damaged preference");
 
-            assert_eq!(view.language, LanguagePreference::System);
+            assert_eq!(view.language, LanguagePreference::EnUs);
             assert!(view.recovered);
             assert_eq!(fs::read(&path).expect("read retained bytes"), before);
         }
@@ -349,7 +349,7 @@ mod tests {
 
         let view = load_ui_preferences_from_file(&path).expect("recover invalid UTF-8");
 
-        assert_eq!(view.language, LanguagePreference::System);
+        assert_eq!(view.language, LanguagePreference::EnUs);
         assert!(view.recovered);
         assert_eq!(fs::read(&path).expect("read retained bytes"), original);
     }

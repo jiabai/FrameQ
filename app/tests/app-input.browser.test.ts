@@ -131,7 +131,7 @@ describe("App browser input interactions", () => {
       expect(structure.result.value).toMatchObject({
         hasDesktopWindow: true,
         trafficLights: 3,
-        trafficLightButtons: ["关闭窗口", "最小化窗口", "最大化或还原窗口"],
+        trafficLightButtons: ["Close window", "Minimize window", "Maximize or restore window"],
         hasToolbar: true,
         toolbarDragRegion: true,
         innerDragRegions: true,
@@ -139,11 +139,11 @@ describe("App browser input interactions", () => {
         localBadges: 0,
         showsLocalFirstCopy: false,
         visibleUrlLabels: 0,
-        videoUrlAriaLabel: "视频 URL",
-        videoUrlPlaceholder: "粘贴受支持的公开视频链接",
+        videoUrlAriaLabel: "Video URL",
+        videoUrlPlaceholder: "Paste a supported public video link",
         hasCommandPanel: true,
         hasTaskWorkspaces: false,
-        primaryButtonText: "确认",
+        primaryButtonText: "Confirm",
       });
       expect(structure.result.value.commandPanelWidth).toBeGreaterThanOrEqual(720);
       expect(structure.result.value.commandPanelWidth).toBeLessThanOrEqual(820);
@@ -211,12 +211,53 @@ describe("App browser input interactions", () => {
         hasCommandPanel: false,
         hasLocalWorkspace: true,
         hasAiWorkspace: true,
-        localTitle: "本地转录",
+        localTitle: "Local Transcription",
         toolbarStageBadges: 0,
         localProgressSteps: 2,
         activeLayoutDisplay: "flex",
       });
       expect(afterSubmit.result.value.localTop).toBe(afterSubmit.result.value.aiTop);
+
+      await page.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+      });
+      await waitForRuntimeCondition(
+        page,
+        "Array.from(document.querySelectorAll('.spin')).every((element) => getComputedStyle(element).animationName === 'processing-pulse')",
+      );
+      const reducedMotion = await evaluateValue<Array<{ name: string; duration: string }>>(
+        page,
+        `Array.from(document.querySelectorAll('.spin')).map((element) => ({
+          name: getComputedStyle(element).animationName,
+          duration: getComputedStyle(element).animationDuration
+        }))`,
+      );
+      expect(reducedMotion.length).toBeGreaterThanOrEqual(2);
+      expect(reducedMotion).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "processing-pulse", duration: "1.8s" }),
+        ]),
+      );
+
+      await page.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+      });
+      await waitForRuntimeCondition(
+        page,
+        "Array.from(document.querySelectorAll('.spin')).every((element) => getComputedStyle(element).animationName === 'spin')",
+      );
+      const standardMotion = await evaluateValue<Array<{ name: string; duration: string }>>(
+        page,
+        `Array.from(document.querySelectorAll('.spin')).map((element) => ({
+          name: getComputedStyle(element).animationName,
+          duration: getComputedStyle(element).animationDuration
+        }))`,
+      );
+      expect(standardMotion).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "spin", duration: "1s" }),
+        ]),
+      );
     } finally {
       await page.close();
     }

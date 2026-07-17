@@ -91,7 +91,7 @@ export type UiPreferencesView = {
 const defaultSettingsRunner: SettingsCommandRunner = (command, args) => invoke(command, args);
 let browserUiPreferences: UiPreferencesView = {
   schemaVersion: 1,
-  language: "system",
+  language: "en-US",
   recovered: false,
 };
 

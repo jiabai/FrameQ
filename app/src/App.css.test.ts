@@ -41,6 +41,17 @@ function getRuleBody(selectors: string[]): string {
 }
 
 describe("App result workspace layout styles", () => {
+  test("keeps processing loaders visibly active while respecting reduced motion", () => {
+    const spinRule = getRuleBody([".spin"]);
+
+    expect(spinRule).toContain("animation: spin 1s linear infinite;");
+    expect(spinRule).toContain("transform-origin: center;");
+    expect(appCss).toContain("@keyframes processing-pulse");
+    expect(appCss).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.spin\s*\{[\s\S]*?animation: processing-pulse 1.8s ease-in-out infinite !important;/,
+    );
+  });
+
   test("stacks the task banner above a domain-specific workspace grid", () => {
     const activeWorkspaceRule = getRuleBody([".workspace.active-layout"]);
     const taskLayoutRule = getRuleBody([".task-workspace-layout"]);

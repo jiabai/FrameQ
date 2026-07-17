@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, LoaderCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, LoaderCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { renderUiMessage } from "../../i18n/uiMessage";
@@ -31,8 +31,10 @@ export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
         <CheckCircle2 size={20} aria-hidden="true" />
       ) : model.kind === "local_failed" ? (
         <AlertTriangle size={20} aria-hidden="true" />
-      ) : (
+      ) : model.kind === "local_processing" ? (
         <LoaderCircle size={20} className="spin" aria-hidden="true" />
+      ) : (
+        <CircleDashed size={20} aria-hidden="true" />
       )}
       <div>
         <strong>{t(bannerTitleKey(model.kind))}</strong>

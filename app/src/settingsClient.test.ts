@@ -220,7 +220,7 @@ describe("settings client", () => {
   test("uses an immediate in-memory UI-preferences mock outside Tauri", async () => {
     await expect(getUiPreferences()).resolves.toMatchObject({
       schemaVersion: 1,
-      language: "system",
+      language: "en-US",
       recovered: false,
     });
   });

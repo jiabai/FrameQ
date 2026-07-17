@@ -60,10 +60,12 @@ The persisted preference is `{ "schemaVersion": 1, "language": "system" | Suppor
 app-local `ui-preferences.json`. Tauri owns strict parsing, validation, and atomic writes through
 `get_ui_preferences` and `save_ui_preferences`. The frontend receives `recovered: true` when JSON,
 schema, or enum validation fails. A read failure does not rewrite the file; the next successful
-explicit save repairs it.
+explicit save repairs it. When no valid preference exists, the product default is explicit `en-US`,
+so App Settings > Basic initially selects `English`; the `system` option remains available but is
+never imposed over an existing saved preference.
 
 The startup shell waits at most 1.5 seconds for the preference before mounting the localized app.
-After timeout or failure it resolves the current system locale, ignores the late response, and
+After timeout or failure it uses `en-US`, ignores the late response, and
 shows a non-blocking recovery notice. Rapid setting changes are serialized and tagged with an
 operation sequence so stale responses cannot overwrite the latest choice. The frontend separately
 tracks the most recent successfully persisted preference; failures never advance that rollback
@@ -182,9 +184,10 @@ Neutral:
 
 | Failure mode | Required behavior |
 |---|---|
-| Preference file missing | Start with resolved system locale; do not show recovery. |
-| Preference corrupt, unknown schema, or invalid enum | Start with resolved system locale, return `recovered: true`, retain the file until a valid save. |
-| Preference read exceeds 1.5 seconds | Mount once with system locale, ignore the late result, show a non-blocking notice. |
+| Preference file missing | Start with explicit `en-US`; Settings selects `English`; do not show recovery. |
+| Preference corrupt, unknown schema, or invalid enum | Start with explicit `en-US`, return `recovered: true`, retain the file until a valid save. |
+| Preference read exceeds 1.5 seconds | Mount once with `en-US`, ignore the late result, show a non-blocking notice. |
+| Existing saved preference | Preserve `system`, `zh-CN`, `zh-TW`, or `en-US` exactly; do not migrate existing users. |
 | Rapid saves resolve out of order | Serialized writes plus operation sequence prevent stale UI overwrite; only successful writes advance the persisted rollback anchor. |
 | Latest save fails | Roll back to the most recent successfully persisted value, never the immediately previous optimistic choice, and show a localized error. |
 | A persisted; B stale failure; C latest failure | Ignore B for UI rollback; C rolls UI back to A, while disk remains A. This sequence requires an explicit regression test. |

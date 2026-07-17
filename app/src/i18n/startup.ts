@@ -62,8 +62,8 @@ export async function resolveStartupLocale({
   }
 
   return {
-    preference: "system",
-    resolvedLocale: resolveLanguagePreference("system", systemLanguages),
+    preference: "en-US",
+    resolvedLocale: "en-US",
     persistedAnchor: null,
     notice:
       outcome.kind === "timed-out"

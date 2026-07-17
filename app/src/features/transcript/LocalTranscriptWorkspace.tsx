@@ -1,4 +1,4 @@
-import { FileAudio, Film, X } from "lucide-react";
+import { CheckCircle2, Circle, FileAudio, Film, LoaderCircle, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { isSupportedLocale } from "../../i18n/locale";
@@ -57,6 +57,13 @@ export function LocalTranscriptWorkspace({
         <div className="local-progress" aria-label={t("workspace.progressLabel")}>
           {model.progressSteps.map((step) => (
             <span className={step.state} key={step.id}>
+              {step.state === "complete" ? (
+                <CheckCircle2 size={16} aria-hidden="true" />
+              ) : step.state === "active" ? (
+                <LoaderCircle size={16} className="spin" aria-hidden="true" />
+              ) : (
+                <Circle size={16} aria-hidden="true" />
+              )}
               {t(localProgressStepKey(step.id))}
             </span>
           ))}

@@ -59,19 +59,21 @@ Tauri 在 app-local data 根目录管理独立的 `ui-preferences.json`：
 ```json
 {
   "schemaVersion": 1,
-  "language": "system"
+  "language": "en-US"
 }
 ```
 
 - 新增 `get_ui_preferences()` 与 `save_ui_preferences({ preferences: { language } })`。
-- 文件缺失返回 `system` 且 `recovered: false`；这属于正常首启。
-- JSON 损坏、未知 schema 或非法语言返回 `system` 且 `recovered: true`，读取时不覆盖原文件。
+- 文件缺失返回 `en-US` 且 `recovered: false`；这属于正常首启，设置页初始选中 `English`。
+- JSON 损坏、未知 schema 或非法语言返回 `en-US` 且 `recovered: true`，读取时不覆盖原文件。
 - 下一次合法保存原子替换该文件并清除恢复状态。
+- 已保存的 `system`、`zh-CN`、`zh-TW` 或 `en-US` 均按原值加载；默认值变更不得迁移或覆盖
+  已有用户选择，`跟随系统` 仍是可手动选择的合法选项。
 - 偏好不得写入 `.env`、FrameQ server、任务目录、任务 manifest、账号状态或灵感档案。
 - Rust 只接受 `system` 与三个 `SupportedLocale`，不接受任意 BCP 47 字符串。
 
 窗口启动时先显示仅含 `FrameQ` 的中性 bootstrap shell。偏好在 1.5 秒内返回时，使用解析后的
-locale 初始化 i18next 后再挂载主 React UI；超时或失败时按系统语言启动，忽略迟到响应，并显示
+locale 初始化 i18next 后再挂载主 React UI；超时或失败时按 `en-US` 启动，忽略迟到响应，并显示
 非阻塞恢复提示。启动不能因为偏好 I/O 出现白屏或在迟到响应后突然二次切换。
 
 ## Settings Experience
