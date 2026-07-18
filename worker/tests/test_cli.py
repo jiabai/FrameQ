@@ -18,7 +18,24 @@ from frameq_worker.cli import (
     resolve_source_identity_once,
     run_worker_once,
 )
+from frameq_worker.desktop_contract import PROCESS_VIDEO_CONTRACT_VERSION
 from frameq_worker.media import CommandResult
+
+DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall"
+
+
+def process_request_json(
+    url: str,
+    *,
+    asr_model: str = DEFAULT_ASR_MODEL,
+) -> str:
+    return json.dumps(
+        {
+            "contract_version": PROCESS_VIDEO_CONTRACT_VERSION,
+            "url": url,
+            "asr_model": asr_model,
+        }
+    )
 
 
 def is_ytdlp_command(command: list[str]) -> bool:
@@ -147,13 +164,9 @@ def test_main_returns_zero_for_structured_worker_failures(monkeypatch, capsys) -
 
 
 def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
-    payload = json.dumps(
-        {
-            "url": (
-                "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
-                "?xsec_token=review-secret"
-            )
-        }
+    payload = process_request_json(
+        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+        "?xsec_token=review-secret"
     )
     captured: dict[str, str] = {}
 
@@ -377,7 +390,9 @@ def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Pa
     runner = FakeMediaRunner()
 
     result = run_worker_once(
-        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        process_request_json(
+            "https://www.douyin.com/video/7524373044106677544"
+        ),
         project_root=tmp_path,
         command_runner=runner,
     )
@@ -413,7 +428,9 @@ def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
         fail_if_ai_client_is_built,
     )
     result = run_worker_once(
-        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        process_request_json(
+            "https://www.douyin.com/video/7524373044106677544"
+        ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
@@ -479,7 +496,9 @@ def test_run_worker_once_rejects_retired_ai_field_without_echoing_request(
     result = run_worker_once(
         json.dumps(
             {
+                "contract_version": PROCESS_VIDEO_CONTRACT_VERSION,
                 "url": raw_url,
+                "asr_model": DEFAULT_ASR_MODEL,
                 "generate_insights": True,
             }
         ),
@@ -491,7 +510,7 @@ def test_run_worker_once_rejects_retired_ai_field_without_echoing_request(
     serialized = json.dumps(result, ensure_ascii=False)
     assert result["status"] == "failed"
     assert result["error"]["code"] == "INVALID_REQUEST_PAYLOAD"
-    assert result["error"]["message"] == "Process request contains an unsupported field."
+    assert result["error"]["message"] == "Process request payload was invalid."
     assert "review-secret" not in serialized
     assert raw_url not in serialized
 
@@ -510,10 +529,8 @@ def test_run_worker_once_uses_configured_output_and_cache_roots(tmp_path: Path) 
     custom_output_dir = tmp_path / "app-data" / "outputs"
 
     result = run_worker_once(
-        json.dumps(
-            {
-                "url": "https://www.douyin.com/video/7524373044106677544",
-            }
+        process_request_json(
+            "https://www.douyin.com/video/7524373044106677544"
         ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
@@ -554,10 +571,8 @@ def test_run_worker_once_uses_download_stdout_inside_task_cache_dir(
     runner = FakeMediaRunner()
 
     result = run_worker_once(
-        json.dumps(
-            {
-                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            }
+        process_request_json(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         ),
         project_root=tmp_path,
         command_runner=runner,
@@ -578,7 +593,9 @@ def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extrac
         raise AssertionError("ASR model should be validated before loading")
 
     result = run_worker_once(
-        json.dumps({"url": "https://www.douyin.com/video/7524373044106677544"}),
+        process_request_json(
+            "https://www.douyin.com/video/7524373044106677544"
+        ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber_factory=fail_build_asr_transcriber,
@@ -604,7 +621,7 @@ def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extrac
     }
 
 
-def test_run_worker_once_uses_configured_asr_model_from_user_data_env(
+def test_run_worker_once_uses_explicit_asr_model_instead_of_user_data_env(
     tmp_path: Path,
 ) -> None:
     captured: dict[str, object] = {}
@@ -612,7 +629,7 @@ def test_run_worker_once_uses_configured_asr_model_from_user_data_env(
     user_data_dir.mkdir()
     create_valid_asr_cache(tmp_path / "models")
     (user_data_dir / ".env").write_text(
-        "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n",
+        "FRAMEQ_ASR_MODEL=Qwen/Qwen3-ASR-0.6B\n",
         encoding="utf-8",
     )
 
@@ -622,11 +639,8 @@ def test_run_worker_once_uses_configured_asr_model_from_user_data_env(
         return FakeTranscriber()
 
     result = run_worker_once(
-        json.dumps(
-            {
-                "url": "https://www.douyin.com/video/7524373044106677544",
-                "model": "Qwen/Qwen3-ASR-0.6B",
-            }
+        process_request_json(
+            "https://www.douyin.com/video/7524373044106677544"
         ),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
@@ -645,34 +659,23 @@ def test_run_worker_once_uses_configured_asr_model_from_user_data_env(
     assert "- Model: iic/SenseVoiceSmall" in transcript_md.read_text(encoding="utf-8")
 
 
-def test_hidden_dev_qwen_adapter_does_not_expand_release_progress_model_enum(
+def test_worker_request_rejects_model_outside_release_contract(
     tmp_path: Path,
 ) -> None:
-    create_valid_asr_cache(tmp_path / "models")
-    events: list[dict[str, object]] = []
-
+    runner = FakeMediaRunner()
     result = run_worker_once(
-        json.dumps(
-            {
-                "url": "https://www.douyin.com/video/7524373044106677544",
-                "model": "Qwen/Qwen3-ASR-0.6B",
-            }
+        process_request_json(
+            "https://www.douyin.com/video/7524373044106677544",
+            asr_model="Qwen/Qwen3-ASR-0.6B",
         ),
         project_root=tmp_path,
-        command_runner=FakeMediaRunner(),
-        transcriber_factory=lambda model_name, cache_dir: FakeTranscriber(),
-        allow_real_asr=True,
-        progress_callback=events.append,
+        command_runner=runner,
     )
 
-    assert result["status"] == "completed"
-    cache_event = next(
-        event
-        for event in events
-        if event["message_code"] == "asr.cache.preparing"
-    )
-    assert cache_event == {
-        "stage": "video_transcribing",
-        "progress": 58,
-        "message_code": "asr.cache.preparing",
+    assert result["status"] == "failed"
+    assert result["error"] == {
+        "code": "INVALID_REQUEST_PAYLOAD",
+        "message": "Process request payload was invalid.",
+        "stage": "waiting_input",
     }
+    assert runner.commands == []

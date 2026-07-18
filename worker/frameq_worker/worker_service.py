@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable
-from dataclasses import replace
 from pathlib import Path
 
-from frameq_worker.asr import DEFAULT_ASR_MODEL, ASRError, Transcriber, build_asr_transcriber
+from frameq_worker.asr import DEFAULT_ASR_MODEL, Transcriber, build_asr_transcriber
 from frameq_worker.config import load_project_env
 from frameq_worker.desktop_contract import (
     MODEL_DIR_ENV,
@@ -35,7 +34,6 @@ from frameq_worker.requests import (
     optional_env,
     parse_process_request,
     parse_retry_insights_request,
-    resolve_configured_asr_model,
 )
 from frameq_worker.source_identity import (
     SourceIdentityError,
@@ -88,20 +86,6 @@ def run_worker_once(
         ).to_dict()
 
     runtime_env = load_project_env(root, environ)
-    try:
-        request = replace(
-            request,
-            model=resolve_configured_asr_model(request.model, runtime_env),
-        )
-    except ASRError as exc:
-        return ProcessResult(
-            status=JobStage.FAILED,
-            error=WorkerError(
-                code=exc.code,
-                message=str(exc),
-                stage=JobStage.VIDEO_TRANSCRIBING,
-            ),
-        ).to_dict()
 
     result = run_worker_pipeline(
         request=request,

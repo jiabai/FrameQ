@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-18-process-video-request-contract-v3-plan.md` | Replaced the false five-field process request with URL-only IPC intent, a Rust-resolved strict v3 worker request, and fail-closed Python parsing. |
 | `2026-07-18-rust-worker-runtime-lifecycle-refactor-plan.md` | Unified every Rust-owned worker/model-download child under one private supervised runner with typed terminal outcomes, closed progress routes, safe diagnostics, and native Windows/macOS cancellation evidence. |
 | `2026-07-18-source-identity-dependency-inversion-plan.md` | Separated pure SourceIdentity policy from platform short-link infrastructure and injected a closed resolver registry at the worker CLI composition root. |
 | `2026-07-18-youtube-generic-chinese-subtitle-plan.md` | Added exact generic Chinese `zh` platform-subtitle request and priority before local ASR, without enabling translated-caption regexes. |

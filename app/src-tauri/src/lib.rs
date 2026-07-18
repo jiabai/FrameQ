@@ -311,7 +311,18 @@ mod tests {
         )
         .expect("parse desktop worker contract");
 
-        assert_eq!(contract["contractVersion"], 2);
+        assert_eq!(
+            super::video_processing::PROCESS_VIDEO_CONTRACT_VERSION,
+            contract["contractVersion"]
+                .as_u64()
+                .expect("numeric desktop contract version") as u32
+        );
+        assert_eq!(
+            super::video_processing::PROCESS_VIDEO_CONTRACT_VERSION,
+            contract["processVideo"]["workerRequest"]["properties"]["contract_version"]["const"]
+                .as_u64()
+                .expect("numeric process-video worker contract version") as u32
+        );
         assert_eq!(
             super::PROGRESS_EVENT_NAME,
             contract["events"]["workerProgress"]

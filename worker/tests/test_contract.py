@@ -12,6 +12,7 @@ from frameq_worker.cli import (
     OUTPUT_DIR_ENV,
     PROGRESS_EVENT_PREFIX,
 )
+from frameq_worker.desktop_contract import PROCESS_VIDEO_CONTRACT_VERSION
 from frameq_worker.models import Insight, JobStage, ProcessResult
 
 
@@ -20,8 +21,40 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v2() -> None:
-    assert load_contract()["contractVersion"] == 2
+def test_contract_version_is_strictly_v3() -> None:
+    contract = load_contract()
+
+    assert PROCESS_VIDEO_CONTRACT_VERSION == contract["contractVersion"] == 3
+    assert (
+        contract["processVideo"]["workerRequest"]["properties"]["contract_version"]
+        ["const"]
+        == PROCESS_VIDEO_CONTRACT_VERSION
+    )
+
+
+def test_process_video_contract_separates_ipc_intent_from_worker_execution() -> None:
+    process_video = load_contract()["processVideo"]
+
+    assert process_video == {
+        "serverManagedLlmCheckout": False,
+        "configurationOwner": "desktop_rust",
+        "ipcRequest": {
+            "type": "object",
+            "required": ["url"],
+            "properties": {"url": {"type": "string", "minLength": 1}},
+            "additionalProperties": False,
+        },
+        "workerRequest": {
+            "type": "object",
+            "required": ["contract_version", "url", "asr_model"],
+            "properties": {
+                "contract_version": {"const": 3},
+                "url": {"type": "string", "minLength": 1},
+                "asr_model": {"type": "string", "enum": ["iic/SenseVoiceSmall"]},
+            },
+            "additionalProperties": False,
+        },
+    }
 
 
 def test_worker_constants_match_desktop_contract() -> None:
@@ -55,9 +88,7 @@ def test_worker_result_contract_includes_task_artifacts() -> None:
 def test_process_video_contract_is_transcript_only_and_retry_insights_is_ai_path() -> None:
     contract = load_contract()
 
-    assert contract["processVideo"] == {
-        "serverManagedLlmCheckout": False,
-    }
+    assert contract["processVideo"]["serverManagedLlmCheckout"] is False
     assert contract["aiGeneration"]["command"] == "retry_insights"
     assert contract["aiGeneration"]["serverManagedLlmCheckout"] is True
 

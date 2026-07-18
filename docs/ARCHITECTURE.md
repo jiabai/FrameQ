@@ -1,5 +1,25 @@
 # FrameQ Architecture
 
+## 2026-07-18 Process-video request contract v3 boundary
+
+- React-to-Tauri `process_video` input expresses user intent only and contains exactly `url`. UI
+  locale, transcript language, output formats, ASR configuration, and AI mode are not frontend
+  processing parameters.
+- Rust owns app-local ASR configuration. It preserves the submitted URL, resolves one supported ASR model,
+  performs cache matching with that value, and constructs a distinct immutable worker request.
+- The bounded worker-stdin request contains exactly `contract_version: 3`, `url`, and `asr_model`.
+  Python validates this request and treats it as execution truth; it does not override the model from
+  environment configuration in the process path.
+- `contracts/desktop-worker-contract.json` is the canonical worker-request schema. TypeScript IPC,
+  Rust serialization, and Python parsing/consumption tests reject missing, legacy, additional,
+  wrong-version, or unsupported values without echoing raw source input.
+- `language`, `output_formats`, and `insightflow_mode` are retired rather than assigned manufactured
+  semantics. A future option requires an owner, validator, executable consumer, failure policy, and
+  versioned contract test.
+- The change does not alter task manifests, History, cache identity, artifacts, source handling,
+  cancellation, or AI generation. The future local-media boundary remains a separate command and
+  advances the desktop-worker contract from v3 to v4.
+
 ## 2026-07-16 Local Media Import Boundary
 
 - URL processing remains the existing `process_video` capability. Local processing is an independent
@@ -12,8 +32,8 @@
 - The local path crosses into the bundled worker only through a bounded one-shot
   `--process-local-media-stdin` request. It must not enter frontend state, argv, environment variables,
   results, progress, errors, logs, manifests, transcript exports, prompts, or cloud requests.
-- `contracts/desktop-worker-contract.json` v3 adds a closed local-media request plus registered local
-  progress/error codes while preserving the existing URL request. TypeScript, Rust, Python, and the
+- `contracts/desktop-worker-contract.json` v4 adds a closed local-media request plus registered local
+  progress/error codes while preserving the cleaned v3 URL request. TypeScript, Rust, Python, and the
   packaged worker mirror must reject drift and invalid/additional values consistently.
 - Every local source is decoded into official `media/audio.wav` as 16 kHz mono signed 16-bit PCM
   before SenseVoice. Video requires video+audio streams, preserves original bytes as generic

@@ -133,7 +133,7 @@ def create_task_context(
         paths=paths,
         source_identity=source_identity,
         platform=platform,
-        model=request.model,
+        model=request.asr_model,
         created_at=created.isoformat(timespec="seconds").replace("+00:00", "Z"),
     )
 

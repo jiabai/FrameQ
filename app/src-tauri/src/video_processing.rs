@@ -19,23 +19,18 @@ use tauri::{AppHandle, State, Window};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct ProcessVideoRequest {
+pub(crate) struct ProcessVideoIpcRequest {
     url: String,
-    language: String,
-    output_formats: Vec<String>,
-    model: String,
-    insightflow_mode: String,
 }
 
 #[derive(Serialize)]
-struct ProcessVideoWorkerRequest<'a> {
-    url: &'a str,
-    language: &'a str,
-    output_formats: &'a [String],
-    model: &'a str,
-    insightflow_mode: &'a str,
+struct ProcessVideoWorkerRequest {
+    contract_version: u32,
+    url: String,
+    asr_model: String,
 }
 
+pub(crate) const PROCESS_VIDEO_CONTRACT_VERSION: u32 = 3;
 pub(crate) const INVALID_RETRY_PAYLOAD: &str = "INVALID_RETRY_PAYLOAD";
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -146,7 +141,7 @@ pub(crate) async fn process_video(
     window: Window,
     app: AppHandle,
     process_state: State<'_, Arc<ProcessSupervisors>>,
-    request: ProcessVideoRequest,
+    request: ProcessVideoIpcRequest,
 ) -> Result<serde_json::Value, String> {
     let process_state = Arc::clone(process_state.inner());
     run_blocking_worker_command(move || process_video_blocking(window, app, process_state, request))
@@ -157,27 +152,30 @@ fn process_video_blocking(
     window: Window,
     app: AppHandle,
     process_state: Arc<ProcessSupervisors>,
-    mut request: ProcessVideoRequest,
+    request: ProcessVideoIpcRequest,
 ) -> Result<serde_json::Value, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    if let Err(error) = apply_configured_asr_model_to_request(&env_path(&paths), &mut request) {
-        return Ok(serde_json::json!(ProcessVideoResult {
-            status: "failed".to_string(),
-            task_id: None,
-            task_dir: None,
-            artifacts: HashMap::new(),
-            text: String::new(),
-            summary: String::new(),
-            insights: vec![],
-            transcript: None,
-            error: Some(WorkerError {
-                code: "ASR_MODEL_UNSUPPORTED".to_string(),
-                message: error,
-                stage: "video_transcribing".to_string(),
-            }),
-        }));
+    let request = match resolve_process_video_worker_request(&env_path(&paths), request) {
+        Ok(request) => request,
+        Err(error) => {
+            return Ok(serde_json::json!(ProcessVideoResult {
+                status: "failed".to_string(),
+                task_id: None,
+                task_dir: None,
+                artifacts: HashMap::new(),
+                text: String::new(),
+                summary: String::new(),
+                insights: vec![],
+                transcript: None,
+                error: Some(WorkerError {
+                    code: "ASR_MODEL_UNSUPPORTED".to_string(),
+                    message: error,
+                    stage: "video_transcribing".to_string(),
+                }),
+            }))
+        }
     };
     if let Some(cached) = cached_process_result_for_request(&output_root, &request)? {
         let _ = append_desktop_log(
@@ -235,7 +233,7 @@ fn process_video_blocking(
 
 fn cached_process_result_for_request(
     output_root: &Path,
-    request: &ProcessVideoRequest,
+    request: &ProcessVideoWorkerRequest,
 ) -> Result<Option<serde_json::Value>, String> {
     let requested_source_url = request.url.trim();
     if requested_source_url.is_empty() {
@@ -245,20 +243,13 @@ fn cached_process_result_for_request(
     cached_process_result(output_root, request, Some(requested_source_url), None)
 }
 
-fn serialize_process_video_request(request: &ProcessVideoRequest) -> Result<String, String> {
-    serde_json::to_string(&ProcessVideoWorkerRequest {
-        url: &request.url,
-        language: &request.language,
-        output_formats: &request.output_formats,
-        model: &request.model,
-        insightflow_mode: &request.insightflow_mode,
-    })
-    .map_err(|_| "Failed to encode worker request.".to_string())
+fn serialize_process_video_request(request: &ProcessVideoWorkerRequest) -> Result<String, String> {
+    serde_json::to_string(request).map_err(|_| "Failed to encode worker request.".to_string())
 }
 
 fn cached_process_result_for_identity(
     output_root: &Path,
-    request: &ProcessVideoRequest,
+    request: &ProcessVideoWorkerRequest,
     source_identity: &task_manifest::SourceIdentity,
 ) -> Result<Option<serde_json::Value>, String> {
     cached_process_result(output_root, request, None, Some(source_identity))
@@ -266,7 +257,7 @@ fn cached_process_result_for_identity(
 
 fn cached_process_result(
     output_root: &Path,
-    request: &ProcessVideoRequest,
+    request: &ProcessVideoWorkerRequest,
     requested_source_url: Option<&str>,
     requested_identity: Option<&task_manifest::SourceIdentity>,
 ) -> Result<Option<serde_json::Value>, String> {
@@ -303,7 +294,7 @@ fn reusable_task_manifest_matches(
     manifest: &task_manifest::TaskManifest,
     requested_source_url: Option<&str>,
     requested_identity: Option<&task_manifest::SourceIdentity>,
-    request: &ProcessVideoRequest,
+    request: &ProcessVideoWorkerRequest,
 ) -> bool {
     if !manifest.source_privacy_ready()
         || !matches!(manifest.status.as_str(), "completed" | "partial_completed")
@@ -326,7 +317,7 @@ fn reusable_task_manifest_matches(
         return false;
     }
     let manifest_model = manifest.model.trim();
-    let request_model = request.model.trim();
+    let request_model = request.asr_model.trim();
     manifest_model.is_empty() || request_model.is_empty() || manifest_model == request_model
 }
 
@@ -655,28 +646,29 @@ pub(crate) fn cancel_process(
     Ok(process_state.video.cancel())
 }
 
-fn apply_configured_asr_model_to_request(
+fn resolve_process_video_worker_request(
     dotenv_path: &Path,
-    request: &mut ProcessVideoRequest,
-) -> Result<(), String> {
+    request: ProcessVideoIpcRequest,
+) -> Result<ProcessVideoWorkerRequest, String> {
     let values = parse_dotenv_values(dotenv_path)?;
     let configured_model = values.get(ASR_MODEL_ENV).cloned();
-    if configured_model.as_deref().unwrap_or("").trim().is_empty() {
-        request.model = resolve_asr_model_value(Some(request.model.clone()))?;
-    } else {
-        request.model = resolve_asr_model_value(configured_model)?;
-    }
-    Ok(())
+    let asr_model = resolve_asr_model_value(configured_model)?;
+    Ok(ProcessVideoWorkerRequest {
+        contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
+        url: request.url,
+        asr_model,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_configured_asr_model_to_request, cached_process_result_for_identity,
-        cached_process_result_for_request, cancelled_worker_result, map_worker_run_result,
-        parse_retry_insights_request, retry_result_log_detail, serialize_process_video_request,
-        worker_already_running_result, worker_transport_failure_result, ProcessVideoRequest,
-        INVALID_RETRY_PAYLOAD,
+        cached_process_result_for_identity, cached_process_result_for_request,
+        cancelled_worker_result, map_worker_run_result, parse_retry_insights_request,
+        resolve_process_video_worker_request, retry_result_log_detail,
+        serialize_process_video_request, worker_already_running_result,
+        worker_transport_failure_result, ProcessVideoIpcRequest, ProcessVideoWorkerRequest,
+        INVALID_RETRY_PAYLOAD, PROCESS_VIDEO_CONTRACT_VERSION,
     };
     use crate::worker_runtime::{
         WorkerExitSummary, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
@@ -818,12 +810,10 @@ mod tests {
         )
         .expect("write manifest");
 
-        let request = ProcessVideoRequest {
+        let request = ProcessVideoWorkerRequest {
+            contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
             url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string(),
-            language: "Chinese".to_string(),
-            output_formats: vec!["txt".to_string(), "md".to_string()],
-            model: "iic/SenseVoiceSmall".to_string(),
-            insightflow_mode: "embedded".to_string(),
+            asr_model: "iic/SenseVoiceSmall".to_string(),
         };
 
         let cached = cached_process_result_for_request(&output_root, &request)
@@ -886,12 +876,10 @@ mod tests {
             ),
         )
         .expect("write manifest");
-        let request = ProcessVideoRequest {
+        let request = ProcessVideoWorkerRequest {
+            contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
             url: format!("{canonical_url}?xsec_token=review-secret&source=web"),
-            language: "Chinese".to_string(),
-            output_formats: vec!["txt".to_string(), "md".to_string()],
-            model: "iic/SenseVoiceSmall".to_string(),
-            insightflow_mode: "embedded".to_string(),
+            asr_model: "iic/SenseVoiceSmall".to_string(),
         };
         let identity = SourceIdentity {
             version: 1,
@@ -916,20 +904,55 @@ mod tests {
 
     #[test]
     fn process_request_serialization_never_includes_preflight_source_identity() {
-        let request = ProcessVideoRequest {
+        let request = ProcessVideoWorkerRequest {
+            contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
             url: "https://xhslink.com/short?xsec_token=review-secret".to_string(),
-            language: "Chinese".to_string(),
-            output_formats: vec!["txt".to_string(), "md".to_string()],
-            model: "iic/SenseVoiceSmall".to_string(),
-            insightflow_mode: "embedded".to_string(),
+            asr_model: "iic/SenseVoiceSmall".to_string(),
         };
 
         let encoded = serialize_process_video_request(&request).expect("serialize request");
         let payload: serde_json::Value = serde_json::from_str(&encoded).expect("request json");
 
-        assert_eq!(payload["url"], request.url);
-        assert!(payload.get("source_identity").is_none());
-        assert!(payload.get("generate_insights").is_none());
+        assert_eq!(
+            payload,
+            serde_json::json!({
+                "contract_version": 3,
+                "url": request.url,
+                "asr_model": request.asr_model,
+            })
+        );
+    }
+
+    #[test]
+    fn process_ipc_request_accepts_url_only() {
+        let request = serde_json::from_str::<ProcessVideoIpcRequest>(
+            r#"{"url":"https://www.douyin.com/video/7524373044106677544"}"#,
+        )
+        .expect("URL-only process intent");
+
+        assert_eq!(
+            request.url,
+            "https://www.douyin.com/video/7524373044106677544"
+        );
+    }
+
+    #[test]
+    fn process_ipc_request_rejects_legacy_false_contract_fields() {
+        let raw = r#"{
+          "url":"https://user:review-secret@example.com/private",
+          "language":"Chinese",
+          "output_formats":["txt","md"],
+          "model":"iic/SenseVoiceSmall",
+          "insightflow_mode":"embedded"
+        }"#;
+
+        let error = match serde_json::from_str::<ProcessVideoIpcRequest>(raw) {
+            Ok(_) => panic!("legacy false process-video fields must be rejected"),
+            Err(error) => error.to_string(),
+        };
+
+        assert!(!error.contains("review-secret"));
+        assert!(!error.contains("https://"));
     }
 
     #[test]
@@ -943,7 +966,7 @@ mod tests {
           "insightflow_mode":"embedded"
         }"#;
 
-        let error = match serde_json::from_str::<ProcessVideoRequest>(raw) {
+        let error = match serde_json::from_str::<ProcessVideoIpcRequest>(raw) {
             Ok(_) => panic!("retired process-video AI field must be rejected"),
             Err(error) => error.to_string(),
         };
@@ -991,12 +1014,10 @@ mod tests {
             ),
         )
         .expect("write manifest");
-        let request = ProcessVideoRequest {
+        let request = ProcessVideoWorkerRequest {
+            contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
             url: "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456".to_string(),
-            language: "Chinese".to_string(),
-            output_formats: vec!["txt".to_string()],
-            model: "iic/SenseVoiceSmall".to_string(),
-            insightflow_mode: "embedded".to_string(),
+            asr_model: "iic/SenseVoiceSmall".to_string(),
         };
 
         assert!(cached_process_result_for_request(&output_root, &request)
@@ -1054,12 +1075,10 @@ mod tests {
         )
         .expect("write manifest");
 
-        let request = ProcessVideoRequest {
+        let request = ProcessVideoWorkerRequest {
+            contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
             url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string(),
-            language: "Chinese".to_string(),
-            output_formats: vec!["txt".to_string(), "md".to_string()],
-            model: "iic/SenseVoiceSmall".to_string(),
-            insightflow_mode: "embedded".to_string(),
+            asr_model: "iic/SenseVoiceSmall".to_string(),
         };
 
         let cached = cached_process_result_for_request(&output_root, &request)
@@ -1100,12 +1119,10 @@ mod tests {
             ),
         )
         .expect("write manifest");
-        let request = ProcessVideoRequest {
+        let request = ProcessVideoWorkerRequest {
+            contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
             url: "https://www.youtube.com/watch?v=new-video".to_string(),
-            language: "Chinese".to_string(),
-            output_formats: vec!["txt".to_string(), "md".to_string()],
-            model: "iic/SenseVoiceSmall".to_string(),
-            insightflow_mode: "embedded".to_string(),
+            asr_model: "iic/SenseVoiceSmall".to_string(),
         };
 
         let cached = cached_process_result_for_request(&output_root, &request)
@@ -1280,20 +1297,18 @@ mod tests {
     }
 
     #[test]
-    fn apply_configured_asr_model_overrides_worker_request_model() {
-        let env_path = temp_env_path("apply_configured_asr_model");
+    fn resolve_process_video_worker_request_uses_configured_asr_model() {
+        let env_path = temp_env_path("resolve_process_video_worker_request");
         fs::write(&env_path, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall").expect("write test env");
-        let mut request = ProcessVideoRequest {
+        let request = ProcessVideoIpcRequest {
             url: "https://www.douyin.com/video/7646789377271647540".to_string(),
-            language: "Chinese".to_string(),
-            output_formats: vec!["txt".to_string(), "md".to_string()],
-            model: "iic/SenseVoiceSmall".to_string(),
-            insightflow_mode: "embedded".to_string(),
         };
 
-        apply_configured_asr_model_to_request(&env_path, &mut request).expect("apply asr model");
+        let request = resolve_process_video_worker_request(&env_path, request)
+            .expect("resolve worker request");
 
-        assert_eq!(request.model, "iic/SenseVoiceSmall");
+        assert_eq!(request.contract_version, PROCESS_VIDEO_CONTRACT_VERSION);
+        assert_eq!(request.asr_model, "iic/SenseVoiceSmall");
     }
 
     fn temp_env_path(test_name: &str) -> PathBuf {

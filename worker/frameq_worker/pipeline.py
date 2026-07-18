@@ -517,7 +517,7 @@ def prepare_asr_transcriber_stage(
         JobStage.VIDEO_TRANSCRIBING,
         "asr.cache.preparing",
         58,
-        message_args=_asr_model_args(request.model),
+        message_args=_asr_model_args(request.asr_model),
     )
     model_cache_dir = resolve_model_cache_dir(project_root=project_root, environ=environ)
     normalize_asr_model_cache_layout(model_cache_dir)
@@ -529,7 +529,7 @@ def prepare_asr_transcriber_stage(
         )
     factory = transcriber_factory or build_asr_transcriber
     try:
-        return factory(request.model, model_cache_dir)
+        return factory(request.asr_model, model_cache_dir)
     except OSError as exc:
         return failed_result(
             code="ASR_MODEL_CACHE_UNAVAILABLE",
@@ -578,7 +578,7 @@ def run_asr_transcript_stage(
         output_dir=task_context.paths.transcript_dir,
         output_stem="",
         transcriber=prepared_transcriber,
-        model=request.model,
+        model=request.asr_model,
         source_identity=task_context.source_identity,
     )
 

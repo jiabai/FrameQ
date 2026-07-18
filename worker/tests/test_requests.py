@@ -44,37 +44,89 @@ def valid_preference_snapshot() -> dict[str, object]:
     }
 
 
-def test_process_request_does_not_accept_preference_snapshot() -> None:
-    request = parse_process_request(
-        {
-            "url": "https://www.douyin.com/video/7524373044106677544",
-            "preference_snapshot": valid_preference_snapshot(),
-        }
-    )
+def valid_process_request() -> dict[str, object]:
+    return {
+        "contract_version": 3,
+        "url": "https://www.douyin.com/video/7524373044106677544",
+        "asr_model": "iic/SenseVoiceSmall",
+    }
 
-    assert not hasattr(request, "preference_snapshot")
+
+def test_process_request_parses_exact_v3_execution_input() -> None:
+    request = parse_process_request(valid_process_request())
+
+    assert request.url == "https://www.douyin.com/video/7524373044106677544"
+    assert request.asr_model == "iic/SenseVoiceSmall"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"remove": "contract_version"},
+        {"remove": "url"},
+        {"remove": "asr_model"},
+        {"contract_version": 2},
+        {"contract_version": "3"},
+        {"url": "   "},
+        {"asr_model": "Qwen/Qwen3-ASR-0.6B"},
+        {"language": "Chinese"},
+        {"output_formats": ["txt", "md"]},
+        {"insightflow_mode": "embedded"},
+        {"model": "iic/SenseVoiceSmall"},
+        {"preference_snapshot": valid_preference_snapshot()},
+        {"generate_insights": True},
+    ],
+)
+def test_process_request_rejects_non_v3_payloads(mutation: dict[str, object]) -> None:
+    payload = valid_process_request()
+    removed = mutation.get("remove")
+    if isinstance(removed, str):
+        payload.pop(removed)
+    else:
+        payload.update(mutation)
+
+    with pytest.raises(ValueError, match="^Process request payload was invalid\\.$"):
+        parse_process_request(payload)
+
+
+def test_process_request_rejects_additional_fields_without_echoing_input() -> None:
+    payload = valid_process_request()
+    payload["url"] = "https://user:review-secret@www.example.com/private"
+    payload["language"] = "Chinese"
+
+    with pytest.raises(ValueError) as error:
+        parse_process_request(payload)
+
+    assert str(error.value) == "Process request payload was invalid."
+    assert "review-secret" not in str(error.value)
+    assert "https://" not in str(error.value)
+
+
+def test_process_request_does_not_accept_preference_snapshot() -> None:
+    payload = valid_process_request()
+    payload["preference_snapshot"] = valid_preference_snapshot()
+
+    with pytest.raises(ValueError, match="^Process request payload was invalid\\.$"):
+        parse_process_request(payload)
 
 
 def test_process_request_has_no_ai_generation_field() -> None:
-    request = parse_process_request(
-        {
-            "url": "https://www.douyin.com/video/7524373044106677544",
-        }
-    )
+    payload = valid_process_request()
+    payload["generate_insights"] = True
 
-    assert not hasattr(request, "generate_insights")
+    with pytest.raises(ValueError, match="^Process request payload was invalid\\.$"):
+        parse_process_request(payload)
 
 
 def test_process_request_rejects_retired_ai_generation_field_without_echoing_input() -> None:
-    with pytest.raises(ValueError) as error:
-        parse_process_request(
-            {
-                "url": "https://user:review-secret@www.example.com/private",
-                "generate_insights": True,
-            }
-        )
+    payload = valid_process_request()
+    payload["url"] = "https://user:review-secret@www.example.com/private"
+    payload["generate_insights"] = True
 
-    assert str(error.value) == "Process request contains an unsupported field."
+    with pytest.raises(ValueError) as error:
+        parse_process_request(payload)
+
+    assert str(error.value) == "Process request payload was invalid."
     assert "review-secret" not in str(error.value)
     assert "https://" not in str(error.value)
 

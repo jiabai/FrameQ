@@ -2,6 +2,14 @@
 
 ## Active UI Work
 
+- [x] Replace the false process-video request with strict contract v3 (2026-07-18) - ✅ Acceptance:
+  React sends only URL intent; Rust alone resolves app-local ASR configuration and sends exact
+  `contract_version + url + asr_model` worker input; Python rejects legacy/additional/mismatched
+  requests without echo; local-media planning advances to contract v4. ExecPlan:
+  `docs/exec-plans/completed/2026-07-18-process-video-request-contract-v3-plan.md`. ✅ App 491,
+  Rust 143, worker 392, focused cross-language contract suites, Ruff, lint/build, docs, static-schema,
+  and diff gates passed.
+
 - [x] Reuse exact generic Chinese YouTube/Bilibili subtitles before ASR (2026-07-18) — ✅ Acceptance:
   request and prefer exact `zh` after script-specific Chinese, avoid `zh.*` translated-caption
   expansion, retain malformed/missing subtitle ASR fallback, pass worker/Ruff/docs/diff gates, and

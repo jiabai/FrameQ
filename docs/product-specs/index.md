@@ -10,6 +10,7 @@
 
 ## Desktop Runtime Spec
 
+- `2026-07-18-process-video-request-contract-v3.md` - Minimal URL-only desktop intent, Rust-owned ASR configuration, and strict v3 worker execution request with no false fields.
 - `2026-07-16-local-media-file-import.md` - Single-file local video/audio import with opaque Rust-owned selection tokens, normalized local WAV transcription, source-aware artifacts/History, and strict path secrecy.
 - `2026-07-15-desktop-i18n-ai-output-language.md` - Offline bundled Simplified Chinese, Traditional Chinese, and US English UI; app-local language preference; structured progress codes; and strict confirmation-time AI output language.
 - `2026-07-12-history-task-permanent-deletion.md` - Explicit irreversible deletion of one supported History vNext task and its playback cache, with strict task-ID/path validation and truthful partial-failure semantics.

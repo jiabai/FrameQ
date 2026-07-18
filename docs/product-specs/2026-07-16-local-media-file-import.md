@@ -171,10 +171,6 @@ type LocalMediaSelectionView = {
 
 type ProcessLocalMediaRequest = {
   selectionToken: string;
-  language: string;
-  outputFormats: string[];
-  model: string;
-  insightflowMode: "embedded";
 };
 ```
 
@@ -185,7 +181,7 @@ New Tauri commands are:
 - `process_local_media({ request })`.
 
 The clear command is idempotent and only clears the matching current token. Existing
-`process_video` URL behavior and request shape remain unchanged.
+`process_video` URL behavior and its cleaned v3 request remain unchanged.
 
 ### Opaque token lifecycle
 
@@ -208,14 +204,12 @@ Rust sends the complete source path only in a one-shot bounded stdin request to 
 
 ```ts
 type ProcessLocalMediaWorkerRequest = {
+  contract_version: 4;
   source_path: string;
   media_kind: LocalMediaKind;
   safe_display_name: string;
   source_extension: string;
-  language: string;
-  output_formats: string[];
-  model: string;
-  insightflow_mode: "embedded";
+  asr_model: "iic/SenseVoiceSmall";
 };
 ```
 
@@ -223,8 +217,8 @@ The worker entry point is `--process-local-media-stdin`. The path must never app
 environment variables, worker results, progress, errors, logs, task manifests, transcripts, AI
 prompts, or cloud requests.
 
-`contracts/desktop-worker-contract.json` advances from version 2 to strict version 3. It keeps the
-existing URL request unchanged and adds a closed local request. TypeScript, Rust, and Python reject
+`contracts/desktop-worker-contract.json` advances from version 3 to strict version 4. It keeps the
+cleaned URL request unchanged and adds a closed local request. TypeScript, Rust, and Python reject
 missing, unknown, or invalid values. The desktop and bundled worker ship at the same contract
 version, and the canonical worker must match its Tauri packaged mirror.
 

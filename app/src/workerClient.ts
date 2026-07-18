@@ -35,12 +35,8 @@ export type ProgressDiagnosticRecorder = (safeCode: string) => void;
 
 export type RetryInsightTarget = "summary" | "insights";
 
-export type ProcessVideoRequest = {
+export type ProcessVideoIpcRequest = {
   url: string;
-  language: string;
-  output_formats: string[];
-  model: string;
-  insightflow_mode: string;
 };
 
 export type RetryInsightsRequest = RetryInsightsWireRequest;
@@ -58,12 +54,8 @@ export async function processVideo(
   progressListener: WorkerProgressListener = listen,
   recordInvalidProgress: ProgressDiagnosticRecorder = defaultProgressDiagnosticRecorder,
 ): Promise<WorkerResult> {
-  const request: ProcessVideoRequest = {
+  const request: ProcessVideoIpcRequest = {
     url,
-    language: "Chinese",
-    output_formats: ["txt", "md"],
-    model: "iic/SenseVoiceSmall",
-    insightflow_mode: "embedded",
   };
 
   const unlisten = onProgress

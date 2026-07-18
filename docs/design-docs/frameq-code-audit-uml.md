@@ -1555,7 +1555,7 @@ stateDiagram-v2
 |------|------------|------------------|
 | `app/src/App.tsx` | 组装 9 个主要 controller，并通过 refs/callbacks 协调 reset、history、transcript、account 和 AI | 哪些协调属于 composition root；哪些可以成为明确的 application use case，而不产生第二个 workflow owner？ |
 | `useTaskProcessingController.ts` | 同时处理 submit、progress、cancel、history restore、transcript merge 和 AI retry，并维护 operation ID | 是否需要拆 action/use-case，但仍保留唯一 task identity owner？ |
-| `ProcessVideoRequest` 三语言镜像 | `language`、`output_formats` 和 `insightflow_mode` 会由 TS 发送、Rust 转发、Python 解析，但当前 worker pipeline 未读取；实际处理读取 `url` 与 `model` | 这些字段是应恢复语义的契约，还是可以通过版本化迁移删除的历史负担？ |
+| Process-video 请求契约 v3（2026-07-18 已解决） | TS 仅发送 URL 意图；Rust 统一解析 app-local ASR 配置并发送 `contract_version + url + asr_model`；Python 严格解析且不再用环境变量覆盖模型 | 已由 `docs/design-docs/2026-07-18-process-video-request-contract-v3.md` 关闭；未来字段必须先定义 owner、consumer、失败语义和版本迁移。 |
 | `video_processing.rs` | IPC adapter、cache service、identity preflight、worker runner、progress bridge 和 result mapping 位于一文件 | 哪些边界可独立测试和迁移；拆分后如何保持 cancellation race 与 safe logging？ |
 | `worker_command.rs` | supervisor state machine 与 OS process infrastructure、env policy、stdin/output parser 共存 | 领域状态机是否应与 process adapter 分离；哪些类型必须保持 crate-private？ |
 | `app/src-tauri/src/lib.rs` 中的 `greet` | scaffold command 仍在 `generate_handler!` 注册，但 `app/src/` 没有调用点 | 是否可通过 focused command-registry test 后删除，避免无业务含义的公开 IPC surface？ |

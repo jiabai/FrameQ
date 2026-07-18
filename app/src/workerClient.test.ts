@@ -88,10 +88,6 @@ describe("worker client", () => {
         args: {
           request: {
             url: "https://www.douyin.com/video/7524373044106677544",
-            language: "Chinese",
-            output_formats: ["txt", "md"],
-            model: "iic/SenseVoiceSmall",
-            insightflow_mode: "embedded",
           },
         },
       },

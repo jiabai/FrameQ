@@ -1,5 +1,21 @@
 # Security and Compliance
 
+## 2026-07-18 Process-video request contract v3 boundary
+
+- React may send only the raw submitted URL in the strict `process_video` IPC request. It must not
+  send model settings, locale, output-format choices, worker modes, credentials, or derived source
+  identity.
+- Rust resolves the configured ASR model once and sends a bounded worker-stdin request containing
+  exactly contract version, URL, and allowlisted `asr_model`. The same resolved model is used for
+  cache matching and worker execution.
+- Python rejects missing, legacy, additional, wrong-version, empty-URL, and unsupported-model fields
+  before source resolution or task mutation. Fixed invalid-request errors must not echo payloads,
+  URLs, userinfo, query values, fragments, settings paths, environment values, or parser details.
+- The process path has no model compatibility fallback and Python must not override the explicit
+  worker model from `FRAMEQ_ASR_MODEL`. Desktop and bundled worker remain an atomic release unit.
+- Shared schema and cross-language tests are security gates: adding a field requires a closed type,
+  explicit owner and consumer, safe failure policy, and non-echoing negative tests.
+
 ## 2026-07-16 Local Media Path and Artifact Boundary
 
 - The complete local source path is sensitive. It may exist only in the Rust selection store, the
@@ -14,7 +30,7 @@
   bidi/directional formatting controls, is bounded to 160 characters while preserving extension, and
   falls back when empty. It may be displayed/persisted locally for History but is forbidden from
   diagnostics and AI prompts. Tokens are never persisted or logged.
-- Contract v3 local requests are closed and non-echoing. Rust and Python reject missing, additional,
+- Contract v4 local requests are closed and non-echoing. Rust and Python reject missing, additional,
   invalid, mismatched-kind, changed, linked, malformed, or missing-stream sources through fixed codes.
   Raw ffprobe/FFmpeg commands, stdout/stderr, payloads, and operating-system errors must pass the
   existing sanitizer and cannot be returned as primary or technical UI text if they expose a path.

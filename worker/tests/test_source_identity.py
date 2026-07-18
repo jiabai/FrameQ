@@ -251,7 +251,10 @@ def test_task_manifest_writer_rejects_unvalidated_source_identity(tmp_path: Path
     )
     with pytest.raises(SourceIdentityError):
         create_task_context(
-            ProcessRequest(url="https://example.test"),
+            ProcessRequest(
+                url="https://example.test",
+                asr_model="iic/SenseVoiceSmall",
+            ),
             unsafe_identity,
             tmp_path / "outputs",
             tmp_path / "cache",

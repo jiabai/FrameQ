@@ -24,10 +24,7 @@ class JobStage(StrEnum):
 @dataclass(frozen=True)
 class ProcessRequest:
     url: str = field(repr=False)
-    language: str = "Chinese"
-    output_formats: tuple[str, ...] = ("txt", "md")
-    model: str = "iic/SenseVoiceSmall"
-    insightflow_mode: str = "embedded"
+    asr_model: str
 
 
 @dataclass(frozen=True)

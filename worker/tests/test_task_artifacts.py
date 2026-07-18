@@ -111,6 +111,7 @@ def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path
     result = run_worker_pipeline(
         request=ProcessRequest(
             url="https://www.douyin.com/video/7524373044106677544",
+            asr_model="iic/SenseVoiceSmall",
         ),
         project_root=tmp_path,
         command_runner=runner,
@@ -217,7 +218,7 @@ def test_sensitive_xhs_download_url_never_crosses_local_process_boundary(
         raise AssertionError(f"unexpected command: {command}")
 
     result = run_worker_pipeline(
-        request=ProcessRequest(url=raw_url),
+        request=ProcessRequest(url=raw_url, asr_model="iic/SenseVoiceSmall"),
         project_root=tmp_path,
         command_runner=runner,
         transcriber=FakeTranscriber(),
@@ -306,6 +307,7 @@ def test_worker_pipeline_uses_platform_subtitle_before_asr_model_ready(
     result = run_worker_pipeline(
         request=ProcessRequest(
             url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            asr_model="iic/SenseVoiceSmall",
         ),
         project_root=tmp_path,
         command_runner=runner,

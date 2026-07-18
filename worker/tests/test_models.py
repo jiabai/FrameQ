@@ -8,18 +8,19 @@ from frameq_worker.models import (
 )
 
 
-def test_process_request_uses_mvp_defaults() -> None:
+def test_process_request_contains_only_resolved_execution_inputs() -> None:
     sensitive_url = (
         "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
         "?xsec_token=review-secret"
     )
-    request = ProcessRequest(url=sensitive_url)
+    request = ProcessRequest(url=sensitive_url, asr_model="iic/SenseVoiceSmall")
 
-    assert request.language == "Chinese"
-    assert request.output_formats == ("txt", "md")
-    assert request.model == "iic/SenseVoiceSmall"
+    assert request.asr_model == "iic/SenseVoiceSmall"
+    assert not hasattr(request, "language")
+    assert not hasattr(request, "output_formats")
+    assert not hasattr(request, "model")
     assert not hasattr(request, "generate_insights")
-    assert request.insightflow_mode == "embedded"
+    assert not hasattr(request, "insightflow_mode")
     assert "review-secret" not in repr(request)
     assert "xsec_token" not in repr(request)
 

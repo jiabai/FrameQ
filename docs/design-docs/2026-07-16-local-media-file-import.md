@@ -25,11 +25,12 @@ The design must preserve these existing boundaries:
 - History accepts only a closed safe manifest predicate;
 - AI generation is separately confirmed and receives transcript data only under its existing rules;
   and
-- the existing URL workflow, cache reuse, subtitle behavior, and request contract remain unchanged.
+- the existing URL workflow, cache reuse, subtitle behavior, and cleaned v3 request contract remain
+  unchanged.
 
 ## Decision 1: Add an independent local-file command with an opaque selection token
 
-The URL command remains `process_video` with its current request. Local selection and processing use
+The URL command remains `process_video` with its cleaned URL-only IPC request. Local selection and processing use
 three new Tauri commands: `select_local_media`, `clear_local_media_selection`, and
 `process_local_media`.
 
@@ -68,15 +69,16 @@ Neutral:
 - The selected safe basename may be displayed and persisted locally in History because the user
   explicitly approved that local-only behavior; it is still forbidden from logs and cloud prompts.
 
-## Decision 2: Send the path once through bounded worker stdin and upgrade to contract v3
+## Decision 2: Send the path once through bounded worker stdin and upgrade to contract v4
 
 Rust starts the bundled worker with the fixed mode `--process-local-media-stdin` and sends one strict,
 bounded JSON request through stdin. The complete path is present only in Rust memory, the stdin pipe,
 and worker memory while opening/copying/transcoding the source. It is forbidden from argv,
 environment variables, progress, results, errors, logs, persistence, prompts, and cloud traffic.
 
-`contracts/desktop-worker-contract.json` advances to version 3 and declares a closed local request,
-progress/error codes, and forbidden-content rules. The existing URL request remains unchanged.
+`contracts/desktop-worker-contract.json` advances from version 3 to version 4 and declares a closed
+local request, progress/error codes, and forbidden-content rules. The cleaned URL request remains
+unchanged.
 TypeScript, Rust, and Python reject missing, illegal, additional, or wrong-kind values without
 echoing the payload. The packaged Tauri worker mirror must exactly match the canonical worker.
 
@@ -94,14 +96,14 @@ Positive:
 
 Negative:
 
-- Desktop, Rust, Python, tests, examples, and the packaged mirror must ship the v3 change together.
+- Desktop, Rust, Python, tests, examples, and the packaged mirror must ship the v4 change together.
 - Raw FFmpeg and ffprobe stderr cannot be forwarded directly because it may contain the input path.
 - Every new local progress or error state requires contract and three-locale resource registration.
 
 Neutral:
 
-- The local request's `language` remains ASR configuration. It is unrelated to confirmation-time AI
-  `output_language` introduced by contract v2.
+- Rust resolves the same app-local `asr_model` used by URL processing before constructing the local
+  worker request. UI language and confirmation-time AI `output_language` remain unrelated contracts.
 
 ## Decision 3: Normalize all local sources to one official WAV
 
@@ -270,7 +272,7 @@ or decoder failures and may add a separately specified limit if operational evid
 ### Upgrade the task manifest schema number
 
 Rejected because schema v3 already represents the supported secure task family and can add a closed
-source discriminator while preserving URL default semantics. Contract v3 changes the desktop/worker
+source discriminator while preserving URL default semantics. Contract v4 changes the desktop/worker
 wire protocol, not the persisted task schema version.
 
 ## References

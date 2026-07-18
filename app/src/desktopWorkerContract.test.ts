@@ -17,6 +17,25 @@ type DesktopWorkerContract = {
   };
   processVideo: {
     serverManagedLlmCheckout: boolean;
+    configurationOwner: string;
+    ipcRequest: {
+      type: "object";
+      required: string[];
+      properties: {
+        url: { type: "string"; minLength: number };
+      };
+      additionalProperties: boolean;
+    };
+    workerRequest: {
+      type: "object";
+      required: string[];
+      properties: {
+        contract_version: { const: number };
+        url: { type: "string"; minLength: number };
+        asr_model: { type: "string"; enum: string[] };
+      };
+      additionalProperties: boolean;
+    };
   };
   aiGeneration: {
     command: string;
@@ -95,8 +114,8 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict contract version 2", () => {
-    expect(loadContract().contractVersion).toBe(2);
+  test("uses strict contract version 3", () => {
+    expect(loadContract().contractVersion).toBe(3);
   });
 
   test("matches shared event names", () => {
@@ -106,7 +125,7 @@ describe("desktop/worker contract", () => {
     expect(ASR_MODEL_DOWNLOAD_PROGRESS_EVENT).toBe(contract.events.asrModelDownloadProgress);
   });
 
-  test("uses the contract default ASR model in worker requests", async () => {
+  test("declares separate minimal IPC and resolved worker requests", async () => {
     const contract = loadContract();
     const calls: Array<{ command: string; args: unknown }> = [];
 
@@ -125,9 +144,31 @@ describe("desktop/worker contract", () => {
       };
     });
 
-    expect(calls[0]?.args).toMatchObject({
+    expect(calls[0]?.args).toEqual({
       request: {
-        model: contract.asr.defaultModel,
+        url: "https://www.douyin.com/video/7524373044106677544",
+      },
+    });
+    expect(contract.processVideo).toEqual({
+      serverManagedLlmCheckout: false,
+      configurationOwner: "desktop_rust",
+      ipcRequest: {
+        type: "object",
+        required: ["url"],
+        properties: {
+          url: { type: "string", minLength: 1 },
+        },
+        additionalProperties: false,
+      },
+      workerRequest: {
+        type: "object",
+        required: ["contract_version", "url", "asr_model"],
+        properties: {
+          contract_version: { const: 3 },
+          url: { type: "string", minLength: 1 },
+          asr_model: { type: "string", enum: [contract.asr.defaultModel] },
+        },
+        additionalProperties: false,
       },
     });
   });

@@ -17,12 +17,15 @@ remain governed by the existing separate summary/inspiration confirmation.
 ## Progress
 
 - [x] 2026-07-16: Approved the product behavior, local-path secrecy boundary, artifact rules,
-  manifest/source union, strict contract-v3 direction, error/progress registry, and acceptance scope.
+  manifest/source union, strict contract direction, error/progress registry, and acceptance scope.
   Validation: section-by-section user review completed in the planning conversation.
 - [x] 2026-07-16: Published the product specification, ADR, active ExecPlan, and synchronized
   governance entry points for pre-implementation review. Validation: `python
   scripts/validate_agents_docs.py --level WARN` passed with 0 errors and 0 warnings; tracked-file
   `git diff --check` passed and the three new documents contain no trailing whitespace.
+- [x] 2026-07-18: Reserved contract v3 for process-video request cleanup and revised local media to
+  build on that minimal URL request as contract v4. Validation: approved process-video contract v3
+  product specification and ADR.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -44,9 +47,9 @@ remain governed by the existing separate summary/inspiration confirmation.
 - Evidence: `app/src-tauri/src/task_manifest.rs` and `app/src-tauri/src/history.rs` enforce the current
   History vNext manifest predicate. Local tasks cannot be made visible safely by leaving URL fields
   partially populated; the predicate and returned source model must become closed unions.
-- Evidence: the desktop-worker contract is currently version 2 after output-language localization.
-  Local media adds a new strict wire request and code registry entries, so the packaged desktop and
-  worker require a synchronized version 3 release.
+- Evidence: the desktop-worker contract is version 2 after output-language localization. The
+  prerequisite process-video cleanup advances it to v3; local media then adds a new strict wire
+  request and code registry entries through a synchronized version 4 release.
 - Evidence: the approved scope deliberately has no product file-size or duration maximum. Tests must
   exercise truthful disk/probe/decoder failures and must not silently introduce a hidden cap.
 
@@ -66,7 +69,7 @@ remain governed by the existing separate summary/inspiration confirmation.
   time at processing. Rationale: a valid selection can be replaced or changed before confirmation;
   the token must not authorize different bytes silently. Date/Author: 2026-07-16, User + Codex.
 - Decision: Pass the full path only through a bounded `--process-local-media-stdin` payload and raise
-  the strict desktop-worker contract to v3. Rationale: stdin avoids process-list/environment exposure,
+  the strict desktop-worker contract from v3 to v4. Rationale: stdin avoids process-list/environment exposure,
   and desktop/worker ship together so compatibility defaults would hide drift.
   Date/Author: 2026-07-16, User + Codex.
 - Decision: Normalize every source to 16 kHz mono 16-bit PCM `media/audio.wav`, which is the only ASR
@@ -134,8 +137,8 @@ directory, even though the complete path is never stored.
 
 ## Plan of Work
 
-1. [ ] Lock contract v3 and source types through RED tests.
-   - Extend the shared contract without changing the existing `process_video` request.
+1. [ ] Lock contract v4 and source types through RED tests.
+   - Extend the shared contract without changing the cleaned v3 `process_video` request.
    - Declare `LocalMediaKind`, frontend selection metadata, strict local worker stdin request,
      registered progress codes, registered errors, and forbidden path/token content.
    - Add TypeScript, Rust, and Python rejection tests for missing, unknown, wrong-type, wrong-kind,
@@ -156,7 +159,7 @@ directory, even though the complete path is never stored.
 
 3. [ ] Add the independent supervised local worker command.
    - Add `process_local_media({request})` without changing URL `process_video`.
-   - Apply the existing account/config/model/output-format preparation and the same
+   - Apply the existing account/config/model preparation and the same
      ProcessSupervisor video-lane busy/cancel/instance semantics.
    - Resolve the token only in Rust and write the full path once to bounded worker stdin using the
      fixed `--process-local-media-stdin` mode.
@@ -165,8 +168,8 @@ directory, even though the complete path is never stored.
      to the approved terminal state.
 
 4. [ ] Implement the worker local-media parser and probe boundary.
-   - Parse a closed request with `source_path`, `media_kind`, safe display name, extension, ASR
-     language, formats, model, and embedded mode; reject extra or invalid fields without echo.
+   - Parse a closed request with `contract_version`, `source_path`, `media_kind`, safe display name,
+     extension, and resolved `asr_model`; reject extra or invalid fields without echo.
    - Recheck extension, ordinary local file expectations available to Python, and ffprobe content.
    - Classify MP3/other cover art as audio and require video+audio streams for video.
    - Open or stream the source for media-tool probing/decoding without placing the complete path in a

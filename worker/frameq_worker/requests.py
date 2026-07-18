@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
-from frameq_worker.asr import DEFAULT_ASR_MODEL, resolve_asr_model_name
-from frameq_worker.desktop_contract import ASR_MODEL_ENV
+from frameq_worker.asr import DEFAULT_ASR_MODEL
+from frameq_worker.desktop_contract import PROCESS_VIDEO_CONTRACT_VERSION
 from frameq_worker.models import (
     GenerationPreferences,
     InspirationProfile,
@@ -152,6 +152,8 @@ GENERATION_FIELD_OPTIONS: dict[str, set[str]] = {
 }
 
 TASK_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]+$")
+PROCESS_VIDEO_REQUEST_FIELDS = frozenset({"contract_version", "url", "asr_model"})
+INVALID_PROCESS_PAYLOAD_MESSAGE = "Process request payload was invalid."
 RETRY_REQUEST_FIELDS = frozenset(
     {"task_id", "target", "output_language", "preference_snapshot"}
 )
@@ -159,27 +161,30 @@ INVALID_RETRY_PAYLOAD_MESSAGE = "Retry request payload was invalid."
 
 
 def parse_process_request(payload: object) -> ProcessRequest:
-    if not isinstance(payload, dict):
-        raise ValueError("Request payload must be a JSON object.")
-    if "generate_insights" in payload:
-        raise ValueError("Process request contains an unsupported field.")
+    try:
+        return _parse_process_request(payload)
+    except (TypeError, ValueError):
+        raise ValueError(INVALID_PROCESS_PAYLOAD_MESSAGE) from None
+
+
+def _parse_process_request(payload: object) -> ProcessRequest:
+    if not isinstance(payload, dict) or set(payload) != PROCESS_VIDEO_REQUEST_FIELDS:
+        raise ValueError
+
+    if payload.get("contract_version") != PROCESS_VIDEO_CONTRACT_VERSION:
+        raise ValueError
 
     url = payload.get("url")
     if not isinstance(url, str) or not url.strip():
-        raise ValueError("Request payload must include a non-empty url.")
+        raise ValueError
 
-    output_formats = payload.get("output_formats", ("txt", "md"))
-    if not isinstance(output_formats, list | tuple) or not all(
-        isinstance(item, str) for item in output_formats
-    ):
-        raise ValueError("Request payload output_formats must be a list of strings.")
+    asr_model = payload.get("asr_model")
+    if not isinstance(asr_model, str) or asr_model != DEFAULT_ASR_MODEL:
+        raise ValueError
 
     return ProcessRequest(
         url=url.strip(),
-        language=str(payload.get("language", "Chinese")),
-        output_formats=tuple(output_formats),
-        model=str(payload.get("model", DEFAULT_ASR_MODEL)),
-        insightflow_mode=str(payload.get("insightflow_mode", "embedded")),
+        asr_model=asr_model,
     )
 
 
@@ -386,15 +391,6 @@ def _read_multi_option(
     if any(value not in allowed_options[field] for value in values):
         raise ValueError(f"preference_snapshot.{field} has an invalid option id.")
     return tuple(values)
-
-
-def resolve_configured_asr_model(
-    request_model: str,
-    environ: dict[str, str] | None = None,
-) -> str:
-    env = environ if environ is not None else {}
-    configured_model = env.get(ASR_MODEL_ENV, "").strip()
-    return resolve_asr_model_name(configured_model or request_model)
 
 
 def optional_env(env: dict[str, str], key: str) -> str | None:

@@ -47,7 +47,6 @@ from frameq_worker.requests import (
 from frameq_worker.requests import (
     parse_process_request,
     parse_retry_insights_request,
-    resolve_configured_asr_model,
 )
 from frameq_worker.worker_service import (
     failed_insight_retry_result,
@@ -86,7 +85,6 @@ __all__ = [
     "render_progress_event",
     "render_result_json",
     "resolve_cache_dir",
-    "resolve_configured_asr_model",
     "resolve_output_dir",
     "resolve_source_identity_once",
     "retry_insights_once",
