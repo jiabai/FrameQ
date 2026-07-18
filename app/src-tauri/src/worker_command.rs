@@ -960,6 +960,36 @@ Some dependency logged to stdout
     }
 
     #[test]
+    fn parse_worker_output_rejects_success_without_structured_result() {
+        let output = Output {
+            status: exit_status(0),
+            stdout: b"dependency completed without worker json".to_vec(),
+            stderr: b"diagnostic only".to_vec(),
+        };
+        let fallback = ProcessVideoResult {
+            status: "failed".to_string(),
+            task_id: None,
+            task_dir: None,
+            artifacts: HashMap::new(),
+            text: String::new(),
+            summary: String::new(),
+            insights: vec![],
+            transcript: None,
+            error: Some(WorkerError {
+                code: "WORKER_PROCESS_FAILED".to_string(),
+                message: "fixed fallback".to_string(),
+                stage: "video_extracting".to_string(),
+            }),
+        };
+
+        let error = parse_worker_output_or_fallback(&output, fallback)
+            .expect_err("successful worker exit requires structured json");
+
+        assert!(error.contains("structured JSON result"));
+        assert!(!error.contains("fixed fallback"));
+    }
+
+    #[test]
     fn worker_command_spec_uses_bundled_python_and_app_local_data() {
         let paths = command_test_paths();
         let request_json = r#"{"url":"https://www.douyin.com/video/7524373044106677544"}"#;

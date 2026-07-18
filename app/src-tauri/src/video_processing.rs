@@ -899,8 +899,9 @@ fn apply_configured_asr_model_to_request(
 mod tests {
     use super::{
         apply_configured_asr_model_to_request, cached_process_result_for_identity,
-        cached_process_result_for_request, finish_retry_after_reader, parse_retry_insights_request,
-        retry_result_log_detail, serialize_process_video_request, ProcessVideoRequest,
+        cached_process_result_for_request, cancelled_worker_result, finish_retry_after_reader,
+        parse_retry_insights_request, retry_result_log_detail, serialize_process_video_request,
+        worker_already_running_result, worker_transport_failure_result, ProcessVideoRequest,
         INVALID_RETRY_PAYLOAD,
     };
     use crate::worker_command::{CancelRequestOutcome, ProcessSupervisor};
@@ -911,6 +912,28 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn worker_lifecycle_failures_keep_process_and_retry_public_shapes() {
+        let process_cancelled = cancelled_worker_result("video_extracting", "failed");
+        assert_eq!(process_cancelled["status"], "failed");
+        assert_eq!(process_cancelled["error"]["code"], "WORKER_CANCELLED");
+        assert_eq!(process_cancelled["error"]["stage"], "video_extracting");
+
+        let retry_cancelled = cancelled_worker_result("insights_generating", "partial_completed");
+        assert_eq!(retry_cancelled["status"], "partial_completed");
+        assert_eq!(retry_cancelled["error"]["code"], "WORKER_CANCELLED");
+        assert_eq!(retry_cancelled["error"]["stage"], "insights_generating");
+
+        let already_running = worker_already_running_result("video_extracting", "failed");
+        assert_eq!(already_running["error"]["code"], "WORKER_ALREADY_RUNNING");
+
+        let transport = worker_transport_failure_result("video_extracting", "failed");
+        assert_eq!(
+            transport["error"]["code"],
+            "WORKER_REQUEST_TRANSPORT_FAILED"
+        );
+    }
 
     #[test]
     fn cached_process_result_reuses_completed_task_for_same_source_url() {

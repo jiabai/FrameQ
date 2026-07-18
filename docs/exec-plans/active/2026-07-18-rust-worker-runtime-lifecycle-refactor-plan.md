@@ -39,8 +39,16 @@ boundaries.
 - [x] 2026-07-18: User approved a single supervised runner, closed progress routes, typed terminal
   outcomes, private low-level process operations, and a behavior-preserving staged migration.
   Validation: `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`.
-- [ ] 2026-07-18: Implementation has not started. Validation: this plan creates documentation and
-  execution gates only; no Rust source or contract file is changed in the planning step.
+- [x] 2026-07-18: Completed Task 1 characterization without changing production behavior. Added
+  successful-exit/malformed-stdout protocol coverage and fixed public process/retry lifecycle failure
+  shape coverage; the complete Rust suite passed 136/136 and rustfmt passed. Validation:
+  `cargo test --manifest-path app\src-tauri\Cargo.toml` and
+  `cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check`.
+- [x] 2026-07-18: Established the isolated Windows Rust baseline. The first sandboxed run failed
+  only because two controlled fixture tests could not invoke `taskkill`; rerunning the same tests
+  with process-tree permission passed 2/2, then the complete suite passed 134/134 and rustfmt passed.
+  Validation: `cargo test --manifest-path app\src-tauri\Cargo.toml` and
+  `cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check`.
 
 ## Surprises & Discoveries
 
@@ -59,6 +67,10 @@ boundaries.
 - Evidence: current start logging can derive detail from raw command args and full executable/current
   directory paths. The new lifecycle boundary should log fixed `WorkerOperation` fields and treat
   sanitization as defense in depth rather than the primary privacy mechanism.
+- Evidence: the original Task 1 wording expected a new source-preflight precedence test to remain
+  RED and then be committed before the runner existed. A permanently failing characterization
+  commit would break staged execution, so current behavior stays covered by GREEN characterization;
+  the desired structured-result-first rule becomes the first RED runner test in Task 3.
 
 ## Decision Log
 
@@ -146,7 +158,7 @@ stderr handling.
 - Modify: `app/src-tauri/src/video_processing.rs` tests.
 - Modify: `app/src-tauri/src/asr_model.rs` tests.
 
-- [ ] Record a clean baseline with the current Rust suite and rustfmt before edits.
+- [x] Record a clean baseline with the current Rust suite and rustfmt before edits.
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml
@@ -155,7 +167,7 @@ stderr handling.
 
   Expected: both commands pass; record the exact test count in Progress.
 
-- [ ] Add focused behavior tests for this terminal matrix without asserting implementation file
+- [x] Add focused behavior tests for this terminal matrix without asserting implementation file
   placement:
 
   ```text
@@ -168,7 +180,7 @@ stderr handling.
   stale instance finish             -> cannot clear newer instance
   ```
 
-- [ ] Add adapter characterization assertions for existing public mappings:
+- [x] Add adapter characterization assertions for existing public mappings:
 
   ```text
   process_video cancellation       -> status=failed, stage=video_extracting
@@ -177,9 +189,10 @@ stderr handling.
   model cancellation               -> status=cancelled plus validated cancellation event
   ```
 
-- [ ] Run the focused tests. Existing intended behavior must pass; the new source-preflight
-  structured-result-first assertion is expected to fail and documents the ordering inconsistency
-  before implementation.
+- [x] Run the focused tests and require all current characterization assertions to pass. Record the
+  source-preflight ordering inconsistency in Surprises & Discoveries without committing a failing
+  test; Task 3 introduces the desired structured-result-first assertion against the new runner API
+  and verifies RED before implementation.
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml worker_command::tests
@@ -187,7 +200,7 @@ stderr handling.
   cargo test --manifest-path app\src-tauri\Cargo.toml asr_model::tests
   ```
 
-- [ ] Commit only the characterization tests and Progress evidence.
+- [x] Commit only the characterization tests and Progress evidence.
 
   ```powershell
   git add app/src-tauri/src/worker_command.rs app/src-tauri/src/video_processing.rs app/src-tauri/src/asr_model.rs docs/exec-plans/active/2026-07-18-rust-worker-runtime-lifecycle-refactor-plan.md
