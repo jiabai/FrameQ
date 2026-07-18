@@ -39,17 +39,6 @@ impl WorkerCommandSpec {
     }
 }
 
-pub(crate) fn worker_command_log_detail(spec: &WorkerCommandSpec, kind: &str) -> String {
-    let args = spec.args.join(" ");
-    format!(
-        "kind={kind} program={} current_dir={} args={} {}",
-        path_to_env_string(&spec.program),
-        path_to_env_string(&spec.current_dir),
-        args,
-        js_runtime_diagnostics(spec)
-    )
-}
-
 pub(super) fn js_runtime_diagnostics(spec: &WorkerCommandSpec) -> String {
     let path_value = spec
         .env
@@ -184,9 +173,7 @@ fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> b
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_worker_command_spec, worker_command_log_detail, WorkerCommandSpec, WorkerInvocation,
-    };
+    use super::{build_worker_command_spec, WorkerCommandSpec, WorkerInvocation};
     use crate::account::ServerManagedLlmInvocation;
     use crate::{bundled_python_path, path_to_env_string, RuntimePaths};
     use std::path::PathBuf;
@@ -309,9 +296,6 @@ mod tests {
                 .env
                 .iter()
                 .any(|(_, value)| value.contains("xsec_token")));
-            let log = worker_command_log_detail(&spec, "privacy_probe");
-            assert!(!log.contains(secret));
-            assert!(!log.contains("xsec_token"));
         }
     }
 

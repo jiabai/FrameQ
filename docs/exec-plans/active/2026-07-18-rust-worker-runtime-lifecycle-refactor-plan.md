@@ -72,6 +72,13 @@ boundaries.
   passed 10/10, and the complete Rust suite passed 147/147. The model module still owns availability,
   structured message mapping, and the single synthetic cancellation event; it no longer owns raw
   spawn/register/stderr/wait/finish logic.
+- [x] 2026-07-18: Completed Task 6 and closed the lifecycle boundary. Removed the compatibility
+  spawn/parser/fallback/log APIs, restricted supervisor mutation and process-tree termination to
+  `worker_runtime`, migrated the remaining stdin privacy/cleanup tests to `WorkerLane::run`, and
+  updated the native macOS workflow contract to the split runtime files. Runtime tests passed 24/24,
+  the complete Rust suite passed 141/141 without warnings, and the workflow contract passed 2/2.
+  Boundary scanning found worker lifecycle primitives only under `worker_runtime`; the two
+  `history_deletion.rs` `cmd.exe` matches are Windows file-lock test fixtures.
 
 ## Surprises & Discoveries
 
@@ -103,6 +110,10 @@ boundaries.
   loader startup with `STATUS_ENTRYPOINT_NOT_FOUND`. Production routes still own `Window`; test
   builds use the same closed route discriminators with unit payloads and validate protocol routing
   without loading the GUI stack.
+- Evidence: the native macOS workflow contract still opened the retired `worker_command.rs` even
+  though the workflow itself runs the complete Cargo suite. The contract now verifies the real Unix
+  fixture and TERM/KILL implementation in `supervisor.rs` plus production `process_group(0)` setup
+  in `runner.rs`.
 
 ## Decision Log
 
@@ -132,10 +143,11 @@ boundaries.
 ## Outcomes & Retrospective
 
 Current outcome: command construction, supervision, spawn/stdin/pipe ownership, progress routing,
-terminal parsing, and lifecycle diagnostics now live in separate tested runtime modules. Existing
-application flows still use temporary compatibility re-exports; implementation is complete only
-when all four operations call `WorkerLane::run`, low-level compatibility APIs are removed, local
-tests pass, and the macOS process-group workflow succeeds.
+terminal parsing, and lifecycle diagnostics now live in separate tested runtime modules. All four
+operations call `WorkerLane::run`; compatibility APIs are gone, and application modules cannot
+mutate `ProcessSupervisor` or terminate a process tree. Local Rust and workflow-contract gates pass.
+Task 7 documentation, complete cross-stack gates, manual desktop regression, and native hosted
+macOS evidence remain.
 
 Residual risk: process cancellation is platform-sensitive. Windows unit tests cannot prove macOS
 PGID/TERM/KILL delivery, so native GitHub macOS runner evidence remains mandatory even if every local
@@ -433,14 +445,14 @@ stderr handling.
 - Modify: `app/src-tauri/src/lib.rs`.
 - Modify: all Rust imports identified by the boundary scan.
 
-- [ ] Remove temporary compatibility exports and expose only command construction, typed lane
+- [x] Remove temporary compatibility exports and expose only command construction, typed lane
   outcomes/errors, cancellation result, `ProcessSupervisors`, and the blocking adapter required by
   Tauri commands.
 
-- [ ] Make raw spawn, stdin delivery, `ProcessSupervisor` mutation, `terminate_process_tree`, and raw
+- [x] Make raw spawn, stdin delivery, `ProcessSupervisor` mutation, `terminate_process_tree`, and raw
   child output parsing private to `worker_runtime`.
 
-- [ ] Run this production boundary scan and require no matches outside `worker_runtime`:
+- [x] Run this production boundary scan and require no matches outside `worker_runtime`:
 
   ```powershell
   rg -n "Command::new|\.spawn\(|wait_with_output|\.start\(|\.finish\(|terminate_process_tree|std::process::Child" app/src-tauri/src -g "*.rs"
@@ -450,7 +462,7 @@ stderr handling.
   `app/src-tauri/src/worker_runtime/`; unrelated fixed OS commands must be reviewed explicitly rather
   than hidden by weakening the scan.
 
-- [ ] Verify source URL/stdin privacy and workflow contract tests.
+- [x] Verify source URL/stdin privacy and workflow contract tests.
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml
@@ -458,7 +470,7 @@ stderr handling.
   cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check
   ```
 
-- [ ] Commit removal of the old boundary.
+- [x] Commit removal of the old boundary.
 
   ```powershell
   git add app/src-tauri/src app/src-tauri/src/lib.rs

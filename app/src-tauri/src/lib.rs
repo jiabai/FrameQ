@@ -28,7 +28,7 @@ pub(crate) use runtime::{
 };
 
 pub(crate) use diagnostics::{
-    append_desktop_log, sanitize_diagnostic_text, summarize_worker_result_for_log, truncate_for_log,
+    append_desktop_log, sanitize_diagnostic_text, summarize_worker_result_for_log,
 };
 
 pub(crate) use asr_model::{DEFAULT_ASR_MODEL, SUPPORTED_ASR_MODELS};
@@ -37,18 +37,11 @@ pub(crate) use asr_model::{DEFAULT_ASR_MODEL, SUPPORTED_ASR_MODELS};
 pub(crate) use asr_model::{ASR_MODEL_DOWNLOAD_EVENT_NAME, MODEL_DOWNLOAD_EVENT_PREFIX};
 
 pub(crate) use worker_runtime::{
-    build_worker_command_spec, parse_worker_output_or_fallback, parse_worker_stdout,
-    request_process_cancellation, run_blocking_worker_command, spawn_supervised_worker_command,
-    spawn_worker_command, terminate_process_tree, worker_command_log_detail,
-    worker_exit_log_detail, CancelProcessResult, ProcessPhase, ProcessSupervisors,
-    SupervisedSpawnError, WorkerCommandSpec, WorkerInvocation,
+    build_worker_command_spec, run_blocking_worker_command, CancelProcessResult,
+    ProcessSupervisors, WorkerCommandSpec, WorkerInvocation,
 };
 
 pub(crate) use history_deletion::HistoryDeletionState;
-pub(crate) use video_processing::ProcessVideoResult;
-
-#[cfg(test)]
-pub(crate) use video_processing::WorkerError;
 
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";

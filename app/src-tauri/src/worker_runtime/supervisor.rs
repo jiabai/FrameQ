@@ -11,32 +11,32 @@ use std::os::windows::process::CommandExt;
 const WINDOWS_CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[cfg(target_os = "windows")]
-pub(crate) fn windows_subprocess_creation_flags() -> u32 {
+fn windows_subprocess_creation_flags() -> u32 {
     WINDOWS_CREATE_NO_WINDOW
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ProcessPhase {
+pub(super) enum ProcessPhase {
     Running,
     Cancelling,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ProcessInstance {
-    pub(crate) instance_id: u64,
-    pub(crate) pid: u32,
-    pub(crate) process_group_id: Option<u32>,
+pub(super) struct ProcessInstance {
+    pub(super) instance_id: u64,
+    pub(super) pid: u32,
+    pub(super) process_group_id: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum CancelClaim {
+pub(super) enum CancelClaim {
     Claimed(ProcessInstance),
     AlreadyCancelling(ProcessInstance),
     NotRunning,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum CancelRequestOutcome {
+pub(super) enum CancelRequestOutcome {
     Signalled(ProcessInstance),
     AlreadyCancelling(ProcessInstance),
     NotRunning,
@@ -48,7 +48,7 @@ pub(crate) enum CancelRequestOutcome {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum CancelProcessStatus {
+pub(super) enum CancelProcessStatus {
     Cancelling,
     AlreadyCancelling,
     NotRunning,
@@ -57,12 +57,12 @@ pub(crate) enum CancelProcessStatus {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct CancelProcessResult {
-    pub(crate) status: CancelProcessStatus,
-    pub(crate) error: Option<String>,
+    pub(super) status: CancelProcessStatus,
+    pub(super) error: Option<String>,
 }
 
 #[derive(Default)]
-pub(crate) struct ProcessSupervisor {
+pub(super) struct ProcessSupervisor {
     state: Mutex<ProcessSupervisorState>,
 }
 
@@ -73,7 +73,7 @@ struct ProcessSupervisorState {
 }
 
 impl ProcessSupervisor {
-    pub(crate) fn is_active(&self) -> bool {
+    pub(super) fn is_active(&self) -> bool {
         self.state
             .lock()
             .expect("process supervisor lock poisoned")
@@ -81,7 +81,7 @@ impl ProcessSupervisor {
             .is_some()
     }
 
-    pub(crate) fn start(&self, pid: u32) -> Option<ProcessInstance> {
+    pub(super) fn start(&self, pid: u32) -> Option<ProcessInstance> {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
         if state.current.is_some() {
             return None;
@@ -98,7 +98,7 @@ impl ProcessSupervisor {
     }
 
     #[cfg(test)]
-    pub(crate) fn current(&self) -> Option<ProcessInstance> {
+    fn current(&self) -> Option<ProcessInstance> {
         self.state
             .lock()
             .expect("process supervisor lock poisoned")
@@ -107,7 +107,7 @@ impl ProcessSupervisor {
     }
 
     #[cfg(test)]
-    pub(crate) fn phase(&self) -> Option<ProcessPhase> {
+    fn phase(&self) -> Option<ProcessPhase> {
         self.state
             .lock()
             .expect("process supervisor lock poisoned")
@@ -115,7 +115,7 @@ impl ProcessSupervisor {
             .map(|(_, phase)| phase)
     }
 
-    pub(crate) fn claim_cancel(&self) -> CancelClaim {
+    fn claim_cancel(&self) -> CancelClaim {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
         match state.current.as_mut() {
             Some((instance, phase @ ProcessPhase::Running)) => {
@@ -127,7 +127,7 @@ impl ProcessSupervisor {
         }
     }
 
-    pub(crate) fn restore_running(&self, instance_id: u64) -> bool {
+    fn restore_running(&self, instance_id: u64) -> bool {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
         match state.current.as_mut() {
             Some((instance, phase @ ProcessPhase::Cancelling))
@@ -140,7 +140,7 @@ impl ProcessSupervisor {
         }
     }
 
-    pub(crate) fn finish(&self, instance_id: u64) -> Option<ProcessPhase> {
+    pub(super) fn finish(&self, instance_id: u64) -> Option<ProcessPhase> {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
         let (instance, phase) = state.current?;
         if instance.instance_id != instance_id {
@@ -150,7 +150,7 @@ impl ProcessSupervisor {
         Some(phase)
     }
 
-    pub(crate) fn request_cancel<F>(&self, terminate: F) -> CancelRequestOutcome
+    fn request_cancel<F>(&self, terminate: F) -> CancelRequestOutcome
     where
         F: FnOnce(ProcessInstance) -> Result<(), String>,
     {
@@ -170,7 +170,7 @@ impl ProcessSupervisor {
     }
 }
 
-pub(crate) fn request_process_cancellation(supervisor: &ProcessSupervisor) -> CancelProcessResult {
+pub(super) fn request_process_cancellation(supervisor: &ProcessSupervisor) -> CancelProcessResult {
     match supervisor.request_cancel(|instance| {
         terminate_process_tree(instance.process_group_id.unwrap_or(instance.pid))
     }) {
@@ -195,19 +195,19 @@ pub(crate) fn request_process_cancellation(supervisor: &ProcessSupervisor) -> Ca
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ProcessPlatform {
+enum ProcessPlatform {
     Windows,
     Unix,
 }
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ProcessSignal {
+enum ProcessSignal {
     Term,
     Kill,
 }
 
-pub(crate) fn termination_command_spec(
+fn termination_command_spec(
     platform: ProcessPlatform,
     pid: u32,
     signal: ProcessSignal,
@@ -258,7 +258,7 @@ fn termination_failure_detail(output: &Output, fallback: &str) -> String {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn terminate_process_tree(pid: u32) -> Result<(), String> {
+pub(super) fn terminate_process_tree(pid: u32) -> Result<(), String> {
     let (program, args) =
         termination_command_spec(ProcessPlatform::Windows, pid, ProcessSignal::Term);
     let mut command = Command::new(program);
@@ -279,7 +279,7 @@ pub(crate) fn terminate_process_tree(pid: u32) -> Result<(), String> {
 }
 
 #[cfg(unix)]
-pub(crate) fn terminate_process_tree(pid: u32) -> Result<(), String> {
+pub(super) fn terminate_process_tree(pid: u32) -> Result<(), String> {
     send_process_group_signal(pid, ProcessSignal::Term)?;
     std::thread::sleep(Duration::from_millis(500));
     if process_group_exists(pid)? {

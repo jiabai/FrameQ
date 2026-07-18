@@ -18,13 +18,6 @@ use std::time::{Duration, Instant};
 #[cfg(not(test))]
 use tauri::{Emitter, Window};
 
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) enum SupervisedSpawnError {
-    AlreadyRunning,
-    Cancelled,
-    Failed(String),
-}
-
 fn configure_child_process_group(command: &mut Command) {
     #[cfg(unix)]
     {
@@ -87,43 +80,7 @@ fn deliver_worker_stdin(
         .map_err(|_| "Failed to deliver worker request through stdin.".to_string())
 }
 
-pub(crate) fn spawn_worker_command(spec: WorkerCommandSpec) -> Result<std::process::Child, String> {
-    let (mut child, stdin_payload) = spawn_worker_process(spec)?;
-    if let Err(error) = deliver_worker_stdin(&mut child, stdin_payload) {
-        let pid = child.id();
-        terminate_and_reap(&mut child, pid);
-        return Err(error);
-    }
-    Ok(child)
-}
-
-pub(crate) fn spawn_supervised_worker_command(
-    spec: WorkerCommandSpec,
-    supervisor: &ProcessSupervisor,
-) -> Result<(std::process::Child, ProcessInstance), SupervisedSpawnError> {
-    let (mut child, stdin_payload) =
-        spawn_worker_process(spec).map_err(SupervisedSpawnError::Failed)?;
-    let Some(instance) = supervisor.start(child.id()) else {
-        let pid = child.id();
-        terminate_and_reap(&mut child, pid);
-        return Err(SupervisedSpawnError::AlreadyRunning);
-    };
-    if let Err(error) = deliver_worker_stdin(&mut child, stdin_payload) {
-        terminate_and_reap(
-            &mut child,
-            instance.process_group_id.unwrap_or(instance.pid),
-        );
-        let terminal_phase = supervisor.finish(instance.instance_id);
-        return if terminal_phase == Some(ProcessPhase::Cancelling) {
-            Err(SupervisedSpawnError::Cancelled)
-        } else {
-            Err(SupervisedSpawnError::Failed(error))
-        };
-    }
-    Ok((child, instance))
-}
-
-pub(crate) fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, String> {
+fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, String> {
     let text = String::from_utf8_lossy(stdout);
     let mut last_error = None;
 
@@ -708,8 +665,10 @@ mod tests {
         WorkerRunRequest,
     };
     use crate::worker_runtime::supervisor::CancelProcessStatus;
-    use crate::worker_runtime::{ProcessPhase, WorkerCommandSpec};
+    use crate::worker_runtime::supervisor::ProcessPhase;
+    use crate::worker_runtime::WorkerCommandSpec;
     use crate::RuntimePaths;
+    use std::io::Read;
     use std::path::PathBuf;
     use std::process::Output;
     use std::sync::atomic::Ordering;
@@ -927,6 +886,90 @@ mod tests {
             .expect_err("forced wait failure must be typed");
 
         assert_eq!(error.kind, WorkerRunErrorKind::WaitFailed);
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn sensitive_request_is_delivered_only_through_stdin() {
+        const PROBE_ENV: &str = "FRAMEQ_RUNNER_STDIN_PRIVACY_PROBE";
+        const TEST_NAME: &str =
+            "worker_runtime::runner::tests::sensitive_request_is_delivered_only_through_stdin";
+        const SECRET: &str = "runner-review-secret";
+        if std::env::var_os(PROBE_ENV).is_some() {
+            let mut stdin = String::new();
+            std::io::stdin()
+                .read_to_string(&mut stdin)
+                .expect("privacy probe reads stdin");
+            let argv = std::env::args().collect::<Vec<_>>().join(" ");
+            let env_contains_secret = std::env::vars().any(|(_, value)| value.contains(SECRET));
+            println!(
+                "{}",
+                serde_json::json!({
+                    "status": "completed",
+                    "stdin_received": stdin.contains(SECRET),
+                    "argv_contains_secret": argv.contains(SECRET),
+                    "env_contains_secret": env_contains_secret,
+                })
+            );
+            return;
+        }
+
+        let lane = WorkerLane::default();
+        let paths = test_paths("stdin-privacy");
+        let payload = format!(r#"{{"url":"https://example.invalid/video?token={SECRET}"}}"#);
+        let request = fixture_request(TEST_NAME, PROBE_ENV, Some(payload));
+
+        assert!(!request
+            .command
+            .args
+            .iter()
+            .any(|value| value.contains(SECRET)));
+        assert!(!request
+            .command
+            .env
+            .iter()
+            .any(|(_, value)| value.contains(SECRET)));
+        let outcome = lane
+            .run(&paths, request)
+            .expect("stdin privacy probe succeeds");
+        let log = std::fs::read_to_string(crate::diagnostics::desktop_log_path(&paths))
+            .expect("read runner log");
+
+        assert!(matches!(
+            outcome,
+            WorkerRunOutcome::Structured(value)
+                if value["stdin_received"] == true
+                    && value["argv_contains_secret"] == false
+                    && value["env_contains_secret"] == false
+        ));
+        assert!(!log.contains(SECRET));
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn stdin_delivery_failure_is_typed_sanitized_and_clears_the_lane() {
+        const PROBE_ENV: &str = "FRAMEQ_RUNNER_STDIN_FAILURE_PROBE";
+        const TEST_NAME: &str = "worker_runtime::runner::tests::stdin_delivery_failure_is_typed_sanitized_and_clears_the_lane";
+        const SECRET: &str = "runner-review-secret";
+        if std::env::var_os(PROBE_ENV).is_some() {
+            return;
+        }
+
+        let lane = WorkerLane::default();
+        let paths = test_paths("stdin-failure");
+        let error = lane
+            .run(
+                &paths,
+                fixture_request(TEST_NAME, PROBE_ENV, Some(SECRET.repeat(256 * 1024))),
+            )
+            .expect_err("closed child stdin must fail request delivery");
+        let log = std::fs::read_to_string(crate::diagnostics::desktop_log_path(&paths))
+            .expect("read runner log");
+
+        assert_eq!(error.kind, WorkerRunErrorKind::RequestDeliveryFailed);
+        assert_eq!(error.detail, "Worker request delivery failed.");
+        assert!(!error.detail.contains(SECRET));
+        assert!(!log.contains(SECRET));
         assert!(!lane.is_active());
     }
 
