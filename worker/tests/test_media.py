@@ -65,7 +65,9 @@ def test_build_ytdlp_command_uses_transcription_first_youtube_format_policy() ->
     assert runtime_values == ["deno", "node", "quickjs", "bun"]
     assert "--write-subs" in command
     assert "--write-auto-subs" in command
-    assert command[command.index("--sub-langs") + 1] == "zh-Hans,zh-CN,zh-Hant,en,ja,ko"
+    assert command[command.index("--sub-langs") + 1] == (
+        "zh-Hans,zh-CN,zh-Hant,zh,en,ja,ko"
+    )
     assert command[command.index("--sub-format") + 1] == "best"
     assert "--convert-subs" not in command
     assert "--cookies" not in command
@@ -83,7 +85,9 @@ def test_build_ytdlp_command_adds_subtitle_args_for_bilibili_only() -> None:
 
     assert_ytdlp_module_prefix(command)
     assert command[-1] == "https://www.bilibili.com/video/BV1Aa411c7mD"
-    assert command[command.index("--sub-langs") + 1] == "zh-Hans,zh-CN,zh-Hant,en,ja,ko"
+    assert command[command.index("--sub-langs") + 1] == (
+        "zh-Hans,zh-CN,zh-Hant,zh,en,ja,ko"
+    )
     assert "--write-subs" in command
     assert "--write-auto-subs" in command
     assert "--sub-format" in command

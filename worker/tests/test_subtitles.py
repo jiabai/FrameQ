@@ -15,6 +15,10 @@ def test_find_subtitle_transcript_prefers_configured_languages_and_parses_srt(
         "2\n00:00:02,500 --> 00:00:03,000\n第二句\n",
         encoding="utf-8",
     )
+    (tmp_path / "demo.zh.srt").write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n通用中文\n",
+        encoding="utf-8",
+    )
 
     transcript = find_subtitle_transcript(tmp_path)
 
@@ -25,6 +29,25 @@ def test_find_subtitle_transcript_prefers_configured_languages_and_parses_srt(
         {"id": "subtitle-1", "start_ms": 1200, "end_ms": 2400, "text": "第一句"},
         {"id": "subtitle-2", "start_ms": 2500, "end_ms": 3000, "text": "第二句"},
     ]
+
+
+def test_find_subtitle_transcript_prefers_generic_chinese_over_english(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "demo.en.vtt").write_text(
+        "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nEnglish line\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "demo.zh.vtt").write_text(
+        "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n通用中文字幕\n",
+        encoding="utf-8",
+    )
+
+    transcript = find_subtitle_transcript(tmp_path)
+
+    assert transcript is not None
+    assert transcript.language == "zh"
+    assert transcript.text == "通用中文字幕"
 
 
 def test_find_subtitle_transcript_cleans_vtt_controls_tags_and_rolling_duplicates(

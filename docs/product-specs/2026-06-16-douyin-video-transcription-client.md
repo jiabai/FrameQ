@@ -19,6 +19,11 @@
 ## 2026-07-05 YouTube/Bilibili Subtitle-First Transcript Source
 
 - For public YouTube and Bilibili links that complete through `yt-dlp`, FrameQ should request platform subtitle files before local ASR and reuse a valid `.vtt` or `.srt` subtitle as the official transcript when available.
+- The closed Chinese subtitle request policy must include exact generic `zh` in addition to
+  `zh-Hans`, `zh-CN`, and `zh-Hant`. Script-specific Chinese remains preferred over generic `zh`,
+  and generic `zh` remains preferred over non-Chinese languages. FrameQ must not use a broad
+  `zh.*` request that also downloads YouTube auto-translated variants such as `zh-Hans-zh` or
+  `zh-Hant-zh` when an original `zh` track exists.
 - Subtitle reuse is an optimization inside the existing single-link workflow. It does not add a subtitle picker, raw subtitle viewer, download center, platform login, cookie import, or private-content bypass.
 - When a usable subtitle is found, FrameQ should still keep the normal video artifact, audio artifact, audio review behavior, transcript result card, history row, and optional AI整理 flow. Only local ASR model loading and inference are skipped.
 - When subtitles are missing, malformed, too short, unsupported, or the Bilibili public fallback path is used, the worker should silently continue through the existing local ASR path and preserve existing recoverable error behavior.

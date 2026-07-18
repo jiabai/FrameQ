@@ -7,7 +7,15 @@ from pathlib import Path
 
 from frameq_worker.asr import TranscriptSegment
 
-PREFERRED_SUBTITLE_LANGUAGES = ("zh-Hans", "zh-CN", "zh-Hant", "en", "ja", "ko")
+PREFERRED_SUBTITLE_LANGUAGES = (
+    "zh-Hans",
+    "zh-CN",
+    "zh-Hant",
+    "zh",
+    "en",
+    "ja",
+    "ko",
+)
 SUPPORTED_SUBTITLE_SUFFIXES = (".srt", ".vtt")
 TIMESTAMP_PATTERN = re.compile(
     r"(?P<start>(?:\d{2}:)?\d{2}:\d{2}[\.,]\d{3})\s*-->\s*"

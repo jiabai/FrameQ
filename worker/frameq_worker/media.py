@@ -58,7 +58,7 @@ PLATFORM_SUBTITLE_ARGS = [
     "--write-subs",
     "--write-auto-subs",
     "--sub-langs",
-    "zh-Hans,zh-CN,zh-Hant,en,ja,ko",
+    "zh-Hans,zh-CN,zh-Hant,zh,en,ja,ko",
     "--sub-format",
     "best",
 ]
