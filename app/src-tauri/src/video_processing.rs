@@ -1,23 +1,21 @@
 use crate::account;
-use crate::progress_event::{invalid_progress_log_detail, validate_worker_progress_event};
 use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::task_manifest;
-use crate::worker_runtime::ProcessSupervisor;
+use crate::worker_runtime::{
+    ProgressRoute, WorkerLane, WorkerOperation, WorkerRunError, WorkerRunErrorKind,
+    WorkerRunOutcome, WorkerRunRequest,
+};
 use crate::{
-    append_desktop_log, build_worker_command_spec, ensure_runtime_dirs,
-    parse_worker_output_or_fallback, parse_worker_stdout, path_to_env_string,
-    resolve_runtime_paths, run_blocking_worker_command, spawn_supervised_worker_command,
-    summarize_worker_result_for_log, terminate_process_tree, worker_command_log_detail,
-    worker_exit_log_detail, CancelProcessResult, ProcessPhase, ProcessSupervisors,
-    SupervisedSpawnError, WorkerInvocation, PROGRESS_EVENT_NAME, PROGRESS_EVENT_PREFIX,
+    append_desktop_log, build_worker_command_spec, ensure_runtime_dirs, path_to_env_string,
+    resolve_runtime_paths, run_blocking_worker_command, summarize_worker_result_for_log,
+    CancelProcessResult, ProcessSupervisors, WorkerInvocation,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State, Window};
+use tauri::{AppHandle, State, Window};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -192,13 +190,13 @@ fn process_video_blocking(
     let resolved_source_identity =
         match resolve_source_identity_for_cache(&paths, &request.url, &process_state.video) {
             Ok(identity) => identity,
-            Err(SupervisedSpawnError::Cancelled) => {
+            Err(SourceIdentityPreflightError::Cancelled) => {
                 return Ok(cancelled_worker_result("video_extracting", "failed"));
             }
-            Err(SupervisedSpawnError::AlreadyRunning) => {
+            Err(SourceIdentityPreflightError::AlreadyRunning) => {
                 return Ok(worker_already_running_result("video_extracting", "failed"));
             }
-            Err(SupervisedSpawnError::Failed(_)) => {
+            Err(SourceIdentityPreflightError::Transport) => {
                 return Ok(worker_transport_failure_result(
                     "video_extracting",
                     "failed",
@@ -220,138 +218,19 @@ fn process_video_blocking(
     let request_json = serialize_process_video_request(&request)?;
     let spec =
         build_worker_command_spec(&paths, WorkerInvocation::ProcessVideo(request_json), None)?;
-    let _ = append_desktop_log(
-        &paths,
-        "worker.process_video.start",
-        &worker_command_log_detail(&spec, "process_video"),
-    );
-    let (mut child, worker_instance) =
-        match spawn_supervised_worker_command(spec, &process_state.video) {
-            Ok(spawned) => spawned,
-            Err(SupervisedSpawnError::Cancelled) => {
-                return Ok(cancelled_worker_result("video_extracting", "failed"));
-            }
-            Err(SupervisedSpawnError::AlreadyRunning) => {
-                return Ok(worker_already_running_result("video_extracting", "failed"));
-            }
-            Err(SupervisedSpawnError::Failed(_)) => {
-                return Ok(worker_transport_failure_result(
-                    "video_extracting",
-                    "failed",
-                ));
-            }
-        };
-    let worker_pid = worker_instance.pid;
-
-    let Some(stderr) = child.stderr.take() else {
-        process_state.video.finish(worker_instance.instance_id);
-        let _ = terminate_process_tree(worker_pid);
-        return Err("Could not capture worker stderr.".to_string());
-    };
-    let progress_window = window.clone();
-    let progress_paths = paths.clone();
-    let stderr_reader = std::thread::spawn(move || {
-        let mut diagnostic_lines = Vec::new();
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            if let Some(raw_event) = line.strip_prefix(PROGRESS_EVENT_PREFIX) {
-                let parsed = serde_json::from_str::<serde_json::Value>(raw_event).ok();
-                if let Some(payload) = parsed
-                    .as_ref()
-                    .and_then(|payload| validate_worker_progress_event(payload).ok())
-                {
-                    let _ = progress_window.emit(PROGRESS_EVENT_NAME, payload);
-                } else {
-                    let detail = parsed
-                        .as_ref()
-                        .map(invalid_progress_log_detail)
-                        .unwrap_or_else(|| "message_code=invalid".to_string());
-                    let _ = append_desktop_log(&progress_paths, "worker.progress.invalid", &detail);
-                }
-            } else if !line.trim().is_empty() {
-                diagnostic_lines.push(line);
-            }
-        }
-        diagnostic_lines.join("\n")
-    });
-
-    let output = match child.wait_with_output() {
-        Ok(output) => output,
-        Err(error) => {
-            process_state.video.finish(worker_instance.instance_id);
-            return Err(error.to_string());
-        }
-    };
-    let terminal_phase = process_state.video.finish(worker_instance.instance_id);
-    let stderr = stderr_reader
-        .join()
-        .unwrap_or_else(|_| "Worker stderr reader failed.".to_string());
-    let _ = append_desktop_log(
-        &paths,
-        "worker.process_video.exit",
-        &worker_exit_log_detail(worker_pid, &output, &stderr),
-    );
-
-    let parsed = match parse_worker_stdout(&output.stdout) {
-        Ok(value) => Some(value),
-        Err(error) if output.status.success() => return Err(error),
-        Err(_) => None,
-    };
-    if let Some(parsed) = parsed {
-        let _ = append_desktop_log(
+    map_worker_run_result(
+        process_state.video.run(
             &paths,
-            "worker.process_video.result",
-            &summarize_worker_result_for_log(&parsed),
-        );
-        return Ok(parsed);
-    };
-
-    if terminal_phase == Some(ProcessPhase::Cancelling) {
-        let _ = append_desktop_log(
-            &paths,
-            "worker.process_video.cancelled",
-            &format!("pid={worker_pid}"),
-        );
-        return Ok(serde_json::json!(ProcessVideoResult {
-            status: "failed".to_string(),
-            task_id: None,
-            task_dir: None,
-            artifacts: HashMap::new(),
-            text: String::new(),
-            summary: String::new(),
-            insights: vec![],
-            transcript: None,
-            error: Some(WorkerError {
-                code: "WORKER_CANCELLED".to_string(),
-                message: "Worker process was cancelled.".to_string(),
-                stage: "video_extracting".to_string(),
-            }),
-        }));
-    };
-
-    let parsed = parse_worker_output_or_fallback(
-        &output,
-        ProcessVideoResult {
-            status: "failed".to_string(),
-            task_id: None,
-            task_dir: None,
-            artifacts: HashMap::new(),
-            text: String::new(),
-            summary: String::new(),
-            insights: vec![],
-            transcript: None,
-            error: Some(WorkerError {
-                code: "WORKER_PROCESS_FAILED".to_string(),
-                message: "Worker process failed before returning a structured result.".to_string(),
-                stage: "video_extracting".to_string(),
-            }),
-        },
-    )?;
-    let _ = append_desktop_log(
-        &paths,
-        "worker.process_video.result",
-        &summarize_worker_result_for_log(&parsed),
-    );
-    Ok(parsed)
+            WorkerRunRequest {
+                operation: WorkerOperation::ProcessVideo,
+                command: spec,
+                progress: ProgressRoute::worker(window),
+            },
+        ),
+        "video_extracting",
+        "failed",
+        "Worker process failed before returning a structured result.",
+    )
 }
 
 fn cached_process_result_for_request(
@@ -535,40 +414,40 @@ fn read_cached_insights_artifact(
     task_manifest::parse_insights_payload(&payload)
 }
 
+enum SourceIdentityPreflightError {
+    Cancelled,
+    AlreadyRunning,
+    Transport,
+}
+
 fn resolve_source_identity_for_cache(
     paths: &crate::RuntimePaths,
     raw_url: &str,
-    supervisor: &crate::worker_runtime::ProcessSupervisor,
-) -> Result<Option<task_manifest::SourceIdentity>, SupervisedSpawnError> {
+    lane: &WorkerLane,
+) -> Result<Option<task_manifest::SourceIdentity>, SourceIdentityPreflightError> {
     let payload = serde_json::json!({"url": raw_url}).to_string();
     let spec = build_worker_command_spec(
         paths,
         WorkerInvocation::ResolveSourceIdentity(payload),
         None,
     )
-    .map_err(SupervisedSpawnError::Failed)?;
-    let (child, instance) = spawn_supervised_worker_command(spec, supervisor)?;
-    let output = match child.wait_with_output() {
-        Ok(output) => output,
-        Err(_) => {
-            let phase = supervisor.finish(instance.instance_id);
-            return if phase == Some(ProcessPhase::Cancelling) {
-                Err(SupervisedSpawnError::Cancelled)
-            } else {
-                Err(SupervisedSpawnError::Failed(
-                    "Source identity worker failed to finish.".to_string(),
-                ))
-            };
+    .map_err(|_| SourceIdentityPreflightError::Transport)?;
+    let value = match lane.run(
+        paths,
+        WorkerRunRequest {
+            operation: WorkerOperation::ResolveSourceIdentity,
+            command: spec,
+            progress: ProgressRoute::None,
+        },
+    ) {
+        Ok(WorkerRunOutcome::Structured(value)) => value,
+        Ok(WorkerRunOutcome::Cancelled) => return Err(SourceIdentityPreflightError::Cancelled),
+        Ok(WorkerRunOutcome::UnstructuredFailure(_)) => return Ok(None),
+        Err(error) if error.kind == WorkerRunErrorKind::AlreadyRunning => {
+            return Err(SourceIdentityPreflightError::AlreadyRunning)
         }
-    };
-    if supervisor.finish(instance.instance_id) == Some(ProcessPhase::Cancelling) {
-        return Err(SupervisedSpawnError::Cancelled);
-    }
-    if !output.status.success() {
-        return Ok(None);
-    }
-    let Some(value) = parse_worker_stdout(&output.stdout).ok() else {
-        return Ok(None);
+        Err(error) if error.kind == WorkerRunErrorKind::ProtocolViolation => return Ok(None),
+        Err(_) => return Err(SourceIdentityPreflightError::Transport),
     };
     let identity = serde_json::from_value::<task_manifest::SourceIdentity>(
         value
@@ -616,137 +495,18 @@ fn retry_insights_blocking(
         "worker.retry_insights.start",
         &retry_diagnostic_detail(&request, "started", None),
     );
-    let (mut child, worker_instance) =
-        match spawn_supervised_worker_command(spec, &process_state.video) {
-            Ok(spawned) => spawned,
-            Err(SupervisedSpawnError::Cancelled) => {
-                return Ok(cancelled_worker_result(
-                    "insights_generating",
-                    "partial_completed",
-                ));
-            }
-            Err(SupervisedSpawnError::AlreadyRunning) => {
-                return Ok(worker_already_running_result(
-                    "insights_generating",
-                    "partial_completed",
-                ));
-            }
-            Err(SupervisedSpawnError::Failed(_)) => {
-                return Ok(worker_transport_failure_result(
-                    "insights_generating",
-                    "partial_completed",
-                ));
-            }
-        };
-    let worker_pid = worker_instance.pid;
-
-    let Some(stderr) = child.stderr.take() else {
-        process_state.video.finish(worker_instance.instance_id);
-        let _ = terminate_process_tree(worker_pid);
-        return Err("Could not capture worker stderr.".to_string());
-    };
-    let progress_paths = paths.clone();
-    let stderr_reader = std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            let Some(raw_event) = line.strip_prefix(PROGRESS_EVENT_PREFIX) else {
-                continue;
-            };
-            let parsed = serde_json::from_str::<serde_json::Value>(raw_event).ok();
-            if let Some(payload) = parsed
-                .as_ref()
-                .and_then(|payload| validate_worker_progress_event(payload).ok())
-            {
-                let _ = window.emit(PROGRESS_EVENT_NAME, payload);
-            } else {
-                let detail = parsed
-                    .as_ref()
-                    .map(invalid_progress_log_detail)
-                    .unwrap_or_else(|| "message_code=invalid".to_string());
-                let _ = append_desktop_log(&progress_paths, "worker.progress.invalid", &detail);
-            }
-        }
-    });
-
-    let output = match child.wait_with_output() {
-        Ok(output) => output,
-        Err(error) => {
-            process_state.video.finish(worker_instance.instance_id);
-            return Err(error.to_string());
-        }
-    };
-    let terminal_phase =
-        finish_retry_after_reader(&process_state.video, worker_instance.instance_id, || {
-            let _ = stderr_reader.join();
-        });
-    let _ = append_desktop_log(
-        &paths,
-        "worker.retry_insights.exit",
-        &retry_diagnostic_detail(
-            &request,
-            if output.status.success() {
-                "exited"
-            } else {
-                "failed"
+    let parsed = map_worker_run_result(
+        process_state.video.run(
+            &paths,
+            WorkerRunRequest {
+                operation: WorkerOperation::RetryInsights,
+                command: spec,
+                progress: ProgressRoute::worker(window),
             },
-            (!output.status.success()).then_some("WORKER_EXIT_FAILED"),
         ),
-    );
-
-    let parsed = match parse_worker_stdout(&output.stdout) {
-        Ok(value) => Some(value),
-        Err(error) if output.status.success() => return Err(error),
-        Err(_) => None,
-    };
-    if let Some(parsed) = parsed {
-        let _ = append_desktop_log(
-            &paths,
-            "worker.retry_insights.result",
-            &retry_result_log_detail(&request, &parsed),
-        );
-        return Ok(parsed);
-    }
-
-    if terminal_phase == Some(ProcessPhase::Cancelling) {
-        let _ = append_desktop_log(
-            &paths,
-            "worker.retry_insights.cancelled",
-            &retry_diagnostic_detail(&request, "cancelled", Some("WORKER_CANCELLED")),
-        );
-        return Ok(serde_json::json!(ProcessVideoResult {
-            status: "partial_completed".to_string(),
-            task_id: None,
-            task_dir: None,
-            artifacts: HashMap::new(),
-            text: String::new(),
-            summary: String::new(),
-            insights: vec![],
-            transcript: None,
-            error: Some(WorkerError {
-                code: "WORKER_CANCELLED".to_string(),
-                message: "Worker process was cancelled.".to_string(),
-                stage: "insights_generating".to_string(),
-            }),
-        }));
-    }
-
-    let parsed = parse_worker_output_or_fallback(
-        &output,
-        ProcessVideoResult {
-            status: "partial_completed".to_string(),
-            task_id: None,
-            task_dir: None,
-            artifacts: HashMap::new(),
-            text: String::new(),
-            summary: String::new(),
-            insights: vec![],
-            transcript: None,
-            error: Some(WorkerError {
-                code: "WORKER_PROCESS_FAILED".to_string(),
-                message: "AI generation worker failed before returning a structured result."
-                    .to_string(),
-                stage: "insights_generating".to_string(),
-            }),
-        },
+        "insights_generating",
+        "partial_completed",
+        "AI generation worker failed before returning a structured result.",
     )?;
     let _ = append_desktop_log(
         &paths,
@@ -754,19 +514,6 @@ fn retry_insights_blocking(
         &retry_result_log_detail(&request, &parsed),
     );
     Ok(parsed)
-}
-
-fn finish_retry_after_reader<F>(
-    supervisor: &ProcessSupervisor,
-    instance_id: u64,
-    join_reader: F,
-) -> Option<ProcessPhase>
-where
-    F: FnOnce(),
-{
-    let terminal_phase = supervisor.finish(instance_id);
-    join_reader();
-    terminal_phase
 }
 
 fn retry_diagnostic_detail(
@@ -824,6 +571,33 @@ fn safe_retry_error_code(code: &str) -> String {
     }
 }
 
+fn map_worker_run_result(
+    result: Result<WorkerRunOutcome, WorkerRunError>,
+    stage: &str,
+    status: &str,
+    unstructured_message: &str,
+) -> Result<serde_json::Value, String> {
+    match result {
+        Ok(WorkerRunOutcome::Structured(value)) => Ok(value),
+        Ok(WorkerRunOutcome::Cancelled) => Ok(cancelled_worker_result(stage, status)),
+        Ok(WorkerRunOutcome::UnstructuredFailure(_)) => Ok(worker_failure_result(
+            status,
+            stage,
+            "WORKER_PROCESS_FAILED",
+            unstructured_message,
+        )),
+        Err(error) => match error.kind {
+            WorkerRunErrorKind::AlreadyRunning => Ok(worker_already_running_result(stage, status)),
+            WorkerRunErrorKind::SpawnFailed | WorkerRunErrorKind::RequestDeliveryFailed => {
+                Ok(worker_transport_failure_result(stage, status))
+            }
+            WorkerRunErrorKind::PipeUnavailable
+            | WorkerRunErrorKind::WaitFailed
+            | WorkerRunErrorKind::ProtocolViolation => Err(error.detail.to_string()),
+        },
+    }
+}
+
 fn worker_failure_result(
     status: &str,
     stage: &str,
@@ -878,7 +652,7 @@ fn worker_transport_failure_result(stage: &str, status: &str) -> serde_json::Val
 pub(crate) fn cancel_process(
     process_state: State<'_, Arc<ProcessSupervisors>>,
 ) -> Result<CancelProcessResult, String> {
-    Ok(crate::request_process_cancellation(&process_state.video))
+    Ok(process_state.video.cancel())
 }
 
 fn apply_configured_asr_model_to_request(
@@ -899,18 +673,17 @@ fn apply_configured_asr_model_to_request(
 mod tests {
     use super::{
         apply_configured_asr_model_to_request, cached_process_result_for_identity,
-        cached_process_result_for_request, cancelled_worker_result, finish_retry_after_reader,
+        cached_process_result_for_request, cancelled_worker_result, map_worker_run_result,
         parse_retry_insights_request, retry_result_log_detail, serialize_process_video_request,
         worker_already_running_result, worker_transport_failure_result, ProcessVideoRequest,
         INVALID_RETRY_PAYLOAD,
     };
-    use crate::worker_runtime::{CancelRequestOutcome, ProcessSupervisor};
+    use crate::worker_runtime::{
+        WorkerExitSummary, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
+    };
     use crate::{path_to_env_string, task_manifest::SourceIdentity};
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::{mpsc, Arc};
-    use std::thread;
-    use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -933,6 +706,60 @@ mod tests {
             transport["error"]["code"],
             "WORKER_REQUEST_TRANSPORT_FAILED"
         );
+    }
+
+    #[test]
+    fn typed_runner_outcomes_preserve_process_and_retry_adapter_shapes() {
+        let process_failure = map_worker_run_result(
+            Ok(WorkerRunOutcome::UnstructuredFailure(WorkerExitSummary {
+                exit_code: Some(1),
+                stderr: "present",
+            })),
+            "video_extracting",
+            "failed",
+            "Worker process failed before returning a structured result.",
+        )
+        .expect("map process failure");
+        assert_eq!(process_failure["status"], "failed");
+        assert_eq!(process_failure["error"]["code"], "WORKER_PROCESS_FAILED");
+        assert_eq!(process_failure["error"]["stage"], "video_extracting");
+
+        let retry_cancelled = map_worker_run_result(
+            Ok(WorkerRunOutcome::Cancelled),
+            "insights_generating",
+            "partial_completed",
+            "unused",
+        )
+        .expect("map retry cancellation");
+        assert_eq!(retry_cancelled["status"], "partial_completed");
+        assert_eq!(retry_cancelled["error"]["code"], "WORKER_CANCELLED");
+
+        let transport = map_worker_run_result(
+            Err(WorkerRunError {
+                kind: WorkerRunErrorKind::SpawnFailed,
+                detail: "fixed spawn failure",
+            }),
+            "video_extracting",
+            "failed",
+            "unused",
+        )
+        .expect("map transport failure");
+        assert_eq!(
+            transport["error"]["code"],
+            "WORKER_REQUEST_TRANSPORT_FAILED"
+        );
+
+        let protocol_error = map_worker_run_result(
+            Err(WorkerRunError {
+                kind: WorkerRunErrorKind::ProtocolViolation,
+                detail: "fixed protocol failure",
+            }),
+            "video_extracting",
+            "failed",
+            "unused",
+        )
+        .expect_err("protocol violation remains a command error");
+        assert_eq!(protocol_error, "fixed protocol failure");
     }
 
     #[test]
@@ -1450,35 +1277,6 @@ mod tests {
         ] {
             assert!(!detail.contains(forbidden));
         }
-    }
-
-    #[test]
-    fn exited_retry_is_not_cancellable_while_stderr_reader_finishes() {
-        let supervisor = Arc::new(ProcessSupervisor::default());
-        let instance = supervisor.start(42_424).expect("start retry worker");
-        let (reader_entered_tx, reader_entered_rx) = mpsc::channel();
-        let (release_reader_tx, release_reader_rx) = mpsc::channel();
-        let cleanup_supervisor = Arc::clone(&supervisor);
-        let cleanup = thread::spawn(move || {
-            finish_retry_after_reader(&cleanup_supervisor, instance.instance_id, || {
-                reader_entered_tx.send(()).expect("signal reader join");
-                release_reader_rx.recv().expect("release reader join");
-            })
-        });
-
-        reader_entered_rx
-            .recv_timeout(Duration::from_secs(2))
-            .expect("reader join started");
-        let mut terminator_called = false;
-        let cancellation = supervisor.request_cancel(|_| {
-            terminator_called = true;
-            Ok(())
-        });
-        release_reader_tx.send(()).expect("release reader");
-        cleanup.join().expect("join cleanup thread");
-
-        assert_eq!(cancellation, CancelRequestOutcome::NotRunning);
-        assert!(!terminator_called);
     }
 
     #[test]

@@ -67,12 +67,6 @@ pub(crate) struct ProcessSupervisor {
 }
 
 #[derive(Default)]
-pub(crate) struct ProcessSupervisors {
-    pub(crate) video: ProcessSupervisor,
-    pub(crate) asr_model_download: ProcessSupervisor,
-}
-
-#[derive(Default)]
 struct ProcessSupervisorState {
     next_instance_id: u64,
     current: Option<(ProcessInstance, ProcessPhase)>,
@@ -326,7 +320,7 @@ fn process_group_exists(pid: u32) -> Result<bool, String> {
 mod tests {
     use super::{
         termination_command_spec, CancelClaim, CancelRequestOutcome, ProcessPhase, ProcessPlatform,
-        ProcessSignal, ProcessSupervisor, ProcessSupervisors,
+        ProcessSignal, ProcessSupervisor,
     };
     #[cfg(unix)]
     use std::os::unix::process::CommandExt;
@@ -404,24 +398,22 @@ mod tests {
     }
 
     #[test]
-    fn video_and_asr_download_use_the_same_instance_safe_supervisor_semantics() {
-        let supervisors = ProcessSupervisors::default();
-        let video = supervisors.video.start(505).expect("video worker starts");
-        let model = supervisors
-            .asr_model_download
-            .start(606)
-            .expect("model download starts");
+    fn independent_lanes_use_the_same_instance_safe_supervisor_semantics() {
+        let video = ProcessSupervisor::default();
+        let model_download = ProcessSupervisor::default();
+        let video_instance = video.start(505).expect("video worker starts");
+        let model_instance = model_download.start(606).expect("model download starts");
 
         assert!(matches!(
-            supervisors.video.claim_cancel(),
-            CancelClaim::Claimed(instance) if instance == video
+            video.claim_cancel(),
+            CancelClaim::Claimed(instance) if instance == video_instance
         ));
         assert_eq!(
-            supervisors.video.finish(video.instance_id),
+            video.finish(video_instance.instance_id),
             Some(ProcessPhase::Cancelling)
         );
         assert_eq!(
-            supervisors.asr_model_download.finish(model.instance_id),
+            model_download.finish(model_instance.instance_id),
             Some(ProcessPhase::Running)
         );
     }

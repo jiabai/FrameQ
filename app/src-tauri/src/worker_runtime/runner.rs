@@ -348,6 +348,19 @@ impl WorkerLane {
     }
 
     #[cfg(test)]
+    pub(crate) fn activate_for_test(&self, pid: u32) -> u64 {
+        self.supervisor
+            .start(pid)
+            .expect("test worker lane must be idle")
+            .instance_id
+    }
+
+    #[cfg(test)]
+    pub(crate) fn finish_for_test(&self, instance_id: u64) {
+        self.supervisor.finish(instance_id);
+    }
+
+    #[cfg(test)]
     fn run_with_hooks(
         &self,
         paths: &RuntimePaths,

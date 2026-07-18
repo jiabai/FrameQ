@@ -14,8 +14,14 @@ pub(crate) use runner::{
 pub(crate) use supervisor::CancelRequestOutcome;
 pub(crate) use supervisor::{
     request_process_cancellation, terminate_process_tree, CancelProcessResult, ProcessPhase,
-    ProcessSupervisor, ProcessSupervisors,
+    ProcessSupervisor,
 };
+
+#[derive(Default)]
+pub(crate) struct ProcessSupervisors {
+    pub(crate) video: WorkerLane,
+    pub(crate) asr_model_download: ProcessSupervisor,
+}
 
 use crate::{sanitize_diagnostic_text, truncate_for_log, ProcessVideoResult};
 use std::process::Output;

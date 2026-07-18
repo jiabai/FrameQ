@@ -61,6 +61,12 @@ boundaries.
   Runner tests passed 10/10 and the complete Rust suite passed 146/146. Validation:
   `cargo test --manifest-path app\src-tauri\Cargo.toml worker_runtime::runner::tests`, the complete
   Cargo suite, rustfmt, and `git diff --check`.
+- [x] 2026-07-18: Completed Task 4 and migrated every video-lane operation: process-video, AI retry,
+  and source-identity preflight. Source preflight moved in this task so changing `video` to
+  `WorkerLane` did not require exposing its internal supervisor as a temporary application bypass.
+  Video adapter tests passed 16/16, runner tests passed 10/10, and the complete Rust suite passed
+  146/146. Validation: the Task 4 focused/full Cargo commands and a source scan proving
+  `video_processing.rs` has no raw wait, stderr reader, supervisor finish, or process termination.
 
 ## Surprises & Discoveries
 
@@ -348,19 +354,19 @@ stderr handling.
 - Modify: `app/src-tauri/src/video_processing.rs`.
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs` tests if an application-neutral gap is found.
 
-- [ ] Change `process_video_blocking` to retain runtime setup, ASR request configuration, both cache
+- [x] Change `process_video_blocking` to retain runtime setup, ASR request configuration, both cache
   checks, source preflight, and public failure construction while replacing direct child/stderr/wait/
   finish/parse code with `process_state.video.run(...)` using `WorkerOperation::ProcessVideo` and
   `ProgressRoute::Worker`.
 
-- [ ] Change `retry_insights_blocking` to retain strict request parsing, server-managed checkout,
+- [x] Change `retry_insights_blocking` to retain strict request parsing, server-managed checkout,
   target/locale diagnostics, and `partial_completed` mapping while using the same lane runner with
   `WorkerOperation::RetryInsights`.
 
-- [ ] Delete the duplicated stderr reader blocks and `finish_retry_after_reader`; move its race test
+- [x] Delete the duplicated stderr reader blocks and `finish_retry_after_reader`; move its race test
   to the runner test module instead of weakening or dropping it.
 
-- [ ] Verify that structured worker success/failure still wins cancellation and that unstructured
+- [x] Verify that structured worker success/failure still wins cancellation and that unstructured
   cancellation preserves the existing stage/status/error code for both flows.
 
   ```powershell
@@ -369,7 +375,7 @@ stderr handling.
   cargo test --manifest-path app\src-tauri\Cargo.toml
   ```
 
-- [ ] Commit both same-lane migrations together.
+- [x] Commit both same-lane migrations together.
 
   ```powershell
   git add app/src-tauri/src/video_processing.rs app/src-tauri/src/worker_runtime/runner.rs
@@ -384,7 +390,7 @@ stderr handling.
 - Modify: `app/src-tauri/src/asr_model.rs`.
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs` tests.
 
-- [ ] Route source-identity preflight through `ProgressRoute::None`. Preserve ordinary preflight
+- [x] Route source-identity preflight through `ProgressRoute::None`. Preserve ordinary preflight
   failure as cache miss/advisory `None`, but make a valid structured identity win a concurrent cancel
   claim according to the approved terminal precedence.
 

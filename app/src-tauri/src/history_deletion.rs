@@ -562,7 +562,7 @@ mod tests {
         let remover = RecordingRemover::default();
         let supervisors = ProcessSupervisors::default();
         let deletion_state = HistoryDeletionState::default();
-        let worker = supervisors.video.start(1234).expect("start worker fixture");
+        let worker_instance_id = supervisors.video.activate_for_test(1234);
 
         assert_eq!(
             delete_history_task_with_state(
@@ -575,7 +575,7 @@ mod tests {
             ),
             Err(HistoryDeleteError::Busy),
         );
-        supervisors.video.finish(worker.instance_id);
+        supervisors.video.finish_for_test(worker_instance_id);
         let deletion_guard = deletion_state.lock.try_lock().expect("hold delete lock");
         assert_eq!(
             delete_history_task_with_state(
