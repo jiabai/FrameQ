@@ -131,10 +131,14 @@
 
 ## 2026-07-10 Desktop Process Supervision and Cancellation Boundary
 
-- `ProcessSupervisor` is the one reusable state machine for the video-worker lane and the ASR-model-download lane. Each lane admits one child at a time and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running` or `Cancelling` phase; absence is the only finished state.
+- `ProcessSupervisors` owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running` or `Cancelling` phase; absence is the only finished state.
+- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. Process video, AI retry, source-identity preflight, and ASR model download submit a typed `WorkerRunRequest`; application modules cannot spawn, write child stdin, take pipes, wait/reap, mutate supervisor state, or terminate a process tree directly.
+- `worker_runtime/command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` owns spawn/register/stdin/read/wait/finish/parse/classify/log ordering. Raw helpers remain private to this module boundary.
 - Start, cancellation claim, signal-failure rollback, and terminal cleanup must match the running instance ID. A stale waiter or PID cannot clear or restore a newer child. A duplicate cancellation request returns structured `already_cancelling` and sends no second signal.
+- Registration occurs before one-shot stdin delivery. After terminal observation, the runner finishes the matching instance before joining stderr readers; an internal guard clears only its own instance on every setup or wait failure.
 - Windows terminates the controlled PID with `taskkill /PID <pid> /T /F`. On supported macOS releases, the Unix implementation starts each worker in a fresh process group, sends `TERM` to the negative PGID, waits only for the bounded escalation grace, and sends `KILL` to the same group only if it remains alive. Commands receive only supervisor-owned numeric IDs and are never built through a shell. Linux is not a supported release target.
-- Signal delivery exposes `cancelling`, never a fabricated completed cancellation. The waiter owns the terminal result: a structured worker success or failure that wins the race is preserved; only an unstructured termination outcome while the matching instance remains `Cancelling` becomes `WORKER_CANCELLED`.
+- Signal delivery exposes `cancelling`, never a fabricated completed cancellation. The runner owns terminal precedence: a structured result wins a concurrent cancellation claim; only an unstructured termination observed for the matching `Cancelling` instance becomes `Cancelled`. Successful malformed stdout is a protocol violation, while nonzero malformed output is a typed unstructured failure.
+- Progress routing is closed to `None`, validated worker progress, or validated ASR model-download progress. Application modules select a route but cannot provide arbitrary parsers, event names, or unvalidated payload emission.
 - React keeps the operation ID and task UI while cancellation is pending. It resets only after a confirmed cancelled worker/model-download terminal result; a signal failure restores the prior observable processing state so progress and the real later result remain visible. Cancellation deliberately preserves existing outputs, cache, and model files.
 
 ## 2026-07-10 Server Entitlement Transaction Boundary
@@ -149,8 +153,8 @@
 ## 2026-07-10 Source Identity and AI Input Boundary
 
 - The worker owns one source boundary for every request. `SourceRequest` contains transient `download_url` for the current downloader/fallback call and has no persistence/result serialization path. The raw submission crosses frontend-to-Tauri IPC and a one-shot child stdin pipe only for a cache-only identity preflight or the current full processing call; it never enters worker argv or environment variables. The separate persistable `SourceIdentity` contains only version, platform, stable id, effective part, and canonical URL.
-- `WorkerCommandSpec` separates fixed, loggable mode arguments from an optional in-memory stdin payload. Serialized process-video, source-identity, and retry requests use fixed `--request-stdin`, `--resolve-source-stdin`, or `--retry-insights-stdin` flags. The shared spawn boundary pipes, writes, and closes stdin before any output wait; no-payload model download and migration commands receive null stdin.
-- Both desktop and worker cap stdin payloads at 1 MiB and use fixed non-echoing delivery/parse errors. Payload-bearing production paths register the spawned PID/PGID with `ProcessSupervisor` before writing, so cancellation can terminate the process tree even while pipe delivery is blocked; a matching cancellation during delivery returns the confirmed cancelled terminal result rather than starting another worker stage. The spawn helper keeps the existing no-shell command vector, Windows hidden process/tree behavior, and macOS process-group behavior.
+- `WorkerCommandSpec` separates fixed mode arguments from an optional in-memory stdin payload. Serialized process-video, source-identity, and retry requests use fixed `--request-stdin`, `--resolve-source-stdin`, or `--retry-insights-stdin` flags. `WorkerLane::run` pipes, writes, and closes stdin before any output wait; no-payload model download receives null stdin.
+- Both desktop and worker cap stdin payloads at 1 MiB and use fixed non-echoing delivery/parse errors. The runner registers the spawned PID/PGID before writing, so cancellation can terminate the process tree even while pipe delivery is blocked; a matching cancellation during delivery returns the confirmed cancelled terminal result rather than starting another worker stage. The runner preserves the no-shell command vector, Windows hidden process/tree behavior, and macOS process-group behavior.
 - Canonical URLs are reconstructed from allowlisted stable platform identifiers: Xiaohongshu note ID, Bilibili BV/av ID plus non-default `p`, YouTube video ID, or Douyin video/work ID. Userinfo, fragments, and non-allowlisted query fields never cross the canonicalization boundary.
 - Supported short links are resolved in the worker, then canonicalized from the resolved stable ID. The original short link remains only the current download input. A failed resolution cannot promote the raw URL to persistent identity.
 - Task creation, transcript writing, and manifest writing accept only a worker-validated `SourceIdentity`. Cache matching and history defensively validate the persisted identity but do not regenerate platform canonical URLs in Tauri. A desktop preflight identity is cache-only advisory data and is never injected into the full worker request.
@@ -193,7 +197,8 @@
 ## 2026-07-05 Desktop Diagnostics Boundary
 
 - The Tauri desktop layer owns app-local diagnostic logs at `logs/frameq-desktop.log`.
-- Diagnostics record desktop command lifecycle, worker exit status, task id, structured error code, and sanitized short messages.
+- Worker lifecycle diagnostics are emitted only by `WorkerLane::run` from a closed operation mapping. They record fixed operation kind, supervisor-owned PID, safe exit/status markers, and structured safe summaries; they never include raw args, stdin, environment values, full executable/current-directory paths, source/local-media paths, URLs, credentials, transcripts, prompts, preference prose, generated bodies, or raw stderr.
+- Application diagnostics may retain task id, structured error code, validated retry target/output locale, cache outcomes, and sanitized short messages, but they do not reconstruct process lifecycle logs.
 - Worker task diagnostics remain under app-local `cache/tasks/<task_id>/` when task-specific temporary evidence is needed; desktop logs are global support evidence, not user artifacts.
 - YouTube extraction may explicitly enable local JavaScript runtimes supported by `yt-dlp` (`deno`, `node`, `quickjs`, `bun`) but must still run as a worker-owned public-link download policy.
 - Release packages bundle Deno in `resources/bin` so clean Windows and macOS machines have a local JavaScript runtime available for `yt-dlp` YouTube player evaluation.
@@ -337,6 +342,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | 模块 | 责任 | 状态 |
 |------|------|------|
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
+| `app/src-tauri/src/worker_runtime/` | Rust worker 命令构造、单一受监督运行器、实例安全取消、progress 校验路由和进程树终止 | `WorkerLane::run` 已统一 process-video、AI retry、source preflight 与 ASR model download；低层生命周期 API 对应用模块不可见 |
 | `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认启用 SenseVoice Small，但模型缓存由首启下载 |
 | `worker/insightflow/` | 从参考实现复制并裁剪后的灵感生成模块 | 已初始化 splitter、prompt、JSON parser、generator；先用 LLM 做话题分段规划，再逐话题生成问题；planner 失败时 fallback 到直接生成 |
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
@@ -354,7 +360,8 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 graph LR
   subgraph "app/ (Tauri + React + TS)"
     A1["app/src/<br/>workflow.ts<br/>settingsClient.ts<br/>historyClient.ts"]
-    A2["app/src-tauri/src/<br/>lib.rs<br/>video_processing.rs<br/>settings.rs / history.rs"]
+    A2["app/src-tauri/src/<br/>lib.rs · video_processing.rs<br/>asr_model.rs · settings/history"]
+    A3["worker_runtime/<br/>command.rs · runner.rs<br/>supervisor.rs"]
   end
 
   subgraph "worker/frameq_worker/"
@@ -382,7 +389,8 @@ graph LR
   end
 
   A1 -->|Tauri invoke| A2
-  A2 -->|process_video / retry_insights JSON| W1
+  A2 -->|typed WorkerRunRequest| A3
+  A3 -->|fixed CLI + bounded stdin| W1
   W1 --> W2
   W1 --> W3
   W1 --> W4
@@ -402,6 +410,7 @@ graph LR
 阅读路径：
 
 - 改 UI 状态或历史展示：`app/src/workflow.ts` → `app/src/historyClient.ts` → `app/src-tauri/src/video_processing.rs` / `history.rs` / `settings.rs`。
+- 改 Rust worker 启动、stdin、progress、取消竞争或进程树终止：`app/src-tauri/src/worker_runtime/runner.rs` → `supervisor.rs` → `command.rs`；应用命令只保留领域映射。
 - 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
 - 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `model_download.py` → `app-local data models/`。
 - 改灵感 / 总结 / mindmap：`worker/frameq_worker/insightflow/` → `llm.py`。
@@ -420,6 +429,9 @@ graph LR
 - `app/src/workflow.ts`：前端工作流状态模型。
 - `app/src/settingsClient.ts`：前端本机设置读写 client（Tauri invoke 包装），包含 ASR、输出目录和 app-local `.env` 路径。
 - `app/src/historyClient.ts`：前端历史记录读取 client（Tauri invoke 包装）。
+- `app/src-tauri/src/worker_runtime/command.rs`：固定 worker invocation、受限 stdin payload 与 app-local 环境构造。
+- `app/src-tauri/src/worker_runtime/runner.rs`：所有 Rust-owned Python 子进程唯一的 spawn/register/stdin/progress/wait/finish/terminal/log 生命周期。
+- `app/src-tauri/src/worker_runtime/supervisor.rs`：每 lane 的实例状态、取消 claim/rollback 与 Windows/macOS 进程树终止。
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
@@ -433,6 +445,7 @@ graph LR
 ## 架构不变量
 
 - UI 只编排任务和展示状态，不直接调用 `yt-dlp`、`ffmpeg`、ASR 或 LLM。
+- Tauri 应用模块只能通过 `WorkerLane::run`/`cancel`/activity query 管理 FrameQ worker；不得直接 spawn、wait、finish、发送 OS 信号或转发未验证 progress。
 - UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
 - `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和 pipeline 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary` 或 `insights` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用。
@@ -443,7 +456,7 @@ graph LR
 
 ## 层级边界
 
-依赖方向为 `UI -> Tauri command -> Worker facade -> Services -> Config/Types`。下层不得 import 上层；共享数据结构应收敛到明确的 request/result schema。
+依赖方向为 `UI -> Tauri command/domain adapter -> worker_runtime -> Worker facade -> Services -> Config/Types`。下层不得 import 上层；共享数据结构应收敛到明确的 request/result schema。
 
 ## 横切关注点
 

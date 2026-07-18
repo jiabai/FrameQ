@@ -1,23 +1,21 @@
-use crate::progress_event::{
-    cancelled_model_download_event, invalid_progress_log_detail, validate_model_download_event,
-};
+use crate::progress_event::cancelled_model_download_event;
 use crate::settings::{
     asr_model_source, configured_env_value, env_path, legacy_local_llm_env_removals,
     parse_dotenv_values, ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV,
     MODELSCOPE_ENDPOINT_ENV, SENSEVOICE_REVISION_ENV,
 };
+use crate::worker_runtime::{
+    ProgressRoute, WorkerOperation, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
+    WorkerRunRequest,
+};
 use crate::{
-    append_desktop_log, bundled_python_path, ensure_runtime_dirs, parse_worker_stdout,
-    path_to_env_string, prepend_to_path, resolve_runtime_paths, run_blocking_worker_command,
-    spawn_worker_command, summarize_worker_result_for_log, terminate_process_tree,
-    worker_command_log_detail, worker_exit_log_detail, CancelProcessResult, ProcessPhase,
-    ProcessSupervisors, RuntimePaths, WorkerCommandSpec, MODEL_DIR_ENV, RESOURCE_DIR_ENV,
-    USER_DATA_DIR_ENV,
+    bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
+    resolve_runtime_paths, run_blocking_worker_command, CancelProcessResult, ProcessSupervisors,
+    RuntimePaths, WorkerCommandSpec, MODEL_DIR_ENV, RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,
 };
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State, Window};
@@ -177,168 +175,84 @@ fn download_asr_model_blocking(
 
     let config_values = parse_dotenv_values(&env_path(&paths))?;
     let spec = build_model_download_command_spec(&paths, &config_values)?;
-    let _ = append_desktop_log(
+    match map_model_download_run_result(process_supervisors.asr_model_download.run(
         &paths,
-        "worker.download_asr_model.start",
-        &worker_command_log_detail(&spec, "download_asr_model"),
-    );
-    let mut child = spawn_worker_command(spec)?;
-    let download_pid = child.id();
-    let Some(download_instance) = process_supervisors.asr_model_download.start(download_pid) else {
-        let _ = terminate_process_tree(download_pid);
-        return Err("Another ASR model download is already running.".to_string());
-    };
+        WorkerRunRequest {
+            operation: WorkerOperation::DownloadAsrModel,
+            command: spec,
+            progress: ProgressRoute::asr_model_download(window.clone()),
+        },
+    ))? {
+        ModelDownloadRunResult::Completed => Ok(AsrModelDownloadResult {
+            started: true,
+            status: "completed".to_string(),
+        }),
+        ModelDownloadRunResult::Cancelled => {
+            let _ = window.emit(
+                ASR_MODEL_DOWNLOAD_EVENT_NAME,
+                cancelled_model_download_event(),
+            );
+            Ok(AsrModelDownloadResult {
+                started: false,
+                status: "cancelled".to_string(),
+            })
+        }
+    }
+}
 
-    let Some(stderr) = child.stderr.take() else {
-        process_supervisors
-            .asr_model_download
-            .finish(download_instance.instance_id);
-        let _ = terminate_process_tree(download_pid);
-        return Err("Could not capture ASR model download stderr.".to_string());
-    };
-    let progress_window = window.clone();
-    let progress_paths = paths.clone();
-    let stderr_reader = std::thread::spawn(move || {
-        let mut diagnostic_lines = Vec::new();
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            if let Some(raw_event) = line.strip_prefix(MODEL_DOWNLOAD_EVENT_PREFIX) {
-                let parsed = serde_json::from_str::<serde_json::Value>(raw_event).ok();
-                if let Some(payload) = parsed
-                    .as_ref()
-                    .and_then(|payload| validate_model_download_event(payload).ok())
-                {
-                    let _ = progress_window.emit(ASR_MODEL_DOWNLOAD_EVENT_NAME, payload);
-                } else {
-                    let detail = parsed
-                        .as_ref()
-                        .map(invalid_progress_log_detail)
-                        .unwrap_or_else(|| "message_code=invalid".to_string());
-                    let _ = append_desktop_log(
-                        &progress_paths,
-                        "worker.model_progress.invalid",
-                        &detail,
-                    );
-                }
-            } else if !line.trim().is_empty() {
-                diagnostic_lines.push(line);
+#[derive(Debug, Eq, PartialEq)]
+enum ModelDownloadRunResult {
+    Completed,
+    Cancelled,
+}
+
+fn map_model_download_run_result(
+    result: Result<WorkerRunOutcome, WorkerRunError>,
+) -> Result<ModelDownloadRunResult, String> {
+    match result {
+        Ok(WorkerRunOutcome::Structured(value)) => {
+            if value
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|status| status == "completed")
+            {
+                return Ok(ModelDownloadRunResult::Completed);
             }
+            Err(value
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .filter(|message| !message.trim().is_empty())
+                .unwrap_or("ASR model download did not complete.")
+                .to_string())
         }
-        diagnostic_lines.join("\n")
-    });
-
-    let output = match child.wait_with_output() {
-        Ok(output) => output,
-        Err(error) => {
-            process_supervisors
-                .asr_model_download
-                .finish(download_instance.instance_id);
-            return Err(error.to_string());
+        Ok(WorkerRunOutcome::Cancelled) => Ok(ModelDownloadRunResult::Cancelled),
+        Ok(WorkerRunOutcome::UnstructuredFailure(_)) => {
+            Err("ASR model download failed before returning a structured result.".to_string())
         }
-    };
-    let terminal_phase = process_supervisors
-        .asr_model_download
-        .finish(download_instance.instance_id);
-    let stderr = stderr_reader
-        .join()
-        .unwrap_or_else(|_| "ASR model download stderr reader failed.".to_string());
-    let _ = append_desktop_log(
-        &paths,
-        "worker.download_asr_model.exit",
-        &worker_exit_log_detail(download_pid, &output, &stderr),
-    );
-
-    if output.status.success()
-        && parse_worker_stdout(&output.stdout)
-            .ok()
-            .and_then(|value| {
-                value
-                    .get("status")
-                    .and_then(|status| status.as_str())
-                    .map(str::to_string)
-            })
-            .is_some_and(|status| status == "completed")
-    {
-        let result = parse_worker_stdout(&output.stdout)?;
-        let _ = append_desktop_log(
-            &paths,
-            "worker.download_asr_model.result",
-            &summarize_worker_result_for_log(&result),
-        );
-        return Ok(AsrModelDownloadResult {
-            started: true,
-            status: "completed".to_string(),
-        });
+        Err(error) if error.kind == WorkerRunErrorKind::AlreadyRunning => {
+            Err("Another ASR model download is already running.".to_string())
+        }
+        Err(error) => Err(error.detail.to_string()),
     }
-
-    if terminal_phase == Some(ProcessPhase::Cancelling) {
-        let _ = append_desktop_log(
-            &paths,
-            "worker.download_asr_model.cancelled",
-            &format!("pid={download_pid}"),
-        );
-        let _ = window.emit(
-            ASR_MODEL_DOWNLOAD_EVENT_NAME,
-            cancelled_model_download_event(),
-        );
-        return Ok(AsrModelDownloadResult {
-            started: false,
-            status: "cancelled".to_string(),
-        });
-    }
-
-    if !output.status.success() {
-        let detail = parse_worker_stdout(&output.stdout)
-            .ok()
-            .and_then(|value| {
-                value
-                    .get("message")
-                    .and_then(|message| message.as_str())
-                    .map(|message| message.to_string())
-            })
-            .filter(|message| !message.trim().is_empty())
-            .unwrap_or(stderr);
-        return Err(detail);
-    }
-
-    let result = parse_worker_stdout(&output.stdout)?;
-    let _ = append_desktop_log(
-        &paths,
-        "worker.download_asr_model.result",
-        &summarize_worker_result_for_log(&result),
-    );
-    if result
-        .get("status")
-        .and_then(|status| status.as_str())
-        .is_some_and(|status| status == "completed")
-    {
-        return Ok(AsrModelDownloadResult {
-            started: true,
-            status: "completed".to_string(),
-        });
-    }
-
-    Err(result
-        .get("message")
-        .and_then(|message| message.as_str())
-        .unwrap_or("ASR model download did not complete.")
-        .to_string())
 }
 
 #[tauri::command]
 pub(crate) fn cancel_asr_model_download(
     process_supervisors: State<'_, Arc<ProcessSupervisors>>,
 ) -> Result<CancelProcessResult, String> {
-    Ok(crate::request_process_cancellation(
-        &process_supervisors.asr_model_download,
-    ))
+    Ok(process_supervisors.asr_model_download.cancel())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         asr_model_available, build_model_download_command_spec, cancelled_model_download_event,
+        map_model_download_run_result, ModelDownloadRunResult,
     };
     use crate::settings::supported_asr_models;
+    use crate::worker_runtime::{
+        WorkerExitSummary, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
+    };
     use crate::{bundled_python_path, path_to_env_string, RuntimePaths, WorkerCommandSpec};
     use std::collections::HashMap;
     use std::fs;
@@ -389,6 +303,42 @@ mod tests {
         assert_eq!(payload["message_code"], "model.download.cancelled");
         assert!(payload.get("message").is_none());
         assert!(payload.get("current_file").is_none());
+    }
+
+    #[test]
+    fn typed_runner_outcomes_preserve_model_download_product_mapping() {
+        assert_eq!(
+            map_model_download_run_result(Ok(WorkerRunOutcome::Structured(
+                serde_json::json!({"status": "completed"}),
+            ))),
+            Ok(ModelDownloadRunResult::Completed)
+        );
+        assert_eq!(
+            map_model_download_run_result(Ok(WorkerRunOutcome::Structured(
+                serde_json::json!({"status": "failed", "message": "download failed"}),
+            ))),
+            Err("download failed".to_string())
+        );
+        assert_eq!(
+            map_model_download_run_result(Ok(WorkerRunOutcome::Cancelled)),
+            Ok(ModelDownloadRunResult::Cancelled)
+        );
+        assert_eq!(
+            map_model_download_run_result(Ok(WorkerRunOutcome::UnstructuredFailure(
+                WorkerExitSummary {
+                    exit_code: Some(1),
+                    stderr: "present",
+                },
+            ))),
+            Err("ASR model download failed before returning a structured result.".to_string())
+        );
+        assert_eq!(
+            map_model_download_run_result(Err(WorkerRunError {
+                kind: WorkerRunErrorKind::AlreadyRunning,
+                detail: "unused",
+            })),
+            Err("Another ASR model download is already running.".to_string())
+        );
     }
 
     #[test]

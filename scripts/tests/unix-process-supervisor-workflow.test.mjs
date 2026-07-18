@@ -11,7 +11,11 @@ const workflowPath = resolve(
 );
 const supervisorPath = resolve(
   repositoryRoot,
-  "app/src-tauri/src/worker_command.rs",
+  "app/src-tauri/src/worker_runtime/supervisor.rs",
+);
+const runnerPath = resolve(
+  repositoryRoot,
+  "app/src-tauri/src/worker_runtime/runner.rs",
 );
 
 test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux or privileged product integrations", async () => {
@@ -36,17 +40,28 @@ test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux
 });
 
 test("the hosted cargo command includes the real Unix parent-child process-group fixture", async () => {
-  const source = await readFile(supervisorPath, "utf8");
-  const fixture = source.indexOf(
+  const supervisor = await readFile(supervisorPath, "utf8");
+  const runner = await readFile(runnerPath, "utf8");
+  const fixture = supervisor.indexOf(
     "unix_termination_stops_a_parent_and_child_in_the_managed_process_group",
   );
 
   assert.notEqual(fixture, -1);
-  const fixtureContext = source.slice(Math.max(0, fixture - 300), fixture + 2_500);
+  const fixtureContext = supervisor.slice(
+    Math.max(0, fixture - 300),
+    fixture + 2_500,
+  );
   assert.match(fixtureContext, /#\[cfg\(unix\)\]/);
-  assert.match(fixtureContext, /configure_child_process_group/);
+  assert.match(fixtureContext, /process_group\(0\)/);
   assert.match(fixtureContext, /terminate_process_tree/);
-  assert.match(source, /process_group\(0\)/);
-  assert.match(source, /send_process_group_signal\(pid, ProcessSignal::Term\)/);
-  assert.match(source, /send_process_group_signal\(pid, ProcessSignal::Kill\)/);
+  assert.match(
+    supervisor,
+    /send_process_group_signal\(pid, ProcessSignal::Term\)/,
+  );
+  assert.match(
+    supervisor,
+    /send_process_group_signal\(pid, ProcessSignal::Kill\)/,
+  );
+  assert.match(runner, /fn configure_child_process_group/);
+  assert.match(runner, /command\.process_group\(0\)/);
 });

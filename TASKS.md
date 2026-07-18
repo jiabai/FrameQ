@@ -57,6 +57,18 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Unify Rust worker runtime lifecycle ownership (2026-07-18) - ✅ Acceptance: route process
+  video, AI retry, source-identity preflight, and ASR model download through one private supervised
+  runner; preserve register-before-stdin, finish-before-reader-join, matching-instance cleanup,
+  structured-result-first cancellation, closed progress validation, and safe diagnostics; remove
+  direct spawn/wait/finish/terminate access from application modules without changing Tauri/worker
+  contracts or user-visible behavior. Design:
+  `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-18-rust-worker-runtime-lifecycle-refactor-plan.md`. ✅ Windows
+  Rust 141/141, app 491/491, Node contracts 23/23, lint/build/rustfmt/docs/diff gates, hosted macOS
+  140/140 with the real parent-child process-group fixture, and user-confirmed native Windows
+  cancellation/URL-retention/second-task stale-callback regression all passed.
+
 - [x] Invert the worker SourceIdentity dependency (2026-07-18) - ✅ Acceptance: importing core
   models/source identity loads no platform fallback; short-link infrastructure is injected from the
   CLI composition root; direct/short identities, canonical persistence, cache keys, privacy
