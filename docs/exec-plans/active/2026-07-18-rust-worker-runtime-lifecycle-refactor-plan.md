@@ -55,6 +55,12 @@ boundaries.
   `worker_runtime/mod.rs`. Focused command tests passed 5/5, supervisor tests passed 6/6, and the
   complete Rust suite passed 136/136. Validation: the Task 2 focused/full Cargo commands, rustfmt,
   responsibility-boundary `rg` scans, and `git diff --check`.
+- [x] 2026-07-18: Completed Task 3 with a single tested runner boundary. Added typed operations,
+  closed progress routes, terminal classification, instance-guard cleanup, concurrent stdout/stderr
+  readers, fixed safe lifecycle diagnostics, and compatibility re-exports for unmigrated callers.
+  Runner tests passed 10/10 and the complete Rust suite passed 146/146. Validation:
+  `cargo test --manifest-path app\src-tauri\Cargo.toml worker_runtime::runner::tests`, the complete
+  Cargo suite, rustfmt, and `git diff --check`.
 
 ## Surprises & Discoveries
 
@@ -81,6 +87,11 @@ boundaries.
   subprocess fixture filter names. The stale names matched zero child tests, which surfaced as empty
   stdout, failed stdin delivery, and cancellation assertions; updating the fixed test paths restored
   all three behaviors without production changes.
+- Evidence: making `tauri::Window::emit` reachable from Windows unit tests pulled GUI imports such
+  as `comctl32!TaskDialogIndirect` into the manifest-free Rust test executable, which then failed at
+  loader startup with `STATUS_ENTRYPOINT_NOT_FOUND`. Production routes still own `Window`; test
+  builds use the same closed route discriminators with unit payloads and validate protocol routing
+  without loading the GUI stack.
 
 ## Decision Log
 
@@ -109,10 +120,11 @@ boundaries.
 
 ## Outcomes & Retrospective
 
-Current outcome: the command and supervisor responsibilities now live in separate tested modules,
-while the existing spawn/parse compatibility layer remains in `worker_runtime/mod.rs`. Implementation
-is complete only when all four operations use the shared runner, low-level process APIs are private,
-local tests pass, and the macOS process-group workflow succeeds.
+Current outcome: command construction, supervision, spawn/stdin/pipe ownership, progress routing,
+terminal parsing, and lifecycle diagnostics now live in separate tested runtime modules. Existing
+application flows still use temporary compatibility re-exports; implementation is complete only
+when all four operations call `WorkerLane::run`, low-level compatibility APIs are removed, local
+tests pass, and the macOS process-group workflow succeeds.
 
 Residual risk: process cancellation is platform-sensitive. Windows unit tests cannot prove macOS
 PGID/TERM/KILL delivery, so native GitHub macOS runner evidence remains mandatory even if every local
@@ -266,7 +278,7 @@ stderr handling.
 - Modify: `app/src-tauri/src/progress_event.rs` only if required by pure routing reuse.
 - Modify: `app/src-tauri/src/diagnostics.rs`.
 
-- [ ] Write RED runner tests for the complete terminal matrix, setup-error cleanup, blocked stdin
+- [x] Write RED runner tests for the complete terminal matrix, setup-error cleanup, blocked stdin
   cancellation, missing stderr, reader panic marker, finish-before-reader-join, both closed progress
   routes, and invalid progress dropping.
 
@@ -277,7 +289,7 @@ stderr handling.
   Expected: compile/test failures because `WorkerLane::run`, `WorkerRunRequest`, closed routes, and
   typed outcomes are not implemented.
 
-- [ ] Implement the design-approved crate-visible API:
+- [x] Implement the design-approved crate-visible API:
 
   ```rust
   pub(crate) enum WorkerOperation {
@@ -300,18 +312,20 @@ stderr handling.
   }
   ```
 
-- [ ] Implement one runner sequence: spawn/configure, register, deliver stdin, take pipes, read
+- [x] Implement one runner sequence: spawn/configure, register, deliver stdin, take pipes, read
   stderr, wait, finish matching instance before reader join, parse, classify, and emit safe lifecycle
   diagnostics. Use an internal guard so every early return clears only its own instance exactly once.
 
-- [ ] Keep `ProcessSupervisor::start`, `finish`, rollback, and OS termination accessible only inside
-  `worker_runtime`; expose lane-level `run`, `cancel`, and `is_active` behavior.
+- [ ] After the application migrations, keep `ProcessSupervisor::start`, `finish`, rollback, and OS
+  termination accessible only inside `worker_runtime`; expose lane-level `run`, `cancel`, and
+  `is_active` behavior. This privacy closeout is deferred to Task 6 while compatibility callers
+  remain.
 
-- [ ] Replace raw command/path lifecycle details with fixed operation summaries. Add diagnostics tests
+- [x] Replace raw command/path lifecycle details with fixed operation summaries. Add diagnostics tests
   containing sentinel URL, token, stdin JSON, full local path, prompt, transcript, and generated text;
   assert none survives in lifecycle logs.
 
-- [ ] Run runner, diagnostics, supervisor, and complete Rust tests until GREEN.
+- [x] Run runner, diagnostics, supervisor, and complete Rust tests until GREEN.
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml worker_runtime::runner::tests
@@ -320,7 +334,7 @@ stderr handling.
   cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check
   ```
 
-- [ ] Commit the runner before migrating application flows.
+- [x] Commit the runner before migrating application flows.
 
   ```powershell
   git add app/src-tauri/src/worker_runtime app/src-tauri/src/progress_event.rs app/src-tauri/src/diagnostics.rs

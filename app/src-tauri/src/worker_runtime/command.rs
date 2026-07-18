@@ -50,7 +50,7 @@ pub(crate) fn worker_command_log_detail(spec: &WorkerCommandSpec, kind: &str) ->
     )
 }
 
-fn js_runtime_diagnostics(spec: &WorkerCommandSpec) -> String {
+pub(super) fn js_runtime_diagnostics(spec: &WorkerCommandSpec) -> String {
     let path_value = spec
         .env
         .iter()

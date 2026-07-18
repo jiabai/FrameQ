@@ -1,28 +1,24 @@
 mod command;
+mod runner;
 mod supervisor;
 
 pub(crate) use command::{
     build_worker_command_spec, worker_command_log_detail, WorkerCommandSpec, WorkerInvocation,
 };
+pub(crate) use runner::{
+    parse_worker_stdout, spawn_supervised_worker_command, spawn_worker_command, ProgressRoute,
+    SupervisedSpawnError, WorkerExitSummary, WorkerLane, WorkerOperation, WorkerRunError,
+    WorkerRunErrorKind, WorkerRunOutcome, WorkerRunRequest,
+};
 #[cfg(test)]
 pub(crate) use supervisor::CancelRequestOutcome;
 pub(crate) use supervisor::{
-    request_process_cancellation, terminate_process_tree, CancelProcessResult, ProcessInstance,
-    ProcessPhase, ProcessSupervisor, ProcessSupervisors,
+    request_process_cancellation, terminate_process_tree, CancelProcessResult, ProcessPhase,
+    ProcessSupervisor, ProcessSupervisors,
 };
 
 use crate::{sanitize_diagnostic_text, truncate_for_log, ProcessVideoResult};
-use std::io::Write;
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
-use std::process::{Command, Output, Stdio};
-
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) enum SupervisedSpawnError {
-    AlreadyRunning,
-    Cancelled,
-    Failed(String),
-}
+use std::process::Output;
 
 pub(crate) fn worker_exit_log_detail(pid: u32, output: &Output, stderr: &str) -> String {
     format!(
@@ -34,132 +30,6 @@ pub(crate) fn worker_exit_log_detail(pid: u32, output: &Output, stderr: &str) ->
             .unwrap_or_else(|| "signal".to_string()),
         truncate_for_log(&sanitize_diagnostic_text(stderr), 1000)
     )
-}
-
-fn configure_child_process_group(command: &mut Command) {
-    #[cfg(unix)]
-    {
-        command.process_group(0);
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = command;
-    }
-}
-
-fn spawn_worker_process(
-    spec: WorkerCommandSpec,
-) -> Result<(std::process::Child, Option<String>), String> {
-    let WorkerCommandSpec {
-        program,
-        args,
-        stdin_payload,
-        env,
-        env_remove,
-        current_dir,
-    } = spec;
-    let mut command = Command::new(program);
-    supervisor::hide_child_console_window(&mut command);
-    configure_child_process_group(&mut command);
-    for key in env_remove {
-        command.env_remove(key);
-    }
-    command
-        .args(args)
-        .envs(env)
-        .current_dir(current_dir)
-        .stdin(if stdin_payload.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    command
-        .spawn()
-        .map(|child| (child, stdin_payload))
-        .map_err(|error| error.to_string())
-}
-
-fn deliver_worker_stdin(
-    child: &mut std::process::Child,
-    stdin_payload: Option<String>,
-) -> Result<(), String> {
-    let Some(payload) = stdin_payload else {
-        return Ok(());
-    };
-    child
-        .stdin
-        .take()
-        .ok_or(())
-        .and_then(|mut stdin| stdin.write_all(payload.as_bytes()).map_err(|_| ()))
-        .map_err(|_| "Failed to deliver worker request through stdin.".to_string())
-}
-
-pub(crate) fn spawn_worker_command(spec: WorkerCommandSpec) -> Result<std::process::Child, String> {
-    let (mut child, stdin_payload) = spawn_worker_process(spec)?;
-    if let Err(error) = deliver_worker_stdin(&mut child, stdin_payload) {
-        let _ = terminate_process_tree(child.id());
-        let _ = child.wait();
-        return Err(error);
-    }
-    Ok(child)
-}
-
-pub(crate) fn spawn_supervised_worker_command(
-    spec: WorkerCommandSpec,
-    supervisor: &ProcessSupervisor,
-) -> Result<(std::process::Child, ProcessInstance), SupervisedSpawnError> {
-    let (mut child, stdin_payload) =
-        spawn_worker_process(spec).map_err(SupervisedSpawnError::Failed)?;
-    let Some(instance) = supervisor.start(child.id()) else {
-        let _ = terminate_process_tree(child.id());
-        let _ = child.wait();
-        return Err(SupervisedSpawnError::AlreadyRunning);
-    };
-    if let Err(error) = deliver_worker_stdin(&mut child, stdin_payload) {
-        let terminal_phase = supervisor.finish(instance.instance_id);
-        let _ = terminate_process_tree(instance.process_group_id.unwrap_or(instance.pid));
-        let _ = child.wait();
-        return if terminal_phase == Some(ProcessPhase::Cancelling) {
-            Err(SupervisedSpawnError::Cancelled)
-        } else {
-            Err(SupervisedSpawnError::Failed(error))
-        };
-    }
-    Ok((child, instance))
-}
-
-pub(crate) fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, String> {
-    let text = String::from_utf8_lossy(stdout);
-    let mut last_error = None;
-
-    for raw_line in text.lines().rev() {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        match serde_json::from_str::<serde_json::Value>(line) {
-            Ok(value) if value.get("status").is_some() => return Ok(value),
-            Ok(_) => continue,
-            Err(error) => last_error = Some(error.to_string()),
-        }
-    }
-
-    let preview = text
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .take(3)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let preview = sanitize_diagnostic_text(&preview);
-    let detail = last_error.unwrap_or_else(|| "stdout did not contain JSON".to_string());
-    Err(format!(
-        "Worker stdout did not contain a structured JSON result: {detail}. stdout preview: {preview}"
-    ))
 }
 
 pub(crate) fn parse_worker_output_or_fallback(
