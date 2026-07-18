@@ -2,7 +2,7 @@ use crate::account;
 use crate::progress_event::{invalid_progress_log_detail, validate_worker_progress_event};
 use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::task_manifest;
-use crate::worker_command::ProcessSupervisor;
+use crate::worker_runtime::ProcessSupervisor;
 use crate::{
     append_desktop_log, build_worker_command_spec, ensure_runtime_dirs,
     parse_worker_output_or_fallback, parse_worker_stdout, path_to_env_string,
@@ -538,7 +538,7 @@ fn read_cached_insights_artifact(
 fn resolve_source_identity_for_cache(
     paths: &crate::RuntimePaths,
     raw_url: &str,
-    supervisor: &crate::worker_command::ProcessSupervisor,
+    supervisor: &crate::worker_runtime::ProcessSupervisor,
 ) -> Result<Option<task_manifest::SourceIdentity>, SupervisedSpawnError> {
     let payload = serde_json::json!({"url": raw_url}).to_string();
     let spec = build_worker_command_spec(
@@ -904,7 +904,7 @@ mod tests {
         worker_already_running_result, worker_transport_failure_result, ProcessVideoRequest,
         INVALID_RETRY_PAYLOAD,
     };
-    use crate::worker_command::{CancelRequestOutcome, ProcessSupervisor};
+    use crate::worker_runtime::{CancelRequestOutcome, ProcessSupervisor};
     use crate::{path_to_env_string, task_manifest::SourceIdentity};
     use std::fs;
     use std::path::PathBuf;

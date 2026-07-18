@@ -49,6 +49,12 @@ boundaries.
   with process-tree permission passed 2/2, then the complete suite passed 134/134 and rustfmt passed.
   Validation: `cargo test --manifest-path app\src-tauri\Cargo.toml` and
   `cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check`.
+- [x] 2026-07-18: Completed Task 2 without lifecycle behavior changes. Extracted command
+  construction into `worker_runtime/command.rs`, supervision and process-tree termination into
+  `worker_runtime/supervisor.rs`, and retained temporary crate-private compatibility exports in
+  `worker_runtime/mod.rs`. Focused command tests passed 5/5, supervisor tests passed 6/6, and the
+  complete Rust suite passed 136/136. Validation: the Task 2 focused/full Cargo commands, rustfmt,
+  responsibility-boundary `rg` scans, and `git diff --check`.
 
 ## Surprises & Discoveries
 
@@ -71,6 +77,10 @@ boundaries.
   RED and then be committed before the runner existed. A permanently failing characterization
   commit would break staged execution, so current behavior stays covered by GREEN characterization;
   the desired structured-result-first rule becomes the first RED runner test in Task 3.
+- Evidence: moving the outer test module from `worker_command` to `worker_runtime` changed the exact
+  subprocess fixture filter names. The stale names matched zero child tests, which surfaced as empty
+  stdout, failed stdin delivery, and cancellation assertions; updating the fixed test paths restored
+  all three behaviors without production changes.
 
 ## Decision Log
 
@@ -99,10 +109,10 @@ boundaries.
 
 ## Outcomes & Retrospective
 
-Planning outcome: the approved runtime boundary and implementation sequence are documented, but no
-production code has moved yet. Implementation is complete only when all four operations use the
-shared runner, low-level process APIs are private, local tests pass, and the macOS process-group
-workflow succeeds.
+Current outcome: the command and supervisor responsibilities now live in separate tested modules,
+while the existing spawn/parse compatibility layer remains in `worker_runtime/mod.rs`. Implementation
+is complete only when all four operations use the shared runner, low-level process APIs are private,
+local tests pass, and the macOS process-group workflow succeeds.
 
 Residual risk: process cancellation is platform-sensitive. Windows unit tests cannot prove macOS
 PGID/TERM/KILL delivery, so native GitHub macOS runner evidence remains mandatory even if every local
@@ -217,21 +227,21 @@ stderr handling.
 - Modify: `app/src-tauri/src/lib.rs`.
 - Modify: `app/src-tauri/src/worker_command.rs` temporarily.
 
-- [ ] Create the `worker_runtime` module and move `WorkerInvocation`, `WorkerCommandSpec`, stdin size
+- [x] Create the `worker_runtime` module and move `WorkerInvocation`, `WorkerCommandSpec`, stdin size
   validation, environment construction, and JavaScript runtime detection into `command.rs`.
 
-- [ ] Move `ProcessPhase`, instance/cancel types, `ProcessSupervisor`, `ProcessSupervisors`, fixed
+- [x] Move `ProcessPhase`, instance/cancel types, `ProcessSupervisor`, `ProcessSupervisors`, fixed
   termination command construction, process-group signalling, and their existing tests into
   `supervisor.rs`.
 
-- [ ] Keep temporary crate-private compatibility re-exports in `worker_runtime/mod.rs` so production
+- [x] Keep temporary crate-private compatibility re-exports in `worker_runtime/mod.rs` so production
   call sites still compile before the runner migration. Do not duplicate any moved implementation.
 
-- [ ] Require `command.rs` to contain no `Command::spawn`, `Child`, `wait_with_output`, supervisor
+- [x] Require `command.rs` to contain no `Command::spawn`, `Child`, `wait_with_output`, supervisor
   mutation, or process termination. Require `supervisor.rs` to contain no worker JSON parsing,
   progress parsing, task result, or Tauri window logic.
 
-- [ ] Run focused and full Rust gates.
+- [x] Run focused and full Rust gates.
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml worker_runtime::command::tests
@@ -240,7 +250,7 @@ stderr handling.
   cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check
   ```
 
-- [ ] Commit the responsibility-preserving extraction.
+- [x] Commit the responsibility-preserving extraction.
 
   ```powershell
   git add app/src-tauri/src/worker_runtime app/src-tauri/src/worker_command.rs app/src-tauri/src/lib.rs

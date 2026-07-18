@@ -18,7 +18,7 @@ mod ui_preferences;
 mod updates;
 mod video_processing;
 mod window_chrome;
-mod worker_command;
+mod worker_runtime;
 
 pub(crate) use runtime::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
@@ -36,7 +36,7 @@ pub(crate) use asr_model::{DEFAULT_ASR_MODEL, SUPPORTED_ASR_MODELS};
 #[cfg(test)]
 pub(crate) use asr_model::{ASR_MODEL_DOWNLOAD_EVENT_NAME, MODEL_DOWNLOAD_EVENT_PREFIX};
 
-pub(crate) use worker_command::{
+pub(crate) use worker_runtime::{
     build_worker_command_spec, parse_worker_output_or_fallback, parse_worker_stdout,
     request_process_cancellation, run_blocking_worker_command, spawn_supervised_worker_command,
     spawn_worker_command, terminate_process_tree, worker_command_log_detail,
