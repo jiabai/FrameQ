@@ -20,7 +20,7 @@ pub(crate) use supervisor::{
 #[derive(Default)]
 pub(crate) struct ProcessSupervisors {
     pub(crate) video: WorkerLane,
-    pub(crate) asr_model_download: ProcessSupervisor,
+    pub(crate) asr_model_download: WorkerLane,
 }
 
 use crate::{sanitize_diagnostic_text, truncate_for_log, ProcessVideoResult};

@@ -67,6 +67,11 @@ boundaries.
   Video adapter tests passed 16/16, runner tests passed 10/10, and the complete Rust suite passed
   146/146. Validation: the Task 4 focused/full Cargo commands and a source scan proving
   `video_processing.rs` has no raw wait, stderr reader, supervisor finish, or process termination.
+- [x] 2026-07-18: Completed Task 5 by migrating ASR model download to the model progress route and
+  changing both managed process slots to `WorkerLane`. Model adapter tests passed 7/7, runner tests
+  passed 10/10, and the complete Rust suite passed 147/147. The model module still owns availability,
+  structured message mapping, and the single synthetic cancellation event; it no longer owns raw
+  spawn/register/stderr/wait/finish logic.
 
 ## Surprises & Discoveries
 
@@ -394,14 +399,14 @@ stderr handling.
   failure as cache miss/advisory `None`, but make a valid structured identity win a concurrent cancel
   claim according to the approved terminal precedence.
 
-- [ ] Route ASR model download through `process_supervisors.asr_model_download.run(...)` with
+- [x] Route ASR model download through `process_supervisors.asr_model_download.run(...)` with
   `WorkerOperation::DownloadAsrModel` and `ProgressRoute::AsrModelDownload`.
 
-- [ ] Keep model availability checks and its product-level completed/cancelled/error mapping in
+- [x] Keep model availability checks and its product-level completed/cancelled/error mapping in
   `asr_model.rs`. Emit the existing validated synthetic cancellation event exactly once only after a
   confirmed cancelled runner outcome.
 
-- [ ] Remove the remaining application-level calls to spawn/register/wait/finish/terminate and run
+- [x] Remove the remaining application-level calls to spawn/register/wait/finish/terminate and run
   focused/full tests.
 
   ```powershell
@@ -412,7 +417,7 @@ stderr handling.
   cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check
   ```
 
-- [ ] Commit the final production call-site migration.
+- [x] Commit the final production call-site migration.
 
   ```powershell
   git add app/src-tauri/src/video_processing.rs app/src-tauri/src/asr_model.rs app/src-tauri/src/worker_runtime/runner.rs
