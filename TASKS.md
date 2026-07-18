@@ -7,7 +7,7 @@
   expansion, retain malformed/missing subtitle ASR fallback, pass worker/Ruff/docs/diff gates, and
   confirm `dGzm8O95tdc` selects `zh / vtt` without downloading media. ✅ Focused RED produced 3
   failures/32 passes, GREEN passed 35/35, worker passed 364/364, and Ruff/docs/diff/live simulation
-  passed. ExecPlan: `docs/exec-plans/active/2026-07-18-youtube-generic-chinese-subtitle-plan.md`.
+  passed. ExecPlan: `docs/exec-plans/completed/2026-07-18-youtube-generic-chinese-subtitle-plan.md`.
 
 - [ ] Prepare FrameQ v0.2.17 desktop i18n release (2026-07-17) — ✅ Acceptance: synchronize five version sources,
   restore the documented app lint gate, write reviewed Gatekeeper-first release notes, run complete

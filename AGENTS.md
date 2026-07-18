@@ -30,8 +30,7 @@
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
-- 当前 active 修复计划：`docs/exec-plans/active/2026-07-18-youtube-generic-chinese-subtitle-plan.md`
-- 最近完成执行计划：`docs/exec-plans/completed/2026-07-15-desktop-i18n-ai-output-language-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-07-18-youtube-generic-chinese-subtitle-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

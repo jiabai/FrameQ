@@ -35,6 +35,10 @@ higher priority. Missing, malformed, or unsupported subtitles still fall back to
 - [x] 2026-07-18: Ran full worker/governance/diff gates and no-download live metadata acceptance.
   Validation: worker passed 364/364, Ruff passed, governance reported 0 errors/0 warnings,
   `git diff --check` passed, and the confirmed URL selected `zh / vtt`.
+- [x] 2026-07-18: Committed the reviewed implementation, fast-forwarded local `main`, reran the
+  complete acceptance gates on the merged tree, and removed the feature worktree/branch. Validation:
+  commit `5d70d1e`; merged worker 364/364, Ruff, governance 0/0, diff check, and `zh / vtt` live
+  simulation all passed.
 
 ## Surprises & Discoveries
 
@@ -62,7 +66,7 @@ higher priority. Missing, malformed, or unsupported subtitles still fall back to
 
 ## Outcomes & Retrospective
 
-Implementation and local verification are complete. FrameQ now requests exact generic `zh`, ranks it
+Implementation, local verification, and local integration are complete. FrameQ now requests exact generic `zh`, ranks it
 after script-specific Chinese and before English, and retains the existing malformed/missing subtitle
 ASR fallback. The deterministic focused suite passed 35/35 and the full worker suite passed 364/364;
 the confirmed live URL selected `zh / vtt` without downloading media.
@@ -145,7 +149,7 @@ automatic captions in UI and continues to report only `Platform subtitle`.
 - [x] Run all validation commands below and record exact results.
 - [x] Run the confirmed URL with no cache, simulation, and no media download; report only selected
   language and format, never caption URLs.
-- [x] Update Progress and Outcomes. Leave the plan active until user review; do not commit, push,
+- [x] Update Progress and Outcomes, archive after the user-approved local merge, and do not push,
   tag, or publish.
 
 ## Validation and Acceptance
