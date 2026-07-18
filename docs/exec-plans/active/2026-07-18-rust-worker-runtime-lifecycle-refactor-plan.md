@@ -84,6 +84,13 @@ boundaries.
   and 491/491 tests, app lint, production build, Node contracts 23/23, governance validation with
   0 errors and 0 warnings, rustfmt, and diff checks. The build retained only the existing Vite
   chunk-size advisory. Native hosted macOS evidence and manual Windows desktop regression remain.
+- [x] 2026-07-18: Pushed `codex/worker-runtime-lifecycle`, opened draft PR 7, and collected native
+  macOS evidence on exact commit `481b4d7841566bab172cd77694b43e734e137333`. Read-only workflow
+  [run 29640471857](https://github.com/jiabai/FrameQ/actions/runs/29640471857),
+  [job 88070033061](https://github.com/jiabai/FrameQ/actions/runs/29640471857/job/88070033061),
+  concluded success; its log records the real
+  `unix_termination_stops_a_parent_and_child_in_the_managed_process_group ... ok` fixture and a
+  complete macOS-conditional Rust result of 140/140. Desktop Release was not triggered.
 
 ## Surprises & Discoveries
 
@@ -151,8 +158,8 @@ Current outcome: command construction, supervision, spawn/stdin/pipe ownership, 
 terminal parsing, and lifecycle diagnostics now live in separate tested runtime modules. All four
 operations call `WorkerLane::run`; compatibility APIs are gone, and application modules cannot
 mutate `ProcessSupervisor` or terminate a process tree. Local Rust and workflow-contract gates pass.
-Task 7 documentation, complete cross-stack gates, manual desktop regression, and native hosted
-macOS evidence remain.
+Task 7 documentation, complete cross-stack gates, and native hosted macOS evidence are complete.
+Only the native Windows desktop interaction regression and final plan archival remain.
 
 Residual risk: process cancellation is platform-sensitive. Windows unit tests cannot prove macOS
 PGID/TERM/KILL delivery, so native GitHub macOS runner evidence remains mandatory even if every local
@@ -511,7 +518,7 @@ stderr handling.
   git status --short
   ```
 
-- [ ] Push the reviewed implementation branch and run `.github/workflows/unix-process-supervisor.yml`
+- [x] Push the reviewed implementation branch and run `.github/workflows/unix-process-supervisor.yml`
   on that exact commit. Require the native macOS parent-plus-child process-group fixture and complete
   Rust suite to pass; record run URL, SHA, job conclusion, and test count in Progress.
 
