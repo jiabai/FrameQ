@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from frameq_worker.models import PreferenceSnapshot, ProcessRequest, ProcessResult
+from frameq_worker.models import (
+    PreferenceSnapshot,
+    ProcessRequest,
+    ProcessResult,
+    TranscriptMetadata,
+)
 from frameq_worker.source_identity import (
     SOURCE_PRIVACY_MIGRATION_VERSION,
     SourceIdentity,
@@ -110,6 +115,67 @@ class TaskContext:
     @property
     def task_id(self) -> str:
         return self.paths.task_id
+
+
+@dataclass(frozen=True)
+class OpenedTask:
+    context: TaskContext
+    transcript: TranscriptMetadata | None
+
+
+@dataclass(frozen=True)
+class TaskStoreFacade:
+    output_root: Path
+    cache_root: Path
+
+    def create(
+        self,
+        request: ProcessRequest,
+        source_identity: SourceIdentity,
+        now: datetime | None = None,
+    ) -> TaskContext:
+        context = create_task_context(
+            request,
+            source_identity=source_identity,
+            output_root=self.output_root,
+            cache_root=self.cache_root,
+            now=now,
+        )
+        ensure_task_dirs(context.paths)
+        return context
+
+    def open(self, task_id: str) -> OpenedTask:
+        manifest = load_task_manifest(self.output_root, task_id)
+        context = task_context_from_loaded_manifest(
+            self.output_root,
+            self.cache_root,
+            task_id,
+            manifest,
+        )
+        ensure_task_dirs(context.paths)
+        return OpenedTask(
+            context=context,
+            transcript=transcript_metadata_from_manifest(manifest),
+        )
+
+    def finalize(self, context: TaskContext, result: ProcessResult) -> ProcessResult:
+        task_result = result_with_task(
+            result,
+            context,
+            artifacts={
+                **result.artifacts,
+                **task_artifacts_for_existing_files(context.paths),
+            },
+        )
+        write_task_manifest(context, task_result)
+        return task_result
+
+    def save_preference_snapshot(
+        self,
+        context: TaskContext,
+        snapshot: PreferenceSnapshot,
+    ) -> None:
+        write_preference_snapshot_artifact(context.paths, snapshot)
 
 
 def create_task_context(
@@ -282,6 +348,20 @@ def _is_link_or_junction(path: Path) -> bool:
 
 def task_context_from_manifest(output_root: Path, cache_root: Path, task_id: str) -> TaskContext:
     manifest = load_task_manifest(output_root, task_id)
+    return task_context_from_loaded_manifest(
+        output_root,
+        cache_root,
+        task_id,
+        manifest,
+    )
+
+
+def task_context_from_loaded_manifest(
+    output_root: Path,
+    cache_root: Path,
+    task_id: str,
+    manifest: dict[str, object],
+) -> TaskContext:
     source_identity = source_identity_from_manifest(manifest.get("source_identity"))
     source_url = manifest.get("source_url")
     if source_identity is not None:
@@ -307,4 +387,22 @@ def task_context_from_manifest(output_root: Path, cache_root: Path, task_id: str
         created_at=created_at,
         app_version=str(manifest.get("app_version") or "app"),
         worker_version=str(manifest.get("worker_version") or "app"),
+    )
+
+
+def transcript_metadata_from_manifest(
+    manifest: dict[str, object],
+) -> TranscriptMetadata | None:
+    raw_transcript = manifest.get("transcript")
+    if not isinstance(raw_transcript, dict):
+        return None
+    source = raw_transcript.get("source")
+    if source not in {"asr", "subtitle"}:
+        return None
+    language = raw_transcript.get("language")
+    engine = raw_transcript.get("engine")
+    return TranscriptMetadata(
+        source=source,
+        language=language if isinstance(language, str) else None,
+        engine=engine if isinstance(engine, str) else None,
     )

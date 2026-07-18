@@ -28,6 +28,29 @@ const SAFE_ARTIFACT_KEYS: [&str; 10] = [
     "preference_snapshot",
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TaskArtifact {
+    Audio,
+    TranscriptTxt,
+    TranscriptMd,
+    Segments,
+    Summary,
+    Insights,
+}
+
+impl TaskArtifact {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Audio => "audio",
+            Self::TranscriptTxt => "transcript_txt",
+            Self::TranscriptMd => "transcript_md",
+            Self::Segments => "segments",
+            Self::Summary => "summary",
+            Self::Insights => "insights",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub(crate) struct SourceIdentity {
     pub(crate) version: u64,
@@ -194,14 +217,14 @@ fn is_sensitive_parameter_value(value: &str) -> bool {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub(crate) struct TaskManifestError {
+struct TaskManifestError {
     pub(crate) code: String,
     pub(crate) message: String,
     pub(crate) stage: String,
 }
 
 impl TaskManifestError {
-    pub(crate) fn safe_code(&self) -> String {
+    fn safe_code(&self) -> String {
         let is_safe = !self.code.is_empty()
             && self.code.len() <= 64
             && self.code.chars().enumerate().all(|(index, ch)| {
@@ -218,7 +241,7 @@ impl TaskManifestError {
         }
     }
 
-    pub(crate) fn safe_message(&self) -> String {
+    fn safe_message(&self) -> String {
         let normalized = self.message.to_ascii_lowercase();
         if normalized.contains("http://")
             || normalized.contains("https://")
@@ -259,7 +282,7 @@ pub(crate) struct InsightView {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub(crate) struct TaskManifest {
+struct TaskManifest {
     #[serde(default)]
     pub(crate) schema_version: u64,
     #[serde(default)]
@@ -364,7 +387,7 @@ fn required_trimmed_string(value: &serde_json::Value, key: &str) -> Option<Strin
 }
 
 impl TaskManifest {
-    pub(crate) fn safe_source_identity(&self) -> Option<&SourceIdentity> {
+    fn safe_source_identity(&self) -> Option<&SourceIdentity> {
         if self.source_privacy_quarantined
             || self.schema_version != TASK_SCHEMA_VERSION
             || self.source_privacy_migration_version != SOURCE_PRIVACY_MIGRATION_VERSION
@@ -376,13 +399,13 @@ impl TaskManifest {
             .filter(|identity| identity.is_safe() && self.source_url == identity.canonical_url)
     }
 
-    pub(crate) fn safe_source_url(&self) -> &str {
+    fn safe_source_url(&self) -> &str {
         self.safe_source_identity()
             .map(|identity| identity.canonical_url.as_str())
             .unwrap_or("")
     }
 
-    pub(crate) fn safe_artifacts(&self) -> HashMap<String, String> {
+    fn safe_artifacts(&self) -> HashMap<String, String> {
         self.artifacts
             .iter()
             .filter(|(key, raw_path)| validate_relative_artifact_path(raw_path, key).is_ok())
@@ -390,14 +413,14 @@ impl TaskManifest {
             .collect()
     }
 
-    pub(crate) fn source_privacy_ready(&self) -> bool {
+    fn source_privacy_ready(&self) -> bool {
         self.schema_version == TASK_SCHEMA_VERSION
             && self.source_privacy_migration_version == SOURCE_PRIVACY_MIGRATION_VERSION
             && !self.source_privacy_quarantined
             && self.safe_source_identity().is_some()
     }
 
-    pub(crate) fn transcript_metadata(&self) -> Option<TranscriptMetadata> {
+    fn transcript_metadata(&self) -> Option<TranscriptMetadata> {
         self.transcript.clone()
     }
 }
@@ -419,7 +442,7 @@ pub(crate) fn path_to_frontend_string(path: impl AsRef<Path>) -> String {
     path_to_env_string(path)
 }
 
-pub(crate) fn load_task_manifest(
+fn load_task_manifest(
     output_root: &Path,
     task_id: &str,
 ) -> Result<(TaskManifest, PathBuf), String> {
@@ -437,12 +460,12 @@ pub(crate) fn load_task_manifest(
     Ok((manifest, task_dir))
 }
 
-pub(crate) fn task_dir_for(output_root: &Path, task_id: &str) -> Result<PathBuf, String> {
+fn task_dir_for(output_root: &Path, task_id: &str) -> Result<PathBuf, String> {
     let task_id = validate_task_id(task_id)?;
     Ok(output_root.join(TASKS_DIR_NAME).join(task_id))
 }
 
-pub(crate) fn list_task_manifest_paths(output_root: &Path) -> Result<Vec<PathBuf>, String> {
+fn list_task_manifest_paths(output_root: &Path) -> Result<Vec<PathBuf>, String> {
     let tasks_dir = output_root.join(TASKS_DIR_NAME);
     if !tasks_dir.exists() {
         return Ok(vec![]);
@@ -471,7 +494,7 @@ pub(crate) fn list_task_manifest_paths(output_root: &Path) -> Result<Vec<PathBuf
     Ok(paths)
 }
 
-pub(crate) fn read_task_manifest_path(path: &Path) -> Result<(TaskManifest, PathBuf), String> {
+fn read_task_manifest_path(path: &Path) -> Result<(TaskManifest, PathBuf), String> {
     validate_storage_entry(path, false, "task manifest")?;
     let content =
         fs::read_to_string(path).map_err(|_| "Failed to read task manifest.".to_string())?;
@@ -485,7 +508,7 @@ pub(crate) fn read_task_manifest_path(path: &Path) -> Result<(TaskManifest, Path
     Ok((manifest, task_dir))
 }
 
-pub(crate) fn write_task_manifest(task_dir: &Path, manifest: &TaskManifest) -> Result<(), String> {
+fn write_task_manifest(task_dir: &Path, manifest: &TaskManifest) -> Result<(), String> {
     fs::write(
         task_dir.join(TASK_MANIFEST_FILE_NAME),
         serde_json::to_string_pretty(manifest)
@@ -495,7 +518,7 @@ pub(crate) fn write_task_manifest(task_dir: &Path, manifest: &TaskManifest) -> R
     .map_err(|_| "Failed to save task manifest.".to_string())
 }
 
-pub(crate) fn artifact_path(
+fn artifact_path(
     task_dir: &Path,
     manifest: &TaskManifest,
     key: &str,
@@ -507,7 +530,7 @@ pub(crate) fn artifact_path(
     Ok(Some(task_dir.join(relative)))
 }
 
-pub(crate) fn required_artifact_path(
+fn required_artifact_path(
     task_dir: &Path,
     manifest: &TaskManifest,
     key: &str,
@@ -516,11 +539,7 @@ pub(crate) fn required_artifact_path(
         .ok_or_else(|| format!("Task manifest is missing {key} artifact."))
 }
 
-pub(crate) fn validate_task_artifact_path(
-    task_dir: &Path,
-    path: &Path,
-    _field: &str,
-) -> Result<(), String> {
+fn validate_task_artifact_path(task_dir: &Path, path: &Path, _field: &str) -> Result<(), String> {
     let task_dir = task_dir
         .canonicalize()
         .map_err(|_| "Failed to resolve task directory.".to_string())?;
@@ -534,7 +553,7 @@ pub(crate) fn validate_task_artifact_path(
     }
 }
 
-pub(crate) fn ensure_artifact_parent(task_dir: &Path, path: &Path) -> Result<(), String> {
+fn ensure_artifact_parent(task_dir: &Path, path: &Path) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "Artifact path has no parent directory.".to_string())?;
@@ -553,10 +572,7 @@ pub(crate) fn ensure_artifact_parent(task_dir: &Path, path: &Path) -> Result<(),
     }
 }
 
-pub(crate) fn validate_relative_artifact_path(
-    raw_path: &str,
-    field: &str,
-) -> Result<PathBuf, String> {
+fn validate_relative_artifact_path(raw_path: &str, field: &str) -> Result<PathBuf, String> {
     if !SAFE_ARTIFACT_KEYS.contains(&field) {
         return Err("Task manifest contains an unsupported artifact field.".to_string());
     }
@@ -643,8 +659,8 @@ fn is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_insight_view, validate_task_artifact_path, SourceIdentity, TaskManifest,
-        TaskManifestError,
+        parse_insight_view, validate_task_artifact_path, SourceIdentity, SupportedTask,
+        TaskArtifact, TaskManifest, TaskManifestError,
     };
     use serde_json::json;
     use std::fs;
@@ -833,6 +849,83 @@ mod tests {
     }
 
     #[test]
+    fn supported_task_opens_only_current_tasks_and_reads_validated_artifacts() {
+        let output_root = temp_dir("supported-task-facade");
+        let task_id = "20260718-120000-youtube-dQw4w9WgXcQ";
+        write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
+
+        let task = SupportedTask::open(&output_root, task_id).expect("open supported task");
+
+        assert_eq!(task.task_id(), task_id);
+        assert_eq!(
+            task.safe_source_url(),
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        );
+        assert_eq!(
+            task.read_text_artifact(TaskArtifact::TranscriptTxt)
+                .expect("read transcript")
+                .as_deref(),
+            Some("facade transcript")
+        );
+        assert_eq!(
+            task.existing_artifacts()["transcript_txt"],
+            "transcript/transcript.txt"
+        );
+    }
+
+    #[test]
+    fn supported_task_scan_isolates_corrupt_and_unsupported_manifests() {
+        let output_root = temp_dir("supported-task-scan");
+        write_supported_task(
+            &output_root,
+            "20260718-120000-youtube-dQw4w9WgXcQ",
+            "dQw4w9WgXcQ",
+        );
+        let corrupt_dir = output_root.join("tasks").join("corrupt-task");
+        fs::create_dir_all(&corrupt_dir).expect("create corrupt task");
+        fs::write(corrupt_dir.join("frameq-task.json"), b"{not-json")
+            .expect("write corrupt manifest");
+        let legacy_dir = output_root.join("tasks").join("legacy-task");
+        fs::create_dir_all(&legacy_dir).expect("create legacy task");
+        fs::write(
+            legacy_dir.join("frameq-task.json"),
+            r#"{"schema_version":2,"task_id":"legacy-task","created_at":"2026-07-18T12:00:00Z","status":"completed"}"#,
+        )
+        .expect("write legacy manifest");
+
+        let scan = SupportedTask::scan(&output_root).expect("scan tasks");
+
+        let ignored_count = scan.ignored_count();
+        assert_eq!(scan.into_tasks().len(), 1);
+        assert_eq!(ignored_count, 2);
+    }
+
+    #[test]
+    fn supported_task_artifact_errors_do_not_echo_manifest_path_material() {
+        let output_root = temp_dir("supported-task-safe-artifact-error");
+        let task_id = "20260718-120000-youtube-dQw4w9WgXcQ";
+        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
+        let manifest_path = task_dir.join("frameq-task.json");
+        let manifest = fs::read_to_string(&manifest_path).expect("read manifest");
+        fs::write(
+            &manifest_path,
+            manifest.replace(
+                "transcript/transcript.txt",
+                "../xsec_token=review-secret.txt",
+            ),
+        )
+        .expect("write unsafe artifact");
+
+        let task = SupportedTask::open(&output_root, task_id).expect("open supported task");
+        let error = task
+            .read_text_artifact(TaskArtifact::TranscriptTxt)
+            .expect_err("unsafe artifact must fail");
+
+        assert!(!error.contains("review-secret"));
+        assert!(!error.contains("xsec_token"));
+    }
+
+    #[test]
     fn parse_insight_view_rejects_missing_required_fields() {
         let value = json!({
             "id": 1,
@@ -896,5 +989,338 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
+    }
+
+    fn write_supported_task(
+        output_root: &std::path::Path,
+        task_id: &str,
+        stable_id: &str,
+    ) -> std::path::PathBuf {
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "facade transcript\n",
+        )
+        .expect("write transcript");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
+  "source_privacy_quarantined": false,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-18T12:00:00Z",
+  "source_url": "https://www.youtube.com/watch?v={stable_id}",
+  "source_identity": {{
+    "version": 1,
+    "platform": "youtube",
+    "stable_id": "{stable_id}",
+    "effective_part": null,
+    "canonical_url": "https://www.youtube.com/watch?v={stable_id}"
+  }},
+  "platform": "youtube",
+  "status": "completed",
+  "model": "iic/SenseVoiceSmall",
+  "artifacts": {{"transcript_txt": "transcript/transcript.txt"}},
+  "error": null,
+  "text_preview": "facade transcript",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write manifest");
+        task_dir
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SafeTaskError {
+    pub(crate) code: String,
+    pub(crate) message: String,
+    pub(crate) stage: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SupportedTask {
+    manifest: TaskManifest,
+    task_dir: PathBuf,
+}
+
+#[derive(Debug)]
+pub(crate) struct TaskScan {
+    tasks: Vec<SupportedTask>,
+    ignored_count: usize,
+}
+
+impl TaskScan {
+    pub(crate) fn into_tasks(self) -> Vec<SupportedTask> {
+        self.tasks
+    }
+
+    pub(crate) fn ignored_count(&self) -> usize {
+        self.ignored_count
+    }
+}
+
+impl SupportedTask {
+    pub(crate) fn open(output_root: &Path, task_id: &str) -> Result<Self, String> {
+        let (manifest, task_dir) = load_task_manifest(output_root, task_id)?;
+        if !manifest.source_privacy_ready() {
+            return Err("Task is unavailable in the current history format.".to_string());
+        }
+        Ok(Self { manifest, task_dir })
+    }
+
+    pub(crate) fn scan(output_root: &Path) -> Result<TaskScan, String> {
+        let mut tasks = Vec::new();
+        let mut ignored_count = 0;
+        for manifest_path in list_task_manifest_paths(output_root)? {
+            match Self::from_manifest_path(output_root, &manifest_path) {
+                Ok(Some(task)) => tasks.push(task),
+                Ok(None) => ignored_count += 1,
+                Err(_) => ignored_count += 1,
+            }
+        }
+        Ok(TaskScan {
+            tasks,
+            ignored_count,
+        })
+    }
+
+    fn from_manifest_path(
+        output_root: &Path,
+        manifest_path: &Path,
+    ) -> Result<Option<Self>, String> {
+        let (manifest, task_dir) = read_task_manifest_path(manifest_path)?;
+        let expected_task_dir = match task_dir_for(output_root, &manifest.task_id) {
+            Ok(path) => path,
+            Err(_) => return Ok(None),
+        };
+        if expected_task_dir != task_dir || !manifest.source_privacy_ready() {
+            return Ok(None);
+        }
+        Ok(Some(Self { manifest, task_dir }))
+    }
+
+    pub(crate) fn task_id(&self) -> &str {
+        &self.manifest.task_id
+    }
+
+    pub(crate) fn created_at(&self) -> &str {
+        &self.manifest.created_at
+    }
+
+    pub(crate) fn status(&self) -> &str {
+        &self.manifest.status
+    }
+
+    pub(crate) fn model(&self) -> &str {
+        &self.manifest.model
+    }
+
+    pub(crate) fn safe_source_url(&self) -> &str {
+        self.manifest.safe_source_url()
+    }
+
+    pub(crate) fn source_identity(&self) -> Option<&SourceIdentity> {
+        self.manifest.safe_source_identity()
+    }
+
+    pub(crate) fn transcript_metadata(&self) -> Option<TranscriptMetadata> {
+        self.manifest.transcript_metadata()
+    }
+
+    pub(crate) fn declared_artifacts(&self) -> HashMap<String, String> {
+        self.manifest.safe_artifacts()
+    }
+
+    pub(crate) fn existing_artifacts(&self) -> HashMap<String, String> {
+        self.manifest
+            .artifacts
+            .iter()
+            .filter_map(|(key, raw_path)| {
+                let relative = validate_relative_artifact_path(raw_path, key).ok()?;
+                let path = self.task_dir.join(relative);
+                if !path.is_file()
+                    || validate_task_artifact_path(&self.task_dir, &path, key).is_err()
+                {
+                    return None;
+                }
+                Some((key.clone(), raw_path.clone()))
+            })
+            .collect()
+    }
+
+    pub(crate) fn safe_error(&self) -> Option<SafeTaskError> {
+        self.manifest.error.as_ref().map(|error| SafeTaskError {
+            code: error.safe_code(),
+            message: error.safe_message(),
+            stage: error.stage.clone(),
+        })
+    }
+
+    pub(crate) fn text_preview(&self) -> &str {
+        &self.manifest.text_preview
+    }
+
+    pub(crate) fn insights_count(&self) -> usize {
+        self.manifest.insights_count
+    }
+
+    pub(crate) fn task_dir_frontend_string(&self) -> String {
+        path_to_frontend_string(&self.task_dir)
+    }
+
+    pub(crate) fn read_text_artifact(
+        &self,
+        artifact: TaskArtifact,
+    ) -> Result<Option<String>, String> {
+        let Some(path) = artifact_path(&self.task_dir, &self.manifest, artifact.as_str())? else {
+            return Ok(None);
+        };
+        validate_task_artifact_path(&self.task_dir, &path, artifact.as_str())?;
+        Ok(fs::read_to_string(path)
+            .ok()
+            .map(|text| text.trim().to_string()))
+    }
+
+    pub(crate) fn read_insights(&self) -> Result<Vec<InsightView>, String> {
+        let Some(path) = self.validated_existing_artifact_path(TaskArtifact::Insights)? else {
+            return Ok(vec![]);
+        };
+        let Ok(content) = fs::read_to_string(path) else {
+            return Ok(vec![]);
+        };
+        let Ok(payload) = serde_json::from_str::<serde_json::Value>(&content) else {
+            return Ok(vec![]);
+        };
+        Ok(parse_insights_payload(&payload))
+    }
+
+    pub(crate) fn validated_existing_artifact_path(
+        &self,
+        artifact: TaskArtifact,
+    ) -> Result<Option<PathBuf>, String> {
+        let Some(path) = artifact_path(&self.task_dir, &self.manifest, artifact.as_str())? else {
+            return Ok(None);
+        };
+        if !path.exists() {
+            return Ok(None);
+        }
+        validate_task_artifact_path(&self.task_dir, &path, artifact.as_str())?;
+        Ok(Some(path))
+    }
+
+    pub(crate) fn required_existing_artifact_path(
+        &self,
+        artifact: TaskArtifact,
+    ) -> Result<PathBuf, String> {
+        self.validated_existing_artifact_path(artifact)?
+            .ok_or_else(|| format!("Task manifest is missing {} artifact.", artifact.as_str()))
+    }
+
+    pub(crate) fn artifact_path_or_default(
+        &self,
+        artifact: TaskArtifact,
+        default_relative_path: &str,
+    ) -> Result<PathBuf, String> {
+        if let Some(path) = artifact_path(&self.task_dir, &self.manifest, artifact.as_str())? {
+            return Ok(path);
+        }
+        let relative = validate_relative_artifact_path(default_relative_path, artifact.as_str())?;
+        Ok(self.task_dir.join(relative))
+    }
+
+    pub(crate) fn task_dir(&self) -> &Path {
+        &self.task_dir
+    }
+
+    pub(crate) fn validate_existing_path(
+        &self,
+        path: &Path,
+        artifact: TaskArtifact,
+    ) -> Result<(), String> {
+        validate_task_artifact_path(&self.task_dir, path, artifact.as_str())
+    }
+
+    pub(crate) fn into_edit_session(self) -> TaskEditSession {
+        TaskEditSession {
+            manifest: self.manifest,
+            task_dir: self.task_dir,
+        }
+    }
+}
+
+pub(crate) struct TaskEditSession {
+    manifest: TaskManifest,
+    task_dir: PathBuf,
+}
+
+impl TaskEditSession {
+    pub(crate) fn task_dir(&self) -> &Path {
+        &self.task_dir
+    }
+
+    pub(crate) fn required_existing_artifact_path(
+        &self,
+        artifact: TaskArtifact,
+    ) -> Result<PathBuf, String> {
+        let path = required_artifact_path(&self.task_dir, &self.manifest, artifact.as_str())?;
+        validate_task_artifact_path(&self.task_dir, &path, artifact.as_str())?;
+        Ok(path)
+    }
+
+    pub(crate) fn artifact_path_or_default(
+        &self,
+        artifact: TaskArtifact,
+        default_relative_path: &str,
+    ) -> Result<PathBuf, String> {
+        if let Some(path) = artifact_path(&self.task_dir, &self.manifest, artifact.as_str())? {
+            return Ok(path);
+        }
+        let relative = validate_relative_artifact_path(default_relative_path, artifact.as_str())?;
+        Ok(self.task_dir.join(relative))
+    }
+
+    pub(crate) fn has_artifact(&self, artifact: TaskArtifact) -> bool {
+        self.manifest.artifacts.contains_key(artifact.as_str())
+    }
+
+    pub(crate) fn validate_existing_path(
+        &self,
+        path: &Path,
+        artifact: TaskArtifact,
+    ) -> Result<(), String> {
+        validate_task_artifact_path(&self.task_dir, path, artifact.as_str())
+    }
+
+    pub(crate) fn ensure_artifact_parent(&self, path: &Path) -> Result<(), String> {
+        ensure_artifact_parent(&self.task_dir, path)
+    }
+
+    pub(crate) fn set_artifact(
+        &mut self,
+        artifact: TaskArtifact,
+        relative_path: &str,
+    ) -> Result<(), String> {
+        validate_relative_artifact_path(relative_path, artifact.as_str())?;
+        self.manifest
+            .artifacts
+            .insert(artifact.as_str().to_string(), relative_path.to_string());
+        Ok(())
+    }
+
+    pub(crate) fn set_text_preview(&mut self, text_preview: String) {
+        self.manifest.text_preview = text_preview;
+    }
+
+    pub(crate) fn declared_artifacts(&self) -> HashMap<String, String> {
+        self.manifest.safe_artifacts()
+    }
+
+    pub(crate) fn save(&self) -> Result<(), String> {
+        write_task_manifest(&self.task_dir, &self.manifest)
     }
 }

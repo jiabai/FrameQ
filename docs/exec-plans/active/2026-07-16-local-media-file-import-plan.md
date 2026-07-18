@@ -26,6 +26,11 @@ remain governed by the existing separate summary/inspiration confirmation.
 - [x] 2026-07-18: Reserved contract v3 for process-video request cleanup and revised local media to
   build on that minimal URL request as contract v4. Validation: approved process-video contract v3
   product specification and ADR.
+- [x] 2026-07-18: Consolidated current task trust and persistence access behind Rust
+  `SupportedTask`/`TaskEditSession` and Python `TaskStoreFacade` before adding the local source
+  variant. Validation: Rust facade RED tests then 146 Rust tests passed; Python facade RED tests then
+  394 worker tests passed; focused Ruff passed. Final formatting/governance/diff gates remain in the
+  implementation closeout record.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -52,6 +57,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   request and code registry entries through a synchronized version 4 release.
 - Evidence: the approved scope deliberately has no product file-size or duration maximum. Tests must
   exercise truthful disk/probe/decoder failures and must not silently introduce a hidden cap.
+- Evidence: History, cache reuse, transcript read/edit, and deletion previously reconstructed the
+  manifest privacy/path sequence independently. The implemented task-access facade now makes the
+  future URL/local source predicate a single Rust ownership point while retaining per-task scan
+  isolation. Python pipeline/retry persistence now shares one lifecycle facade as well.
 
 ## Decision Log
 
@@ -96,12 +105,19 @@ remain governed by the existing separate summary/inspiration confirmation.
 - Decision: Reuse the existing ProcessSupervisor video lane, workflow stages, account gate, and
   separately confirmed AI flows. Rationale: local media is a new source, not a parallel lifecycle,
   entitlement model, cancellation model, or AI billing path. Date/Author: 2026-07-16, User + Codex.
+- Decision: Make raw Rust task manifests and artifact-path primitives private and require
+  `SupportedTask::scan/open`; use `TaskEditSession` for transcript manifest mutation and
+  `TaskStoreFacade` for Python create/open/finalize/snapshot persistence. Rationale: the local source
+  union must not require every History/cache/transcript/deletion caller to reproduce a security
+  predicate, while deletion and playback still need narrowly validated filesystem capabilities.
+  Date/Author: 2026-07-18, User + Codex.
 
 ## Outcomes & Retrospective
 
-Planning is complete and implementation has not started. This document records the approved product,
-architecture, security, contract, persistence, test, and native-acceptance scope so review can occur
-before code changes.
+Planning is complete. Local-media product implementation has not started; its task-access facade
+prerequisite is complete. This document records the approved product, architecture, security,
+contract, persistence, test, and native-acceptance scope so the remaining implementation can proceed
+without reopening caller-local manifest/path checks.
 
 Residual risk: actual codec/container support depends on the packaged FFmpeg/ffprobe build and must be
 proven with representative fixtures. Very large media may exhaust disk or processing resources because
@@ -115,6 +131,7 @@ directory, even though the complete path is never stored.
 
 - Product intent: `docs/product-specs/2026-07-16-local-media-file-import.md`.
 - Persistent decisions: `docs/design-docs/2026-07-16-local-media-file-import.md`.
+- Task access prerequisite: `docs/design-docs/2026-07-18-task-access-facade.md`.
 - Shared wire protocol: `contracts/desktop-worker-contract.json`,
   `app/src/desktopWorkerContract.test.ts`, and `worker/tests/test_contract.py`.
 - Frontend composition and source state: `app/src/App.tsx`, `app/src/workflowState.ts`,
@@ -136,6 +153,13 @@ directory, even though the complete path is never stored.
   `docs/SECURITY.md`, and this active plan.
 
 ## Plan of Work
+
+0. [x] Centralize current task access before extending the source union.
+   - Keep raw Rust manifest/path helpers private and migrate History, cache, transcript, and deletion
+     to `SupportedTask`, with transcript mutation through `TaskEditSession`.
+   - Make Python pipeline and retry use `TaskStoreFacade` for task lifecycle persistence.
+   - Preserve current schema/contract/result behavior and prove it with existing characterization
+     suites plus focused facade tests.
 
 1. [ ] Lock contract v4 and source types through RED tests.
    - Extend the shared contract without changing the cleaned v3 `process_video` request.

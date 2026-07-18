@@ -64,11 +64,10 @@ fn delete_history_task_from_roots<R: DirectoryRemover>(
     task_id: &str,
     remover: &R,
 ) -> Result<HistoryDeleteResult, HistoryDeleteError> {
-    let (manifest, task_dir) = task_manifest::load_task_manifest(output_root, task_id)
+    let task = task_manifest::SupportedTask::open(output_root, task_id)
         .map_err(|_| HistoryDeleteError::Unavailable)?;
-    if !manifest.source_privacy_ready() {
-        return Err(HistoryDeleteError::Unavailable);
-    }
+    let supported_task_id = task.task_id().to_string();
+    let task_dir = task.task_dir().to_path_buf();
 
     validate_unlinked_directory(output_root)?;
     validate_unlinked_directory(&output_root.join(task_manifest::TASKS_DIR_NAME))?;
@@ -125,7 +124,7 @@ fn delete_history_task_from_roots<R: DirectoryRemover>(
     }
 
     Ok(HistoryDeleteResult {
-        task_id: manifest.task_id,
+        task_id: supported_task_id,
         deleted: true,
     })
 }

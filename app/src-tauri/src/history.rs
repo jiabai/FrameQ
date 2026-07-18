@@ -2,7 +2,6 @@ use crate::{append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, task
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 use std::time::Instant;
 use tauri::AppHandle;
@@ -110,123 +109,74 @@ pub(crate) fn load_history_from_output_root(
 fn load_history_with_stats(
     output_root: &Path,
 ) -> Result<(Vec<HistoryListItemView>, usize), String> {
-    let mut items = Vec::new();
-    let mut ignored = 0;
-    for manifest_path in task_manifest::list_task_manifest_paths(output_root)? {
-        match history_item_from_manifest_path(output_root, &manifest_path) {
-            Ok(Some(item)) => items.push(item),
-            Ok(None) => ignored += 1,
-            Err(error) if is_isolatable_manifest_read_error(&error) => ignored += 1,
-            Err(error) => return Err(error),
-        }
-    }
+    let scan = task_manifest::SupportedTask::scan(output_root)?;
+    let ignored = scan.ignored_count();
+    let mut items = scan
+        .into_tasks()
+        .into_iter()
+        .map(|task| history_item_from_supported_task(output_root, task))
+        .collect::<Vec<_>>();
     items.sort_by(|left, right| right.created_at.cmp(&left.created_at));
     Ok((items, ignored))
 }
 
-fn is_isolatable_manifest_read_error(error: &str) -> bool {
-    matches!(
-        error,
-        "Failed to read task manifest." | "Failed to parse task manifest."
-    )
-}
-
-fn history_item_from_manifest_path(
+fn history_item_from_supported_task(
     output_root: &Path,
-    manifest_path: &Path,
-) -> Result<Option<HistoryListItemView>, String> {
-    let (manifest, task_dir) = task_manifest::read_task_manifest_path(manifest_path)?;
-    let expected_task_dir = match task_manifest::task_dir_for(output_root, &manifest.task_id) {
-        Ok(path) => path,
-        Err(_) => return Ok(None),
-    };
-    if expected_task_dir != task_dir || !manifest.source_privacy_ready() {
-        return Ok(None);
-    }
-    let artifacts = manifest.safe_artifacts();
-
-    let safe_source_url = manifest.safe_source_url().to_string();
-    Ok(Some(HistoryListItemView {
-        task_id: manifest.task_id.clone(),
-        id: manifest.task_id,
-        created_at: manifest.created_at,
-        url: safe_source_url,
-        status: manifest.status,
-        task_dir: task_manifest::path_to_frontend_string(&task_dir),
+    task: task_manifest::SupportedTask,
+) -> HistoryListItemView {
+    let task_id = task.task_id().to_string();
+    HistoryListItemView {
+        task_id: task_id.clone(),
+        id: task_id,
+        created_at: task.created_at().to_string(),
+        url: task.safe_source_url().to_string(),
+        status: task.status().to_string(),
+        task_dir: task.task_dir_frontend_string(),
         output_dir: task_manifest::path_to_frontend_string(output_root),
-        artifacts,
-        error: manifest.error.map(|error| HistoryListErrorView {
-            code: error.safe_code(),
-        }),
-        text_preview: manifest.text_preview,
-        insights_count: manifest.insights_count,
-    }))
+        artifacts: task.declared_artifacts(),
+        error: task
+            .safe_error()
+            .map(|error| HistoryListErrorView { code: error.code }),
+        text_preview: task.text_preview().to_string(),
+        insights_count: task.insights_count(),
+    }
 }
 
 pub(crate) fn load_history_detail_from_output_root(
     output_root: &Path,
     request: HistoryDetailRequest,
 ) -> Result<HistoryDetailView, String> {
-    let (manifest, task_dir) = task_manifest::load_task_manifest(output_root, &request.task_id)?;
-    if !manifest.source_privacy_ready() {
-        return Err("History task is unavailable.".to_string());
-    }
-    let text = read_text_artifact(&task_dir, &manifest, "transcript_txt")?.unwrap_or_default();
-    let summary = read_text_artifact(&task_dir, &manifest, "summary")?.unwrap_or_default();
-    let insights = read_insights_artifact(&task_dir, &manifest)?;
-    let transcript = manifest.transcript_metadata();
-    let artifacts = manifest.safe_artifacts();
-    let safe_source_url = manifest.safe_source_url().to_string();
+    let task =
+        task_manifest::SupportedTask::open(output_root, &request.task_id).map_err(|error| {
+            if error == "Task is unavailable in the current history format." {
+                "History task is unavailable.".to_string()
+            } else {
+                error
+            }
+        })?;
+    let text = task
+        .read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?
+        .unwrap_or_default();
+    let summary = task
+        .read_text_artifact(task_manifest::TaskArtifact::Summary)?
+        .unwrap_or_default();
+    let insights = task.read_insights()?;
     Ok(HistoryDetailView {
-        task_id: manifest.task_id,
-        url: safe_source_url,
-        status: manifest.status,
-        task_dir: task_manifest::path_to_frontend_string(&task_dir),
-        artifacts,
-        error: manifest.error.map(|error| HistoryErrorView {
-            code: error.safe_code(),
-            message: error.safe_message(),
+        task_id: task.task_id().to_string(),
+        url: task.safe_source_url().to_string(),
+        status: task.status().to_string(),
+        task_dir: task.task_dir_frontend_string(),
+        artifacts: task.declared_artifacts(),
+        error: task.safe_error().map(|error| HistoryErrorView {
+            code: error.code,
+            message: error.message,
             stage: error.stage,
         }),
         text,
         summary,
-        transcript,
+        transcript: task.transcript_metadata(),
         insights,
     })
-}
-
-fn read_text_artifact(
-    task_dir: &Path,
-    manifest: &task_manifest::TaskManifest,
-    key: &str,
-) -> Result<Option<String>, String> {
-    let Some(path) = task_manifest::artifact_path(task_dir, manifest, key)? else {
-        return Ok(None);
-    };
-    task_manifest::validate_task_artifact_path(task_dir, &path, key)?;
-    Ok(fs::read_to_string(path)
-        .ok()
-        .map(|text| text.trim().to_string()))
-}
-
-fn read_insights_artifact(
-    task_dir: &Path,
-    manifest: &task_manifest::TaskManifest,
-) -> Result<Vec<task_manifest::InsightView>, String> {
-    let Some(path) = task_manifest::artifact_path(task_dir, manifest, "insights")? else {
-        return Ok(vec![]);
-    };
-    if !path.exists() {
-        return Ok(vec![]);
-    }
-    task_manifest::validate_task_artifact_path(task_dir, &path, "insights")?;
-    let Ok(content) = fs::read_to_string(path) else {
-        return Ok(vec![]);
-    };
-    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&content) else {
-        return Ok(vec![]);
-    };
-    Ok(task_manifest::parse_insights_payload(&payload))
 }
 
 #[cfg(test)]

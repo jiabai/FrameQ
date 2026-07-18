@@ -23,7 +23,6 @@ from frameq_worker.models import Insight, JobStage, ProcessResult, TranscriptMet
 from frameq_worker.pipeline import (
     TranscriberFactory,
     failed_result,
-    finalize_task_result,
     resolve_cache_dir,
     resolve_output_dir,
     run_insight_generation_step,
@@ -42,12 +41,7 @@ from frameq_worker.source_resolution import (
     SourceRequestResolver,
     resolve_source_request,
 )
-from frameq_worker.task_store import (
-    ensure_task_dirs,
-    load_task_manifest,
-    task_context_from_manifest,
-    write_preference_snapshot_artifact,
-)
+from frameq_worker.task_store import TaskStoreFacade
 
 InsightClientFactory = Callable[[dict[str, str]], InsightClient | None]
 
@@ -169,9 +163,9 @@ def retry_insights_once(
     )(runtime_env)
     output_dir = resolve_output_dir(root, runtime_env)
     cache_dir = resolve_cache_dir(root, runtime_env)
+    task_store = TaskStoreFacade(output_root=output_dir, cache_root=cache_dir)
     try:
-        task_context = task_context_from_manifest(output_dir, cache_dir, request.task_id)
-        manifest = load_task_manifest(output_dir, request.task_id)
+        opened_task = task_store.open(request.task_id)
     except (OSError, ValueError, json.JSONDecodeError):
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,
@@ -181,10 +175,10 @@ def retry_insights_once(
                 stage=JobStage.INSIGHTS_GENERATING,
             ),
         ).to_dict()
-    ensure_task_dirs(task_context.paths)
+    task_context = opened_task.context
     if request.target == "insights" and request.preference_snapshot is not None:
-        write_preference_snapshot_artifact(
-            task_context.paths,
+        task_store.save_preference_snapshot(
+            task_context,
             request.preference_snapshot,
         )
 
@@ -193,13 +187,13 @@ def retry_insights_once(
         output_dir=task_context.paths.ai_dir,
         output_stem="",
         client=configured_insight_client,
-        transcript=transcript_metadata_from_manifest(manifest),
+        transcript=opened_task.transcript,
         preference_snapshot=request.preference_snapshot,
         target=request.target,
         output_language=request.output_language,
     )
 
-    return finalize_task_result(
+    return task_store.finalize(
         task_context,
         merge_existing_ai_artifacts(task_context.paths, insight_result),
     ).to_dict()
@@ -297,22 +291,6 @@ def failed_insight_retry_result(
             stage=JobStage.INSIGHTS_GENERATING,
         ),
     )
-
-
-def transcript_metadata_from_manifest(manifest: dict[str, object]) -> TranscriptMetadata | None:
-    raw_transcript = manifest.get("transcript")
-    if isinstance(raw_transcript, dict):
-        source = raw_transcript.get("source")
-        if source in {"asr", "subtitle"}:
-            language = raw_transcript.get("language")
-            engine = raw_transcript.get("engine")
-            return TranscriptMetadata(
-                source=source,
-                language=language if isinstance(language, str) else None,
-                engine=engine if isinstance(engine, str) else None,
-            )
-
-    return None
 
 
 def should_allow_real_asr(environ: dict[str, str] | None = None) -> bool:

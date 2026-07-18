@@ -6,13 +6,12 @@ use crate::worker_runtime::{
     WorkerRunOutcome, WorkerRunRequest,
 };
 use crate::{
-    append_desktop_log, build_worker_command_spec, ensure_runtime_dirs, path_to_env_string,
-    resolve_runtime_paths, run_blocking_worker_command, summarize_worker_result_for_log,
-    CancelProcessResult, ProcessSupervisors, WorkerInvocation,
+    append_desktop_log, build_worker_command_spec, ensure_runtime_dirs, resolve_runtime_paths,
+    run_blocking_worker_command, summarize_worker_result_for_log, CancelProcessResult,
+    ProcessSupervisors, WorkerInvocation,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, State, Window};
@@ -262,21 +261,11 @@ fn cached_process_result(
     requested_identity: Option<&task_manifest::SourceIdentity>,
 ) -> Result<Option<serde_json::Value>, String> {
     let mut newest_cached: Option<(String, serde_json::Value)> = None;
-    for manifest_path in task_manifest::list_task_manifest_paths(output_root)? {
-        let Ok((manifest, task_dir)) = task_manifest::read_task_manifest_path(&manifest_path)
-        else {
-            continue;
-        };
-        if !reusable_task_manifest_matches(
-            &manifest,
-            requested_source_url,
-            requested_identity,
-            request,
-        ) {
+    for task in task_manifest::SupportedTask::scan(output_root)?.into_tasks() {
+        if !reusable_task_matches(&task, requested_source_url, requested_identity, request) {
             continue;
         }
-        let Some((created_at, cached)) = cached_process_result_from_manifest(&task_dir, manifest)?
-        else {
+        let Some((created_at, cached)) = cached_process_result_from_task(task)? else {
             continue;
         };
         if newest_cached
@@ -290,66 +279,65 @@ fn cached_process_result(
     Ok(newest_cached.map(|(_, value)| value))
 }
 
-fn reusable_task_manifest_matches(
-    manifest: &task_manifest::TaskManifest,
+fn reusable_task_matches(
+    task: &task_manifest::SupportedTask,
     requested_source_url: Option<&str>,
     requested_identity: Option<&task_manifest::SourceIdentity>,
     request: &ProcessVideoWorkerRequest,
 ) -> bool {
-    if !manifest.source_privacy_ready()
-        || !matches!(manifest.status.as_str(), "completed" | "partial_completed")
-    {
+    if !matches!(task.status(), "completed" | "partial_completed") {
         return false;
     }
     let source_matches = match requested_identity {
         Some(identity) => {
             identity.is_safe()
-                && manifest
-                    .safe_source_identity()
+                && task
+                    .source_identity()
                     .and_then(task_manifest::SourceIdentity::equality_key)
                     == identity.equality_key()
         }
-        None => {
-            requested_source_url.is_some_and(|source_url| manifest.safe_source_url() == source_url)
-        }
+        None => requested_source_url.is_some_and(|source_url| task.safe_source_url() == source_url),
     };
     if !source_matches {
         return false;
     }
-    let manifest_model = manifest.model.trim();
+    let manifest_model = task.model().trim();
     let request_model = request.asr_model.trim();
     manifest_model.is_empty() || request_model.is_empty() || manifest_model == request_model
 }
 
-fn cached_process_result_from_manifest(
-    task_dir: &Path,
-    manifest: task_manifest::TaskManifest,
+fn cached_process_result_from_task(
+    task: task_manifest::SupportedTask,
 ) -> Result<Option<(String, serde_json::Value)>, String> {
-    if !manifest.source_privacy_ready() {
-        return Ok(None);
-    }
-    let artifacts = cached_existing_artifacts(task_dir, &manifest);
+    let artifacts = task.existing_artifacts();
     if !artifacts.contains_key("transcript_txt") {
         return Ok(None);
     }
 
-    let text = read_cached_text_artifact(task_dir, &manifest, "transcript_txt").unwrap_or_default();
-    let summary = read_cached_text_artifact(task_dir, &manifest, "summary").unwrap_or_default();
-    let insights = read_cached_insights_artifact(task_dir, &manifest);
-    let transcript = manifest.transcript_metadata();
-    let status = manifest.status;
-    let task_id = manifest.task_id;
-    let created_at = manifest.created_at;
-    let error = manifest.error.as_ref().map(|error| WorkerError {
-        code: error.safe_code(),
-        message: error.safe_message(),
-        stage: error.stage.clone(),
+    let text = task
+        .read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?
+        .unwrap_or_default();
+    let summary = if artifacts.contains_key("summary") {
+        task.read_text_artifact(task_manifest::TaskArtifact::Summary)?
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let insights = task.read_insights()?;
+    let transcript = task.transcript_metadata();
+    let status = task.status().to_string();
+    let task_id = task.task_id().to_string();
+    let created_at = task.created_at().to_string();
+    let error = task.safe_error().map(|error| WorkerError {
+        code: error.code,
+        message: error.message,
+        stage: error.stage,
     });
 
     let value = serde_json::json!(ProcessVideoResult {
         status,
         task_id: Some(task_id),
-        task_dir: Some(path_to_env_string(task_dir)),
+        task_dir: Some(task.task_dir_frontend_string()),
         artifacts,
         text,
         summary,
@@ -358,51 +346,6 @@ fn cached_process_result_from_manifest(
         error,
     });
     Ok(Some((created_at, value)))
-}
-
-fn cached_existing_artifacts(
-    task_dir: &Path,
-    manifest: &task_manifest::TaskManifest,
-) -> HashMap<String, String> {
-    manifest
-        .artifacts
-        .iter()
-        .filter_map(|(key, raw_path)| {
-            let relative = task_manifest::validate_relative_artifact_path(raw_path, key).ok()?;
-            let path = task_dir.join(relative);
-            if !path.is_file()
-                || task_manifest::validate_task_artifact_path(task_dir, &path, key).is_err()
-            {
-                return None;
-            }
-            Some((key.clone(), raw_path.clone()))
-        })
-        .collect()
-}
-
-fn read_cached_text_artifact(
-    task_dir: &Path,
-    manifest: &task_manifest::TaskManifest,
-    key: &str,
-) -> Option<String> {
-    let path = task_manifest::artifact_path(task_dir, manifest, key).ok()??;
-    task_manifest::validate_task_artifact_path(task_dir, &path, key).ok()?;
-    fs::read_to_string(path)
-        .ok()
-        .map(|text| text.trim().to_string())
-}
-
-fn read_cached_insights_artifact(
-    task_dir: &Path,
-    manifest: &task_manifest::TaskManifest,
-) -> Vec<task_manifest::InsightView> {
-    let Some(content) = read_cached_text_artifact(task_dir, manifest, "insights") else {
-        return vec![];
-    };
-    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&content) else {
-        return vec![];
-    };
-    task_manifest::parse_insights_payload(&payload)
 }
 
 enum SourceIdentityPreflightError {

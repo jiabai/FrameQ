@@ -63,11 +63,7 @@ from frameq_worker.source_resolution import (
 from frameq_worker.subtitles import find_subtitle_transcript
 from frameq_worker.task_store import (
     TaskContext,
-    create_task_context,
-    ensure_task_dirs,
-    result_with_task,
-    task_artifacts_for_existing_files,
-    write_task_manifest,
+    TaskStoreFacade,
 )
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
@@ -75,6 +71,7 @@ TranscriberFactory = Callable[[str, Path], Transcriber]
 @dataclass(frozen=True)
 class PipelineContext:
     task_context: TaskContext
+    task_store: TaskStoreFacade
     source_request: SourceRequest
     download_dir: Path
     video_id: str | None
@@ -313,18 +310,17 @@ def prepare_pipeline_context(
     output_dir = resolve_output_dir(project_root, environ)
     cache_dir = resolve_cache_dir(project_root, environ)
     source_request = source_request_resolver(request.url)
-    task_context = create_task_context(
+    task_store = TaskStoreFacade(output_root=output_dir, cache_root=cache_dir)
+    task_context = task_store.create(
         request,
-        source_identity=source_request.identity,
-        output_root=output_dir,
-        cache_root=cache_dir,
+        source_request.identity,
     )
-    ensure_task_dirs(task_context.paths)
     download_dir = task_context.paths.download_dir
     video_id = source_request.identity.stable_id
     media_files_before_download = snapshot_video_files(download_dir)
     return PipelineContext(
         task_context=task_context,
+        task_store=task_store,
         source_request=source_request,
         download_dir=download_dir,
         video_id=video_id,
@@ -351,7 +347,7 @@ def download_and_select_video(
             progress_callback=progress_callback,
         )
     except CommandExecutionError as exc:
-        return finalize_task_result(
+        return context.task_store.finalize(
             context.task_context,
             failed_result(
                 code="VIDEO_DOWNLOAD_FAILED",
@@ -381,7 +377,7 @@ def download_and_select_video(
     if video_path is None:
         video_path = find_latest_video(context.download_dir)
     if video_path is None:
-        return finalize_task_result(
+        return context.task_store.finalize(
             context.task_context,
             failed_result(
                 code="VIDEO_DOWNLOAD_OUTPUT_MISSING",
@@ -394,6 +390,7 @@ def download_and_select_video(
 
 
 def validate_and_copy_video(
+    task_store: TaskStoreFacade,
     task_context: TaskContext,
     video_path: Path,
     command_runner: CommandRunner,
@@ -401,7 +398,7 @@ def validate_and_copy_video(
     try:
         media_info = probe_media_file(video_path, runner=command_runner)
     except CommandExecutionError:
-        return finalize_task_result(
+        return task_store.finalize(
             task_context,
             failed_result(
                 code="MEDIA_VALIDATION_FAILED",
@@ -411,7 +408,7 @@ def validate_and_copy_video(
         )
 
     if not media_info.is_valid:
-        return finalize_task_result(
+        return task_store.finalize(
             task_context,
             failed_result(
                 code="MEDIA_VALIDATION_FAILED",
@@ -425,6 +422,7 @@ def validate_and_copy_video(
 
 
 def prepare_audio(
+    task_store: TaskStoreFacade,
     task_context: TaskContext,
     video_path: Path,
     command_runner: CommandRunner,
@@ -449,7 +447,7 @@ def prepare_audio(
     try:
         extract_audio(video_path, audio_path, runner=command_runner)
     except CommandExecutionError as exc:
-        return finalize_task_result(
+        return task_store.finalize(
             task_context,
             failed_result(
                 code="AUDIO_EXTRACTION_FAILED",
@@ -584,11 +582,12 @@ def run_asr_transcript_stage(
 
 
 def complete_transcript_stage(
+    task_store: TaskStoreFacade,
     task_context: TaskContext,
     transcript_text: str,
     transcript: TranscriptMetadata | None,
 ) -> ProcessResult:
-    return finalize_task_result(
+    return task_store.finalize(
         task_context,
         ProcessResult(
             status=JobStage.COMPLETED,
@@ -642,6 +641,7 @@ def run_worker_pipeline(
     video_path = downloaded_video.path
 
     validation_failure = validate_and_copy_video(
+        task_store=pipeline_context.task_store,
         task_context=task_context,
         video_path=video_path,
         command_runner=command_runner,
@@ -650,6 +650,7 @@ def run_worker_pipeline(
         return validation_failure
 
     audio_result = prepare_audio(
+        task_store=pipeline_context.task_store,
         task_context=task_context,
         video_path=video_path,
         command_runner=command_runner,
@@ -667,6 +668,7 @@ def run_worker_pipeline(
     )
     if subtitle_result is not None:
         return complete_transcript_stage(
+            task_store=pipeline_context.task_store,
             task_context=task_context,
             transcript_text=subtitle_result.text,
             transcript=subtitle_result.transcript,
@@ -684,9 +686,10 @@ def run_worker_pipeline(
         progress_callback=progress_callback,
     )
     if transcript_result.status == JobStage.FAILED:
-        return finalize_task_result(task_context, transcript_result)
+        return pipeline_context.task_store.finalize(task_context, transcript_result)
 
     return complete_transcript_stage(
+        task_store=pipeline_context.task_store,
         task_context=task_context,
         transcript_text=transcript_result.text,
         transcript=transcript_result.transcript,
@@ -833,16 +836,6 @@ def failed_result(
             stage=stage,
         ),
     )
-
-
-def finalize_task_result(context: TaskContext, result: ProcessResult) -> ProcessResult:
-    task_result = result_with_task(
-        result,
-        context,
-        artifacts={**result.artifacts, **task_artifacts_for_existing_files(context.paths)},
-    )
-    write_task_manifest(context, task_result)
-    return task_result
 
 
 def emit_progress(

@@ -222,6 +222,23 @@
 - Diagnostic logs are not uploaded to FrameQ server and are not exposed through normal result artifact actions.
 - Deno is bundled only as a local `yt-dlp` JavaScript runtime. It must not be used for browser cookie import, account login automation, CAPTCHA solving, proxy bypass, remote app-code loading, or private-content scraping.
 
+## 2026-07-18 Task Access Facade Enforcement
+
+- Raw Rust `TaskManifest` parsing, support-predicate checks, artifact-key lookup, relative-path
+  validation, canonical containment checks, and manifest writes remain private to
+  `task_manifest.rs`. History, cache, transcript, and deletion code must enter through
+  `SupportedTask::scan/open` and must not reconstruct those checks locally.
+- `SupportedTask` means the current storage and source-privacy predicate already passed. A scan
+  isolates and counts an invalid individual entry without returning its identity or content;
+  inability to enumerate the configured task root remains an operation failure.
+- Artifact access uses the closed `TaskArtifact` enum. Transcript mutation uses `TaskEditSession`;
+  deletion and playback may receive only the validated task-local path capability required for
+  their filesystem operation. No facade method may turn task access into an arbitrary path browser.
+- Python pipeline and retry persistence must use `TaskStoreFacade`. `OpenedTask` may expose a
+  validated `TaskContext` and normalized transcript metadata, but not the raw manifest payload.
+- Adding the future local-file source variant must change the central support predicate and its
+  contract tests. It must not reintroduce caller-specific URL/local manifest acceptance rules.
+
 ## 2026-07-05 Task Artifact Path Boundary
 
 - Task-manifest artifact-path fields may contain local paths only as relative paths under the owning task directory. Absolute paths, `..`, path traversal, remote URLs, cookies, headers, or credentials must be rejected; the allowlisted `source_identity.canonical_url` is source metadata, not an artifact path.

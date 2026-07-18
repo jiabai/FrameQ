@@ -96,27 +96,26 @@ pub(crate) fn load_transcript_detail_from_roots(
     playback_cache_root: &Path,
     request: LoadTranscriptDetailRequest,
 ) -> Result<TranscriptDetailView, String> {
-    let (manifest, task_dir) = task_manifest::load_task_manifest(output_root, &request.task_id)?;
-    ensure_task_source_privacy_ready(&manifest)?;
+    let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
     let transcript_path =
-        task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
-    validate_transcript_txt(&task_dir, &transcript_path)?;
-    task_manifest::validate_task_artifact_path(&task_dir, &transcript_path, "transcript_txt")?;
+        task.required_existing_artifact_path(task_manifest::TaskArtifact::TranscriptTxt)?;
+    validate_transcript_txt(task.task_dir(), &transcript_path)?;
     reject_linked_artifact_target(&transcript_path)?;
 
     let text = fs::read_to_string(&transcript_path)
         .map_err(|_| "Failed to read transcript.".to_string())?
         .trim()
         .to_string();
-    let segments_path = task_manifest::artifact_path(&task_dir, &manifest, "segments")?
-        .unwrap_or_else(|| default_segments_path(&task_dir));
-    let segments = read_segments_sidecar(&task_dir, &segments_path)?;
+    let segments_path = task.artifact_path_or_default(
+        task_manifest::TaskArtifact::Segments,
+        "transcript/segments.json",
+    )?;
+    let segments = read_segments_sidecar(&task, &segments_path)?;
     let audio_paths = load_audio_paths(
-        &task_dir,
-        &manifest,
+        &task,
         direct_audio_root,
         playback_cache_root,
-        &manifest.task_id,
+        task.task_id(),
     )?;
     let (audio_path, audio_asset_path) = audio_paths
         .map(|paths| (Some(paths.source_path), Some(paths.asset_path)))
@@ -141,35 +140,37 @@ pub(crate) fn save_transcript_edit_to_output_root(
         return Err("Transcript text cannot be empty.".to_string());
     }
 
-    let (mut manifest, task_dir) =
-        task_manifest::load_task_manifest(output_root, &request.task_id)?;
-    ensure_task_source_privacy_ready(&manifest)?;
+    let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
+    let mut edit = task.into_edit_session();
     let transcript_path =
-        task_manifest::required_artifact_path(&task_dir, &manifest, "transcript_txt")?;
-    validate_transcript_txt(&task_dir, &transcript_path)?;
-    task_manifest::validate_task_artifact_path(&task_dir, &transcript_path, "transcript_txt")?;
+        edit.required_existing_artifact_path(task_manifest::TaskArtifact::TranscriptTxt)?;
+    validate_transcript_txt(edit.task_dir(), &transcript_path)?;
     reject_linked_artifact_target(&transcript_path)?;
 
-    let md_path = task_manifest::artifact_path(&task_dir, &manifest, "transcript_md")?
-        .unwrap_or_else(|| default_transcript_md_path(&task_dir));
-    validate_transcript_md(&task_dir, &md_path)?;
-    let segments_path = task_manifest::artifact_path(&task_dir, &manifest, "segments")?
-        .unwrap_or_else(|| default_segments_path(&task_dir));
-    validate_segments_path(&task_dir, &segments_path)?;
+    let md_path = edit.artifact_path_or_default(
+        task_manifest::TaskArtifact::TranscriptMd,
+        "transcript/transcript.md",
+    )?;
+    validate_transcript_md(edit.task_dir(), &md_path)?;
+    let segments_path = edit.artifact_path_or_default(
+        task_manifest::TaskArtifact::Segments,
+        "transcript/segments.json",
+    )?;
+    validate_segments_path(edit.task_dir(), &segments_path)?;
 
     reject_linked_artifact_target(&md_path)?;
     reject_linked_artifact_target(&segments_path)?;
     if md_path.exists() {
-        task_manifest::validate_task_artifact_path(&task_dir, &md_path, "transcript_md")?;
+        edit.validate_existing_path(&md_path, task_manifest::TaskArtifact::TranscriptMd)?;
     }
     if segments_path.exists() {
-        task_manifest::validate_task_artifact_path(&task_dir, &segments_path, "segments")?;
+        edit.validate_existing_path(&segments_path, task_manifest::TaskArtifact::Segments)?;
     }
 
-    task_manifest::ensure_artifact_parent(&task_dir, &transcript_path)?;
-    task_manifest::ensure_artifact_parent(&task_dir, &md_path)?;
-    task_manifest::ensure_artifact_parent(&task_dir, &segments_path)?;
-    create_original_backups(&task_dir, &transcript_path, &md_path)?;
+    edit.ensure_artifact_parent(&transcript_path)?;
+    edit.ensure_artifact_parent(&md_path)?;
+    edit.ensure_artifact_parent(&segments_path)?;
+    create_original_backups(&edit, &transcript_path, &md_path)?;
 
     fs::write(&transcript_path, format!("{text}\n"))
         .map_err(|_| "Failed to save transcript.".to_string())?;
@@ -181,41 +182,34 @@ pub(crate) fn save_transcript_edit_to_output_root(
     .map_err(|_| "Failed to save transcript markdown.".to_string())?;
 
     if request.segments.is_empty() {
-        if manifest.artifacts.contains_key("segments") {
+        if edit.has_artifact(task_manifest::TaskArtifact::Segments) {
             write_segments_sidecar(&segments_path, &[])?;
         }
     } else {
         write_segments_sidecar(&segments_path, &request.segments)?;
-        manifest.artifacts.insert(
-            "segments".to_string(),
-            "transcript/segments.json".to_string(),
-        );
+        edit.set_artifact(
+            task_manifest::TaskArtifact::Segments,
+            "transcript/segments.json",
+        )?;
     }
 
-    manifest.artifacts.insert(
-        "transcript_txt".to_string(),
-        "transcript/transcript.txt".to_string(),
-    );
-    manifest.artifacts.insert(
-        "transcript_md".to_string(),
-        "transcript/transcript.md".to_string(),
-    );
-    manifest.text_preview = text.chars().take(180).collect();
-    task_manifest::write_task_manifest(&task_dir, &manifest)?;
+    edit.set_artifact(
+        task_manifest::TaskArtifact::TranscriptTxt,
+        "transcript/transcript.txt",
+    )?;
+    edit.set_artifact(
+        task_manifest::TaskArtifact::TranscriptMd,
+        "transcript/transcript.md",
+    )?;
+    edit.set_text_preview(text.chars().take(180).collect());
+    edit.save()?;
 
     Ok(SaveTranscriptEditResult {
         task_id: request.task_id,
         text: text.to_string(),
-        artifacts: manifest.artifacts,
+        artifacts: edit.declared_artifacts(),
         has_original_backup: true,
     })
-}
-
-fn ensure_task_source_privacy_ready(manifest: &task_manifest::TaskManifest) -> Result<(), String> {
-    if !manifest.source_privacy_ready() {
-        return Err("Task is unavailable in the current history format.".to_string());
-    }
-    Ok(())
 }
 
 struct AudioPlaybackPaths {
@@ -224,20 +218,17 @@ struct AudioPlaybackPaths {
 }
 
 fn load_audio_paths(
-    task_dir: &Path,
-    manifest: &task_manifest::TaskManifest,
+    task: &task_manifest::SupportedTask,
     direct_audio_root: &Path,
     playback_cache_root: &Path,
     task_id: &str,
 ) -> Result<Option<AudioPlaybackPaths>, String> {
-    let Some(audio_path) = task_manifest::artifact_path(task_dir, manifest, "audio")? else {
+    let Some(audio_path) =
+        task.validated_existing_artifact_path(task_manifest::TaskArtifact::Audio)?
+    else {
         return Ok(None);
     };
-    if !audio_path.exists() {
-        return Ok(None);
-    }
     validate_audio_path(&audio_path)?;
-    task_manifest::validate_task_artifact_path(task_dir, &audio_path, "audio")?;
     let source_path = audio_path
         .canonicalize()
         .map_err(|_| "Failed to resolve audio artifact.".to_string())?;
@@ -382,14 +373,14 @@ fn ensure_canonical_dir(path: &Path, label: &str) -> Result<PathBuf, String> {
 }
 
 fn read_segments_sidecar(
-    task_dir: &Path,
+    task: &task_manifest::SupportedTask,
     path: &Path,
 ) -> Result<Vec<TranscriptSegmentView>, String> {
     if !path.exists() {
         return Ok(vec![]);
     }
-    validate_segments_path(task_dir, path)?;
-    task_manifest::validate_task_artifact_path(task_dir, path, "segments")?;
+    validate_segments_path(task.task_dir(), path)?;
+    task.validate_existing_path(path, task_manifest::TaskArtifact::Segments)?;
     let Ok(content) = fs::read_to_string(path) else {
         return Ok(vec![]);
     };
@@ -462,9 +453,13 @@ fn write_segments_sidecar(path: &Path, segments: &[TranscriptSegmentView]) -> Re
     .map_err(|_| "Failed to save transcript segments.".to_string())
 }
 
-fn create_original_backups(task_dir: &Path, txt_path: &Path, md_path: &Path) -> Result<(), String> {
+fn create_original_backups(
+    edit: &task_manifest::TaskEditSession,
+    txt_path: &Path,
+    md_path: &Path,
+) -> Result<(), String> {
     let txt_backup_path = original_backup_path(txt_path);
-    task_manifest::ensure_artifact_parent(task_dir, &txt_backup_path)?;
+    edit.ensure_artifact_parent(&txt_backup_path)?;
     reject_linked_artifact_target(&txt_backup_path)?;
     if !txt_backup_path.exists() {
         fs::copy(txt_path, &txt_backup_path)
@@ -473,7 +468,7 @@ fn create_original_backups(task_dir: &Path, txt_path: &Path, md_path: &Path) -> 
 
     if md_path.exists() {
         let md_backup_path = original_backup_path(md_path);
-        task_manifest::ensure_artifact_parent(task_dir, &md_backup_path)?;
+        edit.ensure_artifact_parent(&md_backup_path)?;
         reject_linked_artifact_target(&md_backup_path)?;
         if !md_backup_path.exists() {
             fs::copy(md_path, md_backup_path)
@@ -499,14 +494,6 @@ fn format_transcript_markdown(existing_markdown: Option<&str>, text: &str) -> St
     }
 
     format!("# Transcript\n\n{TRANSCRIPT_SECTION_MARKER}\n\n{text}\n")
-}
-
-fn default_transcript_md_path(task_dir: &Path) -> PathBuf {
-    task_dir.join("transcript").join("transcript.md")
-}
-
-fn default_segments_path(task_dir: &Path) -> PathBuf {
-    task_dir.join("transcript").join("segments.json")
 }
 
 fn validate_transcript_txt(task_dir: &Path, path: &Path) -> Result<(), String> {
