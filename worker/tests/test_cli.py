@@ -2,10 +2,12 @@ import inspect
 import io
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import frameq_worker.cli as cli
 import frameq_worker.pipeline as pipeline
 import pytest
+from frameq_worker import platform_source_resolvers as platform_resolvers_module
 from frameq_worker.asr import Transcript
 from frameq_worker.cli import (
     MODEL_DOWNLOAD_EVENT_PREFIX,
@@ -343,6 +345,27 @@ def test_source_identity_preflight_returns_only_safe_identity() -> None:
     serialized = json.dumps(result)
     assert "review-secret" not in serialized
     assert "xsec_token" not in serialized
+
+
+def test_source_identity_preflight_uses_cli_platform_resolver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        platform_resolvers_module,
+        "parse_bilibili_input",
+        lambda _source: SimpleNamespace(
+            full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
+        ),
+    )
+
+    result = resolve_source_identity_once(
+        json.dumps({"url": "https://b23.tv/review-short"})
+    )
+
+    assert result["status"] == "completed"
+    assert result["source_url"] == (
+        "https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
+    )
 
 
 def test_migration_cli_mode_is_not_supported() -> None:

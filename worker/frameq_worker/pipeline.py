@@ -53,7 +53,10 @@ from frameq_worker.progress_events import (
 from frameq_worker.source_identity import (
     SourceIdentity,
     SourceIdentityError,
+)
+from frameq_worker.source_resolution import (
     SourceRequest,
+    SourceRequestResolver,
     resolve_source_request,
     sanitize_source_text,
 )
@@ -305,12 +308,11 @@ def prepare_pipeline_context(
     request: ProcessRequest,
     project_root: Path,
     environ: dict[str, str],
+    source_request_resolver: SourceRequestResolver = resolve_source_request,
 ) -> PipelineContext:
     output_dir = resolve_output_dir(project_root, environ)
     cache_dir = resolve_cache_dir(project_root, environ)
-    source_request = resolve_source_request(
-        request.url,
-    )
+    source_request = source_request_resolver(request.url)
     task_context = create_task_context(
         request,
         source_identity=source_request.identity,
@@ -605,9 +607,15 @@ def run_worker_pipeline(
     environ: dict[str, str],
     progress_callback: ProgressCallback | None = None,
     transcriber_factory: TranscriberFactory | None = None,
+    source_request_resolver: SourceRequestResolver = resolve_source_request,
 ) -> ProcessResult:
     try:
-        pipeline_context = prepare_pipeline_context(request, project_root, environ)
+        pipeline_context = prepare_pipeline_context(
+            request,
+            project_root,
+            environ,
+            source_request_resolver,
+        )
     except SourceIdentityError:
         return failed_result(
             code="SOURCE_IDENTITY_UNAVAILABLE",

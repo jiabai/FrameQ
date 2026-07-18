@@ -5,13 +5,6 @@ import urllib.parse
 from dataclasses import dataclass
 from typing import Literal
 
-from frameq_worker.bilibili_fallback import BilibiliFallbackError, parse_bilibili_input
-from frameq_worker.douyin_fallback import resolve_aweme_id_from_input
-from frameq_worker.xiaohongshu_fallback import (
-    XiaohongshuFallbackError,
-    parse_xiaohongshu_input,
-)
-
 SourcePlatform = Literal["douyin", "xiaohongshu", "bilibili", "youtube"]
 
 SOURCE_IDENTITY_VERSION = 1
@@ -52,26 +45,10 @@ class SourceIdentity:
         }
 
 
-class SourceRequest:
-    __slots__ = ("_download_url", "identity")
-
-    def __init__(self, download_url: str, identity: SourceIdentity) -> None:
-        self._download_url = download_url
-        self.identity = identity
-
-    @property
-    def download_url(self) -> str:
-        return self._download_url
-
-    def __repr__(self) -> str:
-        return f"SourceRequest(identity={self.identity!r})"
-
-
 def identify_source(
     raw_source: str,
     *,
     resolved_url: str | None = None,
-    allow_network: bool = True,
 ) -> SourceIdentity:
     source = raw_source.strip()
     if not source:
@@ -86,29 +63,7 @@ def identify_source(
     if direct is not None:
         return direct
 
-    if allow_network:
-        resolved = _resolve_supported_short_source(source)
-        if resolved is not None:
-            return resolved
-
     raise SourceIdentityError("Source URL does not contain a supported stable video ID.")
-
-
-def resolve_source_request(
-    download_url: str,
-    *,
-    resolved_url: str | None = None,
-    allow_network: bool = True,
-) -> SourceRequest:
-    normalized = download_url.strip()
-    return SourceRequest(
-        normalized,
-        identify_source(
-            normalized,
-            resolved_url=resolved_url,
-            allow_network=allow_network,
-        ),
-    )
 
 
 def source_identity_from_manifest(value: object) -> SourceIdentity | None:
@@ -132,7 +87,7 @@ def source_identity_from_manifest(value: object) -> SourceIdentity | None:
     ):
         return None
     try:
-        expected = identify_source(canonical_url, allow_network=False)
+        expected = identify_source(canonical_url)
     except SourceIdentityError:
         return None
     identity = SourceIdentity(
@@ -153,17 +108,6 @@ def canonical_url_for_persistence(identity: SourceIdentity | None) -> str | None
     return validated.canonical_url
 
 
-def sanitize_source_text(text: str, source_request: SourceRequest) -> str:
-    sanitized = text.replace(source_request.download_url, source_request.identity.canonical_url)
-    for candidate in _extract_url_candidates(sanitized):
-        try:
-            replacement = identify_source(candidate, allow_network=False).canonical_url
-        except SourceIdentityError:
-            replacement = "[source URL removed]"
-        sanitized = sanitized.replace(candidate, replacement)
-    return sanitized
-
-
 def _identify_direct_source(raw_source: str) -> SourceIdentity | None:
     normalized = raw_source.strip()
     if XHS_NOTE_ID_PATTERN.fullmatch(normalized):
@@ -172,7 +116,7 @@ def _identify_direct_source(raw_source: str) -> SourceIdentity | None:
     if bilibili_direct is not None:
         return _bilibili_identity(bilibili_direct, part_index=1)
 
-    for candidate in _extract_url_candidates(normalized):
+    for candidate in extract_url_candidates(normalized):
         try:
             parsed = urllib.parse.urlparse(candidate)
             host = (parsed.hostname or "").lower().rstrip(".")
@@ -206,44 +150,7 @@ def _identify_direct_source(raw_source: str) -> SourceIdentity | None:
     return None
 
 
-def _resolve_supported_short_source(raw_source: str) -> SourceIdentity | None:
-    candidates = _extract_url_candidates(raw_source)
-    candidate_hosts: list[tuple[str, str]] = []
-    for candidate in candidates:
-        try:
-            host = (urllib.parse.urlparse(candidate).hostname or "").lower().rstrip(".")
-        except ValueError:
-            continue
-        candidate_hosts.append((host, candidate))
-    hosts = {host for host, _candidate in candidate_hosts}
-    if hosts & {"xhslink.com", "www.xhslink.com"}:
-        try:
-            parsed = parse_xiaohongshu_input(raw_source)
-        except XiaohongshuFallbackError:
-            return None
-        resolved = _identify_direct_source(parsed.full_url)
-        return resolved if resolved is not None and resolved.platform == "xiaohongshu" else None
-    if hosts & {"b23.tv", "www.b23.tv"}:
-        try:
-            parsed = parse_bilibili_input(raw_source)
-        except BilibiliFallbackError:
-            return None
-        resolved = _identify_direct_source(parsed.full_url)
-        return resolved if resolved is not None and resolved.platform == "bilibili" else None
-    if "v.douyin.com" in hosts:
-        short_url = next(
-            candidate for host, candidate in candidate_hosts if host == "v.douyin.com"
-        )
-        aweme_id = resolve_aweme_id_from_input(short_url)
-        return (
-            _douyin_identity(aweme_id)
-            if aweme_id and DOUYIN_AWEME_ID_PATTERN.fullmatch(aweme_id)
-            else None
-        )
-    return None
-
-
-def _extract_url_candidates(raw_source: str) -> list[str]:
+def extract_url_candidates(raw_source: str) -> list[str]:
     return [
         match.group(0).rstrip(URL_TRAILING_PUNCTUATION)
         for match in URL_PATTERN.finditer(raw_source)

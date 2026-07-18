@@ -37,7 +37,6 @@ def test_write_transcript_files_creates_non_empty_txt_and_markdown(tmp_path: Pat
             engine="Qwen/Qwen3-ASR-0.6B",
             source_identity=identify_source(
                 "https://www.douyin.com/video/7524373044106677544",
-                allow_network=False,
             ),
         ),
     )
@@ -67,7 +66,6 @@ def test_write_transcript_files_records_platform_subtitle_metadata(
             engine=None,
             source_identity=identify_source(
                 "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                allow_network=False,
             ),
         ),
     )

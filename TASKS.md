@@ -57,6 +57,14 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Invert the worker SourceIdentity dependency (2026-07-18) - ✅ Acceptance: importing core
+  models/source identity loads no platform fallback; short-link infrastructure is injected from the
+  CLI composition root; direct/short identities, canonical persistence, cache keys, privacy
+  sanitization, and external worker errors remain unchanged. ExecPlan:
+  `docs/exec-plans/completed/2026-07-18-source-identity-dependency-inversion-plan.md`. ✅ RED
+  exposed all three fallback imports; focused tests passed 57/57, worker passed 376/376, Ruff/docs/
+  diff gates passed, and all 30 canonical worker files matched the packaged mirror by SHA-256.
+
 - [x] P2 worker pipeline/media 结构性重构已收口（2026-07-10）✅ `run_worker_pipeline` 已拆为高层编排，媒体下载/选择、视频校验、音频准备和字幕/ASR finalize 下沉到阶段函数；原可选 AI finalize 后续已删除，AI 仅由 `retry_insights` 进入。`media.py` 下载 fallback 由 `DownloadStrategy` + `FALLBACK_DOWNLOAD_STRATEGIES` 驱动，保持 Douyin -> Xiaohongshu -> Bilibili 顺序和 YouTube 原失败分类路径。阶段审查通过 `uv run pytest worker\tests`（154 tests）、`uv run ruff check worker` 和 `git diff --check`。真实平台 smoke、未来新增平台前是否抽 `download_strategies.py`、Python 3.13 `pydub/audioop` 风险已登记在 `docs/exec-plans/tech-debt-tracker.md`。
 
 - [x] P2 orchestration hooks 错误分支测试已补强（2026-07-10）✅ 新增 `useInsightGenerationController` 关键错误分支和 `useSettingsController` load/save/cache/location/profile 错误分支覆盖；阶段审查通过 `npm --prefix app test`（27 files / 184 tests）、`npm --prefix app run build` 和 `git diff --check`。剩余 `useHistoryController` 并发/重复打开场景与轻量 hook harness 限制已登记在 `docs/exec-plans/tech-debt-tracker.md`。

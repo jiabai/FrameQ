@@ -36,6 +36,7 @@ from frameq_worker.pipeline import (
     run_worker_pipeline,
     snapshot_video_files,
 )
+from frameq_worker.platform_source_resolvers import build_default_source_resolver
 from frameq_worker.progress_events import (
     validate_model_progress_event,
     validate_worker_progress_event,
@@ -50,7 +51,6 @@ from frameq_worker.requests import (
 )
 from frameq_worker.worker_service import (
     failed_insight_retry_result,
-    resolve_source_identity_once,
     run_asr_model_download_once,
     should_allow_real_asr,
 )
@@ -98,6 +98,7 @@ __all__ = [
 ]
 
 MAX_STDIN_REQUEST_BYTES = 1024 * 1024
+DEFAULT_SOURCE_RESOLVER = build_default_source_resolver()
 
 
 class StdinRequestError(ValueError):
@@ -150,7 +151,19 @@ def stdin_failure_result(mode: str) -> dict[str, object]:
 
 def run_worker_once(*args: object, **kwargs: object) -> dict[str, object]:
     kwargs.setdefault("transcriber_factory", build_asr_transcriber)
+    kwargs.setdefault(
+        "source_request_resolver",
+        DEFAULT_SOURCE_RESOLVER.resolve_request,
+    )
     return worker_service_module.run_worker_once(*args, **kwargs)
+
+
+def resolve_source_identity_once(*args: object, **kwargs: object) -> dict[str, object]:
+    kwargs.setdefault(
+        "source_request_resolver",
+        DEFAULT_SOURCE_RESOLVER.resolve_request,
+    )
+    return worker_service_module.resolve_source_identity_once(*args, **kwargs)
 
 
 def retry_insights_once(*args: object, **kwargs: object) -> dict[str, object]:

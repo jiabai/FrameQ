@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
-from frameq_worker import source_identity as source_identity_module
 from frameq_worker import task_store as task_store_module
 from frameq_worker.models import ProcessRequest
 from frameq_worker.source_identity import (
     SourceIdentity,
     SourceIdentityError,
     identify_source,
-    resolve_source_request,
 )
+from frameq_worker.source_resolution import resolve_source_request
 from frameq_worker.task_store import create_task_context, task_context_from_manifest
 
 XHS_NOTE_ID = "64a1b2c3d4e5f67890123456"
@@ -102,7 +100,7 @@ def test_identify_source_builds_allowlisted_canonical_identity(
     part: int | None,
     canonical_url: str,
 ) -> None:
-    identity = identify_source(source, allow_network=False)
+    identity = identify_source(source)
 
     assert identity.platform == platform
     assert identity.stable_id == stable_id
@@ -139,7 +137,7 @@ def test_identify_source_prefers_resolved_short_link_identity(
     resolved_url: str,
     expected_url: str,
 ) -> None:
-    identity = identify_source(short_url, resolved_url=resolved_url, allow_network=False)
+    identity = identify_source(short_url, resolved_url=resolved_url)
     assert identity.canonical_url == expected_url
 
 
@@ -153,74 +151,7 @@ def test_identify_source_rejects_unsupported_or_lookalike_hosts() -> None:
         "https://[invalid-host/video/123?xsec_token=review-secret",
     ]:
         with pytest.raises(SourceIdentityError):
-            identify_source(source, allow_network=False)
-
-
-@pytest.mark.parametrize(
-    ("part", "expected_url"),
-    [
-        (1, "https://www.bilibili.com/video/BV1Aa411c7mD"),
-        (2, "https://www.bilibili.com/video/BV1Aa411c7mD?p=2"),
-        (3, "https://www.bilibili.com/video/BV1Aa411c7mD?p=3"),
-    ],
-)
-def test_bilibili_short_link_revalidates_resolved_full_url(
-    monkeypatch: pytest.MonkeyPatch,
-    part: int,
-    expected_url: str,
-) -> None:
-    monkeypatch.setattr(
-        source_identity_module,
-        "parse_bilibili_input",
-        lambda _source: SimpleNamespace(
-            full_url=f"https://www.bilibili.com/video/BV1Aa411c7mD?p={part}"
-        ),
-    )
-    identity = identify_source("https://b23.tv/review-short")
-    assert identity.canonical_url == expected_url
-
-
-def test_short_link_rejects_parser_id_without_safe_resolved_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        source_identity_module,
-        "parse_xiaohongshu_input",
-        lambda _source: SimpleNamespace(
-            note_id=XHS_NOTE_ID,
-            full_url=(
-                "https://www.xiaohongshu.com/login"
-                "?xsec_token=0123456789abcdef01234567"
-            ),
-        ),
-    )
-
-    with pytest.raises(SourceIdentityError):
-        identify_source("https://xhslink.com/review-short")
-
-
-def test_douyin_short_resolution_ignores_lookalike_direct_id(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    received: list[str] = []
-
-    def fake_resolver(value: str) -> str:
-        received.append(value)
-        return "7524373044106677544"
-
-    monkeypatch.setattr(
-        source_identity_module,
-        "resolve_aweme_id_from_input",
-        fake_resolver,
-    )
-
-    identity = identify_source(
-        "https://douyin.com.evil/video/1111111111111111111 "
-        "https://v.douyin.com/safe-code",
-    )
-
-    assert identity.stable_id == "7524373044106677544"
-    assert received == ["https://v.douyin.com/safe-code"]
+            identify_source(source)
 
 
 @pytest.mark.parametrize(
@@ -234,7 +165,7 @@ def test_douyin_short_resolution_ignores_lookalike_direct_id(
 )
 def test_identify_source_rejects_oversized_stable_ids_and_part(source: str) -> None:
     with pytest.raises(SourceIdentityError):
-        identify_source(source, allow_network=False)
+        identify_source(source)
 
 
 def test_source_request_keeps_download_url_process_local_only() -> None:
@@ -242,7 +173,7 @@ def test_source_request_keeps_download_url_process_local_only() -> None:
         f"https://www.xiaohongshu.com/explore/{XHS_NOTE_ID}"
         "?xsec_token=review-secret&source=web"
     )
-    source = resolve_source_request(raw_url, allow_network=False)
+    source = resolve_source_request(raw_url)
     assert source.download_url == raw_url
     assert source.identity.canonical_url == (
         f"https://www.xiaohongshu.com/explore/{XHS_NOTE_ID}"
@@ -291,9 +222,7 @@ def test_retry_context_rejects_linked_task_directory(
                 "source_privacy_quarantined": False,
                 "task_id": task_id,
                 "source_url": canonical,
-                "source_identity": identify_source(
-                    canonical, allow_network=False
-                ).to_manifest_dict(),
+                "source_identity": identify_source(canonical).to_manifest_dict(),
                 "status": "completed",
                 "artifacts": {},
             }

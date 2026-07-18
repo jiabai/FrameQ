@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-18-source-identity-dependency-inversion-plan.md` | Separated pure SourceIdentity policy from platform short-link infrastructure and injected a closed resolver registry at the worker CLI composition root. |
 | `2026-07-18-youtube-generic-chinese-subtitle-plan.md` | Added exact generic Chinese `zh` platform-subtitle request and priority before local ASR, without enabling translated-caption regexes. |
 | `2026-07-15-desktop-i18n-ai-output-language-plan.md` | Added offline three-language desktop localization, app-local language recovery, structured progress/error copy, and strict confirmation-time AI output language across TypeScript, Rust, and Python. |
 | `2026-07-12-github-actions-node24-upgrade-plan.md` | Upgraded checkout, setup-node, setup-uv, and artifact upload to Node.js 24 runtimes with TDD and clean hosted macOS annotations, without triggering Desktop Release. |

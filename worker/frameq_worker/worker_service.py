@@ -39,6 +39,9 @@ from frameq_worker.requests import (
 )
 from frameq_worker.source_identity import (
     SourceIdentityError,
+)
+from frameq_worker.source_resolution import (
+    SourceRequestResolver,
     resolve_source_request,
 )
 from frameq_worker.task_store import (
@@ -60,6 +63,7 @@ def run_worker_once(
     allow_real_asr: bool | None = None,
     environ: dict[str, str] | None = None,
     progress_callback: ProgressCallback | None = None,
+    source_request_resolver: SourceRequestResolver = resolve_source_request,
 ) -> dict[str, object]:
     root = project_root or Path.cwd()
     try:
@@ -110,11 +114,15 @@ def run_worker_once(
         environ=runtime_env,
         transcriber_factory=transcriber_factory or build_asr_transcriber,
         progress_callback=progress_callback,
+        source_request_resolver=source_request_resolver,
     )
     return result.to_dict()
 
 
-def resolve_source_identity_once(request_json: str) -> dict[str, object]:
+def resolve_source_identity_once(
+    request_json: str,
+    source_request_resolver: SourceRequestResolver = resolve_source_request,
+) -> dict[str, object]:
     try:
         payload = json.loads(request_json)
     except json.JSONDecodeError:
@@ -129,7 +137,7 @@ def resolve_source_identity_once(request_json: str) -> dict[str, object]:
             "error": {"code": "INVALID_SOURCE_IDENTITY_PAYLOAD"},
         }
     try:
-        identity = resolve_source_request(raw_url).identity
+        identity = source_request_resolver(raw_url).identity
     except SourceIdentityError:
         return {
             "status": "failed",
