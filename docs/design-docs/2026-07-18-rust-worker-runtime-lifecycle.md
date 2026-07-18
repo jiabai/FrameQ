@@ -2,11 +2,11 @@
 
 ## Status
 
-Implemented and platform-validated on 2026-07-18. All four operations use the shared runner,
-low-level compatibility APIs are removed, local cross-stack gates pass, and hosted macOS run
-`29640471857` executed the real Unix parent-child process-group fixture successfully at commit
-`481b4d7841566bab172cd77694b43e734e137333`. The native Windows desktop interaction regression
-remains before the ExecPlan is archived.
+Implemented and accepted on 2026-07-18. All four operations use the shared runner, low-level
+compatibility APIs are removed, local cross-stack gates pass, and hosted macOS run `29640471857`
+executed the real Unix parent-child process-group fixture successfully at commit
+`481b4d7841566bab172cd77694b43e734e137333`. The user also confirmed the native Windows desktop
+cancel, terminal confirmation, URL retention, second-task start, and stale-callback isolation flow.
 
 ## Problem
 

@@ -29,10 +29,9 @@
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
-- 当前 active 重构计划：`docs/exec-plans/active/2026-07-18-rust-worker-runtime-lifecycle-refactor-plan.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
-- 最近完成执行计划：`docs/exec-plans/completed/2026-07-18-source-identity-dependency-inversion-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-07-18-rust-worker-runtime-lifecycle-refactor-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

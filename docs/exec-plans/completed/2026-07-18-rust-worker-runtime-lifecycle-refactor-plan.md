@@ -91,6 +91,10 @@ boundaries.
   concluded success; its log records the real
   `unix_termination_stops_a_parent_and_child_in_the_managed_process_group ... ok` fixture and a
   complete macOS-conditional Rust result of 140/140. Desktop Release was not triggered.
+- [x] 2026-07-18: User completed the native Windows desktop regression. Cancelling remained visible
+  until terminal confirmation, the URL draft was retained, a second task started normally, and no
+  late result or progress from the first task overwrote it. Validation: user-confirmed manual
+  Windows/WebView2/Tauri acceptance in the implementation thread.
 
 ## Surprises & Discoveries
 
@@ -154,23 +158,31 @@ boundaries.
 
 ## Outcomes & Retrospective
 
-Current outcome: command construction, supervision, spawn/stdin/pipe ownership, progress routing,
-terminal parsing, and lifecycle diagnostics now live in separate tested runtime modules. All four
-operations call `WorkerLane::run`; compatibility APIs are gone, and application modules cannot
-mutate `ProcessSupervisor` or terminate a process tree. Local Rust and workflow-contract gates pass.
-Task 7 documentation, complete cross-stack gates, and native hosted macOS evidence are complete.
-Only the native Windows desktop interaction regression and final plan archival remain.
+Outcome: command construction, supervision, spawn/stdin/pipe ownership, closed progress routing,
+terminal parsing, cancellation precedence, and lifecycle diagnostics now live in separate tested
+runtime modules. Process video, AI retry, source-identity preflight, and ASR model download all call
+one `WorkerLane::run`; compatibility APIs are gone, and application modules cannot mutate
+`ProcessSupervisor` or terminate a process tree. Tauri commands, worker JSON/progress contracts,
+cache/artifacts, user-visible workflow, and AI Credits behavior are unchanged.
 
-Residual risk: process cancellation is platform-sensitive. Windows unit tests cannot prove macOS
-PGID/TERM/KILL delivery, so native GitHub macOS runner evidence remains mandatory even if every local
-Rust test passes. The refactor must also avoid accidentally broadening lifecycle logs while moving
-stderr handling.
+Validation: Windows Rust passed 141/141; app passed 62 files and 491/491 tests; Node contracts passed
+23/23; app lint/build, rustfmt, governance validation, and diff checks passed. Hosted macOS run
+`29640471857` passed 140/140 and the real parent-child process-group fixture. The user then confirmed
+the native Windows cancel/terminal/URL-retention/second-task/no-late-overwrite regression.
+
+Residual risk: OS process-tree behavior remains platform-sensitive, so future changes to
+`runner.rs` or `supervisor.rs` must retain both Windows process-tree tests and native macOS
+process-group evidence. Sensitive source input still exists transiently in process/pipe memory as
+recorded in the shared technical-debt tracker; this refactor introduced no new persistence or log
+exposure. The existing Vite chunk-size advisory is unrelated to this Rust ownership change.
 
 ## Context and Orientation
 
 - Approved design: `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`.
 - Code-audit baseline: `docs/design-docs/frameq-code-audit-uml.md`.
-- Current combined runtime: `app/src-tauri/src/worker_command.rs`.
+- Worker command construction: `app/src-tauri/src/worker_runtime/command.rs`.
+- Supervised runner: `app/src-tauri/src/worker_runtime/runner.rs`.
+- Supervisor and OS process-tree control: `app/src-tauri/src/worker_runtime/supervisor.rs`.
 - Video, source-preflight, and retry orchestration: `app/src-tauri/src/video_processing.rs`.
 - Model-download orchestration: `app/src-tauri/src/asr_model.rs`.
 - Progress validation: `app/src-tauri/src/progress_event.rs`.
@@ -351,10 +363,10 @@ stderr handling.
   stderr, wait, finish matching instance before reader join, parse, classify, and emit safe lifecycle
   diagnostics. Use an internal guard so every early return clears only its own instance exactly once.
 
-- [ ] After the application migrations, keep `ProcessSupervisor::start`, `finish`, rollback, and OS
+- [x] After the application migrations, keep `ProcessSupervisor::start`, `finish`, rollback, and OS
   termination accessible only inside `worker_runtime`; expose lane-level `run`, `cancel`, and
-  `is_active` behavior. This privacy closeout is deferred to Task 6 while compatibility callers
-  remain.
+  `is_active` behavior. This privacy closeout was completed in Task 6 after compatibility callers
+  were removed.
 
 - [x] Replace raw command/path lifecycle details with fixed operation summaries. Add diagnostics tests
   containing sentinel URL, token, stdin JSON, full local path, prompt, transcript, and generated text;
@@ -522,11 +534,11 @@ stderr handling.
   on that exact commit. Require the native macOS parent-plus-child process-group fixture and complete
   Rust suite to pass; record run URL, SHA, job conclusion, and test count in Progress.
 
-- [ ] Perform a manual desktop regression on Windows: start video processing, cancel during worker
+- [x] Perform a manual desktop regression on Windows: start video processing, cancel during worker
   activity, verify `cancelling` remains until terminal confirmation, verify the URL draft is retained,
   start a second task, and confirm no first-task result/progress overwrites it.
 
-- [ ] Fill Outcomes & Retrospective with exact local/hosted evidence and residual risk, move this
+- [x] Fill Outcomes & Retrospective with exact local/hosted evidence and residual risk, move this
   plan to `completed/`, update indexes/AGENTS/TASKS, and commit closeout documentation.
 
 ## Validation and Acceptance
@@ -543,7 +555,8 @@ The implementation is accepted only when all conditions hold:
   prompt, preference prose, or generated body.
 - Existing Tauri command names, worker invocation flags, JSON request/result/progress contracts,
   cache behavior, artifacts, model files, frontend workflow, and AI Credits behavior are unchanged.
-- Full local gates and the native macOS ProcessSupervisor workflow pass on the final commit.
+- Full local gates and the native macOS ProcessSupervisor workflow pass on the final implementation
+  commit; later closeout-only documentation commits do not alter the validated runtime source.
 
 ## Rollback Strategy
 
