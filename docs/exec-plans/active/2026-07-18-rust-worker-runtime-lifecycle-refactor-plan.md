@@ -79,6 +79,11 @@ boundaries.
   the complete Rust suite passed 141/141 without warnings, and the workflow contract passed 2/2.
   Boundary scanning found worker lifecycle primitives only under `worker_runtime`; the two
   `history_deletion.rs` `cmd.exe` matches are Windows file-lock test fixtures.
+- [x] 2026-07-18: Updated architecture, security, lifecycle design, and technical-debt references
+  to the implemented ownership boundary. Complete local gates passed: Rust 141/141, app 62 files
+  and 491/491 tests, app lint, production build, Node contracts 23/23, governance validation with
+  0 errors and 0 warnings, rustfmt, and diff checks. The build retained only the existing Vite
+  chunk-size advisory. Native hosted macOS evidence and manual Windows desktop regression remain.
 
 ## Surprises & Discoveries
 
@@ -488,11 +493,11 @@ stderr handling.
 - Modify: `AGENTS.md`.
 - Modify: `TASKS.md`.
 
-- [ ] Update architecture/security docs from planned to implemented ownership. Record that
+- [x] Update architecture/security docs from planned to implemented ownership. Record that
   `WorkerLane::run` is the sole lifecycle owner and application modules cannot signal arbitrary
   processes or emit unvalidated progress.
 
-- [ ] Run all local gates:
+- [x] Run all local gates:
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml

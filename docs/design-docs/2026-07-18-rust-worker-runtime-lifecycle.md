@@ -2,7 +2,9 @@
 
 ## Status
 
-Approved for implementation planning on 2026-07-18. Implementation has not started.
+Implemented locally on 2026-07-18. All four operations use the shared runner, low-level
+compatibility APIs are removed, and local Rust/workflow-contract gates pass. Native hosted macOS
+process-group evidence and final cross-stack closeout gates remain before this design is archived.
 
 ## Problem
 
