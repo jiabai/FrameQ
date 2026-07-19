@@ -65,10 +65,12 @@
 
 ## Refactoring and Technical Debt
 
-- [ ] Make worker media and task JSON writes crash-safe (2026-07-19) - ✅ Acceptance: stage task
+- [x] Make worker media and task JSON writes crash-safe (2026-07-19) - ✅ Acceptance: stage task
   video, normalized WAV, manifest, and preference snapshot beside their official destinations;
   validate media before atomic replacement; preserve previous committed files on failure; register
-  only committed ordinary artifacts; and pass focused/full Worker, Ruff, docs, and diff gates.
+  only committed ordinary artifacts; and pass focused/full Worker, Ruff, docs, and diff gates. ✅
+  Focused 14/14, Worker 406/406, Ruff, governance, and diff checks passed; contract v4 and local
+  source variants remain deferred to the active feature plan.
   Design: `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`. ExecPlan:
   `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
 

@@ -1,7 +1,7 @@
 # Worker Atomic Artifact Commit
 
 - Date: 2026-07-19
-- Status: Accepted; implementation in progress
+- Status: Implemented
 - Related plan: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
 
 ## Context

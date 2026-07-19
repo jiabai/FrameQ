@@ -411,7 +411,13 @@ def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Pa
     assert (task_dir_from_result(result) / "media" / "video.mp4").is_file()
     assert (task_dir_from_result(result) / "media" / "audio.wav").is_file()
     assert manifest_from_result(result)["status"] == "failed"
-    assert [command_name(command) for command in runner.commands] == ["yt-dlp", "ffprobe", "ffmpeg"]
+    assert [command_name(command) for command in runner.commands] == [
+        "yt-dlp",
+        "ffprobe",
+        "ffprobe",
+        "ffmpeg",
+        "ffprobe",
+    ]
 
 
 def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
@@ -582,7 +588,12 @@ def test_run_worker_once_uses_download_stdout_inside_task_cache_dir(
 
     assert result["status"] == "completed"
     assert (task_dir_from_result(result) / "media" / "video.mp4").is_file()
-    assert [command_name(command) for command in runner.commands] == ["ffprobe", "ffmpeg"]
+    assert [command_name(command) for command in runner.commands] == [
+        "ffprobe",
+        "ffprobe",
+        "ffmpeg",
+        "ffprobe",
+    ]
 
 
 def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extraction(

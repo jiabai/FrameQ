@@ -40,10 +40,11 @@ remain governed by the existing separate summary/inspiration confirmation.
   Validation: facade and pipeline-boundary RED tests preceded implementation; 397 worker tests and
   focused Ruff passed with existing URL artifacts, progress, subtitles, errors, and manifests
   unchanged.
-- [ ] 2026-07-19: Make current URL media plus task manifest/preference writes crash-safe before
-  adding local producers. Validation: RED tests must prove direct official-path writes can expose
-  partial media/JSON; GREEN must preserve prior committed files, install only validated staged
-  files, exclude staging from artifacts, and pass the complete worker and Ruff suites.
+- [x] 2026-07-19: Made current URL media plus task manifest/preference writes crash-safe before
+  adding local producers. Validation: focused RED runs exposed direct-write, missing-validation,
+  artifact-allowlist, and exception-cause failures; 14 focused tests, all 406 worker tests, Ruff,
+  governance validation, and diff checks passed. Contract v4 and local source variants remain
+  intentionally absent.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -82,9 +83,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   task video copying, audio extraction, and subtitle discovery. The implemented media-preparation
   facade now returns task-owned media plus a parsed subtitle candidate while leaving task finalize,
   transcript writing, ASR, and AI in the pipeline.
-- Evidence: the current facade still copies and decodes directly into official task paths, while
-  task JSON uses direct `write_text` and artifact discovery trusts existence. Disk, permission,
-  decoder, or process interruption can therefore leave a partial file at an authoritative name.
+- Evidence: the current facade formerly copied and decoded directly into official task paths, while
+  task JSON used direct `write_text` and artifact discovery trusted existence. The implemented
+  shared atomic-file boundary now stages, syncs, validates media, replaces per file, removes handled
+  partials, and restricts artifact discovery to known ordinary official files.
 
 ## Decision Log
 
@@ -154,10 +156,10 @@ remain governed by the existing separate summary/inspiration confirmation.
 ## Outcomes & Retrospective
 
 Planning is complete. Local-media product implementation has not started; its task-access,
-typed-worker-execution, and media-preparation facade prerequisites are complete. This document records the approved product,
-architecture, security, contract, persistence, test, and native-acceptance scope so the remaining
-implementation can proceed without reopening caller-local manifest/path checks or worker policy
-composition.
+typed-worker-execution, media-preparation facade, and crash-safe file-commit prerequisites are
+complete. This document records the approved product, architecture, security, contract,
+persistence, test, and native-acceptance scope so the remaining implementation can proceed without
+reopening caller-local manifest/path checks, worker policy composition, or partial-file semantics.
 
 Residual risk: actual codec/container support depends on the packaged FFmpeg/ffprobe build and must be
 proven with representative fixtures. Very large media may exhaust disk or processing resources because
@@ -185,7 +187,7 @@ directory, even though the complete path is never stored.
   `app/src-tauri/src/history.rs`, and `app/src-tauri/src/history_deletion.rs`.
 - Canonical worker: `worker/frameq_worker/desktop_contract.py`,
   `worker/frameq_worker/pipeline.py`, `worker/frameq_worker/media_preparation.py`,
-  `worker/frameq_worker/media.py`,
+  `worker/frameq_worker/atomic_files.py`, `worker/frameq_worker/media.py`,
   `worker/frameq_worker/task_store.py`, and worker CLI/service entry points discovered during
   implementation.
 - Packaged worker: the Tauri worker resource mirror, synchronized only by the repository's existing
@@ -209,7 +211,7 @@ directory, even though the complete path is never stored.
    - Preserve current schema/contract/result behavior and prove it with existing characterization
      suites plus focused facade tests.
 
-0.1. [ ] Make existing worker file commits crash-safe before local-media contract v4.
+0.1. [x] Make existing worker file commits crash-safe before local-media contract v4.
    - Add RED tests for interrupted/invalid video copy, partial/invalid WAV extraction, atomic JSON
      replacement failure, prior-file preservation, staging cleanup, and artifact exclusion.
    - Add one focused atomic-file module for unique same-directory staging, file sync, optional

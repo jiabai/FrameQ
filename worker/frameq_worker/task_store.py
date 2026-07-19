@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from frameq_worker.atomic_files import atomic_write_text
 from frameq_worker.models import (
     PreferenceSnapshot,
     ProcessRequest,
@@ -162,10 +163,7 @@ class TaskStoreFacade:
         task_result = result_with_task(
             result,
             context,
-            artifacts={
-                **result.artifacts,
-                **task_artifacts_for_existing_files(context.paths),
-            },
+            artifacts=task_artifacts_for_existing_files(context.paths),
         )
         write_task_manifest(context, task_result)
         return task_result
@@ -230,8 +228,15 @@ def task_artifacts_for_existing_files(paths: TaskPaths) -> dict[str, str]:
     return {
         key: path.relative_to(paths.task_dir).as_posix()
         for key, path in candidates.items()
-        if path.exists()
+        if _is_committed_regular_file(path)
     }
+
+
+def _is_committed_regular_file(path: Path) -> bool:
+    try:
+        return path.is_file() and not _is_link_or_junction(path)
+    except OSError:
+        return False
 
 
 def result_with_task(
@@ -278,9 +283,9 @@ def write_task_manifest(context: TaskContext, result: ProcessResult) -> None:
         "text_preview": result.text.strip()[:180],
         "insights_count": len(result.insights),
     }
-    context.paths.manifest_path.write_text(
+    atomic_write_text(
+        context.paths.manifest_path,
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
     )
 
 
@@ -289,9 +294,9 @@ def write_preference_snapshot_artifact(
     snapshot: PreferenceSnapshot,
 ) -> None:
     paths.ai_dir.mkdir(parents=True, exist_ok=True)
-    paths.preference_snapshot_path.write_text(
+    atomic_write_text(
+        paths.preference_snapshot_path,
         json.dumps(snapshot.to_dict(), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
     )
 
 

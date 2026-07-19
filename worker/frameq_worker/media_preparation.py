@@ -4,6 +4,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from frameq_worker.atomic_files import AtomicFileCommitError, staged_file
 from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.media import (
     CommandExecutionError,
@@ -85,7 +86,7 @@ class MediaPreparationFacade:
 
         try:
             media_info = probe_media_file(video_path, runner=self.command_runner)
-        except CommandExecutionError as exc:
+        except (CommandExecutionError, ValueError) as exc:
             raise MediaPreparationError(
                 "MEDIA_VALIDATION_FAILED",
                 "Downloaded media could not be validated.",
@@ -96,8 +97,8 @@ class MediaPreparationFacade:
                 "Downloaded file must contain valid video and audio streams.",
             )
 
-        shutil.copy2(video_path, task_context.paths.video_path)
-        audio_path = self._prepare_audio(video_path, task_context)
+        self._commit_video(video_path, task_context.paths.video_path)
+        audio_path = self._prepare_audio(task_context.paths.video_path, task_context)
 
         self._emit(
             "subtitle.detect.running",
@@ -115,6 +116,33 @@ class MediaPreparationFacade:
             subtitle_candidate=subtitle_candidate,
         )
 
+    def _commit_video(self, source_path: Path, destination_path: Path) -> None:
+        try:
+            with staged_file(
+                destination_path,
+                validator=self._validate_staged_video,
+            ) as staging_path:
+                shutil.copy2(source_path, staging_path)
+        except AtomicFileCommitError as exc:
+            raise MediaPreparationError(
+                "MEDIA_VALIDATION_FAILED",
+                "Prepared video could not be stored safely.",
+            ) from exc
+
+    def _validate_staged_video(self, video_path: Path) -> None:
+        try:
+            media_info = probe_media_file(video_path, runner=self.command_runner)
+        except (CommandExecutionError, ValueError) as exc:
+            raise MediaPreparationError(
+                "MEDIA_VALIDATION_FAILED",
+                "Prepared video could not be validated.",
+            ) from exc
+        if not media_info.is_valid:
+            raise MediaPreparationError(
+                "MEDIA_VALIDATION_FAILED",
+                "Prepared video must contain valid video and audio streams.",
+            )
+
     def _prepare_audio(self, video_path: Path, task_context: TaskContext) -> Path:
         self._emit("audio.extract.running", 48)
         audio_path = task_context.paths.audio_path
@@ -122,17 +150,40 @@ class MediaPreparationFacade:
             self._emit("audio.extract.reused", 50)
             return audio_path
         try:
-            extract_audio(
-                video_path,
+            with staged_file(
                 audio_path,
-                runner=self.command_runner,
-            )
+                validator=self._validate_staged_audio,
+            ) as staging_path:
+                extract_audio(
+                    video_path,
+                    staging_path,
+                    runner=self.command_runner,
+                )
         except CommandExecutionError as exc:
             raise MediaPreparationError(
                 "AUDIO_EXTRACTION_FAILED",
-                str(exc),
+                "Audio extraction failed.",
+            ) from exc
+        except AtomicFileCommitError as exc:
+            raise MediaPreparationError(
+                "AUDIO_EXTRACTION_FAILED",
+                "Extracted audio could not be stored safely.",
             ) from exc
         return audio_path
+
+    def _validate_staged_audio(self, audio_path: Path) -> None:
+        try:
+            audio_info = probe_media_file(audio_path, runner=self.command_runner)
+        except (CommandExecutionError, ValueError) as exc:
+            raise MediaPreparationError(
+                "AUDIO_EXTRACTION_FAILED",
+                "Extracted audio could not be validated.",
+            ) from exc
+        if not audio_info.is_valid_audio:
+            raise MediaPreparationError(
+                "AUDIO_EXTRACTION_FAILED",
+                "Extracted audio could not be validated.",
+            )
 
     def _emit(
         self,
@@ -232,6 +283,6 @@ def can_reuse_audio(audio_path: Path, runner: CommandRunner) -> bool:
         return False
     try:
         audio_info = probe_media_file(audio_path, runner=runner)
-    except CommandExecutionError:
+    except (CommandExecutionError, ValueError):
         return False
     return audio_info.is_valid_audio
