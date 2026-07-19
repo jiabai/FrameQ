@@ -6,6 +6,10 @@ mod supervisor;
 
 pub(crate) use command::WorkerCommandSpec;
 pub(crate) use facade::{VideoWorkerFacade, WorkerJob};
+pub(crate) use result_protocol::{
+    ModelDownloadTerminalResult, SourceIdentityTerminalResult, TaskTerminalResult,
+    ValidatedWorkerResult, WORKER_PROTOCOL_MESSAGE, WORKER_PROTOCOL_VIOLATION,
+};
 #[cfg(test)]
 pub(crate) use runner::WorkerExitSummary;
 use runner::{ProgressRoute, WorkerLane, WorkerOperation, WorkerRunRequest};

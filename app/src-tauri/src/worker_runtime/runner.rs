@@ -1,5 +1,8 @@
 use super::command::js_runtime_diagnostics;
 use super::command::WorkerCommandSpec;
+use super::result_protocol::{
+    parse_terminal_result, TerminalResultError, ValidatedWorkerResult, WORKER_PROTOCOL_MESSAGE,
+};
 use super::supervisor::{
     hide_child_console_window, request_process_cancellation, terminate_process_tree,
     CancelProcessResult, ProcessInstance, ProcessPhase, ProcessSupervisor,
@@ -78,36 +81,6 @@ fn deliver_worker_stdin(
         .ok_or(())
         .and_then(|mut stdin| stdin.write_all(payload.as_bytes()).map_err(|_| ()))
         .map_err(|_| "Failed to deliver worker request through stdin.".to_string())
-}
-
-fn parse_worker_stdout(stdout: &[u8]) -> Result<serde_json::Value, String> {
-    let text = String::from_utf8_lossy(stdout);
-    let mut last_error = None;
-
-    for raw_line in text.lines().rev() {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        match serde_json::from_str::<serde_json::Value>(line) {
-            Ok(value) if value.get("status").is_some() => return Ok(value),
-            Ok(_) => continue,
-            Err(error) => last_error = Some(error.to_string()),
-        }
-    }
-
-    let preview = text
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .take(3)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let preview = crate::sanitize_diagnostic_text(&preview);
-    let detail = last_error.unwrap_or_else(|| "stdout did not contain JSON".to_string());
-    Err(format!(
-        "Worker stdout did not contain a structured JSON result: {detail}. stdout preview: {preview}"
-    ))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -246,7 +219,7 @@ impl WorkerRunError {
     fn protocol_violation() -> Self {
         Self::new(
             WorkerRunErrorKind::ProtocolViolation,
-            "Worker exited successfully without a structured result.",
+            WORKER_PROTOCOL_MESSAGE,
         )
     }
 }
@@ -277,7 +250,7 @@ pub(crate) struct WorkerExitSummary {
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum WorkerRunOutcome {
-    Structured(serde_json::Value),
+    Structured(ValidatedWorkerResult),
     Cancelled,
     UnstructuredFailure(WorkerExitSummary),
 }
@@ -467,7 +440,7 @@ impl WorkerLane {
             &safe_exit_log_detail(operation, instance.pid, &output, stderr),
         );
 
-        let outcome = classify_terminal(&output, terminal_phase, stderr)?;
+        let outcome = classify_terminal(operation, &output, terminal_phase, stderr)?;
         let terminal = match &outcome {
             WorkerRunOutcome::Structured(_) => "structured",
             WorkerRunOutcome::Cancelled => "cancelled",
@@ -637,23 +610,30 @@ fn safe_exit_log_detail(
 }
 
 fn classify_terminal(
+    operation: WorkerOperation,
     output: &Output,
     terminal_phase: Option<ProcessPhase>,
     stderr: StderrSummary,
 ) -> Result<WorkerRunOutcome, WorkerRunError> {
-    if let Ok(value) = parse_worker_stdout(&output.stdout) {
-        return Ok(WorkerRunOutcome::Structured(value));
-    }
+    let parse_error = match parse_terminal_result(operation, &output.stdout) {
+        Ok(value) => return Ok(WorkerRunOutcome::Structured(value)),
+        Err(error) => error,
+    };
     if terminal_phase == Some(ProcessPhase::Cancelling) {
         return Ok(WorkerRunOutcome::Cancelled);
     }
-    if output.status.success() {
-        return Err(WorkerRunError::protocol_violation());
+    match parse_error {
+        TerminalResultError::Invalid => Err(WorkerRunError::protocol_violation()),
+        TerminalResultError::Missing if output.status.success() => {
+            Err(WorkerRunError::protocol_violation())
+        }
+        TerminalResultError::Missing => {
+            Ok(WorkerRunOutcome::UnstructuredFailure(WorkerExitSummary {
+                exit_code: output.status.code(),
+                stderr: stderr.marker(),
+            }))
+        }
     }
-    Ok(WorkerRunOutcome::UnstructuredFailure(WorkerExitSummary {
-        exit_code: output.status.code(),
-        stderr: stderr.marker(),
-    }))
 }
 
 #[cfg(test)]
@@ -664,11 +644,11 @@ mod tests {
         StderrSummary, WorkerLane, WorkerOperation, WorkerRunErrorKind, WorkerRunOutcome,
         WorkerRunRequest,
     };
+    use crate::worker_runtime::result_protocol::{TaskTerminalStatus, ValidatedWorkerResult};
     use crate::worker_runtime::supervisor::CancelProcessStatus;
     use crate::worker_runtime::supervisor::ProcessPhase;
     use crate::worker_runtime::WorkerCommandSpec;
     use crate::RuntimePaths;
-    use std::io::Read;
     use std::path::PathBuf;
     use std::process::Output;
     use std::sync::atomic::Ordering;
@@ -679,11 +659,12 @@ mod tests {
     fn structured_result_wins_a_concurrent_cancellation_claim() {
         let output = Output {
             status: exit_status(1),
-            stdout: br#"{"status":"completed","task_id":"safe-task"}"#.to_vec(),
+            stdout: valid_task_stdout().as_bytes().to_vec(),
             stderr: Vec::new(),
         };
 
         let outcome = classify_terminal(
+            WorkerOperation::ProcessVideo,
             &output,
             Some(ProcessPhase::Cancelling),
             StderrSummary::default(),
@@ -692,7 +673,8 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            WorkerRunOutcome::Structured(value) if value["status"] == "completed"
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
         ));
     }
 
@@ -708,9 +690,15 @@ mod tests {
             stdout: b"not-json".to_vec(),
             stderr: Vec::new(),
         };
+        let missing_failure = Output {
+            status: exit_status(1),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        };
 
         assert!(matches!(
             classify_terminal(
+                WorkerOperation::ProcessVideo,
                 &malformed_failure,
                 Some(ProcessPhase::Cancelling),
                 StderrSummary::default(),
@@ -719,6 +707,7 @@ mod tests {
         ));
         assert!(matches!(
             classify_terminal(
+                WorkerOperation::ProcessVideo,
                 &malformed_success,
                 Some(ProcessPhase::Running),
                 StderrSummary::default(),
@@ -727,7 +716,8 @@ mod tests {
         ));
         assert!(matches!(
             classify_terminal(
-                &malformed_failure,
+                WorkerOperation::ProcessVideo,
+                &missing_failure,
                 Some(ProcessPhase::Running),
                 StderrSummary {
                     had_diagnostic_output: true,
@@ -736,6 +726,17 @@ mod tests {
             ),
             Ok(WorkerRunOutcome::UnstructuredFailure(summary))
                 if summary.exit_code == Some(1) && summary.stderr == "present"
+        ));
+        assert!(matches!(
+            classify_terminal(
+                WorkerOperation::ProcessVideo,
+                &malformed_failure,
+                Some(ProcessPhase::Running),
+                StderrSummary::default(),
+            ),
+            Err(error)
+                if error.kind == WorkerRunErrorKind::ProtocolViolation
+                    && error.detail == "Worker result violated the terminal protocol."
         ));
     }
 
@@ -891,33 +892,12 @@ mod tests {
 
     #[test]
     fn sensitive_request_is_delivered_only_through_stdin() {
-        const PROBE_ENV: &str = "FRAMEQ_RUNNER_STDIN_PRIVACY_PROBE";
-        const TEST_NAME: &str =
-            "worker_runtime::runner::tests::sensitive_request_is_delivered_only_through_stdin";
         const SECRET: &str = "runner-review-secret";
-        if std::env::var_os(PROBE_ENV).is_some() {
-            let mut stdin = String::new();
-            std::io::stdin()
-                .read_to_string(&mut stdin)
-                .expect("privacy probe reads stdin");
-            let argv = std::env::args().collect::<Vec<_>>().join(" ");
-            let env_contains_secret = std::env::vars().any(|(_, value)| value.contains(SECRET));
-            println!(
-                "{}",
-                serde_json::json!({
-                    "status": "completed",
-                    "stdin_received": stdin.contains(SECRET),
-                    "argv_contains_secret": argv.contains(SECRET),
-                    "env_contains_secret": env_contains_secret,
-                })
-            );
-            return;
-        }
 
         let lane = WorkerLane::default();
         let paths = test_paths("stdin-privacy");
         let payload = format!(r#"{{"url":"https://example.invalid/video?token={SECRET}"}}"#);
-        let request = fixture_request(TEST_NAME, PROBE_ENV, Some(payload));
+        let request = terminal_fixture_request(Some(payload), true);
 
         assert!(!request
             .command
@@ -937,10 +917,8 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            WorkerRunOutcome::Structured(value)
-                if value["stdin_received"] == true
-                    && value["argv_contains_secret"] == false
-                    && value["env_contains_secret"] == false
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
         ));
         assert!(!log.contains(SECRET));
         assert!(!lane.is_active());
@@ -1008,13 +986,6 @@ mod tests {
 
     #[test]
     fn terminal_observation_finishes_lane_before_stderr_reader_join() {
-        const PROBE_ENV: &str = "FRAMEQ_RUNNER_READER_GATE_PROBE";
-        const TEST_NAME: &str = "worker_runtime::runner::tests::terminal_observation_finishes_lane_before_stderr_reader_join";
-        if std::env::var_os(PROBE_ENV).is_some() {
-            println!(r#"{{"status":"completed","task_id":"safe-task"}}"#);
-            return;
-        }
-
         let lane = Arc::new(WorkerLane::default());
         let gate = ReaderJoinGate::default();
         let operation_gate = gate.clone();
@@ -1024,7 +995,7 @@ mod tests {
         let operation = std::thread::spawn(move || {
             operation_lane.run_with_hooks(
                 &operation_paths,
-                fixture_request(TEST_NAME, PROBE_ENV, None),
+                terminal_fixture_request(None, false),
                 RunnerHooks {
                     reader_join_gate: Some(operation_gate),
                     ..RunnerHooks::default()
@@ -1049,25 +1020,19 @@ mod tests {
                 .join()
                 .expect("runner thread completes")
                 .expect("structured fixture succeeds"),
-            WorkerRunOutcome::Structured(value) if value["status"] == "completed"
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
         ));
     }
 
     #[test]
     fn stderr_reader_panic_keeps_terminal_outcome_and_uses_fixed_marker() {
-        const PROBE_ENV: &str = "FRAMEQ_RUNNER_READER_PANIC_PROBE";
-        const TEST_NAME: &str = "worker_runtime::runner::tests::stderr_reader_panic_keeps_terminal_outcome_and_uses_fixed_marker";
-        if std::env::var_os(PROBE_ENV).is_some() {
-            println!(r#"{{"status":"completed","task_id":"safe-task"}}"#);
-            return;
-        }
-
         let lane = WorkerLane::default();
         let paths = test_paths("reader-panic");
         let outcome = lane
             .run_with_hooks(
                 &paths,
-                fixture_request(TEST_NAME, PROBE_ENV, None),
+                terminal_fixture_request(None, false),
                 RunnerHooks {
                     panic_stderr_reader: true,
                     ..RunnerHooks::default()
@@ -1079,7 +1044,8 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            WorkerRunOutcome::Structured(value) if value["status"] == "completed"
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
         ));
         assert!(log.contains("stderr=reader_failed"));
     }
@@ -1105,6 +1071,63 @@ mod tests {
             },
             progress: ProgressRoute::None,
         }
+    }
+
+    fn terminal_fixture_request(
+        stdin_payload: Option<String>,
+        require_stdin: bool,
+    ) -> WorkerRunRequest {
+        let (program, args) = terminal_fixture_command(require_stdin);
+        WorkerRunRequest {
+            operation: WorkerOperation::ProcessVideo,
+            command: WorkerCommandSpec {
+                program,
+                args,
+                stdin_payload,
+                env: Vec::new(),
+                env_remove: Vec::new(),
+                current_dir: std::env::current_dir().expect("resolve test directory"),
+            },
+            progress: ProgressRoute::None,
+        }
+    }
+
+    #[cfg(windows)]
+    fn terminal_fixture_command(require_stdin: bool) -> (PathBuf, Vec<String>) {
+        let stdin_check = if require_stdin {
+            "$payload = [Console]::In.ReadToEnd(); if ([string]::IsNullOrEmpty($payload)) { exit 17 }; "
+        } else {
+            ""
+        };
+        let script = format!(
+            "{stdin_check}[Console]::Out.WriteLine('{}')",
+            valid_task_stdout()
+        );
+        (
+            PathBuf::from("powershell.exe"),
+            vec![
+                "-NoLogo".to_string(),
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-Command".to_string(),
+                script,
+            ],
+        )
+    }
+
+    #[cfg(unix)]
+    fn terminal_fixture_command(require_stdin: bool) -> (PathBuf, Vec<String>) {
+        let stdin_check = if require_stdin {
+            "payload=$(cat); test -n \"$payload\" || exit 17; "
+        } else {
+            ""
+        };
+        let script = format!("{stdin_check}printf '%s\\n' '{}'", valid_task_stdout());
+        (PathBuf::from("/bin/sh"), vec!["-c".to_string(), script])
+    }
+
+    fn valid_task_stdout() -> &'static str {
+        r#"{"status":"completed","task_id":"safe-task","task_dir":null,"artifacts":{},"text":"","summary":"","insights":[],"transcript":null,"error":null}"#
     }
 
     fn wait_until_active(lane: &WorkerLane) {

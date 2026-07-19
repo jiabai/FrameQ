@@ -1,6 +1,9 @@
 use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::task_manifest;
-use crate::worker_runtime::{WorkerJob, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome};
+use crate::worker_runtime::{
+    SourceIdentityTerminalResult, TaskTerminalResult, ValidatedWorkerResult, WorkerJob,
+    WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome, WORKER_PROTOCOL_VIOLATION,
+};
 use crate::{
     append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, run_blocking_worker_command,
     summarize_worker_result_for_log, CancelProcessResult, ProcessSupervisors,
@@ -136,7 +139,7 @@ pub(crate) async fn process_video(
     app: AppHandle,
     process_state: State<'_, Arc<ProcessSupervisors>>,
     request: ProcessVideoIpcRequest,
-) -> Result<serde_json::Value, String> {
+) -> Result<TaskTerminalResult, String> {
     let process_state = Arc::clone(process_state.inner());
     run_blocking_worker_command(move || process_video_blocking(window, app, process_state, request))
         .await
@@ -147,14 +150,14 @@ fn process_video_blocking(
     app: AppHandle,
     process_state: Arc<ProcessSupervisors>,
     request: ProcessVideoIpcRequest,
-) -> Result<serde_json::Value, String> {
+) -> Result<TaskTerminalResult, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
     let request = match resolve_process_video_worker_request(&env_path(&paths), request) {
         Ok(request) => request,
         Err(error) => {
-            return Ok(serde_json::json!(ProcessVideoResult {
+            return Ok(closed_task_result(serde_json::json!(ProcessVideoResult {
                 status: "failed".to_string(),
                 task_id: None,
                 task_dir: None,
@@ -168,14 +171,14 @@ fn process_video_blocking(
                     message: error,
                     stage: "video_transcribing".to_string(),
                 }),
-            }))
+            })))
         }
     };
     if let Some(cached) = cached_process_result_for_request(&output_root, &request)? {
         let _ = append_desktop_log(
             &paths,
             "worker.process_video.cache_hit",
-            &summarize_worker_result_for_log(&cached),
+            &summarize_task_result_for_log(&cached),
         );
         return Ok(cached);
     }
@@ -202,7 +205,7 @@ fn process_video_blocking(
             let _ = append_desktop_log(
                 &paths,
                 "worker.process_video.cache_hit",
-                &summarize_worker_result_for_log(&cached),
+                &summarize_task_result_for_log(&cached),
             );
             return Ok(cached);
         }
@@ -221,7 +224,7 @@ fn process_video_blocking(
 fn cached_process_result_for_request(
     output_root: &Path,
     request: &ProcessVideoWorkerRequest,
-) -> Result<Option<serde_json::Value>, String> {
+) -> Result<Option<TaskTerminalResult>, String> {
     let requested_source_url = request.url.trim();
     if requested_source_url.is_empty() {
         return Ok(None);
@@ -238,7 +241,7 @@ fn cached_process_result_for_identity(
     output_root: &Path,
     request: &ProcessVideoWorkerRequest,
     source_identity: &task_manifest::SourceIdentity,
-) -> Result<Option<serde_json::Value>, String> {
+) -> Result<Option<TaskTerminalResult>, String> {
     cached_process_result(output_root, request, None, Some(source_identity))
 }
 
@@ -247,8 +250,8 @@ fn cached_process_result(
     request: &ProcessVideoWorkerRequest,
     requested_source_url: Option<&str>,
     requested_identity: Option<&task_manifest::SourceIdentity>,
-) -> Result<Option<serde_json::Value>, String> {
-    let mut newest_cached: Option<(String, serde_json::Value)> = None;
+) -> Result<Option<TaskTerminalResult>, String> {
+    let mut newest_cached: Option<(String, TaskTerminalResult)> = None;
     for task in task_manifest::SupportedTask::scan(output_root)?.into_tasks() {
         if !reusable_task_matches(&task, requested_source_url, requested_identity, request) {
             continue;
@@ -296,7 +299,7 @@ fn reusable_task_matches(
 
 fn cached_process_result_from_task(
     task: task_manifest::SupportedTask,
-) -> Result<Option<(String, serde_json::Value)>, String> {
+) -> Result<Option<(String, TaskTerminalResult)>, String> {
     let artifacts = task.existing_artifacts();
     if !artifacts.contains_key("transcript_txt") {
         return Ok(None);
@@ -333,7 +336,10 @@ fn cached_process_result_from_task(
         transcript,
         error,
     });
-    Ok(Some((created_at, value)))
+    let Ok(result) = TaskTerminalResult::from_value(value) else {
+        return Ok(None);
+    };
+    Ok(Some((created_at, result)))
 }
 
 enum SourceIdentityPreflightError {
@@ -352,8 +358,16 @@ fn resolve_source_identity_for_cache(
         .video_worker(paths)
         .execute(WorkerJob::resolve_source_identity(payload))
         .map_err(|_| SourceIdentityPreflightError::Transport)?;
-    let value = match result {
-        Ok(WorkerRunOutcome::Structured(value)) => value,
+    match result {
+        Ok(WorkerRunOutcome::Structured(ValidatedWorkerResult::SourceIdentity(
+            SourceIdentityTerminalResult::Completed {
+                source_identity, ..
+            },
+        ))) => Ok(Some(source_identity)),
+        Ok(WorkerRunOutcome::Structured(ValidatedWorkerResult::SourceIdentity(
+            SourceIdentityTerminalResult::Failed { .. },
+        ))) => Ok(None),
+        Ok(WorkerRunOutcome::Structured(_)) => Ok(None),
         Ok(WorkerRunOutcome::Cancelled) => return Err(SourceIdentityPreflightError::Cancelled),
         Ok(WorkerRunOutcome::UnstructuredFailure(_)) => return Ok(None),
         Err(error) if error.kind == WorkerRunErrorKind::AlreadyRunning => {
@@ -361,15 +375,7 @@ fn resolve_source_identity_for_cache(
         }
         Err(error) if error.kind == WorkerRunErrorKind::ProtocolViolation => return Ok(None),
         Err(_) => return Err(SourceIdentityPreflightError::Transport),
-    };
-    let identity = serde_json::from_value::<task_manifest::SourceIdentity>(
-        value
-            .get("source_identity")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null),
-    )
-    .ok();
-    Ok(identity.filter(task_manifest::SourceIdentity::is_safe))
+    }
 }
 
 #[tauri::command]
@@ -378,7 +384,7 @@ pub(crate) async fn retry_insights(
     app: AppHandle,
     process_state: State<'_, Arc<ProcessSupervisors>>,
     request: serde_json::Value,
-) -> Result<serde_json::Value, String> {
+) -> Result<TaskTerminalResult, String> {
     let request = parse_retry_insights_request(request)?;
     let process_state = Arc::clone(process_state.inner());
     run_blocking_worker_command(move || {
@@ -392,7 +398,7 @@ fn retry_insights_blocking(
     app: AppHandle,
     process_state: Arc<ProcessSupervisors>,
     request: RetryInsightsRequest,
-) -> Result<serde_json::Value, String> {
+) -> Result<TaskTerminalResult, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let request_json = serde_json::to_string(&request)
@@ -436,17 +442,12 @@ fn retry_diagnostic_detail(
     detail
 }
 
-fn retry_result_log_detail(request: &RetryInsightsRequest, result: &serde_json::Value) -> String {
-    let status = result
-        .get("status")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("unknown");
-    let error_code = result
-        .get("error")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|error| error.get("code"))
-        .and_then(serde_json::Value::as_str);
-    retry_diagnostic_detail(request, status, error_code)
+fn retry_result_log_detail(request: &RetryInsightsRequest, result: &TaskTerminalResult) -> String {
+    retry_diagnostic_detail(
+        request,
+        result.status.as_str(),
+        result.error.as_ref().map(|error| error.code.as_str()),
+    )
 }
 
 fn safe_retry_status(status: &str) -> &'static str {
@@ -478,9 +479,10 @@ fn map_worker_run_result(
     stage: &str,
     status: &str,
     unstructured_message: &str,
-) -> Result<serde_json::Value, String> {
+) -> Result<TaskTerminalResult, String> {
     match result {
-        Ok(WorkerRunOutcome::Structured(value)) => Ok(value),
+        Ok(WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))) => Ok(value),
+        Ok(WorkerRunOutcome::Structured(_)) => Ok(worker_protocol_failure_result(stage, status)),
         Ok(WorkerRunOutcome::Cancelled) => Ok(cancelled_worker_result(stage, status)),
         Ok(WorkerRunOutcome::UnstructuredFailure(_)) => Ok(worker_failure_result(
             status,
@@ -493,9 +495,12 @@ fn map_worker_run_result(
             WorkerRunErrorKind::SpawnFailed | WorkerRunErrorKind::RequestDeliveryFailed => {
                 Ok(worker_transport_failure_result(stage, status))
             }
-            WorkerRunErrorKind::PipeUnavailable
-            | WorkerRunErrorKind::WaitFailed
-            | WorkerRunErrorKind::ProtocolViolation => Err(error.detail.to_string()),
+            WorkerRunErrorKind::ProtocolViolation => {
+                Ok(worker_protocol_failure_result(stage, status))
+            }
+            WorkerRunErrorKind::PipeUnavailable | WorkerRunErrorKind::WaitFailed => {
+                Err(error.detail.to_string())
+            }
         },
     }
 }
@@ -505,8 +510,8 @@ fn worker_failure_result(
     stage: &str,
     code: &str,
     message: &str,
-) -> serde_json::Value {
-    serde_json::json!(ProcessVideoResult {
+) -> TaskTerminalResult {
+    closed_task_result(serde_json::json!(ProcessVideoResult {
         status: status.to_string(),
         task_id: None,
         task_dir: None,
@@ -520,10 +525,10 @@ fn worker_failure_result(
             message: message.to_string(),
             stage: stage.to_string(),
         }),
-    })
+    }))
 }
 
-fn cancelled_worker_result(stage: &str, status: &str) -> serde_json::Value {
+fn cancelled_worker_result(stage: &str, status: &str) -> TaskTerminalResult {
     worker_failure_result(
         status,
         stage,
@@ -532,7 +537,7 @@ fn cancelled_worker_result(stage: &str, status: &str) -> serde_json::Value {
     )
 }
 
-fn worker_already_running_result(stage: &str, status: &str) -> serde_json::Value {
+fn worker_already_running_result(stage: &str, status: &str) -> TaskTerminalResult {
     worker_failure_result(
         status,
         stage,
@@ -541,13 +546,28 @@ fn worker_already_running_result(stage: &str, status: &str) -> serde_json::Value
     )
 }
 
-fn worker_transport_failure_result(stage: &str, status: &str) -> serde_json::Value {
+fn worker_transport_failure_result(stage: &str, status: &str) -> TaskTerminalResult {
     worker_failure_result(
         status,
         stage,
         "WORKER_REQUEST_TRANSPORT_FAILED",
         "Worker request could not be delivered.",
     )
+}
+
+fn worker_protocol_failure_result(stage: &str, status: &str) -> TaskTerminalResult {
+    worker_failure_result(status, stage, WORKER_PROTOCOL_VIOLATION, "")
+}
+
+fn closed_task_result(value: serde_json::Value) -> TaskTerminalResult {
+    TaskTerminalResult::from_value(value)
+        .expect("trusted desktop task result must satisfy the terminal contract")
+}
+
+fn summarize_task_result_for_log(result: &TaskTerminalResult) -> String {
+    serde_json::to_value(result)
+        .map(|value| summarize_worker_result_for_log(&value))
+        .unwrap_or_else(|_| "status=unknown".to_string())
 }
 
 #[tauri::command]
@@ -582,29 +602,40 @@ mod tests {
         INVALID_RETRY_PAYLOAD, PROCESS_VIDEO_CONTRACT_VERSION,
     };
     use crate::worker_runtime::{
-        WorkerExitSummary, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
+        TaskTerminalResult, WorkerExitSummary, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
     };
     use crate::{path_to_env_string, task_manifest::SourceIdentity};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn task_value(result: &TaskTerminalResult) -> serde_json::Value {
+        serde_json::to_value(result).expect("serialize closed task result")
+    }
+
     #[test]
     fn worker_lifecycle_failures_keep_process_and_retry_public_shapes() {
-        let process_cancelled = cancelled_worker_result("video_extracting", "failed");
+        let process_cancelled = task_value(&cancelled_worker_result("video_extracting", "failed"));
         assert_eq!(process_cancelled["status"], "failed");
         assert_eq!(process_cancelled["error"]["code"], "WORKER_CANCELLED");
         assert_eq!(process_cancelled["error"]["stage"], "video_extracting");
 
-        let retry_cancelled = cancelled_worker_result("insights_generating", "partial_completed");
+        let retry_cancelled = task_value(&cancelled_worker_result(
+            "insights_generating",
+            "partial_completed",
+        ));
         assert_eq!(retry_cancelled["status"], "partial_completed");
         assert_eq!(retry_cancelled["error"]["code"], "WORKER_CANCELLED");
         assert_eq!(retry_cancelled["error"]["stage"], "insights_generating");
 
-        let already_running = worker_already_running_result("video_extracting", "failed");
+        let already_running =
+            task_value(&worker_already_running_result("video_extracting", "failed"));
         assert_eq!(already_running["error"]["code"], "WORKER_ALREADY_RUNNING");
 
-        let transport = worker_transport_failure_result("video_extracting", "failed");
+        let transport = task_value(&worker_transport_failure_result(
+            "video_extracting",
+            "failed",
+        ));
         assert_eq!(
             transport["error"]["code"],
             "WORKER_REQUEST_TRANSPORT_FAILED"
@@ -623,6 +654,7 @@ mod tests {
             "Worker process failed before returning a structured result.",
         )
         .expect("map process failure");
+        let process_failure = task_value(&process_failure);
         assert_eq!(process_failure["status"], "failed");
         assert_eq!(process_failure["error"]["code"], "WORKER_PROCESS_FAILED");
         assert_eq!(process_failure["error"]["stage"], "video_extracting");
@@ -634,6 +666,7 @@ mod tests {
             "unused",
         )
         .expect("map retry cancellation");
+        let retry_cancelled = task_value(&retry_cancelled);
         assert_eq!(retry_cancelled["status"], "partial_completed");
         assert_eq!(retry_cancelled["error"]["code"], "WORKER_CANCELLED");
 
@@ -647,6 +680,7 @@ mod tests {
             "unused",
         )
         .expect("map transport failure");
+        let transport = task_value(&transport);
         assert_eq!(
             transport["error"]["code"],
             "WORKER_REQUEST_TRANSPORT_FAILED"
@@ -661,8 +695,11 @@ mod tests {
             "failed",
             "unused",
         )
-        .expect_err("protocol violation remains a command error");
-        assert_eq!(protocol_error, "fixed protocol failure");
+        .expect("protocol violation becomes a closed task failure");
+        let protocol_error = task_value(&protocol_error);
+        assert_eq!(protocol_error["status"], "failed");
+        assert_eq!(protocol_error["error"]["code"], "WORKER_PROTOCOL_VIOLATION");
+        assert_eq!(protocol_error["error"]["message"], "");
     }
 
     #[test]
@@ -730,6 +767,7 @@ mod tests {
         let cached = cached_process_result_for_request(&output_root, &request)
             .expect("read cached result")
             .expect("same URL should reuse cached task");
+        let cached = task_value(&cached);
 
         assert_eq!(cached["status"], "completed");
         assert_eq!(cached["task_id"], task_id);
@@ -806,6 +844,7 @@ mod tests {
         let cached = cached_process_result_for_identity(&output_root, &request, &identity)
             .expect("canonical lookup")
             .expect("canonical identity should reuse cached task");
+        let cached = task_value(&cached);
 
         assert_eq!(cached["task_id"], task_id);
         let serialized = cached.to_string();
@@ -995,6 +1034,7 @@ mod tests {
         let cached = cached_process_result_for_request(&output_root, &request)
             .expect("read cached result")
             .expect("same URL should reuse cached task");
+        let cached = task_value(&cached);
 
         assert_eq!(cached["status"], "completed");
         assert_eq!(cached["text"], "cached transcript");
@@ -1182,12 +1222,19 @@ mod tests {
         let result = serde_json::json!({
             "status": "partial_completed",
             "task_id": "private-task-id",
+            "task_dir": null,
+            "artifacts": {},
+            "text": "",
             "summary": "private generated body",
+            "insights": [],
+            "transcript": null,
             "error": {
                 "code": "LLM_REQUEST_FAILED",
-                "message": "provider said prompt-secret https://secret.example"
+                "message": "provider said prompt-secret https://secret.example",
+                "stage": "insights_generating"
             }
         });
+        let result = TaskTerminalResult::from_value(result).expect("closed retry result");
 
         let detail = retry_result_log_detail(&request, &result);
 

@@ -40,8 +40,9 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
 - [x] 2026-07-19: Added the Rust operation-specific terminal-result parser after an expected RED
   compile failure for the absent API. Validation: result-protocol tests 8/8 and `cargo fmt --check`
   passed; dead-code warnings are expected until Task 4 connects the parser to the runner.
-- [ ] 2026-07-19: Replace permissive Rust stdout parsing and raw application `Value` consumption.
-  Validation: focused result-protocol, runner, video, and model tests.
+- [x] 2026-07-19: Replaced permissive Rust stdout parsing and raw application `Value` consumption.
+  Validation: result protocol 8/8, runner 12/12, video 18/18, model 7/7, and full Rust 157/157
+  passed with `cargo fmt --check` and `git diff --check` clean.
 - [ ] 2026-07-19: Parse unknown task/model/cancel IPC values in TypeScript. Validation: focused
   Vitest suites and production build.
 - [ ] 2026-07-19: Complete full gates, update measured results, and archive this plan. Validation:
@@ -60,6 +61,9 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
   and use child exit status for privacy assertions.
 - Evidence: the restricted sandbox cannot terminate one Windows child-tree fixture; the exact runner
   suite passes outside it in 0.29 seconds.
+- Evidence: Rust's test harness writes its own progress to child stdout, so self-spawned successful
+  fixtures violate the new one-line terminal protocol. Operation fixtures now use quiet platform
+  shells that emit only the terminal result; lifecycle-only self-spawned fixtures remain unchanged.
 
 ## Decision Log
 
@@ -338,7 +342,7 @@ Use strict UTF-8, exactly one trimmed non-empty line, operation-selected Serde D
 
 Run Step 2. Expected: result-protocol tests pass; runner fixtures are completed in Task 4.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app\src-tauri\src\worker_runtime\result_protocol.rs app\src-tauri\src\worker_runtime\mod.rs
@@ -349,16 +353,19 @@ git commit -m "feat(worker): parse typed terminal results"
 
 **Files:**
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs`
+- Modify: `app/src-tauri/src/worker_runtime/result_protocol.rs`
+- Modify: `app/src-tauri/src/worker_runtime/mod.rs`
 - Modify: `app/src-tauri/src/video_processing.rs`
 - Modify: `app/src-tauri/src/asr_model.rs`
+- Modify: `app/src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Update runner/application tests for typed outcomes**
+- [x] **Step 1: Update runner/application tests for typed outcomes**
 
 Child fixtures emit all nine task fields; privacy children use process exit status rather than extra
 JSON fields. Add assertions that protocol errors map to `WORKER_PROTOCOL_VIOLATION` task failures,
 source results yield only source variants, and model results yield only model variants.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\Github\FrameQ\app\src-tauri\target'
@@ -369,7 +376,7 @@ cargo test --manifest-path app\src-tauri\Cargo.toml asr_model::tests
 
 Expected: old `serde_json::Value` matches/adapters fail.
 
-- [ ] **Step 3: Normalize every application result**
+- [x] **Step 3: Normalize every application result**
 
 First route terminal classification through the parser and change `WorkerRunOutcome::Structured` to
 carry `ValidatedWorkerResult`:
@@ -398,7 +405,7 @@ Protocol violations become typed task failures with the fixed code, empty safe m
 stage/status. Source preflight exhaustively matches source completed/failed variants. Model download
 exhaustively matches model completed/failed variants and exposes only the fixed message.
 
-- [ ] **Step 4: Run focused and full Rust tests**
+- [x] **Step 4: Run focused and full Rust tests**
 
 Run Step 2 outside the restricted process sandbox, then:
 

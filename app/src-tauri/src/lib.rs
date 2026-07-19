@@ -27,9 +27,7 @@ pub(crate) use runtime::{
     OUTPUT_DIR_ENV, RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,
 };
 
-pub(crate) use diagnostics::{
-    append_desktop_log, sanitize_diagnostic_text, summarize_worker_result_for_log,
-};
+pub(crate) use diagnostics::{append_desktop_log, summarize_worker_result_for_log};
 
 pub(crate) use asr_model::{DEFAULT_ASR_MODEL, SUPPORTED_ASR_MODELS};
 

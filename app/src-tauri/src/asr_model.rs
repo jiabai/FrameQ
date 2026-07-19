@@ -4,7 +4,10 @@ use crate::settings::{
     parse_dotenv_values, ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV,
     MODELSCOPE_ENDPOINT_ENV, SENSEVOICE_REVISION_ENV,
 };
-use crate::worker_runtime::{WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome};
+use crate::worker_runtime::{
+    ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerRunError, WorkerRunErrorKind,
+    WorkerRunOutcome, WORKER_PROTOCOL_MESSAGE,
+};
 use crate::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
     resolve_runtime_paths, run_blocking_worker_command, CancelProcessResult, ProcessSupervisors,
@@ -204,21 +207,13 @@ fn map_model_download_run_result(
     result: Result<WorkerRunOutcome, WorkerRunError>,
 ) -> Result<ModelDownloadRunResult, String> {
     match result {
-        Ok(WorkerRunOutcome::Structured(value)) => {
-            if value
-                .get("status")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|status| status == "completed")
-            {
-                return Ok(ModelDownloadRunResult::Completed);
-            }
-            Err(value
-                .get("message")
-                .and_then(serde_json::Value::as_str)
-                .filter(|message| !message.trim().is_empty())
-                .unwrap_or("ASR model download did not complete.")
-                .to_string())
-        }
+        Ok(WorkerRunOutcome::Structured(ValidatedWorkerResult::ModelDownload(
+            ModelDownloadTerminalResult::Completed { .. },
+        ))) => Ok(ModelDownloadRunResult::Completed),
+        Ok(WorkerRunOutcome::Structured(ValidatedWorkerResult::ModelDownload(
+            ModelDownloadTerminalResult::Failed { message, .. },
+        ))) => Err(message),
+        Ok(WorkerRunOutcome::Structured(_)) => Err(WORKER_PROTOCOL_MESSAGE.to_string()),
         Ok(WorkerRunOutcome::Cancelled) => Ok(ModelDownloadRunResult::Cancelled),
         Ok(WorkerRunOutcome::UnstructuredFailure(_)) => {
             Err("ASR model download failed before returning a structured result.".to_string())
@@ -245,7 +240,8 @@ mod tests {
     };
     use crate::settings::supported_asr_models;
     use crate::worker_runtime::{
-        WorkerExitSummary, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
+        ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerExitSummary, WorkerRunError,
+        WorkerRunErrorKind, WorkerRunOutcome,
     };
     use crate::{bundled_python_path, path_to_env_string, RuntimePaths, WorkerCommandSpec};
     use std::collections::HashMap;
@@ -303,15 +299,20 @@ mod tests {
     fn typed_runner_outcomes_preserve_model_download_product_mapping() {
         assert_eq!(
             map_model_download_run_result(Ok(WorkerRunOutcome::Structured(
-                serde_json::json!({"status": "completed"}),
+                ValidatedWorkerResult::ModelDownload(ModelDownloadTerminalResult::Completed {
+                    model: "iic/SenseVoiceSmall".to_string(),
+                }),
             ))),
             Ok(ModelDownloadRunResult::Completed)
         );
         assert_eq!(
             map_model_download_run_result(Ok(WorkerRunOutcome::Structured(
-                serde_json::json!({"status": "failed", "message": "download failed"}),
+                ValidatedWorkerResult::ModelDownload(ModelDownloadTerminalResult::Failed {
+                    code: "MODEL_DOWNLOAD_FAILED".to_string(),
+                    message: "ASR model download failed.".to_string(),
+                }),
             ))),
-            Err("download failed".to_string())
+            Err("ASR model download failed.".to_string())
         );
         assert_eq!(
             map_model_download_run_result(Ok(WorkerRunOutcome::Cancelled)),

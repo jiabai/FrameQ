@@ -4,11 +4,13 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 pub(crate) const WORKER_PROTOCOL_VIOLATION: &str = "WORKER_PROTOCOL_VIOLATION";
+pub(crate) const WORKER_PROTOCOL_MESSAGE: &str = "Worker result violated the terminal protocol.";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 const MODEL_DOWNLOAD_FAILED_MESSAGE: &str = "ASR model download failed.";
 const MODEL_ARCHIVE_INVALID_MESSAGE: &str = "Downloaded ASR model archive was invalid.";
 
+#[cfg(test)]
 pub(crate) const TASK_RESULT_FIELDS: &[&str] = &[
     "status",
     "task_id",
@@ -32,6 +34,7 @@ pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
     "insights_md",
     "preference_snapshot",
 ];
+#[cfg(test)]
 pub(crate) const TASK_INSIGHT_FIELDS: &[&str] = &[
     "id",
     "topic",
@@ -40,8 +43,10 @@ pub(crate) const TASK_INSIGHT_FIELDS: &[&str] = &[
     "suitableUse",
     "sourceChunkId",
 ];
+#[cfg(test)]
 pub(crate) const TASK_TERMINAL_STATUSES: &[&str] = &["completed", "partial_completed", "failed"];
 
+#[cfg(test)]
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) struct TerminalOperationFamilies {
@@ -51,6 +56,7 @@ pub(crate) struct TerminalOperationFamilies {
     download_asr_model: &'static str,
 }
 
+#[cfg(test)]
 pub(crate) const TERMINAL_OPERATION_FAMILIES: TerminalOperationFamilies =
     TerminalOperationFamilies {
         process_video: "task",
@@ -87,20 +93,6 @@ pub(crate) enum TaskErrorStage {
     Completed,
     PartialCompleted,
     Failed,
-}
-
-impl TaskErrorStage {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::WaitingInput => "waiting_input",
-            Self::VideoExtracting => "video_extracting",
-            Self::VideoTranscribing => "video_transcribing",
-            Self::InsightsGenerating => "insights_generating",
-            Self::Completed => "completed",
-            Self::PartialCompleted => "partial_completed",
-            Self::Failed => "failed",
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
