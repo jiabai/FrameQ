@@ -169,15 +169,31 @@
 
 ## 2026-07-10 Desktop Process Supervision and Cancellation Boundary
 
-- `ProcessSupervisors` owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running` or `Cancelling` phase; absence is the only finished state.
-- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. Process video, AI retry, source-identity preflight, and ASR model download submit a typed `WorkerRunRequest`; application modules cannot spawn, write child stdin, take pipes, wait/reap, mutate supervisor state, or terminate a process tree directly.
-- `worker_runtime/command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` owns spawn/register/stdin/read/wait/finish/parse/classify/log ordering. Raw helpers remain private to this module boundary.
+- `ProcessSupervisors` privately owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running` or `Cancelling` phase; absence is the only finished state.
+- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the internal typed `WorkerRunRequest`, but application modules can enter the video lane only through `VideoWorkerFacade::execute(WorkerJob)` and can enter the model-download lane only through the narrow `ProcessSupervisors` model-download method. Application modules cannot select a lane, operation, progress route, invocation, credential policy, spawn behavior, pipe, wait/reap path, supervisor mutation, or process-tree termination.
+- `worker_runtime/facade.rs` exhaustively derives video-job invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane. `command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` owns spawn/register/stdin/read/wait/finish/parse/classify/log ordering. Raw composition helpers remain private to this module boundary.
 - Start, cancellation claim, signal-failure rollback, and terminal cleanup must match the running instance ID. A stale waiter or PID cannot clear or restore a newer child. A duplicate cancellation request returns structured `already_cancelling` and sends no second signal.
 - Registration occurs before one-shot stdin delivery. After terminal observation, the runner finishes the matching instance before joining stderr readers; an internal guard clears only its own instance on every setup or wait failure.
 - Windows terminates the controlled PID with `taskkill /PID <pid> /T /F`. On supported macOS releases, the Unix implementation starts each worker in a fresh process group, sends `TERM` to the negative PGID, waits only for the bounded escalation grace, and sends `KILL` to the same group only if it remains alive. Commands receive only supervisor-owned numeric IDs and are never built through a shell. Linux is not a supported release target.
 - Signal delivery exposes `cancelling`, never a fabricated completed cancellation. The runner owns terminal precedence: a structured result wins a concurrent cancellation claim; only an unstructured termination observed for the matching `Cancelling` instance becomes `Cancelled`. Successful malformed stdout is a protocol violation, while nonzero malformed output is a typed unstructured failure.
-- Progress routing is closed to `None`, validated worker progress, or validated ASR model-download progress. Application modules select a route but cannot provide arbitrary parsers, event names, or unvalidated payload emission.
+- Progress routing is closed to `None`, validated worker progress, or validated ASR model-download progress. The typed job/model-download boundary derives the route; application modules cannot select it or provide arbitrary parsers, event names, or unvalidated payload emission.
 - React keeps the operation ID and task UI while cancellation is pending. It resets only after a confirmed cancelled worker/model-download terminal result; a signal failure restores the prior observable processing state so progress and the real later result remain visible. Cancellation deliberately preserves existing outputs, cache, and model files.
+
+## 2026-07-19 Typed Worker Job Execution Boundary
+
+- The current closed `WorkerJob` set is `ProcessVideo`, `ResolveSourceIdentity`, and
+  `RetryInsights`. Each semantic constructor supplies only payload plus the window required by a
+  progress-publishing job; callers cannot construct or import raw `WorkerInvocation`,
+  `WorkerOperation`, `ProgressRoute`, `WorkerRunRequest`, or `WorkerLane` policy.
+- `VideoWorkerFacade::execute` is the single application-facing video-lane entry. Its exhaustive
+  match fixes the CLI mode, lifecycle log operation, progress protocol, lane, and LLM policy; only
+  `RetryInsights` resolves server-managed LLM invocation material.
+- ASR model download remains a separate semantic method because it owns a distinct command builder,
+  progress protocol, and lane. It still delegates the complete child lifecycle to `WorkerLane`.
+- `ProcessLocalMedia` is added only when desktop-worker contract v4 and the Python CLI consumer are
+  implemented in the same change. Reserving a dead variant would weaken rather than prove the
+  cross-language boundary. The accepted decision is recorded in
+  `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
 
 ## 2026-07-10 Server Entitlement Transaction Boundary
 

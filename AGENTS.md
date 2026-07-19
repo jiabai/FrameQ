@@ -12,6 +12,7 @@
 - 架构：`docs/ARCHITECTURE.md`
 - 设计规范：`docs/DESIGN.md`
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
+- Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Task access facade 设计：`docs/design-docs/2026-07-18-task-access-facade.md`
 - Web 宣传站设计规范：`docs/design-docs/web-marketing-site-design.md`
 - Web 宣传站设计参考：`design-system/README.md`
@@ -32,7 +33,7 @@
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
-- 最近完成执行计划：`docs/exec-plans/completed/2026-07-18-process-video-request-contract-v3-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-07-19-typed-worker-job-facade-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

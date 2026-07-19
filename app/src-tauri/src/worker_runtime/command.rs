@@ -16,7 +16,7 @@ use std::path::PathBuf;
 const MAX_WORKER_STDIN_PAYLOAD_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone)]
-pub(crate) enum WorkerInvocation {
+pub(super) enum WorkerInvocation {
     ProcessVideo(String),
     RetryInsights(String),
     ResolveSourceIdentity(String),
@@ -84,7 +84,7 @@ fn executable_available_on_path(path_value: &str, binary_names: &[&str]) -> bool
     })
 }
 
-pub(crate) fn build_worker_command_spec(
+pub(super) fn build_worker_command_spec(
     paths: &RuntimePaths,
     invocation: WorkerInvocation,
     server_managed_llm: Option<account::ServerManagedLlmInvocation>,

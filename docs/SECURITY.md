@@ -170,13 +170,17 @@
 
 ## 2026-07-10 Desktop Process-Tree Cancellation Boundary
 
-- Only `worker_runtime::supervisor` may signal a PID/PGID, and only one recorded by the private `ProcessSupervisor` for the current in-process worker or model-download instance. Application modules receive lane-level `run`, `cancel`, and activity behavior; they cannot call supervisor mutation or OS termination functions.
+- Only `worker_runtime::supervisor` may signal a PID/PGID, and only one recorded by the private `ProcessSupervisor` for the current in-process worker or model-download instance. Application modules receive semantic typed-job execution, cancellation, activity, and model-download methods; the lanes themselves and all supervisor mutation/OS termination functions remain private.
 - `WorkerLane::run` is the sole owner of FrameQ worker spawn, register-before-stdin, pipe ownership, reader startup, wait/reap, finish-before-reader-join, terminal classification, and lifecycle diagnostics. It must not accept a PID, PGID, executable, command, environment key, or shell fragment from IPC, UI, worker output, task data, or a log entry.
+- `VideoWorkerFacade::execute(WorkerJob)` is the only application-facing video-lane execution entry.
+  It must derive the fixed invocation, lifecycle operation, progress route, lane, and credential
+  policy exhaustively. Only `RetryInsights` may resolve server-managed LLM invocation material;
+  process-video and source-identity jobs cannot receive it through their API.
 - Windows cancellation uses the fixed `taskkill /T /F` argument vector. Unix cancellation uses a fixed `kill` argument vector directed at the worker-created process group, first `TERM` and then bounded-grace `KILL` only if the group remains. No shell interpolation is permitted.
 - A delivered termination signal is not proof of a final cancelled state. State rollback after a signal error and terminal cleanup after child observation must match the same instance ID, so stale cancellation/exit handling cannot hide a real result or interfere with a newer process.
 - A valid structured worker result wins a concurrent cancellation claim. Without a structured result, only the matching `Cancelling` terminal phase becomes cancelled; malformed success is a protocol violation and malformed failure remains a typed unstructured failure.
 - Cancellation must preserve existing task artifacts, cache, and model files. Lifecycle logs use fixed operation/status markers and must not include raw worker arguments, stdin, environment values, full executable/current-directory paths, source/local-media paths, URLs, credentials, descendant command lines, stderr bodies, transcripts, prompts, preferences, generated content, or arbitrary termination diagnostics.
-- Worker and ASR model progress may cross Tauri only through the closed runtime routes and their existing contract validators. Application modules cannot supply an arbitrary parser, event name, or unvalidated progress payload.
+- Worker and ASR model progress may cross Tauri only through the closed runtime routes and their existing contract validators. Typed job/model-download execution derives the route; application modules cannot supply or select an arbitrary parser, event name, route, or unvalidated progress payload.
 - The Unix parent-plus-child fixture is conditional on a Unix host. Windows command/state coverage does not prove macOS signal delivery, so the supported macOS release requires native-host validation. Linux is not a supported release platform and is not a release gate.
 
 ## 2026-07-10 Entitlement Transaction Integrity Boundary

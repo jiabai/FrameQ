@@ -1,20 +1,67 @@
 mod command;
+mod facade;
 mod runner;
 mod supervisor;
 
-pub(crate) use command::{build_worker_command_spec, WorkerCommandSpec, WorkerInvocation};
+pub(crate) use command::WorkerCommandSpec;
+pub(crate) use facade::{VideoWorkerFacade, WorkerJob};
 #[cfg(test)]
 pub(crate) use runner::WorkerExitSummary;
-pub(crate) use runner::{
-    ProgressRoute, WorkerLane, WorkerOperation, WorkerRunError, WorkerRunErrorKind,
-    WorkerRunOutcome, WorkerRunRequest,
-};
+use runner::{ProgressRoute, WorkerLane, WorkerOperation, WorkerRunRequest};
+pub(crate) use runner::{WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome};
 pub(crate) use supervisor::CancelProcessResult;
+use tauri::Window;
+
+use crate::RuntimePaths;
 
 #[derive(Default)]
 pub(crate) struct ProcessSupervisors {
-    pub(crate) video: WorkerLane,
-    pub(crate) asr_model_download: WorkerLane,
+    video: WorkerLane,
+    asr_model_download: WorkerLane,
+}
+
+impl ProcessSupervisors {
+    pub(crate) fn video_worker<'a>(&'a self, paths: &'a RuntimePaths) -> VideoWorkerFacade<'a> {
+        VideoWorkerFacade::new(paths, &self.video)
+    }
+
+    pub(crate) fn cancel_video(&self) -> CancelProcessResult {
+        self.video.cancel()
+    }
+
+    pub(crate) fn is_video_active(&self) -> bool {
+        self.video.is_active()
+    }
+
+    pub(crate) fn run_asr_model_download(
+        &self,
+        paths: &RuntimePaths,
+        command: WorkerCommandSpec,
+        window: Window,
+    ) -> Result<WorkerRunOutcome, WorkerRunError> {
+        self.asr_model_download.run(
+            paths,
+            WorkerRunRequest {
+                operation: WorkerOperation::DownloadAsrModel,
+                command,
+                progress: ProgressRoute::asr_model_download(window),
+            },
+        )
+    }
+
+    pub(crate) fn cancel_asr_model_download(&self) -> CancelProcessResult {
+        self.asr_model_download.cancel()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn activate_video_for_test(&self, pid: u32) -> u64 {
+        self.video.activate_for_test(pid)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn finish_video_for_test(&self, instance_id: u64) {
+        self.video.finish_for_test(instance_id);
+    }
 }
 
 pub(crate) async fn run_blocking_worker_command<T, F>(operation: F) -> Result<T, String>

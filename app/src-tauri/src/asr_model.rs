@@ -4,10 +4,7 @@ use crate::settings::{
     parse_dotenv_values, ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV,
     MODELSCOPE_ENDPOINT_ENV, SENSEVOICE_REVISION_ENV,
 };
-use crate::worker_runtime::{
-    ProgressRoute, WorkerOperation, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
-    WorkerRunRequest,
-};
+use crate::worker_runtime::{WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome};
 use crate::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
     resolve_runtime_paths, run_blocking_worker_command, CancelProcessResult, ProcessSupervisors,
@@ -175,13 +172,10 @@ fn download_asr_model_blocking(
 
     let config_values = parse_dotenv_values(&env_path(&paths))?;
     let spec = build_model_download_command_spec(&paths, &config_values)?;
-    match map_model_download_run_result(process_supervisors.asr_model_download.run(
+    match map_model_download_run_result(process_supervisors.run_asr_model_download(
         &paths,
-        WorkerRunRequest {
-            operation: WorkerOperation::DownloadAsrModel,
-            command: spec,
-            progress: ProgressRoute::asr_model_download(window.clone()),
-        },
+        spec,
+        window.clone(),
     ))? {
         ModelDownloadRunResult::Completed => Ok(AsrModelDownloadResult {
             started: true,
@@ -240,7 +234,7 @@ fn map_model_download_run_result(
 pub(crate) fn cancel_asr_model_download(
     process_supervisors: State<'_, Arc<ProcessSupervisors>>,
 ) -> Result<CancelProcessResult, String> {
-    Ok(process_supervisors.asr_model_download.cancel())
+    Ok(process_supervisors.cancel_asr_model_download())
 }
 
 #[cfg(test)]

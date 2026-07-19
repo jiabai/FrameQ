@@ -31,6 +31,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   variant. Validation: Rust facade RED tests then 146 Rust tests passed; Python facade RED tests then
   394 worker tests passed; focused Ruff passed. Final formatting/governance/diff gates remain in the
   implementation closeout record.
+- [x] 2026-07-19: Consolidated current video-worker execution policy behind Rust `WorkerJob` and
+  `VideoWorkerFacade` before adding the local-media operation. Validation: three RED policy tests
+  preceded implementation, then all 149 Rust tests passed; application modules no longer import or
+  compose invocation, operation, progress route, request, credentials, or lane policy.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -61,6 +65,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   manifest privacy/path sequence independently. The implemented task-access facade now makes the
   future URL/local source predicate a single Rust ownership point while retaining per-task scan
   isolation. Python pipeline/retry persistence now shares one lifecycle facade as well.
+- Evidence: `video_processing.rs` also previously selected `WorkerInvocation`, `WorkerOperation`,
+  `ProgressRoute`, retry-only LLM material, and `WorkerLane` independently. The implemented typed
+  worker facade now owns that tuple. A `ProcessLocalMedia` job is intentionally absent until contract
+  v4 and its Python CLI consumer exist, so the variant and all policies can land atomically.
 
 ## Decision Log
 
@@ -111,13 +119,19 @@ remain governed by the existing separate summary/inspiration confirmation.
   union must not require every History/cache/transcript/deletion caller to reproduce a security
   predicate, while deletion and playback still need narrowly validated filesystem capabilities.
   Date/Author: 2026-07-18, User + Codex.
+- Decision: Add local-media execution as a new `WorkerJob::ProcessLocalMedia` variant only together
+  with contract v4 and the real worker CLI consumer. `VideoWorkerFacade` must then derive its fixed
+  invocation, lifecycle operation, worker progress route, video lane, and no-LLM policy in one
+  exhaustive match. Rationale: current application callers can no longer build inconsistent policy
+  tuples, while avoiding an untestable dead variant. Date/Author: 2026-07-19, User + Codex.
 
 ## Outcomes & Retrospective
 
-Planning is complete. Local-media product implementation has not started; its task-access facade
-prerequisite is complete. This document records the approved product, architecture, security,
-contract, persistence, test, and native-acceptance scope so the remaining implementation can proceed
-without reopening caller-local manifest/path checks.
+Planning is complete. Local-media product implementation has not started; its task-access and typed
+worker-execution facade prerequisites are complete. This document records the approved product,
+architecture, security, contract, persistence, test, and native-acceptance scope so the remaining
+implementation can proceed without reopening caller-local manifest/path checks or worker policy
+composition.
 
 Residual risk: actual codec/container support depends on the packaged FFmpeg/ffprobe build and must be
 proven with representative fixtures. Very large media may exhaust disk or processing resources because
@@ -132,6 +146,7 @@ directory, even though the complete path is never stored.
 - Product intent: `docs/product-specs/2026-07-16-local-media-file-import.md`.
 - Persistent decisions: `docs/design-docs/2026-07-16-local-media-file-import.md`.
 - Task access prerequisite: `docs/design-docs/2026-07-18-task-access-facade.md`.
+- Worker execution prerequisite: `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
 - Shared wire protocol: `contracts/desktop-worker-contract.json`,
   `app/src/desktopWorkerContract.test.ts`, and `worker/tests/test_contract.py`.
 - Frontend composition and source state: `app/src/App.tsx`, `app/src/workflowState.ts`,
@@ -154,10 +169,12 @@ directory, even though the complete path is never stored.
 
 ## Plan of Work
 
-0. [x] Centralize current task access before extending the source union.
+0. [x] Centralize current task access and worker execution policy before extending the source union.
    - Keep raw Rust manifest/path helpers private and migrate History, cache, transcript, and deletion
      to `SupportedTask`, with transcript mutation through `TaskEditSession`.
    - Make Python pipeline and retry use `TaskStoreFacade` for task lifecycle persistence.
+   - Route current video/source/AI jobs through `WorkerJob + VideoWorkerFacade`; keep both lanes
+     private and expose only semantic execution/cancel/activity methods.
    - Preserve current schema/contract/result behavior and prove it with existing characterization
      suites plus focused facade tests.
 

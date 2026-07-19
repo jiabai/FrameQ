@@ -1,0 +1,243 @@
+use super::command::{build_worker_command_spec, WorkerInvocation};
+use super::runner::{
+    ProgressRoute, WorkerLane, WorkerOperation, WorkerRunError, WorkerRunOutcome, WorkerRunRequest,
+};
+use crate::account::{self, ServerManagedLlmInvocation};
+use crate::RuntimePaths;
+#[cfg(not(test))]
+use tauri::Window;
+
+pub(crate) enum WorkerJob {
+    ProcessVideo {
+        payload: String,
+        progress: ProgressRoute,
+    },
+    ResolveSourceIdentity {
+        payload: String,
+    },
+    RetryInsights {
+        payload: String,
+        progress: ProgressRoute,
+    },
+}
+
+impl WorkerJob {
+    #[cfg(not(test))]
+    pub(crate) fn process_video(payload: String, window: Window) -> Self {
+        Self::ProcessVideo {
+            payload,
+            progress: ProgressRoute::worker(window),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn process_video<T>(payload: String, window: T) -> Self {
+        Self::ProcessVideo {
+            payload,
+            progress: ProgressRoute::worker(window),
+        }
+    }
+
+    pub(crate) fn resolve_source_identity(payload: String) -> Self {
+        Self::ResolveSourceIdentity { payload }
+    }
+
+    #[cfg(not(test))]
+    pub(crate) fn retry_insights(payload: String, window: Window) -> Self {
+        Self::RetryInsights {
+            payload,
+            progress: ProgressRoute::worker(window),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn retry_insights<T>(payload: String, window: T) -> Self {
+        Self::RetryInsights {
+            payload,
+            progress: ProgressRoute::worker(window),
+        }
+    }
+}
+
+pub(crate) struct VideoWorkerFacade<'a> {
+    paths: &'a RuntimePaths,
+    lane: &'a WorkerLane,
+}
+
+impl<'a> VideoWorkerFacade<'a> {
+    pub(super) fn new(paths: &'a RuntimePaths, lane: &'a WorkerLane) -> Self {
+        Self { paths, lane }
+    }
+
+    pub(crate) fn execute(
+        &self,
+        job: WorkerJob,
+    ) -> Result<Result<WorkerRunOutcome, WorkerRunError>, String> {
+        let request = self.prepare_with(job, account::server_managed_llm_invocation)?;
+        Ok(self.lane.run(self.paths, request))
+    }
+
+    fn prepare_with<F>(&self, job: WorkerJob, resolve_llm: F) -> Result<WorkerRunRequest, String>
+    where
+        F: FnOnce(&RuntimePaths) -> Result<Option<ServerManagedLlmInvocation>, String>,
+    {
+        let (invocation, operation, progress, needs_llm) = match job {
+            WorkerJob::ProcessVideo { payload, progress } => (
+                WorkerInvocation::ProcessVideo(payload),
+                WorkerOperation::ProcessVideo,
+                progress,
+                false,
+            ),
+            WorkerJob::ResolveSourceIdentity { payload } => (
+                WorkerInvocation::ResolveSourceIdentity(payload),
+                WorkerOperation::ResolveSourceIdentity,
+                ProgressRoute::None,
+                false,
+            ),
+            WorkerJob::RetryInsights { payload, progress } => (
+                WorkerInvocation::RetryInsights(payload),
+                WorkerOperation::RetryInsights,
+                progress,
+                true,
+            ),
+        };
+        let llm = if needs_llm {
+            resolve_llm(self.paths)?
+        } else {
+            None
+        };
+        let command = build_worker_command_spec(self.paths, invocation, llm)?;
+        Ok(WorkerRunRequest {
+            operation,
+            command,
+            progress,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn prepare_for_test<F>(
+        &self,
+        job: WorkerJob,
+        resolve_llm: F,
+    ) -> Result<WorkerRunRequest, String>
+    where
+        F: FnOnce(&RuntimePaths) -> Result<Option<ServerManagedLlmInvocation>, String>,
+    {
+        self.prepare_with(job, resolve_llm)
+    }
+}
+
+#[cfg(test)]
+mod typed_job_policy_tests {
+    use super::super::runner::{ProgressRoute, WorkerOperation};
+    use super::super::ProcessSupervisors;
+    use super::WorkerJob;
+    use crate::account::ServerManagedLlmInvocation;
+    use crate::RuntimePaths;
+    use std::cell::Cell;
+    use std::path::PathBuf;
+
+    fn runtime_paths() -> RuntimePaths {
+        RuntimePaths {
+            resource_dir: PathBuf::from("frameq-test").join("resources"),
+            user_data_dir: PathBuf::from("frameq-test").join("user-data"),
+        }
+    }
+
+    fn server_llm() -> ServerManagedLlmInvocation {
+        ServerManagedLlmInvocation {
+            server_base_url: "http://127.0.0.1:8787".to_string(),
+            session_token: "desktop-token".to_string(),
+            request_id: "llm-run-12345678".to_string(),
+        }
+    }
+
+    #[test]
+    fn process_video_job_derives_worker_progress_and_never_resolves_llm() {
+        let paths = runtime_paths();
+        let supervisors = ProcessSupervisors::default();
+        let resolver_calls = Cell::new(0);
+        let payload = r#"{"contract_version":3,"url":"https://example.test/video","asr_model":"iic/SenseVoiceSmall"}"#;
+
+        let request = supervisors
+            .video_worker(&paths)
+            .prepare_for_test(WorkerJob::process_video(payload.to_string(), ()), |_| {
+                resolver_calls.set(resolver_calls.get() + 1);
+                Ok(Some(server_llm()))
+            })
+            .expect("prepare process-video job");
+
+        assert_eq!(request.operation, WorkerOperation::ProcessVideo);
+        assert!(matches!(request.progress, ProgressRoute::Worker));
+        assert_eq!(
+            request.command.args,
+            vec!["-m", "frameq_worker", "--request-stdin"]
+        );
+        assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
+        assert_eq!(resolver_calls.get(), 0);
+        assert!(!request
+            .command
+            .env
+            .iter()
+            .any(|(key, _)| key.starts_with("FRAMEQ_LLM_")));
+    }
+
+    #[test]
+    fn source_identity_job_derives_silent_progress_and_never_resolves_llm() {
+        let paths = runtime_paths();
+        let supervisors = ProcessSupervisors::default();
+        let resolver_calls = Cell::new(0);
+        let payload = r#"{"url":"https://example.test/video"}"#;
+
+        let request = supervisors
+            .video_worker(&paths)
+            .prepare_for_test(
+                WorkerJob::resolve_source_identity(payload.to_string()),
+                |_| {
+                    resolver_calls.set(resolver_calls.get() + 1);
+                    Ok(Some(server_llm()))
+                },
+            )
+            .expect("prepare source-identity job");
+
+        assert_eq!(request.operation, WorkerOperation::ResolveSourceIdentity);
+        assert!(matches!(request.progress, ProgressRoute::None));
+        assert_eq!(
+            request.command.args,
+            vec!["-m", "frameq_worker", "--resolve-source-stdin"]
+        );
+        assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
+        assert_eq!(resolver_calls.get(), 0);
+    }
+
+    #[test]
+    fn retry_insights_job_derives_worker_progress_and_resolves_llm_once() {
+        let paths = runtime_paths();
+        let supervisors = ProcessSupervisors::default();
+        let resolver_calls = Cell::new(0);
+        let payload = r#"{"task_id":"safe-task","target":"summary","output_language":"en-US"}"#;
+
+        let request = supervisors
+            .video_worker(&paths)
+            .prepare_for_test(WorkerJob::retry_insights(payload.to_string(), ()), |_| {
+                resolver_calls.set(resolver_calls.get() + 1);
+                Ok(Some(server_llm()))
+            })
+            .expect("prepare retry-insights job");
+        let env = request.command.env_map();
+
+        assert_eq!(request.operation, WorkerOperation::RetryInsights);
+        assert!(matches!(request.progress, ProgressRoute::Worker));
+        assert_eq!(
+            request.command.args,
+            vec!["-m", "frameq_worker", "--retry-insights-stdin"]
+        );
+        assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
+        assert_eq!(resolver_calls.get(), 1);
+        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), Some(&"server".to_string()));
+        assert_eq!(
+            env.get("FRAMEQ_LLM_SESSION_TOKEN"),
+            Some(&"desktop-token".to_string())
+        );
+    }
+}

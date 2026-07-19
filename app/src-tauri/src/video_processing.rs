@@ -1,14 +1,9 @@
-use crate::account;
 use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::task_manifest;
-use crate::worker_runtime::{
-    ProgressRoute, WorkerLane, WorkerOperation, WorkerRunError, WorkerRunErrorKind,
-    WorkerRunOutcome, WorkerRunRequest,
-};
+use crate::worker_runtime::{WorkerJob, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome};
 use crate::{
-    append_desktop_log, build_worker_command_spec, ensure_runtime_dirs, resolve_runtime_paths,
-    run_blocking_worker_command, summarize_worker_result_for_log, CancelProcessResult,
-    ProcessSupervisors, WorkerInvocation,
+    append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, run_blocking_worker_command,
+    summarize_worker_result_for_log, CancelProcessResult, ProcessSupervisors,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -185,7 +180,7 @@ fn process_video_blocking(
         return Ok(cached);
     }
     let resolved_source_identity =
-        match resolve_source_identity_for_cache(&paths, &request.url, &process_state.video) {
+        match resolve_source_identity_for_cache(&paths, &request.url, process_state.as_ref()) {
             Ok(identity) => identity,
             Err(SourceIdentityPreflightError::Cancelled) => {
                 return Ok(cancelled_worker_result("video_extracting", "failed"));
@@ -213,17 +208,10 @@ fn process_video_blocking(
         }
     }
     let request_json = serialize_process_video_request(&request)?;
-    let spec =
-        build_worker_command_spec(&paths, WorkerInvocation::ProcessVideo(request_json), None)?;
     map_worker_run_result(
-        process_state.video.run(
-            &paths,
-            WorkerRunRequest {
-                operation: WorkerOperation::ProcessVideo,
-                command: spec,
-                progress: ProgressRoute::worker(window),
-            },
-        ),
+        process_state
+            .video_worker(&paths)
+            .execute(WorkerJob::process_video(request_json, window))?,
         "video_extracting",
         "failed",
         "Worker process failed before returning a structured result.",
@@ -357,23 +345,14 @@ enum SourceIdentityPreflightError {
 fn resolve_source_identity_for_cache(
     paths: &crate::RuntimePaths,
     raw_url: &str,
-    lane: &WorkerLane,
+    process_supervisors: &ProcessSupervisors,
 ) -> Result<Option<task_manifest::SourceIdentity>, SourceIdentityPreflightError> {
     let payload = serde_json::json!({"url": raw_url}).to_string();
-    let spec = build_worker_command_spec(
-        paths,
-        WorkerInvocation::ResolveSourceIdentity(payload),
-        None,
-    )
-    .map_err(|_| SourceIdentityPreflightError::Transport)?;
-    let value = match lane.run(
-        paths,
-        WorkerRunRequest {
-            operation: WorkerOperation::ResolveSourceIdentity,
-            command: spec,
-            progress: ProgressRoute::None,
-        },
-    ) {
+    let result = process_supervisors
+        .video_worker(paths)
+        .execute(WorkerJob::resolve_source_identity(payload))
+        .map_err(|_| SourceIdentityPreflightError::Transport)?;
+    let value = match result {
         Ok(WorkerRunOutcome::Structured(value)) => value,
         Ok(WorkerRunOutcome::Cancelled) => return Err(SourceIdentityPreflightError::Cancelled),
         Ok(WorkerRunOutcome::UnstructuredFailure(_)) => return Ok(None),
@@ -418,26 +397,15 @@ fn retry_insights_blocking(
     ensure_runtime_dirs(&paths)?;
     let request_json = serde_json::to_string(&request)
         .map_err(|_| "Failed to encode worker request.".to_string())?;
-    let llm_invocation = account::server_managed_llm_invocation(&paths)?;
-    let spec = build_worker_command_spec(
-        &paths,
-        WorkerInvocation::RetryInsights(request_json),
-        llm_invocation,
-    )?;
     let _ = append_desktop_log(
         &paths,
         "worker.retry_insights.start",
         &retry_diagnostic_detail(&request, "started", None),
     );
     let parsed = map_worker_run_result(
-        process_state.video.run(
-            &paths,
-            WorkerRunRequest {
-                operation: WorkerOperation::RetryInsights,
-                command: spec,
-                progress: ProgressRoute::worker(window),
-            },
-        ),
+        process_state
+            .video_worker(&paths)
+            .execute(WorkerJob::retry_insights(request_json, window))?,
         "insights_generating",
         "partial_completed",
         "AI generation worker failed before returning a structured result.",
@@ -586,7 +554,7 @@ fn worker_transport_failure_result(stage: &str, status: &str) -> serde_json::Val
 pub(crate) fn cancel_process(
     process_state: State<'_, Arc<ProcessSupervisors>>,
 ) -> Result<CancelProcessResult, String> {
-    Ok(process_state.video.cancel())
+    Ok(process_state.cancel_video())
 }
 
 fn resolve_process_video_worker_request(

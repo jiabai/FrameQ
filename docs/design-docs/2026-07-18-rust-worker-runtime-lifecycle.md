@@ -8,6 +8,11 @@ executed the real Unix parent-child process-group fixture successfully at commit
 `481b4d7841566bab172cd77694b43e734e137333`. The user also confirmed the native Windows desktop
 cancel, terminal confirmation, URL retention, second-task start, and stale-callback isolation flow.
 
+Follow-up hardening on 2026-07-19 added the typed application execution boundary described in
+`docs/design-docs/2026-07-19-typed-worker-job-facade.md`. Application modules no longer construct
+`WorkerRunRequest` or select an invocation, operation, progress route, LLM policy, or lane; the
+shared lifecycle and native cancellation behavior below are unchanged.
+
 ## Problem
 
 The Rust desktop layer has one documented `ProcessSupervisor` state machine per process lane, but
@@ -38,8 +43,9 @@ is centralized, while terminal observation and cleanup remain caller-controlled.
 - Make spawn, process-group setup, supervisor registration, stdin delivery, stderr handling, wait,
   matching-instance finish, terminal classification, and lifecycle diagnostics one ordered
   operation.
-- Keep cache lookup, entitlement/checkout policy, request validation, task manifests, and public
-  result mapping in their existing application modules.
+- Keep cache lookup, entitlement gates, request validation, task manifests, and public result
+  mapping in their existing application modules; the later typed facade owns retry-only checkout
+  material as execution policy.
 - Preserve the current desktop-worker JSON contract, Tauri commands, frontend states, output files,
   and cancellation behavior.
 - Make low-level process operations private so future application code cannot assemble another
@@ -61,13 +67,14 @@ is centralized, while terminal observation and cleanup remain caller-controlled.
 
 ## Decision
 
-Create a focused `worker_runtime` Rust module and expose lane-level operations rather than raw
-process primitives.
+Create a focused `worker_runtime` Rust module and expose a typed application execution boundary
+rather than raw process primitives.
 
 ```text
 app/src-tauri/src/worker_runtime/
   mod.rs
   command.rs
+  facade.rs
   supervisor.rs
   runner.rs
 ```
@@ -77,11 +84,12 @@ app/src-tauri/src/worker_runtime/
 | Module | Owns | Must Not Own |
 |---|---|---|
 | `worker_runtime/command.rs` | `WorkerInvocation`, `WorkerCommandSpec`, fixed CLI modes, bounded stdin payload, environment construction | spawning, waiting, cancellation state, result mapping |
+| `worker_runtime/facade.rs` | closed `WorkerJob`, exhaustive video-job invocation/operation/progress/LLM/lane policy, `VideoWorkerFacade::execute` | cache, task manifests, public result mapping, child lifecycle implementation |
 | `worker_runtime/supervisor.rs` | lane state, instance IDs, PID/PGID, `Running`/`Cancelling`, cancellation claim/rollback, fixed Windows/macOS tree termination | worker JSON, progress events, task/AI semantics |
 | `worker_runtime/runner.rs` | spawn configuration, supervisor registration, stdin delivery, stderr reader, progress routing, wait/reap, finish ordering, stdout parsing, terminal classification, lifecycle diagnostics | cache, manifests, entitlement, public `ProcessVideoResult` construction |
 | `progress_event.rs` | pure contract-backed validation and safe invalid-event summaries | process ownership and Tauri command orchestration |
 | `diagnostics.rs` | app-local log sink, sanitization, truncation, safe result summaries | deciding child lifecycle or cancellation precedence |
-| `video_processing.rs` | process-video cache/preflight policy, retry request/checkout policy, domain result mapping | `Command`, `Child`, raw stderr threads, direct `finish()` or process-tree termination |
+| `video_processing.rs` | process-video cache/preflight policy, semantic job submission, retry request validation, domain result mapping | invocation/operation/progress/lane/LLM execution policy, `Command`, `Child`, raw stderr threads, direct `finish()` or process-tree termination |
 | `asr_model.rs` | model availability/configuration and model-download product result/event mapping | raw spawn/register/wait/finish implementation |
 
 `worker_command.rs` is retired after migration. Its command construction, supervision, and runner
@@ -89,28 +97,20 @@ tests move with the responsibility they verify.
 
 ## Public Runtime Surface
 
-Only crate-private, policy-shaped types are exposed to application modules. Low-level supervisor
-mutation and operating-system process functions stay private to `worker_runtime`.
+Application modules receive semantic execution and typed terminal mapping only. Low-level request
+composition, supervisor mutation, and operating-system process functions stay private to
+`worker_runtime`.
 
 ```rust
-pub(crate) enum WorkerOperation {
-    ProcessVideo,
-    RetryInsights,
-    ResolveSourceIdentity,
-    DownloadAsrModel,
+pub(crate) enum WorkerJob {
+    ProcessVideo { /* payload + progress target */ },
+    ResolveSourceIdentity { /* payload */ },
+    RetryInsights { /* payload + progress target */ },
 }
 
-pub(crate) enum ProgressRoute {
-    None,
-    Worker(tauri::Window),
-    AsrModelDownload(tauri::Window),
-}
-
-pub(crate) struct WorkerRunRequest {
-    pub(crate) operation: WorkerOperation,
-    pub(crate) command: WorkerCommandSpec,
-    pub(crate) progress: ProgressRoute,
-}
+VideoWorkerFacade::execute(job)
+ProcessSupervisors::{cancel_video, is_video_active}
+ProcessSupervisors::{run_asr_model_download, cancel_asr_model_download}
 
 pub(crate) enum WorkerRunOutcome {
     Structured(serde_json::Value),
@@ -128,13 +128,18 @@ pub(crate) enum WorkerRunErrorKind {
 }
 ```
 
+`WorkerInvocation`, `WorkerOperation`, `ProgressRoute`, `WorkerRunRequest`, and `WorkerLane` are
+internal implementation types. `VideoWorkerFacade` derives them through one exhaustive match; ASR
+model download uses a separate narrow method that derives its fixed operation, progress route, and
+lane.
+
 The exact error carrier may include a sanitized bounded diagnostic for the desktop log, but it must
 never carry the stdin payload, raw command line, raw source URL, complete local source path,
 credential, transcript, prompt, or generated result body.
 
-`ProcessSupervisors` becomes a collection of `WorkerLane` values. Application modules may call only
-`run`, `cancel`, and the existing activity query required by deletion/restore gates. They cannot call
-`start`, `finish`, `restore_running`, or `terminate_process_tree` directly.
+`ProcessSupervisors` remains a collection of private `WorkerLane` values. Application modules may
+submit semantic jobs, cancel/query the video lane, or execute/cancel model download; they cannot call
+`WorkerLane::run`, `start`, `finish`, `restore_running`, or `terminate_process_tree` directly.
 
 ## Lifecycle Order
 

@@ -65,6 +65,17 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Centralize Rust video-worker execution policy behind a typed facade (2026-07-19) - ✅
+  `WorkerJob + VideoWorkerFacade` now uniquely derive CLI invocation, lifecycle operation, progress
+  route, retry-only LLM material, and the private video lane; model download uses a separate semantic
+  runtime method, while `WorkerLane` remains the sole child-lifecycle owner. `ProcessLocalMedia` is
+  intentionally deferred until contract v4 and its Python CLI consumer land atomically. TDD and
+  gates: expected compile RED, focused policy 3/3, Rust 149/149, app 491/491 + production build,
+  worker 394/394, Ruff, scripts 23/23, rustfmt, docs 0/0, and diff check passed. Existing Vite bundle
+  size and Python `audioop` deprecation warnings remain non-blocking. Design:
+  `docs/design-docs/2026-07-19-typed-worker-job-facade.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-19-typed-worker-job-facade-plan.md`.
+
 - [x] Unify Rust worker runtime lifecycle ownership (2026-07-18) - ✅ Acceptance: route process
   video, AI retry, source-identity preflight, and ASR model download through one private supervised
   runner; preserve register-before-stdin, finish-before-reader-join, matching-instance cleanup,
