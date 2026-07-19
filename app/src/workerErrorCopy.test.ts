@@ -37,6 +37,7 @@ describe("worker error presentation", () => {
     ["WORKER_CANCELLED", "worker.cancelled"],
     ["WORKER_ALREADY_RUNNING", "worker.alreadyRunning"],
     ["WORKER_REQUEST_TRANSPORT_FAILED", "worker.transportFailed"],
+    ["WORKER_PROTOCOL_VIOLATION", "worker.processFailed"],
   ])("maps known worker code %s to %s", (code, messageCode) => {
     expect(presentWorkerError(workerError(code))).toMatchObject({
       messageCode: `errors.${messageCode}`,

@@ -67,6 +67,30 @@ describe("settings client", () => {
     expect(ASR_MODEL_DOWNLOAD_PROGRESS_EVENT).toBe("asr-model-download-progress");
   });
 
+  test.each([
+    { started: false, status: "completed", secret: "model-result-secret" },
+    { started: true, status: "cancelled" },
+    { started: false, status: "already_available", extra: true },
+  ])("rejects malformed model-download responses without echoing payloads", async (payload) => {
+    const runner: SettingsCommandRunner = async () => payload;
+
+    await expect(downloadAsrModel(runner)).rejects.toThrow(
+      "INVALID_ASR_MODEL_DOWNLOAD_RESPONSE",
+    );
+  });
+
+  test.each([
+    { status: "cancelling", error: "unexpected", secret: "cancel-result-secret" },
+    { status: "failed", error: null },
+    { status: "not_running", error: null, extra: true },
+  ])("rejects malformed model-cancel responses without echoing payloads", async (payload) => {
+    const runner: SettingsCommandRunner = async () => payload;
+
+    await expect(cancelAsrModelDownload(runner)).rejects.toThrow(
+      "INVALID_CANCEL_PROCESS_RESPONSE",
+    );
+  });
+
   test("loads app settings without LLM config from Tauri", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: SettingsCommandRunner = async (command, args) => {

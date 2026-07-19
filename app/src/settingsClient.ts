@@ -6,11 +6,18 @@ import type {
 } from "./desktopWorkerProtocol";
 import { isLanguagePreference, type LanguagePreference } from "./i18n/locale";
 import type { AsrModelDownloadLocalPhase } from "./modelDownloadState";
+import {
+  parseAsrModelDownloadResult,
+  parseCancelProcessResult,
+  type AsrModelDownloadResult,
+  type CancelProcessResult,
+} from "./workerResultProtocol";
 
 export {
   ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
   parseAsrModelDownloadProgressEvent,
 } from "./desktopWorkerProtocol";
+export type { AsrModelDownloadResult, CancelProcessResult } from "./workerResultProtocol";
 
 export type LlmConfig = {
   outputDir: string;
@@ -42,15 +49,7 @@ export type FirstRunStatusResponse = {
   asr_model_source: string;
 };
 
-export type AsrModelDownloadResult = {
-  started: boolean;
-  status: "completed" | "cancelled" | "already_available";
-};
-
-export type CancelAsrModelDownloadResult = {
-  status: "cancelling" | "already_cancelling" | "not_running" | "failed";
-  error?: string | null;
-};
+export type CancelAsrModelDownloadResult = CancelProcessResult;
 
 export type AsrModelDownloadProgress = {
   phase: AsrModelDownloadLocalPhase;
@@ -183,13 +182,21 @@ export async function checkFirstRun(
 export async function downloadAsrModel(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<AsrModelDownloadResult> {
-  return (await runner("download_asr_model", {})) as AsrModelDownloadResult;
+  const result = parseAsrModelDownloadResult(await runner("download_asr_model", {}));
+  if (!result) {
+    throw new Error("INVALID_ASR_MODEL_DOWNLOAD_RESPONSE");
+  }
+  return result;
 }
 
 export async function cancelAsrModelDownload(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<CancelAsrModelDownloadResult> {
-  return (await runner("cancel_asr_model_download", {})) as CancelAsrModelDownloadResult;
+  const result = parseCancelProcessResult(await runner("cancel_asr_model_download", {}));
+  if (!result) {
+    throw new Error("INVALID_CANCEL_PROCESS_RESPONSE");
+  }
+  return result;
 }
 
 function mapLlmConfigResponse(response: LlmConfigResponse): LlmConfig {

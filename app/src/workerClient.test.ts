@@ -407,13 +407,13 @@ describe("worker client", () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: CancelCommandRunner = async (command, args) => {
       calls.push({ command, args });
-      return { status: "cancelling" };
+      return { status: "cancelling", error: null };
     };
 
     const result = await cancelProcess(runner);
 
     expect(calls).toEqual([{ command: "cancel_process", args: {} }]);
-    expect(result).toEqual({ status: "cancelling" });
+    expect(result).toEqual({ status: "cancelling", error: null });
   });
 
   test("maps cancel command errors to a structured failed result", async () => {
@@ -427,5 +427,67 @@ describe("worker client", () => {
       status: "failed",
       error: "worker process could not be terminated",
     });
+  });
+
+  test("fails closed when process_video returns an open IPC result", async () => {
+    const result = await processVideo(
+      "https://www.douyin.com/video/7524373044106677544",
+      async () => ({ ...completedResult(), secret: "process-result-secret" }),
+    );
+
+    expect(result).toEqual({
+      status: "failed",
+      task_id: null,
+      task_dir: null,
+      artifacts: {},
+      text: "",
+      summary: "",
+      insights: [],
+      transcript: null,
+      error: {
+        code: "WORKER_PROTOCOL_VIOLATION",
+        message: "",
+        stage: "video_extracting",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("process-result-secret");
+  });
+
+  test("fails closed with retry context when retry_insights returns an open IPC result", async () => {
+    const result = await retryInsights(
+      { taskId: TASK_ID, target: "summary", outputLanguage: "en-US" },
+      async () => ({ ...completedResult(), secret: "retry-result-secret" }),
+    );
+
+    expect(result).toEqual({
+      status: "partial_completed",
+      task_id: TASK_ID,
+      task_dir: null,
+      artifacts: {},
+      text: "",
+      summary: "",
+      insights: [],
+      transcript: null,
+      error: {
+        code: "WORKER_PROTOCOL_VIOLATION",
+        message: "",
+        stage: "insights_generating",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("retry-result-secret");
+  });
+
+  test("fails closed when cancel_process returns an open IPC result", async () => {
+    const result = await cancelProcess(async () => ({
+      status: "cancelling",
+      error: null,
+      secret: "cancel-result-secret",
+    }));
+
+    expect(result).toEqual({
+      status: "failed",
+      error: "INVALID_CANCEL_PROCESS_RESPONSE",
+    });
+    expect(JSON.stringify(result)).not.toContain("cancel-result-secret");
   });
 });

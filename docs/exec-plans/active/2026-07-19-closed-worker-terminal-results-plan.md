@@ -43,8 +43,9 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
 - [x] 2026-07-19: Replaced permissive Rust stdout parsing and raw application `Value` consumption.
   Validation: result protocol 8/8, runner 12/12, video 18/18, model 7/7, and full Rust 157/157
   passed with `cargo fmt --check` and `git diff --check` clean.
-- [ ] 2026-07-19: Parse unknown task/model/cancel IPC values in TypeScript. Validation: focused
-  Vitest suites and production build.
+- [x] 2026-07-19: Parsed unknown task/model/cancel IPC values in TypeScript and copied accepted
+  values into closed results. Validation: focused 127/127, full app 540/540, lint, and production
+  build passed; the existing Vite chunk-size warning remains.
 - [ ] 2026-07-19: Complete full gates, update measured results, and archive this plan. Validation:
   every command in Validation and Acceptance plus clean diff review.
 
@@ -64,6 +65,8 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
 - Evidence: Rust's test harness writes its own progress to child stdout, so self-spawned successful
   fixtures violate the new one-line terminal protocol. Operation fixtures now use quiet platform
   shells that emit only the terminal result; lifecycle-only self-spawned fixtures remain unchanged.
+- Evidence: the production Vite build still reports the pre-existing warning that the main minified
+  chunk exceeds 500 kB; this result parser adds no new runtime dependency.
 
 ## Decision Log
 
@@ -416,7 +419,7 @@ cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check
 
 Expected: zero failures and no format diff.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app\src-tauri\src\worker_runtime app\src-tauri\src\video_processing.rs app\src-tauri\src\asr_model.rs
@@ -439,7 +442,7 @@ git commit -m "refactor(worker): consume validated terminal results"
 `CancelProcessResult`; `settingsClient.ts` and `workerClient.ts` re-export those types. This avoids a
 runtime import cycle while keeping one parser/type definition for both cancel commands.
 
-- [ ] **Step 1: Write direct and gateway RED tests**
+- [x] **Step 1: Write direct and gateway RED tests**
 
 Direct parser tables accept completed/partial/failed and safe unknown codes. They reject class/Date
 objects, every nested unknown field, unknown artifacts, wrong scalars, unsafe integers, bad
@@ -463,7 +466,7 @@ Error-copy test maps `WORKER_PROTOCOL_VIOLATION` to `errors.worker.processFailed
 The direct suite also compares exported task/artifact/insight/status constants with
 `terminalResults.schemas.task` so parser and contract drift fails in the same app test.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```powershell
 npm.cmd test -- --run src\workerResultProtocol.test.ts src\workerClient.test.ts src\settingsClient.test.ts src\workerErrorCopy.test.ts
@@ -472,7 +475,7 @@ npm.cmd test -- --run src\workerResultProtocol.test.ts src\workerClient.test.ts 
 Expected: parser is absent, invalid task values pass through, settings casts accept malformed values,
 and the protocol code uses generic copy.
 
-- [ ] **Step 3: Implement exact plain-object parsers**
+- [x] **Step 3: Implement exact plain-object parsers**
 
 ```typescript
 export function parseWorkerResult(value: unknown): WorkerResult | null;
@@ -485,14 +488,14 @@ enums/nullability, safe-code regex, semantic pairs, and clean copies. Never stri
 values. Model pairs are completed/true, cancelled/false, already_available/false. Cancel requires
 exact status/error, null error for non-failed and string error for failed.
 
-- [ ] **Step 4: Enforce parsers at gateways**
+- [x] **Step 4: Enforce parsers at gateways**
 
 Change low-level task/cancel runners to `Promise<unknown>`. Parse process/retry results and map null
 to the fixed task failure. Preserve thrown-Tauri mapping and progress cleanup. Parse settings
 download/cancel values and throw only `INVALID_ASR_MODEL_DOWNLOAD_RESPONSE` or
 `INVALID_CANCEL_PROCESS_RESPONSE`. Register the protocol error code to existing worker-process copy.
 
-- [ ] **Step 5: Run focused and full app gates**
+- [x] **Step 5: Run focused and full app gates**
 
 ```powershell
 npm.cmd test -- --run src\workerResultProtocol.test.ts src\workerClient.test.ts src\settingsClient.test.ts src\workerErrorCopy.test.ts

@@ -11,21 +11,22 @@ import {
   type WorkerProgressEvent,
   type WorkflowStage,
 } from "./desktopWorkerProtocol";
+import {
+  parseCancelProcessResult,
+  parseWorkerResult,
+  type CancelProcessResult,
+} from "./workerResultProtocol";
 import type { WorkerResult } from "./workflow";
 
 export { WORKER_PROGRESS_EVENT } from "./desktopWorkerProtocol";
 export type { RetryInsightsInput } from "./desktopWorkerProtocol";
+export type { CancelProcessResult } from "./workerResultProtocol";
 
-export type CancelProcessResult = {
-  status: "cancelling" | "already_cancelling" | "not_running" | "failed";
-  error?: string | null;
-};
-
-export type WorkerCommandRunner = (command: string, args: InvokeArgs) => Promise<WorkerResult>;
+export type WorkerCommandRunner = (command: string, args: InvokeArgs) => Promise<unknown>;
 export type CancelCommandRunner = (
   command: string,
   args: InvokeArgs,
-) => Promise<CancelProcessResult>;
+) => Promise<unknown>;
 export type WorkerProgressListener = (
   eventName: string,
   handler: (event: Event<unknown>) => void,
@@ -73,7 +74,10 @@ export async function processVideo(
     : null;
 
   try {
-    return await runner("process_video", { request });
+    return (
+      parseWorkerResult(await runner("process_video", { request })) ??
+      protocolViolationResult(null, "failed", "video_extracting")
+    );
   } catch (error) {
     return failedResult(
       "TAURI_COMMAND_FAILED",
@@ -97,7 +101,14 @@ export async function retryInsights(
   }
 
   try {
-    return await runner("retry_insights", { request: parsed.request });
+    return (
+      parseWorkerResult(await runner("retry_insights", { request: parsed.request })) ??
+      protocolViolationResult(
+        parsed.request.task_id,
+        "partial_completed",
+        "insights_generating",
+      )
+    );
   } catch (error) {
     return {
       status: "partial_completed",
@@ -121,7 +132,12 @@ export async function cancelProcess(
   runner: CancelCommandRunner = defaultCancelRunner,
 ): Promise<CancelProcessResult> {
   try {
-    return await runner("cancel_process", {});
+    return (
+      parseCancelProcessResult(await runner("cancel_process", {})) ?? {
+        status: "failed",
+        error: "INVALID_CANCEL_PROCESS_RESPONSE",
+      }
+    );
   } catch (error) {
     return {
       status: "failed",
@@ -162,6 +178,28 @@ function invalidRetryPayloadResult(taskId: string | null): WorkerResult {
       code: "INVALID_RETRY_PAYLOAD",
       message: "",
       stage: "insights_generating",
+    },
+  };
+}
+
+function protocolViolationResult(
+  taskId: string | null,
+  status: "failed" | "partial_completed",
+  stage: WorkflowStage,
+): WorkerResult {
+  return {
+    status,
+    task_id: taskId,
+    task_dir: null,
+    artifacts: {},
+    text: "",
+    summary: "",
+    insights: [],
+    transcript: null,
+    error: {
+      code: "WORKER_PROTOCOL_VIOLATION",
+      message: "",
+      stage,
     },
   };
 }

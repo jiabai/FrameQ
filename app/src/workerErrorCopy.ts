@@ -49,6 +49,7 @@ export const WORKER_ERROR_MESSAGE_CODES = {
   WORKER_ALREADY_RUNNING: "worker.alreadyRunning",
   WORKER_REQUEST_TRANSPORT_FAILED: "worker.transportFailed",
   WORKER_PROCESS_FAILED: "worker.processFailed",
+  WORKER_PROTOCOL_VIOLATION: "worker.processFailed",
   TAURI_COMMAND_FAILED: "worker.processFailed",
 } as const;
 
