@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test, vi } from "vitest";
 import { createGuestAccountStatus } from "../../accountState";
 import {
   createInitialWorkflow,
+  requestProcessingCancellation,
   startProcessing,
   startInsightRetry,
   summarizeWorkerResult,
@@ -125,7 +126,6 @@ describe("task domain workspaces", () => {
       <>
         <TaskStatusBanner model={model.banner} />
         <LocalTranscriptWorkspace
-          workflow={workflow}
           model={model.local}
           controller={transcriptController()}
           actionNotice={null}
@@ -133,7 +133,6 @@ describe("task domain workspaces", () => {
           onCancel={vi.fn()}
         />
         <AiGenerationWorkspace
-          workflow={workflow}
           model={model.ai}
           quotaRemaining={8}
           onSummaryAction={vi.fn()}
@@ -168,7 +167,6 @@ describe("task domain workspaces", () => {
     const processingMarkup = renderToStaticMarkup(
       <>
         <LocalTranscriptWorkspace
-          workflow={processingWorkflow}
           model={processingModel.local}
           controller={transcriptController()}
           actionNotice={null}
@@ -176,7 +174,6 @@ describe("task domain workspaces", () => {
           onCancel={vi.fn()}
         />
         <AiGenerationWorkspace
-          workflow={processingWorkflow}
           model={processingModel.ai}
           quotaRemaining={8}
           onSummaryAction={vi.fn()}
@@ -203,7 +200,6 @@ describe("task domain workspaces", () => {
     const failedModel = createTaskWorkspaceViewModel(failedWorkflow, aiAccount());
     const failedMarkup = renderToStaticMarkup(
       <LocalTranscriptWorkspace
-        workflow={failedWorkflow}
         model={failedModel.local}
         controller={transcriptController()}
           actionNotice={null}
@@ -217,7 +213,6 @@ describe("task domain workspaces", () => {
     const generatingModel = createTaskWorkspaceViewModel(generatingWorkflow, aiAccount());
     const generatingMarkup = renderToStaticMarkup(
       <AiGenerationWorkspace
-        workflow={generatingWorkflow}
         model={generatingModel.ai}
         quotaRemaining={8}
         onSummaryAction={vi.fn()}
@@ -237,7 +232,6 @@ describe("task domain workspaces", () => {
     const extractingModel = createTaskWorkspaceViewModel(extractingWorkflow, aiAccount());
     const extractingMarkup = renderToStaticMarkup(
       <LocalTranscriptWorkspace
-        workflow={extractingWorkflow}
         model={extractingModel.local}
         controller={transcriptController()}
         actionNotice={null}
@@ -260,7 +254,6 @@ describe("task domain workspaces", () => {
     const transcribingModel = createTaskWorkspaceViewModel(transcribingWorkflow, aiAccount());
     const transcribingMarkup = renderToStaticMarkup(
       <LocalTranscriptWorkspace
-        workflow={transcribingWorkflow}
         model={transcribingModel.local}
         controller={transcriptController()}
         actionNotice={null}
@@ -289,7 +282,6 @@ describe("task domain workspaces", () => {
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
     const markup = renderToStaticMarkup(
       <LocalTranscriptWorkspace
-        workflow={workflow}
         model={model.local}
         controller={transcriptController()}
           actionNotice={null}
@@ -309,12 +301,43 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("result-grid");
   });
 
+  test("renders an audio-only local workspace from the facade model without workflow state", () => {
+    const workflow = summarizeWorkerResult({
+      status: "completed",
+      task_id: "audio-only-task",
+      task_dir: "D:/FrameQ/outputs/tasks/audio-only-task",
+      artifacts: {
+        audio: "media/audio.wav",
+        transcript_txt: "transcript/transcript.txt",
+        transcript_md: "transcript/transcript.md",
+      },
+      text: "音频文件文字稿。",
+      summary: "",
+      insights: [],
+      transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
+      error: null,
+    });
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={transcriptController()}
+        actionNotice={null}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).not.toContain("定位视频");
+    expect(markup).toContain("定位音频");
+    expect(markup).toContain("来源：本地 ASR");
+  });
+
   test("AI workspace has independent summary and inspiration targets without a mindmap target", () => {
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
     const markup = renderToStaticMarkup(
       <AiGenerationWorkspace
-        workflow={workflow}
         model={model.ai}
         quotaRemaining={8}
         onSummaryAction={vi.fn()}
@@ -340,12 +363,31 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain('class="primary-button"');
   });
 
+  test("renders AI cancellation from the facade model without workflow state", () => {
+    const workflow = requestProcessingCancellation(
+      startInsightRetry(readyWorkflow(), "summary"),
+    );
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <AiGenerationWorkspace
+        model={model.ai}
+        quotaRemaining={8}
+        onSummaryAction={vi.fn()}
+        onInsightsAction={vi.fn()}
+        onViewTarget={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("正在取消");
+    expect(markup).toMatch(/class="secondary-button danger-soft ai-cancel-button"[^>]*disabled=""/);
+  });
+
   test("AI generation keeps transcript review visible but disables editing and saving", () => {
     const workflow = startInsightRetry(readyWorkflow(), "summary");
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
     const markup = renderToStaticMarkup(
       <LocalTranscriptWorkspace
-        workflow={workflow}
         model={model.local}
         controller={transcriptController()}
           actionNotice={null}
@@ -376,7 +418,6 @@ describe("task domain workspaces", () => {
     const model = createTaskWorkspaceViewModel(workflow, aiAccount(0));
     const markup = renderToStaticMarkup(
       <AiGenerationWorkspace
-        workflow={workflow}
         model={model.ai}
         quotaRemaining={0}
         notice={{ messageCode: "preferences.notice.preferencesReadFailed" }}
@@ -405,7 +446,6 @@ describe("task domain workspaces", () => {
       const model = createTaskWorkspaceViewModel(workflow, aiAccount());
       const markup = renderToStaticMarkup(
         <LocalTranscriptWorkspace
-          workflow={workflow}
           model={model.local}
           controller={transcriptController()}
           actionNotice={null}
@@ -447,7 +487,6 @@ describe("task domain workspaces", () => {
     const model = createTaskWorkspaceViewModel(failedWorkflow, aiAccount());
     const markup = renderToStaticMarkup(
       <LocalTranscriptWorkspace
-        workflow={failedWorkflow}
         model={model.local}
         controller={transcriptController()}
           actionNotice={null}

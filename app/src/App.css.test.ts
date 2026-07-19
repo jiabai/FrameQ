@@ -225,10 +225,13 @@ describe("App result workspace layout styles", () => {
     expect(groupedIconFeedbackRule).toContain("background: rgba(255, 255, 255, 0.82);");
   });
 
-  test("uses explicit task copy for the processing cancel action", () => {
+  test("uses facade cancellation state for the processing cancel action", () => {
     expect(localTranscriptWorkspaceTsx).toContain('t("workspace.cancelling")');
     expect(localTranscriptWorkspaceTsx).toContain('t("workspace.cancel")');
-    expect(localTranscriptWorkspaceTsx).toContain('disabled={workflow.stage === "cancelling"}');
+    expect(localTranscriptWorkspaceTsx).toContain("model.cancellation.visible");
+    expect(localTranscriptWorkspaceTsx).toContain("disabled={!model.cancellation.enabled}");
+    expect(localTranscriptWorkspaceTsx).toContain("model.cancellation.inProgress");
+    expect(localTranscriptWorkspaceTsx).not.toContain("workflow.stage");
   });
 
   test("routes sign-out cancellation through the workflow controller", () => {

@@ -546,7 +546,6 @@ function App() {
               <TaskStatusBanner model={taskWorkspaceModel.banner} />
               <div className="task-workspace-layout">
                 <LocalTranscriptWorkspace
-                  workflow={workflow}
                   model={taskWorkspaceModel.local}
                   controller={transcriptDetailController}
                   actionNotice={aiActionNotice ? null : actionNotice}
@@ -554,7 +553,6 @@ function App() {
                   onCancel={() => void cancelCurrentProcessing()}
                 />
                 <AiGenerationWorkspace
-                  workflow={workflow}
                   model={taskWorkspaceModel.ai}
                   quotaRemaining={account.llmQuotaRemaining}
                   notice={aiActionNotice}

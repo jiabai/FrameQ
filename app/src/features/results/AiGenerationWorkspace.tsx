@@ -2,12 +2,11 @@ import { AlertTriangle, Lightbulb, ListChecks, LoaderCircle, X } from "lucide-re
 import { useTranslation } from "react-i18next";
 
 import type { TaskWorkspaceViewModel, AiTargetViewModel } from "../../taskWorkspaceViewModel";
-import type { InsightRetryTarget, WorkflowState } from "../../workflow";
+import type { InsightRetryTarget } from "../../workflow";
 import { isSupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 
 type AiGenerationWorkspaceProps = {
-  workflow: WorkflowState;
   model: TaskWorkspaceViewModel["ai"];
   quotaRemaining: number;
   notice?: UiMessage | null;
@@ -18,7 +17,6 @@ type AiGenerationWorkspaceProps = {
 };
 
 export function AiGenerationWorkspace({
-  workflow,
   model,
   quotaRemaining,
   notice = null,
@@ -95,16 +93,16 @@ export function AiGenerationWorkspace({
         />
       </div>
 
-      {model.activeTarget ? (
+      {model.cancellation.visible ? (
         <button
           className="secondary-button danger-soft ai-cancel-button"
           type="button"
           onClick={onCancel}
-          disabled={workflow.stage === "cancelling"}
+          disabled={!model.cancellation.enabled}
         >
           <X size={16} />
           <span>
-            {workflow.stage === "cancelling"
+            {model.cancellation.inProgress
               ? t("action.cancelling")
               : t("action.cancel")}
           </span>

@@ -4,13 +4,12 @@ import { useTranslation } from "react-i18next";
 import { isSupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { TaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
-import type { TaskArtifactKey, WorkflowState } from "../../workflow";
+import type { TaskArtifactKey } from "../../workflow";
 import { TranscriptReviewPanel } from "./TranscriptReviewPanel";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
 import { WorkerErrorNotice } from "../results/WorkerErrorNotice";
 
 type LocalTranscriptWorkspaceProps = {
-  workflow: WorkflowState;
   model: TaskWorkspaceViewModel["local"];
   controller: TranscriptDetailController;
   actionNotice: UiMessage | null;
@@ -19,7 +18,6 @@ type LocalTranscriptWorkspaceProps = {
 };
 
 export function LocalTranscriptWorkspace({
-  workflow,
   model,
   controller,
   actionNotice,
@@ -67,19 +65,21 @@ export function LocalTranscriptWorkspace({
               {t(localProgressStepKey(step.id))}
             </span>
           ))}
-          <button
-            className="secondary-button danger-soft"
-            type="button"
-            onClick={onCancel}
-            disabled={workflow.stage === "cancelling"}
-          >
-            <X size={16} />
-            <span>
-              {workflow.stage === "cancelling"
-                ? t("workspace.cancelling")
-                : t("workspace.cancel")}
-            </span>
-          </button>
+          {model.cancellation.visible ? (
+            <button
+              className="secondary-button danger-soft"
+              type="button"
+              onClick={onCancel}
+              disabled={!model.cancellation.enabled}
+            >
+              <X size={16} />
+              <span>
+                {model.cancellation.inProgress
+                  ? t("workspace.cancelling")
+                  : t("workspace.cancel")}
+              </span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -91,37 +91,42 @@ export function LocalTranscriptWorkspace({
 
       {model.canReview ? (
         <TranscriptReviewPanel
-          workflow={workflow}
+          transcriptSource={model.transcriptSource}
           controller={controller}
           editingDisabled={!model.canEdit}
           readOnlyReason={
             model.readOnly ? t("review.readOnlyDuringAi") : null
           }
-          artifactToolbar={(
+          artifactToolbar={model.artifactActions.locateVideo.visible ||
+            model.artifactActions.locateAudio.visible ? (
             <div
               className="local-artifact-toolbar"
               aria-label={t("workspace.artifactActions")}
             >
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => onLocateArtifact("video")}
-                disabled={!workflow.artifacts.video}
-              >
-                <Film size={16} />
-                <span>{t("workspace.locateVideo")}</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => onLocateArtifact("audio")}
-                disabled={!workflow.artifacts.audio}
-              >
-                <FileAudio size={16} />
-                <span>{t("workspace.locateAudio")}</span>
-              </button>
+              {model.artifactActions.locateVideo.visible ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => onLocateArtifact("video")}
+                  disabled={!model.artifactActions.locateVideo.enabled}
+                >
+                  <Film size={16} />
+                  <span>{t("workspace.locateVideo")}</span>
+                </button>
+              ) : null}
+              {model.artifactActions.locateAudio.visible ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => onLocateArtifact("audio")}
+                  disabled={!model.artifactActions.locateAudio.enabled}
+                >
+                  <FileAudio size={16} />
+                  <span>{t("workspace.locateAudio")}</span>
+                </button>
+              ) : null}
             </div>
-          )}
+          ) : undefined}
         />
       ) : model.phase !== "processing" ? (
         <p className="workspace-empty-copy">{t("workspace.empty")}</p>

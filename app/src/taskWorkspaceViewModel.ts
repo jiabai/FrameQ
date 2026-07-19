@@ -41,6 +41,22 @@ export type TaskStatusBannerViewModel = {
   progressMessage: ProgressMessageDescriptor | null;
 };
 
+export type WorkspaceCancellationViewModel = {
+  visible: boolean;
+  enabled: boolean;
+  inProgress: boolean;
+};
+
+export type ArtifactActionViewModel = {
+  visible: boolean;
+  enabled: boolean;
+};
+
+export type TranscriptSourceViewModel =
+  | { kind: "asr" }
+  | { kind: "subtitle"; language: string | null }
+  | null;
+
 function hasSavedTranscript(workflow: WorkflowState): boolean {
   return Boolean(
     workflow.taskId &&
@@ -126,6 +142,37 @@ function cancellationOwner(workflow: WorkflowState): WorkspaceCancellationOwner 
   return null;
 }
 
+function workspaceCancellation(
+  owner: WorkspaceCancellationOwner,
+  workspace: Exclude<WorkspaceCancellationOwner, null>,
+  workflow: WorkflowState,
+): WorkspaceCancellationViewModel {
+  const visible = owner === workspace;
+  const inProgress = visible && workflow.stage === "cancelling";
+  return {
+    visible,
+    enabled: visible && !inProgress,
+    inProgress,
+  };
+}
+
+function artifactAction(
+  transcriptReady: boolean,
+  artifactPath: string | undefined,
+): ArtifactActionViewModel {
+  const available = transcriptReady && Boolean(artifactPath);
+  return { visible: available, enabled: available };
+}
+
+function transcriptSource(workflow: WorkflowState): TranscriptSourceViewModel {
+  if (!workflow.transcript) {
+    return null;
+  }
+  return workflow.transcript.source === "subtitle"
+    ? { kind: "subtitle", language: workflow.transcript.language }
+    : { kind: "asr" };
+}
+
 export function createTaskWorkspaceViewModel(
   workflow: WorkflowState,
   account: AccountStatus,
@@ -146,6 +193,7 @@ export function createTaskWorkspaceViewModel(
   const readOnly = transcriptReady && (aiActive || isAiCancellation(workflow));
   const summary = aiTargetStatus(workflow, "summary", transcriptReady);
   const insights = aiTargetStatus(workflow, "insights", transcriptReady);
+  const owner = cancellationOwner(workflow);
   const aiPhase: AiWorkspacePhase = !transcriptReady
     ? "waiting_transcript"
     : aiActive || isAiCancellation(workflow)
@@ -177,7 +225,7 @@ export function createTaskWorkspaceViewModel(
             }),
       stage: workflow.stage,
     } satisfies TaskStatusBannerViewModel,
-    cancellationOwner: cancellationOwner(workflow),
+    cancellationOwner: owner,
     local: {
       taskId: workflow.taskId,
       phase: localPhase,
@@ -185,6 +233,18 @@ export function createTaskWorkspaceViewModel(
       canReview: transcriptReady,
       canEdit: transcriptReady && !readOnly,
       readOnly,
+      cancellation: workspaceCancellation(owner, "local", workflow),
+      artifactActions: {
+        locateVideo: artifactAction(
+          transcriptReady,
+          workflow.artifacts.video,
+        ),
+        locateAudio: artifactAction(
+          transcriptReady,
+          workflow.artifacts.audio,
+        ),
+      },
+      transcriptSource: transcriptSource(workflow),
       error: !transcriptReady && workflow.error?.stage !== "insights_generating"
         ? workflow.error
         : null,
@@ -194,6 +254,7 @@ export function createTaskWorkspaceViewModel(
       phase: aiPhase,
       availability: aiAvailability(account),
       activeTarget: workflow.activeAiTarget,
+      cancellation: workspaceCancellation(owner, "ai", workflow),
       summary,
       insights,
     },

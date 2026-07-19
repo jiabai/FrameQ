@@ -34,7 +34,6 @@ function renderWorkspace() {
 
   return renderToStaticMarkup(
     <AiGenerationWorkspace
-      workflow={workflow}
       model={createTaskWorkspaceViewModel(workflow, account).ai}
       quotaRemaining={8}
       onSummaryAction={vi.fn()}

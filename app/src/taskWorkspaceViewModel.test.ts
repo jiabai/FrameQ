@@ -70,6 +70,40 @@ describe("task workspace view model", () => {
     expect(model.cancellationOwner).toBe("local");
   });
 
+  test("projects cancellation controls into the workspace that owns the operation", () => {
+    const processing = startProcessing(
+      createInitialWorkflow(),
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    );
+
+    const runningModel = createTaskWorkspaceViewModel(
+      processing,
+      entitledAccount(),
+    );
+
+    expect(runningModel.local.cancellation).toEqual({
+      visible: true,
+      enabled: true,
+      inProgress: false,
+    });
+    expect(runningModel.ai.cancellation).toEqual({
+      visible: false,
+      enabled: false,
+      inProgress: false,
+    });
+
+    const cancellingModel = createTaskWorkspaceViewModel(
+      requestProcessingCancellation(processing),
+      entitledAccount(),
+    );
+
+    expect(cancellingModel.local.cancellation).toEqual({
+      visible: true,
+      enabled: false,
+      inProgress: true,
+    });
+  });
+
   test("keeps semantic worker progress in the view model until render time", () => {
     const workflow = mergeProgressEvent(
       startProcessing(
@@ -108,6 +142,30 @@ describe("task workspace view model", () => {
     expect(model.ai.taskId).toBe(TASK_ID);
     expect(model.ai.summary.status).toBe("available");
     expect(model.ai.insights.status).toBe("available");
+  });
+
+  test("projects source-aware artifact actions and transcript source without exposing workflow state", () => {
+    const workflow = summarizeWorkerResult(
+      transcriptResult({
+        artifacts: {
+          audio: "media/audio.wav",
+          transcript_txt: "transcript/transcript.txt",
+          transcript_md: "transcript/transcript.md",
+        },
+        transcript: { source: "subtitle", language: "en", engine: null },
+      }),
+    );
+
+    const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
+
+    expect(model.local.artifactActions).toEqual({
+      locateVideo: { visible: false, enabled: false },
+      locateAudio: { visible: true, enabled: true },
+    });
+    expect(model.local.transcriptSource).toEqual({
+      kind: "subtitle",
+      language: "en",
+    });
   });
 
   test.each([

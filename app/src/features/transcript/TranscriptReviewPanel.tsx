@@ -13,14 +13,14 @@ import { useTranslation } from "react-i18next";
 import { clampAudioTime, formatAudioClock } from "../../audioReviewBarState";
 import { formatNumber, formatPercent } from "../../i18n/formatters";
 import { resolveSystemLocale } from "../../i18n/locale";
+import type { TranscriptSourceViewModel } from "../../taskWorkspaceViewModel";
 import { isTranscriptSegmentEditDisabled } from "../../transcriptReviewState";
-import type { WorkflowState } from "../../workflow";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
 
 const AUDIO_TIME_SEPARATOR = " / ";
 
 type TranscriptReviewPanelProps = {
-  workflow: WorkflowState;
+  transcriptSource: TranscriptSourceViewModel;
   controller: TranscriptDetailController;
   editingDisabled: boolean;
   readOnlyReason: string | null;
@@ -37,7 +37,7 @@ function formatSegmentTime(startMs: number, locale: ReturnType<typeof resolveSys
 }
 
 export function TranscriptReviewPanel({
-  workflow,
+  transcriptSource,
   controller,
   editingDisabled,
   readOnlyReason,
@@ -82,11 +82,11 @@ export function TranscriptReviewPanel({
     updateFullTranscriptDraft,
   } = controller;
   const transcriptEditButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const sourceLabel = workflow.transcript
-    ? workflow.transcript.source === "subtitle"
-      ? workflow.transcript.language
+  const sourceLabel = transcriptSource
+    ? transcriptSource.kind === "subtitle"
+      ? transcriptSource.language
         ? t("review.source.subtitleWithLanguage", {
-            language: workflow.transcript.language,
+            language: transcriptSource.language,
           })
         : t("review.source.subtitle")
       : t("review.source.asr")
@@ -286,8 +286,6 @@ export function TranscriptReviewPanel({
           onClick={saveTranscriptDraft}
           disabled={
             editingDisabled ||
-            !workflow.taskId ||
-            !workflow.artifacts.transcript_txt ||
             !transcriptDirty ||
             transcriptSaving
           }
