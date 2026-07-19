@@ -1,5 +1,23 @@
 # Security and Compliance
 
+## 2026-07-20 Video-Processing Application Module Boundary
+
+- The root Tauri adapter delegates to focused URL and retry modules without changing strict command
+  inputs or public terminal results. Tauri's generated handler symbols remain at the existing root
+  paths; `lib.rs` command registration is unchanged.
+- URL cache reuse accepts only a requested URL or validated `SourceIdentity` plus ASR model and reads
+  task data exclusively through `SupportedTask`. It cannot spawn workers, resolve settings, log, or
+  access arbitrary manifest paths.
+- Source-identity preflight remains a best-effort cache optimization for failed, wrong-family,
+  unstructured, or protocol-invalid outcomes. Only completed identities influence cache matching;
+  cancellation, busy, and transport categories retain fixed closed process failure mapping.
+- Retry diagnostics contain only validated target, output language, status, and bounded safe error
+  code. They never include task ID, preference snapshot, prompt, transcript, generated body, raw
+  worker detail, URL, path, or credentials.
+- The split introduces no new input/output field, worker invocation, persistence, network access,
+  facade, local-path flow, or local-media placeholder. Contract v3 and the existing result/privacy
+  validators remain authoritative.
+
 ## 2026-07-19 Video-Processing Task-Result Adapter Boundary
 
 - Only `video_processing/task_result.rs` may turn typed process-video or retry-insights worker

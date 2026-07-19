@@ -6,6 +6,8 @@ mod supervisor;
 
 pub(crate) use command::WorkerCommandSpec;
 pub(crate) use facade::{VideoWorkerFacade, WorkerJob};
+#[cfg(test)]
+pub(crate) use result_protocol::SourceIdentityFailure;
 pub(crate) use result_protocol::{
     ModelDownloadTerminalResult, SourceIdentityTerminalResult, TaskTerminalResult,
     ValidatedWorkerResult, WORKER_PROTOCOL_MESSAGE, WORKER_PROTOCOL_VIOLATION,

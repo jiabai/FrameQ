@@ -49,6 +49,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   command, implemented it without contract-v4 behavior, and archived its ExecPlan. Validation:
   architecture review accepted `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`;
   focused/cross-layer gates and the native Rust 159/159 suite passed.
+- [x] 2026-07-20: Split the remaining video-processing application hotspot before contract-v4
+  implementation. Validation: root reduced from 1,118 to 68 lines; preflight matrix 4/4 and all
+  `video_processing` 24/24 passed; complete Rust 163/163, App 542/542, scripts 23/23, dependency
+  scans, rustfmt, lint, app/Tauri no-bundle builds, governance, and diff gates passed.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -91,10 +95,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   task JSON used direct `write_text` and artifact discovery trusted existence. The implemented
   shared atomic-file boundary now stages, syncs, validates media, replaces per file, removes handled
   partials, and restricts artifact discovery to known ordinary official files.
-- Evidence: `video_processing.rs` still maps typed task worker outcomes through caller-supplied
-  stage/status/message strings. The accepted task-result adapter will close that application policy
-  before the local-media command adds another task-result-producing path; cache, preflight, settings,
-  diagnostics, and contract v4 remain outside that prerequisite.
+- Evidence: the task-result adapter now closes typed process/retry failure policy, but the remaining
+  `video_processing.rs` still combines strict AI retry, model-aware URL cache, source-identity
+  preflight, ASR request preparation, diagnostics, and Tauri command orchestration. The approved
+  follow-up split isolates those current workflows before contract-v4 adds a separate local source.
 
 ## Decision Log
 
@@ -165,12 +169,17 @@ remain governed by the existing separate summary/inspiration confirmation.
   strings. Rationale: local media should join an explicit tested result policy without expanding the
   worker runtime facade or mixing path-sensitive implementation into this refactor.
   Date/Author: 2026-07-19, User + Codex.
+- Decision: Split current retry, URL cache, and URL process/config/preflight responsibilities into
+  focused private child modules before contract v4, without adding another facade or a dead local
+  source module. Rationale: local-media implementation should enter a small composition boundary,
+  while current cache tolerance and safe diagnostics remain independently testable.
+  Date/Author: 2026-07-20, User + Codex.
 
 ## Outcomes & Retrospective
 
 Planning is complete. Local-media product implementation has not started; its task-access,
-typed-worker-execution, media-preparation facade, and crash-safe file-commit prerequisites are
-complete. This document records the approved product, architecture, security, contract,
+typed-worker-execution, media-preparation facade, crash-safe file-commit, task-result, and
+video-processing module-boundary prerequisites are complete. This document records the approved product, architecture, security, contract,
 persistence, test, and native-acceptance scope so the remaining implementation can proceed without
 reopening caller-local manifest/path checks, worker policy composition, or partial-file semantics.
 
@@ -190,6 +199,8 @@ directory, even though the complete path is never stored.
 - Worker execution prerequisite: `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
 - Task-result adapter prerequisite:
   `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`.
+- Video-processing module-split prerequisite:
+  `docs/design-docs/2026-07-20-video-processing-module-split.md`.
 - Media preparation prerequisite: `docs/design-docs/2026-07-19-media-preparation-facade.md`.
 - Shared wire protocol: `contracts/desktop-worker-contract.json`,
   `app/src/desktopWorkerContract.test.ts`, and `worker/tests/test_contract.py`.
@@ -254,6 +265,22 @@ directory, even though the complete path is never stored.
      blocked-stdin cancellation fixture. The earlier sandbox-only failure was traced to `taskkill`
      receiving `Access denied`; no worker-runtime source change was required. Dedicated ExecPlan:
      `docs/exec-plans/completed/2026-07-19-video-processing-task-result-boundary-plan.md`.
+
+0.3. [x] Split current Rust video-processing application responsibilities before contract v4.
+   - Add a pure classifier and complete behavior matrix for source-identity preflight before moving
+     the orchestration.
+   - Extract strict retry request/execution/diagnostics, model-aware URL cache policy, and URL
+     request/config/preflight/process orchestration into focused private modules.
+   - Keep the existing task-result adapter, Tauri command paths, contract v3, worker, manifest,
+     cache, cancellation, diagnostics, and user-visible behavior unchanged.
+   - Add no generic facade, `ProcessLocalMedia` variant, or empty local-media module; those remain
+     atomic with contract v4 and the real worker consumer.
+   - Complete the focused/full Rust and cross-layer gates in the dedicated ExecPlan before starting
+     contract-v4 RED tests.
+   - Implemented on 2026-07-20: root 68 lines; retry/cache/URL modules own their approved boundaries;
+     focused 24/24, Rust 163/163, App 542/542, scripts 23/23, dependency, formatting, build,
+     Tauri no-bundle release, governance, and diff gates passed. Dedicated ExecPlan:
+     `docs/exec-plans/completed/2026-07-20-video-processing-module-split-plan.md`.
 
 1. [ ] Lock contract v4 and source types through RED tests.
    - Extend the shared contract without changing the cleaned v3 `process_video` request.

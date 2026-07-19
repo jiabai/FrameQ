@@ -1,5 +1,25 @@
 # FrameQ Architecture
 
+## 2026-07-20 Video-processing application module boundary
+
+- `video_processing.rs` is now a 68-line Tauri adapter/module root. It retains the three stable
+  command entry points, cancellation, and narrowly shared trusted desktop task-result DTO support;
+  the process and retry commands delegate immediately to focused child modules.
+- `video_processing/url_processing.rs` owns strict process-video IPC/worker DTOs, contract-v3 ASR
+  request resolution, exact-URL then canonical-identity cache orchestration, source-identity
+  preflight, cache-hit diagnostics, and semantic process job submission.
+- Source-identity preflight is an explicit closed policy: completed identity enables the second
+  cache lookup; failed identity, wrong result family, unstructured failure, and protocol violation
+  continue without identity; cancellation, busy, and remaining transport errors stay terminal.
+- `video_processing/url_cache.rs` owns model-aware validated URL-task reuse. Its API accepts only URL
+  or `SourceIdentity` plus ASR model, reads through `SupportedTask`, and has no Tauri, worker-job,
+  settings, runtime-path, supervisor, or diagnostics dependency.
+- `video_processing/retry_insights.rs` owns strict retry parsing, execution, and safe diagnostics and
+  has no URL cache, source-identity, task-manifest, or ASR-settings dependency.
+- The existing `video_processing/task_result.rs` remains the sole closed process/retry task-outcome
+  mapper. Tauri command names/registration, contract v3, worker/runtime behavior, manifest schema,
+  frontend behavior, cancellation, and future local-media contract v4 are unchanged.
+
 ## 2026-07-19 Video-processing task-result adapter boundary
 
 - `video_processing.rs` remains the Tauri command adapter and application orchestrator for request

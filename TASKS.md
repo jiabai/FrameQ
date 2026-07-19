@@ -65,6 +65,17 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the remaining video-processing application hotspot by workflow boundary (2026-07-20) — ✅ Acceptance:
+  kept `video_processing.rs` as a 68-line Tauri adapter/cancellation owner; extracted strict AI retry, model-aware
+  URL cache, and URL process/config/preflight orchestration into focused private child modules.
+  The complete 4-case source-preflight matrix preceded implementation; command paths, contract v3,
+  cache/result/diagnostic/cancellation behavior remain unchanged, with no new facade or local-media
+  placeholder. Retry 6/6, cache 5/5, URL/preflight 9/9, task-result 4/4, complete Rust 163/163, App
+  542/542, scripts 23/23, dependency scans, rustfmt, lint/build, Tauri no-bundle release build,
+  docs/diff gates passed.
+  Design: `docs/design-docs/2026-07-20-video-processing-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-20-video-processing-module-split-plan.md`.
+
 - [x] Extract video-processing task-result adaptation behind a focused private module (2026-07-19) — ✅
   Implemented and accepted in `1fa2f37`:
   - Keep `video_processing.rs` as the Tauri/application orchestrator while moving only typed worker
