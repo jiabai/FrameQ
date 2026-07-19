@@ -1,5 +1,6 @@
 mod command;
 mod facade;
+mod result_protocol;
 mod runner;
 mod supervisor;
 

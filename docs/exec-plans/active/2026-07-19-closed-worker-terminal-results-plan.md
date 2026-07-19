@@ -37,6 +37,9 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
 - [x] 2026-07-19: Registered closed result schemas and safe Python producers after expected RED
   failures for missing schema, leaked `model_dir`/exception text, and the wrong source failure family.
   Validation: Python contract 12/12, TypeScript contract 10/10, and Python CLI/model 35/35 passed.
+- [x] 2026-07-19: Added the Rust operation-specific terminal-result parser after an expected RED
+  compile failure for the absent API. Validation: result-protocol tests 8/8 and `cargo fmt --check`
+  passed; dead-code warnings are expected until Task 4 connects the parser to the runner.
 - [ ] 2026-07-19: Replace permissive Rust stdout parsing and raw application `Value` consumption.
   Validation: focused result-protocol, runner, video, and model tests.
 - [ ] 2026-07-19: Parse unknown task/model/cancel IPC values in TypeScript. Validation: focused
@@ -260,7 +263,7 @@ process/retry.
 
 Run Step 2. Expected: all focused tests pass without the secret in output.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add worker\frameq_worker\worker_service.py worker\frameq_worker\cli.py worker\tests\test_model_download.py worker\tests\test_cli.py
@@ -273,7 +276,7 @@ git commit -m "fix(worker): sanitize terminal result producers"
 - Create: `app/src-tauri/src/worker_runtime/result_protocol.rs`
 - Modify: `app/src-tauri/src/worker_runtime/mod.rs`
 
-- [ ] **Step 1: Create the test module and write failing parser tests**
+- [x] **Step 1: Create the test module and write failing parser tests**
 
 ```rust
 let parsed = parse_terminal_result(
@@ -296,7 +299,7 @@ two non-empty lines, operation mismatch, source URL/identity mismatch, and model
 Create the file with this test module and register `mod result_protocol;` in `worker_runtime/mod.rs`,
 but leave the production types/functions absent for the RED compile.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\Github\FrameQ\app\src-tauri\target'
@@ -305,7 +308,7 @@ cargo test --manifest-path app\src-tauri\Cargo.toml worker_runtime::result_proto
 
 Expected: compilation fails because the module/API is absent.
 
-- [ ] **Step 3: Implement strict framing and DTOs**
+- [x] **Step 3: Implement strict framing and DTOs**
 
 ```rust
 pub(crate) const WORKER_PROTOCOL_VIOLATION: &str = "WORKER_PROTOCOL_VIOLATION";
@@ -331,7 +334,7 @@ Use strict UTF-8, exactly one trimmed non-empty line, operation-selected Serde D
 64-byte safe codes, terminal status/error coherence, fixed model messages, safe source identity, and
 `source_url == canonical_url`.
 
-- [ ] **Step 4: Run focused parser tests and verify GREEN**
+- [x] **Step 4: Run focused parser tests and verify GREEN**
 
 Run Step 2. Expected: result-protocol tests pass; runner fixtures are completed in Task 4.
 
