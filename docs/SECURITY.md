@@ -1,5 +1,23 @@
 # Security and Compliance
 
+## 2026-07-19 Worker Atomic Artifact Commit Boundary
+
+- Official task video, audio, manifest, and preference-snapshot paths must never be used as scratch
+  outputs. Copies, FFmpeg output, and JSON text are staged beside the destination and installed only
+  through a same-directory atomic replacement after required validation succeeds.
+- Media staging names must be unique, retain a tool-compatible final suffix, stay inside the owning
+  task directory, and remain outside the manifest artifact allowlist. Cleanup is best effort, but a
+  leftover staging file is never authoritative and must not be returned to UI or History.
+- A failed write, sync, probe, decode, or replace preserves any previous official file. Raw operating
+  system, source URL, ffprobe, FFmpeg, staging-path, and destination-path text must not cross the
+  structured worker error boundary.
+- `frameq-task.json` is installed atomically after its complete payload is serialized. It may record
+  only committed ordinary files at known task-owned paths; existence of an arbitrary or partial file
+  is insufficient evidence for registration.
+- Per-file atomicity does not promise a cross-file transaction. A failure may retain a previously
+  committed valid artifact, matching existing partial-task preservation, while never claiming a
+  partial artifact succeeded.
+
 ## 2026-07-18 Process-video request contract v3 boundary
 
 - React may send only the raw submitted URL in the strict `process_video` IPC request. It must not

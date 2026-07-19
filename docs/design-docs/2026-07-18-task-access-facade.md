@@ -30,6 +30,9 @@ separate low-level calls.
   must call filesystem APIs, but they no longer receive or mutate the raw manifest.
 - Python exposes `TaskStoreFacade.create/open/finalize/save_preference_snapshot`. `OpenedTask`
   returns the validated `TaskContext` and normalized transcript metadata, not the raw manifest.
+- Python installs the manifest and preference snapshot through the shared atomic artifact-commit
+  boundary. `finalize` registers only committed ordinary official artifacts; task-local staging
+  files remain outside the manifest even if best-effort cleanup cannot remove them.
 - This is an internal refactor. Manifest schema v3, desktop-worker contract v3, IPC/result DTOs,
   task identity, History output, cache matching, transcript backup behavior, and AI retry behavior
   remain unchanged.
@@ -49,6 +52,8 @@ separate low-level calls.
   History/cache/transcript/deletion caller.
 - Artifact key typos become compile-time errors at application call sites.
 - Python retry loads and validates one manifest instead of independently loading it twice.
+- A failed manifest or snapshot replacement preserves the previous valid JSON rather than exposing
+  a truncated authoritative file.
 - `task_manifest.rs` remains physically large because DTO parsing and the facade are colocated. A
   later file split is optional; preserving one non-bypassable trust boundary is more important than
   reducing line count.

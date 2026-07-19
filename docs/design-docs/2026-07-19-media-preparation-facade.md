@@ -42,6 +42,11 @@ For URL sources, the facade owns:
 - subtitle discovery and parsing; and
 - media-preparation progress plus typed, sanitized preparation failures.
 
+Official task video and WAV files are installed through the atomic artifact-commit boundary in
+`docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`. The facade writes media-tool-compatible
+same-directory staging files, validates them before replacement, and returns only committed paths.
+Raw filesystem and media-tool failures remain chained causes behind fixed safe preparation errors.
+
 `run_worker_pipeline` owns the application flow around the facade. It creates and finalizes the task
 through `TaskStoreFacade`, writes a prepared subtitle as the official transcript or invokes ASR with
 `PreparedMedia.audio_path`, and completes the task result. The media facade must not import ASR,
@@ -67,6 +72,8 @@ testable while contract v3 remains the only production process request.
   primitives.
 - Existing URL artifacts, progress codes, subtitle-first behavior, failure mapping, ASR behavior,
   task manifests, and result DTOs remain unchanged.
+- An interrupted copy or audio extraction cannot make a partial official media path visible or
+  registerable; a previous valid official artifact remains intact until replacement commits.
 - Media preparation can evolve by source without absorbing transcription, AI, or persistence.
 - `PreparedMedia.video_path` is optional now so the output contract already tells downstream code
   that audio-only tasks own no video; the local input variants themselves remain deferred to v4.

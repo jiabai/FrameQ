@@ -65,6 +65,13 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Make worker media and task JSON writes crash-safe (2026-07-19) - ✅ Acceptance: stage task
+  video, normalized WAV, manifest, and preference snapshot beside their official destinations;
+  validate media before atomic replacement; preserve previous committed files on failure; register
+  only committed ordinary artifacts; and pass focused/full Worker, Ruff, docs, and diff gates.
+  Design: `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
+
 - [x] Centralize Rust video-worker execution policy behind a typed facade (2026-07-19) - ✅
   `WorkerJob + VideoWorkerFacade` now uniquely derive CLI invocation, lifecycle operation, progress
   route, retry-only LLM material, and the private video lane; model download uses a separate semantic

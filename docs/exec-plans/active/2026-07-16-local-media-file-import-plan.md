@@ -40,6 +40,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   Validation: facade and pipeline-boundary RED tests preceded implementation; 397 worker tests and
   focused Ruff passed with existing URL artifacts, progress, subtitles, errors, and manifests
   unchanged.
+- [ ] 2026-07-19: Make current URL media plus task manifest/preference writes crash-safe before
+  adding local producers. Validation: RED tests must prove direct official-path writes can expose
+  partial media/JSON; GREEN must preserve prior committed files, install only validated staged
+  files, exclude staging from artifacts, and pass the complete worker and Ruff suites.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -78,6 +82,9 @@ remain governed by the existing separate summary/inspiration confirmation.
   task video copying, audio extraction, and subtitle discovery. The implemented media-preparation
   facade now returns task-owned media plus a parsed subtitle candidate while leaving task finalize,
   transcript writing, ASR, and AI in the pipeline.
+- Evidence: the current facade still copies and decodes directly into official task paths, while
+  task JSON uses direct `write_text` and artifact discovery trusts existence. Disk, permission,
+  decoder, or process interruption can therefore leave a partial file at an authoritative name.
 
 ## Decision Log
 
@@ -138,6 +145,11 @@ remain governed by the existing separate summary/inspiration confirmation.
   URL sources so pipeline code does not rescan cache files. Rationale: the facade remains exhaustive
   and useful now without shipping dead local-path handling or leaking media subsystem details.
   Date/Author: 2026-07-19, User + Codex.
+- Decision: Install official worker media and task JSON through unique same-directory staging files,
+  validation where applicable, and `os.replace`; preserve per-file rather than promise cross-file
+  atomicity. Rationale: official names must mean committed content, while an audio failure may still
+  truthfully retain an already validated video under existing partial-task behavior.
+  Date/Author: 2026-07-19, User + Codex.
 
 ## Outcomes & Retrospective
 
@@ -196,6 +208,19 @@ directory, even though the complete path is never stored.
      `MediaPreparationFacade`; keep task persistence, transcript writing, ASR, and AI outside it.
    - Preserve current schema/contract/result behavior and prove it with existing characterization
      suites plus focused facade tests.
+
+0.1. [ ] Make existing worker file commits crash-safe before local-media contract v4.
+   - Add RED tests for interrupted/invalid video copy, partial/invalid WAV extraction, atomic JSON
+     replacement failure, prior-file preservation, staging cleanup, and artifact exclusion.
+   - Add one focused atomic-file module for unique same-directory staging, file sync, optional
+     directory sync, replacement, UTF-8 text writes, and best-effort cleanup.
+   - Make `MediaPreparationFacade` validate staged video/audio before replacement and map filesystem
+     or media-tool failures to fixed safe errors without paths or command output.
+   - Make `TaskStoreFacade` atomically install manifest and preference snapshot, and register only
+     committed ordinary files at known official paths.
+   - Run focused tests after every RED/GREEN step, then the complete worker suite, Ruff, governance
+     validation, and diff checks. Keep contract v4, local source variants, transcript/AI writer
+     transactions, and automatic orphan cleanup outside this prerequisite.
 
 1. [ ] Lock contract v4 and source types through RED tests.
    - Extend the shared contract without changing the cleaned v3 `process_video` request.

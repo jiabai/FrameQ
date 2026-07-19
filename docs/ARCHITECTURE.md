@@ -1,5 +1,22 @@
 # FrameQ Architecture
 
+## 2026-07-19 Worker atomic artifact commit boundary
+
+- Official task media and JSON files are commit destinations, never scratch outputs. Worker-owned
+  producers write to unique same-directory staging files, close and sync those files, validate
+  media where applicable, and install them with `os.replace` only after success.
+- `MediaPreparationFacade` owns staging, validation, installation, and safe failure mapping for the
+  current URL video and normalized WAV. The pipeline receives only committed `PreparedMedia` paths.
+- `TaskStoreFacade` atomically installs `frameq-task.json` and the preference snapshot. The manifest
+  is the final task-result commit record and may reference only committed ordinary files at known
+  official artifact paths.
+- Video and audio use independent per-file commits. A later audio failure may preserve an already
+  committed valid video under existing partial-task semantics, but incomplete staging media never
+  enters artifacts, results, History, or cache authority.
+- This boundary does not add local-media contract v4, change manifest schema v3/result DTOs, or make
+  transcript and AI artifact writers transactional. The durable decision is recorded in
+  `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`.
+
 ## 2026-07-19 Media preparation facade boundary
 
 - Python `run_worker_pipeline` enters download, media selection, ffprobe validation, task-owned
