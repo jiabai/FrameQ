@@ -13,6 +13,7 @@
 - 设计规范：`docs/DESIGN.md`
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
+- Media preparation facade 设计：`docs/design-docs/2026-07-19-media-preparation-facade.md`
 - Task access facade 设计：`docs/design-docs/2026-07-18-task-access-facade.md`
 - Web 宣传站设计规范：`docs/design-docs/web-marketing-site-design.md`
 - Web 宣传站设计参考：`design-system/README.md`

@@ -1,5 +1,22 @@
 # FrameQ Architecture
 
+## 2026-07-19 Media preparation facade boundary
+
+- Python `run_worker_pipeline` enters download, media selection, ffprobe validation, task-owned
+  video copying, audio extraction/reuse, and subtitle discovery only through
+  `MediaPreparationFacade`.
+- The current closed input is `UrlMediaSource`. `LocalVideoSource` and `LocalAudioSource` are added
+  only with desktop-worker contract v4 and the real local-media CLI consumer; no dead variant is
+  reserved under contract v3.
+- The facade returns `PreparedMedia` with optional task-owned video, required task-owned audio, and
+  an optional parsed subtitle candidate. URL subtitle writing and ASR remain pipeline stages; local
+  sources must return no subtitle candidate.
+- `MediaPreparationError` carries a stable code, sanitized message, and workflow stage. The pipeline
+  maps it into a result and owns `TaskStoreFacade.finalize`; the facade does not write manifests.
+- ASR, transcript artifact writing, InsightFlow/AI, History, cache policy, and task persistence stay
+  outside this facade. Existing URL progress, artifacts, results, task schema, and contract v3 are
+  unchanged.
+
 ## 2026-07-18 Task access facade boundary
 
 - Rust raw task-manifest parsing, privacy predicates, relative-path resolution, canonical artifact

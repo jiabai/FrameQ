@@ -35,6 +35,11 @@ remain governed by the existing separate summary/inspiration confirmation.
   `VideoWorkerFacade` before adding the local-media operation. Validation: three RED policy tests
   preceded implementation, then all 149 Rust tests passed; application modules no longer import or
   compose invocation, operation, progress route, request, credentials, or lane policy.
+- [x] 2026-07-19: Consolidated current URL download, media validation/copy, audio extraction/reuse,
+  and subtitle discovery behind Python `MediaPreparationFacade` before extending the source union.
+  Validation: facade and pipeline-boundary RED tests preceded implementation; 397 worker tests and
+  focused Ruff passed with existing URL artifacts, progress, subtitles, errors, and manifests
+  unchanged.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -69,6 +74,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   `ProgressRoute`, retry-only LLM material, and `WorkerLane` independently. The implemented typed
   worker facade now owns that tuple. A `ProcessLocalMedia` job is intentionally absent until contract
   v4 and its Python CLI consumer exist, so the variant and all policies can land atomically.
+- Evidence: `run_worker_pipeline` previously reconstructed URL download, output selection, ffprobe,
+  task video copying, audio extraction, and subtitle discovery. The implemented media-preparation
+  facade now returns task-owned media plus a parsed subtitle candidate while leaving task finalize,
+  transcript writing, ASR, and AI in the pipeline.
 
 ## Decision Log
 
@@ -124,11 +133,16 @@ remain governed by the existing separate summary/inspiration confirmation.
   invocation, lifecycle operation, worker progress route, video lane, and no-LLM policy in one
   exhaustive match. Rationale: current application callers can no longer build inconsistent policy
   tuples, while avoiding an untestable dead variant. Date/Author: 2026-07-19, User + Codex.
+- Decision: Add local source variants to `MediaPreparationFacade` only with contract v4 and the real
+  worker consumer; contract v3 exposes only `UrlMediaSource`. Return a parsed subtitle candidate for
+  URL sources so pipeline code does not rescan cache files. Rationale: the facade remains exhaustive
+  and useful now without shipping dead local-path handling or leaking media subsystem details.
+  Date/Author: 2026-07-19, User + Codex.
 
 ## Outcomes & Retrospective
 
-Planning is complete. Local-media product implementation has not started; its task-access and typed
-worker-execution facade prerequisites are complete. This document records the approved product,
+Planning is complete. Local-media product implementation has not started; its task-access,
+typed-worker-execution, and media-preparation facade prerequisites are complete. This document records the approved product,
 architecture, security, contract, persistence, test, and native-acceptance scope so the remaining
 implementation can proceed without reopening caller-local manifest/path checks or worker policy
 composition.
@@ -147,6 +161,7 @@ directory, even though the complete path is never stored.
 - Persistent decisions: `docs/design-docs/2026-07-16-local-media-file-import.md`.
 - Task access prerequisite: `docs/design-docs/2026-07-18-task-access-facade.md`.
 - Worker execution prerequisite: `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
+- Media preparation prerequisite: `docs/design-docs/2026-07-19-media-preparation-facade.md`.
 - Shared wire protocol: `contracts/desktop-worker-contract.json`,
   `app/src/desktopWorkerContract.test.ts`, and `worker/tests/test_contract.py`.
 - Frontend composition and source state: `app/src/App.tsx`, `app/src/workflowState.ts`,
@@ -157,7 +172,8 @@ directory, even though the complete path is never stored.
 - Desktop task and History boundary: `app/src-tauri/src/task_manifest.rs`,
   `app/src-tauri/src/history.rs`, and `app/src-tauri/src/history_deletion.rs`.
 - Canonical worker: `worker/frameq_worker/desktop_contract.py`,
-  `worker/frameq_worker/pipeline.py`, `worker/frameq_worker/media.py`,
+  `worker/frameq_worker/pipeline.py`, `worker/frameq_worker/media_preparation.py`,
+  `worker/frameq_worker/media.py`,
   `worker/frameq_worker/task_store.py`, and worker CLI/service entry points discovered during
   implementation.
 - Packaged worker: the Tauri worker resource mirror, synchronized only by the repository's existing
@@ -169,12 +185,15 @@ directory, even though the complete path is never stored.
 
 ## Plan of Work
 
-0. [x] Centralize current task access and worker execution policy before extending the source union.
+0. [x] Centralize current task access, worker execution, and media preparation policy before
+   extending the source union.
    - Keep raw Rust manifest/path helpers private and migrate History, cache, transcript, and deletion
      to `SupportedTask`, with transcript mutation through `TaskEditSession`.
    - Make Python pipeline and retry use `TaskStoreFacade` for task lifecycle persistence.
    - Route current video/source/AI jobs through `WorkerJob + VideoWorkerFacade`; keep both lanes
      private and expose only semantic execution/cancel/activity methods.
+   - Route current URL download, validation/copy, audio preparation, and subtitle discovery through
+     `MediaPreparationFacade`; keep task persistence, transcript writing, ASR, and AI outside it.
    - Preserve current schema/contract/result behavior and prove it with existing characterization
      suites plus focused facade tests.
 

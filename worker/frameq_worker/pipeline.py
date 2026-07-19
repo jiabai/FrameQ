@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,13 +22,11 @@ from frameq_worker.insightflow import (
     generate_insights_from_markdown,
     generate_summary_from_markdown,
 )
-from frameq_worker.media import (
-    CommandExecutionError,
-    CommandResult,
-    CommandRunner,
-    download_video,
-    extract_audio,
-    probe_media_file,
+from frameq_worker.media import CommandRunner
+from frameq_worker.media_preparation import (
+    MediaPreparationError,
+    MediaPreparationFacade,
+    UrlMediaSource,
 )
 from frameq_worker.model_download import (
     normalize_asr_model_cache_layout,
@@ -58,30 +55,21 @@ from frameq_worker.source_resolution import (
     SourceRequest,
     SourceRequestResolver,
     resolve_source_request,
-    sanitize_source_text,
 )
-from frameq_worker.subtitles import find_subtitle_transcript
+from frameq_worker.subtitles import SubtitleTranscript
 from frameq_worker.task_store import (
     TaskContext,
     TaskStoreFacade,
 )
 
-VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 TranscriberFactory = Callable[[str, Path], Transcriber]
+
+
 @dataclass(frozen=True)
 class PipelineContext:
     task_context: TaskContext
     task_store: TaskStoreFacade
     source_request: SourceRequest
-    download_dir: Path
-    video_id: str | None
-    media_files_before_download: dict[str, tuple[int, int]]
-
-
-@dataclass(frozen=True)
-class DownloadedVideo:
-    result: CommandResult
-    path: Path
 
 
 def run_asr_transcript_step(
@@ -134,16 +122,12 @@ def run_asr_transcript_step(
     )
 
 
-def run_subtitle_transcript_step(
-    download_dir: Path,
+def run_prepared_subtitle_transcript_step(
+    subtitle: SubtitleTranscript,
     output_dir: Path,
     output_stem: str,
     source_identity: SourceIdentity,
 ) -> ProcessResult | None:
-    subtitle = find_subtitle_transcript(download_dir)
-    if subtitle is None:
-        return None
-
     metadata = TranscriptMetadata(
         source="subtitle",
         language=subtitle.language,
@@ -315,170 +299,25 @@ def prepare_pipeline_context(
         request,
         source_request.identity,
     )
-    download_dir = task_context.paths.download_dir
-    video_id = source_request.identity.stable_id
-    media_files_before_download = snapshot_video_files(download_dir)
     return PipelineContext(
         task_context=task_context,
         task_store=task_store,
         source_request=source_request,
-        download_dir=download_dir,
-        video_id=video_id,
-        media_files_before_download=media_files_before_download,
     )
 
 
-def download_and_select_video(
-    context: PipelineContext,
-    command_runner: CommandRunner,
-    progress_callback: ProgressCallback | None,
-) -> DownloadedVideo | ProcessResult:
-    emit_progress(
-        progress_callback,
-        JobStage.VIDEO_EXTRACTING,
-        "video.download.preparing",
-        18,
-    )
-    try:
-        download_result = download_video(
-            context.source_request.download_url,
-            output_dir=context.download_dir,
-            runner=command_runner,
-            progress_callback=progress_callback,
-        )
-    except CommandExecutionError as exc:
-        return context.task_store.finalize(
-            context.task_context,
-            failed_result(
-                code="VIDEO_DOWNLOAD_FAILED",
-                message=sanitize_source_text(str(exc), context.source_request),
-                stage=JobStage.VIDEO_EXTRACTING,
-            ),
-        )
-
-    emit_progress(
-        progress_callback,
-        JobStage.VIDEO_EXTRACTING,
-        "video.stream.validating",
-        34,
-    )
-    video_path = find_video_from_download_stdout(download_result.stdout, context.download_dir)
-    if video_path is None:
-        video_path = (
-            find_video_by_stem(context.download_dir, context.video_id)
-            if context.video_id
-            else None
-        )
-    if video_path is None:
-        video_path = find_new_or_updated_video(
-            context.download_dir,
-            context.media_files_before_download,
-        )
-    if video_path is None:
-        video_path = find_latest_video(context.download_dir)
-    if video_path is None:
-        return context.task_store.finalize(
-            context.task_context,
-            failed_result(
-                code="VIDEO_DOWNLOAD_OUTPUT_MISSING",
-                message="Video download completed but no media file was found.",
-                stage=JobStage.VIDEO_EXTRACTING,
-            ),
-        )
-
-    return DownloadedVideo(result=download_result, path=video_path)
-
-
-def validate_and_copy_video(
-    task_store: TaskStoreFacade,
-    task_context: TaskContext,
-    video_path: Path,
-    command_runner: CommandRunner,
-) -> ProcessResult | None:
-    try:
-        media_info = probe_media_file(video_path, runner=command_runner)
-    except CommandExecutionError:
-        return task_store.finalize(
-            task_context,
-            failed_result(
-                code="MEDIA_VALIDATION_FAILED",
-                message="Downloaded media could not be validated.",
-                stage=JobStage.VIDEO_EXTRACTING,
-            ),
-        )
-
-    if not media_info.is_valid:
-        return task_store.finalize(
-            task_context,
-            failed_result(
-                code="MEDIA_VALIDATION_FAILED",
-                message="Downloaded file must contain valid video and audio streams.",
-                stage=JobStage.VIDEO_EXTRACTING,
-            ),
-        )
-
-    shutil.copy2(video_path, task_context.paths.video_path)
-    return None
-
-
-def prepare_audio(
-    task_store: TaskStoreFacade,
-    task_context: TaskContext,
-    video_path: Path,
-    command_runner: CommandRunner,
-    progress_callback: ProgressCallback | None,
-) -> Path | ProcessResult:
-    emit_progress(
-        progress_callback,
-        JobStage.VIDEO_EXTRACTING,
-        "audio.extract.running",
-        48,
-    )
-    audio_path = task_context.paths.audio_path
-    if can_reuse_audio(audio_path, command_runner):
-        emit_progress(
-            progress_callback,
-            JobStage.VIDEO_EXTRACTING,
-            "audio.extract.reused",
-            50,
-        )
-        return audio_path
-
-    try:
-        extract_audio(video_path, audio_path, runner=command_runner)
-    except CommandExecutionError as exc:
-        return task_store.finalize(
-            task_context,
-            failed_result(
-                code="AUDIO_EXTRACTION_FAILED",
-                message=str(exc),
-                stage=JobStage.VIDEO_EXTRACTING,
-            ),
-        )
-    return audio_path
-
-
-def try_subtitle_transcript_stage(
-    download_result: CommandResult,
-    download_dir: Path,
+def write_prepared_subtitle_stage(
+    subtitle_candidate: SubtitleTranscript | None,
     task_context: TaskContext,
     progress_callback: ProgressCallback | None,
 ) -> ProcessResult | None:
-    emit_progress(
-        progress_callback,
-        JobStage.VIDEO_TRANSCRIBING,
-        "subtitle.detect.running",
-        58,
-    )
-    subtitle_result = (
-        None
-        if download_result.command and download_result.command[0] == "bilibili-fallback"
-        else run_subtitle_transcript_step(
-            download_dir=download_dir,
-            output_dir=task_context.paths.transcript_dir,
-            output_stem="",
-            source_identity=task_context.source_identity,
-        )
+    if subtitle_candidate is None:
+        return None
+    subtitle_result = run_prepared_subtitle_transcript_step(
+        subtitle=subtitle_candidate,
+        output_dir=task_context.paths.transcript_dir,
+        output_stem="",
+        source_identity=task_context.source_identity,
     )
     if subtitle_result is not None:
         emit_progress(
@@ -628,41 +467,26 @@ def run_worker_pipeline(
             stage=JobStage.VIDEO_EXTRACTING,
         )
     task_context = pipeline_context.task_context
-    download_dir = pipeline_context.download_dir
+    try:
+        prepared_media = MediaPreparationFacade(
+            command_runner=command_runner,
+            progress_callback=progress_callback,
+        ).prepare(
+            UrlMediaSource(pipeline_context.source_request),
+            task_context,
+        )
+    except MediaPreparationError as exc:
+        return pipeline_context.task_store.finalize(
+            task_context,
+            failed_result(
+                code=exc.code,
+                message=str(exc),
+                stage=exc.stage,
+            ),
+        )
 
-    downloaded_video = download_and_select_video(
-        context=pipeline_context,
-        command_runner=command_runner,
-        progress_callback=progress_callback,
-    )
-    if isinstance(downloaded_video, ProcessResult):
-        return downloaded_video
-    download_result = downloaded_video.result
-    video_path = downloaded_video.path
-
-    validation_failure = validate_and_copy_video(
-        task_store=pipeline_context.task_store,
-        task_context=task_context,
-        video_path=video_path,
-        command_runner=command_runner,
-    )
-    if validation_failure is not None:
-        return validation_failure
-
-    audio_result = prepare_audio(
-        task_store=pipeline_context.task_store,
-        task_context=task_context,
-        video_path=video_path,
-        command_runner=command_runner,
-        progress_callback=progress_callback,
-    )
-    if isinstance(audio_result, ProcessResult):
-        return audio_result
-    audio_path = audio_result
-
-    subtitle_result = try_subtitle_transcript_stage(
-        download_result=download_result,
-        download_dir=download_dir,
+    subtitle_result = write_prepared_subtitle_stage(
+        subtitle_candidate=prepared_media.subtitle_candidate,
         task_context=task_context,
         progress_callback=progress_callback,
     )
@@ -677,7 +501,7 @@ def run_worker_pipeline(
     transcript_result = run_asr_transcript_stage(
         request=request,
         project_root=project_root,
-        audio_path=audio_path,
+        audio_path=prepared_media.audio_path,
         transcriber=transcriber,
         transcriber_factory=transcriber_factory,
         allow_real_asr=allow_real_asr,
@@ -718,109 +542,6 @@ def resolve_cache_dir(project_root: Path, environ: dict[str, str] | None = None)
     if cache_dir.is_absolute():
         return cache_dir
     return project_root / cache_dir
-
-
-def find_latest_video(output_dir: Path) -> Path | None:
-    if not output_dir.exists():
-        return None
-
-    candidates = [
-        path
-        for path in output_dir.iterdir()
-        if path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
-    ]
-    if not candidates:
-        return None
-
-    return max(candidates, key=lambda path: path.stat().st_mtime)
-
-
-def snapshot_video_files(output_dir: Path) -> dict[str, tuple[int, int]]:
-    if not output_dir.exists():
-        return {}
-
-    snapshot: dict[str, tuple[int, int]] = {}
-    for path in output_dir.iterdir():
-        if not path.is_file() or path.suffix.lower() not in VIDEO_SUFFIXES:
-            continue
-        stat = path.stat()
-        snapshot[path.as_posix()] = (stat.st_mtime_ns, stat.st_size)
-    return snapshot
-
-
-def find_new_or_updated_video(
-    output_dir: Path,
-    previous_snapshot: dict[str, tuple[int, int]],
-) -> Path | None:
-    if not output_dir.exists():
-        return None
-
-    candidates: list[Path] = []
-    for path in output_dir.iterdir():
-        if not path.is_file() or path.suffix.lower() not in VIDEO_SUFFIXES:
-            continue
-        stat = path.stat()
-        signature = (stat.st_mtime_ns, stat.st_size)
-        if previous_snapshot.get(path.as_posix()) != signature:
-            candidates.append(path)
-    if not candidates:
-        return None
-
-    return max(candidates, key=lambda path: path.stat().st_mtime_ns)
-
-
-def find_video_by_stem(output_dir: Path, stem: str | None) -> Path | None:
-    if stem is None or not output_dir.exists():
-        return None
-
-    candidates = [
-        path
-        for path in output_dir.iterdir()
-        if path.is_file() and path.stem == stem and path.suffix.lower() in VIDEO_SUFFIXES
-    ]
-    if not candidates:
-        return None
-
-    return max(candidates, key=lambda path: path.stat().st_mtime)
-
-
-def find_video_from_download_stdout(stdout: str, output_dir: Path) -> Path | None:
-    if not stdout.strip() or not output_dir.exists():
-        return None
-
-    try:
-        output_root = output_dir.resolve()
-    except OSError:
-        return None
-
-    for raw_line in reversed(stdout.splitlines()):
-        raw_path = raw_line.strip().strip("\"'")
-        if not raw_path:
-            continue
-        candidate = Path(raw_path)
-        if not candidate.is_absolute():
-            candidate = output_dir / candidate
-        try:
-            resolved_candidate = candidate.resolve()
-        except OSError:
-            continue
-        if not resolved_candidate.is_relative_to(output_root):
-            continue
-        if candidate.is_file() and candidate.suffix.lower() in VIDEO_SUFFIXES:
-            return candidate
-    return None
-
-
-def can_reuse_audio(audio_path: Path, runner: CommandRunner) -> bool:
-    if not audio_path.exists():
-        return False
-
-    try:
-        audio_info = probe_media_file(audio_path, runner=runner)
-    except CommandExecutionError:
-        return False
-
-    return audio_info.is_valid_audio
 
 
 def failed_result(

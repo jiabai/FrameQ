@@ -1,15 +1,15 @@
 from pathlib import Path
 
 import pytest
-from frameq_worker.asr import Transcript
-from frameq_worker.media import CommandResult
+from frameq_worker.asr import Transcript, TranscriptSegment
 from frameq_worker.pipeline import (
     run_asr_transcript_step,
     run_insight_generation_step,
-    try_subtitle_transcript_stage,
+    write_prepared_subtitle_stage,
 )
 from frameq_worker.requests import parse_preference_snapshot
 from frameq_worker.source_identity import SourceIdentity
+from frameq_worker.subtitles import SubtitleTranscript
 from frameq_worker.task_store import TaskContext, TaskPaths
 
 
@@ -102,12 +102,7 @@ def test_subtitle_found_progress_always_uses_a_safe_language_arg(
         cache_root=tmp_path / "cache",
         task_id="subtitle-language-test",
     )
-    paths.download_dir.mkdir(parents=True)
     paths.transcript_dir.mkdir(parents=True)
-    (paths.download_dir / f"video.{subtitle_language}.srt").write_text(
-        "1\n00:00:01,000 --> 00:00:02,000\nsubtitle text\n",
-        encoding="utf-8",
-    )
     context = TaskContext(
         paths=paths,
         source_identity=SourceIdentity(
@@ -121,9 +116,19 @@ def test_subtitle_found_progress_always_uses_a_safe_language_arg(
     )
     events: list[dict[str, object]] = []
 
-    result = try_subtitle_transcript_stage(
-        CommandResult(["yt-dlp"], 0, "", ""),
-        paths.download_dir,
+    result = write_prepared_subtitle_stage(
+        SubtitleTranscript(
+            text="subtitle text",
+            language=subtitle_language,
+            segments=(
+                TranscriptSegment(
+                    id="subtitle-1",
+                    start_ms=1_000,
+                    end_ms=2_000,
+                    text="subtitle text",
+                ),
+            ),
+        ),
         context,
         events.append,
     )

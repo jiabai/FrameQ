@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import frameq_worker.cli as cli
+import frameq_worker.media_preparation as media_preparation
 import frameq_worker.pipeline as pipeline
 import pytest
 from frameq_worker import platform_source_resolvers as platform_resolvers_module
@@ -567,7 +568,7 @@ def test_run_worker_once_uses_download_stdout_inside_task_cache_dir(
             stderr="",
         )
 
-    monkeypatch.setattr(pipeline, "download_video", fake_download_video)
+    monkeypatch.setattr(media_preparation, "download_video", fake_download_video)
     runner = FakeMediaRunner()
 
     result = run_worker_once(

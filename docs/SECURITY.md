@@ -243,6 +243,21 @@
 - Adding the future local-file source variant must change the central support predicate and its
   contract tests. It must not reintroduce caller-specific URL/local manifest acceptance rules.
 
+## 2026-07-19 Media Preparation Facade Enforcement
+
+- `run_worker_pipeline` must not reconstruct download, downloaded-file selection, ffprobe, video
+  copy, audio extraction/reuse, or subtitle-discovery flows. Those operations enter through
+  `MediaPreparationFacade` and return only `PreparedMedia` or a typed sanitized failure.
+- `MediaPreparationFacade` may receive a validated `TaskContext` for bounded task-owned paths, but
+  it must not import `TaskStoreFacade`, finalize a result, write a task manifest, invoke ASR, or enter
+  InsightFlow/AI.
+- The current facade accepts only `UrlMediaSource`. Future local variants must land together with
+  contract v4 and its real CLI consumer, and must keep the complete local path out of argv, progress,
+  results, errors, logs, manifests, transcripts, prompts, and UI state.
+- A local audio result must expose no video path; local video/audio results expose no subtitle
+  candidate. Partial media remains unregistered until the task persistence boundary validates the
+  final artifact.
+
 ## 2026-07-05 Task Artifact Path Boundary
 
 - Task-manifest artifact-path fields may contain local paths only as relative paths under the owning task directory. Absolute paths, `..`, path traversal, remote URLs, cookies, headers, or credentials must be rejected; the allowlisted `source_identity.canonical_url` is source metadata, not an artifact path.

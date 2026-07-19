@@ -23,18 +23,20 @@ from frameq_worker.desktop_contract import (
     ProgressCallback,
 )
 from frameq_worker.llm import build_insight_client_from_env
-from frameq_worker.pipeline import (
+from frameq_worker.media_preparation import (
     VIDEO_SUFFIXES,
     can_reuse_audio,
-    emit_progress,
-    failed_result,
     find_latest_video,
     find_new_or_updated_video,
     find_video_by_stem,
+    snapshot_video_files,
+)
+from frameq_worker.pipeline import (
+    emit_progress,
+    failed_result,
     resolve_cache_dir,
     resolve_output_dir,
     run_worker_pipeline,
-    snapshot_video_files,
 )
 from frameq_worker.platform_source_resolvers import build_default_source_resolver
 from frameq_worker.progress_events import (

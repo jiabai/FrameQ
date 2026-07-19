@@ -572,7 +572,8 @@ def test_contract_current_file_pattern_matches_portable_runtime_fixtures() -> No
 def test_every_python_producer_code_is_declared_at_its_actual_source() -> None:
     root = Path(__file__).parents[1] / "frameq_worker"
     source_expectations = {
-        "pipeline.py": list(WORKER_SPECS)[:9],
+        "media_preparation.py": list(WORKER_SPECS)[:5],
+        "pipeline.py": list(WORKER_SPECS)[5:9],
         "douyin_fallback.py": [code for code in WORKER_SPECS if code.startswith("douyin.")],
         "xiaohongshu_fallback.py": [
             code for code in WORKER_SPECS if code.startswith("xiaohongshu.")
