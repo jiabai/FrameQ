@@ -1,5 +1,23 @@
 # Security and Compliance
 
+## 2026-07-19 Closed Worker Terminal-Result Boundary
+
+- Python-to-Rust stdout and Rust-to-TypeScript IPC results are untrusted runtime values. Consumers
+  must validate the operation-specific closed top-level and nested shapes before reading any field.
+- Unknown fields, missing fields, wrong types, invalid enums, unsafe codes, incoherent status/error
+  combinations, multiple terminal lines, and operation-family mismatches fail with the fixed
+  `WORKER_PROTOCOL_VIOLATION` code.
+- Protocol failures must never echo or stringify rejected stdout/IPC payloads in public errors,
+  technical details, diagnostics, or logs. This includes task paths, artifact paths, source URLs,
+  transcript text, prompts, generated content, credentials, and raw exception text.
+- Unknown error codes may cross the boundary only when they match the bounded safe-code grammar;
+  they continue to use generic localized UI guidance. This forward-safe behavior does not permit
+  unknown object fields or arbitrary error values.
+- Model-download terminal results must not contain `model_dir`; raw HTTP, archive, filesystem, or
+  downloader exceptions are converted to fixed safe code/message pairs before serialization.
+- The shared contract and cross-language negative tests are release gates. Python producer checks do
+  not replace independent Rust and TypeScript consumer validation.
+
 ## 2026-07-19 Worker Atomic Artifact Commit Boundary
 
 - Official task video, audio, manifest, and preference-snapshot paths must never be used as scratch

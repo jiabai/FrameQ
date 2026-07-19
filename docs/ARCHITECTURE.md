@@ -1,5 +1,23 @@
 # FrameQ Architecture
 
+## 2026-07-19 Closed worker terminal-result boundary
+
+- Each worker operation accepts exactly one declared terminal-result family: task processing and AI
+  retry use `TaskTerminalResult`, source preflight uses `SourceIdentityTerminalResult`, and model
+  download uses `ModelDownloadTerminalResult`.
+- The canonical contract closes every result object and nested object. Rust validates stdout with
+  operation-aware typed DTOs, while TypeScript independently parses unknown IPC values before they
+  enter application state, including cached and synthetic results.
+- The supervised runner retains lifecycle and cancellation ownership and delegates result semantics
+  to a focused protocol module. A validated result wins a cancellation race; missing or malformed
+  output follows the documented cancelled/protocol/unstructured precedence.
+- Worker stdout contains exactly one non-empty terminal JSON line. Progress and diagnostics remain
+  on stderr, and protocol rejection never echoes the raw line, paths, transcript, or generated text.
+- Safe unknown error codes remain structurally valid for generic localized guidance; unknown fields,
+  wrong types, unsafe codes, invalid enums, and operation-family mismatches are rejected.
+- This formalizes contract v3 without implementing local-media v4. The durable decision is recorded
+  in `docs/design-docs/2026-07-19-closed-worker-terminal-results.md`.
+
 ## 2026-07-19 Worker atomic artifact commit boundary
 
 - Official task media and JSON files are commit destinations, never scratch outputs. Worker-owned

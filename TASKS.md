@@ -65,6 +65,14 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Close worker terminal-result contracts across Python, Rust, and TypeScript (2026-07-19) - ✅
+  Acceptance: declare operation-specific closed result families in the canonical v3 contract;
+  require exactly one terminal stdout JSON line; reject unknown/missing fields, wrong nested types,
+  unsafe codes, incoherent statuses, and operation mismatches at both Rust and TypeScript runtime
+  boundaries; preserve cancellation precedence and valid cache/synthetic behavior; never echo a
+  rejected payload; and remove unused `model_dir` from model-download results. Design:
+  `docs/design-docs/2026-07-19-closed-worker-terminal-results.md`.
+
 - [x] Make worker media and task JSON writes crash-safe (2026-07-19) - ✅ Acceptance: stage task
   video, normalized WAV, manifest, and preference snapshot beside their official destinations;
   validate media before atomic replacement; preserve previous committed files on failure; register
