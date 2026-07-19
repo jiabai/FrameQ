@@ -65,15 +65,19 @@
 
 ## Refactoring and Technical Debt
 
-- [ ] Extract video-processing task-result adaptation behind a focused private module (2026-07-19) - ✅ Acceptance:
+- [ ] Close video-processing task-result adapter acceptance (2026-07-19) — ✅ Implementation complete
+  in `1fa2f37`:
   - Keep `video_processing.rs` as the Tauri/application orchestrator while moving only typed worker
     outcome classification and fixed synthetic task failures into
     `video_processing/task_result.rs`. Preserve process-video and retry status/stage/error shapes,
     cancellation precedence, closed terminal validation, diagnostics, cache/preflight behavior, and
-    contract v3. Do not add a dead local-media variant or another execution facade. Adapter tests
-    cover every current runtime outcome and both command contexts; all focused/full
-    Rust, rustfmt, app, scripts, docs, and diff gates pass; contract, worker, manifest, command, and
-    user-visible behavior remain unchanged. Design:
+    contract v3. No dead local-media variant or additional execution facade was added. Four adapter
+    tests, all 20 `video_processing` tests, the dependency boundary, rustfmt, app 542, scripts 23,
+    lint/build, docs, diff, and scope gates pass; contract, worker, manifest, command, and
+    user-visible behavior remain unchanged. The ordinary full Rust gate remains blocked by
+    `blocked_stdin_delivery_remains_cancellable`, which fails identically on untouched local `main`;
+    the other 158 Rust tests pass. Do not mark acceptance complete or archive the ExecPlan until that
+    independent Windows runner baseline is resolved or separately reviewed. Design:
     `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`. ExecPlan:
     `docs/exec-plans/active/2026-07-19-video-processing-task-result-boundary-plan.md`.
 

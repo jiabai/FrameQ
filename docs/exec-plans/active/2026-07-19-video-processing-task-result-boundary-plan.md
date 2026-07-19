@@ -36,8 +36,19 @@
   removed the superseded parent helpers/tests while retaining cache and preflight orchestration.
   Validation: 4 focused adapter tests and all 20 `video_processing` tests passed; the dependency
   boundary and rustfmt checks passed.
-- [ ] Run focused and full regression gates, synchronize architecture/security/audit/local-media
-  governance, record evidence, and archive this plan.
+- [x] 2026-07-19: Completed every independent cross-layer gate. Validation: all 63 app test files
+  and 542 tests passed; TypeScript/i18n lint passed; Vite transformed 2,123 modules and built
+  successfully with the existing 659.62 kB main-chunk warning; all 23 repository script tests
+  passed; governance reported 0 errors and 0 warnings; `git diff --check` passed; and scope review
+  found no worker, contract, manifest implementation, packaged-worker, or frontend production diff.
+- [x] 2026-07-19: Synchronized the implemented architecture, security boundary, measured audit,
+  local-media prerequisite, task tracking, design status, and this retrospective without falsely
+  archiving the blocked plan. Validation: governance reported 0 errors and 0 warnings and
+  `git diff --check` passed.
+- [ ] Finish strict Rust acceptance and archive this plan. All scoped implementation and independent
+  cross-layer gates are complete, and architecture/security/audit/local-media governance is
+  synchronized. Archive remains blocked only by the pre-existing Windows runner baseline recorded
+  below.
 
 ## Surprises & Discoveries
 
@@ -64,6 +75,10 @@
   fails identically on the untouched local `main`, and `runner.rs` has no branch diff. Running the
   suite with only that baseline test skipped passed all 158 remaining tests. This plan does not alter
   worker runtime to hide or bundle that independent blocker.
+- PowerShell blocked the `npm.ps1` wrapper and the isolated worktree intentionally had no duplicate
+  dependency install. The app gates therefore used `npm.cmd` plus a temporary ignored junction to
+  the main worktree's lockfile-matched `node_modules`; the junction was removed after validation and
+  the shared dependency directory remained intact.
 
 ## Decision Log
 
@@ -87,11 +102,27 @@
   this branch. Rationale: it exists on untouched `main`, is outside the approved task-result boundary,
   and changing cancellation/transport precedence requires its own test-first review.
   Date/Author: 2026-07-19, Codex.
+- Decision: Keep this ExecPlan active and the design/TASKS acceptance explicitly pending instead of
+  applying the planned “implemented and accepted” status or archiving it. Rationale: the delivered
+  boundary is documented and usable, but the plan's strict full-Rust acceptance claim is not true
+  until the independent baseline is resolved or separately reviewed. Date/Author: 2026-07-19, Codex.
 
 ## Outcomes & Retrospective
 
-Implementation has not started. The approved design and this executable plan define the boundary;
-the current branch contains documentation only.
+The approved boundary is implemented in `1fa2f37`. `video_processing/task_result.rs` now owns the
+closed process/retry context and every typed task-outcome mapping; `video_processing.rs` retains
+request, cache, preflight, diagnostic, execution, cancellation, and Tauri orchestration. No command,
+contract, worker, manifest implementation, packaged resource, frontend production source, public
+result shape, cache rule, diagnostic rule, or user-visible behavior changed.
+
+RED failed only on the intentionally missing adapter API. GREEN passed 4 focused adapter tests and
+all 20 `video_processing` tests. The dependency boundary, rustfmt, app 542, scripts 23, lint/build,
+governance, diff, and scope gates pass. The Vite build retains the pre-existing 659.62 kB main-chunk
+warning. A normal full Rust run passes 158 tests and fails the unrelated Windows
+`blocked_stdin_delivery_remains_cancellable` test; the same exact failure reproduces on untouched
+local `main`, while a run excluding only that test passes all other 158. Because the approved scope
+forbids worker-runtime changes, the implementation is committed and governance reflects reality,
+but final acceptance and archival remain pending that separate baseline resolution.
 
 ## Context and Orientation
 
@@ -550,7 +581,7 @@ cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check
 
 Expected: the complete Rust suite passes and rustfmt reports no diff.
 
-- [ ] **Step 8: Commit the production refactor**
+- [x] **Step 8: Commit the production refactor**
 
 ```powershell
 git add app/src-tauri/src/video_processing.rs app/src-tauri/src/video_processing/task_result.rs docs/exec-plans/active/2026-07-19-video-processing-task-result-boundary-plan.md
@@ -563,7 +594,7 @@ git commit -m "refactor(tauri): extract task result adapter"
 
 - Modify: `docs/exec-plans/active/2026-07-19-video-processing-task-result-boundary-plan.md`
 
-- [ ] **Step 1: Run the complete app test suite**
+- [x] **Step 1: Run the complete app test suite**
 
 Run:
 
@@ -574,7 +605,7 @@ npm --prefix app test
 Expected: every frontend/IPC contract test passes; the current baseline before implementation is 63
 files and 542 tests.
 
-- [ ] **Step 2: Run frontend lint and production build**
+- [x] **Step 2: Run frontend lint and production build**
 
 Run:
 
@@ -586,7 +617,7 @@ npm --prefix app run build
 Expected: TypeScript and i18n literal checks pass, and Vite builds successfully. Record the existing
 main-chunk warning if it remains; do not treat it as caused by this Rust-only refactor.
 
-- [ ] **Step 3: Run repository script and documentation gates**
+- [x] **Step 3: Run repository script and documentation gates**
 
 Run:
 
@@ -599,7 +630,7 @@ git diff --check
 Expected: all script tests pass, governance validation reports 0 errors and 0 warnings, and the diff
 check emits no errors.
 
-- [ ] **Step 4: Prove worker, contract, manifest, and frontend production sources are untouched**
+- [x] **Step 4: Prove worker, contract, manifest, and frontend production sources are untouched**
 
 Run:
 
@@ -619,7 +650,7 @@ Documentation/governance files from this design and plan are allowed. Any path u
 `contracts/`, `app/src/`, `app/src-tauri/resources/worker/`, or manifest schema implementation is
 scope drift and must be reverted or returned to design review.
 
-- [ ] **Step 5: Record exact verification evidence**
+- [x] **Step 5: Record exact verification evidence**
 
 Update Progress with exact test totals, lint/build outcome, rustfmt outcome, script totals,
 governance result, diff result, and any pre-existing warning. Update Surprises & Discoveries only
@@ -640,7 +671,7 @@ for facts observed during execution; do not invent a surprise entry when none oc
 - Modify: `docs/exec-plans/completed/index.md`
 - Move: `docs/exec-plans/active/2026-07-19-video-processing-task-result-boundary-plan.md` to `docs/exec-plans/completed/2026-07-19-video-processing-task-result-boundary-plan.md`
 
-- [ ] **Step 1: Record the implemented architecture and security boundary**
+- [x] **Step 1: Record the implemented architecture and security boundary**
 
 Change the design status to `Implemented and accepted on 2026-07-19`. Add concise dated sections to
 `docs/ARCHITECTURE.md` and `docs/SECURITY.md` that state:
@@ -654,7 +685,7 @@ Change the design status to `Implemented and accepted on 2026-07-19`. Add concis
 - worker runtime lifecycle, terminal parsing, diagnostics, commands, contract v3, and local-media v4 remain unchanged.
 ```
 
-- [ ] **Step 2: Update the audit with measured current facts**
+- [x] **Step 2: Update the audit with measured current facts**
 
 Measure both production files:
 
@@ -669,7 +700,7 @@ cache, preflight, diagnostics, and command orchestration. Add the implemented ad
 audit evidence while explicitly stating that the parent remains a maintenance hotspot and that cache
 or preflight extraction requires separate review.
 
-- [ ] **Step 3: Close the prerequisite and task tracking**
+- [x] **Step 3: Close the prerequisite and task tracking**
 
 In the local-media ExecPlan, mark task `0.2` complete and record the actual focused/full verification
 evidence. In `TASKS.md`, mark this refactor complete and replace prospective acceptance text with the
@@ -682,7 +713,7 @@ residual risks. Move this file from `active/` to `completed/`, remove it from th
 to the completed index, remove the active-refactor entry from `AGENTS.md`, and make it the most recent
 completed plan entry if it is still chronologically latest.
 
-- [ ] **Step 5: Re-run final documentation and diff gates**
+- [x] **Step 5: Re-run final documentation and diff gates**
 
 Run:
 

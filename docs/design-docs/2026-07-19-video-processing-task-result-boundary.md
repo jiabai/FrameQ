@@ -1,12 +1,13 @@
 # Video Processing Task-Result Adapter Boundary
 
 **Date:** 2026-07-19
-**Status:** Accepted for implementation on 2026-07-19
+**Status:** Implemented on 2026-07-19; final acceptance is pending the independently reproducible
+Windows runner baseline described in the active ExecPlan
 
 ## Context
 
-`app/src-tauri/src/video_processing.rs` is currently a 1,238-line application module. Some of its
-size is legitimate: it is the Tauri composition point for URL processing, source-identity cache
+Before implementation, `app/src-tauri/src/video_processing.rs` was a 1,238-line application module.
+Some of its size is legitimate: it is the Tauri composition point for URL processing, source-identity cache
 preflight, AI retry, and cancellation. It also owns several separable policies, including request
 preparation, URL cache lookup, preflight outcome handling, task-result adaptation, retry diagnostics,
 and the command functions themselves.

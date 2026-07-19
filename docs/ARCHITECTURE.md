@@ -1,5 +1,21 @@
 # FrameQ Architecture
 
+## 2026-07-19 Video-processing task-result adapter boundary
+
+- `video_processing.rs` remains the Tauri command adapter and application orchestrator for request
+  preparation, URL cache lookup, source-identity preflight, diagnostics, job submission, retry, and
+  cancellation.
+- `video_processing/task_result.rs` alone maps typed task worker outcomes into the public closed task
+  result. Its exhaustive context is limited to process-video and retry-insights.
+- Each context fixes status, stage, code, and public fallback message. Valid structured task results
+  pass through unchanged; a wrong terminal-result family or protocol failure becomes a fixed empty
+  `WORKER_PROTOCOL_VIOLATION` task error rather than exposing rejected data.
+- Source-identity preflight keeps its distinct tolerant cache policy in the parent, but its terminal
+  cancellation/busy/transport categories enter the same task-result adapter instead of recreating
+  public result policy.
+- Worker runtime lifecycle, terminal parsing, diagnostics, Tauri commands, contract v3, and the
+  future local-media contract v4 remain unchanged by this boundary.
+
 ## 2026-07-19 Closed worker terminal-result boundary
 
 - Each worker operation accepts exactly one declared terminal-result family: task processing and AI

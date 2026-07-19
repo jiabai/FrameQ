@@ -239,7 +239,7 @@ directory, even though the complete path is never stored.
      validation, and diff checks. Keep contract v4, local source variants, transcript/AI writer
      transactions, and automatic orphan cleanup outside this prerequisite.
 
-0.2. [ ] Extract current Rust task-result adaptation before local-media contract v4.
+0.2. [x] Extract current Rust task-result adaptation before local-media contract v4.
    - Add RED tests for structured task passthrough, mismatched result families, cancellation,
      unstructured failures, busy/transport/protocol failures, and fixed pipe/wait command errors.
    - Move only task outcome/error classification into
@@ -248,6 +248,12 @@ directory, even though the complete path is never stored.
      media outside the module; do not add `ProcessLocalMedia` until its real contract and consumer.
    - Run the focused/full Rust, rustfmt, app, scripts, governance, and diff gates recorded in the
      dedicated task-result ExecPlan before starting contract-v4 RED tests.
+   - Implemented in `1fa2f37`: 4 adapter tests and all 20 `video_processing` tests passed; the
+     dependency boundary, rustfmt, app 542, scripts 23, lint/build, governance, and diff/scope gates
+     passed. The ordinary full Rust run has one independently reproducible Windows runner timing
+     failure that also occurs on untouched `main`; all other 158 Rust tests pass. The dedicated
+     task-result ExecPlan remains active until that external acceptance blocker is resolved, and this
+     evidence must not be rewritten as an all-green full Rust run.
 
 1. [ ] Lock contract v4 and source types through RED tests.
    - Extend the shared contract without changing the cleaned v3 `process_video` request.

@@ -1,5 +1,20 @@
 # Security and Compliance
 
+## 2026-07-19 Video-Processing Task-Result Adapter Boundary
+
+- Only `video_processing/task_result.rs` may turn typed process-video or retry-insights worker
+  outcomes into synthetic public task failures. Callers select a closed context and cannot inject
+  arbitrary status, stage, code, or fallback prose.
+- A validated structured task result passes through unchanged. Wrong result families, protocol
+  failures, raw unstructured stderr, and runtime error details never enter synthetic public errors;
+  fixed safe codes and messages are used instead.
+- Process-video failures keep `failed/video_extracting`; retry failures keep
+  `partial_completed/insights_generating`. Pipe and wait failures retain the runner-owned fixed
+  command-error behavior and are not converted into user-content-bearing task values.
+- Cache/preflight, diagnostics, lifecycle supervision, terminal parsing, commands, contract v3, and
+  local-media v4 remain separate boundaries. This extraction adds no logging, persistence, worker,
+  network, prompt, transcript, or artifact access to the adapter.
+
 ## 2026-07-19 Closed Worker Terminal-Result Boundary
 
 - Python-to-Rust stdout and Rust-to-TypeScript IPC results are untrusted runtime values. Consumers

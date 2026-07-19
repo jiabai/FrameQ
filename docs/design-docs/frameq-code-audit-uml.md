@@ -110,9 +110,9 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 
 | 项目 | 基线 |
 |------|------|
-| 基准提交 | `be31b7fa352b6f6a265cb4fbbcef5a1810df1fa3` |
+| 基准提交 | `1fa2f371766e437f0da22393e93dbc14b48bf6ab` |
 | 提交日期 | 2026-07-19 |
-| 提交主题 | `refactor(worker): add media preparation facade` |
+| 提交主题 | `refactor(tauri): extract task result adapter` |
 | 桌面前端 | `app/src/`，React + TypeScript |
 | 桌面原生层 | `app/src-tauri/src/`，Tauri + Rust |
 | 本地 worker | `worker/frameq_worker/`，Python |
@@ -120,7 +120,8 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | 跨进程契约 | `contracts/desktop-worker-contract.json`，当前实现版本 v3 |
 
 该提交是本轮审计的已提交基线，已经包含 task access facade、typed worker job facade、
-前端 task workspace 展示门面和 Python media preparation facade 四轮收口。本文只描述截至该
+前端 task workspace 展示门面、Python media preparation facade 和 Rust task-result adapter
+五轮收口。本文只描述截至该
 提交已经存在的生产实现，不把尚未实现的 local-media contract v4 当作当前代码。
 
 范围规则：
@@ -141,7 +142,7 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | 子系统 | 生产源文件数 | 物理行数 |
 |--------|-------------:|---------:|
 | React / TypeScript | 76 | 13,538 |
-| Tauri / Rust | 23 | 11,948 |
+| Tauri / Rust | 25 | 12,876 |
 | Python worker | 31 | 9,297 |
 | Fastify server | 18 | 4,271 |
 
@@ -150,7 +151,8 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | 文件 | 物理行数 | 当前可见职责 |
 |------|---------:|--------------|
 | `app/src-tauri/src/task_manifest.rs` | 1,326 | 私有 manifest DTO/路径原语、`SupportedTask` facade、受限 edit session、source identity 与 artifact 安全 |
-| `app/src-tauri/src/video_processing.rs` | 1,238 | IPC/worker DTO、配置解析、缓存查找、source identity 预检、语义 job 提交、结果映射、AI retry |
+| `app/src-tauri/src/video_processing.rs` | 1,118 | IPC/worker DTO、配置解析、缓存查找、source identity 预检、语义 job 提交、诊断、AI retry 与命令编排 |
+| `app/src-tauri/src/video_processing/task_result.rs` | 247 | closed process/retry context、typed outcome 映射、固定安全失败与内联边界测试 |
 | `app/src-tauri/src/transcript_detail.rs` | 1,133 | transcript 读取/保存、格式校验、备份、segments、音频回放缓存；任务信任由 facade 提供 |
 | `app/src-tauri/src/worker_runtime/runner.rs` | 1,144 | 四类 worker 操作的 spawn、stdin、progress、wait/reap、terminal 分类和生命周期日志；含内联测试 |
 | `worker/frameq_worker/bilibili_fallback.py` | 936 | URL 解析、HTTP、API 解析、流选择、下载、DASH 合并、错误映射 |
@@ -168,6 +170,11 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 `pipeline.py` 从 868 行降为 589 行，同时新增 237 行的 `media_preparation.py`。这次变化的审计
 价值不在净行数，而在于下载、选择、探测、任务内媒体准备和字幕发现已经拥有单一入口，pipeline
 不再直接依赖这些底层原语。
+
+`video_processing.rs` 从 1,238 行降为 1,118 行，同时新增 247 行（含 4 个内联测试）的
+`video_processing/task_result.rs`。结果适配不再接受 caller 提供的 status/stage/message 字符串；
+process-video 与 retry 的固定策略集中在 closed context 中。父模块仍拥有 cache、preflight、请求
+准备、诊断和 command orchestration，因此仍是维护热点，而不是已经完成全部职责拆分。
 
 建议把这张表当成“从哪里开始读”的索引，而不是自动拆分清单。真正的拆分候选要结合后面 UML 中的依赖数量、状态所有权和时序约束判断。
 
@@ -316,8 +323,9 @@ flowchart LR
 实际代码中仍有需要审计的回流或高扇出位置：
 
 - `App.tsx` 通过 callback/ref 协调多个 controller，是明确的 composition root，同时也承担跨 feature 调度。
-- `video_processing.rs` 直接组合 cache、identity preflight、请求配置和业务结果映射，但受监督
-  child 生命周期已经统一下沉到 `worker_runtime::WorkerLane`。
+- `video_processing.rs` 直接组合 cache、identity preflight、请求配置、诊断和 command
+  orchestration；业务 task-result 映射已收口到 `video_processing/task_result.rs`，受监督 child
+  生命周期则统一下沉到 `worker_runtime::WorkerLane`。
 - `worker_runtime/runner.rs` 是四类 child 操作的唯一生命周期实现；`command.rs` 负责固定调用与
   环境，`supervisor.rs` 负责私有实例状态和操作系统进程树终止。
 - `worker_service.py` 与 `pipeline.py` 互相分担 application orchestration；媒体准备已下沉到
@@ -1014,7 +1022,7 @@ classDiagram
 
 | 责任 | 当前代表模块 | 说明 |
 |------|--------------|------|
-| IPC/application orchestration | `lib.rs`, `video_processing.rs` | 接收 command、组织 cache/preflight/worker 流程、把结果返回前端 |
+| IPC/application orchestration | `lib.rs`, `video_processing.rs`, `video_processing/task_result.rs` | 接收 command、组织 cache/preflight/worker 流程，并通过 closed context 把 typed task outcome 返回前端 |
 | 受监督 worker runtime | `worker_runtime/facade.rs`, `command.rs`, `runner.rs`, `supervisor.rs` | 分别拥有语义 job 策略、固定 command/env、完整 child 生命周期/进度/terminal 分类、私有取消状态与平台信号 |
 | 本地信任与存储 | `runtime.rs`, `task_manifest.rs`, History/Transcript/Settings modules | 决定哪些目录和文件可读写，拒绝链接、越界路径和不受支持 manifest |
 
@@ -1825,6 +1833,7 @@ stateDiagram-v2
 | `pipeline.py` 直接协调下载、选择、ffprobe、任务内复制、FFmpeg、音频复用与字幕发现 | 已在 `be31b7f` 收口到 `MediaPreparationFacade.prepare(UrlMediaSource, TaskContext)`；pipeline 只消费 `PreparedMedia`，facade 不拥有 ASR、AI 或 task persistence | `worker/tests/test_media_preparation.py` 的行为/AST boundary tests 与 worker 全量测试；设计见 `docs/design-docs/2026-07-19-media-preparation-facade.md` |
 | Rust runner 只凭 stdout JSON 含 `status` 判断结构化结果，TypeScript IPC gateway 只依赖静态类型 | 已在 `result_protocol.rs` 与 `workerResultProtocol.ts` 按操作收口；Rust 要求单行 UTF-8 JSON 并解析为 closed DTO，TypeScript 对 Tauri `unknown` 值再次做闭集校验，未知/缺失字段、错误类型、错误 family 与不一致状态均固定失败且不回显 payload | canonical `terminalResults` contract 与 Python/Rust/TypeScript negative tests；全量 worker 411、Rust 157、app 540、scripts 23；设计见 `docs/design-docs/2026-07-19-closed-worker-terminal-results.md` |
 | `App.tsx` 协调多个 controller，但缺少 App 级真实渲染生命周期证据 | 审计原描述已校正：既有 `app-input.browser.test.ts` 本就通过生产 `main.tsx` 在 Chromium 中挂载 `<App />`，覆盖任务、History、文字稿、AI、设置与账户退出；本轮补齐启动账户深链和恢复任务产物定位两条组合根接线 | 深链测试先 RED 后 GREEN，断言唯一 `complete_auth_flow`；产物测试断言唯一 opener 路径与本地化结果；browser 27/27、app 542/542、scripts 23/23、lint/build/docs/diff 通过；设计见 `docs/design-docs/2026-07-19-app-composition-integration-coverage.md` |
+| `video_processing.rs` 允许调用方传入任意 status/stage/message 来映射 task worker outcome，并与 cache/preflight/command 编排混在同一文件 | 已在 `1fa2f37` 收口到私有 `video_processing/task_result.rs`；调用方只能选择 `ProcessVideo` 或 `RetryInsights` closed context，structured task 透传，错误 family、protocol 和 runtime failure 使用固定安全结果；cache/preflight/诊断仍由父模块拥有 | 4 个 adapter tests 与全部 20 个 `video_processing` tests 通过；dependency boundary、rustfmt、app 542、scripts 23、lint/build/docs/diff 通过；完整 Rust 除一个可在 `main` 独立复现的 Windows runner 时序基线外其余 158 个通过；设计见 `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md` |
 
 ### 如何使用这张表
 
@@ -1841,7 +1850,7 @@ stateDiagram-v2
 |------|------------|------------------|
 | `app/src/App.tsx` | 组装 9 个主要 controller，并通过 refs/callbacks 协调 reset、history、transcript、account 和 AI | 哪些协调属于 composition root；哪些可以成为明确的 application use case，而不产生第二个 workflow owner？ |
 | `useTaskProcessingController.ts` | 同时处理 submit、progress、cancel、history restore、transcript merge 和 AI retry，并维护 operation ID | 是否需要拆 action/use-case，但仍保留唯一 task identity owner？ |
-| `video_processing.rs` | IPC/worker DTO、ASR 配置解析、两次 cache policy、identity preflight、语义 job 提交、AI retry 和 public result mapping 位于一文件；raw execution policy 与 child 生命周期均已下沉 | cache/preflight/request preparation/result mapping 中哪些可成为独立 application service；如何保持 model-aware cache、typed facade outcome 和 safe logging？ |
+| `video_processing.rs` | IPC/worker DTO、ASR 配置解析、两次 cache policy、identity preflight、语义 job 提交、诊断与 AI retry 仍位于一文件；task-result mapping、raw execution policy 与 child 生命周期均已下沉 | cache/preflight/request preparation 中哪些可成为独立 application service；如何保持 model-aware cache、typed facade outcome 和 safe logging？ |
 | `app/src-tauri/src/lib.rs` 中的 `greet` | scaffold command 仍在 `generate_handler!` 注册，但 `app/src/` 没有调用点 | 是否可通过 focused command-registry test 后删除，避免无业务含义的公开 IPC surface？ |
 | `transcript_detail.rs` | command、格式/链接校验、audio cache、segment IO、备份和 markdown formatting 共存；manifest/privacy/artifact-root 信任已委托 `SupportedTask` | 哪些剩余职责可以成为纯 transcript storage/service 单元，而不把安全路径原语重新复制回来？ |
 | `worker_service.py` + `pipeline.py` | 两处仍承担不同 application orchestration；任务生命周期和媒体准备已分别委托 `TaskStoreFacade` 与 `MediaPreparationFacade`，retry 仍复用 pipeline 中的 AI step | application service、注入 port 与 transcript/AI stage library 的下一步边界在哪里；是否能保持一个 task persistence owner？ |
@@ -1885,6 +1894,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 |----------|----------|
 | Command registry | `app/src-tauri/src/lib.rs` |
 | Video processing adapter/orchestrator | `app/src-tauri/src/video_processing.rs` |
+| Closed process/retry task-result adapter | `app/src-tauri/src/video_processing/task_result.rs` |
 | Typed worker job execution facade | `app/src-tauri/src/worker_runtime/facade.rs` |
 | Worker command policy | `app/src-tauri/src/worker_runtime/command.rs` |
 | Worker lifecycle runner and progress routes | `app/src-tauri/src/worker_runtime/runner.rs` |
