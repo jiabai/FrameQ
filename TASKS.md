@@ -65,6 +65,13 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Cover App composition-root deep-link and artifact-location lifecycles (2026-07-19) - ✅
+  Acceptance: extend the existing real Chromium-rendered App smoke rather than adding a mocked DOM stack;
+  assert startup `complete_auth_flow`, exact task artifact opener routing, localized outcomes, and
+  absence of runtime exceptions. Design:
+  `docs/design-docs/2026-07-19-app-composition-integration-coverage.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-19-app-composition-integration-coverage-plan.md`.
+
 - [x] Close worker terminal-result contracts across Python, Rust, and TypeScript (2026-07-19) - ✅
   Acceptance: declare operation-specific closed result families in the canonical v3 contract;
   require exactly one terminal stdout JSON line; reject unknown/missing fields, wrong nested types,
