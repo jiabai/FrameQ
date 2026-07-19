@@ -1,7 +1,7 @@
 # Video Processing Task-Result Adapter Boundary
 
 **Date:** 2026-07-19
-**Status:** Proposed for review
+**Status:** Accepted for implementation on 2026-07-19
 
 ## Context
 

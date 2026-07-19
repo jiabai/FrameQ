@@ -45,6 +45,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   artifact-allowlist, and exception-cause failures; 14 focused tests, all 406 worker tests, Ruff,
   governance validation, and diff checks passed. Contract v4 and local source variants remain
   intentionally absent.
+- [x] 2026-07-19: Approved a focused Rust task-result adapter boundary before adding the local-media
+  command. Validation: architecture review accepted
+  `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`; implementation remains
+  isolated in its own active ExecPlan and has not added contract-v4 behavior.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -87,6 +91,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   task JSON used direct `write_text` and artifact discovery trusted existence. The implemented
   shared atomic-file boundary now stages, syncs, validates media, replaces per file, removes handled
   partials, and restricts artifact discovery to known ordinary official files.
+- Evidence: `video_processing.rs` still maps typed task worker outcomes through caller-supplied
+  stage/status/message strings. The accepted task-result adapter will close that application policy
+  before the local-media command adds another task-result-producing path; cache, preflight, settings,
+  diagnostics, and contract v4 remain outside that prerequisite.
 
 ## Decision Log
 
@@ -152,6 +160,11 @@ remain governed by the existing separate summary/inspiration confirmation.
   atomicity. Rationale: official names must mean committed content, while an audio failure may still
   truthfully retain an already validated video under existing partial-task behavior.
   Date/Author: 2026-07-19, User + Codex.
+- Decision: Extract current process-video/retry task outcome adaptation into one private Rust child
+  module before contract v4, using a closed command context rather than caller-supplied failure
+  strings. Rationale: local media should join an explicit tested result policy without expanding the
+  worker runtime facade or mixing path-sensitive implementation into this refactor.
+  Date/Author: 2026-07-19, User + Codex.
 
 ## Outcomes & Retrospective
 
@@ -175,6 +188,8 @@ directory, even though the complete path is never stored.
 - Persistent decisions: `docs/design-docs/2026-07-16-local-media-file-import.md`.
 - Task access prerequisite: `docs/design-docs/2026-07-18-task-access-facade.md`.
 - Worker execution prerequisite: `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
+- Task-result adapter prerequisite:
+  `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`.
 - Media preparation prerequisite: `docs/design-docs/2026-07-19-media-preparation-facade.md`.
 - Shared wire protocol: `contracts/desktop-worker-contract.json`,
   `app/src/desktopWorkerContract.test.ts`, and `worker/tests/test_contract.py`.
@@ -223,6 +238,16 @@ directory, even though the complete path is never stored.
    - Run focused tests after every RED/GREEN step, then the complete worker suite, Ruff, governance
      validation, and diff checks. Keep contract v4, local source variants, transcript/AI writer
      transactions, and automatic orphan cleanup outside this prerequisite.
+
+0.2. [ ] Extract current Rust task-result adaptation before local-media contract v4.
+   - Add RED tests for structured task passthrough, mismatched result families, cancellation,
+     unstructured failures, busy/transport/protocol failures, and fixed pipe/wait command errors.
+   - Move only task outcome/error classification into
+     `app/src-tauri/src/video_processing/task_result.rs` behind a closed process/retry context.
+   - Keep cache lookup, source preflight, request parsing, diagnostics, worker execution, and local
+     media outside the module; do not add `ProcessLocalMedia` until its real contract and consumer.
+   - Run the focused/full Rust, rustfmt, app, scripts, governance, and diff gates recorded in the
+     dedicated task-result ExecPlan before starting contract-v4 RED tests.
 
 1. [ ] Lock contract v4 and source types through RED tests.
    - Extend the shared contract without changing the cleaned v3 `process_video` request.

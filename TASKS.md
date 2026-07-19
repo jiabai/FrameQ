@@ -65,6 +65,18 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Extract video-processing task-result adaptation behind a focused private module (2026-07-19) - ✅ Acceptance:
+  - Keep `video_processing.rs` as the Tauri/application orchestrator while moving only typed worker
+    outcome classification and fixed synthetic task failures into
+    `video_processing/task_result.rs`. Preserve process-video and retry status/stage/error shapes,
+    cancellation precedence, closed terminal validation, diagnostics, cache/preflight behavior, and
+    contract v3. Do not add a dead local-media variant or another execution facade. Adapter tests
+    cover every current runtime outcome and both command contexts; all focused/full
+    Rust, rustfmt, app, scripts, docs, and diff gates pass; contract, worker, manifest, command, and
+    user-visible behavior remain unchanged. Design:
+    `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`. ExecPlan:
+    `docs/exec-plans/active/2026-07-19-video-processing-task-result-boundary-plan.md`.
+
 - [x] Cover App composition-root deep-link and artifact-location lifecycles (2026-07-19) - ✅
   Acceptance: extend the existing real Chromium-rendered App smoke rather than adding a mocked DOM stack;
   assert startup `complete_auth_flow`, exact task artifact opener routing, localized outcomes, and

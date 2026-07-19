@@ -4,3 +4,4 @@
 |------|-------|
 | `2026-07-17-v0.2.17-desktop-i18n-release-plan.md` | Prepare a verified v0.2.17 release commit for completed desktop localization and AI output-language behavior without tagging or publishing. |
 | `2026-07-16-local-media-file-import-plan.md` | Import one local video or audio file through an opaque Rust-owned selection, normalize audio for local ASR, and preserve strict path/privacy boundaries. |
+| `2026-07-19-video-processing-task-result-boundary-plan.md` | Extract fixed task terminal-result adaptation from `video_processing.rs` before contract-v4 local-media work, without changing commands, contracts, or runtime behavior. |
