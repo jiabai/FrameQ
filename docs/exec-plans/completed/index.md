@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-19-video-processing-task-result-boundary-plan.md` | Extracted fixed task terminal-result adaptation from `video_processing.rs` behind a closed private process/retry context without changing commands, contracts, or runtime behavior. |
 | `2026-07-19-app-composition-integration-coverage-plan.md` | Proved startup authentication deep-link and task artifact-location wiring through the real Chromium-rendered App lifecycle. |
 | `2026-07-19-closed-worker-terminal-results-plan.md` | Closed operation-specific worker terminal results at the Python producer, Rust stdout, and TypeScript IPC boundaries without echoing rejected content. |
 | `2026-07-19-typed-worker-job-facade-plan.md` | Derived video-worker invocation, operation, progress, retry-only LLM policy, and lane from one typed Rust job facade while preserving the shared lifecycle runner. |

@@ -46,9 +46,9 @@ remain governed by the existing separate summary/inspiration confirmation.
   governance validation, and diff checks passed. Contract v4 and local source variants remain
   intentionally absent.
 - [x] 2026-07-19: Approved a focused Rust task-result adapter boundary before adding the local-media
-  command. Validation: architecture review accepted
-  `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`; implementation remains
-  isolated in its own active ExecPlan and has not added contract-v4 behavior.
+  command, implemented it without contract-v4 behavior, and archived its ExecPlan. Validation:
+  architecture review accepted `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`;
+  focused/cross-layer gates and the native Rust 159/159 suite passed.
 - [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
   Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
   setup errors.
@@ -250,10 +250,10 @@ directory, even though the complete path is never stored.
      dedicated task-result ExecPlan before starting contract-v4 RED tests.
    - Implemented in `1fa2f37`: 4 adapter tests and all 20 `video_processing` tests passed; the
      dependency boundary, rustfmt, app 542, scripts 23, lint/build, governance, and diff/scope gates
-     passed. The ordinary full Rust run has one independently reproducible Windows runner timing
-     failure that also occurs on untouched `main`; all other 158 Rust tests pass. The dedicated
-     task-result ExecPlan remains active until that external acceptance blocker is resolved, and this
-     evidence must not be rewritten as an all-green full Rust run.
+     passed. The complete native-permission Rust suite passed 159/159, including the Windows
+     blocked-stdin cancellation fixture. The earlier sandbox-only failure was traced to `taskkill`
+     receiving `Access denied`; no worker-runtime source change was required. Dedicated ExecPlan:
+     `docs/exec-plans/completed/2026-07-19-video-processing-task-result-boundary-plan.md`.
 
 1. [ ] Lock contract v4 and source types through RED tests.
    - Extend the shared contract without changing the cleaned v3 `process_video` request.

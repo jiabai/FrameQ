@@ -65,21 +65,19 @@
 
 ## Refactoring and Technical Debt
 
-- [ ] Close video-processing task-result adapter acceptance (2026-07-19) — ✅ Implementation complete
-  in `1fa2f37`:
+- [x] Extract video-processing task-result adaptation behind a focused private module (2026-07-19) — ✅
+  Implemented and accepted in `1fa2f37`:
   - Keep `video_processing.rs` as the Tauri/application orchestrator while moving only typed worker
     outcome classification and fixed synthetic task failures into
     `video_processing/task_result.rs`. Preserve process-video and retry status/stage/error shapes,
     cancellation precedence, closed terminal validation, diagnostics, cache/preflight behavior, and
     contract v3. No dead local-media variant or additional execution facade was added. Four adapter
     tests, all 20 `video_processing` tests, the dependency boundary, rustfmt, app 542, scripts 23,
-    lint/build, docs, diff, and scope gates pass; contract, worker, manifest, command, and
-    user-visible behavior remain unchanged. The ordinary full Rust gate remains blocked by
-    `blocked_stdin_delivery_remains_cancellable`, which fails identically on untouched local `main`;
-    the other 158 Rust tests pass. Do not mark acceptance complete or archive the ExecPlan until that
-    independent Windows runner baseline is resolved or separately reviewed. Design:
+    lint/build, docs, diff, and scope gates pass; the native-permission Rust suite passes 159/159,
+    including blocked-stdin Windows cancellation. Contract, worker, manifest, command, and
+    user-visible behavior remain unchanged. Design:
     `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`. ExecPlan:
-    `docs/exec-plans/active/2026-07-19-video-processing-task-result-boundary-plan.md`.
+    `docs/exec-plans/completed/2026-07-19-video-processing-task-result-boundary-plan.md`.
 
 - [x] Cover App composition-root deep-link and artifact-location lifecycles (2026-07-19) - ✅
   Acceptance: extend the existing real Chromium-rendered App smoke rather than adding a mocked DOM stack;

@@ -42,13 +42,14 @@
   passed; governance reported 0 errors and 0 warnings; `git diff --check` passed; and scope review
   found no worker, contract, manifest implementation, packaged-worker, or frontend production diff.
 - [x] 2026-07-19: Synchronized the implemented architecture, security boundary, measured audit,
-  local-media prerequisite, task tracking, design status, and this retrospective without falsely
-  archiving the blocked plan. Validation: governance reported 0 errors and 0 warnings and
-  `git diff --check` passed.
-- [ ] Finish strict Rust acceptance and archive this plan. All scoped implementation and independent
-  cross-layer gates are complete, and architecture/security/audit/local-media governance is
-  synchronized. Archive remains blocked only by the pre-existing Windows runner baseline recorded
-  below.
+  local-media prerequisite, task tracking, design status, and this retrospective. Validation:
+  governance reported 0 errors and 0 warnings and `git diff --check` passed.
+- [x] 2026-07-19: Diagnosed the apparent Windows stdin-cancellation failure as a Codex sandbox
+  permission artifact rather than a FrameQ defect. Direct sandboxed `taskkill /T /F` returned
+  `Access denied`; the exact cancellation test passed in 0.33 seconds with native permissions, and
+  the complete feature-branch Rust suite then passed all 159 tests. No runtime code change was made.
+- [x] 2026-07-19: Completed strict acceptance and archived this plan after the final governance,
+  scope, formatting, and diff gates passed.
 
 ## Surprises & Discoveries
 
@@ -69,12 +70,11 @@
   its three closed failure categories into typed runtime outcomes before calling the same task-result
   adapter; cache/preflight ownership remains in the parent and no second public-message policy was
   retained.
-- The complete Rust gate exposed a pre-existing Windows timing failure in
-  `worker_runtime::runner::tests::blocked_stdin_delivery_remains_cancellable`: 158 tests passed and
-  that test returned the fixed `RequestDeliveryFailed` error after 30 seconds. The same exact test
-  fails identically on the untouched local `main`, and `runner.rs` has no branch diff. Running the
-  suite with only that baseline test skipped passed all 158 remaining tests. This plan does not alter
-  worker runtime to hide or bundle that independent blocker.
+- The first complete Rust run was executed inside a process-restricted Codex sandbox. Its Windows
+  cancellation fixture waited 30 seconds and returned `RequestDeliveryFailed` because the sandbox
+  denied `taskkill /T /F`, then the supervisor correctly rolled the failed cancellation claim back
+  to `Running`. A direct sandbox probe reproduced `Access denied`. Running the exact test and full
+  suite with native permissions passed, proving there was no runner timing defect to repair.
 - PowerShell blocked the `npm.ps1` wrapper and the isolated worktree intentionally had no duplicate
   dependency install. The app gates therefore used `npm.cmd` plus a temporary ignored junction to
   the main worktree's lockfile-matched `node_modules`; the junction was removed after validation and
@@ -98,14 +98,10 @@
   do not run or modify the Python worker solely for this Rust-only refactor. Rationale: worker code,
   wire schemas, packaged resources, and producer behavior are explicit non-goals; any such diff is
   scope drift requiring renewed review. Date/Author: 2026-07-19, Codex.
-- Decision: Record rather than repair the independently reproducible Windows runner test failure in
-  this branch. Rationale: it exists on untouched `main`, is outside the approved task-result boundary,
-  and changing cancellation/transport precedence requires its own test-first review.
-  Date/Author: 2026-07-19, Codex.
-- Decision: Keep this ExecPlan active and the design/TASKS acceptance explicitly pending instead of
-  applying the planned “implemented and accepted” status or archiving it. Rationale: the delivered
-  boundary is documented and usable, but the plan's strict full-Rust acceptance claim is not true
-  until the independent baseline is resolved or separately reviewed. Date/Author: 2026-07-19, Codex.
+- Decision: Do not change worker runtime for the sandbox-only Windows cancellation failure; rerun the
+  native process-tree test and complete Rust suite with permissions that allow the product's fixed
+  `taskkill` command. Rationale: the sandbox probe supplied direct root-cause evidence, while native
+  runs passed the existing contract without a source change. Date/Author: 2026-07-19, Codex.
 
 ## Outcomes & Retrospective
 
@@ -118,11 +114,10 @@ result shape, cache rule, diagnostic rule, or user-visible behavior changed.
 RED failed only on the intentionally missing adapter API. GREEN passed 4 focused adapter tests and
 all 20 `video_processing` tests. The dependency boundary, rustfmt, app 542, scripts 23, lint/build,
 governance, diff, and scope gates pass. The Vite build retains the pre-existing 659.62 kB main-chunk
-warning. A normal full Rust run passes 158 tests and fails the unrelated Windows
-`blocked_stdin_delivery_remains_cancellable` test; the same exact failure reproduces on untouched
-local `main`, while a run excluding only that test passes all other 158. Because the approved scope
-forbids worker-runtime changes, the implementation is committed and governance reflects reality,
-but final acceptance and archival remain pending that separate baseline resolution.
+warning. The exact Windows blocked-stdin cancellation test passed in 0.33 seconds under native
+permissions, and the complete Rust suite passed 159/159. The earlier sandbox failure was caused by
+`taskkill` receiving `Access denied`, not by FrameQ code. No residual behavior risk was introduced by
+this extraction; future cache or preflight extraction still requires separate design review.
 
 ## Context and Orientation
 
@@ -570,7 +565,7 @@ Write-Output "task_result dependency boundary passed"
 
 Expected: `task_result dependency boundary passed` and no forbidden match.
 
-- [ ] **Step 7: Run Rust regression and formatting gates**
+- [x] **Step 7: Run Rust regression and formatting gates**
 
 Run:
 
@@ -706,7 +701,7 @@ In the local-media ExecPlan, mark task `0.2` complete and record the actual focu
 evidence. In `TASKS.md`, mark this refactor complete and replace prospective acceptance text with the
 actual totals. Do not mark any contract-v4 or local-media product task complete.
 
-- [ ] **Step 4: Complete and archive this ExecPlan**
+- [x] **Step 4: Complete and archive this ExecPlan**
 
 Update Outcomes & Retrospective with the delivered boundary, unchanged behavior, exact gates, and
 residual risks. Move this file from `active/` to `completed/`, remove it from the active index, add it
@@ -726,7 +721,7 @@ git status --short
 Expected: 0 documentation errors, 0 warnings, no whitespace errors, and only the reviewed closeout
 files remain uncommitted.
 
-- [ ] **Step 6: Commit closeout documentation**
+- [x] **Step 6: Commit closeout documentation**
 
 ```powershell
 git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md docs/design-docs/2026-07-19-video-processing-task-result-boundary.md docs/design-docs/frameq-code-audit-uml.md docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md docs/exec-plans/active/index.md docs/exec-plans/completed/index.md docs/exec-plans/completed/2026-07-19-video-processing-task-result-boundary-plan.md

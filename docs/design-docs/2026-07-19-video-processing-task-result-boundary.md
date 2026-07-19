@@ -1,8 +1,7 @@
 # Video Processing Task-Result Adapter Boundary
 
 **Date:** 2026-07-19
-**Status:** Implemented on 2026-07-19; final acceptance is pending the independently reproducible
-Windows runner baseline described in the active ExecPlan
+**Status:** Implemented and accepted on 2026-07-19
 
 ## Context
 
