@@ -100,6 +100,22 @@ type DesktopWorkerContract = {
       >;
     };
   };
+  terminalResults: {
+    stdout: {
+      encoding: string;
+      nonEmptyLineCount: number;
+      diagnosticsChannel: string;
+      invalidPayloadPolicy: string;
+    };
+    operations: Record<string, string>;
+    safeErrorCode: {
+      type: string;
+      minLength: number;
+      maxLength: number;
+      pattern: string;
+    };
+    schemas: Record<string, unknown>;
+  };
   insightResult: {
     schemaVersion: number;
     itemKeys: string[];
@@ -116,6 +132,79 @@ function loadContract(): DesktopWorkerContract {
 describe("desktop/worker contract", () => {
   test("uses strict contract version 3", () => {
     expect(loadContract().contractVersion).toBe(3);
+  });
+
+  test("declares closed operation-specific terminal result families", () => {
+    const contract = loadContract();
+    const terminal = contract.terminalResults;
+
+    expect(terminal.stdout).toEqual({
+      encoding: "utf-8",
+      nonEmptyLineCount: 1,
+      diagnosticsChannel: "stderr",
+      invalidPayloadPolicy: "reject_without_echo",
+    });
+    expect(terminal.operations).toEqual({
+      process_video: "task",
+      retry_insights: "task",
+      resolve_source_identity: "sourceIdentity",
+      download_asr_model: "modelDownload",
+    });
+    expect(terminal.safeErrorCode).toEqual({
+      type: "string",
+      minLength: 1,
+      maxLength: 64,
+      pattern: "^[A-Z][A-Z0-9_]{0,63}$",
+    });
+
+    const task = terminal.schemas.task as {
+      required: string[];
+      properties: {
+        status: { enum: string[] };
+        artifacts: { properties: Record<string, unknown>; additionalProperties: boolean };
+        insights: { items: { properties: Record<string, unknown>; additionalProperties: boolean } };
+      };
+      additionalProperties: boolean;
+    };
+    expect(task.required).toEqual([
+      "status",
+      "task_id",
+      "task_dir",
+      "artifacts",
+      "text",
+      "summary",
+      "insights",
+      "transcript",
+      "error",
+    ]);
+    expect(task.properties.status.enum).toEqual([
+      "completed",
+      "partial_completed",
+      "failed",
+    ]);
+    expect(Object.keys(task.properties.artifacts.properties)).toEqual([
+      "video",
+      "audio",
+      "transcript_txt",
+      "transcript_md",
+      "segments",
+      "summary",
+      "mindmap",
+      "insights",
+      "insights_md",
+      "preference_snapshot",
+    ]);
+    expect(task.properties.artifacts.additionalProperties).toBe(false);
+    expect(Object.keys(task.properties.insights.items.properties)).toEqual([
+      "id",
+      "topic",
+      "matchReason",
+      "followUpQuestions",
+      "suitableUse",
+      "sourceChunkId",
+    ]);
+    expect(task.properties.insights.items.additionalProperties).toBe(false);
+    expect(task.additionalProperties).toBe(false);
   });
 
   test("matches shared event names", () => {

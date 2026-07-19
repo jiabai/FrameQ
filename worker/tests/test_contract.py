@@ -85,6 +85,78 @@ def test_worker_result_contract_includes_task_artifacts() -> None:
     assert "transcript" in contract["workerResultKeys"]
 
 
+def test_terminal_result_contract_closes_framing_operations_and_nested_shapes() -> None:
+    terminal = load_contract()["terminalResults"]
+
+    assert terminal["stdout"] == {
+        "encoding": "utf-8",
+        "nonEmptyLineCount": 1,
+        "diagnosticsChannel": "stderr",
+        "invalidPayloadPolicy": "reject_without_echo",
+    }
+    assert terminal["operations"] == {
+        "process_video": "task",
+        "retry_insights": "task",
+        "resolve_source_identity": "sourceIdentity",
+        "download_asr_model": "modelDownload",
+    }
+    assert terminal["safeErrorCode"] == {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": r"^[A-Z][A-Z0-9_]{0,63}$",
+    }
+
+    schemas = terminal["schemas"]
+    task = schemas["task"]
+    assert task["required"] == load_contract()["workerResultKeys"]
+    assert task["additionalProperties"] is False
+    assert task["properties"]["status"]["enum"] == [
+        "completed",
+        "partial_completed",
+        "failed",
+    ]
+    assert set(task["properties"]["artifacts"]["properties"]) == {
+        "video",
+        "audio",
+        "transcript_txt",
+        "transcript_md",
+        "segments",
+        "summary",
+        "mindmap",
+        "insights",
+        "insights_md",
+        "preference_snapshot",
+    }
+    assert task["properties"]["artifacts"]["additionalProperties"] is False
+    insight_object = task["properties"]["insights"]["items"]
+    assert list(insight_object["properties"]) == load_contract()["insightResult"][
+        "itemKeys"
+    ]
+    assert insight_object["additionalProperties"] is False
+    assert task["properties"]["transcript"]["oneOf"][1][
+        "additionalProperties"
+    ] is False
+    assert task["properties"]["error"]["oneOf"][1][
+        "additionalProperties"
+    ] is False
+    assert task["constraints"] == {
+        "completedRequiresNullError": True,
+        "nonCompletedRequiresStructuredError": True,
+    }
+
+    source = schemas["sourceIdentity"]
+    model = schemas["modelDownload"]
+    assert len(source["oneOf"]) == 2
+    assert len(model["oneOf"]) == 2
+    assert all(variant["additionalProperties"] is False for variant in source["oneOf"])
+    assert all(variant["additionalProperties"] is False for variant in model["oneOf"])
+    assert model["oneOf"][1]["properties"]["message"]["enum"] == [
+        "ASR model download failed.",
+        "Downloaded ASR model archive was invalid.",
+    ]
+
+
 def test_process_video_contract_is_transcript_only_and_retry_insights_is_ai_path() -> None:
     contract = load_contract()
 

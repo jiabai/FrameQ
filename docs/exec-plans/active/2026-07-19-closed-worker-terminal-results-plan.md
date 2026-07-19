@@ -34,8 +34,9 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
   runner 12 tests, docs ERROR gate, and a clean isolated branch.
 - [x] 2026-07-19: Recorded and received user approval for the operation-specific defense-in-depth
   design. Validation: commit `6f99e52` and user response `设计通过`.
-- [ ] 2026-07-19: Register closed result schemas and safe Python producers. Validation: focused
-  Python and cross-language contract tests.
+- [ ] 2026-07-19: Register closed result schemas and safe Python producers. Contract portion
+  complete: Python contract 12/12 and TypeScript contract 10/10 passed after expected missing-schema
+  RED failures. Validation: focused cross-language contract tests; producer portion remains.
 - [ ] 2026-07-19: Replace permissive Rust stdout parsing and raw application `Value` consumption.
   Validation: focused result-protocol, runner, video, and model tests.
 - [ ] 2026-07-19: Parse unknown task/model/cancel IPC values in TypeScript. Validation: focused
@@ -124,7 +125,7 @@ IPC/resource behavior; this work introduces no arbitrary user-content cap.
 - Modify: `app/src/desktopWorkerContract.test.ts`
 - Modify: `contracts/desktop-worker-contract.json`
 
-- [ ] **Step 1: Write failing contract assertions**
+- [x] **Step 1: Write failing contract assertions**
 
 ```python
 terminal = load_contract()["terminalResults"]
@@ -150,7 +151,7 @@ TypeScript asserts the same framing/operation map and checks that the task requi
 properties, insight properties, terminal statuses, and model-message enum are internally closed.
 Task 5 adds the parser-to-contract drift comparison after parser constants exist.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```powershell
 D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker\tests\test_contract.py -q
@@ -159,7 +160,7 @@ npm.cmd test -- --run src\desktopWorkerContract.test.ts
 
 Expected: both suites fail because `terminalResults` is absent.
 
-- [ ] **Step 3: Add the registry and full schemas**
+- [x] **Step 3: Add the registry and full schemas**
 
 ```json
 {
@@ -190,7 +191,7 @@ transcript/error objects, terminal status and workflow-stage enums, null unions,
 download use exact `oneOf` success/failure objects. Model messages are restricted to
 `ASR model download failed.` and `Downloaded ASR model archive was invalid.`.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run both Step 2 commands. Expected: focused contract tests pass.
 

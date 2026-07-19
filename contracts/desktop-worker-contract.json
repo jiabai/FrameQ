@@ -248,6 +248,399 @@
       }
     }
   },
+  "terminalResults": {
+    "stdout": {
+      "encoding": "utf-8",
+      "nonEmptyLineCount": 1,
+      "diagnosticsChannel": "stderr",
+      "invalidPayloadPolicy": "reject_without_echo"
+    },
+    "operations": {
+      "process_video": "task",
+      "retry_insights": "task",
+      "resolve_source_identity": "sourceIdentity",
+      "download_asr_model": "modelDownload"
+    },
+    "safeErrorCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+    },
+    "schemas": {
+      "task": {
+        "type": "object",
+        "required": [
+          "status",
+          "task_id",
+          "task_dir",
+          "artifacts",
+          "text",
+          "summary",
+          "insights",
+          "transcript",
+          "error"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "partial_completed",
+              "failed"
+            ]
+          },
+          "task_id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_dir": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artifacts": {
+            "type": "object",
+            "properties": {
+              "video": {
+                "type": "string"
+              },
+              "audio": {
+                "type": "string"
+              },
+              "transcript_txt": {
+                "type": "string"
+              },
+              "transcript_md": {
+                "type": "string"
+              },
+              "segments": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "mindmap": {
+                "type": "string"
+              },
+              "insights": {
+                "type": "string"
+              },
+              "insights_md": {
+                "type": "string"
+              },
+              "preference_snapshot": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "text": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "insights": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "topic",
+                "matchReason",
+                "followUpQuestions",
+                "suitableUse",
+                "sourceChunkId"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "topic": {
+                  "type": "string"
+                },
+                "matchReason": {
+                  "type": "string"
+                },
+                "followUpQuestions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "suitableUse": {
+                  "type": "string"
+                },
+                "sourceChunkId": {
+                  "oneOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "transcript": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "source",
+                  "language",
+                  "engine"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "asr",
+                      "subtitle"
+                    ]
+                  },
+                  "language": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "engine": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "code",
+                  "message",
+                  "stage"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "waiting_input",
+                      "video_extracting",
+                      "video_transcribing",
+                      "insights_generating",
+                      "completed",
+                      "partial_completed",
+                      "failed"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "constraints": {
+          "completedRequiresNullError": true,
+          "nonCompletedRequiresStructuredError": true
+        }
+      },
+      "sourceIdentity": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "source_url",
+              "source_identity"
+            ],
+            "properties": {
+              "status": {
+                "const": "completed"
+              },
+              "source_url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_identity": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "platform",
+                  "stable_id",
+                  "effective_part",
+                  "canonical_url"
+                ],
+                "properties": {
+                  "version": {
+                    "const": 1
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "douyin",
+                      "xiaohongshu",
+                      "bilibili",
+                      "youtube"
+                    ]
+                  },
+                  "stable_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "effective_part": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "canonical_url": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "error"
+            ],
+            "properties": {
+              "status": {
+                "const": "failed"
+              },
+              "error": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "modelDownload": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "model"
+            ],
+            "properties": {
+              "status": {
+                "const": "completed"
+              },
+              "model": {
+                "type": "string",
+                "enum": [
+                  "iic/SenseVoiceSmall"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "code",
+              "message"
+            ],
+            "properties": {
+              "status": {
+                "const": "failed"
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+              },
+              "message": {
+                "type": "string",
+                "enum": [
+                  "ASR model download failed.",
+                  "Downloaded ASR model archive was invalid."
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
   "asr": {
     "defaultModel": "iic/SenseVoiceSmall"
   },
