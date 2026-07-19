@@ -46,8 +46,9 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
 - [x] 2026-07-19: Parsed unknown task/model/cancel IPC values in TypeScript and copied accepted
   values into closed results. Validation: focused 127/127, full app 540/540, lint, and production
   build passed; the existing Vite chunk-size warning remains.
-- [ ] 2026-07-19: Complete full gates, update measured results, and archive this plan. Validation:
-  every command in Validation and Acceptance plus clean diff review.
+- [x] 2026-07-19: Completed full gates, updated measured results, and archived this plan. Validation:
+  worker 411/411, Rust 157/157, app 540/540, scripts 23/23, Ruff, lint/build, rustfmt, packaged
+  worker equality, governance, and diff gates passed.
 
 ## Surprises & Discoveries
 
@@ -67,6 +68,12 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
   shells that emit only the terminal result; lifecycle-only self-spawned fixtures remain unchanged.
 - Evidence: the production Vite build still reports the pre-existing warning that the main minified
   chunk exceeds 500 kB; this result parser adds no new runtime dependency.
+- Evidence: the first full worker run reached 281 passing tests but 130 setup errors because the
+  machine's default pytest temp directory denied access. Re-running with a writable explicit
+  `--basetemp` and disabled cache provider passed 411/411; no assertion failure was hidden.
+- Evidence: Windows PowerShell lacks the .NET `Path.GetRelativePath` API used by the first mirror
+  comparison attempt. A cross-platform Node SHA-256 comparison replaced that invalid harness and
+  verified all 32 files with zero forbidden cache entries or mismatches.
 
 ## Decision Log
 
@@ -86,13 +93,22 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
 
 ## Outcomes & Retrospective
 
-At plan creation, only approved design/governance files have changed. Production outcomes, exact
-test counts, observed warnings, and residual risks will be recorded from fresh output before this
-plan moves to `completed/`.
+Implemented the canonical v3 `terminalResults` registry, safe Python producer changes, strict Rust
+stdout framing and operation DTOs, exhaustive Rust application mapping, and independent TypeScript
+IPC parsing. Invalid values now fail with fixed non-echoing errors; valid task, source, model,
+cancellation, cached, and synthetic behavior remains covered.
 
-Residual risk: native validators can drift until all three language-specific suites and canonical
-key comparisons pass together. Structurally valid large transcript/AI strings retain existing
-IPC/resource behavior; this work introduces no arbitrary user-content cap.
+Fresh closeout evidence: worker 411/411 with one Python 3.13 `audioop` deprecation warning; Ruff
+clean; scripts 23/23; app 540/540 plus lint and production build; Rust 157/157 plus rustfmt; and 32
+canonical/packaged worker files matched by relative path and SHA-256 with no Python cache files. The
+production build retains the pre-existing >500 kB main-chunk warning. The local pytest command needs
+an explicit writable `--basetemp` on this machine because its default temp ACL is broken.
+
+Residual risks: native validators can drift if future shape changes bypass the required shared
+contract/key tests. Structurally valid large transcript/AI strings retain existing IPC/resource
+behavior; this work introduces no arbitrary user-content cap. macOS process-group behavior was not
+freshly rerun because this change preserves that lifecycle and it remains covered by the existing
+hosted release gate.
 
 ## Context and Orientation
 
@@ -506,7 +522,7 @@ npm.cmd run build
 
 Expected: zero failures; record any pre-existing Vite bundle warning.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add app\src\workerResultProtocol.ts app\src\workerResultProtocol.test.ts app\src\workerClient.ts app\src\workerClient.test.ts app\src\settingsClient.ts app\src\settingsClient.test.ts app\src\workerErrorCopy.ts app\src\workerErrorCopy.test.ts
@@ -523,7 +539,7 @@ git commit -m "feat(app): validate worker IPC results"
 - Modify: `docs/exec-plans/active/index.md`, `docs/exec-plans/completed/index.md`
 - Move: this plan from `active/` to `completed/`
 
-- [ ] **Step 1: Run complete worker/script gates**
+- [x] **Step 1: Run complete worker/script gates**
 
 ```powershell
 D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker\tests
@@ -531,7 +547,7 @@ D:\Github\FrameQ\.venv\Scripts\python.exe -m ruff check worker
 node --test scripts\tests\*.test.mjs
 ```
 
-- [ ] **Step 2: Run complete app/Rust gates fresh**
+- [x] **Step 2: Run complete app/Rust gates fresh**
 
 ```powershell
 npm --prefix app test
@@ -544,18 +560,18 @@ cargo fmt --manifest-path app\src-tauri\Cargo.toml -- --check
 
 Run child-process Rust fixtures outside the restricted sandbox.
 
-- [ ] **Step 3: Verify canonical/resource worker equality**
+- [x] **Step 3: Verify canonical/resource worker equality**
 
 Invoke `prepareFreshWorkerResource` without starting Tauri, then compare canonical and generated
 worker relative file sets plus SHA-256 hashes. Require no `.pyc`, `.pyo`, or `__pycache__` entry.
 
-- [ ] **Step 4: Update living evidence and archive**
+- [x] **Step 4: Update living evidence and archive**
 
 Re-read every approved design goal/non-goal, record exact counts/warnings/risks here, mark the TASKS
 item complete, update lifecycle ownership language and the audit finding if present, mark the design
 Implemented, move this plan to completed, and update both indexes plus AGENTS.
 
-- [ ] **Step 5: Run governance/diff gates**
+- [x] **Step 5: Run governance/diff gates**
 
 ```powershell
 python scripts\validate_agents_docs.py --level WARN
@@ -567,7 +583,7 @@ git diff
 
 Expected: 0 docs errors/warnings, a scoped diff, and no live credentials/user content in fixtures.
 
-- [ ] **Step 6: Commit closeout**
+- [x] **Step 6: Commit closeout**
 
 ```powershell
 git add AGENTS.md TASKS.md docs contracts worker app scripts

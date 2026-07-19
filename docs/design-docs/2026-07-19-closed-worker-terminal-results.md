@@ -1,7 +1,13 @@
 # Closed Worker Terminal-Result Boundary
 
 **Date:** 2026-07-19  
-**Status:** Accepted for implementation by the user on 2026-07-19
+**Status:** Implemented and accepted on 2026-07-19
+
+The canonical v3 contract now registers the three closed result families. Python emits only those
+families, Rust parses exactly one stdout line into operation-specific DTOs in
+`worker_runtime/result_protocol.rs`, and TypeScript independently parses unknown Tauri values in
+`workerResultProtocol.ts`. Task, source-identity, model-download, cancellation, cached, and
+synthetic paths all cross a runtime parser before application code consumes them.
 
 ## Context
 

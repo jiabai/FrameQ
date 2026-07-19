@@ -1823,6 +1823,7 @@ stateDiagram-v2
 | Rust application callers 分别组合 `WorkerInvocation`、`WorkerOperation`、`ProgressRoute`、LLM policy 与 `WorkerLane` | 已在 `e69fed4` 收口为 `WorkerJob + VideoWorkerFacade`；两个 lane 私有，model download 使用独立语义方法，未来 local-media variant 与 contract v4/CLI consumer 原子加入 | `worker_runtime::facade::typed_job_policy_tests` 证明三种当前 job 的固定 CLI/operation/progress/LLM policy；Rust facade/runner tests；设计见 `docs/design-docs/2026-07-19-typed-worker-job-facade.md` |
 | Local/AI workspace 同时读取展示 ViewModel 与原始 `WorkflowState`，重复解释取消、只读与产物操作语义 | 已在 `e68bc4a` 把 cancellation、artifact actions、transcript source 和 target status 全部投影到 `TaskWorkspaceViewModel`；两个 workspace 只消费各自 projection | `taskWorkspaceViewModel.test.ts`、`TaskWorkspaces.test.tsx` 与 i18n rendering tests；音频任务可用 `locateVideo.visible=false` 表达无视频，不需要组件识别 source type |
 | `pipeline.py` 直接协调下载、选择、ffprobe、任务内复制、FFmpeg、音频复用与字幕发现 | 已在 `be31b7f` 收口到 `MediaPreparationFacade.prepare(UrlMediaSource, TaskContext)`；pipeline 只消费 `PreparedMedia`，facade 不拥有 ASR、AI 或 task persistence | `worker/tests/test_media_preparation.py` 的行为/AST boundary tests 与 worker 全量测试；设计见 `docs/design-docs/2026-07-19-media-preparation-facade.md` |
+| Rust runner 只凭 stdout JSON 含 `status` 判断结构化结果，TypeScript IPC gateway 只依赖静态类型 | 已在 `result_protocol.rs` 与 `workerResultProtocol.ts` 按操作收口；Rust 要求单行 UTF-8 JSON 并解析为 closed DTO，TypeScript 对 Tauri `unknown` 值再次做闭集校验，未知/缺失字段、错误类型、错误 family 与不一致状态均固定失败且不回显 payload | canonical `terminalResults` contract 与 Python/Rust/TypeScript negative tests；全量 worker 411、Rust 157、app 540、scripts 23；设计见 `docs/design-docs/2026-07-19-closed-worker-terminal-results.md` |
 
 ### 如何使用这张表
 
@@ -1862,7 +1863,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | App composition root | `app/src/App.tsx` |
 | Task processing controller | `app/src/features/workflow/useTaskProcessingController.ts` |
 | Workflow state | `app/src/workflowState.ts`, `app/src/desktopWorkerProtocol.ts` |
-| Worker gateway | `app/src/workerClient.ts` |
+| Worker gateway and terminal-result parser | `app/src/workerClient.ts`, `app/src/workerResultProtocol.ts` |
 | Workspace presentation facade | `app/src/taskWorkspaceViewModel.ts` |
 | Workspace presentation consumers | `app/src/features/transcript/LocalTranscriptWorkspace.tsx`, `app/src/features/results/AiGenerationWorkspace.tsx` |
 | Transcript controller | `app/src/features/transcript/useTranscriptDetailController.ts` |
@@ -1886,6 +1887,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Typed worker job execution facade | `app/src-tauri/src/worker_runtime/facade.rs` |
 | Worker command policy | `app/src-tauri/src/worker_runtime/command.rs` |
 | Worker lifecycle runner and progress routes | `app/src-tauri/src/worker_runtime/runner.rs` |
+| Closed worker terminal-result protocol | `app/src-tauri/src/worker_runtime/result_protocol.rs` |
 | Private supervisor and OS process-tree termination | `app/src-tauri/src/worker_runtime/supervisor.rs` |
 | Worker runtime facade and lane collection | `app/src-tauri/src/worker_runtime/mod.rs` |
 | Runtime paths | `app/src-tauri/src/runtime.rs` |

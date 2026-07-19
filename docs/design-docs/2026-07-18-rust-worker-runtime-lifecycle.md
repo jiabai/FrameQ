@@ -13,6 +13,11 @@ Follow-up hardening on 2026-07-19 added the typed application execution boundary
 `WorkerRunRequest` or select an invocation, operation, progress route, LLM policy, or lane; the
 shared lifecycle and native cancellation behavior below are unchanged.
 
+A second 2026-07-19 follow-up implemented the closed terminal-result boundary described in
+`docs/design-docs/2026-07-19-closed-worker-terminal-results.md`. The runner now delegates exact
+one-line, operation-aware parsing to `worker_runtime/result_protocol.rs` and carries
+`ValidatedWorkerResult`; application modules no longer consume arbitrary `serde_json::Value`.
+
 ## Problem
 
 The Rust desktop layer has one documented `ProcessSupervisor` state machine per process lane, but
@@ -58,8 +63,10 @@ is centralized, while terminal observation and cleanup remain caller-controlled.
   or worker hot updates.
 - Do not rewrite the desktop process layer to Tokio, async process streams, actors, or an external
   process-management dependency.
-- Do not change Python worker CLI flags, stdin JSON, stdout JSON, progress-event schemas, model
-  download behavior, AI Credits, or server-managed LLM checkout.
+- The original lifecycle migration did not change Python worker CLI flags, stdin JSON, stdout JSON,
+  progress-event schemas, model download behavior, AI Credits, or server-managed LLM checkout. The
+  later terminal-result follow-up preserves valid v3 result behavior while strictly validating the
+  existing operation-specific stdout families and removing the unused `model_dir` field.
 - Do not combine video and ASR model-download lanes; they remain separate mutually exclusive lanes
   backed by the same implementation.
 - Do not make the runner understand business statuses such as `partial_completed`, task manifests,
@@ -75,6 +82,7 @@ app/src-tauri/src/worker_runtime/
   mod.rs
   command.rs
   facade.rs
+  result_protocol.rs
   supervisor.rs
   runner.rs
 ```
@@ -86,7 +94,8 @@ app/src-tauri/src/worker_runtime/
 | `worker_runtime/command.rs` | `WorkerInvocation`, `WorkerCommandSpec`, fixed CLI modes, bounded stdin payload, environment construction | spawning, waiting, cancellation state, result mapping |
 | `worker_runtime/facade.rs` | closed `WorkerJob`, exhaustive video-job invocation/operation/progress/LLM/lane policy, `VideoWorkerFacade::execute` | cache, task manifests, public result mapping, child lifecycle implementation |
 | `worker_runtime/supervisor.rs` | lane state, instance IDs, PID/PGID, `Running`/`Cancelling`, cancellation claim/rollback, fixed Windows/macOS tree termination | worker JSON, progress events, task/AI semantics |
-| `worker_runtime/runner.rs` | spawn configuration, supervisor registration, stdin delivery, stderr reader, progress routing, wait/reap, finish ordering, stdout parsing, terminal classification, lifecycle diagnostics | cache, manifests, entitlement, public `ProcessVideoResult` construction |
+| `worker_runtime/runner.rs` | spawn configuration, supervisor registration, stdin delivery, stderr reader, progress routing, wait/reap, finish ordering, stdout capture, parser delegation, terminal classification, lifecycle diagnostics | result-field interpretation, cache, manifests, entitlement, public `ProcessVideoResult` construction |
+| `worker_runtime/result_protocol.rs` | exact stdout framing, operation-specific closed DTO parsing, nested type/enum/key validation, semantic result invariants, fixed non-echoing protocol errors | spawn/wait/cancellation, task cache/manifests, UI error rendering |
 | `progress_event.rs` | pure contract-backed validation and safe invalid-event summaries | process ownership and Tauri command orchestration |
 | `diagnostics.rs` | app-local log sink, sanitization, truncation, safe result summaries | deciding child lifecycle or cancellation precedence |
 | `video_processing.rs` | process-video cache/preflight policy, semantic job submission, retry request validation, domain result mapping | invocation/operation/progress/lane/LLM execution policy, `Command`, `Child`, raw stderr threads, direct `finish()` or process-tree termination |
@@ -113,7 +122,7 @@ ProcessSupervisors::{cancel_video, is_video_active}
 ProcessSupervisors::{run_asr_model_download, cancel_asr_model_download}
 
 pub(crate) enum WorkerRunOutcome {
-    Structured(serde_json::Value),
+    Structured(ValidatedWorkerResult),
     Cancelled,
     UnstructuredFailure(WorkerExitSummary),
 }
@@ -168,13 +177,17 @@ classification after child observation can do that.
 
 ## Terminal Precedence
 
-The runner applies one rule to every operation:
+The runner applies one rule to every operation. “Structured result” below means a value that passed
+the operation-specific parser, not merely JSON containing a `status` field:
 
-1. A valid structured worker result wins, including when cancellation was claimed concurrently.
-2. If no structured result exists and the matching terminal phase was `Cancelling`, return
+1. A valid operation-matching structured worker result wins, including when cancellation was
+   claimed concurrently.
+2. If no valid result exists and the matching terminal phase was `Cancelling`, return
    `WorkerRunOutcome::Cancelled`.
-3. A successful exit without a structured result is a protocol violation.
-4. A nonzero/signal exit without a structured result is an unstructured worker failure.
+3. Outside cancellation, malformed, multi-line, invalid UTF-8, wrong-family, or semantically invalid
+   output is a fixed protocol violation.
+4. Missing output after a successful exit is a protocol violation.
+5. Missing output after a nonzero/signal exit is an unstructured worker failure.
 
 This is the cancellation contract already documented for FrameQ. The source-identity preflight must
 receive a characterization test because its current implementation checks `Cancelling` before
