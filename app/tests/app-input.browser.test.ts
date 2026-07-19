@@ -626,6 +626,48 @@ describe("App browser input interactions", () => {
       await page.close();
     }
   }, 10_000);
+
+  test("routes a startup authentication deep link through the App account lifecycle", async () => {
+    const callbackUrl =
+      "frameq://auth/callback?code=ui-smoke-code&state=ui-smoke-state";
+    const page = await openUiSmokePage({
+      responses: {
+        "plugin:deep-link|get_current": [callbackUrl],
+        complete_auth_flow: {
+          authenticated: true,
+          email: "ui-smoke@frameq.local",
+          can_process: true,
+          can_generate_ai: true,
+        },
+      },
+    });
+
+    try {
+      await waitForRuntimeCondition(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.commands.some((entry) => entry.command === 'complete_auth_flow')",
+      );
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('.account-sheet')?.textContent.includes('登录已完成。') === true",
+      );
+
+      const authCommands = (await readUiSmokeCommands(page)).filter(
+        (entry) => entry.command === "complete_auth_flow",
+      );
+      expect(authCommands).toEqual([
+        {
+          command: "complete_auth_flow",
+          args: { callbackUrl },
+        },
+      ]);
+      expect(
+        page.events.find((event) => event.method === "Runtime.exceptionThrown"),
+      ).toBeUndefined();
+    } finally {
+      await page.close();
+    }
+  }, 10_000);
 });
 
 describe("App desktop sheet structure", () => {
@@ -1823,6 +1865,54 @@ describe("App controller-owned lifecycle UI smoke", () => {
       await page.close();
     }
   }, 15_000);
+
+  test("routes a restored task artifact through the App location lifecycle", async () => {
+    const page = await openUiSmokePage({
+      responses: {
+        "plugin:opener|reveal_item_in_dir": null,
+      },
+    });
+
+    try {
+      await restoreSmokeHistoryItem(page, "历史任务甲文字稿");
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.local-artifact-toolbar'))",
+      );
+      await clickButtonContaining(
+        page,
+        ".local-artifact-toolbar button",
+        "定位视频",
+      );
+      await waitForRuntimeCondition(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.commands.some((entry) => entry.command === 'plugin:opener|reveal_item_in_dir')",
+      );
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('.local-transcript-workspace')?.textContent.includes('已在文件管理器中定位导出文件。') === true",
+      );
+
+      const openerCommands = (await readUiSmokeCommands(page)).filter(
+        (entry) => entry.command === "plugin:opener|reveal_item_in_dir",
+      );
+      expect(openerCommands).toEqual([
+        {
+          command: "plugin:opener|reveal_item_in_dir",
+          args: {
+            paths: [
+              "C:/FrameQ/outputs/tasks/history-task-a/media/video.mp4",
+            ],
+          },
+        },
+      ]);
+      expect(
+        page.events.find((event) => event.method === "Runtime.exceptionThrown"),
+      ).toBeUndefined();
+    } finally {
+      await page.close();
+    }
+  }, 10_000);
 
   test("keeps local transcript usable when AI is unavailable or quota is exhausted", async () => {
     for (const account of [

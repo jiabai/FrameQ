@@ -180,7 +180,11 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
         },
         invoke(command, args) {
           smoke.commands.push({ command, args: args || {} });
-          if (command === "plugin:deep-link|get_current") return Promise.resolve([]);
+          if (command === "plugin:deep-link|get_current") {
+            return Promise.resolve(
+              scenario.responses["plugin:deep-link|get_current"] || []
+            );
+          }
           if (command === "plugin:event|listen") return Promise.resolve(1);
           if (command === "plugin:event|unlisten") return Promise.resolve(null);
           if (Object.prototype.hasOwnProperty.call(scenario.rejectedCommands, command)) {
