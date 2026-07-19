@@ -27,10 +27,15 @@
   the design status, active indexes, task tracking, and local-media prerequisite order. Validation:
   plan self-review found no placeholder/type/scope gap; governance reported 0 errors and 0 warnings,
   and the tracked diff check passed.
-- [ ] Add focused RED tests that require the new child-module API and fail only because the adapter
-  does not yet exist.
-- [ ] Implement the adapter, migrate process-video/retry call sites, and remove the superseded parent
-  helpers/tests while keeping cache and preflight code in place.
+- [x] 2026-07-19: Added focused RED tests for the new child-module API. Validation:
+  `cargo test --manifest-path app/src-tauri/Cargo.toml video_processing::task_result::tests`
+  failed with compiler error `E0432` only because `map_task_worker_result` and
+  `TaskCommandContext` were intentionally unresolved; no unrelated compile, dependency, or runtime
+  failure occurred.
+- [x] 2026-07-19: Implemented the closed task-result adapter, migrated process-video and retry, and
+  removed the superseded parent helpers/tests while retaining cache and preflight orchestration.
+  Validation: 4 focused adapter tests and all 20 `video_processing` tests passed; the dependency
+  boundary and rustfmt checks passed.
 - [ ] Run focused and full regression gates, synchronize architecture/security/audit/local-media
   governance, record evidence, and archive this plan.
 
@@ -49,6 +54,16 @@
 - The active local-media plan will eventually add `ProcessLocalMedia`, but neither its worker job nor
   result context may be reserved in this refactor. They land only with contract v4 and the real
   Python consumer.
+- The source-identity cache preflight used the superseded parent failure helpers too. It now converts
+  its three closed failure categories into typed runtime outcomes before calling the same task-result
+  adapter; cache/preflight ownership remains in the parent and no second public-message policy was
+  retained.
+- The complete Rust gate exposed a pre-existing Windows timing failure in
+  `worker_runtime::runner::tests::blocked_stdin_delivery_remains_cancellable`: 158 tests passed and
+  that test returned the fixed `RequestDeliveryFailed` error after 30 seconds. The same exact test
+  fails identically on the untouched local `main`, and `runner.rs` has no branch diff. Running the
+  suite with only that baseline test skipped passed all 158 remaining tests. This plan does not alter
+  worker runtime to hide or bundle that independent blocker.
 
 ## Decision Log
 
@@ -68,6 +83,10 @@
   do not run or modify the Python worker solely for this Rust-only refactor. Rationale: worker code,
   wire schemas, packaged resources, and producer behavior are explicit non-goals; any such diff is
   scope drift requiring renewed review. Date/Author: 2026-07-19, Codex.
+- Decision: Record rather than repair the independently reproducible Windows runner test failure in
+  this branch. Rationale: it exists on untouched `main`, is outside the approved task-result boundary,
+  and changing cancellation/transport precedence requires its own test-first review.
+  Date/Author: 2026-07-19, Codex.
 
 ## Outcomes & Retrospective
 
@@ -109,7 +128,7 @@ resource file is created or modified by the production refactor.
 - Modify: `app/src-tauri/src/video_processing.rs`
 - Test: `app/src-tauri/src/video_processing/task_result.rs`
 
-- [ ] **Step 1: Register the private child module**
+- [x] **Step 1: Register the private child module**
 
 Add this declaration before the imports in `app/src-tauri/src/video_processing.rs`:
 
@@ -117,7 +136,7 @@ Add this declaration before the imports in `app/src-tauri/src/video_processing.r
 mod task_result;
 ```
 
-- [ ] **Step 2: Create the test-only RED module**
+- [x] **Step 2: Create the test-only RED module**
 
 Create `app/src-tauri/src/video_processing/task_result.rs` with the following tests and no production
 items yet. The unresolved `map_task_worker_result` and `TaskCommandContext` imports are the intended
@@ -275,7 +294,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run the focused test and verify RED**
+- [x] **Step 3: Run the focused test and verify RED**
 
 Run:
 
@@ -287,7 +306,7 @@ Expected: compilation fails with unresolved imports for `map_task_worker_result`
 `TaskCommandContext`. It must not fail because of missing dependencies, unrelated source errors, or
 an unavailable test runtime.
 
-- [ ] **Step 4: Record RED evidence in this plan**
+- [x] **Step 4: Record RED evidence in this plan**
 
 Add one dated Progress entry naming the exact compiler error and confirming that the failure is
 limited to the intentionally missing adapter API. Do not commit the non-compiling state separately.
@@ -301,7 +320,7 @@ limited to the intentionally missing adapter API. Do not commit the non-compilin
 - Test: `app/src-tauri/src/video_processing/task_result.rs`
 - Test: `app/src-tauri/src/video_processing.rs`
 
-- [ ] **Step 1: Add the minimal production implementation above the RED tests**
+- [x] **Step 1: Add the minimal production implementation above the RED tests**
 
 Insert this implementation before `#[cfg(test)] mod tests` in
 `app/src-tauri/src/video_processing/task_result.rs`:
@@ -416,7 +435,7 @@ fn worker_protocol_failure_result(context: TaskCommandContext) -> TaskTerminalRe
 Do not import Tauri, task manifests, settings, runtime paths, process supervisors, diagnostics,
 `WorkerJob`, or `VideoWorkerFacade` into this module.
 
-- [ ] **Step 2: Run the focused adapter tests and verify GREEN**
+- [x] **Step 2: Run the focused adapter tests and verify GREEN**
 
 Run:
 
@@ -426,7 +445,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml video_processing::task_resul
 
 Expected: all four new adapter tests pass.
 
-- [ ] **Step 3: Migrate the two task-producing call sites**
+- [x] **Step 3: Migrate the two task-producing call sites**
 
 Use these imports in `app/src-tauri/src/video_processing.rs`:
 
@@ -467,7 +486,7 @@ let parsed = map_task_worker_result(
 Do not alter the surrounding cache-hit logging, preflight behavior, retry start/result diagnostics,
 or command return types.
 
-- [ ] **Step 4: Delete superseded parent helpers and tests**
+- [x] **Step 4: Delete superseded parent helpers and tests**
 
 Delete these functions from `app/src-tauri/src/video_processing.rs`:
 
@@ -496,7 +515,7 @@ Reduce the parent test imports to the symbols still used there. In particular, r
 test module; the production parent still keeps the outcome/error-kind imports needed by source
 preflight.
 
-- [ ] **Step 5: Run all video-processing tests**
+- [x] **Step 5: Run all video-processing tests**
 
 Run:
 
@@ -507,7 +526,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml video_processing
 Expected: adapter, cache, IPC request, retry request, retry diagnostic, and request-resolution tests
 all pass.
 
-- [ ] **Step 6: Verify the dependency boundary**
+- [x] **Step 6: Verify the dependency boundary**
 
 Run:
 

@@ -1,8 +1,10 @@
+mod task_result;
+
 use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::task_manifest;
 use crate::worker_runtime::{
     SourceIdentityTerminalResult, TaskTerminalResult, ValidatedWorkerResult, WorkerJob,
-    WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome, WORKER_PROTOCOL_VIOLATION,
+    WorkerRunErrorKind, WorkerRunOutcome,
 };
 use crate::{
     append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, run_blocking_worker_command,
@@ -12,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use task_result::{map_task_worker_result, TaskCommandContext};
 use tauri::{AppHandle, State, Window};
 
 #[derive(Deserialize)]
@@ -185,17 +188,11 @@ fn process_video_blocking(
     let resolved_source_identity =
         match resolve_source_identity_for_cache(&paths, &request.url, process_state.as_ref()) {
             Ok(identity) => identity,
-            Err(SourceIdentityPreflightError::Cancelled) => {
-                return Ok(cancelled_worker_result("video_extracting", "failed"));
-            }
-            Err(SourceIdentityPreflightError::AlreadyRunning) => {
-                return Ok(worker_already_running_result("video_extracting", "failed"));
-            }
-            Err(SourceIdentityPreflightError::Transport) => {
-                return Ok(worker_transport_failure_result(
-                    "video_extracting",
-                    "failed",
-                ));
+            Err(error) => {
+                return map_task_worker_result(
+                    error.into_task_worker_result(),
+                    TaskCommandContext::ProcessVideo,
+                );
             }
         };
     if let Some(source_identity) = resolved_source_identity.as_ref() {
@@ -211,13 +208,11 @@ fn process_video_blocking(
         }
     }
     let request_json = serialize_process_video_request(&request)?;
-    map_worker_run_result(
+    map_task_worker_result(
         process_state
             .video_worker(&paths)
             .execute(WorkerJob::process_video(request_json, window))?,
-        "video_extracting",
-        "failed",
-        "Worker process failed before returning a structured result.",
+        TaskCommandContext::ProcessVideo,
     )
 }
 
@@ -348,6 +343,24 @@ enum SourceIdentityPreflightError {
     Transport,
 }
 
+impl SourceIdentityPreflightError {
+    fn into_task_worker_result(
+        self,
+    ) -> Result<WorkerRunOutcome, crate::worker_runtime::WorkerRunError> {
+        match self {
+            Self::Cancelled => Ok(WorkerRunOutcome::Cancelled),
+            Self::AlreadyRunning => Err(crate::worker_runtime::WorkerRunError {
+                kind: WorkerRunErrorKind::AlreadyRunning,
+                detail: "Source identity worker is already running.",
+            }),
+            Self::Transport => Err(crate::worker_runtime::WorkerRunError {
+                kind: WorkerRunErrorKind::RequestDeliveryFailed,
+                detail: "Source identity request could not be delivered.",
+            }),
+        }
+    }
+}
+
 fn resolve_source_identity_for_cache(
     paths: &crate::RuntimePaths,
     raw_url: &str,
@@ -408,13 +421,11 @@ fn retry_insights_blocking(
         "worker.retry_insights.start",
         &retry_diagnostic_detail(&request, "started", None),
     );
-    let parsed = map_worker_run_result(
+    let parsed = map_task_worker_result(
         process_state
             .video_worker(&paths)
             .execute(WorkerJob::retry_insights(request_json, window))?,
-        "insights_generating",
-        "partial_completed",
-        "AI generation worker failed before returning a structured result.",
+        TaskCommandContext::RetryInsights,
     )?;
     let _ = append_desktop_log(
         &paths,
@@ -474,91 +485,6 @@ fn safe_retry_error_code(code: &str) -> String {
     }
 }
 
-fn map_worker_run_result(
-    result: Result<WorkerRunOutcome, WorkerRunError>,
-    stage: &str,
-    status: &str,
-    unstructured_message: &str,
-) -> Result<TaskTerminalResult, String> {
-    match result {
-        Ok(WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))) => Ok(value),
-        Ok(WorkerRunOutcome::Structured(_)) => Ok(worker_protocol_failure_result(stage, status)),
-        Ok(WorkerRunOutcome::Cancelled) => Ok(cancelled_worker_result(stage, status)),
-        Ok(WorkerRunOutcome::UnstructuredFailure(_)) => Ok(worker_failure_result(
-            status,
-            stage,
-            "WORKER_PROCESS_FAILED",
-            unstructured_message,
-        )),
-        Err(error) => match error.kind {
-            WorkerRunErrorKind::AlreadyRunning => Ok(worker_already_running_result(stage, status)),
-            WorkerRunErrorKind::SpawnFailed | WorkerRunErrorKind::RequestDeliveryFailed => {
-                Ok(worker_transport_failure_result(stage, status))
-            }
-            WorkerRunErrorKind::ProtocolViolation => {
-                Ok(worker_protocol_failure_result(stage, status))
-            }
-            WorkerRunErrorKind::PipeUnavailable | WorkerRunErrorKind::WaitFailed => {
-                Err(error.detail.to_string())
-            }
-        },
-    }
-}
-
-fn worker_failure_result(
-    status: &str,
-    stage: &str,
-    code: &str,
-    message: &str,
-) -> TaskTerminalResult {
-    closed_task_result(serde_json::json!(ProcessVideoResult {
-        status: status.to_string(),
-        task_id: None,
-        task_dir: None,
-        artifacts: HashMap::new(),
-        text: String::new(),
-        summary: String::new(),
-        insights: vec![],
-        transcript: None,
-        error: Some(WorkerError {
-            code: code.to_string(),
-            message: message.to_string(),
-            stage: stage.to_string(),
-        }),
-    }))
-}
-
-fn cancelled_worker_result(stage: &str, status: &str) -> TaskTerminalResult {
-    worker_failure_result(
-        status,
-        stage,
-        "WORKER_CANCELLED",
-        "Worker process was cancelled.",
-    )
-}
-
-fn worker_already_running_result(stage: &str, status: &str) -> TaskTerminalResult {
-    worker_failure_result(
-        status,
-        stage,
-        "WORKER_ALREADY_RUNNING",
-        "Another worker process is already running.",
-    )
-}
-
-fn worker_transport_failure_result(stage: &str, status: &str) -> TaskTerminalResult {
-    worker_failure_result(
-        status,
-        stage,
-        "WORKER_REQUEST_TRANSPORT_FAILED",
-        "Worker request could not be delivered.",
-    )
-}
-
-fn worker_protocol_failure_result(stage: &str, status: &str) -> TaskTerminalResult {
-    worker_failure_result(status, stage, WORKER_PROTOCOL_VIOLATION, "")
-}
-
 fn closed_task_result(value: serde_json::Value) -> TaskTerminalResult {
     TaskTerminalResult::from_value(value)
         .expect("trusted desktop task result must satisfy the terminal contract")
@@ -595,15 +521,11 @@ fn resolve_process_video_worker_request(
 mod tests {
     use super::{
         cached_process_result_for_identity, cached_process_result_for_request,
-        cancelled_worker_result, map_worker_run_result, parse_retry_insights_request,
-        resolve_process_video_worker_request, retry_result_log_detail,
-        serialize_process_video_request, worker_already_running_result,
-        worker_transport_failure_result, ProcessVideoIpcRequest, ProcessVideoWorkerRequest,
-        INVALID_RETRY_PAYLOAD, PROCESS_VIDEO_CONTRACT_VERSION,
+        parse_retry_insights_request, resolve_process_video_worker_request,
+        retry_result_log_detail, serialize_process_video_request, ProcessVideoIpcRequest,
+        ProcessVideoWorkerRequest, INVALID_RETRY_PAYLOAD, PROCESS_VIDEO_CONTRACT_VERSION,
     };
-    use crate::worker_runtime::{
-        TaskTerminalResult, WorkerExitSummary, WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
-    };
+    use crate::worker_runtime::TaskTerminalResult;
     use crate::{path_to_env_string, task_manifest::SourceIdentity};
     use std::fs;
     use std::path::PathBuf;
@@ -611,95 +533,6 @@ mod tests {
 
     fn task_value(result: &TaskTerminalResult) -> serde_json::Value {
         serde_json::to_value(result).expect("serialize closed task result")
-    }
-
-    #[test]
-    fn worker_lifecycle_failures_keep_process_and_retry_public_shapes() {
-        let process_cancelled = task_value(&cancelled_worker_result("video_extracting", "failed"));
-        assert_eq!(process_cancelled["status"], "failed");
-        assert_eq!(process_cancelled["error"]["code"], "WORKER_CANCELLED");
-        assert_eq!(process_cancelled["error"]["stage"], "video_extracting");
-
-        let retry_cancelled = task_value(&cancelled_worker_result(
-            "insights_generating",
-            "partial_completed",
-        ));
-        assert_eq!(retry_cancelled["status"], "partial_completed");
-        assert_eq!(retry_cancelled["error"]["code"], "WORKER_CANCELLED");
-        assert_eq!(retry_cancelled["error"]["stage"], "insights_generating");
-
-        let already_running =
-            task_value(&worker_already_running_result("video_extracting", "failed"));
-        assert_eq!(already_running["error"]["code"], "WORKER_ALREADY_RUNNING");
-
-        let transport = task_value(&worker_transport_failure_result(
-            "video_extracting",
-            "failed",
-        ));
-        assert_eq!(
-            transport["error"]["code"],
-            "WORKER_REQUEST_TRANSPORT_FAILED"
-        );
-    }
-
-    #[test]
-    fn typed_runner_outcomes_preserve_process_and_retry_adapter_shapes() {
-        let process_failure = map_worker_run_result(
-            Ok(WorkerRunOutcome::UnstructuredFailure(WorkerExitSummary {
-                exit_code: Some(1),
-                stderr: "present",
-            })),
-            "video_extracting",
-            "failed",
-            "Worker process failed before returning a structured result.",
-        )
-        .expect("map process failure");
-        let process_failure = task_value(&process_failure);
-        assert_eq!(process_failure["status"], "failed");
-        assert_eq!(process_failure["error"]["code"], "WORKER_PROCESS_FAILED");
-        assert_eq!(process_failure["error"]["stage"], "video_extracting");
-
-        let retry_cancelled = map_worker_run_result(
-            Ok(WorkerRunOutcome::Cancelled),
-            "insights_generating",
-            "partial_completed",
-            "unused",
-        )
-        .expect("map retry cancellation");
-        let retry_cancelled = task_value(&retry_cancelled);
-        assert_eq!(retry_cancelled["status"], "partial_completed");
-        assert_eq!(retry_cancelled["error"]["code"], "WORKER_CANCELLED");
-
-        let transport = map_worker_run_result(
-            Err(WorkerRunError {
-                kind: WorkerRunErrorKind::SpawnFailed,
-                detail: "fixed spawn failure",
-            }),
-            "video_extracting",
-            "failed",
-            "unused",
-        )
-        .expect("map transport failure");
-        let transport = task_value(&transport);
-        assert_eq!(
-            transport["error"]["code"],
-            "WORKER_REQUEST_TRANSPORT_FAILED"
-        );
-
-        let protocol_error = map_worker_run_result(
-            Err(WorkerRunError {
-                kind: WorkerRunErrorKind::ProtocolViolation,
-                detail: "fixed protocol failure",
-            }),
-            "video_extracting",
-            "failed",
-            "unused",
-        )
-        .expect("protocol violation becomes a closed task failure");
-        let protocol_error = task_value(&protocol_error);
-        assert_eq!(protocol_error["status"], "failed");
-        assert_eq!(protocol_error["error"]["code"], "WORKER_PROTOCOL_VIOLATION");
-        assert_eq!(protocol_error["error"]["message"], "");
     }
 
     #[test]
