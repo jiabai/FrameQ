@@ -205,6 +205,30 @@ def test_main_rejects_invalid_stdin_without_echoing_payload(monkeypatch, capsys)
     assert "xsec_token" not in captured.out + captured.err
 
 
+def test_source_identity_stdin_failure_uses_closed_source_result_without_echo(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        cli.sys,
+        "stdin",
+        io.StringIO(
+            '{"url":"https://example.test/?xsec_token=review-secret"'
+        ),
+    )
+
+    exit_code = cli.main(["--resolve-source-stdin"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {
+        "status": "failed",
+        "error": {"code": "WORKER_STDIN_INVALID"},
+    }
+    assert "review-secret" not in captured.out + captured.err
+    assert "xsec_token" not in captured.out + captured.err
+
+
 def test_main_resolves_source_identity_from_stdin_without_echoing_secret(
     monkeypatch,
     capsys,

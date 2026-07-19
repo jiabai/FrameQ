@@ -18,7 +18,11 @@ from frameq_worker.desktop_contract import (
 from frameq_worker.insightflow import InsightClient
 from frameq_worker.llm import build_insight_client_from_env
 from frameq_worker.media import CommandRunner, run_command
-from frameq_worker.model_download import ModelDownloadError, download_asr_model_cache
+from frameq_worker.model_download import (
+    ARCHIVE_INVALID_ERROR_CODE,
+    ModelDownloadError,
+    download_asr_model_cache,
+)
 from frameq_worker.models import Insight, JobStage, ProcessResult, TranscriptMetadata, WorkerError
 from frameq_worker.pipeline import (
     TranscriberFactory,
@@ -44,6 +48,8 @@ from frameq_worker.source_resolution import (
 from frameq_worker.task_store import TaskStoreFacade
 
 InsightClientFactory = Callable[[dict[str, str]], InsightClient | None]
+MODEL_DOWNLOAD_FAILED_MESSAGE = "ASR model download failed."
+MODEL_ARCHIVE_INVALID_MESSAGE = "Downloaded ASR model archive was invalid."
 
 
 def run_worker_once(
@@ -317,22 +323,26 @@ def run_asr_model_download_once(
             progress_callback=progress_callback,
         )
     except ModelDownloadError as exc:
+        code, message = _safe_model_download_failure(exc.code)
         return {
             "status": "failed",
-            "code": exc.code,
-            "message": exc.message,
-            "model_dir": cache_dir.as_posix(),
+            "code": code,
+            "message": message,
         }
-    except Exception as exc:  # noqa: BLE001 - wraps third-party downloader failures.
+    except Exception:  # noqa: BLE001 - maps third-party downloader failures to a fixed result.
         return {
             "status": "failed",
             "code": "ASR_MODEL_DOWNLOAD_FAILED",
-            "message": str(exc),
-            "model_dir": cache_dir.as_posix(),
+            "message": MODEL_DOWNLOAD_FAILED_MESSAGE,
         }
 
     return {
         "status": "completed",
         "model": DEFAULT_ASR_MODEL,
-        "model_dir": cache_dir.as_posix(),
     }
+
+
+def _safe_model_download_failure(code: str) -> tuple[str, str]:
+    if code == ARCHIVE_INVALID_ERROR_CODE:
+        return code, MODEL_ARCHIVE_INVALID_MESSAGE
+    return "ASR_MODEL_DOWNLOAD_FAILED", MODEL_DOWNLOAD_FAILED_MESSAGE

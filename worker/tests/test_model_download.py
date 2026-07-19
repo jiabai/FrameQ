@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 
 import frameq_worker.model_download as model_download
+import frameq_worker.worker_service as worker_service
 import pytest
 from frameq_worker.model_download import (
     ARCHIVE_INVALID_ERROR_CODE,
@@ -44,6 +45,74 @@ def create_valid_legacy_cache(root: Path) -> None:
         "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
         encoding="utf-8",
     )
+
+
+def test_model_download_terminal_success_omits_local_model_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_dir = tmp_path / "review-secret-model-dir"
+    monkeypatch.setattr(
+        worker_service,
+        "download_asr_model_cache",
+        lambda **_kwargs: secret_dir,
+    )
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        environ={"FRAMEQ_MODEL_DIR": secret_dir.as_posix()},
+    )
+
+    assert result == {
+        "status": "completed",
+        "model": SENSEVOICE_MODEL_ID,
+    }
+    assert "review-secret" not in repr(result)
+
+
+def test_model_download_terminal_failure_maps_archive_detail_to_fixed_message(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "review-secret-member"
+
+    def fail_download(**_kwargs: object) -> None:
+        raise ModelDownloadError(
+            ARCHIVE_INVALID_ERROR_CODE,
+            f"Archive contains unsafe member {secret}",
+        )
+
+    monkeypatch.setattr(worker_service, "download_asr_model_cache", fail_download)
+
+    result = worker_service.run_asr_model_download_once(project_root=tmp_path)
+
+    assert result == {
+        "status": "failed",
+        "code": ARCHIVE_INVALID_ERROR_CODE,
+        "message": "Downloaded ASR model archive was invalid.",
+    }
+    assert secret not in repr(result)
+
+
+def test_model_download_terminal_failure_never_exposes_third_party_exception(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "review-secret-provider-url"
+
+    def fail_download(**_kwargs: object) -> None:
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(worker_service, "download_asr_model_cache", fail_download)
+
+    result = worker_service.run_asr_model_download_once(project_root=tmp_path)
+
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+    assert secret not in repr(result)
 
 
 def test_validate_asr_model_cache_requires_marker_and_model_files(tmp_path: Path) -> None:

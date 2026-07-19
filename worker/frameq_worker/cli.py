@@ -131,6 +131,11 @@ def read_stdin_request(stream: TextIOBase) -> str:
 
 
 def stdin_failure_result(mode: str) -> dict[str, object]:
+    if mode == "resolve_source_identity":
+        return {
+            "status": "failed",
+            "error": {"code": "WORKER_STDIN_INVALID"},
+        }
     stage = "insights_generating" if mode == "retry_insights" else "waiting_input"
     return {
         "status": "failed",

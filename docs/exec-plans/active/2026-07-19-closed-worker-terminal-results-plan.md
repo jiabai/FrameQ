@@ -34,9 +34,9 @@ formalizes current contract v3 and leaves local-media contract v4 untouched.
   runner 12 tests, docs ERROR gate, and a clean isolated branch.
 - [x] 2026-07-19: Recorded and received user approval for the operation-specific defense-in-depth
   design. Validation: commit `6f99e52` and user response `设计通过`.
-- [ ] 2026-07-19: Register closed result schemas and safe Python producers. Contract portion
-  complete: Python contract 12/12 and TypeScript contract 10/10 passed after expected missing-schema
-  RED failures. Validation: focused cross-language contract tests; producer portion remains.
+- [x] 2026-07-19: Registered closed result schemas and safe Python producers after expected RED
+  failures for missing schema, leaked `model_dir`/exception text, and the wrong source failure family.
+  Validation: Python contract 12/12, TypeScript contract 10/10, and Python CLI/model 35/35 passed.
 - [ ] 2026-07-19: Replace permissive Rust stdout parsing and raw application `Value` consumption.
   Validation: focused result-protocol, runner, video, and model tests.
 - [ ] 2026-07-19: Parse unknown task/model/cancel IPC values in TypeScript. Validation: focused
@@ -195,7 +195,7 @@ download use exact `oneOf` success/failure objects. Model messages are restricte
 
 Run both Step 2 commands. Expected: focused contract tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add contracts\desktop-worker-contract.json worker\tests\test_contract.py app\src\desktopWorkerContract.test.ts
@@ -210,7 +210,7 @@ git commit -m "contract(worker): close terminal result schemas"
 - Modify: `worker/frameq_worker/worker_service.py`
 - Modify: `worker/frameq_worker/cli.py`
 
-- [ ] **Step 1: Write failing producer privacy tests**
+- [x] **Step 1: Write failing producer privacy tests**
 
 ```python
 def test_model_download_result_never_exposes_path_or_exception(monkeypatch, tmp_path):
@@ -234,7 +234,7 @@ def test_model_download_result_never_exposes_path_or_exception(monkeypatch, tmp_
 
 Add archive-error, success-without-`model_dir`, and source-stdin-failure exact-shape cases.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```powershell
 D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker\tests\test_model_download.py worker\tests\test_cli.py -q
@@ -242,7 +242,7 @@ D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker\tests\test_model_down
 
 Expected: failures expose `model_dir`, exception text, and a task-shaped source failure.
 
-- [ ] **Step 3: Implement fixed mappings**
+- [x] **Step 3: Implement fixed mappings**
 
 ```python
 def _safe_model_download_failure(code: str) -> tuple[str, str]:
@@ -256,7 +256,7 @@ Return only status/code/fixed message on failure and status/model on success. Ma
 `{"status": "failed", "error": {"code": "WORKER_STDIN_INVALID"}}`; retain full task failures for
 process/retry.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run Step 2. Expected: all focused tests pass without the secret in output.
 
