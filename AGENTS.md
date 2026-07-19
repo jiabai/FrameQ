@@ -36,8 +36,7 @@
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
-- 当前 active 测试加固计划：`docs/exec-plans/active/2026-07-19-app-composition-integration-coverage-plan.md`
-- 最近完成执行计划：`docs/exec-plans/completed/2026-07-19-closed-worker-terminal-results-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-07-19-app-composition-integration-coverage-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

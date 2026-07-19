@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-19-app-composition-integration-coverage-plan.md` | Proved startup authentication deep-link and task artifact-location wiring through the real Chromium-rendered App lifecycle. |
 | `2026-07-19-closed-worker-terminal-results-plan.md` | Closed operation-specific worker terminal results at the Python producer, Rust stdout, and TypeScript IPC boundaries without echoing rejected content. |
 | `2026-07-19-typed-worker-job-facade-plan.md` | Derived video-worker invocation, operation, progress, retry-only LLM policy, and lane from one typed Rust job facade while preserving the shared lifecycle runner. |
 | `2026-07-18-process-video-request-contract-v3-plan.md` | Replaced the false five-field process request with URL-only IPC intent, a Rust-resolved strict v3 worker request, and fail-closed Python parsing. |

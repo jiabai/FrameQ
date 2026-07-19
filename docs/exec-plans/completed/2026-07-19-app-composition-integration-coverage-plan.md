@@ -28,8 +28,12 @@ does not add jsdom, Testing Library, production dependency injection, or a secon
   mounts the production App and passes 25/25 at baseline.
 - [x] 2026-07-19: Recorded the approved minimal design and alternatives in
   `docs/design-docs/2026-07-19-app-composition-integration-coverage.md`.
-- [ ] 2026-07-19: Demonstrate deep-link RED, implement the bridge seam, add artifact-location
-  characterization, run full gates, and archive this plan.
+- [x] 2026-07-19: Added startup deep-link and restored artifact-location App browser coverage.
+  Validation: the deep-link test failed first because `complete_auth_flow` was absent, then the
+  focused case passed; the complete browser file passed 27/27.
+- [x] 2026-07-19: Demonstrated deep-link RED, implemented the bridge seam, added artifact-location
+  characterization, ran full gates, and archived this plan. Validation: browser 27/27, app 542/542,
+  scripts 23/23, lint/build/docs/diff passed.
 
 ## Surprises & Discoveries
 
@@ -48,8 +52,17 @@ does not add jsdom, Testing Library, production dependency injection, or a secon
 
 ## Outcomes & Retrospective
 
-Implementation results, exact test counts, warnings, and residual risks will be recorded before the
-plan moves to `completed/`.
+Implemented two missing real-browser App composition assertions without changing production source
+or adding a dependency. The startup callback generates exactly one `complete_auth_flow` command and
+reaches localized completion. The restored History task generates exactly one opener command for
+its task-owned video path and reaches the localized success notice.
+
+Fresh evidence: the focused deep-link test failed before the bridge change because the command was
+absent, then passed; the browser file passed 27/27, complete app passed 542/542, scripts passed
+23/23, and lint, production build, governance, and diff checks passed. The existing Vite warning for
+the 659.62 kB main chunk remains. Browser smoke still relies on an installed Chrome/Edge executable;
+native Tauri plugin implementation is covered at its existing command boundary rather than opened
+against the real operating-system file manager in this automated test.
 
 ## File Structure
 
@@ -75,7 +88,7 @@ plan moves to `completed/`.
 Add one active-index row, one unchecked technical-debt task linking the design and plan, and one
 AGENTS quick-entry link. Do not mark the audit resolved yet.
 
-- [ ] **Step 2: Validate and commit planning**
+- [x] **Step 2: Validate and commit planning**
 
 Run:
 
@@ -99,7 +112,7 @@ git commit -m "docs(app): plan composition integration coverage"
 - Modify: `app/tests/app-input.browser.test.ts`
 - Modify: `app/tests/support/mockTauriBridge.ts`
 
-- [ ] **Step 1: Write the startup deep-link test**
+- [x] **Step 1: Write the startup deep-link test**
 
 Add a test that opens the production App with this scenario response:
 
@@ -123,7 +136,7 @@ Wait for `complete_auth_flow`, then require exactly one ledger entry with
 `args.callbackUrl === callbackUrl`, no `Runtime.exceptionThrown`, a visible `.account-sheet`, and
 the localized `登录已完成。` notice.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -134,7 +147,7 @@ npm.cmd test -- tests\app-input.browser.test.ts -t "routes a startup authenticat
 Expected: FAIL because `createUiSmokeBridgeScript` still returns `[]` for
 `plugin:deep-link|get_current`, so `complete_auth_flow` is never invoked.
 
-- [ ] **Step 3: Implement the minimal bridge seam**
+- [x] **Step 3: Implement the minimal bridge seam**
 
 Replace the unconditional response with a scenario-backed default:
 
@@ -148,11 +161,11 @@ if (command === "plugin:deep-link|get_current") {
 
 Do not add a production API or change the default empty-list behavior.
 
-- [ ] **Step 4: Run the focused deep-link test and verify GREEN**
+- [x] **Step 4: Run the focused deep-link test and verify GREEN**
 
 Run the command from Step 2. Expected: one passing test and no runtime exception.
 
-- [ ] **Step 5: Add the artifact-location characterization test**
+- [x] **Step 5: Add the artifact-location characterization test**
 
 Open the App with a successful `plugin:opener|reveal_item_in_dir: null` response, restore History
 task `history-task-a`, click the `定位视频` button in `.local-artifact-toolbar`, and assert:
@@ -174,7 +187,7 @@ Also require the localized `已在文件管理器中定位导出文件。` notic
 is a characterization test of existing production behavior; no production implementation is
 expected.
 
-- [ ] **Step 6: Run and commit focused coverage**
+- [x] **Step 6: Run and commit focused coverage**
 
 Run:
 
@@ -200,7 +213,7 @@ git commit -m "test(app): cover composition root lifecycles"
 - Modify: `docs/exec-plans/active/index.md`, `docs/exec-plans/completed/index.md`
 - Move: this plan from `active/` to `completed/`
 
-- [ ] **Step 1: Run complete app and governance gates**
+- [x] **Step 1: Run complete app and governance gates**
 
 ```powershell
 npm.cmd --prefix app test
@@ -213,13 +226,13 @@ git diff --check
 
 Expected: zero failures. Record the exact app/browser/script counts and existing build warnings.
 
-- [ ] **Step 2: Update durable evidence**
+- [x] **Step 2: Update durable evidence**
 
 Mark the design Implemented, add the audit finding to the resolved table with the real-browser
 ownership and both new lifecycle assertions, complete the TASKS item, record outcomes here, archive
 the plan, and update AGENTS plus both indexes.
 
-- [ ] **Step 3: Re-run governance and commit closeout**
+- [x] **Step 3: Re-run governance and commit closeout**
 
 ```powershell
 python scripts\validate_agents_docs.py --level WARN

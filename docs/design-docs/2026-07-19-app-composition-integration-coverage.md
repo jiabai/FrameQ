@@ -1,7 +1,11 @@
 # App Composition Integration Coverage
 
 **Date:** 2026-07-19  
-**Status:** Approved for implementation by the user's conditional instruction on 2026-07-19
+**Status:** Implemented and accepted on 2026-07-19
+
+The production App remains unchanged. The real-browser suite now covers 27 App lifecycles,
+including exact startup authentication callback delivery and restored task artifact location; the
+complete app suite passes 542/542 with lint and production build gates.
 
 ## Context
 
