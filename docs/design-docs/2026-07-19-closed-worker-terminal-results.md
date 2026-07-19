@@ -1,7 +1,7 @@
 # Closed Worker Terminal-Result Boundary
 
 **Date:** 2026-07-19  
-**Status:** Proposed; pending review before implementation
+**Status:** Accepted for implementation by the user on 2026-07-19
 
 ## Context
 

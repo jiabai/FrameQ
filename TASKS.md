@@ -71,7 +71,8 @@
   unsafe codes, incoherent statuses, and operation mismatches at both Rust and TypeScript runtime
   boundaries; preserve cancellation precedence and valid cache/synthetic behavior; never echo a
   rejected payload; and remove unused `model_dir` from model-download results. Design:
-  `docs/design-docs/2026-07-19-closed-worker-terminal-results.md`.
+  `docs/design-docs/2026-07-19-closed-worker-terminal-results.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-19-closed-worker-terminal-results-plan.md`.
 
 - [x] Make worker media and task JSON writes crash-safe (2026-07-19) - ✅ Acceptance: stage task
   video, normalized WAV, manifest, and preference snapshot beside their official destinations;
