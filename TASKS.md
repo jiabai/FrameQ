@@ -72,6 +72,19 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Xiaohongshu public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
+  kept the 169-line `frameq_worker.xiaohongshu_fallback` as the stable production/test adapter and
+  separated types, source/short-link, page-state, stream-policy, and CookieJar/transport ownership
+  into a private `xiaohongshu/` package. Public note/share/short-link and transient `xsec_token`, one
+  process-local anonymous CookieJar, decode/state/ranking, nested primary/backup attempts,
+  atomic/resumable MP4 replacement, fixed errors, progress, and root identities remain covered; no
+  login/browser-cookie, image/Live Photo, generic fallback framework, facade class, contract, or UI
+  behavior was added. Focused 222/222, worker 477/477, app 549/549, Rust 169/169, scripts 23/23,
+  Ruff/rustfmt/lint/build, Tauri no-bundle, and recursive 44/44 packaged-worker equality pass.
+  Credential-free live platform and macOS runtime smoke were not run and remain residual risks.
+  Design: `docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-20-xiaohongshu-fallback-module-split-plan.md`.
+
 - [x] Split the Bilibili public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
   kept the 137-line `frameq_worker.bilibili_fallback` as the stable production/test adapter and
   separated types, source, playback, transport, and artifact responsibilities into a private

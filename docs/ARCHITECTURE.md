@@ -419,9 +419,11 @@
 
 - Xiaohongshu fallback remains worker-owned and video-only. UI and Tauri submit a source string and receive the existing worker result shape; they do not parse Xiaohongshu HTML, select streams, import cookies, or manage downloads.
 - The frontend may accept Xiaohongshu share text, full note URLs, and short links, but all platform interpretation happens inside the Python worker.
-- The worker should port EasyDownload's Xiaohongshu parser/client/downloader ideas into `worker/frameq_worker/xiaohongshu_fallback.py` and shared download helpers, not call or bundle the Go/Wails EasyDownload runtime.
+- `worker/frameq_worker/xiaohongshu_fallback.py` is the 169-line stable compatibility/application adapter and the only Xiaohongshu import path used by production modules outside the private package. It owns default dependency composition, the complete fallback sequence, output naming, nested candidate/backup attempts, and all three `xiaohongshu.*` progress events.
+- Private `worker/frameq_worker/xiaohongshu/` modules separate shared identities (`types.py`), source/short-link policy (`source.py`), bounded page-state interpretation (`page.py`), deterministic stream ranking (`streams.py`), and CookieJar/urllib/safe-download effects (`transport.py`). Private children do not import the root adapter or task/application/ASR/AI layers; no facade class or generic multi-platform fallback framework exists.
+- The worker ports only the required EasyDownload Xiaohongshu parser/client/downloader ideas into these Python boundaries and shared download helpers; it does not call or bundle the Go/Wails EasyDownload runtime. Stable root re-exports preserve repository-observed type, client, source-builder, and test-seam identities.
 - `yt-dlp` stays the first attempt. Xiaohongshu fallback runs only after a Xiaohongshu-related failure and only for public or user-authorized video notes.
-- The fallback should preserve `xsec_token`, handle short-link `3xx` and embedded-HTML resolution, decode `gzip`/`br`/`deflate` note pages, parse `window.__INITIAL_STATE__`, rank video streams deterministically, and download through safe streaming `.part` behavior.
+- The fallback preserves transient `xsec_token`, short-link `3xx` and embedded-HTML resolution, `gzip`/`br`/`deflate` note-page decoding, `window.__INITIAL_STATE__` parsing, deterministic stream ranking, one process-local client/CookieJar, and safe resumable `.part` writes with atomic final replacement.
 - The fallback must not add image album ZIP output, Live Photo sidecar output, stream picker UI, batch queue, login automation, browser cookie import, CAPTCHA solving, proxy pools, or private-note scraping.
 
 ## 2026-06-27 Admin Entitlement Adjustment Boundary
