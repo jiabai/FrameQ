@@ -1,5 +1,24 @@
 # FrameQ Architecture
 
+## 2026-07-20 Douyin fallback module boundary
+
+- `douyin_fallback.py` is now a 132-line stable compatibility/application adapter. It retains the
+  complete fallback sequence, default dependency composition, output naming, candidate-order
+  wrapper, and all four `douyin.*` progress events.
+- The private `douyin/` package separates immutable shared types, source/short-link policy, pure
+  Router Data interpretation, bit-rate/ratio-probe stream policy, and CookieJar/urllib/atomic-write
+  transport. The package initializer exports nothing, and production consumers outside the package
+  continue importing only `frameq_worker.douyin_fallback`.
+- One default `UrllibDouyinHttpClient` and its process-local anonymous `CookieJar` still span source
+  resolution, share-page request, ratio probes, and final media request. Direct canonical IDs remain
+  network-free.
+- Candidate sorting/deduplication stays in stream policy and the root wrapper; transport receives an
+  ordered sequence, removes probe Range headers, retries only request/safe-write failures, and uses
+  the shared atomic writer without emitting progress or exposing volatile URLs.
+- AST tests enforce owner symbols, dependency direction, transport-only low-level effects,
+  root-only production entry/progress, and exact shared identities. The generated Tauri worker
+  remains a recursive byte-equal mirror of the canonical 50-file worker tree.
+
 ## 2026-07-20 Desktop-worker contract v4 source-type boundary
 
 - `contracts/desktop-worker-contract.json` is now global contract v4. The existing URL worker

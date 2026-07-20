@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-20-douyin-fallback-module-split-plan.md` | Split the Douyin public-video fallback into a 132-line stable adapter and private type, source, Router Data, stream/probe, and transport failure boundaries without changing platform behavior. |
 | `2026-07-20-xiaohongshu-fallback-module-split-plan.md` | Split the Xiaohongshu public-video fallback into a 169-line stable adapter and private type, source, page-state, stream-policy, and transport failure boundaries without changing platform behavior. |
 | `2026-07-20-bilibili-fallback-module-split-plan.md` | Split the Bilibili public-video fallback into a 137-line stable adapter and private type, source, playback, transport, and artifact failure boundaries without changing platform behavior. |
 | `2026-07-20-video-processing-module-split-plan.md` | Split the Rust video-processing hotspot into a 68-line Tauri root plus focused retry, URL cache, URL orchestration, and existing closed task-result modules without changing behavior or contract v3. |

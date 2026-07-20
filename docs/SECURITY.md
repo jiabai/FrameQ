@@ -437,9 +437,20 @@
 - The fallback must not require, collect, persist, or upload browser cookies. Exported cookie files are not part of the supported product path for this fallback.
 - The fallback may use a fixed mobile Safari user agent and minimal public-page headers for compatibility with public share pages. It must not use user-agent rotation, proxy pools, browser fingerprint spoofing, CAPTCHA solving, login automation, or account-authenticated scraping.
 - A process-local cookie jar may accept anonymous cookies naturally set by the public share page, such as `ttwid`, but those cookies must be discarded after the worker invocation and must not be written to history, logs, app-local settings, or server requests.
+- The stable root adapter is the only production entry point outside the private `douyin/` package.
+  `source.py` owns allowlisted ID/host/short-link policy; `page.py` owns in-memory Router Data
+  interpretation; `streams.py` owns deterministic bit-rate and bounded ratio-probe policy;
+  `transport.py` alone owns CookieJar, raw urllib, Range removal, and atomic candidate writes. AST
+  gates reject child-to-root/application/ASR/AI back-edges and direct production imports of private
+  modules.
+- Candidate request or safe-write failure may advance to the next ordered stream, but arbitrary
+  filesystem exceptions still propagate. The shared atomic writer keeps `.part` scoped beside the
+  destination and preserves an existing completed MP4 until a valid replacement succeeds.
 - The fallback must not attempt to solve CAPTCHA, defeat login gates, bypass private content restrictions, or automate account-authenticated scraping.
 - Worker logs, history records, and UI errors must not store submitted/download URLs, cookies, sensitive request headers, or full media CDN URLs when those URLs contain volatile request tokens. Logs may keep canonical platform identifiers, short sanitized error summaries, hostnames, stream quality labels, byte sizes, task ids, and local output paths.
 - Downloaded video, extracted audio, transcripts, summaries, mindmaps, and topic outputs remain local artifacts under the configured output/cache directories; no fallback media data is sent to the FrameQ server.
+- The packaged worker must be generated from canonical source and compared recursively by file set
+  and bytes; the private package must never be maintained through hand-edited resource copies.
 
 ## 2026-06-23 Desktop Update Boundary
 

@@ -72,6 +72,23 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Douyin public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
+  retain `frameq_worker.douyin_fallback` as the sole stable production/test adapter; separate shared
+  types, source/short-link policy, Router Data parsing, stream/ratio-probe policy, and
+  CookieJar/HTTP/atomic-download effects into a private `douyin/` package. Preserve exact accepted
+  inputs, one process-local anonymous client, request/probe policy, candidate order/deduplication,
+  fixed errors, four root-owned progress events, prior-MP4 preservation, fallback order, and root
+  identities. Add characterization and AST/import-boundary tests before extraction; add no login,
+  browser-cookie input, CAPTCHA/private-content bypass, generic platform framework, facade class,
+  contract, or UI behavior. Implemented as a 132-line root plus empty initializer and five private
+  owners. Characterization and RED ownership tests preceded extraction; focused 205/205, worker
+  501/501, app 549/549, normal-permission Windows Rust 169/169, scripts 23/23, Ruff, rustfmt,
+  TypeScript/i18n lint, builds, Tauri no-bundle, governance, diff, and recursive 50/50 packaged
+  worker equality passed. One unchanged Python `audioop` deprecation warning remains; live Douyin
+  and macOS runtime smoke are unverified. Design:
+  `docs/design-docs/2026-07-20-douyin-fallback-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-20-douyin-fallback-module-split-plan.md`.
+
 - [x] Split the Xiaohongshu public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
   kept the 169-line `frameq_worker.xiaohongshu_fallback` as the stable production/test adapter and
   separated types, source/short-link, page-state, stream-policy, and CookieJar/transport ownership

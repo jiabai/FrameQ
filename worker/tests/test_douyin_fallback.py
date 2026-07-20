@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import frameq_worker.douyin_fallback as douyin_fallback
 import pytest
 from frameq_worker.douyin_fallback import (
     DOUYIN_MOBILE_USER_AGENT,
@@ -17,6 +18,24 @@ from frameq_worker.douyin_fallback import (
     resolve_aweme_id_from_input,
     select_stream_candidates,
 )
+
+ROOT_COMPATIBILITY_SURFACE = {
+    "DOUYIN_MOBILE_USER_AGENT",
+    "PLAY_QUALITIES",
+    "DouyinFallbackError",
+    "DouyinStreamCandidate",
+    "HttpResponse",
+    "UrllibDouyinHttpClient",
+    "extract_aweme_id",
+    "resolve_aweme_id_from_input",
+    "parse_share_page_router_data",
+    "collect_stream_candidates",
+    "select_stream_candidates",
+    "download_first_available_candidate",
+    "download_douyin_video",
+    "build_share_page_url",
+    "build_play_url",
+}
 
 
 class FakeHttpClient:
@@ -38,6 +57,24 @@ class FakeHttpClient:
         if isinstance(item, Exception):
             raise item
         return item
+
+
+def test_root_exposes_the_repository_observed_compatibility_surface() -> None:
+    assert ROOT_COMPATIBILITY_SURFACE <= vars(douyin_fallback).keys()
+
+
+def test_direct_aweme_id_resolution_is_network_free() -> None:
+    class NoRequestClient:
+        def get(self, *args: object, **kwargs: object) -> HttpResponse:
+            raise AssertionError("direct aweme ID must not make an HTTP request")
+
+    assert (
+        resolve_aweme_id_from_input(
+            "https://www.douyin.com/video/7653372612151692594",
+            http_client=NoRequestClient(),
+        )
+        == "7653372612151692594"
+    )
 
 
 def test_extract_aweme_id_accepts_canonical_video_and_aweme_query_links() -> None:
@@ -181,6 +218,46 @@ def test_collect_stream_candidates_probes_play_addr_uri_and_dedupes_sizes() -> N
     assert client.calls[0][1]["Range"] == "bytes=0-1"
 
 
+def test_collect_stream_candidates_prefers_declared_bit_rates_without_probing() -> None:
+    client = FakeHttpClient({})
+    item = {
+        "video": {
+            "bit_rate": [
+                {
+                    "gear_name": "720p",
+                    "data_size": 4000,
+                    "play_addr": {
+                        "url_list": ["https://cdn.example/720.mp4"],
+                        "width": 1280,
+                        "height": 720,
+                    },
+                },
+                {
+                    "gear_name": "540p",
+                    "data_size": 4000,
+                    "play_addr": {"url_list": ["https://cdn.example/540.mp4"]},
+                },
+                {
+                    "gear_name": "1080p",
+                    "data_size": 5000,
+                    "play_addr": {"url_list": ["https://cdn.example/1080.mp4"]},
+                },
+            ]
+        }
+    }
+
+    candidates = collect_stream_candidates(item, http_client=client)
+
+    assert client.calls == []
+    assert [(candidate.quality, candidate.size_bytes) for candidate in candidates] == [
+        ("1080p", 5000),
+        ("720p", 4000),
+    ]
+    assert candidates[1].width == 1280
+    assert candidates[1].height == 720
+    assert candidates[1].headers["User-Agent"] == DOUYIN_MOBILE_USER_AGENT
+
+
 def test_select_stream_candidates_prefers_largest_size_then_quality_rank() -> None:
     selected = select_stream_candidates(
         [
@@ -230,6 +307,93 @@ def test_download_first_available_candidate_retries_next_stream_on_failure(
         "message_code": "douyin.stream.retrying",
         "message_args": {"attempt": 2, "total": 2},
     } in events
+
+
+def test_download_first_available_candidate_removes_probe_range_header(
+    tmp_path: Path,
+) -> None:
+    candidate = DouyinStreamCandidate(
+        "1080p",
+        "https://cdn.example/1080.mp4",
+        5000,
+        headers={"Range": "bytes=0-1", "X-Test": "preserved"},
+    )
+    client = FakeHttpClient(
+        {
+            candidate.url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "video/mp4"},
+                    body=b"complete media",
+                    url=candidate.url,
+                )
+            ]
+        }
+    )
+
+    result = download_first_available_candidate(
+        aweme_id="7653372612151692594",
+        candidates=[candidate],
+        output_dir=tmp_path,
+        http_client=client,
+    )
+
+    assert result.read_bytes() == b"complete media"
+    assert client.calls == [(candidate.url, {"X-Test": "preserved"})]
+
+
+def test_download_first_available_candidate_preserves_completed_output_when_all_fail(
+    tmp_path: Path,
+) -> None:
+    aweme_id = "7653372612151692594"
+    output_path = tmp_path / f"{aweme_id}.mp4"
+    output_path.write_bytes(b"existing completed video")
+    request_failure = DouyinStreamCandidate(
+        "1080p",
+        "https://cdn.example/request-failure.mp4",
+        5000,
+    )
+    invalid_response = DouyinStreamCandidate(
+        "720p",
+        "https://cdn.example/empty-response.mp4",
+        3000,
+    )
+    client = FakeHttpClient(
+        {
+            request_failure.url: [TimeoutError("timed out")],
+            invalid_response.url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "video/mp4"},
+                    body=b"",
+                    url=invalid_response.url,
+                )
+            ],
+        }
+    )
+    events: list[dict[str, object]] = []
+
+    with pytest.raises(DouyinFallbackError) as exc_info:
+        download_first_available_candidate(
+            aweme_id=aweme_id,
+            candidates=[request_failure, invalid_response],
+            output_dir=tmp_path,
+            http_client=client,
+            progress_callback=events.append,
+        )
+
+    assert exc_info.value.code == "DOUYIN_STREAM_DOWNLOAD_FAILED"
+    assert str(exc_info.value) == "All Douyin fallback streams failed to download."
+    assert output_path.read_bytes() == b"existing completed video"
+    assert not output_path.with_name(f"{output_path.name}.part").exists()
+    assert events == [
+        {
+            "stage": "video_extracting",
+            "progress": 30,
+            "message_code": "douyin.stream.retrying",
+            "message_args": {"attempt": 2, "total": 2},
+        }
+    ]
 
 
 @pytest.mark.parametrize("with_callback", [False, True])
@@ -342,3 +506,8 @@ def test_download_douyin_video_emits_closed_structured_progress(tmp_path: Path) 
         },
     ]
     assert all("message" not in event for event in events)
+    assert [url for url, _headers in client.calls] == [
+        build_share_page_url(aweme_id),
+        *(build_play_url(video_uri, quality) for quality in PLAY_QUALITIES),
+        "https://cdn.example/video.mp4",
+    ]
