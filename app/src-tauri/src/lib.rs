@@ -9,6 +9,9 @@ mod diagnostics;
 mod history;
 mod history_deletion;
 mod insight_preferences;
+// Contract-first types are consumed by the native picker/command in the next ExecPlan step.
+#[allow(dead_code)]
+mod local_media_contract;
 mod progress_event;
 mod runtime;
 mod settings;
@@ -19,6 +22,9 @@ mod updates;
 mod video_processing;
 mod window_chrome;
 mod worker_runtime;
+
+#[cfg(test)]
+mod local_media_contract_tests;
 
 pub(crate) use runtime::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
@@ -309,7 +315,7 @@ mod tests {
         .expect("parse desktop worker contract");
 
         assert_eq!(
-            super::video_processing::PROCESS_VIDEO_CONTRACT_VERSION,
+            super::local_media_contract::LOCAL_MEDIA_CONTRACT_VERSION,
             contract["contractVersion"]
                 .as_u64()
                 .expect("numeric desktop contract version") as u32
@@ -319,6 +325,20 @@ mod tests {
             contract["processVideo"]["workerRequest"]["properties"]["contract_version"]["const"]
                 .as_u64()
                 .expect("numeric process-video worker contract version") as u32
+        );
+        assert_eq!(
+            super::local_media_contract::LOCAL_MEDIA_CONTRACT_VERSION,
+            contract["localMedia"]["workerRequest"]["properties"]["contract_version"]["const"]
+                .as_u64()
+                .expect("numeric local-media worker contract version") as u32
+        );
+        assert_eq!(
+            serde_json::json!(super::local_media_contract::VIDEO_EXTENSIONS),
+            contract["localMedia"]["extensionsByKind"]["video"]
+        );
+        assert_eq!(
+            serde_json::json!(super::local_media_contract::AUDIO_EXTENSIONS),
+            contract["localMedia"]["extensionsByKind"]["audio"]
         );
         assert_eq!(
             super::PROGRESS_EVENT_NAME,

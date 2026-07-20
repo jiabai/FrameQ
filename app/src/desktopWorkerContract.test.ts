@@ -37,6 +37,36 @@ type DesktopWorkerContract = {
       additionalProperties: boolean;
     };
   };
+  localMedia: {
+    workerMode: string;
+    mediaKinds: string[];
+    extensionsByKind: Record<"video" | "audio", string[]>;
+    frontendSelection: {
+      type: "object";
+      required: string[];
+      properties: Record<string, unknown>;
+      additionalProperties: boolean;
+      constraints: Record<string, boolean>;
+    };
+    ipcRequest: {
+      type: "object";
+      required: string[];
+      properties: Record<string, unknown>;
+      additionalProperties: boolean;
+    };
+    workerRequest: {
+      type: "object";
+      required: string[];
+      properties: Record<string, unknown>;
+      additionalProperties: boolean;
+      constraints: Record<string, boolean>;
+    };
+    errorCodes: string[];
+    sensitiveContent: Record<
+      "full_path" | "selection_token",
+      { allowedOnlyIn: string[]; forbiddenFrom: string[] }
+    >;
+  };
   aiGeneration: {
     command: string;
     serverManagedLlmCheckout: boolean;
@@ -130,8 +160,157 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict contract version 3", () => {
-    expect(loadContract().contractVersion).toBe(3);
+  test("uses strict desktop contract v4 while preserving process_video v3", () => {
+    const contract = loadContract();
+
+    expect(contract.contractVersion).toBe(4);
+    expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
+  });
+
+  test("declares the closed local-media source and transport boundary", () => {
+    const localMedia = loadContract().localMedia;
+    const allExtensions = [
+      "mp4",
+      "m4v",
+      "mov",
+      "mkv",
+      "avi",
+      "wmv",
+      "webm",
+      "mp3",
+      "wav",
+      "m4a",
+      "aac",
+      "flac",
+      "ogg",
+      "opus",
+      "wma",
+    ];
+
+    expect(localMedia.workerMode).toBe("--process-local-media-stdin");
+    expect(localMedia.mediaKinds).toEqual(["video", "audio"]);
+    expect(localMedia.extensionsByKind).toEqual({
+      video: ["mp4", "m4v", "mov", "mkv", "avi", "wmv", "webm"],
+      audio: ["mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "wma"],
+    });
+    expect(localMedia.frontendSelection).toEqual({
+      type: "object",
+      required: ["selectionToken", "displayName", "mediaKind", "extension", "sizeBytes"],
+      properties: {
+        selectionToken: { type: "string", format: "uuid" },
+        displayName: { type: "string", minLength: 1, maxLength: 160 },
+        mediaKind: { type: "string", enum: ["video", "audio"] },
+        extension: { type: "string", enum: allExtensions },
+        sizeBytes: { type: "integer", minimum: 1 },
+      },
+      additionalProperties: false,
+      constraints: {
+        displayNameMustBeSafeBasename: true,
+        displayNameExtensionMustMatch: true,
+        extensionMustMatchMediaKind: true,
+      },
+    });
+    expect(localMedia.ipcRequest).toEqual({
+      type: "object",
+      required: ["selectionToken"],
+      properties: {
+        selectionToken: { type: "string", format: "uuid" },
+      },
+      additionalProperties: false,
+    });
+    expect(localMedia.workerRequest).toEqual({
+      type: "object",
+      required: [
+        "contract_version",
+        "source_path",
+        "media_kind",
+        "safe_display_name",
+        "source_extension",
+        "asr_model",
+      ],
+      properties: {
+        contract_version: { const: 4 },
+        source_path: { type: "string", minLength: 1 },
+        media_kind: { type: "string", enum: ["video", "audio"] },
+        safe_display_name: { type: "string", minLength: 1, maxLength: 160 },
+        source_extension: { type: "string", enum: allExtensions },
+        asr_model: { type: "string", enum: ["iic/SenseVoiceSmall"] },
+      },
+      additionalProperties: false,
+      constraints: {
+        sourcePathMustBeAbsolute: true,
+        sourcePathExtensionMustMatch: true,
+        safeDisplayNameMustBeSafeBasename: true,
+        safeDisplayNameExtensionMustMatch: true,
+        extensionMustMatchMediaKind: true,
+      },
+    });
+  });
+
+  test("registers local progress, fixed errors, and path/token secrecy", () => {
+    const contract = loadContract();
+    const localMedia = contract.localMedia;
+
+    expect(Object.keys(contract.progressEvents.worker.messageCodes)).toEqual(
+      expect.arrayContaining([
+        "local.media.validating",
+        "local.video.copying",
+        "local.audio.normalizing",
+      ]),
+    );
+    expect(localMedia.errorCodes).toEqual([
+      "LOCAL_MEDIA_SELECTION_INVALID",
+      "LOCAL_MEDIA_SELECTION_CHANGED",
+      "LOCAL_MEDIA_UNSUPPORTED_FORMAT",
+      "LOCAL_MEDIA_UNAVAILABLE",
+      "LOCAL_MEDIA_LINKED",
+      "LOCAL_MEDIA_VALIDATION_FAILED",
+      "LOCAL_MEDIA_KIND_MISMATCH",
+      "LOCAL_VIDEO_STREAM_MISSING",
+      "LOCAL_VIDEO_AUDIO_STREAM_MISSING",
+      "LOCAL_AUDIO_STREAM_MISSING",
+      "LOCAL_VIDEO_COPY_FAILED",
+      "AUDIO_NORMALIZATION_FAILED",
+    ]);
+    expect(localMedia.sensitiveContent.full_path).toEqual({
+      allowedOnlyIn: ["rust_selection_memory", "worker_stdin", "worker_memory"],
+      forbiddenFrom: [
+        "frontend",
+        "ipc_request",
+        "ipc_response",
+        "argv",
+        "environment",
+        "worker_result",
+        "progress",
+        "error",
+        "log",
+        "manifest",
+        "transcript",
+        "ai_prompt",
+        "cloud_request",
+      ],
+    });
+    expect(localMedia.sensitiveContent.selection_token).toEqual({
+      allowedOnlyIn: [
+        "rust_selection_memory",
+        "frontend",
+        "ipc_request",
+        "ipc_response",
+      ],
+      forbiddenFrom: [
+        "worker_stdin",
+        "argv",
+        "environment",
+        "worker_result",
+        "progress",
+        "error",
+        "log",
+        "manifest",
+        "transcript",
+        "ai_prompt",
+        "cloud_request",
+      ],
+    });
   });
 
   test("declares closed operation-specific terminal result families", () => {
@@ -389,6 +568,7 @@ describe("desktop/worker contract", () => {
       forbiddenContent: [
         "url",
         "full_path",
+        "selection_token",
         "cookie",
         "credential",
         "transcript_content",
@@ -454,6 +634,9 @@ describe("desktop/worker contract", () => {
     expect(Object.keys(progress.worker.messageCodes)).toEqual([
       "video.download.preparing",
       "video.stream.validating",
+      "local.media.validating",
+      "local.video.copying",
+      "local.audio.normalizing",
       "audio.extract.running",
       "audio.extract.reused",
       "subtitle.detect.running",

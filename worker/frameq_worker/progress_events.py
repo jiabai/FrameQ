@@ -60,6 +60,9 @@ class ModelProgressSpec:
 WORKER_PROGRESS_REGISTRY: dict[str, WorkerProgressSpec] = {
     "video.download.preparing": WorkerProgressSpec(),
     "video.stream.validating": WorkerProgressSpec(),
+    "local.media.validating": WorkerProgressSpec(),
+    "local.video.copying": WorkerProgressSpec(),
+    "local.audio.normalizing": WorkerProgressSpec(),
     "audio.extract.running": WorkerProgressSpec(),
     "audio.extract.reused": WorkerProgressSpec(),
     "subtitle.detect.running": WorkerProgressSpec(),

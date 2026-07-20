@@ -4,7 +4,14 @@ from collections.abc import Callable
 
 PROGRESS_EVENT_PREFIX = "FRAMEQ_PROGRESS "
 MODEL_DOWNLOAD_EVENT_PREFIX = "FRAMEQ_MODEL_DOWNLOAD "
+DESKTOP_WORKER_CONTRACT_VERSION = 4
+LOCAL_MEDIA_CONTRACT_VERSION = 4
 PROCESS_VIDEO_CONTRACT_VERSION = 3
+
+VIDEO_EXTENSIONS = frozenset({"mp4", "m4v", "mov", "mkv", "avi", "wmv", "webm"})
+AUDIO_EXTENSIONS = frozenset(
+    {"mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "wma"}
+)
 
 OUTPUT_DIR_ENV = "FRAMEQ_OUTPUT_DIR"
 CACHE_DIR_ENV = "FRAMEQ_CACHE_DIR"

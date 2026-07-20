@@ -136,7 +136,7 @@ Video” action.
 
 ### Progress and completion
 
-Local import uses structured localized progress. Contract v3 registers at least:
+Local import uses structured localized progress. Contract v4 registers at least:
 
 - `local.media.validating`;
 - `local.video.copying`;
@@ -266,7 +266,7 @@ Markdown export does not add a Source URL. AI prompts receive neither the local 
 
 ## Errors and Diagnostics
 
-Contract v3 registers fixed errors including:
+Contract v4 registers fixed errors including:
 
 - `LOCAL_MEDIA_SELECTION_INVALID`;
 - `LOCAL_MEDIA_SELECTION_CHANGED`;

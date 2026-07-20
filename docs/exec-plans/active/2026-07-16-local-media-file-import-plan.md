@@ -53,9 +53,21 @@ remain governed by the existing separate summary/inspiration confirmation.
   implementation. Validation: root reduced from 1,118 to 68 lines; preflight matrix 4/4 and all
   `video_processing` 24/24 passed; complete Rust 163/163, App 542/542, scripts 23/23, dependency
   scans, rustfmt, lint, app/Tauri no-bundle builds, governance, and diff gates passed.
-- [ ] 2026-07-16: Add RED contract, frontend, Rust, and worker tests before implementation.
-  Validation: focused tests must fail for the intended missing local-media behavior, not unrelated
-  setup errors.
+- [x] 2026-07-20: Added Contract v4 RED tests before implementation. TypeScript failed on global v3,
+  absent `localMedia`, absent progress codes, and the missing frontend-safe module; Python failed on
+  absent v4 constants/parser; Rust failed on the absent contract module. The mirror test remained
+  green and proved recursive file-set plus byte equality after synchronization.
+- [x] 2026-07-20: Locked the Contract v4 and source-type foundation without adding runtime local
+  processing. The canonical contract, TypeScript safe selection/token parsers, Rust pure
+  selection/IPC/worker-request validators, Python strict worker-request parser/model, progress
+  registries, fixed errors, and path/token transport rules now agree. Focused GREEN: TypeScript
+  25/25, Python 156/156, Rust local-media 6/6 plus contract parity 1/1.
+- [x] 2026-07-20: Completed the Contract v4 step gates. Validation: App 549/549, Worker 436/436,
+  Rust 169/169, scripts 23/23, full Ruff, app lint/build, rustfmt check, Tauri release
+  `--no-bundle`, governance 0 errors/0 warnings, and `git diff --check` passed. The Rust suite ran
+  outside the sandbox because its existing Windows blocked-stdin cancellation test requires real
+  `taskkill`; the sandbox failure was reproduced and isolated as permission-only. Existing
+  `audioop` deprecation and Vite chunk-size warnings remain non-blocking and unrelated.
 - [ ] 2026-07-16: Implement Rust selection, strict IPC, worker local-media pipeline, source-aware
   task persistence/History, and UI composition. Validation: focused suites and packaged-worker
   equality must pass.
@@ -77,6 +89,17 @@ remain governed by the existing separate summary/inspiration confirmation.
 - Evidence: the desktop-worker contract is version 2 after output-language localization. The
   prerequisite process-video cleanup advances it to v3; local media then adds a new strict wire
   request and code registry entries through a synchronized version 4 release.
+- Evidence: the canonical desktop-worker contract is now v4 while the existing URL worker request
+  intentionally remains v3. Separate constants and assertions are required; equating the global
+  contract version with every operation's request version would silently break the stable URL path.
+- Evidence: `app/src-tauri/resources/worker/frameq_worker` is absent because it is an ignored generated
+  mirror. The refresh-path test now compares the complete filtered relative file set and bytes, so
+  the later real mirror copy has an equality gate without hand-editing generated resources.
+- Evidence: local progress codes must be registered before producers exist. The producer-source test
+  therefore names exactly three reserved local codes; no URL module emits fabricated local progress.
+- Evidence: the Windows blocked-stdin cancellation test fails inside the filesystem/process sandbox
+  because `taskkill` is denied, but the identical isolated and full Rust runs pass outside that
+  sandbox. No runtime change was made for this environmental false failure.
 - Evidence: the approved scope deliberately has no product file-size or duration maximum. Tests must
   exercise truthful disk/probe/decoder failures and must not silently introduce a hidden cap.
 - Evidence: History, cache reuse, transcript read/edit, and deletion previously reconstructed the
@@ -119,6 +142,19 @@ remain governed by the existing separate summary/inspiration confirmation.
   the strict desktop-worker contract from v3 to v4. Rationale: stdin avoids process-list/environment exposure,
   and desktop/worker ship together so compatibility defaults would hide drift.
   Date/Author: 2026-07-16, User + Codex.
+- Decision: Keep `process_video.contract_version = 3` while setting the canonical desktop-worker
+  contract and local worker request to v4. Rationale: the global release contract gained a new
+  operation, but the already-cleaned URL request did not change and must not be version-bumped for
+  cosmetic consistency. Date/Author: 2026-07-20, Codex.
+- Decision: Land only pure local-media source/transport types and validators in this contract step;
+  do not add a Tauri command, `WorkerJob`/facade variant, Python CLI switch, or media source variant
+  until each has a real consumer. Rationale: cross-language rejection behavior can be locked now
+  without creating an executable half-path or weakening the earlier no-dead-variant decision.
+  Date/Author: 2026-07-20, Codex.
+- Decision: Register the three local progress codes now and explicitly reserve them in the producer
+  coverage test until the real pipeline lands. Rationale: fake emissions would misstate product
+  behavior, while leaving the registry implicit would allow desktop/worker drift.
+  Date/Author: 2026-07-20, Codex.
 - Decision: Normalize every source to 16 kHz mono 16-bit PCM `media/audio.wav`, which is the only ASR
   input. Rationale: one deterministic artifact contract isolates codec/container differences from
   SenseVoice and existing playback/transcript behavior. Date/Author: 2026-07-16, User + Codex.
@@ -177,11 +213,12 @@ remain governed by the existing separate summary/inspiration confirmation.
 
 ## Outcomes & Retrospective
 
-Planning is complete. Local-media product implementation has not started; its task-access,
-typed-worker-execution, media-preparation facade, crash-safe file-commit, task-result, and
-video-processing module-boundary prerequisites are complete. This document records the approved product, architecture, security, contract,
-persistence, test, and native-acceptance scope so the remaining implementation can proceed without
-reopening caller-local manifest/path checks, worker policy composition, or partial-file semantics.
+The local-media Contract v4 and cross-language source-type foundation are complete. Product runtime
+implementation has not started: there is still no picker, selection store, Tauri local command,
+`WorkerJob::ProcessLocalMedia`, Python CLI consumer, FFmpeg/ffprobe local pipeline, manifest variant,
+History/UI support, or native acceptance. The earlier task-access, typed-worker-execution,
+media-preparation facade, crash-safe file-commit, task-result, and video-processing module-boundary
+prerequisites remain complete.
 
 Residual risk: actual codec/container support depends on the packaged FFmpeg/ffprobe build and must be
 proven with representative fixtures. Very large media may exhaust disk or processing resources because
@@ -282,13 +319,15 @@ directory, even though the complete path is never stored.
      Tauri no-bundle release, governance, and diff gates passed. Dedicated ExecPlan:
      `docs/exec-plans/completed/2026-07-20-video-processing-module-split-plan.md`.
 
-1. [ ] Lock contract v4 and source types through RED tests.
+1. [x] Lock contract v4 and source types through RED tests.
    - Extend the shared contract without changing the cleaned v3 `process_video` request.
    - Declare `LocalMediaKind`, frontend selection metadata, strict local worker stdin request,
      registered progress codes, registered errors, and forbidden path/token content.
    - Add TypeScript, Rust, and Python rejection tests for missing, unknown, wrong-type, wrong-kind,
      additional, and path-echoing values.
    - Add canonical/mirror equality expectations before copying implementation.
+   - Implemented 2026-07-20 without changing the cleaned v3 URL request or adding runtime local
+     consumers. Focused RED evidence and GREEN counts are recorded in Progress.
 
 2. [ ] Implement the Rust-side native selection capability.
    - Add the official Tauri dialog plugin and a single-file filter for the closed video/audio

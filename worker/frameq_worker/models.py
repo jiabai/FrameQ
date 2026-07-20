@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Literal
 
 from frameq_worker.output_language import OutputLanguage
@@ -9,6 +10,7 @@ from frameq_worker.source_identity import SourceIdentity
 
 RetryInsightTarget = Literal["summary", "insights"]
 InsightGenerationTarget = Literal["all", "summary", "insights"]
+LocalMediaKind = Literal["video", "audio"]
 
 
 class JobStage(StrEnum):
@@ -24,6 +26,15 @@ class JobStage(StrEnum):
 @dataclass(frozen=True)
 class ProcessRequest:
     url: str = field(repr=False)
+    asr_model: str
+
+
+@dataclass(frozen=True)
+class ProcessLocalMediaRequest:
+    source_path: Path = field(repr=False)
+    media_kind: LocalMediaKind
+    safe_display_name: str = field(repr=False)
+    source_extension: str
     asr_model: str
 
 

@@ -1,5 +1,25 @@
 # FrameQ Architecture
 
+## 2026-07-20 Desktop-worker contract v4 source-type boundary
+
+- `contracts/desktop-worker-contract.json` is now global contract v4. The existing URL worker
+  request deliberately remains `contract_version: 3` with exactly `url + asr_model`; local media
+  owns an independent closed v4 worker request and `--process-local-media-stdin` mode.
+- The local-media contract declares the closed video/audio kind and extension sets, frontend-safe
+  selection metadata, token-only IPC intent, worker stdin fields, fixed error codes, progress codes,
+  and machine-readable full-path/selection-token transport restrictions.
+- TypeScript owns only token plus safe display metadata and has no local-path field. Rust owns pure
+  selection/IPC/worker-request types and fixed non-echoing validators. Python owns the corresponding
+  path-bearing request model and strict parser; its path and safe basename are excluded from repr.
+- This contract-first step does not register a Tauri picker/command, add a `WorkerJob` variant, add a
+  Python CLI mode, process media, change manifests, or expose local tasks in History/UI. Those
+  consumers remain atomic with their later ExecPlan steps.
+- The three local progress codes are registered and accepted but have no fake producer yet. The
+  producer-source gate marks them as reserved until the real local worker pipeline lands.
+- The packaged Tauri worker directory is a generated ignored mirror. Its existing refresh test now
+  proves recursive relative-file and byte equality after excluding Python cache files, rather than
+  relying on one sampled file.
+
 ## 2026-07-20 Video-processing application module boundary
 
 - `video_processing.rs` is now a 68-line Tauri adapter/module root. It retains the three stable

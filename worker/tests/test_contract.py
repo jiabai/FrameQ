@@ -12,7 +12,13 @@ from frameq_worker.cli import (
     OUTPUT_DIR_ENV,
     PROGRESS_EVENT_PREFIX,
 )
-from frameq_worker.desktop_contract import PROCESS_VIDEO_CONTRACT_VERSION
+from frameq_worker.desktop_contract import (
+    AUDIO_EXTENSIONS,
+    DESKTOP_WORKER_CONTRACT_VERSION,
+    LOCAL_MEDIA_CONTRACT_VERSION,
+    PROCESS_VIDEO_CONTRACT_VERSION,
+    VIDEO_EXTENSIONS,
+)
 from frameq_worker.models import Insight, JobStage, ProcessResult
 
 
@@ -21,15 +27,180 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v3() -> None:
+def test_contract_version_is_strictly_v4_while_process_video_stays_v3() -> None:
     contract = load_contract()
 
-    assert PROCESS_VIDEO_CONTRACT_VERSION == contract["contractVersion"] == 3
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 4
+    assert LOCAL_MEDIA_CONTRACT_VERSION == 4
+    assert PROCESS_VIDEO_CONTRACT_VERSION == 3
     assert (
         contract["processVideo"]["workerRequest"]["properties"]["contract_version"]
         ["const"]
         == PROCESS_VIDEO_CONTRACT_VERSION
     )
+
+
+def test_local_media_contract_is_closed_source_typed_and_non_echoing() -> None:
+    contract = load_contract()
+    local_media = contract["localMedia"]
+    all_extensions = [
+        "mp4",
+        "m4v",
+        "mov",
+        "mkv",
+        "avi",
+        "wmv",
+        "webm",
+        "mp3",
+        "wav",
+        "m4a",
+        "aac",
+        "flac",
+        "ogg",
+        "opus",
+        "wma",
+    ]
+
+    assert local_media["workerMode"] == "--process-local-media-stdin"
+    assert local_media["mediaKinds"] == ["video", "audio"]
+    assert local_media["extensionsByKind"] == {
+        "video": ["mp4", "m4v", "mov", "mkv", "avi", "wmv", "webm"],
+        "audio": ["mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "wma"],
+    }
+    assert VIDEO_EXTENSIONS == frozenset(local_media["extensionsByKind"]["video"])
+    assert AUDIO_EXTENSIONS == frozenset(local_media["extensionsByKind"]["audio"])
+    assert local_media["frontendSelection"] == {
+        "type": "object",
+        "required": [
+            "selectionToken",
+            "displayName",
+            "mediaKind",
+            "extension",
+            "sizeBytes",
+        ],
+        "properties": {
+            "selectionToken": {"type": "string", "format": "uuid"},
+            "displayName": {"type": "string", "minLength": 1, "maxLength": 160},
+            "mediaKind": {"type": "string", "enum": ["video", "audio"]},
+            "extension": {"type": "string", "enum": all_extensions},
+            "sizeBytes": {"type": "integer", "minimum": 1},
+        },
+        "additionalProperties": False,
+        "constraints": {
+            "displayNameMustBeSafeBasename": True,
+            "displayNameExtensionMustMatch": True,
+            "extensionMustMatchMediaKind": True,
+        },
+    }
+    assert local_media["ipcRequest"] == {
+        "type": "object",
+        "required": ["selectionToken"],
+        "properties": {
+            "selectionToken": {"type": "string", "format": "uuid"},
+        },
+        "additionalProperties": False,
+    }
+    assert local_media["workerRequest"] == {
+        "type": "object",
+        "required": [
+            "contract_version",
+            "source_path",
+            "media_kind",
+            "safe_display_name",
+            "source_extension",
+            "asr_model",
+        ],
+        "properties": {
+            "contract_version": {"const": 4},
+            "source_path": {"type": "string", "minLength": 1},
+            "media_kind": {"type": "string", "enum": ["video", "audio"]},
+            "safe_display_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+            },
+            "source_extension": {"type": "string", "enum": all_extensions},
+            "asr_model": {"type": "string", "enum": ["iic/SenseVoiceSmall"]},
+        },
+        "additionalProperties": False,
+        "constraints": {
+            "sourcePathMustBeAbsolute": True,
+            "sourcePathExtensionMustMatch": True,
+            "safeDisplayNameMustBeSafeBasename": True,
+            "safeDisplayNameExtensionMustMatch": True,
+            "extensionMustMatchMediaKind": True,
+        },
+    }
+
+
+def test_local_media_contract_registers_progress_errors_and_sensitive_content() -> None:
+    contract = load_contract()
+    local_media = contract["localMedia"]
+
+    assert {
+        "local.media.validating",
+        "local.video.copying",
+        "local.audio.normalizing",
+    } <= set(contract["progressEvents"]["worker"]["messageCodes"])
+    assert local_media["errorCodes"] == [
+        "LOCAL_MEDIA_SELECTION_INVALID",
+        "LOCAL_MEDIA_SELECTION_CHANGED",
+        "LOCAL_MEDIA_UNSUPPORTED_FORMAT",
+        "LOCAL_MEDIA_UNAVAILABLE",
+        "LOCAL_MEDIA_LINKED",
+        "LOCAL_MEDIA_VALIDATION_FAILED",
+        "LOCAL_MEDIA_KIND_MISMATCH",
+        "LOCAL_VIDEO_STREAM_MISSING",
+        "LOCAL_VIDEO_AUDIO_STREAM_MISSING",
+        "LOCAL_AUDIO_STREAM_MISSING",
+        "LOCAL_VIDEO_COPY_FAILED",
+        "AUDIO_NORMALIZATION_FAILED",
+    ]
+    assert local_media["sensitiveContent"] == {
+        "full_path": {
+            "allowedOnlyIn": [
+                "rust_selection_memory",
+                "worker_stdin",
+                "worker_memory",
+            ],
+            "forbiddenFrom": [
+                "frontend",
+                "ipc_request",
+                "ipc_response",
+                "argv",
+                "environment",
+                "worker_result",
+                "progress",
+                "error",
+                "log",
+                "manifest",
+                "transcript",
+                "ai_prompt",
+                "cloud_request",
+            ],
+        },
+        "selection_token": {
+            "allowedOnlyIn": [
+                "rust_selection_memory",
+                "frontend",
+                "ipc_request",
+                "ipc_response",
+            ],
+            "forbiddenFrom": [
+                "worker_stdin",
+                "argv",
+                "environment",
+                "worker_result",
+                "progress",
+                "error",
+                "log",
+                "manifest",
+                "transcript",
+                "ai_prompt",
+                "cloud_request",
+            ],
+        },
+    }
 
 
 def test_process_video_contract_separates_ipc_intent_from_worker_execution() -> None:
@@ -269,6 +440,7 @@ def test_progress_argument_schemas_are_closed_and_safe() -> None:
         "forbiddenContent": [
             "url",
             "full_path",
+            "selection_token",
             "cookie",
             "credential",
             "transcript_content",
@@ -319,6 +491,9 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
     assert list(worker_codes) == [
         "video.download.preparing",
         "video.stream.validating",
+        "local.media.validating",
+        "local.video.copying",
+        "local.audio.normalizing",
         "audio.extract.running",
         "audio.extract.reused",
         "subtitle.detect.running",

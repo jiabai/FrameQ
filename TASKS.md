@@ -29,6 +29,13 @@
   video artifact for audio tasks, keep full paths out of React/persistence/logs/cloud, and extend
   strict schema-v3 History with a closed local-source variant. ExecPlan:
   `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
+  Contract foundation completed 2026-07-20: global v4 now declares the independent local source,
+  token-only frontend/IPC metadata, exact Rust/Python worker request, fixed progress/errors, and
+  path/token secrecy while URL `process_video` remains v3. RED preceded implementation; GREEN passed
+  App 549/549, Worker 436/436, Rust 169/169, scripts 23/23, Ruff, lint/build, rustfmt, governance,
+  Tauri release `--no-bundle`, mirror-sync equality, and diff gates. Picker, command, worker
+  CLI/pipeline, manifest, History, and UI remain open and the overall feature therefore stays
+  unchecked.
 
 - [x] Add desktop i18n and confirmation-time AI output language (2026-07-15) — ✅ Acceptance: bundle `zh-CN`,
   `zh-TW`, and `en-US`; persist `system | locale` in app-local `ui-preferences.json`; localize UI,

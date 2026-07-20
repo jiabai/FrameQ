@@ -39,6 +39,9 @@ type ProgressMessageArgKey = "model" | "language" | "attempt" | "total";
 export const WORKER_MESSAGE_CODE_RULES = {
   "video.download.preparing": { allowedArgs: [] },
   "video.stream.validating": { allowedArgs: [] },
+  "local.media.validating": { allowedArgs: [] },
+  "local.video.copying": { allowedArgs: [] },
+  "local.audio.normalizing": { allowedArgs: [] },
   "audio.extract.running": { allowedArgs: [] },
   "audio.extract.reused": { allowedArgs: [] },
   "subtitle.detect.running": { allowedArgs: [] },

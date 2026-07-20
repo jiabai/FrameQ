@@ -1,5 +1,29 @@
 # Security and Compliance
 
+## 2026-07-20 Contract v4 local-media request boundary
+
+- Global desktop-worker contract v4 is not permission to widen the stable URL request: URL
+  processing still accepts only its v3 `contract_version + url + asr_model` stdin payload.
+- React/TypeScript may hold only a canonical UUID selection token and validated display-safe name,
+  kind, lowercase extension, and positive integer byte count. Its local-media module contains
+  no complete-path field and rejects missing, extra, wrong-type, wrong-kind, or unsafe metadata with
+  the fixed `LOCAL_MEDIA_SELECTION_INVALID` code.
+- Rust path-bearing serialization is available only as a pure contract constructor for the later
+  native command. It requires an absolute path, matching source/display extensions, a closed media
+  kind/extension pair, the supported ASR model, and a safe basename; failures return one fixed
+  non-echoing message. Token-bearing Rust DTOs deliberately do not implement `Debug`.
+- Python parses the exact six-field local worker request into a path-bearing model whose path and
+  safe display name are excluded from repr. Missing, additional, wrong-version/type/kind/extension,
+  relative-path, unsafe-basename, or unsupported-model inputs fail before any filesystem or media
+  operation with the same fixed non-echoing message.
+- The shared registry explicitly forbids `full_path` and `selection_token` in progress. Contract
+  transport policy permits a full path only in Rust selection memory, bounded worker stdin, and
+  worker memory; the token is forbidden from worker input/output, diagnostics, persistence, prompts,
+  and cloud traffic.
+- No picker, selection store, worker CLI consumer, FFmpeg/ffprobe execution, manifest producer, log,
+  or network path exists in this step, so no local media bytes or paths can yet leave these pure
+  validation boundaries.
+
 ## 2026-07-20 Video-Processing Application Module Boundary
 
 - The root Tauri adapter delegates to focused URL and retry modules without changing strict command

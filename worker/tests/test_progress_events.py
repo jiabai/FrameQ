@@ -11,6 +11,9 @@ import pytest
 WORKER_SPECS = {
     "video.download.preparing": ("video_extracting", 18, {}),
     "video.stream.validating": ("video_extracting", 34, {}),
+    "local.media.validating": ("video_extracting", 10, {}),
+    "local.video.copying": ("video_extracting", 30, {}),
+    "local.audio.normalizing": ("video_extracting", 48, {}),
     "audio.extract.running": ("video_extracting", 48, {}),
     "audio.extract.reused": ("video_extracting", 50, {}),
     "subtitle.detect.running": ("video_transcribing", 58, {}),
@@ -571,9 +574,20 @@ def test_contract_current_file_pattern_matches_portable_runtime_fixtures() -> No
 
 def test_every_python_producer_code_is_declared_at_its_actual_source() -> None:
     root = Path(__file__).parents[1] / "frameq_worker"
+    reserved_local_media_codes = {
+        "local.media.validating",
+        "local.video.copying",
+        "local.audio.normalizing",
+    }
+    current_producer_codes = [
+        code for code in WORKER_SPECS if code not in reserved_local_media_codes
+    ]
+    assert reserved_local_media_codes <= set(
+        progress_events_module().WORKER_PROGRESS_REGISTRY
+    )
     source_expectations = {
-        "media_preparation.py": list(WORKER_SPECS)[:5],
-        "pipeline.py": list(WORKER_SPECS)[5:9],
+        "media_preparation.py": current_producer_codes[:5],
+        "pipeline.py": current_producer_codes[5:9],
         "douyin_fallback.py": [code for code in WORKER_SPECS if code.startswith("douyin.")],
         "xiaohongshu_fallback.py": [
             code for code in WORKER_SPECS if code.startswith("xiaohongshu.")

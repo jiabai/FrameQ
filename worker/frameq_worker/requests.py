@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from frameq_worker.asr import DEFAULT_ASR_MODEL
-from frameq_worker.desktop_contract import PROCESS_VIDEO_CONTRACT_VERSION
+from frameq_worker.desktop_contract import (
+    AUDIO_EXTENSIONS,
+    LOCAL_MEDIA_CONTRACT_VERSION,
+    PROCESS_VIDEO_CONTRACT_VERSION,
+    VIDEO_EXTENSIONS,
+)
 from frameq_worker.models import (
     GenerationPreferences,
     InspirationProfile,
@@ -11,6 +17,7 @@ from frameq_worker.models import (
     PreferenceLabelSnapshotItem,
     PreferenceLabelValue,
     PreferenceSnapshot,
+    ProcessLocalMediaRequest,
     ProcessRequest,
     RetryInsightsRequest,
 )
@@ -154,10 +161,24 @@ GENERATION_FIELD_OPTIONS: dict[str, set[str]] = {
 TASK_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]+$")
 PROCESS_VIDEO_REQUEST_FIELDS = frozenset({"contract_version", "url", "asr_model"})
 INVALID_PROCESS_PAYLOAD_MESSAGE = "Process request payload was invalid."
+LOCAL_MEDIA_REQUEST_FIELDS = frozenset(
+    {
+        "contract_version",
+        "source_path",
+        "media_kind",
+        "safe_display_name",
+        "source_extension",
+        "asr_model",
+    }
+)
+INVALID_LOCAL_MEDIA_PAYLOAD_MESSAGE = "Local media request payload was invalid."
 RETRY_REQUEST_FIELDS = frozenset(
     {"task_id", "target", "output_language", "preference_snapshot"}
 )
 INVALID_RETRY_PAYLOAD_MESSAGE = "Retry request payload was invalid."
+UNSAFE_BASENAME_CHARACTER_PATTERN = re.compile(
+    r"[/\\\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]"
+)
 
 
 def parse_process_request(payload: object) -> ProcessRequest:
@@ -185,6 +206,71 @@ def _parse_process_request(payload: object) -> ProcessRequest:
     return ProcessRequest(
         url=url.strip(),
         asr_model=asr_model,
+    )
+
+
+def parse_process_local_media_request(payload: object) -> ProcessLocalMediaRequest:
+    try:
+        return _parse_process_local_media_request(payload)
+    except (TypeError, ValueError, OSError):
+        raise ValueError(INVALID_LOCAL_MEDIA_PAYLOAD_MESSAGE) from None
+
+
+def _parse_process_local_media_request(payload: object) -> ProcessLocalMediaRequest:
+    if not isinstance(payload, dict) or set(payload) != LOCAL_MEDIA_REQUEST_FIELDS:
+        raise ValueError
+
+    contract_version = payload.get("contract_version")
+    if type(contract_version) is not int or contract_version != LOCAL_MEDIA_CONTRACT_VERSION:
+        raise ValueError
+
+    source_path_value = payload.get("source_path")
+    if not isinstance(source_path_value, str) or not source_path_value:
+        raise ValueError
+    source_path = Path(source_path_value)
+    if not source_path.is_absolute():
+        raise ValueError
+
+    media_kind = payload.get("media_kind")
+    if not isinstance(media_kind, str) or media_kind not in {"video", "audio"}:
+        raise ValueError
+
+    source_extension = payload.get("source_extension")
+    if not isinstance(source_extension, str):
+        raise ValueError
+    allowed_extensions = (
+        VIDEO_EXTENSIONS if media_kind == "video" else AUDIO_EXTENSIONS
+    )
+    if source_extension not in allowed_extensions:
+        raise ValueError
+    if source_path.suffix.lower() != f".{source_extension}":
+        raise ValueError
+
+    safe_display_name = payload.get("safe_display_name")
+    if not _is_safe_local_media_display_name(safe_display_name, source_extension):
+        raise ValueError
+
+    asr_model = payload.get("asr_model")
+    if not isinstance(asr_model, str) or asr_model != DEFAULT_ASR_MODEL:
+        raise ValueError
+
+    return ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind=media_kind,
+        safe_display_name=safe_display_name,
+        source_extension=source_extension,
+        asr_model=asr_model,
+    )
+
+
+def _is_safe_local_media_display_name(value: object, extension: str) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and len(value) <= 160
+        and value not in {".", ".."}
+        and UNSAFE_BASENAME_CHARACTER_PATTERN.search(value) is None
+        and value.lower().endswith(f".{extension}")
     )
 
 

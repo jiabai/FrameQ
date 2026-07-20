@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
-from frameq_worker.requests import parse_process_request, parse_retry_insights_request
+from frameq_worker.requests import (
+    parse_process_local_media_request,
+    parse_process_request,
+    parse_retry_insights_request,
+)
 
 
 def valid_preference_snapshot() -> dict[str, object]:
@@ -50,6 +56,105 @@ def valid_process_request() -> dict[str, object]:
         "url": "https://www.douyin.com/video/7524373044106677544",
         "asr_model": "iic/SenseVoiceSmall",
     }
+
+
+def valid_local_media_request(
+    *, media_kind: str = "video", extension: str = "wmv"
+) -> dict[str, object]:
+    source_path = Path.cwd() / "private" / "review-secret" / f"访谈.{extension}"
+    return {
+        "contract_version": 4,
+        "source_path": str(source_path),
+        "media_kind": media_kind,
+        "safe_display_name": f"访谈.{extension}",
+        "source_extension": extension,
+        "asr_model": "iic/SenseVoiceSmall",
+    }
+
+
+def test_local_media_request_parses_exact_v4_execution_input_without_repr_path() -> None:
+    request = parse_process_local_media_request(valid_local_media_request())
+
+    assert request.media_kind == "video"
+    assert request.safe_display_name == "访谈.wmv"
+    assert request.source_extension == "wmv"
+    assert request.asr_model == "iic/SenseVoiceSmall"
+    assert request.source_path.is_absolute()
+    assert "review-secret" not in repr(request)
+    assert "访谈" not in repr(request)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"remove": "contract_version"},
+        {"remove": "source_path"},
+        {"remove": "media_kind"},
+        {"remove": "safe_display_name"},
+        {"remove": "source_extension"},
+        {"remove": "asr_model"},
+        {"contract_version": 3},
+        {"contract_version": "4"},
+        {"source_path": 42},
+        {"source_path": "relative/访谈.wmv"},
+        {"media_kind": "document"},
+        {"media_kind": 1},
+        {"safe_display_name": ""},
+        {"safe_display_name": r"C:\Users\review-secret\访谈.wmv"},
+        {"source_extension": "mp3"},
+        {"source_extension": "WMV"},
+        {"source_extension": 42},
+        {"asr_model": "Qwen/Qwen3-ASR-0.6B"},
+        {"selection_token": "review-secret-selection-token"},
+    ],
+)
+def test_local_media_request_rejects_non_v4_payloads(
+    mutation: dict[str, object],
+) -> None:
+    payload = valid_local_media_request()
+    removed = mutation.get("remove")
+    if isinstance(removed, str):
+        payload.pop(removed)
+    else:
+        payload.update(mutation)
+
+    with pytest.raises(
+        ValueError, match=r"^Local media request payload was invalid\.$"
+    ):
+        parse_process_local_media_request(payload)
+
+
+@pytest.mark.parametrize(
+    "media_kind,extension",
+    [
+        ("video", "mp3"),
+        ("audio", "mp4"),
+    ],
+)
+def test_local_media_request_rejects_wrong_kind_extension(
+    media_kind: str, extension: str
+) -> None:
+    payload = valid_local_media_request(
+        media_kind=media_kind,
+        extension=extension,
+    )
+
+    with pytest.raises(
+        ValueError, match=r"^Local media request payload was invalid\.$"
+    ):
+        parse_process_local_media_request(payload)
+
+
+def test_local_media_request_rejects_path_echoing_payload() -> None:
+    payload = valid_local_media_request()
+    payload["unexpected"] = r"C:\Users\review-secret\recording.wmv"
+
+    with pytest.raises(ValueError) as error:
+        parse_process_local_media_request(payload)
+
+    assert str(error.value) == "Local media request payload was invalid."
+    assert "review-secret" not in str(error.value)
+    assert "C:\\Users" not in str(error.value)
 
 
 def test_process_request_parses_exact_v3_execution_input() -> None:
