@@ -72,6 +72,22 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Rust transcript-detail module by failure boundary (2026-07-20) — ✅ Acceptance: keep
+  `transcript_detail.rs` as the stable Tauri command/DTO/composition root; move validated audio
+  playback/cache preparation, tolerant segment codec behavior, and official transcript edit
+  persistence into private `audio_playback`, `segments`, and `edit_storage` owners; move broad
+  characterization to a private test module. Preserve exact command/DTO/error, fixed official
+  paths, one-time backups, Markdown prefix, segment fallback/write, hard-link/symlink/reparse,
+  cache, task-manifest, and local-media behavior. Continue entering task storage only through
+  `SupportedTask` / `TaskEditSession`; add no Facade, raw manifest consumer, network/log path,
+  product behavior, or contract/schema change. Design:
+  `docs/design-docs/2026-07-20-transcript-detail-module-split.md`. Implemented as a 134-line root,
+  three private owners (160/99/191 lines), and a separate 791-line test module. Three behavior
+  matrices and one RED/GREEN ownership gate preceded extraction; focused 14/14, full Rust 173/173,
+  app 549/549, scripts 23/23, rustfmt, TypeScript/i18n lint, production build, and Tauri no-bundle
+  passed. Real Tauri transcript load/play/save smoke was not rerun. ExecPlan:
+  `docs/exec-plans/completed/2026-07-20-transcript-detail-module-split-plan.md`.
+
 - [x] Split the Douyin public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
   retain `frameq_worker.douyin_fallback` as the sole stable production/test adapter; separate shared
   types, source/short-link policy, Router Data parsing, stream/ratio-probe policy, and

@@ -373,6 +373,8 @@
 
 - Transcript review may read only the transcript path and audio path associated with the current task or a local history record. It must not become an arbitrary file browser, text editor, or media player.
 - Tauri transcript commands must validate path shape, file extension, existence, and relationship to known transcript/audio artifacts before returning a playable path or writing edits.
+- `transcript_detail.rs` remains the sole Tauri/runtime-root boundary. Its private `audio_playback`, `segments`, and `edit_storage` children may receive only `SupportedTask` / `TaskEditSession` capabilities and fixed internal roots; they must not parse raw manifests, accept frontend paths, resolve app runtime directories, add network access, or log transcript/path content.
+- Audio-cache replacement and canonical containment stay in `audio_playback`; tolerant optional-sidecar reads and strict edited-sidecar writes stay in `segments`; linked-target checks, official-path enforcement, one-time backups, ordered transcript writes, preview updates, and manifest save stay in `edit_storage`.
 - `load_transcript_detail` may return transcript text, optional segment metadata, backup status, and a validated local audio path. It must not return cookies, request headers, remote media CDN URLs, LLM keys, or private signing material.
 - `save_transcript_edit` may write the official transcript `.txt`, matching `.md`, optional segment sidecar, and local history preview. The first save should create an original backup once and must not overwrite that backup later.
 - Empty transcript saves, path traversal, non-transcript files, and unrelated local paths must fail recoverably.

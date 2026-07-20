@@ -142,7 +142,7 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | 子系统 | 生产源文件数 | 物理行数 |
 |--------|-------------:|---------:|
 | React / TypeScript | 76 | 13,538 |
-| Tauri / Rust | 28 | 13,049 |
+| Tauri / Rust | 32 | 12,689 |
 | Python worker | 31 | 9,297 |
 | Fastify server | 18 | 4,271 |
 
@@ -156,7 +156,10 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | `app/src-tauri/src/video_processing/url_cache.rs` | 447 | model-aware URL/identity cache policy、`SupportedTask` 投影与 5 个内联测试；生产实现 123 行 |
 | `app/src-tauri/src/video_processing/retry_insights.rs` | 365 | strict AI retry parser、job 编排、安全诊断与 6 个内联测试；生产实现 188 行 |
 | `app/src-tauri/src/video_processing/task_result.rs` | 247 | closed process/retry context、typed outcome 映射、固定安全失败与内联边界测试 |
-| `app/src-tauri/src/transcript_detail.rs` | 1,133 | transcript 读取/保存、格式校验、备份、segments、音频回放缓存；任务信任由 facade 提供 |
+| `app/src-tauri/src/transcript_detail.rs` | 134 | transcript Tauri command、DTO、runtime-root composition、单次 `SupportedTask::open` 与结果组装 |
+| `app/src-tauri/src/transcript_detail/audio_playback.rs` | 160 | validated audio 查找、扩展名策略、direct/cache 路由、安全临时复制与 canonical containment |
+| `app/src-tauri/src/transcript_detail/segments.rs` | 99 | 固定 sidecar 路径、容错读取/过滤、严格编辑校验与 JSON 编码 |
+| `app/src-tauri/src/transcript_detail/edit_storage.rs` | 191 | 官方 transcript 路径/链接校验、一次性备份、Markdown、顺序写入、preview/artifact/manifest 更新 |
 | `app/src-tauri/src/worker_runtime/runner.rs` | 1,144 | 四类 worker 操作的 spawn、stdin、progress、wait/reap、terminal 分类和生命周期日志；含内联测试 |
 | `worker/frameq_worker/bilibili_fallback.py` | 936 | URL 解析、HTTP、API 解析、流选择、下载、DASH 合并、错误映射 |
 | `worker/frameq_worker/xiaohongshu_fallback.py` | 894 | URL 解析、HTTP、页面解码、状态解析、流选择和下载 |
@@ -180,6 +183,13 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 1,468 行，但其中 851 行位于相邻的 24 个内联测试中。拆分价值是依赖和失败策略可单独审计，而
 不是追求总行数减少；根模块不再是维护热点，未来 local-media 仍需随 contract v4 原子加入真实
 模块和 consumer，不能预建空 facade/variant。
+
+`transcript_detail.rs` 从 1,133 行收口为 134 行 composition root；原文件中的 791 行
+command-level characterization 已移动到相邻 `tests.rs`，不再计入生产规模。三个私有 child
+module 共 450 行，分别拥有 audio playback/cache、segment codec 和 official edit storage
+失败边界。生产模块树合计 584 行，相比拆分前 552 行生产实现仅增加边界连接代码；维护价值来自
+依赖与失败策略可独立审计，而不是压缩总行数。任务信任和 manifest mutation 仍只通过
+`SupportedTask` / `TaskEditSession`，没有新增 transcript facade。
 
 建议把这张表当成“从哪里开始读”的索引，而不是自动拆分清单。真正的拆分候选要结合后面 UML 中的依赖数量、状态所有权和时序约束判断。
 
@@ -1880,6 +1890,7 @@ stateDiagram-v2
 | `App.tsx` 协调多个 controller，但缺少 App 级真实渲染生命周期证据 | 审计原描述已校正：既有 `app-input.browser.test.ts` 本就通过生产 `main.tsx` 在 Chromium 中挂载 `<App />`，覆盖任务、History、文字稿、AI、设置与账户退出；本轮补齐启动账户深链和恢复任务产物定位两条组合根接线 | 深链测试先 RED 后 GREEN，断言唯一 `complete_auth_flow`；产物测试断言唯一 opener 路径与本地化结果；browser 27/27、app 542/542、scripts 23/23、lint/build/docs/diff 通过；设计见 `docs/design-docs/2026-07-19-app-composition-integration-coverage.md` |
 | `video_processing.rs` 允许调用方传入任意 status/stage/message 来映射 task worker outcome，并与 cache/preflight/command 编排混在同一文件 | 已在 `1fa2f37` 收口到私有 `video_processing/task_result.rs`；调用方只能选择 `ProcessVideo` 或 `RetryInsights` closed context，structured task 透传，错误 family、protocol 和 runtime failure 使用固定安全结果；cache/preflight/诊断仍由父模块拥有 | 4 个 adapter tests 与全部 20 个 `video_processing` tests、完整 Rust 159、app 542、scripts 23、dependency boundary、rustfmt、lint/build/docs/diff 全部通过；设计见 `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md` |
 | `video_processing.rs` 在 task-result 下沉后仍同时拥有 strict AI retry、model-aware URL cache、source preflight、ASR request preparation、cache-hit diagnostics 与 Tauri orchestration | 已按 workflow/failure boundary 收口：68 行 root 保留薄 Tauri delegates/cancel；`retry_insights.rs`、`url_cache.rs`、`url_processing.rs` 分别拥有 retry、cache 与 URL orchestration；没有新增 facade 或 local-media placeholder | 新增 preflight matrix 4 项；retry 6、cache 5、URL 9、task-result 4，共 24 个 focused tests；完整 Rust 163、app 542、scripts 23、dependency scans、rustfmt/lint/build/docs/diff 通过；设计见 `docs/design-docs/2026-07-20-video-processing-module-split.md` |
+| `transcript_detail.rs` 同时拥有 command/DTO、格式与链接校验、audio cache、segment IO、备份和 Markdown formatting | 已按失败边界收口：134 行 root 只保留 Tauri/runtime composition 与 DTO；`audio_playback.rs`、`segments.rs`、`edit_storage.rs` 分别拥有 cache、codec 与官方编辑存储；没有新增 facade，task trust 仍由 `SupportedTask` / `TaskEditSession` 独占 | 新增 3 组隐式行为矩阵和 1 个 RED/GREEN source-boundary gate；focused 14/14、完整 Rust 173/173、app 549/549、scripts 23/23、rustfmt/lint/build/Tauri no-bundle 通过；设计见 `docs/design-docs/2026-07-20-transcript-detail-module-split.md` |
 | `bilibili_fallback.py` 同时拥有 source、public API/DASH、HTTP/safe streaming、artifact/FFmpeg 与 progress | 已按失败边界收口为 137 行稳定 root adapter，以及 `types/source/playback/transport/artifacts` 私有包；根入口、五个进度 code、候选/产物语义和类型身份保持兼容，没有新增 facade 类或三平台通用框架 | focused 183/183、worker 450/450、app 549/549、Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及 6/6 mirror hash 通过；设计见 `docs/design-docs/2026-07-20-bilibili-fallback-module-split.md` |
 | `xiaohongshu_fallback.py` 同时拥有 source、进程内 CookieJar/HTTP、页面解压/初始状态、stream policy、安全下载与 progress | 已按失败边界收口为 169 行稳定 root adapter，以及 `types/source/page/streams/transport` 私有包；根入口、三项进度、同一 CookieJar、候选/备选次序、原子替换和共享身份保持兼容，没有新增 facade 类或三平台通用框架 | focused 222/222、worker 477/477、app 549/549、Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 44/44 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md` |
 | `douyin_fallback.py` 同时拥有 source、进程内 CookieJar/HTTP、Router Data、bit-rate/ratio probe、候选下载与 progress | 已按失败边界收口为 132 行稳定 root adapter，以及空 initializer 和 `types/source/page/streams/transport` 私有包；根入口、四项进度、同一匿名 client、Router Data、probe/排序/去重、Range 移除、固定失败和原子替换保持兼容，没有新增 facade 类或三平台通用框架 | focused 205/205、worker 501/501、app 549/549、正常 Windows 权限 Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 50/50 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-douyin-fallback-module-split.md` |
@@ -1900,7 +1911,7 @@ stateDiagram-v2
 | `app/src/App.tsx` | 组装 9 个主要 controller，并通过 refs/callbacks 协调 reset、history、transcript、account 和 AI | 哪些协调属于 composition root；哪些可以成为明确的 application use case，而不产生第二个 workflow owner？ |
 | `useTaskProcessingController.ts` | 同时处理 submit、progress、cancel、history restore、transcript merge 和 AI retry，并维护 operation ID | 是否需要拆 action/use-case，但仍保留唯一 task identity owner？ |
 | `app/src-tauri/src/lib.rs` 中的 `greet` | scaffold command 仍在 `generate_handler!` 注册，但 `app/src/` 没有调用点 | 是否可通过 focused command-registry test 后删除，避免无业务含义的公开 IPC surface？ |
-| `transcript_detail.rs` | command、格式/链接校验、audio cache、segment IO、备份和 markdown formatting 共存；manifest/privacy/artifact-root 信任已委托 `SupportedTask` | 哪些剩余职责可以成为纯 transcript storage/service 单元，而不把安全路径原语重新复制回来？ |
+| `transcript_detail.rs` | 历史 1,133 行热点已收口为 134 行稳定 composition root；私有模块分别拥有 audio playback/cache、segment codec 与 official edit storage，完整证据见上方“已解决审计项” | 后续修改应进入对应私有 owner，并保持 root-only Tauri/runtime composition、`SupportedTask` / `TaskEditSession` 信任边界和 source-boundary 门禁；不要继续机械增加 facade |
 | `worker_service.py` + `pipeline.py` | 两处仍承担不同 application orchestration；任务生命周期和媒体准备已分别委托 `TaskStoreFacade` 与 `MediaPreparationFacade`，retry 仍复用 pipeline 中的 AI step | application service、注入 port 与 transcript/AI stage library 的下一步边界在哪里；是否能保持一个 task persistence owner？ |
 | `worker/frameq_worker/cli.py` | 同时承担进程 adapter、source resolver composition root；`__all__` 还重导出 pipeline、request、ASR 和 helper symbols | 哪些调用方依赖兼容导出；如何保留必要 composition 职责并缩小其他公共 surface？ |
 | `worker/frameq_worker/xiaohongshu_fallback.py` | 历史 894 行热点已收口为 169 行稳定 adapter；私有包分别拥有 source/page/streams/transport，完整实现证据见上方“已解决审计项” | 后续平台变化应修改对应私有 owner，并保持 root-only production entry、CookieJar/隐私和 AST 门禁；不要继续机械增加 facade |
@@ -1960,7 +1971,8 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Safe desktop logging | `app/src-tauri/src/diagnostics.rs` |
 | Task access facade and private manifest trust boundary | `app/src-tauri/src/task_manifest.rs` |
 | History read/delete | `app/src-tauri/src/history.rs`, `app/src-tauri/src/history_deletion.rs` |
-| Transcript read/edit/audio cache | `app/src-tauri/src/transcript_detail.rs` |
+| Transcript command/composition | `app/src-tauri/src/transcript_detail.rs` |
+| Transcript read/edit/audio cache | `app/src-tauri/src/transcript_detail/audio_playback.rs`, `segments.rs`, `edit_storage.rs` |
 | Account/session/checkout env | `app/src-tauri/src/account.rs` |
 | ASR model lifecycle | `app/src-tauri/src/asr_model.rs` |
 | Local settings/preferences | `app/src-tauri/src/settings.rs`, `ui_preferences.rs`, `insight_preferences.rs`, `updates.rs` |
