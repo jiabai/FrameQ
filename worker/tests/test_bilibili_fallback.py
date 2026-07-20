@@ -1,7 +1,10 @@
+import gzip
 import json
 from pathlib import Path
 
+import frameq_worker.bilibili_fallback as bilibili_fallback
 import pytest
+from frameq_worker.bilibili import transport as bilibili_transport
 from frameq_worker.bilibili_fallback import (
     BilibiliFallbackError,
     HttpResponse,
@@ -154,6 +157,61 @@ def playurl_payload(extra: dict[str, object] | None = None) -> dict[str, object]
     return {"code": 0, "message": "0", "data": data}
 
 
+def test_bilibili_root_compatibility_surface_is_stable() -> None:
+    expected = {
+        "BilibiliFallbackError",
+        "HttpResponse",
+        "CommandResult",
+        "BilibiliParseResult",
+        "BilibiliPage",
+        "BilibiliVideoInfo",
+        "BilibiliDashSelection",
+        "UrllibBilibiliHttpClient",
+        "parse_bilibili_input",
+        "build_video_info_url",
+        "build_playurl_url",
+        "select_dash_stream_pair",
+        "download_bilibili_video",
+    }
+
+    assert expected <= set(dir(bilibili_fallback))
+
+
+def test_bilibili_root_reexports_private_type_identities() -> None:
+    from frameq_worker.bilibili import types as bilibili_types
+
+    assert bilibili_fallback.BilibiliFallbackError is bilibili_types.BilibiliFallbackError
+    assert bilibili_fallback.HttpResponse is bilibili_types.HttpResponse
+    assert bilibili_fallback.CommandResult is bilibili_types.CommandResult
+    assert bilibili_fallback.BilibiliParseResult is bilibili_types.BilibiliParseResult
+    assert bilibili_fallback.BilibiliPage is bilibili_types.BilibiliPage
+    assert bilibili_fallback.BilibiliVideoInfo is bilibili_types.BilibiliVideoInfo
+    assert bilibili_fallback.BilibiliDashSelection is bilibili_types.BilibiliDashSelection
+
+
+def test_bilibili_root_reexports_transport_client_identity() -> None:
+    assert (
+        bilibili_fallback.UrllibBilibiliHttpClient
+        is bilibili_transport.UrllibBilibiliHttpClient
+    )
+
+
+def test_decode_response_rejects_oversized_expanded_body() -> None:
+    expanded = b"x" * (bilibili_transport.BILIBILI_MAX_RESPONSE_BYTES + 1)
+    response = bilibili_transport.HttpResponse(
+        status=200,
+        headers={"Content-Encoding": "gzip"},
+        body=gzip.compress(expanded),
+        url="https://api.bilibili.com/demo",
+    )
+
+    with pytest.raises(bilibili_transport.BilibiliFallbackError) as exc_info:
+        bilibili_transport.decode_response_body(response)
+
+    assert exc_info.value.code == "BILIBILI_VIDEO_INFO_UNAVAILABLE"
+    assert "api.bilibili.com" not in str(exc_info.value)
+
+
 def test_parse_bilibili_input_accepts_bv_av_part_and_short_link() -> None:
     client = FakeBilibiliHttpClient(
         {
@@ -180,6 +238,22 @@ def test_parse_bilibili_input_accepts_bv_av_part_and_short_link() -> None:
     assert av.part_index == 0
     assert short.video_id == BVID
     assert short.part_index == 1
+
+
+def test_parse_direct_id_does_not_construct_http_client(monkeypatch) -> None:
+    def unexpected_client_construction() -> None:
+        raise AssertionError("direct IDs must not construct an HTTP client")
+
+    monkeypatch.setattr(
+        bilibili_fallback,
+        "UrllibBilibiliHttpClient",
+        unexpected_client_construction,
+    )
+
+    parsed = bilibili_fallback.parse_bilibili_input(BVID)
+
+    assert parsed.video_id == BVID
+    assert parsed.id_kind == "bvid"
 
 
 def test_parse_bilibili_input_rejects_bangumi_as_unsupported_content() -> None:
@@ -323,6 +397,128 @@ def test_download_bilibili_video_downloads_dash_and_merges_selected_part(
         },
     ]
     assert all("message" not in event for event in events)
+
+
+def test_download_bilibili_video_tries_video_backup_before_audio(
+    tmp_path: Path,
+) -> None:
+    primary_video = "https://cdn.example/video-primary.m4s"
+    backup_video = "https://cdn.example/video-backup.m4s"
+    primary_audio = "https://cdn.example/audio-primary.m4s"
+    view_url = build_video_info_url("bvid", BVID)
+    playurl_url = build_playurl_url(BVID, CID_1)
+    payload = playurl_payload()
+    payload["data"]["dash"] = {
+        "video": [
+            {
+                "id": 80,
+                "baseUrl": primary_video,
+                "backupUrl": [backup_video],
+                "bandwidth": 1_000_000,
+                "codecid": 7,
+                "width": 1920,
+                "height": 1080,
+            }
+        ],
+        "audio": [
+            {
+                "id": 30280,
+                "baseUrl": primary_audio,
+                "bandwidth": 128_000,
+            }
+        ],
+    }
+    client = FakeBilibiliHttpClient(
+        responses={
+            view_url: [ok_response(view_url, view_payload())],
+            playurl_url: [ok_response(playurl_url, payload)],
+        },
+        downloads={
+            primary_video: [OSError("primary unavailable")],
+            backup_video: [b"video bytes"],
+            primary_audio: [b"audio bytes"],
+        },
+    )
+
+    def fake_runner(command: list[str]) -> CommandResult:
+        Path(command[-1]).write_bytes(b"merged mp4")
+        return CommandResult(command=command, returncode=0, stdout="", stderr="")
+
+    output_path = download_bilibili_video(
+        BVID,
+        output_dir=tmp_path,
+        command_runner=fake_runner,
+        http_client=client,
+    )
+
+    assert output_path.read_bytes() == b"merged mp4"
+    assert [url for url, _, _ in client.download_calls] == [
+        primary_video,
+        backup_video,
+        primary_audio,
+    ]
+
+
+def test_download_bilibili_video_preserves_previous_output_and_complete_dash_on_merge_failure(
+    tmp_path: Path,
+) -> None:
+    video_url = "https://cdn.example/video.m4s"
+    audio_url = "https://cdn.example/audio.m4s"
+    view_url = build_video_info_url("bvid", BVID)
+    playurl_url = build_playurl_url(BVID, CID_1)
+    payload = playurl_payload()
+    payload["data"]["dash"] = {
+        "video": [
+            {
+                "id": 80,
+                "baseUrl": video_url,
+                "bandwidth": 1_000_000,
+                "codecid": 7,
+            }
+        ],
+        "audio": [
+            {
+                "id": 30280,
+                "baseUrl": audio_url,
+                "bandwidth": 128_000,
+            }
+        ],
+    }
+    client = FakeBilibiliHttpClient(
+        responses={
+            view_url: [ok_response(view_url, view_payload())],
+            playurl_url: [ok_response(playurl_url, payload)],
+        },
+        downloads={video_url: [b"video bytes"], audio_url: [b"audio bytes"]},
+    )
+    output_path = tmp_path / f"{BVID}.mp4"
+    video_temp_path = tmp_path / f"{BVID}_video.m4s"
+    audio_temp_path = tmp_path / f"{BVID}_audio.m4s"
+    merge_temp_path = tmp_path / f"{BVID}.merge.mp4"
+    output_path.write_bytes(b"previous mp4")
+    video_temp_path.with_name(f"{video_temp_path.name}.part").write_bytes(b"partial video")
+    audio_temp_path.with_name(f"{audio_temp_path.name}.part").write_bytes(b"partial audio")
+
+    def failing_runner(command: list[str]) -> CommandResult:
+        Path(command[-1]).write_bytes(b"incomplete merge")
+        return CommandResult(command=command, returncode=1, stdout="", stderr="private")
+
+    with pytest.raises(BilibiliFallbackError) as exc_info:
+        download_bilibili_video(
+            BVID,
+            output_dir=tmp_path,
+            command_runner=failing_runner,
+            http_client=client,
+        )
+
+    assert exc_info.value.code == "BILIBILI_FFMPEG_MERGE_FAILED"
+    assert "cdn.example" not in str(exc_info.value)
+    assert output_path.read_bytes() == b"previous mp4"
+    assert video_temp_path.read_bytes() == b"video bytes"
+    assert audio_temp_path.read_bytes() == b"audio bytes"
+    assert not merge_temp_path.exists()
+    assert not video_temp_path.with_name(f"{video_temp_path.name}.part").exists()
+    assert not audio_temp_path.with_name(f"{audio_temp_path.name}.part").exists()
 
 
 def test_download_bilibili_video_rejects_drm_and_missing_part(tmp_path: Path) -> None:

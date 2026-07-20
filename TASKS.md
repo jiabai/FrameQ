@@ -72,6 +72,18 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Bilibili public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
+  kept the 137-line `frameq_worker.bilibili_fallback` as the stable production/test adapter and
+  separated types, source, playback, transport, and artifact responsibilities into a private
+  `bilibili/` package. URL/API/DASH selection, fallback order, fixed errors/progress, resumable
+  download, `.m4s`/merge cleanup, previous/final MP4 behavior, and root type identities remain
+  covered; no login/cookie/DRM bypass, generic downloader framework, facade class, or UI change was
+  added. Focused 183/183, worker 450/450, app 549/549, Rust 169/169, scripts 23/23, Ruff/rustfmt,
+  lint/build, 6/6 packaged-worker hashes, Tauri no-bundle, docs, and diff gates pass. Credential-free
+  live platform smoke was not run and remains a residual risk. Design:
+  `docs/design-docs/2026-07-20-bilibili-fallback-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-20-bilibili-fallback-module-split-plan.md`.
+
 - [x] Split the remaining video-processing application hotspot by workflow boundary (2026-07-20) — ✅ Acceptance:
   kept `video_processing.rs` as a 68-line Tauri adapter/cancellation owner; extracted strict AI retry, model-aware
   URL cache, and URL process/config/preflight orchestration into focused private child modules.
