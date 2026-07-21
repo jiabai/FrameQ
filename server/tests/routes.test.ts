@@ -4,6 +4,43 @@ import { sha256 } from "../src/security.js";
 import { MemoryStore } from "../src/store.js";
 
 describe("desktop account routes", () => {
+  test("registers the complete stable HTTP route table", () => {
+    const app = buildServer({
+      store: new MemoryStore(),
+      sendOtp: async () => {},
+      createNativePayment: async () => ({
+        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+        providerPayload: {},
+      }),
+    });
+    const routes = [
+      ["GET", "/login"],
+      ["GET", "/admin/login"],
+      ["POST", "/admin/auth/email/start"],
+      ["POST", "/admin/auth/email/verify"],
+      ["POST", "/admin/auth/logout"],
+      ["GET", "/admin"],
+      ["POST", "/admin/api/activation-codes"],
+      ["POST", "/admin/api/llm-config"],
+      ["POST", "/admin/api/users/:userId/entitlement-adjustments"],
+      ["POST", "/auth/email/start"],
+      ["POST", "/auth/email/verify"],
+      ["POST", "/api/desktop/sessions/exchange"],
+      ["GET", "/api/desktop/account"],
+      ["POST", "/api/desktop/logout"],
+      ["POST", "/api/desktop/activation-codes/redeem"],
+      ["POST", "/api/desktop/llm/checkouts"],
+      ["GET", "/api/desktop/updates/:target/:arch/:currentVersion"],
+      ["POST", "/api/desktop/billing/wechat-native"],
+      ["GET", "/api/desktop/billing/orders/:orderId"],
+      ["POST", "/api/wechat/notify"],
+    ] as const;
+
+    for (const [method, url] of routes) {
+      expect(app.hasRoute({ method, url }), `${method} ${url}`).toBe(true);
+    }
+  });
+
   test("serves the desktop email login page", async () => {
     const app = buildServer({
       store: new MemoryStore(),
@@ -234,5 +271,34 @@ describe("desktop account routes", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ code: "FAIL", message: "invalid wechat signature" });
+  });
+
+  test("forwards the exact WeChat JSON bytes to the notification parser", async () => {
+    const rawBody = '{\n  "id": "notice-raw",\n  "nested": { "amount": 1 }\n}';
+    let captured: { body: unknown; rawBody: string } | undefined;
+    const app = buildServer({
+      store: new MemoryStore(),
+      sendOtp: async () => {},
+      createNativePayment: async () => ({
+        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+        providerPayload: {},
+      }),
+      parseWechatNotification: async (input) => {
+        captured = { body: input.body, rawBody: input.rawBody };
+        throw new Error("capture complete");
+      },
+      wechatPayEnabled: true,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/wechat/notify",
+      headers: { "content-type": "application/json" },
+      payload: rawBody,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(captured?.body).toEqual({ id: "notice-raw", nested: { amount: 1 } });
+    expect(captured?.rawBody).toBe(rawBody);
   });
 });

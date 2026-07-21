@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-21-server-route-module-split-plan.md` | Reduced `server.ts` to a stable 112-line composition root and split all 20 routes into private capability registrars without changing HTTP, security, or transaction behavior. |
 | `2026-07-20-asr-module-split-plan.md` | Keep `frameq_worker.asr` stable while splitting types, registry/cache, Qwen, SenseVoice/VAD, and transcript artifact ownership into a private package. |
 | `2026-07-20-transcript-detail-module-split-plan.md` | Split the Rust transcript-detail hotspot into a 134-line stable Tauri root plus private audio playback, segment codec, and edit-storage failure boundaries without changing commands or behavior. |
 | `2026-07-20-douyin-fallback-module-split-plan.md` | Split the Douyin public-video fallback into a 132-line stable adapter and private type, source, Router Data, stream/probe, and transport failure boundaries without changing platform behavior. |

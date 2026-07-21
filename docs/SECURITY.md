@@ -1,5 +1,25 @@
 # Security and Compliance
 
+## 2026-07-21 Server HTTP Capability Boundary
+
+- Administrator session and CSRF cookie names, attributes, issuance, verification, and clearing are
+  private to `server/src/routes/admin.ts`. The split deliberately preserves the current successful
+  login wire behavior, including its duplicate administrator-session `Set-Cookie` header; changing
+  that compatibility detail requires a separate behavior/security change and provider/client
+  validation.
+- The root Fastify instance still captures exact JSON bytes before parsing. Only
+  `server/src/routes/billing.ts` consumes `rawBody` for WeChat signature verification, and neither
+  the parser nor the route adds logging, persistence, or response echo of the raw payload.
+- Desktop LLM checkout remains private to its authenticated route owner and preserves the existing
+  bearer-token hashing, entitlement/quota checks, server-managed secret handling, and fixed failure
+  mapping. The route split does not widen supplier credentials or add a diagnostic path.
+- Private route modules do not import Prisma or coordinate multi-write persistence. Payment
+  settlement, activation redemption, and administrator entitlement adjustment remain atomic
+  `Store`/`PrismaStore` operations behind application services.
+- Server boundary tests lock all 20 method/path pairs, exact raw webhook forwarding, cookie/CSRF
+  ownership, route-to-capability ownership, absence of feature-to-feature/Prisma/plugin imports,
+  and root-only service/parser construction.
+
 ## 2026-07-20 ASR application module boundary
 
 - `frameq_worker.asr` remains the only supported production import surface. The private

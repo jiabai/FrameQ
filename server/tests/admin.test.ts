@@ -92,6 +92,29 @@ describe("admin activation code routes", () => {
     });
 
     expect(verified.statusCode).toBe(200);
+    const verifiedCookies = Array.isArray(verified.headers["set-cookie"])
+      ? verified.headers["set-cookie"]
+      : verified.headers["set-cookie"]
+        ? [verified.headers["set-cookie"]]
+        : [];
+    expect(verifiedCookies.map((value) => value.split("=")[0])).toEqual([
+      "frameq_admin_session",
+      "frameq_admin_session",
+      "frameq_admin_csrf",
+    ]);
+    const sessionCookieHeader = verifiedCookies.find((value) =>
+      value.startsWith("frameq_admin_session="),
+    );
+    const csrfCookieHeader = verifiedCookies.find((value) =>
+      value.startsWith("frameq_admin_csrf="),
+    );
+    for (const cookie of [sessionCookieHeader, csrfCookieHeader]) {
+      expect(cookie).toContain("Path=/");
+      expect(cookie).toMatch(/Max-Age=\d+/);
+      expect(cookie).toContain("SameSite=Lax");
+    }
+    expect(sessionCookieHeader).toContain("HttpOnly");
+    expect(csrfCookieHeader).not.toContain("HttpOnly");
     const sessionCookie = parseCookie(verified.headers["set-cookie"], "frameq_admin_session");
     const csrfCookie = parseCookie(verified.headers["set-cookie"], "frameq_admin_csrf");
     expect(String(verified.headers["set-cookie"])).toContain("HttpOnly");
@@ -246,6 +269,27 @@ describe("admin activation code routes", () => {
     expect(String(loggedOut.headers["set-cookie"])).toContain("frameq_admin_session=");
     expect(String(loggedOut.headers["set-cookie"])).toContain("frameq_admin_csrf=");
     expect(String(loggedOut.headers["set-cookie"])).toContain("Max-Age=0");
+    const clearedCookies = Array.isArray(loggedOut.headers["set-cookie"])
+      ? loggedOut.headers["set-cookie"]
+      : loggedOut.headers["set-cookie"]
+        ? [loggedOut.headers["set-cookie"]]
+        : [];
+    expect(clearedCookies.map((value) => value.split("=")[0])).toEqual([
+      "frameq_admin_session",
+      "frameq_admin_session",
+      "frameq_admin_csrf",
+    ]);
+    for (const cookie of clearedCookies) {
+      expect(cookie).toContain("Path=/");
+      expect(cookie).toContain("Max-Age=0");
+      expect(cookie).toContain("SameSite=Lax");
+    }
+    expect(clearedCookies.find((value) => value.startsWith("frameq_admin_session="))).toContain(
+      "HttpOnly",
+    );
+    expect(clearedCookies.find((value) => value.startsWith("frameq_admin_csrf="))).not.toContain(
+      "HttpOnly",
+    );
 
     const afterLogout = await app.inject({
       method: "GET",

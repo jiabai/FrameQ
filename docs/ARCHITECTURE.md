@@ -343,6 +343,26 @@
   cross-language boundary. The accepted decision is recorded in
   `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
 
+## 2026-07-21 Server HTTP Capability Boundary
+
+- `server/src/server.ts` is the sole public server composition surface. It exports only
+  `ServerDependencies` and `buildServer()`, creates Fastify and the six application services,
+  resolves environment/configuration defaults and the release manifest, installs the global exact
+  raw-JSON parser, and synchronously composes private route registrars.
+- Private `server/src/routes/` modules own administrator, desktop authentication, desktop account,
+  desktop LLM, desktop update, and billing/webhook HTTP adaptation. `authSchemas.ts` and `shared.ts`
+  provide private reusable validation and HTTP helpers; no individual registrar is a public startup
+  surface.
+- Registrars are ordinary synchronous functions, not Fastify plugins and not a second facade. They
+  receive only the services/configuration required by their capability, register routes on the
+  supplied Fastify instance, and preserve the existing `buildServer()` startup contract.
+- Route modules depend on the `Store` port or application services only. They do not import Prisma,
+  construct services, own transactions, or call one another; semantic multi-write transactions
+  remain wholly inside `PrismaStore`.
+- The root owns raw-body capture because it is parser lifecycle policy, while only `billing.ts`
+  consumes `rawBody`. Only `admin.ts` owns administrator session/CSRF cookies and their policy.
+  Production startup and tests continue to import the stable root instead of assembling routes.
+
 ## 2026-07-10 Server Entitlement Transaction Boundary
 
 - `Store` is the only persistence boundary for payment settlement, activation-code redemption, and administrator entitlement compensation. Its semantic methods return the final entitlement and, for compensation, its audit record; no caller coordinates those writes itself.

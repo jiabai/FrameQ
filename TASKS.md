@@ -72,6 +72,23 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Fastify server routes by capability (2026-07-21) — ✅ Acceptance: keep
+  `ServerDependencies` and `buildServer()` as the sole stable composition surface; keep Fastify,
+  service/config construction, release-manifest resolution, and the exact-raw-body JSON parser in
+  `server.ts`; extract administrator, desktop auth/account/LLM/update, and billing/webhook HTTP
+  mapping into narrow private registrars. Preserve all 20 method/path pairs, schemas, statuses,
+  responses, cookies/CSRF, bearer hashing, LLM secrets/quota, update 204, disabled WeChat behavior,
+  raw signature bytes, and Store/Prisma transaction ownership. Add behavior characterization and
+  AST/source ownership RED/GREEN gates first; add no Fastify plugin, facade class, dependency,
+  provider enablement, product behavior, or public API. Design:
+  `docs/design-docs/2026-07-21-server-route-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-21-server-route-module-split-plan.md`. Implemented and verified:
+  `server.ts` is a 112-line stable root; eight private route/support files own the six capabilities;
+  boundary 6/6, server 65/65, app 549/549, native Windows Rust 173/173, worker 515/515, scripts
+  23/23, server build, app lint, governance, scope, and diff gates passed. No live provider smoke
+  was run; the existing duplicate administrator-session `Set-Cookie` remains a documented
+  compatibility residual.
+
 - [x] Split the Python ASR application module by failure boundary (2026-07-20) — ✅ Acceptance: keep
   `frameq_worker.asr` as the sole stable production import surface; move errors/data/protocol,
   registry/cache/factory policy, Qwen integration, SenseVoice normalization/VAD/WAV behavior, and
