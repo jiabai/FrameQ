@@ -362,9 +362,16 @@
 ## 2026-07-18 Task Access Facade Enforcement
 
 - Raw Rust `TaskManifest` parsing, support-predicate checks, artifact-key lookup, relative-path
-  validation, canonical containment checks, and manifest writes remain private to
-  `task_manifest.rs`. History, cache, transcript, and deletion code must enter through
-  `SupportedTask::scan/open` and must not reconstruct those checks locally.
+  validation, canonical containment checks, and manifest writes remain private to the
+  `task_manifest` module tree. `task_manifest.rs` is the sole crate-visible import surface; private
+  `source_identity`, `schema`, `storage`, and `access` children must not be imported by History,
+  cache, transcript, deletion, worker-runtime, or other application callers.
+- Canonical URL/source identity policy stays pure in `source_identity`; raw DTO, safe projection,
+  and relative artifact policy stay pure in `schema`; configured roots, manifest I/O,
+  canonicalization, and link/reparse checks stay in `storage`; support gating and task capabilities
+  stay in `access`. Only the stable root may re-export the existing safe surface.
+- History, cache, transcript, and deletion code must enter through `SupportedTask::scan/open` and
+  must not reconstruct support, manifest, or path checks locally.
 - `SupportedTask` means the current storage and source-privacy predicate already passed. A scan
   isolates and counts an invalid individual entry without returning its identity or content;
   inability to enumerate the configured task root remains an operation failure.

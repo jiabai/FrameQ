@@ -142,7 +142,7 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | 子系统 | 生产源文件数 | 物理行数 |
 |--------|-------------:|---------:|
 | React / TypeScript | 76 | 13,538 |
-| Tauri / Rust | 32 | 12,689 |
+| Tauri / Rust | 36 | 12,364 |
 | Python worker | 56 | 10,096 |
 | Fastify server | 18 | 4,271 |
 
@@ -150,7 +150,11 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 
 | 文件 | 物理行数 | 当前可见职责 |
 |------|---------:|--------------|
-| `app/src-tauri/src/task_manifest.rs` | 1,326 | 私有 manifest DTO/路径原语、`SupportedTask` facade、受限 edit session、source identity 与 artifact 安全 |
+| `app/src-tauri/src/task_manifest.rs` | 26 | 唯一 crate-visible task-manifest surface：私有模块声明、四项不变量常量与稳定 re-export |
+| `app/src-tauri/src/task_manifest/access.rs` | 298 | `SupportedTask` / `TaskScan` / `TaskEditSession` support gating、投影、artifact read 与受限 mutation |
+| `app/src-tauri/src/task_manifest/schema.rs` | 298 | 私有 manifest/error DTO、safe projection、Insight parsing 与纯 relative-artifact policy |
+| `app/src-tauri/src/task_manifest/storage.rs` | 205 | configured root、manifest I/O、task/artifact path、canonical containment 与 link/reparse effects |
+| `app/src-tauri/src/task_manifest/source_identity.rs` | 174 | canonical `SourceIdentity`、platform/stable-ID/query privacy policy 与 equality key |
 | `app/src-tauri/src/video_processing.rs` | 68 | Tauri command 薄委托、取消入口、子模块声明与可信 desktop task-result DTO 支持 |
 | `app/src-tauri/src/video_processing/url_processing.rs` | 409 | URL process DTO/配置、两次 cache 编排、source identity 预检、job 提交、cache-hit 诊断与 9 个内联测试 |
 | `app/src-tauri/src/video_processing/url_cache.rs` | 447 | model-aware URL/identity cache policy、`SupportedTask` 投影与 5 个内联测试；生产实现 123 行 |
@@ -181,6 +185,12 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 1,468 行，但其中 851 行位于相邻的 24 个内联测试中。拆分价值是依赖和失败策略可单独审计，而
 不是追求总行数减少；根模块不再是维护热点，未来 local-media 仍需随 contract v4 原子加入真实
 模块和 consumer，不能预建空 facade/variant。
+
+`task_manifest.rs` 从 1,326 行收口为 26 行稳定 root。四个私有生产 owner 合计 975 行，另有
+520 行独立 `tests.rs`；生产行数略增来自显式 imports/visibility seam，测试增长来自 edit-session
+characterization 和递归 source/dependency boundary。审计价值是 source privacy、pure schema、
+filesystem trust 与 validated capabilities 可分别评审，而所有调用方仍只能经过
+`task_manifest::*`，并非把 raw manifest/path API 暴露给更多模块。
 
 `server.ts` 从 710 行收口为 112 行稳定 composition root。私有 `routes/` 模块合计 764 行，
 分别拥有 admin、desktop auth/account/LLM/update、billing/webhook HTTP adapter，以及共享的
@@ -1932,6 +1942,7 @@ stateDiagram-v2
 | `douyin_fallback.py` 同时拥有 source、进程内 CookieJar/HTTP、Router Data、bit-rate/ratio probe、候选下载与 progress | 已按失败边界收口为 132 行稳定 root adapter，以及空 initializer 和 `types/source/page/streams/transport` 私有包；根入口、四项进度、同一匿名 client、Router Data、probe/排序/去重、Range 移除、固定失败和原子替换保持兼容，没有新增 facade 类或三平台通用框架 | focused 205/205、worker 501/501、app 549/549、正常 Windows 权限 Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 50/50 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-douyin-fallback-module-split.md` |
 | `asr.py` 同时拥有模型 registry、两种 provider、SenseVoice VAD/WAV 与 transcript 文件写出 | 已按失败边界收口为 52 行稳定兼容入口和空 initializer；`types/qwen/sensevoice/registry/artifacts` 五个私有 owner 分离共享 contract、SDK、fallback、cache 环境与文件系统职责，生产调用方仍只导入 root | 行为新增 5 项、边界 9/9、focused 32/32、worker 515/515、app 549/549、正常 Windows 权限 Rust 173/173、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 56/56 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-asr-module-split.md` |
 | `server.ts` 同时创建 Fastify/services、定义 schema、拥有全部 20 个 route 和安全/HTTP mapping | 已按 capability 收口为 112 行稳定 composition root 与私有 `routes/`：admin、desktop auth/account/LLM/update、billing 各有 owner；root raw-body parser、service/配置构造、公开导出和 Store/Prisma 事务保持不变，没有新增 plugin、facade 或依赖 | route/security characterization、boundary 6/6、server 65/65 与 build、app 549/549 与 lint、正常 Windows 权限 Rust 173/173、worker 515/515、scripts 23/23、docs/diff gates 通过；设计见 `docs/design-docs/2026-07-21-server-route-module-split.md` |
+| `task_manifest.rs` 同时拥有 canonical source policy、raw schema、安全投影、storage/path effects、validated access 与内联测试 | 已按职责收口为 26 行唯一稳定 root 与私有 `source_identity/schema/storage/access/tests`；raw DTO/path/write primitives 不经 root re-export，所有既有调用者路径和 URL-only support predicate 保持不变，没有新增 facade 或 local-media source union | edit-session characterization 先 GREEN，ownership gate 从 missing-owner RED 转为完整私有树 GREEN；focused 15/15、正常 Windows 权限 Rust 175/175、app 549/549、scripts 23/23、rustfmt/lint/build/Tauri no-bundle/governance/scope/diff 通过；设计见 `docs/design-docs/2026-07-21-task-manifest-module-split.md` |
 
 ### 如何使用这张表
 
@@ -2007,7 +2018,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Runtime paths | `app/src-tauri/src/runtime.rs` |
 | Progress validation | `app/src-tauri/src/progress_event.rs` |
 | Safe desktop logging | `app/src-tauri/src/diagnostics.rs` |
-| Task access facade and private manifest trust boundary | `app/src-tauri/src/task_manifest.rs` |
+| Task access facade and private manifest trust boundary | stable `app/src-tauri/src/task_manifest.rs`; private `task_manifest/source_identity.rs`, `schema.rs`, `storage.rs`, `access.rs` |
 | History read/delete | `app/src-tauri/src/history.rs`, `app/src-tauri/src/history_deletion.rs` |
 | Transcript command/composition | `app/src-tauri/src/transcript_detail.rs` |
 | Transcript read/edit/audio cache | `app/src-tauri/src/transcript_detail/audio_playback.rs`, `segments.rs`, `edit_storage.rs` |

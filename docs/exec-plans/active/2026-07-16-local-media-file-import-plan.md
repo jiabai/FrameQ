@@ -233,6 +233,8 @@ directory, even though the complete path is never stored.
 - Product intent: `docs/product-specs/2026-07-16-local-media-file-import.md`.
 - Persistent decisions: `docs/design-docs/2026-07-16-local-media-file-import.md`.
 - Task access prerequisite: `docs/design-docs/2026-07-18-task-access-facade.md`.
+- Task-manifest private-owner prerequisite:
+  `docs/design-docs/2026-07-21-task-manifest-module-split.md`.
 - Worker execution prerequisite: `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
 - Task-result adapter prerequisite:
   `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`.
@@ -246,8 +248,10 @@ directory, even though the complete path is never stored.
   `app/src/taskWorkspaceViewModel.ts`, and the i18n resources under `app/src/i18n/`.
 - Desktop command/supervision boundary: `app/src-tauri/src/lib.rs` and
   `app/src-tauri/src/video_processing.rs`.
-- Desktop task and History boundary: `app/src-tauri/src/task_manifest.rs`,
-  `app/src-tauri/src/history.rs`, and `app/src-tauri/src/history_deletion.rs`.
+- Desktop task and History boundary: stable `app/src-tauri/src/task_manifest.rs`, private
+  `task_manifest/source_identity.rs`, `schema.rs`, `storage.rs`, and `access.rs`, plus
+  `app/src-tauri/src/history.rs` and `history_deletion.rs`. Application callers continue importing
+  only the stable root.
 - Canonical worker: `worker/frameq_worker/desktop_contract.py`,
   `worker/frameq_worker/pipeline.py`, `worker/frameq_worker/media_preparation.py`,
   `worker/frameq_worker/atomic_files.py`, `worker/frameq_worker/media.py`,
@@ -375,6 +379,11 @@ directory, even though the complete path is never stored.
      manufacture a successful terminal state.
 
 6. [ ] Extend manifest schema-v3 validation with closed URL/local source variants.
+   - Change the closed source union, safe local metadata, and support predicate in private
+     `task_manifest/schema.rs`; keep canonical URL identity rules in `source_identity.rs` and make
+     `access.rs` admit tasks only through the shared schema predicate.
+   - Keep `storage.rs` source-agnostic: it may validate task IDs and task-local filesystem
+     containment but must never receive or persist the original selected local path.
    - Keep absent/current `source_kind` URL semantics and the existing strict SourceIdentity match.
    - Add local `source_kind`, empty URL, null identity, and required bounded safe local metadata.
    - Generate local task IDs from timestamp + `local` + randomness, never path/name/token/hash.

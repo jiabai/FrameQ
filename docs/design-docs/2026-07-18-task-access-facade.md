@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted and implemented on 2026-07-18.
+Accepted and implemented on 2026-07-18; private physical owners implemented on 2026-07-21 without
+changing the facade or behavior.
 
 ## Context
 
@@ -18,7 +19,10 @@ separate low-level calls.
 
 ## Decision
 
-- Rust keeps raw `TaskManifest` and its load/path/write helpers private to `task_manifest.rs`.
+- Rust keeps raw `TaskManifest` and its load/path/write helpers private to the `task_manifest`
+  module tree. `task_manifest.rs` is the sole crate-visible import surface; private
+  `source_identity`, `schema`, `storage`, and `access` children separate policy and effects without
+  becoming caller entry points.
 - Rust callers enter through `SupportedTask::scan` or `SupportedTask::open`. A `SupportedTask` exists
   only after storage validation and the strict current-task predicate succeed.
 - Artifact access uses the closed `TaskArtifact` enum. History receives safe declared artifacts;
@@ -41,8 +45,9 @@ separate low-level calls.
 
 1. Add wrapper methods without migrating callers. Rejected because callers could continue bypassing
    the strict predicate and path validation.
-2. Split manifest DTO, source policy, artifact storage, and editing into several new Rust modules in
-   one change. Rejected as unnecessarily broad before the local-media source variant exists.
+2. Split manifest DTO, source policy, artifact storage, and editing before the facade was proven.
+   Deferred on 2026-07-18; implemented on 2026-07-21 after callers were centralized and a
+   RED/GREEN ownership gate could preserve one non-bypassable root.
 3. Keep Python module-level primitives only. Rejected for production orchestration because the
    pipeline and retry service would continue to assemble different task lifecycles.
 
@@ -54,14 +59,16 @@ separate low-level calls.
 - Python retry loads and validates one manifest instead of independently loading it twice.
 - A failed manifest or snapshot replacement preserves the previous valid JSON rather than exposing
   a truncated authoritative file.
-- `task_manifest.rs` remains physically large because DTO parsing and the facade are colocated. A
-  later file split is optional; preserving one non-bypassable trust boundary is more important than
-  reducing line count.
+- The physical split leaves a 26-line stable root plus private source, schema, storage, and access
+  owners. The ownership/dependency gate, not line count, protects the non-bypassable trust boundary.
 
 ## Verification
 
 - Rust facade tests cover supported open/read, corrupt/unsupported scan isolation, and safe artifact
   errors that do not echo untrusted path material.
+- The module-boundary test records the old-layout RED and private-tree GREEN, requires the root to
+  stay below 100 lines, verifies owner dependency constraints, and recursively rejects private-child
+  imports from production callers.
 - Existing Rust History, cache, transcript edit/playback, deletion, privacy, and worker lifecycle
   tests remain the behavioral characterization suite.
 - Python facade tests cover create/open/finalize/preference-snapshot ownership and unsupported task

@@ -151,8 +151,12 @@
 ## 2026-07-18 Task access facade boundary
 
 - Rust raw task-manifest parsing, privacy predicates, relative-path resolution, canonical artifact
-  validation, and manifest writes are private to `task_manifest.rs`. History, cache reuse,
-  transcript read/edit, and deletion enter through `SupportedTask::scan/open`.
+  validation, and manifest writes are private to the `task_manifest` module tree. The 26-line
+  `task_manifest.rs` root is the only crate-visible import surface; its private `source_identity`,
+  `schema`, `storage`, and `access` children own canonical source policy, pure DTO/projection policy,
+  filesystem/path effects, and validated capability orchestration respectively.
+- History, cache reuse, transcript read/edit, and deletion continue entering through root-re-exported
+  `SupportedTask::scan/open`; no caller may import a private child or assemble raw DTO/path helpers.
 - `SupportedTask` is a validated capability, not another persisted DTO. Application callers use a
   closed `TaskArtifact` enum and receive safe projections or validated task-local capabilities;
   transcript mutation is restricted to `TaskEditSession`.
@@ -637,7 +641,11 @@ graph LR
 阅读路径：
 
 - 改 UI 状态或历史展示：`app/src/workflow.ts` → `app/src/historyClient.ts` → `app/src-tauri/src/video_processing.rs` / `history.rs` / `settings.rs`。
-- 改 task manifest、artifact 或 History/cache/transcript/delete 的任务信任规则：先改 `app/src-tauri/src/task_manifest.rs` 的 `SupportedTask` facade，再核对 Python `worker/frameq_worker/task_store.py` 的 `TaskStoreFacade`；调用方不得恢复 raw manifest/path 组合。
+- 改 task manifest、artifact 或 History/cache/transcript/delete 的任务信任规则：从稳定
+  `app/src-tauri/src/task_manifest.rs` surface 进入，再按职责修改私有 `source_identity.rs`、
+  `schema.rs`、`storage.rs` 或 `access.rs`；同时核对 Python
+  `worker/frameq_worker/task_store.py` 的 `TaskStoreFacade`，调用方不得恢复 raw manifest/path
+  组合或直接导入私有 child。
 - 改 Rust worker 启动、stdin、progress、取消竞争或进程树终止：`app/src-tauri/src/worker_runtime/runner.rs` → `supervisor.rs` → `command.rs`；应用命令只保留领域映射。
 - 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
 - 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `asr_runtime/` → `model_download.py` → `app-local data models/`。
@@ -650,6 +658,8 @@ graph LR
 - `AGENTS.md`：AI 协作入口地图和最高优先级约束摘要。
 - `docs/design-docs/frameq-code-audit-uml.md`：面向 LLM 与人工重构评审的当前代码 UML 基线、依赖证据和结构压力点。
 - `docs/design-docs/2026-07-18-task-access-facade.md`：Rust/Python 任务访问门面、安全不变量和迁移边界。
+- `docs/design-docs/2026-07-21-task-manifest-module-split.md`：Rust task-manifest 私有 owner
+  拆分、稳定 root surface 与 source/dependency boundary。
 - `docs/product-specs/index.md`：产品规格入口；根目录历史方案已迁移进 `docs/` 并删除。
 - `docs/product-specs/2026-06-16-douyin-video-transcription-client.md`：首个用户可见 MVP 规格。
 - `docs/exec-plans/completed/2026-06-18-installer-distribution-runtime-plan.md`：已完成的轻量安装包、首启模型下载与 clean-machine 验证计划；首个 MVP 计划已归档到 `docs/exec-plans/completed/2026-06-16-mvp-desktop-client-plan.md`。

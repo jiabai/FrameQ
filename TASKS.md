@@ -72,6 +72,22 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Rust task-manifest trust module by responsibility (2026-07-21) — ✅ Acceptance:
+  keep `task_manifest.rs` as the sole crate-visible import surface; move canonical SourceIdentity
+  policy, pure manifest/error/artifact/Insight schema policy, configured storage/path effects, and
+  `SupportedTask` / `TaskScan` / `TaskEditSession` capability orchestration into private
+  `source_identity`, `schema`, `storage`, and `access` owners, with characterization in a separate
+  test file. Preserve every root constant/type/function/method, raw-manifest privacy, schema-v3
+  bytes, URL-only support predicate, scan isolation, artifact/link/reparse checks, safe errors,
+  unknown fields, edit save ordering, and all caller paths. Add characterization plus an ownership
+  RED/GREEN gate first; add no Facade, dependency, product behavior, local-media source union,
+  migration, network/log path, or atomic-write claim. Design:
+  `docs/design-docs/2026-07-21-task-manifest-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-21-task-manifest-module-split-plan.md`. Implemented as a
+  26-line stable root plus private source/schema/storage/access owners and separate tests; focused
+  15/15, normal Windows Rust 175/175, App 549/549, scripts 23/23, lint/build/rustfmt/governance,
+  Tauri no-bundle, scope, and diff gates passed.
+
 - [x] Split the Fastify server routes by capability (2026-07-21) — ✅ Acceptance: keep
   `ServerDependencies` and `buildServer()` as the sole stable composition surface; keep Fastify,
   service/config construction, release-manifest resolution, and the exact-raw-body JSON parser in
