@@ -72,6 +72,23 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Python ASR application module by failure boundary (2026-07-20) — ✅ Acceptance: keep
+  `frameq_worker.asr` as the sole stable production import surface; move errors/data/protocol,
+  registry/cache/factory policy, Qwen integration, SenseVoice normalization/VAD/WAV behavior, and
+  transcript artifact writing into five private `asr_runtime/` owners. Preserve exact root
+  definition/function identities, constant values, signatures/defaults, model order/default/cache
+  behavior, lazy SDK imports, provider errors, optional-VAD fallback, source validation before
+  filesystem mutation, filenames/bytes,
+  pipeline/contracts/local-media behavior, and canonical packaged-worker ownership. Add behavior
+  characterization and AST/import-boundary RED/GREEN tests before extraction; add no class facade,
+  model/download change, network/log path, product behavior, or artifact transaction claim. Design:
+  `docs/design-docs/2026-07-20-asr-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-20-asr-module-split-plan.md`. Implemented, verified, and
+  accepted on 2026-07-21: root 52 lines, private owners 95/77/316/113/132 lines,
+  boundary 9/9, focused 32/32, worker 515/515, app 549/549, native Windows Rust 173/173, scripts
+  23/23, installer scripts 5/5, Ruff/rustfmt/lint/build/Tauri no-bundle, and recursive 56/56 worker
+  mirror equality passed.
+
 - [x] Split the Rust transcript-detail module by failure boundary (2026-07-20) — ✅ Acceptance: keep
   `transcript_detail.rs` as the stable Tauri command/DTO/composition root; move validated audio
   playback/cache preparation, tolerant segment codec behavior, and official transcript edit

@@ -7,12 +7,14 @@ import pytest
 from frameq_worker.asr import (
     ASRDependencyError,
     ASRRuntimeError,
+    ASRUnsupportedModelError,
     QwenAsrTranscriber,
     SenseVoiceTranscriber,
     Transcript,
     TranscriptSegment,
     build_asr_transcriber,
     build_qwen_asr_transcriber,
+    resolve_asr_model_name,
     resolve_model_cache_dir,
     supported_asr_model_names,
     transcribe_and_write,
@@ -80,6 +82,7 @@ def test_write_transcript_files_records_platform_subtitle_metadata(
 def test_write_transcript_files_rejects_unsafe_source_identity_before_writing(
     tmp_path: Path,
 ) -> None:
+    output_dir = tmp_path / "not-created"
     unsafe_identity = SourceIdentity(
         platform="xiaohongshu",
         stable_id="64a1b2c3d4e5f67890123456",
@@ -92,7 +95,7 @@ def test_write_transcript_files_rejects_unsafe_source_identity_before_writing(
     with pytest.raises(SourceIdentityError, match="safe for persistence"):
         write_transcript_files(
             text="official transcript",
-            output_dir=tmp_path,
+            output_dir=output_dir,
             output_stem="",
             metadata=TranscriptMetadata(
                 source="subtitle",
@@ -100,8 +103,55 @@ def test_write_transcript_files_rejects_unsafe_source_identity_before_writing(
             ),
         )
 
-    assert not (tmp_path / "transcript.txt").exists()
-    assert not (tmp_path / "transcript.md").exists()
+    assert not output_dir.exists()
+
+
+def test_no_stem_artifacts_keep_paths_metadata_and_bytes(tmp_path: Path) -> None:
+    output_dir = tmp_path / "transcript"
+    artifacts = write_transcript_files(
+        text="第一段 第二段",
+        output_dir=output_dir,
+        output_stem="",
+        model="iic/SenseVoiceSmall",
+        segments=(
+            TranscriptSegment(
+                id="seg-0001",
+                start_ms=0,
+                end_ms=1200,
+                text="第一段",
+                speaker="讲者一",
+            ),
+        ),
+    )
+
+    assert artifacts.txt_path == output_dir / "transcript.txt"
+    assert artifacts.md_path == output_dir / "transcript.md"
+    assert artifacts.segments_path == output_dir / "segments.json"
+    assert artifacts.txt_path.read_bytes() == ("第一段 第二段" + os.linesep).encode("utf-8")
+    assert artifacts.md_path.read_text(encoding="utf-8") == """# 视频文字稿
+
+## Metadata
+
+- Transcript Source: Local ASR
+- ASR Engine: iic/SenseVoiceSmall
+- Model: iic/SenseVoiceSmall
+
+## Transcript
+
+第一段 第二段
+"""
+    assert artifacts.segments_path.read_text(encoding="utf-8") == """{
+  "segments": [
+    {
+      "id": "seg-0001",
+      "start_ms": 0,
+      "end_ms": 1200,
+      "text": "第一段",
+      "speaker": "讲者一"
+    }
+  ]
+}
+"""
 
 
 def test_transcribe_and_write_uses_transcriber_and_outputs_files(tmp_path: Path) -> None:
@@ -248,6 +298,14 @@ def test_supported_asr_models_include_qwen_and_available_sensevoice_models() -> 
     ]
 
 
+def test_unknown_model_keeps_stable_error_contract() -> None:
+    with pytest.raises(ASRUnsupportedModelError) as error:
+        resolve_asr_model_name("vendor/not-supported")
+
+    assert error.value.code == "ASR_MODEL_UNSUPPORTED"
+    assert str(error.value) == "Unsupported ASR model: vendor/not-supported"
+
+
 def test_build_asr_transcriber_selects_sensevoice_for_small(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -388,6 +446,61 @@ def test_sensevoice_transcriber_builds_segments_from_vad_blocks_when_sentence_in
         TranscriptSegment(id="seg-0001", start_ms=0, end_ms=16000, text="第一段"),
         TranscriptSegment(id="seg-0002", start_ms=16000, end_ms=33000, text="第二段"),
     )
+
+
+def test_sensevoice_vad_failure_falls_back_to_full_audio_generate() -> None:
+    class FakeModel:
+        def __init__(self) -> None:
+            self.vad_model = object()
+            self.inference_calls = 0
+            self.generate_calls = 0
+
+        def inference(self, *args: object, **kwargs: object) -> object:
+            self.inference_calls += 1
+            raise RuntimeError("optional VAD failed")
+
+        def generate(self, **kwargs: object) -> list[dict[str, str]]:
+            self.generate_calls += 1
+            return [{"text": "<|zh|><|withitn|>完整音频回退结果"}]
+
+    model = FakeModel()
+    transcriber = SenseVoiceTranscriber(model_factory=lambda **kwargs: model)
+
+    transcript = transcriber.transcribe(Path("cache/demo.wav"))
+
+    assert transcript == Transcript(text="完整音频回退结果", language="Chinese")
+    assert model.inference_calls == 1
+    assert model.generate_calls == 1
+
+
+def test_qwen_provider_failure_keeps_runtime_error_contract() -> None:
+    class FailingModel:
+        def transcribe(self, audio: str, language: str) -> object:
+            raise RuntimeError("qwen provider unavailable")
+
+    transcriber = QwenAsrTranscriber(model_factory=lambda **kwargs: FailingModel())
+
+    with pytest.raises(ASRRuntimeError) as error:
+        transcriber.transcribe(Path("cache/demo.wav"))
+
+    assert error.value.code == "ASR_RUNTIME_ERROR"
+    assert str(error.value) == "qwen provider unavailable"
+    assert isinstance(error.value.__cause__, RuntimeError)
+
+
+def test_sensevoice_provider_failure_keeps_runtime_error_contract() -> None:
+    class FailingModel:
+        def generate(self, **kwargs: object) -> object:
+            raise ValueError("sensevoice provider unavailable")
+
+    transcriber = SenseVoiceTranscriber(model_factory=lambda **kwargs: FailingModel())
+
+    with pytest.raises(ASRRuntimeError) as error:
+        transcriber.transcribe(Path("cache/demo.wav"))
+
+    assert error.value.code == "ASR_RUNTIME_ERROR"
+    assert str(error.value) == "sensevoice provider unavailable"
+    assert isinstance(error.value.__cause__, ValueError)
 
 
 def test_qwen_asr_transcriber_reports_missing_dependency() -> None:

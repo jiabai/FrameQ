@@ -1,5 +1,25 @@
 # Security and Compliance
 
+## 2026-07-20 ASR application module boundary
+
+- `frameq_worker.asr` remains the only supported production import surface. The private
+  `asr_runtime/` owners cannot import the root, CLI, pipeline, worker service, task store, LLM, or
+  InsightFlow layers, and production callers cannot bypass the stable root.
+- Qwen and SenseVoice SDK imports remain inside their default loaders; optional `numpy` and
+  `funasr` VAD utilities remain inside the VAD path. Importing ASR contracts or registry functions
+  does not load a provider SDK, initialize a model, download weights, or make a network request.
+- `registry.py` alone owns `MODELSCOPE_CACHE` mutation. `sensevoice.py` alone owns provider/VAD/WAV
+  effects, and `artifacts.py` alone owns source-identity projection plus transcript filesystem
+  output. Source identity is still validated before the output directory is created.
+- This extraction adds no prompt, transcript, path, model result, telemetry, or provider-error log.
+  Existing provider exceptions remain wrapped with the current text and cause for compatibility;
+  this layer does not claim that third-party exception text is sanitized, so it must not be added
+  to a new diagnostic or persistence path without a separate security review.
+- Canonical worker source remains under `worker/frameq_worker/`. The ignored Tauri worker resource
+  was refreshed only through the established build path, and recursive relative-path plus SHA-256
+  comparison proved all 56 files byte-equal. No dependency, credential, contract, manifest, or
+  model-download boundary changed.
+
 ## 2026-07-20 Contract v4 local-media request boundary
 
 - Global desktop-worker contract v4 is not permission to widen the stable URL request: URL

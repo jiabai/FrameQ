@@ -14,6 +14,7 @@
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
+- ASR 模块拆分设计：`docs/design-docs/2026-07-20-asr-module-split.md`
 - Transcript detail 模块拆分设计：`docs/design-docs/2026-07-20-transcript-detail-module-split.md`
 - Bilibili fallback 模块拆分设计：`docs/design-docs/2026-07-20-bilibili-fallback-module-split.md`
 - Xiaohongshu fallback 模块拆分设计：`docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md`
@@ -42,7 +43,7 @@
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
-- 最近完成执行计划：`docs/exec-plans/completed/2026-07-20-transcript-detail-module-split-plan.md`
+- 最近完成执行计划：`docs/exec-plans/completed/2026-07-20-asr-module-split-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 
 ## 核心信念

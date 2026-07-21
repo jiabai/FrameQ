@@ -1,5 +1,26 @@
 # FrameQ Architecture
 
+## 2026-07-20 ASR application module boundary
+
+- `worker/frameq_worker/asr.py` is now a 52-line stable compatibility surface. Production callers
+  continue importing errors, transcript DTOs, adapters, registry/cache functions, and artifact
+  writers only from `frameq_worker.asr`; the root re-exports the actual private objects rather than
+  wrappers or duplicate classes.
+- The private `asr_runtime/` package separates five owners: `types.py` owns shared contracts,
+  `qwen.py` owns the lazy Qwen adapter, `sensevoice.py` owns SenseVoice normalization/VAD/WAV
+  behavior, `registry.py` owns model selection and cache mutation, and `artifacts.py` owns official
+  transcript output. The package initializer is empty.
+- Provider modules never import the registry, and no private module imports the stable root or
+  application orchestration. `qwen_asr`, `funasr`, and `numpy` remain lazy; importing the stable
+  root does not load a provider SDK or initialize a model.
+- SenseVoice VAD remains best-effort and falls back to the existing full-audio call. Provider
+  failures, model order/defaults, source-identity validation-before-directory-creation, filenames,
+  Markdown/JSON shape, direct non-atomic writes, and public error behavior are unchanged.
+- The canonical `worker/frameq_worker/` tree remains authoritative. Packaging validation refreshed
+  the ignored Tauri resource through the established build path and proved all 56 relative files
+  byte-equal, including the new private package. Worker contracts, local-media runtime, manifests,
+  model-download behavior, UI, and server code are unchanged.
+
 ## 2026-07-20 Douyin fallback module boundary
 
 - `douyin_fallback.py` is now a 132-line stable compatibility/application adapter. It retains the
@@ -552,7 +573,7 @@ graph LR
 
   subgraph "worker/frameq_worker/"
     W1["cli.py<br/>pipeline.py<br/>models.py"]
-    W2["media.py<br/>asr.py<br/>model_download.py"]
+    W2["media.py<br/>asr.py · asr_runtime/<br/>model_download.py"]
     W3["insightflow/<br/>splitter · prompt<br/>generator · json parser"]
     W4["llm.py<br/>config.py"]
   end
@@ -599,7 +620,7 @@ graph LR
 - 改 task manifest、artifact 或 History/cache/transcript/delete 的任务信任规则：先改 `app/src-tauri/src/task_manifest.rs` 的 `SupportedTask` facade，再核对 Python `worker/frameq_worker/task_store.py` 的 `TaskStoreFacade`；调用方不得恢复 raw manifest/path 组合。
 - 改 Rust worker 启动、stdin、progress、取消竞争或进程树终止：`app/src-tauri/src/worker_runtime/runner.rs` → `supervisor.rs` → `command.rs`；应用命令只保留领域映射。
 - 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
-- 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `model_download.py` → `app-local data models/`。
+- 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `asr_runtime/` → `model_download.py` → `app-local data models/`。
 - 改灵感 / 总结 / mindmap：`worker/frameq_worker/insightflow/` → `llm.py`。
 - 改账户、激活码、配额或 LLM checkout：`server/`。
 
@@ -623,7 +644,7 @@ graph LR
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
-- `worker/frameq_worker/asr.py`：ASR model registry、Qwen / SenseVoice adapter、模型缓存目录解析和 transcript `.txt/.md` 写出。
+- `worker/frameq_worker/asr.py`：稳定 ASR 导入入口；实现按 failure boundary 位于私有 `asr_runtime/` 的 types、registry、Qwen、SenseVoice/VAD 和 artifact owners。
 - `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
 - `worker/frameq_worker/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
 - `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client；桌面灵感生成通过 server-managed checkout env 创建 client，默认使用 `temperature=0.7`。

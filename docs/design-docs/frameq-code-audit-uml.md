@@ -143,7 +143,7 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 |--------|-------------:|---------:|
 | React / TypeScript | 76 | 13,538 |
 | Tauri / Rust | 32 | 12,689 |
-| Python worker | 31 | 9,297 |
+| Python worker | 56 | 10,096 |
 | Fastify server | 18 | 4,271 |
 
 当前较大的生产源文件：
@@ -161,15 +161,12 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | `app/src-tauri/src/transcript_detail/segments.rs` | 99 | 固定 sidecar 路径、容错读取/过滤、严格编辑校验与 JSON 编码 |
 | `app/src-tauri/src/transcript_detail/edit_storage.rs` | 191 | 官方 transcript 路径/链接校验、一次性备份、Markdown、顺序写入、preview/artifact/manifest 更新 |
 | `app/src-tauri/src/worker_runtime/runner.rs` | 1,144 | 四类 worker 操作的 spawn、stdin、progress、wait/reap、terminal 分类和生命周期日志；含内联测试 |
-| `worker/frameq_worker/bilibili_fallback.py` | 936 | URL 解析、HTTP、API 解析、流选择、下载、DASH 合并、错误映射 |
-| `worker/frameq_worker/xiaohongshu_fallback.py` | 894 | URL 解析、HTTP、页面解码、状态解析、流选择和下载 |
 | `worker/frameq_worker/pipeline.py` | 589 | 主 pipeline、字幕/ASR/AI stage、进度和路径解析；媒体准备与任务落盘分别委托两个 facade |
 | `server/src/store.ts` | 749 | 领域 records、Store port、MemoryStore 实现 |
 | `app/src/App.tsx` | 740 | composition root、controller 组装、跨 controller 回调、主要视图渲染 |
 | `server/src/adminPage.ts` | 729 | 管理后台 HTML、交互脚本、样式和格式化 |
 | `server/src/server.ts` | 710 | Fastify 创建、服务组装、schema、全部路由和 HTTP 映射 |
 | `server/src/prismaStore.ts` | 685 | Store 的 Prisma 实现和事务边界 |
-| `worker/frameq_worker/asr.py` | 676 | ASR 模型注册、transcriber、VAD、结果归一化和 transcript 写出 |
 | `worker/frameq_worker/media.py` | 598 | yt-dlp、fallback 选择、ffprobe、ffmpeg 和错误归一化 |
 | `app/src/features/transcript/useTranscriptDetailController.ts` | 509 | transcript UI 状态、音频播放、保存和 task stale guards |
 
@@ -183,6 +180,12 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 1,468 行，但其中 851 行位于相邻的 24 个内联测试中。拆分价值是依赖和失败策略可单独审计，而
 不是追求总行数减少；根模块不再是维护热点，未来 local-media 仍需随 contract v4 原子加入真实
 模块和 consumer，不能预建空 facade/variant。
+
+`asr.py` 从 676 行收口为 52 行稳定兼容入口。私有 `asr_runtime/` 包按失败边界拆为
+`types.py` 95 行、`qwen.py` 77 行、`sensevoice.py` 316 行、`registry.py` 113 行和
+`artifacts.py` 132 行，initializer 为空。拆分后的生产树合计 786 行；增加的边界连接与
+结构测试换来了 provider SDK、VAD/WAV、cache 环境和 transcript 文件系统职责的独立 owner，
+而不是把相同复杂度隐藏进新的 facade 类。
 
 `transcript_detail.rs` 从 1,133 行收口为 134 行 composition root；原文件中的 791 行
 command-level characterization 已移动到相邻 `tests.rs`，不再计入生产规模。三个私有 child
@@ -233,7 +236,7 @@ flowchart LR
     SourceAdapters["platform_source_resolvers.py<br/>short-link adapter registry"]
     SourceResolution["source_resolution.py<br/>application resolver"]
     SourceIdentityCore["source_identity.py<br/>pure identity policy"]
-    ASR["asr.py · model_download.py<br/>SenseVoice"]
+    ASR["asr.py · asr_runtime/<br/>model_download.py · SenseVoice"]
     InsightFlow["llm.py + insightflow/<br/>summary · mindmap · inspirations"]
     PyStorage["task_store.py<br/>manifest and artifacts"]
     PyModels["models.py · requests.py"]
@@ -1894,6 +1897,7 @@ stateDiagram-v2
 | `bilibili_fallback.py` 同时拥有 source、public API/DASH、HTTP/safe streaming、artifact/FFmpeg 与 progress | 已按失败边界收口为 137 行稳定 root adapter，以及 `types/source/playback/transport/artifacts` 私有包；根入口、五个进度 code、候选/产物语义和类型身份保持兼容，没有新增 facade 类或三平台通用框架 | focused 183/183、worker 450/450、app 549/549、Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及 6/6 mirror hash 通过；设计见 `docs/design-docs/2026-07-20-bilibili-fallback-module-split.md` |
 | `xiaohongshu_fallback.py` 同时拥有 source、进程内 CookieJar/HTTP、页面解压/初始状态、stream policy、安全下载与 progress | 已按失败边界收口为 169 行稳定 root adapter，以及 `types/source/page/streams/transport` 私有包；根入口、三项进度、同一 CookieJar、候选/备选次序、原子替换和共享身份保持兼容，没有新增 facade 类或三平台通用框架 | focused 222/222、worker 477/477、app 549/549、Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 44/44 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md` |
 | `douyin_fallback.py` 同时拥有 source、进程内 CookieJar/HTTP、Router Data、bit-rate/ratio probe、候选下载与 progress | 已按失败边界收口为 132 行稳定 root adapter，以及空 initializer 和 `types/source/page/streams/transport` 私有包；根入口、四项进度、同一匿名 client、Router Data、probe/排序/去重、Range 移除、固定失败和原子替换保持兼容，没有新增 facade 类或三平台通用框架 | focused 205/205、worker 501/501、app 549/549、正常 Windows 权限 Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 50/50 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-douyin-fallback-module-split.md` |
+| `asr.py` 同时拥有模型 registry、两种 provider、SenseVoice VAD/WAV 与 transcript 文件写出 | 已按失败边界收口为 52 行稳定兼容入口和空 initializer；`types/qwen/sensevoice/registry/artifacts` 五个私有 owner 分离共享 contract、SDK、fallback、cache 环境与文件系统职责，生产调用方仍只导入 root | 行为新增 5 项、边界 9/9、focused 32/32、worker 515/515、app 549/549、正常 Windows 权限 Rust 173/173、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 56/56 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-asr-module-split.md` |
 
 ### 如何使用这张表
 
@@ -1916,7 +1920,7 @@ stateDiagram-v2
 | `worker/frameq_worker/cli.py` | 同时承担进程 adapter、source resolver composition root；`__all__` 还重导出 pipeline、request、ASR 和 helper symbols | 哪些调用方依赖兼容导出；如何保留必要 composition 职责并缩小其他公共 surface？ |
 | `worker/frameq_worker/xiaohongshu_fallback.py` | 历史 894 行热点已收口为 169 行稳定 adapter；私有包分别拥有 source/page/streams/transport，完整实现证据见上方“已解决审计项” | 后续平台变化应修改对应私有 owner，并保持 root-only production entry、CookieJar/隐私和 AST 门禁；不要继续机械增加 facade |
 | `worker/frameq_worker/douyin_fallback.py` | 历史 515 行热点已收口为 132 行稳定 adapter；私有包分别拥有 types/source/page/streams/transport，完整实现证据见上方“已解决审计项” | 后续平台变化应修改对应私有 owner，并保持 root-only production entry、同一进程内匿名 CookieJar、Router Data/probe/原子产物语义和 AST 门禁；不要继续机械增加 facade 或抽取三平台通用框架 |
-| `asr.py` | 模型 registry、两种 transcriber、VAD、结果清洗和文件写出在同一文件 | model adapter、transcript normalization 和 artifact writer 是否能独立？ |
+| `worker/frameq_worker/asr.py` | 历史 676 行热点已收口为 52 行稳定兼容入口；私有包分别拥有 types、Qwen、SenseVoice/VAD、registry/cache 和 artifacts，完整证据见上方“已解决审计项” | 后续修改应进入对应私有 owner，并保持 root-only production import、provider lazy loading、VAD fallback、source-validation-before-write 和 AST 门禁；不要继续机械增加 facade |
 | `server.ts` | 创建 service、定义 schema、注册全部 route、认证检查和 response mapping | 可否按 capability 注册 Fastify plugins，同时保留一个清晰 composition root？ |
 | `store.ts` / `prismaStore.ts` | broad Store port；MemoryStore 与 records 同文件；PrismaStore 镜像所有方法 | Store 是否应按事务一致性聚合拆成 ports，还是单 port 更能保护跨实体事务？ |
 | Settings `LlmConfig` 命名 | TS/Rust 的 `LlmConfig`、`get_llm_config`、`save_llm_config` 当前只承载 output directory 与 ASR model，本地 LLM credentials 已被移除 | 是否应做兼容 command 迁移并改名为 desktop/runtime settings，以降低错误心智模型？ |
@@ -1993,7 +1997,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Media command primitives | `worker/frameq_worker/media.py` |
 | Platform download fallbacks | stable roots `douyin_fallback.py`, `xiaohongshu_fallback.py`, `bilibili_fallback.py`; private owners under `douyin/`, `xiaohongshu/`, `bilibili/` |
 | Download reliability | `worker/frameq_worker/download_reliability.py` |
-| ASR | `worker/frameq_worker/asr.py`, `model_download.py` |
+| ASR | stable root `worker/frameq_worker/asr.py`; private owners under `asr_runtime/`; model lifecycle in `model_download.py` |
 | Subtitle discovery and parsing | `worker/frameq_worker/subtitles.py` |
 | AI client | `worker/frameq_worker/llm.py` |
 | Embedded InsightFlow | `worker/frameq_worker/insightflow/` |
