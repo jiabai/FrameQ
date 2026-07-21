@@ -1,14 +1,21 @@
+import json
 from pathlib import Path
 
 import pytest
 from frameq_worker.asr import Transcript, TranscriptSegment
+from frameq_worker.desktop_contract import OUTPUT_DIR_ENV
+from frameq_worker.media_preparation import MediaPreparationError, MediaPreparationFacade
+from frameq_worker.models import ProcessRequest
 from frameq_worker.pipeline import (
     run_asr_transcript_step,
     run_insight_generation_step,
+    run_prepared_subtitle_transcript_step,
+    run_worker_pipeline,
     write_prepared_subtitle_stage,
 )
 from frameq_worker.requests import parse_preference_snapshot
-from frameq_worker.source_identity import SourceIdentity
+from frameq_worker.source_identity import SourceIdentity, SourceIdentityError
+from frameq_worker.source_resolution import SourceRequest
 from frameq_worker.subtitles import SubtitleTranscript
 from frameq_worker.task_store import TaskContext, TaskPaths
 
@@ -90,6 +97,147 @@ def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path)
         "message": "ASR returned an empty transcript.",
         "stage": "video_transcribing",
     }
+
+
+def test_empty_prepared_subtitle_returns_none_for_asr_fallback(tmp_path: Path) -> None:
+    result = run_prepared_subtitle_transcript_step(
+        subtitle=SubtitleTranscript(text=" ", language="zh-Hans", segments=()),
+        output_dir=tmp_path / "task" / "transcript",
+        output_stem="",
+        source_identity=SourceIdentity(
+            platform="youtube",
+            stable_id="dQw4w9WgXcQ",
+            canonical_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        ),
+    )
+
+    assert result is None
+
+
+def test_missing_official_transcript_returns_safe_not_found(tmp_path: Path) -> None:
+    result = run_insight_generation_step(
+        transcript_txt_path=tmp_path / "task" / "transcript" / "transcript.txt",
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        client=FakeInsightClient(),
+        output_language="en-US",
+    ).to_dict()
+
+    assert result["status"] == "partial_completed"
+    assert result["text"] == ""
+    assert result["error"] == {
+        "code": "TRANSCRIPT_TEXT_NOT_FOUND",
+        "message": "Official transcript text could not be read.",
+        "stage": "insights_generating",
+    }
+
+
+def test_source_identity_failure_creates_no_task(tmp_path: Path) -> None:
+    def reject_source(_url: str) -> SourceRequest:
+        raise SourceIdentityError("must not be echoed")
+
+    result = run_worker_pipeline(
+        request=ProcessRequest(
+            url="https://example.test/review-secret",
+            asr_model="iic/SenseVoiceSmall",
+        ),
+        project_root=tmp_path,
+        command_runner=lambda _command: pytest.fail("media must not run"),
+        transcriber=None,
+        allow_real_asr=False,
+        environ={},
+        source_request_resolver=reject_source,
+    ).to_dict()
+
+    assert result == {
+        "status": "failed",
+        "task_id": None,
+        "task_dir": None,
+        "artifacts": {},
+        "text": "",
+        "summary": "",
+        "insights": [],
+        "transcript": None,
+        "error": {
+            "code": "SOURCE_IDENTITY_UNAVAILABLE",
+            "message": "Could not identify a supported stable video source.",
+            "stage": "video_extracting",
+        },
+    }
+    assert not (tmp_path / "outputs").exists()
+
+
+def test_task_storage_failure_returns_safe_error_without_task(tmp_path: Path) -> None:
+    blocked_output = tmp_path / "blocked-output"
+    blocked_output.write_text("ordinary file", encoding="utf-8")
+    identity = SourceIdentity(
+        platform="douyin",
+        stable_id="7524373044106677544",
+        canonical_url="https://www.douyin.com/video/7524373044106677544",
+    )
+    source_request = SourceRequest(identity.canonical_url, identity)
+
+    result = run_worker_pipeline(
+        request=ProcessRequest(
+            url=identity.canonical_url,
+            asr_model="iic/SenseVoiceSmall",
+        ),
+        project_root=tmp_path,
+        command_runner=lambda _command: pytest.fail("media must not run"),
+        transcriber=None,
+        allow_real_asr=False,
+        environ={OUTPUT_DIR_ENV: blocked_output.as_posix()},
+        source_request_resolver=lambda _url: source_request,
+    ).to_dict()
+
+    assert result["task_id"] is None
+    assert result["task_dir"] is None
+    assert result["error"] == {
+        "code": "TASK_STORAGE_UNAVAILABLE",
+        "message": "Task storage could not be prepared.",
+        "stage": "video_extracting",
+    }
+
+
+def test_media_failure_finalizes_the_created_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = SourceIdentity(
+        platform="douyin",
+        stable_id="7524373044106677544",
+        canonical_url="https://www.douyin.com/video/7524373044106677544",
+    )
+    source_request = SourceRequest(identity.canonical_url, identity)
+
+    def fail_media(*_args: object, **_kwargs: object) -> object:
+        raise MediaPreparationError("VIDEO_DOWNLOAD_FAILED", "safe media failure")
+
+    monkeypatch.setattr(MediaPreparationFacade, "prepare", fail_media)
+    result = run_worker_pipeline(
+        request=ProcessRequest(
+            url=identity.canonical_url,
+            asr_model="iic/SenseVoiceSmall",
+        ),
+        project_root=tmp_path,
+        command_runner=lambda _command: pytest.fail("runner must not be called"),
+        transcriber=None,
+        allow_real_asr=False,
+        environ={},
+        source_request_resolver=lambda _url: source_request,
+    ).to_dict()
+
+    assert result["status"] == "failed"
+    assert result["task_id"] is not None
+    assert result["error"] == {
+        "code": "VIDEO_DOWNLOAD_FAILED",
+        "message": "safe media failure",
+        "stage": "video_extracting",
+    }
+    task_dir = Path(str(result["task_dir"]))
+    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "failed"
+    assert manifest["error"] == result["error"]
 
 
 @pytest.mark.parametrize("subtitle_language", ["unknown", "secret"])

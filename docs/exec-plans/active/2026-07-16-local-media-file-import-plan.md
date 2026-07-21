@@ -68,6 +68,13 @@ remain governed by the existing separate summary/inspiration confirmation.
   outside the sandbox because its existing Windows blocked-stdin cancellation test requires real
   `taskkill`; the sandbox failure was reproduced and isolated as permission-only. Existing
   `audioop` deprecation and Vite chunk-size warnings remain non-blocking and unrelated.
+- [x] 2026-07-21: Split the existing Python worker pipeline by responsibility before adding the
+  local source consumer. `pipeline.py` is now a 39-line stable direct-reexport root; private
+  `pipeline_runtime/shared.py`, `transcript.py`, `insights.py`, and `orchestration.py` own their
+  closed responsibilities. Validation: characterization 56/56, ownership 11/11, Worker 531/531,
+  App 549/549, normal Windows Rust 175/175, scripts 23/23, Ruff/lint/build/rustfmt/Tauri no-bundle,
+  and recursive 61/61 packaged-worker equality passed. No local-media checkbox or runtime behavior
+  was implemented by this prerequisite.
 - [ ] 2026-07-16: Implement Rust selection, strict IPC, worker local-media pipeline, source-aware
   task persistence/History, and UI composition. Validation: focused suites and packaged-worker
   equality must pass.
@@ -80,9 +87,11 @@ remain governed by the existing separate summary/inspiration confirmation.
   through `processVideo`, while `app/src/workerClient.ts` owns the desktop worker client. Local input
   therefore requires an explicit source union and command, not only a file-picker visual control.
 - Evidence: `app/src-tauri/src/video_processing.rs` is the current ProcessSupervisor-backed desktop
-  bridge, while `worker/frameq_worker/pipeline.py`, `media.py`, and `task_store.py` own preparation and
-  artifacts. The local path must cross this existing Rust/Python boundary once without being added to
-  argv or frontend state.
+  bridge. Python's stable `pipeline.py` now only re-exports private owners:
+  `pipeline_runtime/orchestration.py` owns URL task/media/finalization composition and
+  `transcript.py` owns subtitle/ASR, while `media.py`, `media_preparation.py`, and `task_store.py`
+  retain their lower boundaries. The local path must cross this existing Rust/Python boundary once
+  without being added to argv or frontend state.
 - Evidence: `app/src-tauri/src/task_manifest.rs` and `app/src-tauri/src/history.rs` enforce the current
   History vNext manifest predicate. Local tasks cannot be made visible safely by leaving URL fields
   partially populated; the predicate and returned source model must become closed unions.
@@ -105,15 +114,17 @@ remain governed by the existing separate summary/inspiration confirmation.
 - Evidence: History, cache reuse, transcript read/edit, and deletion previously reconstructed the
   manifest privacy/path sequence independently. The implemented task-access facade now makes the
   future URL/local source predicate a single Rust ownership point while retaining per-task scan
-  isolation. Python pipeline/retry persistence now shares one lifecycle facade as well.
+  isolation. Python private orchestration and retry application flows now share one lifecycle
+  facade as well.
 - Evidence: `video_processing.rs` also previously selected `WorkerInvocation`, `WorkerOperation`,
   `ProgressRoute`, retry-only LLM material, and `WorkerLane` independently. The implemented typed
   worker facade now owns that tuple. A `ProcessLocalMedia` job is intentionally absent until contract
   v4 and its Python CLI consumer exist, so the variant and all policies can land atomically.
 - Evidence: `run_worker_pipeline` previously reconstructed URL download, output selection, ffprobe,
   task video copying, audio extraction, and subtitle discovery. The implemented media-preparation
-  facade now returns task-owned media plus a parsed subtitle candidate while leaving task finalize,
-  transcript writing, ASR, and AI in the pipeline.
+  facade returns task-owned media plus a parsed subtitle candidate. The subsequent pipeline split
+  now leaves process finalization in `pipeline_runtime/orchestration.py`, transcript writing/ASR in
+  `transcript.py`, and independently confirmed AI generation in `insights.py`.
 - Evidence: the current facade formerly copied and decoded directly into official task paths, while
   task JSON used direct `write_text` and artifact discovery trusted existence. The implemented
   shared atomic-file boundary now stages, syncs, validates media, replaces per file, removes handled
@@ -192,7 +203,7 @@ remain governed by the existing separate summary/inspiration confirmation.
   tuples, while avoiding an untestable dead variant. Date/Author: 2026-07-19, User + Codex.
 - Decision: Add local source variants to `MediaPreparationFacade` only with contract v4 and the real
   worker consumer; contract v3 exposes only `UrlMediaSource`. Return a parsed subtitle candidate for
-  URL sources so pipeline code does not rescan cache files. Rationale: the facade remains exhaustive
+  URL sources so the orchestration owner does not rescan cache files. Rationale: the facade remains exhaustive
   and useful now without shipping dead local-path handling or leaking media subsystem details.
   Date/Author: 2026-07-19, User + Codex.
 - Decision: Install official worker media and task JSON through unique same-directory staging files,
@@ -252,8 +263,10 @@ directory, even though the complete path is never stored.
   `task_manifest/source_identity.rs`, `schema.rs`, `storage.rs`, and `access.rs`, plus
   `app/src-tauri/src/history.rs` and `history_deletion.rs`. Application callers continue importing
   only the stable root.
-- Canonical worker: `worker/frameq_worker/desktop_contract.py`,
-  `worker/frameq_worker/pipeline.py`, `worker/frameq_worker/media_preparation.py`,
+- Canonical worker: `worker/frameq_worker/desktop_contract.py`, the stable
+  `worker/frameq_worker/pipeline.py` root, private `worker/frameq_worker/pipeline_runtime/`
+  (`orchestration.py` for process composition, `transcript.py` for ASR, `shared.py` for common
+  policy, and isolated `insights.py` for AI), `worker/frameq_worker/media_preparation.py`,
   `worker/frameq_worker/atomic_files.py`, `worker/frameq_worker/media.py`,
   `worker/frameq_worker/task_store.py`, and worker CLI/service entry points discovered during
   implementation.
@@ -270,7 +283,8 @@ directory, even though the complete path is never stored.
    extending the source union.
    - Keep raw Rust manifest/path helpers private and migrate History, cache, transcript, and deletion
      to `SupportedTask`, with transcript mutation through `TaskEditSession`.
-   - Make Python pipeline and retry use `TaskStoreFacade` for task lifecycle persistence.
+   - Keep private Python orchestration and retry application flows on `TaskStoreFacade` for task
+     lifecycle persistence; do not make the stable pipeline root or AI owner a persistence owner.
    - Route current video/source/AI jobs through `WorkerJob + VideoWorkerFacade`; keep both lanes
      private and expose only semantic execution/cancel/activity methods.
    - Route current URL download, validation/copy, audio preparation, and subtitle discovery through

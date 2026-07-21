@@ -148,6 +148,29 @@
   outside this facade. Existing URL progress, artifacts, results, task schema, and contract v3 are
   unchanged.
 
+## 2026-07-21 Worker pipeline private-owner boundary
+
+- `worker/frameq_worker/pipeline.py` is now a 39-line stable compatibility surface containing only
+  explicit direct re-exports. Production callers continue importing pipeline-owned symbols only
+  from `frameq_worker.pipeline`; the root owns no processing behavior and preserves the exact
+  private function/class objects rather than wrappers or duplicate definitions.
+- The empty-initializer private `pipeline_runtime/` package separates four owners: `shared.py` owns
+  path/progress/failure policy, `transcript.py` owns subtitle and ASR stages, `insights.py` owns
+  official-transcript validation/read plus target-scoped AI generation, and `orchestration.py` owns
+  URL source/task/media/transcript/finalization composition.
+- Dependency direction is closed: transcript may depend on shared policy; URL orchestration may
+  depend on shared and transcript; process orchestration cannot import AI/InsightFlow/output-language
+  policy; and AI generation cannot import ASR, media preparation, source resolution, or task
+  persistence. `cli.py` and `worker_service.py` retain their existing stable-root imports.
+- `TaskStoreFacade` remains the task lifecycle/persistence boundary and `MediaPreparationFacade`
+  remains the media subsystem boundary. The split changes no request/result contract, task or
+  manifest schema, progress/error semantics, artifact, AI call, CLI mode, or local-media behavior.
+- Ownership/identity AST gates and behavior characterization enforce this boundary. The canonical
+  worker remains authoritative, and the ignored Tauri worker resource is refreshed through the
+  supported generator and checked recursively for identical relative files and bytes.
+- The durable decision is recorded in
+  `docs/design-docs/2026-07-21-worker-pipeline-module-split.md`.
+
 ## 2026-07-18 Task access facade boundary
 
 - Rust raw task-manifest parsing, privacy predicates, relative-path resolution, canonical artifact
@@ -596,7 +619,7 @@ graph LR
   end
 
   subgraph "worker/frameq_worker/"
-    W1["cli.py<br/>pipeline.py<br/>models.py"]
+    W1["cli.py · pipeline.py<br/>pipeline_runtime/<br/>models.py"]
     W2["media.py<br/>asr.py · asr_runtime/<br/>model_download.py"]
     W3["insightflow/<br/>splitter · prompt<br/>generator · json parser"]
     W4["llm.py<br/>config.py"]
@@ -660,6 +683,8 @@ graph LR
 - `docs/design-docs/2026-07-18-task-access-facade.md`：Rust/Python 任务访问门面、安全不变量和迁移边界。
 - `docs/design-docs/2026-07-21-task-manifest-module-split.md`：Rust task-manifest 私有 owner
   拆分、稳定 root surface 与 source/dependency boundary。
+- `docs/design-docs/2026-07-21-worker-pipeline-module-split.md`：Python worker pipeline 稳定
+  root、四个私有 owner 与 process/AI dependency boundary。
 - `docs/product-specs/index.md`：产品规格入口；根目录历史方案已迁移进 `docs/` 并删除。
 - `docs/product-specs/2026-06-16-douyin-video-transcription-client.md`：首个用户可见 MVP 规格。
 - `docs/exec-plans/completed/2026-06-18-installer-distribution-runtime-plan.md`：已完成的轻量安装包、首启模型下载与 clean-machine 验证计划；首个 MVP 计划已归档到 `docs/exec-plans/completed/2026-06-16-mvp-desktop-client-plan.md`。
@@ -678,7 +703,9 @@ graph LR
 - `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
 - `worker/frameq_worker/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
 - `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client；桌面灵感生成通过 server-managed checkout env 创建 client，默认使用 `temperature=0.7`。
-- `worker/frameq_worker/pipeline.py`：worker 分阶段 pipeline 与 `ProcessResult` 映射。
+- `worker/frameq_worker/pipeline.py`：稳定 pipeline 导入入口；`pipeline_runtime/shared.py`、
+  `transcript.py`、`insights.py`、`orchestration.py` 分别拥有共享 policy、字幕/ASR、AI target
+  和 URL task orchestration。
 - `worker/frameq_worker/insightflow/`：内置 InsightFlow 灵感与总结生成模块，运行期不依赖外部参考仓库；对完整 ASR 文字稿优先生成 Mermaid mindmap 和要点总结，同时保留 topic planner 生成启发问题，最终去重并限制总数。
 
 ## 架构不变量
@@ -687,7 +714,7 @@ graph LR
 - Tauri 应用模块只能通过 `WorkerLane::run`/`cancel`/activity query 管理 FrameQ worker；不得直接 spawn、wait、finish、发送 OS 信号或转发未验证 progress。
 - UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
-- `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和 pipeline 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary` 或 `insights` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用。
+- `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和私有 process orchestration 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary` 或 `insights` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用。
 - `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
 - 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `cache/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。

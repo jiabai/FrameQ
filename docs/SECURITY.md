@@ -378,7 +378,8 @@
 - Artifact access uses the closed `TaskArtifact` enum. Transcript mutation uses `TaskEditSession`;
   deletion and playback may receive only the validated task-local path capability required for
   their filesystem operation. No facade method may turn task access into an arbitrary path browser.
-- Python pipeline and retry persistence must use `TaskStoreFacade`. `OpenedTask` may expose a
+- Python URL orchestration and retry application-flow persistence must use `TaskStoreFacade`.
+  `OpenedTask` may expose a
   validated `TaskContext` and normalized transcript metadata, but not the raw manifest payload.
 - Adding the future local-file source variant must change the central support predicate and its
   contract tests. It must not reintroduce caller-specific URL/local manifest acceptance rules.
@@ -397,6 +398,28 @@
 - A local audio result must expose no video path; local video/audio results expose no subtitle
   candidate. Partial media remains unregistered until the task persistence boundary validates the
   final artifact.
+
+## 2026-07-21 Worker Pipeline Private-Owner Enforcement
+
+- `frameq_worker.pipeline` is the sole production import surface for pipeline-owned symbols. Modules
+  outside the private `pipeline_runtime/` tree must not import its children directly, and private
+  children must not import the stable root, CLI, or worker service.
+- URL process orchestration owns no InsightFlow, LLM, output-language, or retry dependency. The AI
+  owner owns no ASR, media, source-resolution, or task-persistence dependency; it must validate the
+  exact official `transcript.txt` path and all link/junction constraints before reading or invoking
+  a prompt.
+- Transcript code is the only private owner of ASR behavior. Shared policy may depend only on the
+  stable `Transcriber` contract, while orchestration enters media and persistence only through
+  `MediaPreparationFacade`, `SourceRequest`, and `TaskStoreFacade`.
+- The move creates no new input, output, network, persistence, prompt, progress, diagnostic, or log
+  surface. Existing rules forbidding source URLs, local paths, transcripts, prompts, generated
+  content, credentials, and sensitive headers from diagnostics remain unchanged.
+- The canonical worker is authoritative. Packaged Tauri resources must be generated through the
+  supported refresh path and compared recursively by relative file set and bytes; private runtime
+  files must never be maintained through hand-edited mirror copies.
+- Future local-media work must extend the approved orchestration/transcript owners deliberately and
+  preserve process-versus-AI isolation; it must not bypass these boundaries through a new private
+  import path.
 
 ## 2026-07-05 Task Artifact Path Boundary
 

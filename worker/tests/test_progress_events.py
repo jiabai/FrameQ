@@ -587,7 +587,7 @@ def test_every_python_producer_code_is_declared_at_its_actual_source() -> None:
     )
     source_expectations = {
         "media_preparation.py": current_producer_codes[:5],
-        "pipeline.py": current_producer_codes[5:9],
+        "pipeline_runtime/transcript.py": current_producer_codes[5:9],
         "douyin_fallback.py": [code for code in WORKER_SPECS if code.startswith("douyin.")],
         "xiaohongshu_fallback.py": [
             code for code in WORKER_SPECS if code.startswith("xiaohongshu.")

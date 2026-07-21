@@ -72,6 +72,24 @@
 
 ## Refactoring and Technical Debt
 
+- [x] Split the Python worker pipeline by responsibility (2026-07-21) — ✅ Acceptance: keep
+  `frameq_worker.pipeline` as the sole stable production import surface and direct-reexport the
+  exact current objects; move shared path/progress/failure policy, subtitle/ASR stages,
+  official-transcript AI generation, and URL task/media/finalization orchestration into private
+  `pipeline_runtime/shared.py`, `transcript.py`, `insights.py`, and `orchestration.py` owners behind
+  an empty initializer. Preserve signatures/defaults, eager compatibility imports, errors,
+  artifacts, progress order/args, task finalization, official-transcript checks, target/language/
+  preference behavior, Credits calls, CLI/worker-service callers, contracts, schemas, and packaged
+  worker behavior. Add behavior characterization plus exact tree/identity/dependency RED/GREEN
+  gates first; add no facade class, generic stage framework, local-media runtime, CLI cleanup,
+  dependency, product behavior, or product-spec change. Design:
+  `docs/design-docs/2026-07-21-worker-pipeline-module-split.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-21-worker-pipeline-module-split-plan.md`. Accepted by the user
+  on 2026-07-22: stable root 39 lines; private owners 68/250/152/159 lines; characterization 56/56,
+  ownership 11/11, Worker 531/531, App 549/549, normal-Windows Rust 175/175, scripts 23/23,
+  recursive worker mirror 61/61, Ruff, lint/build, rustfmt, Tauri no-bundle, governance, scope, and
+  diff gates passed.
+
 - [x] Split the Rust task-manifest trust module by responsibility (2026-07-21) — ✅ Acceptance:
   keep `task_manifest.rs` as the sole crate-visible import surface; move canonical SourceIdentity
   policy, pure manifest/error/artifact/Insight schema policy, configured storage/path effects, and

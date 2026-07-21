@@ -51,8 +51,14 @@ def _probe_payload(*, include_video: bool, duration: str = "12.3") -> str:
 
 
 def test_pipeline_enters_media_subsystem_only_through_facade() -> None:
-    pipeline_path = Path(__file__).resolve().parents[1] / "frameq_worker" / "pipeline.py"
-    tree = ast.parse(pipeline_path.read_text(encoding="utf-8"))
+    orchestration_path = (
+        Path(__file__).resolve().parents[1]
+        / "frameq_worker"
+        / "pipeline_runtime"
+        / "orchestration.py"
+    )
+    source = orchestration_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
     imported_names = {
         alias.name
         for node in ast.walk(tree)
@@ -65,7 +71,13 @@ def test_pipeline_enters_media_subsystem_only_through_facade() -> None:
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
 
-    assert "MediaPreparationFacade" in pipeline_path.read_text(encoding="utf-8")
+    public_pipeline = importlib.import_module("frameq_worker.pipeline")
+    private_orchestration = importlib.import_module(
+        "frameq_worker.pipeline_runtime.orchestration"
+    )
+
+    assert public_pipeline.run_worker_pipeline is private_orchestration.run_worker_pipeline
+    assert "MediaPreparationFacade" in source
     assert imported_names.isdisjoint(
         {"download_video", "extract_audio", "probe_media_file"}
     )
@@ -77,7 +89,7 @@ def test_pipeline_enters_media_subsystem_only_through_facade() -> None:
             "probe_media_file",
         }
     )
-    assert "find_subtitle_transcript" not in pipeline_path.read_text(encoding="utf-8")
+    assert "find_subtitle_transcript" not in source
 
 
 def test_media_facade_excludes_asr_ai_and_task_persistence() -> None:
