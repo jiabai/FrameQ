@@ -210,6 +210,7 @@ class ProcessResult:
     insights: list[Insight] = field(default_factory=list)
     transcript: TranscriptMetadata | None = None
     error: WorkerError | None = None
+    artifact_payloads: dict[str, bytes | None] = field(default_factory=dict, repr=False)
 
     def to_dict(self) -> dict[str, object]:
         return {

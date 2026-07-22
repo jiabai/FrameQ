@@ -26,6 +26,8 @@ export const WORKER_ERROR_MESSAGE_CODES = {
   SOURCE_IDENTITY_UNAVAILABLE: "source.identityUnavailable",
   TASK_STORAGE_UNAVAILABLE: "task.storageUnavailable",
   TASK_MANIFEST_NOT_FOUND: "task.manifestNotFound",
+  TASK_ARTIFACT_COMMIT_FAILED: "task.artifactCommitFailed",
+  TASK_ARTIFACT_RECOVERY_FAILED: "task.artifactRecoveryFailed",
   TRANSCRIPT_TEXT_PATH_INVALID: "transcript.pathInvalid",
   TRANSCRIPT_TEXT_NOT_FOUND: "transcript.notFound",
   TRANSCRIPT_MARKDOWN_NOT_FOUND: "transcript.notFound",

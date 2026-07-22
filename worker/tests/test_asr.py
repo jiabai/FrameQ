@@ -1,3 +1,4 @@
+import importlib
 import json
 import os
 import wave
@@ -228,6 +229,80 @@ def test_write_transcript_files_removes_stale_segments_sidecar_when_segments_are
 
     assert artifacts.segments_path is None
     assert not stale_segments_path.exists()
+
+
+def test_transcript_replace_failure_preserves_complete_previous_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    output_dir = tmp_path / "task" / "transcript"
+    output_dir.mkdir(parents=True)
+    txt_path = output_dir / "transcript.txt"
+    md_path = output_dir / "transcript.md"
+    segments_path = output_dir / "segments.json"
+    previous = {
+        txt_path: b"previous transcript\n",
+        md_path: b"# Previous\n",
+        segments_path: b'{"segments":[]}\n',
+    }
+    for path, content in previous.items():
+        path.write_bytes(content)
+
+    original_replace = atomic_files.os.replace
+    failed = False
+
+    def fail_second_replace(source: Path, destination: Path) -> None:
+        nonlocal failed
+        if destination == md_path and not failed:
+            failed = True
+            raise OSError("D:/private/customer/transcript.md is locked")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(atomic_files.os, "replace", fail_second_replace)
+
+    with pytest.raises(atomic_files.AtomicFileCommitError):
+        write_transcript_files(
+            text="next transcript",
+            output_dir=output_dir,
+            output_stem="",
+            model="iic/SenseVoiceSmall",
+            segments=(
+                TranscriptSegment(
+                    id="seg-0001",
+                    start_ms=0,
+                    end_ms=1000,
+                    text="next transcript",
+                ),
+            ),
+        )
+
+    assert {path: path.read_bytes() for path in previous} == previous
+
+
+def test_transcript_failed_first_commit_leaves_no_authoritative_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    output_dir = tmp_path / "task" / "transcript"
+    monkeypatch.setattr(
+        atomic_files.os,
+        "replace",
+        lambda _source, _destination: (_ for _ in ()).throw(OSError("full disk")),
+    )
+
+    with pytest.raises(atomic_files.AtomicFileCommitError):
+        write_transcript_files(
+            text="next transcript",
+            output_dir=output_dir,
+            output_stem="",
+            model="iic/SenseVoiceSmall",
+        )
+
+    assert not (output_dir / "transcript.txt").exists()
+    assert not (output_dir / "transcript.md").exists()
+    assert not (output_dir / "segments.json").exists()
 
 
 def test_qwen_asr_transcriber_uses_injected_model_factory() -> None:

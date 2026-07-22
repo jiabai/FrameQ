@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from frameq_worker.asr import DEFAULT_ASR_MODEL, Transcriber, build_asr_transcriber
+from frameq_worker.atomic_files import AtomicFileCommitError
 from frameq_worker.config import load_project_env
 from frameq_worker.desktop_contract import (
     MODEL_DIR_ENV,
@@ -46,6 +47,10 @@ from frameq_worker.source_resolution import (
     resolve_source_request,
 )
 from frameq_worker.task_store import TaskStoreFacade
+from frameq_worker.task_transaction import (
+    TaskArtifactCommitError,
+    TaskArtifactRecoveryError,
+)
 
 InsightClientFactory = Callable[[dict[str, str]], InsightClient | None]
 MODEL_DOWNLOAD_FAILED_MESSAGE = "ASR model download failed."
@@ -87,19 +92,32 @@ def run_worker_once(
 
     runtime_env = load_project_env(root, environ)
 
-    result = run_worker_pipeline(
-        request=request,
-        project_root=root,
-        command_runner=command_runner,
-        transcriber=transcriber,
-        allow_real_asr=should_allow_real_asr(runtime_env)
-        if allow_real_asr is None
-        else allow_real_asr,
-        environ=runtime_env,
-        transcriber_factory=transcriber_factory or build_asr_transcriber,
-        progress_callback=progress_callback,
-        source_request_resolver=source_request_resolver,
-    )
+    try:
+        result = run_worker_pipeline(
+            request=request,
+            project_root=root,
+            command_runner=command_runner,
+            transcriber=transcriber,
+            allow_real_asr=should_allow_real_asr(runtime_env)
+            if allow_real_asr is None
+            else allow_real_asr,
+            environ=runtime_env,
+            transcriber_factory=transcriber_factory or build_asr_transcriber,
+            progress_callback=progress_callback,
+            source_request_resolver=source_request_resolver,
+        )
+    except TaskArtifactRecoveryError:
+        result = failed_result(
+            code="TASK_ARTIFACT_RECOVERY_FAILED",
+            message="Task artifacts could not be recovered safely.",
+            stage=JobStage.FAILED,
+        )
+    except (AtomicFileCommitError, TaskArtifactCommitError):
+        result = failed_result(
+            code="TASK_ARTIFACT_COMMIT_FAILED",
+            message="Task artifacts could not be stored safely.",
+            stage=JobStage.FAILED,
+        )
     return result.to_dict()
 
 
@@ -172,6 +190,12 @@ def retry_insights_once(
     task_store = TaskStoreFacade(output_root=output_dir, cache_root=cache_dir)
     try:
         opened_task = task_store.open(request.task_id)
+    except TaskArtifactRecoveryError:
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_RECOVERY_FAILED",
+            message="Task artifacts could not be recovered safely.",
+            text="",
+        ).to_dict()
     except (OSError, ValueError, json.JSONDecodeError):
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,
@@ -183,10 +207,25 @@ def retry_insights_once(
         ).to_dict()
     task_context = opened_task.context
     if request.target == "insights" and request.preference_snapshot is not None:
-        task_store.save_preference_snapshot(
-            task_context,
-            request.preference_snapshot,
-        )
+        try:
+            task_store.save_preference_snapshot(
+                task_context,
+                request.preference_snapshot,
+            )
+        except TaskArtifactRecoveryError:
+            return failed_insight_retry_result(
+                code="TASK_ARTIFACT_RECOVERY_FAILED",
+                message="Task artifacts could not be recovered safely.",
+                text="",
+                transcript=opened_task.transcript,
+            ).to_dict()
+        except (AtomicFileCommitError, TaskArtifactCommitError):
+            return failed_insight_retry_result(
+                code="TASK_ARTIFACT_COMMIT_FAILED",
+                message="Task artifacts could not be stored safely.",
+                text="",
+                transcript=opened_task.transcript,
+            ).to_dict()
 
     insight_result = run_insight_generation_step(
         transcript_txt_path=task_context.paths.transcript_txt_path,
@@ -197,12 +236,26 @@ def retry_insights_once(
         preference_snapshot=request.preference_snapshot,
         target=request.target,
         output_language=request.output_language,
+        persist=False,
     )
 
-    return task_store.finalize(
-        task_context,
-        merge_existing_ai_artifacts(task_context.paths, insight_result),
-    ).to_dict()
+    merged_result = merge_existing_ai_artifacts(task_context.paths, insight_result)
+    try:
+        return task_store.finalize(task_context, merged_result).to_dict()
+    except TaskArtifactRecoveryError:
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_RECOVERY_FAILED",
+            message="Task artifacts could not be recovered safely.",
+            text=insight_result.text,
+            transcript=opened_task.transcript,
+        ).to_dict()
+    except (AtomicFileCommitError, TaskArtifactCommitError):
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_COMMIT_FAILED",
+            message="Task artifacts could not be stored safely.",
+            text=insight_result.text,
+            transcript=opened_task.transcript,
+        ).to_dict()
 
 
 def merge_existing_ai_artifacts(paths: object, result: ProcessResult) -> ProcessResult:
@@ -216,6 +269,7 @@ def merge_existing_ai_artifacts(paths: object, result: ProcessResult) -> Process
         insights=insights,
         transcript=result.transcript,
         error=result.error,
+        artifact_payloads=result.artifact_payloads,
     )
 
 

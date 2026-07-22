@@ -29,6 +29,7 @@ def run_insight_generation_step(
     transcript: TranscriptMetadata | None = None,
     preference_snapshot: PreferenceSnapshot | None = None,
     target: InsightGenerationTarget = "all",
+    persist: bool = True,
 ) -> ProcessResult:
     is_junction = getattr(os.path, "isjunction", lambda _path: False)
     expected_transcript_path = output_dir.parent / "transcript" / "transcript.txt"
@@ -90,6 +91,7 @@ def run_insight_generation_step(
                 output_stem=output_stem,
                 client=client,
                 output_language=output_language,
+                persist=persist,
             )
         except InsightGenerationError as exc:
             generation_error = exc
@@ -103,6 +105,7 @@ def run_insight_generation_step(
                 client=client,
                 output_language=output_language,
                 preference_snapshot=preference_snapshot,
+                persist=persist,
             )
         except InsightGenerationError as exc:
             if generation_error is None:
@@ -142,6 +145,32 @@ def run_insight_generation_step(
         summary=summary_artifacts.summary if summary_artifacts else "",
         insights=insight_artifacts.insights if insight_artifacts else [],
         transcript=transcript,
+        artifact_payloads={
+            **(
+                {
+                    summary_artifacts.summary_path.relative_to(
+                        output_dir.parent
+                    ).as_posix(): summary_artifacts.summary_bytes,
+                    summary_artifacts.mindmap_path.relative_to(
+                        output_dir.parent
+                    ).as_posix(): summary_artifacts.mindmap_bytes,
+                }
+                if summary_artifacts
+                else {}
+            ),
+            **(
+                {
+                    insight_artifacts.json_path.relative_to(
+                        output_dir.parent
+                    ).as_posix(): insight_artifacts.json_bytes,
+                    insight_artifacts.md_path.relative_to(
+                        output_dir.parent
+                    ).as_posix(): insight_artifacts.md_bytes,
+                }
+                if insight_artifacts
+                else {}
+            ),
+        },
         error=WorkerError(
             code=generation_error.code,
             message=str(generation_error),

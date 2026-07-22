@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from frameq_worker.atomic_files import platform_text_bytes
+from frameq_worker.insightflow.artifact_storage import commit_insight_payloads
 from frameq_worker.insightflow.prompt import build_question_prompt, build_topic_plan_prompt
 from frameq_worker.insightflow.splitter import MarkdownSplitter
 from frameq_worker.insightflow.utils import extract_json_from_llm_output
@@ -38,6 +40,8 @@ class InsightArtifacts:
     insights: list[Insight]
     json_path: Path
     md_path: Path
+    json_bytes: bytes
+    md_bytes: bytes
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,7 @@ def generate_insights_from_markdown(
     output_language: OutputLanguage,
     splitter: MarkdownSplitter | None = None,
     preference_snapshot: PreferenceSnapshot | None = None,
+    persist: bool = True,
 ) -> InsightArtifacts:
     chunks = (splitter or MarkdownSplitter()).split(markdown)
     if not chunks:
@@ -89,6 +94,7 @@ def generate_insights_from_markdown(
         output_dir=output_dir,
         output_stem=output_stem,
         output_language=output_language,
+        persist=persist,
     )
 
 
@@ -245,6 +251,7 @@ def write_insight_files(
     output_dir: Path,
     output_stem: str,
     output_language: OutputLanguage,
+    persist: bool = True,
 ) -> InsightArtifacts:
     if not insights:
         raise InsightGenerationError(
@@ -252,7 +259,6 @@ def write_insight_files(
             "InsightFlow returned no insights.",
         )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
     if output_stem:
         json_path = output_dir / f"{output_stem}_insights.json"
         md_path = output_dir / f"{output_stem}_insights.md"
@@ -264,16 +270,29 @@ def write_insight_files(
         "schemaVersion": 1,
         "insights": [insight.to_dict() for insight in insights],
     }
-    json_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    json_bytes = platform_text_bytes(
+        json.dumps(payload, ensure_ascii=False, indent=2)
     )
-    md_path.write_text(
-        _format_insights_markdown(insights, output_language),
-        encoding="utf-8",
+    md_bytes = platform_text_bytes(
+        _format_insights_markdown(insights, output_language)
     )
+    if persist:
+        commit_insight_payloads(
+            output_dir,
+            output_stem,
+            {
+                json_path: json_bytes,
+                md_path: md_bytes,
+            },
+        )
 
-    return InsightArtifacts(insights=insights, json_path=json_path, md_path=md_path)
+    return InsightArtifacts(
+        insights=insights,
+        json_path=json_path,
+        md_path=md_path,
+        json_bytes=json_bytes,
+        md_bytes=md_bytes,
+    )
 
 
 def _normalize_insight_drafts(

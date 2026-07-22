@@ -4,8 +4,14 @@ import json
 from pathlib import Path
 
 import pytest
+from frameq_worker import task_transaction, worker_service
 from frameq_worker.asr import Transcript
-from frameq_worker.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
+from frameq_worker.atomic_files import AtomicFileCommitError
+from frameq_worker.desktop_contract import (
+    CACHE_DIR_ENV,
+    OUTPUT_DIR_ENV,
+    PROCESS_VIDEO_CONTRACT_VERSION,
+)
 from frameq_worker.media import CommandResult
 from frameq_worker.models import ProcessRequest
 from frameq_worker.pipeline import run_worker_pipeline
@@ -61,6 +67,51 @@ def valid_preference_snapshot() -> dict[str, object]:
             ],
         },
     }
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_code"),
+    [
+        (AtomicFileCommitError(), "TASK_ARTIFACT_COMMIT_FAILED"),
+        (
+            task_transaction.TaskArtifactRecoveryError(),
+            "TASK_ARTIFACT_RECOVERY_FAILED",
+        ),
+    ],
+)
+def test_worker_service_maps_persistence_failures_to_fixed_non_echoing_results(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: OSError,
+    expected_code: str,
+) -> None:
+    def fail_pipeline(**_kwargs: object) -> object:
+        raise failure from OSError("D:/private/customer/transcript.txt")
+
+    monkeypatch.setattr(worker_service, "run_worker_pipeline", fail_pipeline)
+
+    result = worker_service.run_worker_once(
+        json.dumps(
+            {
+                "contract_version": PROCESS_VIDEO_CONTRACT_VERSION,
+                "url": "https://www.douyin.com/video/7524373044106677544",
+                "asr_model": "iic/SenseVoiceSmall",
+            }
+        ),
+        project_root=tmp_path,
+    )
+
+    assert result["status"] == "failed"
+    assert result["error"] == {
+        "code": expected_code,
+        "message": (
+            "Task artifacts could not be recovered safely."
+            if expected_code == "TASK_ARTIFACT_RECOVERY_FAILED"
+            else "Task artifacts could not be stored safely."
+        ),
+        "stage": "failed",
+    }
+    assert "private" not in json.dumps(result)
 
 
 def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path) -> None:
@@ -735,3 +786,99 @@ def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> Non
     assert manifest["artifacts"] == result["artifacts"]
     assert manifest["insights_count"] == 1
     assert "output_language" not in manifest
+
+
+def test_retry_storage_failure_preserves_previous_target_and_does_not_repeat_llm(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "outputs"
+    cache_root = tmp_path / "cache"
+    task_id = "20260722-120000-youtube-dQw4w9WgXcQ"
+    task_dir = output_root / "tasks" / task_id
+    transcript_dir = task_dir / "transcript"
+    ai_dir = task_dir / "ai"
+    transcript_dir.mkdir(parents=True)
+    ai_dir.mkdir()
+    (transcript_dir / "transcript.txt").write_bytes(b"saved transcript\n")
+    (transcript_dir / "transcript.md").write_bytes(b"# Transcript\n\nsaved transcript\n")
+    summary_path = ai_dir / "summary.md"
+    mindmap_path = ai_dir / "mindmap.mmd"
+    summary_path.write_bytes(b"# Previous summary\n")
+    mindmap_path.write_bytes(b"mindmap\n  root((Previous))\n")
+    manifest_path = task_dir / "frameq-task.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "source_privacy_migration_version": 2,
+                "source_privacy_quarantined": False,
+                "task_id": task_id,
+                "created_at": "2026-07-22T12:00:00Z",
+                "source_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "source_identity": {
+                    "version": 1,
+                    "platform": "youtube",
+                    "stable_id": "dQw4w9WgXcQ",
+                    "effective_part": None,
+                    "canonical_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                },
+                "platform": "youtube",
+                "status": "completed",
+                "app_version": "app",
+                "worker_version": "app",
+                "model": "iic/SenseVoiceSmall",
+                "transcript": {"source": "asr", "language": None, "engine": "model"},
+                "artifacts": {
+                    "transcript_txt": "transcript/transcript.txt",
+                    "transcript_md": "transcript/transcript.md",
+                    "summary": "ai/summary.md",
+                    "mindmap": "ai/mindmap.mmd",
+                },
+                "error": None,
+                "text_preview": "saved transcript",
+                "insights_count": 0,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    previous_manifest = manifest_path.read_bytes()
+    original_install = task_transaction.install_staged_file
+    failed = False
+
+    def fail_mindmap_once(staging: Path, destination: Path) -> None:
+        nonlocal failed
+        if destination == mindmap_path and not failed:
+            failed = True
+            raise AtomicFileCommitError()
+        original_install(staging, destination)
+
+    monkeypatch.setattr(task_transaction, "install_staged_file", fail_mindmap_once)
+    client = FakeInsightClient()
+
+    result = retry_insights_once(
+        json.dumps(
+            {
+                "task_id": task_id,
+                "target": "summary",
+                "output_language": "en-US",
+            }
+        ),
+        project_root=tmp_path,
+        insight_client=client,
+        environ={
+            OUTPUT_DIR_ENV: output_root.as_posix(),
+            CACHE_DIR_ENV: cache_root.as_posix(),
+        },
+    )
+
+    assert result["status"] == "partial_completed"
+    assert result["error"]["code"] == "TASK_ARTIFACT_COMMIT_FAILED"
+    assert len(client.prompts) == 2
+    assert summary_path.read_bytes() == b"# Previous summary\n"
+    assert mindmap_path.read_bytes() == b"mindmap\n  root((Previous))\n"
+    assert manifest_path.read_bytes() == previous_manifest
+    assert not list(task_dir.rglob(".frameq-artifact-*"))

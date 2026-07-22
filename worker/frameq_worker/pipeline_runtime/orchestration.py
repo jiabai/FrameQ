@@ -130,6 +130,8 @@ def run_worker_pipeline(
         progress_callback=progress_callback,
     )
     if subtitle_result is not None:
+        if subtitle_result.status == JobStage.FAILED:
+            return pipeline_context.task_store.finalize(task_context, subtitle_result)
         return complete_transcript_stage(
             task_store=pipeline_context.task_store,
             task_context=task_context,

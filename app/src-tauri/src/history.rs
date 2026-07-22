@@ -234,6 +234,8 @@ mod tests {
     "transcript_txt": "transcript/transcript.txt",
     "summary": "ai/summary.md",
     "insights": "ai/insights.json",
+    "mindmap": "ai/.frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.rollback",
+    "preference_snapshot": "ai/.preference-snapshot.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.part.json",
     "debug_url": "https://example.test/?xsec_token=review-secret"
   }},
   "error": null,
@@ -284,6 +286,8 @@ mod tests {
         );
         assert_eq!(detail.insights[0].source_chunk_id, Some(7));
         assert_eq!(history[0].artifacts["summary"], "ai/summary.md");
+        assert!(!history[0].artifacts.contains_key("mindmap"));
+        assert!(!history[0].artifacts.contains_key("preference_snapshot"));
         assert!(!history[0].artifacts.contains_key("debug_url"));
         let serialized_list = serde_json::to_string(&history).expect("serialize history");
         assert!(!serialized_list.contains("review-secret"));

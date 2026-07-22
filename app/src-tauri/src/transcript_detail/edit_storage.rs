@@ -74,28 +74,27 @@ pub(super) fn save_transcript(
     edit.ensure_artifact_parent(&transcript_path)?;
     edit.ensure_artifact_parent(&md_path)?;
     edit.ensure_artifact_parent(&segments_path)?;
-    create_original_backups(&edit, &transcript_path, &md_path)?;
-
-    fs::write(&transcript_path, format!("{text}\n"))
-        .map_err(|_| "Failed to save transcript.".to_string())?;
     let existing_markdown = fs::read_to_string(&md_path).ok();
-    fs::write(
-        &md_path,
-        format_transcript_markdown(existing_markdown.as_deref(), text),
-    )
-    .map_err(|_| "Failed to save transcript markdown.".to_string())?;
+    let transcript_bytes = format!("{text}\n").into_bytes();
+    let markdown_bytes =
+        format_transcript_markdown(existing_markdown.as_deref(), text).into_bytes();
+    let mut mutations = Vec::new();
+    create_original_backups(&edit, &transcript_path, &md_path, &mut mutations)?;
 
-    if segments.is_empty() {
+    let segments_bytes = if segments.is_empty() {
         if edit.has_artifact(task_manifest::TaskArtifact::Segments) {
-            segments::write_segments_sidecar(&segments_path, &[])?;
+            Some(segments::encode_segments_sidecar(&[])?)
+        } else {
+            None
         }
     } else {
-        segments::write_segments_sidecar(&segments_path, segments)?;
+        let encoded = segments::encode_segments_sidecar(segments)?;
         edit.set_artifact(
             task_manifest::TaskArtifact::Segments,
             "transcript/segments.json",
         )?;
-    }
+        Some(encoded)
+    };
 
     edit.set_artifact(
         task_manifest::TaskArtifact::TranscriptTxt,
@@ -106,7 +105,26 @@ pub(super) fn save_transcript(
         "transcript/transcript.md",
     )?;
     edit.set_text_preview(text.chars().take(180).collect());
-    edit.save()?;
+    let manifest_bytes = edit.encoded_manifest()?;
+
+    mutations.push(task_manifest::TaskArtifactMutation::replace(
+        "transcript/transcript.txt",
+        transcript_bytes,
+    ));
+    mutations.push(task_manifest::TaskArtifactMutation::replace(
+        "transcript/transcript.md",
+        markdown_bytes,
+    ));
+    if let Some(segments_bytes) = segments_bytes {
+        mutations.push(task_manifest::TaskArtifactMutation::replace(
+            "transcript/segments.json",
+            segments_bytes,
+        ));
+    }
+    mutations.push(task_manifest::TaskArtifactMutation::manifest(
+        manifest_bytes,
+    ));
+    task_manifest::commit_task_artifacts(edit.task_dir(), mutations)?;
 
     Ok(SavedTranscript {
         text: text.to_string(),
@@ -119,13 +137,18 @@ fn create_original_backups(
     edit: &task_manifest::TaskEditSession,
     txt_path: &Path,
     md_path: &Path,
+    mutations: &mut Vec<task_manifest::TaskArtifactMutation>,
 ) -> Result<(), String> {
     let txt_backup_path = original_backup_path(txt_path);
     edit.ensure_artifact_parent(&txt_backup_path)?;
     reject_linked_artifact_target(&txt_backup_path)?;
     if !txt_backup_path.exists() {
-        fs::copy(txt_path, &txt_backup_path)
-            .map_err(|_| "Failed to create transcript backup.".to_string())?;
+        let bytes =
+            fs::read(txt_path).map_err(|_| "Failed to create transcript backup.".to_string())?;
+        mutations.push(task_manifest::TaskArtifactMutation::replace(
+            "transcript/original/transcript.txt",
+            bytes,
+        ));
     }
 
     if md_path.exists() {
@@ -133,8 +156,12 @@ fn create_original_backups(
         edit.ensure_artifact_parent(&md_backup_path)?;
         reject_linked_artifact_target(&md_backup_path)?;
         if !md_backup_path.exists() {
-            fs::copy(md_path, md_backup_path)
-                .map_err(|_| "Failed to create markdown backup.".to_string())?;
+            let bytes =
+                fs::read(md_path).map_err(|_| "Failed to create markdown backup.".to_string())?;
+            mutations.push(task_manifest::TaskArtifactMutation::replace(
+                "transcript/original/transcript.md",
+                bytes,
+            ));
         }
     }
     Ok(())

@@ -10,8 +10,19 @@ from frameq_worker.asr_runtime.types import (
     TranscriptArtifacts,
     TranscriptSegment,
 )
+from frameq_worker.atomic_files import (
+    AtomicFileCommitError,
+    atomic_remove_file,
+    atomic_write_bytes,
+    platform_text_bytes,
+)
 from frameq_worker.models import TranscriptMetadata
 from frameq_worker.source_identity import SourceIdentity, canonical_url_for_persistence
+from frameq_worker.task_transaction import (
+    TaskArtifactCommitError,
+    TaskArtifactRecoveryError,
+    commit_task_artifacts,
+)
 
 
 def transcribe_and_write(
@@ -60,7 +71,6 @@ def write_transcript_files(
         transcript_metadata.source_identity
     )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
     if output_stem:
         txt_path = output_dir / f"{output_stem}_transcript.txt"
         md_path = output_dir / f"{output_stem}_transcript.md"
@@ -70,36 +80,53 @@ def write_transcript_files(
         md_path = output_dir / "transcript.md"
         segments_path = output_dir / "segments.json"
 
-    txt_path.write_text(f"{cleaned_text}\n", encoding="utf-8")
-    md_path.write_text(
+    txt_bytes = platform_text_bytes(f"{cleaned_text}\n")
+    markdown_bytes = platform_text_bytes(
         _format_transcript_markdown(
             text=cleaned_text,
             metadata=transcript_metadata,
             canonical_source_url=canonical_source_url,
-        ),
-        encoding="utf-8",
+        )
     )
-
-    written_segments_path: Path | None = None
-    if segments:
-        segments_path.write_text(
+    segments_bytes = (
+        platform_text_bytes(
             json.dumps(
                 {"segments": [segment.to_json() for segment in segments]},
                 ensure_ascii=False,
                 indent=2,
             )
-            + "\n",
-            encoding="utf-8",
+            + "\n"
         )
-        written_segments_path = segments_path
+        if segments
+        else None
+    )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_stem == "" and output_dir.name == "transcript":
+        try:
+            commit_task_artifacts(
+                output_dir.parent,
+                {
+                    "transcript/transcript.txt": txt_bytes,
+                    "transcript/transcript.md": markdown_bytes,
+                    "transcript/segments.json": segments_bytes,
+                },
+            )
+        except (TaskArtifactCommitError, TaskArtifactRecoveryError):
+            raise AtomicFileCommitError() from None
     else:
-        segments_path.unlink(missing_ok=True)
+        atomic_write_bytes(txt_path, txt_bytes)
+        atomic_write_bytes(md_path, markdown_bytes)
+        if segments_bytes is None:
+            atomic_remove_file(segments_path)
+        else:
+            atomic_write_bytes(segments_path, segments_bytes)
 
     return TranscriptArtifacts(
         text=cleaned_text,
         txt_path=txt_path,
         md_path=md_path,
-        segments_path=written_segments_path,
+        segments_path=segments_path if segments_bytes is not None else None,
     )
 
 

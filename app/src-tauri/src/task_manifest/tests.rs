@@ -2,11 +2,219 @@ use super::{
     parse_insight_view,
     schema::{TaskManifest, TaskManifestError},
     storage::validate_task_artifact_path,
+    transaction::{
+        recover_task_artifacts, validate_journal_value_for_test, RecoveryOutcome, JOURNAL_FILE_NAME,
+    },
     SourceIdentity, SupportedTask, TaskArtifact,
 };
 use serde_json::json;
 use std::fs;
+use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[test]
+fn transaction_contract_fixtures_match_rust_parser() {
+    let contract: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../contracts/task-artifact-transaction-v1.json"
+    ))
+    .expect("parse transaction contract");
+    for fixture in contract["validFixtures"]
+        .as_array()
+        .expect("valid fixtures")
+    {
+        validate_journal_value_for_test(fixture.clone()).expect("valid journal fixture");
+    }
+    for fixture in contract["invalidFixtures"]
+        .as_array()
+        .expect("invalid fixtures")
+    {
+        assert!(validate_journal_value_for_test(fixture["journal"].clone()).is_err());
+    }
+}
+
+#[test]
+fn prepared_transaction_recovery_restores_previous_revision_idempotently() {
+    let task_dir = temp_dir("prepared-transaction-recovery");
+    let transcript_dir = task_dir.join("transcript");
+    fs::create_dir_all(&transcript_dir).expect("create transcript dir");
+    let transcript = transcript_dir.join("transcript.txt");
+    fs::write(&transcript, b"mixed new text\n").expect("write mixed transcript");
+    let transaction_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let rollback = transcript_dir.join(format!(".frameq-artifact-{transaction_id}-0.rollback"));
+    fs::write(&rollback, b"old text\n").expect("write rollback");
+    fs::write(
+        task_dir.join(JOURNAL_FILE_NAME),
+        serde_json::to_vec_pretty(&json!({
+            "schema_version": 1,
+            "transaction_id": transaction_id,
+            "state": "prepared",
+            "entries": [{
+                "destination": "transcript/transcript.txt",
+                "staging": format!("transcript/.frameq-artifact-{transaction_id}-0.staging"),
+                "rollback": format!("transcript/.frameq-artifact-{transaction_id}-0.rollback"),
+                "existed_before": true
+            }]
+        }))
+        .expect("encode journal"),
+    )
+    .expect("write journal");
+
+    assert_eq!(
+        recover_task_artifacts(&task_dir).expect("recover prepared transaction"),
+        RecoveryOutcome::RolledBack
+    );
+    assert_eq!(
+        fs::read(&transcript).expect("read restored transcript"),
+        b"old text\n"
+    );
+    assert!(!task_dir.join(JOURNAL_FILE_NAME).exists());
+    assert!(!rollback.exists());
+    assert_eq!(
+        recover_task_artifacts(&task_dir).expect("repeat recovery"),
+        RecoveryOutcome::None
+    );
+}
+
+#[test]
+fn committed_transaction_recovery_keeps_new_revision_and_cleans_material() {
+    let task_dir = temp_dir("committed-transaction-recovery");
+    let ai_dir = task_dir.join("ai");
+    fs::create_dir_all(&ai_dir).expect("create ai dir");
+    let summary = ai_dir.join("summary.md");
+    fs::write(&summary, b"# New summary\n").expect("write new summary");
+    let transaction_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let rollback = ai_dir.join(format!(".frameq-artifact-{transaction_id}-0.rollback"));
+    fs::write(&rollback, b"# Old summary\n").expect("write rollback");
+    fs::write(
+        task_dir.join(JOURNAL_FILE_NAME),
+        serde_json::to_vec_pretty(&json!({
+            "schema_version": 1,
+            "transaction_id": transaction_id,
+            "state": "committed",
+            "entries": [{
+                "destination": "ai/summary.md",
+                "staging": format!("ai/.frameq-artifact-{transaction_id}-0.staging"),
+                "rollback": format!("ai/.frameq-artifact-{transaction_id}-0.rollback"),
+                "existed_before": true
+            }]
+        }))
+        .expect("encode journal"),
+    )
+    .expect("write journal");
+
+    assert_eq!(
+        recover_task_artifacts(&task_dir).expect("recover committed transaction"),
+        RecoveryOutcome::CommittedCleaned
+    );
+    assert_eq!(
+        fs::read(&summary).expect("read summary"),
+        b"# New summary\n"
+    );
+    assert!(!rollback.exists());
+    assert!(!task_dir.join(JOURNAL_FILE_NAME).exists());
+}
+
+#[test]
+fn invalid_transaction_journal_fails_closed_without_echo_or_mutation() {
+    let task_dir = temp_dir("invalid-transaction-recovery");
+    fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+    let transcript = task_dir.join("transcript").join("transcript.txt");
+    fs::write(&transcript, b"mixed but untouched\n").expect("write transcript");
+    fs::write(
+        task_dir.join(JOURNAL_FILE_NAME),
+        br#"{"schema_version":1,"transaction_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","state":"prepared","entries":[{"destination":"../review-secret.txt","staging":null,"rollback":null,"existed_before":false}]}"#,
+    )
+    .expect("write invalid journal");
+
+    let error = recover_task_artifacts(&task_dir).expect_err("unsafe journal must fail");
+
+    assert_eq!(error, "Task artifacts could not be recovered safely.");
+    assert!(!error.contains("review-secret"));
+    assert_eq!(
+        fs::read(&transcript).expect("read untouched transcript"),
+        b"mixed but untouched\n"
+    );
+    assert!(task_dir.join(JOURNAL_FILE_NAME).exists());
+}
+
+#[test]
+fn rust_atomic_replace_failure_preserves_previous_destination() {
+    let directory = temp_dir("atomic-replace-failure");
+    let destination = directory.join("frameq-task.json");
+    fs::write(&destination, b"previous manifest\n").expect("write previous manifest");
+
+    let result = crate::atomic_files::atomic_write_with_replace_for_test(
+        &destination,
+        b"next manifest\n",
+        |_staging, _destination| Err(io::Error::other("replace failed")),
+    );
+
+    assert!(result.is_err());
+    assert_eq!(
+        fs::read(&destination).expect("read preserved manifest"),
+        b"previous manifest\n"
+    );
+    assert_eq!(
+        fs::read_dir(&directory)
+            .expect("read directory")
+            .filter_map(Result::ok)
+            .filter(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".frameq-task."))
+            .count(),
+        0
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn rust_atomic_windows_sharing_violation_preserves_previous_destination() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let directory = temp_dir("atomic-sharing-violation");
+    let destination = directory.join("frameq-task.json");
+    fs::write(&destination, b"previous manifest\n").expect("write previous manifest");
+    let locked = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&destination)
+        .expect("lock destination without delete sharing");
+
+    let result = crate::atomic_files::atomic_write(&destination, b"next manifest\n");
+
+    assert!(result.is_err());
+    drop(locked);
+    assert_eq!(
+        fs::read(&destination).expect("read preserved manifest"),
+        b"previous manifest\n"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn rust_atomic_unix_permission_failure_preserves_previous_destination() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = temp_dir("atomic-permission-failure");
+    let destination = directory.join("frameq-task.json");
+    fs::write(&destination, b"previous manifest\n").expect("write previous manifest");
+    let original_permissions = fs::metadata(&directory)
+        .expect("read directory metadata")
+        .permissions();
+    let mut restricted_permissions = original_permissions.clone();
+    restricted_permissions.set_mode(0o500);
+    fs::set_permissions(&directory, restricted_permissions).expect("restrict directory writes");
+
+    let result = crate::atomic_files::atomic_write(&destination, b"next manifest\n");
+
+    fs::set_permissions(&directory, original_permissions).expect("restore directory permissions");
+    assert!(result.is_err());
+    assert_eq!(
+        fs::read(&destination).expect("read preserved manifest"),
+        b"previous manifest\n"
+    );
+}
 
 #[test]
 fn task_error_code_and_message_never_echo_source_credentials() {
@@ -254,6 +462,46 @@ fn supported_task_opens_only_current_tasks_and_reads_validated_artifacts() {
 }
 
 #[test]
+fn supported_task_open_recovers_prepared_transaction_before_reading_artifacts() {
+    let output_root = temp_dir("supported-task-recovers-transaction");
+    let task_id = "20260722-120000-youtube-dQw4w9WgXcQ";
+    let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
+    let transcript = task_dir.join("transcript").join("transcript.txt");
+    fs::write(&transcript, b"mixed new text\n").expect("write mixed transcript");
+    let transaction_id = "dddddddddddddddddddddddddddddddd";
+    let rollback = task_dir
+        .join("transcript")
+        .join(format!(".frameq-artifact-{transaction_id}-0.rollback"));
+    fs::write(&rollback, b"facade transcript\n").expect("write rollback");
+    fs::write(
+        task_dir.join(JOURNAL_FILE_NAME),
+        serde_json::to_vec(&json!({
+            "schema_version": 1,
+            "transaction_id": transaction_id,
+            "state": "prepared",
+            "entries": [{
+                "destination": "transcript/transcript.txt",
+                "staging": format!("transcript/.frameq-artifact-{transaction_id}-0.staging"),
+                "rollback": format!("transcript/.frameq-artifact-{transaction_id}-0.rollback"),
+                "existed_before": true
+            }]
+        }))
+        .expect("encode journal"),
+    )
+    .expect("write journal");
+
+    let task = SupportedTask::open(&output_root, task_id).expect("open recovered task");
+
+    assert_eq!(
+        task.read_text_artifact(TaskArtifact::TranscriptTxt)
+            .expect("read recovered transcript")
+            .as_deref(),
+        Some("facade transcript")
+    );
+    assert!(!task_dir.join(JOURNAL_FILE_NAME).exists());
+}
+
+#[test]
 fn supported_task_scan_isolates_corrupt_and_unsupported_manifests() {
     let output_root = temp_dir("supported-task-scan");
     write_supported_task(
@@ -277,6 +525,34 @@ fn supported_task_scan_isolates_corrupt_and_unsupported_manifests() {
     let ignored_count = scan.ignored_count();
     assert_eq!(scan.into_tasks().len(), 1);
     assert_eq!(ignored_count, 2);
+}
+
+#[test]
+fn supported_task_coordinator_rejects_overlapping_direct_access_and_releases_on_drop() {
+    let output_root = temp_dir("supported-task-coordinator");
+    let task_id = "20260722-120000-youtube-dQw4w9WgXcQ";
+    write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
+
+    let first = SupportedTask::open(&output_root, task_id).expect("open first lease");
+    let error = SupportedTask::open(&output_root, task_id).expect_err("second access must be busy");
+
+    assert_eq!(error, "Task is busy. Try again shortly.");
+    drop(first);
+    SupportedTask::open(&output_root, task_id).expect("lease released after drop");
+}
+
+#[test]
+fn supported_task_scan_skips_busy_task_without_counting_it_as_corrupt() {
+    let output_root = temp_dir("supported-task-scan-busy");
+    let task_id = "20260722-120000-youtube-dQw4w9WgXcQ";
+    write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
+    let held = SupportedTask::open(&output_root, task_id).expect("hold task lease");
+
+    let scan = SupportedTask::scan(&output_root).expect("scan tasks");
+
+    assert_eq!(scan.ignored_count(), 0);
+    assert_eq!(scan.into_tasks().len(), 0);
+    drop(held);
 }
 
 #[test]
@@ -372,6 +648,10 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
     let schema = fs::read_to_string(module_dir.join("schema.rs")).expect("read schema owner");
     let storage = fs::read_to_string(module_dir.join("storage.rs")).expect("read storage owner");
     let access = fs::read_to_string(module_dir.join("access.rs")).expect("read access owner");
+    let coordinator =
+        fs::read_to_string(module_dir.join("coordinator.rs")).expect("read coordinator owner");
+    let transaction =
+        fs::read_to_string(module_dir.join("transaction.rs")).expect("read transaction owner");
     let tests = fs::read_to_string(module_dir.join("tests.rs")).expect("read tests owner");
 
     assert!(
@@ -380,9 +660,11 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
     );
     for declaration in [
         "mod access;",
+        "mod coordinator;",
         "mod schema;",
         "mod source_identity;",
         "mod storage;",
+        "mod transaction;",
         "mod tests;",
     ] {
         assert!(root.contains(declaration), "missing {declaration}");
@@ -409,6 +691,10 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
     assert!(storage.contains("pub(crate) fn is_link_or_reparse_point"));
     assert!(access.contains("pub(crate) struct SupportedTask"));
     assert!(access.contains("pub(crate) struct TaskEditSession"));
+    assert!(coordinator.contains("pub(crate) struct TaskLease"));
+    assert!(coordinator.contains("pub(crate) fn acquire_task"));
+    assert!(transaction.contains("pub(crate) fn commit_task_artifacts"));
+    assert!(transaction.contains("pub(crate) fn recover_task_artifacts"));
     assert!(tests.contains("edit_session_preserves_unknown_fields"));
 
     for pure_owner in [&source_identity, &schema] {
@@ -418,7 +704,14 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
     }
     assert!(!access.contains("RuntimePaths"));
     assert!(!access.contains("settings::"));
-    for child in [&source_identity, &schema, &storage, &access] {
+    for child in [
+        &source_identity,
+        &schema,
+        &storage,
+        &access,
+        &coordinator,
+        &transaction,
+    ] {
         for forbidden in [
             "tauri::",
             "crate::history",
@@ -445,6 +738,8 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
             "task_manifest::schema",
             "task_manifest::storage",
             "task_manifest::access",
+            "task_manifest::coordinator",
+            "task_manifest::transaction",
         ] {
             assert!(
                 !production_source.contains(forbidden),

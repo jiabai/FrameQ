@@ -665,6 +665,76 @@ fn save_detail_preserves_markdown_prefix_and_existing_empty_segments_declaration
 }
 
 #[test]
+fn save_detail_mid_commit_failure_restores_complete_previous_revision() {
+    let output_root = temp_dir("save-detail-transaction-rollback");
+    let task_id = "20260722-120000-youtube-dQw4w9WgXcQ";
+    let task_dir = create_task(&output_root, task_id);
+    let transcript_path = task_dir.join("transcript").join("transcript.txt");
+    let markdown_path = task_dir.join("transcript").join("transcript.md");
+    let segments_path = task_dir.join("transcript").join("segments.json");
+    let manifest_path = task_dir.join("frameq-task.json");
+    fs::write(&transcript_path, b"first version\n").expect("write transcript");
+    fs::write(
+        &markdown_path,
+        b"# Transcript\n\n## Transcript\n\nfirst version\n",
+    )
+    .expect("write markdown");
+    write_manifest(&task_dir, task_id, false);
+    let previous_transcript = fs::read(&transcript_path).expect("read transcript");
+    let previous_markdown = fs::read(&markdown_path).expect("read markdown");
+    let previous_manifest = fs::read(&manifest_path).expect("read manifest");
+    crate::atomic_files::fail_next_install_for_test(markdown_path.clone());
+
+    let error = save_transcript_edit_to_output_root(
+        &output_root,
+        SaveTranscriptEditRequest {
+            task_id: task_id.to_string(),
+            text: "second version".to_string(),
+            segments: vec![TranscriptSegmentView {
+                id: "seg-0001".to_string(),
+                start_ms: 0,
+                end_ms: 1000,
+                text: "second version".to_string(),
+                speaker: None,
+            }],
+        },
+    )
+    .expect_err("injected commit failure must fail save");
+
+    assert_eq!(error, "Task artifacts could not be stored safely.");
+    assert_eq!(
+        fs::read(&transcript_path).expect("read transcript"),
+        previous_transcript
+    );
+    assert_eq!(
+        fs::read(&markdown_path).expect("read markdown"),
+        previous_markdown
+    );
+    assert_eq!(
+        fs::read(&manifest_path).expect("read manifest"),
+        previous_manifest
+    );
+    assert!(!segments_path.exists());
+    assert!(!task_dir
+        .join("transcript")
+        .join("original")
+        .join("transcript.txt")
+        .exists());
+    assert!(!task_dir.join(".frameq-artifact-transaction.json").exists());
+    assert_eq!(
+        fs::read_dir(task_dir.join("transcript"))
+            .expect("read transcript dir")
+            .filter_map(Result::ok)
+            .filter(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".frameq-artifact-"))
+            .count(),
+        0
+    );
+}
+
+#[test]
 fn transcript_detail_module_boundary_matches_approved_owners() {
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let module_root = source_root.join("transcript_detail");

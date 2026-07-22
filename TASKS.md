@@ -7,7 +7,9 @@
   same-directory atomic replacement; existing-task multi-file updates recover through the closed
   prepared/committed journal to one complete revision; paths, schemas, content bytes, History,
   Credits, and local-media planning remain unchanged. ExecPlan:
-  `docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`.
+  `docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`. Implementation and local
+  Windows/package gates are complete on `codex/atomic-persistence-hardening`; branch review/merge
+  and unavailable macOS/native forced-exit smoke remain before this broad-release item is closed.
 
 - [ ] Close broad-release worker watchdog blocker (2026-07-22) — ✅ Acceptance: every supervised
   worker has a Rust-owned fixed absolute deadline, progress-capable jobs also have a validated-idle

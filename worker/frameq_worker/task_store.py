@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,11 @@ from frameq_worker.source_identity import (
     SourceIdentity,
     canonical_url_for_persistence,
     source_identity_from_manifest,
+)
+from frameq_worker.task_transaction import (
+    TaskArtifactCommitError,
+    commit_task_artifacts,
+    recover_task_artifacts,
 )
 
 TASK_MANIFEST_FILE_NAME = "frameq-task.json"
@@ -160,12 +166,31 @@ class TaskStoreFacade:
         )
 
     def finalize(self, context: TaskContext, result: ProcessResult) -> ProcessResult:
+        recover_task_artifacts(context.paths.task_dir)
+        artifact_payloads = result.artifact_payloads
+        artifacts = (
+            _artifacts_after_payloads(context.paths, artifact_payloads)
+            if artifact_payloads
+            else task_artifacts_for_existing_files(context.paths)
+        )
         task_result = result_with_task(
             result,
             context,
-            artifacts=task_artifacts_for_existing_files(context.paths),
+            artifacts=artifacts,
         )
-        write_task_manifest(context, task_result)
+        if artifact_payloads:
+            commit_task_artifacts(
+                context.paths.task_dir,
+                {
+                    **artifact_payloads,
+                    TASK_MANIFEST_FILE_NAME: serialize_task_manifest(
+                        context,
+                        task_result,
+                    ),
+                },
+            )
+        else:
+            write_task_manifest(context, task_result)
         return task_result
 
     def save_preference_snapshot(
@@ -173,6 +198,7 @@ class TaskStoreFacade:
         context: TaskContext,
         snapshot: PreferenceSnapshot,
     ) -> None:
+        recover_task_artifacts(context.paths.task_dir)
         write_preference_snapshot_artifact(context.paths, snapshot)
 
 
@@ -256,10 +282,18 @@ def result_with_task(
         insights=result.insights,
         transcript=result.transcript,
         error=result.error,
+        artifact_payloads=result.artifact_payloads,
     )
 
 
 def write_task_manifest(context: TaskContext, result: ProcessResult) -> None:
+    atomic_write_text(
+        context.paths.manifest_path,
+        serialize_task_manifest(context, result).decode("utf-8"),
+    )
+
+
+def serialize_task_manifest(context: TaskContext, result: ProcessResult) -> bytes:
     source_identity = context.source_identity
     canonical_url = canonical_url_for_persistence(source_identity)
     context.paths.task_dir.mkdir(parents=True, exist_ok=True)
@@ -283,10 +317,7 @@ def write_task_manifest(context: TaskContext, result: ProcessResult) -> None:
         "text_preview": result.text.strip()[:180],
         "insights_count": len(result.insights),
     }
-    atomic_write_text(
-        context.paths.manifest_path,
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-    )
+    return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
 def write_preference_snapshot_artifact(
@@ -302,6 +333,7 @@ def write_preference_snapshot_artifact(
 
 def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
     manifest_path = _validated_task_manifest_path(output_root, task_id)
+    recover_task_artifacts(manifest_path.parent)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     source_identity = source_identity_from_manifest(manifest.get("source_identity"))
     if source_identity is None:
@@ -349,6 +381,33 @@ def _validated_task_manifest_path(output_root: Path, task_id: str) -> Path:
 def _is_link_or_junction(path: Path) -> bool:
     is_junction = getattr(os.path, "isjunction", lambda _path: False)
     return path.is_symlink() or bool(is_junction(path))
+
+
+_ARTIFACT_KEY_BY_RELATIVE_PATH = {
+    "transcript/transcript.txt": "transcript_txt",
+    "transcript/transcript.md": "transcript_md",
+    "transcript/segments.json": "segments",
+    "ai/summary.md": "summary",
+    "ai/mindmap.mmd": "mindmap",
+    "ai/insights.json": "insights",
+    "ai/insights.md": "insights_md",
+}
+
+
+def _artifacts_after_payloads(
+    paths: TaskPaths,
+    payloads: Mapping[str, bytes | None],
+) -> dict[str, str]:
+    artifacts = task_artifacts_for_existing_files(paths)
+    for relative_path, content in payloads.items():
+        artifact_key = _ARTIFACT_KEY_BY_RELATIVE_PATH.get(relative_path)
+        if artifact_key is None:
+            raise TaskArtifactCommitError() from None
+        if content is None:
+            artifacts.pop(artifact_key, None)
+        else:
+            artifacts[artifact_key] = relative_path
+    return artifacts
 
 
 def task_context_from_manifest(output_root: Path, cache_root: Path, task_id: str) -> TaskContext:

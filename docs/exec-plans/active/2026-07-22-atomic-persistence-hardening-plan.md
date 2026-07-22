@@ -35,11 +35,28 @@ History behavior, provider calls, or AI Credits policy changes.
   only Phase 1. Validation: source inspection with `rg` plus the named production owners.
 - [x] 2026-07-22: Approved the product boundary and durable Phase 2 design; registered this work as
   a broad-release blocker. Validation: documentation diff and governance index registration.
-- [ ] Add RED characterization, failure-injection, and production-write ownership tests.
-- [ ] Extend Python atomic writes and task transaction recovery.
-- [ ] Add Rust atomic writes and task transaction recovery.
-- [ ] Integrate transcript and AI target commits without changing product formats or Credits.
-- [ ] Run complete local, packaging-mirror, and available native acceptance gates.
+- [x] 2026-07-22: Added byte characterization, failure-injection, and production-write ownership
+  tests. RED evidence: focused pytest produced 6 intended failures (missing byte/JSON atomic APIs and
+  transcript/AI writers bypassing replacement); the Node ownership gate reported all 7 current
+  direct-write violations across the named Python/Rust owners.
+- [x] 2026-07-22: Completed the Python per-file atomic primitive with UTF-8 text, bytes, pretty JSON,
+  fixed non-echoing failures, ordinary-file checks, reparse/link checks, cleanup, and best-effort
+  directory sync. GREEN evidence: `worker/tests/test_atomic_files.py` reports 14 passed, 2 skipped;
+  the two skips are Windows symlink fixtures unavailable without local symlink privilege.
+- [x] 2026-07-22: Implemented the closed task transaction journal in Python and Rust with shared
+  valid/invalid fixtures, prepared rollback, committed cleanup, orphan cleanup, manifest-last
+  ordering, and idempotent recovery. GREEN evidence: focused atomic/transaction pytest reports
+  24 passed, 2 skipped; both Node contract/ownership tests and Rust fixture/recovery tests pass.
+- [x] 2026-07-22: Moved worker transcript and AI target payloads plus the final manifest behind the
+  transaction boundary. Commit failure preserves the prior revision, returns fixed storage codes,
+  and does not repeat the captured LLM calls. Focused integration coverage reports 101 passed.
+- [x] 2026-07-22: Added the Rust atomic writer, supported-task recovery gate, task-local coordinator,
+  retry-child lease, and transactional transcript edit/backups. A real Windows no-delete-sharing
+  fixture and the injected mid-commit matrix preserve the prior complete revision.
+- [x] 2026-07-22: Completed local and packaging validation. Worker 563 passed / 2 native-symlink
+  fixtures skipped; App 551 passed; Rust 185 passed outside the restrictive process sandbox; scripts
+  25 passed; Ruff, TypeScript/i18n lint, frontend build, rustfmt, governance, 63-file packaged-worker
+  SHA-256 equality, and Tauri release `--no-bundle` build passed.
 
 ## Surprises & Discoveries
 
@@ -56,6 +73,15 @@ History behavior, provider calls, or AI Credits policy changes.
 - Evidence: `task_manifest/access.rs` is the existing validated supported-task entry point and is
   therefore the correct recovery gate. Recovery must not create a second
   raw-manifest or path-validation owner.
+- Evidence: the current Windows test host rejects unprivileged file and directory symlink fixture
+  creation. Link/reparse rejection remains implemented and source-tested, but native symlink
+  execution must be rerun on a host with Developer Mode or equivalent privilege.
+- Evidence: an invalid manifest could previously declare a transaction rollback path under a known
+  artifact key. Artifact-path validation now rejects dot-prefixed internal path components, and
+  History regression coverage proves transaction and per-file atomic staging paths cannot be listed
+  or located.
+- Evidence: the Rust blocked-stdin cancellation test fails only inside the restrictive command
+  sandbox with `RequestDeliveryFailed`; the same complete 185-test suite passes outside that sandbox.
 
 ## Decision Log
 
@@ -76,11 +102,14 @@ History behavior, provider calls, or AI Credits policy changes.
 
 ## Outcomes & Retrospective
 
-Not implemented. Completion requires recorded RED/GREEN evidence, cross-language journal fixtures,
-full local gates, packaging mirror equality, and available native filesystem fault acceptance.
-Residual risk: until then, interruption can still truncate or mix the currently identified
-authoritative paths; external programs that bypass FrameQ task access are outside the planned
-product transaction guarantee.
+Implementation and local acceptance are complete on `codex/atomic-persistence-hardening` and ready
+for branch review. Authoritative transcript, AI, manifest, preference-snapshot, and Rust transcript
+edit writes now use atomic replacement; existing-task bundles recover through journal v1 to the old
+or new complete revision. The current Windows host passed a real sharing-violation fixture and the
+full release build. Residual validation: macOS/Unix native permission, symlink, forced-termination,
+and real Tauri transcript/AI smoke were not available in this session. External programs that
+bypass FrameQ task access remain outside the product transaction guarantee. Broad publication also
+remains independently blocked on the worker-watchdog and server-operations plans.
 
 ## Context and Orientation
 
@@ -130,14 +159,14 @@ product transaction guarantee.
 - Modify: `app/src-tauri/src/transcript_detail/tests.rs`
 - Create: `scripts/tests/atomic-persistence-boundary.test.mjs`
 
-- [ ] Characterize exact transcript TXT/Markdown/segments, summary/mindmap, insights JSON/Markdown,
+- [x] Characterize exact transcript TXT/Markdown/segments, summary/mindmap, insights JSON/Markdown,
   manifest, backup, and saved-edit bytes before changing writers.
-- [ ] Add a source ownership test that rejects direct authoritative `Path.write_text`, `fs::write`,
+- [x] Add a source ownership test that rejects direct authoritative `Path.write_text`, `fs::write`,
   `File::create`, or truncating `OpenOptions` in the listed production owners while allowing test
   fixtures and reviewed atomic modules.
-- [ ] Add RED tests showing a simulated replace failure preserves the old destination and a failed
+- [x] Add RED tests showing a simulated replace failure preserves the old destination and a failed
   first write leaves no destination.
-- [ ] Run focused tests and record the expected failures in this Progress section.
+- [x] Run focused tests and record the expected failures in this Progress section.
 
 ### Task 2: Complete the Python Per-File Atomic Primitive
 
@@ -145,15 +174,16 @@ product transaction guarantee.
 - Modify: `worker/frameq_worker/atomic_files.py`
 - Modify: `worker/tests/test_atomic_files.py`
 
-- [ ] Keep `staged_file` as the single low-level owner. Add byte-writing and staged-content
+- [x] Keep `staged_file` as the single low-level owner. Add byte-writing and staged-content
   validation APIs only if required; do not duplicate staging/replace logic in artifact modules.
-- [ ] Reject linked/reparse/irregular destinations or parents according to the current task-root
+- [x] Reject linked/reparse/irregular destinations or parents according to the current task-root
   boundary before replacement. Preserve Windows closed-handle semantics.
-- [ ] Map create/write/sync/validation/replace failures to fixed non-echoing exceptions and always
+- [x] Map create/write/sync/validation/replace failures to fixed non-echoing exceptions and always
   attempt staging cleanup without replacing the primary error.
-- [ ] Test existing destination, absent destination, Unicode content, JSON serialization, nonregular
+- [x] Test existing destination, absent destination, Unicode content, JSON serialization, nonregular
   staging, sync failure, replace failure, cleanup failure, and parent-directory sync fallback.
-- [ ] Run `uv run pytest worker\tests\test_atomic_files.py -q` and require GREEN.
+- [x] Run `uv run pytest worker\tests\test_atomic_files.py -q` and require GREEN (10 passed, 2
+  native-symlink fixtures skipped on this Windows host).
 
 ### Task 3: Define and Cross-Test Transaction Journal v1
 
@@ -166,17 +196,17 @@ product transaction guarantee.
 - Modify: `app/src-tauri/src/task_manifest/tests.rs`
 - Create: `scripts/tests/task-artifact-transaction-contract.test.mjs`
 
-- [ ] Define exact closed fields for schema version, transaction ID, state, and entries. Entries may
+- [x] Define exact closed fields for schema version, transaction ID, state, and entries. Entries may
   contain only normalized relative destination/staging/rollback names and `existed_before`.
-- [ ] Register the exact allowed destination set/patterns for transcript and AI artifacts plus
+- [x] Register the exact allowed destination set/patterns for transcript and AI artifacts plus
   `frameq-task.json`; forbid source media, configuration, logs, original backups, and external paths.
-- [ ] Implement identical Python/Rust parse and validation semantics from shared valid/invalid JSON
+- [x] Implement identical Python/Rust parse and validation semantics from shared valid/invalid JSON
   fixtures. Unknown fields/schema/state, duplicates, separators outside normalized relative paths,
   links, missing rollback files, and unsupported targets fail closed.
-- [ ] Implement `prepared` rollback and `committed` cleanup idempotently. A second recovery pass must
+- [x] Implement `prepared` rollback and `committed` cleanup idempotently. A second recovery pass must
   make no further authoritative change.
-- [ ] Do not expose the raw journal DTO outside the Python task facade or Rust task-manifest module.
-- [ ] Run focused Python, Rust, and script contract tests and require GREEN.
+- [x] Do not expose the raw journal DTO outside the Python task facade or Rust task-manifest module.
+- [x] Run focused Python, Rust, and script contract tests and require GREEN.
 
 ### Task 4: Move Python Transcript and AI Producers Behind Transactions
 
@@ -193,19 +223,19 @@ product transaction guarantee.
 - Modify: `worker/tests/test_pipeline.py`
 - Modify: `worker/tests/test_task_store.py`
 
-- [ ] Make transcript generation build and validate every payload before committing TXT/Markdown and
+- [x] Make transcript generation build and validate every payload before committing TXT/Markdown and
   optional segments. New task manifest remains the visibility boundary.
-- [ ] Move existing-task transaction ownership high enough that the selected AI target files and
+- [x] Move existing-task transaction ownership high enough that the selected AI target files and
   the final manifest participate in one commit. Summary/mindmap form one target transaction and
   insights JSON/Markdown another; lower InsightFlow formatters must not commit early. Commit only
   the target that completed, preserving `partial_completed` and returned artifact maps.
-- [ ] Recover an unresolved journal before Python opens, retries, or finalizes an existing task.
-- [ ] Ensure an LLM response is never repeated because disk commit failed. Return the fixed storage
+- [x] Recover an unresolved journal before Python opens, retries, or finalizes an existing task.
+- [x] Ensure an LLM response is never repeated because disk commit failed. Return the fixed storage
   error and let the user decide whether to retry.
-- [ ] Add failure injection after every destination replace and both journal states; assert complete
+- [x] Add failure injection after every destination replace and both journal states; assert complete
   old/new revision, unchanged provider-call count, unchanged Credits count, and hidden internal
   files.
-- [ ] Run focused worker suites and then `uv run pytest worker\tests` plus
+- [x] Run focused worker suites and then `uv run pytest worker\tests` plus
   `uv run ruff check worker`.
 
 ### Task 5: Add Rust Atomic Manifest and Transcript Transactions
@@ -222,20 +252,20 @@ product transaction guarantee.
 - Modify: `app/src-tauri/src/transcript_detail/segments.rs`
 - Modify: `app/src-tauri/src/transcript_detail/tests.rs`
 
-- [ ] Implement one private same-directory Rust atomic writer with exclusive unique staging,
+- [x] Implement one private same-directory Rust atomic writer with exclusive unique staging,
   `write_all`, `sync_all`, validation, rename/replace, parent sync where supported, and safe cleanup.
   Keep platform replacement details inside this module.
-- [ ] Replace `write_task_manifest` direct writing while preserving exact pretty JSON plus newline.
-- [ ] Stage transcript text, preserved-prefix Markdown, optional segments, one-time original backups,
+- [x] Replace `write_task_manifest` direct writing while preserving exact pretty JSON plus newline.
+- [x] Stage transcript text, preserved-prefix Markdown, optional segments, one-time original backups,
   and manifest bytes before mutation; then commit them through journal v1.
-- [ ] Add a narrow per-task Rust coordinator around recovery/read/edit and hold the matching mutation
+- [x] Add a narrow per-task Rust coordinator around recovery/read/edit and hold the matching mutation
   lease across the complete supervised `retry_insights` child invocation. History skips a busy task;
   direct open/edit returns a fixed busy result. Do not add a second global workflow lock.
-- [ ] Recover before supported task scan/open/edit and skip/fail closed according to existing scan
+- [x] Recover before supported task scan/open/edit and skip/fail closed according to existing scan
   versus direct-open policy.
-- [ ] Add Windows sharing-violation and Unix permission/fault fixtures where deterministic, plus the
+- [x] Add Windows sharing-violation and Unix permission/fault fixtures where deterministic, plus the
   complete crash-point matrix using injected hooks rather than killing the test process.
-- [ ] Run focused Rust tests, full Cargo tests, and rustfmt.
+- [x] Run focused Rust tests, full Cargo tests, and rustfmt.
 
 ### Task 6: Close Cross-Language and Product Regression Gates
 
@@ -249,13 +279,13 @@ product transaction guarantee.
 - Modify: `app/tests/app-input.browser.test.ts`
 - Modify: this ExecPlan and release-plan evidence
 
-- [ ] Add localized stable guidance for atomic write and recovery failures through the existing
+- [x] Add localized stable guidance for atomic write and recovery failures through the existing
   `errorResources` and `workerErrorCopy` mapping. Preserve sanitized technical-details behavior.
-- [ ] Prove task History/detail/AI retry never lists or locates staging, journal, or rollback files.
-- [ ] Prove existing task bytes and manifest schema remain compatible on all successful paths.
-- [ ] Refresh the packaged worker only through the established build helper and prove recursive
+- [x] Prove task History/detail/AI retry never lists or locates staging, journal, or rollback files.
+- [x] Prove existing task bytes and manifest schema remain compatible on all successful paths.
+- [x] Refresh the packaged worker only through the established build helper and prove recursive
   canonical/mirror equality.
-- [ ] Run all validation commands below. Record exact totals, warnings, unavailable native evidence,
+- [x] Run all validation commands below. Record exact totals, warnings, unavailable native evidence,
   and residual risk before marking this plan complete.
 
 ## Validation and Acceptance

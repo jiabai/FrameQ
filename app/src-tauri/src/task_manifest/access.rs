@@ -1,23 +1,33 @@
 use super::{
+    coordinator::{acquire_task, try_acquire_task, TaskLease},
     schema::{
         parse_insights_payload, validate_relative_artifact_path, InsightView, SafeTaskError,
         TaskArtifact, TaskManifest, TranscriptMetadata,
     },
     source_identity::SourceIdentity,
     storage::{
-        artifact_path, ensure_artifact_parent, list_task_manifest_paths, load_task_manifest,
-        path_to_frontend_string, read_task_manifest_path, required_artifact_path, task_dir_for,
-        validate_task_artifact_path, write_task_manifest,
+        artifact_path, encode_task_manifest, ensure_artifact_parent, list_task_manifest_paths,
+        load_task_manifest, path_to_frontend_string, read_task_manifest_path,
+        required_artifact_path, task_dir_for, validate_task_artifact_path, write_task_manifest,
     },
+    transaction::recover_task_artifacts,
 };
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+enum ScanCandidate {
+    Ready(SupportedTask),
+    Busy,
+    Unsupported,
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct SupportedTask {
     manifest: TaskManifest,
     task_dir: PathBuf,
+    _lease: Arc<TaskLease>,
 }
 
 #[derive(Debug)]
@@ -38,11 +48,18 @@ impl TaskScan {
 
 impl SupportedTask {
     pub(crate) fn open(output_root: &Path, task_id: &str) -> Result<Self, String> {
+        let task_dir = task_dir_for(output_root, task_id)?;
+        let lease = acquire_task(&task_dir)?;
+        recover_task_artifacts(&task_dir)?;
         let (manifest, task_dir) = load_task_manifest(output_root, task_id)?;
         if !manifest.source_privacy_ready() {
             return Err("Task is unavailable in the current history format.".to_string());
         }
-        Ok(Self { manifest, task_dir })
+        Ok(Self {
+            manifest,
+            task_dir,
+            _lease: lease,
+        })
     }
 
     pub(crate) fn scan(output_root: &Path) -> Result<TaskScan, String> {
@@ -50,8 +67,9 @@ impl SupportedTask {
         let mut ignored_count = 0;
         for manifest_path in list_task_manifest_paths(output_root)? {
             match Self::from_manifest_path(output_root, &manifest_path) {
-                Ok(Some(task)) => tasks.push(task),
-                Ok(None) => ignored_count += 1,
+                Ok(ScanCandidate::Ready(task)) => tasks.push(task),
+                Ok(ScanCandidate::Busy) => {}
+                Ok(ScanCandidate::Unsupported) => ignored_count += 1,
                 Err(_) => ignored_count += 1,
             }
         }
@@ -64,16 +82,27 @@ impl SupportedTask {
     fn from_manifest_path(
         output_root: &Path,
         manifest_path: &Path,
-    ) -> Result<Option<Self>, String> {
+    ) -> Result<ScanCandidate, String> {
+        let task_dir = manifest_path
+            .parent()
+            .ok_or_else(|| "Task manifest has no parent directory.".to_string())?;
+        let Some(lease) = try_acquire_task(task_dir)? else {
+            return Ok(ScanCandidate::Busy);
+        };
+        recover_task_artifacts(task_dir)?;
         let (manifest, task_dir) = read_task_manifest_path(manifest_path)?;
         let expected_task_dir = match task_dir_for(output_root, &manifest.task_id) {
             Ok(path) => path,
-            Err(_) => return Ok(None),
+            Err(_) => return Ok(ScanCandidate::Unsupported),
         };
         if expected_task_dir != task_dir || !manifest.source_privacy_ready() {
-            return Ok(None);
+            return Ok(ScanCandidate::Unsupported);
         }
-        Ok(Some(Self { manifest, task_dir }))
+        Ok(ScanCandidate::Ready(Self {
+            manifest,
+            task_dir,
+            _lease: lease,
+        }))
     }
 
     pub(crate) fn task_id(&self) -> &str {
@@ -221,6 +250,7 @@ impl SupportedTask {
         TaskEditSession {
             manifest: self.manifest,
             task_dir: self.task_dir,
+            _lease: self._lease,
         }
     }
 }
@@ -228,6 +258,7 @@ impl SupportedTask {
 pub(crate) struct TaskEditSession {
     manifest: TaskManifest,
     task_dir: PathBuf,
+    _lease: Arc<TaskLease>,
 }
 
 impl TaskEditSession {
@@ -292,7 +323,12 @@ impl TaskEditSession {
         self.manifest.safe_artifacts()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn save(&self) -> Result<(), String> {
         write_task_manifest(&self.task_dir, &self.manifest)
+    }
+
+    pub(crate) fn encoded_manifest(&self) -> Result<Vec<u8>, String> {
+        encode_task_manifest(&self.manifest)
     }
 }

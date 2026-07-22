@@ -4,6 +4,7 @@ use tauri_plugin_deep_link::DeepLinkExt;
 
 mod account;
 mod asr_model;
+mod atomic_files;
 mod deep_link;
 mod diagnostics;
 mod history;

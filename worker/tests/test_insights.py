@@ -1,8 +1,10 @@
+import importlib
 import json
 import multiprocessing
 import queue
 from pathlib import Path
 
+import pytest
 from frameq_worker.insightflow import (
     Insight,
     InsightGenerationError,
@@ -529,15 +531,85 @@ def test_write_summary_files_rejects_empty_outputs(tmp_path: Path) -> None:
     else:
         raise AssertionError("Expected InsightGenerationError")
 
-    try:
+
+def test_summary_replace_failure_preserves_complete_previous_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    output_dir = tmp_path / "task" / "ai"
+    output_dir.mkdir(parents=True)
+    summary_path = output_dir / "summary.md"
+    mindmap_path = output_dir / "mindmap.mmd"
+    summary_path.write_bytes(b"# Previous summary\n")
+    mindmap_path.write_bytes(b"mindmap\n  root((Previous))\n")
+    original_replace = atomic_files.os.replace
+    failed = False
+
+    def fail_second_replace(source: Path, destination: Path) -> None:
+        nonlocal failed
+        if destination == mindmap_path and not failed:
+            failed = True
+            raise OSError("D:/private/customer/mindmap.mmd is locked")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(atomic_files.os, "replace", fail_second_replace)
+
+    with pytest.raises(atomic_files.AtomicFileCommitError):
         write_summary_files(
-            summary="# 要点总结",
+            summary="# Next summary\n",
+            mindmap="mindmap\n  root((Next))\n",
+            output_dir=output_dir,
+            output_stem="",
+            output_language="en-US",
+        )
+
+    assert summary_path.read_bytes() == b"# Previous summary\n"
+    assert mindmap_path.read_bytes() == b"mindmap\n  root((Previous))\n"
+
+
+def test_insight_failed_first_commit_leaves_no_authoritative_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    output_dir = tmp_path / "task" / "ai"
+    monkeypatch.setattr(
+        atomic_files.os,
+        "replace",
+        lambda _source, _destination: (_ for _ in ()).throw(OSError("full disk")),
+    )
+
+    with pytest.raises(atomic_files.AtomicFileCommitError):
+        write_insight_files(
+            [
+                Insight(
+                    id=1,
+                    topic="Atomic persistence",
+                    match_reason="Release reliability",
+                    follow_up_questions=("How is recovery tested?",),
+                    suitable_use="Release review",
+                    source_chunk_id=1,
+                )
+            ],
+            output_dir=output_dir,
+            output_stem="",
+            output_language="en-US",
+        )
+
+    assert not (output_dir / "insights.json").exists()
+    assert not (output_dir / "insights.md").exists()
+
+
+
+def test_write_summary_files_rejects_invalid_mindmap(tmp_path: Path) -> None:
+    with pytest.raises(InsightGenerationError) as captured:
+        write_summary_files(
+            summary="# Key Summary",
             mindmap="graph TD\n  A-->B",
             output_dir=tmp_path / "outputs",
             output_stem="demo",
-            output_language="zh-CN",
+            output_language="en-US",
         )
-    except InsightGenerationError as error:
-        assert error.code == "INSIGHTFLOW_INVALID_MINDMAP"
-    else:
-        raise AssertionError("Expected InsightGenerationError")
+
+    assert captured.value.code == "INSIGHTFLOW_INVALID_MINDMAP"

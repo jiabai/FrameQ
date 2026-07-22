@@ -280,12 +280,21 @@ pub(super) fn validate_relative_artifact_path(
         || normalized.contains("secret")
         || normalized.contains("session")
         || normalized.contains("cookie");
-    if path.is_absolute() || has_forbidden_component(&path) || contains_sensitive_material {
+    if path.is_absolute()
+        || has_forbidden_component(&path)
+        || contains_sensitive_material
+        || contains_hidden_component(&path)
+    {
         return Err(format!(
             "{field} artifact path must stay inside the task directory."
         ));
     }
     Ok(path)
+}
+
+fn contains_hidden_component(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
 }
 
 pub(super) fn has_forbidden_component(path: &Path) -> bool {

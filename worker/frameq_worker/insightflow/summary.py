@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from frameq_worker.atomic_files import platform_text_bytes
+from frameq_worker.insightflow.artifact_storage import commit_insight_payloads
 from frameq_worker.insightflow.generator import InsightClient, InsightGenerationError
 from frameq_worker.insightflow.prompt import build_mindmap_prompt, build_summary_prompt
 from frameq_worker.insightflow.splitter import MarkdownSplitter
@@ -15,6 +17,8 @@ class SummaryArtifacts:
     mindmap: str
     summary_path: Path
     mindmap_path: Path
+    summary_bytes: bytes
+    mindmap_bytes: bytes
 
 
 def generate_summary_from_markdown(
@@ -24,6 +28,7 @@ def generate_summary_from_markdown(
     client: InsightClient,
     output_language: OutputLanguage,
     splitter: MarkdownSplitter | None = None,
+    persist: bool = True,
 ) -> SummaryArtifacts:
     chunks = (splitter or MarkdownSplitter()).split(markdown)
     if not chunks:
@@ -48,6 +53,7 @@ def generate_summary_from_markdown(
         output_dir=output_dir,
         output_stem=output_stem,
         output_language=output_language,
+        persist=persist,
     )
 
 
@@ -57,6 +63,7 @@ def write_summary_files(
     output_dir: Path,
     output_stem: str,
     output_language: OutputLanguage,
+    persist: bool = True,
 ) -> SummaryArtifacts:
     normalized_summary = normalize_summary_markdown(summary, output_language)
     normalized_mindmap = normalize_mermaid_mindmap(mindmap)
@@ -71,21 +78,31 @@ def write_summary_files(
             "InsightFlow returned an invalid Mermaid mindmap.",
         )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
     if output_stem:
         summary_path = output_dir / f"{output_stem}_summary.md"
         mindmap_path = output_dir / f"{output_stem}_mindmap.mmd"
     else:
         summary_path = output_dir / "summary.md"
         mindmap_path = output_dir / "mindmap.mmd"
-    summary_path.write_text(normalized_summary, encoding="utf-8")
-    mindmap_path.write_text(normalized_mindmap, encoding="utf-8")
+    summary_bytes = platform_text_bytes(normalized_summary)
+    mindmap_bytes = platform_text_bytes(normalized_mindmap)
+    if persist:
+        commit_insight_payloads(
+            output_dir,
+            output_stem,
+            {
+                summary_path: summary_bytes,
+                mindmap_path: mindmap_bytes,
+            },
+        )
 
     return SummaryArtifacts(
         summary=normalized_summary,
         mindmap=normalized_mindmap,
         summary_path=summary_path,
         mindmap_path=mindmap_path,
+        summary_bytes=summary_bytes,
+        mindmap_bytes=mindmap_bytes,
     )
 
 

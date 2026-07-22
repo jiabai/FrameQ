@@ -2,7 +2,7 @@ use super::task_result::{map_task_worker_result, TaskCommandContext};
 use crate::worker_runtime::{TaskTerminalResult, WorkerJob};
 use crate::{
     append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, run_blocking_worker_command,
-    ProcessSupervisors,
+    task_manifest, ProcessSupervisors,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -115,6 +115,8 @@ fn retry_insights_blocking(
 ) -> Result<TaskTerminalResult, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
+    let output_root = task_manifest::configured_output_root(&paths)?;
+    let _task_lease = task_manifest::acquire_task_mutation(&output_root, &request.task_id)?;
     let request_json = serde_json::to_string(&request)
         .map_err(|_| "Failed to encode worker request.".to_string())?;
     let _ = append_desktop_log(

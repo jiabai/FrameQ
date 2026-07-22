@@ -16,7 +16,11 @@ from frameq_worker.models import (
     TranscriptMetadata,
 )
 from frameq_worker.source_identity import SourceIdentity
-from frameq_worker.task_store import TaskContext, TaskStoreFacade
+from frameq_worker.task_store import (
+    TaskContext,
+    TaskStoreFacade,
+    task_artifacts_for_existing_files,
+)
 
 
 def _create_store_context(tmp_path: Path) -> tuple[TaskStoreFacade, TaskContext]:
@@ -249,6 +253,18 @@ def test_finalize_registers_only_known_committed_regular_files(tmp_path: Path) -
     context.paths.audio_path.write_bytes(b"committed audio")
     staging_path = context.paths.media_dir / ".audio.interrupted.part.wav"
     staging_path.write_bytes(b"partial audio")
+    (context.paths.task_dir / ".frameq-artifact-transaction.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+    (context.paths.ai_dir / ".frameq-artifact-aaaaaaaa-0.rollback").write_bytes(
+        b"internal rollback"
+    )
+
+    assert task_artifacts_for_existing_files(context.paths) == {
+        "audio": "media/audio.wav"
+    }
+    (context.paths.task_dir / ".frameq-artifact-transaction.json").unlink()
 
     finalized = store.finalize(
         context,

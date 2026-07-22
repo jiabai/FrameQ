@@ -69,10 +69,9 @@ fn segment_from_value(value: &serde_json::Value) -> Result<TranscriptSegmentView
     })
 }
 
-pub(super) fn write_segments_sidecar(
-    path: &Path,
+pub(super) fn encode_segments_sidecar(
     segments: &[TranscriptSegmentView],
-) -> Result<(), String> {
+) -> Result<Vec<u8>, String> {
     for segment in segments {
         if segment.id.trim().is_empty() {
             return Err("Transcript segment id cannot be empty.".to_string());
@@ -81,13 +80,12 @@ pub(super) fn write_segments_sidecar(
             return Err("Transcript segment timing is invalid.".to_string());
         }
     }
-    fs::write(
-        path,
-        serde_json::to_string_pretty(&serde_json::json!({ "segments": segments }))
+    Ok(
+        (serde_json::to_string_pretty(&serde_json::json!({ "segments": segments }))
             .map_err(|_| "Failed to encode transcript segments.".to_string())?
-            + "\n",
+            + "\n")
+            .into_bytes(),
     )
-    .map_err(|_| "Failed to save transcript segments.".to_string())
 }
 
 pub(super) fn validate_segments_path(task_dir: &Path, path: &Path) -> Result<(), String> {

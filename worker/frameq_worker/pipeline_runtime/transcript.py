@@ -12,6 +12,7 @@ from frameq_worker.asr import (
     transcribe_and_write,
     write_transcript_files,
 )
+from frameq_worker.atomic_files import AtomicFileCommitError
 from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.model_download import (
     normalize_asr_model_cache_layout,
@@ -63,6 +64,8 @@ def run_asr_transcript_step(
                 stage=JobStage.VIDEO_TRANSCRIBING,
             ),
         )
+    except AtomicFileCommitError:
+        return _artifact_storage_failure()
 
     return ProcessResult(
         status=JobStage.VIDEO_TRANSCRIBING,
@@ -107,6 +110,8 @@ def run_prepared_subtitle_transcript_step(
         )
     except ASRError:
         return None
+    except AtomicFileCommitError:
+        return _artifact_storage_failure()
 
     return ProcessResult(
         status=JobStage.VIDEO_TRANSCRIBING,
@@ -137,7 +142,7 @@ def write_prepared_subtitle_stage(
         output_stem="",
         source_identity=task_context.source_identity,
     )
-    if subtitle_result is not None:
+    if subtitle_result is not None and subtitle_result.status != JobStage.FAILED:
         emit_progress(
             progress_callback,
             JobStage.VIDEO_TRANSCRIBING,
@@ -248,3 +253,14 @@ def _asr_model_args(model: object) -> dict[str, str] | None:
     # progress instead of expanding the release progress-model allowlist.
     normalized = normalize_model_arg(model)
     return {"model": normalized} if normalized is not None else None
+
+
+def _artifact_storage_failure() -> ProcessResult:
+    return ProcessResult(
+        status=JobStage.FAILED,
+        error=WorkerError(
+            code="TASK_ARTIFACT_COMMIT_FAILED",
+            message="Task artifacts could not be stored safely.",
+            stage=JobStage.VIDEO_TRANSCRIBING,
+        ),
+    )

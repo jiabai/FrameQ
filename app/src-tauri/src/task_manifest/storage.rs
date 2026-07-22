@@ -2,6 +2,7 @@ use super::{
     schema::{has_forbidden_component, validate_relative_artifact_path, TaskManifest},
     TASKS_DIR_NAME, TASK_MANIFEST_FILE_NAME,
 };
+use crate::atomic_files;
 use crate::{path_to_env_string, settings, RuntimePaths, OUTPUT_DIR_ENV};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -89,14 +90,18 @@ pub(super) fn read_task_manifest_path(path: &Path) -> Result<(TaskManifest, Path
     Ok((manifest, task_dir))
 }
 
+#[allow(dead_code)]
 pub(super) fn write_task_manifest(task_dir: &Path, manifest: &TaskManifest) -> Result<(), String> {
-    fs::write(
-        task_dir.join(TASK_MANIFEST_FILE_NAME),
-        serde_json::to_string_pretty(manifest)
-            .map_err(|_| "Failed to encode task manifest.".to_string())?
-            + "\n",
-    )
-    .map_err(|_| "Failed to save task manifest.".to_string())
+    let bytes = encode_task_manifest(manifest)?;
+    atomic_files::atomic_write(&task_dir.join(TASK_MANIFEST_FILE_NAME), &bytes)
+        .map_err(|_| "Failed to save task manifest.".to_string())
+}
+
+pub(super) fn encode_task_manifest(manifest: &TaskManifest) -> Result<Vec<u8>, String> {
+    Ok((serde_json::to_string_pretty(manifest)
+        .map_err(|_| "Failed to encode task manifest.".to_string())?
+        + "\n")
+        .into_bytes())
 }
 
 pub(super) fn artifact_path(

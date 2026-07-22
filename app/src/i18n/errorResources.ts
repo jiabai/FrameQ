@@ -61,6 +61,8 @@ export const errorResources = {
     task: {
       storageUnavailable: "本地任务存储不可用，请检查磁盘空间和权限。",
       manifestNotFound: "未找到任务记录，请重新处理该视频。",
+      artifactCommitFailed: "无法安全保存本次结果。现有结果已保留，请检查磁盘空间和权限后重试。",
+      artifactRecoveryFailed: "无法安全恢复该任务，FrameQ 已停止继续修改。请重启应用；如仍失败，请联系支持。",
     },
     transcript: {
       pathInvalid: "文字稿路径无效，请重新处理该任务。",
@@ -149,6 +151,8 @@ export const errorResources = {
     task: {
       storageUnavailable: "本機工作儲存空間無法使用，請檢查磁碟空間和權限。",
       manifestNotFound: "找不到工作記錄，請重新處理此影片。",
+      artifactCommitFailed: "無法安全儲存本次結果。現有結果已保留，請檢查磁碟空間和權限後重試。",
+      artifactRecoveryFailed: "無法安全復原此工作，FrameQ 已停止繼續修改。請重新啟動應用程式；若仍失敗，請聯絡支援。",
     },
     transcript: {
       pathInvalid: "逐字稿路徑無效，請重新處理此工作。",
@@ -237,6 +241,8 @@ export const errorResources = {
     task: {
       storageUnavailable: "Local task storage is unavailable. Check disk space and permissions.",
       manifestNotFound: "The task record could not be found. Process the video again.",
+      artifactCommitFailed: "The result could not be saved safely. Existing results were preserved. Check disk space and permissions, then try again.",
+      artifactRecoveryFailed: "This task could not be recovered safely, so FrameQ stopped modifying it. Restart the app; contact support if it still fails.",
     },
     transcript: {
       pathInvalid: "The transcript path is invalid. Process the task again.",
