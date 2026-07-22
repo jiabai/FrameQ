@@ -1,5 +1,36 @@
 # Security and Compliance
 
+## 2026-07-22 Planned Release Reliability and Crash-Consistency Boundary
+
+- This boundary is approved but not implemented. Broad consumer publication remains blocked while
+  authoritative transcript/AI/Rust edit writes can be sequential and supervised workers can wait
+  without a production deadline.
+- Every authoritative destination must use same-directory staging, closed-handle sync, validation,
+  and atomic replacement. A task-local transaction journal may contain only schema/state, random
+  transaction ID, normalized allowlisted relative internal paths, and existed-before markers. It
+  must never contain artifact bytes, absolute paths, source URLs, selection tokens, credentials,
+  transcript text, prompts, generated content, or raw errors.
+- Journal recovery must validate every field/path before mutation, reject links/reparse points,
+  traversal, duplicates, unknown schema/state/fields, unsupported destinations, and missing required
+  rollback material. An invalid journal fails closed and must not touch a path outside its supported
+  task root.
+- Internal staging, rollback, and journal files are never manifest artifacts, History entries,
+  locate-file targets, cache authority, log attachments, or AI input. Original transcript backups
+  remain a separate user-facing recovery feature.
+- Rust worker watchdog policy is derived from a closed operation enum. Request JSON, UI, Python,
+  environment variables, and external content cannot extend or disable deadlines. Only validated
+  progress resets idle time; arbitrary stderr cannot keep a process alive.
+- Timeout termination reuses supervisor-owned numeric PID/PGID and existing no-shell process-tree
+  primitives. Instance matching prevents stale watchdogs from terminating a newer process. Safe
+  diagnostics may record operation, timeout kind/duration bucket, instance/PID, and stable outcome
+  only.
+- Timeout must not log or display request payload, source/local paths, URL, Cookie/credential,
+  prompt, transcript, generated content, complete stderr, or arbitrary OS errors. It must not
+  automatically retry AI or authorize another Credits call.
+- Desktop crash consistency and watchdog work do not close server OTP/ticket/quota concurrency,
+  abuse controls, observability, backup/restore, or multi-instance deployment safety. Those remain a
+  separately tracked release blocker.
+
 ## 2026-07-21 Server HTTP Capability Boundary
 
 - Administrator session and CSRF cookie names, attributes, issuance, verification, and clearing are
@@ -129,9 +160,11 @@
 - `frameq-task.json` is installed atomically after its complete payload is serialized. It may record
   only committed ordinary files at known task-owned paths; existence of an arbitrary or partial file
   is insufficient evidence for registration.
-- Per-file atomicity does not promise a cross-file transaction. A failure may retain a previously
-  committed valid artifact, matching existing partial-task preservation, while never claiming a
-  partial artifact succeeded.
+- The implemented Phase 1 per-file atomicity does not promise a cross-file transaction. A failure
+  may retain a previously committed valid artifact, matching existing partial-task preservation,
+  while never claiming a partial artifact succeeded. The approved 2026-07-22 Phase 2 adds a closed
+  prepared/committed journal and recovery-before-read for transcript/AI/Rust edit bundles; it must
+  not be described as active until its ExecPlan passes.
 
 ## 2026-07-18 Process-video request contract v3 boundary
 

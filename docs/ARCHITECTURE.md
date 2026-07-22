@@ -1,5 +1,31 @@
 # FrameQ Architecture
 
+## 2026-07-22 Planned broad-release reliability boundary (not implemented)
+
+- Broad consumer publication is blocked on two independent desktop runtime changes. The current
+  implementation still has direct/sequential authoritative transcript and AI writes plus an
+  unbounded Rust `child.wait()`; this section records the accepted target architecture, not current
+  runtime capability.
+- Persistence keeps two layers distinct. A shared Python/Rust same-directory staging + sync +
+  atomic-replace primitive prevents individual-file truncation. A closed task-local
+  prepared/committed journal makes existing-task transcript and AI bundles recover to one complete
+  revision before `SupportedTask`/`TaskStoreFacade` readers trust them.
+- The journal retains official artifact paths and task schema v3, contains no content or absolute
+  paths, remains outside artifact discovery, and fails closed before unsafe recovery. New task
+  creation continues using the atomically written manifest as the final visibility record.
+- `worker_runtime` remains the sole process lifecycle owner and will derive fixed idle/absolute
+  policies from `WorkerOperation`. An instance-bound watchdog can terminate while stdin delivery or
+  wait is blocked, reuses the existing process-tree primitives, and cannot act on a newer instance.
+- Structured-result-first and explicit cancellation semantics remain unchanged. A timeout has its
+  own safe outcome, clears the busy state, preserves committed artifacts, and never automatically
+  retries an LLM or consumes another AI Credit.
+- Durable decisions and implementation steps are in
+  `docs/product-specs/2026-07-22-release-reliability-hardening.md`,
+  `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`,
+  `docs/design-docs/2026-07-22-rust-worker-watchdog.md`, and their two active ExecPlans.
+- Server OTP/ticket/quota concurrency and production operations remain a separate broad-release
+  blocker; the desktop persistence/watchdog architecture does not close it.
+
 ## 2026-07-20 ASR application module boundary
 
 - `worker/frameq_worker/asr.py` is now a 52-line stable compatibility surface. Production callers
@@ -127,9 +153,10 @@
 - Video and audio use independent per-file commits. A later audio failure may preserve an already
   committed valid video under existing partial-task semantics, but incomplete staging media never
   enters artifacts, results, History, or cache authority.
-- This boundary does not add local-media contract v4, change manifest schema v3/result DTOs, or make
-  transcript and AI artifact writers transactional. The durable decision is recorded in
-  `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`.
+- The implemented 2026-07-19 boundary does not add local-media contract v4, change manifest schema
+  v3/result DTOs, or make transcript and AI artifact writers transactional. Those remaining paths
+  are now a planned broad-release Phase 2, not an implemented property. The durable decision is
+  recorded in `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`.
 
 ## 2026-07-19 Media preparation facade boundary
 
@@ -353,6 +380,10 @@
 - Signal delivery exposes `cancelling`, never a fabricated completed cancellation. The runner owns terminal precedence: a structured result wins a concurrent cancellation claim; only an unstructured termination observed for the matching `Cancelling` instance becomes `Cancelled`. Successful malformed stdout is a protocol violation, while nonzero malformed output is a typed unstructured failure.
 - Progress routing is closed to `None`, validated worker progress, or validated ASR model-download progress. The typed job/model-download boundary derives the route; application modules cannot select it or provide arbitrary parsers, event names, or unvalidated payload emission.
 - React keeps the operation ID and task UI while cancellation is pending. It resets only after a confirmed cancelled worker/model-download terminal result; a signal failure restores the prior observable processing state so progress and the real later result remain visible. Cancellation deliberately preserves existing outputs, cache, and model files.
+- Current production execution still has no watchdog and can remain blocked in `child.wait()` after
+  a hung worker. The accepted but unimplemented extension is
+  `docs/design-docs/2026-07-22-rust-worker-watchdog.md`; no deadline behavior should be inferred
+  until its ExecPlan is complete.
 
 ## 2026-07-19 Typed Worker Job Execution Boundary
 

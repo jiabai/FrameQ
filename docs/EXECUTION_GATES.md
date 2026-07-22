@@ -16,6 +16,21 @@
 - 涉及 app/UI 的改动必须至少运行 lint、typecheck 或 build 中的一项。
 - 涉及下载、ASR、LLM 或文件导出的改动必须记录失败路径和可恢复行为。
 
+### 面向大量普通用户发布的额外硬门禁
+
+- 权威文字稿、AI 产物、偏好和 task manifest 不得直接截断写入最终路径；单文件原子替换、
+  现有任务多文件 transaction recovery、故障注入矩阵和跨语言 journal 契约必须通过。
+- 所有受监督 worker 操作必须有 Rust 运行时拥有的固定绝对 deadline；具有闭集进度协议的
+  操作还必须有 validated-progress idle deadline。超时必须终止并 reap 匹配的完整进程树。
+- watchdog 必须覆盖正常完成、静默、进度后停滞、持续进度仍触发绝对超时、阻塞 stdin、
+  structured-result/cancel/timeout race、stale instance 和第二任务启动。
+- 超时不得自动重试 LLM 或增加 AI Credits 调用；持久化恢复不得暴露内部 staging/journal/
+  rollback 文件或触碰 task root 外路径。
+- 可用的 Windows/macOS 环境必须分别记录原子替换/恢复和 watchdog parent-child 清理证据；
+  缺失平台记录为未验证残余风险，不得默认通过。
+- 发布前必须另行关闭 server OTP/ticket/quota 并发与生产运维门禁；桌面本地验证不能替代
+  数据库并发、限流、可观测性、备份恢复和部署 runbook 证据。
+
 ## Soft Gates
 
 - 更广范围回归测试。

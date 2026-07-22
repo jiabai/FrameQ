@@ -1,5 +1,25 @@
 # FrameQ Design Guidelines
 
+## Reliability Failure and Recovery UX
+
+- A worker timeout or persistence-recovery failure must leave the current busy state and present one
+  concise localized explanation plus the next safe action. Do not ask ordinary users to inspect
+  JSON, find a PID, kill Python manually, edit task files, or choose between rollback files.
+- Distinguish explicit cancellation, idle timeout, absolute execution timeout, save failure, and
+  recovery failure. Do not collapse them into “unknown error” when a stable code exists.
+- Process timeout offers retry/new-task behavior after the runtime confirms process-tree cleanup.
+  AI timeout keeps the local transcript and previously committed target visible and lets the user
+  choose whether to retry; copy must not imply an automatic retry or Credit refund.
+- Model-download timeout returns to the existing downloadable/retry state and must not display a
+  false completed or permanently broken model state.
+- A transcript save may show success only after the complete task transaction commits. During
+  automatic recovery, keep the task unavailable rather than briefly rendering a mixed revision.
+- Primary guidance remains non-technical. Sanitized technical details stay in the existing collapsed
+  disclosure and may show only stable codes/bounded safe diagnostics, never paths, request payloads,
+  transcript text, prompts, generated text, or raw worker/OS prose.
+- These behaviors are planned by the 2026-07-22 release-reliability specification and are not
+  current acceptance claims until both active reliability ExecPlans complete.
+
 ## Local Media Input and Source-Aware Workspace
 
 - Keep one input composer. Add a keyboard-accessible `+` control at the left that opens a one-item

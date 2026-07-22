@@ -110,25 +110,27 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 
 | 项目 | 基线 |
 |------|------|
-| 基准提交 | `1fa2f371766e437f0da22393e93dbc14b48bf6ab` |
-| 提交日期 | 2026-07-19 |
-| 提交主题 | `refactor(tauri): extract task result adapter` |
+| 基准提交 | `3fd01e807f5a4e61726fe3049c39b34dc74cbe64` |
+| 提交日期 | 2026-07-22 |
+| 提交主题 | `refactor(worker): split pipeline runtime boundaries` |
 | 桌面前端 | `app/src/`，React + TypeScript |
 | 桌面原生层 | `app/src-tauri/src/`，Tauri + Rust |
 | 本地 worker | `worker/frameq_worker/`，Python |
 | 账户服务 | `server/src/`，Fastify + TypeScript |
-| 跨进程契约 | `contracts/desktop-worker-contract.json`，当前实现版本 v3 |
+| 跨进程契约 | `contracts/desktop-worker-contract.json`，全局版本 v4；现行 URL process request 仍为 v3 |
 
 该提交是本轮审计的已提交基线，已经包含 task access facade、typed worker job facade、
-前端 task workspace 展示门面、Python media preparation facade 和 Rust task-result adapter
-五轮收口。本文只描述截至该
-提交已经存在的生产实现，不把尚未实现的 local-media contract v4 当作当前代码。
+前端 task workspace 展示门面、Python media preparation facade、Rust task-result adapter，
+以及后续 video processing、transcript detail、三平台 fallback、ASR、server routes、task
+manifest 和 worker pipeline 的模块边界收口。本文区分“已经存在的生产实现”与
+“2026-07-22 已登记但尚未实现的发布可靠性目标”，不把 local-media v4 runtime、原子
+transaction recovery 或 worker watchdog 误画成当前能力。
 
 范围规则：
 
 - 图只表示该提交中的生产实现，不把 active ExecPlan 当作已落地代码。
-- `process_local_media` 尚未注册为 Tauri command，也不在 worker 当前请求模型中；active 计划预留
-  contract v4，但本基线只画已经落地的 v3 URL 处理流程。
+- `process_local_media` 尚未注册为 Tauri command，也不在 worker 当前请求模型中；全局
+  contract v4 已锁定 local-media 的独立请求，但本基线只画已经落地的 v3 URL 处理流程。
 - 独立的 `*.test.*`、`tests/` 和构建脚本不进入主要依赖图；测试入口在源码索引中按职责说明。
 - Rust 测试通常以内联 `#[cfg(test)]` 模块存在，所以物理行数包含同文件内测试。
 - 图中的“大文件”只是审计入口，不等同于已经证明存在设计缺陷。
@@ -1984,6 +1986,7 @@ stateDiagram-v2
 |----------|----------|----------------|
 | `models.py -> source_identity.py -> fallbacks` | 已在 `f22861c` 完成依赖倒置；core identity、application resolution 与 platform adapters 已分层 | `worker/tests/test_import_boundaries.py`、`worker/tests/test_source_resolution.py`；完整设计见 `docs/design-docs/2026-07-18-source-identity-dependency-boundary.md` |
 | `worker_command.rs` 混合 supervisor、OS process、stdin/progress/output 与调用策略 | 已在 `9833bd6` 删除旧模块；`worker_runtime/command.rs`、`runner.rs`、`supervisor.rs` 分层，四类操作统一经过 `WorkerLane::run`，低层状态和终止函数保持私有 | `worker_runtime` 内联 Rust tests、`scripts/tests/unix-process-supervisor-workflow.test.mjs`；完整设计见 `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md` |
+| Rust `WorkerLane::run` 对已注册 child 使用无界 `child.wait()` | **发布阻断，尚未实现**：共享 lifecycle/cancellation 已收口，但静默或挂起 child 可让 UI 永久 busy；已决定由 `worker_runtime` 增加 operation-owned idle/absolute watchdog、instance-safe timeout claim 和现有 process-tree termination 复用 | 产品规格 `docs/product-specs/2026-07-22-release-reliability-hardening.md`；设计 `docs/design-docs/2026-07-22-rust-worker-watchdog.md`；active ExecPlan `docs/exec-plans/active/2026-07-22-worker-watchdog-plan.md` |
 | Process-video 请求中存在无消费者字段和多重 ASR model owner | 已在 `cfd1233` 升级为 contract v3；TS IPC 只传 `url`，Rust 解析配置并构造 `contract_version + url + asr_model`，Python 严格消费 | `app/src/desktopWorkerContract.test.ts`、`workerClient.test.ts`、Rust `video_processing` tests、`worker/tests/test_contract.py`/`test_requests.py`；完整设计见 `docs/design-docs/2026-07-18-process-video-request-contract-v3.md` |
 | Local-media 新来源可能把路径泄露到 React、argv、日志或松散可选字段 | Contract v4 的纯类型边界已锁定：TS 只有 token/安全元数据，Rust/Python 路径请求严格闭集且固定非回显；原 URL worker request 仍为 v3。picker、command、CLI、pipeline 与 manifest 尚未实现 | `localMediaContract.test.ts`、`local_media_contract_tests.rs`、`worker/tests/test_requests.py`、三端 canonical contract tests，以及 recursive packaged-worker mirror equality test；执行记录见 active local-media ExecPlan |
 | History/cache/transcript/delete 分别重组 manifest privacy 与 artifact path 安全流程，Python pipeline/retry 分别协调任务落盘 | 已在 `eecd0fb` 收口为 Rust `SupportedTask::scan/open` + `TaskEditSession` 和 Python `TaskStoreFacade`；raw Rust manifest/path/write 原语保持模块私有 | Rust facade tests 与既有 History/cache/transcript/delete characterization tests；`worker/tests/test_task_store.py` 与 worker 全量测试；设计见 `docs/design-docs/2026-07-18-task-access-facade.md` |
@@ -2002,6 +2005,7 @@ stateDiagram-v2
 | `asr.py` 同时拥有模型 registry、两种 provider、SenseVoice VAD/WAV 与 transcript 文件写出 | 已按失败边界收口为 52 行稳定兼容入口和空 initializer；`types/qwen/sensevoice/registry/artifacts` 五个私有 owner 分离共享 contract、SDK、fallback、cache 环境与文件系统职责，生产调用方仍只导入 root | 行为新增 5 项、边界 9/9、focused 32/32、worker 515/515、app 549/549、正常 Windows 权限 Rust 173/173、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 56/56 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-asr-module-split.md` |
 | `server.ts` 同时创建 Fastify/services、定义 schema、拥有全部 20 个 route 和安全/HTTP mapping | 已按 capability 收口为 112 行稳定 composition root 与私有 `routes/`：admin、desktop auth/account/LLM/update、billing 各有 owner；root raw-body parser、service/配置构造、公开导出和 Store/Prisma 事务保持不变，没有新增 plugin、facade 或依赖 | route/security characterization、boundary 6/6、server 65/65 与 build、app 549/549 与 lint、正常 Windows 权限 Rust 173/173、worker 515/515、scripts 23/23、docs/diff gates 通过；设计见 `docs/design-docs/2026-07-21-server-route-module-split.md` |
 | `task_manifest.rs` 同时拥有 canonical source policy、raw schema、安全投影、storage/path effects、validated access 与内联测试 | 已按职责收口为 26 行唯一稳定 root 与私有 `source_identity/schema/storage/access/tests`；raw DTO/path/write primitives 不经 root re-export，所有既有调用者路径和 URL-only support predicate 保持不变，没有新增 facade 或 local-media source union | edit-session characterization 先 GREEN，ownership gate 从 missing-owner RED 转为完整私有树 GREEN；focused 15/15、正常 Windows 权限 Rust 175/175、app 549/549、scripts 23/23、rustfmt/lint/build/Tauri no-bundle/governance/scope/diff 通过；设计见 `docs/design-docs/2026-07-21-task-manifest-module-split.md` |
+| Python transcript/AI 与 Rust manifest/transcript edit 仍有 direct 或多文件顺序写入 | **发布阻断，尚未实现**：现有 atomic helper 已保护媒体、Python manifest 与 preference snapshot，但不能保证其余权威文件不被截断，也不能让 existing-task 多文件更新恢复为一个完整 revision；已决定补齐单文件 atomic replace + closed prepared/committed task journal | Phase 2 设计见 `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`；active ExecPlan `docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`；实施前不得把 transaction consistency 写成现状 |
 
 ### 如何使用这张表
 

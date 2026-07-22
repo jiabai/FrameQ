@@ -2,6 +2,26 @@
 
 ## Active UI Work
 
+- [ ] Close broad-release atomic persistence blocker (2026-07-22) — ✅ Acceptance: every
+  authoritative transcript, AI, preference, manifest, and Rust transcript-edit file uses reviewed
+  same-directory atomic replacement; existing-task multi-file updates recover through the closed
+  prepared/committed journal to one complete revision; paths, schemas, content bytes, History,
+  Credits, and local-media planning remain unchanged. ExecPlan:
+  `docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`.
+
+- [ ] Close broad-release worker watchdog blocker (2026-07-22) — ✅ Acceptance: every supervised
+  worker has a Rust-owned fixed absolute deadline, progress-capable jobs also have a validated-idle
+  deadline, timeout terminates/reaps the matching process tree, structured-result/cancellation race
+  rules remain truthful, and AI is never automatically retried. ExecPlan:
+  `docs/exec-plans/active/2026-07-22-worker-watchdog-plan.md`.
+
+- [ ] Plan and close broad-release server concurrency/operations blocker (2026-07-22) — ✅
+  Acceptance: audit OTP/ticket/quota check-then-write concurrency, multi-instance correctness,
+  database constraints/transactions, rate limiting, observability, backup/restore, and deployment
+  runbooks in a separate product/design/ExecPlan before broad publication. This remains outside the
+  two desktop reliability plans and must not be assumed complete from existing entitlement
+  transaction coverage.
+
 - [x] Replace the false process-video request with strict contract v3 (2026-07-18) - ✅ Acceptance:
   React sends only URL intent; Rust alone resolves app-local ASR configuration and sends exact
   `contract_version + url + asr_model` worker input; Python rejects legacy/additional/mismatched

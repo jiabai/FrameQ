@@ -75,6 +75,11 @@ remain governed by the existing separate summary/inspiration confirmation.
   App 549/549, normal Windows Rust 175/175, scripts 23/23, Ruff/lint/build/rustfmt/Tauri no-bundle,
   and recursive 61/61 packaged-worker equality passed. No local-media checkbox or runtime behavior
   was implemented by this prerequisite.
+- [x] 2026-07-22: Registered atomic task persistence and worker watchdog as shared broad-release
+  dependencies. The future `ProcessLocalMedia` job inherits the media timeout policy, and local
+  task writes must use the completed persistence boundary rather than a parallel implementation.
+  Validation: reliability product/design docs and two independent active ExecPlans were indexed;
+  no local-media runtime checkbox was completed.
 - [ ] 2026-07-16: Implement Rust selection, strict IPC, worker local-media pipeline, source-aware
   task persistence/History, and UI composition. Validation: focused suites and packaged-worker
   equality must pass.
@@ -129,6 +134,9 @@ remain governed by the existing separate summary/inspiration confirmation.
   task JSON used direct `write_text` and artifact discovery trusted existence. The implemented
   shared atomic-file boundary now stages, syncs, validates media, replaces per file, removes handled
   partials, and restricts artifact discovery to known ordinary official files.
+- Evidence: the shared runner still has no production watchdog and transcript/AI/Rust edit paths are
+  not yet fully crash-consistent. Local-media runtime must not ship around those active release
+  blockers; its future semantic job and task finalization reuse their accepted owners.
 - Evidence: the task-result adapter now closes typed process/retry failure policy, but the remaining
   `video_processing.rs` still combines strict AI retry, model-aware URL cache, source-identity
   preflight, ASR request preparation, diagnostics, and Tauri command orchestration. The approved
@@ -166,6 +174,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   coverage test until the real pipeline lands. Rationale: fake emissions would misstate product
   behavior, while leaving the registry implicit would allow desktop/worker drift.
   Date/Author: 2026-07-20, Codex.
+- Decision: Make the future `ProcessLocalMedia` job use the fixed process-media watchdog policy and
+  the shared atomic persistence/task recovery boundary. Rationale: local import is another producer
+  in the same supervised task lifecycle, not a reason to create separate timers, final-path writers,
+  or transaction formats. Date/Author: 2026-07-22, Codex.
 - Decision: Normalize every source to 16 kHz mono 16-bit PCM `media/audio.wav`, which is the only ASR
   input. Rationale: one deterministic artifact contract isolates codec/container differences from
   SenseVoice and existing playback/transcript behavior. Date/Author: 2026-07-16, User + Codex.

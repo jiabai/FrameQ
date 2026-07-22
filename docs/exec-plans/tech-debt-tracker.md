@@ -1,12 +1,14 @@
 # Tech Debt Tracker
 
-Last updated: 2026-07-12
+Last updated: 2026-07-22
 
 ## High Priority
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| None | No high-priority MVP debt remains after final validation | N/A | N/A |
+| Authoritative transcript/AI/manifest writes are not fully crash-consistent | Direct and sequential final-path writes can truncate a file or expose a mixed existing-task revision after interruption. Consumer-scale filesystem failures make this a release blocker. | `docs/product-specs/2026-07-22-release-reliability-hardening.md`; `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`; atomic persistence ExecPlan | Every authoritative writer uses reviewed atomic replacement; the closed task transaction/recovery matrix passes in Python and Rust; full packaging and available native gates are recorded. |
+| Supervised worker execution has no watchdog | The shared Rust runner can wait forever on a hung Python/native/provider child, leaving ordinary users stuck in a busy state and potentially retaining descendants. | `app/src-tauri/src/worker_runtime/runner.rs`; `docs/design-docs/2026-07-22-rust-worker-watchdog.md`; watchdog ExecPlan | Fixed operation-owned idle/absolute deadlines, instance-safe tree termination, closed timeout mappings, deterministic race tests, and available Windows/macOS evidence pass. |
+| Broad-release server concurrency and operations boundary is not closed | Existing entitlement transaction work does not by itself prove OTP/ticket/quota check-then-write correctness under concurrent multi-instance traffic or provide rate-limit, observability, backup/restore, and deployment runbooks. | `server/src/`; `docs/product-specs/2026-07-10-server-entitlement-transaction-safety.md`; 2026-07-22 release review | Complete and accept a separate product/design/ExecPlan with database-level concurrency tests and production operations evidence before broad publication. |
 
 ## Completed / Resolved
 

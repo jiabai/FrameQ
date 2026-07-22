@@ -15,6 +15,7 @@
 - Worker pipeline 模块拆分设计：`docs/design-docs/2026-07-21-worker-pipeline-module-split.md`
 - Server route 模块拆分设计：`docs/design-docs/2026-07-21-server-route-module-split.md`
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
+- Rust worker watchdog 设计：`docs/design-docs/2026-07-22-rust-worker-watchdog.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
 - ASR 模块拆分设计：`docs/design-docs/2026-07-20-asr-module-split.md`
@@ -41,11 +42,14 @@
 - 工作流：`WORKFLOW.md`
 - 完成门禁：`docs/EXECUTION_GATES.md`
 - 产品规格索引：`docs/product-specs/index.md`
+- 发布可靠性规格：`docs/product-specs/2026-07-22-release-reliability-hardening.md`
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- 当前 active 原子持久化计划：`docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`
+- 当前 active worker watchdog 计划：`docs/exec-plans/active/2026-07-22-worker-watchdog-plan.md`
 - 最近完成执行计划：`docs/exec-plans/completed/2026-07-21-worker-pipeline-module-split-plan.md`
 - 技术债：`docs/exec-plans/tech-debt-tracker.md`
 

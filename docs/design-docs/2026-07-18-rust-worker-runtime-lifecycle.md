@@ -18,6 +18,14 @@ A second 2026-07-19 follow-up implemented the closed terminal-result boundary de
 one-line, operation-aware parsing to `worker_runtime/result_protocol.rs` and carries
 `ValidatedWorkerResult`; application modules no longer consume arbitrary `serde_json::Value`.
 
+The implemented lifecycle still has no production execution deadline and currently waits through
+an unbounded `child.wait()`. The proposed release-hardening extension is intentionally specified in
+`docs/design-docs/2026-07-22-rust-worker-watchdog.md`: `worker_runtime` will add instance-bound idle
+and absolute deadline ownership while preserving this document's spawn, cancellation,
+process-tree, finish, and structured-result-first rules. Until that plan is implemented and
+verified, worker watchdog coverage remains a broad-release blocker rather than an implemented
+property of this lifecycle.
+
 ## Problem
 
 The Rust desktop layer has one documented `ProcessSupervisor` state machine per process lane, but
