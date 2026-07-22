@@ -1,5 +1,38 @@
 # FrameQ Architecture
 
+## 2026-07-22 Server authentication, quota, and production operations boundary (planned)
+
+- Broad publication is blocked on two active server ExecPlans. The authentication/quota plan owns
+  database correctness; the production-operations plan owns configuration, trusted proxy,
+  observability, lifecycle, migration deployment, backup/restore, and CI. Neither is implemented by
+  the documentation decision.
+- `Store` is the consistency facade for critical multi-entity use cases. Authentication services
+  generate raw OTP/ticket/session/CSRF values but pass only hashes into purpose-specific semantic
+  Store operations. Routes remain HTTP adapters and cannot assemble Prisma transactions.
+- OTP challenges gain closed `desktop_login`/`admin_login` purpose, exact-scope replacement, atomic
+  attempt/consume/artifact creation, and database-backed email/IP dispatch limits. One challenge
+  creates at most one ticket/admin session and never exceeds five attempts.
+- Desktop ticket consumption and session creation become one transaction. Session insertion failure
+  rolls back ticket consumption; concurrent exchange yields one session.
+- AI Credit checkout uses one parameterized conditional entitlement update guarded by
+  `llmQuotaUsed < llmQuotaLimit` and one same-transaction unique `(userId, requestId)` usage event.
+  It preserves `consumed/reused/unavailable` semantics without supplier calls during database retry.
+- Correctness comes from conditional writes, transactions, checks, and unique constraints, not a
+  JavaScript mutex or SQLite's ordinary writer serialization. Tests must use independent Prisma
+  clients against one real temporary SQLite file. Supported production remains one server instance
+  per local SQLite file; shared-network/multi-host SQLite remains forbidden.
+- The repository establishes a current-schema Prisma migration baseline and a separate hardening
+  migration. Production moves from `db push` to preflight + backup + `migrate deploy`, with full
+  database restore as rollback and no silent quota clamping.
+- Production startup validates a closed config and requires explicit SMTP/secrets. Fastify emits
+  redacted structured lifecycle/outcome logs, trusts forwarded IP only from loopback Nginx, exposes
+  fixed `/health/live` and database-aware `/health/ready`, and drains Fastify/Prisma through one
+  bounded idempotent signal coordinator.
+- The durable decision is
+  `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; implementation steps are
+  `docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md` and
+  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`.
+
 ## 2026-07-22 Broad-release reliability boundary (persistence and watchdog implemented)
 
 - The authoritative-persistence half of this boundary is implemented on `main` at `61d489a`.
@@ -26,8 +59,9 @@
   `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`,
   `docs/design-docs/2026-07-22-rust-worker-watchdog.md` and the completed atomic-persistence and
   worker-watchdog ExecPlans.
-- Server OTP/ticket/quota concurrency and production operations remain a separate broad-release
-  blocker; the desktop persistence/watchdog architecture does not close it.
+- Server OTP/ticket/quota concurrency and production operations remain a separately designed
+  broad-release blocker; the desktop persistence/watchdog architecture does not close either active
+  server ExecPlan.
 
 ## 2026-07-20 ASR application module boundary
 

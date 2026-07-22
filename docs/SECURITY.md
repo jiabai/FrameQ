@@ -1,5 +1,49 @@
 # Security and Compliance
 
+## 2026-07-22 Server Authentication, Quota, and Operations Hardening (Planned)
+
+- Broad publication remains blocked until both active server hardening ExecPlans are implemented and
+  accepted. This section records the approved target boundary; it is not evidence that current
+  check-then-write paths are already atomic.
+- OTP challenges are isolated by closed purpose (`desktop_login` or `admin_login`) plus normalized
+  email and state. One database transaction records an attempt, conditionally consumes a correct
+  challenge, and creates the ticket/admin session. Missing, expired, consumed, wrong-purpose,
+  wrong-code, and attempt-exhausted cases share one public invalid response.
+- OTP dispatch limiting is database-backed and atomically applies normalized-email and trusted-client-
+  IP policies before challenge creation. A process-local map or client-supplied forwarding header is
+  not authoritative. Fastify may trust forwarded addresses only from the documented loopback Nginx
+  peer; `trustProxy: true` is forbidden.
+- Desktop ticket consumption and hashed session insertion commit or roll back together. Raw ticket,
+  desktop session, administrator session, and CSRF values remain service/response-only values and
+  never enter database or Store return fields in plaintext.
+- AI Credit checkout uses a parameterized conditional quota update and the existing unique
+  `(userId, requestId)` event in one transaction. Same-request replay consumes once; distinct
+  concurrent requests cannot exceed remaining quota; an event-write failure rolls back the
+  increment. Bounded database conflict retry never calls the LLM supplier.
+- The migration adds closed-purpose/attempt/quota checks and rejects invalid historical accounting
+  state rather than clamping it. Outstanding legacy OTPs are invalidated instead of assigned a
+  guessed purpose. Production migration requires preflight, backup, integrity/restore rehearsal,
+  and matched database/code/config rollback.
+- Production missing/partial SMTP or required secret configuration is a startup failure. Console OTP
+  requires explicit non-production opt-in and is rejected in production. Startup/config errors name
+  variables only and never print values.
+- Structured production logs may contain generated request ID, matched route/method/status, duration
+  bucket, readiness/lifecycle transition, and stable semantic outcome/error code. They must not
+  contain bodies, OTPs, raw email/IP/state, Authorization/Cookie/Set-Cookie, session/CSRF/ticket/
+  activation values or hashes, LLM/SMTP/payment secrets, request IDs used for quota, prompts,
+  transcripts, generated content, payment payloads, or raw Prisma/SQLite exception text.
+- `/health/live` and `/health/ready` return fixed non-secret bodies. Readiness checks only startup,
+  compatible/reachable SQLite, and non-draining state; it does not send SMTP, call an LLM, reveal
+  config/version/path/user counts, or weaken capability-specific account checks.
+- Shutdown first marks readiness false, then drains Fastify and disconnects Prisma through one
+  idempotent deadline-bound sequence. Startup failure closes partial resources. A timeout emits one
+  safe code and exits nonzero before the systemd stop deadline.
+- Independent Prisma clients against one real temporary SQLite file, secret-seeded log/response
+  tests, real child-process signal tests, and disposable backup/restore rehearsal are security gates.
+  Single-client unit tests or untested runbook prose do not close this boundary.
+- Durable design:
+  `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`.
+
 ## 2026-07-22 Release Reliability and Crash-Consistency Boundary
 
 - Authoritative persistence is implemented on `main` at `61d489a`: reviewed owners use atomic
@@ -585,11 +629,14 @@
 
 - The account service stores only email accounts, OTP metadata, session token hashes, activation-code hashes/prefixes, entitlements, admin sessions, LLM config metadata, and quota events.
 - Desktop session tokens are opaque random values. The server stores SHA-256 hashes only; the desktop client stores the raw token in app-local data under `auth/session.json`.
-- Email OTP codes expire after 10 minutes, allow at most 5 attempts, and must be rate-limited by email and IP.
+- Email OTP codes expire after 10 minutes, allow at most 5 attempts, are purpose-scoped, and must be
+  rate-limited atomically by normalized email and trusted client IP.
 - Login deep-link tickets expire after 5 minutes, are single-use, and must be bound to a desktop-generated `state` value.
 - SMTP credentials and server encryption keys must only be configured through the server environment. They must not be bundled into the desktop installer.
 - Activation codes must be high-entropy, single-use, and stored as hashes only. The full code is displayed once when an administrator creates it.
-- Admin Web access is restricted to `FRAMEQ_ADMIN_EMAIL`, defaults to `lantianye@163.com`, and uses HttpOnly 12-hour sessions. Admin write routes must validate CSRF tokens.
+- Admin Web access is restricted to `FRAMEQ_ADMIN_EMAIL` and uses HttpOnly 12-hour sessions. The
+  historical development fallback is not a valid production configuration; production must set the
+  administrator email explicitly. Admin write routes must validate CSRF tokens.
 - The service must not accept uploads or API fields containing video, audio, transcript, insight, cookie, or user-local configuration data.
 - The service may store a dedicated FrameQ client LLM API key. It must be encrypted at rest with `FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY`, never displayed in full, and treated as revocable client runtime material rather than a supplier master key.
 - The dedicated client LLM key is delivered to authenticated entitled desktop clients during checkout. This improves out-of-box setup but does not prevent extraction from a compromised client; supplier-side key rotation and quota controls remain required.

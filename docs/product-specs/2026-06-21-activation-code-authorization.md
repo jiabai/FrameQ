@@ -23,7 +23,9 @@ The monthly pass is the user-facing entitlement name: one successful activation 
 
 ## Admin Requirements
 
-- Admin login uses email OTP and only allows `FRAMEQ_ADMIN_EMAIL`, defaulting to `lantianye@163.com`.
+- Admin login uses a purpose-scoped email OTP and only allows `FRAMEQ_ADMIN_EMAIL`. Development may
+  retain `lantianye@163.com` as an explicit compatibility fallback, but production startup requires
+  the administrator email to be configured.
 - Admin sessions are stored in HttpOnly cookies and expire after 12 hours.
 - The Admin page can generate one-time activation codes for 31-day monthly passes with a default 30-day redemption deadline.
 - The Admin page lists users, current entitlement status, and activation code status.
@@ -40,4 +42,6 @@ The monthly pass is the user-facing entitlement name: one successful activation 
 - Admin can log in with `lantianye@163.com`, generate a code, and see it listed without full plaintext storage.
 - A desktop user can redeem a valid code once and immediately receives an active monthly pass with `can_process=true`.
 - Reusing the same code, redeeming an expired code, or using a wrong code does not extend the monthly pass entitlement.
+- One administrator OTP creates at most one administrator session and cannot be consumed by the
+  desktop-login flow; OTP attempt/consume/session writes commit or roll back together.
 

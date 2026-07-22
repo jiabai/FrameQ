@@ -6,7 +6,7 @@ Last updated: 2026-07-22
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Broad-release server concurrency and operations boundary is not closed | Existing entitlement transaction work does not by itself prove OTP/ticket/quota check-then-write correctness under concurrent multi-instance traffic or provide rate-limit, observability, backup/restore, and deployment runbooks. | `server/src/`; `docs/product-specs/2026-07-10-server-entitlement-transaction-safety.md`; 2026-07-22 release review | Complete and accept a separate product/design/ExecPlan with database-level concurrency tests and production operations evidence before broad publication. |
+| Broad-release server concurrency and operations boundary is designed but not implemented | Existing entitlement transaction work does not prove OTP/ticket/quota correctness under concurrent independent database clients, and current production startup still lacks fail-closed SMTP, safe observability, health/shutdown ownership, reviewed migration deploy, restored-backup evidence, and server CI. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active server auth/quota and production-operations ExecPlans | Complete and accept both active server plans, including independent-client SQLite concurrency/rollback, secret-seeded logging/config/lifecycle tests, hosted CI, and disposable migration/restore/staging evidence; then rerun the combined release gate. |
 
 ## Completed / Resolved
 

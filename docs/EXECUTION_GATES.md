@@ -28,8 +28,18 @@
   rollback 文件或触碰 task root 外路径。
 - 可用的 Windows/macOS 环境必须分别记录原子替换/恢复和 watchdog parent-child 清理证据；
   缺失平台记录为未验证残余风险，不得默认通过。
-- 发布前必须另行关闭 server OTP/ticket/quota 并发与生产运维门禁；桌面本地验证不能替代
-  数据库并发、限流、可观测性、备份恢复和部署 runbook 证据。
+- 发布前必须完成并接受 server 认证/额度并发计划：OTP purpose、attempt、artifact 和 ticket/
+  session 必须由语义 Store 事务原子提交；额度必须使用数据库条件更新和唯一 request event，
+  并由至少两个独立 Prisma client 连接同一真实临时 SQLite 文件证明不重复、不超额和故障回滚。
+- OTP dispatch 必须由数据库原子执行 email + trusted-client-IP 限流；`trustProxy` 只允许文档化
+  的 loopback Nginx peer。进程内 Map、单 client `Promise.all` 或 SQLite “通常单 writer”不能
+  作为并发通过证据。
+- 发布前必须完成并接受 server 生产运维计划：production SMTP/必需 secrets fail closed，结构化
+  日志通过 secret-seeded 脱敏测试，live/ready 状态真实，SIGTERM 实际 drain Fastify 并断开
+  Prisma，server 专用 CI 通过。
+- SQLite 生产变更必须使用已审查 baseline + forward migration，且有 preflight、停机备份、
+  checksum/权限/异地留存、隔离 restore、`PRAGMA integrity_check` 和匹配 code/database/config
+  回滚证据；`prisma db push` 和只有备份没有恢复演练都不能关闭发布门禁。
 
 ## Soft Gates
 

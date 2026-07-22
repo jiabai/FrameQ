@@ -22,12 +22,23 @@
   Tauri `--no-bundle` passed; native Windows parent/descendant timeout cleanup passed. macOS runtime
   execution remains unverified while the portable fixture is enforced by the hosted workflow.
 
-- [ ] Plan and close broad-release server concurrency/operations blocker (2026-07-22) — ✅
-  Acceptance: audit OTP/ticket/quota check-then-write concurrency, multi-instance correctness,
-  database constraints/transactions, rate limiting, observability, backup/restore, and deployment
-  runbooks in a separate product/design/ExecPlan before broad publication. This remains outside the
-  two desktop reliability plans and must not be assumed complete from existing entitlement
-  transaction coverage.
+- [ ] Close broad-release server authentication/quota concurrency blocker (2026-07-22) — ✅
+  Acceptance: purpose-scoped OTP dispatch/attempt/artifact and ticket/session exchange commit through
+  semantic Store transactions; AI Credit checkout uses one conditional quota update plus the unique
+  request event; independent Prisma clients on one real temporary SQLite file prove single-use,
+  capacity, idempotency, bounded conflict retry, and injected rollback. Design:
+  `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`. Planning and
+  documentation are complete; implementation evidence is pending and existing entitlement
+  transaction tests do not close this gate.
+
+- [ ] Close broad-release server production-operations blocker (2026-07-22) — ✅ Acceptance:
+  production required config/SMTP fails closed; console OTP is explicit non-production only;
+  redacted structured logs, loopback-only trusted proxy, live/ready endpoints, bounded SIGTERM
+  drain/disconnect, reviewed migrations, backup/restore rehearsal, deployment runbook, and dedicated
+  hosted server CI all pass without secret-bearing evidence. ExecPlan:
+  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`. This gate is
+  separate from database correctness and both must pass before broad publication.
 
 - [x] Replace the false process-video request with strict contract v3 (2026-07-18) - ✅ Acceptance:
   React sends only URL intent; Rust alone resolves app-local ASR configuration and sends exact
