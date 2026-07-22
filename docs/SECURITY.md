@@ -1,10 +1,11 @@
 # Security and Compliance
 
-## 2026-07-22 Planned Release Reliability and Crash-Consistency Boundary
+## 2026-07-22 Release Reliability and Crash-Consistency Boundary
 
-- This boundary is approved but not implemented. Broad consumer publication remains blocked while
-  authoritative transcript/AI/Rust edit writes can be sequential and supervised workers can wait
-  without a production deadline.
+- Authoritative persistence is implemented on `main` at `61d489a`: reviewed owners use atomic
+  replacement and existing-task multi-file updates recover through the closed task journal. Broad
+  consumer publication remains blocked because supervised workers still have no production
+  deadline; watchdog requirements below remain approved target behavior until its ExecPlan passes.
 - Every authoritative destination must use same-directory staging, closed-handle sync, validation,
   and atomic replacement. A task-local transaction journal may contain only schema/state, random
   transaction ID, normalized allowlisted relative internal paths, and existed-before markers. It
@@ -160,11 +161,10 @@
 - `frameq-task.json` is installed atomically after its complete payload is serialized. It may record
   only committed ordinary files at known task-owned paths; existence of an arbitrary or partial file
   is insufficient evidence for registration.
-- The implemented Phase 1 per-file atomicity does not promise a cross-file transaction. A failure
-  may retain a previously committed valid artifact, matching existing partial-task preservation,
-  while never claiming a partial artifact succeeded. The approved 2026-07-22 Phase 2 adds a closed
-  prepared/committed journal and recovery-before-read for transcript/AI/Rust edit bundles; it must
-  not be described as active until its ExecPlan passes.
+- Phase 1 per-file media atomicity still preserves independently committed valid artifacts under
+  existing partial-task behavior. The implemented 2026-07-22 Phase 2 adds the closed
+  prepared/committed journal and recovery-before-read for transcript/AI/Rust edit bundles, so a
+  supported existing task resolves to the complete previous or new revision before product access.
 
 ## 2026-07-18 Process-video request contract v3 boundary
 

@@ -6,11 +6,24 @@ Last updated: 2026-07-22
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Authoritative transcript/AI/manifest writes are not fully crash-consistent | Direct and sequential final-path writes can truncate a file or expose a mixed existing-task revision after interruption. Consumer-scale filesystem failures make this a release blocker. | `docs/product-specs/2026-07-22-release-reliability-hardening.md`; `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`; atomic persistence ExecPlan | Every authoritative writer uses reviewed atomic replacement; the closed task transaction/recovery matrix passes in Python and Rust; full packaging and available native gates are recorded. |
 | Supervised worker execution has no watchdog | The shared Rust runner can wait forever on a hung Python/native/provider child, leaving ordinary users stuck in a busy state and potentially retaining descendants. | `app/src-tauri/src/worker_runtime/runner.rs`; `docs/design-docs/2026-07-22-rust-worker-watchdog.md`; watchdog ExecPlan | Fixed operation-owned idle/absolute deadlines, instance-safe tree termination, closed timeout mappings, deterministic race tests, and available Windows/macOS evidence pass. |
 | Broad-release server concurrency and operations boundary is not closed | Existing entitlement transaction work does not by itself prove OTP/ticket/quota check-then-write correctness under concurrent multi-instance traffic or provide rate-limit, observability, backup/restore, and deployment runbooks. | `server/src/`; `docs/product-specs/2026-07-10-server-entitlement-transaction-safety.md`; 2026-07-22 release review | Complete and accept a separate product/design/ExecPlan with database-level concurrency tests and production operations evidence before broad publication. |
 
 ## Completed / Resolved
+
+### P1 Atomic Authoritative Persistence
+
+- Status: completed and merged to `main` at `61d489a`.
+- Resolution: All FrameQ-owned authoritative transcript, AI, preference, manifest, and Rust
+  transcript-edit writers use reviewed same-directory atomic replacement. Existing-task multi-file
+  updates use the closed prepared/committed journal and recovery-before-read boundary in Python and
+  Rust.
+- Evidence: Worker 563 passed / 2 skipped, App 551 passed, Windows Rust 185 passed, scripts 25
+  passed, packaged-worker 63-file equality and Tauri `--no-bundle` passed; the implementation plan
+  is archived at `docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`.
+- Residual risk: macOS/Unix native permission, symlink and forced-exit fixtures plus real Tauri
+  transcript/AI smoke were unavailable and remain explicitly unverified. External programs that
+  bypass FrameQ task access are outside the transaction guarantee.
 
 ### P2 God Component Split
 

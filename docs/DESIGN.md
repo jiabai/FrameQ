@@ -17,8 +17,10 @@
 - Primary guidance remains non-technical. Sanitized technical details stay in the existing collapsed
   disclosure and may show only stable codes/bounded safe diagnostics, never paths, request payloads,
   transcript text, prompts, generated text, or raw worker/OS prose.
-- These behaviors are planned by the 2026-07-22 release-reliability specification and are not
-  current acceptance claims until both active reliability ExecPlans complete.
+- Persistence-recovery behavior is implemented by the completed atomic-persistence ExecPlan.
+  Worker timeout behavior remains planned and must not be presented as current capability until the
+  active watchdog ExecPlan completes. Unavailable macOS/Unix native and real-Tauri acceptance stays
+  explicit residual validation rather than an inferred pass.
 
 ## Local Media Input and Source-Aware Workspace
 

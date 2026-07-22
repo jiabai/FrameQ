@@ -1,11 +1,13 @@
 # FrameQ Architecture
 
-## 2026-07-22 Planned broad-release reliability boundary (not implemented)
+## 2026-07-22 Broad-release reliability boundary (persistence implemented; watchdog planned)
 
-- Broad consumer publication is blocked on two independent desktop runtime changes. The current
-  implementation still has direct/sequential authoritative transcript and AI writes plus an
-  unbounded Rust `child.wait()`; this section records the accepted target architecture, not current
-  runtime capability.
+- The authoritative-persistence half of this boundary is implemented on `main` at `61d489a`.
+  Transcript, AI, preference, manifest, and Rust transcript-edit owners use reviewed atomic
+  replacement, while existing-task bundles recover through the closed prepared/committed journal.
+- Broad consumer publication remains blocked on the independent worker-watchdog change. The current
+  Rust runner still has an unbounded `child.wait()`; the watchdog bullets below describe the
+  accepted target architecture rather than current runtime capability.
 - Persistence keeps two layers distinct. A shared Python/Rust same-directory staging + sync +
   atomic-replace primitive prevents individual-file truncation. A closed task-local
   prepared/committed journal makes existing-task transcript and AI bundles recover to one complete
@@ -22,7 +24,8 @@
 - Durable decisions and implementation steps are in
   `docs/product-specs/2026-07-22-release-reliability-hardening.md`,
   `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`,
-  `docs/design-docs/2026-07-22-rust-worker-watchdog.md`, and their two active ExecPlans.
+  `docs/design-docs/2026-07-22-rust-worker-watchdog.md`, the completed atomic-persistence ExecPlan,
+  and the active worker-watchdog ExecPlan.
 - Server OTP/ticket/quota concurrency and production operations remain a separate broad-release
   blocker; the desktop persistence/watchdog architecture does not close it.
 
@@ -39,9 +42,11 @@
 - Provider modules never import the registry, and no private module imports the stable root or
   application orchestration. `qwen_asr`, `funasr`, and `numpy` remain lazy; importing the stable
   root does not load a provider SDK or initialize a model.
-- SenseVoice VAD remains best-effort and falls back to the existing full-audio call. Provider
-  failures, model order/defaults, source-identity validation-before-directory-creation, filenames,
-  Markdown/JSON shape, direct non-atomic writes, and public error behavior are unchanged.
+- SenseVoice VAD remains best-effort and falls back to the existing full-audio call. At this
+  structural checkpoint provider failures, model order/defaults, source-identity
+  validation-before-directory-creation, filenames, Markdown/JSON shape, direct non-atomic writes,
+  and public error behavior were unchanged; `61d489a` later replaced those writes without changing
+  the ASR formats.
 - The canonical `worker/frameq_worker/` tree remains authoritative. Packaging validation refreshed
   the ignored Tauri resource through the established build path and proved all 56 relative files
   byte-equal, including the new private package. Worker contracts, local-media runtime, manifests,
@@ -153,10 +158,11 @@
 - Video and audio use independent per-file commits. A later audio failure may preserve an already
   committed valid video under existing partial-task semantics, but incomplete staging media never
   enters artifacts, results, History, or cache authority.
-- The implemented 2026-07-19 boundary does not add local-media contract v4, change manifest schema
-  v3/result DTOs, or make transcript and AI artifact writers transactional. Those remaining paths
-  are now a planned broad-release Phase 2, not an implemented property. The durable decision is
-  recorded in `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`.
+- The original 2026-07-19 boundary did not add local-media contract v4 or change manifest schema
+  v3/result DTOs. Release-hardening Phase 2 is now implemented: transcript/AI/Rust edit owners use
+  per-file atomic replacement and existing-task updates use the closed journal/recovery boundary.
+  The durable decision and residual native validation risks are recorded in
+  `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md` and the completed ExecPlan.
 
 ## 2026-07-19 Media preparation facade boundary
 

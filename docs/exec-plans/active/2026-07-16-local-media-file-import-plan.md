@@ -78,8 +78,8 @@ remain governed by the existing separate summary/inspiration confirmation.
 - [x] 2026-07-22: Registered atomic task persistence and worker watchdog as shared broad-release
   dependencies. The future `ProcessLocalMedia` job inherits the media timeout policy, and local
   task writes must use the completed persistence boundary rather than a parallel implementation.
-  Validation: reliability product/design docs and two independent active ExecPlans were indexed;
-  no local-media runtime checkbox was completed.
+  Validation: reliability product/design docs, the completed atomic-persistence ExecPlan, and the
+  active watchdog ExecPlan are indexed; no local-media runtime checkbox was completed.
 - [ ] 2026-07-16: Implement Rust selection, strict IPC, worker local-media pipeline, source-aware
   task persistence/History, and UI composition. Validation: focused suites and packaged-worker
   equality must pass.
@@ -134,9 +134,9 @@ remain governed by the existing separate summary/inspiration confirmation.
   task JSON used direct `write_text` and artifact discovery trusted existence. The implemented
   shared atomic-file boundary now stages, syncs, validates media, replaces per file, removes handled
   partials, and restricts artifact discovery to known ordinary official files.
-- Evidence: the shared runner still has no production watchdog and transcript/AI/Rust edit paths are
-  not yet fully crash-consistent. Local-media runtime must not ship around those active release
-  blockers; its future semantic job and task finalization reuse their accepted owners.
+- Evidence: the shared runner still has no production watchdog. Transcript/AI/Rust edit paths now
+  use the implemented atomic persistence and task-recovery owners. Local-media runtime must reuse
+  that completed persistence boundary and must not ship around the remaining watchdog blocker.
 - Evidence: the task-result adapter now closes typed process/retry failure policy, but the remaining
   `video_processing.rs` still combines strict AI retry, model-aware URL cache, source-identity
   preflight, ASR request preparation, diagnostics, and Tauri command orchestration. The approved

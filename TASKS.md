@@ -2,14 +2,16 @@
 
 ## Active UI Work
 
-- [ ] Close broad-release atomic persistence blocker (2026-07-22) — ✅ Acceptance: every
+- [x] Close broad-release atomic persistence blocker (2026-07-22) — ✅ Acceptance: every
   authoritative transcript, AI, preference, manifest, and Rust transcript-edit file uses reviewed
   same-directory atomic replacement; existing-task multi-file updates recover through the closed
   prepared/committed journal to one complete revision; paths, schemas, content bytes, History,
   Credits, and local-media planning remain unchanged. ExecPlan:
-  `docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`. Implementation and local
-  Windows/package gates are complete on `codex/atomic-persistence-hardening`; branch review/merge
-  and unavailable macOS/native forced-exit smoke remain before this broad-release item is closed.
+  `docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`. ✅ Merged to `main`
+  at `61d489a`; Worker 563 passed / 2 skipped, App 551 passed, Windows Rust 185 passed, scripts 25
+  passed, packaged-worker 63-file equality and Tauri `--no-bundle` passed. macOS/Unix native
+  permission/symlink/forced-exit and real Tauri transcript/AI smoke remain recorded residual risks,
+  not unverified pass claims.
 
 - [ ] Close broad-release worker watchdog blocker (2026-07-22) — ✅ Acceptance: every supervised
   worker has a Rust-owned fixed absolute deadline, progress-capable jobs also have a validated-idle

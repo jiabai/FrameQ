@@ -57,6 +57,11 @@ History behavior, provider calls, or AI Credits policy changes.
   fixtures skipped; App 551 passed; Rust 185 passed outside the restrictive process sandbox; scripts
   25 passed; Ruff, TypeScript/i18n lint, frontend build, rustfmt, governance, 63-file packaged-worker
   SHA-256 equality, and Tauri release `--no-bundle` build passed.
+- [x] 2026-07-22: Landed the reviewed implementation on `main` at `61d489a` by fast-forward merge,
+  reran the complete worker/app/Rust/script/lint/build/governance gates on the merged tree, removed
+  the clean feature worktree, and deleted the merged branch. Validation: Worker 563 passed / 2
+  skipped, App 551 passed, Rust 185 passed, scripts 25 passed, and the final `main` worktree was
+  clean.
 
 ## Surprises & Discoveries
 
@@ -102,14 +107,14 @@ History behavior, provider calls, or AI Credits policy changes.
 
 ## Outcomes & Retrospective
 
-Implementation and local acceptance are complete on `codex/atomic-persistence-hardening` and ready
-for branch review. Authoritative transcript, AI, manifest, preference-snapshot, and Rust transcript
-edit writes now use atomic replacement; existing-task bundles recover through journal v1 to the old
-or new complete revision. The current Windows host passed a real sharing-violation fixture and the
-full release build. Residual validation: macOS/Unix native permission, symlink, forced-termination,
-and real Tauri transcript/AI smoke were not available in this session. External programs that
-bypass FrameQ task access remain outside the product transaction guarantee. Broad publication also
-remains independently blocked on the worker-watchdog and server-operations plans.
+Implementation and recorded local acceptance are complete and landed on `main` in `61d489a`.
+Authoritative transcript, AI, manifest, preference-snapshot, and Rust transcript-edit writes now use
+atomic replacement; existing-task bundles recover through journal v1 to the old or new complete
+revision. The current Windows host passed a real sharing-violation fixture and the full local/package
+gates. Residual validation remains unverified for macOS/Unix native permission and symlink behavior,
+forced termination, and real Tauri transcript/AI smoke. External programs that bypass FrameQ task
+access remain outside the product transaction guarantee. Broad publication remains independently
+blocked on worker-watchdog and server-operations work.
 
 ## Context and Orientation
 
@@ -321,5 +326,5 @@ Manual/native acceptance:
 - All authoritative production writes enter reviewed atomic owners.
 - Every transaction crash point recovers deterministically and idempotently.
 - Full validation is GREEN and evidence is recorded here and in the active release plan.
-- The atomic-persistence high-priority debt entry is moved to completed only after review.
+- The atomic-persistence high-priority debt entry is recorded as completed after review and merge.
 - No tag, push, PR, or public release is part of this ExecPlan without separate authorization.

@@ -123,8 +123,11 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 前端 task workspace 展示门面、Python media preparation facade、Rust task-result adapter，
 以及后续 video processing、transcript detail、三平台 fallback、ASR、server routes、task
 manifest 和 worker pipeline 的模块边界收口。本文区分“已经存在的生产实现”与
-“2026-07-22 已登记但尚未实现的发布可靠性目标”，不把 local-media v4 runtime、原子
-transaction recovery 或 worker watchdog 误画成当前能力。
+“2026-07-22 已登记的发布可靠性目标”，不把 local-media v4 runtime 或 worker watchdog
+误画成当前能力。
+
+Post-baseline update：原子持久化与 transaction recovery 已在 `61d489a` 落地；本文仅同步
+该审计项的状态与证据，其余 UML、代码规模和依赖快照仍以 `3fd01e8` 为基线。
 
 范围规则：
 
@@ -2005,7 +2008,7 @@ stateDiagram-v2
 | `asr.py` 同时拥有模型 registry、两种 provider、SenseVoice VAD/WAV 与 transcript 文件写出 | 已按失败边界收口为 52 行稳定兼容入口和空 initializer；`types/qwen/sensevoice/registry/artifacts` 五个私有 owner 分离共享 contract、SDK、fallback、cache 环境与文件系统职责，生产调用方仍只导入 root | 行为新增 5 项、边界 9/9、focused 32/32、worker 515/515、app 549/549、正常 Windows 权限 Rust 173/173、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 56/56 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-asr-module-split.md` |
 | `server.ts` 同时创建 Fastify/services、定义 schema、拥有全部 20 个 route 和安全/HTTP mapping | 已按 capability 收口为 112 行稳定 composition root 与私有 `routes/`：admin、desktop auth/account/LLM/update、billing 各有 owner；root raw-body parser、service/配置构造、公开导出和 Store/Prisma 事务保持不变，没有新增 plugin、facade 或依赖 | route/security characterization、boundary 6/6、server 65/65 与 build、app 549/549 与 lint、正常 Windows 权限 Rust 173/173、worker 515/515、scripts 23/23、docs/diff gates 通过；设计见 `docs/design-docs/2026-07-21-server-route-module-split.md` |
 | `task_manifest.rs` 同时拥有 canonical source policy、raw schema、安全投影、storage/path effects、validated access 与内联测试 | 已按职责收口为 26 行唯一稳定 root 与私有 `source_identity/schema/storage/access/tests`；raw DTO/path/write primitives 不经 root re-export，所有既有调用者路径和 URL-only support predicate 保持不变，没有新增 facade 或 local-media source union | edit-session characterization 先 GREEN，ownership gate 从 missing-owner RED 转为完整私有树 GREEN；focused 15/15、正常 Windows 权限 Rust 175/175、app 549/549、scripts 23/23、rustfmt/lint/build/Tauri no-bundle/governance/scope/diff 通过；设计见 `docs/design-docs/2026-07-21-task-manifest-module-split.md` |
-| Python transcript/AI 与 Rust manifest/transcript edit 仍有 direct 或多文件顺序写入 | **发布阻断，尚未实现**：现有 atomic helper 已保护媒体、Python manifest 与 preference snapshot，但不能保证其余权威文件不被截断，也不能让 existing-task 多文件更新恢复为一个完整 revision；已决定补齐单文件 atomic replace + closed prepared/committed task journal | Phase 2 设计见 `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`；active ExecPlan `docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`；实施前不得把 transaction consistency 写成现状 |
+| Python transcript/AI 与 Rust manifest/transcript edit 仍有 direct 或多文件顺序写入 | **已在 `61d489a` 解决**：FrameQ 权威 transcript/AI/preference/manifest/Rust edit writers 均进入受审原子 owner；existing-task 通过 closed prepared/committed journal 恢复到旧或新完整 revision | Phase 2 设计见 `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`；completed ExecPlan `docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`；Worker 563/2 skipped、App 551、Windows Rust 185、scripts 25、63-file mirror 与 Tauri no-bundle 通过。macOS/Unix/真实 Tauri 仍为未验证残余风险 |
 
 ### 如何使用这张表
 

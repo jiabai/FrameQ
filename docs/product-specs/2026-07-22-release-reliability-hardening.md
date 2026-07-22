@@ -1,7 +1,7 @@
 # Release Reliability Hardening
 
 - Date: 2026-07-22
-- Status: Proposed; implementation required before broad consumer release
+- Status: Partially implemented; authoritative persistence complete, worker watchdog required
 - Scope: authoritative task persistence and supervised worker execution
 
 ## Summary
@@ -129,8 +129,10 @@ tests; it must not require a desktop-worker contract change.
 
 ## Release Gate
 
-Broad consumer publication is blocked until both linked ExecPlans are implemented, reviewed, and
-their automated and available native acceptance evidence is recorded in the active release plan.
+The authoritative-persistence ExecPlan is implemented, reviewed, and merged at `61d489a`. Broad
+consumer publication remains blocked until the linked worker-watchdog ExecPlan is implemented,
+reviewed, and its automated and available native acceptance evidence is recorded in the active
+release plan.
 An unavailable macOS or Windows environment must be recorded as unverified residual risk, not
 treated as a pass.
 

@@ -1,10 +1,10 @@
 # Worker Atomic Artifact Commit
 
 - Date: 2026-07-19
-- Status: Phase 1 implemented; release-hardening Phase 2 planned on 2026-07-22
+- Status: Phase 1 and release-hardening Phase 2 implemented; Phase 2 landed in `61d489a`
 - Related plan: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
 - Release-hardening plan:
-  `docs/exec-plans/active/2026-07-22-atomic-persistence-hardening-plan.md`
+  `docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`
 
 ## Context
 
@@ -79,10 +79,11 @@ below.
 
 ### Problem
 
-The worker still writes transcript TXT/Markdown/segments and AI summary/mindmap/insight files
-directly to their final names. Rust `task_manifest/storage.rs`, transcript Markdown/segments, and
-transcript editing also use direct or sequential final-path writes. A write failure can therefore
-truncate one file, while a crash between writes can expose a mixed revision of one logical update.
+Before Phase 2, the worker wrote transcript TXT/Markdown/segments and AI summary/mindmap/insight
+files directly to their final names. Rust `task_manifest/storage.rs`, transcript Markdown/segments,
+and transcript editing also used direct or sequential final-path writes, so a write failure could
+truncate one file and a crash between writes could expose a mixed logical revision. Phase 2 now
+routes these owners through the atomic and task-transaction boundaries described below.
 
 Per-file atomic replacement closes truncation but cannot by itself make several fixed paths change
 at the same instant. FrameQ therefore needs two distinct guarantees:
@@ -187,6 +188,9 @@ or retry a provider call.
   or equivalent bypass outside the reviewed atomic modules.
 - Re-run the complete worker, Rust, app, script, packaging-mirror, governance, and diff gates before
   removing the release blocker.
+
+Implementation and recorded acceptance evidence are archived in
+`docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`.
 
 ## Verification
 
