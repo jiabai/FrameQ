@@ -1,6 +1,6 @@
 use crate::worker_runtime::{
     TaskTerminalResult, ValidatedWorkerResult, WorkerRunError, WorkerRunErrorKind,
-    WorkerRunOutcome, WORKER_PROTOCOL_VIOLATION,
+    WorkerRunOutcome, WorkerTimeoutKind, WORKER_PROTOCOL_VIOLATION,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,6 +45,19 @@ pub(super) fn map_task_worker_result(
             "WORKER_CANCELLED",
             "Worker process was cancelled.",
         )),
+        Ok(WorkerRunOutcome::TimedOut(kind)) => {
+            let (code, message) = match kind {
+                WorkerTimeoutKind::Idle => (
+                    "WORKER_IDLE_TIMEOUT",
+                    "Worker process made no progress for too long.",
+                ),
+                WorkerTimeoutKind::Absolute => (
+                    "WORKER_EXECUTION_TIMEOUT",
+                    "Worker process exceeded the maximum execution time.",
+                ),
+            };
+            Ok(worker_failure_result(context, code, message))
+        }
         Ok(WorkerRunOutcome::UnstructuredFailure(_)) => {
             let message = context.failure_policy().unstructured_message;
             Ok(worker_failure_result(
@@ -59,13 +72,13 @@ pub(super) fn map_task_worker_result(
                 "WORKER_ALREADY_RUNNING",
                 "Another worker process is already running.",
             )),
-            WorkerRunErrorKind::SpawnFailed | WorkerRunErrorKind::RequestDeliveryFailed => {
-                Ok(worker_failure_result(
-                    context,
-                    "WORKER_REQUEST_TRANSPORT_FAILED",
-                    "Worker request could not be delivered.",
-                ))
-            }
+            WorkerRunErrorKind::SpawnFailed
+            | WorkerRunErrorKind::RequestDeliveryFailed
+            | WorkerRunErrorKind::WatchdogStartFailed => Ok(worker_failure_result(
+                context,
+                "WORKER_REQUEST_TRANSPORT_FAILED",
+                "Worker request could not be delivered.",
+            )),
             WorkerRunErrorKind::ProtocolViolation => Ok(worker_protocol_failure_result(context)),
             WorkerRunErrorKind::PipeUnavailable | WorkerRunErrorKind::WaitFailed => {
                 Err(error.detail.to_string())
@@ -107,7 +120,7 @@ mod tests {
     use super::{map_task_worker_result, TaskCommandContext};
     use crate::worker_runtime::{
         ModelDownloadTerminalResult, TaskTerminalResult, ValidatedWorkerResult, WorkerExitSummary,
-        WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome,
+        WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome, WorkerTimeoutKind,
     };
 
     fn task_value(result: &TaskTerminalResult) -> serde_json::Value {
@@ -185,6 +198,45 @@ mod tests {
     }
 
     #[test]
+    fn process_and_retry_timeouts_keep_context_shape_and_closed_safe_codes() {
+        for (context, status, stage) in [
+            (
+                TaskCommandContext::ProcessVideo,
+                "failed",
+                "video_extracting",
+            ),
+            (
+                TaskCommandContext::RetryInsights,
+                "partial_completed",
+                "insights_generating",
+            ),
+        ] {
+            for (kind, code, message) in [
+                (
+                    WorkerTimeoutKind::Idle,
+                    "WORKER_IDLE_TIMEOUT",
+                    "Worker process made no progress for too long.",
+                ),
+                (
+                    WorkerTimeoutKind::Absolute,
+                    "WORKER_EXECUTION_TIMEOUT",
+                    "Worker process exceeded the maximum execution time.",
+                ),
+            ] {
+                let result = map_task_worker_result(Ok(WorkerRunOutcome::TimedOut(kind)), context)
+                    .expect("map timeout");
+                let result = task_value(&result);
+
+                assert_eq!(result["status"], status);
+                assert_eq!(result["error"]["stage"], stage);
+                assert_eq!(result["error"]["code"], code);
+                assert_eq!(result["error"]["message"], message);
+                assert!(!result.to_string().contains("https://"));
+            }
+        }
+    }
+
+    #[test]
     fn mismatched_family_and_runtime_failures_use_fixed_safe_task_errors() {
         let mismatched = map_task_worker_result(
             Ok(WorkerRunOutcome::Structured(
@@ -207,6 +259,10 @@ mod tests {
             ),
             (
                 WorkerRunErrorKind::RequestDeliveryFailed,
+                "WORKER_REQUEST_TRANSPORT_FAILED",
+            ),
+            (
+                WorkerRunErrorKind::WatchdogStartFailed,
                 "WORKER_REQUEST_TRANSPORT_FAILED",
             ),
             (

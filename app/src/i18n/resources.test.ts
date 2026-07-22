@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { asrModelResources } from "./asrModelResources";
 import { RESOURCE_NAMESPACES, resources } from "./resources";
 import { SUPPORTED_LOCALES } from "./locale";
 
@@ -84,5 +85,28 @@ describe("bundled localization resources", () => {
         }
       }
     }
+  });
+
+  test("provides exact localized recovery guidance for model download timeouts", () => {
+    expect(asrModelResources).toMatchObject({
+      "zh-CN": {
+        notice: {
+          idleTimeout: "模型下载长时间没有新的进展，已停止。已下载的文件会保留，请稍后重试。",
+          executionTimeout: "模型下载已超过最长运行时间，已停止。已下载的文件会保留，请稍后重试。",
+        },
+      },
+      "zh-TW": {
+        notice: {
+          idleTimeout: "模型下載長時間沒有新的進度，已停止。已下載的檔案會保留，請稍後重試。",
+          executionTimeout: "模型下載已超過最長執行時間，已停止。已下載的檔案會保留，請稍後重試。",
+        },
+      },
+      "en-US": {
+        notice: {
+          idleTimeout: "The model download stopped after making no progress for too long. Downloaded files were kept; try again later.",
+          executionTimeout: "The model download reached the maximum run time and was stopped. Downloaded files were kept; try again later.",
+        },
+      },
+    });
   });
 });

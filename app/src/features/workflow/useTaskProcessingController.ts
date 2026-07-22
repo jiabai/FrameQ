@@ -254,6 +254,7 @@ export function useTaskProcessingController({
             text: result.text || current.text,
             summary: result.summary || current.summary,
             insights: result.insights.length > 0 ? result.insights : current.insights,
+            transcript: result.transcript ?? current.transcript,
           },
           target,
         ),

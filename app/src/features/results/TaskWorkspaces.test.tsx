@@ -502,4 +502,49 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("C:/private");
     await initializeI18n("zh-CN");
   });
+
+  test.each([
+    ["zh-CN", "处理已超过最长运行时间，FrameQ 已停止本次任务。现有结果已保留，请重试。"],
+    ["zh-TW", "處理已超過最長執行時間，FrameQ 已停止本次工作。現有結果已保留，請重試。"],
+    ["en-US", "FrameQ stopped this operation after it reached the maximum run time. Existing results were kept; try again."],
+  ] as const)(
+    "shows AI execution-timeout recovery guidance in %s",
+    async (locale, expectedGuidance) => {
+      await initializeI18n(locale);
+      const source = readyWorkflow();
+      const failedWorkflow = summarizeWorkerResult(
+        {
+          status: "partial_completed",
+          task_id: source.taskId,
+          task_dir: source.taskDir,
+          artifacts: source.artifacts,
+          text: source.text,
+          summary: source.summary,
+          insights: source.insights,
+          transcript: source.transcript,
+          error: {
+            code: "WORKER_EXECUTION_TIMEOUT",
+            message: "untrusted runtime detail",
+            stage: "insights_generating",
+          },
+        },
+        "summary",
+      );
+      const model = createTaskWorkspaceViewModel(failedWorkflow, aiAccount());
+      const markup = renderToStaticMarkup(
+        <AiGenerationWorkspace
+          model={model.ai}
+          quotaRemaining={8}
+          onSummaryAction={vi.fn()}
+          onInsightsAction={vi.fn()}
+          onViewTarget={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+
+      expect(markup).toContain(expectedGuidance);
+      expect(markup).not.toContain("untrusted runtime detail");
+      await initializeI18n("zh-CN");
+    },
+  );
 });

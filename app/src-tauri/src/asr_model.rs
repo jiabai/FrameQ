@@ -6,7 +6,7 @@ use crate::settings::{
 };
 use crate::worker_runtime::{
     ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerRunError, WorkerRunErrorKind,
-    WorkerRunOutcome, WORKER_PROTOCOL_MESSAGE,
+    WorkerRunOutcome, WorkerTimeoutKind, WORKER_PROTOCOL_MESSAGE,
 };
 use crate::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
@@ -215,13 +215,27 @@ fn map_model_download_run_result(
         ))) => Err(message),
         Ok(WorkerRunOutcome::Structured(_)) => Err(WORKER_PROTOCOL_MESSAGE.to_string()),
         Ok(WorkerRunOutcome::Cancelled) => Ok(ModelDownloadRunResult::Cancelled),
+        Ok(WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle)) => {
+            Err("ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT".to_string())
+        }
+        Ok(WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Absolute)) => {
+            Err("ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT".to_string())
+        }
         Ok(WorkerRunOutcome::UnstructuredFailure(_)) => {
             Err("ASR model download failed before returning a structured result.".to_string())
         }
-        Err(error) if error.kind == WorkerRunErrorKind::AlreadyRunning => {
-            Err("Another ASR model download is already running.".to_string())
+        Err(error) => Err(match error.kind {
+            WorkerRunErrorKind::AlreadyRunning => "Another ASR model download is already running.",
+            WorkerRunErrorKind::SpawnFailed | WorkerRunErrorKind::RequestDeliveryFailed => {
+                "ASR model download request could not be delivered."
+            }
+            WorkerRunErrorKind::WatchdogStartFailed => "Worker watchdog failed to start.",
+            WorkerRunErrorKind::PipeUnavailable | WorkerRunErrorKind::WaitFailed => {
+                "ASR model download runtime failed."
+            }
+            WorkerRunErrorKind::ProtocolViolation => WORKER_PROTOCOL_MESSAGE,
         }
-        Err(error) => Err(error.detail.to_string()),
+        .to_string()),
     }
 }
 
@@ -241,7 +255,7 @@ mod tests {
     use crate::settings::supported_asr_models;
     use crate::worker_runtime::{
         ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerExitSummary, WorkerRunError,
-        WorkerRunErrorKind, WorkerRunOutcome,
+        WorkerRunErrorKind, WorkerRunOutcome, WorkerTimeoutKind, WORKER_PROTOCOL_MESSAGE,
     };
     use crate::{bundled_python_path, path_to_env_string, RuntimePaths, WorkerCommandSpec};
     use std::collections::HashMap;
@@ -319,6 +333,16 @@ mod tests {
             Ok(ModelDownloadRunResult::Cancelled)
         );
         assert_eq!(
+            map_model_download_run_result(Ok(WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle,))),
+            Err("ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT".to_string())
+        );
+        assert_eq!(
+            map_model_download_run_result(Ok(WorkerRunOutcome::TimedOut(
+                WorkerTimeoutKind::Absolute,
+            ))),
+            Err("ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT".to_string())
+        );
+        assert_eq!(
             map_model_download_run_result(Ok(WorkerRunOutcome::UnstructuredFailure(
                 WorkerExitSummary {
                     exit_code: Some(1),
@@ -334,6 +358,46 @@ mod tests {
             })),
             Err("Another ASR model download is already running.".to_string())
         );
+    }
+
+    #[test]
+    fn model_download_runtime_errors_use_closed_safe_messages() {
+        for (kind, expected) in [
+            (
+                WorkerRunErrorKind::SpawnFailed,
+                "ASR model download request could not be delivered.",
+            ),
+            (
+                WorkerRunErrorKind::RequestDeliveryFailed,
+                "ASR model download request could not be delivered.",
+            ),
+            (
+                WorkerRunErrorKind::WatchdogStartFailed,
+                "Worker watchdog failed to start.",
+            ),
+            (
+                WorkerRunErrorKind::PipeUnavailable,
+                "ASR model download runtime failed.",
+            ),
+            (
+                WorkerRunErrorKind::WaitFailed,
+                "ASR model download runtime failed.",
+            ),
+            (
+                WorkerRunErrorKind::ProtocolViolation,
+                WORKER_PROTOCOL_MESSAGE,
+            ),
+        ] {
+            let result = map_model_download_run_result(Err(WorkerRunError {
+                kind,
+                detail: "review-secret https://secret.example/private",
+            }))
+            .expect_err("runtime failure remains an error");
+
+            assert_eq!(result, expected);
+            assert!(!result.contains("review-secret"));
+            assert!(!result.contains("https://"));
+        }
     }
 
     #[test]

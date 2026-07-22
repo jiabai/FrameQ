@@ -2022,6 +2022,77 @@ describe("App controller-owned lifecycle UI smoke", () => {
     }
   }, 15_000);
 
+  test("shows localized watchdog recovery after AI timeout without retrying or hiding the transcript", async () => {
+    const page = await openUiSmokePage({
+      deferredCommands: ["retry_insights"],
+      responses: {
+        get_ui_preferences: {
+          schemaVersion: 1,
+          language: "en-US",
+          recovered: false,
+        },
+      },
+    });
+    try {
+      await openSmokeHistory(page);
+      await clickSelector(page, ".history-item-select");
+      await waitForRuntimeCondition(
+        page,
+        "!document.querySelector('.history-sheet') && Boolean(document.querySelector('.transcript-full-editor'))",
+      );
+      await clickSelector(page, '[data-ai-target="summary"] .ai-target-action');
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.preference-flow-sheet'))");
+      await clickSelector(page, ".preference-flow-sheet .sheet-footer .primary-button");
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.retry_insights?.length)",
+      );
+
+      await resolveUiSmokeCommand(page, "retry_insights", {
+        status: "partial_completed",
+        task_id: null,
+        task_dir: null,
+        artifacts: {},
+        text: "",
+        summary: "",
+        insights: [],
+        transcript: null,
+        error: {
+          code: "WORKER_EXECUTION_TIMEOUT",
+          message: "Authorization: Bearer private-runtime-detail",
+          stage: "insights_generating",
+        },
+      });
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('[data-ai-target=\"summary\"]')?.classList.contains('failed')",
+      );
+
+      const state = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          guidance: document.querySelector('[data-ai-target="summary"] .ai-target-error')?.textContent ?? '',
+          transcriptVisible: Boolean(document.querySelector('.transcript-full-editor')),
+          transcriptDisabled: document.querySelector('.transcript-full-editor')?.disabled ?? null,
+          body: document.body.innerText
+        })`,
+      );
+      expect(state.guidance).toBe(
+        "FrameQ stopped this operation after it reached the maximum run time. Existing results were kept; try again.",
+      );
+      expect(state.transcriptVisible).toBe(true);
+      expect(state.transcriptDisabled).toBe(false);
+      expect(String(state.body)).not.toContain("private-runtime-detail");
+
+      const retries = (await readUiSmokeCommands(page)).filter(
+        (entry) => entry.command === "retry_insights",
+      );
+      expect(retries).toHaveLength(1);
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
   test("keeps history read-only while cancelling and waits for the confirmed worker terminal result", async () => {
     const page = await openUiSmokePage({ deferredCommands: ["process_video"] });
 

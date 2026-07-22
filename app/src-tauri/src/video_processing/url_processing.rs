@@ -171,6 +171,7 @@ fn classify_source_identity_preflight_result(
         ))) => Ok(None),
         Ok(WorkerRunOutcome::Structured(_)) => Ok(None),
         Ok(WorkerRunOutcome::Cancelled) => Err(SourceIdentityPreflightError::Cancelled),
+        Ok(WorkerRunOutcome::TimedOut(_)) => Ok(None),
         Ok(WorkerRunOutcome::UnstructuredFailure(_)) => Ok(None),
         Err(error) if error.kind == WorkerRunErrorKind::AlreadyRunning => {
             Err(SourceIdentityPreflightError::AlreadyRunning)
@@ -211,7 +212,7 @@ mod tests {
     use crate::worker_runtime::{
         ModelDownloadTerminalResult, SourceIdentityFailure, SourceIdentityTerminalResult,
         ValidatedWorkerResult, WorkerExitSummary, WorkerRunError, WorkerRunErrorKind,
-        WorkerRunOutcome,
+        WorkerRunOutcome, WorkerTimeoutKind,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -263,6 +264,8 @@ mod tests {
                 kind: WorkerRunErrorKind::ProtocolViolation,
                 detail: "Worker result violated the protocol.",
             }),
+            Ok(WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle)),
+            Ok(WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Absolute)),
         ];
 
         for result in results {
@@ -294,6 +297,7 @@ mod tests {
             WorkerRunErrorKind::RequestDeliveryFailed,
             WorkerRunErrorKind::PipeUnavailable,
             WorkerRunErrorKind::WaitFailed,
+            WorkerRunErrorKind::WatchdogStartFailed,
         ] {
             assert!(matches!(
                 classify_source_identity_preflight_result(Err(WorkerRunError {

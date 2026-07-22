@@ -167,6 +167,62 @@ describe("desktop/worker contract", () => {
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
   });
 
+  test("keeps watchdog policy out of requests while accepting the fixed timeout codes", () => {
+    const contract = loadContract();
+    const propertyPaths: string[] = [];
+    const visit = (value: unknown, path = "contract"): void => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        const childPath = `${path}.${key}`;
+        if (/timeout|deadline|watchdog/i.test(key)) {
+          propertyPaths.push(childPath);
+        }
+        visit(child, childPath);
+      }
+    };
+    visit(contract);
+
+    expect(contract.contractVersion).toBe(4);
+    expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
+    expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
+    expect(contract.processVideo.ipcRequest.required).toEqual(["url"]);
+    expect(Object.keys(contract.processVideo.ipcRequest.properties)).toEqual(["url"]);
+    expect(contract.processVideo.workerRequest.required).toEqual([
+      "contract_version",
+      "url",
+      "asr_model",
+    ]);
+    expect(Object.keys(contract.processVideo.workerRequest.properties)).toEqual([
+      "contract_version",
+      "url",
+      "asr_model",
+    ]);
+    expect(contract.aiGeneration.request.required).toEqual([
+      "task_id",
+      "target",
+      "output_language",
+    ]);
+    expect(Object.keys(contract.aiGeneration.request.properties)).toEqual([
+      "task_id",
+      "target",
+      "output_language",
+      "preference_snapshot",
+    ]);
+    expect(propertyPaths).toEqual([]);
+
+    const safeCodePattern = new RegExp(contract.terminalResults.safeErrorCode.pattern);
+    for (const code of [
+      "WORKER_IDLE_TIMEOUT",
+      "WORKER_EXECUTION_TIMEOUT",
+      "ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT",
+      "ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT",
+    ]) {
+      expect(code).toMatch(safeCodePattern);
+    }
+  });
+
   test("declares the closed local-media source and transport boundary", () => {
     const localMedia = loadContract().localMedia;
     const allExtensions = [

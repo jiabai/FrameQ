@@ -38,6 +38,8 @@ describe("worker error presentation", () => {
     ["WORKER_STDIN_INVALID", "request.invalid"],
     ["WORKER_CANCELLED", "worker.cancelled"],
     ["WORKER_ALREADY_RUNNING", "worker.alreadyRunning"],
+    ["WORKER_IDLE_TIMEOUT", "worker.idleTimeout"],
+    ["WORKER_EXECUTION_TIMEOUT", "worker.executionTimeout"],
     ["WORKER_REQUEST_TRANSPORT_FAILED", "worker.transportFailed"],
     ["WORKER_PROTOCOL_VIOLATION", "worker.processFailed"],
   ])("maps known worker code %s to %s", (code, messageCode) => {

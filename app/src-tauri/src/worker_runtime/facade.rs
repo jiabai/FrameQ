@@ -136,6 +136,17 @@ mod typed_job_policy_tests {
     use crate::RuntimePaths;
     use std::cell::Cell;
     use std::path::PathBuf;
+    use std::time::Duration;
+
+    fn assert_watchdog_policy(
+        operation: WorkerOperation,
+        idle_timeout: Option<Duration>,
+        absolute_timeout: Duration,
+    ) {
+        let policy = operation.watchdog_policy();
+        assert_eq!(policy.idle_timeout(), idle_timeout);
+        assert_eq!(policy.absolute_timeout(), absolute_timeout);
+    }
 
     fn runtime_paths() -> RuntimePaths {
         RuntimePaths {
@@ -168,6 +179,11 @@ mod typed_job_policy_tests {
             .expect("prepare process-video job");
 
         assert_eq!(request.operation, WorkerOperation::ProcessVideo);
+        assert_watchdog_policy(
+            request.operation,
+            Some(Duration::from_secs(45 * 60)),
+            Duration::from_secs(8 * 60 * 60),
+        );
         assert!(matches!(request.progress, ProgressRoute::Worker));
         assert_eq!(
             request.command.args,
@@ -201,6 +217,7 @@ mod typed_job_policy_tests {
             .expect("prepare source-identity job");
 
         assert_eq!(request.operation, WorkerOperation::ResolveSourceIdentity);
+        assert_watchdog_policy(request.operation, None, Duration::from_secs(3 * 60));
         assert!(matches!(request.progress, ProgressRoute::None));
         assert_eq!(
             request.command.args,
@@ -227,6 +244,11 @@ mod typed_job_policy_tests {
         let env = request.command.env_map();
 
         assert_eq!(request.operation, WorkerOperation::RetryInsights);
+        assert_watchdog_policy(
+            request.operation,
+            Some(Duration::from_secs(10 * 60)),
+            Duration::from_secs(30 * 60),
+        );
         assert!(matches!(request.progress, ProgressRoute::Worker));
         assert_eq!(
             request.command.args,
@@ -238,6 +260,32 @@ mod typed_job_policy_tests {
         assert_eq!(
             env.get("FRAMEQ_LLM_SESSION_TOKEN"),
             Some(&"desktop-token".to_string())
+        );
+    }
+
+    #[test]
+    fn caller_payload_cannot_override_operation_owned_watchdog_policy() {
+        let paths = runtime_paths();
+        let supervisors = ProcessSupervisors::default();
+        let spoofed_payload = r#"{"contract_version":3,"url":"https://example.test/video","asr_model":"iic/SenseVoiceSmall","timeout":0,"idle_timeout":0,"deadline":0,"watchdog":{"disabled":true}}"#;
+
+        let request = supervisors
+            .video_worker(&paths)
+            .prepare_for_test(
+                WorkerJob::process_video(spoofed_payload.to_string(), ()),
+                |_| panic!("process video must not resolve LLM configuration"),
+            )
+            .expect("prepare process-video job with spoofed timeout fields");
+
+        assert_eq!(
+            request.command.stdin_payload.as_deref(),
+            Some(spoofed_payload),
+            "the facade transports opaque worker JSON but never interprets timeout-like fields",
+        );
+        assert_watchdog_policy(
+            request.operation,
+            Some(Duration::from_secs(45 * 60)),
+            Duration::from_secs(8 * 60 * 60),
         );
     }
 }

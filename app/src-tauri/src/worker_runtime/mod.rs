@@ -15,7 +15,7 @@ pub(crate) use result_protocol::{
 #[cfg(test)]
 pub(crate) use runner::WorkerExitSummary;
 use runner::{ProgressRoute, WorkerLane, WorkerOperation, WorkerRunRequest};
-pub(crate) use runner::{WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome};
+pub(crate) use runner::{WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome, WorkerTimeoutKind};
 pub(crate) use supervisor::CancelProcessResult;
 use tauri::Window;
 

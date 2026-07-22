@@ -17,10 +17,10 @@
 - Primary guidance remains non-technical. Sanitized technical details stay in the existing collapsed
   disclosure and may show only stable codes/bounded safe diagnostics, never paths, request payloads,
   transcript text, prompts, generated text, or raw worker/OS prose.
-- Persistence-recovery behavior is implemented by the completed atomic-persistence ExecPlan.
-  Worker timeout behavior remains planned and must not be presented as current capability until the
-  active watchdog ExecPlan completes. Unavailable macOS/Unix native and real-Tauri acceptance stays
-  explicit residual validation rather than an inferred pass.
+- Persistence-recovery and worker-timeout behavior are implemented by their completed ExecPlans.
+  Timeout copy must continue to use the stable localized recovery guidance; unavailable macOS
+  watchdog runtime and real-Tauri interaction acceptance stay explicit residual validation rather
+  than inferred passes.
 
 ## Local Media Input and Source-Aware Workspace
 

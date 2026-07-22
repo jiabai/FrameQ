@@ -16,6 +16,22 @@ import type { AsrModelStatus } from "./types";
 
 const DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall" as const;
 
+function modelDownloadTimeoutNotice(error: unknown): UiMessage | null {
+  const code =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : null;
+  if (code === "ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT") {
+    return uiMessage("asrModel.notice.idleTimeout");
+  }
+  if (code === "ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT") {
+    return uiMessage("asrModel.notice.executionTimeout");
+  }
+  return null;
+}
+
 const defaultAsrModelStatus: AsrModelStatus = {
   model: DEFAULT_ASR_MODEL,
   modelDir: "",
@@ -247,7 +263,7 @@ export function useAsrModelDownload() {
         }));
         setModelDownloadNotice(uiMessage("asrModel.notice.incomplete"));
       }
-    } catch {
+    } catch (error) {
       if (
         !shouldApplyModelDownloadUpdate({
           operationId,
@@ -265,7 +281,9 @@ export function useAsrModelDownload() {
         message: { messageCode: "model.download.failed", args: {} },
         progress: current.progress,
       }));
-      setModelDownloadNotice(uiMessage("asrModel.notice.downloadFailed"));
+      setModelDownloadNotice(
+        modelDownloadTimeoutNotice(error) ?? uiMessage("asrModel.notice.downloadFailed"),
+      );
     } finally {
       if (unlisten) {
         unlisten();

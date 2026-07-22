@@ -94,6 +94,74 @@ describe("useAsrModelDownload cancellation", () => {
     downloadAsrModelMock.mockReset();
   });
 
+  test.each([
+    [
+      "idle timeout from a bare Tauri rejection",
+      "ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT",
+      "asrModel.notice.idleTimeout",
+    ],
+    [
+      "idle timeout from an Error rejection",
+      new Error("ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT"),
+      "asrModel.notice.idleTimeout",
+    ],
+    [
+      "execution timeout from a bare Tauri rejection",
+      "ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT",
+      "asrModel.notice.executionTimeout",
+    ],
+    [
+      "execution timeout from an Error rejection",
+      new Error("ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT"),
+      "asrModel.notice.executionTimeout",
+    ],
+  ])("handles %s as a retryable terminal failure", async (_label, rejection, noticeCode) => {
+    listenMock.mockResolvedValue(() => undefined);
+    downloadAsrModelMock
+      .mockRejectedValueOnce(rejection)
+      .mockResolvedValueOnce({ started: false, status: "cancelled" });
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    await hook.startAsrModelDownload();
+    hook = render();
+
+    expect(hook.modelDownloadProgress.phase).toBe("failed");
+    expect(hook.modelDownloadProgress.message).toEqual({
+      messageCode: "model.download.failed",
+      args: {},
+    });
+    expect(hook.modelDownloadNotice).toEqual({ messageCode: noticeCode });
+    expect(hook.modelDownloadActive).toBe(false);
+
+    await hook.startAsrModelDownload();
+    expect(downloadAsrModelMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("keeps unknown or decorated rejection text generic and private", async () => {
+    const secret = "Authorization: Bearer model-download-secret";
+    listenMock.mockResolvedValue(() => undefined);
+    downloadAsrModelMock.mockRejectedValue(
+      new Error(`ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT ${secret}`),
+    );
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    await hook.startAsrModelDownload();
+    hook = render();
+
+    expect(hook.modelDownloadProgress.phase).toBe("failed");
+    expect(hook.modelDownloadNotice).toEqual({
+      messageCode: "asrModel.notice.downloadFailed",
+    });
+    expect(
+      JSON.stringify({
+        progress: hook.modelDownloadProgress,
+        notice: hook.modelDownloadNotice,
+      }),
+    ).not.toContain(secret);
+  });
+
   test("restores the running model download after tree termination fails", async () => {
     listenMock.mockResolvedValue(() => undefined);
     downloadAsrModelMock.mockImplementation(() => new Promise(() => undefined));
@@ -267,7 +335,7 @@ describe("useAsrModelDownload cancellation", () => {
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
-  test("keeps a cancelled wire event after the download invoke rejects", async () => {
+  test("keeps a cancelled wire event after a late timeout rejection", async () => {
     let progressHandler: ((event: { payload: unknown }) => void) | null = null;
     let rejectDownload: ((reason: Error) => void) | null = null;
     const unlisten = vi.fn();
@@ -302,7 +370,7 @@ describe("useAsrModelDownload cancellation", () => {
       progress: 58,
     });
 
-    requireResolver(rejectDownload)(new Error("late invoke failure"));
+    requireResolver(rejectDownload)(new Error("ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT"));
     await download;
     hook = render();
 

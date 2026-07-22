@@ -13,11 +13,14 @@
   permission/symlink/forced-exit and real Tauri transcript/AI smoke remain recorded residual risks,
   not unverified pass claims.
 
-- [ ] Close broad-release worker watchdog blocker (2026-07-22) — ✅ Acceptance: every supervised
+- [x] Close broad-release worker watchdog blocker (2026-07-22) — ✅ Acceptance: every supervised
   worker has a Rust-owned fixed absolute deadline, progress-capable jobs also have a validated-idle
   deadline, timeout terminates/reaps the matching process tree, structured-result/cancellation race
   rules remain truthful, and AI is never automatically retried. ExecPlan:
-  `docs/exec-plans/active/2026-07-22-worker-watchdog-plan.md`.
+  `docs/exec-plans/completed/2026-07-22-worker-watchdog-plan.md`. ✅ Rust 208/208, App 567/567,
+  worker 563 passed / 2 skipped, scripts 25/25, Chromium smoke 28/28, lint/Ruff/rustfmt/build and
+  Tauri `--no-bundle` passed; native Windows parent/descendant timeout cleanup passed. macOS runtime
+  execution remains unverified while the portable fixture is enforced by the hosted workflow.
 
 - [ ] Plan and close broad-release server concurrency/operations blocker (2026-07-22) — ✅
   Acceptance: audit OTP/ticket/quota check-then-write concurrency, multi-instance correctness,

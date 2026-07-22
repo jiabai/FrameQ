@@ -123,11 +123,12 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 前端 task workspace 展示门面、Python media preparation facade、Rust task-result adapter，
 以及后续 video processing、transcript detail、三平台 fallback、ASR、server routes、task
 manifest 和 worker pipeline 的模块边界收口。本文区分“已经存在的生产实现”与
-“2026-07-22 已登记的发布可靠性目标”，不把 local-media v4 runtime 或 worker watchdog
-误画成当前能力。
+“2026-07-22 已登记的未来能力”；local-media v4 runtime 仍只是计划，而 worker watchdog
+已在本次 post-baseline 更新中落地并按下方证据标记为当前能力。
 
-Post-baseline update：原子持久化与 transaction recovery 已在 `61d489a` 落地；本文仅同步
-该审计项的状态与证据，其余 UML、代码规模和依赖快照仍以 `3fd01e8` 为基线。
+Post-baseline update：原子持久化与 transaction recovery 已在 `61d489a` 落地，Rust-owned
+worker watchdog 也已完成实现与 Windows 原生验证；本文仅同步这两项审计状态与证据，
+其余 UML、代码规模和依赖快照仍以 `3fd01e8` 为基线。
 
 范围规则：
 
@@ -1989,7 +1990,7 @@ stateDiagram-v2
 |----------|----------|----------------|
 | `models.py -> source_identity.py -> fallbacks` | 已在 `f22861c` 完成依赖倒置；core identity、application resolution 与 platform adapters 已分层 | `worker/tests/test_import_boundaries.py`、`worker/tests/test_source_resolution.py`；完整设计见 `docs/design-docs/2026-07-18-source-identity-dependency-boundary.md` |
 | `worker_command.rs` 混合 supervisor、OS process、stdin/progress/output 与调用策略 | 已在 `9833bd6` 删除旧模块；`worker_runtime/command.rs`、`runner.rs`、`supervisor.rs` 分层，四类操作统一经过 `WorkerLane::run`，低层状态和终止函数保持私有 | `worker_runtime` 内联 Rust tests、`scripts/tests/unix-process-supervisor-workflow.test.mjs`；完整设计见 `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md` |
-| Rust `WorkerLane::run` 对已注册 child 使用无界 `child.wait()` | **发布阻断，尚未实现**：共享 lifecycle/cancellation 已收口，但静默或挂起 child 可让 UI 永久 busy；已决定由 `worker_runtime` 增加 operation-owned idle/absolute watchdog、instance-safe timeout claim 和现有 process-tree termination 复用 | 产品规格 `docs/product-specs/2026-07-22-release-reliability-hardening.md`；设计 `docs/design-docs/2026-07-22-rust-worker-watchdog.md`；active ExecPlan `docs/exec-plans/active/2026-07-22-worker-watchdog-plan.md` |
+| Rust `WorkerLane::run` 对已注册 child 使用无界 `child.wait()` | **已解决**：`worker_runtime` 为四类当前操作派生固定 idle/absolute policy；instance-bound watchdog 可在 stdin 或 wait 阻塞时终止完整进程树，termination lease 阻止 PID/PGID 复用竞态，结构化结果与显式取消优先级保持不变 | Rust 208/208（其中 worker runtime 56/56）、App 567/567、worker 563 passed / 2 skipped、scripts 25/25、Chromium smoke 28/28、Tauri `--no-bundle`；Windows parent/descendant timeout fixture 通过；设计 `docs/design-docs/2026-07-22-rust-worker-watchdog.md`；completed ExecPlan `docs/exec-plans/completed/2026-07-22-worker-watchdog-plan.md`。macOS runtime evidence 尚待 hosted workflow 实际运行 |
 | Process-video 请求中存在无消费者字段和多重 ASR model owner | 已在 `cfd1233` 升级为 contract v3；TS IPC 只传 `url`，Rust 解析配置并构造 `contract_version + url + asr_model`，Python 严格消费 | `app/src/desktopWorkerContract.test.ts`、`workerClient.test.ts`、Rust `video_processing` tests、`worker/tests/test_contract.py`/`test_requests.py`；完整设计见 `docs/design-docs/2026-07-18-process-video-request-contract-v3.md` |
 | Local-media 新来源可能把路径泄露到 React、argv、日志或松散可选字段 | Contract v4 的纯类型边界已锁定：TS 只有 token/安全元数据，Rust/Python 路径请求严格闭集且固定非回显；原 URL worker request 仍为 v3。picker、command、CLI、pipeline 与 manifest 尚未实现 | `localMediaContract.test.ts`、`local_media_contract_tests.rs`、`worker/tests/test_requests.py`、三端 canonical contract tests，以及 recursive packaged-worker mirror equality test；执行记录见 active local-media ExecPlan |
 | History/cache/transcript/delete 分别重组 manifest privacy 与 artifact path 安全流程，Python pipeline/retry 分别协调任务落盘 | 已在 `eecd0fb` 收口为 Rust `SupportedTask::scan/open` + `TaskEditSession` 和 Python `TaskStoreFacade`；raw Rust manifest/path/write 原语保持模块私有 | Rust facade tests 与既有 History/cache/transcript/delete characterization tests；`worker/tests/test_task_store.py` 与 worker 全量测试；设计见 `docs/design-docs/2026-07-18-task-access-facade.md` |

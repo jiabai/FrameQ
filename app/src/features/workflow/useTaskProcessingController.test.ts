@@ -312,6 +312,121 @@ describe("useTaskProcessingController cancellation", () => {
   });
 });
 
+describe("useTaskProcessingController watchdog timeouts", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    cancelProcessMock.mockReset();
+    processVideoMock.mockReset();
+    retryInsightsMock.mockReset();
+  });
+
+  test("clears process busy state after timeout without starting another process command", async () => {
+    processVideoMock.mockResolvedValue(
+      createWorkerResult({
+        status: "failed",
+        task_id: null,
+        task_dir: null,
+        artifacts: {},
+        text: "",
+        summary: "",
+        insights: [],
+        transcript: null,
+        error: {
+          code: "WORKER_IDLE_TIMEOUT",
+          message: "Worker process made no progress for too long.",
+          stage: "video_extracting",
+        },
+      }),
+    );
+    const { render } = await createController();
+    let controller = render();
+    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller = render();
+
+    await controller.submitUrl(
+      { preventDefault: vi.fn() } as never,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+
+    expect(controller.workflow.stage).toBe("failed");
+    expect(controller.workflow.error?.code).toBe("WORKER_IDLE_TIMEOUT");
+    expect(controller.canRestoreHistory).toBe(true);
+    expect(controller.toolbarNewTaskButtonState.disabled).toBe(false);
+    expect(processVideoMock).toHaveBeenCalledTimes(1);
+
+    controller.startNewTaskFromToolbar();
+    controller = render();
+    expect(controller.workflow.stage).toBe("waiting_input");
+    expect(processVideoMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps the complete current task after AI timeout without retrying or opening Credits", async () => {
+    const source = createHistoryItem({
+      taskId: "source-task",
+      taskDir: "D:/FrameQ/outputs/tasks/source-task",
+      artifacts: {
+        transcript_txt: "transcript/transcript.txt",
+        transcript_md: "transcript/transcript.md",
+        summary: "ai/summary.md",
+        insights: "ai/insights.json",
+      },
+      text: "preserved transcript",
+      summary: "preserved summary",
+    });
+    retryInsightsMock.mockResolvedValue(
+      createWorkerResult({
+        status: "partial_completed",
+        task_id: null,
+        task_dir: null,
+        artifacts: {},
+        text: "",
+        summary: "",
+        insights: [],
+        transcript: null,
+        error: {
+          code: "WORKER_EXECUTION_TIMEOUT",
+          message: "Worker process exceeded the maximum execution time.",
+          stage: "insights_generating",
+        },
+      }),
+    );
+    const openAccountPanel = vi.fn();
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+
+    await controller.retryInsightGeneration(
+      "summary",
+      "en-US",
+      null,
+      createBrowserPreviewAccountStatus(),
+      openAccountPanel,
+    );
+    controller = render();
+
+    expect(controller.workflow.stage).toBe("partial_completed");
+    expect(controller.workflow.activeAiTarget).toBeNull();
+    expect(controller.workflow.aiErrorTarget).toBe("summary");
+    expect(controller.workflow.taskId).toBe(source.taskId);
+    expect(controller.workflow.taskDir).toBe(source.taskDir);
+    expect(controller.workflow.text).toBe(source.text);
+    expect(controller.workflow.transcript).toEqual(source.transcript);
+    expect(controller.workflow.artifacts).toEqual(source.artifacts);
+    expect(controller.workflow.summary).toBe(source.summary);
+    expect(controller.workflow.insights).toEqual(source.insights);
+    expect(retryInsightsMock).toHaveBeenCalledTimes(1);
+    expect(retryInsightsMock).toHaveBeenCalledWith({
+      taskId: "source-task",
+      target: "summary",
+      outputLanguage: "en-US",
+    });
+    expect(openAccountPanel).not.toHaveBeenCalled();
+  });
+});
+
 describe("useTaskProcessingController history restore", () => {
   beforeEach(() => {
     vi.resetModules();

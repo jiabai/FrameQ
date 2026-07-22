@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 
 import type { TaskWorkspaceViewModel, AiTargetViewModel } from "../../taskWorkspaceViewModel";
 import type { InsightRetryTarget } from "../../workflow";
-import { isSupportedLocale } from "../../i18n/locale";
-import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
+import { isSupportedLocale, type SupportedLocale } from "../../i18n/locale";
+import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
 type AiGenerationWorkspaceProps = {
   model: TaskWorkspaceViewModel["ai"];
@@ -73,6 +73,7 @@ export function AiGenerationWorkspace({
       <div className="ai-target-list">
         <AiTargetCard
           target={model.summary}
+          locale={locale}
           title={t("target.summary.title")}
           description={t("target.summary.description")}
           creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
@@ -83,6 +84,7 @@ export function AiGenerationWorkspace({
         />
         <AiTargetCard
           target={model.insights}
+          locale={locale}
           title={t("target.insights.title")}
           description={t("target.insights.description")}
           creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
@@ -114,6 +116,7 @@ export function AiGenerationWorkspace({
 
 type AiTargetCardProps = {
   target: AiTargetViewModel;
+  locale: SupportedLocale;
   title: string;
   description: string;
   creditsSummary: string;
@@ -125,6 +128,7 @@ type AiTargetCardProps = {
 
 function AiTargetCard({
   target,
+  locale,
   title,
   description,
   creditsSummary,
@@ -143,6 +147,7 @@ function AiTargetCard({
     : target.target === "insights"
       ? t("action.chooseAndConfirm")
       : t("action.confirm");
+  const timeoutGuidance = renderTimeoutGuidance(target.errorCode, locale);
 
   return (
     <article className={`ai-target-card ${target.status}`} data-ai-target={target.target}>
@@ -155,7 +160,9 @@ function AiTargetCard({
         <span className="ai-target-status">{t(`status.${target.status}`)}</span>
       </div>
       {target.errorCode ? (
-        <p className="ai-target-error">{t("target.error", { code: target.errorCode })}</p>
+        <p className="ai-target-error">
+          {timeoutGuidance ?? t("target.error", { code: target.errorCode })}
+        </p>
       ) : null}
       <small>{creditsSummary}</small>
       <div className="ai-target-actions">
@@ -174,4 +181,17 @@ function AiTargetCard({
       </div>
     </article>
   );
+}
+
+function renderTimeoutGuidance(
+  errorCode: string | null,
+  locale: SupportedLocale,
+): string | null {
+  if (errorCode === "WORKER_IDLE_TIMEOUT") {
+    return renderUiMessage(locale, uiMessage("errors.worker.idleTimeout"));
+  }
+  if (errorCode === "WORKER_EXECUTION_TIMEOUT") {
+    return renderUiMessage(locale, uiMessage("errors.worker.executionTimeout"));
+  }
+  return null;
 }

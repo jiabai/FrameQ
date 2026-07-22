@@ -5,7 +5,8 @@ use super::result_protocol::{
 };
 use super::supervisor::{
     hide_child_console_window, request_process_cancellation, terminate_process_tree,
-    CancelProcessResult, ProcessInstance, ProcessPhase, ProcessSupervisor,
+    CancelProcessResult, CleanupClaim, ProcessInstance, ProcessPhase, ProcessSupervisor,
+    TimeoutRequestOutcome,
 };
 use crate::progress_event::{
     invalid_progress_log_detail, validate_model_download_event, validate_worker_progress_event,
@@ -16,7 +17,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 #[cfg(not(test))]
 use tauri::{Emitter, Window};
@@ -91,6 +93,39 @@ pub(crate) enum WorkerOperation {
     DownloadAsrModel,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WorkerTimeoutKind {
+    Idle,
+    Absolute,
+}
+
+impl WorkerTimeoutKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Absolute => "absolute",
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct WatchdogPolicy {
+    idle_timeout: Option<Duration>,
+    absolute_timeout: Duration,
+}
+
+#[allow(dead_code)]
+impl WatchdogPolicy {
+    pub(super) fn idle_timeout(self) -> Option<Duration> {
+        self.idle_timeout
+    }
+
+    pub(super) fn absolute_timeout(self) -> Duration {
+        self.absolute_timeout
+    }
+}
+
 impl WorkerOperation {
     fn as_str(self) -> &'static str {
         match self {
@@ -103,6 +138,251 @@ impl WorkerOperation {
 
     fn event(self, phase: &str) -> String {
         format!("worker.{}.{}", self.as_str(), phase)
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn watchdog_policy(self) -> WatchdogPolicy {
+        match self {
+            Self::ProcessVideo => WatchdogPolicy {
+                idle_timeout: Some(Duration::from_secs(45 * 60)),
+                absolute_timeout: Duration::from_secs(8 * 60 * 60),
+            },
+            Self::RetryInsights => WatchdogPolicy {
+                idle_timeout: Some(Duration::from_secs(10 * 60)),
+                absolute_timeout: Duration::from_secs(30 * 60),
+            },
+            Self::ResolveSourceIdentity => WatchdogPolicy {
+                idle_timeout: None,
+                absolute_timeout: Duration::from_secs(3 * 60),
+            },
+            Self::DownloadAsrModel => WatchdogPolicy {
+                idle_timeout: Some(Duration::from_secs(10 * 60)),
+                absolute_timeout: Duration::from_secs(4 * 60 * 60),
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn select_watchdog_deadline(
+    idle_deadline: Option<Instant>,
+    absolute_deadline: Instant,
+) -> (Instant, WorkerTimeoutKind) {
+    match idle_deadline {
+        Some(idle_deadline) if idle_deadline < absolute_deadline => {
+            (idle_deadline, WorkerTimeoutKind::Idle)
+        }
+        _ => (absolute_deadline, WorkerTimeoutKind::Absolute),
+    }
+}
+
+struct WatchdogTiming {
+    stopped: bool,
+    last_validated_progress: Instant,
+}
+
+struct WatchdogControl {
+    started_at: Instant,
+    timing: Mutex<WatchdogTiming>,
+    wake: Condvar,
+}
+
+impl WatchdogControl {
+    fn new() -> Self {
+        let started_at = Instant::now();
+        Self {
+            started_at,
+            timing: Mutex::new(WatchdogTiming {
+                stopped: false,
+                last_validated_progress: started_at,
+            }),
+            wake: Condvar::new(),
+        }
+    }
+
+    fn record_validated_progress(&self) {
+        let mut timing = self
+            .timing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !timing.stopped {
+            timing.last_validated_progress = Instant::now();
+            self.wake.notify_all();
+        }
+    }
+
+    fn wait_for_expiration(&self, policy: WatchdogPolicy) -> Option<WorkerTimeoutKind> {
+        let absolute_deadline = self.started_at + policy.absolute_timeout;
+        let mut timing = self
+            .timing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        loop {
+            if timing.stopped {
+                return None;
+            }
+            let idle_deadline = policy
+                .idle_timeout
+                .map(|timeout| timing.last_validated_progress + timeout);
+            let (deadline, kind) = select_watchdog_deadline(idle_deadline, absolute_deadline);
+            let now = Instant::now();
+            if now >= deadline {
+                return Some(kind);
+            }
+            let wait = deadline.saturating_duration_since(now);
+            timing = self
+                .wake
+                .wait_timeout(timing, wait)
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .0;
+        }
+    }
+
+    fn wait_backoff_or_stop(&self, backoff: Duration) -> bool {
+        let deadline = Instant::now() + backoff;
+        let mut timing = self
+            .timing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        loop {
+            if timing.stopped {
+                return true;
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            timing = self
+                .wake
+                .wait_timeout(timing, deadline.saturating_duration_since(now))
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .0;
+        }
+    }
+
+    fn wait_until_stopped(&self) {
+        let mut timing = self
+            .timing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while !timing.stopped {
+            timing = self
+                .wake
+                .wait(timing)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+    }
+
+    fn stop(&self) {
+        let mut timing = self
+            .timing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        timing.stopped = true;
+        self.wake.notify_all();
+    }
+}
+
+struct WatchdogHandle {
+    control: Arc<WatchdogControl>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl WatchdogHandle {
+    fn activity(&self) -> Arc<WatchdogControl> {
+        Arc::clone(&self.control)
+    }
+
+    fn stop_and_join(mut self) {
+        self.control.stop();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+fn start_watchdog(
+    paths: RuntimePaths,
+    operation: WorkerOperation,
+    supervisor: Arc<ProcessSupervisor>,
+    instance: ProcessInstance,
+    policy: WatchdogPolicy,
+    retry_backoff: Duration,
+    force_start_failure: bool,
+) -> Result<WatchdogHandle, WorkerRunError> {
+    let control = Arc::new(WatchdogControl::new());
+    let thread_control = Arc::clone(&control);
+    let builder = std::thread::Builder::new().name("frameq-worker-watchdog".to_string());
+    if force_start_failure {
+        return Err(WorkerRunError::new(
+            WorkerRunErrorKind::WatchdogStartFailed,
+            "Worker watchdog failed to start.",
+        ));
+    }
+    let thread = builder
+        .spawn(move || {
+            run_watchdog_with_terminator(
+                &paths,
+                operation,
+                &supervisor,
+                instance,
+                policy,
+                retry_backoff,
+                &thread_control,
+                |claimed| terminate_process_tree(claimed.process_group_id.unwrap_or(claimed.pid)),
+            );
+        })
+        .map_err(|_| {
+            WorkerRunError::new(
+                WorkerRunErrorKind::WatchdogStartFailed,
+                "Worker watchdog failed to start.",
+            )
+        })?;
+    Ok(WatchdogHandle {
+        control,
+        thread: Some(thread),
+    })
+}
+
+fn run_watchdog_with_terminator<F>(
+    paths: &RuntimePaths,
+    operation: WorkerOperation,
+    supervisor: &ProcessSupervisor,
+    instance: ProcessInstance,
+    policy: WatchdogPolicy,
+    retry_backoff: Duration,
+    control: &WatchdogControl,
+    terminate: F,
+) where
+    F: Fn(ProcessInstance) -> Result<(), String>,
+{
+    loop {
+        let Some(kind) = control.wait_for_expiration(policy) else {
+            return;
+        };
+        let outcome = supervisor.request_timeout(instance.instance_id, kind, &terminate);
+        match outcome {
+            TimeoutRequestOutcome::Signalled(_) => {
+                control.wait_until_stopped();
+                return;
+            }
+            TimeoutRequestOutcome::Failed { .. } => {
+                let _ = append_desktop_log(
+                    paths,
+                    &operation.event("watchdog_signal_failed"),
+                    &format!(
+                        "operation={} timeout={} signal=failed",
+                        operation.as_str(),
+                        kind.as_str()
+                    ),
+                );
+            }
+            TimeoutRequestOutcome::AlreadyTerminating(_) => {}
+            TimeoutRequestOutcome::NotRunning => return,
+        }
+        if control.wait_backoff_or_stop(retry_backoff) {
+            return;
+        }
     }
 }
 
@@ -199,6 +479,7 @@ pub(crate) struct WorkerRunRequest {
 pub(crate) enum WorkerRunErrorKind {
     AlreadyRunning,
     SpawnFailed,
+    WatchdogStartFailed,
     RequestDeliveryFailed,
     PipeUnavailable,
     WaitFailed,
@@ -252,12 +533,13 @@ pub(crate) struct WorkerExitSummary {
 pub(crate) enum WorkerRunOutcome {
     Structured(ValidatedWorkerResult),
     Cancelled,
+    TimedOut(WorkerTimeoutKind),
     UnstructuredFailure(WorkerExitSummary),
 }
 
 #[derive(Default)]
 pub(crate) struct WorkerLane {
-    supervisor: ProcessSupervisor,
+    supervisor: Arc<ProcessSupervisor>,
 }
 
 impl WorkerLane {
@@ -331,16 +613,33 @@ impl WorkerLane {
                 "Another worker operation is already running.",
             ));
         };
-        let mut instance_guard = InstanceGuard::new(&self.supervisor, instance);
+        let mut instance_guard = InstanceGuard::new(self.supervisor.as_ref(), instance);
+        let watchdog = match start_watchdog(
+            paths.clone(),
+            operation,
+            Arc::clone(&self.supervisor),
+            instance,
+            hooks.watchdog_policy(operation),
+            hooks.watchdog_retry_backoff(),
+            hooks.force_watchdog_start_failure(),
+        ) {
+            Ok(watchdog) => watchdog,
+            Err(error) => {
+                cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
+                instance_guard.finish();
+                return Err(error);
+            }
+        };
 
         if deliver_worker_stdin(&mut child, stdin_payload).is_err() {
-            terminate_and_reap(
-                &mut child,
-                instance.process_group_id.unwrap_or(instance.pid),
-            );
+            watchdog.stop_and_join();
+            cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
             let phase = instance_guard.finish();
             if phase == Some(ProcessPhase::Cancelling) {
                 return Ok(WorkerRunOutcome::Cancelled);
+            }
+            if let Some(ProcessPhase::TimingOut(kind)) = phase {
+                return Ok(WorkerRunOutcome::TimedOut(kind));
             }
             return Err(WorkerRunError::new(
                 WorkerRunErrorKind::RequestDeliveryFailed,
@@ -352,10 +651,8 @@ impl WorkerLane {
             drop(child.stderr.take());
         }
         let Some(stdout) = child.stdout.take() else {
-            terminate_and_reap(
-                &mut child,
-                instance.process_group_id.unwrap_or(instance.pid),
-            );
+            watchdog.stop_and_join();
+            cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
             instance_guard.finish();
             return Err(WorkerRunError::new(
                 WorkerRunErrorKind::PipeUnavailable,
@@ -363,10 +660,8 @@ impl WorkerLane {
             ));
         };
         let Some(stderr) = child.stderr.take() else {
-            terminate_and_reap(
-                &mut child,
-                instance.process_group_id.unwrap_or(instance.pid),
-            );
+            watchdog.stop_and_join();
+            cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
             instance_guard.finish();
             return Err(WorkerRunError::new(
                 WorkerRunErrorKind::PipeUnavailable,
@@ -381,14 +676,20 @@ impl WorkerLane {
         });
         let progress_paths = paths.clone();
         let reader_hooks = hooks.clone();
-        let stderr_reader =
-            std::thread::spawn(move || read_stderr(stderr, progress, progress_paths, reader_hooks));
+        let watchdog_activity = watchdog.activity();
+        let stderr_reader = std::thread::spawn(move || {
+            read_stderr(
+                stderr,
+                progress,
+                progress_paths,
+                reader_hooks,
+                watchdog_activity,
+            )
+        });
 
         if hooks.force_wait_failure {
-            terminate_and_reap(
-                &mut child,
-                instance.process_group_id.unwrap_or(instance.pid),
-            );
+            watchdog.stop_and_join();
+            cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
             instance_guard.finish();
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
@@ -401,10 +702,8 @@ impl WorkerLane {
         let status = match child.wait() {
             Ok(status) => status,
             Err(_) => {
-                terminate_and_reap(
-                    &mut child,
-                    instance.process_group_id.unwrap_or(instance.pid),
-                );
+                watchdog.stop_and_join();
+                cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
                 instance_guard.finish();
                 let _ = stdout_reader.join();
                 let _ = stderr_reader.join();
@@ -414,6 +713,7 @@ impl WorkerLane {
                 ));
             }
         };
+        watchdog.stop_and_join();
         let terminal_phase = instance_guard.finish();
         let stdout = stdout_reader
             .join()
@@ -444,6 +744,8 @@ impl WorkerLane {
         let terminal = match &outcome {
             WorkerRunOutcome::Structured(_) => "structured",
             WorkerRunOutcome::Cancelled => "cancelled",
+            WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle) => "idle_timeout",
+            WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Absolute) => "absolute_timeout",
             WorkerRunOutcome::UnstructuredFailure(_) => "unstructured_failure",
         };
         let _ = append_desktop_log(
@@ -494,6 +796,39 @@ struct RunnerHooks {
     force_wait_failure: bool,
     panic_stderr_reader: bool,
     reader_join_gate: Option<ReaderJoinGate>,
+    #[cfg(test)]
+    watchdog_policy: Option<WatchdogPolicy>,
+    #[cfg(test)]
+    watchdog_retry_backoff: Option<Duration>,
+    #[cfg(test)]
+    force_watchdog_start_failure: bool,
+}
+
+impl RunnerHooks {
+    fn watchdog_policy(&self, operation: WorkerOperation) -> WatchdogPolicy {
+        #[cfg(test)]
+        if let Some(policy) = self.watchdog_policy {
+            return policy;
+        }
+        operation.watchdog_policy()
+    }
+
+    fn watchdog_retry_backoff(&self) -> Duration {
+        #[cfg(test)]
+        if let Some(backoff) = self.watchdog_retry_backoff {
+            return backoff;
+        }
+        Duration::from_secs(1)
+    }
+
+    fn force_watchdog_start_failure(&self) -> bool {
+        #[cfg(test)]
+        {
+            return self.force_watchdog_start_failure;
+        }
+        #[cfg(not(test))]
+        false
+    }
 }
 
 #[derive(Clone, Default)]
@@ -507,11 +842,38 @@ fn terminate_and_reap(child: &mut std::process::Child, process_group_id: u32) {
     let _ = child.wait();
 }
 
+fn cleanup_registered_child(
+    child: &mut std::process::Child,
+    supervisor: &ProcessSupervisor,
+    instance: ProcessInstance,
+) {
+    loop {
+        if matches!(child.try_wait(), Ok(Some(_))) {
+            return;
+        }
+        match supervisor.claim_cleanup(instance.instance_id) {
+            CleanupClaim::Claimed(claimed) => {
+                let _ = terminate_process_tree(claimed.process_group_id.unwrap_or(claimed.pid));
+                let _ = child.wait();
+                return;
+            }
+            CleanupClaim::AlreadyTerminating(_) => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            CleanupClaim::NotRunning => {
+                let _ = child.wait();
+                return;
+            }
+        }
+    }
+}
+
 fn read_stderr(
     stderr: std::process::ChildStderr,
     progress: ProgressRoute,
     paths: RuntimePaths,
     hooks: RunnerHooks,
+    watchdog: Arc<WatchdogControl>,
 ) -> StderrSummary {
     let protocol = progress.protocol();
     let mut summary = StderrSummary::default();
@@ -524,7 +886,10 @@ fn read_stderr(
             }
         };
         match inspect_progress_line(protocol, &line) {
-            ProgressRecord::Validated(payload) => progress.emit(payload),
+            ProgressRecord::Validated(payload) => {
+                watchdog.record_validated_progress();
+                progress.emit(payload);
+            }
             ProgressRecord::Invalid(detail) => {
                 let event = match protocol {
                     ProgressProtocol::AsrModelDownload => "worker.model_progress.invalid",
@@ -622,6 +987,9 @@ fn classify_terminal(
     if terminal_phase == Some(ProcessPhase::Cancelling) {
         return Ok(WorkerRunOutcome::Cancelled);
     }
+    if let Some(ProcessPhase::TimingOut(kind)) = terminal_phase {
+        return Ok(WorkerRunOutcome::TimedOut(kind));
+    }
     match parse_error {
         TerminalResultError::Invalid => Err(WorkerRunError::protocol_violation()),
         TerminalResultError::Missing if output.status.success() => {
@@ -639,21 +1007,136 @@ fn classify_terminal(
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_terminal, inspect_progress_line, safe_exit_log_detail, safe_start_log_detail,
-        ProgressProtocol, ProgressRecord, ProgressRoute, ReaderJoinGate, RunnerHooks,
-        StderrSummary, WorkerLane, WorkerOperation, WorkerRunErrorKind, WorkerRunOutcome,
-        WorkerRunRequest,
+        classify_terminal, inspect_progress_line, run_watchdog_with_terminator,
+        safe_exit_log_detail, safe_start_log_detail, select_watchdog_deadline, ProgressProtocol,
+        ProgressRecord, ProgressRoute, ReaderJoinGate, RunnerHooks, StderrSummary, WatchdogControl,
+        WatchdogPolicy, WorkerLane, WorkerOperation, WorkerRunErrorKind, WorkerRunOutcome,
+        WorkerRunRequest, WorkerTimeoutKind,
     };
     use crate::worker_runtime::result_protocol::{TaskTerminalStatus, ValidatedWorkerResult};
     use crate::worker_runtime::supervisor::CancelProcessStatus;
     use crate::worker_runtime::supervisor::ProcessPhase;
     use crate::worker_runtime::WorkerCommandSpec;
     use crate::RuntimePaths;
-    use std::path::PathBuf;
-    use std::process::Output;
-    use std::sync::atomic::Ordering;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output, Stdio};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn worker_operations_own_exact_closed_production_watchdog_policies() {
+        let cases = [
+            (
+                WorkerOperation::ProcessVideo,
+                WatchdogPolicy {
+                    idle_timeout: Some(Duration::from_secs(45 * 60)),
+                    absolute_timeout: Duration::from_secs(8 * 60 * 60),
+                },
+            ),
+            (
+                WorkerOperation::RetryInsights,
+                WatchdogPolicy {
+                    idle_timeout: Some(Duration::from_secs(10 * 60)),
+                    absolute_timeout: Duration::from_secs(30 * 60),
+                },
+            ),
+            (
+                WorkerOperation::ResolveSourceIdentity,
+                WatchdogPolicy {
+                    idle_timeout: None,
+                    absolute_timeout: Duration::from_secs(3 * 60),
+                },
+            ),
+            (
+                WorkerOperation::DownloadAsrModel,
+                WatchdogPolicy {
+                    idle_timeout: Some(Duration::from_secs(10 * 60)),
+                    absolute_timeout: Duration::from_secs(4 * 60 * 60),
+                },
+            ),
+        ];
+
+        for (operation, expected) in cases {
+            assert_eq!(operation.watchdog_policy(), expected);
+        }
+    }
+
+    #[test]
+    fn watchdog_deadline_selection_prefers_absolute_on_an_exact_tie() {
+        let origin = Instant::now();
+        let idle_first = origin + Duration::from_secs(1);
+        let absolute_later = origin + Duration::from_secs(2);
+
+        assert_eq!(
+            select_watchdog_deadline(Some(idle_first), absolute_later),
+            (idle_first, WorkerTimeoutKind::Idle)
+        );
+        assert_eq!(
+            select_watchdog_deadline(Some(absolute_later), idle_first),
+            (idle_first, WorkerTimeoutKind::Absolute)
+        );
+        assert_eq!(
+            select_watchdog_deadline(Some(idle_first), idle_first),
+            (idle_first, WorkerTimeoutKind::Absolute)
+        );
+        assert_eq!(
+            select_watchdog_deadline(None, absolute_later),
+            (absolute_later, WorkerTimeoutKind::Absolute)
+        );
+    }
+
+    #[test]
+    fn failed_timeout_signal_rolls_back_logs_safely_and_retries_with_backoff() {
+        const RAW_FAILURE: &str = "WATCHDOG_RAW_FAILURE_SENTINEL";
+        let supervisor = Arc::new(crate::worker_runtime::supervisor::ProcessSupervisor::default());
+        let instance = supervisor.start(404).expect("worker starts");
+        let control = Arc::new(WatchdogControl::new());
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let paths = test_paths("watchdog-signal-retry");
+        let thread_supervisor = Arc::clone(&supervisor);
+        let thread_control = Arc::clone(&control);
+        let thread_attempts = Arc::clone(&attempts);
+        let thread_paths = paths.clone();
+        let watchdog = std::thread::spawn(move || {
+            run_watchdog_with_terminator(
+                &thread_paths,
+                WorkerOperation::ProcessVideo,
+                &thread_supervisor,
+                instance,
+                WatchdogPolicy {
+                    idle_timeout: None,
+                    absolute_timeout: Duration::from_millis(5),
+                },
+                Duration::from_millis(15),
+                &thread_control,
+                |_| {
+                    thread_attempts.fetch_add(1, Ordering::SeqCst);
+                    Err(RAW_FAILURE.to_string())
+                },
+            );
+        });
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while attempts.load(Ordering::SeqCst) < 3 && Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        control.stop();
+        watchdog.join().expect("watchdog exits after stop");
+
+        assert!(attempts.load(Ordering::SeqCst) >= 3);
+        assert_eq!(
+            supervisor.phase_for(instance.instance_id),
+            Some(ProcessPhase::Running)
+        );
+        let log = std::fs::read_to_string(crate::diagnostics::desktop_log_path(&paths))
+            .expect("read watchdog log");
+        assert!(log.contains("timeout=absolute signal=failed"));
+        assert!(!log.contains(RAW_FAILURE));
+        assert_eq!(
+            supervisor.finish(instance.instance_id),
+            Some(ProcessPhase::Running)
+        );
+    }
 
     #[test]
     fn structured_result_wins_a_concurrent_cancellation_claim() {
@@ -676,6 +1159,48 @@ mod tests {
             WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
                 if value.status == TaskTerminalStatus::Completed
         ));
+    }
+
+    #[test]
+    fn structured_result_wins_a_concurrent_timeout_claim() {
+        let output = Output {
+            status: exit_status(1),
+            stdout: valid_task_stdout().as_bytes().to_vec(),
+            stderr: Vec::new(),
+        };
+
+        let outcome = classify_terminal(
+            WorkerOperation::ProcessVideo,
+            &output,
+            Some(ProcessPhase::TimingOut(WorkerTimeoutKind::Idle)),
+            StderrSummary::default(),
+        )
+        .expect("structured result remains authoritative");
+
+        assert!(matches!(
+            outcome,
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
+        ));
+    }
+
+    #[test]
+    fn timeout_phase_is_classified_only_when_no_structured_result_exists() {
+        let output = Output {
+            status: exit_status(1),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        };
+
+        assert_eq!(
+            classify_terminal(
+                WorkerOperation::ProcessVideo,
+                &output,
+                Some(ProcessPhase::TimingOut(WorkerTimeoutKind::Absolute)),
+                StderrSummary::default(),
+            ),
+            Ok(WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Absolute))
+        );
     }
 
     #[test]
@@ -1050,6 +1575,263 @@ mod tests {
         assert!(log.contains("stderr=reader_failed"));
     }
 
+    #[test]
+    fn silent_fixture_hits_the_idle_deadline_and_clears_the_lane() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-silent-idle");
+
+        let outcome = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    silent_fixture_script(),
+                    None,
+                ),
+                watchdog_hooks(Some(1_500), 8_000),
+            )
+            .expect("silent worker is a timeout outcome");
+
+        assert_eq!(outcome, WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle));
+        assert!(!lane.is_active());
+        assert!(matches!(
+            lane.run(&paths, terminal_fixture_request(None, false))
+                .expect("timeout cleanup admits a second task"),
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
+        ));
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn validated_progress_resets_idle_activity_until_normal_completion() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-valid-progress");
+
+        let outcome = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    progress_then_result_fixture_script(),
+                    None,
+                ),
+                watchdog_hooks(Some(1_500), 8_000),
+            )
+            .expect("validated progress keeps the idle deadline alive");
+
+        assert!(matches!(
+            outcome,
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
+        ));
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn endless_validated_progress_cannot_extend_the_absolute_deadline() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-absolute");
+
+        let outcome = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    endless_progress_fixture_script(),
+                    None,
+                ),
+                watchdog_hooks(Some(1_500), 2_500),
+            )
+            .expect("absolute timeout is a typed outcome");
+
+        assert_eq!(
+            outcome,
+            WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Absolute)
+        );
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn malformed_diagnostic_empty_and_stdout_spam_do_not_reset_idle_activity() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-untrusted-spam");
+
+        let outcome = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    untrusted_spam_fixture_script(),
+                    None,
+                ),
+                watchdog_hooks(Some(1_500), 8_000),
+            )
+            .expect("untrusted output cannot keep the worker alive");
+
+        assert_eq!(outcome, WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle));
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn source_identity_is_absolute_only_even_when_stderr_looks_like_progress() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-source-identity");
+
+        let outcome = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ResolveSourceIdentity,
+                    ProgressRoute::None,
+                    endless_progress_fixture_script(),
+                    None,
+                ),
+                watchdog_hooks(None, 2_000),
+            )
+            .expect("source identity uses an absolute-only timeout");
+
+        assert_eq!(
+            outcome,
+            WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Absolute)
+        );
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn watchdog_times_out_while_stdin_delivery_is_blocked() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-blocked-stdin");
+
+        let outcome = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    silent_fixture_script(),
+                    Some("x".repeat(4 * 1024 * 1024)),
+                ),
+                watchdog_hooks(Some(1_500), 8_000),
+            )
+            .expect("watchdog must act while stdin delivery blocks");
+
+        assert_eq!(outcome, WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle));
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn watchdog_timeout_terminates_parent_and_descendant_then_admits_second_task() {
+        let lane = Arc::new(WorkerLane::default());
+        let paths = test_paths("watchdog-native-tree");
+        let pid_file = paths.user_data_dir.join("descendant.pid");
+        std::fs::create_dir_all(&paths.user_data_dir).expect("create fixture directory");
+
+        let runner_lane = Arc::clone(&lane);
+        let runner_paths = paths.clone();
+        let runner_pid_file = pid_file.clone();
+        let runner = std::thread::spawn(move || {
+            runner_lane.run_with_hooks(
+                &runner_paths,
+                watchdog_tree_fixture_request(&runner_pid_file),
+                watchdog_hooks(Some(4_000), 12_000),
+            )
+        });
+
+        let descendant_pid = match wait_for_numeric_fixture_pid(&pid_file, Duration::from_secs(3)) {
+            Some(pid) => pid,
+            None => {
+                let _ = runner.join();
+                panic!("fixture descendant did not publish a numeric PID");
+            }
+        };
+        assert!(fixture_process_is_alive(descendant_pid));
+        assert!(lane.is_active());
+
+        let outcome = runner
+            .join()
+            .expect("watchdog fixture runner joins")
+            .expect("watchdog timeout is a typed outcome");
+        assert_eq!(outcome, WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle));
+        assert!(!lane.is_active());
+        wait_until_fixture_process_is_gone(descendant_pid);
+
+        assert!(matches!(
+            lane.run(&paths, terminal_fixture_request(None, false))
+                .expect("joined watchdog admits a second task on the same lane"),
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
+        ));
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn structured_result_written_before_timeout_remains_authoritative() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-structured-first");
+
+        let outcome = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    result_then_stall_fixture_script(),
+                    None,
+                ),
+                watchdog_hooks(Some(1_500), 8_000),
+            )
+            .expect("valid stdout wins a concurrent timeout claim");
+
+        assert!(matches!(
+            outcome,
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
+        ));
+        assert!(!lane.is_active());
+    }
+
+    #[test]
+    fn watchdog_start_failure_reaps_clears_and_admits_a_second_task() {
+        let lane = WorkerLane::default();
+        let paths = test_paths("watchdog-start-failure");
+        let error = lane
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    silent_fixture_script(),
+                    None,
+                ),
+                RunnerHooks {
+                    watchdog_policy: Some(WatchdogPolicy {
+                        idle_timeout: Some(Duration::from_millis(1_500)),
+                        absolute_timeout: Duration::from_millis(8_000),
+                    }),
+                    force_watchdog_start_failure: true,
+                    ..RunnerHooks::default()
+                },
+            )
+            .expect_err("forced watchdog startup failure is typed");
+
+        assert_eq!(error.kind, WorkerRunErrorKind::WatchdogStartFailed);
+        assert_eq!(error.detail, "Worker watchdog failed to start.");
+        assert!(!lane.is_active());
+
+        assert!(matches!(
+            lane.run(&paths, terminal_fixture_request(None, false))
+                .expect("a second task starts only after cleanup"),
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::Task(value))
+                if value.status == TaskTerminalStatus::Completed
+        ));
+        assert!(!lane.is_active());
+    }
+
     fn fixture_request(
         test_name: &str,
         probe_env: &str,
@@ -1071,6 +1853,157 @@ mod tests {
             },
             progress: ProgressRoute::None,
         }
+    }
+
+    fn watchdog_hooks(idle_timeout_ms: Option<u64>, absolute_timeout_ms: u64) -> RunnerHooks {
+        RunnerHooks {
+            watchdog_policy: Some(WatchdogPolicy {
+                idle_timeout: idle_timeout_ms.map(Duration::from_millis),
+                absolute_timeout: Duration::from_millis(absolute_timeout_ms),
+            }),
+            watchdog_retry_backoff: Some(Duration::from_millis(25)),
+            ..RunnerHooks::default()
+        }
+    }
+
+    fn watchdog_fixture_request(
+        operation: WorkerOperation,
+        progress: ProgressRoute,
+        script: String,
+        stdin_payload: Option<String>,
+    ) -> WorkerRunRequest {
+        let (program, args) = shell_fixture_command(script);
+        WorkerRunRequest {
+            operation,
+            command: WorkerCommandSpec {
+                program,
+                args,
+                stdin_payload,
+                env: Vec::new(),
+                env_remove: Vec::new(),
+                current_dir: std::env::current_dir().expect("resolve test directory"),
+            },
+            progress,
+        }
+    }
+
+    fn watchdog_tree_fixture_request(pid_file: &Path) -> WorkerRunRequest {
+        let (program, args) = shell_fixture_command(watchdog_tree_fixture_script());
+        WorkerRunRequest {
+            operation: WorkerOperation::ProcessVideo,
+            command: WorkerCommandSpec {
+                program,
+                args,
+                stdin_payload: None,
+                env: vec![(
+                    "FRAMEQ_TEST_CHILD_PID_FILE".to_string(),
+                    pid_file.to_string_lossy().into_owned(),
+                )],
+                env_remove: Vec::new(),
+                current_dir: std::env::current_dir().expect("resolve test directory"),
+            },
+            progress: ProgressRoute::None,
+        }
+    }
+
+    #[cfg(windows)]
+    fn shell_fixture_command(script: String) -> (PathBuf, Vec<String>) {
+        (
+            PathBuf::from("powershell.exe"),
+            vec![
+                "-NoLogo".to_string(),
+                "-NoProfile".to_string(),
+                "-NonInteractive".to_string(),
+                "-Command".to_string(),
+                script,
+            ],
+        )
+    }
+
+    #[cfg(unix)]
+    fn shell_fixture_command(script: String) -> (PathBuf, Vec<String>) {
+        (PathBuf::from("/bin/sh"), vec!["-c".to_string(), script])
+    }
+
+    fn valid_progress_line() -> &'static str {
+        r#"FRAMEQ_PROGRESS {"stage":"video_extracting","progress":22,"message_code":"video.download.preparing"}"#
+    }
+
+    #[cfg(windows)]
+    fn silent_fixture_script() -> String {
+        "Start-Sleep -Seconds 30".to_string()
+    }
+
+    #[cfg(unix)]
+    fn silent_fixture_script() -> String {
+        "sleep 30".to_string()
+    }
+
+    #[cfg(windows)]
+    fn watchdog_tree_fixture_script() -> String {
+        "$child = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 30') -PassThru -WindowStyle Hidden; [System.IO.File]::WriteAllText($env:FRAMEQ_TEST_CHILD_PID_FILE, [string]$child.Id); Wait-Process -Id $child.Id".to_string()
+    }
+
+    #[cfg(unix)]
+    fn watchdog_tree_fixture_script() -> String {
+        "sleep 30 & child_pid=$!; printf '%s' \"$child_pid\" > \"$FRAMEQ_TEST_CHILD_PID_FILE\"; trap 'wait \"$child_pid\" 2>/dev/null; exit 143' TERM INT HUP; wait \"$child_pid\"".to_string()
+    }
+
+    #[cfg(windows)]
+    fn progress_then_result_fixture_script() -> String {
+        format!(
+            "for ($i = 0; $i -lt 6; $i++) {{ [Console]::Error.WriteLine('{}'); [Console]::Error.Flush(); Start-Sleep -Milliseconds 400 }}; [Console]::Out.WriteLine('{}')",
+            valid_progress_line(),
+            valid_task_stdout()
+        )
+    }
+
+    #[cfg(unix)]
+    fn progress_then_result_fixture_script() -> String {
+        format!(
+            "for i in 1 2 3 4 5 6; do printf '%s\\n' '{}' >&2; sleep 0.4; done; printf '%s\\n' '{}'",
+            valid_progress_line(),
+            valid_task_stdout()
+        )
+    }
+
+    #[cfg(windows)]
+    fn endless_progress_fixture_script() -> String {
+        format!(
+            "while ($true) {{ [Console]::Error.WriteLine('{}'); [Console]::Error.Flush(); Start-Sleep -Milliseconds 250 }}",
+            valid_progress_line()
+        )
+    }
+
+    #[cfg(unix)]
+    fn endless_progress_fixture_script() -> String {
+        format!(
+            "while :; do printf '%s\\n' '{}' >&2; sleep 0.25; done",
+            valid_progress_line()
+        )
+    }
+
+    #[cfg(windows)]
+    fn untrusted_spam_fixture_script() -> String {
+        "while ($true) { [Console]::Error.WriteLine('FRAMEQ_PROGRESS {not-json'); [Console]::Error.WriteLine('diagnostic'); [Console]::Error.WriteLine(''); [Console]::Out.WriteLine('stdout-noise'); [Console]::Error.Flush(); [Console]::Out.Flush(); Start-Sleep -Milliseconds 250 }".to_string()
+    }
+
+    #[cfg(unix)]
+    fn untrusted_spam_fixture_script() -> String {
+        "while :; do printf '%s\\n' 'FRAMEQ_PROGRESS {not-json' 'diagnostic' '' >&2; printf '%s\\n' 'stdout-noise'; sleep 0.25; done".to_string()
+    }
+
+    #[cfg(windows)]
+    fn result_then_stall_fixture_script() -> String {
+        format!(
+            "[Console]::Out.WriteLine('{}'); [Console]::Out.Flush(); Start-Sleep -Seconds 30",
+            valid_task_stdout()
+        )
+    }
+
+    #[cfg(unix)]
+    fn result_then_stall_fixture_script() -> String {
+        format!("printf '%s\\n' '{}'; sleep 30", valid_task_stdout())
     }
 
     fn terminal_fixture_request(
@@ -1136,6 +2069,68 @@ mod tests {
             std::thread::yield_now();
         }
         assert!(lane.is_active(), "runner did not become active");
+    }
+
+    fn wait_for_numeric_fixture_pid(path: &Path, timeout: Duration) -> Option<u32> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Ok(value) = std::fs::read_to_string(path) {
+                if !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()) {
+                    if let Ok(pid) = value.parse::<u32>() {
+                        if pid > 0 {
+                            return Some(pid);
+                        }
+                    }
+                }
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn wait_until_fixture_process_is_gone(pid: u32) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while fixture_process_is_alive(pid) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            !fixture_process_is_alive(pid),
+            "watchdog left the fixture descendant alive"
+        );
+    }
+
+    #[cfg(unix)]
+    fn fixture_process_is_alive(pid: u32) -> bool {
+        Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+
+    #[cfg(windows)]
+    fn fixture_process_is_alive(pid: u32) -> bool {
+        let mut command = Command::new("powershell.exe");
+        super::hide_child_console_window(&mut command);
+        command
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!(
+                    "if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 0 }} else {{ exit 1 }}"
+                ),
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
     }
 
     fn test_paths(label: &str) -> RuntimePaths {

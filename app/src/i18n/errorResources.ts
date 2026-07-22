@@ -85,6 +85,8 @@ export const errorResources = {
     worker: {
       cancelled: "任务已取消。",
       alreadyRunning: "已有任务正在处理，请等待完成后重试。",
+      idleTimeout: "处理长时间没有新的进展，FrameQ 已停止本次任务。现有结果已保留，请重试。",
+      executionTimeout: "处理已超过最长运行时间，FrameQ 已停止本次任务。现有结果已保留，请重试。",
       transportFailed: "无法向本地 worker 发送请求，请重试。",
       processFailed: "本地 worker 异常退出，请保留现有结果后重试。",
     },
@@ -175,6 +177,8 @@ export const errorResources = {
     worker: {
       cancelled: "工作已取消。",
       alreadyRunning: "已有工作正在處理，請等待完成後重試。",
+      idleTimeout: "處理長時間沒有新的進度，FrameQ 已停止本次工作。現有結果已保留，請重試。",
+      executionTimeout: "處理已超過最長執行時間，FrameQ 已停止本次工作。現有結果已保留，請重試。",
       transportFailed: "無法向本機 worker 傳送請求，請重試。",
       processFailed: "本機 worker 異常結束，請保留現有結果後重試。",
     },
@@ -265,6 +269,8 @@ export const errorResources = {
     worker: {
       cancelled: "The task was cancelled.",
       alreadyRunning: "Another task is already running. Wait for it to finish.",
+      idleTimeout: "FrameQ stopped this operation after it made no progress for too long. Existing results were kept; try again.",
+      executionTimeout: "FrameQ stopped this operation after it reached the maximum run time. Existing results were kept; try again.",
       transportFailed: "FrameQ could not send the request to the local worker. Try again.",
       processFailed: "The local worker exited unexpectedly. Keep existing results and try again.",
     },

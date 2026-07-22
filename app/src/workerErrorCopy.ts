@@ -49,6 +49,8 @@ export const WORKER_ERROR_MESSAGE_CODES = {
   INSIGHTFLOW_EMPTY_TRANSCRIPT: "insight.emptyTranscript",
   WORKER_CANCELLED: "worker.cancelled",
   WORKER_ALREADY_RUNNING: "worker.alreadyRunning",
+  WORKER_IDLE_TIMEOUT: "worker.idleTimeout",
+  WORKER_EXECUTION_TIMEOUT: "worker.executionTimeout",
   WORKER_REQUEST_TRANSPORT_FAILED: "worker.transportFailed",
   WORKER_PROCESS_FAILED: "worker.processFailed",
   WORKER_PROTOCOL_VIOLATION: "worker.processFailed",

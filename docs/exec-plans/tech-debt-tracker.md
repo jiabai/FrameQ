@@ -6,10 +6,24 @@ Last updated: 2026-07-22
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Supervised worker execution has no watchdog | The shared Rust runner can wait forever on a hung Python/native/provider child, leaving ordinary users stuck in a busy state and potentially retaining descendants. | `app/src-tauri/src/worker_runtime/runner.rs`; `docs/design-docs/2026-07-22-rust-worker-watchdog.md`; watchdog ExecPlan | Fixed operation-owned idle/absolute deadlines, instance-safe tree termination, closed timeout mappings, deterministic race tests, and available Windows/macOS evidence pass. |
 | Broad-release server concurrency and operations boundary is not closed | Existing entitlement transaction work does not by itself prove OTP/ticket/quota check-then-write correctness under concurrent multi-instance traffic or provide rate-limit, observability, backup/restore, and deployment runbooks. | `server/src/`; `docs/product-specs/2026-07-10-server-entitlement-transaction-safety.md`; 2026-07-22 release review | Complete and accept a separate product/design/ExecPlan with database-level concurrency tests and production operations evidence before broad publication. |
 
 ## Completed / Resolved
+
+### P1 Supervised Worker Watchdog
+
+- Status: completed; feature branch ready for integration.
+- Resolution: Every current supervised Rust operation derives a fixed idle/absolute policy from
+  `WorkerOperation`. An instance-bound watchdog can terminate during blocked stdin delivery or
+  wait, reuses the process-tree boundary, preserves structured-result/cancellation precedence, and
+  returns closed localized timeout outcomes without automatically retrying AI.
+- Evidence: worker-runtime 56/56, complete Rust 208/208, App 567/567, worker 563 passed / 2 skipped,
+  scripts 25/25, Chromium smoke 28/28, lint, Ruff, rustfmt, build, and Tauri `--no-bundle` passed.
+  The native Windows fixture removed the worker parent and descendant and admitted a second task.
+- Residual risk: no macOS host was available for this implementation session. The portable fixture
+  is required by the hosted macOS full-Cargo workflow, but actual runtime evidence remains pending.
+  If an OS tree-termination primitive refuses or itself fails to return, FrameQ keeps the instance
+  supervised and cannot promise a bounded exit without falsely claiming cleanup.
 
 ### P1 Atomic Authoritative Persistence
 

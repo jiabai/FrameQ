@@ -1,6 +1,7 @@
+use super::WorkerTimeoutKind;
 use serde::Serialize;
 use std::process::{Command, Output};
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex};
 #[cfg(unix)]
 use std::time::Duration;
 
@@ -19,6 +20,9 @@ fn windows_subprocess_creation_flags() -> u32 {
 pub(super) enum ProcessPhase {
     Running,
     Cancelling,
+    CleaningUp,
+    #[allow(dead_code)]
+    TimingOut(WorkerTimeoutKind),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -46,6 +50,33 @@ pub(super) enum CancelRequestOutcome {
     },
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum TimeoutClaim {
+    Claimed(ProcessInstance),
+    AlreadyTerminating(ProcessInstance),
+    NotRunning,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum TimeoutRequestOutcome {
+    Signalled(ProcessInstance),
+    AlreadyTerminating(ProcessInstance),
+    NotRunning,
+    Failed {
+        instance: ProcessInstance,
+        error: String,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum CleanupClaim {
+    Claimed(ProcessInstance),
+    AlreadyTerminating(ProcessInstance),
+    NotRunning,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum CancelProcessStatus {
@@ -64,12 +95,40 @@ pub(crate) struct CancelProcessResult {
 #[derive(Default)]
 pub(super) struct ProcessSupervisor {
     state: Mutex<ProcessSupervisorState>,
+    termination_finished: Condvar,
 }
 
 #[derive(Default)]
 struct ProcessSupervisorState {
     next_instance_id: u64,
     current: Option<(ProcessInstance, ProcessPhase)>,
+    termination_in_flight: Option<TerminationLease>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminationLease {
+    Cancellation {
+        instance_id: u64,
+    },
+    Timeout {
+        instance_id: u64,
+        kind: WorkerTimeoutKind,
+    },
+}
+
+impl TerminationLease {
+    fn instance_id(self) -> u64 {
+        match self {
+            Self::Cancellation { instance_id } | Self::Timeout { instance_id, .. } => instance_id,
+        }
+    }
+
+    fn phase(self) -> ProcessPhase {
+        match self {
+            Self::Cancellation { .. } => ProcessPhase::Cancelling,
+            Self::Timeout { kind, .. } => ProcessPhase::TimingOut(kind),
+        }
+    }
 }
 
 impl ProcessSupervisor {
@@ -83,7 +142,7 @@ impl ProcessSupervisor {
 
     pub(super) fn start(&self, pid: u32) -> Option<ProcessInstance> {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
-        if state.current.is_some() {
+        if state.current.is_some() || state.termination_in_flight.is_some() {
             return None;
         }
 
@@ -115,20 +174,93 @@ impl ProcessSupervisor {
             .map(|(_, phase)| phase)
     }
 
+    #[cfg(test)]
+    pub(super) fn phase_for(&self, instance_id: u64) -> Option<ProcessPhase> {
+        self.state
+            .lock()
+            .expect("process supervisor lock poisoned")
+            .current
+            .and_then(|(instance, phase)| (instance.instance_id == instance_id).then_some(phase))
+    }
+
+    #[cfg(test)]
     fn claim_cancel(&self) -> CancelClaim {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        Self::claim_cancel_locked(&mut state, false)
+    }
+
+    fn claim_cancel_termination(&self) -> CancelClaim {
+        let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        Self::claim_cancel_locked(&mut state, true)
+    }
+
+    fn claim_cancel_locked(
+        state: &mut ProcessSupervisorState,
+        lease_termination: bool,
+    ) -> CancelClaim {
         match state.current.as_mut() {
             Some((instance, phase @ ProcessPhase::Running)) => {
                 *phase = ProcessPhase::Cancelling;
+                if lease_termination {
+                    debug_assert!(state.termination_in_flight.is_none());
+                    state.termination_in_flight = Some(TerminationLease::Cancellation {
+                        instance_id: instance.instance_id,
+                    });
+                }
                 CancelClaim::Claimed(*instance)
             }
-            Some((instance, ProcessPhase::Cancelling)) => CancelClaim::AlreadyCancelling(*instance),
+            Some((
+                instance,
+                ProcessPhase::Cancelling | ProcessPhase::CleaningUp | ProcessPhase::TimingOut(_),
+            )) => CancelClaim::AlreadyCancelling(*instance),
             None => CancelClaim::NotRunning,
         }
     }
 
+    #[allow(dead_code)]
+    pub(super) fn claim_timeout(&self, instance_id: u64, kind: WorkerTimeoutKind) -> TimeoutClaim {
+        let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        Self::claim_timeout_locked(&mut state, instance_id, kind, false)
+    }
+
+    fn claim_timeout_termination(&self, instance_id: u64, kind: WorkerTimeoutKind) -> TimeoutClaim {
+        let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        Self::claim_timeout_locked(&mut state, instance_id, kind, true)
+    }
+
+    fn claim_timeout_locked(
+        state: &mut ProcessSupervisorState,
+        instance_id: u64,
+        kind: WorkerTimeoutKind,
+        lease_termination: bool,
+    ) -> TimeoutClaim {
+        match state.current.as_mut() {
+            Some((instance, _)) if instance.instance_id != instance_id => TimeoutClaim::NotRunning,
+            Some((instance, phase @ ProcessPhase::Running)) => {
+                *phase = ProcessPhase::TimingOut(kind);
+                if lease_termination {
+                    debug_assert!(state.termination_in_flight.is_none());
+                    state.termination_in_flight = Some(TerminationLease::Timeout {
+                        instance_id: instance.instance_id,
+                        kind,
+                    });
+                }
+                TimeoutClaim::Claimed(*instance)
+            }
+            Some((
+                instance,
+                ProcessPhase::Cancelling | ProcessPhase::CleaningUp | ProcessPhase::TimingOut(_),
+            )) => TimeoutClaim::AlreadyTerminating(*instance),
+            None => TimeoutClaim::NotRunning,
+        }
+    }
+
+    #[cfg(test)]
     fn restore_running(&self, instance_id: u64) -> bool {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        if state.termination_in_flight.is_some() {
+            return false;
+        }
         match state.current.as_mut() {
             Some((instance, phase @ ProcessPhase::Cancelling))
                 if instance.instance_id == instance_id =>
@@ -140,32 +272,142 @@ impl ProcessSupervisor {
         }
     }
 
+    #[allow(dead_code)]
+    pub(super) fn restore_running_after_timeout(
+        &self,
+        instance_id: u64,
+        kind: WorkerTimeoutKind,
+    ) -> bool {
+        let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        if state.termination_in_flight.is_some() {
+            return false;
+        }
+        match state.current.as_mut() {
+            Some((instance, phase))
+                if instance.instance_id == instance_id
+                    && *phase == ProcessPhase::TimingOut(kind) =>
+            {
+                *phase = ProcessPhase::Running;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub(super) fn claim_cleanup(&self, instance_id: u64) -> CleanupClaim {
+        let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        match state.current.as_mut() {
+            Some((instance, _)) if instance.instance_id != instance_id => CleanupClaim::NotRunning,
+            Some((instance, phase @ ProcessPhase::Running)) => {
+                *phase = ProcessPhase::CleaningUp;
+                CleanupClaim::Claimed(*instance)
+            }
+            Some((
+                instance,
+                ProcessPhase::Cancelling | ProcessPhase::CleaningUp | ProcessPhase::TimingOut(_),
+            )) => CleanupClaim::AlreadyTerminating(*instance),
+            None => CleanupClaim::NotRunning,
+        }
+    }
+
     pub(super) fn finish(&self, instance_id: u64) -> Option<ProcessPhase> {
         let mut state = self.state.lock().expect("process supervisor lock poisoned");
-        let (instance, phase) = state.current?;
-        if instance.instance_id != instance_id {
-            return None;
+        loop {
+            let (instance, phase) = state.current?;
+            if instance.instance_id != instance_id {
+                return None;
+            }
+            if state
+                .termination_in_flight
+                .is_some_and(|lease| lease.instance_id() == instance_id)
+            {
+                state = self
+                    .termination_finished
+                    .wait(state)
+                    .expect("process supervisor lock poisoned");
+                continue;
+            }
+            state.current = None;
+            return Some(phase);
         }
-        state.current = None;
-        Some(phase)
+    }
+
+    fn complete_termination(&self, lease: TerminationLease, succeeded: bool) -> bool {
+        let mut state = self.state.lock().expect("process supervisor lock poisoned");
+        if state.termination_in_flight != Some(lease) {
+            return false;
+        }
+        let Some((instance, phase)) = state.current else {
+            return false;
+        };
+        if instance.instance_id != lease.instance_id() || phase != lease.phase() {
+            return false;
+        }
+
+        if !succeeded {
+            state.current = Some((instance, ProcessPhase::Running));
+        }
+        state.termination_in_flight = None;
+        self.termination_finished.notify_all();
+        true
     }
 
     fn request_cancel<F>(&self, terminate: F) -> CancelRequestOutcome
     where
         F: FnOnce(ProcessInstance) -> Result<(), String>,
     {
-        match self.claim_cancel() {
-            CancelClaim::Claimed(instance) => match terminate(instance) {
-                Ok(()) => CancelRequestOutcome::Signalled(instance),
-                Err(error) => {
-                    self.restore_running(instance.instance_id);
-                    CancelRequestOutcome::Failed { instance, error }
+        match self.claim_cancel_termination() {
+            CancelClaim::Claimed(instance) => {
+                let result = terminate(instance);
+                let completed = self.complete_termination(
+                    TerminationLease::Cancellation {
+                        instance_id: instance.instance_id,
+                    },
+                    result.is_ok(),
+                );
+                debug_assert!(completed);
+                match result {
+                    Ok(()) => CancelRequestOutcome::Signalled(instance),
+                    Err(error) => CancelRequestOutcome::Failed { instance, error },
                 }
-            },
+            }
             CancelClaim::AlreadyCancelling(instance) => {
                 CancelRequestOutcome::AlreadyCancelling(instance)
             }
             CancelClaim::NotRunning => CancelRequestOutcome::NotRunning,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn request_timeout<F>(
+        &self,
+        instance_id: u64,
+        kind: WorkerTimeoutKind,
+        terminate: F,
+    ) -> TimeoutRequestOutcome
+    where
+        F: FnOnce(ProcessInstance) -> Result<(), String>,
+    {
+        match self.claim_timeout_termination(instance_id, kind) {
+            TimeoutClaim::Claimed(instance) => {
+                let result = terminate(instance);
+                let completed = self.complete_termination(
+                    TerminationLease::Timeout {
+                        instance_id: instance.instance_id,
+                        kind,
+                    },
+                    result.is_ok(),
+                );
+                debug_assert!(completed);
+                match result {
+                    Ok(()) => TimeoutRequestOutcome::Signalled(instance),
+                    Err(error) => TimeoutRequestOutcome::Failed { instance, error },
+                }
+            }
+            TimeoutClaim::AlreadyTerminating(instance) => {
+                TimeoutRequestOutcome::AlreadyTerminating(instance)
+            }
+            TimeoutClaim::NotRunning => TimeoutRequestOutcome::NotRunning,
         }
     }
 }
@@ -319,13 +561,17 @@ fn process_group_exists(pid: u32) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        termination_command_spec, CancelClaim, CancelRequestOutcome, ProcessPhase, ProcessPlatform,
-        ProcessSignal, ProcessSupervisor,
+        termination_command_spec, CancelClaim, CancelRequestOutcome, CleanupClaim, ProcessPhase,
+        ProcessPlatform, ProcessSignal, ProcessSupervisor, TimeoutClaim, TimeoutRequestOutcome,
     };
+    use crate::worker_runtime::WorkerTimeoutKind;
     #[cfg(unix)]
     use std::os::unix::process::CommandExt;
     #[cfg(unix)]
     use std::process::Command;
+    use std::sync::{mpsc, Arc, Barrier};
+    use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn process_supervisor_claims_cancellation_once_and_rolls_back_only_matching_instance() {
@@ -395,6 +641,318 @@ mod tests {
             supervisor.finish(instance.instance_id),
             Some(ProcessPhase::Running)
         );
+    }
+
+    #[test]
+    fn finish_waits_for_cancellation_termination_before_admitting_a_new_instance() {
+        let supervisor = Arc::new(ProcessSupervisor::default());
+        let instance = supervisor.start(405).expect("worker starts");
+        let (termination_entered_tx, termination_entered_rx) = mpsc::channel();
+        let (release_termination_tx, release_termination_rx) = mpsc::channel();
+        let termination_supervisor = Arc::clone(&supervisor);
+        let termination_thread = thread::spawn(move || {
+            termination_supervisor.request_cancel(|claimed| {
+                assert_eq!(claimed, instance);
+                termination_entered_tx
+                    .send(())
+                    .expect("announce termination claim");
+                release_termination_rx
+                    .recv()
+                    .expect("release termination closure");
+                Ok(())
+            })
+        });
+
+        termination_entered_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("termination closure starts after claiming cancellation");
+        assert_eq!(supervisor.phase(), Some(ProcessPhase::Cancelling));
+
+        let finish_barrier = Arc::new(Barrier::new(2));
+        let finish_thread_barrier = Arc::clone(&finish_barrier);
+        let finish_supervisor = Arc::clone(&supervisor);
+        let (finish_tx, finish_rx) = mpsc::channel();
+        let finish_thread = thread::spawn(move || {
+            finish_thread_barrier.wait();
+            let phase = finish_supervisor.finish(instance.instance_id);
+            let next = finish_supervisor.start(406);
+            finish_tx
+                .send((phase, next))
+                .expect("report finish and next start");
+        });
+        finish_barrier.wait();
+
+        let before_release = finish_rx.recv_timeout(Duration::from_millis(200));
+        let start_before_release = supervisor.start(407);
+        release_termination_tx
+            .send(())
+            .expect("release termination closure");
+        let termination_outcome = termination_thread.join().expect("termination thread joins");
+        let (finished_phase, next) = match before_release {
+            Ok(value) => value,
+            Err(mpsc::RecvTimeoutError::Timeout) => finish_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("finish completes after termination closure"),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("finish thread disconnected before reporting")
+            }
+        };
+        finish_thread.join().expect("finish thread joins");
+
+        assert!(matches!(
+            termination_outcome,
+            CancelRequestOutcome::Signalled(claimed) if claimed == instance
+        ));
+        assert!(matches!(
+            before_release,
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ));
+        assert!(start_before_release.is_none());
+        assert_eq!(finished_phase, Some(ProcessPhase::Cancelling));
+        let next = next.expect("new worker starts only after termination finishes");
+        assert_eq!(next.instance_id, instance.instance_id + 1);
+        assert_eq!(supervisor.current(), Some(next));
+        assert_eq!(supervisor.phase(), Some(ProcessPhase::Running));
+    }
+
+    #[test]
+    fn finish_waits_for_timeout_failure_rollback_without_deadlocking() {
+        let supervisor = Arc::new(ProcessSupervisor::default());
+        let instance = supervisor.start(408).expect("worker starts");
+        let (termination_entered_tx, termination_entered_rx) = mpsc::channel();
+        let (release_termination_tx, release_termination_rx) = mpsc::channel();
+        let termination_supervisor = Arc::clone(&supervisor);
+        let termination_thread = thread::spawn(move || {
+            termination_supervisor.request_timeout(
+                instance.instance_id,
+                WorkerTimeoutKind::Idle,
+                |claimed| {
+                    assert_eq!(claimed, instance);
+                    termination_entered_tx
+                        .send(())
+                        .expect("announce termination claim");
+                    release_termination_rx
+                        .recv()
+                        .expect("release termination closure");
+                    Err("tree termination failed".to_string())
+                },
+            )
+        });
+
+        termination_entered_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("termination closure starts after claiming timeout");
+        assert_eq!(
+            supervisor.phase(),
+            Some(ProcessPhase::TimingOut(WorkerTimeoutKind::Idle))
+        );
+
+        let finish_barrier = Arc::new(Barrier::new(2));
+        let finish_thread_barrier = Arc::clone(&finish_barrier);
+        let finish_supervisor = Arc::clone(&supervisor);
+        let (finish_tx, finish_rx) = mpsc::channel();
+        let finish_thread = thread::spawn(move || {
+            finish_thread_barrier.wait();
+            let phase = finish_supervisor.finish(instance.instance_id);
+            let next = finish_supervisor.start(409);
+            finish_tx
+                .send((phase, next))
+                .expect("report finish and next start");
+        });
+        finish_barrier.wait();
+
+        let before_release = finish_rx.recv_timeout(Duration::from_millis(200));
+        let start_before_release = supervisor.start(410);
+        release_termination_tx
+            .send(())
+            .expect("release termination closure");
+        let termination_outcome = termination_thread.join().expect("termination thread joins");
+        let (finished_phase, next) = match before_release {
+            Ok(value) => value,
+            Err(mpsc::RecvTimeoutError::Timeout) => finish_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("finish completes after timeout rollback"),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("finish thread disconnected before reporting")
+            }
+        };
+        finish_thread.join().expect("finish thread joins");
+
+        assert!(matches!(
+            termination_outcome,
+            TimeoutRequestOutcome::Failed { instance: claimed, .. } if claimed == instance
+        ));
+        assert!(matches!(
+            before_release,
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ));
+        assert!(start_before_release.is_none());
+        assert_eq!(finished_phase, Some(ProcessPhase::Running));
+        let next = next.expect("new worker starts only after rollback and finish");
+        assert_eq!(next.instance_id, instance.instance_id + 1);
+        assert_eq!(supervisor.current(), Some(next));
+        assert_eq!(supervisor.phase(), Some(ProcessPhase::Running));
+    }
+
+    #[test]
+    fn timeout_claim_is_instance_safe_and_keeps_the_first_terminal_kind() {
+        let supervisor = ProcessSupervisor::default();
+        let first = supervisor.start(405).expect("first worker starts");
+
+        assert!(matches!(
+            supervisor.claim_timeout(first.instance_id, WorkerTimeoutKind::Idle),
+            TimeoutClaim::Claimed(instance) if instance == first
+        ));
+        assert_eq!(
+            supervisor.phase(),
+            Some(ProcessPhase::TimingOut(WorkerTimeoutKind::Idle))
+        );
+        assert!(matches!(
+            supervisor.claim_timeout(first.instance_id, WorkerTimeoutKind::Absolute),
+            TimeoutClaim::AlreadyTerminating(instance) if instance == first
+        ));
+        assert_eq!(
+            supervisor.phase(),
+            Some(ProcessPhase::TimingOut(WorkerTimeoutKind::Idle))
+        );
+        assert!(matches!(
+            supervisor.claim_cancel(),
+            CancelClaim::AlreadyCancelling(instance) if instance == first
+        ));
+
+        assert_eq!(
+            supervisor.finish(first.instance_id),
+            Some(ProcessPhase::TimingOut(WorkerTimeoutKind::Idle))
+        );
+        let second = supervisor.start(406).expect("second worker starts");
+        assert_eq!(
+            supervisor.claim_timeout(first.instance_id, WorkerTimeoutKind::Absolute),
+            TimeoutClaim::NotRunning
+        );
+        assert!(
+            !supervisor.restore_running_after_timeout(first.instance_id, WorkerTimeoutKind::Idle)
+        );
+        assert!(!supervisor.restore_running(first.instance_id));
+        assert_eq!(supervisor.finish(first.instance_id), None);
+        assert_eq!(supervisor.current(), Some(second));
+        assert_eq!(supervisor.phase(), Some(ProcessPhase::Running));
+    }
+
+    #[test]
+    fn cancellation_claim_prevents_timeout_signal_and_relabel() {
+        let supervisor = ProcessSupervisor::default();
+        let instance = supervisor.start(407).expect("worker starts");
+        let mut cancel_signals = 0;
+
+        assert!(matches!(
+            supervisor.request_cancel(|current| {
+                assert_eq!(current, instance);
+                cancel_signals += 1;
+                Ok(())
+            }),
+            CancelRequestOutcome::Signalled(current) if current == instance
+        ));
+        assert_eq!(cancel_signals, 1);
+        assert!(matches!(
+            supervisor.request_timeout(
+                instance.instance_id,
+                WorkerTimeoutKind::Absolute,
+                |_| panic!("timeout must not signal after cancellation owns termination")
+            ),
+            TimeoutRequestOutcome::AlreadyTerminating(current) if current == instance
+        ));
+        assert_eq!(supervisor.phase(), Some(ProcessPhase::Cancelling));
+    }
+
+    #[test]
+    fn timeout_request_signals_once_and_rolls_back_only_the_expected_claim() {
+        let supervisor = ProcessSupervisor::default();
+        let instance = supervisor.start(408).expect("worker starts");
+        let mut timeout_signals = 0;
+
+        assert!(matches!(
+            supervisor.request_timeout(
+                instance.instance_id,
+                WorkerTimeoutKind::Idle,
+                |current| {
+                    assert_eq!(current, instance);
+                    timeout_signals += 1;
+                    Ok(())
+                }
+            ),
+            TimeoutRequestOutcome::Signalled(current) if current == instance
+        ));
+        assert_eq!(timeout_signals, 1);
+        assert!(matches!(
+            supervisor.request_timeout(
+                instance.instance_id,
+                WorkerTimeoutKind::Idle,
+                |_| panic!("a repeated timeout must not signal")
+            ),
+            TimeoutRequestOutcome::AlreadyTerminating(current) if current == instance
+        ));
+        assert!(matches!(
+            supervisor.request_cancel(|_| panic!("cancel must not signal during timeout")),
+            CancelRequestOutcome::AlreadyCancelling(current) if current == instance
+        ));
+
+        assert!(!supervisor
+            .restore_running_after_timeout(instance.instance_id, WorkerTimeoutKind::Absolute));
+        assert_eq!(
+            supervisor.phase(),
+            Some(ProcessPhase::TimingOut(WorkerTimeoutKind::Idle))
+        );
+        assert!(
+            supervisor.restore_running_after_timeout(instance.instance_id, WorkerTimeoutKind::Idle)
+        );
+        assert_eq!(supervisor.phase(), Some(ProcessPhase::Running));
+
+        assert!(matches!(
+            supervisor.request_timeout(
+                instance.instance_id,
+                WorkerTimeoutKind::Absolute,
+                |_| Err("tree termination failed".to_string())
+            ),
+            TimeoutRequestOutcome::Failed { instance: current, .. } if current == instance
+        ));
+        assert_eq!(supervisor.phase(), Some(ProcessPhase::Running));
+    }
+
+    #[test]
+    fn cleanup_claim_closes_the_check_then_signal_race_without_stealing_terminal_ownership() {
+        let supervisor = ProcessSupervisor::default();
+        let instance = supervisor.start(412).expect("worker starts");
+
+        assert!(matches!(
+            supervisor.claim_cleanup(instance.instance_id),
+            CleanupClaim::Claimed(claimed) if claimed == instance
+        ));
+        assert_eq!(
+            supervisor.phase_for(instance.instance_id),
+            Some(ProcessPhase::CleaningUp)
+        );
+        assert!(matches!(
+            supervisor.claim_cancel(),
+            CancelClaim::AlreadyCancelling(claimed) if claimed == instance
+        ));
+        assert!(matches!(
+            supervisor.claim_timeout(instance.instance_id, WorkerTimeoutKind::Idle),
+            TimeoutClaim::AlreadyTerminating(claimed) if claimed == instance
+        ));
+        assert_eq!(
+            supervisor.finish(instance.instance_id),
+            Some(ProcessPhase::CleaningUp)
+        );
+
+        let next = supervisor.start(413).expect("next worker starts");
+        assert!(matches!(
+            supervisor.claim_cancel(),
+            CancelClaim::Claimed(claimed) if claimed == next
+        ));
+        assert!(matches!(
+            supervisor.claim_cleanup(next.instance_id),
+            CleanupClaim::AlreadyTerminating(claimed) if claimed == next
+        ));
     }
 
     #[test]

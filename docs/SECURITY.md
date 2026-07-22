@@ -3,9 +3,10 @@
 ## 2026-07-22 Release Reliability and Crash-Consistency Boundary
 
 - Authoritative persistence is implemented on `main` at `61d489a`: reviewed owners use atomic
-  replacement and existing-task multi-file updates recover through the closed task journal. Broad
-  consumer publication remains blocked because supervised workers still have no production
-  deadline; watchdog requirements below remain approved target behavior until its ExecPlan passes.
+  replacement and existing-task multi-file updates recover through the closed task journal. The
+  supervised worker watchdog is also implemented with fixed operation-owned deadlines,
+  instance-safe timeout claims, process-tree termination, and closed non-echoing outcomes. Broad
+  publication remains separately blocked on server concurrency and production operations.
 - Every authoritative destination must use same-directory staging, closed-handle sync, validation,
   and atomic replacement. A task-local transaction journal may contain only schema/state, random
   transaction ID, normalized allowlisted relative internal paths, and existed-before markers. It

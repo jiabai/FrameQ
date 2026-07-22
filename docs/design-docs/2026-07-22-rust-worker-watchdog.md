@@ -1,17 +1,18 @@
 # Rust Worker Watchdog and Deadline Boundary
 
 - Date: 2026-07-22
-- Status: Proposed; release blocker
+- Status: Implemented; Windows/native and complete local gates passed, macOS runtime evidence pending
 - Related lifecycle design:
   `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
-- ExecPlan: `docs/exec-plans/active/2026-07-22-worker-watchdog-plan.md`
+- ExecPlan: `docs/exec-plans/completed/2026-07-22-worker-watchdog-plan.md`
 
 ## Context
 
-The shared Rust `WorkerLane::run` now owns spawn, process-group setup, supervisor registration,
-stdin delivery, stderr/progress reading, `child.wait()`, finish, parsing, and terminal
-classification for process video, AI retry, source identity, and ASR model download. Cancellation
-can terminate the supervised process tree from another command, but no production deadline exists.
+The shared Rust `WorkerLane::run` owns spawn, process-group setup, supervisor registration, stdin
+delivery, stderr/progress reading, `child.wait()`, finish, parsing, and terminal classification for
+process video, AI retry, source identity, and ASR model download. It now starts an instance-bound
+production watchdog after registration and before stdin delivery; cancellation and timeout reuse
+the same supervised process-tree boundary.
 
 If a Python worker, FFmpeg/native library, provider request, pipe operation, or descendant process
 hangs without exiting, `child.wait()` can block forever. The UI remains in a processing state and
@@ -38,6 +39,7 @@ struct WatchdogPolicy {
 enum ProcessPhase {
     Running,
     Cancelling,
+    CleaningUp,
     TimingOut(WorkerTimeoutKind),
 }
 ```
@@ -86,9 +88,12 @@ normal completion, or activity update. On expiry it attempts an instance-matchin
 `ProcessSupervisor`. Only the winner of that state transition may call the existing
 `terminate_process_tree` with the supervisor-owned numeric PID/PGID.
 
-The main runner continues to reap the child, stops and joins the watchdog, finishes the matching
-supervisor instance, joins pipe readers, and applies terminal precedence. The watchdog never parses
-stdout, maps business results, emits arbitrary progress, or clears supervisor state itself.
+The main runner continues to reap the child, stops and joins the watchdog before clearing the
+matching supervisor instance, joins pipe readers, and applies terminal precedence. Every early
+runner return uses the same lifecycle helper: stop/join the watchdog first, observe the matching
+terminal claim, avoid a second tree signal when cancellation or timeout already owns termination,
+reap the child, and only then finish the instance. The watchdog never parses stdout, maps business
+results, emits arbitrary progress, or clears supervisor state itself.
 
 An internal guard still clears exactly one matching instance on early setup/wait failure. Watchdog
 thread startup failure is a fixed runtime failure: FrameQ terminates and reaps the newly supervised
@@ -100,15 +105,41 @@ child rather than running it without the required release safety boundary.
 
 - `Running -> Cancelling` when the user cancellation claim wins;
 - `Running -> TimingOut(kind)` when the matching watchdog claim wins;
+- `Running -> CleaningUp` when an early runner error must terminate/reap the registered child;
 - a cancel request during `TimingOut` reports the task is already terminating and sends no second
   signal;
+- cancel/timeout attempts during `CleaningUp` report that termination is already in progress and
+  send no second signal;
 - a timeout attempt during `Cancelling` does nothing and cannot relabel cancellation;
 - stale instance IDs cannot claim, restore, finish, or terminate a newer process.
+
+Cancellation and timeout claims also create an instance-bound termination-in-flight lease before
+the OS terminator runs outside the supervisor lock. `finish(instance_id)` waits on a condition
+variable while that matching lease is live, so the old instance remains registered and `start`
+cannot admit a newer worker until the complete TERM/check/KILL or Windows tree-termination sequence
+returns. Completion preserves the claimed terminal phase on success or atomically restores
+`Running` on failure, then clears the matching lease and wakes waiters. A stale lease completion
+cannot change state or wake a newer instance. This closes numeric PID/PGID reuse between early child
+exit and a still-running termination helper without holding a mutex across OS process control.
+
+When idle and absolute deadlines become due on the same observation, `Absolute` wins the exact tie.
+This keeps classification deterministic without changing the earlier of two unequal deadlines.
 
 Signal failure follows the existing rollback principle. If timeout tree termination fails, the
 supervisor restores `Running` only for the same instance, the runner remains responsible for the
 eventual child outcome, and a fixed sanitized runtime error is recorded. It must not report a
-timeout as completed while the process is still known to be running.
+timeout as completed while the process is still known to be running. The watchdog remains live and
+retries an expired matching deadline with bounded backoff; it must not spin, silently disable the
+deadline, or allow a newer instance to be targeted. A watchdog that observes `Cancelling` also
+remains stoppable and rechecks after backoff because cancellation termination may fail and roll the
+same instance back to `Running`.
+
+The bounded-exit guarantee depends on the supported OS process-control primitive eventually
+accepting tree termination. If the OS refuses or the primitive itself cannot complete, FrameQ keeps
+the instance supervised and reports only a fixed safe diagnostic; it does not clear busy state,
+admit a second worker, or claim cleanup succeeded. Native release evidence must exercise the normal
+successful path, while this exceptional OS failure remains an explicit residual risk rather than a
+false success.
 
 ## Terminal Precedence
 
@@ -176,8 +207,10 @@ Focused Rust tests use real fixture children plus private short policies to cove
 - parent plus descendant termination and successful second-task admission.
 
 Adapter, model-download, frontend parser/i18n, browser smoke, complete app/Rust/worker/script suites,
-packaging, and governance gates must pass. Native Windows and macOS acceptance must prove no parent
-or child remains after a timeout. An unavailable platform is recorded as residual risk.
+packaging, and governance gates passed. Native Windows acceptance proved no parent or child remains
+after a timeout and that the same lane admits a second task. The same fixture is required by the
+hosted macOS full-Cargo workflow, but this session had no macOS host; its runtime execution remains
+recorded residual release evidence rather than an inferred pass.
 
 ## Non-Goals
 

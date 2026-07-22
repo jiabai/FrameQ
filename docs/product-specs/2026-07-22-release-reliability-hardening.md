@@ -1,7 +1,7 @@
 # Release Reliability Hardening
 
 - Date: 2026-07-22
-- Status: Partially implemented; authoritative persistence complete, worker watchdog required
+- Status: Desktop reliability implemented; server concurrency/operations remains a separate release blocker
 - Scope: authoritative task persistence and supervised worker execution
 
 ## Summary
@@ -129,12 +129,11 @@ tests; it must not require a desktop-worker contract change.
 
 ## Release Gate
 
-The authoritative-persistence ExecPlan is implemented, reviewed, and merged at `61d489a`. Broad
-consumer publication remains blocked until the linked worker-watchdog ExecPlan is implemented,
-reviewed, and its automated and available native acceptance evidence is recorded in the active
-release plan.
-An unavailable macOS or Windows environment must be recorded as unverified residual risk, not
-treated as a pass.
+The authoritative-persistence ExecPlan is implemented, reviewed, and merged at `61d489a`. The
+worker-watchdog ExecPlan is implemented and passed complete local gates plus the native Windows
+parent/descendant timeout fixture. The portable fixture is registered in the hosted macOS full
+Cargo workflow, but no macOS host was available in this session; that runtime evidence remains an
+unverified residual risk rather than a pass.
 
 The server's OTP/ticket/quota concurrency and production operations boundary is a separate release
 blocker. This specification does not claim to make server-side check-then-write flows atomic.

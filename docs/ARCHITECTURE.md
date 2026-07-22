@@ -1,13 +1,13 @@
 # FrameQ Architecture
 
-## 2026-07-22 Broad-release reliability boundary (persistence implemented; watchdog planned)
+## 2026-07-22 Broad-release reliability boundary (persistence and watchdog implemented)
 
 - The authoritative-persistence half of this boundary is implemented on `main` at `61d489a`.
   Transcript, AI, preference, manifest, and Rust transcript-edit owners use reviewed atomic
   replacement, while existing-task bundles recover through the closed prepared/committed journal.
-- Broad consumer publication remains blocked on the independent worker-watchdog change. The current
-  Rust runner still has an unbounded `child.wait()`; the watchdog bullets below describe the
-  accepted target architecture rather than current runtime capability.
+- The desktop reliability boundary is implemented: the Rust runner now places every supervised
+  operation behind fixed operation-owned idle/absolute deadlines and an instance-bound watchdog.
+  Broad publication remains separately blocked on server concurrency and production operations.
 - Persistence keeps two layers distinct. A shared Python/Rust same-directory staging + sync +
   atomic-replace primitive prevents individual-file truncation. A closed task-local
   prepared/committed journal makes existing-task transcript and AI bundles recover to one complete
@@ -15,17 +15,17 @@
 - The journal retains official artifact paths and task schema v3, contains no content or absolute
   paths, remains outside artifact discovery, and fails closed before unsafe recovery. New task
   creation continues using the atomically written manifest as the final visibility record.
-- `worker_runtime` remains the sole process lifecycle owner and will derive fixed idle/absolute
-  policies from `WorkerOperation`. An instance-bound watchdog can terminate while stdin delivery or
-  wait is blocked, reuses the existing process-tree primitives, and cannot act on a newer instance.
+- `worker_runtime` remains the sole process lifecycle owner and derives fixed idle/absolute policies
+  from `WorkerOperation`. Its instance-bound watchdog terminates while stdin delivery or wait is
+  blocked, reuses the existing process-tree primitives, and cannot act on a newer instance.
 - Structured-result-first and explicit cancellation semantics remain unchanged. A timeout has its
   own safe outcome, clears the busy state, preserves committed artifacts, and never automatically
   retries an LLM or consumes another AI Credit.
 - Durable decisions and implementation steps are in
   `docs/product-specs/2026-07-22-release-reliability-hardening.md`,
   `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`,
-  `docs/design-docs/2026-07-22-rust-worker-watchdog.md`, the completed atomic-persistence ExecPlan,
-  and the active worker-watchdog ExecPlan.
+  `docs/design-docs/2026-07-22-rust-worker-watchdog.md` and the completed atomic-persistence and
+  worker-watchdog ExecPlans.
 - Server OTP/ticket/quota concurrency and production operations remain a separate broad-release
   blocker; the desktop persistence/watchdog architecture does not close it.
 
@@ -377,19 +377,19 @@
 
 ## 2026-07-10 Desktop Process Supervision and Cancellation Boundary
 
-- `ProcessSupervisors` privately owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running` or `Cancelling` phase; absence is the only finished state.
+- `ProcessSupervisors` privately owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running`, `Cancelling`, `CleaningUp`, or typed `TimingOut` phase; absence is the only finished state.
 - `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the internal typed `WorkerRunRequest`, but application modules can enter the video lane only through `VideoWorkerFacade::execute(WorkerJob)` and can enter the model-download lane only through the narrow `ProcessSupervisors` model-download method. Application modules cannot select a lane, operation, progress route, invocation, credential policy, spawn behavior, pipe, wait/reap path, supervisor mutation, or process-tree termination.
 - `worker_runtime/facade.rs` exhaustively derives video-job invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane. `command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` owns spawn/register/stdin/read/wait/finish/parse/classify/log ordering. Raw composition helpers remain private to this module boundary.
 - Start, cancellation claim, signal-failure rollback, and terminal cleanup must match the running instance ID. A stale waiter or PID cannot clear or restore a newer child. A duplicate cancellation request returns structured `already_cancelling` and sends no second signal.
-- Registration occurs before one-shot stdin delivery. After terminal observation, the runner finishes the matching instance before joining stderr readers; an internal guard clears only its own instance on every setup or wait failure.
+- Registration and watchdog startup occur before one-shot stdin delivery. After terminal observation, the runner stops and joins the watchdog, finishes the matching instance before joining stderr readers, and an internal guard clears only its own instance on every setup or wait failure. A termination-in-flight lease prevents lane reuse until the complete OS termination call returns.
 - Windows terminates the controlled PID with `taskkill /PID <pid> /T /F`. On supported macOS releases, the Unix implementation starts each worker in a fresh process group, sends `TERM` to the negative PGID, waits only for the bounded escalation grace, and sends `KILL` to the same group only if it remains alive. Commands receive only supervisor-owned numeric IDs and are never built through a shell. Linux is not a supported release target.
 - Signal delivery exposes `cancelling`, never a fabricated completed cancellation. The runner owns terminal precedence: a structured result wins a concurrent cancellation claim; only an unstructured termination observed for the matching `Cancelling` instance becomes `Cancelled`. Successful malformed stdout is a protocol violation, while nonzero malformed output is a typed unstructured failure.
 - Progress routing is closed to `None`, validated worker progress, or validated ASR model-download progress. The typed job/model-download boundary derives the route; application modules cannot select it or provide arbitrary parsers, event names, or unvalidated payload emission.
 - React keeps the operation ID and task UI while cancellation is pending. It resets only after a confirmed cancelled worker/model-download terminal result; a signal failure restores the prior observable processing state so progress and the real later result remain visible. Cancellation deliberately preserves existing outputs, cache, and model files.
-- Current production execution still has no watchdog and can remain blocked in `child.wait()` after
-  a hung worker. The accepted but unimplemented extension is
-  `docs/design-docs/2026-07-22-rust-worker-watchdog.md`; no deadline behavior should be inferred
-  until its ExecPlan is complete.
+- Production execution now uses the fixed watchdog policy in
+  `docs/design-docs/2026-07-22-rust-worker-watchdog.md`. Only validated progress extends idle time;
+  every operation has an absolute deadline, and timeout classification preserves valid-result and
+  explicit-cancellation precedence.
 
 ## 2026-07-19 Typed Worker Job Execution Boundary
 

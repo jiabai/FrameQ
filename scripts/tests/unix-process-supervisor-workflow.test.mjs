@@ -29,7 +29,7 @@ test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux
   assert.match(workflow, /uses:\s*dtolnay\/rust-toolchain@stable/);
   assert.match(
     workflow,
-    /run:\s*cargo test --manifest-path app\/src-tauri\/Cargo\.toml/,
+    /run:\s*cargo test --manifest-path app\/src-tauri\/Cargo\.toml\s*(?:\r?\n|$)/,
   );
 
   assert.doesNotMatch(workflow, /pull_request_target:/);
@@ -39,7 +39,7 @@ test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux
   assert.doesNotMatch(workflow, /tauri-action|gh release|WECHAT|LLM|yt-dlp|ffmpeg/i);
 });
 
-test("the hosted cargo command includes the real Unix parent-child process-group fixture", async () => {
+test("the hosted cargo command includes the direct and watchdog parent-child fixtures", async () => {
   const supervisor = await readFile(supervisorPath, "utf8");
   const runner = await readFile(runnerPath, "utf8");
   const fixture = supervisor.indexOf(
@@ -64,4 +64,23 @@ test("the hosted cargo command includes the real Unix parent-child process-group
   );
   assert.match(runner, /fn configure_child_process_group/);
   assert.match(runner, /command\.process_group\(0\)/);
+
+  const watchdogFixture = runner.indexOf(
+    "watchdog_timeout_terminates_parent_and_descendant_then_admits_second_task",
+  );
+  assert.notEqual(watchdogFixture, -1);
+  const watchdogFixtureContext = runner.slice(
+    Math.max(0, watchdogFixture - 300),
+    watchdogFixture + 2_500,
+  );
+  const watchdogDeclaration = runner.slice(
+    Math.max(0, watchdogFixture - 100),
+    watchdogFixture + 100,
+  );
+  assert.match(
+    watchdogDeclaration,
+    /#\[test\]\s+fn watchdog_timeout_terminates_parent_and_descendant_then_admits_second_task\(\)/,
+  );
+  assert.doesNotMatch(watchdogDeclaration, /#\[cfg/);
+  assert.match(watchdogFixtureContext, /WorkerRunOutcome::TimedOut/);
 });

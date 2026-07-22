@@ -7,9 +7,11 @@
 > lifecycle change, systematic-debugging for race failures, and verification-before-completion
 > before removing the release blocker. Keep this plan current after every checkpoint.
 
-**Goal:** Ensure every supervised FrameQ worker leaves the busy state within a bounded time, kills
-and reaps its complete process tree on deadline, and returns a distinct safe timeout outcome without
-changing explicit cancellation or valid-result precedence.
+**Goal:** Ensure every supervised FrameQ worker has a fixed bounded deadline and, when supported OS
+process-control primitives succeed, leaves the busy state after its complete process tree is killed
+and reaped, returning a distinct safe timeout outcome without changing explicit cancellation or
+valid-result precedence. An OS termination failure must stay supervised and truthful rather than
+fabricating cleanup.
 
 **Architecture:** Keep deadline policy, monotonic activity tracking, instance-safe timeout claims,
 and tree termination inside the existing Rust `worker_runtime`. Add idle and absolute policies
@@ -36,10 +38,28 @@ completion and explicit cancellation retain their existing meaning.
 - [x] 2026-07-22: Approved fixed operation-owned idle/absolute policies and registered watchdog
   completion as a broad-release blocker. Validation: durable design, active-plan, release-plan, and
   debt-index registration.
-- [ ] Add RED policy, state-machine, process-fixture, adapter, and UI tests.
-- [ ] Implement instance-bound watchdog lifecycle and timeout claims.
-- [ ] Map timeout outcomes through task/model/preflight adapters and localized UI.
-- [ ] Run complete local and available Windows/macOS native acceptance gates.
+- [x] 2026-07-22: Synchronized completed atomic-persistence status on `main` at `5a34b99`, created
+  `codex/worker-watchdog-hardening` in an isolated worktree, and established a green baseline.
+  Validation: worker-runtime Rust 35/35 and app 551/551. The process-tree Rust tests require an
+  unsandboxed host because restricted `taskkill` produces a known false failure.
+- [x] Add RED closed-policy and supervisor state-machine tests. Validation: RED produced 18 expected
+  missing-API compile errors; the complete unsandboxed worker-runtime suite passed 40/40, followed
+  by the added spoofed-payload regression at 1/1. Process-fixture, adapter, and UI RED tests remain
+  in later tasks.
+- [x] 2026-07-22: Implemented the instance-bound watchdog, closed operation policies, validated
+  activity tracking, timeout/cancel/cleanup first-claim ordering, termination leases, bounded
+  signal-failure retry, early-return cleanup, and structured-result-first classification.
+  Validation: the focused worker-runtime suite passed 56/56, including blocked stdin, signal
+  rollback, cancellation/timeout races, and watchdog startup failure.
+- [x] 2026-07-22: Mapped closed timeout outcomes through process/retry, source preflight, and ASR
+  model-download adapters; added three-locale process/model guidance and target-specific AI timeout
+  guidance while preserving the transcript and preventing automatic retry. Validation: focused
+  frontend tests passed 93/93 and real Chromium smoke passed 28/28.
+- [x] 2026-07-22: Completed local and available Windows acceptance. Validation: Rust 208/208,
+  App 567/567, worker 563 passed / 2 skipped, scripts 25/25, lint, Ruff, rustfmt, frontend build,
+  and Tauri `--no-bundle` passed. The native Windows watchdog fixture killed a parent plus
+  descendant and admitted a second task. The same portable fixture is required by the macOS hosted
+  Cargo workflow, but an actual macOS run was unavailable and remains residual release evidence.
 
 ## Surprises & Discoveries
 
@@ -55,6 +75,20 @@ completion and explicit cancellation retain their existing meaning.
 - Evidence: `video_processing/task_result.rs` exhaustively matches the current
   `WorkerRunOutcome`/`WorkerRunErrorKind` sets and has no timeout outcome; adding one requires an
   exhaustive mapping update rather than allowing a generic raw Rust error to leak through.
+- Evidence: model download already uses the shared lane but is not represented by `WorkerJob` in
+  `facade.rs`; exhaustive production policy coverage must therefore stay on `WorkerOperation`, with
+  typed-job tests covering the three facade jobs and a direct runner test covering model download.
+- Evidence: OS tree termination can fail or be blocked by a restricted host. A failed signal cannot
+  safely clear the lane; timeout must roll back only the matching phase, retry with bounded backoff,
+  and retain a truthful supervised state until the child exits or termination succeeds.
+- Evidence: stopping the watchdog alone does not close the race between an early runner cleanup and
+  a concurrent cancel command. The supervisor therefore needs an internal instance-matching
+  `CleaningUp` claim; only its winner may send the early-cleanup tree signal, and cancellation or
+  timeout that already owns termination remains authoritative.
+- Evidence: Unix cancellation can observe child exit after TERM while its 500 ms escalation window
+  is still active. Without a termination-in-flight lease, runner `finish` could admit a new worker
+  before the old numeric PGID check/KILL completed. Synchronized RED tests reproduced this ordering
+  for cancellation success and timeout failure rollback.
 
 ## Decision Log
 
@@ -73,14 +107,42 @@ completion and explicit cancellation retain their existing meaning.
 - Decision: No automatic LLM retry or Credit action follows timeout. Rationale: watchdog recovery is
   process reliability, not permission to incur another external call. Date/Author: 2026-07-22,
   User + Codex.
+- Decision: An exact idle/absolute deadline tie is classified as `Absolute`; unequal deadlines use
+  the earlier instant. Rationale: deterministic tests and diagnostics must not depend on scheduler
+  ordering. Date/Author: 2026-07-22, Codex.
+- Decision: Signal failure rolls the same terminal claim back to `Running`, keeps the watchdog
+  stoppable, and retries with bounded backoff. FrameQ never clears the supervisor or reports timeout
+  while the child is known alive. Rationale: release reliability cannot be obtained by fabricating
+  successful cleanup. Date/Author: 2026-07-22, Codex.
+- Decision: Early runner failures use a private `CleaningUp` terminal claim. Rationale: a phase read
+  followed by an unconditional signal has a check-then-act race with cancellation; an atomic claim
+  prevents duplicate tree signals while keeping user cancellation and timeout labels truthful.
+  Date/Author: 2026-07-22, Codex.
+- Decision: Cancellation and timeout OS calls hold an instance-bound termination lease, not the
+  supervisor mutex. `finish` waits for the lease to complete before clearing the instance. Rationale:
+  process-tree termination must stay outside locks, but numeric PID/PGID reuse is unsafe until the
+  whole terminator sequence returns. Date/Author: 2026-07-22, Codex.
 
 ## Outcomes & Retrospective
 
-Not implemented. Completion requires deterministic short-deadline fixture evidence, complete
-regression gates, and native Windows/macOS parent-child termination evidence where available.
-Residual risk: until then, a hung worker can still keep the UI busy indefinitely; final timing
-values may need field calibration after safe telemetry/support evidence, but request-controlled
-deadlines remain out of scope.
+Implemented. Every current supervised operation now receives an exhaustive Rust-owned policy; only
+validated progress extends idle time, the absolute limit never moves, and the watchdog can act
+while stdin delivery or `child.wait()` blocks. Timeout, cancellation, early cleanup, and finish are
+instance-safe, and a termination-in-flight lease prevents a completed child from releasing its lane
+while an OS tree terminator can still act on the old numeric PID/PGID. Closed adapter/UI outcomes
+leave the busy state, preserve committed results, and never authorize an automatic AI retry.
+
+Local evidence: worker-runtime 56/56, complete Rust 208/208, App 567/567, worker 563 passed / 2
+skipped, scripts 25/25, Chromium smoke 28/28, lint, Ruff, rustfmt, frontend production build, and
+Tauri `--no-bundle` all passed on Windows. The real Windows parent/descendant timeout fixture passed
+and the source-level workflow guard requires the same fixture in full hosted macOS Cargo tests.
+
+Residual risk: this session had no macOS host, so the new watchdog-triggered parent/descendant path
+has not yet produced hosted macOS runtime evidence. If a supported OS tree-termination primitive
+refuses or itself fails to return, FrameQ deliberately keeps the instance supervised rather than
+claiming a false timeout; that exceptional OS failure cannot be bounded by an in-process watchdog.
+The conservative durations may need later field calibration, but request-controlled deadlines stay
+out of scope.
 
 ## Context and Orientation
 
@@ -107,6 +169,10 @@ deadlines remain out of scope.
 - Timeout/cancel/finish/rollback transitions match the monotonically increasing instance ID.
 - Exactly one terminal claimant sends a termination signal; stale watchdogs cannot touch newer
   children.
+- A failed termination claim rolls back only its matching phase and is retried with bounded backoff;
+  it never spins, disables the watchdog, clears the lane, or reports a false timeout.
+- Every normal and early return stops and joins its instance watchdog before supervisor finish, and
+  runner cleanup does not send a second signal after cancellation/timeout already owns termination.
 - The main runner remains the only reap, pipe-join, parse, classify, and supervisor-finish owner.
 - A valid typed structured result wins a concurrent timeout or cancellation claim.
 - Timeout never echoes raw worker/request/path/content data and never automatically retries AI.
@@ -122,13 +188,13 @@ deadlines remain out of scope.
 - Modify: `app/src-tauri/src/worker_runtime/supervisor.rs`
 - Modify: `app/src-tauri/src/worker_runtime/facade.rs`
 
-- [ ] Add policy tests for exact production values: process 45m/8h, retry 10m/30m, identity
+- [x] Add policy tests for exact production values: process 45m/8h, retry 10m/30m, identity
   absolute-only 3m, model download 10m/4h. Assert callers and payloads cannot override policy.
-- [ ] Add supervisor RED tests for `Running -> TimingOut(kind)`, cancellation/timeout first-claim
+- [x] Add supervisor RED tests for `Running -> TimingOut(kind)`, cancellation/timeout first-claim
   ordering, repeated claims, signal-failure rollback, matching finish, and stale instance rejection.
-- [ ] Extend typed-job ownership tests so every current semantic job derives a policy and a future
+- [x] Extend typed-job ownership tests so every current semantic job derives a policy and a future
   enum variant fails compilation until exhaustively mapped.
-- [ ] Run focused Cargo tests and record the expected failures before production changes.
+- [x] Run focused Cargo tests and record the expected failures before production changes.
 
 ### Task 2: Build Deterministic Worker Fixture Coverage
 
@@ -136,14 +202,14 @@ deadlines remain out of scope.
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs`
 - Modify: `scripts/tests/unix-process-supervisor-workflow.test.mjs`
 
-- [ ] Add fixture modes for silent sleep, validated-progress cadence then stall, endless validated
+- [x] Add fixture modes for silent sleep, validated-progress cadence then stall, endless validated
   progress, delayed valid terminal result, blocked/unread stdin, spawned descendant, malformed
   progress spam, and controlled signal handling.
-- [ ] Add a private injectable `WatchdogPolicy`/clock-or-duration hook. Production code must use real
+- [x] Add a private injectable `WatchdogPolicy`/clock-or-duration hook. Production code must use real
   `Instant`; tests must complete in milliseconds and avoid flaky wall-clock equality assertions.
-- [ ] Add RED runner tests for idle timeout, absolute timeout despite progress, absolute-only source
+- [x] Add RED runner tests for idle timeout, absolute timeout despite progress, absolute-only source
   identity, blocked stdin termination, descendant cleanup, and second-task admission.
-- [ ] Keep fixture payloads free of real paths, URLs, credentials, transcripts, and prompts.
+- [x] Keep fixture payloads free of real paths, URLs, credentials, transcripts, and prompts.
 
 ### Task 3: Implement Runtime-Owned Watchdog and Timeout Claims
 
@@ -152,19 +218,19 @@ deadlines remain out of scope.
 - Modify: `app/src-tauri/src/worker_runtime/supervisor.rs`
 - Modify: `app/src-tauri/src/worker_runtime/mod.rs`
 
-- [ ] Add `WorkerTimeoutKind`, closed `WatchdogPolicy`, and `TimingOut` supervisor phase without
+- [x] Add `WorkerTimeoutKind`, closed `WatchdogPolicy`, and `TimingOut` supervisor phase without
   exposing raw process primitives to application modules.
-- [ ] Start one instance-bound watchdog after registration and before stdin delivery. Store only
+- [x] Start one instance-bound watchdog after registration and before stdin delivery. Store only
   monotonic timing state plus supervisor-owned IDs.
-- [ ] Let validated progress notify the watchdog through narrow shared activity state. Do not count
+- [x] Let validated progress notify the watchdog through narrow shared activity state. Do not count
   diagnostics, invalid progress, stdout, or arbitrary stderr.
-- [ ] On expiry, claim only the matching running instance and reuse `terminate_process_tree`. Do not
+- [x] On expiry, claim only the matching running instance and reuse `terminate_process_tree`. Do not
   finish the supervisor or parse output from the watchdog thread.
-- [ ] Stop/join the watchdog on every runner return path. Watchdog setup failure terminates/reaps the
+- [x] Stop/join the watchdog on every runner return path. Watchdog setup failure terminates/reaps the
   child and returns a fixed safe runtime error.
-- [ ] Preserve current finish-before-reader-join and structured-result-first behavior. Extend
+- [x] Preserve current finish-before-reader-join and structured-result-first behavior. Extend
   terminal classification with idle/absolute timeout outcomes only when no valid result exists.
-- [ ] Run focused tests repeatedly enough to expose race flakes, then run full Cargo tests and
+- [x] Run focused tests repeatedly enough to expose race flakes, then run full Cargo tests and
   rustfmt.
 
 ### Task 4: Map Closed Timeout Outcomes at Application Boundaries
@@ -176,15 +242,15 @@ deadlines remain out of scope.
 - Modify: `app/src-tauri/src/asr_model.rs`
 - Modify: the inline `#[cfg(test)]` modules in the four Rust files above
 
-- [ ] Map process/retry timeout to fixed `WORKER_IDLE_TIMEOUT` or
+- [x] Map process/retry timeout to fixed `WORKER_IDLE_TIMEOUT` or
   `WORKER_EXECUTION_TIMEOUT`, preserving context-owned status/stage.
-- [ ] Keep source-identity timeout tolerant: record the safe internal code, return no identity, and
+- [x] Keep source-identity timeout tolerant: record the safe internal code, return no identity, and
   continue normal URL processing unless explicit cancellation won.
-- [ ] Map model download to its two fixed timeout codes and ensure the model-download busy state
+- [x] Map model download to its two fixed timeout codes and ensure the model-download busy state
   clears without fabricating success.
-- [ ] Exhaustively test every `WorkerRunErrorKind`/outcome mapping and prove rejected diagnostic
+- [x] Exhaustively test every `WorkerRunErrorKind`/outcome mapping and prove rejected diagnostic
   detail is not echoed.
-- [ ] Keep `contracts/desktop-worker-contract.json` request/progress/result schemas unchanged. Runtime
+- [x] Keep `contracts/desktop-worker-contract.json` request/progress/result schemas unchanged. Runtime
   timeout codes use the existing safe-code terminal field and become known localized UI mappings;
   add a regression assertion that no timeout request field or contract-version bump was introduced.
 
@@ -201,14 +267,14 @@ deadlines remain out of scope.
 - Modify: `app/src/features/asrModel/useAsrModelDownload.test.ts`
 - Modify: `app/tests/app-input.browser.test.ts`
 
-- [ ] Add Simplified Chinese, Traditional Chinese, and US English guidance for worker idle,
+- [x] Add Simplified Chinese, Traditional Chinese, and US English guidance for worker idle,
   execution, and model-download timeout codes. Keep timeout as the primary guidance and sanitized
   technical details optional.
-- [ ] Prove process timeout clears processing state and enables retry/new-task behavior.
-- [ ] Prove AI timeout remains `partial_completed`, keeps transcript/previous artifacts, and makes
+- [x] Prove process timeout clears processing state and enables retry/new-task behavior.
+- [x] Prove AI timeout remains `partial_completed`, keeps transcript/previous artifacts, and makes
   no automatic second desktop command or Credits request.
-- [ ] Prove explicit cancellation retains cancellation copy when it wins the race.
-- [ ] Run focused i18n/controller/browser tests, then the complete app suite, lint, and build.
+- [x] Prove explicit cancellation retains cancellation copy when it wins the race.
+- [x] Run focused i18n/controller/browser tests, then the complete app suite, lint, and build.
 
 ### Task 6: Native Process-Tree and Release Validation
 
@@ -216,13 +282,13 @@ deadlines remain out of scope.
 - Modify: `.github/workflows/unix-process-supervisor.yml`
 - Modify: this ExecPlan and active release-plan evidence
 
-- [ ] Extend existing Windows/macOS process-supervisor fixtures to let a watchdog—not a manual cancel
+- [x] Extend existing Windows/macOS process-supervisor fixtures to let a watchdog—not a manual cancel
   command—terminate a parent and descendant and then admit a second task.
-- [ ] Verify no orphan PID/PGID remains after timeout and no stale watchdog can terminate the second
+- [x] Verify no orphan PID/PGID remains after timeout and no stale watchdog can terminate the second
   fixture.
-- [ ] Run all validation commands below. Record exact totals, warnings, unavailable host evidence,
+- [x] Run all validation commands below. Record exact totals, warnings, unavailable host evidence,
   and residual risk before marking this plan complete.
-- [ ] Keep tag, release publication, external provider smoke, and local-media runtime outside this
+- [x] Keep tag, release publication, external provider smoke, and local-media runtime outside this
   plan unless separately authorized.
 
 ## Validation and Acceptance
