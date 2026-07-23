@@ -9,14 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
-import {
-  getDetailText,
-  getExportPath,
-  type DetailTab,
-  type WorkflowState,
-} from "../../workflow";
+import type { WorkflowState } from "../../workflow";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { SupportedLocale } from "../../i18n/locale";
 import {
@@ -36,6 +30,7 @@ import {
   audioProgressPercent,
   clampAudioTime,
 } from "../../audioReviewBarState";
+import { useArtifactDetailController } from "../results/useArtifactDetailController";
 
 type UseTranscriptDetailControllerOptions = {
   workflow: WorkflowState;
@@ -50,7 +45,6 @@ export function useTranscriptDetailController({
   applyTranscriptSave,
   setActionNotice,
 }: UseTranscriptDetailControllerOptions) {
-  const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
   const [transcriptDetail, setTranscriptDetail] = useState<TranscriptDetailResponse | null>(null);
   const [transcriptDraft, setTranscriptDraft] = useState("");
   const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([]);
@@ -69,13 +63,24 @@ export function useTranscriptDetailController({
   const currentTaskIdRef = useRef(workflow.taskId);
   currentTaskIdRef.current = workflow.taskId;
 
-  const openDetailTab = useCallback((tab: DetailTab | null) => {
-    setDetailTab(tab);
-  }, []);
-
-  const closeDetail = useCallback(() => {
-    setDetailTab(null);
-  }, []);
+  const {
+    detailTab,
+    openDetailTab,
+    closeDetail,
+    detailText,
+    exportPath,
+    currentTranscriptPath,
+    copyDetail,
+    copyTranscript,
+    exportDetail,
+    exportTranscript,
+  } = useArtifactDetailController({
+    workflow,
+    locale,
+    transcriptDraft,
+    transcriptDirty,
+    setActionNotice,
+  });
 
   useEffect(() => {
     if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
@@ -149,14 +154,6 @@ export function useTranscriptDetailController({
     });
   }, [activeTranscriptSegmentId]);
 
-  const detailText =
-    detailTab === "transcript"
-      ? transcriptDraft
-      : detailTab
-        ? getDetailText(detailTab, workflow, locale)
-        : "";
-  const exportPath = detailTab ? getExportPath(detailTab, workflow) : null;
-  const currentTranscriptPath = getExportPath("transcript", workflow);
   const transcriptAudioSrc = transcriptDetail?.audio_asset_path
     ? convertFileSrc(transcriptDetail.audio_asset_path)
     : "";
@@ -176,80 +173,6 @@ export function useTranscriptDetailController({
       transcriptAudioRef.current.playbackRate = 1;
     }
   }, [transcriptAudioSrc]);
-
-  const copyDetail = useCallback(async () => {
-    if (!detailTab) {
-      return;
-    }
-    const text =
-      detailTab === "transcript"
-        ? transcriptDraft
-        : getDetailText(detailTab, workflow, locale);
-    if (!text) {
-      setActionNotice(uiMessage("transcript.notice.nothingToCopy"));
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setActionNotice(uiMessage("transcript.notice.copied"));
-    } catch {
-      setActionNotice(uiMessage("transcript.notice.copyFailed"));
-    }
-  }, [detailTab, locale, setActionNotice, transcriptDraft, workflow]);
-
-  const copyTranscript = useCallback(async () => {
-    if (!transcriptDraft) {
-      setActionNotice(uiMessage("transcript.notice.nothingToCopy"));
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(transcriptDraft);
-      setActionNotice(uiMessage("transcript.notice.copied"));
-    } catch {
-      setActionNotice(uiMessage("transcript.notice.transcriptCopyFailed"));
-    }
-  }, [setActionNotice, transcriptDraft]);
-
-  const exportDetail = useCallback(async () => {
-    if (!detailTab) {
-      return;
-    }
-    if (detailTab === "transcript" && transcriptDirty) {
-      setActionNotice(uiMessage("transcript.notice.unsavedLocate"));
-      return;
-    }
-    const detailExportPath = getExportPath(detailTab, workflow);
-    if (!detailExportPath) {
-      setActionNotice(uiMessage("transcript.notice.noExport"));
-      return;
-    }
-
-    try {
-      await revealItemInDir(detailExportPath);
-      setActionNotice(uiMessage("transcript.notice.exportLocated"));
-    } catch {
-      setActionNotice(uiMessage("transcript.notice.exportLocateFailed"));
-    }
-  }, [detailTab, setActionNotice, transcriptDirty, workflow]);
-
-  const exportTranscript = useCallback(async () => {
-    if (transcriptDirty) {
-      setActionNotice(uiMessage("transcript.notice.unsavedLocate"));
-      return;
-    }
-    const transcriptPath = getExportPath("transcript", workflow);
-    if (!transcriptPath) {
-      setActionNotice(uiMessage("transcript.notice.noTranscriptExport"));
-      return;
-    }
-    try {
-      await revealItemInDir(transcriptPath);
-      setActionNotice(uiMessage("transcript.notice.transcriptLocated"));
-    } catch {
-      setActionNotice(uiMessage("transcript.notice.transcriptLocateFailed"));
-    }
-  }, [setActionNotice, transcriptDirty, workflow]);
 
   const playTranscriptSegment = useCallback(
     async (segment: TranscriptSegment) => {

@@ -66,6 +66,10 @@ transcript-detail module, introduce a nested public controller API, or add a new
   `npm.cmd --prefix app test -- src/features/transcript/transcriptControllerBoundary.test.ts`
   failed for the intended reason: the first approved private owner,
   `../results/useArtifactDetailController.ts`, does not yet exist.
+- [x] 2026-07-23: Extracted result-detail tab, clipboard, and saved-artifact location behavior into
+  `useArtifactDetailController` while preserving the facade projection. Validation: focused facade
+  1 file / 18 tests and App lint passed; the intentional ownership RED advanced to the next missing
+  owner, `useTranscriptDocumentController.ts`.
 
 ## Surprises & Discoveries
 
@@ -576,7 +580,7 @@ boundary test.
 - Modify: `app/src/features/transcript/useTranscriptDetailController.ts`
 - Test: `app/src/features/transcript/useTranscriptDetailController.test.ts`
 
-- [ ] **Step 1: Create the artifact-detail owner**
+- [x] **Step 1: Create the artifact-detail owner**
 
 Implement this private hook signature:
 
@@ -633,7 +637,7 @@ the exact current guards, selectors, `navigator.clipboard.writeText` /
 `revealItemInDir` calls, and message codes. Keep the current callback dependency values. Do not
 accept a path or command runner through options.
 
-- [ ] **Step 2: Compose the new owner from the stable facade**
+- [x] **Step 2: Compose the new owner from the stable facade**
 
 Remove `detailTab` state, derived detail/export values, and the four clipboard/location callbacks
 from the root. Call:
@@ -650,7 +654,7 @@ const artifactDetail = useArtifactDetailController({
 
 Return the same artifact-detail fields explicitly. Do not modify consumer imports or props.
 
-- [ ] **Step 3: Run behavior and type gates**
+- [x] **Step 3: Run behavior and type gates**
 
 ```powershell
 npm.cmd --prefix app test -- src/features/transcript/useTranscriptDetailController.test.ts
@@ -660,7 +664,7 @@ npm.cmd --prefix app run lint
 Expected: all facade behavior tests pass and TypeScript/i18n lint reports zero failures. The
 ownership test remains RED only because the document/review owners are still absent.
 
-- [ ] **Step 4: Commit the artifact owner**
+- [x] **Step 4: Commit the artifact owner**
 
 ```powershell
 git add app\src\features\results\useArtifactDetailController.ts app\src\features\transcript\useTranscriptDetailController.ts
