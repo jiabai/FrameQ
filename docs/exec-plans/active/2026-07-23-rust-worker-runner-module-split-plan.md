@@ -63,8 +63,9 @@ user-visible error.
   progress child to depend on `asr_model.rs`. Validation: governance reported 0 errors / 0
   warnings; required-section, placeholder, balanced-fence, type/path/scope, tracked-diff, and new
   file whitespace checks passed.
-- [ ] User reviews and explicitly approves this ExecPlan before any test or production
-  implementation begins. Validation: approval is recorded in this Progress section.
+- [x] 2026-07-23: User reviewed and approved this ExecPlan. Validation: approval was explicitly
+  recorded in the Codex thread; test and production implementation remain pending separate start
+  authorization.
 - [ ] Task 1 locks stdout-reader failure behavior and records the final ownership RED. Validation:
   the new behavior test passes, all 27 non-boundary runner tests pass, and the boundary test fails
   only because the approved owner tree is absent.
