@@ -66,9 +66,12 @@ user-visible error.
 - [x] 2026-07-23: User reviewed and approved this ExecPlan. Validation: approval was explicitly
   recorded in the Codex thread; test and production implementation remain pending separate start
   authorization.
-- [ ] Task 1 locks stdout-reader failure behavior and records the final ownership RED. Validation:
-  the new behavior test passes, all 27 non-boundary runner tests pass, and the boundary test fails
-  only because the approved owner tree is absent.
+- [x] 2026-07-23: Task 1 locked stdout-reader failure behavior and recorded the final ownership
+  RED. Validation: stdout characterization first failed to compile only because
+  `panic_stdout_reader` was absent, then passed 1/1 after the private hook; the existing stderr
+  characterization passed 1/1; the ownership gate compiled and failed only at missing
+  `runner/process_io.rs`; all 27 non-boundary runner tests, rustfmt, and diff checks passed under
+  normal Windows process permissions.
 - [ ] Tasks 2-4 extract watchdog, progress, and terminal owners move-first while all 27
   non-boundary runner tests remain green after each task.
 - [ ] Task 5 extracts process-I/O helpers, moves tests by topic, updates the hosted-workflow source
@@ -118,6 +121,10 @@ user-visible error.
   limit after dependency compilation. The identical already-built command passed 26/26 in 13.2
   seconds with normal Windows process permissions, including blocked-stdin and parent/descendant
   termination fixtures.
+- The fresh implementation-session sandbox baseline again denied process-tree cleanup: 4 tests
+  failed and 3 remained blocked until the 180-second command timeout. A read-only elevated process
+  inspection found no residual FrameQ test process, and the unchanged command then passed 26/26 in
+  4.98 seconds with normal Windows process permissions.
 
 ## Decision Log
 
