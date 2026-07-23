@@ -80,7 +80,10 @@ user-visible error.
   transport constants. Validation: the three contract/product-mapping characterizations and four
   focused progress/reader/watchdog filters passed; all 27 non-boundary runner tests passed in
   4.93 seconds with normal Windows process permissions; rustfmt and diff checks passed.
-- [ ] Task 4 extracts the terminal owner while all 27 non-boundary runner tests remain green.
+- [x] 2026-07-23: Task 4 extracted the terminal owner. Validation: structured-result precedence
+  passed 2/2; terminal matrix, safe lifecycle diagnostics, and both reader-failure filters passed
+  1/1 each; all 27 non-boundary runner tests passed in 4.93 seconds with normal Windows process
+  permissions; rustfmt and diff checks passed.
 - [ ] Task 5 extracts process-I/O helpers, moves tests by topic, updates the hosted-workflow source
   test, and turns the ownership gate GREEN. Validation: all 28 runner tests and the focused Node
   workflow test pass.
@@ -920,7 +923,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
 - Create: `app/src-tauri/src/worker_runtime/runner/terminal.rs`
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs`
 
-- [ ] Declare private `mod terminal;` and move:
+- [x] Declare private `mod terminal;` and move:
 
   - `WorkerExitSummary`;
   - `safe_start_log_detail`;
@@ -930,7 +933,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Keep `WorkerRunError::protocol_violation`, `WorkerRunOutcome`, `WorkerOperation`, and
   `WorkerTimeoutKind` in the root.
 
-- [ ] Preserve the current type path and exact one-way dependencies:
+- [x] Preserve the current type path and exact one-way dependencies:
 
   ```rust
   // runner/terminal.rs
@@ -961,10 +964,10 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Do not move closed DTO validation out of `result_protocol.rs` or application error/result mapping
   out of `asr_model.rs` / `video_processing/task_result.rs`.
 
-- [ ] Update inline terminal-test imports through `super::terminal`; do not expose the functions
+- [x] Update inline terminal-test imports through `super::terminal`; do not expose the functions
   from the runner root.
 
-- [ ] Run the complete terminal matrix, safe-log behavior, both reader-failure behaviors, and all
+- [x] Run the complete terminal matrix, safe-log behavior, both reader-failure behaviors, and all
   non-boundary runner tests:
 
   ```powershell
@@ -982,7 +985,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   concurrent cancel/timeout; missing nonzero output is unstructured failure; invalid/multiple
   output is a fixed protocol violation.
 
-- [ ] Review the diff and stop if operation/result family matching, parse order, cancellation or
+- [x] Review the diff and stop if operation/result family matching, parse order, cancellation or
   timeout precedence, exit/stderr marker, fixed error detail, or safe diagnostic content changes.
 
 ### Task 5: Extract Process I/O, Split Tests, and Turn Ownership GREEN
