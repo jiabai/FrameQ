@@ -28,7 +28,7 @@ impl LocalMediaKind {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LocalMediaSelectionView {
     selection_token: String,
@@ -61,6 +61,10 @@ impl LocalMediaSelectionView {
             extension: extension.to_string(),
             size_bytes,
         })
+    }
+
+    pub(crate) fn selection_token(&self) -> &str {
+        &self.selection_token
     }
 }
 

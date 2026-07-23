@@ -10,8 +10,7 @@ mod diagnostics;
 mod history;
 mod history_deletion;
 mod insight_preferences;
-// Contract-first types are consumed by the native picker/command in the next ExecPlan step.
-#[allow(dead_code)]
+mod local_media;
 mod local_media_contract;
 mod progress_event;
 mod runtime;
@@ -60,6 +59,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(ProcessSupervisors::default()))
         .manage(Arc::new(HistoryDeletionState::default()))
+        .manage(Arc::new(local_media::LocalMediaSelectionState::default()))
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 deep_link::activate_main_window_for_deep_link(&window, argv);
@@ -69,6 +69,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             #[cfg(any(windows, target_os = "linux"))]
             if let Err(error) = app.deep_link().register_all() {
@@ -78,6 +79,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            local_media::select_local_media,
+            local_media::clear_local_media_selection,
             video_processing::process_video,
             video_processing::retry_insights,
             video_processing::cancel_process,
