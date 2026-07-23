@@ -1,5 +1,28 @@
 # FrameQ Architecture
 
+## 2026-07-23 Frontend transcript controller ownership boundary
+
+- `app/src/features/transcript/useTranscriptDetailController.ts` remains the only production
+  transcript-controller import shared by `App.tsx` and presentation components. It is a 126-line
+  facade that composes private owners and preserves the existing 41-key flat return surface and
+  `ReturnType` alias.
+- `useArtifactDetailController.ts` owns result-detail tab state, locale-aware copy text, clipboard,
+  and saved-artifact location actions. `useTranscriptDocumentController.ts` owns task-scoped load,
+  draft/segment state, save IPC, stale-result rejection, and semantic workflow merge.
+  `useTranscriptReviewSession.ts` owns validated audio URL conversion, browser media/segment refs,
+  timing, scrubbing/following, edit pause/resume intent, and matching-task deletion release.
+- The facade is the only composition point; private owners do not import one another. Successful
+  save sequencing passes one private completion callback from the review owner into the document
+  owner without exposing either private action through the public controller.
+- `useTaskProcessingController` remains the sole workflow/task-identity owner. The document owner
+  can only request the existing `applyTranscriptSave` semantic merge, and both load/save results
+  reject stale task identity before updating the visible projection.
+- Review identity is task-scoped. Changing or removing the current official transcript task clears
+  active/edit state and pending playback-resume intent, so task A cannot cause task B audio to play.
+- Source-boundary tests enforce owners, dependency direction, consumer imports, `ReturnType`, and
+  limits of 200 facade / 250 child physical lines. No IPC, native path validation, network,
+  localization, manifest, logging, AI, or Credits behavior changed.
+
 ## 2026-07-22 Server authentication, quota, and production operations boundary
 
 - The authentication/quota data-correctness boundary and local production-operations implementation

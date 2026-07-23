@@ -1,4 +1,4 @@
-# Frontend Transcript Controller Split Implementation Plan
+# Frontend Transcript Controller Split Implementation Plan (Completed)
 
 > This ExecPlan is a living document. The sections Progress, Surprises & Discoveries, Decision Log,
 > and Outcomes & Retrospective must be kept up to date as work proceeds.
@@ -86,6 +86,10 @@ transcript-detail module, introduce a nested public controller API, or add a new
   tests; App lint; production build; Node repository scripts 25/25; governance 0 errors / 0
   warnings; and `git diff --check` all passed. Vite retained its existing non-blocking 665.20 kB
   chunk-size warning.
+- [x] 2026-07-23: Synchronized implemented ownership and evidence into the design, architecture,
+  code audit, technical-debt tracker, task list, navigation map, and plan indexes; moved this plan
+  to `completed/`. Post-movement closeout repeated App 65 files / 583 tests, lint, build, scripts
+  25/25, governance 0 errors / 0 warnings, and `git diff --check` successfully.
 
 ## Surprises & Discoveries
 
@@ -147,24 +151,32 @@ transcript-detail module, introduce a nested public controller API, or add a new
 
 ## Outcomes & Retrospective
 
-Planning is complete; production implementation has not started. The approved target is one stable
-facade below 200 physical lines, three focused private hooks below 250 production lines each unless
-measured evidence justifies otherwise, and preserved App/presentation call sites.
+Implementation is complete on isolated branch `codex/transcript-controller-split`. The former
+509-line mixed hook is now a 126-line stable facade with 139-line artifact, 199-line document, and
+250-line review owners. Its exact 41-key projection remains intact; no production consumer, IPC,
+Tauri, worker, server, contract, path, localization, AI, or Credits behavior changed.
 
-Residual risk before implementation: the lightweight hook harness does not reproduce every React
-scheduling detail, so the full App suite and focused real-browser cases remain mandatory. Native
-Tauri filesystem/path behavior is unchanged and is not scheduled for a new native smoke unless the
-implementation unexpectedly touches IPC, asset scope, permissions, or packaged runtime code.
+Characterization increased from 4 to 18 tests before movement, and the final task-switch resume
+regression raised the facade suite to 19. Ownership 1/1, selected Chromium 4/4, complete App
+583/583, scripts 25/25, lint, build, governance, and diff gates passed before archival; all
+non-browser closeout gates were repeated successfully after documentation movement. The one
+intended hardening clears task-local pending resume intent when review identity changes.
+
+Residual risk: native Tauri load/play/edit/save smoke was not rerun because native IPC, validated
+asset scope, permissions, and packaged runtime were untouched. The lightweight hook harness is
+therefore backed by focused real Chromium integration, but native WebView behavior remains
+explicitly unverified in this session. Vite also retains its existing non-blocking 665.20 kB chunk
+warning.
 
 ## Context and Orientation
 
 - Approved design:
   `docs/design-docs/2026-07-23-frontend-transcript-controller-split.md`.
-- Stable public facade and current mixed implementation:
+- Stable public facade and implemented composition:
   `app/src/features/transcript/useTranscriptDetailController.ts`.
 - Focused hook harness and current behavior tests:
   `app/src/features/transcript/useTranscriptDetailController.test.ts`.
-- Planned ownership test:
+- Source ownership test:
   `app/src/features/transcript/transcriptControllerBoundary.test.ts`.
 - Presentation consumers:
   `app/src/features/transcript/TranscriptReviewPanel.tsx`,
@@ -1109,7 +1121,7 @@ approved design commit.
 - Modify: `docs/exec-plans/completed/index.md`
 - Move: this plan from `docs/exec-plans/active/` to `docs/exec-plans/completed/`
 
-- [ ] **Step 1: Record implemented ownership and evidence**
+- [x] **Step 1: Record implemented ownership and evidence**
 
 Mark the design Implemented with measured line counts and final test totals. Add an Architecture
 entry stating:
@@ -1123,13 +1135,13 @@ Update the code audit's large-module table and resolved/deferred section with th
 boundary-test evidence. Mark the old 509-line mixed controller hotspot resolved in the technical
 debt tracker.
 
-- [ ] **Step 2: Complete task and plan lifecycle**
+- [x] **Step 2: Complete task and plan lifecycle**
 
 Mark the `TASKS.md` item complete, fill every pending Progress/Decision/Outcome fact with exact
 evidence, move this plan to `completed/`, remove its active-index row, add its completed-index row,
 and change the AGENTS link from active to recently completed.
 
-- [ ] **Step 3: Re-run closeout gates**
+- [x] **Step 3: Re-run closeout gates**
 
 ```powershell
 python scripts\validate_agents_docs.py --level WARN
@@ -1144,7 +1156,7 @@ git status --short
 Expected: all automated gates pass after documentation movement. Record exact totals and all
 not-run manual evidence in Outcomes.
 
-- [ ] **Step 4: Commit closeout**
+- [x] **Step 4: Commit closeout**
 
 ```powershell
 git add AGENTS.md TASKS.md docs

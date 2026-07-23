@@ -63,6 +63,21 @@ Last updated: 2026-07-23
   transcript/AI smoke were unavailable and remain explicitly unverified. External programs that
   bypass FrameQ task access are outside the transaction guarantee.
 
+### P1 Frontend Transcript Controller Ownership
+
+- Status: completed and verified on isolated branch `codex/transcript-controller-split`.
+- Resolution: the former 509-line mixed transcript-detail hook is now a 126-line stable facade.
+  Artifact-detail actions, task-scoped document persistence, and browser audio/edit review live in
+  focused 139/199/250-line private owners. The 41-key public surface, presentation consumers,
+  task-stale guards, IPC, paths, localized notices, and workflow task owner remain unchanged.
+- Evidence: characterization grew from 4 to 18 tests before extraction; final facade 19/19,
+  ownership 1/1, selected Chromium 4/4, complete App 583/583, repository scripts 25/25, lint,
+  build, governance, protected-scope diff, and whitespace checks passed. The source boundary
+  enforces owner existence, dependency direction, stable consumers, `ReturnType`, and size limits.
+- Residual risk: native Tauri load/play/edit/save smoke was not rerun because no native IPC, asset
+  scope, permission, or packaged-runtime code changed. The review owner sits exactly at the
+  approved 250-line ceiling and must not absorb unrelated transcript-document or artifact actions.
+
 ### P2 God Component Split
 
 - Status: completed.

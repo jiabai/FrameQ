@@ -1,7 +1,7 @@
 # Frontend Transcript Detail Controller Split
 
 **Date:** 2026-07-23
-**Status:** Approved for implementation planning on 2026-07-23
+**Status:** Implemented and verified on 2026-07-23
 
 ## Context
 
@@ -100,15 +100,13 @@ Use the following module tree:
 ```text
 app/src/features/results/
   useArtifactDetailController.ts
-  useArtifactDetailController.test.ts
 
 app/src/features/transcript/
   useTranscriptDetailController.ts
   useTranscriptDetailController.test.ts
+  transcriptControllerBoundary.test.ts
   useTranscriptDocumentController.ts
-  useTranscriptDocumentController.test.ts
   useTranscriptReviewSession.ts
-  useTranscriptReviewSession.test.ts
 ```
 
 The implementation may keep a focused test in the facade file rather than duplicate a child test
@@ -244,7 +242,8 @@ arbitrary filesystem path, Tauri command runner, event bus, or another child's i
 
 `reviewTaskId` is the current task ID only when the current workflow still declares an official
 transcript artifact. When that identity becomes null or changes, the review session clears active
-selection, edit state, pending resume intent, and browser audio state. The document hook separately
+selection, edit state, and pending resume intent. Its separate validated-audio-source effect resets
+browser audio time/duration/playing state when the asset changes. The document hook independently
 resets its task-scoped projection.
 
 ## Load, Edit, and Save Flow
@@ -369,10 +368,10 @@ details or local paths are not copied into notices.
 
 ### Post-extraction ownership coverage
 
-- Focused child tests exercise each owner's state/effect behavior.
-- Facade tests retain cross-child save and task-switch sequencing.
+- Facade tests exercise each owner's state/effect behavior and retain cross-child save and
+  task-switch sequencing through the stable public surface.
 - A source-boundary test verifies the approved module files, stable consumer import surface, and
-  forbidden dependency directions.
+  forbidden dependency directions, `ReturnType` alias, and physical line limits.
 - Existing browser coverage remains the integration proof for real React scheduling and DOM
   wiring, especially delayed save after task restoration, segment Escape behavior, transcript
   availability during AI activity, and the audio review workspace.
@@ -453,6 +452,35 @@ audio/edit transition, saved artifact action, or presentation behavior changes.
 - `App.tsx`, Tauri commands, worker/server code, contracts, manifest schema, localization
   resources, CSS, and product-visible behavior have no intentional change.
 - Governance validation and `git diff --check` pass.
+
+## Implementation Evidence
+
+The implementation preserves the 41-key flat facade and leaves all production consumers unchanged.
+The boundary-test physical-line measurement records:
+
+| Production module | Physical lines |
+|---|---:|
+| `useTranscriptDetailController.ts` | 126 |
+| `useArtifactDetailController.ts` | 139 |
+| `useTranscriptDocumentController.ts` | 199 |
+| `useTranscriptReviewSession.ts` | 250 |
+
+The pre-extraction facade baseline was 1 file / 4 tests. Characterization expanded it to 18 tests;
+the final task-scoped resume regression raised it to 19. The ownership test first failed on the
+missing approved owners, then passed after the split. Final automated evidence is:
+
+- focused facade 19/19 and ownership 1/1;
+- selected real Chromium integration 4 passed / 24 skipped;
+- complete App 65 files / 583 tests, TypeScript/i18n lint, and production build;
+- repository scripts 25/25, governance 0 errors / 0 warnings, and `git diff --check`;
+- no diff in `App.tsx`, presentation consumers, `transcriptDetailClient`, Tauri, worker, server, or
+  contracts.
+
+The only intentional behavior hardening is task-scoped pending-resume reset: an edit begun on task A
+cannot cause task B audio to play after a later save. No IPC, path, network, localization, schema,
+log, AI, or Credits behavior changed. Native Tauri load/play/edit/save smoke was not rerun because
+the implementation did not touch IPC, asset scope, permissions, native code, or packaged runtime;
+that remains the explicitly unverified manual residual risk.
 
 ## Validation Commands for the Future ExecPlan
 

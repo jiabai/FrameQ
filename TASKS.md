@@ -2,13 +2,16 @@
 
 ## Active UI Work
 
-- [ ] Split the frontend transcript-detail controller by responsibility (2026-07-23) — ✅
+- [x] Split the frontend transcript-detail controller by responsibility (2026-07-23) — ✅
   Acceptance: preserve the existing flat `TranscriptDetailController` surface and all App/view
   consumers while extracting private artifact-detail, task-document, and audio-review owners;
   retain stale task guards, edit/playback/save/deletion semantics, fixed localized notices, IPC,
   paths, and local-first security boundaries. Design:
   `docs/design-docs/2026-07-23-frontend-transcript-controller-split.md`. ExecPlan:
-  `docs/exec-plans/active/2026-07-23-frontend-transcript-controller-split-plan.md`.
+  `docs/exec-plans/completed/2026-07-23-frontend-transcript-controller-split-plan.md`. Facade
+  126 lines; private owners 139/199/250 lines; facade 19/19, ownership 1/1, selected Chromium 4/4,
+  App 583/583, scripts 25/25, lint/build/governance/diff gates passed. Native Tauri smoke was not
+  rerun because native IPC, asset scope, permissions, and packaged runtime were unchanged.
 
 - [x] Close broad-release atomic persistence blocker (2026-07-22) — ✅ Acceptance: every
   authoritative transcript, AI, preference, manifest, and Rust transcript-edit file uses reviewed
