@@ -3,6 +3,9 @@ use std::sync::OnceLock;
 
 const CONTRACT_JSON: &str = include_str!("../../../contracts/desktop-worker-contract.json");
 const SAFE_CODE_MAX_CHARS: usize = 96;
+pub(crate) const ASR_MODEL_DOWNLOAD_EVENT_NAME: &str = "asr-model-download-progress";
+pub(crate) const MODEL_DOWNLOAD_EVENT_PREFIX: &str = "FRAMEQ_MODEL_DOWNLOAD ";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct InvalidProgressEvent;
 

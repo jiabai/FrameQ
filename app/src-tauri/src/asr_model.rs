@@ -1,4 +1,7 @@
 use crate::progress_event::cancelled_model_download_event;
+pub(crate) use crate::progress_event::ASR_MODEL_DOWNLOAD_EVENT_NAME;
+#[allow(unused_imports)]
+pub(crate) use crate::progress_event::MODEL_DOWNLOAD_EVENT_PREFIX;
 use crate::settings::{
     asr_model_source, configured_env_value, env_path, legacy_local_llm_env_removals,
     parse_dotenv_values, ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV,
@@ -20,8 +23,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State, Window};
 
-pub(crate) const ASR_MODEL_DOWNLOAD_EVENT_NAME: &str = "asr-model-download-progress";
-pub(crate) const MODEL_DOWNLOAD_EVENT_PREFIX: &str = "FRAMEQ_MODEL_DOWNLOAD ";
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
 pub(crate) const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";

@@ -76,8 +76,10 @@ user-visible error.
   exact-deadline, and failed-signal retry filters passed 1/1 each; all 27 non-boundary runner tests,
   rustfmt, and diff checks passed under normal Windows process permissions. The ownership gate
   remains intentionally RED because later owners/test files are absent.
-- [ ] Task 3 extracts the progress owner and relocates the two model-download transport constants
-  while all 27 non-boundary runner tests remain green.
+- [x] 2026-07-23: Task 3 extracted the progress owner and relocated the two model-download
+  transport constants. Validation: the three contract/product-mapping characterizations and four
+  focused progress/reader/watchdog filters passed; all 27 non-boundary runner tests passed in
+  4.93 seconds with normal Windows process permissions; rustfmt and diff checks passed.
 - [ ] Task 4 extracts the terminal owner while all 27 non-boundary runner tests remain green.
 - [ ] Task 5 extracts process-I/O helpers, moves tests by topic, updates the hosted-workflow source
   test, and turns the ownership gate GREEN. Validation: all 28 runner tests and the focused Node
@@ -134,6 +136,10 @@ user-visible error.
   failed and 3 remained blocked until the 180-second command timeout. A read-only elevated process
   inspection found no residual FrameQ test process, and the unchanged command then passed 26/26 in
   4.98 seconds with normal Windows process permissions.
+- The Task 3 malformed/diagnostic/stdout-spam filter also requires normal Windows process-tree
+  permissions: it exceeded the 120-second sandbox limit, left no residual FrameQ test process, and
+  passed unchanged in 1.69 seconds with normal permissions. The complete non-boundary suite then
+  passed 27/27.
 
 ## Decision Log
 
@@ -331,7 +337,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
 
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs` test hook and inline test module only
 
-- [ ] Add `stdout_reader_panic_finishes_lane_and_returns_fixed_protocol_error` before changing the
+- [x] Add `stdout_reader_panic_finishes_lane_and_returns_fixed_protocol_error` before changing the
   stdout reader. The test uses the existing terminal fixture and asserts the current fixed result:
 
   ```rust
@@ -356,7 +362,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   }
   ```
 
-- [ ] Run the single new test before adding the hook:
+- [x] Run the single new test before adding the hook:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml stdout_reader_panic_finishes_lane
@@ -365,7 +371,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Expected RED: Rust reports that `RunnerHooks` has no field named `panic_stdout_reader`. Any
   unrelated compile/test failure must be fixed or returned to review before proceeding.
 
-- [ ] Add only the private test hook and forced panic branch:
+- [x] Add only the private test hook and forced panic branch:
 
   ```rust
   #[derive(Clone, Default)]
@@ -397,7 +403,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Do not add an IPC/config/environment input, production setter, new error, or alternate terminal
   path.
 
-- [ ] Re-run the new test and the existing stderr-reader test:
+- [x] Re-run the new test and the existing stderr-reader test:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml stdout_reader_panic_finishes_lane
@@ -407,7 +413,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Expected GREEN: 1/1 for each filter. Stdout returns the fixed protocol error after clearing the
   lane; stderr retains the structured result and fixed marker.
 
-- [ ] Add `collect_runner_rust_sources` and
+- [x] Add `collect_runner_rust_sources` and
   `worker_runner_module_boundary_matches_approved_private_owners` to the inline test module:
 
   ```rust
@@ -681,7 +687,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   }
   ```
 
-- [ ] Run the new ownership test:
+- [x] Run the new ownership test:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml worker_runner_module_boundary
@@ -691,7 +697,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   `runner/process_io.rs` does not exist. It must compile first and fail for this missing approved
   owner only.
 
-- [ ] Keep the ownership test enabled but skip only that named test while proving all behavior
+- [x] Keep the ownership test enabled but skip only that named test while proving all behavior
   remains green:
 
   ```powershell
@@ -709,7 +715,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
 - Create: `app/src-tauri/src/worker_runtime/runner/watchdog.rs`
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs`
 
-- [ ] Declare private `mod watchdog;` and move these existing definitions without changing timing,
+- [x] Declare private `mod watchdog;` and move these existing definitions without changing timing,
   mutex/condvar ordering, thread name, retry behavior, or log text:
 
   - `WatchdogPolicy` and its accessors;
@@ -721,7 +727,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   - `start_watchdog`; and
   - `run_watchdog_with_terminator`.
 
-- [ ] Preserve the existing worker-runtime test surface and narrow parent composition:
+- [x] Preserve the existing worker-runtime test surface and narrow parent composition:
 
   ```rust
   // runner/watchdog.rs
@@ -775,11 +781,11 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   modules compose them. Keep the child module private. Do not add timeout constants, configuration,
   request inputs, or a second thread owner.
 
-- [ ] Update the still-inline test imports to reach private watchdog test seams through
+- [x] Update the still-inline test imports to reach private watchdog test seams through
   `super::watchdog::{...}`. Do not root-re-export `WatchdogControl`,
   `select_watchdog_deadline`, or `run_watchdog_with_terminator`.
 
-- [ ] Run watchdog policy/state behavior and all non-boundary runner tests:
+- [x] Run watchdog policy/state behavior and all non-boundary runner tests:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml worker_operations_own_exact_closed_production_watchdog_policies
@@ -793,7 +799,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Expected: focused tests and all 27 non-boundary runner tests pass; the ownership test remains RED
   only because later owners/test files are absent.
 
-- [ ] Review the diff and stop if any timeout value, validated-activity clock, instance ID,
+- [x] Review the diff and stop if any timeout value, validated-activity clock, instance ID,
   termination closure, log event/detail, thread stop/join, or public visibility changed.
 
 ### Task 3: Extract the Progress Owner
@@ -805,7 +811,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
 - Modify: `app/src-tauri/src/progress_event.rs`
 - Modify: `app/src-tauri/src/asr_model.rs`
 
-- [ ] Before moving runner progress code, relocate only the two existing model-download transport
+- [x] Before moving runner progress code, relocate only the two existing model-download transport
   constant definitions to the shared progress boundary:
 
   ```rust
@@ -823,7 +829,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   constant definitions from `asr_model.rs`; do not change their values, the existing lib test
   re-export, event emission, cancellation mapping, worker contract, or model-download behavior.
 
-- [ ] Run the existing contract/value and model-download mapping characterizations:
+- [x] Run the existing contract/value and model-download mapping characterizations:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml desktop_worker_contract_matches_tauri_constants
@@ -835,7 +841,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   `asr_model::{ASR_MODEL_DOWNLOAD_EVENT_NAME, MODEL_DOWNLOAD_EVENT_PREFIX}` path continues to
   compile through the re-export.
 
-- [ ] Declare private `mod progress;` and move these existing definitions without changing event
+- [x] Declare private `mod progress;` and move these existing definitions without changing event
   names, prefixes, validators, invalid-detail construction, or reader behavior:
 
   - both cfg-specific `ProgressRoute` definitions and their implementation;
@@ -845,7 +851,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   - `read_stderr`; and
   - `inspect_progress_line`.
 
-- [ ] Keep the current crate-visible route path and only the private stderr-summary seam:
+- [x] Keep the current crate-visible route path and only the private stderr-summary seam:
 
   ```rust
   // runner/progress.rs
@@ -879,15 +885,15 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   `StderrSummary`, `read_stderr`, and `inspect_progress_line` only `pub(super)` visibility needed by
   the parent, terminal sibling, and focused tests; do not re-export them from the root.
 
-- [ ] Move Tauri `Window`/`Emitter`, `BufRead`/`BufReader`, progress validators, safe invalid-event
+- [x] Move Tauri `Window`/`Emitter`, `BufRead`/`BufReader`, progress validators, safe invalid-event
   logging, and reader-wait imports with their owner. Keep `RunnerHooks` and `ReaderJoinGate` in the
   root; the child may access them as ancestor-private coordination types.
 
-- [ ] Update inline test imports to reach `ProgressProtocol`, `ProgressRecord`,
+- [x] Update inline test imports to reach `ProgressProtocol`, `ProgressRecord`,
   `StderrSummary`, and `inspect_progress_line` through `super::progress`; keep `ProgressRoute`
   available from the stable root path.
 
-- [ ] Run progress/reader/watchdog behavior and all non-boundary runner tests:
+- [x] Run progress/reader/watchdog behavior and all non-boundary runner tests:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml progress_protocols_validate_before_routing
@@ -903,7 +909,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   emit nothing and never refresh idle activity; validated lines retain existing payload/event
   behavior.
 
-- [ ] Review the diff and stop if any raw stderr is retained/forwarded, any unvalidated payload is
+- [x] Review the diff and stop if any raw stderr is retained/forwarded, any unvalidated payload is
   emitted, any invalid detail begins echoing input, or any activity other than validated progress
   refreshes the watchdog.
 
