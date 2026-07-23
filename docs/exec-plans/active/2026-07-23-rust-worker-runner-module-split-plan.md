@@ -72,8 +72,13 @@ user-visible error.
   characterization passed 1/1; the ownership gate compiled and failed only at missing
   `runner/process_io.rs`; all 27 non-boundary runner tests, rustfmt, and diff checks passed under
   normal Windows process permissions.
-- [ ] Tasks 2-4 extract watchdog, progress, and terminal owners move-first while all 27
-  non-boundary runner tests remain green after each task.
+- [x] 2026-07-23: Task 2 extracted the private watchdog owner move-first. Validation: policy,
+  exact-deadline, and failed-signal retry filters passed 1/1 each; all 27 non-boundary runner tests,
+  rustfmt, and diff checks passed under normal Windows process permissions. The ownership gate
+  remains intentionally RED because later owners/test files are absent.
+- [ ] Task 3 extracts the progress owner and relocates the two model-download transport constants
+  while all 27 non-boundary runner tests remain green.
+- [ ] Task 4 extracts the terminal owner while all 27 non-boundary runner tests remain green.
 - [ ] Task 5 extracts process-I/O helpers, moves tests by topic, updates the hosted-workflow source
   test, and turns the ownership gate GREEN. Validation: all 28 runner tests and the focused Node
   workflow test pass.
@@ -94,6 +99,10 @@ user-visible error.
   `pub(in crate::worker_runtime)` plus a root re-export to preserve the existing effective test
   surface. `ProgressRoute` and `WorkerExitSummary` retain their current `pub(crate)` definitions
   behind a private child path.
+- `WatchdogPolicy`'s fields were private in the old root but are directly constructed by descendant
+  runner tests. After the type moved to a child, those fields needed `pub(super)` so the same runner
+  tree retained access; the type and accessor methods remain restricted to
+  `crate::worker_runtime`, so this does not widen the effective surface.
 - Stderr and stdout reader failures have different current behavior. A stderr reader failure/panic
   retains terminal classification with `stderr=reader_failed`; a stdout reader join/read failure
   finishes the lane and returns fixed `ProtocolViolation` / `Worker stdout reader failed.` before
