@@ -1,6 +1,7 @@
 # Server Store / PrismaStore Module Split Implementation Plan
 
-Status: Approved by the user on 2026-07-23; implementation is in progress.
+Status: Approved by the user on 2026-07-23; implementation in progress. The user approved the
+Task 1 Prisma/SQLite concurrency-gate amendment on 2026-07-23.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this
 > plan task-by-task. Use superpowers:test-driven-development for characterization and the
@@ -64,6 +65,29 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   `npm --prefix server run prisma:generate` restored the local generated client/engines without
   changing dependency files. Validation: `.worktrees/` is ignored; Server 23/23 files, 142 passed,
   one skipped; TypeScript build passed; worktree branch was clean at `dd7ce7d`.
+- [x] 2026-07-23: Task 1 locked the Store/class/Memory fixture compatibility surface and proved
+  that the old subclass barrier intercepts zero semantic OTP reads. Validation:
+  `storeCompatibility` passed 3/3; the existing Memory/Prisma concurrency and transaction-safety
+  filters passed; the deliberate old-barrier RED failed both OTP cases with expected `0` versus
+  `2` arrivals.
+- [x] 2026-07-23: The approved replacement that blocks both transactions after
+  `tx.emailOtp.findFirst` exposed a test-design incompatibility with Prisma/SQLite serialization:
+  only one transaction can reach that in-transaction point, so both OTP cases timed out with one
+  arrival. Implementation stopped before production movement as required. A test-only
+  transaction-start gate plus real-read observer passed the complete Prisma concurrency file
+  13/13, proving the approved amendment while retaining two independent clients and the real
+  transaction read. Validation: literal read barrier 1/2 arrivals and timeout; approved gate
+  2/2 start arrivals, 2/2 observed reads, 13/13 tests passed.
+- [x] 2026-07-23: The user approved the evidence-backed Task 1 amendment: synchronize both
+  independent clients immediately before `$transaction`, separately observe the real
+  `tx.emailOtp.findFirst` inside each transaction, and retain the one-artifact/one-attempt
+  assertions without adding production hooks, delays, Store methods, or transaction changes.
+- [x] 2026-07-23: Task 1 completed after approval. The compatibility surface, Memory/Prisma
+  failure-injection matrices, repaired independent-client OTP concurrency proof, TypeScript build,
+  governance, and whitespace checks all passed. Validation: `storeCompatibility` 3/3;
+  `authQuotaConcurrency` 23/23; `transactionSafety` 20/20; `prismaTransactionSafety` 9/9;
+  `prismaAuthQuotaConcurrency` 13/13; `tsc --noEmit`; governance 0 errors / 0 warnings; and
+  `git diff --check`.
 
 ## Surprises & Discoveries
 
@@ -106,6 +130,13 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   Evidence: the first build error resolved to the global missing `typescript/bin/tsc`; the first
   test run reported missing `.prisma/client/default`; the unchanged rerun passed 142/142 with one
   skip after Prisma 6.19.3 generation.
+- Prisma/SQLite does not admit both independent interactive transactions into the current
+  transaction callback/read point simultaneously. Blocking the first after its successful
+  `emailOtp.findFirst` leaves the second outside that point; both literal barrier cases reported
+  exactly one arrival and timed out. Synchronizing the independent requests immediately before
+  calling `$transaction`, then separately observing each transaction's real
+  `tx.emailOtp.findFirst`, passes without weakening the one-artifact/one-attempt assertions.
+  Evidence: Task 1 RED/diagnostic/GREEN command outputs on 2026-07-23.
 
 ## Decision Log
 
@@ -125,6 +156,12 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   test hook. Rationale: extraction cannot rely on a test seam that no longer intercepts the
   transaction read it claims to synchronize.
   Date/Author: 2026-07-23, User + Codex.
+- Decision: Replace the infeasible in-transaction read barrier with a test-only outer transaction
+  start gate plus a non-blocking real-read observer. Rationale: SQLite serializes admission to the
+  interactive transaction callback, so blocking the first transaction at its read prevents the
+  second from reaching that same point; the approved amendment still proves two independent
+  requests and two real reads while preserving all outcome assertions.
+  Date/Author: 2026-07-23, User + Codex.
 - Decision: Preserve every current `this.<publicMethod>` call through bound callbacks when a
   Memory semantic operation moves to a child module. Rationale: virtual dispatch is observable to
   subclasses even when only a subset of seams has explicit failure-injection coverage today.
@@ -141,14 +178,16 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
 
 ## Outcomes & Retrospective
 
-Implementation is pending ExecPlan review and explicit start approval. On completion this section
-must record final owner sizes, exact test counts, TypeScript/Prisma/migration/restore results,
-protected-scope proof, documentation updates, and the implementation commit range.
+Implementation is in progress. Task 1 compatibility and concurrency characterization is complete;
+production extraction has not yet started. On completion this section must record final owner
+sizes, exact test counts, TypeScript/Prisma/migration/restore results, protected-scope proof,
+documentation updates, and the implementation commit range.
 
-Residual risk before implementation: the existing independent-client OTP tests do not yet prove
-that both transactions reached the intended read barrier. Residual risk after local completion will
-still include any hosted Linux Server CI, production SMTP/staging, and off-host restore evidence not
-actually run for the resulting commits.
+Task 1 closed the prior risk that the independent-client OTP tests did not intercept their claimed
+semantic read: both requests now synchronize before transaction admission and both real transaction
+reads are observed. Residual risk after local completion will still include any hosted Linux Server
+CI, production SMTP/staging, and off-host restore evidence not actually run for the resulting
+commits.
 
 ## Context and Orientation
 
@@ -340,7 +379,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   TypeScript build. If the branch has moved and counts differ, record and explain the new baseline
   in Progress before continuing.
 
-- [ ] Add compile-time and runtime compatibility characterization. The new test defines:
+- [x] Add compile-time and runtime compatibility characterization. The new test defines:
 
   ```ts
   type Equal<Left, Right> =
@@ -359,7 +398,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   fields, and that current read methods return the same mutable record objects where they do today.
   Assign `true` to a value typed as `StoreMethodSetIsExact` so TypeScript checks the alias.
 
-- [ ] Re-run the compatibility and existing failure-injection matrices:
+- [x] Re-run the compatibility and existing failure-injection matrices:
 
   ```powershell
   npm --prefix server test -- --run storeCompatibility
@@ -370,7 +409,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 
   Expected GREEN: all four filters pass before any production body moves.
 
-- [ ] Prove the current subclass barrier is ineffective before replacing it. Give the existing
+- [x] Prove the current subclass barrier is ineffective before replacing it. Give the existing
   test-only barrier an `arrivals()` observation, retain the current subclass, and assert
   `arrivals() === 2` after each independent-client race.
 
@@ -381,13 +420,14 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Expected RED: the two OTP race cases report zero intercepted reads. No production failure or
   changed outcome is an acceptable substitute for this exact evidence.
 
-- [ ] Delete `OtpReadBarrierPrismaStore` and replace it with a test-only Prisma/transaction proxy
-  that intercepts the `findFirst` actually called on `tx.emailOtp`:
+- [x] Delete `OtpReadBarrierPrismaStore` and replace it with the user-approved test-only outer
+  transaction-start gate plus a transaction proxy that observes the `findFirst` actually called
+  on `tx.emailOtp`:
 
   ```ts
-  function transactionWithOtpReadBarrier(
+  function transactionWithOtpReadObserver(
     tx: Prisma.TransactionClient,
-    waitAtRead: () => Promise<void>,
+    observeRead: () => void,
   ): Prisma.TransactionClient {
     const emailOtp = new Proxy(tx.emailOtp, {
       get(target, property, receiver) {
@@ -397,7 +437,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
         }
         return async (...args: unknown[]) => {
           const otp = await Reflect.apply(value, target, args);
-          await waitAtRead();
+          observeRead();
           return otp;
         };
       },
@@ -413,9 +453,10 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
     }) as Prisma.TransactionClient;
   }
 
-  function prismaWithOtpReadBarrier(
+  function prismaWithOtpConcurrencyGate(
     prisma: PrismaClient,
-    waitAtRead: () => Promise<void>,
+    waitAtTransactionStart: () => Promise<void>,
+    observeRead: () => void,
   ): PrismaClient {
     return new Proxy(prisma, {
       get(target, property, receiver) {
@@ -423,7 +464,8 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
         if (property !== "$transaction" || typeof value !== "function") {
           return typeof value === "function" ? value.bind(target) : value;
         }
-        return (...args: unknown[]) => {
+        return async (...args: unknown[]) => {
+          await waitAtTransactionStart();
           const [operation, ...rest] = args;
           if (typeof operation !== "function") {
             return Reflect.apply(value, target, args);
@@ -431,7 +473,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
           return Reflect.apply(value, target, [
             async (tx: Prisma.TransactionClient) =>
               Reflect.apply(operation, undefined, [
-                transactionWithOtpReadBarrier(tx, waitAtRead),
+                transactionWithOtpReadObserver(tx, observeRead),
               ]),
             ...rest,
           ]);
@@ -441,12 +483,13 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   }
   ```
 
-  The barrier exposes `allArrived`, `arrivals()`, and `release()`. Each race starts both operations,
-  awaits `allArrived`, asserts two arrivals, releases them, and only then awaits the results. Keep
-  two independently created Prisma clients on one temporary SQLite file. Add no production hook,
-  environment flag, delay, or Store method.
+  The outer gate exposes `allArrived`, `arrivals()`, and `release()`. Each race starts both
+  operations, awaits `allArrived`, asserts two transaction-start arrivals, releases them, and only
+  then awaits the results. A separate observer asserts two completed real
+  `tx.emailOtp.findFirst` calls. Keep two independently created Prisma clients on one temporary
+  SQLite file. Add no production hook, environment flag, scheduling delay, or Store method.
 
-- [ ] Re-run the repaired Prisma concurrency file and complete Server build:
+- [x] Re-run the repaired Prisma concurrency file and complete Server build:
 
   ```powershell
   npm --prefix server test -- --run prismaAuthQuotaConcurrency
@@ -454,10 +497,10 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   git diff --check
   ```
 
-  Expected GREEN: both OTP cases prove two barrier arrivals and still produce one artifact plus one
-  recorded attempt; all other conflict/retry/quota tests in the file pass.
+  Expected GREEN: both OTP cases prove two gate arrivals and two real reads while still producing
+  one artifact plus one recorded attempt; all other conflict/retry/quota tests in the file pass.
 
-- [ ] Update this plan's Progress and Surprises with the exact RED/GREEN evidence, then create the
+- [x] Update this plan's Progress and Surprises with the exact RED/GREEN evidence, then create the
   first authorized implementation checkpoint:
 
   ```powershell

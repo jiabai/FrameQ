@@ -1,7 +1,8 @@
 # Server Store / PrismaStore Module Split
 
 - Date: 2026-07-23
-- Status: Design and ExecPlan approved by the user on 2026-07-23; implementation in progress
+- Status: Design, ExecPlan, and Task 1 concurrency-gate amendment approved by the user on
+  2026-07-23; implementation in progress
 - Scope: behavior-neutral TypeScript server persistence refactor
 - ExecPlan: `docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md`
 - Related designs:
@@ -394,6 +395,28 @@ Before production extraction:
 The repair adds no production hook, environment variable, sleep, or Store method. If the effective
 barrier exposes a real concurrency failure, implementation stops and returns to the existing
 authentication/quota design rather than weakening the test.
+
+### Task 1 Evidence and Approved Amendment
+
+Implementation evidence showed that the literal read barrier is incompatible with the current
+Prisma/SQLite transaction admission behavior: after the first independent client completes
+`tx.emailOtp.findFirst` and waits, the second client cannot enter the same transaction callback/read
+point. Both desktop and administrator cases reached exactly one of two required arrivals and then
+timed out.
+
+The approved amendment retains the intended proof without waiting inside the serialized
+transaction:
+
+1. a test-only outer gate blocks both independent clients immediately before each calls
+   `$transaction`;
+2. the test asserts both clients reached that gate before release;
+3. a transaction-client proxy separately observes the real `tx.emailOtp.findFirst` call for each
+   client without blocking it;
+4. the test asserts two real reads plus the existing one-artifact and one-attempt outcomes; and
+5. no production hook, delay, Store method, schema, retry, or transaction body changes.
+
+This amendment passed the complete Prisma authentication/quota concurrency file 13/13. The user
+approved it on 2026-07-23 before production extraction began.
 
 ## Security and Privacy
 

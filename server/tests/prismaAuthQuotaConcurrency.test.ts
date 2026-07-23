@@ -3,7 +3,6 @@ import { afterEach, describe, expect, test } from "vitest";
 import { AdminAuthService } from "../src/adminAuth.js";
 import { AuthService } from "../src/auth.js";
 import { PrismaStore } from "../src/prismaStore.js";
-import type { EmailOtpRecord } from "../src/store.js";
 import {
   createTemporaryPrismaClient,
   prismaWithInjectedWriteFailure,
@@ -17,18 +16,64 @@ afterEach(async () => {
   await Promise.all(fixtures.splice(0).map((fixture) => fixture.cleanup()));
 });
 
-function createBarrier(parties: number): () => Promise<void> {
+function createBarrier(parties: number): {
+  waitAtTransactionStart: () => Promise<void>;
+  allArrived: Promise<void>;
+  release: () => void;
+  arrivals: () => number;
+} {
   let arrivals = 0;
+  let signalAllArrived = () => {};
   let release = () => {};
-  const reached = new Promise<void>((resolve) => {
+  const allArrived = new Promise<void>((resolve) => {
+    signalAllArrived = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
     release = resolve;
   });
-  return async () => {
-    arrivals += 1;
-    if (arrivals === parties) {
-      release();
+  return {
+    waitAtTransactionStart: async () => {
+      arrivals += 1;
+      if (arrivals === parties) {
+        signalAllArrived();
+      }
+      await released;
+    },
+    allArrived,
+    release,
+    arrivals: () => arrivals,
+  };
+}
+
+async function waitForBarrierArrivals(barrier: ReturnType<typeof createBarrier>): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      barrier.allArrived,
+      new Promise<void>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`OTP transaction gate reached by ${barrier.arrivals()} clients`)),
+          5000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
     }
-    await reached;
+  }
+}
+
+function createOtpReadObserver(): {
+  observe: () => void;
+  reads: () => number;
+} {
+  let reads = 0;
+  return {
+    observe: () => {
+      reads += 1;
+    },
+    reads: () => reads,
   };
 }
 
@@ -54,16 +99,61 @@ function prismaWithTransactionFailures(
   };
 }
 
-class OtpReadBarrierPrismaStore extends PrismaStore {
-  constructor(prisma: PrismaClient, private readonly waitAtRead: () => Promise<void>) {
-    super(prisma);
-  }
+function transactionWithOtpReadObserver(
+  tx: Prisma.TransactionClient,
+  observeRead: () => void,
+): Prisma.TransactionClient {
+  const emailOtp = new Proxy(tx.emailOtp, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "findFirst" || typeof value !== "function") {
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async (...args: unknown[]) => {
+        const otp = await Reflect.apply(value, target, args);
+        observeRead();
+        return otp;
+      };
+    },
+  });
+  return new Proxy(tx, {
+    get(target, property, receiver) {
+      if (property === "emailOtp") {
+        return emailOtp;
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as Prisma.TransactionClient;
+}
 
-  override async findLatestUsableOtp(email: string, state: string, at: Date): Promise<EmailOtpRecord | null> {
-    const otp = await super.findLatestUsableOtp(email, state, at);
-    await this.waitAtRead();
-    return otp;
-  }
+function prismaWithOtpConcurrencyGate(
+  prisma: PrismaClient,
+  waitAtTransactionStart: () => Promise<void>,
+  observeRead: () => void,
+): PrismaClient {
+  return new Proxy(prisma, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "$transaction" || typeof value !== "function") {
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async (...args: unknown[]) => {
+        await waitAtTransactionStart();
+        const [operation, ...rest] = args;
+        if (typeof operation !== "function") {
+          return Reflect.apply(value, target, args);
+        }
+        return Reflect.apply(value, target, [
+          async (tx: Prisma.TransactionClient) =>
+            Reflect.apply(operation, undefined, [
+              transactionWithOtpReadObserver(tx, observeRead),
+            ]),
+          ...rest,
+        ]);
+      };
+    },
+  }) as PrismaClient;
 }
 
 describe("PrismaStore authentication and quota concurrency boundaries", () => {
@@ -248,18 +338,27 @@ describe("PrismaStore authentication and quota concurrency boundaries", () => {
       ip: "203.0.113.20",
     });
     const barrier = createBarrier(2);
+    const readObserver = createOtpReadObserver();
     const firstAuth = new AuthService({
-      store: new OtpReadBarrierPrismaStore(fixture.prisma, barrier),
+      store: new PrismaStore(prismaWithOtpConcurrencyGate(
+        fixture.prisma,
+        barrier.waitAtTransactionStart,
+        readObserver.observe,
+      )),
       now: () => now,
       sendOtp: async () => {},
     });
     const secondAuth = new AuthService({
-      store: new OtpReadBarrierPrismaStore(secondClient, barrier),
+      store: new PrismaStore(prismaWithOtpConcurrencyGate(
+        secondClient,
+        barrier.waitAtTransactionStart,
+        readObserver.observe,
+      )),
       now: () => now,
       sendOtp: async () => {},
     });
 
-    const results = await Promise.allSettled([
+    const pendingResults = Promise.allSettled([
       firstAuth.verifyEmailCode({
         email: "prisma-desktop@example.com",
         state: "prisma-desktop-state",
@@ -272,6 +371,11 @@ describe("PrismaStore authentication and quota concurrency boundaries", () => {
       }),
     ]);
 
+    await waitForBarrierArrivals(barrier);
+    expect(barrier.arrivals()).toBe(2);
+    barrier.release();
+    const results = await pendingResults;
+    expect(readObserver.reads()).toBe(2);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect(await fixture.prisma.desktopLoginTicket.count()).toBe(1);
@@ -298,24 +402,38 @@ describe("PrismaStore authentication and quota concurrency boundaries", () => {
       ip: "203.0.113.21",
     });
     const barrier = createBarrier(2);
+    const readObserver = createOtpReadObserver();
     const firstAuth = new AdminAuthService({
-      store: new OtpReadBarrierPrismaStore(fixture.prisma, barrier),
+      store: new PrismaStore(prismaWithOtpConcurrencyGate(
+        fixture.prisma,
+        barrier.waitAtTransactionStart,
+        readObserver.observe,
+      )),
       adminEmail: "prisma-admin@example.com",
       now: () => now,
       sendOtp: async () => {},
     });
     const secondAuth = new AdminAuthService({
-      store: new OtpReadBarrierPrismaStore(secondClient, barrier),
+      store: new PrismaStore(prismaWithOtpConcurrencyGate(
+        secondClient,
+        barrier.waitAtTransactionStart,
+        readObserver.observe,
+      )),
       adminEmail: "prisma-admin@example.com",
       now: () => now,
       sendOtp: async () => {},
     });
 
-    const results = await Promise.allSettled([
+    const pendingResults = Promise.allSettled([
       firstAuth.verifyEmailCode({ email: "prisma-admin@example.com", state: "prisma-admin-state", code }),
       secondAuth.verifyEmailCode({ email: "prisma-admin@example.com", state: "prisma-admin-state", code }),
     ]);
 
+    await waitForBarrierArrivals(barrier);
+    expect(barrier.arrivals()).toBe(2);
+    barrier.release();
+    const results = await pendingResults;
+    expect(readObserver.reads()).toBe(2);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect(await fixture.prisma.adminSession.count()).toBe(1);
