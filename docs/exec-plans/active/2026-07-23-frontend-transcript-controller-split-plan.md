@@ -57,6 +57,11 @@ transcript-detail module, introduce a nested public controller API, or add a new
 - [x] 2026-07-23: Registered this active ExecPlan, its task, and navigation entries without
   changing production code. Validation: governance, placeholder scan, staged diff check, and clean
   post-commit status recorded in the planning handoff.
+- [x] 2026-07-23: Locked the facade's exact 41-key public surface and cross-owner load, stale
+  completion, edit/save, artifact-action, audio-review, and safe-notice behavior before moving
+  production code. Validation:
+  `npm.cmd --prefix app test -- src/features/transcript/useTranscriptDetailController.test.ts`
+  passed 1 file / 18 tests.
 
 ## Surprises & Discoveries
 
@@ -232,7 +237,7 @@ git commit -m "docs(app): plan transcript controller split"
 
 - Modify: `app/src/features/transcript/useTranscriptDetailController.test.ts`
 
-- [ ] **Step 1: Make the existing hook harness task-mutable**
+- [x] **Step 1: Make the existing hook harness task-mutable**
 
 Keep the current local React hook harness and extend `createController` with a mutable workflow and
 optional initial-load wait:
@@ -290,7 +295,7 @@ async function createController({
 }
 ```
 
-- [ ] **Step 2: Add exact public-key characterization**
+- [x] **Step 2: Add exact public-key characterization**
 
 Render the ready controller and assert the sorted keys equal the current 41-key projection:
 
@@ -340,7 +345,7 @@ expect(Object.keys(render()).sort()).toEqual([
 ].sort());
 ```
 
-- [ ] **Step 3: Characterize load reset, deduplication, fallback, and stale completion**
+- [x] **Step 3: Characterize load reset, deduplication, fallback, and stale completion**
 
 Add tests with these exact outcomes:
 
@@ -413,7 +418,7 @@ For the stale-load case, use a deferred first promise, switch to a second ready 
 `taskId: "task-b"` and `text: "任务 B 文字稿"`, resolve task B first, then resolve task A. Assert
 the final draft and detail task ID remain task B and task A's late result produces no notice.
 
-- [ ] **Step 4: Characterize save identity and positive resume**
+- [x] **Step 4: Characterize save identity and positive resume**
 
 Add one stale-save test that starts a deferred save for task A, changes the workflow to task B,
 resolves task A, and asserts:
@@ -431,7 +436,7 @@ Add one positive resume test: attach a playing audio double, begin segment edit,
 save successfully, and require one `pause`, one `play`, cleared edit state, cleared dirty state,
 and one `applyTranscriptSave("task-escape", saved)` call.
 
-- [ ] **Step 5: Characterize artifact actions and audio review**
+- [x] **Step 5: Characterize artifact actions and audio review**
 
 Expose `mocks.revealItemInDir` from the opener mock and stub
 `navigator.clipboard.writeText`. Add assertions that:
@@ -446,7 +451,7 @@ Expose `mocks.revealItemInDir` from the opener mock and stub
 - scrubbing clamps time and updates the active segment; and
 - autoplay/playback rejection emits only the existing fixed message code.
 
-- [ ] **Step 6: Run the expanded facade suite**
+- [x] **Step 6: Run the expanded facade suite**
 
 Run:
 
@@ -457,7 +462,7 @@ npm.cmd --prefix app test -- src/features/transcript/useTranscriptDetailControll
 Expected: the original 4 tests and all new characterization tests pass before production movement.
 Record the exact total in Progress.
 
-- [ ] **Step 7: Commit characterization**
+- [x] **Step 7: Commit characterization**
 
 ```powershell
 git add app\src\features\transcript\useTranscriptDetailController.test.ts

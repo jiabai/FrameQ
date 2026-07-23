@@ -1,9 +1,18 @@
-import type { DependencyList, EffectCallback, SetStateAction } from "react";
+import type {
+  ChangeEvent,
+  DependencyList,
+  EffectCallback,
+  SetStateAction,
+} from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createInitialWorkflow } from "../../workflowState";
 import type { WorkflowState } from "../../workflow";
 import type { UiMessage } from "../../i18n/uiMessage";
+import type {
+  SaveTranscriptEditResponse,
+  TranscriptDetailResponse,
+} from "../../transcriptDetailClient";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
 
 type StateUpdater<T> = T | ((current: T) => T);
@@ -13,7 +22,9 @@ type EffectRecord = {
 };
 
 const mocks = vi.hoisted(() => ({
+  clipboardWriteText: vi.fn(),
   loadTranscriptDetail: vi.fn(),
+  revealItemInDir: vi.fn(),
   saveTranscriptEdit: vi.fn(),
 }));
 
@@ -27,7 +38,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
-  revealItemInDir: vi.fn(),
+  revealItemInDir: mocks.revealItemInDir,
 }));
 
 function createHookHarness() {
@@ -85,22 +96,77 @@ function createHookHarness() {
   };
 }
 
-function readyWorkflow(): WorkflowState {
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
+function readyWorkflow(
+  taskId = "task-escape",
+  text = "第一段原稿。",
+): WorkflowState {
   return {
     ...createInitialWorkflow(),
     stage: "completed",
-    taskId: "task-escape",
-    taskDir: "D:/FrameQ/outputs/tasks/task-escape",
-    text: "第一段原稿。",
+    taskId,
+    taskDir: `D:/FrameQ/outputs/tasks/${taskId}`,
+    text,
     artifacts: { transcript_txt: "transcript/transcript.txt" },
   };
 }
 
-async function createController(): Promise<{
+function detailResponse(
+  taskId = "task-escape",
+  text = "第一段原稿。",
+): TranscriptDetailResponse {
+  return {
+    task_id: taskId,
+    text,
+    segments: [
+      {
+        id: "segment-1",
+        start_ms: 0,
+        end_ms: 3000,
+        text,
+      },
+    ],
+    audio_path: `D:/FrameQ/outputs/tasks/${taskId}/media/audio.wav`,
+    audio_asset_path: `D:/FrameQ/cache/audio-review/${taskId}.wav`,
+    has_original_backup: false,
+  };
+}
+
+function savedResponse(
+  taskId = "task-escape",
+  text = "第一段保留草稿。",
+): SaveTranscriptEditResponse {
+  return {
+    task_id: taskId,
+    text,
+    artifacts: { transcript_txt: "transcript/transcript.txt" },
+    has_original_backup: true,
+  };
+}
+
+type ControllerHarness = {
   render: () => TranscriptDetailController;
+  setWorkflow: (next: WorkflowState) => TranscriptDetailController;
   applyTranscriptSave: ReturnType<typeof vi.fn>;
   setActionNotice: ReturnType<typeof vi.fn>;
-}> {
+};
+
+async function createController({
+  initialWorkflow = readyWorkflow(),
+  waitForInitialLoad = true,
+}: {
+  initialWorkflow?: WorkflowState;
+  waitForInitialLoad?: boolean;
+} = {}): Promise<ControllerHarness> {
   const harness = createHookHarness();
   vi.doMock("react", () => ({
     useCallback: harness.useCallback,
@@ -113,7 +179,7 @@ async function createController(): Promise<{
   const setActionNotice = vi.fn<
     (value: SetStateAction<UiMessage | null>) => void
   >();
-  const workflow = readyWorkflow();
+  let workflow = initialWorkflow;
   const render = () => {
     harness.resetRender();
     return useTranscriptDetailController({
@@ -123,32 +189,184 @@ async function createController(): Promise<{
       setActionNotice,
     });
   };
+  const setWorkflow = (next: WorkflowState) => {
+    workflow = next;
+    return render();
+  };
 
   render();
-  await vi.waitFor(() => expect(mocks.loadTranscriptDetail).toHaveBeenCalledOnce());
-  await vi.waitFor(() => expect(render().transcriptSegments).toHaveLength(1));
-  return { render, applyTranscriptSave, setActionNotice };
+  if (waitForInitialLoad) {
+    await vi.waitFor(() =>
+      expect(mocks.loadTranscriptDetail).toHaveBeenCalledOnce()
+    );
+    await vi.waitFor(() =>
+      expect(render().transcriptSegments.length).toBeGreaterThan(0)
+    );
+  }
+  return { render, setWorkflow, applyTranscriptSave, setActionNotice };
 }
 
 describe("useTranscriptDetailController segment editing", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.unstubAllGlobals();
+    mocks.clipboardWriteText.mockReset();
     mocks.loadTranscriptDetail.mockReset();
+    mocks.revealItemInDir.mockReset();
     mocks.saveTranscriptEdit.mockReset();
-    mocks.loadTranscriptDetail.mockResolvedValue({
-      task_id: "task-escape",
-      text: "第一段原稿。",
-      segments: [{ id: "segment-1", start_ms: 0, end_ms: 3000, text: "第一段原稿。" }],
-      audio_path: "D:/FrameQ/outputs/tasks/task-escape/media/audio.wav",
-      audio_asset_path: "D:/FrameQ/cache/audio-review/task-escape.wav",
-      has_original_backup: false,
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        writeText: mocks.clipboardWriteText,
+      },
     });
-    mocks.saveTranscriptEdit.mockResolvedValue({
-      task_id: "task-escape",
-      text: "第一段保留草稿。",
-      artifacts: { transcript_txt: "transcript/transcript.txt" },
-      has_original_backup: true,
+    mocks.clipboardWriteText.mockResolvedValue(undefined);
+    mocks.loadTranscriptDetail.mockResolvedValue(detailResponse());
+    mocks.revealItemInDir.mockResolvedValue(undefined);
+    mocks.saveTranscriptEdit.mockResolvedValue(savedResponse());
+  });
+
+  test("keeps the exact flat public controller surface", async () => {
+    const { render } = await createController();
+
+    expect(Object.keys(render()).sort()).toEqual([
+      "activeTranscriptSegmentId",
+      "beginTranscriptSegmentEdit",
+      "closeDetail",
+      "copyDetail",
+      "copyTranscript",
+      "currentTranscriptPath",
+      "detailTab",
+      "detailText",
+      "editingTranscriptSegmentId",
+      "endTranscriptSegmentEdit",
+      "exportDetail",
+      "exportPath",
+      "exportTranscript",
+      "handleTranscriptAudioMetadata",
+      "handleTranscriptAudioPause",
+      "handleTranscriptAudioPlay",
+      "handleTranscriptTimeUpdate",
+      "hasTranscriptSegments",
+      "openDetailTab",
+      "playTranscriptSegment",
+      "prepareTranscriptForTaskDeletion",
+      "saveTranscriptDraft",
+      "scrubTranscriptAudio",
+      "toggleTranscriptAudio",
+      "transcriptAudioCurrentTime",
+      "transcriptAudioDuration",
+      "transcriptAudioPlaying",
+      "transcriptAudioProgress",
+      "transcriptAudioRef",
+      "transcriptAudioScrubberMax",
+      "transcriptAudioScrubberStyle",
+      "transcriptAudioSrc",
+      "transcriptDetail",
+      "transcriptDirty",
+      "transcriptDraft",
+      "transcriptLoading",
+      "transcriptSaving",
+      "transcriptSegmentRefs",
+      "transcriptSegments",
+      "updateFullTranscriptDraft",
+      "updateTranscriptSegmentDraft",
+    ].sort());
+  });
+
+  test("does not load without a current official transcript and resets review state", async () => {
+    const workflow = {
+      ...readyWorkflow(),
+      taskId: null,
+      text: "Workflow fallback",
+      artifacts: {},
+    };
+    const { render } = await createController({
+      initialWorkflow: workflow,
+      waitForInitialLoad: false,
     });
+
+    expect(mocks.loadTranscriptDetail).not.toHaveBeenCalled();
+    expect(render().transcriptDraft).toBe("Workflow fallback");
+    expect(render().transcriptSegments).toEqual([]);
+    expect(render().transcriptDirty).toBe(false);
+    expect(render().activeTranscriptSegmentId).toBeNull();
+    expect(render().editingTranscriptSegmentId).toBeNull();
+  });
+
+  test("does not reload an already loaded task on an equivalent rerender", async () => {
+    const { render } = await createController();
+
+    render();
+    render();
+
+    expect(mocks.loadTranscriptDetail).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps workflow text and a fixed notice when detail loading fails", async () => {
+    mocks.loadTranscriptDetail.mockRejectedValueOnce(
+      new Error("C:/private/transcript.txt Authorization: secret"),
+    );
+    const { render, setActionNotice } = await createController({
+      waitForInitialLoad: false,
+    });
+
+    await vi.waitFor(() =>
+      expect(setActionNotice).toHaveBeenCalledWith({
+        messageCode: "transcript.notice.detailLoadFallback",
+      })
+    );
+
+    expect(render().transcriptDraft).toBe("第一段原稿。");
+    expect(render().transcriptSegments).toEqual([]);
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
+  });
+
+  test("keeps editing available with the fixed no-audio notice", async () => {
+    mocks.loadTranscriptDetail.mockResolvedValueOnce({
+      ...detailResponse(),
+      segments: [],
+      audio_path: null,
+      audio_asset_path: null,
+    });
+    const { render, setActionNotice } = await createController({
+      waitForInitialLoad: false,
+    });
+
+    await vi.waitFor(() =>
+      expect(setActionNotice).toHaveBeenCalledWith({
+        messageCode: "transcript.notice.audioUnavailableEdit",
+      })
+    );
+
+    expect(render().transcriptDraft).toBe("第一段原稿。");
+    expect(render().transcriptAudioSrc).toBe("");
+  });
+
+  test("ignores a late transcript load after switching tasks", async () => {
+    const taskALoad = deferred<TranscriptDetailResponse>();
+    const taskBLoad = deferred<TranscriptDetailResponse>();
+    mocks.loadTranscriptDetail.mockReset();
+    mocks.loadTranscriptDetail.mockImplementation((taskId: string) =>
+      taskId === "task-escape" ? taskALoad.promise : taskBLoad.promise
+    );
+    const { render, setWorkflow, setActionNotice } = await createController({
+      waitForInitialLoad: false,
+    });
+
+    setWorkflow(readyWorkflow("task-b", "任务 B 文字稿"));
+    taskBLoad.resolve(detailResponse("task-b", "任务 B 文字稿"));
+    await vi.waitFor(() =>
+      expect(render().transcriptDetail?.task_id).toBe("task-b")
+    );
+    taskALoad.resolve(detailResponse("task-escape", "迟到的任务 A"));
+    await taskALoad.promise;
+    await Promise.resolve();
+
+    expect(render().transcriptDetail?.task_id).toBe("task-b");
+    expect(render().transcriptDraft).toBe("任务 B 文字稿");
+    expect(setActionNotice).toHaveBeenCalledTimes(1);
+    expect(setActionNotice).toHaveBeenLastCalledWith(null);
   });
 
   test("ending segment edit keeps the in-memory draft dirty without saving", async () => {
@@ -228,6 +446,263 @@ describe("useTranscriptDetailController segment editing", () => {
 
     expect(setActionNotice).toHaveBeenLastCalledWith({
       messageCode: "transcript.notice.saveFailed",
+    });
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");
+  });
+
+  test("ignores a late transcript save after switching tasks", async () => {
+    const taskASave = deferred<SaveTranscriptEditResponse>();
+    mocks.saveTranscriptEdit.mockReturnValueOnce(taskASave.promise);
+    const {
+      render,
+      setWorkflow,
+      applyTranscriptSave,
+      setActionNotice,
+    } = await createController();
+    setActionNotice.mockClear();
+    let controller = render();
+    const taskAAudio = {
+      currentTime: 0,
+      duration: 3,
+      paused: false,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 1,
+    };
+    controller.transcriptAudioRef.current =
+      taskAAudio as unknown as HTMLAudioElement;
+    controller.beginTranscriptSegmentEdit("segment-1");
+    controller = render();
+    controller.updateTranscriptSegmentDraft("segment-1", "任务 A 草稿");
+    controller = render();
+    const savePromise = controller.saveTranscriptDraft();
+
+    mocks.loadTranscriptDetail.mockResolvedValueOnce(
+      detailResponse("task-b", "任务 B 文字稿"),
+    );
+    setWorkflow(readyWorkflow("task-b", "任务 B 文字稿"));
+    await vi.waitFor(() =>
+      expect(render().transcriptDetail?.task_id).toBe("task-b")
+    );
+    const taskBAudio = {
+      currentTime: 0,
+      duration: 3,
+      paused: true,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 1,
+    };
+    render().transcriptAudioRef.current =
+      taskBAudio as unknown as HTMLAudioElement;
+
+    taskASave.resolve(savedResponse("task-escape", "迟到的任务 A 保存"));
+    await savePromise;
+
+    expect(render().transcriptDraft).toBe("任务 B 文字稿");
+    expect(applyTranscriptSave).not.toHaveBeenCalled();
+    expect(setActionNotice).not.toHaveBeenCalledWith({
+      messageCode: "transcript.notice.saved",
+    });
+    expect(taskBAudio.play).not.toHaveBeenCalled();
+  });
+
+  test("resumes audio after a successful save started from segment editing", async () => {
+    const { render, applyTranscriptSave } = await createController();
+    let controller = render();
+    const audio = {
+      currentTime: 0,
+      duration: 3,
+      paused: false,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 1,
+    };
+    controller.transcriptAudioRef.current = audio as unknown as HTMLAudioElement;
+
+    controller.beginTranscriptSegmentEdit("segment-1");
+    controller = render();
+    controller.updateTranscriptSegmentDraft("segment-1", "第一段保留草稿。");
+    controller = render();
+    await controller.saveTranscriptDraft();
+    controller = render();
+
+    expect(audio.pause).toHaveBeenCalledOnce();
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(controller.editingTranscriptSegmentId).toBeNull();
+    expect(controller.transcriptDirty).toBe(false);
+    expect(applyTranscriptSave).toHaveBeenCalledWith(
+      "task-escape",
+      savedResponse(),
+    );
+  });
+
+  test("copies the unsaved transcript draft and reports clipboard failure safely", async () => {
+    const { render, setActionNotice } = await createController();
+    let controller = render();
+    controller.updateFullTranscriptDraft("Unsaved transcript draft");
+    controller = render();
+
+    await controller.copyTranscript();
+
+    expect(mocks.clipboardWriteText).toHaveBeenCalledWith(
+      "Unsaved transcript draft",
+    );
+    mocks.clipboardWriteText.mockRejectedValueOnce(
+      new Error("clipboard secret at C:/private/transcript.txt"),
+    );
+    setActionNotice.mockClear();
+    await controller.copyTranscript();
+
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.transcriptCopyFailed",
+    });
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");
+  });
+
+  test("blocks dirty transcript location and reveals only the clean saved artifact", async () => {
+    const { render, setActionNotice } = await createController();
+    let controller = render();
+    controller.updateFullTranscriptDraft("Unsaved transcript draft");
+    controller = render();
+
+    await controller.exportTranscript();
+
+    expect(mocks.revealItemInDir).not.toHaveBeenCalled();
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.unsavedLocate",
+    });
+
+    await controller.saveTranscriptDraft();
+    controller = render();
+    setActionNotice.mockClear();
+    await controller.exportTranscript();
+
+    expect(mocks.revealItemInDir).toHaveBeenCalledWith(
+      controller.currentTranscriptPath,
+    );
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.transcriptLocated",
+    });
+  });
+
+  test("reports transcript location failure without exposing rejection details", async () => {
+    mocks.revealItemInDir.mockRejectedValueOnce(
+      new Error("opener secret at C:/private/transcript.txt"),
+    );
+    const { render, setActionNotice } = await createController();
+    setActionNotice.mockClear();
+
+    await render().exportTranscript();
+
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.transcriptLocateFailed",
+    });
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");
+  });
+
+  test("plays a selected segment and pauses the active playing segment", async () => {
+    const { render } = await createController();
+    let controller = render();
+    const audio = {
+      currentTime: 2,
+      duration: 3,
+      paused: false,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 0.75,
+    };
+    controller.transcriptAudioRef.current = audio as unknown as HTMLAudioElement;
+    const segment = controller.transcriptSegments[0]!;
+
+    await controller.playTranscriptSegment(segment);
+    controller = render();
+
+    expect(audio.currentTime).toBe(0);
+    expect(audio.playbackRate).toBe(1);
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(controller.activeTranscriptSegmentId).toBe("segment-1");
+
+    await controller.playTranscriptSegment(segment);
+
+    expect(audio.pause).toHaveBeenCalledOnce();
+    expect(audio.play).toHaveBeenCalledOnce();
+  });
+
+  test("clamps audio scrubbing and follows the matching segment", async () => {
+    mocks.loadTranscriptDetail.mockResolvedValueOnce({
+      ...detailResponse(),
+      segments: [
+        {
+          id: "segment-1",
+          start_ms: 0,
+          end_ms: 1000,
+          text: "First",
+        },
+        {
+          id: "segment-2",
+          start_ms: 1000,
+          end_ms: 3000,
+          text: "Second",
+        },
+      ],
+    });
+    const { render } = await createController();
+    let controller = render();
+    const audio = {
+      currentTime: 0,
+      duration: 3,
+      paused: true,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 0.75,
+    };
+    controller.transcriptAudioRef.current = audio as unknown as HTMLAudioElement;
+    controller.handleTranscriptAudioMetadata();
+    controller = render();
+
+    controller.scrubTranscriptAudio({
+      currentTarget: { valueAsNumber: 10 },
+    } as ChangeEvent<HTMLInputElement>);
+    controller = render();
+
+    expect(audio.currentTime).toBe(3);
+    expect(controller.transcriptAudioCurrentTime).toBe(3);
+    expect(controller.transcriptAudioProgress).toBe(100);
+    expect(controller.activeTranscriptSegmentId).toBe("segment-2");
+  });
+
+  test("uses fixed notices for rejected segment autoplay and audio playback", async () => {
+    const { render, setActionNotice } = await createController();
+    let controller = render();
+    const audio = {
+      currentTime: 0,
+      duration: 3,
+      paused: true,
+      pause: vi.fn(),
+      play: vi.fn()
+        .mockRejectedValueOnce(
+          new Error("autoplay secret at C:/private/transcript.txt"),
+        )
+        .mockRejectedValueOnce(
+          new Error("playback secret at C:/private/transcript.txt"),
+        ),
+      playbackRate: 1,
+    };
+    controller.transcriptAudioRef.current = audio as unknown as HTMLAudioElement;
+    setActionNotice.mockClear();
+
+    await controller.playTranscriptSegment(controller.transcriptSegments[0]!);
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.audioAutoplayFailed",
+    });
+
+    controller = render();
+    await controller.toggleTranscriptAudio();
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.audioPlaybackFailed",
     });
     expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
     expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");
