@@ -273,6 +273,27 @@ describe("task domain workspaces", () => {
     );
   });
 
+  test("labels local audio preparation without claiming that a video is being extracted", () => {
+    const workflow = startProcessing(createInitialWorkflow(), {
+      kind: "local_file",
+      displayName: "Interview.mp3",
+      mediaKind: "audio",
+    });
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={transcriptController()}
+        actionNotice={null}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("音频准备中");
+    expect(markup).not.toContain("视频提取中");
+  });
+
   test("keeps the idle task banner static", () => {
     const model = createTaskWorkspaceViewModel(createInitialWorkflow(), aiAccount());
     const markup = renderToStaticMarkup(<TaskStatusBanner model={model.banner} />);

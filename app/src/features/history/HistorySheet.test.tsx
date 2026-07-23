@@ -258,6 +258,34 @@ describe("HistorySheet selection accessibility", () => {
     expect(markup).toContain(formatDateTime(new Date(createdAt), "en-US"));
   });
 
+  test("shows a localized media-kind label for a safe local-file source", async () => {
+    await initializeI18n("en-US");
+    const markup = renderHistorySheet(
+      {
+        controller: createHistoryController([
+          createHistoryItem({
+            textPreview: "",
+            source: {
+              kind: "local_file",
+              displayName: "Interview.mp3",
+              mediaKind: "audio",
+            },
+          }),
+        ]),
+        selectionDisabled: false,
+        selectionDisabledReason: uiMessage("history.disabled.selectionWhileProcessing"),
+        deletionDisabled: false,
+        deletionDisabledReason: uiMessage("history.disabled.deletionWhileProcessing"),
+      },
+      "en-US",
+    );
+
+    expect(markup).toContain("Interview.mp3");
+    expect(markup).toContain('class="history-source-kind"');
+    expect(markup).toContain("Audio file");
+    expect(markup).not.toContain("C:\\Users");
+  });
+
   test("rerenders one semantic notice after a locale switch without exposing raw errors", async () => {
     const notice = uiMessage("history.notice.loadFailed");
     const props: ComponentProps<typeof HistorySheet> = {

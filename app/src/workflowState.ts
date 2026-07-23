@@ -202,7 +202,13 @@ export function startProcessing(
     aiTargetErrors: {},
     taskSource,
     statusMessage: null,
-    progressMessage: { messageCode: "video.download.preparing", args: {} },
+    progressMessage: {
+      messageCode:
+        taskSource.kind === "local_file"
+          ? "local.media.validating"
+          : "video.download.preparing",
+      args: {},
+    },
     progressPercent: 12,
     text: "",
     summary: "",

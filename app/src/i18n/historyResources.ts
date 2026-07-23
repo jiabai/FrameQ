@@ -15,6 +15,10 @@ export const historyResources = {
       insights_one: "{{formattedCount}} 条灵感",
       insights_other: "{{formattedCount}} 条灵感",
       outputFallback: "outputs",
+      localSource: {
+        video: "视频文件",
+        audio: "音频文件",
+      },
       deleteAriaLabel: "永久删除历史任务：{{title}}",
       deleteTitle: "永久删除",
     },
@@ -59,6 +63,10 @@ export const historyResources = {
       insights_one: "{{formattedCount}} 則靈感",
       insights_other: "{{formattedCount}} 則靈感",
       outputFallback: "outputs",
+      localSource: {
+        video: "影片檔案",
+        audio: "音訊檔案",
+      },
       deleteAriaLabel: "永久刪除歷史任務：{{title}}",
       deleteTitle: "永久刪除",
     },
@@ -103,6 +111,10 @@ export const historyResources = {
       insights_one: "{{formattedCount}} insight",
       insights_other: "{{formattedCount}} insights",
       outputFallback: "outputs",
+      localSource: {
+        video: "Video file",
+        audio: "Audio file",
+      },
       deleteAriaLabel: "Permanently delete history task: {{title}}",
       deleteTitle: "Permanently delete",
     },

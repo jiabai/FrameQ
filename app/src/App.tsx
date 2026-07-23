@@ -5,7 +5,6 @@ import {
   History as HistoryIcon,
   ListChecks,
   LoaderCircle,
-  Play,
   RotateCcw,
   Settings,
   ShieldCheck,
@@ -44,6 +43,7 @@ import { LocalTranscriptWorkspace } from "./features/transcript/LocalTranscriptW
 import { useTranscriptDetailController } from "./features/transcript/useTranscriptDetailController";
 import { useWindowChromeController } from "./features/window/useWindowChromeController";
 import { useModalFocus } from "./features/modal/useModalFocus";
+import { TaskComposer } from "./features/workflow/TaskComposer";
 import { useTaskProcessingController } from "./features/workflow/useTaskProcessingController";
 import { useAppUpdateController } from "./features/updates/useAppUpdateController";
 import { useLocale } from "./i18n/LocaleProvider";
@@ -142,6 +142,8 @@ function App() {
     cancelCurrentProcessing,
     resetWorkflow,
     updateUrlDraft,
+    setLocalMediaSelection,
+    removeLocalMediaSelection,
     applyTranscriptSave,
     completeHistoryTaskDeletion,
     restoreHistoryItem,
@@ -511,51 +513,17 @@ function App() {
         >
           {workflow.stage === "waiting_input" ? (
             <div className="workflow-column">
-              <form
-                className="command-panel input-pane"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (workflow.composerSource.kind === "url") {
-                    void submitTask(
-                      {
-                        kind: "url",
-                        url: workflow.composerSource.urlDraft,
-                      },
-                      account,
-                      openAccountPanel,
-                    );
-                  }
+              <TaskComposer
+                source={workflow.composerSource}
+                canSubmit={canSubmit}
+                statusBody={activeStageBody}
+                onUrlDraftChange={updateUrlDraft}
+                onLocalMediaSelected={setLocalMediaSelection}
+                onRemoveLocalMedia={removeLocalMediaSelection}
+                onSubmit={(submission) => {
+                  void submitTask(submission, account, openAccountPanel);
                 }}
-              >
-                <div className="panel-heading">
-                  <div>
-                    <p className="section-label">{tWorkflow("input.sectionLabel")}</p>
-                    <h2>{tWorkflow("input.title")}</h2>
-                  </div>
-                </div>
-
-                <div className="url-row command-row">
-                  <input
-                    id="video-url"
-                    aria-label={tWorkflow("input.urlAria")}
-                    value={
-                      workflow.composerSource.kind === "url"
-                        ? workflow.composerSource.urlDraft
-                        : workflow.composerSource.retainedUrlDraft
-                    }
-                    onChange={(event) => {
-                      const url = event.currentTarget.value;
-                      updateUrlDraft(url);
-                    }}
-                    placeholder={tWorkflow("input.placeholder")}
-                  />
-                  <button className="primary-button" type="submit" disabled={!canSubmit}>
-                    <Play size={17} />
-                    <span>{tWorkflow("input.confirm")}</span>
-                  </button>
-                </div>
-                <p className="status-line">{activeStageBody}</p>
-              </form>
+              />
             </div>
           ) : (
             <>

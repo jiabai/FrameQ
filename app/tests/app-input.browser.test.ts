@@ -153,6 +153,210 @@ describe("App browser input interactions", () => {
     }
   }, 20_000);
 
+  test("selects, removes, and submits a local audio file without exposing a path or losing the URL draft", async () => {
+    const selectionToken = "01234567-89ab-4def-8abc-0123456789ab";
+    const page = await openUiSmokePage({
+      responses: {
+        get_ui_preferences: {
+          schemaVersion: 1,
+          language: "en-US",
+          recovered: false,
+        },
+        select_local_media: {
+          selectionToken,
+          displayName: "Interview.mp3",
+          mediaKind: "audio",
+          extension: "mp3",
+          sizeBytes: 1_572_864,
+        },
+        clear_local_media_selection: true,
+        process_local_media: {
+          status: "completed",
+          task_id: "local-audio-task",
+          task_dir: "C:/FrameQ/outputs/tasks/local-audio-task",
+          artifacts: {
+            audio: "media/audio.wav",
+            transcript_txt: "transcript/transcript.txt",
+            transcript_md: "transcript/transcript.md",
+          },
+          text: "Local audio transcript",
+          summary: "",
+          insights: [],
+          transcript: {
+            source: "asr",
+            language: "en",
+            engine: "SenseVoice",
+          },
+          error: null,
+        },
+      },
+    });
+
+    try {
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 720,
+        height: 640,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "window.innerWidth === 720 && document.documentElement.lang === 'en-US'",
+      );
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('#video-url').focus()",
+      });
+      await page.send("Input.insertText", {
+        text: "https://example.test/retained-draft",
+      });
+
+      await clickSelector(page, ".attachment-trigger");
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.attachment-menu')) && document.activeElement === document.querySelector('.attachment-menu-item')",
+      );
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Escape",
+        code: "Escape",
+      });
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Escape",
+        code: "Escape",
+      });
+      await waitForRuntimeCondition(
+        page,
+        "!document.querySelector('.attachment-menu') && document.activeElement === document.querySelector('.attachment-trigger')",
+      );
+
+      await clickSelector(page, ".attachment-trigger");
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.attachment-menu'))");
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('.panel-heading').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))",
+      });
+      await waitForRuntimeCondition(page, "!document.querySelector('.attachment-menu')");
+
+      await clickSelector(page, ".attachment-trigger");
+      await clickSelector(page, ".attachment-menu-item");
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.local-media-chip')) && !document.querySelector('#video-url')",
+      );
+
+      const selected = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          chipText: document.querySelector('.local-media-chip')?.textContent ?? '',
+          mediaKind: document.querySelector('.local-media-chip')?.dataset.mediaKind ?? '',
+          documentWidth: document.documentElement.scrollWidth,
+          bodyWidth: document.body.scrollWidth,
+          processCommands: window.__FRAMEQ_UI_SMOKE__.commands.filter(
+            (entry) => entry.command === 'process_local_media'
+          ).length,
+          leakedPath: document.body.innerText.includes('C:/Users')
+        })`,
+      );
+      expect(selected).toMatchObject({
+        mediaKind: "audio",
+        processCommands: 0,
+        leakedPath: false,
+      });
+      expect(selected.chipText).toContain("Interview.mp3");
+      expect(selected.chipText).toContain("Audio");
+      expect(selected.chipText).toContain("1.5 MB");
+      expect(Number(selected.documentWidth)).toBeLessThanOrEqual(720);
+      expect(Number(selected.bodyWidth)).toBeLessThanOrEqual(720);
+
+      await clickSelector(page, ".local-media-remove");
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('#video-url')?.value === 'https://example.test/retained-draft' && document.activeElement === document.querySelector('.attachment-trigger')",
+      );
+
+      await clickSelector(page, ".attachment-trigger");
+      await clickSelector(page, ".attachment-menu-item");
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.local-media-chip'))");
+      await clickSelector(page, ".primary-button");
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.task-workspace-layout')) && document.body.innerText.includes('The audio and transcript are saved locally.')",
+      );
+
+      const commands = await readUiSmokeCommands(page);
+      expect(
+        commands.filter((entry) => entry.command === "clear_local_media_selection"),
+      ).toEqual([
+        {
+          command: "clear_local_media_selection",
+          args: { selectionToken },
+        },
+      ]);
+      expect(
+        commands.filter((entry) => entry.command === "process_local_media"),
+      ).toEqual([
+        {
+          command: "process_local_media",
+          args: { request: { selectionToken } },
+        },
+      ]);
+      expect(commands.some((entry) => entry.command === "process_video")).toBe(false);
+
+      const completed = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          banner: document.querySelector('.task-status-banner')?.textContent ?? '',
+          locateVideo: Boolean(
+            [...document.querySelectorAll('.local-artifact-toolbar button')]
+              .find((button) => button.textContent.includes('Video'))
+          ),
+          locateAudio: Boolean(
+            [...document.querySelectorAll('.local-artifact-toolbar button')]
+              .find((button) => button.textContent.includes('Audio'))
+          )
+        })`,
+      );
+      expect(completed.banner).toContain("The audio and transcript are saved locally.");
+      expect(completed.banner).not.toContain("video");
+      expect(completed.locateVideo).toBe(false);
+      expect(completed.locateAudio).toBe(true);
+    } finally {
+      await page.close();
+    }
+  }, 20_000);
+
+  test("treats native picker cancellation as a focused no-op", async () => {
+    const page = await openUiSmokePage({
+      responses: {
+        get_ui_preferences: {
+          schemaVersion: 1,
+          language: "en-US",
+          recovered: false,
+        },
+        select_local_media: null,
+      },
+    });
+
+    try {
+      await page.send("Runtime.evaluate", {
+        expression: "document.querySelector('#video-url').focus()",
+      });
+      await page.send("Input.insertText", { text: "https://example.test/draft" });
+      await clickSelector(page, ".attachment-trigger");
+      await clickSelector(page, ".attachment-menu-item");
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('#video-url')?.value === 'https://example.test/draft' && document.activeElement === document.querySelector('.attachment-trigger')",
+      );
+
+      const commands = await readUiSmokeCommands(page);
+      expect(commands.filter((entry) => entry.command === "select_local_media")).toHaveLength(1);
+      expect(commands.some((entry) => entry.command === "process_local_media")).toBe(false);
+    } finally {
+      await page.close();
+    }
+  }, 10_000);
+
   test("shows the processing workspace only after the URL is submitted", async () => {
     const target = await requestJson<CdpTarget>(
       cdpPort,

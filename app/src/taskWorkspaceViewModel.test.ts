@@ -10,6 +10,7 @@ import {
   startProcessing,
   summarizeWorkerResult,
   type WorkerResult,
+  type WorkflowState,
 } from "./workflow";
 import { createTaskWorkspaceViewModel } from "./taskWorkspaceViewModel";
 
@@ -151,6 +152,35 @@ describe("task workspace view model", () => {
     expect(model.ai.taskId).toBe(TASK_ID);
     expect(model.ai.summary.status).toBe("available");
     expect(model.ai.insights.status).toBe("available");
+  });
+
+  test("uses audio-only completion copy and never offers a video action for a local audio task", () => {
+    const workflow: WorkflowState = {
+      ...summarizeWorkerResult(
+        transcriptResult({
+          artifacts: {
+            audio: "media/audio.wav",
+            transcript_txt: "transcript/transcript.txt",
+            transcript_md: "transcript/transcript.md",
+          },
+        }),
+      ),
+      taskSource: {
+        kind: "local_file",
+        displayName: "Interview.mp3",
+        mediaKind: "audio",
+      },
+    };
+
+    const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
+
+    expect(model.banner.message).toEqual({
+      messageCode: "workflow.banner.localAudioCompleteMessage",
+    });
+    expect(model.local.artifactActions).toEqual({
+      locateVideo: { visible: false, enabled: false },
+      locateAudio: { visible: true, enabled: true },
+    });
   });
 
   test("projects source-aware artifact actions and transcript source without exposing workflow state", () => {

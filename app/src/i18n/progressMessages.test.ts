@@ -66,6 +66,19 @@ describe("semantic progress message rendering", () => {
     expect(english).toContain("2");
   });
 
+  test.each([
+    ["local.media.validating", "Validating the local media file."],
+    ["local.video.copying", "Copying the local video file."],
+    ["local.audio.normalizing", "Normalizing the local audio."],
+  ])("renders local-media code %s as user copy instead of an i18n key", (messageCode, expected) => {
+    expect(
+      renderWorkerProgressMessage("en-US", "video_extracting", {
+        messageCode,
+        args: {},
+      }),
+    ).toBe(expected);
+  });
+
   test("uses localized stage/status fallback for safe unknown codes without raw prose", () => {
     const workerMessage: ProgressMessageDescriptor = {
       messageCode: "future.action.running",

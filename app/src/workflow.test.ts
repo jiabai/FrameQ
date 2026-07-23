@@ -176,6 +176,24 @@ describe("workflow state model", () => {
     });
   });
 
+  test("starts a local task with local validation progress instead of video download progress", () => {
+    const state = startProcessing(createInitialWorkflow(), {
+      kind: "local_file",
+      displayName: "Interview.mp3",
+      mediaKind: "audio",
+    });
+
+    expect(state.taskSource).toEqual({
+      kind: "local_file",
+      displayName: "Interview.mp3",
+      mediaKind: "audio",
+    });
+    expect(state.progressMessage).toEqual({
+      messageCode: "local.media.validating",
+      args: {},
+    });
+  });
+
   test("summarizes transcript source metadata for platform subtitles", () => {
     const state = summarizeWorkerResult(workerResult({
       transcript: {

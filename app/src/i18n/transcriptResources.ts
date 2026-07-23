@@ -19,6 +19,7 @@ export const transcriptResources = {
       },
       progressSteps: {
         videoExtracting: "视频提取中",
+        audioPreparing: "音频准备中",
         videoTranscribing: "文字稿转译中",
       },
       error: {
@@ -90,6 +91,7 @@ export const transcriptResources = {
       },
       progressSteps: {
         videoExtracting: "正在擷取影片",
+        audioPreparing: "正在準備音訊",
         videoTranscribing: "正在轉寫逐字稿",
       },
       error: {
@@ -161,6 +163,7 @@ export const transcriptResources = {
       },
       progressSteps: {
         videoExtracting: "Extracting Video",
+        audioPreparing: "Preparing Audio",
         videoTranscribing: "Transcribing Audio",
       },
       error: {

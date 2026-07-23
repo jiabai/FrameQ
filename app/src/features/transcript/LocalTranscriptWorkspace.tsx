@@ -62,7 +62,7 @@ export function LocalTranscriptWorkspace({
               ) : (
                 <Circle size={16} aria-hidden="true" />
               )}
-              {t(localProgressStepKey(step.id))}
+              {t(localProgressStepKey(step.id, model.sourceMediaKind))}
             </span>
           ))}
           {model.cancellation.visible ? (
@@ -164,8 +164,15 @@ function localStatusKey(
 
 function localProgressStepKey(
   stage: TaskWorkspaceViewModel["local"]["progressSteps"][number]["id"],
-): "workspace.progressSteps.videoExtracting" | "workspace.progressSteps.videoTranscribing" {
-  return stage === "video_transcribing"
-    ? "workspace.progressSteps.videoTranscribing"
+  sourceMediaKind: TaskWorkspaceViewModel["local"]["sourceMediaKind"],
+):
+  | "workspace.progressSteps.videoExtracting"
+  | "workspace.progressSteps.audioPreparing"
+  | "workspace.progressSteps.videoTranscribing" {
+  if (stage === "video_transcribing") {
+    return "workspace.progressSteps.videoTranscribing";
+  }
+  return sourceMediaKind === "audio"
+    ? "workspace.progressSteps.audioPreparing"
     : "workspace.progressSteps.videoExtracting";
 }

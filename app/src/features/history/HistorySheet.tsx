@@ -162,22 +162,29 @@ export function HistorySheet({
                   <span className={`history-status ${item.status}`}>
                     {t(historyStatusKeys[item.status])}
                   </span>
-                  <strong
-                    className={`history-title ${
-                      item.textPreview ? "history-title-preview" : "history-title-url"
-                    }`}
-                    title={
-                      item.textPreview ||
-                      (item.source.kind === "url"
-                        ? item.source.url
-                        : item.source.displayName)
-                    }
-                  >
-                    {item.textPreview ||
-                      (item.source.kind === "url"
-                        ? item.source.url
-                        : item.source.displayName)}
-                  </strong>
+                  <span className="history-title-row">
+                    <strong
+                      className={`history-title ${
+                        item.textPreview ? "history-title-preview" : "history-title-url"
+                      }`}
+                      title={
+                        item.textPreview ||
+                        (item.source.kind === "url"
+                          ? item.source.url
+                          : item.source.displayName)
+                      }
+                    >
+                      {item.textPreview ||
+                        (item.source.kind === "url"
+                          ? item.source.url
+                          : item.source.displayName)}
+                    </strong>
+                    {item.source.kind === "local_file" ? (
+                      <span className="history-source-kind">
+                        {t(`item.localSource.${item.source.mediaKind}`)}
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
                 <div className="history-meta">
                   <span className="history-meta-time">

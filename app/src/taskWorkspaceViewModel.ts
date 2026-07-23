@@ -205,7 +205,12 @@ export function createTaskWorkspaceViewModel(
       ...(transcriptReady
         ? {
             kind: "local_complete" as const,
-            message: uiMessage("workflow.banner.localCompleteMessage"),
+            message: uiMessage(
+              workflow.taskSource?.kind === "local_file" &&
+                workflow.taskSource.mediaKind === "audio"
+                ? "workflow.banner.localAudioCompleteMessage"
+                : "workflow.banner.localCompleteMessage",
+            ),
             progressMessage: null,
           }
         : localPhase === "failed"
@@ -228,6 +233,12 @@ export function createTaskWorkspaceViewModel(
     cancellationOwner: owner,
     local: {
       taskId: workflow.taskId,
+      sourceMediaKind:
+        workflow.taskSource?.kind === "local_file"
+          ? workflow.taskSource.mediaKind
+          : workflow.taskSource?.kind === "url"
+            ? "video"
+            : null,
       phase: localPhase,
       progressSteps: localProgressSteps(workflow),
       canReview: transcriptReady,
