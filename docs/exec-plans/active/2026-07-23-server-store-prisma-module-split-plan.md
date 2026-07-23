@@ -111,6 +111,14 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   safety 20/20; routes 11/11; compatibility 3/3; complete non-boundary suite 145 passed / one
   Windows skip; TypeScript build and `git diff --check` passed. The ownership RED moved exactly to
   the absent Prisma tree.
+- [x] 2026-07-23: Task 5 centralized Prisma rate-limit reservation SQL, known conflict/error
+  classification, fixed three-attempt retry, and `attempt * 5` backoff in the 175-line
+  `prismaStore/concurrency.ts`, then moved all authentication/session operations into the 391-line
+  `prismaStore/auth.ts`. Validation: repaired independent-client Prisma concurrency 13/13; Prisma
+  transaction safety 9/9; cross-backend auth concurrency 23/23; auth 27/27; admin 5/5; routes
+  11/11; complete non-boundary suite 145 passed / one Windows skip; TypeScript build passed; and
+  source search found every protected concurrency definition only in `concurrency.ts`. The
+  ownership RED now reports only the three intentionally absent Prisma capability owners.
 
 ## Surprises & Discoveries
 
@@ -886,7 +894,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - Create: `server/src/prismaStore/auth.ts`
 - Modify: `server/src/prismaStore.ts`
 
-- [ ] Move these backend-policy definitions unchanged into `concurrency.ts`:
+- [x] Move these backend-policy definitions unchanged into `concurrency.ts`:
 
   - `PrismaRateLimitReservation`;
   - `RateLimitExceededError`;
@@ -900,13 +908,13 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Preserve the maximum of three attempts and the `attempt * 5` millisecond backoff. Export only
   the private functions/types required by sibling operation modules.
 
-- [ ] Move all Prisma user/OTP/ticket/desktop-session/admin-session operations, `listUsers`, and
+- [x] Move all Prisma user/OTP/ticket/desktop-session/admin-session operations, `listUsers`, and
   complete authentication transactions into `auth.ts`. The semantic functions accept a
   `PrismaClient`; transaction-local helpers accept `Prisma.TransactionClient` only inside the
   private Prisma tree. Preserve every query predicate, attempt increment, constant-time comparison,
   conditional consume, created ID, transaction member, and terminal outcome mapping.
 
-- [ ] Replace the corresponding root bodies with direct private-operation delegation while keeping
+- [x] Replace the corresponding root bodies with direct private-operation delegation while keeping
   the constructor and public methods:
 
   ```ts
@@ -924,7 +932,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Keep all six compatibility methods and every official auth method on the class. Do not expose the
   Prisma client, a transaction callback, or a child module to callers.
 
-- [ ] Run the repaired independent-client races and all auth/route/build gates:
+- [x] Run the repaired independent-client races and all auth/route/build gates:
 
   ```powershell
   npm --prefix server test -- --run prismaAuthQuotaConcurrency
@@ -940,7 +948,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   atomicity, retry, purpose, limit, ticket/session, and fixed error outcomes remain unchanged.
   The ownership gate remains RED because three Prisma capability files are absent.
 
-- [ ] Record exact evidence and create the authorized Prisma-auth checkpoint:
+- [x] Record exact evidence and create the authorized Prisma-auth checkpoint:
 
   ```powershell
   git add server/src/prismaStore.ts server/src/prismaStore/concurrency.ts server/src/prismaStore/auth.ts docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md

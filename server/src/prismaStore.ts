@@ -1,341 +1,98 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { authRateLimitKey, constantTimeEqual } from "./security.js";
 import type {
   ActivationCodeRecord,
   ActivationRedemption,
   AdminEntitlementAdjustmentRecord,
-  AuthRateLimitScope,
-  ExchangeDesktopTicketResult,
   EntitlementAdjustmentApplication,
-  AdminSessionRecord,
   DesktopLoginTicketRecord,
   EmailOtpRecord,
   EntitlementRecord,
-  IssueEmailOtpResult,
   LlmConfigRecord,
   LlmQuotaCheckoutResult,
-  OtpPurpose,
   OrderRecord,
   PaidOrderSettlement,
-  SessionRecord,
   Store,
-  UserRecord,
-  VerifyAdminOtpResult,
-  VerifyDesktopOtpResult,
   WebhookEventRecord,
 } from "./store.js";
+import * as authOperations from "./prismaStore/auth.js";
+import {
+  isLlmUsageEventIdempotencyConflict,
+  isPrismaKnownError,
+  withConflictRetry,
+} from "./prismaStore/concurrency.js";
 
 export class PrismaStore implements Store {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async upsertUserByEmail(email: string, now: Date): Promise<UserRecord> {
-    return this.prisma.user.upsert({
-      where: { email },
-      update: { updatedAt: now },
-      create: {
-        id: randomUUID(),
-        email,
-        createdAt: now,
-        updatedAt: now,
-      },
-    });
+  async upsertUserByEmail(
+    email: string,
+    now: Date,
+  ): ReturnType<Store["upsertUserByEmail"]> {
+    return authOperations.upsertUserByEmail(this.prisma, email, now);
   }
 
-  async getUserById(userId: string): Promise<UserRecord | null> {
-    return this.prisma.user.findUnique({ where: { id: userId } });
+  async getUserById(userId: string): ReturnType<Store["getUserById"]> {
+    return authOperations.getUserById(this.prisma, userId);
   }
 
   async issueEmailOtp(
+    input: Parameters<Store["issueEmailOtp"]>[0],
+  ): ReturnType<Store["issueEmailOtp"]> {
+    return authOperations.issueEmailOtp(this.prisma, input);
+  }
+
+  async invalidateIssuedOtpAfterDeliveryFailure(
+    otpId: string,
+    now: Date,
+  ): ReturnType<Store["invalidateIssuedOtpAfterDeliveryFailure"]> {
+    return authOperations.invalidateIssuedOtpAfterDeliveryFailure(this.prisma, otpId, now);
+  }
+
+  async verifyDesktopOtpAndCreateTicket(
+    input: Parameters<Store["verifyDesktopOtpAndCreateTicket"]>[0],
+  ): ReturnType<Store["verifyDesktopOtpAndCreateTicket"]> {
+    return authOperations.verifyDesktopOtpAndCreateTicket(this.prisma, input);
+  }
+
+  async verifyAdminOtpAndCreateSession(
+    input: Parameters<Store["verifyAdminOtpAndCreateSession"]>[0],
+  ): ReturnType<Store["verifyAdminOtpAndCreateSession"]> {
+    return authOperations.verifyAdminOtpAndCreateSession(this.prisma, input);
+  }
+
+  async exchangeDesktopTicketAndCreateSession(
+    input: Parameters<Store["exchangeDesktopTicketAndCreateSession"]>[0],
+  ): ReturnType<Store["exchangeDesktopTicketAndCreateSession"]> {
+    return authOperations.exchangeDesktopTicketAndCreateSession(this.prisma, input);
+  }
+
+  async createEmailOtp(
     input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
-  ): Promise<IssueEmailOtpResult> {
-    const otpId = randomUUID();
-    const reservations = prismaRateLimitReservations(input);
-    const attempted = await withConflictRetry(async () => {
-      try {
-        return await this.prisma.$transaction(async (tx) => {
-          for (const reservation of reservations) {
-            await reserveAuthRateLimit(tx, reservation, input.createdAt);
-          }
-          await tx.emailOtp.updateMany({
-            where: {
-              purpose: input.purpose,
-              email: input.email,
-              state: input.state,
-              consumedAt: null,
-            },
-            data: { consumedAt: input.createdAt },
-          });
-          await tx.emailOtp.create({
-            data: { ...input, id: otpId, attempts: 0, consumedAt: null },
-          });
-          return { status: "issued", otpId } as const;
-        });
-      } catch (error) {
-        if (error instanceof RateLimitExceededError) {
-          return { status: "rate_limited", retryAt: error.retryAt } as const;
-        }
-        throw error;
-      }
-    });
-    return attempted.status === "exhausted"
-      ? { status: "temporarily_unavailable" }
-      : attempted.value;
+  ): Promise<EmailOtpRecord> {
+    return authOperations.createEmailOtp(this.prisma, input);
   }
 
-  async invalidateIssuedOtpAfterDeliveryFailure(otpId: string, now: Date): Promise<void> {
-    const attempted = await withConflictRetry(async () => {
-      await this.prisma.emailOtp.updateMany({
-        where: { id: otpId, consumedAt: null },
-        data: { consumedAt: now },
-      });
-    });
-    if (attempted.status === "exhausted") {
-      throw new StoreTemporarilyUnavailableError();
-    }
-  }
-
-  async verifyDesktopOtpAndCreateTicket(input: {
-    email: string;
-    state: string;
-    codeHash: string;
-    ticketHash: string;
-    now: Date;
-    ticketExpiresAt: Date;
-  }): Promise<VerifyDesktopOtpResult> {
-    const ticketId = randomUUID();
-    const userId = randomUUID();
-    const attempted = await withConflictRetry(() =>
-      this.prisma.$transaction(async (tx) => {
-        const otp = await tx.emailOtp.findFirst({
-          where: {
-            purpose: "desktop_login",
-            email: input.email,
-            state: input.state,
-            consumedAt: null,
-            attempts: { lt: 5 },
-            expiresAt: { gt: input.now },
-          },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        });
-        if (!otp) {
-          return { status: "invalid" } as const;
-        }
-        const matches = constantTimeEqual(otp.codeHash, input.codeHash);
-        const attemptedOtp = await tx.emailOtp.updateMany({
-          where: {
-            id: otp.id,
-            purpose: "desktop_login",
-            email: input.email,
-            state: input.state,
-            codeHash: otp.codeHash,
-            consumedAt: null,
-            attempts: { lt: 5 },
-            expiresAt: { gt: input.now },
-          },
-          data: matches
-            ? { attempts: { increment: 1 }, consumedAt: input.now }
-            : { attempts: { increment: 1 } },
-        });
-        if (attemptedOtp.count !== 1 || !matches) {
-          return { status: "invalid" } as const;
-        }
-        const user = await tx.user.upsert({
-          where: { email: input.email },
-          update: { updatedAt: input.now },
-          create: {
-            id: userId,
-            email: input.email,
-            createdAt: input.now,
-            updatedAt: input.now,
-          },
-        });
-        const ticket = await tx.desktopLoginTicket.create({
-          data: {
-            id: ticketId,
-            ticketHash: input.ticketHash,
-            state: input.state,
-            userId: user.id,
-            expiresAt: input.ticketExpiresAt,
-            consumedAt: null,
-            createdAt: input.now,
-          },
-        });
-        return {
-          status: "verified",
-          user: user as UserRecord,
-          ticket: ticket as DesktopLoginTicketRecord,
-        } as const;
-      }),
-    );
-    return attempted.status === "exhausted"
-      ? { status: "temporarily_unavailable" }
-      : attempted.value;
-  }
-
-  async verifyAdminOtpAndCreateSession(input: {
-    email: string;
-    state: string;
-    codeHash: string;
-    sessionTokenHash: string;
-    csrfTokenHash: string;
-    now: Date;
-    sessionExpiresAt: Date;
-  }): Promise<VerifyAdminOtpResult> {
-    const sessionId = randomUUID();
-    const attempted = await withConflictRetry(() =>
-      this.prisma.$transaction(async (tx) => {
-        const otp = await tx.emailOtp.findFirst({
-          where: {
-            purpose: "admin_login",
-            email: input.email,
-            state: input.state,
-            consumedAt: null,
-            attempts: { lt: 5 },
-            expiresAt: { gt: input.now },
-          },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        });
-        if (!otp) {
-          return { status: "invalid" } as const;
-        }
-        const matches = constantTimeEqual(otp.codeHash, input.codeHash);
-        const attemptedOtp = await tx.emailOtp.updateMany({
-          where: {
-            id: otp.id,
-            purpose: "admin_login",
-            email: input.email,
-            state: input.state,
-            codeHash: otp.codeHash,
-            consumedAt: null,
-            attempts: { lt: 5 },
-            expiresAt: { gt: input.now },
-          },
-          data: matches
-            ? { attempts: { increment: 1 }, consumedAt: input.now }
-            : { attempts: { increment: 1 } },
-        });
-        if (attemptedOtp.count !== 1 || !matches) {
-          return { status: "invalid" } as const;
-        }
-        const session = await tx.adminSession.create({
-          data: {
-            id: sessionId,
-            email: input.email,
-            tokenHash: input.sessionTokenHash,
-            csrfTokenHash: input.csrfTokenHash,
-            createdAt: input.now,
-            expiresAt: input.sessionExpiresAt,
-            revokedAt: null,
-          },
-        });
-        return { status: "verified", session: session as AdminSessionRecord } as const;
-      }),
-    );
-    return attempted.status === "exhausted"
-      ? { status: "temporarily_unavailable" }
-      : attempted.value;
-  }
-
-  async exchangeDesktopTicketAndCreateSession(input: {
-    ticketHash: string;
-    state: string;
-    sessionTokenHash: string;
-    now: Date;
-    sessionExpiresAt: Date;
-  }): Promise<ExchangeDesktopTicketResult> {
-    const sessionId = randomUUID();
-    const attempted = await withConflictRetry(() =>
-      this.prisma.$transaction(async (tx) => {
-        const ticket = await tx.desktopLoginTicket.findUnique({
-          where: { ticketHash: input.ticketHash },
-        });
-        if (
-          !ticket ||
-          ticket.state !== input.state ||
-          ticket.consumedAt !== null ||
-          ticket.expiresAt <= input.now
-        ) {
-          return { status: "invalid" } as const;
-        }
-        const user = await tx.user.findUnique({ where: { id: ticket.userId } });
-        if (!user) {
-          return { status: "invalid" } as const;
-        }
-        const consumed = await tx.desktopLoginTicket.updateMany({
-          where: {
-            id: ticket.id,
-            ticketHash: input.ticketHash,
-            state: input.state,
-            consumedAt: null,
-            expiresAt: { gt: input.now },
-          },
-          data: { consumedAt: input.now },
-        });
-        if (consumed.count !== 1) {
-          return { status: "invalid" } as const;
-        }
-        const session = await tx.session.create({
-          data: {
-            id: sessionId,
-            userId: user.id,
-            tokenHash: input.sessionTokenHash,
-            createdAt: input.now,
-            expiresAt: input.sessionExpiresAt,
-            revokedAt: null,
-          },
-        });
-        return {
-          status: "exchanged",
-          user: user as UserRecord,
-          session: session as SessionRecord,
-        } as const;
-      }),
-    );
-    return attempted.status === "exhausted"
-      ? { status: "temporarily_unavailable" }
-      : attempted.value;
-  }
-
-  async createEmailOtp(input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">): Promise<EmailOtpRecord> {
-    return this.prisma.emailOtp.create({
-      data: { ...input, id: randomUUID(), attempts: 0, consumedAt: null },
-    }) as Promise<EmailOtpRecord>;
-  }
-
-  async findLatestUsableOtp(email: string, state: string, now: Date): Promise<EmailOtpRecord | null> {
-    return this.prisma.emailOtp.findFirst({
-      where: {
-        email,
-        state,
-        consumedAt: null,
-        attempts: { lt: 5 },
-        expiresAt: { gt: now },
-      },
-      orderBy: { createdAt: "desc" },
-    }) as Promise<EmailOtpRecord | null>;
+  async findLatestUsableOtp(
+    email: string,
+    state: string,
+    now: Date,
+  ): Promise<EmailOtpRecord | null> {
+    return authOperations.findLatestUsableOtp(this.prisma, email, state, now);
   }
 
   async incrementOtpAttempts(otpId: string): Promise<EmailOtpRecord> {
-    return this.prisma.emailOtp.update({
-      where: { id: otpId },
-      data: { attempts: { increment: 1 } },
-    }) as Promise<EmailOtpRecord>;
+    return authOperations.incrementOtpAttempts(this.prisma, otpId);
   }
 
   async consumeOtp(otpId: string, now: Date): Promise<void> {
-    await this.prisma.emailOtp.update({
-      where: { id: otpId },
-      data: { consumedAt: now },
-    });
+    return authOperations.consumeOtp(this.prisma, otpId, now);
   }
 
   async createDesktopLoginTicket(
     input: Omit<DesktopLoginTicketRecord, "id" | "consumedAt">,
   ): Promise<DesktopLoginTicketRecord> {
-    return this.prisma.desktopLoginTicket.create({
-      data: { ...input, id: randomUUID(), consumedAt: null },
-    });
+    return authOperations.createDesktopLoginTicket(this.prisma, input);
   }
 
   async consumeDesktopLoginTicket(
@@ -343,45 +100,29 @@ export class PrismaStore implements Store {
     state: string,
     now: Date,
   ): Promise<DesktopLoginTicketRecord | null> {
-    const ticket = await this.prisma.desktopLoginTicket.findFirst({
-      where: {
-        ticketHash,
-        state,
-        consumedAt: null,
-        expiresAt: { gt: now },
-      },
-    });
-    if (!ticket) {
-      return null;
-    }
-    return this.prisma.desktopLoginTicket.update({
-      where: { id: ticket.id },
-      data: { consumedAt: now },
-    });
+    return authOperations.consumeDesktopLoginTicket(this.prisma, ticketHash, state, now);
   }
 
-  async createSession(input: Omit<SessionRecord, "id" | "revokedAt">): Promise<SessionRecord> {
-    return this.prisma.session.create({
-      data: { ...input, id: randomUUID(), revokedAt: null },
-    });
+  async createSession(
+    input: Parameters<Store["createSession"]>[0],
+  ): ReturnType<Store["createSession"]> {
+    return authOperations.createSession(this.prisma, input);
   }
 
-  async findSessionByTokenHash(tokenHash: string, now: Date): Promise<SessionRecord | null> {
-    return this.prisma.session.findFirst({
-      where: {
-        tokenHash,
-        revokedAt: null,
-        expiresAt: { gt: now },
-      },
-    });
+  async findSessionByTokenHash(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["findSessionByTokenHash"]> {
+    return authOperations.findSessionByTokenHash(this.prisma, tokenHash, now);
   }
 
-  async revokeSession(tokenHash: string, now: Date): Promise<void> {
-    await this.prisma.session.updateMany({
-      where: { tokenHash },
-      data: { revokedAt: now },
-    });
+  async revokeSession(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["revokeSession"]> {
+    return authOperations.revokeSession(this.prisma, tokenHash, now);
   }
+
 
   async createOrder(input: Omit<OrderRecord, "id" | "paidAt" | "transactionId">): Promise<OrderRecord> {
     const order = await this.prisma.order.create({
@@ -706,32 +447,30 @@ export class PrismaStore implements Store {
     return codes as ActivationCodeRecord[];
   }
 
-  async listUsers(): Promise<UserRecord[]> {
-    return this.prisma.user.findMany({ orderBy: { email: "asc" } });
+  async listUsers(): ReturnType<Store["listUsers"]> {
+    return authOperations.listUsers(this.prisma);
   }
 
-  async createAdminSession(input: Omit<AdminSessionRecord, "id" | "revokedAt">): Promise<AdminSessionRecord> {
-    return this.prisma.adminSession.create({
-      data: { ...input, id: randomUUID(), revokedAt: null },
-    });
+  async createAdminSession(
+    input: Parameters<Store["createAdminSession"]>[0],
+  ): ReturnType<Store["createAdminSession"]> {
+    return authOperations.createAdminSession(this.prisma, input);
   }
 
-  async findAdminSessionByTokenHash(tokenHash: string, now: Date): Promise<AdminSessionRecord | null> {
-    return this.prisma.adminSession.findFirst({
-      where: {
-        tokenHash,
-        revokedAt: null,
-        expiresAt: { gt: now },
-      },
-    });
+  async findAdminSessionByTokenHash(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["findAdminSessionByTokenHash"]> {
+    return authOperations.findAdminSessionByTokenHash(this.prisma, tokenHash, now);
   }
 
-  async revokeAdminSession(tokenHash: string, now: Date): Promise<void> {
-    await this.prisma.adminSession.updateMany({
-      where: { tokenHash },
-      data: { revokedAt: now },
-    });
+  async revokeAdminSession(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["revokeAdminSession"]> {
+    return authOperations.revokeAdminSession(this.prisma, tokenHash, now);
   }
+
 
   async createAdminEntitlementAdjustment(
     input: AdminEntitlementAdjustmentRecord,
@@ -952,160 +691,6 @@ export class PrismaStore implements Store {
   }
 }
 
-type PrismaRateLimitReservation = {
-  id: string;
-  keyHash: string;
-  purpose: OtpPurpose;
-  scope: AuthRateLimitScope;
-  windowStartedAt: Date;
-  nextAllowedAt: Date;
-  maxCount: number;
-};
-
-class RateLimitExceededError extends Error {
-  constructor(readonly retryAt: Date) {
-    super("AUTH_RATE_LIMITED");
-    this.name = "RateLimitExceededError";
-  }
-}
-
-class StoreTemporarilyUnavailableError extends Error {
-  constructor() {
-    super("SERVER_TEMPORARILY_UNAVAILABLE");
-    this.name = "StoreTemporarilyUnavailableError";
-  }
-}
-
-function prismaRateLimitReservations(
-  input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
-): PrismaRateLimitReservation[] {
-  const hourStart = new Date(
-    Math.floor(input.createdAt.getTime() / (60 * 60 * 1000)) * 60 * 60 * 1000,
-  );
-  const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
-  const reservation = (
-    scope: AuthRateLimitScope,
-    value: string,
-    windowStartedAt: Date,
-    nextAllowedAt: Date,
-    maxCount: number,
-  ): PrismaRateLimitReservation => ({
-    id: randomUUID(),
-    keyHash: authRateLimitKey(scope, input.purpose, value),
-    purpose: input.purpose,
-    scope,
-    windowStartedAt,
-    nextAllowedAt,
-    maxCount,
-  });
-  return [
-    reservation(
-      "email_minute",
-      input.email,
-      input.createdAt,
-      new Date(input.createdAt.getTime() + 60 * 1000),
-      1,
-    ),
-    reservation("email_hour", input.email, hourStart, hourEnd, 5),
-    reservation("ip_hour", input.ip, hourStart, hourEnd, 20),
-  ];
-}
-
-async function reserveAuthRateLimit(
-  tx: Prisma.TransactionClient,
-  reservation: PrismaRateLimitReservation,
-  now: Date,
-): Promise<void> {
-  const rows = await tx.$queryRaw<Array<{ nextAllowedAt: Date }>>(Prisma.sql`
-    INSERT INTO "AuthRateLimit" (
-      "id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt"
-    ) VALUES (
-      ${reservation.id}, ${reservation.keyHash}, ${reservation.purpose}, ${reservation.scope},
-      ${reservation.windowStartedAt}, 1, ${reservation.nextAllowedAt}, ${now}
-    )
-    ON CONFLICT("keyHash") DO UPDATE SET
-      "windowStartedAt" = excluded."windowStartedAt",
-      "count" = CASE
-        WHEN excluded."scope" <> 'email_minute'
-          AND "AuthRateLimit"."windowStartedAt" = excluded."windowStartedAt"
-        THEN "AuthRateLimit"."count" + 1
-        ELSE 1
-      END,
-      "nextAllowedAt" = excluded."nextAllowedAt",
-      "updatedAt" = excluded."updatedAt"
-    WHERE
-      (excluded."scope" = 'email_minute' AND "AuthRateLimit"."nextAllowedAt" <= ${now})
-      OR
-      (excluded."scope" <> 'email_minute' AND (
-        "AuthRateLimit"."windowStartedAt" <> excluded."windowStartedAt"
-        OR "AuthRateLimit"."count" < ${reservation.maxCount}
-      ))
-    RETURNING "nextAllowedAt"
-  `);
-  if (rows.length > 0) {
-    return;
-  }
-  const existing = await tx.authRateLimit.findUnique({ where: { keyHash: reservation.keyHash } });
-  throw new RateLimitExceededError(existing?.nextAllowedAt ?? reservation.nextAllowedAt);
-}
-
-type ConflictRetryResult<T> =
-  | { status: "completed"; value: T }
-  | { status: "exhausted" };
-
-async function withConflictRetry<T>(
-  operation: () => Promise<T>,
-  isAdditionalRetryable: (error: unknown) => boolean = () => false,
-): Promise<ConflictRetryResult<T>> {
-  const maximumAttempts = 3;
-  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
-    try {
-      return { status: "completed", value: await operation() };
-    } catch (error) {
-      if (!isRetryablePrismaConflict(error) && !isAdditionalRetryable(error)) {
-        throw error;
-      }
-      if (attempt === maximumAttempts) {
-        return { status: "exhausted" };
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, attempt * 5));
-    }
-  }
-  return { status: "exhausted" };
-}
-
-function isRetryablePrismaConflict(error: unknown): boolean {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    if (error.code === "P2034" || error.code === "P1008") {
-      return true;
-    }
-    if (error.code === "P2010") {
-      const meta = error.meta as { code?: unknown; message?: unknown } | undefined;
-      return meta?.code === "5" || hasSqliteBusyMarker(meta?.message);
-    }
-    return error.code === "P2028" && hasSqliteBusyMarker(error.message);
-  }
-  return error instanceof Prisma.PrismaClientUnknownRequestError && hasSqliteBusyMarker(error.message);
-}
-
-function hasSqliteBusyMarker(value: unknown): boolean {
-  return typeof value === "string" && /SQLITE_BUSY|database (?:table )?is locked/i.test(value);
-}
-
-function isLlmUsageEventIdempotencyConflict(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-  const target = (error.meta as { target?: unknown } | undefined)?.target;
-  if (Array.isArray(target)) {
-    return target.includes("userId") && target.includes("requestId");
-  }
-  return typeof target === "string" && target.includes("userId") && target.includes("requestId");
-}
-
-function isPrismaKnownError(error: unknown, code: string): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
-}
 
 function storedWebhookTransactionId(payload: string): string | null {
   try {
