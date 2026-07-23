@@ -4,6 +4,8 @@ import type { LlmConfigService } from "../llmConfig.js";
 import type { Store } from "../store.js";
 import { authenticateDesktop, llmQuotaRemaining } from "./shared.js";
 
+type DesktopLlmStore = Pick<Store, "findSessionByTokenHash" | "consumeLlmQuota">;
+
 const llmCheckoutSchema = z.object({
   request_id: z
     .string()
@@ -13,7 +15,7 @@ const llmCheckoutSchema = z.object({
 });
 
 type DesktopLlmRouteDependencies = {
-  store: Store;
+  store: DesktopLlmStore;
   llmConfig: LlmConfigService;
   now: () => Date;
 };
@@ -39,7 +41,7 @@ export function registerDesktopLlmRoutes(
     if (!config) {
       return reply.code(400).send({ error: "LLM_CONFIG_MISSING" });
     }
-    let consumed: Awaited<ReturnType<Store["consumeLlmQuota"]>>;
+    let consumed: Awaited<ReturnType<DesktopLlmStore["consumeLlmQuota"]>>;
     try {
       consumed = await dependencies.store.consumeLlmQuota(
         session.userId,

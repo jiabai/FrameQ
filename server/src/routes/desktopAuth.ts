@@ -11,13 +11,15 @@ import {
   publicAuthError,
 } from "./shared.js";
 
+type DesktopAuthRouteStore = Pick<Store, "revokeSession">;
+
 const ticketExchangeSchema = z.object({
   ticket: z.string(),
   state: z.string(),
 });
 
 type DesktopAuthRouteDependencies = {
-  store: Store;
+  store: DesktopAuthRouteStore;
   auth: AuthService;
   now: () => Date;
 };

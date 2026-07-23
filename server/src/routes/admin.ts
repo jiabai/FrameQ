@@ -15,6 +15,15 @@ import {
   publicError,
 } from "./shared.js";
 
+type AdminRouteStore = Pick<
+  Store,
+  | "revokeAdminSession"
+  | "listUsers"
+  | "getEntitlement"
+  | "listActivationCodes"
+  | "listAdminEntitlementAdjustments"
+>;
+
 const adminActivationCreateSchema = z.object({
   redeem_window_days: z.number().int().min(1).max(365).optional(),
 });
@@ -45,7 +54,7 @@ const adminEntitlementAdjustmentSchema = z
   );
 
 type AdminRouteDependencies = {
-  store: Store;
+  store: AdminRouteStore;
   adminAuth: AdminAuthService;
   activationCodes: ActivationCodeService;
   llmConfig: LlmConfigService;

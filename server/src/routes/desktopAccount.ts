@@ -5,12 +5,17 @@ import type { LlmConfigService } from "../llmConfig.js";
 import type { EntitlementRecord, SessionRecord, Store } from "../store.js";
 import { authenticateDesktop, llmQuotaRemaining, publicError } from "./shared.js";
 
+type DesktopAccountStore = Pick<
+  Store,
+  "findSessionByTokenHash" | "getUserById" | "getEntitlement"
+>;
+
 const activationRedeemSchema = z.object({
   code: z.string().min(8).max(64),
 });
 
 type DesktopAccountRouteDependencies = {
-  store: Store;
+  store: DesktopAccountStore;
   activationCodes: ActivationCodeService;
   llmConfig: LlmConfigService;
   now: () => Date;
@@ -73,7 +78,7 @@ export function registerDesktopAccountRoutes(
 }
 
 async function accountStatusResponse(
-  store: Store,
+  store: DesktopAccountStore,
   llmConfig: LlmConfigService,
   session: SessionRecord,
   now: Date,

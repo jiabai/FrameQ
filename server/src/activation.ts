@@ -2,12 +2,17 @@ import { randomBytes } from "node:crypto";
 import { sha256 } from "./security.js";
 import type { ActivationCodeRecord, Store } from "./store.js";
 
+type ActivationStore = Pick<
+  Store,
+  "createActivationCode" | "redeemActivationCodeAndGrantEntitlement"
+>;
+
 const ACTIVATION_CODE_DAYS = 31;
 const DEFAULT_REDEEM_BY_DAYS = 30;
 const LLM_QUOTA_PER_ACTIVATION = 20;
 
 export type ActivationCodeServiceOptions = {
-  store: Store;
+  store: ActivationStore;
   now?: () => Date;
 };
 
@@ -20,7 +25,7 @@ export type GeneratedActivationCode = {
 };
 
 export class ActivationCodeService {
-  private readonly store: Store;
+  private readonly store: ActivationStore;
   private readonly now: () => Date;
 
   constructor(options: ActivationCodeServiceOptions) {

@@ -1,8 +1,10 @@
 import { sha256 } from "../security.js";
 import type { EntitlementRecord, SessionRecord, Store } from "../store.js";
 
+type DesktopSessionStore = Pick<Store, "findSessionByTokenHash">;
+
 export async function authenticateDesktop(
-  store: Store,
+  store: DesktopSessionStore,
   authorization: string | undefined,
   now: Date,
 ): Promise<SessionRecord | null> {

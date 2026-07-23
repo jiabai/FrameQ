@@ -128,6 +128,11 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   limits, stable exports, private dependencies, concurrency ownership, all eight semantic owners,
   and transaction-client placement before reaching the expected first consumer-capability RED in
   `activation.ts`.
+- [x] 2026-07-23: Task 7 replaced each of the 12 full Store consumer declarations with the exact
+  approved local `Pick<Store, ...>` capability while retaining the complete runtime Store instance
+  and all executable statements. Validation: Store ownership 1/1; existing Server module boundaries
+  7/7; auth 27/27; admin 5/5; activation 4/4; billing 2/2; LLM quota/config 10/10; routes 11/11;
+  TypeScript build and `git diff --check` passed.
 
 ## Surprises & Discoveries
 
@@ -1064,7 +1069,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - Modify: `server/tests/storeModuleBoundaries.test.ts` only if an AST implementation correction is
   required; do not weaken an accepted capability set
 
-- [ ] Add exactly these local or adjacent type aliases:
+- [x] Add exactly these local or adjacent type aliases:
 
   | Consumer | Capability alias | Exact Store keys |
   |---|---|---|
@@ -1093,7 +1098,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   >;
   ```
 
-- [ ] Change only the consumer's `store` property/constructor type. Keep the full instance passed
+- [x] Change only the consumer's `store` property/constructor type. Keep the full instance passed
   from `server.ts`; create no runtime adapter:
 
   ```ts
@@ -1119,7 +1124,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Do not change executable statements, dependency objects, route registration, or Store
   construction.
 
-- [ ] Run the ownership gate and require full GREEN:
+- [x] Run the ownership gate and require full GREEN:
 
   ```powershell
   npm --prefix server test -- --run storeModuleBoundaries
@@ -1129,7 +1134,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Expected GREEN: exact files, line limits, direct roots, private dependencies, semantic owners,
   Prisma import exceptions, and all 12 capability aliases match the approved map.
 
-- [ ] Run all service and route behavior plus TypeScript compilation:
+- [x] Run all service and route behavior plus TypeScript compilation:
 
   ```powershell
   npm --prefix server test -- --run auth
@@ -1145,7 +1150,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Expected GREEN: runtime behavior is unchanged and every full MemoryStore/PrismaStore instance is
   structurally assignable to the narrower consumer type.
 
-- [ ] Record GREEN evidence and create the authorized capability checkpoint:
+- [x] Record GREEN evidence and create the authorized capability checkpoint:
 
   ```powershell
   git add server/src/auth.ts server/src/adminAuth.ts server/src/billing.ts server/src/activation.ts server/src/llmConfig.ts server/src/entitlementAdjustment.ts server/src/routes/shared.ts server/src/routes/desktopAuth.ts server/src/routes/desktopAccount.ts server/src/routes/desktopLlm.ts server/src/routes/billing.ts server/src/routes/admin.ts server/tests/storeModuleBoundaries.test.ts docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md

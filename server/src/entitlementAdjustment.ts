@@ -1,12 +1,14 @@
 import type { EntitlementAdjustmentApplication, Store } from "./store.js";
 
+type EntitlementAdjustmentStore = Pick<Store, "applyEntitlementAdjustmentWithAudit">;
+
 export type EntitlementAdjustmentServiceOptions = {
-  store: Store;
+  store: EntitlementAdjustmentStore;
   now?: () => Date;
 };
 
 export class EntitlementAdjustmentService {
-  private readonly store: Store;
+  private readonly store: EntitlementAdjustmentStore;
   private readonly now: () => Date;
 
   constructor(options: EntitlementAdjustmentServiceOptions) {

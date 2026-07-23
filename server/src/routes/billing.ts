@@ -4,8 +4,10 @@ import type { Store } from "../store.js";
 import type { WechatNotificationParser } from "../wechat.js";
 import { authenticateDesktop, publicError } from "./shared.js";
 
+type BillingRouteStore = Pick<Store, "findSessionByTokenHash" | "getEntitlement">;
+
 type BillingRouteDependencies = {
-  store: Store;
+  store: BillingRouteStore;
   billing: BillingService;
   parseWechatNotification: WechatNotificationParser;
   wechatPayEnabled: boolean;

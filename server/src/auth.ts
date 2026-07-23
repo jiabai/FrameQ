@@ -1,18 +1,26 @@
 import { otpCode, secureToken, sha256 } from "./security.js";
 import type { Store } from "./store.js";
 
+type AuthStore = Pick<
+  Store,
+  | "issueEmailOtp"
+  | "invalidateIssuedOtpAfterDeliveryFailure"
+  | "verifyDesktopOtpAndCreateTicket"
+  | "exchangeDesktopTicketAndCreateSession"
+>;
+
 const OTP_TTL_MS = 10 * 60 * 1000;
 const TICKET_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 export type AuthServiceOptions = {
-  store: Store;
+  store: AuthStore;
   now?: () => Date;
   sendOtp: (email: string, code: string) => Promise<void>;
 };
 
 export class AuthService {
-  private readonly store: Store;
+  private readonly store: AuthStore;
   private readonly now: () => Date;
   private readonly sendOtp: (email: string, code: string) => Promise<void>;
 

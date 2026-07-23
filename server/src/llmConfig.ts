@@ -1,6 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import type { LlmConfigRecord, Store } from "./store.js";
 
+type LlmConfigStore = Pick<Store, "getLlmConfig" | "upsertLlmConfig">;
+
 const DEFAULT_PROVIDER = "openai_compatible";
 const DEFAULT_TIMEOUT_SECONDS = 60;
 
@@ -25,7 +27,7 @@ export type DesktopLlmConfig = {
 export class LlmConfigService {
   constructor(
     private readonly options: {
-      store: Store;
+      store: LlmConfigStore;
       encryptionKey?: string;
       now?: () => Date;
     },

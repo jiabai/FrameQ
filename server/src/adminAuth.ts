@@ -2,11 +2,19 @@ import { constantTimeEqual, otpCode, secureToken, sha256 } from "./security.js";
 import type { AdminSessionRecord, Store } from "./store.js";
 import { normalizeEmail, validateState } from "./auth.js";
 
+type AdminAuthStore = Pick<
+  Store,
+  | "issueEmailOtp"
+  | "invalidateIssuedOtpAfterDeliveryFailure"
+  | "verifyAdminOtpAndCreateSession"
+  | "findAdminSessionByTokenHash"
+>;
+
 const ADMIN_OTP_TTL_MS = 10 * 60 * 1000;
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 export type AdminAuthServiceOptions = {
-  store: Store;
+  store: AdminAuthStore;
   sendOtp: (email: string, code: string) => Promise<void>;
   adminEmail?: string;
   now?: () => Date;
@@ -19,7 +27,7 @@ export type AdminSessionTokens = {
 };
 
 export class AdminAuthService {
-  private readonly store: Store;
+  private readonly store: AdminAuthStore;
   private readonly sendOtp: (email: string, code: string) => Promise<void>;
   private readonly adminEmail: string;
   private readonly now: () => Date;

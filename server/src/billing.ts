@@ -1,6 +1,11 @@
 import { secureToken } from "./security.js";
 import type { OrderRecord, Store } from "./store.js";
 
+type BillingStore = Pick<
+  Store,
+  "findSessionByTokenHash" | "createOrder" | "settlePaidOrder" | "findOrderByOutTradeNo"
+>;
+
 const MONTHLY_PASS_AMOUNT_FEN = 990;
 const PASS_DAYS = 31;
 const ORDER_TTL_MS = 30 * 60 * 1000;
@@ -17,13 +22,13 @@ export type NativePaymentResult = {
 };
 
 export type BillingServiceOptions = {
-  store: Store;
+  store: BillingStore;
   now?: () => Date;
   createNativePayment: (input: NativePaymentInput) => Promise<NativePaymentResult>;
 };
 
 export class BillingService {
-  private readonly store: Store;
+  private readonly store: BillingStore;
   private readonly now: () => Date;
   private readonly createNativePayment: (input: NativePaymentInput) => Promise<NativePaymentResult>;
 
