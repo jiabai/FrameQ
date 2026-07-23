@@ -267,6 +267,7 @@ def test_terminal_result_contract_closes_framing_operations_and_nested_shapes() 
     }
     assert terminal["operations"] == {
         "process_video": "task",
+        "process_local_media": "task",
         "retry_insights": "task",
         "resolve_source_identity": "sourceIdentity",
         "download_asr_model": "modelDownload",

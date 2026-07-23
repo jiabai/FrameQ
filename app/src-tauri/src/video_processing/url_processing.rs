@@ -109,7 +109,7 @@ fn process_video_blocking(
     let request_json = serialize_process_video_request(&request)?;
     map_task_worker_result(
         process_state
-            .video_worker(&paths)
+            .task_worker(&paths)
             .execute(WorkerJob::process_video(request_json, window))?,
         TaskCommandContext::ProcessVideo,
     )
@@ -151,7 +151,7 @@ fn resolve_source_identity_for_cache(
 ) -> Result<Option<task_manifest::SourceIdentity>, SourceIdentityPreflightError> {
     let payload = serde_json::json!({"url": raw_url}).to_string();
     let result = process_supervisors
-        .video_worker(paths)
+        .task_worker(paths)
         .execute(WorkerJob::resolve_source_identity(payload))
         .map_err(|_| SourceIdentityPreflightError::Transport)?;
     classify_source_identity_preflight_result(result)

@@ -141,7 +141,7 @@ fn delete_history_task_with_state<R: DirectoryRemover>(
         .lock
         .try_lock()
         .map_err(|_| HistoryDeleteError::Busy)?;
-    if process_supervisors.is_video_active() {
+    if process_supervisors.is_task_active() {
         return Err(HistoryDeleteError::Busy);
     }
     delete_history_task_from_roots(output_root, cache_root, task_id, remover)
@@ -561,7 +561,7 @@ mod tests {
         let remover = RecordingRemover::default();
         let supervisors = ProcessSupervisors::default();
         let deletion_state = HistoryDeletionState::default();
-        let worker_instance_id = supervisors.activate_video_for_test(1234);
+        let worker_instance_id = supervisors.activate_task_for_test(1234);
 
         assert_eq!(
             delete_history_task_with_state(
@@ -574,7 +574,7 @@ mod tests {
             ),
             Err(HistoryDeleteError::Busy),
         );
-        supervisors.finish_video_for_test(worker_instance_id);
+        supervisors.finish_task_for_test(worker_instance_id);
         let deletion_guard = deletion_state.lock.try_lock().expect("hold delete lock");
         assert_eq!(
             delete_history_task_with_state(

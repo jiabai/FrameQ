@@ -6,6 +6,7 @@ use crate::worker_runtime::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum TaskCommandContext {
     ProcessVideo,
+    ProcessLocalMedia,
     RetryInsights,
 }
 
@@ -22,6 +23,12 @@ impl TaskCommandContext {
                 status: "failed",
                 stage: "video_extracting",
                 unstructured_message: "Worker process failed before returning a structured result.",
+            },
+            Self::ProcessLocalMedia => TaskFailurePolicy {
+                status: "failed",
+                stage: "video_extracting",
+                unstructured_message:
+                    "Local media worker failed before returning a structured result.",
             },
             Self::RetryInsights => TaskFailurePolicy {
                 status: "partial_completed",
@@ -166,6 +173,12 @@ mod tests {
                 "Worker process failed before returning a structured result.",
             ),
             (
+                TaskCommandContext::ProcessLocalMedia,
+                "failed",
+                "video_extracting",
+                "Local media worker failed before returning a structured result.",
+            ),
+            (
                 TaskCommandContext::RetryInsights,
                 "partial_completed",
                 "insights_generating",
@@ -202,6 +215,11 @@ mod tests {
         for (context, status, stage) in [
             (
                 TaskCommandContext::ProcessVideo,
+                "failed",
+                "video_extracting",
+            ),
+            (
+                TaskCommandContext::ProcessLocalMedia,
                 "failed",
                 "video_extracting",
             ),

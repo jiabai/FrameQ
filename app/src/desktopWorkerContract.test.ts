@@ -381,6 +381,7 @@ describe("desktop/worker contract", () => {
     });
     expect(terminal.operations).toEqual({
       process_video: "task",
+      process_local_media: "task",
       retry_insights: "task",
       resolve_source_identity: "sourceIdentity",
       download_asr_model: "modelDownload",

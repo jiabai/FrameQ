@@ -29,7 +29,7 @@ impl WorkerOperation {
     #[allow(dead_code)]
     pub(in crate::worker_runtime) fn watchdog_policy(self) -> WatchdogPolicy {
         match self {
-            Self::ProcessVideo => WatchdogPolicy {
+            Self::ProcessVideo | Self::ProcessLocalMedia => WatchdogPolicy {
                 idle_timeout: Some(Duration::from_secs(45 * 60)),
                 absolute_timeout: Duration::from_secs(8 * 60 * 60),
             },

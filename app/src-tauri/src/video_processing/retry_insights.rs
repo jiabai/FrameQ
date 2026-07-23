@@ -126,7 +126,7 @@ fn retry_insights_blocking(
     );
     let parsed = map_task_worker_result(
         process_state
-            .video_worker(&paths)
+            .task_worker(&paths)
             .execute(WorkerJob::retry_insights(request_json, window))?,
         TaskCommandContext::RetryInsights,
     )?;

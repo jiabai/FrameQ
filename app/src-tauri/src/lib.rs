@@ -82,6 +82,7 @@ pub fn run() {
             local_media::select_local_media,
             local_media::clear_local_media_selection,
             video_processing::process_video,
+            video_processing::process_local_media,
             video_processing::retry_insights,
             video_processing::cancel_process,
             settings::get_llm_config,

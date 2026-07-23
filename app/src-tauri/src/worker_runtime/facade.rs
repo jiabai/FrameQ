@@ -12,6 +12,10 @@ pub(crate) enum WorkerJob {
         payload: String,
         progress: ProgressRoute,
     },
+    ProcessLocalMedia {
+        payload: String,
+        progress: ProgressRoute,
+    },
     ResolveSourceIdentity {
         payload: String,
     },
@@ -38,6 +42,22 @@ impl WorkerJob {
         }
     }
 
+    #[cfg(not(test))]
+    pub(crate) fn process_local_media(payload: String, window: Window) -> Self {
+        Self::ProcessLocalMedia {
+            payload,
+            progress: ProgressRoute::worker(window),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn process_local_media<T>(payload: String, window: T) -> Self {
+        Self::ProcessLocalMedia {
+            payload,
+            progress: ProgressRoute::worker(window),
+        }
+    }
+
     pub(crate) fn resolve_source_identity(payload: String) -> Self {
         Self::ResolveSourceIdentity { payload }
     }
@@ -59,12 +79,12 @@ impl WorkerJob {
     }
 }
 
-pub(crate) struct VideoWorkerFacade<'a> {
+pub(crate) struct TaskWorkerFacade<'a> {
     paths: &'a RuntimePaths,
     lane: &'a WorkerLane,
 }
 
-impl<'a> VideoWorkerFacade<'a> {
+impl<'a> TaskWorkerFacade<'a> {
     pub(super) fn new(paths: &'a RuntimePaths, lane: &'a WorkerLane) -> Self {
         Self { paths, lane }
     }
@@ -85,6 +105,12 @@ impl<'a> VideoWorkerFacade<'a> {
             WorkerJob::ProcessVideo { payload, progress } => (
                 WorkerInvocation::ProcessVideo(payload),
                 WorkerOperation::ProcessVideo,
+                progress,
+                false,
+            ),
+            WorkerJob::ProcessLocalMedia { payload, progress } => (
+                WorkerInvocation::ProcessLocalMedia(payload),
+                WorkerOperation::ProcessLocalMedia,
                 progress,
                 false,
             ),
@@ -171,7 +197,7 @@ mod typed_job_policy_tests {
         let payload = r#"{"contract_version":3,"url":"https://example.test/video","asr_model":"iic/SenseVoiceSmall"}"#;
 
         let request = supervisors
-            .video_worker(&paths)
+            .task_worker(&paths)
             .prepare_for_test(WorkerJob::process_video(payload.to_string(), ()), |_| {
                 resolver_calls.set(resolver_calls.get() + 1);
                 Ok(Some(server_llm()))
@@ -199,6 +225,54 @@ mod typed_job_policy_tests {
     }
 
     #[test]
+    fn process_local_media_job_uses_task_lane_stdin_progress_watchdog_and_no_llm() {
+        let paths = runtime_paths();
+        let supervisors = ProcessSupervisors::default();
+        let resolver_calls = Cell::new(0);
+        let payload = r#"{"contract_version":4,"source_path":"C:\\Users\\review-secret\\Interview.wmv","media_kind":"video","safe_display_name":"Interview.wmv","source_extension":"wmv","asr_model":"iic/SenseVoiceSmall"}"#;
+
+        let request = supervisors
+            .task_worker(&paths)
+            .prepare_for_test(
+                WorkerJob::process_local_media(payload.to_string(), ()),
+                |_| {
+                    resolver_calls.set(resolver_calls.get() + 1);
+                    Ok(Some(server_llm()))
+                },
+            )
+            .expect("prepare local-media job");
+
+        assert_eq!(request.operation, WorkerOperation::ProcessLocalMedia);
+        assert_watchdog_policy(
+            request.operation,
+            Some(Duration::from_secs(45 * 60)),
+            Duration::from_secs(8 * 60 * 60),
+        );
+        assert!(matches!(request.progress, ProgressRoute::Worker));
+        assert_eq!(
+            request.command.args,
+            vec!["-m", "frameq_worker", "--process-local-media-stdin"]
+        );
+        assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
+        assert_eq!(resolver_calls.get(), 0);
+        assert!(!request
+            .command
+            .args
+            .iter()
+            .any(|arg| arg.contains("review-secret")));
+        assert!(!request
+            .command
+            .env
+            .iter()
+            .any(|(_, value)| value.contains("review-secret")));
+        assert!(!request
+            .command
+            .env
+            .iter()
+            .any(|(key, _)| key.starts_with("FRAMEQ_LLM_")));
+    }
+
+    #[test]
     fn source_identity_job_derives_silent_progress_and_never_resolves_llm() {
         let paths = runtime_paths();
         let supervisors = ProcessSupervisors::default();
@@ -206,7 +280,7 @@ mod typed_job_policy_tests {
         let payload = r#"{"url":"https://example.test/video"}"#;
 
         let request = supervisors
-            .video_worker(&paths)
+            .task_worker(&paths)
             .prepare_for_test(
                 WorkerJob::resolve_source_identity(payload.to_string()),
                 |_| {
@@ -235,7 +309,7 @@ mod typed_job_policy_tests {
         let payload = r#"{"task_id":"safe-task","target":"summary","output_language":"en-US"}"#;
 
         let request = supervisors
-            .video_worker(&paths)
+            .task_worker(&paths)
             .prepare_for_test(WorkerJob::retry_insights(payload.to_string(), ()), |_| {
                 resolver_calls.set(resolver_calls.get() + 1);
                 Ok(Some(server_llm()))
@@ -270,7 +344,7 @@ mod typed_job_policy_tests {
         let spoofed_payload = r#"{"contract_version":3,"url":"https://example.test/video","asr_model":"iic/SenseVoiceSmall","timeout":0,"idle_timeout":0,"deadline":0,"watchdog":{"disabled":true}}"#;
 
         let request = supervisors
-            .video_worker(&paths)
+            .task_worker(&paths)
             .prepare_for_test(
                 WorkerJob::process_video(spoofed_payload.to_string(), ()),
                 |_| panic!("process video must not resolve LLM configuration"),

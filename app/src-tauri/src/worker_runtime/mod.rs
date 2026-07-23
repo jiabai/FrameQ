@@ -5,7 +5,7 @@ mod runner;
 mod supervisor;
 
 pub(crate) use command::WorkerCommandSpec;
-pub(crate) use facade::{VideoWorkerFacade, WorkerJob};
+pub(crate) use facade::{TaskWorkerFacade, WorkerJob};
 #[cfg(test)]
 pub(crate) use result_protocol::SourceIdentityFailure;
 pub(crate) use result_protocol::{
@@ -23,21 +23,21 @@ use crate::RuntimePaths;
 
 #[derive(Default)]
 pub(crate) struct ProcessSupervisors {
-    video: WorkerLane,
+    task: WorkerLane,
     asr_model_download: WorkerLane,
 }
 
 impl ProcessSupervisors {
-    pub(crate) fn video_worker<'a>(&'a self, paths: &'a RuntimePaths) -> VideoWorkerFacade<'a> {
-        VideoWorkerFacade::new(paths, &self.video)
+    pub(crate) fn task_worker<'a>(&'a self, paths: &'a RuntimePaths) -> TaskWorkerFacade<'a> {
+        TaskWorkerFacade::new(paths, &self.task)
     }
 
-    pub(crate) fn cancel_video(&self) -> CancelProcessResult {
-        self.video.cancel()
+    pub(crate) fn cancel_task(&self) -> CancelProcessResult {
+        self.task.cancel()
     }
 
-    pub(crate) fn is_video_active(&self) -> bool {
-        self.video.is_active()
+    pub(crate) fn is_task_active(&self) -> bool {
+        self.task.is_active()
     }
 
     pub(crate) fn run_asr_model_download(
@@ -61,13 +61,13 @@ impl ProcessSupervisors {
     }
 
     #[cfg(test)]
-    pub(crate) fn activate_video_for_test(&self, pid: u32) -> u64 {
-        self.video.activate_for_test(pid)
+    pub(crate) fn activate_task_for_test(&self, pid: u32) -> u64 {
+        self.task.activate_for_test(pid)
     }
 
     #[cfg(test)]
-    pub(crate) fn finish_video_for_test(&self, instance_id: u64) {
-        self.video.finish_for_test(instance_id);
+    pub(crate) fn finish_task_for_test(&self, instance_id: u64) {
+        self.task.finish_for_test(instance_id);
     }
 }
 

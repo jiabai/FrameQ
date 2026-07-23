@@ -18,6 +18,7 @@ const MAX_WORKER_STDIN_PAYLOAD_BYTES: usize = 1024 * 1024;
 #[derive(Clone)]
 pub(super) enum WorkerInvocation {
     ProcessVideo(String),
+    ProcessLocalMedia(String),
     RetryInsights(String),
     ResolveSourceIdentity(String),
 }
@@ -94,6 +95,10 @@ pub(super) fn build_worker_command_spec(
         WorkerInvocation::ProcessVideo(payload) => {
             (vec!["--request-stdin".to_string()], Some(payload))
         }
+        WorkerInvocation::ProcessLocalMedia(payload) => (
+            vec!["--process-local-media-stdin".to_string()],
+            Some(payload),
+        ),
         WorkerInvocation::RetryInsights(payload) => {
             (vec!["--retry-insights-stdin".to_string()], Some(payload))
         }
@@ -167,7 +172,9 @@ pub(super) fn build_worker_command_spec(
 fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> bool {
     match invocation {
         WorkerInvocation::RetryInsights(_) => true,
-        WorkerInvocation::ProcessVideo(_) | WorkerInvocation::ResolveSourceIdentity(_) => false,
+        WorkerInvocation::ProcessVideo(_)
+        | WorkerInvocation::ProcessLocalMedia(_)
+        | WorkerInvocation::ResolveSourceIdentity(_) => false,
     }
 }
 
@@ -262,6 +269,12 @@ mod tests {
                     r#"{{"url":"https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456?xsec_token={secret}"}}"#
                 )),
                 "--request-stdin",
+            ),
+            (
+                WorkerInvocation::ProcessLocalMedia(format!(
+                    r#"{{"contract_version":4,"source_path":"C:\\Users\\{secret}\\Interview.wmv","media_kind":"video","safe_display_name":"Interview.wmv","source_extension":"wmv","asr_model":"iic/SenseVoiceSmall"}}"#
+                )),
+                "--process-local-media-stdin",
             ),
             (
                 WorkerInvocation::ResolveSourceIdentity(format!(

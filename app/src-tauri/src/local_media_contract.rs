@@ -63,6 +63,7 @@ impl LocalMediaSelectionView {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn selection_token(&self) -> &str {
         &self.selection_token
     }

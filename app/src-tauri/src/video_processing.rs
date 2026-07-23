@@ -1,3 +1,4 @@
+mod local_media;
 mod retry_insights;
 mod task_result;
 mod url_cache;
@@ -46,6 +47,17 @@ pub(crate) async fn process_video(
 }
 
 #[tauri::command]
+pub(crate) async fn process_local_media(
+    window: Window,
+    app: AppHandle,
+    process_state: State<'_, Arc<ProcessSupervisors>>,
+    selection_state: State<'_, Arc<crate::local_media::LocalMediaSelectionState>>,
+    request: serde_json::Value,
+) -> Result<TaskTerminalResult, String> {
+    local_media::run_process_local_media(window, app, process_state, selection_state, request).await
+}
+
+#[tauri::command]
 pub(crate) async fn retry_insights(
     window: Window,
     app: AppHandle,
@@ -59,7 +71,7 @@ pub(crate) async fn retry_insights(
 pub(crate) fn cancel_process(
     process_state: State<'_, Arc<ProcessSupervisors>>,
 ) -> Result<CancelProcessResult, String> {
-    Ok(process_state.cancel_video())
+    Ok(process_state.cancel_task())
 }
 
 fn closed_task_result(value: serde_json::Value) -> TaskTerminalResult {

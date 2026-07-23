@@ -51,6 +51,7 @@ pub(crate) const TASK_TERMINAL_STATUSES: &[&str] = &["completed", "partial_compl
 #[serde(rename_all = "snake_case")]
 pub(crate) struct TerminalOperationFamilies {
     process_video: &'static str,
+    process_local_media: &'static str,
     retry_insights: &'static str,
     resolve_source_identity: &'static str,
     download_asr_model: &'static str,
@@ -60,6 +61,7 @@ pub(crate) struct TerminalOperationFamilies {
 pub(crate) const TERMINAL_OPERATION_FAMILIES: TerminalOperationFamilies =
     TerminalOperationFamilies {
         process_video: "task",
+        process_local_media: "task",
         retry_insights: "task",
         resolve_source_identity: "sourceIdentity",
         download_asr_model: "modelDownload",
@@ -204,7 +206,9 @@ pub(crate) fn parse_terminal_result(
     }
 
     match operation {
-        WorkerOperation::ProcessVideo | WorkerOperation::RetryInsights => {
+        WorkerOperation::ProcessVideo
+        | WorkerOperation::ProcessLocalMedia
+        | WorkerOperation::RetryInsights => {
             let result = serde_json::from_str(line).map_err(|_| TerminalResultError::Invalid)?;
             validate_task_result(result).map(ValidatedWorkerResult::Task)
         }
@@ -429,6 +433,7 @@ mod tests {
     fn task_operations_accept_only_complete_closed_task_results() {
         for operation in [
             WorkerOperation::ProcessVideo,
+            WorkerOperation::ProcessLocalMedia,
             WorkerOperation::RetryInsights,
         ] {
             let stdout = serde_json::to_vec(&valid_task_value()).expect("serialize task fixture");
