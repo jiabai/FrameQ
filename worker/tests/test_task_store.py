@@ -11,14 +11,17 @@ from frameq_worker.models import (
     JobStage,
     PreferenceLabelSnapshot,
     PreferenceSnapshot,
+    ProcessLocalMediaRequest,
     ProcessRequest,
     ProcessResult,
     TranscriptMetadata,
 )
 from frameq_worker.source_identity import SourceIdentity
 from frameq_worker.task_store import (
+    LocalFileTaskSource,
     TaskContext,
     TaskStoreFacade,
+    UrlTaskSource,
     task_artifacts_for_existing_files,
 )
 
@@ -128,6 +131,78 @@ def test_task_store_facade_owns_create_open_finalize_and_preference_snapshot(
     manifest = json.loads(context.paths.manifest_path.read_text(encoding="utf-8"))
     assert manifest["task_id"] == context.task_id
     assert manifest["artifacts"] == finalized.artifacts
+    assert "source_kind" not in manifest
+    assert isinstance(opened.context.source, UrlTaskSource)
+
+
+def test_local_task_source_is_closed_path_free_unique_and_reopenable(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "outputs"
+    cache_root = tmp_path / "cache"
+    store = TaskStoreFacade(output_root=output_root, cache_root=cache_root)
+    request = ProcessLocalMediaRequest(
+        source_path=tmp_path / "review-secret" / "Interview.wmv",
+        media_kind="video",
+        safe_display_name="Interview.wmv",
+        source_extension="wmv",
+        asr_model="iic/SenseVoiceSmall",
+    )
+
+    context = store.create_local(
+        request,
+        now=datetime(2026, 7, 18, 12, 0, tzinfo=UTC),
+        random_id="abc123",
+    )
+    second = store.create_local(
+        request,
+        now=datetime(2026, 7, 18, 12, 0, tzinfo=UTC),
+        random_id="def456",
+    )
+    finalized = store.finalize(
+        context,
+        ProcessResult(
+            status=JobStage.COMPLETED,
+            text="local transcript",
+            transcript=TranscriptMetadata(
+                source="asr",
+                engine="iic/SenseVoiceSmall",
+            ),
+        ),
+    )
+    opened = store.open(context.task_id)
+    manifest = json.loads(context.paths.manifest_path.read_text(encoding="utf-8"))
+    serialized = json.dumps(manifest, ensure_ascii=False)
+
+    assert context.task_id == "20260718-120000-local-abc123"
+    assert second.task_id == "20260718-120000-local-def456"
+    assert context.task_id != second.task_id
+    assert isinstance(context.source, LocalFileTaskSource)
+    assert context.source_identity is None
+    assert opened.context == context
+    assert finalized.task_id == context.task_id
+    assert manifest["source_kind"] == "local_file"
+    assert manifest["source_url"] == ""
+    assert manifest["source_identity"] is None
+    assert manifest["local_source"] == {
+        "display_name": "Interview.wmv",
+        "media_kind": "video",
+        "extension": "wmv",
+    }
+    assert "review-secret" not in serialized
+    assert str(request.source_path) not in serialized
+
+    invalid_manifest = dict(manifest)
+    invalid_manifest.pop("source_identity")
+    context.paths.manifest_path.write_text(
+        json.dumps(invalid_manifest),
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ValueError,
+        match="Task is unavailable in the current history format.",
+    ):
+        store.open(context.task_id)
 
 
 def test_task_store_facade_open_rejects_unsupported_task_without_raw_manifest(

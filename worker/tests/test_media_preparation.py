@@ -10,7 +10,7 @@ from frameq_worker import atomic_files
 from frameq_worker.media import CommandResult
 from frameq_worker.source_identity import SourceIdentity
 from frameq_worker.source_resolution import SourceRequest
-from frameq_worker.task_store import TaskContext, TaskPaths
+from frameq_worker.task_store import TaskContext, TaskPaths, UrlTaskSource
 
 
 def _build_context(tmp_path: Path, task_id: str) -> TaskContext:
@@ -23,12 +23,13 @@ def _build_context(tmp_path: Path, task_id: str) -> TaskContext:
     paths.media_dir.mkdir(parents=True)
     return TaskContext(
         paths=paths,
-        source_identity=SourceIdentity(
-            platform="youtube",
-            stable_id="dQw4w9WgXcQ",
-            canonical_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        source=UrlTaskSource(
+            SourceIdentity(
+                platform="youtube",
+                stable_id="dQw4w9WgXcQ",
+                canonical_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            )
         ),
-        platform="youtube",
         model="iic/SenseVoiceSmall",
         created_at="2026-07-19T00:00:00Z",
     )

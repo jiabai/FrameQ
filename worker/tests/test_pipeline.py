@@ -17,7 +17,7 @@ from frameq_worker.requests import parse_preference_snapshot
 from frameq_worker.source_identity import SourceIdentity, SourceIdentityError
 from frameq_worker.source_resolution import SourceRequest
 from frameq_worker.subtitles import SubtitleTranscript
-from frameq_worker.task_store import TaskContext, TaskPaths
+from frameq_worker.task_store import TaskContext, TaskPaths, UrlTaskSource
 
 
 class FakeTranscriber:
@@ -253,12 +253,13 @@ def test_subtitle_found_progress_always_uses_a_safe_language_arg(
     paths.transcript_dir.mkdir(parents=True)
     context = TaskContext(
         paths=paths,
-        source_identity=SourceIdentity(
-            platform="youtube",
-            stable_id="dQw4w9WgXcQ",
-            canonical_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        source=UrlTaskSource(
+            SourceIdentity(
+                platform="youtube",
+                stable_id="dQw4w9WgXcQ",
+                canonical_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            )
         ),
-        platform="youtube",
         model="iic/SenseVoiceSmall",
         created_at="2026-07-15T00:00:00Z",
     )

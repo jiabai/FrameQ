@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import secrets
+import unicodedata
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 from frameq_worker.atomic_files import atomic_write_text
+from frameq_worker.desktop_contract import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from frameq_worker.models import (
+    LocalMediaKind,
     PreferenceSnapshot,
+    ProcessLocalMediaRequest,
     ProcessRequest,
     ProcessResult,
     TranscriptMetadata,
@@ -28,6 +34,7 @@ from frameq_worker.task_transaction import (
 
 TASK_MANIFEST_FILE_NAME = "frameq-task.json"
 TASK_SCHEMA_VERSION = 3
+_LOCAL_TASK_RANDOM_ID_PATTERN = re.compile(r"^[a-z0-9]{6,32}$")
 
 
 @dataclass(frozen=True)
@@ -110,10 +117,32 @@ class TaskPaths:
 
 
 @dataclass(frozen=True)
+class UrlTaskSource:
+    identity: SourceIdentity = field(repr=False)
+
+
+@dataclass(frozen=True)
+class LocalFileTaskSource:
+    display_name: str = field(repr=False)
+    media_kind: LocalMediaKind
+    extension: str
+
+    def __post_init__(self) -> None:
+        if not _is_valid_local_source(
+            self.display_name,
+            self.media_kind,
+            self.extension,
+        ):
+            raise ValueError("Local task source is invalid.")
+
+
+TaskSource = UrlTaskSource | LocalFileTaskSource
+
+
+@dataclass(frozen=True)
 class TaskContext:
     paths: TaskPaths
-    source_identity: SourceIdentity
-    platform: str
+    source: TaskSource
     model: str
     created_at: str
     worker_version: str = "app"
@@ -122,6 +151,18 @@ class TaskContext:
     @property
     def task_id(self) -> str:
         return self.paths.task_id
+
+    @property
+    def source_identity(self) -> SourceIdentity | None:
+        if isinstance(self.source, UrlTaskSource):
+            return self.source.identity
+        return None
+
+    @property
+    def platform(self) -> str:
+        if isinstance(self.source, UrlTaskSource):
+            return self.source.identity.platform
+        return "local"
 
 
 @dataclass(frozen=True)
@@ -147,6 +188,22 @@ class TaskStoreFacade:
             output_root=self.output_root,
             cache_root=self.cache_root,
             now=now,
+        )
+        ensure_task_dirs(context.paths)
+        return context
+
+    def create_local(
+        self,
+        request: ProcessLocalMediaRequest,
+        now: datetime | None = None,
+        random_id: str | None = None,
+    ) -> TaskContext:
+        context = create_local_task_context(
+            request,
+            output_root=self.output_root,
+            cache_root=self.cache_root,
+            now=now,
+            random_id=random_id,
         )
         ensure_task_dirs(context.paths)
         return context
@@ -221,8 +278,37 @@ def create_task_context(
     paths = TaskPaths(output_root=output_root, cache_root=cache_root, task_id=task_id)
     return TaskContext(
         paths=paths,
-        source_identity=source_identity,
-        platform=platform,
+        source=UrlTaskSource(source_identity),
+        model=request.asr_model,
+        created_at=created.isoformat(timespec="seconds").replace("+00:00", "Z"),
+    )
+
+
+def create_local_task_context(
+    request: ProcessLocalMediaRequest,
+    output_root: Path,
+    cache_root: Path,
+    now: datetime | None = None,
+    random_id: str | None = None,
+) -> TaskContext:
+    created = (now or datetime.now(UTC)).astimezone(UTC)
+    source = LocalFileTaskSource(
+        display_name=request.safe_display_name,
+        media_kind=request.media_kind,
+        extension=request.source_extension,
+    )
+    safe_random_id = random_id or secrets.token_hex(8)
+    if _LOCAL_TASK_RANDOM_ID_PATTERN.fullmatch(safe_random_id) is None:
+        raise ValueError("Local task random id is invalid.")
+    timestamp = created.strftime("%Y%m%d-%H%M%S")
+    task_id = f"{timestamp}-local-{safe_random_id}"
+    return TaskContext(
+        paths=TaskPaths(
+            output_root=output_root,
+            cache_root=cache_root,
+            task_id=task_id,
+        ),
+        source=source,
         model=request.asr_model,
         created_at=created.isoformat(timespec="seconds").replace("+00:00", "Z"),
     )
@@ -294,9 +380,8 @@ def write_task_manifest(context: TaskContext, result: ProcessResult) -> None:
 
 
 def serialize_task_manifest(context: TaskContext, result: ProcessResult) -> bytes:
-    source_identity = context.source_identity
-    canonical_url = canonical_url_for_persistence(source_identity)
     context.paths.task_dir.mkdir(parents=True, exist_ok=True)
+    source_fields = _manifest_source_fields(context.source)
     payload = {
         "schema_version": TASK_SCHEMA_VERSION,
         "source_privacy_migration_version": SOURCE_PRIVACY_MIGRATION_VERSION,
@@ -304,9 +389,7 @@ def serialize_task_manifest(context: TaskContext, result: ProcessResult) -> byte
         "task_id": context.task_id,
         "created_at": context.created_at,
         "updated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "source_url": canonical_url or "",
-        "source_identity": source_identity.to_manifest_dict(),
-        "platform": context.platform,
+        **source_fields,
         "status": result.status.value,
         "app_version": context.app_version,
         "worker_version": context.worker_version,
@@ -335,18 +418,17 @@ def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
     manifest_path = _validated_task_manifest_path(output_root, task_id)
     recover_task_artifacts(manifest_path.parent)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    source_identity = source_identity_from_manifest(manifest.get("source_identity"))
-    if source_identity is None:
-        raise ValueError("Task is unavailable in the current history format.")
     if (
         manifest.get("schema_version") != TASK_SCHEMA_VERSION
         or manifest.get("source_privacy_migration_version")
         != SOURCE_PRIVACY_MIGRATION_VERSION
         or manifest.get("source_privacy_quarantined") is True
-        or source_identity is None
-        or manifest.get("source_url") != source_identity.canonical_url
     ):
         raise ValueError("Task is unavailable in the current history format.")
+    try:
+        _task_source_from_manifest(manifest)
+    except ValueError:
+        raise ValueError("Task is unavailable in the current history format.") from None
     return manifest
 
 
@@ -426,31 +508,116 @@ def task_context_from_loaded_manifest(
     task_id: str,
     manifest: dict[str, object],
 ) -> TaskContext:
-    source_identity = source_identity_from_manifest(manifest.get("source_identity"))
-    source_url = manifest.get("source_url")
-    if source_identity is not None:
-        if source_url != source_identity.canonical_url:
-            raise ValueError("Task source identity is inconsistent.")
-    elif source_url != "" or "source_identity" in manifest:
-        raise ValueError("Task source identity is unavailable or invalid.")
+    source = _task_source_from_manifest(manifest)
     model = str(manifest.get("model") or "iic/SenseVoiceSmall")
-    platform = (
-        source_identity.platform
-        if source_identity
-        else str(manifest.get("platform") or "source")
-    )
     created_at = str(
         manifest.get("created_at")
         or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
     )
     return TaskContext(
         paths=TaskPaths(output_root=output_root, cache_root=cache_root, task_id=task_id),
-        source_identity=source_identity,
-        platform=platform,
+        source=source,
         model=model,
         created_at=created_at,
         app_version=str(manifest.get("app_version") or "app"),
         worker_version=str(manifest.get("worker_version") or "app"),
+    )
+
+
+def _manifest_source_fields(source: TaskSource) -> dict[str, object]:
+    if isinstance(source, UrlTaskSource):
+        canonical_url = canonical_url_for_persistence(source.identity)
+        return {
+            "source_url": canonical_url or "",
+            "source_identity": source.identity.to_manifest_dict(),
+            "platform": source.identity.platform,
+        }
+    if isinstance(source, LocalFileTaskSource):
+        return {
+            "source_kind": "local_file",
+            "source_url": "",
+            "source_identity": None,
+            "local_source": {
+                "display_name": source.display_name,
+                "media_kind": source.media_kind,
+                "extension": source.extension,
+            },
+            "platform": "local",
+        }
+    raise TypeError("Unsupported task source.")
+
+
+def _task_source_from_manifest(manifest: Mapping[str, object]) -> TaskSource:
+    source_kind = manifest.get("source_kind")
+    if source_kind in {None, "url"}:
+        if "local_source" in manifest:
+            raise ValueError("URL task cannot contain a local source.")
+        source_identity = source_identity_from_manifest(manifest.get("source_identity"))
+        if (
+            source_identity is None
+            or manifest.get("source_url") != source_identity.canonical_url
+        ):
+            raise ValueError("Task source identity is unavailable or invalid.")
+        return UrlTaskSource(source_identity)
+
+    if source_kind != "local_file":
+        raise ValueError("Task source kind is unsupported.")
+    if (
+        "source_url" not in manifest
+        or "source_identity" not in manifest
+        or manifest.get("source_url") != ""
+        or manifest.get("source_identity") is not None
+        or manifest.get("platform") != "local"
+    ):
+        raise ValueError("Local task source boundary is invalid.")
+    raw_local_source = manifest.get("local_source")
+    if not isinstance(raw_local_source, dict) or set(raw_local_source) != {
+        "display_name",
+        "media_kind",
+        "extension",
+    }:
+        raise ValueError("Local task source is unavailable or invalid.")
+    display_name = raw_local_source.get("display_name")
+    media_kind = raw_local_source.get("media_kind")
+    extension = raw_local_source.get("extension")
+    if (
+        not isinstance(display_name, str)
+        or media_kind not in {"video", "audio"}
+        or not isinstance(extension, str)
+    ):
+        raise ValueError("Local task source is unavailable or invalid.")
+    return LocalFileTaskSource(
+        display_name=display_name,
+        media_kind=media_kind,
+        extension=extension,
+    )
+
+
+def _is_valid_local_source(
+    display_name: str,
+    media_kind: LocalMediaKind,
+    extension: str,
+) -> bool:
+    allowed_extensions = VIDEO_EXTENSIONS if media_kind == "video" else AUDIO_EXTENSIONS
+    return (
+        media_kind in {"video", "audio"}
+        and extension in allowed_extensions
+        and bool(display_name.strip())
+        and display_name not in {".", ".."}
+        and len(display_name) <= 160
+        and display_name.lower().endswith(f".{extension}")
+        and not any(_is_unsafe_basename_character(value) for value in display_name)
+    )
+
+
+def _is_unsafe_basename_character(value: str) -> bool:
+    codepoint = ord(value)
+    return (
+        value in {"/", "\\"}
+        or unicodedata.category(value) == "Cc"
+        or codepoint in {0x061C, 0x200E, 0x200F}
+        or 0x202A <= codepoint <= 0x202E
+        or 0x2066 <= codepoint <= 0x2069
     )
 
 
