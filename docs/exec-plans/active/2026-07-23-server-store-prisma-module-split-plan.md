@@ -102,6 +102,15 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   LLM quota/config 10/10; complete non-boundary suite 145 passed / one Windows skip; TypeScript
   build passed. The ownership RED now reports only the four intentionally absent Memory operation
   owners.
+- [x] 2026-07-23: Task 4 extracted all Memory authentication, billing, entitlement/accounting,
+  and LLM-configuration operations behind bound, override-aware contexts while retaining one
+  actual class, all 13 fixture fields, all 38 callable methods, and the single full-state atomic
+  coordinator. Final sizes: `memory.ts` 346, `atomic.ts` 84, `auth.ts` 400, `billing.ts` 176,
+  `entitlements.ts` 246, and `llmConfig.ts` 30 physical lines. Validation: auth concurrency 23/23;
+  auth filters 27/27; admin 5/5; billing 2/2; activation 4/4; LLM quota/config 10/10; transaction
+  safety 20/20; routes 11/11; compatibility 3/3; complete non-boundary suite 145 passed / one
+  Windows skip; TypeScript build and `git diff --check` passed. The ownership RED moved exactly to
+  the absent Prisma tree.
 
 ## Surprises & Discoveries
 
@@ -767,7 +776,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - Create: `server/src/store/memory/llmConfig.ts`
 - Modify: `server/src/store/memory.ts`
 
-- [ ] Move the exact existing Memory bodies by this closed ownership map:
+- [x] Move the exact existing Memory bodies by this closed ownership map:
 
   | Owner | Methods and helpers |
   |---|---|
@@ -779,7 +788,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Random-ID creation, comparison, date arithmetic, sort order, fixed thrown strings, mutation
   order, and returned object identity move with their current bodies.
 
-- [ ] Define narrow child contexts from `MemoryState`, `MemoryAtomicCoordinator`, contract method
+- [x] Define narrow child contexts from `MemoryState`, `MemoryAtomicCoordinator`, contract method
   signatures, and explicit compatibility callback signatures. Children must not import
   `../memory.js`. The stable class binds every current internal public call to the actual instance:
 
@@ -816,7 +825,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   `upsertEntitlement`, and `createAdminEntitlementAdjustment`. This preserves current virtual
   dispatch; a child must not directly mutate an array in place of one of those existing calls.
 
-- [ ] Keep `MemoryStore` as the actual class with all 13 fixture fields and all 38 callable
+- [x] Keep `MemoryStore` as the actual class with all 13 fixture fields and all 38 callable
   methods. Each method delegates directly to one named child operation:
 
   ```ts
@@ -839,7 +848,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   of `Store`. Do not use `any`, an index-signature state bag, runtime repositories, or a generic
   public dispatcher.
 
-- [ ] Run focused tests after each child moves instead of batching all four:
+- [x] Run focused tests after each child moves instead of batching all four:
 
   ```powershell
   npm --prefix server test -- --run authQuotaConcurrency
@@ -862,7 +871,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   changes. `store/memory.ts` is at most 350 lines and every child is at most 400. The ownership gate
   remains RED at the absent Prisma tree.
 
-- [ ] Record each owner size and focused count, then create the authorized Memory checkpoint:
+- [x] Record each owner size and focused count, then create the authorized Memory checkpoint:
 
   ```powershell
   git add server/src/store/memory.ts server/src/store/memory docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md
