@@ -81,6 +81,11 @@ transcript-detail module, introduce a nested public controller API, or add a new
   file / 1 test, and App lint passed. Boundary-test physical sizes are facade 126, artifact owner
   139, document owner 199, and review owner 250 lines. The protected App, presentation, client,
   Tauri, worker, server, and contract diff is empty.
+- [x] 2026-07-23: Completed real-browser, full App, build, repository-script, governance, and scope
+  regression. Validation: selected Chromium 4 passed / 24 skipped; complete App 65 files / 583
+  tests; App lint; production build; Node repository scripts 25/25; governance 0 errors / 0
+  warnings; and `git diff --check` all passed. Vite retained its existing non-blocking 665.20 kB
+  chunk-size warning.
 
 ## Surprises & Discoveries
 
@@ -106,6 +111,11 @@ transcript-detail module, introduce a nested public controller API, or add a new
   `resumeTranscriptAfterSaveRef` is set in `beginTranscriptSegmentEdit`, cleared in
   `endTranscriptSegmentEdit`, successful resume, and deletion preparation, while the load effect
   resets active/editing IDs only.
+- The full App suite contained a source-coupled style assertion that read
+  `useTranscriptDetailController.ts` directly to locate `--audio-progress`. After ownership moved,
+  the first full run passed 582/583 and failed only this stale fixture path. Updating the fixture to
+  read `useTranscriptReviewSession.ts` preserved the assertion and produced 21/21 focused CSS tests
+  followed by 583/583 complete App tests.
 
 ## Decision Log
 
@@ -131,6 +141,9 @@ transcript-detail module, introduce a nested public controller API, or add a new
 - Decision: Do not update a product spec or add dependencies. Rationale: the refactor changes
   internal ownership only and uses existing React/Vitest/Tauri capabilities. Date/Author:
   2026-07-23, Codex.
+- Decision: Retarget the existing audio style source assertion to the new review-session owner
+  rather than weakening or deleting it. Rationale: `--audio-progress` remains required behavior;
+  only its approved implementation owner changed. Date/Author: 2026-07-23, Codex.
 
 ## Outcomes & Retrospective
 
@@ -1040,7 +1053,7 @@ git commit -m "refactor(app): split transcript review session"
 
 - Test only; production changes are not expected
 
-- [ ] **Step 1: Run focused Chromium integration**
+- [x] **Step 1: Run focused Chromium integration**
 
 ```powershell
 npm.cmd --prefix app test -- tests/app-input.browser.test.ts -t "renders one task as aligned local transcript|ignores a late transcript save|Escape exits segment editing|keeps local transcript usable"
@@ -1050,7 +1063,7 @@ Expected: the four selected real-browser cases pass with no runtime exception. T
 audio/segments, stale save, Escape edit semantics, and local transcript availability during AI
 gating.
 
-- [ ] **Step 2: Run the complete App gates**
+- [x] **Step 2: Run the complete App gates**
 
 ```powershell
 npm.cmd --prefix app test
@@ -1061,7 +1074,7 @@ npm.cmd --prefix app run build
 Expected: zero test/lint/build failures. Record exact file/test totals and existing non-blocking
 Vite warnings.
 
-- [ ] **Step 3: Run repository and governance gates**
+- [x] **Step 3: Run repository and governance gates**
 
 ```powershell
 node --test scripts\tests\*.test.mjs
@@ -1071,7 +1084,7 @@ git diff --check
 
 Expected: scripts and governance pass; no whitespace errors.
 
-- [ ] **Step 4: Inspect final scope and commits**
+- [x] **Step 4: Inspect final scope and commits**
 
 ```powershell
 git status --short

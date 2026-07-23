@@ -15,8 +15,8 @@ const aiResultDetailSheetTsx = readFileSync(
   new URL("./features/results/AiResultDetailSheet.tsx", import.meta.url),
   "utf-8",
 );
-const transcriptDetailControllerTs = readFileSync(
-  new URL("./features/transcript/useTranscriptDetailController.ts", import.meta.url),
+const transcriptReviewSessionTs = readFileSync(
+  new URL("./features/transcript/useTranscriptReviewSession.ts", import.meta.url),
   "utf-8",
 );
 const settingsSheetTsx = readFileSync(
@@ -341,7 +341,7 @@ describe("App result workspace layout styles", () => {
       /className="audio-review-bar"[\s\S]*?<button[\s\S]*?<\/button>\s*<input[\s\S]*?className="audio-review-scrubber"[\s\S]*?\/>\s*<div className="audio-review-clock">/,
     );
     expect(transcriptReviewPanelTsx).toContain("transcriptAudioScrubberStyle");
-    expect(transcriptDetailControllerTs).toContain("--audio-progress");
+    expect(transcriptReviewSessionTs).toContain("--audio-progress");
     expect(barRule).toContain("grid-template-columns: 48px minmax(0, 1fr) max-content;");
     expect(barRule).toContain("align-items: center;");
     expect(barRule).toContain("column-gap: 16px;");
