@@ -1,18 +1,21 @@
 # Rust Worker Watchdog and Deadline Boundary
 
 - Date: 2026-07-22
-- Status: Implemented; Windows/native and complete local gates passed, macOS runtime evidence pending
+- Status: Implemented; Windows/native and complete local gates passed, private owner split completed
+  2026-07-23, macOS runtime evidence for the split commit pending
 - Related lifecycle design:
   `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - ExecPlan: `docs/exec-plans/completed/2026-07-22-worker-watchdog-plan.md`
 
 ## Context
 
-The shared Rust `WorkerLane::run` owns spawn, process-group setup, supervisor registration, stdin
-delivery, stderr/progress reading, `child.wait()`, finish, parsing, and terminal classification for
-process video, AI retry, source identity, and ASR model download. It now starts an instance-bound
-production watchdog after registration and before stdin delivery; cancellation and timeout reuse
-the same supervised process-tree boundary.
+The shared Rust `WorkerLane::run` is the sole orchestrator of spawn, supervisor registration, stdin
+delivery, pipe reading, `child.wait()`, finish, parsing, and terminal classification for process
+video, AI retry, source identity, and ASR model download. Private `runner/process_io.rs`,
+`watchdog.rs`, `progress.rs`, and `terminal.rs` own the narrow implementation details without
+creating another executor. The root starts an instance-bound production watchdog after
+registration and before stdin delivery; cancellation and timeout reuse the same supervised
+process-tree boundary.
 
 If a Python worker, FFmpeg/native library, provider request, pipe operation, or descendant process
 hangs without exiting, `child.wait()` can block forever. The UI remains in a processing state and
@@ -72,6 +75,11 @@ changed by a reviewed runtime decision; weakening activity validation or allowin
 timeouts is not an acceptable workaround.
 
 ## Ownership and Lifecycle
+
+The watchdog policy, control, deadline selection, thread, and timeout retry are physically owned by
+private `worker_runtime/runner/watchdog.rs`. `runner.rs` alone decides when it starts/stops and how
+its terminal claim participates in lifecycle ordering; `runner/progress.rs` receives only the
+narrow validated-activity handle. Application modules cannot import either child path.
 
 After the child is spawned and registered, the runner creates one instance-bound watchdog control
 with:

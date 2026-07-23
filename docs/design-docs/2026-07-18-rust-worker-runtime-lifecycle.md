@@ -18,13 +18,18 @@ A second 2026-07-19 follow-up implemented the closed terminal-result boundary de
 one-line, operation-aware parsing to `worker_runtime/result_protocol.rs` and carries
 `ValidatedWorkerResult`; application modules no longer consume arbitrary `serde_json::Value`.
 
-The implemented lifecycle still has no production execution deadline and currently waits through
-an unbounded `child.wait()`. The proposed release-hardening extension is intentionally specified in
-`docs/design-docs/2026-07-22-rust-worker-watchdog.md`: `worker_runtime` will add instance-bound idle
-and absolute deadline ownership while preserving this document's spawn, cancellation,
-process-tree, finish, and structured-result-first rules. Until that plan is implemented and
-verified, worker watchdog coverage remains a broad-release blocker rather than an implemented
-property of this lifecycle.
+The 2026-07-22 release-hardening follow-up in
+`docs/design-docs/2026-07-22-rust-worker-watchdog.md` is implemented. Every operation now has a
+fixed absolute deadline, eligible operations also have a validated-progress idle deadline, and an
+instance-bound watchdog can terminate the supervised process tree while stdin delivery or
+`child.wait()` is blocked. Spawn, cancellation, finish, and structured-result-first rules remain
+unchanged.
+
+The behavior-neutral 2026-07-23 follow-up in
+`docs/design-docs/2026-07-23-rust-worker-runner-module-split.md` is also implemented. `runner.rs`
+remains the only lifecycle orchestrator, while private process-I/O, watchdog, progress, and
+terminal owners make the implementation separately reviewable without widening the application
+surface.
 
 ## Problem
 
@@ -93,6 +98,18 @@ app/src-tauri/src/worker_runtime/
   result_protocol.rs
   supervisor.rs
   runner.rs
+  runner/
+    process_io.rs
+    watchdog.rs
+    progress.rs
+    terminal.rs
+    tests.rs
+    tests/
+      fixtures.rs
+      lifecycle.rs
+      progress.rs
+      terminal.rs
+      watchdog.rs
 ```
 
 ### Module Responsibilities
@@ -102,7 +119,11 @@ app/src-tauri/src/worker_runtime/
 | `worker_runtime/command.rs` | `WorkerInvocation`, `WorkerCommandSpec`, fixed CLI modes, bounded stdin payload, environment construction | spawning, waiting, cancellation state, result mapping |
 | `worker_runtime/facade.rs` | closed `WorkerJob`, exhaustive video-job invocation/operation/progress/LLM/lane policy, `VideoWorkerFacade::execute` | cache, task manifests, public result mapping, child lifecycle implementation |
 | `worker_runtime/supervisor.rs` | lane state, instance IDs, PID/PGID, `Running`/`Cancelling`, cancellation claim/rollback, fixed Windows/macOS tree termination | worker JSON, progress events, task/AI semantics |
-| `worker_runtime/runner.rs` | spawn configuration, supervisor registration, stdin delivery, stderr reader, progress routing, wait/reap, finish ordering, stdout capture, parser delegation, terminal classification, lifecycle diagnostics | result-field interpretation, cache, manifests, entitlement, public `ProcessVideoResult` construction |
+| `worker_runtime/runner.rs` | sole `WorkerLane` lifecycle ordering, stable operation/request/outcome/error surface, matching-instance guard, private-owner composition | OS signalling implementation, command policy, progress parsing details, terminal DTO semantics, application result mapping |
+| `worker_runtime/runner/process_io.rs` | process-group setup, fixed-spec spawn, one-shot stdin delivery, stdout capture helper, matching-child terminate/reap cleanup | lifecycle phase ordering, watchdog policy, progress validation, terminal classification |
+| `worker_runtime/runner/watchdog.rs` | closed operation deadlines, validated-activity clock, watchdog control/thread, timeout claim retry | caller-controlled timeouts, progress payload interpretation, terminal result parsing |
+| `worker_runtime/runner/progress.rs` | closed progress routes, stderr parsing/validation/emission, fixed stderr summary, validated activity refresh | raw stderr forwarding, terminal parsing, application semantics |
+| `worker_runtime/runner/terminal.rs` | safe lifecycle details, structured-result-first terminal classification, fixed unstructured exit summary | closed DTO field validation, process cleanup, application result mapping |
 | `worker_runtime/result_protocol.rs` | exact stdout framing, operation-specific closed DTO parsing, nested type/enum/key validation, semantic result invariants, fixed non-echoing protocol errors | spawn/wait/cancellation, task cache/manifests, UI error rendering |
 | `progress_event.rs` | pure contract-backed validation and safe invalid-event summaries | process ownership and Tauri command orchestration |
 | `diagnostics.rs` | app-local log sink, sanitization, truncation, safe result summaries | deciding child lifecycle or cancellation precedence |

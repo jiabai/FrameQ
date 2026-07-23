@@ -436,7 +436,7 @@
 
 - `ProcessSupervisors` privately owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running`, `Cancelling`, `CleaningUp`, or typed `TimingOut` phase; absence is the only finished state.
 - `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the internal typed `WorkerRunRequest`, but application modules can enter the video lane only through `VideoWorkerFacade::execute(WorkerJob)` and can enter the model-download lane only through the narrow `ProcessSupervisors` model-download method. Application modules cannot select a lane, operation, progress route, invocation, credential policy, spawn behavior, pipe, wait/reap path, supervisor mutation, or process-tree termination.
-- `worker_runtime/facade.rs` exhaustively derives video-job invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane. `command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` owns spawn/register/stdin/read/wait/finish/parse/classify/log ordering. Raw composition helpers remain private to this module boundary.
+- `worker_runtime/facade.rs` exhaustively derives video-job invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane. `command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` remains the sole owner of spawn/register/stdin/read/wait/finish/parse/classify/log ordering above four private implementation owners: `runner/process_io.rs`, `watchdog.rs`, `progress.rs`, and `terminal.rs`. Application modules cannot import these child paths, and raw composition helpers remain private to this module boundary.
 - Start, cancellation claim, signal-failure rollback, and terminal cleanup must match the running instance ID. A stale waiter or PID cannot clear or restore a newer child. A duplicate cancellation request returns structured `already_cancelling` and sends no second signal.
 - Registration and watchdog startup occur before one-shot stdin delivery. After terminal observation, the runner stops and joins the watchdog, finishes the matching instance before joining stderr readers, and an internal guard clears only its own instance on every setup or wait failure. A termination-in-flight lease prevents lane reuse until the complete OS termination call returns.
 - Windows terminates the controlled PID with `taskkill /PID <pid> /T /F`. On supported macOS releases, the Unix implementation starts each worker in a fresh process group, sends `TERM` to the negative PGID, waits only for the bounded escalation grace, and sends `KILL` to the same group only if it remains alive. Commands receive only supervisor-owned numeric IDs and are never built through a shell. Linux is not a supported release target.
@@ -715,7 +715,7 @@ graph LR
   subgraph "app/ (Tauri + React + TS)"
     A1["app/src/<br/>workflow.ts<br/>settingsClient.ts<br/>historyClient.ts"]
     A2["app/src-tauri/src/<br/>lib.rs · video_processing.rs<br/>asr_model.rs · settings/history"]
-    A3["worker_runtime/<br/>command.rs · runner.rs<br/>supervisor.rs"]
+    A3["worker_runtime/<br/>command.rs · runner.rs + runner/*<br/>supervisor.rs"]
   end
 
   subgraph "worker/frameq_worker/"
@@ -769,7 +769,7 @@ graph LR
   `schema.rs`、`storage.rs` 或 `access.rs`；同时核对 Python
   `worker/frameq_worker/task_store.py` 的 `TaskStoreFacade`，调用方不得恢复 raw manifest/path
   组合或直接导入私有 child。
-- 改 Rust worker 启动、stdin、progress、取消竞争或进程树终止：`app/src-tauri/src/worker_runtime/runner.rs` → `supervisor.rs` → `command.rs`；应用命令只保留领域映射。
+- 改 Rust worker 生命周期顺序：从 `app/src-tauri/src/worker_runtime/runner.rs` 进入；按职责修改私有 `runner/process_io.rs`、`watchdog.rs`、`progress.rs` 或 `terminal.rs`，进程树信号仍只改 `supervisor.rs`，固定 invocation/env 仍只改 `command.rs`；应用命令只保留领域映射。
 - 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
 - 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `asr_runtime/` → `model_download.py` → `app-local data models/`。
 - 改灵感 / 总结 / mindmap：`worker/frameq_worker/insightflow/` → `llm.py`。
@@ -794,7 +794,7 @@ graph LR
 - `app/src/settingsClient.ts`：前端本机设置读写 client（Tauri invoke 包装），包含 ASR、输出目录和 app-local `.env` 路径。
 - `app/src/historyClient.ts`：前端历史记录读取 client（Tauri invoke 包装）。
 - `app/src-tauri/src/worker_runtime/command.rs`：固定 worker invocation、受限 stdin payload 与 app-local 环境构造。
-- `app/src-tauri/src/worker_runtime/runner.rs`：所有 Rust-owned Python 子进程唯一的 spawn/register/stdin/progress/wait/finish/terminal/log 生命周期。
+- `app/src-tauri/src/worker_runtime/runner.rs`：所有 Rust-owned Python 子进程唯一的生命周期编排；私有 `runner/process_io.rs`、`watchdog.rs`、`progress.rs`、`terminal.rs` 分别拥有底层实现，不构成新的应用入口。
 - `app/src-tauri/src/worker_runtime/supervisor.rs`：每 lane 的实例状态、取消 claim/rollback 与 Windows/macOS 进程树终止。
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。

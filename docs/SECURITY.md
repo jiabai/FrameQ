@@ -70,6 +70,10 @@
 - Rust worker watchdog policy is derived from a closed operation enum. Request JSON, UI, Python,
   environment variables, and external content cannot extend or disable deadlines. Only validated
   progress resets idle time; arbitrary stderr cannot keep a process alive.
+- `worker_runtime/runner.rs` remains the sole lifecycle orchestrator above private process-I/O,
+  watchdog, progress, and terminal owners. Application modules cannot import those child paths;
+  `supervisor.rs` remains the only OS signal constructor, `progress.rs` emits only contract-validated
+  payloads, and `terminal.rs` retains fixed non-echoing classification and diagnostic details.
 - Timeout termination reuses supervisor-owned numeric PID/PGID and existing no-shell process-tree
   primitives. Instance matching prevents stale watchdogs from terminating a newer process. Safe
   diagnostics may record operation, timeout kind/duration bucket, instance/PID, and stable outcome

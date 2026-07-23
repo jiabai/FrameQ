@@ -1,5 +1,7 @@
 # Rust Worker Runner Module Split Implementation Plan
 
+Status: Completed and locally verified on 2026-07-23.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this
 > plan task-by-task. Use superpowers:test-driven-development for characterization and the ownership
 > RED/GREEN gate, and use superpowers:verification-before-completion before claiming completion.
@@ -91,8 +93,11 @@ user-visible error.
   `process_io.rs` 108; `watchdog.rs` 273; `progress.rs` 195; `terminal.rs` 71; `tests.rs` 273;
   `tests/fixtures.rs` 339; `tests/lifecycle.rs` 269; `tests/progress.rs` 35;
   `tests/terminal.rs` 174; `tests/watchdog.rs` 390.
-- [ ] Task 6 completes full regression, protected-scope proof, durable documentation, plan
-  archival, and exact residual-risk recording.
+- [x] 2026-07-23: Task 6 completed full regression, exact-tree/protected-scope proof, durable
+  documentation, and archival preparation. Validation: runner 28/28, complete Rust 210/210, App 65
+  files / 583 tests, scripts 25/25, TypeScript/i18n lint, frontend build, rustfmt, governance 0
+  errors / 0 warnings, Tauri release `--no-bundle`, and empty exact-tree/protected-scope
+  comparisons; macOS execution remains explicitly unverified for these commits.
 
 ## Surprises & Discoveries
 
@@ -151,6 +156,12 @@ user-visible error.
   names. The four self-spawning fixtures therefore needed only their fixed `--exact` test-name
   strings updated from `runner::tests::<name>` to `runner::tests::lifecycle::<name>`; the probe
   environment names, scripts, payloads, assertions, and production behavior remain unchanged.
+- The isolated worktree initially had no `app/node_modules`, so the first App test command could
+  not resolve `vitest`. `npm --prefix app ci --ignore-scripts --no-audit --no-fund` installed the
+  lockfile-pinned 240 packages without changing tracked dependency files; the rerun passed 583/583.
+- The Tauri release build left `Cargo.toml` marked stat-dirty even though its worktree and HEAD blob
+  hashes were identical. Refreshing that exact path through the Git index cleared the status with
+  no staged/content diff; protected dependency scope remained unchanged.
 
 ## Decision Log
 
@@ -191,19 +202,29 @@ user-visible error.
 - Decision: Do not update a product specification. Rationale: the plan changes no user-visible
   behavior, wire contract, artifact, timeout, event, error, or supported platform.
   Date/Author: 2026-07-23, User + Codex.
+- Decision: Do not run Worker, Server, Ruff, Prisma, or provider suites for closeout. Rationale:
+  exact protected-scope proof confirms those regions and their contracts/dependencies are
+  unchanged; Rust, App, script, governance, and packaging gates cover every modified layer.
+  Date/Author: 2026-07-23, Codex.
 
 ## Outcomes & Retrospective
 
-Planning outcome only: the approved design has been converted into six implementation batches with
-explicit RED/GREEN evidence, symbol ownership, caller/visibility constraints, platform process
-tests, rollback points, and documentation closeout. Production and test implementation has not
-started.
+The 2,162-line runner is now a 415-line sole lifecycle orchestrator above four private production
+owners: process I/O 108 lines, watchdog 273, progress 195, and terminal 71. The 1,156-line inline
+test hotspot became a 273-line aggregator plus focused fixtures/lifecycle/progress/terminal/watchdog
+files, all at or below 390 lines. Existing caller paths, effective visibility, lifecycle ordering,
+timeout/cancellation/result precedence, progress validation, supervisor-only signalling, event/log
+values, and product behavior remain unchanged.
 
-Residual risk at planning time: Rust source-boundary assertions can prove physical ownership and
-forbidden imports, but they cannot prove semantic equivalence by themselves. Existing behavior,
-process-tree, progress, terminal, and cross-layer tests remain mandatory after every move. Native
-macOS execution is not available in the current Windows workspace and must remain unverified unless
-the unchanged hosted workflow is run for the implementation commit.
+The characterization-first sequence caught the distinct stdout-reader protocol-error behavior,
+the ownership gate provided an intentional missing-tree RED before a complete GREEN, and behavior
+tests ran after every owner move. Final local gates passed runner 28/28, complete Rust 210/210, App
+583/583, scripts 25/25, lint/build/rustfmt/governance/scope, and Tauri release `--no-bundle`.
+
+Residual risk: source-boundary tests complement rather than replace behavior tests, and the
+unchanged macOS hosted process-group workflow was not run for this implementation commit. Windows
+native process-tree coverage passed; macOS execution therefore remains unverified rather than
+inferred.
 
 ## Context and Orientation
 
@@ -1161,7 +1182,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
 - Modify: `docs/exec-plans/completed/index.md`
 - Move: this plan from `docs/exec-plans/active/` to `docs/exec-plans/completed/`
 
-- [ ] Run focused and complete Rust gates under normal Windows process permissions and record exact
+- [x] Run focused and complete Rust gates under normal Windows process permissions and record exact
   counts:
 
   ```powershell
@@ -1175,7 +1196,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   baseline and require exactly the two planned new tests rather than editing assertions to match a
   failure.
 
-- [ ] Run cross-layer/runtime source regression:
+- [x] Run cross-layer/runtime source regression:
 
   ```powershell
   npm --prefix app test
@@ -1191,7 +1212,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   are not required because protected-scope proof forbids changes in those regions; if scope expands
   into one of them, stop and return to plan review before running substitute gates.
 
-- [ ] Prove the Rust production diff is the exact approved tree:
+- [x] Prove the Rust production diff is the exact approved tree:
 
   ```powershell
   $expectedProduction = @(
@@ -1231,7 +1252,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   test children from the exact production list; the second comparison proves the complete approved
   test tree separately.
 
-- [ ] Prove protected runtime/contract/dependency/workflow scope remains unchanged:
+- [x] Prove protected runtime/contract/dependency/workflow scope remains unchanged:
 
   ```powershell
   git diff --quiet main...HEAD -- app/src-tauri/src/worker_runtime/command.rs app/src-tauri/src/worker_runtime/facade.rs app/src-tauri/src/worker_runtime/result_protocol.rs app/src-tauri/src/worker_runtime/supervisor.rs app/src-tauri/src/worker_runtime/mod.rs app/src-tauri/src/lib.rs app/src-tauri/Cargo.toml app/package.json app/package-lock.json worker contracts server .github/workflows
@@ -1242,23 +1263,25 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   two-constant owner/re-export changes in `progress_event.rs` and `asr_model.rs`; the only non-Rust
   implementation test change is `scripts/tests/unix-process-supervisor-workflow.test.mjs`.
 
-- [ ] Update durable documents to describe `runner.rs` as the sole orchestrator above four private
+- [x] Update durable documents to describe `runner.rs` as the sole orchestrator above four private
   owners, not as one file owning every helper. Preserve `supervisor.rs` signalling,
   result-protocol, validated-progress, structured-result-first, register-before-stdin, and
   finish-before-reader-join language.
 
-- [ ] Update the split design with final line/test evidence and status. Update the audit map and
+- [x] Update the split design with final line/test evidence and status. Update the audit map and
   source-location table to the implemented private tree. Mark the root TASKS item complete only
   after all gates pass.
 
-- [ ] Complete Progress, Surprises, Decision Log, and Outcomes with exact evidence; move this plan
+- [x] Complete Progress, Surprises, Decision Log, and Outcomes with exact evidence; move this plan
   to completed, remove it from the active index, add it to the completed index, and update AGENTS
   from active to completed.
 
-- [ ] Re-run WARN governance, rustfmt, `git diff --check`, protected-scope proof, and clean-status
-  inspection after archival.
+- [x] Re-run WARN governance, rustfmt, `git diff --check`, protected-scope proof, and clean-status
+  inspection after archival. Validation: governance reported 0 errors / 0 warnings; rustfmt and
+  diff checks passed; protected scope remained unchanged; status contained only the intended
+  durable-document and plan-archive changes before the final documentation commit.
 
-- [ ] Native macOS execution is optional for this behavior-neutral move. If the unchanged
+- [x] Native macOS execution is optional for this behavior-neutral move. If the unchanged
   `.github/workflows/unix-process-supervisor.yml` is not run for the implementation commit, record
   macOS process-group execution as unverified residual risk; do not infer it from Windows or the
   Node source test.

@@ -1,8 +1,8 @@
 # Rust Worker Runner Module Split
 
 - Date: 2026-07-23
-- Status: Design approved by the user and reviewed against current code on 2026-07-23;
-  implementation not started
+- Status: Implemented and locally verified on 2026-07-23; completed ExecPlan:
+  `docs/exec-plans/completed/2026-07-23-rust-worker-runner-module-split-plan.md`
 - Scope: behavior-neutral Rust worker-runtime refactor
 - Related designs:
   - `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
@@ -12,9 +12,9 @@
 
 ## Context
 
-`app/src-tauri/src/worker_runtime/runner.rs` is currently 2,162 physical lines. The production
-region occupies lines 1-1,006, followed by a 1,156-line inline test module. The file remains the
-correct single lifecycle owner, but it physically combines four independently reviewable
+Before implementation, `app/src-tauri/src/worker_runtime/runner.rs` was 2,162 physical lines. Its
+production region occupied lines 1-1,006, followed by a 1,156-line inline test module. The file was
+the correct single lifecycle owner, but physically combined four independently reviewable
 responsibilities:
 
 1. child-process and pipe setup, request delivery, and failure cleanup;
@@ -107,8 +107,7 @@ app/src-tauri/src/worker_runtime/
       fixtures.rs
 ```
 
-The exact test subdivision may be reduced if a file would contain only trivial forwarding, but the
-production tree and ownership boundaries are fixed. `runner.rs` declares child modules with
+The exact production and test trees above are implemented. `runner.rs` declares child modules with
 private `mod`, never `pub mod`. Child definitions use the narrowest effective visibility that
 preserves the current surface: private for one owner, `pub(super)` for parent/sibling composition,
 `pub(in crate::worker_runtime)` for the existing worker-runtime test-observed watchdog surface, and
@@ -353,7 +352,7 @@ changes, stop at the last green step and return the difference to design review.
 
 ## Verification
 
-The implementation ExecPlan must include at least:
+The completed implementation ExecPlan ran:
 
 ```text
 cargo test --manifest-path app/src-tauri/Cargo.toml
@@ -372,9 +371,25 @@ only when process permissions allow `taskkill`. Existing macOS process-group tes
 workflow evidence remain authoritative until the unchanged portable fixture is run again on an
 available supported Unix host. A missing host is recorded as unverified, never inferred as passed.
 
+## Implementation Evidence
+
+- Implementation commits: `64d69cb`, `ed97ea7`, `b5ef32f`, `92edd44`, and `d4dca24`.
+- Final physical lines: `runner.rs` 415; `process_io.rs` 108; `watchdog.rs` 273;
+  `progress.rs` 195; `terminal.rs` 71; `tests.rs` 273; `tests/fixtures.rs` 339;
+  `tests/lifecycle.rs` 269; `tests/progress.rs` 35; `tests/terminal.rs` 174; and
+  `tests/watchdog.rs` 390.
+- The source ownership/dependency gate first failed only because the approved private tree was
+  absent, then passed after the complete tree existed.
+- Final local gates passed runner 28/28, complete Rust 210/210, App 65 files / 583 tests, scripts
+  25/25, TypeScript/i18n lint, frontend build, rustfmt, governance 0 errors / 0 warnings, scope and
+  protected-file proofs, and Tauri release `--no-bundle`.
+- Windows process-tree, blocked-stdin, reader-failure, timeout, and second-task-admission fixtures
+  passed with normal process permissions. The unchanged macOS hosted process-group workflow was
+  not run for these implementation commits and remains the recorded residual platform risk.
+
 ## Documentation Impact
 
-The implementation closeout must update:
+The implementation closeout updated:
 
 - `AGENTS.md` with the durable design and completed ExecPlan links;
 - `TASKS.md` with exact test and line-count evidence;
