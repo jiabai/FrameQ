@@ -1,7 +1,8 @@
 # Rust Worker Runner Module Split
 
 - Date: 2026-07-23
-- Status: Design approved by the user on 2026-07-23; implementation not started
+- Status: Design approved by the user and reviewed against current code on 2026-07-23;
+  implementation not started
 - Scope: behavior-neutral Rust worker-runtime refactor
 - Related designs:
   - `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
@@ -108,13 +109,16 @@ app/src-tauri/src/worker_runtime/
 
 The exact test subdivision may be reduced if a file would contain only trivial forwarding, but the
 production tree and ownership boundaries are fixed. `runner.rs` declares child modules with
-private `mod`, never `pub mod`. Child definitions use the minimum `pub(super)` visibility needed
-for root orchestration or sibling composition. No child path becomes an application import
-surface.
+private `mod`, never `pub mod`. Child definitions use the narrowest effective visibility that
+preserves the current surface: private for one owner, `pub(super)` for parent/sibling composition,
+`pub(in crate::worker_runtime)` for the existing worker-runtime test-observed watchdog surface, and
+`pub(crate)` only for items that are already crate-visible, such as `ProgressRoute` and
+`WorkerExitSummary`. No child path becomes an application import surface.
 
 The root remains the source of the existing `super::runner::*` paths used by `facade.rs`,
 `result_protocol.rs`, and `worker_runtime/mod.rs`. A moved type may be privately re-exported from
-the root only when necessary to preserve that exact path and visibility.
+the root only when necessary to preserve that exact path and effective visibility; a re-export must
+not widen it.
 
 ## Responsibility Map
 
@@ -123,8 +127,8 @@ the root only when necessary to preserve that exact path and visibility.
 | `runner.rs` | `WorkerLane`; operation/request/outcome/error surface; lifecycle ordering; instance guard; test-hook composition | OS signalling implementation, command policy, progress parsing details, terminal DTO semantics, application mapping |
 | `runner/process_io.rs` | process-group configuration; `WorkerCommandSpec` spawn; one-shot stdin delivery; stdout/stderr pipe setup helpers; matching-child terminate/reap cleanup helpers | lifecycle phase ordering, watchdog policy, progress validation, terminal classification, application-visible API |
 | `runner/watchdog.rs` | closed timeout policies; deadline selection; validated-activity clock; watchdog control/handle/thread; timeout request retry and safe failure log | cancellation API, direct PID selection, application timers, AI retry, progress payload interpretation |
-| `runner/progress.rs` | `ProgressRoute`; progress protocol/record; stderr reader; prefix parsing; payload validation; safe invalid-event detail; event emission | raw stderr forwarding, terminal result parsing, deadline policy, task/AI semantics |
-| `runner/terminal.rs` | stderr marker; safe start/exit detail; structured-result-first terminal matrix; unstructured exit summary | worker DTO field validation, task-result adaptation, raw error rendering, process cleanup |
+| `runner/progress.rs` | `ProgressRoute`; progress protocol/record; stderr reader and fixed `StderrSummary` marker; prefix parsing; payload validation; safe invalid-event detail; event emission | raw stderr forwarding, terminal result parsing, deadline policy, task/AI semantics |
+| `runner/terminal.rs` | safe start/exit detail; command-runtime diagnostic composition; structured-result-first terminal matrix; unstructured exit summary | worker DTO field validation, task-result adaptation, raw error rendering, process cleanup |
 | `runner/tests.rs` and children | shared test composition, cross-module lifecycle races, platform fixtures, focused owner tests, ownership/dependency gate | production helpers, alternate policies, production configuration |
 
 `process_io.rs` may call the private process-tree termination function defined in
@@ -141,12 +145,18 @@ flowchart TD
   Root --> Watchdog["runner/watchdog.rs"]
   Root --> Progress["runner/progress.rs"]
   Root --> Terminal["runner/terminal.rs"]
+  Root --> Runtime["RuntimePaths / safe diagnostics sink"]
   Process --> Command["command.rs"]
   Process --> Supervisor["supervisor.rs"]
   Watchdog --> Supervisor
+  Watchdog --> Runtime
   Progress --> Validation["progress_event.rs"]
   Progress --> Watchdog
+  Progress --> Runtime
+  Progress --> Tauri["tauri Window / Emitter"]
   Terminal --> Protocol["result_protocol.rs"]
+  Terminal --> Command
+  Terminal --> Progress
   Terminal --> Supervisor
   Tests["runner/tests.rs + focused children"] --> Root
 ```
@@ -155,15 +165,20 @@ Allowed dependencies are:
 
 - application/runtime composition to the stable `runner.rs` surface;
 - root orchestration to the four private children;
+- root orchestration, watchdog, and progress to the existing runtime paths and safe app-local
+  diagnostic sink;
 - process I/O to fixed command specs and supervisor-owned termination;
 - watchdog to instance-bound supervisor timeout requests;
-- progress to the watchdog's narrow activity handle and existing progress validators; and
-- terminal policy to the closed result protocol and the finished supervisor phase.
+- progress to the watchdog's narrow activity handle, existing progress validators, and the current
+  closed Tauri `Window`/`Emitter` routes; and
+- terminal policy to command-runtime diagnostics, the progress reader's fixed stderr summary, the
+  closed result protocol, and the finished supervisor phase.
 
 Private children never import `facade.rs`, `video_processing`, `asr_model`, Tauri command handlers,
 task manifests, account/LLM policy, or each other through the root as a compatibility shortcut.
-`progress.rs -> watchdog.rs` is the only approved direct child-to-child production edge and is
-limited to recording validated activity.
+The approved direct child-to-child production edges are `progress.rs -> watchdog.rs`, limited to
+recording validated activity, and `terminal.rs -> progress.rs`, limited to consuming the fixed
+`StderrSummary`. These edges are one-way and create no cycle.
 
 ## Stable Surface
 
@@ -178,6 +193,11 @@ The refactor preserves these current root-owned or root-exposed items:
 - `WorkerExitSummary`;
 - `WorkerRunOutcome`; and
 - `ProgressRoute` constructors used by the semantic facade/model-download composition.
+
+The current test-observed worker-runtime surface is also preserved:
+`WorkerOperation::watchdog_policy()` and the `WatchdogPolicy` idle/absolute accessors remain usable
+from `facade.rs` tests at their current effective visibility. They may be implemented through a
+narrow root re-export/forwarder, but must not become crate-wide production policy inputs.
 
 Application modules continue to enter the video lane only through
 `VideoWorkerFacade::execute(WorkerJob)` and the model-download lane only through the narrow
@@ -217,7 +237,8 @@ Private extraction must not split this ordering across independently callable ex
 | stdin delivery fails | stop watchdog, clean up the matching child, finish instance; return confirmed cancellation/timeout when that phase won, otherwise `RequestDeliveryFailed` |
 | stdout or stderr pipe is unavailable | stop watchdog, terminate/reap, finish, return fixed `PipeUnavailable` |
 | wait fails | stop watchdog, terminate/reap, finish, join readers, return fixed `WaitFailed` |
-| reader fails or panics | retain terminal outcome and use the fixed safe reader marker; do not echo stderr |
+| stderr reader read fails or panics | retain terminal classification and use the fixed `reader_failed` marker; do not echo stderr |
+| stdout reader read fails or panics | finish the matching lane, return fixed `ProtocolViolation` / `Worker stdout reader failed.`, and do not attempt terminal classification |
 | valid structured stdout exists | return the validated structured result even if cancellation/timeout was claimed concurrently |
 | no structured result and matching phase is cancelling | return `Cancelled` |
 | no structured result and matching phase is timing out | return `TimedOut(Idle\|Absolute)` |
@@ -243,8 +264,13 @@ continues to prevent lane reuse until the matching OS termination call has compl
 - Terminal parsing continues to require exactly one valid UTF-8 JSON line and delegates closed DTO
   semantics to `result_protocol.rs`.
 - `supervisor.rs` remains the only module that constructs and sends OS process-tree signals.
-- Test failure hooks remain available only under `cfg(test)` and cannot become production policy or
-  request fields.
+- A termination target comes only from the matching registered `ProcessInstance`, or from
+  `Child::id()` for the runner-owned child that is synchronously terminated/reaped after lane
+  registration is rejected. A PID/PGID can never come from IPC, worker output, task data, or logs.
+- Fault-injection hooks remain private and callable only through the `#[cfg(test)]`
+  `WorkerLane::run_with_hooks`; no environment variable, request field, IPC command, or production
+  caller can set them. This refactor does not require changing whether zero-valued private hook
+  plumbing is compiled in a non-test build.
 - The split adds no filesystem, network, telemetry, LLM, server, or shell surface.
 
 ## Test Strategy
@@ -259,7 +285,11 @@ tree and intentionally fails because those files do not yet exist. The completed
 - `runner.rs` stays at or below 500 physical lines;
 - no production child exceeds 400 physical lines without renewed design review;
 - application production modules do not import a `runner::*` child path;
-- no child exposes a second `run`, spawn/wait lifecycle, cancellation, or activity entry;
+- no child defines a second `WorkerLane`, complete lifecycle executor, lane cancellation method, or
+  lane `is_active` query; the narrow process-I/O helpers and watchdog activity handle remain
+  private implementation seams;
+- moved items retain exactly their current effective visibility, including the test-observed
+  watchdog policy and crate-visible `ProgressRoute`/`WorkerExitSummary` paths;
 - only `process_io.rs` owns process/pipe helpers;
 - only `watchdog.rs` owns deadline/control/thread behavior;
 - only `progress.rs` owns progress protocol/validation/routing behavior;
@@ -279,8 +309,8 @@ ownership and dependency direction remain the primary gate.
 - `terminal.rs`: structured-result precedence, cancel/timeout ordering, closed terminal matrix,
   protocol violation, safe log detail.
 - lifecycle tests: spawn/register, missing pipe, wait failure, stdin-only request, blocked-stdin
-  cancellation/timeout, finish-before-reader-join, process-tree cleanup, stale instance exclusion,
-  second-task admission, watchdog-start failure.
+  cancellation/timeout, finish-before-reader-join, stderr-reader panic, stdout-reader failure,
+  process-tree cleanup, stale instance exclusion, second-task admission, watchdog-start failure.
 
 Existing behavioral assertions and recognizable test names are preserved where practical. Shared
 platform fixture builders live in `tests/fixtures.rs`; lifecycle, watchdog, progress, and terminal
@@ -290,7 +320,8 @@ single similarly sized external file.
 ## Implementation Order
 
 1. Record baseline line counts, callers, test inventory, and full Rust result in the ExecPlan.
-2. Add the ownership/dependency test and require RED only because the private tree is absent.
+2. Add the missing stdout-reader failure characterization, then add the ownership/dependency test
+   and require RED only because the private tree is absent.
 3. Move watchdog policy/control/thread behavior and its focused tests; run focused Rust tests.
 4. Move progress route/parser/reader behavior and its focused tests; run progress/watchdog tests.
 5. Move terminal classification/safe diagnostics and its focused tests; run terminal tests.
@@ -354,7 +385,8 @@ behavior or contract.
 ### Negative
 
 - The runtime gains four production files plus a test subtree and explicit private seams.
-- Some moved definitions require `pub(super)` or a private root re-export for sibling/root use.
+- Some moved definitions require explicit restricted visibility or a root re-export to preserve
+  their current parent/sibling/crate surface.
 - Source-boundary tests must be maintained when an intentional ownership change is approved.
 
 ### Neutral
@@ -371,9 +403,13 @@ behavior or contract.
 - The approved private production tree and dependency direction are implemented.
 - `runner.rs` remains the only lifecycle orchestrator and is at or below 500 physical lines.
 - No child production module exceeds 400 physical lines without renewed design review.
-- Existing runner-facing types, methods, import paths, callers, and object identities remain
+- Existing runner-facing types, methods, import paths, callers, and Rust type identities remain
   unchanged.
+- Existing effective visibility remains unchanged, including the facade test's watchdog-policy
+  observation and the existing `ProgressRoute` / `WorkerExitSummary` paths.
 - Spawn/register/stdin/read/wait/finish/classify order and every failure/race rule remain unchanged.
+- Stderr reader failure retains terminal classification with a fixed marker; stdout reader failure
+  remains a fixed protocol error after lane finish.
 - Supervisor-only OS signalling, validated-progress-only activity, and safe non-echoing diagnostics
   remain enforced.
 - Characterization and ownership tests record the intended RED-before-move and GREEN-after-split
