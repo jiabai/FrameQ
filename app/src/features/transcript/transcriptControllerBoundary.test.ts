@@ -6,6 +6,7 @@ const sourcePath = (relativePath: string) =>
   fileURLToPath(new URL(relativePath, import.meta.url));
 const readSource = (relativePath: string) =>
   readFileSync(sourcePath(relativePath), "utf8");
+const physicalLines = (source: string) => source.split(/\r?\n/).length;
 
 describe("frontend transcript controller ownership", () => {
   test("matches the approved private owners and stable consumer surface", () => {
@@ -46,6 +47,12 @@ describe("frontend transcript controller ownership", () => {
     expect(review).not.toContain("saveTranscriptEdit");
     expect(review).not.toContain("revealItemInDir");
 
+    for (const child of [artifact, document, review]) {
+      expect(child).not.toMatch(
+        /from ["'][^"']*use(?:ArtifactDetailController|TranscriptDocumentController|TranscriptReviewSession)["']/,
+      );
+    }
+
     const consumers = [
       "../../App.tsx",
       "./LocalTranscriptWorkspace.tsx",
@@ -58,5 +65,13 @@ describe("frontend transcript controller ownership", () => {
       expect(source).not.toContain("useTranscriptReviewSession");
       expect(source).not.toContain("useArtifactDetailController");
     }
+
+    expect(root).toMatch(
+      /export type TranscriptDetailController\s*=\s*ReturnType<\s*typeof useTranscriptDetailController\s*>/,
+    );
+    expect(physicalLines(root)).toBeLessThanOrEqual(200);
+    expect(physicalLines(artifact)).toBeLessThanOrEqual(250);
+    expect(physicalLines(document)).toBeLessThanOrEqual(250);
+    expect(physicalLines(review)).toBeLessThanOrEqual(250);
   });
 });

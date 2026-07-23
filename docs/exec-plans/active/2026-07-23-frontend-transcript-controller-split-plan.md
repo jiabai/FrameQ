@@ -75,6 +75,12 @@ transcript-detail module, introduce a nested public controller API, or add a new
   review reset and save continuation in the facade. Validation: focused facade 1 file / 18 tests
   and App lint passed; the intentional ownership RED advanced to the final missing owner,
   `useTranscriptReviewSession.ts`.
+- [x] 2026-07-23: Proved the cross-task pending-resume defect with a focused RED, then extracted
+  task-scoped audio/edit state into `useTranscriptReviewSession` and reset ephemeral resume intent
+  on review identity changes. Validation: regression 1/1, facade 1 file / 19 tests, ownership 1
+  file / 1 test, and App lint passed. Boundary-test physical sizes are facade 126, artifact owner
+  139, document owner 199, and review owner 250 lines. The protected App, presentation, client,
+  Tauri, worker, server, and contract diff is empty.
 
 ## Surprises & Discoveries
 
@@ -866,7 +872,7 @@ git commit -m "refactor(app): extract transcript document state"
 - Modify: `app/src/features/transcript/transcriptControllerBoundary.test.ts`
 - Test: `app/src/features/transcript/useTranscriptDetailController.test.ts`
 
-- [ ] **Step 1: Write the task-switch resume-intent regression and verify RED**
+- [x] **Step 1: Write the task-switch resume-intent regression and verify RED**
 
 Add `clears pending audio resume when the review task changes`. Begin editing task A while its audio
 double reports `paused: false`, switch the mutable harness to a loaded task B, attach a task-B audio
@@ -888,7 +894,7 @@ Expected: FAIL because the current root does not reset
 `resumeTranscriptAfterSaveRef.current` when task identity changes and therefore attempts to play the
 task-B audio double.
 
-- [ ] **Step 2: Create the review-session owner and task-scoped reset**
+- [x] **Step 2: Create the review-session owner and task-scoped reset**
 
 Use this closed input shape:
 
@@ -934,7 +940,7 @@ useEffect(() => {
 Keep the separate `transcriptAudioSrc` effect for current-time/duration/playing reset and playback
 rate. This closes the stale resume-intent gap recorded in Surprises.
 
-- [ ] **Step 3: Implement successful-save completion**
+- [x] **Step 3: Implement successful-save completion**
 
 ```ts
 const completeSuccessfulSave = useCallback(async () => {
@@ -953,7 +959,7 @@ const completeSuccessfulSave = useCallback(async () => {
 `endTranscriptSegmentEdit` and matching-task deletion preparation must continue clearing pending
 resume intent before later saves.
 
-- [ ] **Step 4: Complete the stable facade composition**
+- [x] **Step 4: Complete the stable facade composition**
 
 Derive review identity and compose the hooks:
 
@@ -984,7 +990,7 @@ const saveTranscriptDraft = useCallback(
 Return the exact characterized public keys explicitly. Do not spread the private
 `saveTranscriptDocument` or `completeSuccessfulSave` actions into the public controller.
 
-- [ ] **Step 5: Complete the source-boundary size assertions**
+- [x] **Step 5: Complete the source-boundary size assertions**
 
 Extend the boundary test with:
 
@@ -999,7 +1005,7 @@ expect(physicalLines(review)).toBeLessThanOrEqual(250);
 Also require `TranscriptDetailController` to remain derived from
 `ReturnType<typeof useTranscriptDetailController>`.
 
-- [ ] **Step 6: Turn the ownership RED GREEN**
+- [x] **Step 6: Turn the ownership RED GREEN**
 
 ```powershell
 npm.cmd --prefix app test -- src/features/transcript/transcriptControllerBoundary.test.ts
@@ -1010,7 +1016,7 @@ npm.cmd --prefix app run lint
 Expected: boundary, facade behavior, and TypeScript/i18n lint all pass. Record exact test totals and
 measured file sizes in Progress.
 
-- [ ] **Step 7: Review protected production scope**
+- [x] **Step 7: Review protected production scope**
 
 Run:
 
@@ -1021,7 +1027,7 @@ git diff 8499bac -- app\src\App.tsx app\src\features\transcript\LocalTranscriptW
 Expected: no diff. Stop if any protected consumer, IPC, Rust, worker, server, or contract file
 changed.
 
-- [ ] **Step 8: Commit the completed module tree**
+- [x] **Step 8: Commit the completed module tree**
 
 ```powershell
 git add app\src\features\transcript\useTranscriptDetailController.ts app\src\features\transcript\useTranscriptReviewSession.ts app\src\features\transcript\transcriptControllerBoundary.test.ts

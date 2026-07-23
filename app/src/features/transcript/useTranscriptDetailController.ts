@@ -1,37 +1,24 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import {
-  type ChangeEvent,
-  type CSSProperties,
   type Dispatch,
   type SetStateAction,
   useCallback,
-  useEffect,
-  useRef,
-  useState,
 } from "react";
 
-import type { WorkflowState } from "../../workflow";
-import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { SupportedLocale } from "../../i18n/locale";
-import {
-  type SaveTranscriptEditResponse,
-  type TranscriptSegment,
-} from "../../transcriptDetailClient";
-import {
-  findActiveTranscriptSegmentId,
-  shouldPauseActiveTranscriptSegment,
-} from "../../transcriptReviewState";
-import {
-  audioProgressPercent,
-  clampAudioTime,
-} from "../../audioReviewBarState";
+import type { UiMessage } from "../../i18n/uiMessage";
+import type { SaveTranscriptEditResponse } from "../../transcriptDetailClient";
+import type { WorkflowState } from "../../workflow";
 import { useArtifactDetailController } from "../results/useArtifactDetailController";
 import { useTranscriptDocumentController } from "./useTranscriptDocumentController";
+import { useTranscriptReviewSession } from "./useTranscriptReviewSession";
 
 type UseTranscriptDetailControllerOptions = {
   workflow: WorkflowState;
   locale: SupportedLocale;
-  applyTranscriptSave: (expectedTaskId: string | null, saved: SaveTranscriptEditResponse) => void;
+  applyTranscriptSave: (
+    expectedTaskId: string | null,
+    saved: SaveTranscriptEditResponse,
+  ) => void;
   setActionNotice: Dispatch<SetStateAction<UiMessage | null>>;
 };
 
@@ -46,279 +33,93 @@ export function useTranscriptDetailController({
     applyTranscriptSave,
     setActionNotice,
   });
-  const {
-    transcriptDetail,
-    transcriptDraft,
-    transcriptSegments,
-    transcriptDirty,
-    transcriptLoading,
-    transcriptSaving,
-    updateTranscriptSegmentDraft,
-    updateFullTranscriptDraft,
-  } = transcriptDocument;
-  const [activeTranscriptSegmentId, setActiveTranscriptSegmentId] = useState<string | null>(null);
-  const [editingTranscriptSegmentId, setEditingTranscriptSegmentId] = useState<string | null>(null);
-  const [transcriptAudioCurrentTime, setTranscriptAudioCurrentTime] = useState(0);
-  const [transcriptAudioDuration, setTranscriptAudioDuration] = useState(0);
-  const [transcriptAudioPlaying, setTranscriptAudioPlaying] = useState(false);
-  const transcriptAudioRef = useRef<HTMLAudioElement | null>(null);
-  const transcriptSegmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const resumeTranscriptAfterSaveRef = useRef(false);
-
-  const {
-    detailTab,
-    openDetailTab,
-    closeDetail,
-    detailText,
-    exportPath,
-    currentTranscriptPath,
-    copyDetail,
-    copyTranscript,
-    exportDetail,
-    exportTranscript,
-  } = useArtifactDetailController({
+  const artifactDetail = useArtifactDetailController({
     workflow,
     locale,
-    transcriptDraft,
-    transcriptDirty,
+    transcriptDraft: transcriptDocument.transcriptDraft,
+    transcriptDirty: transcriptDocument.transcriptDirty,
     setActionNotice,
   });
-
-  useEffect(() => {
-    setActiveTranscriptSegmentId(null);
-    setEditingTranscriptSegmentId(null);
-  }, [workflow.artifacts.transcript_txt, workflow.taskId]);
-
-  useEffect(() => {
-    if (!activeTranscriptSegmentId) {
-      return;
-    }
-    transcriptSegmentRefs.current[activeTranscriptSegmentId]?.scrollIntoView({
-      block: "nearest",
-      behavior: "smooth",
-    });
-  }, [activeTranscriptSegmentId]);
-
-  const transcriptAudioSrc = transcriptDetail?.audio_asset_path
-    ? convertFileSrc(transcriptDetail.audio_asset_path)
-    : "";
-  const transcriptAudioProgress = audioProgressPercent(transcriptAudioCurrentTime, transcriptAudioDuration);
-  const transcriptAudioScrubberMax =
-    transcriptAudioDuration > 0 ? transcriptAudioDuration : Math.max(transcriptAudioCurrentTime, 1);
-  const transcriptAudioScrubberStyle = {
-    "--audio-progress": `${transcriptAudioProgress}%`,
-  } as CSSProperties;
-  const hasTranscriptSegments = transcriptSegments.length > 0;
-
-  useEffect(() => {
-    setTranscriptAudioCurrentTime(0);
-    setTranscriptAudioDuration(0);
-    setTranscriptAudioPlaying(false);
-    if (transcriptAudioRef.current) {
-      transcriptAudioRef.current.playbackRate = 1;
-    }
-  }, [transcriptAudioSrc]);
-
-  const playTranscriptSegment = useCallback(
-    async (segment: TranscriptSegment) => {
-      if (editingTranscriptSegmentId) {
-        return;
-      }
-
-      const audio = transcriptAudioRef.current;
-      if (!audio || !transcriptDetail?.audio_asset_path) {
-        setActiveTranscriptSegmentId(segment.id);
-        setActionNotice(uiMessage("transcript.notice.audioUnavailable"));
-        return;
-      }
-
-      if (shouldPauseActiveTranscriptSegment(activeTranscriptSegmentId, segment.id, !audio.paused)) {
-        audio.pause();
-        setTranscriptAudioPlaying(false);
-        return;
-      }
-
-      setActiveTranscriptSegmentId(segment.id);
-      audio.currentTime = segment.start_ms / 1000;
-      audio.playbackRate = 1;
-      setTranscriptAudioCurrentTime(audio.currentTime);
-      try {
-        await audio.play();
-      } catch {
-        setActionNotice(uiMessage("transcript.notice.audioAutoplayFailed"));
-      }
-    },
-    [activeTranscriptSegmentId, editingTranscriptSegmentId, setActionNotice, transcriptDetail?.audio_asset_path],
-  );
-
-  const syncTranscriptAudioState = useCallback((audio: HTMLAudioElement) => {
-    const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-    setTranscriptAudioDuration(duration);
-    setTranscriptAudioCurrentTime(clampAudioTime(audio.currentTime, duration));
-  }, []);
-
-  const handleTranscriptAudioMetadata = useCallback(() => {
-    const audio = transcriptAudioRef.current;
-    if (!audio) {
-      return;
-    }
-    audio.playbackRate = 1;
-    syncTranscriptAudioState(audio);
-  }, [syncTranscriptAudioState]);
-
-  const handleTranscriptTimeUpdate = useCallback(() => {
-    const audio = transcriptAudioRef.current;
-    if (!audio) {
-      return;
-    }
-    syncTranscriptAudioState(audio);
-    if (!editingTranscriptSegmentId) {
-      const activeId = findActiveTranscriptSegmentId(transcriptSegments, audio.currentTime);
-      if (activeId) {
-        setActiveTranscriptSegmentId(activeId);
-      }
-    }
-  }, [editingTranscriptSegmentId, syncTranscriptAudioState, transcriptSegments]);
-
-  const toggleTranscriptAudio = useCallback(async () => {
-    const audio = transcriptAudioRef.current;
-    if (!audio || !transcriptDetail?.audio_asset_path) {
-      setActionNotice(uiMessage("transcript.notice.audioUnavailable"));
-      return;
-    }
-
-    if (!audio.paused) {
-      audio.pause();
-      return;
-    }
-
-    audio.playbackRate = 1;
-    try {
-      await audio.play();
-    } catch {
-      setActionNotice(uiMessage("transcript.notice.audioPlaybackFailed"));
-    }
-  }, [setActionNotice, transcriptDetail?.audio_asset_path]);
-
-  const scrubTranscriptAudio = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const audio = transcriptAudioRef.current;
-      const nextTime = clampAudioTime(event.currentTarget.valueAsNumber, transcriptAudioDuration);
-      if (audio) {
-        audio.currentTime = nextTime;
-      }
-      setTranscriptAudioCurrentTime(nextTime);
-      if (!editingTranscriptSegmentId) {
-        const activeId = findActiveTranscriptSegmentId(transcriptSegments, nextTime);
-        if (activeId) {
-          setActiveTranscriptSegmentId(activeId);
-        }
-      }
-    },
-    [editingTranscriptSegmentId, transcriptAudioDuration, transcriptSegments],
-  );
-
-  const beginTranscriptSegmentEdit = useCallback((segmentId: string) => {
-    const audio = transcriptAudioRef.current;
-    if (audio && !audio.paused) {
-      resumeTranscriptAfterSaveRef.current = true;
-      audio.pause();
-    }
-    setEditingTranscriptSegmentId(segmentId);
-    setActiveTranscriptSegmentId(segmentId);
-  }, []);
-
-  const endTranscriptSegmentEdit = useCallback(() => {
-    resumeTranscriptAfterSaveRef.current = false;
-    setEditingTranscriptSegmentId(null);
-  }, []);
-
-  const completeSuccessfulSave = useCallback(async () => {
-    setEditingTranscriptSegmentId(null);
-    if (resumeTranscriptAfterSaveRef.current && transcriptAudioRef.current) {
-      resumeTranscriptAfterSaveRef.current = false;
-      try {
-        await transcriptAudioRef.current.play();
-      } catch {
-        setActionNotice(uiMessage("transcript.notice.savedAutoplayFailed"));
-      }
-    }
-  }, [setActionNotice]);
-
+  const reviewTaskId =
+    workflow.taskId && workflow.artifacts.transcript_txt
+      ? workflow.taskId
+      : null;
+  const transcriptReview = useTranscriptReviewSession({
+    reviewTaskId,
+    audioAssetPath:
+      transcriptDocument.transcriptDetail?.audio_asset_path ?? null,
+    transcriptSegments: transcriptDocument.transcriptSegments,
+    setActionNotice,
+  });
   const saveTranscriptDraft = useCallback(
     () =>
-      transcriptDocument.saveTranscriptDocument(completeSuccessfulSave),
-    [completeSuccessfulSave, transcriptDocument.saveTranscriptDocument],
-  );
-
-  const handleTranscriptAudioPlay = useCallback(() => {
-    setTranscriptAudioPlaying(true);
-  }, []);
-
-  const handleTranscriptAudioPause = useCallback(() => {
-    setTranscriptAudioPlaying(false);
-  }, []);
-
-  const prepareTranscriptForTaskDeletion = useCallback(
-    (expectedTaskId: string) => {
-      if (!workflow.taskId || workflow.taskId !== expectedTaskId) {
-        return;
-      }
-      resumeTranscriptAfterSaveRef.current = false;
-      const audio = transcriptAudioRef.current;
-      if (audio) {
-        audio.pause();
-        audio.removeAttribute("src");
-        audio.load();
-      }
-      setTranscriptAudioPlaying(false);
-    },
-    [workflow.taskId],
+      transcriptDocument.saveTranscriptDocument(
+        transcriptReview.completeSuccessfulSave,
+      ),
+    [
+      transcriptDocument.saveTranscriptDocument,
+      transcriptReview.completeSuccessfulSave,
+    ],
   );
 
   return {
-    detailTab,
-    openDetailTab,
-    closeDetail,
-    detailText,
-    exportPath,
-    currentTranscriptPath,
-    transcriptDetail,
-    transcriptDraft,
-    transcriptSegments,
-    transcriptDirty,
-    transcriptLoading,
-    transcriptSaving,
-    activeTranscriptSegmentId,
-    editingTranscriptSegmentId,
-    transcriptAudioCurrentTime,
-    transcriptAudioDuration,
-    transcriptAudioPlaying,
-    transcriptAudioRef,
-    transcriptSegmentRefs,
-    transcriptAudioSrc,
-    transcriptAudioProgress,
-    transcriptAudioScrubberMax,
-    transcriptAudioScrubberStyle,
-    hasTranscriptSegments,
-    copyDetail,
-    copyTranscript,
-    exportDetail,
-    exportTranscript,
+    detailTab: artifactDetail.detailTab,
+    openDetailTab: artifactDetail.openDetailTab,
+    closeDetail: artifactDetail.closeDetail,
+    detailText: artifactDetail.detailText,
+    exportPath: artifactDetail.exportPath,
+    currentTranscriptPath: artifactDetail.currentTranscriptPath,
+    transcriptDetail: transcriptDocument.transcriptDetail,
+    transcriptDraft: transcriptDocument.transcriptDraft,
+    transcriptSegments: transcriptDocument.transcriptSegments,
+    transcriptDirty: transcriptDocument.transcriptDirty,
+    transcriptLoading: transcriptDocument.transcriptLoading,
+    transcriptSaving: transcriptDocument.transcriptSaving,
+    activeTranscriptSegmentId:
+      transcriptReview.activeTranscriptSegmentId,
+    editingTranscriptSegmentId:
+      transcriptReview.editingTranscriptSegmentId,
+    transcriptAudioCurrentTime:
+      transcriptReview.transcriptAudioCurrentTime,
+    transcriptAudioDuration: transcriptReview.transcriptAudioDuration,
+    transcriptAudioPlaying: transcriptReview.transcriptAudioPlaying,
+    transcriptAudioRef: transcriptReview.transcriptAudioRef,
+    transcriptSegmentRefs: transcriptReview.transcriptSegmentRefs,
+    transcriptAudioSrc: transcriptReview.transcriptAudioSrc,
+    transcriptAudioProgress: transcriptReview.transcriptAudioProgress,
+    transcriptAudioScrubberMax:
+      transcriptReview.transcriptAudioScrubberMax,
+    transcriptAudioScrubberStyle:
+      transcriptReview.transcriptAudioScrubberStyle,
+    hasTranscriptSegments: transcriptReview.hasTranscriptSegments,
+    copyDetail: artifactDetail.copyDetail,
+    copyTranscript: artifactDetail.copyTranscript,
+    exportDetail: artifactDetail.exportDetail,
+    exportTranscript: artifactDetail.exportTranscript,
     saveTranscriptDraft,
-    playTranscriptSegment,
-    handleTranscriptAudioMetadata,
-    handleTranscriptTimeUpdate,
-    handleTranscriptAudioPlay,
-    handleTranscriptAudioPause,
-    toggleTranscriptAudio,
-    scrubTranscriptAudio,
-    beginTranscriptSegmentEdit,
-    endTranscriptSegmentEdit,
-    prepareTranscriptForTaskDeletion,
-    updateTranscriptSegmentDraft,
-    updateFullTranscriptDraft,
+    playTranscriptSegment: transcriptReview.playTranscriptSegment,
+    handleTranscriptAudioMetadata:
+      transcriptReview.handleTranscriptAudioMetadata,
+    handleTranscriptTimeUpdate:
+      transcriptReview.handleTranscriptTimeUpdate,
+    handleTranscriptAudioPlay:
+      transcriptReview.handleTranscriptAudioPlay,
+    handleTranscriptAudioPause:
+      transcriptReview.handleTranscriptAudioPause,
+    toggleTranscriptAudio: transcriptReview.toggleTranscriptAudio,
+    scrubTranscriptAudio: transcriptReview.scrubTranscriptAudio,
+    beginTranscriptSegmentEdit:
+      transcriptReview.beginTranscriptSegmentEdit,
+    endTranscriptSegmentEdit: transcriptReview.endTranscriptSegmentEdit,
+    prepareTranscriptForTaskDeletion:
+      transcriptReview.prepareTranscriptForTaskDeletion,
+    updateTranscriptSegmentDraft:
+      transcriptDocument.updateTranscriptSegmentDraft,
+    updateFullTranscriptDraft:
+      transcriptDocument.updateFullTranscriptDraft,
   };
 }
 
-export type TranscriptDetailController = ReturnType<typeof useTranscriptDetailController>;
+export type TranscriptDetailController = ReturnType<
+  typeof useTranscriptDetailController
+>;

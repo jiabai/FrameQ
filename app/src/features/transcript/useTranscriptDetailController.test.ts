@@ -507,6 +507,53 @@ describe("useTranscriptDetailController segment editing", () => {
     expect(taskBAudio.play).not.toHaveBeenCalled();
   });
 
+  test("clears pending audio resume when the review task changes", async () => {
+    const { render, setWorkflow } = await createController();
+    let controller = render();
+    const taskAAudio = {
+      currentTime: 0,
+      duration: 3,
+      paused: false,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 1,
+    };
+    controller.transcriptAudioRef.current =
+      taskAAudio as unknown as HTMLAudioElement;
+    controller.beginTranscriptSegmentEdit("segment-1");
+
+    mocks.loadTranscriptDetail.mockResolvedValueOnce(
+      detailResponse("task-b", "任务 B 文字稿"),
+    );
+    setWorkflow(readyWorkflow("task-b", "任务 B 文字稿"));
+    await vi.waitFor(() =>
+      expect(render().transcriptDetail?.task_id).toBe("task-b")
+    );
+    controller = render();
+    const taskBAudio = {
+      currentTime: 0,
+      duration: 3,
+      paused: true,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 1,
+    };
+    controller.transcriptAudioRef.current =
+      taskBAudio as unknown as HTMLAudioElement;
+    controller.beginTranscriptSegmentEdit("segment-1");
+    controller = render();
+    controller.updateTranscriptSegmentDraft("segment-1", "任务 B 保存");
+    mocks.saveTranscriptEdit.mockResolvedValueOnce(
+      savedResponse("task-b", "任务 B 保存"),
+    );
+    controller = render();
+    await controller.saveTranscriptDraft();
+
+    expect(taskAAudio.pause).toHaveBeenCalledOnce();
+    expect(taskBAudio.play).not.toHaveBeenCalled();
+    expect(render().transcriptDirty).toBe(false);
+  });
+
   test("resumes audio after a successful save started from segment editing", async () => {
     const { render, applyTranscriptSave } = await createController();
     let controller = render();
