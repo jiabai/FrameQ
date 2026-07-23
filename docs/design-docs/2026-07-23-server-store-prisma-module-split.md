@@ -1,8 +1,9 @@
 # Server Store / PrismaStore Module Split
 
 - Date: 2026-07-23
-- Status: Design approved by the user on 2026-07-23; implementation not started
+- Status: Design approved by the user on 2026-07-23; ExecPlan drafted; implementation not started
 - Scope: behavior-neutral TypeScript server persistence refactor
+- ExecPlan: `docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md`
 - Related designs:
   - `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`
   - `docs/design-docs/2026-07-21-server-route-module-split.md`
@@ -199,8 +200,9 @@ The following remain unchanged:
 - `MemoryStore` and `PrismaStore` constructor behavior;
 - `MemoryStore` public arrays and `llmConfig` field;
 - current class methods outside `Store`;
-- subclass overrides of `createSession`, `createDesktopLoginTicket`, `markOrderPaid`,
-  `upsertEntitlement`, and `createAdminEntitlementAdjustment`;
+- all current internal calls through `this.<publicMethod>`, including the tested subclass overrides
+  of `createSession`, `createDesktopLoginTicket`, `markOrderPaid`, `upsertEntitlement`, and
+  `createAdminEntitlementAdjustment`;
 - `ServerDependencies.store`;
 - production construction through `new PrismaStore(prisma)`; and
 - test construction through `new MemoryStore()` or `new PrismaStore(prisma)`.
@@ -293,6 +295,8 @@ same database writes on its own transaction client.
 ```mermaid
 flowchart TD
   Index["index.ts"] --> PrismaRoot["prismaStore.ts"]
+  Index --> Database["database.ts"]
+  Database --> PrismaSdk["@prisma/client"]
   Server["server.ts"] --> ContractRoot["store.ts"]
   Consumers["services / route helpers"] --> Narrow["consumer-owned Pick&lt;Store, ...&gt;"]
   Narrow --> Contracts["store/contracts.ts"]
@@ -303,6 +307,11 @@ flowchart TD
   PrismaRoot --> PrismaBilling["prismaStore/billing.ts"]
   PrismaRoot --> PrismaEntitlements["prismaStore/entitlements.ts"]
   PrismaRoot --> PrismaConfig["prismaStore/llmConfig.ts"]
+  PrismaRoot --> PrismaSdk
+  PrismaAuth --> PrismaSdk
+  PrismaBilling --> PrismaSdk
+  PrismaEntitlements --> PrismaSdk
+  PrismaConfig --> PrismaSdk
   PrismaAuth --> Concurrency["prismaStore/concurrency.ts"]
   PrismaEntitlements --> Concurrency
   MemoryRoot --> Atomic["store/memory/atomic.ts"]
@@ -315,6 +324,7 @@ flowchart TD
 Allowed dependencies are:
 
 - composition and consumers to the stable contract root or type-only narrow ports;
+- `database.ts` to `@prisma/client` for process-level client lifecycle/readiness only;
 - stable adapter roots to their private operation modules;
 - private operation modules to `store/contracts.ts`, existing `security.ts`, and their backend;
 - Prisma authentication/entitlement operations to the private concurrency owner; and
@@ -427,12 +437,15 @@ only because the private files do not yet exist. The completed gate proves:
 - only `store.ts` exports the official contracts and `MemoryStore` path;
 - only `prismaStore.ts` exports `PrismaStore`;
 - application production code imports no private child;
-- only `prismaStore.ts` and its private Prisma tree import `@prisma/client`;
+- only the existing infrastructure owner `database.ts`, `prismaStore.ts`, and its private Prisma
+  tree import `@prisma/client`; `database.ts` remains limited to client lifecycle/readiness and does
+  not own Store transactions;
 - only `prismaStore/concurrency.ts` owns retry/error/rate-limit SQL helpers;
 - every semantic transaction is implemented by exactly one approved backend owner;
 - no service or route outside the `server.ts` composition root accepts the full Store when its
   approved narrow port is sufficient;
-- no private child exports a Store class, repository, Unit of Work, or generic transaction callback;
+- no private child exposes a Store class, repository, Unit of Work, or generic transaction callback
+  to application consumers; the approved Memory atomic coordinator remains private-tree-only;
   and
 - private dependency edges match this design and contain no cycle through a stable root.
 

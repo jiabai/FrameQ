@@ -136,8 +136,9 @@
   atomic/concurrency owners; narrow each service/route helper with consumer-owned type-only Store
   capabilities; add no public repository, Unit of Work, generic transaction callback, dependency,
   schema/product behavior, or production-readiness claim. Design:
-  `docs/design-docs/2026-07-23-server-store-prisma-module-split.md`. Implementation and ExecPlan
-  have not started.
+  `docs/design-docs/2026-07-23-server-store-prisma-module-split.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md`. Implementation is
+  intentionally pending ExecPlan review and explicit approval.
 
 - [x] Split the Rust worker runner by private responsibility (completed 2026-07-23) — ✅
   Acceptance: preserve `runner.rs` as the sole `WorkerLane` lifecycle orchestrator and preserve
