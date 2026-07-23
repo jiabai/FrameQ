@@ -1,12 +1,13 @@
 # Frontend Transcript Detail Controller Split
 
 **Date:** 2026-07-23
-**Status:** User-approved design boundary; awaiting written-design review before implementation planning
+**Status:** Approved for implementation planning on 2026-07-23
 
 ## Context
 
 `app/src/features/transcript/useTranscriptDetailController.ts` is a 509-line React hook with a
-stable public role but several private responsibilities. It currently owns:
+stable public role, 12 state cells, 5 refs, 3 effects, and several private responsibilities. It
+currently owns:
 
 - the shared task-result detail tab used by summary, insights, and the legacy transcript detail
   projection;

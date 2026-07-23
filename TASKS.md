@@ -2,6 +2,14 @@
 
 ## Active UI Work
 
+- [ ] Split the frontend transcript-detail controller by responsibility (2026-07-23) — ✅
+  Acceptance: preserve the existing flat `TranscriptDetailController` surface and all App/view
+  consumers while extracting private artifact-detail, task-document, and audio-review owners;
+  retain stale task guards, edit/playback/save/deletion semantics, fixed localized notices, IPC,
+  paths, and local-first security boundaries. Design:
+  `docs/design-docs/2026-07-23-frontend-transcript-controller-split.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-23-frontend-transcript-controller-split-plan.md`.
+
 - [x] Close broad-release atomic persistence blocker (2026-07-22) — ✅ Acceptance: every
   authoritative transcript, AI, preference, manifest, and Rust transcript-edit file uses reviewed
   same-directory atomic replacement; existing-task multi-file updates recover through the closed
