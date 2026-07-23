@@ -119,6 +119,15 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   11/11; complete non-boundary suite 145 passed / one Windows skip; TypeScript build passed; and
   source search found every protected concurrency definition only in `concurrency.ts`. The
   ownership RED now reports only the three intentionally absent Prisma capability owners.
+- [x] 2026-07-23: Task 6 completed the Prisma adapter behind its stable class. Final sizes:
+  `prismaStore.ts` 269, `auth.ts` 391, `billing.ts` 256, `concurrency.ts` 175,
+  `entitlements.ts` 309, and `llmConfig.ts` 22 physical lines. Validation: billing 2/2; activation
+  4/4; LLM quota/config 10/10; Prisma concurrency 13/13; Prisma transaction safety 9/9; admin 5/5;
+  routes 11/11; compatibility 3/3; complete non-boundary suite 145 passed / one Windows skip;
+  TypeScript build and `git diff --check` passed. The full ownership gate passed exact trees, line
+  limits, stable exports, private dependencies, concurrency ownership, all eight semantic owners,
+  and transaction-client placement before reaching the expected first consumer-capability RED in
+  `activation.ts`.
 
 ## Surprises & Discoveries
 
@@ -964,7 +973,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - Create: `server/src/prismaStore/llmConfig.ts`
 - Modify: `server/src/prismaStore.ts`
 
-- [ ] Move the exact current Prisma bodies by this closed map:
+- [x] Move the exact current Prisma bodies by this closed map:
 
   | Owner | Methods and transaction-local helpers |
   |---|---|
@@ -975,7 +984,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Keep each complete semantic transaction in one file. Billing may write entitlement rows inside
   its own transaction; it must not call an independently committed public entitlement operation.
 
-- [ ] Keep `PrismaStore` below 350 lines as the only exported class and delegate every remaining
+- [x] Keep `PrismaStore` below 350 lines as the only exported class and delegate every remaining
   method directly:
 
   ```ts
@@ -998,7 +1007,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   The root contains no SQL, conflict classification, transaction body, payment matching, quota
   arithmetic, or configuration mutation.
 
-- [ ] Run each capability's behavior and rollback tests immediately after moving it:
+- [x] Run each capability's behavior and rollback tests immediately after moving it:
 
   ```powershell
   npm --prefix server test -- --run billing
@@ -1019,7 +1028,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   adjustment audit atomicity, quota/event conditional writes, configuration behavior, and all
   adapter surfaces are unchanged.
 
-- [ ] Run the ownership test after the full private tree exists:
+- [x] Run the ownership test after the full private tree exists:
 
   ```powershell
   npm --prefix server test -- --run storeModuleBoundaries
@@ -1029,7 +1038,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   helpers still declare the full Store. Any line-limit, export, import, ownership, cycle, or
   transaction-client failure must be fixed before Task 7.
 
-- [ ] Record sizes and evidence, then create the authorized complete-adapter checkpoint:
+- [x] Record sizes and evidence, then create the authorized complete-adapter checkpoint:
 
   ```powershell
   git add server/src/prismaStore.ts server/src/prismaStore docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md

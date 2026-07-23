@@ -11,7 +11,6 @@ import type {
   UserRecord,
 } from "../contracts.js";
 import type { MemoryAtomicCoordinator, MemoryState } from "./atomic.js";
-
 export type MemoryAuthContext = {
   state: MemoryState;
   atomic: MemoryAtomicCoordinator;
