@@ -136,8 +136,9 @@
   Add characterization and an exact ownership/dependency RED/GREEN gate before moving production
   code; add no public lifecycle entry, facade/state-machine framework, dependency, contract, product
   behavior, local-media runtime, or platform-evidence claim. Design:
-  `docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`. ExecPlan and implementation are
-  intentionally pending design-document review.
+  `docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-23-rust-worker-runner-module-split-plan.md`. Implementation is
+  intentionally pending ExecPlan review and explicit approval.
 
 - [x] Split the Python worker pipeline by responsibility (2026-07-21) — ✅ Acceptance: keep
   `frameq_worker.pipeline` as the sole stable production import surface and direct-reexport the

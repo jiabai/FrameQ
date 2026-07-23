@@ -120,6 +120,14 @@ The root remains the source of the existing `super::runner::*` paths used by `fa
 the root only when necessary to preserve that exact path and effective visibility; a re-export must
 not widen it.
 
+The current runner reaches through `asr_model.rs` for
+`ASR_MODEL_DOWNLOAD_EVENT_NAME` and `MODEL_DOWNLOAD_EVENT_PREFIX`. Before progress parsing moves,
+those two existing transport constants move unchanged to `progress_event.rs`, their natural shared
+protocol owner. `asr_model.rs` re-exports them at the existing crate-visible path so current tests
+and model-download behavior remain unchanged. The new `runner/progress.rs` imports the validators
+and constants only from `progress_event.rs`; it does not gain an application-layer dependency or
+duplicate event strings.
+
 ## Responsibility Map
 
 | Owner | Owns | Must not own |
@@ -130,6 +138,7 @@ not widen it.
 | `runner/progress.rs` | `ProgressRoute`; progress protocol/record; stderr reader and fixed `StderrSummary` marker; prefix parsing; payload validation; safe invalid-event detail; event emission | raw stderr forwarding, terminal result parsing, deadline policy, task/AI semantics |
 | `runner/terminal.rs` | safe start/exit detail; command-runtime diagnostic composition; structured-result-first terminal matrix; unstructured exit summary | worker DTO field validation, task-result adaptation, raw error rendering, process cleanup |
 | `runner/tests.rs` and children | shared test composition, cross-module lifecycle races, platform fixtures, focused owner tests, ownership/dependency gate | production helpers, alternate policies, production configuration |
+| `progress_event.rs` | existing worker/model progress validators plus the unchanged model-download event name and prefix | runner lifecycle, model-download product mapping, Tauri commands |
 
 `process_io.rs` may call the private process-tree termination function defined in
 `supervisor.rs`, but OS command construction and signalling stay physically owned by
@@ -154,6 +163,7 @@ flowchart TD
   Progress --> Watchdog
   Progress --> Runtime
   Progress --> Tauri["tauri Window / Emitter"]
+  Model["asr_model.rs"] --> Validation
   Terminal --> Protocol["result_protocol.rs"]
   Terminal --> Command
   Terminal --> Progress
@@ -170,7 +180,9 @@ Allowed dependencies are:
 - process I/O to fixed command specs and supervisor-owned termination;
 - watchdog to instance-bound supervisor timeout requests;
 - progress to the watchdog's narrow activity handle, existing progress validators, and the current
-  closed Tauri `Window`/`Emitter` routes; and
+  closed Tauri `Window`/`Emitter` routes;
+- model-download application behavior to the unchanged transport constants re-exported from the
+  shared progress boundary; and
 - terminal policy to command-runtime diagnostics, the progress reader's fixed stderr summary, the
   closed result protocol, and the finished supervisor phase.
 
@@ -294,6 +306,8 @@ tree and intentionally fails because those files do not yet exist. The completed
 - only `watchdog.rs` owns deadline/control/thread behavior;
 - only `progress.rs` owns progress protocol/validation/routing behavior;
 - only `terminal.rs` owns safe lifecycle detail and terminal classification;
+- only `progress_event.rs` defines the model-download event name/prefix; `asr_model.rs` only
+  re-exports and consumes them, and `runner/progress.rs` never imports `asr_model.rs`;
 - only `supervisor.rs` constructs OS termination commands/signals; and
 - child modules do not import application, account/LLM, task, or Tauri command layers.
 
@@ -323,7 +337,9 @@ single similarly sized external file.
 2. Add the missing stdout-reader failure characterization, then add the ownership/dependency test
    and require RED only because the private tree is absent.
 3. Move watchdog policy/control/thread behavior and its focused tests; run focused Rust tests.
-4. Move progress route/parser/reader behavior and its focused tests; run progress/watchdog tests.
+4. Move the unchanged model-download event name/prefix to `progress_event.rs` with the current
+   `asr_model.rs` path preserved by re-export, then move progress route/parser/reader behavior and
+   its focused tests; run contract/progress/watchdog tests.
 5. Move terminal classification/safe diagnostics and its focused tests; run terminal tests.
 6. Move process I/O and cleanup helpers while keeping lifecycle ordering in `runner.rs`; run all
    lifecycle tests.
@@ -387,6 +403,8 @@ behavior or contract.
 - The runtime gains four production files plus a test subtree and explicit private seams.
 - Some moved definitions require explicit restricted visibility or a root re-export to preserve
   their current parent/sibling/crate surface.
+- Two existing model-download transport constants move from the application module to the shared
+  progress boundary, with their values and former crate-visible path preserved by re-export.
 - Source-boundary tests must be maintained when an intentional ownership change is approved.
 
 ### Neutral
@@ -407,6 +425,8 @@ behavior or contract.
   unchanged.
 - Existing effective visibility remains unchanged, including the facade test's watchdog-policy
   observation and the existing `ProgressRoute` / `WorkerExitSummary` paths.
+- Model-download event name/prefix values and the existing `asr_model` re-export path remain
+  unchanged while their definitions are owned by `progress_event.rs`.
 - Spawn/register/stdin/read/wait/finish/classify order and every failure/race rule remain unchanged.
 - Stderr reader failure retains terminal classification with a fixed marker; stdout reader failure
   remains a fixed protocol error after lane finish.
