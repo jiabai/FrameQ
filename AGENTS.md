@@ -14,6 +14,7 @@
 - Task manifest 模块拆分设计：`docs/design-docs/2026-07-21-task-manifest-module-split.md`
 - Worker pipeline 模块拆分设计：`docs/design-docs/2026-07-21-worker-pipeline-module-split.md`
 - Server route 模块拆分设计：`docs/design-docs/2026-07-21-server-route-module-split.md`
+- Server Store/PrismaStore 模块拆分设计：`docs/design-docs/2026-07-23-server-store-prisma-module-split.md`
 - Server 认证/额度/生产运维加固设计：`docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - Rust worker runner 模块拆分设计：`docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`

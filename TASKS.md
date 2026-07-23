@@ -127,6 +127,18 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Split the Server Store/PrismaStore adapters by transaction responsibility (design approved 2026-07-23) — ✅
+  Acceptance: keep `store.ts` and `prismaStore.ts` as the stable import roots and
+  retain one full Store instance; preserve every Store/class method, Memory fixture field,
+  override-injection seam, closed outcome, query/conditional write, transaction member, retry
+  rule, schema, migration, and independent-client invariant. Extract private Memory/Prisma
+  authentication, billing, entitlement/accounting, LLM-config, and backend-specific
+  atomic/concurrency owners; narrow each service/route helper with consumer-owned type-only Store
+  capabilities; add no public repository, Unit of Work, generic transaction callback, dependency,
+  schema/product behavior, or production-readiness claim. Design:
+  `docs/design-docs/2026-07-23-server-store-prisma-module-split.md`. Implementation and ExecPlan
+  have not started.
+
 - [x] Split the Rust worker runner by private responsibility (completed 2026-07-23) — ✅
   Acceptance: preserve `runner.rs` as the sole `WorkerLane` lifecycle orchestrator and preserve
   every current caller/type path, spawn/register/stdin/read/wait/finish/classify order, matching
