@@ -16,7 +16,10 @@ function createHistoryItem(overrides: Partial<HistoryListItem> = {}): HistoryLis
     taskId: "history-task",
     id: "history-task",
     createdAt: "2026-07-10T00:00:00.000Z",
-    url: "https://www.example.test/history-video",
+    source: {
+      kind: "url",
+      url: "https://www.example.test/history-video",
+    },
     status: "completed",
     taskDir: "D:/FrameQ/outputs/tasks/history-task",
     outputDir: "D:/FrameQ/outputs",
@@ -116,7 +119,12 @@ describe("HistorySheet selection accessibility", () => {
     const items = [
       createHistoryItem({ taskId: "zh", id: "zh", textPreview: longChinesePreview }),
       createHistoryItem({ taskId: "en", id: "en", textPreview: longEnglishPreview }),
-      createHistoryItem({ taskId: "url", id: "url", textPreview: "", url: longYoutubeUrl }),
+      createHistoryItem({
+        taskId: "url",
+        id: "url",
+        textPreview: "",
+        source: { kind: "url", url: longYoutubeUrl },
+      }),
       createHistoryItem({ taskId: "dir", id: "dir", outputDir: longOutputDir }),
       createHistoryItem({
         taskId: "failed",

@@ -53,7 +53,10 @@ describe("history client", () => {
           task_id: "task-1",
           id: "task-1",
           created_at: "2026-06-17T10:00:00Z",
-          url: "https://www.douyin.com/video/7646789377271647540",
+          source: {
+            kind: "url",
+            url: "https://www.douyin.com/video/7646789377271647540",
+          },
           status: "completed",
           task_dir: "D:\\FrameQ\\outputs\\tasks\\task-1",
           output_dir: "D:\\FrameQ\\outputs",
@@ -81,7 +84,10 @@ describe("history client", () => {
         taskId: "task-1",
         id: "task-1",
         createdAt: "2026-06-17T10:00:00Z",
-        url: "https://www.douyin.com/video/7646789377271647540",
+        source: {
+          kind: "url",
+          url: "https://www.douyin.com/video/7646789377271647540",
+        },
         status: "completed",
         taskDir: "D:\\FrameQ\\outputs\\tasks\\task-1",
         outputDir: "D:\\FrameQ\\outputs",
@@ -107,7 +113,11 @@ describe("history client", () => {
       calls.push({ command, args });
       return {
         task_id: "task-detail",
-        url: "https://www.youtube.com/watch?v=abcdefghijk",
+        source: {
+          kind: "local_file",
+          displayName: "Interview.wmv",
+          mediaKind: "video",
+        },
         status: "completed" as const,
         task_dir: "D:/FrameQ/outputs/tasks/task-detail",
         artifacts: { transcript_txt: "transcript/transcript.txt" },
@@ -127,12 +137,46 @@ describe("history client", () => {
     expect(detail.text).toBe("selected transcript body");
     expect(detail.summary).toBe("selected summary");
     expect(detail.insights).toEqual([FIRST_INSIGHT, SECOND_INSIGHT]);
+    expect(detail.source).toEqual({
+      kind: "local_file",
+      displayName: "Interview.wmv",
+      mediaKind: "video",
+    });
+  });
+
+  test("rejects open or unsafe History source variants with a fixed error", async () => {
+    const sourcePath = "C:\\Users\\review-secret\\Interview.wmv";
+    const runner: HistoryCommandRunner = async () => [
+      {
+        task_id: "unsafe-task",
+        id: "unsafe-task",
+        created_at: "2026-07-11T00:00:00Z",
+        source: {
+          kind: "local_file",
+          displayName: "Interview.wmv",
+          mediaKind: "video",
+          sourcePath,
+        },
+        status: "completed",
+        task_dir: "D:/FrameQ/tasks/unsafe-task",
+        output_dir: "D:/FrameQ/outputs",
+        artifacts: {},
+        error: null,
+        text_preview: "",
+        insights_count: 0,
+      },
+    ];
+
+    await expect(getHistory(runner)).rejects.toThrow("HISTORY_SOURCE_INVALID");
   });
 
   test("converts a history item into a workflow worker result", () => {
     const result = historyItemToWorkerResult({
       taskId: "task-2",
-      url: "https://www.douyin.com/video/7646789377271647540",
+      source: {
+        kind: "url",
+        url: "https://www.douyin.com/video/7646789377271647540",
+      },
       status: "partial_completed",
       taskDir: "D:\\FrameQ\\outputs\\tasks\\task-2",
       artifacts: {

@@ -166,9 +166,17 @@ export function HistorySheet({
                     className={`history-title ${
                       item.textPreview ? "history-title-preview" : "history-title-url"
                     }`}
-                    title={item.textPreview || item.url}
+                    title={
+                      item.textPreview ||
+                      (item.source.kind === "url"
+                        ? item.source.url
+                        : item.source.displayName)
+                    }
                   >
-                    {item.textPreview || item.url}
+                    {item.textPreview ||
+                      (item.source.kind === "url"
+                        ? item.source.url
+                        : item.source.displayName)}
                   </strong>
                 </div>
                 <div className="history-meta">
@@ -215,7 +223,11 @@ export function HistorySheet({
                 onClick={() => requestHistoryItemDeletion(item)}
                 disabled={deletionDisabled || historyDeleting}
                 aria-label={t("item.deleteAriaLabel", {
-                  title: item.textPreview || item.url,
+                  title:
+                    item.textPreview ||
+                    (item.source.kind === "url"
+                      ? item.source.url
+                      : item.source.displayName),
                 })}
                 title={t("item.deleteTitle")}
                 aria-describedby={

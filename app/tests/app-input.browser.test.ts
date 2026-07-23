@@ -1453,7 +1453,10 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       task_id: "history-layout-base",
       id: "history-layout-base",
       created_at: "2026-07-11T08:00:00.000Z",
-      url: "https://www.youtube.com/watch?v=abcdefghijk",
+      source: {
+        kind: "url",
+        url: "https://www.youtube.com/watch?v=abcdefghijk",
+      },
       status: "completed",
       task_dir: "C:/FrameQ/outputs/tasks/history-layout-base",
       output_dir: "C:/FrameQ/outputs",
@@ -1482,7 +1485,10 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
         task_id: "history-layout-url",
         id: "history-layout-url",
         text_preview: "",
-        url: "https://youtu.be/abcdefghijk",
+        source: {
+          kind: "url",
+          url: "https://youtu.be/abcdefghijk",
+        },
         output_dir:
           "C:/FrameQ/outputs/a-very-long-safe-history-directory/with/many/nested/segments/for/ellipsis",
       },
@@ -1639,7 +1645,10 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
       task_id: `history-scroll-${index}`,
       id: `history-scroll-${index}`,
       created_at: "2026-07-11T08:00:00.000Z",
-      url: `https://www.youtube.com/watch?v=demo${index.toString().padStart(7, "0")}`,
+      source: {
+        kind: "url",
+        url: `https://www.youtube.com/watch?v=demo${index.toString().padStart(7, "0")}`,
+      },
       status: "completed",
       task_dir: `C:/FrameQ/outputs/tasks/history-scroll-${index}`,
       output_dir: "C:/FrameQ/outputs",

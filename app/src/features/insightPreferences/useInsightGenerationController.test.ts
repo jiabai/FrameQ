@@ -117,9 +117,14 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
     activeAiTarget: null,
     aiErrorTarget: null,
     aiTargetErrors: {},
-    url: "https://example.test/video",
-    submittedUrl: "https://example.test/video",
-    showUrlInput: false,
+    composerSource: {
+      kind: "url",
+      urlDraft: "https://example.test/video",
+    },
+    taskSource: {
+      kind: "url",
+      url: "https://example.test/video",
+    },
     statusMessage: null,
     progressMessage: null,
     progressPercent: 100,

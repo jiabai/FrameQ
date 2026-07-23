@@ -16,6 +16,10 @@ import {
   parseWorkerResult,
   type CancelProcessResult,
 } from "./workerResultProtocol";
+import {
+  parseProcessLocalMediaRequest,
+  type ProcessLocalMediaRequest,
+} from "./localMediaContract";
 import type { WorkerResult } from "./workflow";
 
 export { WORKER_PROGRESS_EVENT } from "./desktopWorkerProtocol";
@@ -55,12 +59,51 @@ export async function processVideo(
   progressListener: WorkerProgressListener = listen,
   recordInvalidProgress: ProgressDiagnosticRecorder = defaultProgressDiagnosticRecorder,
 ): Promise<WorkerResult> {
-  const request: ProcessVideoIpcRequest = {
-    url,
-  };
+  return runTaskCommand(
+    "process_video",
+    { url } satisfies ProcessVideoIpcRequest,
+    runner,
+    onProgress,
+    progressListener,
+    recordInvalidProgress,
+  );
+}
 
+export async function processLocalMedia(
+  input: ProcessLocalMediaRequest,
+  runner: WorkerCommandRunner = defaultWorkerRunner,
+  onProgress?: WorkerProgressHandler,
+  progressListener: WorkerProgressListener = listen,
+  recordInvalidProgress: ProgressDiagnosticRecorder = defaultProgressDiagnosticRecorder,
+): Promise<WorkerResult> {
+  const parsed = parseProcessLocalMediaRequest(input);
+  if (parsed.kind === "invalid") {
+    return failedResult(
+      "LOCAL_MEDIA_SELECTION_INVALID",
+      "",
+      "video_extracting",
+    );
+  }
+  return runTaskCommand(
+    "process_local_media",
+    parsed.value,
+    runner,
+    onProgress,
+    progressListener,
+    recordInvalidProgress,
+  );
+}
+
+async function runTaskCommand(
+  command: "process_video" | "process_local_media",
+  request: ProcessVideoIpcRequest | ProcessLocalMediaRequest,
+  runner: WorkerCommandRunner,
+  onProgress: WorkerProgressHandler | undefined,
+  progressListener: WorkerProgressListener,
+  recordInvalidProgress: ProgressDiagnosticRecorder,
+): Promise<WorkerResult> {
   const unlisten = onProgress
-      ? await progressListener(WORKER_PROGRESS_EVENT, (event) => {
+    ? await progressListener(WORKER_PROGRESS_EVENT, (event) => {
         const parsed = parseWorkerProgressEvent(event.payload);
         if (parsed.kind === "invalid") {
           recordInvalidProgress(parsed.diagnosticCode);
@@ -75,7 +118,7 @@ export async function processVideo(
 
   try {
     return (
-      parseWorkerResult(await runner("process_video", { request })) ??
+      parseWorkerResult(await runner(command, { request })) ??
       protocolViolationResult(null, "failed", "video_extracting")
     );
   } catch (error) {

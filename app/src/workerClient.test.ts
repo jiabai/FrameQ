@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   WORKER_PROGRESS_EVENT,
   cancelProcess,
+  processLocalMedia,
   processVideo,
   retryInsights,
   type CancelCommandRunner,
@@ -70,6 +71,57 @@ function completedResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
 }
 
 describe("worker client", () => {
+  test("invokes the independent local-media command with a token-only request", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return completedResult({
+        artifacts: {
+          audio: "media/audio.wav",
+          transcript_txt: "transcript/transcript.txt",
+        },
+      });
+    };
+
+    const result = await processLocalMedia(
+      { selectionToken: "01234567-89ab-4def-8abc-0123456789ab" },
+      runner,
+    );
+
+    expect(calls).toEqual([
+      {
+        command: "process_local_media",
+        args: {
+          request: {
+            selectionToken: "01234567-89ab-4def-8abc-0123456789ab",
+          },
+        },
+      },
+    ]);
+    expect(JSON.stringify(calls)).not.toContain("sourcePath");
+    expect(result.status).toBe("completed");
+  });
+
+  test("rejects malformed local-media intent before invoking Tauri", async () => {
+    const runner = vi.fn<WorkerCommandRunner>();
+
+    const result = await processLocalMedia(
+      {
+        selectionToken: "review-secret",
+        sourcePath: "C:\\Users\\review-secret\\Interview.wmv",
+      } as never,
+      runner,
+    );
+
+    expect(runner).not.toHaveBeenCalled();
+    expect(result.error).toEqual({
+      code: "LOCAL_MEDIA_SELECTION_INVALID",
+      message: "",
+      stage: "video_extracting",
+    });
+    expect(JSON.stringify(result)).not.toContain("review-secret");
+  });
+
   test("invokes the Tauri process_video command with the submitted url", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: WorkerCommandRunner = async (command, args) => {

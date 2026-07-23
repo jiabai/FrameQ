@@ -162,7 +162,10 @@ describe("task domain workspaces", () => {
   });
 
   test("keeps meaningful workspace statuses for active and constrained states", () => {
-    const processingWorkflow = startProcessing(createInitialWorkflow(), "https://example.invalid/video");
+    const processingWorkflow = startProcessing(createInitialWorkflow(), {
+      kind: "url",
+      url: "https://example.invalid/video",
+    });
     const processingModel = createTaskWorkspaceViewModel(processingWorkflow, aiAccount());
     const processingMarkup = renderToStaticMarkup(
       <>
@@ -227,7 +230,7 @@ describe("task domain workspaces", () => {
   test("shows motion only for the active local processing stage", () => {
     const extractingWorkflow = startProcessing(
       createInitialWorkflow(),
-      "https://example.invalid/video",
+      { kind: "url", url: "https://example.invalid/video" },
     );
     const extractingModel = createTaskWorkspaceViewModel(extractingWorkflow, aiAccount());
     const extractingMarkup = renderToStaticMarkup(

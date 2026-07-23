@@ -22,6 +22,21 @@ import {
 
 const TASK_ID = "20260705-153012-douyin-demo";
 const TASK_DIR = "outputs/tasks/20260705-153012-douyin-demo";
+const URL_SOURCE = {
+  kind: "url",
+  url: "https://www.douyin.com/video/7524373044106677544",
+} as const;
+const LOCAL_COMPOSER_SOURCE = {
+  kind: "local_media",
+  selection: {
+    selectionToken: "01234567-89ab-4def-8abc-0123456789ab",
+    displayName: "Interview.wmv",
+    mediaKind: "video",
+    extension: "wmv",
+    sizeBytes: 1024,
+  },
+  retainedUrlDraft: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+} as const;
 const DEFAULT_ARTIFACTS = {
   video: "media/video.mp4",
   audio: "media/audio.wav",
@@ -66,6 +81,16 @@ function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
 }
 
 describe("workflow state model", () => {
+  test("starts with one URL composer branch and no task source", () => {
+    const state = createInitialWorkflow();
+
+    expect(state.composerSource).toEqual({ kind: "url", urlDraft: "" });
+    expect(state.taskSource).toBeNull();
+    expect(state).not.toHaveProperty("url");
+    expect(state).not.toHaveProperty("submittedUrl");
+    expect(state).not.toHaveProperty("showUrlInput");
+  });
+
   test("allows supported Douyin and Xiaohongshu video urls to be submitted", () => {
     expect(canSubmitUrl("")).toBe(false);
     expect(canSubmitUrl("https://example.com/video/1")).toBe(false);
@@ -138,15 +163,12 @@ describe("workflow state model", () => {
     expect(normalizeSubmitUrl("https://www.youtube.com/playlist?list=PL123")).toBeNull();
   });
 
-  test("starts processing by hiding input and entering video extraction", () => {
-    const state = startProcessing(
-      createInitialWorkflow(),
-      "https://www.douyin.com/video/7524373044106677544",
-    );
+  test("starts processing by freezing the closed task source", () => {
+    const state = startProcessing(createInitialWorkflow(), URL_SOURCE);
 
     expect(state.stage).toBe("video_extracting");
-    expect(state.submittedUrl).toBe("https://www.douyin.com/video/7524373044106677544");
-    expect(state.showUrlInput).toBe(false);
+    expect(state.taskSource).toEqual(URL_SOURCE);
+    expect(state.composerSource).toEqual({ kind: "url", urlDraft: "" });
     expect(state.statusMessage).toBeNull();
     expect(state.progressMessage).toEqual({
       messageCode: "video.download.preparing",
@@ -280,10 +302,7 @@ describe("workflow state model", () => {
   });
 
   test("merges worker progress events into the visible workflow state", () => {
-    const state = startProcessing(
-      createInitialWorkflow(),
-      "https://www.douyin.com/video/7524373044106677544",
-    );
+    const state = startProcessing(createInitialWorkflow(), URL_SOURCE);
 
     const updated = mergeProgressEvent(state, {
       stage: "video_transcribing",
@@ -301,7 +320,7 @@ describe("workflow state model", () => {
     });
     expect(updated.statusMessage).toBeNull();
     expect(updated.progressPercent).toBe(68);
-    expect(updated.showUrlInput).toBe(false);
+    expect(updated.taskSource).toEqual(URL_SOURCE);
   });
 
   test("starts summary generation without discarding the existing transcript", () => {
@@ -379,34 +398,38 @@ describe("workflow state model", () => {
     expect(retrying.error).toBeNull();
   });
 
-  test("cancels active processing and returns to input with the submitted url", () => {
+  test("cancels active URL processing and returns to one URL composer branch", () => {
     const state = startProcessing(
-      createInitialWorkflow(),
-      "https://www.douyin.com/video/7524373044106677544",
+      {
+        ...createInitialWorkflow(),
+        composerSource: {
+          kind: "url",
+          urlDraft: URL_SOURCE.url,
+        },
+      },
+      URL_SOURCE,
     );
 
     const cancelled = cancelProcessing(state);
 
     expect(cancelled.stage).toBe("waiting_input");
-    expect(cancelled.showUrlInput).toBe(true);
-    expect(cancelled.url).toBe("https://www.douyin.com/video/7524373044106677544");
-    expect(cancelled.submittedUrl).toBe("");
+    expect(cancelled.composerSource).toEqual({
+      kind: "url",
+      urlDraft: URL_SOURCE.url,
+    });
+    expect(cancelled.taskSource).toBeNull();
     expect(cancelled.statusMessage).toBeNull();
     expect(cancelled.error).toBeNull();
   });
 
   test("keeps the workflow active while cancellation is pending and restores it when signalling fails", () => {
-    const running = startProcessing(
-      createInitialWorkflow(),
-      "https://www.douyin.com/video/7524373044106677544",
-    );
+    const running = startProcessing(createInitialWorkflow(), URL_SOURCE);
 
     const cancelling = requestProcessingCancellation(running);
 
     expect(cancelling.stage).toBe("cancelling");
     expect(cancelling.cancellingFromStage).toBe("video_extracting");
-    expect(cancelling.showUrlInput).toBe(false);
-    expect(cancelling.submittedUrl).toBe(running.submittedUrl);
+    expect(cancelling.taskSource).toEqual(URL_SOURCE);
     expect(isProcessingStage(cancelling.stage)).toBe(true);
     expect(cancelling.statusMessage).toBeNull();
     expect(cancelling.progressMessage).toEqual({
@@ -419,20 +442,41 @@ describe("workflow state model", () => {
     expect(restored.statusMessage).toEqual({
       messageCode: "workflow.cancellation.failed",
     });
-    expect(restored.submittedUrl).toBe(running.submittedUrl);
+    expect(restored.taskSource).toEqual(URL_SOURCE);
   });
 
   test("returns to input only after cancellation is confirmed", () => {
     const cancelling = requestProcessingCancellation(
       startProcessing(
         createInitialWorkflow(),
-        "https://www.douyin.com/video/7524373044106677544",
+        URL_SOURCE,
       ),
     );
 
     const cancelled = confirmProcessingCancellation(cancelling);
     expect(cancelled.stage).toBe("waiting_input");
-    expect(cancelled.showUrlInput).toBe(true);
-    expect(cancelled.url).toBe("https://www.douyin.com/video/7524373044106677544");
+    expect(cancelled.composerSource).toEqual({ kind: "url", urlDraft: "" });
+    expect(cancelled.taskSource).toBeNull();
+  });
+
+  test("retains a local selection after cancellation while clearing the running source", () => {
+    const running = startProcessing(
+      {
+        ...createInitialWorkflow(),
+        composerSource: LOCAL_COMPOSER_SOURCE,
+      },
+      {
+        kind: "local_file",
+        displayName: "Interview.wmv",
+        mediaKind: "video",
+      },
+    );
+
+    const cancelled = confirmProcessingCancellation(
+      requestProcessingCancellation(running),
+    );
+
+    expect(cancelled.composerSource).toEqual(LOCAL_COMPOSER_SOURCE);
+    expect(cancelled.taskSource).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { createBrowserPreviewAccountStatus } from "../../accountState";
 import type { HistoryItem } from "../../historyClient";
@@ -15,13 +16,30 @@ type HookHarness = {
 };
 
 const cancelProcessMock = vi.fn();
+const processLocalMediaMock = vi.fn();
 const processVideoMock = vi.fn();
 const retryInsightsMock = vi.fn();
+const clearLocalMediaSelectionMock = vi.fn();
+
+const SUBMITTED_URL = "https://www.douyin.com/video/7524373044106677544";
+const URL_SUBMISSION = { kind: "url", url: SUBMITTED_URL } as const;
+const LOCAL_SELECTION = {
+  selectionToken: "01234567-89ab-4def-8abc-0123456789ab",
+  displayName: "Interview.wmv",
+  mediaKind: "video",
+  extension: "wmv",
+  sizeBytes: 1024,
+} as const;
 
 vi.mock("../../workerClient", () => ({
   cancelProcess: cancelProcessMock,
+  processLocalMedia: processLocalMediaMock,
   processVideo: processVideoMock,
   retryInsights: retryInsightsMock,
+}));
+
+vi.mock("../../localMediaClient", () => ({
+  clearLocalMediaSelection: clearLocalMediaSelectionMock,
 }));
 
 function createHookHarness(): HookHarness {
@@ -72,7 +90,10 @@ function requireResolver<T>(resolver: ((value: T) => void) | null): (value: T) =
 function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
   return {
     taskId: "history-task",
-    url: "https://www.example.test/history-video",
+    source: {
+      kind: "url",
+      url: "https://www.example.test/history-video",
+    },
     status: "completed",
     taskDir: "D:/FrameQ/outputs/tasks/history-task",
     artifacts: {
@@ -142,8 +163,11 @@ describe("useTaskProcessingController cancellation", () => {
   beforeEach(() => {
     vi.resetModules();
     cancelProcessMock.mockReset();
+    processLocalMediaMock.mockReset();
     processVideoMock.mockReset();
     retryInsightsMock.mockReset();
+    clearLocalMediaSelectionMock.mockReset();
+    clearLocalMediaSelectionMock.mockResolvedValue(true);
   });
 
   test("keeps the workflow and operation active when process termination fails", async () => {
@@ -155,10 +179,10 @@ describe("useTaskProcessingController cancellation", () => {
     const { render, onResetTaskUi } = await createController();
 
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    void controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    void controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -187,10 +211,10 @@ describe("useTaskProcessingController cancellation", () => {
     const { render } = await createController();
 
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    void controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    void controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -216,10 +240,10 @@ describe("useTaskProcessingController cancellation", () => {
     cancelProcessMock.mockResolvedValue({ status: "cancelling" });
     const { render, onResetTaskUi } = await createController();
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    const processing = controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    const processing = controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -274,10 +298,10 @@ describe("useTaskProcessingController cancellation", () => {
     const { render } = await createController();
     let controller = render();
 
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    const started = controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    const started = controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -316,8 +340,11 @@ describe("useTaskProcessingController watchdog timeouts", () => {
   beforeEach(() => {
     vi.resetModules();
     cancelProcessMock.mockReset();
+    processLocalMediaMock.mockReset();
     processVideoMock.mockReset();
     retryInsightsMock.mockReset();
+    clearLocalMediaSelectionMock.mockReset();
+    clearLocalMediaSelectionMock.mockResolvedValue(true);
   });
 
   test("clears process busy state after timeout without starting another process command", async () => {
@@ -340,11 +367,11 @@ describe("useTaskProcessingController watchdog timeouts", () => {
     );
     const { render } = await createController();
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
 
-    await controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    await controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -427,12 +454,232 @@ describe("useTaskProcessingController watchdog timeouts", () => {
   });
 });
 
+describe("useTaskProcessingController closed local-media source", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    cancelProcessMock.mockReset();
+    processLocalMediaMock.mockReset();
+    processVideoMock.mockReset();
+    retryInsightsMock.mockReset();
+    clearLocalMediaSelectionMock.mockReset();
+    clearLocalMediaSelectionMock.mockResolvedValue(true);
+  });
+
+  test("dispatches token-only local processing and clears the stale composer token on success", async () => {
+    processLocalMediaMock.mockResolvedValue(
+      createWorkerResult({
+        artifacts: {
+          audio: "media/audio.wav",
+          transcript_txt: "transcript/transcript.txt",
+        },
+      }),
+    );
+    const { render } = await createController();
+    let controller = render();
+    controller.updateUrlDraft("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    controller = render();
+    controller.setLocalMediaSelection(LOCAL_SELECTION);
+    controller = render();
+
+    await controller.submitTask(
+      {
+        kind: "local_media",
+        selectionToken: LOCAL_SELECTION.selectionToken,
+      },
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+
+    expect(processLocalMediaMock).toHaveBeenCalledWith(
+      { selectionToken: LOCAL_SELECTION.selectionToken },
+      undefined,
+      expect.any(Function),
+    );
+    expect(processVideoMock).not.toHaveBeenCalled();
+    expect(controller.workflow.taskSource).toEqual({
+      kind: "local_file",
+      displayName: "Interview.wmv",
+      mediaKind: "video",
+    });
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "url",
+      urlDraft: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    });
+  });
+
+  test("rejects a submission that does not match the active composer branch", async () => {
+    const { render } = await createController();
+    let controller = render();
+    controller.setLocalMediaSelection(LOCAL_SELECTION);
+    controller = render();
+
+    await controller.submitTask(
+      URL_SUBMISSION,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+
+    expect(processVideoMock).not.toHaveBeenCalled();
+    expect(processLocalMediaMock).not.toHaveBeenCalled();
+    controller = render();
+    expect(controller.workflow.stage).toBe("waiting_input");
+    expect(controller.workflow.composerSource.kind).toBe("local_media");
+  });
+
+  test("retains a local selection on retryable failure but clears it for invalid source", async () => {
+    processLocalMediaMock
+      .mockResolvedValueOnce(
+        createWorkerResult({
+          status: "failed",
+          task_id: null,
+          task_dir: null,
+          artifacts: {},
+          text: "",
+          summary: "",
+          transcript: null,
+          error: {
+            code: "AUDIO_NORMALIZATION_FAILED",
+            message: "",
+            stage: "video_extracting",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createWorkerResult({
+          status: "failed",
+          task_id: null,
+          task_dir: null,
+          artifacts: {},
+          text: "",
+          summary: "",
+          transcript: null,
+          error: {
+            code: "LOCAL_MEDIA_SELECTION_CHANGED",
+            message: "",
+            stage: "video_extracting",
+          },
+        }),
+      );
+    const { render } = await createController();
+    let controller = render();
+    controller.setLocalMediaSelection(LOCAL_SELECTION);
+    controller = render();
+
+    await controller.submitTask(
+      { kind: "local_media", selectionToken: LOCAL_SELECTION.selectionToken },
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "local_media",
+      selection: LOCAL_SELECTION,
+      retainedUrlDraft: "",
+    });
+
+    await controller.submitTask(
+      { kind: "local_media", selectionToken: LOCAL_SELECTION.selectionToken },
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "url",
+      urlDraft: "",
+    });
+  });
+
+  test("retains a local selection after confirmed cancellation", async () => {
+    let resolveWorker: ((result: WorkerResult) => void) | null = null;
+    processLocalMediaMock.mockImplementation(
+      () =>
+        new Promise<WorkerResult>((resolve) => {
+          resolveWorker = resolve;
+        }),
+    );
+    cancelProcessMock.mockResolvedValue({ status: "cancelling" });
+    const { render } = await createController();
+    let controller = render();
+    controller.setLocalMediaSelection(LOCAL_SELECTION);
+    controller = render();
+    const processing = controller.submitTask(
+      { kind: "local_media", selectionToken: LOCAL_SELECTION.selectionToken },
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+
+    await controller.cancelCurrentProcessing();
+    requireResolver<WorkerResult>(resolveWorker)(
+      createWorkerResult({
+        status: "failed",
+        task_id: null,
+        task_dir: null,
+        artifacts: {},
+        text: "",
+        summary: "",
+        transcript: null,
+        error: {
+          code: "WORKER_CANCELLED",
+          message: "",
+          stage: "video_extracting",
+        },
+      }),
+    );
+    await processing;
+    controller = render();
+
+    expect(controller.workflow.stage).toBe("waiting_input");
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "local_media",
+      selection: LOCAL_SELECTION,
+      retainedUrlDraft: "",
+    });
+    expect(controller.workflow.taskSource).toBeNull();
+  });
+
+  test("clears a removed local selection with its exact token and restores the retained URL", async () => {
+    const { render } = await createController();
+    let controller = render();
+    controller.updateUrlDraft("https://youtu.be/dQw4w9WgXcQ");
+    controller = render();
+    controller.setLocalMediaSelection(LOCAL_SELECTION);
+    controller = render();
+
+    await expect(controller.removeLocalMediaSelection()).resolves.toBe(true);
+    controller = render();
+
+    expect(clearLocalMediaSelectionMock).toHaveBeenCalledWith(
+      LOCAL_SELECTION.selectionToken,
+    );
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "url",
+      urlDraft: "https://youtu.be/dQw4w9WgXcQ",
+    });
+  });
+
+  test("keeps DOM form events outside the application controller", () => {
+    const source = readFileSync(
+      new URL("./useTaskProcessingController.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).not.toContain("FormEvent");
+    expect(source).not.toContain("preventDefault");
+    expect(source).not.toContain("submitUrl");
+  });
+});
+
 describe("useTaskProcessingController history restore", () => {
   beforeEach(() => {
     vi.resetModules();
     cancelProcessMock.mockReset();
+    processLocalMediaMock.mockReset();
     processVideoMock.mockReset();
     retryInsightsMock.mockReset();
+    clearLocalMediaSelectionMock.mockReset();
+    clearLocalMediaSelectionMock.mockResolvedValue(true);
   });
 
   test("rejects history restore while video processing and keeps the active result authoritative", async () => {
@@ -448,10 +695,10 @@ describe("useTaskProcessingController history restore", () => {
     );
     const { render } = await createController();
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    const processing = controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    const processing = controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -603,10 +850,10 @@ describe("useTaskProcessingController history restore", () => {
     cancelProcessMock.mockResolvedValue({ status: "cancelling" });
     const { render } = await createController();
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    const processing = controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    const processing = controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -640,9 +887,49 @@ describe("useTaskProcessingController history restore", () => {
     expect(controller.workflow.text).toBe(history.text);
     expect(controller.workflow.summary).toBe(history.summary);
     expect(controller.workflow.insights).toEqual(history.insights);
-    expect(controller.workflow.url).toBe(history.url);
-    expect(controller.workflow.submittedUrl).toBe(history.url);
+    expect(controller.workflow.taskSource).toEqual(history.source);
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "url",
+      urlDraft:
+        history.source.kind === "url" ? history.source.url : "",
+    });
     expect("setWorkflow" in controller).toBe(false);
+  });
+
+  test("restores a local History source and preserves it through AI retry", async () => {
+    const history = createHistoryItem({
+      source: {
+        kind: "local_file",
+        displayName: "Interview.wmv",
+        mediaKind: "video",
+      },
+    });
+    retryInsightsMock.mockResolvedValue(
+      createWorkerResult({
+        task_id: history.taskId,
+        task_dir: history.taskDir,
+        summary: "fresh summary",
+      }),
+    );
+    const { render } = await createController();
+    let controller = render();
+
+    expect(controller.restoreHistoryItem(history)).toBe(true);
+    controller = render();
+    await controller.retryInsightGeneration(
+      "summary",
+      "en-US",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+
+    expect(controller.workflow.taskSource).toEqual(history.source);
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "url",
+      urlDraft: "",
+    });
   });
 
   test("resets only when the successfully deleted history task is current", async () => {
@@ -679,10 +966,10 @@ describe("useTaskProcessingController history restore", () => {
     processVideoMock.mockImplementation(() => new Promise<WorkerResult>(() => undefined));
     const { render, onResetTaskUi } = await createController();
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    void controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    void controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );
@@ -708,10 +995,10 @@ describe("useTaskProcessingController history restore", () => {
     const history = createHistoryItem();
     const { render } = await createController();
     let controller = render();
-    controller.updateUrlDraft("https://www.douyin.com/video/7524373044106677544");
+    controller.updateUrlDraft(SUBMITTED_URL);
     controller = render();
-    const oldProcessing = controller.submitUrl(
-      { preventDefault: vi.fn() } as never,
+    const oldProcessing = controller.submitTask(
+      URL_SUBMISSION,
       createBrowserPreviewAccountStatus(),
       vi.fn(),
     );

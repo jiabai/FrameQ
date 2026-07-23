@@ -8,7 +8,10 @@ const firstHistoryTask = {
   task_id: "history-task-a",
   id: "history-task-a",
   created_at: "2026-07-11T08:00:00.000Z",
-  url: "https://www.douyin.com/video/7000000000000000001",
+  source: {
+    kind: "url",
+    url: "https://www.douyin.com/video/7000000000000000001",
+  },
   status: "completed",
   task_dir: "C:/FrameQ/outputs/tasks/history-task-a",
   output_dir: "C:/FrameQ/outputs",
@@ -32,7 +35,10 @@ const secondHistoryTask = {
   task_id: "history-task-b",
   id: "history-task-b",
   created_at: "2026-07-11T09:00:00.000Z",
-  url: "https://www.douyin.com/video/7000000000000000002",
+  source: {
+    kind: "url",
+    url: "https://www.douyin.com/video/7000000000000000002",
+  },
   task_dir: "C:/FrameQ/outputs/tasks/history-task-b",
   text_preview: "历史任务乙文字稿",
   text: "历史任务乙完整文字稿",

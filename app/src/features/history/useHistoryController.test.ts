@@ -63,7 +63,7 @@ function createHistoryItem(overrides: Partial<HistoryListItem> = {}): HistoryLis
     taskId: "task-1",
     id: "task-1",
     createdAt: "2026-07-09T00:00:00.000Z",
-    url: "https://example.test/video",
+    source: { kind: "url", url: "https://example.test/video" },
     status: "completed",
     taskDir: "D:/FrameQ/tasks/task-1",
     outputDir: "D:/FrameQ/outputs",
@@ -78,7 +78,7 @@ function createHistoryItem(overrides: Partial<HistoryListItem> = {}): HistoryLis
 function createHistoryDetail(taskId = "task-1"): HistoryItem {
   return {
     taskId,
-    url: "https://example.test/video",
+    source: { kind: "url", url: "https://example.test/video" },
     status: "completed",
     taskDir: `D:/FrameQ/tasks/${taskId}`,
     artifacts: { transcript_txt: "transcript/transcript.txt" },

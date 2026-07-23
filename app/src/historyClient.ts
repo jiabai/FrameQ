@@ -4,10 +4,12 @@ import type {
   Insight,
   TaskArtifacts,
   TranscriptMetadata,
+  TaskSourceSummary,
   WorkerErrorResult,
   WorkerResult,
   WorkflowStage,
 } from "./workflow";
+import { parseTaskSourceSummary } from "./workflow";
 
 export type HistoryErrorResponse = {
   code: string;
@@ -19,7 +21,7 @@ export type HistoryItemResponse = {
   task_id: string;
   id: string;
   created_at: string;
-  url: string;
+  source: unknown;
   status: WorkerResult["status"];
   task_dir: string;
   output_dir: string;
@@ -31,7 +33,7 @@ export type HistoryItemResponse = {
 
 export type HistoryDetailResponse = {
   task_id: string;
-  url: string;
+  source: unknown;
   status: WorkerResult["status"];
   task_dir: string;
   artifacts: TaskArtifacts;
@@ -46,7 +48,7 @@ export type HistoryListItem = {
   taskId: string;
   id: string;
   createdAt: string;
-  url: string;
+  source: TaskSourceSummary;
   status: WorkerResult["status"];
   taskDir: string;
   outputDir: string;
@@ -68,7 +70,7 @@ export type HistoryDeleteResult = {
 
 export type HistoryItem = {
   taskId: string;
-  url: string;
+  source: TaskSourceSummary;
   status: WorkerResult["status"];
   taskDir: string;
   artifacts: TaskArtifacts;
@@ -131,11 +133,12 @@ export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
 }
 
 function mapHistoryItemResponse(response: HistoryItemResponse): HistoryListItem {
+  const source = requireTaskSource(response.source);
   return {
     taskId: response.task_id,
     id: response.id,
     createdAt: response.created_at,
-    url: response.url,
+    source,
     status: response.status,
     taskDir: response.task_dir,
     outputDir: response.output_dir,
@@ -147,6 +150,7 @@ function mapHistoryItemResponse(response: HistoryItemResponse): HistoryListItem 
 }
 
 function mapHistoryDetailResponse(response: HistoryDetailResponse): HistoryItem {
+  const source = requireTaskSource(response.source);
   const error = response.error
     ? {
         code: response.error.code,
@@ -156,7 +160,7 @@ function mapHistoryDetailResponse(response: HistoryDetailResponse): HistoryItem 
     : null;
   return {
     taskId: response.task_id,
-    url: response.url,
+    source,
     status: response.status,
     taskDir: response.task_dir,
     artifacts: response.artifacts ?? {},
@@ -166,4 +170,12 @@ function mapHistoryDetailResponse(response: HistoryDetailResponse): HistoryItem 
     transcript: response.transcript ?? null,
     insights: response.insights,
   };
+}
+
+function requireTaskSource(value: unknown): TaskSourceSummary {
+  const source = parseTaskSourceSummary(value);
+  if (!source) {
+    throw new Error("HISTORY_SOURCE_INVALID");
+  }
+  return source;
 }

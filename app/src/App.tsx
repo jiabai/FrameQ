@@ -147,7 +147,7 @@ function App() {
     restoreHistoryItem,
     retryInsightGeneration,
     startNewTaskFromToolbar,
-    submitUrl,
+    submitTask,
   } = useTaskProcessingController({
     onResetTaskUi: resetTaskUi,
     onRetryStarted: prepareInsightRetryUi,
@@ -506,14 +506,26 @@ function App() {
         </header>
 
         <section
-          className={`workspace ${workflow.showUrlInput ? "waiting-layout" : "active-layout"}`}
+          className={`workspace ${workflow.stage === "waiting_input" ? "waiting-layout" : "active-layout"}`}
           aria-label={tWorkflow("input.workspaceAria")}
         >
-          {workflow.showUrlInput ? (
+          {workflow.stage === "waiting_input" ? (
             <div className="workflow-column">
               <form
                 className="command-panel input-pane"
-                onSubmit={(event) => submitUrl(event, account, openAccountPanel)}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (workflow.composerSource.kind === "url") {
+                    void submitTask(
+                      {
+                        kind: "url",
+                        url: workflow.composerSource.urlDraft,
+                      },
+                      account,
+                      openAccountPanel,
+                    );
+                  }
+                }}
               >
                 <div className="panel-heading">
                   <div>
@@ -526,7 +538,11 @@ function App() {
                   <input
                     id="video-url"
                     aria-label={tWorkflow("input.urlAria")}
-                    value={workflow.url}
+                    value={
+                      workflow.composerSource.kind === "url"
+                        ? workflow.composerSource.urlDraft
+                        : workflow.composerSource.retainedUrlDraft
+                    }
                     onChange={(event) => {
                       const url = event.currentTarget.value;
                       updateUrlDraft(url);

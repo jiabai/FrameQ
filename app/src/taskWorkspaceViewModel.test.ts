@@ -54,7 +54,10 @@ describe("task workspace view model", () => {
   test("local processing has only download and transcription progress while AI waits", () => {
     const workflow = startProcessing(
       createInitialWorkflow(),
-      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      {
+        kind: "url",
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      },
     );
 
     const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
@@ -73,7 +76,10 @@ describe("task workspace view model", () => {
   test("projects cancellation controls into the workspace that owns the operation", () => {
     const processing = startProcessing(
       createInitialWorkflow(),
-      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      {
+        kind: "url",
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      },
     );
 
     const runningModel = createTaskWorkspaceViewModel(
@@ -108,7 +114,10 @@ describe("task workspace view model", () => {
     const workflow = mergeProgressEvent(
       startProcessing(
         createInitialWorkflow(),
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        {
+          kind: "url",
+          url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        },
       ),
       {
         stage: "video_transcribing",

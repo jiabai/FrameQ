@@ -5,6 +5,11 @@ import type {
   WorkerProgressEvent,
   WorkflowStage,
 } from "./desktopWorkerProtocol";
+import {
+  LOCAL_MEDIA_EXTENSIONS,
+  type LocalMediaKind,
+  type LocalMediaSelectionView,
+} from "./localMediaContract";
 
 export type {
   ProgressMessageDescriptor,
@@ -38,6 +43,84 @@ export type TranscriptMetadata = {
   engine: string | null;
 };
 
+export type TaskSubmission =
+  | { kind: "url"; url: string }
+  | { kind: "local_media"; selectionToken: string };
+
+export type TaskSourceSummary =
+  | { kind: "url"; url: string }
+  | {
+      kind: "local_file";
+      displayName: string;
+      mediaKind: LocalMediaKind;
+    };
+
+export type TaskComposerSource =
+  | { kind: "url"; urlDraft: string }
+  | {
+      kind: "local_media";
+      selection: LocalMediaSelectionView;
+      retainedUrlDraft: string;
+    };
+
+const UNSAFE_SOURCE_NAME_PATTERN =
+  /[\/\\\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
+
+export function parseTaskSourceSummary(value: unknown): TaskSourceSummary | null {
+  if (!isPlainRecord(value)) {
+    return null;
+  }
+  if (
+    hasExactKeys(value, ["kind", "url"]) &&
+    value.kind === "url" &&
+    typeof value.url === "string" &&
+    value.url.length > 0
+  ) {
+    return { kind: "url", url: value.url };
+  }
+  if (
+    !hasExactKeys(value, ["kind", "displayName", "mediaKind"]) ||
+    value.kind !== "local_file" ||
+    (value.mediaKind !== "video" && value.mediaKind !== "audio") ||
+    typeof value.displayName !== "string" ||
+    value.displayName.trim().length === 0 ||
+    Array.from(value.displayName).length > 160 ||
+    value.displayName === "." ||
+    value.displayName === ".." ||
+    UNSAFE_SOURCE_NAME_PATTERN.test(value.displayName)
+  ) {
+    return null;
+  }
+  const extension = value.displayName.split(".").pop()?.toLocaleLowerCase("en-US");
+  if (
+    !extension ||
+    !(LOCAL_MEDIA_EXTENSIONS[value.mediaKind] as readonly string[]).includes(extension)
+  ) {
+    return null;
+  }
+  return {
+    kind: "local_file",
+    displayName: value.displayName,
+    mediaKind: value.mediaKind,
+  };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => actual.includes(key));
+}
+
 export type WorkerResult = {
   status: "completed" | "partial_completed" | "failed";
   task_id: string | null;
@@ -70,9 +153,8 @@ export type WorkflowState = {
   activeAiTarget: InsightRetryTarget | null;
   aiErrorTarget: InsightRetryTarget | null;
   aiTargetErrors: Partial<Record<InsightRetryTarget, WorkerErrorResult>>;
-  url: string;
-  submittedUrl: string;
-  showUrlInput: boolean;
+  composerSource: TaskComposerSource;
+  taskSource: TaskSourceSummary | null;
   statusMessage: UiMessage | null;
   progressMessage: ProgressMessageDescriptor | null;
   progressPercent: number;
@@ -92,9 +174,8 @@ export function createInitialWorkflow(): WorkflowState {
     activeAiTarget: null,
     aiErrorTarget: null,
     aiTargetErrors: {},
-    url: "",
-    submittedUrl: "",
-    showUrlInput: true,
+    composerSource: { kind: "url", urlDraft: "" },
+    taskSource: null,
     statusMessage: null,
     progressMessage: null,
     progressPercent: 0,
@@ -108,7 +189,10 @@ export function createInitialWorkflow(): WorkflowState {
     error: null,
   };
 }
-export function startProcessing(state: WorkflowState, url: string): WorkflowState {
+export function startProcessing(
+  state: WorkflowState,
+  taskSource: TaskSourceSummary,
+): WorkflowState {
   return {
     ...state,
     stage: "video_extracting",
@@ -116,9 +200,7 @@ export function startProcessing(state: WorkflowState, url: string): WorkflowStat
     activeAiTarget: null,
     aiErrorTarget: null,
     aiTargetErrors: {},
-    url,
-    submittedUrl: url,
-    showUrlInput: false,
+    taskSource,
     statusMessage: null,
     progressMessage: { messageCode: "video.download.preparing", args: {} },
     progressPercent: 12,
@@ -142,7 +224,6 @@ export function startInsightRetry(state: WorkflowState, target: InsightRetryTarg
     activeAiTarget: target,
     aiErrorTarget: state.aiErrorTarget === target ? null : state.aiErrorTarget,
     aiTargetErrors,
-    showUrlInput: false,
     statusMessage: null,
     progressMessage: {
       messageCode:
@@ -196,7 +277,7 @@ export function restoreProcessingAfterCancellationFailure(
 export function confirmProcessingCancellation(state: WorkflowState): WorkflowState {
   return {
     ...createInitialWorkflow(),
-    url: state.submittedUrl || state.url,
+    composerSource: state.composerSource,
   };
 }
 
@@ -239,7 +320,6 @@ export function summarizeWorkerResult(
   return {
     ...createInitialWorkflow(),
     stage: result.status,
-    showUrlInput: false,
     statusMessage: null,
     progressMessage: null,
     progressPercent: result.status === "failed" ? 35 : 100,
@@ -274,6 +354,8 @@ export function finishInsightRetry(
   }
   return {
     ...next,
+    composerSource: state.composerSource,
+    taskSource: state.taskSource,
     aiErrorTarget: result.error?.stage === "insights_generating" ? target : null,
     aiTargetErrors,
   };
@@ -300,7 +382,6 @@ export function mergeProgressEvent(
   return {
     ...state,
     stage: event.stage,
-    showUrlInput: false,
     progressMessage: event.message,
     progressPercent: event.progress,
   };
