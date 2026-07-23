@@ -18,7 +18,7 @@ pub(crate) use access::{SupportedTask, TaskEditSession, TaskScan};
 #[allow(unused_imports)]
 pub(crate) use schema::{
     parse_insight_view, parse_insights_payload, InsightView, SafeTaskError, TaskArtifact,
-    TranscriptMetadata,
+    TaskSourceSummary, TranscriptMetadata,
 };
 pub(crate) use source_identity::SourceIdentity;
 #[allow(unused_imports)]

@@ -23,7 +23,7 @@ pub(crate) struct HistoryListItemView {
     pub(crate) task_id: String,
     pub(crate) id: String,
     pub(crate) created_at: String,
-    pub(crate) url: String,
+    pub(crate) source: task_manifest::TaskSourceSummary,
     pub(crate) status: String,
     pub(crate) task_dir: String,
     pub(crate) output_dir: String,
@@ -42,7 +42,7 @@ pub(crate) struct HistoryDetailRequest {
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub(crate) struct HistoryDetailView {
     pub(crate) task_id: String,
-    pub(crate) url: String,
+    pub(crate) source: task_manifest::TaskSourceSummary,
     pub(crate) status: String,
     pub(crate) task_dir: String,
     pub(crate) artifacts: HashMap<String, String>,
@@ -129,7 +129,7 @@ fn history_item_from_supported_task(
         task_id: task_id.clone(),
         id: task_id,
         created_at: task.created_at().to_string(),
-        url: task.safe_source_url().to_string(),
+        source: task.source(),
         status: task.status().to_string(),
         task_dir: task.task_dir_frontend_string(),
         output_dir: task_manifest::path_to_frontend_string(output_root),
@@ -163,7 +163,7 @@ pub(crate) fn load_history_detail_from_output_root(
     let insights = task.read_insights()?;
     Ok(HistoryDetailView {
         task_id: task.task_id().to_string(),
-        url: task.safe_source_url().to_string(),
+        source: task.source(),
         status: task.status().to_string(),
         task_dir: task.task_dir_frontend_string(),
         artifacts: task.declared_artifacts(),
@@ -185,7 +185,10 @@ mod tests {
         load_history_detail_from_output_root, load_history_from_output_root,
         load_history_with_stats, HistoryDetailRequest,
     };
-    use crate::task_manifest;
+    use crate::{
+        local_media_contract::LocalMediaKind,
+        task_manifest::{self, TaskSourceSummary},
+    };
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -262,8 +265,10 @@ mod tests {
         assert_eq!(ignored, 1);
         assert_eq!(history[0].task_id, task_id);
         assert_eq!(
-            history[0].url,
-            "https://www.douyin.com/video/7645505408425004329"
+            history[0].source,
+            TaskSourceSummary::Url {
+                url: "https://www.douyin.com/video/7645505408425004329".to_string(),
+            }
         );
         let detail_started = Instant::now();
         let detail = load_history_detail_from_output_root(
@@ -301,6 +306,65 @@ mod tests {
             list_elapsed.as_micros(),
             detail_elapsed.as_micros()
         );
+    }
+
+    #[test]
+    fn load_history_projects_local_sources_and_reads_their_task_artifacts() {
+        let output_root = temp_dir("history-local-sources");
+        let video_task = "20260723-120000-local-abcdef123456";
+        let audio_task = "20260723-120001-local-fedcba654321";
+        write_local_task(&output_root, video_task, "Interview.wmv", "video", "wmv");
+        write_local_task(
+            &output_root,
+            audio_task,
+            "Field recording.MP3",
+            "audio",
+            "mp3",
+        );
+
+        let history = load_history_from_output_root(&output_root).expect("load local history");
+
+        assert_eq!(history.len(), 2);
+        let video_item = history
+            .iter()
+            .find(|item| item.task_id == video_task)
+            .expect("video history item");
+        let audio_item = history
+            .iter()
+            .find(|item| item.task_id == audio_task)
+            .expect("audio history item");
+        assert_eq!(
+            audio_item.source,
+            TaskSourceSummary::LocalFile {
+                display_name: "Field recording.MP3".to_string(),
+                media_kind: LocalMediaKind::Audio,
+            }
+        );
+        assert_eq!(
+            video_item.source,
+            TaskSourceSummary::LocalFile {
+                display_name: "Interview.wmv".to_string(),
+                media_kind: LocalMediaKind::Video,
+            }
+        );
+        let detail = load_history_detail_from_output_root(
+            &output_root,
+            HistoryDetailRequest {
+                task_id: video_task.to_string(),
+            },
+        )
+        .expect("load local detail");
+        assert_eq!(detail.source, video_item.source);
+        assert_eq!(detail.text, "local transcript");
+        assert_eq!(
+            detail.artifacts["transcript_txt"],
+            "transcript/transcript.txt"
+        );
+        let serialized = serde_json::to_value(detail).expect("serialize local detail");
+        assert!(serialized.get("url").is_none());
+        assert_eq!(serialized["source"]["kind"], "local_file");
+        assert_eq!(serialized["source"]["displayName"], "Interview.wmv");
+        assert_eq!(serialized["source"]["mediaKind"], "video");
     }
 
     #[test]
@@ -652,6 +716,50 @@ mod tests {
             ),
         )
         .expect("write manifest");
+    }
+
+    fn write_local_task(
+        output_root: &Path,
+        task_id: &str,
+        display_name: &str,
+        media_kind: &str,
+        extension: &str,
+    ) {
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::write(
+            task_dir.join("transcript").join("transcript.txt"),
+            "local transcript\n",
+        )
+        .expect("write local transcript");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
+  "source_privacy_quarantined": false,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-23T12:00:00Z",
+  "source_kind": "local_file",
+  "source_url": "",
+  "source_identity": null,
+  "local_source": {{
+    "display_name": "{display_name}",
+    "media_kind": "{media_kind}",
+    "extension": "{extension}"
+  }},
+  "platform": "local",
+  "status": "completed",
+  "model": "iic/SenseVoiceSmall",
+  "artifacts": {{"transcript_txt": "transcript/transcript.txt"}},
+  "error": null,
+  "text_preview": "local transcript",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write local manifest");
     }
 
     fn temp_dir(name: &str) -> PathBuf {

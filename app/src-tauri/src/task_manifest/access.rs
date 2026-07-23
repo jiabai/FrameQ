@@ -2,7 +2,7 @@ use super::{
     coordinator::{acquire_task, try_acquire_task, TaskLease},
     schema::{
         parse_insights_payload, validate_relative_artifact_path, InsightView, SafeTaskError,
-        TaskArtifact, TaskManifest, TranscriptMetadata,
+        TaskArtifact, TaskManifest, TaskSourceSummary, TranscriptMetadata,
     },
     source_identity::SourceIdentity,
     storage::{
@@ -127,6 +127,12 @@ impl SupportedTask {
 
     pub(crate) fn source_identity(&self) -> Option<&SourceIdentity> {
         self.manifest.safe_source_identity()
+    }
+
+    pub(crate) fn source(&self) -> TaskSourceSummary {
+        self.manifest
+            .safe_source_summary()
+            .expect("supported task source must remain valid")
     }
 
     pub(crate) fn transcript_metadata(&self) -> Option<TranscriptMetadata> {

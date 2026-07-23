@@ -12,7 +12,7 @@ pub(crate) const AUDIO_EXTENSIONS: [&str; 8] =
 
 const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum LocalMediaKind {
     Video,
@@ -151,11 +151,11 @@ fn is_selection_token(value: &str) -> bool {
         )
 }
 
-fn extension_matches_kind(extension: &str, media_kind: LocalMediaKind) -> bool {
+pub(crate) fn extension_matches_kind(extension: &str, media_kind: LocalMediaKind) -> bool {
     media_kind.extensions().contains(&extension)
 }
 
-fn is_safe_display_name(value: &str, extension: &str) -> bool {
+pub(crate) fn is_safe_display_name(value: &str, extension: &str) -> bool {
     !value.trim().is_empty()
         && value.chars().count() <= 160
         && value != "."

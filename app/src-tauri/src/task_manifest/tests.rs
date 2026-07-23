@@ -5,8 +5,9 @@ use super::{
     transaction::{
         recover_task_artifacts, validate_journal_value_for_test, RecoveryOutcome, JOURNAL_FILE_NAME,
     },
-    SourceIdentity, SupportedTask, TaskArtifact,
+    SourceIdentity, SupportedTask, TaskArtifact, TaskSourceSummary,
 };
+use crate::local_media_contract::LocalMediaKind;
 use serde_json::json;
 use std::fs;
 use std::io;
@@ -250,6 +251,13 @@ fn safe_source_identity_requires_current_schema_marker_and_matching_source_url()
     let ready: TaskManifest = serde_json::from_value(base.clone()).expect("ready manifest");
     assert!(ready.safe_source_identity().is_some());
 
+    let mut null_local_source = base.clone();
+    null_local_source["local_source"] = serde_json::Value::Null;
+    assert!(
+        serde_json::from_value::<TaskManifest>(null_local_source).is_err(),
+        "URL manifests must reject even a null local_source field"
+    );
+
     let mut missing_marker = base.clone();
     missing_marker["source_privacy_migration_version"] = json!(0);
     let missing_marker: TaskManifest =
@@ -268,6 +276,119 @@ fn safe_source_identity_requires_current_schema_marker_and_matching_source_url()
         json!("https://www.youtube.com/watch?v=abcDEF_123-&signature=review-secret");
     let mismatched: TaskManifest = serde_json::from_value(mismatched).expect("mismatched manifest");
     assert!(mismatched.safe_source_identity().is_none());
+}
+
+#[test]
+fn local_task_source_projects_only_valid_video_and_audio_metadata() {
+    for (display_name, media_kind, extension) in [
+        ("Interview.wmv", LocalMediaKind::Video, "wmv"),
+        ("Field recording.MP3", LocalMediaKind::Audio, "mp3"),
+    ] {
+        let manifest: TaskManifest =
+            serde_json::from_value(local_manifest_value(display_name, media_kind, extension))
+                .expect("parse local manifest");
+
+        assert!(manifest.source_privacy_ready());
+        assert_eq!(
+            manifest.safe_source_summary(),
+            Some(TaskSourceSummary::LocalFile {
+                display_name: display_name.to_string(),
+                media_kind,
+            })
+        );
+        assert!(manifest.safe_source_identity().is_none());
+    }
+}
+
+#[test]
+fn local_task_source_fails_closed_for_incomplete_or_conflicting_boundaries() {
+    let base = local_manifest_value("Interview.wmv", LocalMediaKind::Video, "wmv");
+    let unsafe_identity = json!({
+        "version": 1,
+        "platform": "youtube",
+        "stable_id": "abcDEF_123-",
+        "effective_part": null,
+        "canonical_url": "https://www.youtube.com/watch?v=abcDEF_123-"
+    });
+    let mut invalid_values = Vec::new();
+    for (label, pointer, replacement) in [
+        (
+            "nonempty URL",
+            "/source_url",
+            json!("https://example.test/review-secret"),
+        ),
+        ("non-null identity", "/source_identity", unsafe_identity),
+        ("non-local platform", "/platform", json!("youtube")),
+        (
+            "Windows path",
+            "/local_source/display_name",
+            json!("C:\\private\\Interview.wmv"),
+        ),
+        (
+            "control character",
+            "/local_source/display_name",
+            json!("Interview\u{0000}.wmv"),
+        ),
+        (
+            "bidi character",
+            "/local_source/display_name",
+            json!("Interview\u{202e}.wmv"),
+        ),
+        ("wrong extension", "/local_source/extension", json!("mp3")),
+        (
+            "wrong media kind",
+            "/local_source/media_kind",
+            json!("audio"),
+        ),
+    ] {
+        let mut value = base.clone();
+        *value
+            .pointer_mut(pointer)
+            .expect("local manifest pointer must exist") = replacement;
+        invalid_values.push((label, value));
+    }
+    let mut missing_local_source = base.clone();
+    missing_local_source
+        .as_object_mut()
+        .expect("manifest object")
+        .remove("local_source");
+    invalid_values.push(("missing local_source", missing_local_source));
+    for required_field in ["source_url", "source_identity"] {
+        let mut value = base.clone();
+        value
+            .as_object_mut()
+            .expect("manifest object")
+            .remove(required_field);
+        invalid_values.push((required_field, value));
+    }
+
+    for (label, value) in invalid_values {
+        if let Ok(manifest) = serde_json::from_value::<TaskManifest>(value) {
+            assert!(
+                !manifest.source_privacy_ready(),
+                "{label} must not be accepted"
+            );
+            assert_eq!(
+                manifest.safe_source_summary(),
+                None,
+                "{label} must not be projected"
+            );
+        }
+    }
+}
+
+#[test]
+fn local_task_source_rejects_unknown_kinds_and_extra_local_metadata() {
+    let mut unknown_kind = local_manifest_value("Interview.wmv", LocalMediaKind::Video, "wmv");
+    unknown_kind["source_kind"] = json!("filesystem");
+    assert!(serde_json::from_value::<TaskManifest>(unknown_kind).is_err());
+
+    let mut extra_metadata = local_manifest_value("Interview.wmv", LocalMediaKind::Video, "wmv");
+    extra_metadata["local_source"]["path"] = json!("C:\\private\\Interview.wmv");
+    let error = serde_json::from_value::<TaskManifest>(extra_metadata)
+        .expect_err("extra local metadata must fail");
+    assert!(!error.to_string().contains("Interview.wmv"));
+    assert!(!error.to_string().contains("C:\\private"));
 }
 
 #[test]
@@ -375,6 +496,7 @@ fn manifest_round_trip_preserves_unknown_fields() {
         "task_id": "task",
         "created_at": "2026-07-10T12:00:00Z",
         "source_url": "",
+        "source_identity": null,
         "status": "completed",
         "future_worker_field": {"enabled": true}
     });
@@ -812,4 +934,33 @@ fn write_supported_task(
     )
     .expect("write manifest");
     task_dir
+}
+
+fn local_manifest_value(
+    display_name: &str,
+    media_kind: LocalMediaKind,
+    extension: &str,
+) -> serde_json::Value {
+    json!({
+        "schema_version": 3,
+        "source_privacy_migration_version": 2,
+        "source_privacy_quarantined": false,
+        "task_id": "20260723-120000-local-abcdef123456",
+        "created_at": "2026-07-23T12:00:00Z",
+        "source_kind": "local_file",
+        "source_url": "",
+        "source_identity": null,
+        "local_source": {
+            "display_name": display_name,
+            "media_kind": media_kind,
+            "extension": extension
+        },
+        "platform": "local",
+        "status": "completed",
+        "model": "iic/SenseVoiceSmall",
+        "artifacts": {},
+        "error": null,
+        "text_preview": "",
+        "insights_count": 0
+    })
 }

@@ -1,6 +1,7 @@
 use super::{
     source_identity::SourceIdentity, SOURCE_PRIVACY_MIGRATION_VERSION, TASK_SCHEMA_VERSION,
 };
+use crate::local_media_contract::{extension_matches_kind, is_safe_display_name, LocalMediaKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -113,6 +114,84 @@ pub(crate) struct InsightView {
     pub(crate) source_chunk_id: Option<u64>,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum TaskSourceKind {
+    Url,
+    LocalFile,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct LocalSourceManifest {
+    display_name: String,
+    media_kind: LocalMediaKind,
+    extension: String,
+}
+
+impl LocalSourceManifest {
+    fn is_safe(&self) -> bool {
+        extension_matches_kind(&self.extension, self.media_kind)
+            && is_safe_display_name(&self.display_name, &self.extension)
+    }
+}
+
+fn deserialize_present_local_source<'de, D>(
+    deserializer: D,
+) -> Result<Option<LocalSourceManifest>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    LocalSourceManifest::deserialize(deserializer).map(Some)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RequiredSourceIdentity {
+    Missing,
+    Present(Option<SourceIdentity>),
+}
+
+impl Default for RequiredSourceIdentity {
+    fn default() -> Self {
+        Self::Missing
+    }
+}
+
+impl<'de> Deserialize<'de> for RequiredSourceIdentity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Option::<SourceIdentity>::deserialize(deserializer).map(Self::Present)
+    }
+}
+
+impl Serialize for RequiredSourceIdentity {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Missing | Self::Present(None) => serializer.serialize_none(),
+            Self::Present(Some(identity)) => identity.serialize(serializer),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum TaskSourceSummary {
+    Url {
+        url: String,
+    },
+    LocalFile {
+        #[serde(rename = "displayName")]
+        display_name: String,
+        #[serde(rename = "mediaKind")]
+        media_kind: LocalMediaKind,
+    },
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub(super) struct TaskManifest {
     #[serde(default)]
@@ -125,10 +204,17 @@ pub(super) struct TaskManifest {
     pub(super) created_at: String,
     #[serde(default)]
     pub(super) updated_at: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_kind: Option<TaskSourceKind>,
     pub(super) source_url: String,
     #[serde(default)]
-    pub(super) source_identity: Option<SourceIdentity>,
+    source_identity: RequiredSourceIdentity,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_local_source"
+    )]
+    local_source: Option<LocalSourceManifest>,
     #[serde(default)]
     pub(super) platform: String,
     pub(super) status: String,
@@ -223,18 +309,57 @@ impl TaskManifest {
         if self.source_privacy_quarantined
             || self.schema_version != TASK_SCHEMA_VERSION
             || self.source_privacy_migration_version != SOURCE_PRIVACY_MIGRATION_VERSION
+            || !matches!(self.source_kind, None | Some(TaskSourceKind::Url))
+            || self.local_source.is_some()
         {
             return None;
         }
-        self.source_identity
-            .as_ref()
-            .filter(|identity| identity.is_safe() && self.source_url == identity.canonical_url)
+        match &self.source_identity {
+            RequiredSourceIdentity::Present(Some(identity))
+                if identity.is_safe() && self.source_url == identity.canonical_url =>
+            {
+                Some(identity)
+            }
+            _ => None,
+        }
     }
 
     pub(super) fn safe_source_url(&self) -> &str {
         self.safe_source_identity()
             .map(|identity| identity.canonical_url.as_str())
             .unwrap_or("")
+    }
+
+    pub(super) fn safe_source_summary(&self) -> Option<TaskSourceSummary> {
+        if self.source_privacy_quarantined
+            || self.schema_version != TASK_SCHEMA_VERSION
+            || self.source_privacy_migration_version != SOURCE_PRIVACY_MIGRATION_VERSION
+        {
+            return None;
+        }
+
+        match self.source_kind {
+            None | Some(TaskSourceKind::Url) => {
+                self.safe_source_identity()
+                    .map(|identity| TaskSourceSummary::Url {
+                        url: identity.canonical_url.clone(),
+                    })
+            }
+            Some(TaskSourceKind::LocalFile) => {
+                let source = self.local_source.as_ref()?;
+                if self.source_url != ""
+                    || !matches!(self.source_identity, RequiredSourceIdentity::Present(None))
+                    || self.platform != "local"
+                    || !source.is_safe()
+                {
+                    return None;
+                }
+                Some(TaskSourceSummary::LocalFile {
+                    display_name: source.display_name.clone(),
+                    media_kind: source.media_kind,
+                })
+            }
+        }
     }
 
     pub(super) fn safe_artifacts(&self) -> HashMap<String, String> {
@@ -246,10 +371,7 @@ impl TaskManifest {
     }
 
     pub(super) fn source_privacy_ready(&self) -> bool {
-        self.schema_version == TASK_SCHEMA_VERSION
-            && self.source_privacy_migration_version == SOURCE_PRIVACY_MIGRATION_VERSION
-            && !self.source_privacy_quarantined
-            && self.safe_source_identity().is_some()
+        self.safe_source_summary().is_some()
     }
 
     pub(super) fn transcript_metadata(&self) -> Option<TranscriptMetadata> {
