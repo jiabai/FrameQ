@@ -127,6 +127,18 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Split the Rust worker runner by private responsibility (design approved 2026-07-23) — ✅
+  Acceptance: preserve `runner.rs` as the sole `WorkerLane` lifecycle orchestrator and preserve
+  every current caller/type path, spawn/register/stdin/read/wait/finish/classify order, matching
+  instance cleanup, structured-result-first terminal precedence, fixed timeout policy,
+  validated-progress-only activity, supervisor-only OS signalling, and non-echoing diagnostics;
+  extract private process-I/O, watchdog, progress, and terminal owners plus topic-focused tests.
+  Add characterization and an exact ownership/dependency RED/GREEN gate before moving production
+  code; add no public lifecycle entry, facade/state-machine framework, dependency, contract, product
+  behavior, local-media runtime, or platform-evidence claim. Design:
+  `docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`. ExecPlan and implementation are
+  intentionally pending design-document review.
+
 - [x] Split the Python worker pipeline by responsibility (2026-07-21) — ✅ Acceptance: keep
   `frameq_worker.pipeline` as the sole stable production import surface and direct-reexport the
   exact current objects; move shared path/progress/failure policy, subtitle/ASR stages,

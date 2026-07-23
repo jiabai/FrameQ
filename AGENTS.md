@@ -16,6 +16,7 @@
 - Server route 模块拆分设计：`docs/design-docs/2026-07-21-server-route-module-split.md`
 - Server 认证/额度/生产运维加固设计：`docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
+- Rust worker runner 模块拆分设计：`docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`
 - Rust worker watchdog 设计：`docs/design-docs/2026-07-22-rust-worker-watchdog.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
