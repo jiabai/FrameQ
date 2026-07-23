@@ -93,6 +93,15 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   compiled and failed only at its first assertion because the approved `store/` tree was `[]`
   instead of the seven exact paths; excluding only that gate passed 24 Server files, 145 tests,
   with one Windows POSIX-signal skip; TypeScript build passed.
+- [x] 2026-07-23: Task 3 established the two-line stable contract root, moved all 24 contract
+  aliases and the actual Memory class to their defining modules, and extracted the single
+  full-state atomic coordinator. A full-suite RED exposed a new enumerable circular reference
+  (`MemoryStore.atomic -> coordinator.state -> MemoryStore`); using an ECMAScript private
+  `#state` reference restored existing JSON serialization without changing locking or rollback.
+  Validation: compatibility 3/3; auth concurrency 23/23; transaction safety 20/20; routes 11/11;
+  LLM quota/config 10/10; complete non-boundary suite 145 passed / one Windows skip; TypeScript
+  build passed. The ownership RED now reports only the four intentionally absent Memory operation
+  owners.
 
 ## Surprises & Discoveries
 
@@ -142,6 +151,13 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   calling `$transaction`, then separately observing each transaction's real
   `tx.emailOtp.findFirst`, passes without weakening the one-artifact/one-attempt assertions.
   Evidence: Task 1 RED/diagnostic/GREEN command outputs on 2026-07-23.
+- Moving the atomic state reference into a separate class created a circular object graph when the
+  reference was an ordinary TypeScript parameter property. `JSON.stringify(store)` is an existing
+  secret-safety assertion and failed before inspecting the encrypted configuration. An ECMAScript
+  `#state` field is non-enumerable, so it preserves the existing serializability while keeping one
+  coordinator and the same complete snapshot/rollback behavior.
+  Evidence: full non-boundary Server RED in `llmQuota.test.ts`, focused GREEN 10/10, then full
+  GREEN 145 passed / one skip.
 
 ## Decision Log
 
@@ -613,7 +629,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - Modify: `server/src/store.ts`
 - Modify: `server/tests/storeCompatibility.test.ts`
 
-- [ ] Move all current record, closed-outcome, and Store type declarations without renaming or
+- [x] Move all current record, closed-outcome, and Store type declarations without renaming or
   reshaping them into `store/contracts.ts`. The stable root becomes exactly:
 
   ```ts
@@ -624,7 +640,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Do not leave a duplicate type, wrapper class, subclass, default export, namespace export, or
   executable initialization in `store.ts`.
 
-- [ ] Move the actual `MemoryStore` class to `store/memory.ts` and update its security import to
+- [x] Move the actual `MemoryStore` class to `store/memory.ts` and update its security import to
   `../security.js`. The public-root identity test must be:
 
   ```ts
@@ -636,7 +652,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 
   This private import is allowed only in the ownership/compatibility tests.
 
-- [ ] Extract the existing serialized snapshot/rollback mechanism into one private coordinator:
+- [x] Extract the existing serialized snapshot/rollback mechanism into one private coordinator:
 
   ```ts
   export type MemoryState = {
@@ -657,8 +673,11 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 
   export class MemoryAtomicCoordinator {
     private tail: Promise<void> = Promise.resolve();
+    readonly #state: MemoryState;
 
-    constructor(private readonly state: MemoryState) {}
+    constructor(state: MemoryState) {
+      this.#state = state;
+    }
 
     async run<T>(operation: () => Promise<T>): Promise<T> {
       const previous = this.tail;
@@ -668,38 +687,38 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
       });
       await previous;
       const snapshot = structuredClone({
-        users: this.state.users,
-        emailOtps: this.state.emailOtps,
-        desktopLoginTickets: this.state.desktopLoginTickets,
-        sessions: this.state.sessions,
-        orders: this.state.orders,
-        entitlements: this.state.entitlements,
-        llmConfig: this.state.llmConfig,
-        llmUsageEvents: this.state.llmUsageEvents,
-        activationCodes: this.state.activationCodes,
-        adminSessions: this.state.adminSessions,
+        users: this.#state.users,
+        emailOtps: this.#state.emailOtps,
+        desktopLoginTickets: this.#state.desktopLoginTickets,
+        sessions: this.#state.sessions,
+        orders: this.#state.orders,
+        entitlements: this.#state.entitlements,
+        llmConfig: this.#state.llmConfig,
+        llmUsageEvents: this.#state.llmUsageEvents,
+        activationCodes: this.#state.activationCodes,
+        adminSessions: this.#state.adminSessions,
         adminEntitlementAdjustments:
-          this.state.adminEntitlementAdjustments,
-        webhookEvents: this.state.webhookEvents,
-        authRateLimits: this.state.authRateLimits,
+          this.#state.adminEntitlementAdjustments,
+        webhookEvents: this.#state.webhookEvents,
+        authRateLimits: this.#state.authRateLimits,
       });
       try {
         return await operation();
       } catch (error) {
-        this.state.users = snapshot.users;
-        this.state.emailOtps = snapshot.emailOtps;
-        this.state.desktopLoginTickets = snapshot.desktopLoginTickets;
-        this.state.sessions = snapshot.sessions;
-        this.state.orders = snapshot.orders;
-        this.state.entitlements = snapshot.entitlements;
-        this.state.llmConfig = snapshot.llmConfig;
-        this.state.llmUsageEvents = snapshot.llmUsageEvents;
-        this.state.activationCodes = snapshot.activationCodes;
-        this.state.adminSessions = snapshot.adminSessions;
-        this.state.adminEntitlementAdjustments =
+        this.#state.users = snapshot.users;
+        this.#state.emailOtps = snapshot.emailOtps;
+        this.#state.desktopLoginTickets = snapshot.desktopLoginTickets;
+        this.#state.sessions = snapshot.sessions;
+        this.#state.orders = snapshot.orders;
+        this.#state.entitlements = snapshot.entitlements;
+        this.#state.llmConfig = snapshot.llmConfig;
+        this.#state.llmUsageEvents = snapshot.llmUsageEvents;
+        this.#state.activationCodes = snapshot.activationCodes;
+        this.#state.adminSessions = snapshot.adminSessions;
+        this.#state.adminEntitlementAdjustments =
           snapshot.adminEntitlementAdjustments;
-        this.state.webhookEvents = snapshot.webhookEvents;
-        this.state.authRateLimits = snapshot.authRateLimits;
+        this.#state.webhookEvents = snapshot.webhookEvents;
+        this.#state.authRateLimits = snapshot.authRateLimits;
         throw error;
       } finally {
         release();
@@ -708,11 +727,15 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   }
   ```
 
+  The state reference uses an ECMAScript private field rather than an enumerable parameter
+  property because existing secret-safety tests serialize `MemoryStore`; this avoids a circular
+  JSON graph while preserving the coordinator boundary.
+
   `MemoryStore` constructs exactly one coordinator after its public fields initialize and keeps a
   private `runAtomically` forwarding method until the capability extractions in Task 4 are complete.
   Do not create one lock per capability or snapshot only the fields a capability usually touches.
 
-- [ ] Run the stable-surface, Memory concurrency, rollback, route, and build gates:
+- [x] Run the stable-surface, Memory concurrency, rollback, route, and build gates:
 
   ```powershell
   npm --prefix server test -- --run storeCompatibility
@@ -727,7 +750,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   remains intentionally RED because four approved Memory child files and the Prisma tree are still
   absent.
 
-- [ ] Record evidence and create the authorized stable-root checkpoint:
+- [x] Record evidence and create the authorized stable-root checkpoint:
 
   ```powershell
   git add server/src/store.ts server/src/store server/tests/storeCompatibility.test.ts docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md

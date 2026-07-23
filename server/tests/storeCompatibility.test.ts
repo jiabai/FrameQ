@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { PrismaStore } from "../src/prismaStore.js";
-import { MemoryStore, type Store } from "../src/store.js";
+import { MemoryStore as DefiningMemoryStore } from "../src/store/memory.js";
+import { MemoryStore as PublicMemoryStore, type Store } from "../src/store.js";
 
 const storeMethods = [
   "upsertUserByEmail",
@@ -79,7 +80,9 @@ describe("Store adapter compatibility surface", () => {
     expect(storeMethodSetIsExact).toBe(true);
     const expectedMethods = [...storeMethods, ...compatibilityMethods];
 
-    for (const storeClass of [MemoryStore, PrismaStore]) {
+    expect(PublicMemoryStore).toBe(DefiningMemoryStore);
+
+    for (const storeClass of [PublicMemoryStore, PrismaStore]) {
       const prototypeMethods = Object.getOwnPropertyNames(storeClass.prototype);
       for (const method of expectedMethods) {
         expect(prototypeMethods, `${storeClass.name}.${method}`).toContain(method);
@@ -88,7 +91,7 @@ describe("Store adapter compatibility surface", () => {
   });
 
   test("keeps the public MemoryStore fixture fields", () => {
-    const store = new MemoryStore();
+    const store = new PublicMemoryStore();
 
     for (const field of arrayFixtureFields) {
       expect(Array.isArray(store[field]), field).toBe(true);
@@ -97,7 +100,7 @@ describe("Store adapter compatibility surface", () => {
   });
 
   test("keeps mutable record identity and established list ordering", async () => {
-    const store = new MemoryStore();
+    const store = new PublicMemoryStore();
     const later = new Date(now.getTime() + 1000);
 
     const zulu = await store.upsertUserByEmail("zulu@example.com", now);
