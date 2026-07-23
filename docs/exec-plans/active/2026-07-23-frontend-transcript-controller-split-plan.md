@@ -70,6 +70,11 @@ transcript-detail module, introduce a nested public controller API, or add a new
   `useArtifactDetailController` while preserving the facade projection. Validation: focused facade
   1 file / 18 tests and App lint passed; the intentional ownership RED advanced to the next missing
   owner, `useTranscriptDocumentController.ts`.
+- [x] 2026-07-23: Extracted task-scoped transcript loading, draft/segment state, save IPC, stale
+  completion guard, and workflow merge into `useTranscriptDocumentController`; kept the temporary
+  review reset and save continuation in the facade. Validation: focused facade 1 file / 18 tests
+  and App lint passed; the intentional ownership RED advanced to the final missing owner,
+  `useTranscriptReviewSession.ts`.
 
 ## Surprises & Discoveries
 
@@ -679,7 +684,7 @@ git commit -m "refactor(app): extract artifact detail actions"
 - Modify: `app/src/features/transcript/useTranscriptDetailController.ts`
 - Test: `app/src/features/transcript/useTranscriptDetailController.test.ts`
 
-- [ ] **Step 1: Create the document owner**
+- [x] **Step 1: Create the document owner**
 
 Use this option and continuation shape:
 
@@ -717,7 +722,7 @@ It must still reset document state without a task/artifact, deduplicate the same
 cleaned-up request, install text/segments/detail on success, and use the existing fallback/no-audio
 message codes.
 
-- [ ] **Step 2: Move semantic draft updates**
+- [x] **Step 2: Move semantic draft updates**
 
 Implement the exact current draft actions:
 
@@ -740,7 +745,7 @@ const updateFullTranscriptDraft = useCallback((text: string) => {
 }, []);
 ```
 
-- [ ] **Step 3: Move save IPC and stale-result protection**
+- [x] **Step 3: Move save IPC and stale-result protection**
 
 Expose a private `saveTranscriptDocument(completeSuccessfulSave)` action. Preserve the exact
 guard and sequencing:
@@ -801,7 +806,7 @@ const saveTranscriptDocument = useCallback(
 The continuation must catch its own audio-play failure and must not throw. This keeps a successful
 disk save from being relabeled as a save failure.
 
-- [ ] **Step 4: Compose document fields in the facade**
+- [x] **Step 4: Compose document fields in the facade**
 
 Call the new hook first, pass its draft/dirty values into `useArtifactDetailController`, and return
 the same document fields/actions explicitly. While review state still lives in the facade, keep its
@@ -835,7 +840,7 @@ const saveTranscriptDraft = useCallback(
 Task 6 moves this temporary review effect and continuation into the review owner. Do not move
 workflow identity or `applyTranscriptSave` into App or the review owner.
 
-- [ ] **Step 5: Run behavior and lint gates**
+- [x] **Step 5: Run behavior and lint gates**
 
 ```powershell
 npm.cmd --prefix app test -- src/features/transcript/useTranscriptDetailController.test.ts
@@ -845,7 +850,7 @@ npm.cmd --prefix app run lint
 Expected: all behavior tests pass. The ownership test remains RED only because
 `useTranscriptReviewSession.ts` is still absent.
 
-- [ ] **Step 6: Commit the document owner**
+- [x] **Step 6: Commit the document owner**
 
 ```powershell
 git add app\src\features\transcript\useTranscriptDocumentController.ts app\src\features\transcript\useTranscriptDetailController.ts

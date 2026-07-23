@@ -14,23 +14,19 @@ import type { WorkflowState } from "../../workflow";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { SupportedLocale } from "../../i18n/locale";
 import {
-  loadTranscriptDetail,
-  saveTranscriptEdit,
   type SaveTranscriptEditResponse,
-  type TranscriptDetailResponse,
   type TranscriptSegment,
 } from "../../transcriptDetailClient";
 import {
   findActiveTranscriptSegmentId,
   shouldPauseActiveTranscriptSegment,
-  transcriptTextFromSegments,
-  updateTranscriptSegmentText,
 } from "../../transcriptReviewState";
 import {
   audioProgressPercent,
   clampAudioTime,
 } from "../../audioReviewBarState";
 import { useArtifactDetailController } from "../results/useArtifactDetailController";
+import { useTranscriptDocumentController } from "./useTranscriptDocumentController";
 
 type UseTranscriptDetailControllerOptions = {
   workflow: WorkflowState;
@@ -45,12 +41,21 @@ export function useTranscriptDetailController({
   applyTranscriptSave,
   setActionNotice,
 }: UseTranscriptDetailControllerOptions) {
-  const [transcriptDetail, setTranscriptDetail] = useState<TranscriptDetailResponse | null>(null);
-  const [transcriptDraft, setTranscriptDraft] = useState("");
-  const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([]);
-  const [transcriptDirty, setTranscriptDirty] = useState(false);
-  const [transcriptLoading, setTranscriptLoading] = useState(false);
-  const [transcriptSaving, setTranscriptSaving] = useState(false);
+  const transcriptDocument = useTranscriptDocumentController({
+    workflow,
+    applyTranscriptSave,
+    setActionNotice,
+  });
+  const {
+    transcriptDetail,
+    transcriptDraft,
+    transcriptSegments,
+    transcriptDirty,
+    transcriptLoading,
+    transcriptSaving,
+    updateTranscriptSegmentDraft,
+    updateFullTranscriptDraft,
+  } = transcriptDocument;
   const [activeTranscriptSegmentId, setActiveTranscriptSegmentId] = useState<string | null>(null);
   const [editingTranscriptSegmentId, setEditingTranscriptSegmentId] = useState<string | null>(null);
   const [transcriptAudioCurrentTime, setTranscriptAudioCurrentTime] = useState(0);
@@ -59,9 +64,6 @@ export function useTranscriptDetailController({
   const transcriptAudioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptSegmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const resumeTranscriptAfterSaveRef = useRef(false);
-  const transcriptLoadTaskIdRef = useRef<string | null>(null);
-  const currentTaskIdRef = useRef(workflow.taskId);
-  currentTaskIdRef.current = workflow.taskId;
 
   const {
     detailTab,
@@ -83,66 +85,9 @@ export function useTranscriptDetailController({
   });
 
   useEffect(() => {
-    if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      transcriptLoadTaskIdRef.current = null;
-      setTranscriptDetail(null);
-      setTranscriptDraft(workflow.text);
-      setTranscriptSegments([]);
-      setTranscriptDirty(false);
-      setActiveTranscriptSegmentId(null);
-      setEditingTranscriptSegmentId(null);
-      return;
-    }
-
-    if (transcriptLoadTaskIdRef.current === workflow.taskId) {
-      return;
-    }
-    transcriptLoadTaskIdRef.current = workflow.taskId;
-
-    let cancelled = false;
-    setTranscriptLoading(true);
-    setTranscriptDetail(null);
-    setTranscriptDraft(workflow.text);
-    setTranscriptSegments([]);
-    setTranscriptDirty(false);
     setActiveTranscriptSegmentId(null);
     setEditingTranscriptSegmentId(null);
-    const taskId = workflow.taskId;
-
-    async function loadDetail() {
-      try {
-        const detail = await loadTranscriptDetail(taskId);
-        if (cancelled) {
-          return;
-        }
-        setTranscriptDetail(detail);
-        setTranscriptDraft(detail.text || workflow.text);
-        setTranscriptSegments(detail.segments);
-        setActionNotice(
-          detail.audio_asset_path
-            ? null
-            : uiMessage("transcript.notice.audioUnavailableEdit"),
-        );
-      } catch {
-        if (cancelled) {
-          return;
-        }
-        setTranscriptDetail(null);
-        setTranscriptDraft(workflow.text);
-        setTranscriptSegments([]);
-        setActionNotice(uiMessage("transcript.notice.detailLoadFallback"));
-      } finally {
-        if (!cancelled) {
-          setTranscriptLoading(false);
-        }
-      }
-    }
-
-    void loadDetail();
-    return () => {
-      cancelled = true;
-    };
-  }, [setActionNotice, workflow.artifacts.transcript_txt, workflow.taskId, workflow.text]);
+  }, [workflow.artifacts.transcript_txt, workflow.taskId]);
 
   useEffect(() => {
     if (!activeTranscriptSegmentId) {
@@ -288,76 +233,23 @@ export function useTranscriptDetailController({
     setEditingTranscriptSegmentId(null);
   }, []);
 
-  const updateTranscriptSegmentDraft = useCallback((segmentId: string, text: string) => {
-    setTranscriptSegments((current) => {
-      const next = updateTranscriptSegmentText(current, segmentId, text);
-      setTranscriptDraft(transcriptTextFromSegments(next));
-      return next;
-    });
-    setTranscriptDirty(true);
-  }, []);
-
-  const updateFullTranscriptDraft = useCallback((text: string) => {
-    setTranscriptDraft(text);
-    setTranscriptDirty(true);
-  }, []);
-
-  const saveTranscriptDraft = useCallback(async () => {
-    if (!workflow.taskId || !workflow.artifacts.transcript_txt || transcriptSaving) {
-      return;
-    }
-
-    const expectedTaskId = workflow.taskId;
-    setTranscriptSaving(true);
-    try {
-      const saved = await saveTranscriptEdit(
-        expectedTaskId,
-        transcriptDraft,
-        transcriptSegments,
-      );
-      if (
-        currentTaskIdRef.current !== expectedTaskId ||
-        saved.task_id !== expectedTaskId
-      ) {
-        return;
+  const completeSuccessfulSave = useCallback(async () => {
+    setEditingTranscriptSegmentId(null);
+    if (resumeTranscriptAfterSaveRef.current && transcriptAudioRef.current) {
+      resumeTranscriptAfterSaveRef.current = false;
+      try {
+        await transcriptAudioRef.current.play();
+      } catch {
+        setActionNotice(uiMessage("transcript.notice.savedAutoplayFailed"));
       }
-      setTranscriptDraft(saved.text);
-      setTranscriptDirty(false);
-      setEditingTranscriptSegmentId(null);
-      setTranscriptDetail((current) =>
-        current
-          ? {
-              ...current,
-              text: saved.text,
-              has_original_backup: saved.has_original_backup,
-            }
-          : current,
-      );
-      applyTranscriptSave(expectedTaskId, saved);
-      setActionNotice(uiMessage("transcript.notice.saved"));
-
-      if (resumeTranscriptAfterSaveRef.current && transcriptAudioRef.current) {
-        resumeTranscriptAfterSaveRef.current = false;
-        try {
-          await transcriptAudioRef.current.play();
-        } catch {
-          setActionNotice(uiMessage("transcript.notice.savedAutoplayFailed"));
-        }
-      }
-    } catch {
-      setActionNotice(uiMessage("transcript.notice.saveFailed"));
-    } finally {
-      setTranscriptSaving(false);
     }
-  }, [
-    setActionNotice,
-    applyTranscriptSave,
-    transcriptDraft,
-    transcriptSaving,
-    transcriptSegments,
-    workflow.artifacts.transcript_txt,
-    workflow.taskId,
-  ]);
+  }, [setActionNotice]);
+
+  const saveTranscriptDraft = useCallback(
+    () =>
+      transcriptDocument.saveTranscriptDocument(completeSuccessfulSave),
+    [completeSuccessfulSave, transcriptDocument.saveTranscriptDocument],
+  );
 
   const handleTranscriptAudioPlay = useCallback(() => {
     setTranscriptAudioPlaying(true);
