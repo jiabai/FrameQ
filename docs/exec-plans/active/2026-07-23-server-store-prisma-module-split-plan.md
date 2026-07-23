@@ -88,6 +88,11 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   `authQuotaConcurrency` 23/23; `transactionSafety` 20/20; `prismaTransactionSafety` 9/9;
   `prismaAuthQuotaConcurrency` 13/13; `tsc --noEmit`; governance 0 errors / 0 warnings; and
   `git diff --check`.
+- [x] 2026-07-23: Task 2 added the complete future-GREEN Store ownership gate and recorded the
+  required first RED before creating any private production file. Validation: the focused test
+  compiled and failed only at its first assertion because the approved `store/` tree was `[]`
+  instead of the seven exact paths; excluding only that gate passed 24 Server files, 145 tests,
+  with one Windows POSIX-signal skip; TypeScript build passed.
 
 ## Surprises & Discoveries
 
@@ -514,7 +519,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 
 - Create: `server/tests/storeModuleBoundaries.test.ts`
 
-- [ ] Add one source-level test whose first assertion is the exact approved private tree:
+- [x] Add one source-level test whose first assertion is the exact approved private tree:
 
   ```ts
   const expectedStoreOwners = [
@@ -546,7 +551,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   sorted forward-slash-relative `.ts` paths. Do not create empty production files merely to change
   the RED reason.
 
-- [ ] After the tree assertion, implement the complete future GREEN gate with the TypeScript
+- [x] After the tree assertion, implement the complete future GREEN gate with the TypeScript
   compiler API. It must enforce all of these facts:
 
   - `store.ts` has only the direct contract wildcard re-export and actual `MemoryStore` re-export;
@@ -572,7 +577,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   - the exact consumer capability aliases listed in Task 7 replace full Store properties outside
     `server.ts`.
 
-- [ ] Run only the new gate:
+- [x] Run only the new gate:
 
   ```powershell
   npm --prefix server test -- --run storeModuleBoundaries
@@ -581,7 +586,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Expected RED: the first assertion reports the absent approved `store/` tree. The test must
   compile, and no earlier assertion or unrelated exception may fail.
 
-- [ ] Keep the gate enabled but exclude only this file while production extraction is incomplete:
+- [x] Keep the gate enabled but exclude only this file while production extraction is incomplete:
 
   ```powershell
   npm --prefix server test -- --exclude tests/storeModuleBoundaries.test.ts
@@ -591,7 +596,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 
   Expected: the complete non-boundary Server suite and build pass.
 
-- [ ] Record the exact RED evidence in Progress, then create the authorized test checkpoint:
+- [x] Record the exact RED evidence in Progress, then create the authorized test checkpoint:
 
   ```powershell
   git add server/tests/storeModuleBoundaries.test.ts docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md
