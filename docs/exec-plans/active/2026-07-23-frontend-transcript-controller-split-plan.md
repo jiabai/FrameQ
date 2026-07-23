@@ -62,6 +62,10 @@ transcript-detail module, introduce a nested public controller API, or add a new
   production code. Validation:
   `npm.cmd --prefix app test -- src/features/transcript/useTranscriptDetailController.test.ts`
   passed 1 file / 18 tests.
+- [x] 2026-07-23: Established the planned source-ownership RED. Validation:
+  `npm.cmd --prefix app test -- src/features/transcript/transcriptControllerBoundary.test.ts`
+  failed for the intended reason: the first approved private owner,
+  `../results/useArtifactDetailController.ts`, does not yet exist.
 
 ## Surprises & Discoveries
 
@@ -475,7 +479,7 @@ git commit -m "test(app): characterize transcript controller boundaries"
 
 - Create: `app/src/features/transcript/transcriptControllerBoundary.test.ts`
 
-- [ ] **Step 1: Add the source-boundary test**
+- [x] **Step 1: Add the source-boundary test**
 
 Create this test with real source paths and fixed owner assertions:
 
@@ -544,7 +548,7 @@ describe("frontend transcript controller ownership", () => {
 });
 ```
 
-- [ ] **Step 2: Run the ownership test and verify RED**
+- [x] **Step 2: Run the ownership test and verify RED**
 
 ```powershell
 npm.cmd --prefix app test -- src/features/transcript/transcriptControllerBoundary.test.ts
@@ -553,7 +557,7 @@ npm.cmd --prefix app test -- src/features/transcript/transcriptControllerBoundar
 Expected: FAIL because the three approved owner files do not exist. The failure must identify the
 first missing owner path; a TypeScript/compiler/configuration failure is not valid RED evidence.
 
-- [ ] **Step 3: Commit the RED boundary**
+- [x] **Step 3: Commit the RED boundary**
 
 ```powershell
 git add app\src\features\transcript\transcriptControllerBoundary.test.ts
