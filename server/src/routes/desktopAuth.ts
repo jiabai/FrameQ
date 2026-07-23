@@ -5,7 +5,11 @@ import { renderLoginPage } from "../loginPage.js";
 import { sha256 } from "../security.js";
 import type { Store } from "../store.js";
 import { emailStartSchema, emailVerifySchema } from "./authSchemas.js";
-import { bearerToken, publicError } from "./shared.js";
+import {
+  bearerToken,
+  isServerTemporarilyUnavailable,
+  publicAuthError,
+} from "./shared.js";
 
 const ticketExchangeSchema = z.object({
   ticket: z.string(),
@@ -41,7 +45,13 @@ export function registerDesktopAuthRoutes(
       });
       return { ok: true };
     } catch (error) {
-      return reply.code(400).send({ error: publicError(error) });
+      if (isServerTemporarilyUnavailable(error)) {
+        return reply.code(503).send({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+      }
+      const publicMessage = publicAuthError(error);
+      return publicMessage
+        ? reply.code(400).send({ error: publicMessage })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 
@@ -57,7 +67,13 @@ export function registerDesktopAuthRoutes(
         redirect_url: result.redirectUrl,
       };
     } catch (error) {
-      return reply.code(400).send({ error: publicError(error) });
+      if (isServerTemporarilyUnavailable(error)) {
+        return reply.code(503).send({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+      }
+      const publicMessage = publicAuthError(error);
+      return publicMessage
+        ? reply.code(400).send({ error: publicMessage })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 
@@ -74,7 +90,13 @@ export function registerDesktopAuthRoutes(
         expires_at: result.expiresAt.toISOString(),
       };
     } catch (error) {
-      return reply.code(400).send({ error: publicError(error) });
+      if (isServerTemporarilyUnavailable(error)) {
+        return reply.code(503).send({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+      }
+      const publicMessage = publicAuthError(error);
+      return publicMessage
+        ? reply.code(400).send({ error: publicMessage })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 

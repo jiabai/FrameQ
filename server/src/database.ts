@@ -4,18 +4,24 @@ import { dirname, resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 
 export function resolveDatabaseUrl(): string {
-  const configured = process.env.DATABASE_URL;
+  return resolveDatabaseUrlFrom(process.env.DATABASE_URL);
+}
+
+export function resolveDatabaseUrlFrom(configured: string | undefined): string {
   if (configured && configured.trim()) {
-    return configured;
+    return configured.trim();
   }
   const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const sqlitePath = resolve(serverRoot, "data", "frameq.sqlite").replace(/\\/g, "/");
-  mkdirSync(dirname(sqlitePath), { recursive: true });
   return `file:${sqlitePath}`;
 }
 
-export async function createPrismaClient(): Promise<PrismaClient> {
-  process.env.DATABASE_URL = resolveDatabaseUrl();
+export async function createPrismaClient(databaseUrl = resolveDatabaseUrl()): Promise<PrismaClient> {
+  if (databaseUrl === resolveDatabaseUrlFrom(undefined)) {
+    const sqlitePath = databaseUrl.slice("file:".length);
+    mkdirSync(dirname(sqlitePath), { recursive: true });
+  }
+  process.env.DATABASE_URL = databaseUrl;
   const prisma = new PrismaClient();
   try {
     await prisma.$connect();
@@ -26,4 +32,26 @@ export async function createPrismaClient(): Promise<PrismaClient> {
     await prisma.$disconnect().catch(() => undefined);
     throw error;
   }
+}
+
+export function createDatabaseReadinessChecks(prisma: PrismaClient) {
+  return {
+    verifySchema: async () => {
+      await prisma.$queryRawUnsafe(
+        'SELECT "purpose", "email", "state" FROM "EmailOtp" LIMIT 0',
+      );
+      await prisma.$queryRawUnsafe(
+        'SELECT "purpose", "scope", "keyHash" FROM "AuthRateLimit" LIMIT 0',
+      );
+      await prisma.$queryRawUnsafe(
+        'SELECT "llmQuotaLimit", "llmQuotaUsed" FROM "Entitlement" LIMIT 0',
+      );
+      await prisma.$queryRawUnsafe(
+        'SELECT "requestId" FROM "LlmUsageEvent" LIMIT 0',
+      );
+    },
+    ping: async () => {
+      await prisma.$queryRawUnsafe("SELECT 1");
+    },
+  };
 }

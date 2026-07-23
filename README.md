@@ -300,12 +300,17 @@ npm --prefix server run build
 npm --prefix server test
 ```
 
-Local server schema setup:
+Local server schema setup uses the same reviewed migration chain as production:
 
 ```powershell
 npm --prefix server run prisma:generate
-npm --prefix server run db:push
+npm --prefix server run db:migrate:deploy
+npm --prefix server run db:migrate:status
+npm --prefix server run db:preflight -- --mode current
 ```
+
+See [the production runbook](deploy/server-deployment.md) before migrating, backing up, restoring,
+or rolling back a deployed SQLite database.
 
 ## Worker Smoke Test
 

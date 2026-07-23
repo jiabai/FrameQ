@@ -8,12 +8,16 @@ Type=simple
 User=frameq
 Group=frameq
 WorkingDirectory=/opt/frameq/FrameQ/server
+EnvironmentFile=/opt/frameq/FrameQ/server/.env
 Environment=NODE_ENV=production
+ExecStartPre=/opt/frameq/FrameQ/server/node_modules/.bin/prisma migrate status
+ExecStartPre=/usr/bin/node scripts/database-preflight.mjs --mode current
 ExecStart=/opt/frameq/FrameQ/server/node_modules/.bin/tsx src/index.ts
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
 KillSignal=SIGTERM
+UMask=0077
 
 NoNewPrivileges=true
 PrivateTmp=true

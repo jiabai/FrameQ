@@ -43,36 +43,57 @@ Pay.
   implementation plan without changing runtime/deployment files or external systems. Validation:
   governance validation reported 0 errors and 0 warnings, and tracked plus new-document whitespace
   checks passed.
-- [ ] Add RED tests for production config, redaction, trusted proxy, health, shutdown, and deploy
-  contracts. Validation: exact focused failures are recorded before production edits.
-- [ ] Implement typed fail-closed startup and explicit development-only console OTP. Validation:
-  production configuration matrix passes.
-- [ ] Enable safe structured logging and loopback-only trusted proxy behavior. Validation: seeded
-  secret fixtures are absent from captured logs.
-- [ ] Add liveness/readiness and bounded idempotent shutdown. Validation: real child-process lifecycle
-  tests pass and release the SQLite file/port.
-- [ ] Replace production schema push with migration/preflight/backup/restore/rollback runbooks.
-  Validation: disposable restore rehearsal and config contract tests pass.
-- [ ] Add server CI and complete production smoke evidence. Validation: local gates and hosted
-  workflow evidence are recorded before plan completion.
+- [x] 2026-07-23: Added RED tests for production config, redaction, trusted proxy, health/lifecycle,
+  and deployment contracts before each implementation slice. Validation: focused tests failed on
+  the unsafe fallback/raw-error/proxy/missing-route/missing-script behavior, then passed after the
+  corresponding change.
+- [x] 2026-07-23: Implemented typed fail-closed startup and explicit development-only console OTP.
+  Validation: the production configuration/SMTP/optional-integration matrix and email tests pass.
+- [x] 2026-07-23: Enabled safe structured logging and loopback-only trusted proxy behavior.
+  Validation: seeded OTP/email/IP/state/bearer/cookie/CSRF/API-key/body/database markers are absent
+  from captured logs/responses, and trusted/spoofed IPv4/IPv6 cases pass.
+- [x] 2026-07-23: Added liveness/readiness and bounded idempotent shutdown. Validation: local tests
+  prove fixed health states, schema/database probes, startup cleanup, repeated-signal idempotency,
+  timeout code, real listener closure, and SQLite release. The real POSIX child `SIGTERM` fixture is
+  registered but skipped on this Windows host pending Linux CI evidence.
+- [x] 2026-07-23: Replaced production schema push with reviewed migration/preflight/backup/restore/
+  rollback operations. Validation: disposable fresh/baseline/invalid-quota/current-schema/restore
+  cases and static deployment contracts pass without row/path/secret output.
+- [x] 2026-07-23: Re-ran the complete local operations gate from the final worktree state.
+  Validation: Prisma generation and TypeScript build passed; Vitest passed 23 files with 142 tests
+  passed and the one POSIX child-signal fixture skipped on Windows; fresh migration deploy/status,
+  current preflight, and isolated restore smoke passed; repository scripts passed 25/25;
+  governance reported 0 errors/0 warnings; and `git diff --check` passed.
+- [ ] 2026-07-23: Added the path-filtered Node 22 server CI workflow and passed its static/local
+  contract, but hosted workflow and production-shaped SMTP/Nginx/systemd/restore smoke evidence are
+  not available in this local session. The plan remains active and the broad-release gate remains
+  blocked.
 
 ## Surprises & Discoveries
 
-- Evidence: `server/src/email.ts` prints the complete email address and six-digit OTP whenever no
+- Initial evidence, now closed locally: `server/src/email.ts` printed the complete email address and six-digit OTP whenever no
   SMTP variables are present; it does not distinguish development from production.
-- Evidence: `server/src/server.ts` constructs Fastify with `logger: false`, so there is no structured
+- Initial evidence, now closed locally: `server/src/server.ts` constructed Fastify with `logger: false`, so there was no structured
   request/error lifecycle owned by the application.
-- Evidence: `server/src/index.ts` listens and prints the URL but registers no `SIGINT`/`SIGTERM`
+- Initial evidence, now closed locally: `server/src/index.ts` listened and printed the URL but registered no `SIGINT`/`SIGTERM`
   handler and never explicitly calls `app.close()` or `prisma.$disconnect()`.
-- Evidence: no server route exposes liveness or dependency-aware readiness.
-- Evidence: the documented Nginx proxy sets forwarding headers, while the deployment runbook notes
-  Fastify does not trust the proxy; current `request.ip` may be `127.0.0.1` for all production users.
-- Evidence: the runbook already recommends one instance, WAL-aware backup, and off-host storage, but
-  it has no restore procedure/integrity rehearsal and still deploys schema through `db:push`.
+- Initial evidence, now closed locally: no server route exposed liveness or dependency-aware readiness.
+- Initial evidence, now closed locally: the documented Nginx proxy set forwarding headers, while the deployment runbook noted
+  Fastify did not trust the proxy; `request.ip` could be `127.0.0.1` for all production users.
+- Initial evidence, now closed locally: the runbook already recommended one instance, WAL-aware backup, and off-host storage, but
+  it had no restore procedure/integrity rehearsal and still deployed schema through `db:push`.
 - Evidence: systemd already sends `SIGTERM` with `TimeoutStopSec=20`, providing a clear upper bound
   for an application shutdown deadline shorter than twenty seconds.
-- Evidence: `.github/workflows/` contains desktop/macOS/process-supervisor workflows but no mandatory
+- Initial evidence, now closed locally: `.github/workflows/` contained desktop/macOS/process-supervisor workflows but no mandatory
   server test/build/migration workflow.
+- Discovery: Windows does not deliver a catchable POSIX `SIGTERM` to a Node child through
+  `child.kill("SIGTERM")`. The lifecycle contract therefore has deterministic in-process signal
+  coverage on Windows plus a real listening child fixture that runs only on non-Windows Server CI.
+- Discovery: Prisma resolves relative SQLite URLs from the schema directory. The development
+  example now uses `file:../data/frameq.sqlite`, while production documentation uses an absolute
+  local `file:` URL so runtime, migration, preflight, backup, and restore target one file.
+- Discovery: a stop-the-service copy still needs a WAL checkpoint before copying only the main
+  SQLite file. The preflight performs `wal_checkpoint(TRUNCATE)` before requesting exclusive access.
 
 ## Decision Log
 
@@ -102,18 +123,28 @@ Pay.
 - Decision: Add a dedicated path-filtered server CI workflow. Rationale: desktop release workflows
   do not establish server tests, typechecking, Prisma generation, or migration validity.
   Date/Author: 2026-07-22, Codex.
+- Decision: Keep this ExecPlan active after local implementation. Rationale: the plan explicitly
+  requires hosted Linux signal/CI evidence and approved staging SMTP/restore evidence; repository
+  code and a disposable local rehearsal cannot honestly substitute for either external result.
+  Date/Author: 2026-07-23, Codex.
 
 ## Outcomes & Retrospective
 
-Planning outcome: the production operations gap now has an explicit startup, proxy, observability,
-health, lifecycle, deployment, restore, and CI contract. No runtime, deployment file, live database,
-secret, or external system was changed by this planning step.
+Local implementation outcome: unsafe production config now fails before listening; console OTP is
+explicit development/test behavior; production requests use privacy-safe structured logs and
+loopback-only proxy trust; health and lifecycle have closed contracts; reviewed migrations,
+preflight, WAL-safe backup instructions, read-only restore smoke, rollback, Nginx/systemd assets,
+and a dedicated Server CI workflow are present. The final local gate recorded 142 passing Server
+tests with one platform-specific skip, the TypeScript build, fresh migration/status/preflight/
+restore checks, 25 repository script tests, governance validation, and the whitespace gate. No
+live database, SMTP provider, user account, payment provider, LLM, deployment host, commit, push,
+or pull request was touched.
 
-Residual risk: until implemented, a missing SMTP configuration can still print OTPs, server failures
-remain poorly observable, readiness cannot be distinguished from liveness, and systemd may terminate
-the process without application-owned drain/disconnect. After implementation, SMTP/provider uptime
-and host-level disaster recovery remain external dependencies; only a completed restore rehearsal
-can close the backup gate.
+Residual risk: hosted Server CI has not run for this worktree; the POSIX child `SIGTERM` fixture is
+skipped locally on Windows; no approved non-user SMTP inbox or production-shaped Nginx/systemd host
+was provided; off-host backup/restore and provider uptime remain operator/environment concerns; and
+the combined v0.2.17 release gate has not been rerun. These are release blockers, not implicit
+passes, so this plan remains active.
 
 ## Context and Orientation
 
@@ -130,7 +161,7 @@ can close the backup gate.
 - Deployment: `deploy/server-deployment.md` and the `README.md` Server Deployment section.
 - CI: `.github/workflows/` and `server/package.json`.
 - Required data-correctness predecessor:
-  `docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`.
+  `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`.
 
 ## Plan of Work
 
@@ -146,13 +177,13 @@ can close the backup gate.
 - Create: `server/tests/lifecycle.test.ts`
 - Create: `server/tests/proxyTrust.test.ts`
 
-- [ ] Add RED production tests for absent/partial SMTP, implicit admin email, missing encryption key,
+- [x] Add RED production tests for absent/partial SMTP, implicit admin email, missing encryption key,
   and forbidden console OTP.
-- [ ] Capture logs containing seeded OTP, bearer/cookie/CSRF/API-key/body/database-error markers and
+- [x] Capture logs containing seeded OTP, bearer/cookie/CSRF/API-key/body/database-error markers and
   assert the current implementation fails the no-secret contract.
-- [ ] Add RED health/readiness tests and a real child-process `SIGTERM` test that observes current
-  missing drain/disconnect behavior.
-- [ ] Add trusted-loopback and untrusted-forwarded-header cases for `request.ip`.
+- [x] Add health/readiness characterization plus a real POSIX child-process `SIGTERM` fixture; the
+  child fixture is skipped on Windows and remains required in hosted Linux CI.
+- [x] Add trusted-loopback and untrusted-forwarded-header cases for `request.ip`.
 
 ### Task 2: Add Typed Fail-Closed Runtime Configuration
 
@@ -167,13 +198,13 @@ can close the backup gate.
 - Modify: `server/tests/runtimeConfig.test.ts`
 - Modify: `server/tests/email.test.ts`
 
-- [ ] Parse host/port/database/admin email/encryption key/SMTP/proxy/development flags into a closed
+- [x] Parse host/port/database/admin email/encryption key/SMTP/proxy/development flags into a closed
   immutable runtime config before opening the listener.
-- [ ] Require explicit production administrator email, encryption key, database URL, and complete
+- [x] Require explicit production administrator email, encryption key, database URL, and complete
   SMTP; validate enabled optional integrations without logging values.
-- [ ] Require `FRAMEQ_ALLOW_CONSOLE_OTP=1` outside production for console delivery and reject it in
+- [x] Require `FRAMEQ_ALLOW_CONSOLE_OTP=1` outside production for console delivery and reject it in
   production. Make test SMTP dependency injection remain silent.
-- [ ] Preserve current development convenience through explicit documented configuration, not an
+- [x] Preserve current development convenience through explicit documented configuration, not an
   implicit missing-secret fallback.
 
 ### Task 3: Add Structured Logging and Trusted Proxy Policy
@@ -188,13 +219,13 @@ can close the backup gate.
 - Modify: `server/tests/proxyTrust.test.ts`
 - Modify: `deploy/nginx/frameq-proxy-headers.conf`
 
-- [ ] Generate application-owned request IDs and log only method, matched route, status, duration
+- [x] Generate application-owned request IDs and log only method, matched route, status, duration
   bucket, stable operation outcome/error code, and lifecycle transitions.
-- [ ] Redact Authorization, Cookie, Set-Cookie, SMTP/payment/API-key fields and disable request/
+- [x] Redact Authorization, Cookie, Set-Cookie, SMTP/payment/API-key fields and disable request/
   response body logging.
-- [ ] Map unknown errors to fixed internal/public codes without serializing raw Prisma/SQLite
+- [x] Map unknown errors to fixed internal/public codes without serializing raw Prisma/SQLite
   exceptions in production.
-- [ ] Configure forwarded-address trust only for loopback peers and prove spoofed direct headers are
+- [x] Configure forwarded-address trust only for loopback peers and prove spoofed direct headers are
   ignored. Pass the normalized effective address to authentication dispatch limits.
 
 ### Task 4: Implement Health and Graceful Lifecycle Ownership
@@ -210,15 +241,15 @@ can close the backup gate.
 - Modify: `server/tests/health.test.ts`
 - Modify: `server/tests/lifecycle.test.ts`
 
-- [ ] Add fixed `GET /health/live` and `GET /health/ready` responses; readiness requires startup
+- [x] Add fixed `GET /health/live` and `GET /health/ready` responses; readiness requires startup
   completion, schema compatibility, and a bounded database probe but no SMTP/LLM network call.
-- [ ] Register health through the existing route-capability boundary and update the route ownership
+- [x] Register health through the existing route-capability boundary and update the route ownership
   contract test deliberately.
-- [ ] Move listen/signal/close/disconnect orchestration into one bootstrap owner with an idempotent
+- [x] Move listen/signal/close/disconnect orchestration into one bootstrap owner with an idempotent
   shutdown promise and test-injected deadline.
-- [ ] On first signal mark unready, drain `app.close()`, disconnect Prisma, and exit successfully;
+- [x] On first signal mark unready, drain `app.close()`, disconnect Prisma, and exit successfully;
   on timeout log one safe code and exit nonzero before systemd's deadline.
-- [ ] Prove startup failure closes partial resources, a second signal does not double-close, the
+- [x] Prove startup failure closes partial resources, a second signal does not double-close, the
   listening port closes, and the SQLite file can be reopened/moved after normal shutdown.
 
 ### Task 5: Replace Production Schema Push and Complete Restore Operations
@@ -235,17 +266,17 @@ can close the backup gate.
 - Modify: `deploy/nginx/frameq-server.conf`
 - Modify: `README.md`
 
-- [ ] Require the baseline/forward migrations from the concurrency plan and remove `db:push` from
+- [x] Require the baseline/forward migrations from the concurrency plan and remove `db:push` from
   production deployment/rollback instructions.
-- [ ] Add a non-secret database preflight for schema version, invalid quota rows, integrity, and
+- [x] Add a non-secret database preflight for schema version, invalid quota rows, integrity, and
   single-instance/local-file assumptions.
-- [ ] Document stop-the-service backup, checksum, permissions, retention/off-host copy, isolated
+- [x] Document stop-the-service backup, checksum, permissions, retention/off-host copy, isolated
   restore, `PRAGMA integrity_check`, migration status, readiness, and bounded read-only verification.
-- [ ] Add rollback as matched code/database/config restoration; never reverse-edit live accounting
+- [x] Add rollback as matched code/database/config restoration; never reverse-edit live accounting
   tables or print their rows in evidence.
-- [ ] Expose only exact health paths in Nginx and align systemd stop timeout/kill signal with the
+- [x] Expose only exact health paths in Nginx and align systemd stop timeout/kill signal with the
   application deadline. Keep the server bound to loopback.
-- [ ] Rehearse backup and restore on disposable data and record only timestamps, checks, and outcomes.
+- [x] Rehearse backup and restore on disposable data and record only checks/outcomes.
 
 ### Task 6: Add Mandatory Server CI
 
@@ -255,11 +286,11 @@ can close the backup gate.
 - Create or modify: server workflow contract tests under `server/tests/` or `scripts/tests/`
 - Modify: `docs/EXECUTION_GATES.md`
 
-- [ ] Trigger on pull requests/pushes that touch `server/**`, server deployment assets, relevant
+- [x] Trigger on pull requests/pushes that touch `server/**`, server deployment assets, relevant
   docs/scripts, or the workflow itself.
-- [ ] Use Node.js 22, immutable `npm ci`, Prisma generation, fresh migration deploy/status,
+- [x] Use Node.js 22, immutable `npm ci`, Prisma generation, fresh migration deploy/status,
   complete server tests, and TypeScript build.
-- [ ] Run a disposable migration/restore smoke and static deployment-contract checks without real
+- [x] Run a disposable migration/restore smoke and static deployment-contract checks without real
   secrets, SMTP, payments, or LLM calls.
 - [ ] Make the workflow a required broad-release evidence item; local success alone does not imply
   the hosted gate passed.
@@ -281,7 +312,7 @@ can close the backup gate.
   production-shaped host to verify startup refusal, real SMTP delivery, liveness/readiness, log
   redaction, graceful restart, migration, backup, restore, and post-restore readiness. Do not include
   the OTP or address in evidence.
-- [ ] Record unavailable staging/SMTP/hosted evidence as residual risk, never as a pass.
+- [x] Record unavailable staging/SMTP/hosted evidence as residual risk, never as a pass.
 - [ ] After both server plans pass, rerun the complete v0.2.17 release gate on the combined reviewed
   commit before changing the release blocker status.
 - [ ] Move this plan to `completed/` only after local, hosted, and required staging evidence is

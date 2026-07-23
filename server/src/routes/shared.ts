@@ -25,6 +25,48 @@ export function llmQuotaRemaining(entitlement: EntitlementRecord, now: Date): nu
   return Math.max(0, entitlement.llmQuotaLimit - entitlement.llmQuotaUsed);
 }
 
-export function publicError(error: unknown): string {
-  return error instanceof Error ? error.message : "Request failed.";
+const publicOperationErrors = new Set([
+  "Activation code is invalid or expired.",
+  "Desktop session is invalid or expired.",
+  "LLM API key is required.",
+  "Unsupported LLM provider.",
+  "LLM base URL must start with http:// or https://.",
+  "LLM model is required.",
+  "LLM timeout seconds must be between 1 and 600.",
+  "FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY is required.",
+  "invalid wechat signature",
+  "invalid notification",
+  "WeChat notification verification is not configured.",
+  "WeChat APIv3 key must be 32 bytes.",
+  "Payment transaction does not match order.",
+  "Webhook does not match order.",
+  "Order cannot be settled in its current state.",
+]);
+
+export function publicError(error: unknown): string | null {
+  if (!(error instanceof Error) || !publicOperationErrors.has(error.message)) {
+    return null;
+  }
+  return error.message;
+}
+
+export function isServerTemporarilyUnavailable(error: unknown): boolean {
+  return error instanceof Error && error.message === "SERVER_TEMPORARILY_UNAVAILABLE";
+}
+
+const publicAuthErrors = new Set([
+  "A valid email address is required.",
+  "Login state is invalid.",
+  "Verification code must be 6 digits.",
+  "Verification code is invalid or expired.",
+  "Login ticket is invalid or expired.",
+  "Please wait before requesting another verification code.",
+  "Could not send verification code. Please try again later.",
+]);
+
+export function publicAuthError(error: unknown): string | null {
+  if (!(error instanceof Error) || !publicAuthErrors.has(error.message)) {
+    return null;
+  }
+  return error.message;
 }

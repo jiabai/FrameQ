@@ -67,7 +67,7 @@ describe("admin activation code routes", () => {
     expect(sent[0]?.email).toBe("lantianye@163.com");
   });
 
-  test("sets HttpOnly admin session and validates csrf on activation creation", async () => {
+  test("sets secure HttpOnly admin session and validates csrf on activation creation", async () => {
     const store = new MemoryStore();
     let sentCode = "";
     const app = buildServer({
@@ -77,6 +77,7 @@ describe("admin activation code routes", () => {
       },
       createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       adminEmail: "lantianye@163.com",
+      secureCookies: true,
       now: () => now,
     });
 
@@ -112,6 +113,7 @@ describe("admin activation code routes", () => {
       expect(cookie).toContain("Path=/");
       expect(cookie).toMatch(/Max-Age=\d+/);
       expect(cookie).toContain("SameSite=Lax");
+      expect(cookie).toContain("Secure");
     }
     expect(sessionCookieHeader).toContain("HttpOnly");
     expect(csrfCookieHeader).not.toContain("HttpOnly");

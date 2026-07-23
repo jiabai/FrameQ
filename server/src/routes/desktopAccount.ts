@@ -64,7 +64,10 @@ export function registerDesktopAccountRoutes(
         dependencies.now(),
       );
     } catch (error) {
-      return reply.code(400).send({ error: publicError(error) });
+      const message = publicError(error);
+      return message
+        ? reply.code(400).send({ error: message })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 }

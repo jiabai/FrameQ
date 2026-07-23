@@ -1,10 +1,9 @@
-import { constantTimeEqual, otpCode, secureToken, sha256 } from "./security.js";
+import { otpCode, secureToken, sha256 } from "./security.js";
 import type { Store } from "./store.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const TICKET_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
-const RESEND_WINDOW_MS = 60 * 1000;
 
 export type AuthServiceOptions = {
   store: Store;
@@ -16,7 +15,6 @@ export class AuthService {
   private readonly store: Store;
   private readonly now: () => Date;
   private readonly sendOtp: (email: string, code: string) => Promise<void>;
-  private readonly recentStarts = new Map<string, Date>();
 
   constructor(options: AuthServiceOptions) {
     this.store = options.store;
@@ -28,14 +26,9 @@ export class AuthService {
     const email = normalizeEmail(input.email);
     validateState(input.state);
     const now = this.now();
-    const rateKey = `${email}:${input.ip}`;
-    const lastStart = this.recentStarts.get(rateKey);
-    if (lastStart && now.getTime() - lastStart.getTime() < RESEND_WINDOW_MS) {
-      throw new Error("Please wait before requesting another verification code.");
-    }
-
     const code = otpCode();
-    const otp = await this.store.createEmailOtp({
+    const issued = await this.store.issueEmailOtp({
+      purpose: "desktop_login",
       email,
       state: input.state,
       codeHash: sha256(code),
@@ -43,11 +36,20 @@ export class AuthService {
       expiresAt: new Date(now.getTime() + OTP_TTL_MS),
       createdAt: now,
     });
+    if (issued.status === "rate_limited") {
+      throw new Error("Please wait before requesting another verification code.");
+    }
+    if (issued.status === "temporarily_unavailable") {
+      throw temporarilyUnavailableError();
+    }
     try {
       await this.sendOtp(email, code);
-      this.recentStarts.set(rateKey, now);
     } catch {
-      await this.store.consumeOtp(otp.id, now).catch(() => undefined);
+      try {
+        await this.store.invalidateIssuedOtpAfterDeliveryFailure(issued.otpId, now);
+      } catch {
+        throw temporarilyUnavailableError();
+      }
       throw new Error("Could not send verification code. Please try again later.");
     }
   }
@@ -64,25 +66,21 @@ export class AuthService {
     }
 
     const now = this.now();
-    const otp = await this.store.findLatestUsableOtp(email, input.state, now);
-    if (!otp) {
-      throw new Error("Verification code is invalid or expired.");
-    }
-    await this.store.incrementOtpAttempts(otp.id);
-    if (!constantTimeEqual(otp.codeHash, sha256(input.code))) {
-      throw new Error("Verification code is invalid or expired.");
-    }
-
-    await this.store.consumeOtp(otp.id, now);
-    const user = await this.store.upsertUserByEmail(email, now);
     const ticket = secureToken("flt_");
-    await this.store.createDesktopLoginTicket({
-      ticketHash: sha256(ticket),
+    const result = await this.store.verifyDesktopOtpAndCreateTicket({
+      email,
       state: input.state,
-      userId: user.id,
-      expiresAt: new Date(now.getTime() + TICKET_TTL_MS),
-      createdAt: now,
+      codeHash: sha256(input.code),
+      ticketHash: sha256(ticket),
+      now,
+      ticketExpiresAt: new Date(now.getTime() + TICKET_TTL_MS),
     });
+    if (result.status === "temporarily_unavailable") {
+      throw temporarilyUnavailableError();
+    }
+    if (result.status === "invalid") {
+      throw new Error("Verification code is invalid or expired.");
+    }
 
     return {
       ticket,
@@ -99,26 +97,28 @@ export class AuthService {
       throw new Error("Login ticket is invalid or expired.");
     }
     const now = this.now();
-    const ticket = await this.store.consumeDesktopLoginTicket(sha256(input.ticket), input.state, now);
-    if (!ticket) {
-      throw new Error("Login ticket is invalid or expired.");
-    }
-
-    const user = await this.store.getUserById(ticket.userId);
-    if (!user) {
-      throw new Error("Login ticket is invalid or expired.");
-    }
     const sessionToken = secureToken("fq_");
     const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
-    await this.store.createSession({
-      userId: user.id,
-      tokenHash: sha256(sessionToken),
-      createdAt: now,
-      expiresAt,
+    const result = await this.store.exchangeDesktopTicketAndCreateSession({
+      ticketHash: sha256(input.ticket),
+      state: input.state,
+      sessionTokenHash: sha256(sessionToken),
+      now,
+      sessionExpiresAt: expiresAt,
     });
+    if (result.status === "temporarily_unavailable") {
+      throw temporarilyUnavailableError();
+    }
+    if (result.status === "invalid") {
+      throw new Error("Login ticket is invalid or expired.");
+    }
 
-    return { sessionToken, email: user.email, expiresAt };
+    return { sessionToken, email: result.user.email, expiresAt };
   }
+}
+
+function temporarilyUnavailableError(): Error {
+  return new Error("SERVER_TEMPORARILY_UNAVAILABLE");
 }
 
 export function normalizeEmail(email: string): string {

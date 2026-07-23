@@ -4,7 +4,6 @@ import { normalizeEmail, validateState } from "./auth.js";
 
 const ADMIN_OTP_TTL_MS = 10 * 60 * 1000;
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
-const ADMIN_RESEND_WINDOW_MS = 60 * 1000;
 
 export type AdminAuthServiceOptions = {
   store: Store;
@@ -24,7 +23,6 @@ export class AdminAuthService {
   private readonly sendOtp: (email: string, code: string) => Promise<void>;
   private readonly adminEmail: string;
   private readonly now: () => Date;
-  private readonly recentStarts = new Map<string, Date>();
 
   constructor(options: AdminAuthServiceOptions) {
     this.store = options.store;
@@ -40,13 +38,9 @@ export class AdminAuthService {
       throw new Error("ADMIN_ONLY");
     }
     const now = this.now();
-    const rateKey = `${email}:${input.ip}`;
-    const lastStart = this.recentStarts.get(rateKey);
-    if (lastStart && now.getTime() - lastStart.getTime() < ADMIN_RESEND_WINDOW_MS) {
-      throw new Error("Please wait before requesting another verification code.");
-    }
     const code = otpCode();
-    const otp = await this.store.createEmailOtp({
+    const issued = await this.store.issueEmailOtp({
+      purpose: "admin_login",
       email,
       state: input.state,
       codeHash: sha256(code),
@@ -54,11 +48,20 @@ export class AdminAuthService {
       expiresAt: new Date(now.getTime() + ADMIN_OTP_TTL_MS),
       createdAt: now,
     });
+    if (issued.status === "rate_limited") {
+      throw new Error("Please wait before requesting another verification code.");
+    }
+    if (issued.status === "temporarily_unavailable") {
+      throw new Error("SERVER_TEMPORARILY_UNAVAILABLE");
+    }
     try {
       await this.sendOtp(email, code);
-      this.recentStarts.set(rateKey, now);
     } catch {
-      await this.store.consumeOtp(otp.id, now).catch(() => undefined);
+      try {
+        await this.store.invalidateIssuedOtpAfterDeliveryFailure(issued.otpId, now);
+      } catch {
+        throw new Error("SERVER_TEMPORARILY_UNAVAILABLE");
+      }
       throw new Error("Could not send verification code. Please try again later.");
     }
   }
@@ -70,25 +73,24 @@ export class AdminAuthService {
       throw invalidAdminCodeError();
     }
     const now = this.now();
-    const otp = await this.store.findLatestUsableOtp(email, input.state, now);
-    if (!otp) {
-      throw invalidAdminCodeError();
-    }
-    await this.store.incrementOtpAttempts(otp.id);
-    if (!constantTimeEqual(otp.codeHash, sha256(input.code))) {
-      throw invalidAdminCodeError();
-    }
-    await this.store.consumeOtp(otp.id, now);
     const sessionToken = secureToken("fas_");
     const csrfToken = secureToken("fac_");
-    const session = await this.store.createAdminSession({
+    const result = await this.store.verifyAdminOtpAndCreateSession({
       email,
-      tokenHash: sha256(sessionToken),
+      state: input.state,
+      codeHash: sha256(input.code),
+      sessionTokenHash: sha256(sessionToken),
       csrfTokenHash: sha256(csrfToken),
-      createdAt: now,
-      expiresAt: new Date(now.getTime() + ADMIN_SESSION_TTL_MS),
+      now,
+      sessionExpiresAt: new Date(now.getTime() + ADMIN_SESSION_TTL_MS),
     });
-    return { sessionToken, csrfToken, session };
+    if (result.status === "temporarily_unavailable") {
+      throw new Error("SERVER_TEMPORARILY_UNAVAILABLE");
+    }
+    if (result.status === "invalid") {
+      throw invalidAdminCodeError();
+    }
+    return { sessionToken, csrfToken, session: result.session };
   }
 
   async authenticate(sessionToken: string | null): Promise<AdminSessionRecord | null> {

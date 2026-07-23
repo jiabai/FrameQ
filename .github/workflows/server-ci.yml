@@ -1,0 +1,81 @@
+name: Server CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "server/**"
+      - "deploy/**"
+      - "docs/ARCHITECTURE.md"
+      - "docs/SECURITY.md"
+      - "docs/EXECUTION_GATES.md"
+      - "docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md"
+      - "docs/product-specs/2026-07-22-release-reliability-hardening.md"
+      - "docs/exec-plans/**"
+      - ".github/workflows/server-ci.yml"
+  pull_request:
+    paths:
+      - "server/**"
+      - "deploy/**"
+      - "docs/ARCHITECTURE.md"
+      - "docs/SECURITY.md"
+      - "docs/EXECUTION_GATES.md"
+      - "docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md"
+      - "docs/product-specs/2026-07-22-release-reliability-hardening.md"
+      - "docs/exec-plans/**"
+      - ".github/workflows/server-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-gate:
+    name: Node 22 server gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:${{ runner.temp }}/frameq-server-ci.sqlite
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Create disposable SQLite file
+        run: touch "$RUNNER_TEMP/frameq-server-ci.sqlite"
+
+      - name: Deploy and verify reviewed migrations
+        run: |
+          npm run db:migrate:deploy
+          npm run db:migrate:status
+          npm run db:preflight -- --mode current
+
+      - name: Run server tests and build
+        run: |
+          npm test
+          npm run build
+
+      - name: Rehearse isolated restore smoke
+        run: |
+          cp "$RUNNER_TEMP/frameq-server-ci.sqlite" "$RUNNER_TEMP/frameq-server-restore.sqlite"
+          npm run db:restore-smoke -- --database "$RUNNER_TEMP/frameq-server-restore.sqlite"

@@ -14,6 +14,7 @@ const featureRouteFiles = [
   "desktopAuth.ts",
   "desktopLlm.ts",
   "desktopUpdates.ts",
+  "health.ts",
 ] as const;
 
 const expectedRouteFiles = [...featureRouteFiles, "authSchemas.ts", "shared.ts"].sort();
@@ -47,6 +48,7 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
   ],
   "desktopLlm.ts": ["POST /api/desktop/llm/checkouts"],
   "desktopUpdates.ts": ["GET /api/desktop/updates/:target/:arch/:currentVersion"],
+  "health.ts": ["GET /health/live", "GET /health/ready"],
 };
 
 function sourcePath(relativePath: string): string {
@@ -140,7 +142,8 @@ describe("server route module boundaries", () => {
     expect(source.split(/\r?\n/).length).toBeLessThanOrEqual(200);
     expect(directAppRoutes(path, source)).toEqual([]);
     expect(source).not.toContain('from "zod"');
-    expect(source).toContain("Fastify({ logger: false })");
+    expect(source).toContain("createFastifyOptions(");
+    expect(source).toContain("registerObservability(app, observability)");
     expect(source).toContain('removeContentTypeParser("application/json")');
     expect(source).toContain('addContentTypeParser("application/json"');
     for (const service of [
@@ -184,6 +187,27 @@ describe("server route module boundaries", () => {
       expect(source, file).not.toMatch(/\bFastify\s*\(/);
       expect(source, file).not.toContain("app.register(");
       expect(source, file).not.toMatch(/new\s+\w+Service\s*\(/);
+    }
+  });
+
+  test("keeps authentication services on semantic Store operations", () => {
+    const retiredCalls = [
+      "createEmailOtp(",
+      "findLatestUsableOtp(",
+      "incrementOtpAttempts(",
+      "consumeOtp(",
+      "createDesktopLoginTicket(",
+      "consumeDesktopLoginTicket(",
+      "createAdminSession(",
+    ];
+
+    for (const relativePath of ["auth.ts", "adminAuth.ts"] as const) {
+      const source = readSource(sourcePath(relativePath));
+      for (const call of retiredCalls) {
+        expect(source, `${relativePath}: ${call}`).not.toContain(`.${call}`);
+      }
+      expect(importSources(sourcePath(relativePath), source)).not.toContain("@prisma/client");
+      expect(importSources(sourcePath(relativePath), source)).not.toContain("./prismaStore.js");
     }
   });
 

@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-22-server-auth-quota-concurrency-hardening-plan.md` | Made purpose-scoped OTP, ticket/session exchange, dispatch limiting, and AI Credit checkout atomic and retry-safe with reviewed migrations and independent Prisma/SQLite concurrency evidence. |
 | `2026-07-22-worker-watchdog-plan.md` | Added Rust-owned idle/absolute worker deadlines, instance-safe process-tree termination, closed timeout outcomes, localized recovery guidance, and native Windows watchdog evidence. |
 | `2026-07-22-atomic-persistence-hardening-plan.md` | Made transcript, AI, manifest, preference-snapshot, and Rust transcript-edit persistence atomic per file and recoverable as complete task-level revisions. |
 | `2026-07-21-worker-pipeline-module-split-plan.md` | Reduced `pipeline.py` to a 39-line stable import surface and split shared policy, transcript/ASR, AI generation, and URL orchestration into private dependency-gated owners without changing behavior. |

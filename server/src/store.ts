@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { authRateLimitKey, constantTimeEqual } from "./security.js";
+
+export type OtpPurpose = "desktop_login" | "admin_login";
 
 export type UserRecord = {
   id: string;
@@ -9,6 +12,7 @@ export type UserRecord = {
 
 export type EmailOtpRecord = {
   id: string;
+  purpose: OtpPurpose;
   email: string;
   state: string;
   codeHash: string;
@@ -17,6 +21,19 @@ export type EmailOtpRecord = {
   expiresAt: Date;
   consumedAt: Date | null;
   createdAt: Date;
+};
+
+export type AuthRateLimitScope = "email_minute" | "email_hour" | "ip_hour";
+
+export type AuthRateLimitRecord = {
+  id: string;
+  keyHash: string;
+  purpose: OtpPurpose;
+  scope: AuthRateLimitScope;
+  windowStartedAt: Date;
+  count: number;
+  nextAllowedAt: Date;
+  updatedAt: Date;
 };
 
 export type DesktopLoginTicketRecord = {
@@ -145,15 +162,63 @@ export type EntitlementAdjustmentApplication =
   | { status: "user_not_found" }
   | { status: "expiry_required" };
 
+export type IssueEmailOtpResult =
+  | { status: "issued"; otpId: string }
+  | { status: "rate_limited"; retryAt: Date }
+  | { status: "temporarily_unavailable" };
+
+export type VerifyDesktopOtpResult =
+  | { status: "verified"; user: UserRecord; ticket: DesktopLoginTicketRecord }
+  | { status: "invalid" }
+  | { status: "temporarily_unavailable" };
+
+export type VerifyAdminOtpResult =
+  | { status: "verified"; session: AdminSessionRecord }
+  | { status: "invalid" }
+  | { status: "temporarily_unavailable" };
+
+export type ExchangeDesktopTicketResult =
+  | { status: "exchanged"; user: UserRecord; session: SessionRecord }
+  | { status: "invalid" }
+  | { status: "temporarily_unavailable" };
+
+export type LlmQuotaCheckoutResult =
+  | { status: "consumed"; entitlement: EntitlementRecord }
+  | { status: "reused"; entitlement: EntitlementRecord }
+  | { status: "unavailable" }
+  | { status: "temporarily_unavailable" };
+
 export type Store = {
   upsertUserByEmail(email: string, now: Date): Promise<UserRecord>;
   getUserById(userId: string): Promise<UserRecord | null>;
-  createEmailOtp(input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">): Promise<EmailOtpRecord>;
-  findLatestUsableOtp(email: string, state: string, now: Date): Promise<EmailOtpRecord | null>;
-  incrementOtpAttempts(otpId: string): Promise<EmailOtpRecord>;
-  consumeOtp(otpId: string, now: Date): Promise<void>;
-  createDesktopLoginTicket(input: Omit<DesktopLoginTicketRecord, "id" | "consumedAt">): Promise<DesktopLoginTicketRecord>;
-  consumeDesktopLoginTicket(ticketHash: string, state: string, now: Date): Promise<DesktopLoginTicketRecord | null>;
+  issueEmailOtp(
+    input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
+  ): Promise<IssueEmailOtpResult>;
+  invalidateIssuedOtpAfterDeliveryFailure(otpId: string, now: Date): Promise<void>;
+  verifyDesktopOtpAndCreateTicket(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    ticketHash: string;
+    now: Date;
+    ticketExpiresAt: Date;
+  }): Promise<VerifyDesktopOtpResult>;
+  verifyAdminOtpAndCreateSession(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    sessionTokenHash: string;
+    csrfTokenHash: string;
+    now: Date;
+    sessionExpiresAt: Date;
+  }): Promise<VerifyAdminOtpResult>;
+  exchangeDesktopTicketAndCreateSession(input: {
+    ticketHash: string;
+    state: string;
+    sessionTokenHash: string;
+    now: Date;
+    sessionExpiresAt: Date;
+  }): Promise<ExchangeDesktopTicketResult>;
   createSession(input: Omit<SessionRecord, "id" | "revokedAt">): Promise<SessionRecord>;
   findSessionByTokenHash(tokenHash: string, now: Date): Promise<SessionRecord | null>;
   revokeSession(tokenHash: string, now: Date): Promise<void>;
@@ -176,7 +241,7 @@ export type Store = {
     now: Date,
     quota?: { llmQuotaLimit?: number; llmQuotaUsed?: number },
   ): Promise<EntitlementRecord>;
-  consumeLlmQuota(userId: string, requestId: string, now: Date): Promise<{ entitlement: EntitlementRecord; reused: boolean } | null>;
+  consumeLlmQuota(userId: string, requestId: string, now: Date): Promise<LlmQuotaCheckoutResult>;
   getLlmConfig(): Promise<LlmConfigRecord | null>;
   upsertLlmConfig(input: Omit<LlmConfigRecord, "id" | "createdAt" | "updatedAt">, now: Date): Promise<LlmConfigRecord>;
   createActivationCode(input: Omit<ActivationCodeRecord, "id">): Promise<ActivationCodeRecord>;
@@ -223,6 +288,7 @@ export class MemoryStore implements Store {
   adminSessions: AdminSessionRecord[] = [];
   adminEntitlementAdjustments: AdminEntitlementAdjustmentRecord[] = [];
   webhookEvents: WebhookEventRecord[] = [];
+  authRateLimits: AuthRateLimitRecord[] = [];
   private atomicTail: Promise<void> = Promise.resolve();
 
   async upsertUserByEmail(email: string, now: Date): Promise<UserRecord> {
@@ -238,6 +304,142 @@ export class MemoryStore implements Store {
 
   async getUserById(userId: string): Promise<UserRecord | null> {
     return this.users.find((user) => user.id === userId) ?? null;
+  }
+
+  async issueEmailOtp(
+    input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
+  ): Promise<IssueEmailOtpResult> {
+    return this.runAtomically(async () => {
+      const reservations = rateLimitReservations(input);
+      const limitedUntil = reservations
+        .map((reservation) => this.planRateLimitReservation(reservation, input.createdAt))
+        .filter((result): result is { allowed: false; retryAt: Date } => !result.allowed)
+        .map((result) => result.retryAt);
+      if (limitedUntil.length > 0) {
+        return {
+          status: "rate_limited",
+          retryAt: new Date(Math.max(...limitedUntil.map((value) => value.getTime()))),
+        };
+      }
+
+      for (const reservation of reservations) {
+        this.applyRateLimitReservation(reservation, input.createdAt);
+      }
+      for (const otp of this.emailOtps) {
+        if (
+          otp.purpose === input.purpose &&
+          otp.email === input.email &&
+          otp.state === input.state &&
+          otp.consumedAt === null
+        ) {
+          otp.consumedAt = input.createdAt;
+        }
+      }
+      const otp = await this.createEmailOtp(input);
+      return { status: "issued", otpId: otp.id };
+    });
+  }
+
+  async invalidateIssuedOtpAfterDeliveryFailure(otpId: string, now: Date): Promise<void> {
+    await this.runAtomically(async () => {
+      const otp = this.emailOtps.find((record) => record.id === otpId);
+      if (otp?.consumedAt === null) {
+        otp.consumedAt = now;
+      }
+    });
+  }
+
+  async verifyDesktopOtpAndCreateTicket(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    ticketHash: string;
+    now: Date;
+    ticketExpiresAt: Date;
+  }): Promise<VerifyDesktopOtpResult> {
+    return this.runAtomically(async () => {
+      const otp = this.latestUsableOtp("desktop_login", input.email, input.state, input.now);
+      if (!otp) {
+        return { status: "invalid" };
+      }
+      otp.attempts += 1;
+      if (!constantTimeEqual(otp.codeHash, input.codeHash)) {
+        return { status: "invalid" };
+      }
+      otp.consumedAt = input.now;
+      const user = await this.upsertUserByEmail(input.email, input.now);
+      const ticket = await this.createDesktopLoginTicket({
+        ticketHash: input.ticketHash,
+        state: input.state,
+        userId: user.id,
+        expiresAt: input.ticketExpiresAt,
+        createdAt: input.now,
+      });
+      return { status: "verified", user, ticket };
+    });
+  }
+
+  async verifyAdminOtpAndCreateSession(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    sessionTokenHash: string;
+    csrfTokenHash: string;
+    now: Date;
+    sessionExpiresAt: Date;
+  }): Promise<VerifyAdminOtpResult> {
+    return this.runAtomically(async () => {
+      const otp = this.latestUsableOtp("admin_login", input.email, input.state, input.now);
+      if (!otp) {
+        return { status: "invalid" };
+      }
+      otp.attempts += 1;
+      if (!constantTimeEqual(otp.codeHash, input.codeHash)) {
+        return { status: "invalid" };
+      }
+      otp.consumedAt = input.now;
+      const session = await this.createAdminSession({
+        email: input.email,
+        tokenHash: input.sessionTokenHash,
+        csrfTokenHash: input.csrfTokenHash,
+        createdAt: input.now,
+        expiresAt: input.sessionExpiresAt,
+      });
+      return { status: "verified", session };
+    });
+  }
+
+  async exchangeDesktopTicketAndCreateSession(input: {
+    ticketHash: string;
+    state: string;
+    sessionTokenHash: string;
+    now: Date;
+    sessionExpiresAt: Date;
+  }): Promise<ExchangeDesktopTicketResult> {
+    return this.runAtomically(async () => {
+      const ticket = this.desktopLoginTickets.find(
+        (record) =>
+          record.ticketHash === input.ticketHash &&
+          record.state === input.state &&
+          record.consumedAt === null &&
+          record.expiresAt > input.now,
+      );
+      if (!ticket) {
+        return { status: "invalid" };
+      }
+      const user = await this.getUserById(ticket.userId);
+      if (!user) {
+        return { status: "invalid" };
+      }
+      ticket.consumedAt = input.now;
+      const session = await this.createSession({
+        userId: user.id,
+        tokenHash: input.sessionTokenHash,
+        createdAt: input.now,
+        expiresAt: input.sessionExpiresAt,
+      });
+      return { status: "exchanged", user, session };
+    });
   }
 
   async createEmailOtp(input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">): Promise<EmailOtpRecord> {
@@ -467,30 +669,32 @@ export class MemoryStore implements Store {
     userId: string,
     requestId: string,
     now: Date,
-  ): Promise<{ entitlement: EntitlementRecord; reused: boolean } | null> {
-    const existingEvent = this.llmUsageEvents.find(
-      (event) => event.userId === userId && event.requestId === requestId,
-    );
-    const entitlement = await this.getEntitlement(userId);
-    if (!entitlement || entitlement.expiresAt <= now) {
-      return null;
-    }
-    if (existingEvent) {
-      return { entitlement, reused: true };
-    }
-    if (entitlement.llmQuotaUsed >= entitlement.llmQuotaLimit) {
-      return null;
-    }
-    entitlement.llmQuotaUsed += 1;
-    entitlement.updatedAt = now;
-    this.llmUsageEvents.push({
-      id: randomUUID(),
-      userId,
-      entitlementId: entitlement.id,
-      requestId,
-      createdAt: now,
+  ): Promise<LlmQuotaCheckoutResult> {
+    return this.runAtomically(async () => {
+      const existingEvent = this.llmUsageEvents.find(
+        (event) => event.userId === userId && event.requestId === requestId,
+      );
+      const entitlement = await this.getEntitlement(userId);
+      if (!entitlement || entitlement.expiresAt <= now) {
+        return { status: "unavailable" };
+      }
+      if (existingEvent) {
+        return { status: "reused", entitlement };
+      }
+      if (entitlement.llmQuotaUsed >= entitlement.llmQuotaLimit) {
+        return { status: "unavailable" };
+      }
+      entitlement.llmQuotaUsed += 1;
+      entitlement.updatedAt = now;
+      this.llmUsageEvents.push({
+        id: randomUUID(),
+        userId,
+        entitlementId: entitlement.id,
+        requestId,
+        createdAt: now,
+      });
+      return { status: "consumed", entitlement };
     });
-    return { entitlement, reused: false };
   }
 
   async getLlmConfig(): Promise<LlmConfigRecord | null> {
@@ -682,6 +886,69 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  private latestUsableOtp(
+    purpose: OtpPurpose,
+    email: string,
+    state: string,
+    now: Date,
+  ): EmailOtpRecord | null {
+    return (
+      [...this.emailOtps]
+        .reverse()
+        .find(
+          (otp) =>
+            otp.purpose === purpose &&
+            otp.email === email &&
+            otp.state === state &&
+            otp.consumedAt === null &&
+            otp.attempts < 5 &&
+            otp.expiresAt > now,
+        ) ?? null
+    );
+  }
+
+  private planRateLimitReservation(
+    reservation: RateLimitReservation,
+    now: Date,
+  ): { allowed: true } | { allowed: false; retryAt: Date } {
+    const existing = this.authRateLimits.find((record) => record.keyHash === reservation.keyHash);
+    if (!existing) {
+      return { allowed: true };
+    }
+    if (reservation.scope === "email_minute") {
+      return existing.nextAllowedAt > now
+        ? { allowed: false, retryAt: existing.nextAllowedAt }
+        : { allowed: true };
+    }
+    const sameWindow = existing.windowStartedAt.getTime() === reservation.windowStartedAt.getTime();
+    if (sameWindow && existing.count >= reservation.maxCount) {
+      return { allowed: false, retryAt: existing.nextAllowedAt };
+    }
+    return { allowed: true };
+  }
+
+  private applyRateLimitReservation(reservation: RateLimitReservation, now: Date): void {
+    const existing = this.authRateLimits.find((record) => record.keyHash === reservation.keyHash);
+    if (!existing) {
+      this.authRateLimits.push({
+        id: randomUUID(),
+        keyHash: reservation.keyHash,
+        purpose: reservation.purpose,
+        scope: reservation.scope,
+        windowStartedAt: reservation.windowStartedAt,
+        count: 1,
+        nextAllowedAt: reservation.nextAllowedAt,
+        updatedAt: now,
+      });
+      return;
+    }
+    const sameWindow = existing.windowStartedAt.getTime() === reservation.windowStartedAt.getTime();
+    existing.windowStartedAt = reservation.windowStartedAt;
+    existing.count = sameWindow ? existing.count + 1 : 1;
+    existing.nextAllowedAt = reservation.nextAllowedAt;
+    existing.updatedAt = now;
+  }
+
   private async extendMonthlyPass(
     userId: string,
     paidAt: Date,
@@ -716,6 +983,7 @@ export class MemoryStore implements Store {
       adminSessions: this.adminSessions,
       adminEntitlementAdjustments: this.adminEntitlementAdjustments,
       webhookEvents: this.webhookEvents,
+      authRateLimits: this.authRateLimits,
     });
     try {
       return await operation();
@@ -732,11 +1000,48 @@ export class MemoryStore implements Store {
       this.adminSessions = snapshot.adminSessions;
       this.adminEntitlementAdjustments = snapshot.adminEntitlementAdjustments;
       this.webhookEvents = snapshot.webhookEvents;
+      this.authRateLimits = snapshot.authRateLimits;
       throw error;
     } finally {
       release();
     }
   }
+}
+
+type RateLimitReservation = {
+  keyHash: string;
+  purpose: OtpPurpose;
+  scope: AuthRateLimitScope;
+  windowStartedAt: Date;
+  nextAllowedAt: Date;
+  maxCount: number;
+};
+
+function rateLimitReservations(
+  input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
+): RateLimitReservation[] {
+  const now = input.createdAt;
+  const hourStart = new Date(Math.floor(now.getTime() / (60 * 60 * 1000)) * 60 * 60 * 1000);
+  const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+  const reservation = (
+    scope: AuthRateLimitScope,
+    value: string,
+    windowStartedAt: Date,
+    nextAllowedAt: Date,
+    maxCount: number,
+  ): RateLimitReservation => ({
+    keyHash: authRateLimitKey(scope, input.purpose, value),
+    purpose: input.purpose,
+    scope,
+    windowStartedAt,
+    nextAllowedAt,
+    maxCount,
+  });
+  return [
+    reservation("email_minute", input.email, now, new Date(now.getTime() + 60 * 1000), 1),
+    reservation("email_hour", input.email, hourStart, hourEnd, 5),
+    reservation("ip_hour", input.ip, hourStart, hourEnd, 20),
+  ];
 }
 
 function storedWebhookTransactionId(payload: string): string | null {

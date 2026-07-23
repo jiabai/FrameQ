@@ -1,8 +1,5 @@
 import nodemailer from "nodemailer";
-
-type OtpSenderEnvKey = "SMTP_HOST" | "SMTP_PORT" | "SMTP_USER" | "SMTP_PASS" | "SMTP_FROM";
-
-export type OtpSenderEnv = Partial<Record<OtpSenderEnvKey, string | undefined>>;
+import type { RuntimeEnvironment, SmtpConfig } from "./runtimeConfig.js";
 
 type SmtpTransportOptions = {
   host: string;
@@ -28,40 +25,56 @@ type MailTransport = {
 
 type MailTransportFactory = (options: SmtpTransportOptions) => MailTransport;
 
-export function createOtpSender(
-  env: OtpSenderEnv = process.env,
-  createTransport: MailTransportFactory = (options) => nodemailer.createTransport(options),
-) {
-  const host = cleanEnvValue(env.SMTP_HOST);
-  const user = cleanEnvValue(env.SMTP_USER);
-  const pass = cleanEnvValue(env.SMTP_PASS);
-  const configuredFrom = cleanEnvValue(env.SMTP_FROM);
-  const from = configuredFrom || user;
-  const hasAnySmtpSetting = [host, user, pass, configuredFrom].some(Boolean);
+type DevelopmentOtpOutput = {
+  warn(message: string): void;
+  write(email: string, code: string): void;
+};
 
-  if (!host || !user || !pass || !from) {
-    if (hasAnySmtpSetting) {
-      throw new Error("SMTP configuration is incomplete.");
-    }
+export type OtpSenderConfig = Readonly<{
+  environment: RuntimeEnvironment;
+  smtp: SmtpConfig | null;
+  allowConsoleOtp: boolean;
+}>;
+
+const defaultDevelopmentOutput: DevelopmentOtpOutput = {
+  warn(message) {
+    console.warn(message);
+  },
+  write(email, code) {
+    console.warn(`[frameq-server] DEVELOPMENT OTP for ${email}: ${code}`);
+  },
+};
+
+export function createOtpSender(
+  config: OtpSenderConfig,
+  createTransport: MailTransportFactory = (options) => nodemailer.createTransport(options),
+  developmentOutput: DevelopmentOtpOutput = defaultDevelopmentOutput,
+) {
+  if (config.smtp) {
+    const smtp = config.smtp;
+    const transporter = createTransport({
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.secure,
+      auth: { user: smtp.user, pass: smtp.pass },
+    });
     return async (email: string, code: string) => {
-      console.log(`[frameq-server] OTP for ${email}: ${code}`);
+      await transporter.sendMail(buildLoginCodeMessage({ from: smtp.from, to: email, code }));
     };
   }
 
-  const port = Number(cleanEnvValue(env.SMTP_PORT) || 587);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new Error("SMTP_PORT must be a valid TCP port.");
+  if (config.environment === "production") {
+    throw new Error("SMTP configuration is required in production.");
+  }
+  if (!config.allowConsoleOtp) {
+    throw new Error("FRAMEQ_ALLOW_CONSOLE_OTP=1 is required when SMTP is absent.");
   }
 
-  const transporter = createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-
+  developmentOutput.warn(
+    "[frameq-server] DEVELOPMENT ONLY: console OTP delivery is enabled; never use this mode in production.",
+  );
   return async (email: string, code: string) => {
-    await transporter.sendMail(buildLoginCodeMessage({ from, to: email, code }));
+    developmentOutput.write(email, code);
   };
 }
 
@@ -89,8 +102,4 @@ export function buildLoginCodeMessage(input: {
       "</div>",
     ].join(""),
   };
-}
-
-function cleanEnvValue(value: string | undefined): string {
-  return value?.trim() ?? "";
 }

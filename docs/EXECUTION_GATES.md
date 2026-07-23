@@ -14,6 +14,9 @@
 - 架构、安全、流程、运行时 contract 或导出行为变化已同步到 durable docs。
 - 涉及 worker 的改动必须至少运行 focused Python 测试或等价命令。
 - 涉及 app/UI 的改动必须至少运行 lint、typecheck 或 build 中的一项。
+- 涉及 `server/**` 或生产部署资产的改动必须通过完整 server 测试、TypeScript build、迁移/
+  preflight/restore smoke，并以 `.github/workflows/server-ci.yml` 的托管结果作为广泛发布证据；
+  本地通过不能替代尚未运行的 hosted CI。
 - 涉及下载、ASR、LLM 或文件导出的改动必须记录失败路径和可恢复行为。
 
 ### 面向大量普通用户发布的额外硬门禁

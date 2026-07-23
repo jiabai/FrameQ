@@ -36,7 +36,7 @@ describe("email OTP auth", () => {
     expect(otp?.expiresAt.toISOString()).toBe("2026-06-21T08:10:00.000Z");
   });
 
-  test("does not leave a usable OTP or throttle retry when email delivery fails", async () => {
+  test("invalidates a failed delivery while preserving the committed resend limit", async () => {
     let attempts = 0;
     const auth = new AuthService({
       store,
@@ -54,16 +54,14 @@ describe("email OTP auth", () => {
         state: "state-abc",
       }),
     ).rejects.toThrow("Could not send verification code. Please try again later.");
-    await expect(
-      auth.startEmailLogin({
-        email: "user@example.com",
-        ip: "203.0.113.10",
-        state: "state-abc",
-      }),
-    ).rejects.toThrow("Could not send verification code. Please try again later.");
+    await expect(auth.startEmailLogin({
+      email: "user@example.com",
+      ip: "203.0.113.10",
+      state: "state-abc",
+    })).rejects.toThrow("Please wait before requesting another verification code.");
 
-    expect(attempts).toBe(2);
-    expect(store.emailOtps).toHaveLength(2);
+    expect(attempts).toBe(1);
+    expect(store.emailOtps).toHaveLength(1);
     expect(store.emailOtps.every((otp) => otp.consumedAt?.toISOString() === now.toISOString())).toBe(true);
     await expect(
       auth.verifyEmailCode({

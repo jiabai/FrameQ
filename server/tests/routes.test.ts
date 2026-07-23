@@ -3,6 +3,58 @@ import { buildServer } from "../src/server.js";
 import { sha256 } from "../src/security.js";
 import { MemoryStore } from "../src/store.js";
 
+class TemporarilyUnavailableAuthStore extends MemoryStore {
+  override async issueEmailOtp(
+    _input: Parameters<MemoryStore["issueEmailOtp"]>[0],
+  ): ReturnType<MemoryStore["issueEmailOtp"]> {
+    return { status: "temporarily_unavailable" };
+  }
+
+  override async verifyDesktopOtpAndCreateTicket(
+    _input: Parameters<MemoryStore["verifyDesktopOtpAndCreateTicket"]>[0],
+  ): ReturnType<MemoryStore["verifyDesktopOtpAndCreateTicket"]> {
+    return { status: "temporarily_unavailable" };
+  }
+
+  override async verifyAdminOtpAndCreateSession(
+    _input: Parameters<MemoryStore["verifyAdminOtpAndCreateSession"]>[0],
+  ): ReturnType<MemoryStore["verifyAdminOtpAndCreateSession"]> {
+    return { status: "temporarily_unavailable" };
+  }
+
+  override async exchangeDesktopTicketAndCreateSession(
+    _input: Parameters<MemoryStore["exchangeDesktopTicketAndCreateSession"]>[0],
+  ): ReturnType<MemoryStore["exchangeDesktopTicketAndCreateSession"]> {
+    return { status: "temporarily_unavailable" };
+  }
+}
+
+class FailingAuthStore extends MemoryStore {
+  override async issueEmailOtp(
+    _input: Parameters<MemoryStore["issueEmailOtp"]>[0],
+  ): ReturnType<MemoryStore["issueEmailOtp"]> {
+    throw new Error("SQLITE_BUSY seeded authentication database detail");
+  }
+
+  override async verifyDesktopOtpAndCreateTicket(
+    _input: Parameters<MemoryStore["verifyDesktopOtpAndCreateTicket"]>[0],
+  ): ReturnType<MemoryStore["verifyDesktopOtpAndCreateTicket"]> {
+    throw new Error("SQLITE_BUSY seeded authentication database detail");
+  }
+
+  override async verifyAdminOtpAndCreateSession(
+    _input: Parameters<MemoryStore["verifyAdminOtpAndCreateSession"]>[0],
+  ): ReturnType<MemoryStore["verifyAdminOtpAndCreateSession"]> {
+    throw new Error("SQLITE_BUSY seeded authentication database detail");
+  }
+
+  override async exchangeDesktopTicketAndCreateSession(
+    _input: Parameters<MemoryStore["exchangeDesktopTicketAndCreateSession"]>[0],
+  ): ReturnType<MemoryStore["exchangeDesktopTicketAndCreateSession"]> {
+    throw new Error("SQLITE_BUSY seeded authentication database detail");
+  }
+}
+
 describe("desktop account routes", () => {
   test("registers the complete stable HTTP route table", () => {
     const app = buildServer({
@@ -14,6 +66,8 @@ describe("desktop account routes", () => {
       }),
     });
     const routes = [
+      ["GET", "/health/live"],
+      ["GET", "/health/ready"],
       ["GET", "/login"],
       ["GET", "/admin/login"],
       ["POST", "/admin/auth/email/start"],
@@ -249,6 +303,98 @@ describe("desktop account routes", () => {
     });
   });
 
+  test("maps authentication transaction exhaustion to one stable retryable response", async () => {
+    const app = buildServer({
+      store: new TemporarilyUnavailableAuthStore(),
+      sendOtp: async () => {},
+      createNativePayment: async () => ({
+        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+        providerPayload: {},
+      }),
+      adminEmail: "admin@example.com",
+    });
+
+    const responses = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/auth/email/start",
+        payload: { email: "user@example.com", state: "state-1001" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/auth/email/verify",
+        payload: { email: "user@example.com", state: "state-1001", code: "123456" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/api/desktop/sessions/exchange",
+        payload: { ticket: "flt_retryable", state: "state-1001" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/admin/auth/email/start",
+        payload: { email: "admin@example.com", state: "admin-state-1001" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/admin/auth/email/verify",
+        payload: { email: "admin@example.com", state: "admin-state-1001", code: "123456" },
+      }),
+    ]);
+
+    for (const response of responses) {
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+    }
+  });
+
+  test("does not echo unexpected authentication database errors", async () => {
+    const app = buildServer({
+      store: new FailingAuthStore(),
+      sendOtp: async () => {},
+      createNativePayment: async () => ({
+        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+        providerPayload: {},
+      }),
+      adminEmail: "admin@example.com",
+    });
+
+    const responses = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/auth/email/start",
+        payload: { email: "user@example.com", state: "state-1001" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/auth/email/verify",
+        payload: { email: "user@example.com", state: "state-1001", code: "123456" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/api/desktop/sessions/exchange",
+        payload: { ticket: "flt_internal_failure", state: "state-1001" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/admin/auth/email/start",
+        payload: { email: "admin@example.com", state: "admin-state-1001" },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/admin/auth/email/verify",
+        payload: { email: "admin@example.com", state: "admin-state-1001", code: "123456" },
+      }),
+    ]);
+
+    for (const response of responses) {
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toEqual({ error: "INTERNAL_SERVER_ERROR" });
+      expect(response.body).not.toContain("SQLITE_BUSY");
+      expect(response.body).not.toContain("seeded authentication database detail");
+    }
+  });
+
   test("rejects WeChat notifications when signature parsing fails", async () => {
     const app = buildServer({
       store: new MemoryStore(),
@@ -297,7 +443,8 @@ describe("desktop account routes", () => {
       payload: rawBody,
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ code: "FAIL", message: "internal error" });
     expect(captured?.body).toEqual({ id: "notice-raw", nested: { amount: 1 } });
     expect(captured?.rawBody).toBe(rawBody);
   });

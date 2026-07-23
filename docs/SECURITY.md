@@ -1,10 +1,12 @@
 # Security and Compliance
 
-## 2026-07-22 Server Authentication, Quota, and Operations Hardening (Planned)
+## 2026-07-22 Server Authentication, Quota, and Operations Hardening
 
-- Broad publication remains blocked until both active server hardening ExecPlans are implemented and
-  accepted. This section records the approved target boundary; it is not evidence that current
-  check-then-write paths are already atomic.
+- The authentication/quota check-then-write paths are replaced by semantic Store transactions and
+  locally verified with independent Prisma clients. Production configuration, logging, proxy,
+  health/lifecycle, migration/preflight/restore tooling, and the Server CI definition are also
+  implemented locally. Broad publication remains blocked on hosted CI/staging evidence and the
+  combined release gate.
 - OTP challenges are isolated by closed purpose (`desktop_login` or `admin_login`) plus normalized
   email and state. One database transaction records an attempt, conditionally consumes a correct
   challenge, and creates the ticket/admin session. Missing, expired, consumed, wrong-purpose,
@@ -39,8 +41,10 @@
   idempotent deadline-bound sequence. Startup failure closes partial resources. A timeout emits one
   safe code and exits nonzero before the systemd stop deadline.
 - Independent Prisma clients against one real temporary SQLite file, secret-seeded log/response
-  tests, real child-process signal tests, and disposable backup/restore rehearsal are security gates.
-  Single-client unit tests or untested runbook prose do not close this boundary.
+  tests, real child-process signal tests, and disposable backup/restore rehearsal are security
+  gates. Local Windows tests prove signal idempotency plus real listener/SQLite release; the POSIX
+  child fixture remains unverified until hosted Linux Server CI runs. Single-client unit tests,
+  skipped host evidence, or untested runbook prose do not close this boundary.
 - Durable design:
   `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`.
 

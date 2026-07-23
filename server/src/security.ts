@@ -4,6 +4,10 @@ export function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+export function authRateLimitKey(scope: string, purpose: string, value: string): string {
+  return sha256(`frameq:auth-rate-limit:v1|${scope}|${purpose}|${value}`);
+}
+
 export function secureToken(prefix = ""): string {
   return `${prefix}${randomBytes(32).toString("base64url")}`;
 }

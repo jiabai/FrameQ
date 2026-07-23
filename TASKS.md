@@ -22,23 +22,29 @@
   Tauri `--no-bundle` passed; native Windows parent/descendant timeout cleanup passed. macOS runtime
   execution remains unverified while the portable fixture is enforced by the hosted workflow.
 
-- [ ] Close broad-release server authentication/quota concurrency blocker (2026-07-22) — ✅
+- [x] Close broad-release server authentication/quota concurrency blocker (2026-07-23) — ✅
   Acceptance: purpose-scoped OTP dispatch/attempt/artifact and ticket/session exchange commit through
   semantic Store transactions; AI Credit checkout uses one conditional quota update plus the unique
   request event; independent Prisma clients on one real temporary SQLite file prove single-use,
   capacity, idempotency, bounded conflict retry, and injected rollback. Design:
   `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`. ExecPlan:
-  `docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`. Planning and
-  documentation are complete; implementation evidence is pending and existing entitlement
-  transaction tests do not close this gate.
+  `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`. Implemented
+  with reviewed baseline/forward migrations, MemoryStore parity, independent-client SQLite tests,
+  failure injection, fixed non-echoing HTTP outcomes, 97/97 server tests, TypeScript build, and
+  Prisma generation. Broad publication remains blocked on production operations and combined gates.
 
 - [ ] Close broad-release server production-operations blocker (2026-07-22) — ✅ Acceptance:
   production required config/SMTP fails closed; console OTP is explicit non-production only;
   redacted structured logs, loopback-only trusted proxy, live/ready endpoints, bounded SIGTERM
   drain/disconnect, reviewed migrations, backup/restore rehearsal, deployment runbook, and dedicated
   hosted server CI all pass without secret-bearing evidence. ExecPlan:
-  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`. This gate is
-  separate from database correctness and both must pass before broad publication.
+  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`. Runtime,
+  deployment assets, runbook, workflow definition, disposable migration/restore rehearsal, tests,
+  and build are implemented locally; the final local gate recorded Server 142 passed / 1 Windows
+  POSIX-signal skip, scripts 25/25, Prisma generation, TypeScript build, migration/status/preflight/
+  restore, governance, and diff checks. The checkbox remains open for hosted Linux CI/POSIX signal,
+  approved non-user SMTP plus production-shaped Nginx/systemd/off-host restore evidence, and the
+  combined v0.2.17 release gate.
 
 - [x] Replace the false process-video request with strict contract v3 (2026-07-18) - ✅ Acceptance:
   React sends only URL intent; Rust alone resolves app-local ASR configuration and sends exact

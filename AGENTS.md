@@ -49,7 +49,7 @@
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
-- 当前 active Server 并发计划：`docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`
+- 最近完成 Server 并发计划：`docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`
 - 当前 active Server 运维计划：`docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`
 - 最近完成 worker watchdog 计划：`docs/exec-plans/completed/2026-07-22-worker-watchdog-plan.md`
 - 最近完成原子持久化计划：`docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`

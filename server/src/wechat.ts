@@ -1,36 +1,34 @@
 import { createDecipheriv, createHash, createSign, createVerify, randomUUID } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
+import type { WechatConfig } from "./runtimeConfig.js";
 
-export function createWechatNativePayment() {
-  const appid = process.env.WECHAT_APP_ID;
-  const mchid = process.env.WECHAT_MCH_ID;
-  const serialNo = process.env.WECHAT_MCH_SERIAL_NO;
-  const privateKey = process.env.WECHAT_MCH_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  const notifyUrl = process.env.WECHAT_NOTIFY_URL;
-
-  if (!appid || !mchid || !serialNo || !privateKey || !notifyUrl) {
-    return async (input: { outTradeNo: string; amountFen: number; description: string }) => ({
-      codeUrl: `weixin://wxpay/bizpayurl?pr=${encodeURIComponent(input.outTradeNo)}`,
-      providerPayload: { ...input, mode: "development" },
-    });
+export function createWechatNativePayment(
+  config: WechatConfig | null = null,
+  fetchImplementation: typeof fetch = fetch,
+) {
+  if (!config) {
+    return async (_input: { outTradeNo: string; amountFen: number; description: string }) => {
+      throw new Error("WeChat Native payment is not configured.");
+    };
   }
 
   return async (input: { outTradeNo: string; amountFen: number; description: string }) => {
     const body = JSON.stringify({
-      appid,
-      mchid,
+      appid: config.appId,
+      mchid: config.mchId,
       description: input.description,
       out_trade_no: input.outTradeNo,
-      notify_url: notifyUrl,
+      notify_url: config.notifyUrl,
       amount: { total: input.amountFen, currency: "CNY" },
     });
     const response = await wechatRequest({
       method: "POST",
       path: "/v3/pay/transactions/native",
       body,
-      mchid,
-      serialNo,
-      privateKey,
+      mchid: config.mchId,
+      serialNo: config.serialNo,
+      privateKey: config.privateKey,
+      fetchImplementation,
     });
     const payload = (await response.json()) as { code_url?: string };
     if (!response.ok || !payload.code_url) {
@@ -50,6 +48,7 @@ async function wechatRequest(input: {
   mchid: string;
   serialNo: string;
   privateKey: string;
+  fetchImplementation: typeof fetch;
 }) {
   const nonce = randomUUID().replace(/-/g, "");
   const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -64,7 +63,7 @@ async function wechatRequest(input: {
     `serial_no="${input.serialNo}"`,
   ].join(",");
 
-  return fetch(`https://api.mch.weixin.qq.com${input.path}`, {
+  return input.fetchImplementation(`https://api.mch.weixin.qq.com${input.path}`, {
     method: input.method,
     headers: {
       Authorization: authorization,
@@ -93,14 +92,16 @@ export type WechatNotificationParser = (input: {
   rawBody: string;
 }) => Promise<ParsedWechatNotification>;
 
-export function createWechatNotificationParser(): WechatNotificationParser {
+export function createWechatNotificationParser(
+  config: WechatConfig | null = null,
+): WechatNotificationParser {
   return async ({ headers, body, rawBody }) => {
-    if (process.env.WECHAT_DEV_INSECURE_NOTIFY === "1") {
+    if (config?.allowInsecureNotify) {
       return parsePlainDevelopmentNotification(body);
     }
 
-    const apiV3Key = process.env.WECHAT_API_V3_KEY;
-    const platformCert = process.env.WECHAT_PLATFORM_CERT_PEM?.replace(/\\n/g, "\n");
+    const apiV3Key = config?.apiV3Key;
+    const platformCert = config?.platformCertPem;
     if (!apiV3Key || !platformCert) {
       throw new Error("WeChat notification verification is not configured.");
     }

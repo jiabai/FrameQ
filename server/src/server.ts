@@ -5,12 +5,20 @@ import { AuthService } from "./auth.js";
 import { BillingService, type NativePaymentResult } from "./billing.js";
 import { EntitlementAdjustmentService } from "./entitlementAdjustment.js";
 import { LlmConfigService } from "./llmConfig.js";
+import {
+  createFastifyOptions,
+  createObservabilityConfig,
+  registerObservability,
+  type ObservabilityConfig,
+} from "./observability.js";
+import { ReadinessController } from "./readiness.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerBillingRoutes } from "./routes/billing.js";
 import { registerDesktopAccountRoutes } from "./routes/desktopAccount.js";
 import { registerDesktopAuthRoutes } from "./routes/desktopAuth.js";
 import { registerDesktopLlmRoutes } from "./routes/desktopLlm.js";
 import { registerDesktopUpdateRoutes } from "./routes/desktopUpdates.js";
+import { registerHealthRoutes } from "./routes/health.js";
 import type { Store } from "./store.js";
 import { loadDesktopReleaseManifest, type DesktopReleaseManifest } from "./updates.js";
 import { createWechatNotificationParser, type WechatNotificationParser } from "./wechat.js";
@@ -29,11 +37,29 @@ export type ServerDependencies = {
   llmConfigEncryptionKey?: string;
   releaseManifest?: DesktopReleaseManifest | null;
   releaseManifestPath?: string;
+  observability?: ObservabilityConfig;
+  trustLoopbackProxy?: boolean;
+  readiness?: ReadinessController;
+  secureCookies?: boolean;
   now?: () => Date;
 };
 
 export function buildServer(dependencies: ServerDependencies) {
-  const app = Fastify({ logger: false });
+  const observability = dependencies.observability ?? createObservabilityConfig(false);
+  const app = Fastify(
+    createFastifyOptions({
+      observability,
+      trustLoopbackProxy: dependencies.trustLoopbackProxy ?? false,
+    }),
+  );
+  registerObservability(app, observability);
+  const readiness =
+    dependencies.readiness ??
+    new ReadinessController({
+      verifySchema: async () => {},
+      ping: async () => {},
+      timeoutMs: 1000,
+    });
   const now = dependencies.now ?? (() => new Date());
   const auth = new AuthService({
     store: dependencies.store,
@@ -44,7 +70,7 @@ export function buildServer(dependencies: ServerDependencies) {
     store: dependencies.store,
     now,
     sendOtp: dependencies.sendOtp,
-    adminEmail: dependencies.adminEmail ?? process.env.FRAMEQ_ADMIN_EMAIL,
+    adminEmail: dependencies.adminEmail,
   });
   const activationCodes = new ActivationCodeService({
     store: dependencies.store,
@@ -53,7 +79,7 @@ export function buildServer(dependencies: ServerDependencies) {
   const llmConfig = new LlmConfigService({
     store: dependencies.store,
     now,
-    encryptionKey: dependencies.llmConfigEncryptionKey ?? process.env.FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY,
+    encryptionKey: dependencies.llmConfigEncryptionKey,
   });
   const billing = new BillingService({
     store: dependencies.store,
@@ -65,12 +91,12 @@ export function buildServer(dependencies: ServerDependencies) {
     now,
   });
   const parseWechatNotification =
-    dependencies.parseWechatNotification ?? createWechatNotificationParser();
-  const wechatPayEnabled = dependencies.wechatPayEnabled ?? process.env.WECHAT_PAY_ENABLED === "1";
+    dependencies.parseWechatNotification ?? createWechatNotificationParser(null);
+  const wechatPayEnabled = dependencies.wechatPayEnabled ?? false;
   const releaseManifest =
     dependencies.releaseManifest ??
     loadDesktopReleaseManifest(
-      dependencies.releaseManifestPath ?? process.env.FRAMEQ_RELEASE_MANIFEST_PATH,
+      dependencies.releaseManifestPath,
     );
 
   app.removeContentTypeParser("application/json");
@@ -83,6 +109,7 @@ export function buildServer(dependencies: ServerDependencies) {
     }
   });
 
+  registerHealthRoutes(app, readiness);
   registerDesktopAuthRoutes(app, { store: dependencies.store, auth, now });
   registerAdminRoutes(app, {
     store: dependencies.store,
@@ -90,6 +117,7 @@ export function buildServer(dependencies: ServerDependencies) {
     activationCodes,
     llmConfig,
     entitlementAdjustments,
+    secureCookies: dependencies.secureCookies ?? false,
     now,
   });
   registerDesktopAccountRoutes(app, {

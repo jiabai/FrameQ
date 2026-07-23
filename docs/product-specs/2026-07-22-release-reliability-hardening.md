@@ -1,7 +1,7 @@
 # Release Reliability Hardening
 
 - Date: 2026-07-22
-- Status: Desktop reliability implemented; server hardening designed and awaiting implementation
+- Status: Local implementation complete; hosted server/staging and combined release evidence pending
 - Scope: authoritative task persistence, supervised worker execution, and server authorization/accounting/operations
 
 ## Summary
@@ -17,10 +17,11 @@ closed:
    artifacts, overspend AI Credits, expose OTPs/secrets, or leave operators unable to distinguish a
    ready process from a failed or draining one.
 
-These are release-reliability requirements, not optional refactors. Desktop persistence and worker
-watchdog work are implemented. The remaining server boundary is split into independently reviewable
-authentication/quota concurrency and production-operations ExecPlans so database correctness and
-runtime operations do not share one large implementation risk surface.
+These are release-reliability requirements, not optional refactors. Desktop persistence, worker
+watchdog, server authentication/quota concurrency, and the local production-operations code/runbook
+are implemented. The remaining active production-operations work is evidence: hosted Linux Server
+CI, an approved non-user SMTP/staging smoke, off-host restore practice, and the combined release
+gate. Those external results remain separate from the locally verified database boundary.
 
 ## User Problem
 
@@ -201,15 +202,17 @@ parent/descendant timeout fixture. The portable fixture is registered in the hos
 Cargo workflow, but no macOS host was available in this session; that runtime evidence remains an
 unverified residual risk rather than a pass.
 
-The server hardening boundary is now specified by
-`docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md` and two active ExecPlans:
+The server hardening boundary is specified by
+`docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md` and two ExecPlans:
 
-- `docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`; and
+- `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`; and
 - `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`.
 
-These documents do not implement or close the blocker. Broad publication remains blocked until
-both plans have accepted database, local/hosted operations, and required staging evidence and the
-combined release gate is rerun.
+The authentication/quota plan has accepted local database correctness evidence. The operations
+implementation and disposable local migration/restore rehearsal also pass locally, and the hosted
+workflow is registered. Broad publication remains blocked until that workflow produces Linux
+signal/CI evidence, the required production-shaped SMTP/Nginx/systemd/restore smoke is accepted,
+and the combined release gate is rerun.
 
 ## Non-Goals
 

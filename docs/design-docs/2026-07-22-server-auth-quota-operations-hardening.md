@@ -1,17 +1,25 @@
 # Server Authentication, Quota, and Production Operations Hardening
 
 - Date: 2026-07-22
-- Status: Approved design; implementation pending
+- Status: Local implementation complete; hosted CI/staging acceptance pending
 - Product spec: `docs/product-specs/2026-07-22-release-reliability-hardening.md`
 - ExecPlans:
-  - `docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`
+  - `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`
   - `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`
+
+Implementation status: the purpose-scoped OTP, dispatch-limit, ticket/session, migration, and AI
+Credit transaction boundary is implemented and locally verified with independent Prisma clients.
+Fail-closed runtime configuration, explicit development console OTP, privacy-safe structured logs,
+loopback proxy trust, fixed health routes, bounded lifecycle ownership, database preflight/restore
+tools, deployment assets, and the dedicated Server CI workflow are also implemented and locally
+verified. The production-operations ExecPlan remains active because hosted Linux CI, an approved
+SMTP/staging host, off-host restore evidence, and the combined release gate are not available.
 
 ## Context
 
-FrameQ server currently has good transaction boundaries for payment settlement, activation-code
-redemption, and administrator entitlement adjustment. The login and per-call AI Credits paths do
-not yet have the same guarantee:
+This design was opened because FrameQ server had good transaction boundaries for payment
+settlement, activation-code redemption, and administrator entitlement adjustment, while login and
+per-call AI Credits still used separate read/check/write calls:
 
 - desktop and administrator OTP verification read a usable challenge, increment attempts, compare
   the code, consume the challenge, and create the resulting ticket/session through separate Store
@@ -20,19 +28,16 @@ not yet have the same guarantee:
 - LLM checkout reads the entitlement and then increments `llmQuotaUsed`, so two distinct concurrent
   request IDs can both observe one remaining Credit before either update commits.
 
-The current in-memory OTP resend map is also neither atomic across overlapping async requests nor
-shared across restarts/processes. Behind the documented Nginx deployment, Fastify does not yet trust
-the loopback proxy, so `request.ip` may be the proxy address rather than the client address.
+The original in-memory OTP resend map was neither atomic across overlapping async requests nor
+shared across restarts/processes. The original deployment also left Fastify proxy trust disabled,
+printed email/OTP values when SMTP was absent, disabled application logging, exposed no health
+contract, omitted application-owned signal cleanup, used schema push, and documented no complete
+restore drill or Server CI gate. The implementation described above replaces those initial facts;
+they remain here as problem context rather than current behavior.
 
-Production startup currently permits missing SMTP configuration by printing the email address and
-OTP to stdout, disables Fastify logging completely, exposes no liveness/readiness contract, and does
-not close Fastify and Prisma explicitly on `SIGINT`/`SIGTERM`. The deployment runbook describes a
-backup but does not provide a complete restore drill, migration baseline, or server CI gate.
-
-These are broad-release blockers. They do not imply that the present small, single-instance service
-is already compromised, but they can produce duplicate login artifacts, a consumed ticket without
-a session, quota overspend, secret-bearing logs, or operationally ambiguous restarts under ordinary
-concurrency and failure.
+The code-level blockers are now locally closed. Broad release still requires hosted and
+production-shaped evidence; local tests do not claim that SMTP/provider uptime, Nginx/systemd host
+configuration, or off-host disaster recovery has been exercised.
 
 ## Decision Summary
 

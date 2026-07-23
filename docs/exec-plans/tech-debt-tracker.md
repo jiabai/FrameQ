@@ -1,14 +1,38 @@
 # Tech Debt Tracker
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## High Priority
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Broad-release server concurrency and operations boundary is designed but not implemented | Existing entitlement transaction work does not prove OTP/ticket/quota correctness under concurrent independent database clients, and current production startup still lacks fail-closed SMTP, safe observability, health/shutdown ownership, reviewed migration deploy, restored-backup evidence, and server CI. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active server auth/quota and production-operations ExecPlans | Complete and accept both active server plans, including independent-client SQLite concurrency/rollback, secret-seeded logging/config/lifecycle tests, hosted CI, and disposable migration/restore/staging evidence; then rerun the combined release gate. |
+| Hosted/staging server operations evidence remains pending | Fail-closed config, safe logs, proxy trust, health/lifecycle, preflight/restore tools, runbook, and Server CI are implemented and locally tested. This Windows session cannot prove the POSIX child signal fixture, hosted workflow, real SMTP/Nginx/systemd host, or protected off-host restore. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain passing hosted Linux Server CI plus approved non-user SMTP/staging/restore evidence, then rerun and accept the combined release gate. |
 
 ## Completed / Resolved
+
+### Server Production Operations — Local Implementation
+
+- Status: implementation and disposable local rehearsal complete; external release evidence remains
+  in High Priority and the ExecPlan intentionally stays active.
+- Resolution: production runtime config/SMTP fails closed, console OTP is explicit non-production
+  only, Fastify logs closed fields with generated request IDs, proxy trust is loopback-only, health
+  and bounded lifecycle have dedicated owners, and deployment uses reviewed migrations plus
+  preflight/WAL-safe backup/read-only restore/rollback contracts and a path-filtered Server CI.
+- Evidence: secret-seeded log/response tests, IPv4/IPv6 proxy tests, health/lifecycle tests, real
+  listener and SQLite release, migrated-schema readiness, disposable fresh/baseline/invalid/restore
+  checks, Prisma generation, 142 passing Server tests plus one Windows-only POSIX-signal skip,
+  TypeScript build, 25/25 repository scripts, governance, and diff checks pass locally. The real
+  POSIX child signal test remains mandatory in hosted Linux CI.
+
+### Server Authentication and AI Credit Concurrency
+
+- Status: implemented and locally verified; production operations remain a separate release gate.
+- Resolution: purpose-scoped OTP issuance and database dispatch limits, atomic attempt/artifact and
+  ticket/session operations, and conditional quota/event checkout now live behind semantic Store
+  outcomes with MemoryStore parity and bounded recognized-conflict retry.
+- Evidence: baseline plus forward migration fixtures pass fresh/existing/invalid/restore/status
+  cases; independent Prisma-client concurrency and failure injection pass; complete server suite is
+  97/97 and TypeScript/Prisma generation gates pass.
 
 ### P1 Supervised Worker Watchdog
 

@@ -8,7 +8,12 @@ import type { LlmConfigService } from "../llmConfig.js";
 import { sha256 } from "../security.js";
 import type { Store } from "../store.js";
 import { emailStartSchema, emailVerifySchema } from "./authSchemas.js";
-import { llmQuotaRemaining, publicError } from "./shared.js";
+import {
+  isServerTemporarilyUnavailable,
+  llmQuotaRemaining,
+  publicAuthError,
+  publicError,
+} from "./shared.js";
 
 const adminActivationCreateSchema = z.object({
   redeem_window_days: z.number().int().min(1).max(365).optional(),
@@ -45,6 +50,7 @@ type AdminRouteDependencies = {
   activationCodes: ActivationCodeService;
   llmConfig: LlmConfigService;
   entitlementAdjustments: EntitlementAdjustmentService;
+  secureCookies: boolean;
   now: () => Date;
 };
 
@@ -74,7 +80,13 @@ export function registerAdminRoutes(
       if (error instanceof Error && error.message === "ADMIN_ONLY") {
         return reply.code(403).send({ error: "ADMIN_ONLY" });
       }
-      return reply.code(400).send({ error: publicError(error) });
+      if (isServerTemporarilyUnavailable(error)) {
+        return reply.code(503).send({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+      }
+      const publicMessage = publicAuthError(error);
+      return publicMessage
+        ? reply.code(400).send({ error: publicMessage })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 
@@ -88,14 +100,22 @@ export function registerAdminRoutes(
       setCookie(reply, "frameq_admin_session", result.sessionToken, {
         httpOnly: true,
         maxAgeSeconds: adminSessionMaxAgeSeconds,
+        secure: dependencies.secureCookies,
       });
       setCookie(reply, "frameq_admin_csrf", result.csrfToken, {
         httpOnly: false,
         maxAgeSeconds: adminSessionMaxAgeSeconds,
+        secure: dependencies.secureCookies,
       });
       return { ok: true, redirect_url: "/admin" };
     } catch (error) {
-      return reply.code(400).send({ error: publicError(error) });
+      if (isServerTemporarilyUnavailable(error)) {
+        return reply.code(503).send({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+      }
+      const publicMessage = publicAuthError(error);
+      return publicMessage
+        ? reply.code(400).send({ error: publicMessage })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 
@@ -111,8 +131,8 @@ export function registerAdminRoutes(
       return reply.code(403).send({ error: "CSRF_INVALID" });
     }
     await dependencies.store.revokeAdminSession(sha256(sessionToken), dependencies.now());
-    clearCookie(reply, "frameq_admin_session", true);
-    clearCookie(reply, "frameq_admin_csrf", false);
+    clearCookie(reply, "frameq_admin_session", true, dependencies.secureCookies);
+    clearCookie(reply, "frameq_admin_csrf", false, dependencies.secureCookies);
     return { ok: true, redirect_url: "/admin/login" };
   });
 
@@ -203,7 +223,10 @@ export function registerAdminRoutes(
       });
       return publicLlmConfigResponse(saved);
     } catch (error) {
-      return reply.code(400).send({ error: publicError(error) });
+      const message = publicError(error);
+      return message
+        ? reply.code(400).send({ error: message })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 
@@ -291,7 +314,7 @@ function setCookie(
   reply: { header(name: string, value: string | string[]): unknown; getHeader(name: string): unknown },
   name: string,
   value: string,
-  options: { httpOnly: boolean; maxAgeSeconds: number },
+  options: { httpOnly: boolean; maxAgeSeconds: number; secure: boolean },
 ): void {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
@@ -302,7 +325,7 @@ function setCookie(
   if (options.httpOnly) {
     parts.push("HttpOnly");
   }
-  if (process.env.NODE_ENV === "production") {
+  if (options.secure) {
     parts.push("Secure");
   }
   const existing = reply.getHeader("set-cookie");
@@ -318,8 +341,9 @@ function clearCookie(
   reply: { header(name: string, value: string | string[]): unknown; getHeader(name: string): unknown },
   name: string,
   httpOnly: boolean,
+  secure: boolean,
 ): void {
-  setCookie(reply, name, "", { httpOnly, maxAgeSeconds: 0 });
+  setCookie(reply, name, "", { httpOnly, maxAgeSeconds: 0, secure });
 }
 
 function firstHeader(value: string | string[] | undefined): string | null {

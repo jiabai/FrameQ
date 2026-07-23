@@ -3,6 +3,26 @@ import { buildServer } from "../src/server.js";
 import { sha256 } from "../src/security.js";
 import { MemoryStore } from "../src/store.js";
 
+class TemporarilyUnavailableQuotaStore extends MemoryStore {
+  override async consumeLlmQuota(
+    _userId: string,
+    _requestId: string,
+    _now: Date,
+  ): ReturnType<MemoryStore["consumeLlmQuota"]> {
+    return { status: "temporarily_unavailable" };
+  }
+}
+
+class FailingQuotaStore extends MemoryStore {
+  override async consumeLlmQuota(
+    _userId: string,
+    _requestId: string,
+    _now: Date,
+  ): ReturnType<MemoryStore["consumeLlmQuota"]> {
+    throw new Error("SQLITE_BUSY seeded database detail");
+  }
+}
+
 const now = new Date("2026-06-22T08:00:00.000Z");
 const encryptionKey = "0123456789abcdef0123456789abcdef";
 
@@ -135,6 +155,44 @@ describe("server-managed LLM config and quota", () => {
       llmQuotaLimit: 20,
       llmQuotaUsed: 2,
     });
+  });
+
+  test("maps quota transaction exhaustion to a stable retryable response", async () => {
+    const store = new TemporarilyUnavailableQuotaStore();
+    await createAdminSession(store);
+    const { sessionToken } = await createAuthorizedUser(store);
+    const app = buildTestServer(store);
+    expect((await saveLlmConfig(app)).statusCode).toBe(200);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/desktop/llm/checkouts",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { request_id: "quota-temporarily-unavailable" },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+  });
+
+  test("does not echo an unexpected database error from quota checkout", async () => {
+    const store = new FailingQuotaStore();
+    await createAdminSession(store);
+    const { sessionToken } = await createAuthorizedUser(store);
+    const app = buildTestServer(store);
+    expect((await saveLlmConfig(app)).statusCode).toBe(200);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/desktop/llm/checkouts",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { request_id: "quota-unknown-failure" },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ error: "INTERNAL_SERVER_ERROR" });
+    expect(response.body).not.toContain("SQLITE_BUSY");
+    expect(response.body).not.toContain("seeded database detail");
   });
 
   test("account status allows local processing but blocks AI generation when quota is exhausted", async () => {

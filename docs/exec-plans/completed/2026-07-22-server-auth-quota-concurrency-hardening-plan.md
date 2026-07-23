@@ -41,18 +41,33 @@ by the separate server production-operations ExecPlan before publication.
 - [x] 2026-07-22: Registered the product/design/security/architecture boundary and this independent
   implementation plan without modifying server code or data. Validation: governance validation
   reported 0 errors and 0 warnings, and tracked plus new-document whitespace checks passed.
-- [ ] Add characterization and deterministic RED concurrency/failure-injection tests. Validation:
-  focused Vitest commands and exact failing assertions must be recorded before production edits.
-- [ ] Introduce purpose-scoped semantic Store contracts and MemoryStore parity. Validation: focused
-  Store/auth tests pass without Prisma.
-- [ ] Baseline the current database and add the reviewed forward hardening migration. Validation:
-  fresh/existing/invalid-data/restore migration fixtures pass.
-- [ ] Implement Prisma OTP, ticket, dispatch-limit, and quota transactions. Validation: independent-
-  client real-SQLite concurrency and rollback tests pass.
-- [ ] Migrate services/routes away from low-level critical Store composition. Validation: auth,
-  admin, LLM checkout, route-contract, and boundary tests pass.
-- [ ] Run full server/governance gates and hand off for review without broad-publication claims.
-  Validation: commands and exact totals are recorded in this plan.
+- [x] 2026-07-22: Added characterization plus deterministic RED concurrency/failure-injection
+  tests. Before production edits, `tests/authQuotaConcurrency.test.ts` failed 4/4 targeted
+  assertions: both desktop and admin concurrent verification produced two fulfilled results,
+  ticket retry failed after an injected session write error, and both overlapping dispatches sent
+  email. `tests/prismaAuthQuotaConcurrency.test.ts` then failed 4/5: independent clients produced
+  two desktop tickets and two admin sessions after a read barrier, ticket retry failed after the
+  injected Prisma session write error, and an injected `P2034` escaped instead of being retried.
+  The independent-client final-Credit test passed and asserted one event/one increment rather than
+  accepting a lock error as correctness. Test fixture validation: 2/2 passed.
+- [x] 2026-07-22: Introduced purpose-scoped semantic Store contracts and MemoryStore parity. The
+  focused MemoryStore/auth/admin/LLM suite passes 27/27, including purpose isolation, exact-scope
+  replacement, five-attempt racing, email/IP limits, artifact rollback, ticket retry, and quota
+  idempotency. PrismaStore intentionally remains RED until Tasks 3-5 implement the same port.
+- [x] 2026-07-23: Added a reviewed pre-hardening baseline and a separate forward migration with
+  purpose/rate-limit/attempt/quota checks. Fresh deploy, repeat deploy/status, verified existing
+  baseline, invalid-accounting rejection, integrity, and full-file restore pass 3/3 migration tests.
+- [x] 2026-07-23: Implemented Prisma OTP, ticket, dispatch-limit, and AI Credit transactions with
+  parameterized conditional writes and fixed three-attempt retry for recognized conflicts only.
+  Independent-client concurrency, idempotency, failure rollback, retry exhaustion, and unknown-error
+  tests pass 13/13.
+- [x] 2026-07-23: Migrated authentication and checkout callers to closed semantic Store outcomes,
+  removed service-owned resend maps, returned fixed 503 contention outcomes, sanitized unexpected
+  database failures, and added a source boundary gate against retired low-level composition.
+- [x] 2026-07-23: Ran final local gates without a broad-publication claim. Prisma generation,
+  migration deploy/status fixtures, 97/97 complete server tests, TypeScript build, governance
+  validation (0 errors/0 warnings), and `git diff --check` pass. Production operations and hosted/
+  staging evidence remain explicitly pending.
 
 ## Surprises & Discoveries
 
@@ -75,6 +90,15 @@ by the separate server production-operations ExecPlan before publication.
   client. The new database tests must extend it to create independent clients against that file.
 - Evidence: production currently uses `prisma db push` and has no `prisma/migrations` history, so a
   reviewed baseline plus forward migration is required before adding constraints safely.
+- Evidence: a forced post-read barrier inside Prisma interactive transactions deadlocked because
+  the second SQLite transaction did not reach the read while the first remained open. The retained
+  quota test therefore separates concerns: real independent clients must settle to one final
+  increment/event, and deterministic injected `P2034` proves bounded retry without treating a raw
+  lock error as success.
+- Environment: a clean worktree initially lacked the downloaded Prisma schema engine, so baseline
+  tests could not create their temporary schema. Reusing the existing lock-matched Prisma 6.19.3
+  engine from the main workspace allowed `prisma generate`; the untouched baseline then passed
+  65/65 tests and `tsc --noEmit` before RED tests were added.
 
 ## Decision Log
 
@@ -107,14 +131,16 @@ by the separate server production-operations ExecPlan before publication.
 
 ## Outcomes & Retrospective
 
-Planning outcome: the concurrency risks have an approved database-owned design, schema/migration
-path, deterministic test matrix, and two-plan release boundary. No server implementation or
-database was changed by this planning step.
+Implementation outcome: authentication and quota correctness now enter through purpose-specific
+semantic Store operations. Reviewed migrations establish the schema checks; MemoryStore and
+PrismaStore preserve the same closed outcomes; independent-client tests prove single-use,
+idempotency, capacity, bounded retry, and rollback. The complete server suite passes 97/97 and the
+TypeScript build plus Prisma generation pass.
 
-Residual risk: until this ExecPlan is implemented and accepted, overlapping OTP verification,
-ticket exchange, and distinct quota checkout requests may still violate single-use/capacity intent.
-Even after implementation, SQLite remains a single-instance deployment choice and does not provide
-multi-host failover or high-write scalability.
+Residual risk: SQLite remains a one-server-instance, local-file deployment choice and does not
+provide multi-host failover or high-write scalability. Production configuration, logging, trusted
+proxy, health, graceful shutdown, restore operations, and hosted CI remain in the separate active
+production-operations ExecPlan, so broad publication is still blocked.
 
 ## Context and Orientation
 
@@ -147,14 +173,14 @@ multi-host failover or high-write scalability.
 - Create: `server/tests/prismaAuthQuotaConcurrency.test.ts`
 - Modify: `server/tests/prismaTestHarness.ts`
 
-- [ ] Characterize successful desktop/admin login, five-attempt lockout, resend failure, ticket
+- [x] Characterize successful desktop/admin login, five-attempt lockout, resend failure, ticket
   exchange, quota-unavailable, and same-request reuse before changing contracts.
-- [ ] Extend the fixture to open two or more independent `PrismaClient` instances against one
+- [x] Extend the fixture to open two or more independent `PrismaClient` instances against one
   temporary database and apply the same WAL/busy-timeout policy to each.
-- [ ] Add RED tests showing that two correct OTP submissions can currently create multiple artifacts,
+- [x] Add RED tests showing that two correct OTP submissions can currently create multiple artifacts,
   ticket consumption survives an injected session-write failure, and distinct checkout IDs can race
   for one Credit.
-- [ ] Add failure-injection seams for artifact/event writes and record the exact RED failures in
+- [x] Add failure-injection seams for artifact/event writes and record the exact RED failures in
   `Progress`. A test that passes only because SQLite returned `database is locked` is not sufficient;
   it must retry/settle and assert final rows.
 
@@ -166,14 +192,14 @@ multi-host failover or high-write scalability.
 - Modify: `server/tests/transactionSafety.test.ts`
 - Modify: `server/tests/authQuotaConcurrency.test.ts`
 
-- [ ] Add `OtpPurpose` and closed issue/verify/exchange/quota result unions.
-- [ ] Add purpose-specific issue/verify/exchange semantic methods and remove production-service
+- [x] Add `OtpPurpose` and closed issue/verify/exchange/quota result unions.
+- [x] Add purpose-specific issue/verify/exchange semantic methods and remove production-service
   dependence on low-level OTP/ticket calls.
-- [ ] Implement MemoryStore operations behind its existing `runAtomically` queue, including exact
+- [x] Implement MemoryStore operations behind its existing `runAtomically` queue, including exact
   scope replacement, attempt accounting, dispatch limits, artifact rollback, ticket/session
   rollback, and quota idempotency.
-- [ ] Keep raw OTP/ticket/session/CSRF values outside Store; pass only hashes and return only records.
-- [ ] Run the focused MemoryStore suite to GREEN before editing PrismaStore.
+- [x] Keep raw OTP/ticket/session/CSRF values outside Store; pass only hashes and return only records.
+- [x] Run the focused MemoryStore suite to GREEN before editing PrismaStore.
 
 ### Task 3: Establish Reviewed SQLite Migrations
 
@@ -186,15 +212,15 @@ multi-host failover or high-write scalability.
 - Modify: `server/package-lock.json`
 - Create: `server/tests/prismaMigration.test.ts`
 
-- [ ] Generate/review a baseline that exactly represents the current schema; it must not contain the
+- [x] Generate/review a baseline that exactly represents the current schema; it must not contain the
   hardening change.
-- [ ] Add `EmailOtp.purpose`, latest-scope index, `AuthRateLimit`, and explicit SQLite checks for
+- [x] Add `EmailOtp.purpose`, latest-scope index, `AuthRateLimit`, and explicit SQLite checks for
   closed purpose/scope, OTP attempts, and quota invariants.
-- [ ] Make the forward migration deliberately invalidate outstanding legacy OTP rows and reject
+- [x] Make the forward migration deliberately invalidate outstanding legacy OTP rows and reject
   invalid entitlement data through preflight rather than clamp it.
-- [ ] Add `db:migrate:deploy` and `db:migrate:status` scripts. Keep `db:push` development-only and
+- [x] Add `db:migrate:deploy` and `db:migrate:status` scripts. Keep `db:push` development-only and
   remove it from production documentation in the operations plan.
-- [ ] Test fresh apply, verified existing-baseline apply, invalid preflight, repeat deploy, integrity
+- [x] Test fresh apply, verified existing-baseline apply, invalid preflight, repeat deploy, integrity
   check, and restoration of a pre-migration copy.
 
 ### Task 4: Implement Prisma Authentication Transactions
@@ -206,14 +232,14 @@ multi-host failover or high-write scalability.
 - Modify: `server/tests/prismaAuthQuotaConcurrency.test.ts`
 - Modify: `server/tests/prismaTransactionSafety.test.ts`
 
-- [ ] Implement atomic email/IP dispatch reservations and challenge creation with parameterized
+- [x] Implement atomic email/IP dispatch reservations and challenge creation with parameterized
   writes; a failed second scope must roll back the first.
-- [ ] Implement desktop OTP attempt/consume + user/ticket creation and administrator OTP
+- [x] Implement desktop OTP attempt/consume + user/ticket creation and administrator OTP
   attempt/consume + admin-session creation as separate semantic transactions while retaining the
   existing constant-time fixed-length hash comparison.
-- [ ] Implement ticket conditional consumption + desktop-session insertion in one transaction.
-- [ ] Add fixed bounded retry for recognized local transaction conflicts only.
-- [ ] Prove purpose isolation, exact replacement scope, correct/wrong fifth-attempt race, one-artifact
+- [x] Implement ticket conditional consumption + desktop-session insertion in one transaction.
+- [x] Add fixed bounded retry for recognized local transaction conflicts only.
+- [x] Prove purpose isolation, exact replacement scope, correct/wrong fifth-attempt race, one-artifact
   maximum, injected rollback, and safe retry with independent clients.
 
 ### Task 5: Implement Atomic AI Credit Checkout
@@ -226,12 +252,12 @@ multi-host failover or high-write scalability.
 - Modify: `server/tests/llmQuota.test.ts`
 - Modify: `server/tests/prismaAuthQuotaConcurrency.test.ts`
 
-- [ ] Replace read-then-unconditional-increment with one parameterized conditional update and one
+- [x] Replace read-then-unconditional-increment with one parameterized conditional update and one
   same-transaction usage-event insert.
-- [ ] Preserve same-request `reused` behavior and existing successful checkout response fields.
-- [ ] Map recognized retry exhaustion to a fixed temporary-unavailable outcome; preserve
+- [x] Preserve same-request `reused` behavior and existing successful checkout response fields.
+- [x] Map recognized retry exhaustion to a fixed temporary-unavailable outcome; preserve
   `LLM_QUOTA_UNAVAILABLE` for true missing/expired/exhausted entitlement.
-- [ ] Prove one remaining Credit permits exactly one distinct request ID, identical IDs consume once,
+- [x] Prove one remaining Credit permits exactly one distinct request ID, identical IDs consume once,
   event failure rolls back the increment, and no response/log echoes a database error.
 
 ### Task 6: Migrate Services and HTTP Adapters
@@ -246,14 +272,14 @@ multi-host failover or high-write scalability.
 - Modify: `server/tests/routes.test.ts`
 - Modify: `server/tests/serverModuleBoundaries.test.ts`
 
-- [ ] Generate raw values in services, pass hashes/expiries into semantic Store operations, and keep
+- [x] Generate raw values in services, pass hashes/expiries into semantic Store operations, and keep
   fixed public invalid-code/ticket responses.
-- [ ] Remove the two in-memory resend maps; database issuance becomes the only dispatch-limit owner.
-- [ ] Ensure SMTP runs only after committed issuance and delivery failure invalidates the challenge
+- [x] Remove the two in-memory resend maps; database issuance becomes the only dispatch-limit owner.
+- [x] Ensure SMTP runs only after committed issuance and delivery failure invalidates the challenge
   without decrementing committed rate-limit counters.
-- [ ] Return a stable retryable HTTP failure for database contention exhaustion and never translate
+- [x] Return a stable retryable HTTP failure for database contention exhaustion and never translate
   it to invalid credentials or no quota.
-- [ ] Add boundary tests forbidding auth routes/services from importing Prisma or composing retired
+- [x] Add boundary tests forbidding auth routes/services from importing Prisma or composing retired
   low-level critical methods.
 
 ### Task 7: Synchronize Evidence and Hand Off
@@ -269,11 +295,11 @@ multi-host failover or high-write scalability.
 - Modify: `TASKS.md`
 - Modify: this ExecPlan throughout implementation
 
-- [ ] Record exact RED/GREEN evidence, migration rehearsal results, test totals, unavailable evidence,
+- [x] Record exact RED/GREEN evidence, migration rehearsal results, test totals, unavailable evidence,
   and residual risks in `Progress` and `Outcomes & Retrospective`.
-- [ ] Do not mark the overall broad-release server blocker closed until the production-operations
+- [x] Do not mark the overall broad-release server blocker closed until the production-operations
   ExecPlan is also accepted.
-- [ ] Move this plan to `completed/` only after all hard gates pass and update both plan indexes.
+- [x] Move this plan to `completed/` only after all hard gates pass and update both plan indexes.
 
 ## Validation and Acceptance
 

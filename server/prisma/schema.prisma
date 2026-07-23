@@ -21,6 +21,7 @@ model User {
 
 model EmailOtp {
   id         String    @id
+  purpose    String
   email      String
   state      String
   codeHash   String
@@ -30,7 +31,20 @@ model EmailOtp {
   consumedAt DateTime?
   createdAt  DateTime
 
-  @@index([email, state])
+  @@index([purpose, email, state, createdAt])
+}
+
+model AuthRateLimit {
+  id              String   @id
+  keyHash         String   @unique
+  purpose         String
+  scope           String
+  windowStartedAt DateTime
+  count           Int
+  nextAllowedAt   DateTime
+  updatedAt       DateTime
+
+  @@index([purpose, scope, nextAllowedAt])
 }
 
 model DesktopLoginTicket {

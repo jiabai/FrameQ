@@ -89,7 +89,10 @@ export function registerBillingRoutes(
       });
       return { code: "SUCCESS", message: "success" };
     } catch (error) {
-      return reply.code(400).send({ code: "FAIL", message: publicError(error) });
+      const message = publicError(error);
+      return message
+        ? reply.code(400).send({ code: "FAIL", message })
+        : reply.code(500).send({ code: "FAIL", message: "internal error" });
     }
   });
 }

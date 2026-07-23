@@ -1,20 +1,28 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
+import { authRateLimitKey, constantTimeEqual } from "./security.js";
 import type {
   ActivationCodeRecord,
   ActivationRedemption,
   AdminEntitlementAdjustmentRecord,
+  AuthRateLimitScope,
+  ExchangeDesktopTicketResult,
   EntitlementAdjustmentApplication,
   AdminSessionRecord,
   DesktopLoginTicketRecord,
   EmailOtpRecord,
   EntitlementRecord,
+  IssueEmailOtpResult,
   LlmConfigRecord,
+  LlmQuotaCheckoutResult,
+  OtpPurpose,
   OrderRecord,
   PaidOrderSettlement,
   SessionRecord,
   Store,
   UserRecord,
+  VerifyAdminOtpResult,
+  VerifyDesktopOtpResult,
   WebhookEventRecord,
 } from "./store.js";
 
@@ -38,10 +46,261 @@ export class PrismaStore implements Store {
     return this.prisma.user.findUnique({ where: { id: userId } });
   }
 
+  async issueEmailOtp(
+    input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
+  ): Promise<IssueEmailOtpResult> {
+    const otpId = randomUUID();
+    const reservations = prismaRateLimitReservations(input);
+    const attempted = await withConflictRetry(async () => {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          for (const reservation of reservations) {
+            await reserveAuthRateLimit(tx, reservation, input.createdAt);
+          }
+          await tx.emailOtp.updateMany({
+            where: {
+              purpose: input.purpose,
+              email: input.email,
+              state: input.state,
+              consumedAt: null,
+            },
+            data: { consumedAt: input.createdAt },
+          });
+          await tx.emailOtp.create({
+            data: { ...input, id: otpId, attempts: 0, consumedAt: null },
+          });
+          return { status: "issued", otpId } as const;
+        });
+      } catch (error) {
+        if (error instanceof RateLimitExceededError) {
+          return { status: "rate_limited", retryAt: error.retryAt } as const;
+        }
+        throw error;
+      }
+    });
+    return attempted.status === "exhausted"
+      ? { status: "temporarily_unavailable" }
+      : attempted.value;
+  }
+
+  async invalidateIssuedOtpAfterDeliveryFailure(otpId: string, now: Date): Promise<void> {
+    const attempted = await withConflictRetry(async () => {
+      await this.prisma.emailOtp.updateMany({
+        where: { id: otpId, consumedAt: null },
+        data: { consumedAt: now },
+      });
+    });
+    if (attempted.status === "exhausted") {
+      throw new StoreTemporarilyUnavailableError();
+    }
+  }
+
+  async verifyDesktopOtpAndCreateTicket(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    ticketHash: string;
+    now: Date;
+    ticketExpiresAt: Date;
+  }): Promise<VerifyDesktopOtpResult> {
+    const ticketId = randomUUID();
+    const userId = randomUUID();
+    const attempted = await withConflictRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const otp = await tx.emailOtp.findFirst({
+          where: {
+            purpose: "desktop_login",
+            email: input.email,
+            state: input.state,
+            consumedAt: null,
+            attempts: { lt: 5 },
+            expiresAt: { gt: input.now },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+        if (!otp) {
+          return { status: "invalid" } as const;
+        }
+        const matches = constantTimeEqual(otp.codeHash, input.codeHash);
+        const attemptedOtp = await tx.emailOtp.updateMany({
+          where: {
+            id: otp.id,
+            purpose: "desktop_login",
+            email: input.email,
+            state: input.state,
+            codeHash: otp.codeHash,
+            consumedAt: null,
+            attempts: { lt: 5 },
+            expiresAt: { gt: input.now },
+          },
+          data: matches
+            ? { attempts: { increment: 1 }, consumedAt: input.now }
+            : { attempts: { increment: 1 } },
+        });
+        if (attemptedOtp.count !== 1 || !matches) {
+          return { status: "invalid" } as const;
+        }
+        const user = await tx.user.upsert({
+          where: { email: input.email },
+          update: { updatedAt: input.now },
+          create: {
+            id: userId,
+            email: input.email,
+            createdAt: input.now,
+            updatedAt: input.now,
+          },
+        });
+        const ticket = await tx.desktopLoginTicket.create({
+          data: {
+            id: ticketId,
+            ticketHash: input.ticketHash,
+            state: input.state,
+            userId: user.id,
+            expiresAt: input.ticketExpiresAt,
+            consumedAt: null,
+            createdAt: input.now,
+          },
+        });
+        return {
+          status: "verified",
+          user: user as UserRecord,
+          ticket: ticket as DesktopLoginTicketRecord,
+        } as const;
+      }),
+    );
+    return attempted.status === "exhausted"
+      ? { status: "temporarily_unavailable" }
+      : attempted.value;
+  }
+
+  async verifyAdminOtpAndCreateSession(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    sessionTokenHash: string;
+    csrfTokenHash: string;
+    now: Date;
+    sessionExpiresAt: Date;
+  }): Promise<VerifyAdminOtpResult> {
+    const sessionId = randomUUID();
+    const attempted = await withConflictRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const otp = await tx.emailOtp.findFirst({
+          where: {
+            purpose: "admin_login",
+            email: input.email,
+            state: input.state,
+            consumedAt: null,
+            attempts: { lt: 5 },
+            expiresAt: { gt: input.now },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+        if (!otp) {
+          return { status: "invalid" } as const;
+        }
+        const matches = constantTimeEqual(otp.codeHash, input.codeHash);
+        const attemptedOtp = await tx.emailOtp.updateMany({
+          where: {
+            id: otp.id,
+            purpose: "admin_login",
+            email: input.email,
+            state: input.state,
+            codeHash: otp.codeHash,
+            consumedAt: null,
+            attempts: { lt: 5 },
+            expiresAt: { gt: input.now },
+          },
+          data: matches
+            ? { attempts: { increment: 1 }, consumedAt: input.now }
+            : { attempts: { increment: 1 } },
+        });
+        if (attemptedOtp.count !== 1 || !matches) {
+          return { status: "invalid" } as const;
+        }
+        const session = await tx.adminSession.create({
+          data: {
+            id: sessionId,
+            email: input.email,
+            tokenHash: input.sessionTokenHash,
+            csrfTokenHash: input.csrfTokenHash,
+            createdAt: input.now,
+            expiresAt: input.sessionExpiresAt,
+            revokedAt: null,
+          },
+        });
+        return { status: "verified", session: session as AdminSessionRecord } as const;
+      }),
+    );
+    return attempted.status === "exhausted"
+      ? { status: "temporarily_unavailable" }
+      : attempted.value;
+  }
+
+  async exchangeDesktopTicketAndCreateSession(input: {
+    ticketHash: string;
+    state: string;
+    sessionTokenHash: string;
+    now: Date;
+    sessionExpiresAt: Date;
+  }): Promise<ExchangeDesktopTicketResult> {
+    const sessionId = randomUUID();
+    const attempted = await withConflictRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const ticket = await tx.desktopLoginTicket.findUnique({
+          where: { ticketHash: input.ticketHash },
+        });
+        if (
+          !ticket ||
+          ticket.state !== input.state ||
+          ticket.consumedAt !== null ||
+          ticket.expiresAt <= input.now
+        ) {
+          return { status: "invalid" } as const;
+        }
+        const user = await tx.user.findUnique({ where: { id: ticket.userId } });
+        if (!user) {
+          return { status: "invalid" } as const;
+        }
+        const consumed = await tx.desktopLoginTicket.updateMany({
+          where: {
+            id: ticket.id,
+            ticketHash: input.ticketHash,
+            state: input.state,
+            consumedAt: null,
+            expiresAt: { gt: input.now },
+          },
+          data: { consumedAt: input.now },
+        });
+        if (consumed.count !== 1) {
+          return { status: "invalid" } as const;
+        }
+        const session = await tx.session.create({
+          data: {
+            id: sessionId,
+            userId: user.id,
+            tokenHash: input.sessionTokenHash,
+            createdAt: input.now,
+            expiresAt: input.sessionExpiresAt,
+            revokedAt: null,
+          },
+        });
+        return {
+          status: "exchanged",
+          user: user as UserRecord,
+          session: session as SessionRecord,
+        } as const;
+      }),
+    );
+    return attempted.status === "exhausted"
+      ? { status: "temporarily_unavailable" }
+      : attempted.value;
+  }
+
   async createEmailOtp(input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">): Promise<EmailOtpRecord> {
     return this.prisma.emailOtp.create({
       data: { ...input, id: randomUUID(), attempts: 0, consumedAt: null },
-    });
+    }) as Promise<EmailOtpRecord>;
   }
 
   async findLatestUsableOtp(email: string, state: string, now: Date): Promise<EmailOtpRecord | null> {
@@ -54,14 +313,14 @@ export class PrismaStore implements Store {
         expiresAt: { gt: now },
       },
       orderBy: { createdAt: "desc" },
-    });
+    }) as Promise<EmailOtpRecord | null>;
   }
 
   async incrementOtpAttempts(otpId: string): Promise<EmailOtpRecord> {
     return this.prisma.emailOtp.update({
       where: { id: otpId },
       data: { attempts: { increment: 1 } },
-    });
+    }) as Promise<EmailOtpRecord>;
   }
 
   async consumeOtp(otpId: string, now: Date): Promise<void> {
@@ -261,39 +520,61 @@ export class PrismaStore implements Store {
     userId: string,
     requestId: string,
     now: Date,
-  ): Promise<{ entitlement: EntitlementRecord; reused: boolean } | null> {
-    return this.prisma.$transaction(async (tx) => {
-      const existingEvent = await tx.llmUsageEvent.findUnique({
-        where: { userId_requestId: { userId, requestId } },
-      });
-      const entitlement = await tx.entitlement.findUnique({ where: { userId } });
-      if (!entitlement || entitlement.expiresAt <= now) {
-        return null;
-      }
-      if (existingEvent) {
-        return { entitlement: entitlement as EntitlementRecord, reused: true };
-      }
-      if (entitlement.llmQuotaUsed >= entitlement.llmQuotaLimit) {
-        return null;
-      }
-      const updated = await tx.entitlement.update({
-        where: { userId },
-        data: {
-          llmQuotaUsed: { increment: 1 },
-          updatedAt: now,
-        },
-      });
-      await tx.llmUsageEvent.create({
-        data: {
-          id: randomUUID(),
-          userId,
-          entitlementId: entitlement.id,
-          requestId,
-          createdAt: now,
-        },
-      });
-      return { entitlement: updated as EntitlementRecord, reused: false };
-    });
+  ): Promise<LlmQuotaCheckoutResult> {
+    const usageEventId = randomUUID();
+    const attempted = await withConflictRetry(
+      () =>
+        this.prisma.$transaction(async (tx) => {
+          const existingEvent = await tx.llmUsageEvent.findUnique({
+            where: { userId_requestId: { userId, requestId } },
+          });
+          const current = await tx.entitlement.findUnique({ where: { userId } });
+          if (!current || current.expiresAt <= now) {
+            return { status: "unavailable" } as const;
+          }
+          if (existingEvent) {
+            return {
+              status: "reused",
+              entitlement: current as EntitlementRecord,
+            } as const;
+          }
+
+          const updatedRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            UPDATE "Entitlement"
+               SET "llmQuotaUsed" = "llmQuotaUsed" + 1,
+                   "updatedAt" = ${now}
+             WHERE "userId" = ${userId}
+               AND "expiresAt" > ${now}
+               AND "llmQuotaUsed" < "llmQuotaLimit"
+             RETURNING "id"
+          `);
+          const updatedId = updatedRows[0]?.id;
+          if (!updatedId) {
+            return { status: "unavailable" } as const;
+          }
+          const updated = await tx.entitlement.findUnique({ where: { id: updatedId } });
+          if (!updated) {
+            throw new Error("LLM_QUOTA_UPDATE_INCONSISTENT");
+          }
+          await tx.llmUsageEvent.create({
+            data: {
+              id: usageEventId,
+              userId,
+              entitlementId: updated.id,
+              requestId,
+              createdAt: now,
+            },
+          });
+          return {
+            status: "consumed",
+            entitlement: updated as EntitlementRecord,
+          } as const;
+        }),
+      isLlmUsageEventIdempotencyConflict,
+    );
+    return attempted.status === "exhausted"
+      ? { status: "temporarily_unavailable" }
+      : attempted.value;
   }
 
   async getLlmConfig(): Promise<LlmConfigRecord | null> {
@@ -669,6 +950,157 @@ export class PrismaStore implements Store {
     });
     return entitlement as EntitlementRecord;
   }
+}
+
+type PrismaRateLimitReservation = {
+  id: string;
+  keyHash: string;
+  purpose: OtpPurpose;
+  scope: AuthRateLimitScope;
+  windowStartedAt: Date;
+  nextAllowedAt: Date;
+  maxCount: number;
+};
+
+class RateLimitExceededError extends Error {
+  constructor(readonly retryAt: Date) {
+    super("AUTH_RATE_LIMITED");
+    this.name = "RateLimitExceededError";
+  }
+}
+
+class StoreTemporarilyUnavailableError extends Error {
+  constructor() {
+    super("SERVER_TEMPORARILY_UNAVAILABLE");
+    this.name = "StoreTemporarilyUnavailableError";
+  }
+}
+
+function prismaRateLimitReservations(
+  input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
+): PrismaRateLimitReservation[] {
+  const hourStart = new Date(
+    Math.floor(input.createdAt.getTime() / (60 * 60 * 1000)) * 60 * 60 * 1000,
+  );
+  const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+  const reservation = (
+    scope: AuthRateLimitScope,
+    value: string,
+    windowStartedAt: Date,
+    nextAllowedAt: Date,
+    maxCount: number,
+  ): PrismaRateLimitReservation => ({
+    id: randomUUID(),
+    keyHash: authRateLimitKey(scope, input.purpose, value),
+    purpose: input.purpose,
+    scope,
+    windowStartedAt,
+    nextAllowedAt,
+    maxCount,
+  });
+  return [
+    reservation(
+      "email_minute",
+      input.email,
+      input.createdAt,
+      new Date(input.createdAt.getTime() + 60 * 1000),
+      1,
+    ),
+    reservation("email_hour", input.email, hourStart, hourEnd, 5),
+    reservation("ip_hour", input.ip, hourStart, hourEnd, 20),
+  ];
+}
+
+async function reserveAuthRateLimit(
+  tx: Prisma.TransactionClient,
+  reservation: PrismaRateLimitReservation,
+  now: Date,
+): Promise<void> {
+  const rows = await tx.$queryRaw<Array<{ nextAllowedAt: Date }>>(Prisma.sql`
+    INSERT INTO "AuthRateLimit" (
+      "id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt"
+    ) VALUES (
+      ${reservation.id}, ${reservation.keyHash}, ${reservation.purpose}, ${reservation.scope},
+      ${reservation.windowStartedAt}, 1, ${reservation.nextAllowedAt}, ${now}
+    )
+    ON CONFLICT("keyHash") DO UPDATE SET
+      "windowStartedAt" = excluded."windowStartedAt",
+      "count" = CASE
+        WHEN excluded."scope" <> 'email_minute'
+          AND "AuthRateLimit"."windowStartedAt" = excluded."windowStartedAt"
+        THEN "AuthRateLimit"."count" + 1
+        ELSE 1
+      END,
+      "nextAllowedAt" = excluded."nextAllowedAt",
+      "updatedAt" = excluded."updatedAt"
+    WHERE
+      (excluded."scope" = 'email_minute' AND "AuthRateLimit"."nextAllowedAt" <= ${now})
+      OR
+      (excluded."scope" <> 'email_minute' AND (
+        "AuthRateLimit"."windowStartedAt" <> excluded."windowStartedAt"
+        OR "AuthRateLimit"."count" < ${reservation.maxCount}
+      ))
+    RETURNING "nextAllowedAt"
+  `);
+  if (rows.length > 0) {
+    return;
+  }
+  const existing = await tx.authRateLimit.findUnique({ where: { keyHash: reservation.keyHash } });
+  throw new RateLimitExceededError(existing?.nextAllowedAt ?? reservation.nextAllowedAt);
+}
+
+type ConflictRetryResult<T> =
+  | { status: "completed"; value: T }
+  | { status: "exhausted" };
+
+async function withConflictRetry<T>(
+  operation: () => Promise<T>,
+  isAdditionalRetryable: (error: unknown) => boolean = () => false,
+): Promise<ConflictRetryResult<T>> {
+  const maximumAttempts = 3;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      return { status: "completed", value: await operation() };
+    } catch (error) {
+      if (!isRetryablePrismaConflict(error) && !isAdditionalRetryable(error)) {
+        throw error;
+      }
+      if (attempt === maximumAttempts) {
+        return { status: "exhausted" };
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, attempt * 5));
+    }
+  }
+  return { status: "exhausted" };
+}
+
+function isRetryablePrismaConflict(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2034" || error.code === "P1008") {
+      return true;
+    }
+    if (error.code === "P2010") {
+      const meta = error.meta as { code?: unknown; message?: unknown } | undefined;
+      return meta?.code === "5" || hasSqliteBusyMarker(meta?.message);
+    }
+    return error.code === "P2028" && hasSqliteBusyMarker(error.message);
+  }
+  return error instanceof Prisma.PrismaClientUnknownRequestError && hasSqliteBusyMarker(error.message);
+}
+
+function hasSqliteBusyMarker(value: unknown): boolean {
+  return typeof value === "string" && /SQLITE_BUSY|database (?:table )?is locked/i.test(value);
+}
+
+function isLlmUsageEventIdempotencyConflict(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false;
+  }
+  const target = (error.meta as { target?: unknown } | undefined)?.target;
+  if (Array.isArray(target)) {
+    return target.includes("userId") && target.includes("requestId");
+  }
+  return typeof target === "string" && target.includes("userId") && target.includes("requestId");
 }
 
 function isPrismaKnownError(error: unknown, code: string): boolean {

@@ -1,11 +1,10 @@
 # FrameQ Architecture
 
-## 2026-07-22 Server authentication, quota, and production operations boundary (planned)
+## 2026-07-22 Server authentication, quota, and production operations boundary
 
-- Broad publication is blocked on two active server ExecPlans. The authentication/quota plan owns
-  database correctness; the production-operations plan owns configuration, trusted proxy,
-  observability, lifecycle, migration deployment, backup/restore, and CI. Neither is implemented by
-  the documentation decision.
+- The authentication/quota data-correctness boundary and local production-operations implementation
+  are complete and locally verified. Broad publication remains blocked on hosted Linux Server CI,
+  approved production-shaped SMTP/Nginx/systemd/restore evidence, and the combined release gate.
 - `Store` is the consistency facade for critical multi-entity use cases. Authentication services
   generate raw OTP/ticket/session/CSRF values but pass only hashes into purpose-specific semantic
   Store operations. Routes remain HTTP adapters and cannot assemble Prisma transactions.
@@ -22,15 +21,16 @@
   clients against one real temporary SQLite file. Supported production remains one server instance
   per local SQLite file; shared-network/multi-host SQLite remains forbidden.
 - The repository establishes a current-schema Prisma migration baseline and a separate hardening
-  migration. Production moves from `db push` to preflight + backup + `migrate deploy`, with full
-  database restore as rollback and no silent quota clamping.
+  migration. Production uses preflight + backup + `migrate deploy`, with full database restore as
+  rollback and no silent quota clamping; the production package/runbook no longer offers schema
+  push.
 - Production startup validates a closed config and requires explicit SMTP/secrets. Fastify emits
   redacted structured lifecycle/outcome logs, trusts forwarded IP only from loopback Nginx, exposes
   fixed `/health/live` and database-aware `/health/ready`, and drains Fastify/Prisma through one
   bounded idempotent signal coordinator.
 - The durable decision is
   `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; implementation steps are
-  `docs/exec-plans/active/2026-07-22-server-auth-quota-concurrency-hardening-plan.md` and
+  `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md` and
   `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`.
 
 ## 2026-07-22 Broad-release reliability boundary (persistence and watchdog implemented)
@@ -59,9 +59,9 @@
   `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`,
   `docs/design-docs/2026-07-22-rust-worker-watchdog.md` and the completed atomic-persistence and
   worker-watchdog ExecPlans.
-- Server OTP/ticket/quota concurrency and production operations remain a separately designed
-  broad-release blocker; the desktop persistence/watchdog architecture does not close either active
-  server ExecPlan.
+- Server OTP/ticket/quota concurrency and local production operations are implemented. Hosted
+  Server CI, approved staging/restore evidence, and the combined release gate remain separate
+  broad-release blockers; desktop persistence/watchdog evidence does not close them.
 
 ## 2026-07-20 ASR application module boundary
 
@@ -443,23 +443,29 @@
 
 ## 2026-07-21 Server HTTP Capability Boundary
 
-- `server/src/server.ts` is the sole public server composition surface. It exports only
-  `ServerDependencies` and `buildServer()`, creates Fastify and the six application services,
-  resolves environment/configuration defaults and the release manifest, installs the global exact
-  raw-JSON parser, and synchronously composes private route registrars.
-- Private `server/src/routes/` modules own administrator, desktop authentication, desktop account,
-  desktop LLM, desktop update, and billing/webhook HTTP adaptation. `authSchemas.ts` and `shared.ts`
-  provide private reusable validation and HTTP helpers; no individual registrar is a public startup
-  surface.
+- `server/src/server.ts` is the sole public HTTP composition surface. It exports only
+  `ServerDependencies` and `buildServer()`, creates Fastify and the six application services from
+  explicit dependencies, installs observability/proxy/readiness policy plus the global exact
+  raw-JSON parser, and synchronously composes private route registrars. It does not read environment
+  variables or own process signals.
+- `server/src/runtimeConfig.ts` parses and freezes environment-owned startup configuration before
+  listener creation. `server/src/index.ts` is the process composition root, while
+  `server/src/bootstrap.ts` owns readiness initialization, listen, idempotent signal drain,
+  Fastify close, Prisma disconnect, and the shutdown deadline.
+- Private `server/src/routes/` modules own health, administrator, desktop authentication, desktop
+  account, desktop LLM, desktop update, and billing/webhook HTTP adaptation. `authSchemas.ts` and
+  `shared.ts` provide private reusable validation and HTTP helpers; no individual registrar is a
+  public startup surface.
 - Registrars are ordinary synchronous functions, not Fastify plugins and not a second facade. They
   receive only the services/configuration required by their capability, register routes on the
   supplied Fastify instance, and preserve the existing `buildServer()` startup contract.
 - Route modules depend on the `Store` port or application services only. They do not import Prisma,
   construct services, own transactions, or call one another; semantic multi-write transactions
   remain wholly inside `PrismaStore`.
-- The root owns raw-body capture because it is parser lifecycle policy, while only `billing.ts`
+- The HTTP root owns raw-body capture because it is parser lifecycle policy, while only `billing.ts`
   consumes `rawBody`. Only `admin.ts` owns administrator session/CSRF cookies and their policy.
-  Production startup and tests continue to import the stable root instead of assembling routes.
+  Production startup and tests continue to import the stable HTTP root instead of assembling
+  routes; process lifecycle composition stays outside route modules.
 
 ## 2026-07-10 Server Entitlement Transaction Boundary
 

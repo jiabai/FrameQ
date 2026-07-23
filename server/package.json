@@ -7,7 +7,10 @@
     "build": "tsc --noEmit",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
-    "db:push": "prisma db push",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status",
+    "db:preflight": "node --import dotenv/config scripts/database-preflight.mjs",
+    "db:restore-smoke": "node scripts/restore-smoke.mjs",
     "prisma:generate": "prisma generate"
   },
   "dependencies": {

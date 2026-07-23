@@ -39,12 +39,20 @@ export function registerDesktopLlmRoutes(
     if (!config) {
       return reply.code(400).send({ error: "LLM_CONFIG_MISSING" });
     }
-    const consumed = await dependencies.store.consumeLlmQuota(
-      session.userId,
-      parsed.data.request_id,
-      dependencies.now(),
-    );
-    if (!consumed) {
+    let consumed: Awaited<ReturnType<Store["consumeLlmQuota"]>>;
+    try {
+      consumed = await dependencies.store.consumeLlmQuota(
+        session.userId,
+        parsed.data.request_id,
+        dependencies.now(),
+      );
+    } catch {
+      return reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
+    }
+    if (consumed.status === "temporarily_unavailable") {
+      return reply.code(503).send({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
+    }
+    if (consumed.status === "unavailable") {
       return reply.code(403).send({ error: "LLM_QUOTA_UNAVAILABLE" });
     }
     const remaining = llmQuotaRemaining(consumed.entitlement, dependencies.now());
