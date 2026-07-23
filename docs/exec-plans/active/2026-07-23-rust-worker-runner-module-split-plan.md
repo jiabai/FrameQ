@@ -84,9 +84,13 @@ user-visible error.
   passed 2/2; terminal matrix, safe lifecycle diagnostics, and both reader-failure filters passed
   1/1 each; all 27 non-boundary runner tests passed in 4.93 seconds with normal Windows process
   permissions; rustfmt and diff checks passed.
-- [ ] Task 5 extracts process-I/O helpers, moves tests by topic, updates the hosted-workflow source
-  test, and turns the ownership gate GREEN. Validation: all 28 runner tests and the focused Node
-  workflow test pass.
+- [x] 2026-07-23: Task 5 extracted process I/O, split tests by topic, updated the hosted-workflow
+  source assertion, and turned the ownership gate GREEN. Validation: all eight focused lifecycle
+  filters passed; the ownership gate passed 1/1; all 28 runner tests passed in 5.01 seconds; both
+  Node workflow tests, rustfmt, and diff checks passed. Final physical lines: root 415;
+  `process_io.rs` 108; `watchdog.rs` 273; `progress.rs` 195; `terminal.rs` 71; `tests.rs` 273;
+  `tests/fixtures.rs` 339; `tests/lifecycle.rs` 269; `tests/progress.rs` 35;
+  `tests/terminal.rs` 174; `tests/watchdog.rs` 390.
 - [ ] Task 6 completes full regression, protected-scope proof, durable documentation, plan
   archival, and exact residual-risk recording.
 
@@ -143,6 +147,10 @@ user-visible error.
   permissions: it exceeded the 120-second sandbox limit, left no residual FrameQ test process, and
   passed unchanged in 1.69 seconds with normal permissions. The complete non-boundary suite then
   passed 27/27.
+- Moving lifecycle tests into `runner/tests/lifecycle.rs` changes their fully qualified Rust test
+  names. The four self-spawning fixtures therefore needed only their fixed `--exact` test-name
+  strings updated from `runner::tests::<name>` to `runner::tests::lifecycle::<name>`; the probe
+  environment names, scripts, payloads, assertions, and production behavior remain unchanged.
 
 ## Decision Log
 
@@ -1002,7 +1010,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
 - Modify: `app/src-tauri/src/worker_runtime/runner.rs`
 - Modify: `scripts/tests/unix-process-supervisor-workflow.test.mjs`
 
-- [ ] Declare private `mod process_io;` and move these helpers without changing commands, Stdio,
+- [x] Declare private `mod process_io;` and move these helpers without changing commands, Stdio,
   process groups, payload bytes, cleanup claim loops, sleep interval, or wait/reap behavior:
 
   - `configure_child_process_group`;
@@ -1033,7 +1041,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   retains thread start/join and all lifecycle ordering. Give moved helpers only `pub(super)`
   visibility for root/test composition; do not re-export a process-I/O helper from `runner.rs`.
 
-- [ ] Keep process target provenance closed:
+- [x] Keep process target provenance closed:
 
   - newly spawned lane-rejected cleanup receives only `child.id()`;
   - registered cleanup receives only its `ProcessInstance`;
@@ -1041,7 +1049,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   - no child helper accepts a PID/PGID, executable, environment key, or shell fragment from IPC,
     task data, worker output, or logs.
 
-- [ ] Before moving any test file, run the process-I/O/lifecycle filters and the complete
+- [x] Before moving any test file, run the process-I/O/lifecycle filters and the complete
   non-boundary runner suite:
 
   ```powershell
@@ -1061,7 +1069,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Expected: every focused filter passes and all 27 non-boundary runner tests remain green while the
   ownership gate is RED only because the approved external test tree is not complete.
 
-- [ ] Replace the inline test module with `#[cfg(test)] mod tests;`. Put declarations and the
+- [x] Replace the inline test module with `#[cfg(test)] mod tests;`. Put declarations and the
   ownership test in `runner/tests.rs`, move all helper/fixture functions to `tests/fixtures.rs`, and
   distribute the 27 behavior tests exactly as follows:
 
@@ -1079,7 +1087,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   `super::fixtures`. Do not widen production visibility beyond the design's exact restricted
   surface solely to simplify test imports.
 
-- [ ] Update the Node hosted-workflow source assertion to follow the moved owners:
+- [x] Update the Node hosted-workflow source assertion to follow the moved owners:
 
   ```javascript
   const processIoPath = resolve(
@@ -1106,7 +1114,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Retain every workflow permission/runner/toolchain/no-secret/no-Linux assertion and the
   supervisor direct parent/child fixture checks. Do not modify the workflow file.
 
-- [ ] Run the previously RED ownership gate and require GREEN:
+- [x] Run the previously RED ownership gate and require GREEN:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml worker_runner_module_boundary
@@ -1115,7 +1123,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Expected: 1/1 passes. The exact four production children and complete test tree exist; root/child
   line alarms, symbol owners, private declarations/re-exports, and recursive no-bypass scan pass.
 
-- [ ] Run the complete runner and hosted-workflow source tests:
+- [x] Run the complete runner and hosted-workflow source tests:
 
   ```powershell
   cargo test --manifest-path app/src-tauri/Cargo.toml worker_runtime::runner::tests
@@ -1127,12 +1135,12 @@ method may be implemented in `watchdog.rs`, but its method path and effective
   Expected: 28 runner tests pass (26 baseline + stdout characterization + ownership gate); the Node
   file passes both tests; rustfmt and diff checks pass.
 
-- [ ] Measure final files and record exact physical counts in Progress. Require root <= 500 lines
+- [x] Measure final files and record exact physical counts in Progress. Require root <= 500 lines
   and each production child <= 400 lines. Require the test aggregator and each test child <= 500
   lines so no replacement hotspot exists. Record every count separately; do not treat line counts
   as a substitute for behavior or dependency tests.
 
-- [ ] Review the production diff under `runner.rs` and the four production children. Stop if
+- [x] Review the production diff under `runner.rs` and the four production children. Stop if
   `WorkerLane::run/cancel/is_active`, root-facing type identity/path/visibility, lifecycle order,
   operation mapping, command/env/stdin, progress, terminal, error, diagnostic, timeout, cleanup, or
   any existing application caller changes.

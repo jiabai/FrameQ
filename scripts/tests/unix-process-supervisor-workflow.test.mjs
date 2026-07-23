@@ -13,9 +13,13 @@ const supervisorPath = resolve(
   repositoryRoot,
   "app/src-tauri/src/worker_runtime/supervisor.rs",
 );
-const runnerPath = resolve(
+const processIoPath = resolve(
   repositoryRoot,
-  "app/src-tauri/src/worker_runtime/runner.rs",
+  "app/src-tauri/src/worker_runtime/runner/process_io.rs",
+);
+const watchdogTestsPath = resolve(
+  repositoryRoot,
+  "app/src-tauri/src/worker_runtime/runner/tests/watchdog.rs",
 );
 
 test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux or privileged product integrations", async () => {
@@ -41,7 +45,8 @@ test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux
 
 test("the hosted cargo command includes the direct and watchdog parent-child fixtures", async () => {
   const supervisor = await readFile(supervisorPath, "utf8");
-  const runner = await readFile(runnerPath, "utf8");
+  const processIo = await readFile(processIoPath, "utf8");
+  const watchdogTests = await readFile(watchdogTestsPath, "utf8");
   const fixture = supervisor.indexOf(
     "unix_termination_stops_a_parent_and_child_in_the_managed_process_group",
   );
@@ -62,18 +67,18 @@ test("the hosted cargo command includes the direct and watchdog parent-child fix
     supervisor,
     /send_process_group_signal\(pid, ProcessSignal::Kill\)/,
   );
-  assert.match(runner, /fn configure_child_process_group/);
-  assert.match(runner, /command\.process_group\(0\)/);
+  assert.match(processIo, /fn configure_child_process_group/);
+  assert.match(processIo, /command\.process_group\(0\)/);
 
-  const watchdogFixture = runner.indexOf(
+  const watchdogFixture = watchdogTests.indexOf(
     "watchdog_timeout_terminates_parent_and_descendant_then_admits_second_task",
   );
   assert.notEqual(watchdogFixture, -1);
-  const watchdogFixtureContext = runner.slice(
+  const watchdogFixtureContext = watchdogTests.slice(
     Math.max(0, watchdogFixture - 300),
     watchdogFixture + 2_500,
   );
-  const watchdogDeclaration = runner.slice(
+  const watchdogDeclaration = watchdogTests.slice(
     Math.max(0, watchdogFixture - 100),
     watchdogFixture + 100,
   );
