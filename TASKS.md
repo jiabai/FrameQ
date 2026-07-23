@@ -91,6 +91,10 @@
   Tauri release `--no-bundle`, mirror-sync equality, and diff gates. Picker, command, worker
   CLI/pipeline, manifest, History, and UI remain open and the overall feature therefore stays
   unchecked.
+  Implementation approach reconfirmed 2026-07-23: use closed frontend submission/source unions,
+  atomically rename the shared internal video facade/lane to task vocabulary, copy sources to generic
+  task-owned staging before media-tool execution, and activate runtime only as one complete vertical
+  slice. This documentation decision does not complete any runtime checkbox.
 
 - [x] Add desktop i18n and confirmation-time AI output language (2026-07-15) — ✅ Acceptance: bundle `zh-CN`,
   `zh-TW`, and `en-US`; persist `system | locale` in app-local `ui-preferences.json`; localize UI,

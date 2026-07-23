@@ -76,6 +76,46 @@ The task owns exactly one source:
 - a URL; or
 - a selected local file.
 
+Frontend application state expresses that exclusivity with closed source types rather than optional
+URL/path flags:
+
+```ts
+type TaskSubmission =
+  | { kind: "url"; url: string }
+  | { kind: "local_media"; selectionToken: string };
+
+type TaskSourceSummary =
+  | { kind: "url"; url: string }
+  | {
+      kind: "local_file";
+      displayName: string;
+      mediaKind: LocalMediaKind;
+    };
+```
+
+The workflow application controller accepts `TaskSubmission`, performs an exhaustive `kind`
+dispatch, and keeps DOM events and native-picker presentation outside the command. The URL and local
+wire requests remain independent closed commands; neither is represented by a bag of optional
+`url`, `path`, `token`, or `isAudio` fields.
+
+The composer also uses a discriminated source state so it can retain a URL draft while a local file
+is active without creating a state in which URL and local media are both submitted:
+
+```ts
+type TaskComposerSource =
+  | { kind: "url"; urlDraft: string }
+  | {
+      kind: "local_media";
+      selection: LocalMediaSelectionView;
+      retainedUrlDraft: string;
+    };
+```
+
+`WorkflowState` stores `composerSource` plus `taskSource: TaskSourceSummary | null`; it does not keep
+parallel `url`, `submittedUrl`, or `showUrlInput` source fields. The active input control is derived
+from `composerSource.kind`, and the running/completed/restored task identity is derived only from
+`taskSource`.
+
 Submitting the same local file again always creates a new task. FrameQ does not compare paths,
 timestamps, names, hashes, or content to reuse a prior local task.
 
@@ -149,8 +189,9 @@ with the existing task state model; presentation copy is source-aware. Completio
 states that video, audio, and transcript are stored locally. Completion for local audio states only
 that audio and transcript are stored locally.
 
-Cancellation uses the existing ProcessSupervisor video lane and truthful terminal behavior.
-Cancellation must not manufacture success or delete already valid task artifacts.
+Cancellation uses the existing ProcessSupervisor lifecycle, renamed internally from video-lane to
+task-lane vocabulary when the local runtime becomes executable, and preserves truthful terminal
+behavior. Cancellation must not manufacture success or delete already valid task artifacts.
 
 ## Desktop and Worker Interface
 
@@ -217,6 +258,14 @@ The worker entry point is `--process-local-media-stdin`. The path must never app
 environment variables, worker results, progress, errors, logs, task manifests, transcripts, AI
 prompts, or cloud requests.
 
+After parsing and validating the request, Python opens the original path itself and copies the bytes
+to a task-owned generic staging name before spawning ffprobe or FFmpeg. Media-tool argv may contain
+only that generic task staging path, never the original selected path. For video, the validated
+staged container is atomically installed as `media/video.<ext>` and becomes the decode source. For
+audio, the generic staging copy is temporary, is used for probe/normalization, and is removed after
+the official WAV is committed or the operation fails. This preserves seekable-container behavior
+without exposing the original path to child-process arguments.
+
 `contracts/desktop-worker-contract.json` advances from version 3 to strict version 4. It keeps the
 cleaned URL request unchanged and adds a closed local request. TypeScript, Rust, and Python reject
 missing, unknown, or invalid values. The desktop and bundled worker ship at the same contract
@@ -252,12 +301,16 @@ characters, and Unicode bidi/directional formatting characters; is limited to 16
 preserving the extension; and falls back to a localized generic media label if empty. The complete
 path is never persisted.
 
-History projects a source union:
+History projects the same source union:
 
 ```ts
 type TaskSourceSummary =
-  | { kind: "url"; label: string; url: string }
-  | { kind: "local_file"; label: string; mediaKind: LocalMediaKind };
+  | { kind: "url"; url: string }
+  | {
+      kind: "local_file";
+      displayName: string;
+      mediaKind: LocalMediaKind;
+    };
 ```
 
 Local tasks support History list/detail/restore/delete, transcript editing, normalized-audio
@@ -281,6 +334,10 @@ Contract v4 registers fixed errors including:
 - `LOCAL_VIDEO_COPY_FAILED`; and
 - `AUDIO_NORMALIZATION_FAILED`.
 
+Failure while creating the generic staging copy maps to `LOCAL_VIDEO_COPY_FAILED` for video and to
+the existing `AUDIO_NORMALIZATION_FAILED` preparation boundary for audio; it does not introduce an
+unregistered code or reveal the source path.
+
 Primary UI guidance is localized. Optional technical details must pass the existing sanitization
 boundary and must not expose the path, filename, token, raw request, or raw FFmpeg/ffprobe output.
 Logs may include only safe aggregate fields such as media kind, extension, byte/duration bucket,
@@ -297,6 +354,8 @@ selection token, transcript, prompt, or generated content.
   missing, changed, linked, and malformed files fail with fixed non-echoing errors.
 - URL submission remains behaviorally and contractually unchanged.
 - The frontend and browser command ledger contain a token but never a complete local path.
+- Captured ffprobe/FFmpeg invocations contain only generic task-owned staging or official artifact
+  paths and never the original selected directory or basename.
 - Recursive manifest/result/progress/error/log inspection finds no complete path or token.
 - Local tasks survive restart and work through History, transcript review, audio playback, deletion,
   and confirmed AI generation without sending media or filenames to the cloud.

@@ -211,6 +211,131 @@ Negative:
 - Browser smoke must cover mutual exclusion, focus, replacement, native-dialog cancellation mocks,
   and English expansion.
 
+## Decision 6: Model source intent and source projection as closed unions
+
+The frontend application boundary uses separate discriminated unions for the command being submitted
+and the source being rendered:
+
+```ts
+type TaskSubmission =
+  | { kind: "url"; url: string }
+  | { kind: "local_media"; selectionToken: string };
+
+type TaskSourceSummary =
+  | { kind: "url"; url: string }
+  | {
+      kind: "local_file";
+      displayName: string;
+      mediaKind: LocalMediaKind;
+    };
+```
+
+The composer state is also discriminated. Its local branch retains the inactive URL draft alongside
+one validated `LocalMediaSelectionView`, but only the active branch can become a `TaskSubmission`.
+`useTaskProcessingController` accepts that domain command, exhaustively dispatches by `kind`, and
+never accepts a `FormEvent`. The form adapter owns `preventDefault`; the native-picker adapter owns
+dialog presentation and cancellation.
+
+`WorkflowState` replaces its parallel `url`, `submittedUrl`, and `showUrlInput` source fields with
+`composerSource: TaskComposerSource` and `taskSource: TaskSourceSummary | null`. The composer
+discriminator determines which input is active; `taskSource` is frozen when processing starts and is
+restored directly from History. AI retries preserve it. Terminal local success clears the now-stale
+selection token from the composer while retaining the safe `taskSource`; cancellation/retryable
+failure retains the still-valid local selection according to the token lifecycle.
+
+URL and local media continue to cross two independent strict IPC requests. No layer may replace the
+union with optional `url`, `localPath`, `selectionToken`, `mediaKind`, or `isAudio` fields that permit
+meaningless combinations.
+
+### Consequences
+
+Positive:
+
+- TypeScript makes URL/local exclusivity and exhaustive handling compiler-visible.
+- React presentation events no longer leak into workflow application commands.
+- History and the active workspace can render source truth without inferring it from artifacts.
+
+Negative:
+
+- Current URL-only workflow, History, test-fixture, and view-model constructors must migrate
+  together; temporary compatibility fields would recreate the invalid states this decision removes.
+
+## Decision 7: Rename the shared execution vocabulary when local media becomes executable
+
+Local media is another task-producing source in the existing serialized worker lifecycle, not a
+second lane. In the same change that adds the real `WorkerJob::ProcessLocalMedia` consumer, internal
+Rust names move from `video` to task semantics:
+
+- `VideoWorkerFacade` becomes `TaskWorkerFacade`;
+- `ProcessSupervisors.video` becomes `ProcessSupervisors.task`;
+- `video_worker()` becomes `task_worker()`; and
+- `is_video_active()` becomes `is_task_active()`.
+
+`WorkerLane` remains the single private lifecycle state machine, the ASR-model-download lane remains
+separate, and the public Tauri `process_video` command keeps its compatibility name. The rename must
+land atomically with all internal callers and tests; aliases retaining both vocabularies are not part
+of the design.
+
+### Consequences
+
+Positive:
+
+- The facade and lane names describe their actual URL/local/AI responsibility.
+- Local media reuses existing busy, cancellation, watchdog, cleanup, and terminal-result rules.
+
+Negative:
+
+- The implementation touches otherwise behavior-preserving internal call sites and architecture
+  tests, so focused rename characterization is required before adding the new job variant.
+
+## Decision 8: Copy into a generic task-owned staging path before invoking media tools
+
+Python is the only layer that opens the original selected path. It copies the source in bounded
+chunks into a generic task-owned staging filename before spawning ffprobe or FFmpeg. Child-process
+argv may contain only the generic staging path; the original directory and basename never enter a
+media-tool command.
+
+For video, the staging file is probed, validated, and atomically promoted to
+`media/video.<extension>`; that official task artifact becomes the decode source. For audio, the
+staging file is probed and normalized to the official WAV, then removed on success. Failed and
+cancelled operations run the existing best-effort staging cleanup/recovery policy, and no staging
+path enters the manifest.
+
+### Consequences
+
+Positive:
+
+- Seekable containers remain compatible with packaged media tools without exposing the original
+  path through child-process inspection.
+- Video source preservation and audio-source disposal use the same task-owned commit boundary.
+
+Negative:
+
+- Import temporarily needs space for a source-sized staging copy, and large files add a local copy
+  phase before probe/normalization.
+- Python file-open/copy failures can contain sensitive operating-system text internally and must
+  still map to fixed non-echoing errors.
+
+## Decision 9: Activate local media only as one tested vertical slice
+
+The picker/selection store, strict Tauri command, `WorkerJob::ProcessLocalMedia`, bounded worker
+stdin CLI consumer, media preparation, manifest source union, History/workspace projection, and
+composer dispatch become executable together. Contract-v4 pure validators may exist beforehand, but
+there must be no registered picker command, dead job variant, callable CLI switch, or UI affordance
+whose downstream consumer is absent.
+
+### Consequences
+
+Positive:
+
+- Every newly reachable branch has one complete lifecycle and acceptance path.
+- URL behavior remains independently testable throughout the change.
+
+Negative:
+
+- The implementation cannot be released or merged as several partially executable slices; review
+  checkpoints use tests and commits on one feature branch until the whole boundary is coherent.
+
 ## Failure Modes and Mitigations
 
 | Failure mode | Required behavior |
@@ -223,7 +348,8 @@ Negative:
 | Selected media kind does not match content | Return `LOCAL_MEDIA_KIND_MISMATCH`. |
 | Video lacks video or audio stream | Return the corresponding fixed stream-missing code; do not register artifacts. |
 | Audio lacks audio stream | Return `LOCAL_AUDIO_STREAM_MISSING`; do not register artifacts. |
-| Video copy fails | Do not register a partial video; return `LOCAL_VIDEO_COPY_FAILED`. |
+| Video staging copy fails | Clean the stage, do not register a video, and return `LOCAL_VIDEO_COPY_FAILED`. |
+| Audio staging copy fails | Clean the stage and return the existing non-echoing `AUDIO_NORMALIZATION_FAILED`. |
 | WAV conversion/validation fails | Do not register a partial WAV; return `AUDIO_NORMALIZATION_FAILED`. |
 | User cancels processing | Retain a still-valid selection for retry and preserve only valid artifacts. |
 | Disk space is exhausted | Fail truthfully with sanitized local guidance; do not claim completion or impose a fake product limit. |
@@ -241,6 +367,17 @@ and error surfaces without product benefit.
 Rejected because process listings, diagnostics, inherited environments, and shell/argument handling
 create unnecessary disclosure and parsing risks. One-shot bounded stdin matches the existing privacy
 direction.
+
+### Pass the original path directly to ffprobe or FFmpeg after worker stdin parsing
+
+Rejected because stdin would protect only the Rust-to-Python hop while the path would reappear in a
+descendant process command. Copying to a generic task-owned staging path preserves seekability and
+keeps the original path out of media-tool argv.
+
+### Stream every source through an anonymous pipe into media tools
+
+Rejected because MP4, MOV, WMV, and other supported containers may require seeking and packaged
+cross-platform tools cannot be assumed to decode all of them reliably from a non-seekable stream.
 
 ### Add local-file fields to the existing `process_video` request
 

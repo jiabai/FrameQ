@@ -80,6 +80,16 @@ remain governed by the existing separate summary/inspiration confirmation.
   task writes must use the completed persistence boundary rather than a parallel implementation.
   Validation: reliability product/design docs, the completed atomic-persistence ExecPlan, and the
   active watchdog ExecPlan are indexed; no local-media runtime checkbox was completed.
+- [x] 2026-07-23: Selected implementation approach A and synchronized the source-union/runtime
+  design before code: frontend command and source projection are closed discriminated unions; the
+  current internal video facade/lane vocabulary changes atomically to task vocabulary; Python copies
+  the original path to a generic task-owned staging path before media-tool execution; and every
+  runtime consumer activates in one vertical slice. No runtime code was implemented in this
+  documentation checkpoint. Baseline validation in the isolated worktree: App 583/583, Worker
+  563 passed / 2 skipped, native-permission Windows Rust 210/210, and governance 0 errors /
+  0 warnings. The unchanged sandboxed Rust cancellation fixtures reproduced their documented
+  `taskkill` permission-only failure before the native-permission suite passed. Documentation
+  closeout: governance remained at 0 errors / 0 warnings and `git diff --check` passed.
 - [ ] 2026-07-16: Implement Rust selection, strict IPC, worker local-media pipeline, source-aware
   task persistence/History, and UI composition. Validation: focused suites and packaged-worker
   equality must pass.
@@ -199,9 +209,33 @@ remain governed by the existing separate summary/inspiration confirmation.
   limit. Rationale: path/hash deduplication introduces privacy and stale-cache complexity, while
   resource capacity depends on the user's machine and should fail truthfully.
   Date/Author: 2026-07-16, User + Codex.
-- Decision: Reuse the existing ProcessSupervisor video lane, workflow stages, account gate, and
-  separately confirmed AI flows. Rationale: local media is a new source, not a parallel lifecycle,
-  entitlement model, cancellation model, or AI billing path. Date/Author: 2026-07-16, User + Codex.
+- Decision: Reuse the existing serialized ProcessSupervisor lane, workflow stages, account gate, and
+  separately confirmed AI flows. The lane is named `video` before runtime activation and becomes
+  `task` with the 2026-07-23 atomic rename. Rationale: local media is a new source, not a parallel
+  lifecycle, entitlement model, cancellation model, or AI billing path. Date/Author: 2026-07-16,
+  User + Codex.
+- Decision: Model frontend intent as
+  `TaskSubmission = {kind: "url", url} | {kind: "local_media", selectionToken}` and task/history
+  projection as a separate closed `TaskSourceSummary` union. Keep the form event in the UI adapter
+  and exhaustively dispatch the domain command in the workflow controller; do not add optional
+  URL/path/token/kind flags. Rationale: invalid source combinations become unrepresentable and
+  URL/local IPC contracts stay independently strict. Date/Author: 2026-07-23, User + Codex.
+- Decision: When `ProcessLocalMedia` gains its real consumer, rename the internal
+  `VideoWorkerFacade`, `video` lane, `video_worker()`, and `is_video_active()` vocabulary to
+  `TaskWorkerFacade`, `task`, `task_worker()`, and `is_task_active()` in the same change. Preserve the
+  public `process_video` IPC command and add no compatibility aliases. Rationale: one serialized lane
+  owns URL, local, and confirmed AI task work, so its internal name must describe the closed job set
+  without changing the public protocol. Date/Author: 2026-07-23, User + Codex.
+- Decision: Python opens the original selected path and copies it to a generic task-owned staging
+  filename before invoking ffprobe or FFmpeg. Media-tool argv may contain only that generic path;
+  video promotes the validated stage to the official container artifact, while audio removes the
+  stage after normalized-WAV commit. Rationale: seekable formats remain reliable without exposing
+  the original directory/basename through descendant-process arguments. Date/Author: 2026-07-23,
+  User + Codex.
+- Decision: Activate native selection, strict Rust command/job, Python CLI/pipeline, manifest/History
+  support, and frontend dispatch as one tested vertical slice. Rationale: contract validators may
+  precede runtime, but a picker, dead job variant, CLI switch, or UI action without its complete
+  consumer would create a reachable half-path. Date/Author: 2026-07-23, User + Codex.
 - Decision: Make raw Rust task manifests and artifact-path primitives private and require
   `SupportedTask::scan/open`; use `TaskEditSession` for transcript manifest mutation and
   `TaskStoreFacade` for Python create/open/finalize/snapshot persistence. Rationale: the local source
@@ -209,8 +243,9 @@ remain governed by the existing separate summary/inspiration confirmation.
   predicate, while deletion and playback still need narrowly validated filesystem capabilities.
   Date/Author: 2026-07-18, User + Codex.
 - Decision: Add local-media execution as a new `WorkerJob::ProcessLocalMedia` variant only together
-  with contract v4 and the real worker CLI consumer. `VideoWorkerFacade` must then derive its fixed
-  invocation, lifecycle operation, worker progress route, video lane, and no-LLM policy in one
+  with contract v4 and the real worker CLI consumer. The facade—implemented at this checkpoint as
+  `VideoWorkerFacade` and renamed to `TaskWorkerFacade` on local activation—must derive its fixed
+  invocation, lifecycle operation, worker progress route, task lane, and no-LLM policy in one
   exhaustive match. Rationale: current application callers can no longer build inconsistent policy
   tuples, while avoiding an untestable dead variant. Date/Author: 2026-07-19, User + Codex.
 - Decision: Add local source variants to `MediaPreparationFacade` only with contract v4 and the real
@@ -373,8 +408,13 @@ directory, even though the complete path is never stored.
 
 3. [ ] Add the independent supervised local worker command.
    - Add `process_local_media({request})` without changing URL `process_video`.
+   - Before changing behavior, characterize the current facade/lane routes. Then atomically rename
+     `VideoWorkerFacade`, `video`, `video_worker()`, and `is_video_active()` to task-oriented
+     vocabulary across private owners, callers, and tests; do not retain parallel aliases.
    - Apply the existing account/config/model preparation and the same
-     ProcessSupervisor video-lane busy/cancel/instance semantics.
+     ProcessSupervisor task-lane busy/cancel/watchdog/instance semantics.
+   - Add the real `WorkerJob::ProcessLocalMedia` variant only with the Python CLI consumer and
+     complete vertical path.
    - Resolve the token only in Rust and write the full path once to bounded worker stdin using the
      fixed `--process-local-media-stdin` mode.
    - Never place the request/path in argv, env, startup diagnostics, worker log lines, or raw errors.
@@ -386,23 +426,28 @@ directory, even though the complete path is never stored.
      extension, and resolved `asr_model`; reject extra or invalid fields without echo.
    - Recheck extension, ordinary local file expectations available to Python, and ffprobe content.
    - Classify MP3/other cover art as audio and require video+audio streams for video.
-   - Open or stream the source for media-tool probing/decoding without placing the complete path in a
-     spawned ffprobe/FFmpeg argv. If the packaged tools cannot support the approved seekable formats
-     reliably through a cross-platform safe handle/stream strategy, stop for architecture review
-     rather than weakening the path-secrecy boundary silently.
+   - Open the original source only from Python and copy it in bounded chunks to a generic task-owned
+     staging filename. Probe and decode only that staging path; assert the original directory and
+     basename never enter spawned ffprobe/FFmpeg argv.
+   - Map staging-copy failure to `LOCAL_VIDEO_COPY_FAILED` for video and the existing
+     `AUDIO_NORMALIZATION_FAILED` preparation boundary for audio; neither path may echo filesystem
+     details or add an unregistered contract code.
    - Sanitize ffprobe/FFmpeg exceptions before progress, result, and log boundaries.
    - Emit only contract-registered message/error codes and safe args.
 
 5. [ ] Implement source-specific artifact preparation with one shared ASR path.
-   - For video, copy bytes to a partial `media/video.<ext>`, validate/install the final artifact, then
-     decode audio; do not transcode video or inspect embedded/sidecar subtitles.
-   - For audio, do not retain the original source and proceed directly to normalization.
+   - For video, validate the generic staging copy, atomically promote it to
+     `media/video.<ext>`, then decode audio from that official artifact; do not transcode video or
+     inspect embedded/sidecar subtitles.
+   - For audio, normalize from the generic staging copy and remove it after official WAV commit; do
+     not retain the original source.
    - Decode every source to a partial 16 kHz mono `pcm_s16le` WAV, validate it, then install
      `media/audio.wav` before SenseVoice reads it.
    - Reuse the existing transcription, segment, transcript, cancellation, and completion path after
      WAV preparation.
-   - Preserve valid partial task artifacts on cancellation but never register incomplete files or
-     manufacture a successful terminal state.
+   - Preserve valid official task artifacts on cancellation, clean uncommitted generic staging files
+     through existing recovery policy, never register staging/incomplete files, and never manufacture
+     a successful terminal state.
 
 6. [ ] Extend manifest schema-v3 validation with closed URL/local source variants.
    - Change the closed source union, safe local metadata, and support predicate in private
@@ -420,8 +465,9 @@ directory, even though the complete path is never stored.
    - Ensure transcript Markdown, diagnostics, prompts, and worker results do not gain filename/path.
 
 7. [ ] Make History, artifacts, transcript review, and AI source-aware.
-   - Replace URL-only history source fields with a discriminated `TaskSourceSummary` while retaining
-     URL display/canonical behavior.
+   - Replace URL-only history source fields with the closed
+     `TaskSourceSummary = {kind: "url", url} | {kind: "local_file", displayName, mediaKind}` union
+     while retaining URL display/canonical behavior.
    - List, load, restore, delete, play normalized audio, edit transcript, locate existing artifacts,
      and retry AI for a supported local task through the current strict task-root checks.
    - Do not render Locate Video for audio tasks; locate the generic original-container artifact for
@@ -432,6 +478,17 @@ directory, even though the complete path is never stored.
      language rules but never receive source name/path/manifest.
 
 8. [ ] Implement the composer and localized source-aware presentation.
+   - Replace URL-only workflow submission with the closed
+     `TaskSubmission = {kind: "url", url} | {kind: "local_media", selectionToken}` command. Keep DOM
+     `FormEvent` handling in the form adapter and make the application controller exhaustively
+     dispatch the union to two independent worker-client IPC methods.
+   - Model the active composer source as a discriminated union that retains the inactive URL draft
+     only in the local branch. Replace workflow `url`, `submittedUrl`, and `showUrlInput` fields with
+     `composerSource` plus `taskSource: TaskSourceSummary | null`; do not add optional
+     URL/path/token/kind flags.
+   - Freeze `taskSource` at processing start and restore it from History. Preserve it through AI
+     retries; clear the local composer token only on the terminal states required by the selection
+     lifecycle.
    - Add the left `+` button, one-item attachment menu, native picker action, local chip, size
      formatting, replacement/removal behavior, and mutual exclusion with the retained URL draft.
    - Route the existing submit confirmation/account gate to URL or local processing according to the
@@ -445,6 +502,8 @@ directory, even though the complete path is never stored.
 9. [ ] Add security and regression coverage.
    - Assert frontend state, browser command ledger, screenshots/fixtures, and IPC responses contain a
      token/safe basename only where intended and never a full path.
+   - Capture media-tool invocations and prove ffprobe/FFmpeg argv contains only generic task staging
+     or official artifact paths, never the original selected directory or basename.
    - Recursively inspect manifests, results, progress, errors, technical details, logs, transcript
      exports, and prompt captures for absence of full path/token/raw stderr.
    - Cover all allowlisted formats at the declaration level and representative MP4, WMV, MP3, WAV,

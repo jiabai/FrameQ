@@ -41,6 +41,22 @@ Add a typed application-facing execution boundary inside `worker_runtime`:
 its fixed CLI invocation, operation/log name, worker progress route, no-LLM policy, and tests in one
 atomic change. Exhaustive matching then makes omissions a compile failure.
 
+## 2026-07-23 Approved local-media extension
+
+Contract-v4 pure validators now exist, but the local-media CLI and runtime consumer still do not.
+When that consumer lands, the same vertical slice must:
+
+- add the real `WorkerJob::ProcessLocalMedia` variant and its fixed stdin/progress/watchdog/no-LLM
+  policy;
+- rename `VideoWorkerFacade` to `TaskWorkerFacade`;
+- rename the private `ProcessSupervisors.video`, `video_worker()`, and `is_video_active()` vocabulary
+  to `task`, `task_worker()`, and `is_task_active()`; and
+- preserve the public Tauri `process_video` command name and separate model-download lane.
+
+The rename adds no new lifecycle owner. It makes the existing serialized lane's name match its
+closed URL/local/AI job responsibility. All callers and tests move atomically; compatibility aliases
+are rejected because they would leave two names for one policy boundary.
+
 ## Consequences
 
 ### Positive

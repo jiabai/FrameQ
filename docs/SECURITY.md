@@ -169,9 +169,15 @@
   transport policy permits a full path only in Rust selection memory, bounded worker stdin, and
   worker memory; the token is forbidden from worker input/output, diagnostics, persistence, prompts,
   and cloud traffic.
+- Runtime activation must not pass the original selected path from Python to ffprobe or FFmpeg.
+  Python opens the original path itself, copies its bytes to a generic task-owned staging filename,
+  and gives media tools only that staging path. A validated video staging file may be atomically
+  promoted to `media/video.<ext>`; audio staging must be removed after the official WAV commits, and
+  failed/cancelled staging remains subject to the existing bounded cleanup/recovery policy.
 - No picker, selection store, worker CLI consumer, FFmpeg/ffprobe execution, manifest producer, log,
   or network path exists in this step, so no local media bytes or paths can yet leave these pure
-  validation boundaries.
+  validation boundaries. The approved implementation activates those consumers as one tested
+  vertical slice rather than registering a partially executable path.
 
 ## 2026-07-20 Video-Processing Application Module Boundary
 
@@ -277,6 +283,9 @@
   invalid, mismatched-kind, changed, linked, malformed, or missing-stream sources through fixed codes.
   Raw ffprobe/FFmpeg commands, stdout/stderr, payloads, and operating-system errors must pass the
   existing sanitizer and cannot be returned as primary or technical UI text if they expose a path.
+- The original selected path is consumed only by Rust validation and Python file-open/copy code.
+  ffprobe/FFmpeg receive only a generic task-owned staging path; raw source directory names and
+  basenames are forbidden from their argv, lifecycle diagnostics, and sanitized failures.
 - File-dialog filters and extensions are not trusted content validation. The worker probes stream
   structure and requires video+audio for a video source or audio for an audio source. Cover art does
   not grant video classification. No shell interpolation is permitted for copy, probe, or conversion.

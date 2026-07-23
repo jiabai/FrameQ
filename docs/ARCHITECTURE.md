@@ -306,29 +306,43 @@
 ## 2026-07-16 Local Media Import Boundary
 
 - URL processing remains the existing `process_video` capability. Local processing is an independent
-  `process_local_media` command, but both share the ProcessSupervisor video lane, cancellation
-  semantics, normalized-WAV ASR path, task lifecycle, and separately confirmed AI targets.
+  `process_local_media` command, but both share one private ProcessSupervisor task lane, cancellation
+  semantics, normalized-WAV ASR path, task lifecycle, and separately confirmed AI targets. When the
+  local command becomes executable, the current internal `video` lane, `video_worker()`,
+  `is_video_active()`, and `VideoWorkerFacade` names change atomically to task-oriented names; the
+  public `process_video` IPC command is unchanged.
 - The native Tauri picker accepts one allowlisted file. Rust owns the complete absolute path in one
   non-persisted current selection and returns React only a random token, sanitized basename, kind,
   extension, and size. A replacement token invalidates the old selection; processing revalidates
   ordinary-file/no-link status, nonzero size, extension, size, and modification time.
 - The local path crosses into the bundled worker only through a bounded one-shot
   `--process-local-media-stdin` request. It must not enter frontend state, argv, environment variables,
-  results, progress, errors, logs, manifests, transcript exports, prompts, or cloud requests.
+  results, progress, errors, logs, manifests, transcript exports, prompts, or cloud requests. Python
+  opens that path directly and copies the bytes to a generic task-owned staging path before invoking
+  ffprobe or FFmpeg, so descendant-process argv never contains the original directory or basename.
 - `contracts/desktop-worker-contract.json` v4 adds a closed local-media request plus registered local
   progress/error codes while preserving the cleaned v3 URL request. TypeScript, Rust, Python, and the
   packaged worker mirror must reject drift and invalid/additional values consistently.
 - Every local source is decoded into official `media/audio.wav` as 16 kHz mono signed 16-bit PCM
   before SenseVoice. Video requires video+audio streams, preserves original bytes as generic
-  `media/video.<ext>`, and ignores subtitles. Audio requires an audio stream, retains no original
-  copy, and owns no video artifact. Partial artifacts are validated before manifest registration.
+  `media/video.<ext>`, and ignores subtitles. Its validated generic staging copy is atomically
+  promoted to that official artifact before decoding. Audio requires an audio stream, removes its
+  generic staging copy after normalization, retains no original copy, and owns no video artifact.
+  Partial artifacts are validated before manifest registration.
 - Manifest schema v3 gains a closed `local_file` source variant with empty URL, null SourceIdentity,
   and safe local-only basename/kind/extension. Existing or absent `source_kind` retains the current
   strict URL predicate. History and task source models become discriminated unions; older clients
   ignore unrecognized local tasks without mutation.
+- Frontend application commands use the closed `TaskSubmission` union (`url` or token-only
+  `local_media`), while task/history projection uses the closed `TaskSourceSummary` union (`url` or
+  safe `local_file`). DOM events remain in form adapters; URL and local IPC requests remain separate
+  and no optional-field request bag is permitted.
 - A local task supports the existing History detail/restore/delete, normalized-audio playback,
   transcript editing, artifact location, and confirmed summary/inspiration flows. AI receives the
   saved transcript under existing rules and never receives local filename, path, token, or manifest.
+- Picker registration, the real `WorkerJob::ProcessLocalMedia` variant, Python CLI consumption,
+  manifest/history support, and UI dispatch activate as one tested vertical slice. Contract-only
+  validators may precede it, but no half-executable command or dead job branch may ship.
 
 ## 2026-07-15 Desktop i18n and AI Output-Language Boundary
 
@@ -435,7 +449,7 @@
 ## 2026-07-10 Desktop Process Supervision and Cancellation Boundary
 
 - `ProcessSupervisors` privately owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running`, `Cancelling`, `CleaningUp`, or typed `TimingOut` phase; absence is the only finished state.
-- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the internal typed `WorkerRunRequest`, but application modules can enter the video lane only through `VideoWorkerFacade::execute(WorkerJob)` and can enter the model-download lane only through the narrow `ProcessSupervisors` model-download method. Application modules cannot select a lane, operation, progress route, invocation, credential policy, spawn behavior, pipe, wait/reap path, supervisor mutation, or process-tree termination.
+- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the internal typed `WorkerRunRequest`, but application modules can enter the task-producing lane only through the typed worker facade and can enter the model-download lane only through the narrow `ProcessSupervisors` model-download method. Before local-media activation that facade is named `VideoWorkerFacade`; the activation change renames it atomically to `TaskWorkerFacade` with no compatibility alias. Application modules cannot select a lane, operation, progress route, invocation, credential policy, spawn behavior, pipe, wait/reap path, supervisor mutation, or process-tree termination.
 - `worker_runtime/facade.rs` exhaustively derives video-job invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane. `command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` remains the sole owner of spawn/register/stdin/read/wait/finish/parse/classify/log ordering above four private implementation owners: `runner/process_io.rs`, `watchdog.rs`, `progress.rs`, and `terminal.rs`. Application modules cannot import these child paths, and raw composition helpers remain private to this module boundary.
 - Start, cancellation claim, signal-failure rollback, and terminal cleanup must match the running instance ID. A stale waiter or PID cannot clear or restore a newer child. A duplicate cancellation request returns structured `already_cancelling` and sends no second signal.
 - Registration and watchdog startup occur before one-shot stdin delivery. After terminal observation, the runner stops and joins the watchdog, finishes the matching instance before joining stderr readers, and an internal guard clears only its own instance on every setup or wait failure. A termination-in-flight lease prevents lane reuse until the complete OS termination call returns.
@@ -460,7 +474,10 @@
 - ASR model download remains a separate semantic method because it owns a distinct command builder,
   progress protocol, and lane. It still delegates the complete child lifecycle to `WorkerLane`.
 - `ProcessLocalMedia` is added only when desktop-worker contract v4 and the Python CLI consumer are
-  implemented in the same change. Reserving a dead variant would weaken rather than prove the
+  implemented in the same vertical slice as native selection, manifest/History projection, and UI
+  dispatch. That slice also renames `VideoWorkerFacade` and the internal video-lane accessors to
+  `TaskWorkerFacade` and task-lane vocabulary while preserving the public `process_video` command.
+  Reserving a dead variant or retaining parallel aliases would weaken rather than prove the
   cross-language boundary. The accepted decision is recorded in
   `docs/design-docs/2026-07-19-typed-worker-job-facade.md`.
 
