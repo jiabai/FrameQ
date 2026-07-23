@@ -90,11 +90,23 @@ remain governed by the existing separate summary/inspiration confirmation.
   0 warnings. The unchanged sandboxed Rust cancellation fixtures reproduced their documented
   `taskkill` permission-only failure before the native-permission suite passed. Documentation
   closeout: governance remained at 0 errors / 0 warnings and `git diff --check` passed.
-- [ ] 2026-07-16: Implement Rust selection, strict IPC, worker local-media pipeline, source-aware
-  task persistence/History, and UI composition. Validation: focused suites and packaged-worker
-  equality must pass.
-- [ ] 2026-07-16: Complete full automated gates and Windows/macOS manual acceptance, record residual
-  risk, and archive this plan. Validation: all commands and native evidence listed below.
+- [x] 2026-07-23: Implemented the complete local-media vertical slice through TDD. Rust now owns the
+  native picker, opaque selection lifecycle, strict `process_local_media` command, and shared
+  `TaskWorkerFacade` lane; Python consumes the bounded stdin request, copies into generic task-owned
+  staging, validates/probes the declared kind, preserves video containers, normalizes all sources to
+  the official WAV, and persists closed local task sources; manifest/History/workspace/frontend
+  composition use closed source unions; and the localized composer keeps full paths out of React.
+  Commits: `98afd6e`, `84176e5`, `1e72574`, `0648d9e`, `5f22940`, `545f7e2`, and `215c5e2`.
+- [x] 2026-07-23: Completed the automated implementation gates. App 611/611, Worker 574 passed /
+  2 skipped, Windows native-permission Rust 223/223, and scripts 25/25 passed; Ruff, app lint/build,
+  rustfmt, recursive canonical/packaged-worker equality 63/63, Tauri release `--no-bundle`, and
+  `git diff --check` passed. The first clean parallel release compile stopped in third-party
+  `http-body` without a source diagnostic; `cargo build --release -j 1` proved the same graph, then
+  the required Tauri command passed without a code change. Existing Python `audioop` deprecation and
+  Vite chunk-size warnings remain non-blocking.
+- [ ] Complete real Windows and macOS native acceptance, record representative MP4/WMV/MP3/WAV
+  codec evidence, and then archive this plan. No suitable media fixtures or interactive Tauri
+  acceptance were available in this implementation session; macOS remains unavailable.
 
 ## Surprises & Discoveries
 
@@ -151,6 +163,13 @@ remain governed by the existing separate summary/inspiration confirmation.
   `video_processing.rs` still combines strict AI retry, model-aware URL cache, source-identity
   preflight, ASR request preparation, diagnostics, and Tauri command orchestration. The approved
   follow-up split isolates those current workflows before contract-v4 adds a separate local source.
+- Evidence: the three registered local progress codes initially had no locale resource entries, and
+  a broad fallback assertion could pass without proving the intended copy. Exact progress rendering
+  tests exposed the gap before the localized resources were added in all three locales.
+- Evidence: the first clean parallel Tauri release compile exited while compiling third-party
+  `http-body` with no Rust diagnostic. The same release graph passed with one Cargo job, and the
+  required Tauri command then passed unchanged; this was an environment/resource-pressure event,
+  not evidence for a source workaround.
 
 ## Decision Log
 
@@ -236,6 +255,15 @@ remain governed by the existing separate summary/inspiration confirmation.
   support, and frontend dispatch as one tested vertical slice. Rationale: contract validators may
   precede runtime, but a picker, dead job variant, CLI switch, or UI action without its complete
   consumer would create a reachable half-path. Date/Author: 2026-07-23, User + Codex.
+- Decision: Keep DOM/menu/focus behavior in a dedicated `TaskComposer` UI adapter and keep
+  `useTaskProcessingController` responsible for exhaustive domain-command dispatch. Rationale: one
+  controlled composer can preserve the URL draft, token-only local selection, keyboard semantics,
+  and account confirmation without moving presentation state back into the workflow controller.
+  Date/Author: 2026-07-23, Codex.
+- Decision: Make local-audio preparation and completion copy source-aware while keeping artifact
+  actions derived from actual artifact presence. Rationale: an audio task must not claim video
+  extraction or render Locate Video, but the workspace should not duplicate source-policy logic that
+  the closed manifest/artifact projection already owns. Date/Author: 2026-07-23, Codex.
 - Decision: Make raw Rust task manifests and artifact-path primitives private and require
   `SupportedTask::scan/open`; use `TaskEditSession` for transcript manifest mutation and
   `TaskStoreFacade` for Python create/open/finalize/snapshot persistence. Rationale: the local source
@@ -271,17 +299,24 @@ remain governed by the existing separate summary/inspiration confirmation.
 
 ## Outcomes & Retrospective
 
-The local-media Contract v4 and cross-language source-type foundation are complete. Product runtime
-implementation has not started: there is still no picker, selection store, Tauri local command,
-`WorkerJob::ProcessLocalMedia`, Python CLI consumer, FFmpeg/ffprobe local pipeline, manifest variant,
-History/UI support, or native acceptance. The earlier task-access, typed-worker-execution,
-media-preparation facade, crash-safe file-commit, task-result, and video-processing module-boundary
-prerequisites remain complete.
+The local-media runtime is implemented end to end in the isolated `codex/local-media-import`
+worktree. A Rust-owned native picker returns only opaque-token/safe metadata, revalidates the selected
+ordinary file, and launches the strict v4 worker request through the existing supervised task lane.
+Python alone opens the original path, stages it under a generic task-owned name before media tools,
+preserves validated video bytes when applicable, creates one validated 16 kHz mono signed-16-bit WAV,
+and reuses the existing transcript path. Closed local source variants now persist through manifest,
+History, restore, transcript review, artifact actions, and separately confirmed AI flows. The React
+composer dispatches a closed submission union and never stores or renders the complete path.
 
-Residual risk: actual codec/container support depends on the packaged FFmpeg/ffprobe build and must be
-proven with representative fixtures. Very large media may exhaust disk or processing resources because
-the product intentionally has no arbitrary hard cap. Windows and macOS native picker, filesystem-link,
-and path behavior require platform evidence; an unavailable host must remain explicitly unverified.
+Automated implementation evidence is complete: App 611/611, Worker 574 passed / 2 skipped, Rust
+223/223, scripts 25/25, Ruff, lint, frontend build, rustfmt, recursive 63/63 packaged-worker equality,
+Tauri release `--no-bundle`, and diff checks passed. Required AI coverage uses fakes, so this work
+consumed no real AI Credits.
+
+The plan remains active because native product acceptance is not complete. Actual packaged
+FFmpeg/ffprobe decoding must still be proven with representative MP4, WMV, MP3, and WAV files in a
+real Windows Tauri window; macOS picker/filesystem behavior is unverified. Very large media may
+exhaust disk or processing resources because the product intentionally has no arbitrary hard cap.
 Older FrameQ releases intentionally ignore local-source manifests. The source basename remains local
 History metadata and therefore still reveals the selected filename to anyone with access to the task
 directory, even though the complete path is never stored.
@@ -332,8 +367,9 @@ directory, even though the complete path is never stored.
      to `SupportedTask`, with transcript mutation through `TaskEditSession`.
    - Keep private Python orchestration and retry application flows on `TaskStoreFacade` for task
      lifecycle persistence; do not make the stable pipeline root or AI owner a persistence owner.
-   - Route current video/source/AI jobs through `WorkerJob + VideoWorkerFacade`; keep both lanes
-     private and expose only semantic execution/cancel/activity methods.
+   - At the prerequisite checkpoint, route video/source/AI jobs through
+     `WorkerJob + VideoWorkerFacade`; keep both lanes private and expose only semantic
+     execution/cancel/activity methods. Task 3 later performs the approved atomic task rename.
    - Route current URL download, validation/copy, audio preparation, and subtitle discovery through
      `MediaPreparationFacade`; keep task persistence, transcript writing, ASR, and AI outside it.
    - Preserve current schema/contract/result behavior and prove it with existing characterization
@@ -394,7 +430,7 @@ directory, even though the complete path is never stored.
    - Implemented 2026-07-20 without changing the cleaned v3 URL request or adding runtime local
      consumers. Focused RED evidence and GREEN counts are recorded in Progress.
 
-2. [ ] Implement the Rust-side native selection capability.
+2. [x] Implement the Rust-side native selection capability.
    - Add the official Tauri dialog plugin and a single-file filter for the closed video/audio
      extension allowlists.
    - Add one mutex-protected current selection with a cryptographically random UUID token, complete
@@ -406,7 +442,7 @@ directory, even though the complete path is never stored.
    - Revalidate the path, link status, size, and modification time immediately before processing.
    - Ensure command responses and errors contain safe metadata/codes only.
 
-3. [ ] Add the independent supervised local worker command.
+3. [x] Add the independent supervised local worker command.
    - Add `process_local_media({request})` without changing URL `process_video`.
    - Before changing behavior, characterize the current facade/lane routes. Then atomically rename
      `VideoWorkerFacade`, `video`, `video_worker()`, and `is_video_active()` to task-oriented
@@ -421,7 +457,7 @@ directory, even though the complete path is never stored.
    - Map worker events/results through the same strict validators and clear/retain selection according
      to the approved terminal state.
 
-4. [ ] Implement the worker local-media parser and probe boundary.
+4. [x] Implement the worker local-media parser and probe boundary.
    - Parse a closed request with `contract_version`, `source_path`, `media_kind`, safe display name,
      extension, and resolved `asr_model`; reject extra or invalid fields without echo.
    - Recheck extension, ordinary local file expectations available to Python, and ffprobe content.
@@ -435,7 +471,7 @@ directory, even though the complete path is never stored.
    - Sanitize ffprobe/FFmpeg exceptions before progress, result, and log boundaries.
    - Emit only contract-registered message/error codes and safe args.
 
-5. [ ] Implement source-specific artifact preparation with one shared ASR path.
+5. [x] Implement source-specific artifact preparation with one shared ASR path.
    - For video, validate the generic staging copy, atomically promote it to
      `media/video.<ext>`, then decode audio from that official artifact; do not transcode video or
      inspect embedded/sidecar subtitles.
@@ -449,7 +485,7 @@ directory, even though the complete path is never stored.
      through existing recovery policy, never register staging/incomplete files, and never manufacture
      a successful terminal state.
 
-6. [ ] Extend manifest schema-v3 validation with closed URL/local source variants.
+6. [x] Extend manifest schema-v3 validation with closed URL/local source variants.
    - Change the closed source union, safe local metadata, and support predicate in private
      `task_manifest/schema.rs`; keep canonical URL identity rules in `source_identity.rs` and make
      `access.rs` admit tasks only through the shared schema predicate.
@@ -464,7 +500,7 @@ directory, even though the complete path is never stored.
      URL or local variant.
    - Ensure transcript Markdown, diagnostics, prompts, and worker results do not gain filename/path.
 
-7. [ ] Make History, artifacts, transcript review, and AI source-aware.
+7. [x] Make History, artifacts, transcript review, and AI source-aware.
    - Replace URL-only history source fields with the closed
      `TaskSourceSummary = {kind: "url", url} | {kind: "local_file", displayName, mediaKind}` union
      while retaining URL display/canonical behavior.
@@ -477,7 +513,7 @@ directory, even though the complete path is never stored.
    - Ensure summary/inspiration receive the saved transcript under existing confirmation and output
      language rules but never receive source name/path/manifest.
 
-8. [ ] Implement the composer and localized source-aware presentation.
+8. [x] Implement the composer and localized source-aware presentation.
    - Replace URL-only workflow submission with the closed
      `TaskSubmission = {kind: "url", url} | {kind: "local_media", selectionToken}` command. Keep DOM
      `FormEvent` handling in the form adapter and make the application controller exhaustively
@@ -499,7 +535,7 @@ directory, even though the complete path is never stored.
    - Cover keyboard focus, Escape, outside click, dialog cancellation, disabled/busy behavior, and
      English expansion at `720x640`.
 
-9. [ ] Add security and regression coverage.
+9. [x] Add security and regression coverage.
    - Assert frontend state, browser command ledger, screenshots/fixtures, and IPC responses contain a
      token/safe basename only where intended and never a full path.
    - Capture media-tool invocations and prove ffprobe/FFmpeg argv contains only generic task staging
@@ -513,8 +549,8 @@ directory, even though the complete path is never stored.
    - Refresh the packaged worker only through the existing synchronization path and prove canonical
      equality.
 
-10. [ ] Complete automated and native acceptance, then archive.
-    - Run every gate below and record exact test counts/results in Progress and Outcomes.
+10. [ ] Complete remaining native acceptance, then archive.
+    - The automated gates below are complete and recorded in Progress and Outcomes.
     - On Windows and macOS where available, import MP4/WMV/MP3/WAV, inspect the WAV with ffprobe,
       restart/restore History, locate allowed artifacts, test changed/deleted sources, cancellation,
       disk failure, keyboard navigation, and path secrecy.

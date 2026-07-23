@@ -28,7 +28,7 @@ pytest, FFmpeg/ffprobe, i18next.
 - Create: `app/src-tauri/src/local_media.rs`
 - Test: `app/src-tauri/src/local_media.rs`
 
-- [ ] **Step 1: Write failing path/store tests**
+- [x] **Step 1: Write failing path/store tests**
 
 Add tests that create regular MP4/MP3 files and assert selection metadata, replacement, matching-token
 clear, changed size/mtime rejection, missing-file rejection, and symlink/reparse rejection:
@@ -45,7 +45,7 @@ fn selection_store_replaces_and_clears_only_matching_token() {
 }
 ```
 
-- [ ] **Step 2: Run the focused Rust test and verify RED**
+- [x] **Step 2: Run the focused Rust test and verify RED**
 
 Run:
 
@@ -55,7 +55,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml local_media::tests
 
 Expected: compile failure because `local_media` and `LocalMediaSelectionState` do not exist.
 
-- [ ] **Step 3: Implement the selection owner and picker commands**
+- [x] **Step 3: Implement the selection owner and picker commands**
 
 Implement these closed capabilities:
 
@@ -83,11 +83,11 @@ Use `tauri-plugin-dialog` with the contract allowlists. Validate every existing 
 UUID v4 token, sanitize the basename to at most 160 characters while preserving extension, and keep
 path/size/mtime only in the mutex-owned selection.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run the Task 1 focused command. Expected: all local-media selection tests pass.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```powershell
 git add app/src-tauri/Cargo.toml app/src-tauri/Cargo.lock app/src-tauri/src/lib.rs app/src-tauri/src/local_media.rs app/src-tauri/src/local_media_contract.rs
@@ -110,7 +110,7 @@ git commit -m "feat(local-media): add native selection capability"
 - Modify: `app/src-tauri/src/history_deletion.rs`
 - Test: the corresponding Rust inline/private test modules
 
-- [ ] **Step 1: Write failing facade/command/result tests**
+- [x] **Step 1: Write failing facade/command/result tests**
 
 Lock the new job policy and path secrecy:
 
@@ -129,7 +129,7 @@ assert!(!request.command.args.join(" ").contains("review-secret"));
 
 Also assert `ProcessLocalMedia` uses the process-media watchdog and parses the task terminal family.
 
-- [ ] **Step 2: Run focused worker-runtime tests and verify RED**
+- [x] **Step 2: Run focused worker-runtime tests and verify RED**
 
 ```powershell
 cargo test --manifest-path app/src-tauri/Cargo.toml worker_runtime
@@ -137,7 +137,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml worker_runtime
 
 Expected: compile failures for `task_worker`, `TaskWorkerFacade`, and `ProcessLocalMedia`.
 
-- [ ] **Step 3: Rename and extend the closed runtime**
+- [x] **Step 3: Rename and extend the closed runtime**
 
 Atomically rename:
 
@@ -160,7 +160,7 @@ WorkerOperation::ProcessLocalMedia
 Derive fixed `--process-local-media-stdin`, task-result parsing, worker progress, process-media
 watchdog, and no-LLM policy. Keep public `process_video` and `cancel_process` IPC names unchanged.
 
-- [ ] **Step 4: Implement strict `process_local_media` orchestration**
+- [x] **Step 4: Implement strict `process_local_media` orchestration**
 
 Parse the token-only request with `parse_process_local_media_ipc_request`, resolve/revalidate it in
 the Rust selection store, resolve ASR settings, serialize the exact v4 stdin request, execute
@@ -168,11 +168,11 @@ the Rust selection store, resolve ASR settings, serialize the exact v4 stdin req
 Clear selection on success and invalid-source terminal codes; retain it on cancellation and retryable
 processing failures.
 
-- [ ] **Step 5: Run focused Rust tests and verify GREEN**
+- [x] **Step 5: Run focused Rust tests and verify GREEN**
 
 Run worker-runtime, video-processing, local-media, and history-deletion tests. Expected: all pass.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```powershell
 git add app/src-tauri/src
@@ -187,7 +187,7 @@ git commit -m "feat(local-media): add supervised local worker command"
 - Test: `worker/tests/test_task_store.py`
 - Test: `worker/tests/test_pipeline.py`
 
-- [ ] **Step 1: Write failing local task-store tests**
+- [x] **Step 1: Write failing local task-store tests**
 
 Assert unique local task IDs and the exact schema-v3 variant:
 
@@ -209,7 +209,7 @@ assert "review-secret" not in json.dumps(manifest)
 Also assert URL serialization is byte-compatible apart from no required new discriminator and local
 tasks reopen for transcript/AI operations.
 
-- [ ] **Step 2: Run focused worker tests and verify RED**
+- [x] **Step 2: Run focused worker tests and verify RED**
 
 ```powershell
 D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker/tests/test_task_store.py worker/tests/test_pipeline.py -q
@@ -217,7 +217,7 @@ D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker/tests/test_task_store
 
 Expected: failure because `create_local` and the local source model do not exist.
 
-- [ ] **Step 3: Implement closed Python task sources**
+- [x] **Step 3: Implement closed Python task sources**
 
 Add:
 
@@ -239,11 +239,11 @@ Make `TaskContext` own `source: TaskSource`, retain read-only compatibility prop
 existing URL transcript code needs `source_identity`, and add the semantic `TaskStoreFacade.create_local`
 method. Serialize/open URL and local variants exhaustively; never store the original path.
 
-- [ ] **Step 4: Run focused worker tests and verify GREEN**
+- [x] **Step 4: Run focused worker tests and verify GREEN**
 
 Run the Task 3 command. Expected: all selected tests pass.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```powershell
 git add worker/frameq_worker/task_store.py worker/frameq_worker/pipeline_runtime/transcript.py worker/tests/test_task_store.py worker/tests/test_pipeline.py
@@ -262,7 +262,7 @@ git commit -m "feat(local-media): persist closed local task sources"
 - Test: `worker/tests/test_pipeline.py`
 - Test: `worker/tests/test_cli.py`
 
-- [ ] **Step 1: Write failing staging and media-kind tests**
+- [x] **Step 1: Write failing staging and media-kind tests**
 
 Use a recording `CommandRunner` and sensitive original path. Assert:
 
@@ -276,7 +276,7 @@ assert prepared.video_path == task_context.paths.video_path_for_extension("wmv")
 Cover video+audio requirements, audio cover art, missing streams, copy failure, WAV validation,
 audio staging cleanup, video byte preservation, and registered progress events.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker/tests/test_media_preparation.py worker/tests/test_pipeline.py worker/tests/test_cli.py -q
@@ -284,7 +284,7 @@ D:\Github\FrameQ\.venv\Scripts\python.exe -m pytest worker/tests/test_media_prep
 
 Expected: failure because `LocalMediaSource`, local pipeline, and CLI mode do not exist.
 
-- [ ] **Step 3: Implement generic task-owned staging**
+- [x] **Step 3: Implement generic task-owned staging**
 
 Add `LocalMediaSource` to `MediaPreparationFacade`. Copy with Python file objects in bounded chunks
 to a unique generic task path whose basename contains no source name. Probe/FFmpeg receive only that
@@ -294,7 +294,7 @@ For video, atomically promote the validated stage to `media/video.<source_extens
 from that official artifact. For audio, normalize from stage and remove it on success/failure.
 Validate the official WAV as 16 kHz mono signed 16-bit PCM before commit.
 
-- [ ] **Step 4: Add local orchestration and CLI consumption**
+- [x] **Step 4: Add local orchestration and CLI consumption**
 
 Implement:
 
@@ -311,7 +311,7 @@ def run_local_media_pipeline(
 Register `--process-local-media-stdin`, reuse bounded stdin/progress/ASR behavior, never invoke source
 resolvers/subtitle discovery/LLM, and map all exceptions to existing fixed local-media codes.
 
-- [ ] **Step 5: Run focused and full worker gates**
+- [x] **Step 5: Run focused and full worker gates**
 
 Run the Task 4 command, then:
 
@@ -322,7 +322,7 @@ D:\Github\FrameQ\.venv\Scripts\python.exe -m ruff check worker
 
 Expected: all worker tests pass and Ruff reports no errors.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 ```powershell
 git add worker
@@ -339,7 +339,7 @@ git commit -m "feat(local-media): process local sources through task staging"
 - Modify: `app/src-tauri/src/history.rs`
 - Test: the corresponding Rust test modules
 
-- [ ] **Step 1: Write failing schema/History tests**
+- [x] **Step 1: Write failing schema/History tests**
 
 Create local video/audio manifests and assert the closed projection:
 
@@ -356,7 +356,7 @@ assert_eq!(
 Assert missing/extra/unsafe local metadata, nonempty URL, non-null identity, unknown `source_kind`,
 absolute paths, controls, bidi text, and wrong kind/extension all fail closed without mutation.
 
-- [ ] **Step 2: Run focused Rust tests and verify RED**
+- [x] **Step 2: Run focused Rust tests and verify RED**
 
 ```powershell
 cargo test --manifest-path app/src-tauri/Cargo.toml task_manifest
@@ -365,7 +365,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml history
 
 Expected: compile or assertion failure because local schema and `source` DTO do not exist.
 
-- [ ] **Step 3: Implement the closed manifest source**
+- [x] **Step 3: Implement the closed manifest source**
 
 Add strict `LocalSourceManifest` and serializable:
 
@@ -385,16 +385,16 @@ pub(crate) enum TaskSourceSummary {
 Make `source_privacy_ready` exhaustive over legacy/current URL and `local_file`; keep unknown variants
 unsupported. Expose the source only through `SupportedTask`.
 
-- [ ] **Step 4: Replace History URL fields**
+- [x] **Step 4: Replace History URL fields**
 
 Replace list/detail `url` with `source: TaskSourceSummary`; preserve task-root reads, scan isolation,
 deletion, transcript, and AI behavior.
 
-- [ ] **Step 5: Run focused and full Rust gates**
+- [x] **Step 5: Run focused and full Rust gates**
 
 Run Task 5 focused tests, then the full native-permission Rust suite. Expected: all pass.
 
-- [ ] **Step 6: Commit Task 5**
+- [x] **Step 6: Commit Task 5**
 
 ```powershell
 git add app/src-tauri/src/task_manifest.rs app/src-tauri/src/task_manifest app/src-tauri/src/history.rs
@@ -416,7 +416,7 @@ git commit -m "feat(local-media): expose closed task source history"
 - Modify: `app/src/features/workflow/useTaskProcessingController.test.ts`
 - Modify: tests constructing `WorkflowState` or History DTOs
 
-- [ ] **Step 1: Write failing client/union tests**
+- [x] **Step 1: Write failing client/union tests**
 
 Lock:
 
@@ -434,7 +434,7 @@ Test exact picker/clear/process IPC ledgers, invalid response rejection, local s
 regression, History restore, cancellation retention, success/invalid-source token clearing, stale
 operation suppression, and AI retry source preservation.
 
-- [ ] **Step 2: Run focused App tests and verify RED**
+- [x] **Step 2: Run focused App tests and verify RED**
 
 ```powershell
 npm.cmd --prefix app test -- --run src/localMediaClient.test.ts src/workerClient.test.ts src/historyClient.test.ts src/workflow.test.ts src/features/workflow/useTaskProcessingController.test.ts
@@ -442,7 +442,7 @@ npm.cmd --prefix app test -- --run src/localMediaClient.test.ts src/workerClient
 
 Expected: failures for missing local client and URL-only workflow fields.
 
-- [ ] **Step 3: Implement strict clients and state**
+- [x] **Step 3: Implement strict clients and state**
 
 Add `selectLocalMedia`, `clearLocalMediaSelection`, and `processLocalMedia`; validate selection
 through `parseLocalMediaSelectionView` and process input through `parseProcessLocalMediaRequest`.
@@ -457,16 +457,16 @@ taskSource: TaskSourceSummary | null;
 Make `startProcessing`, cancellation, progress, result merge, History restore, and AI retry preserve
 the source invariants.
 
-- [ ] **Step 4: Move DOM events out of the application controller**
+- [x] **Step 4: Move DOM events out of the application controller**
 
 Expose `submitTask(submission, account, openAccountPanel)` and dispatch exhaustively to
 `processVideo` or `processLocalMedia`. The React form adapter alone calls `preventDefault`.
 
-- [ ] **Step 5: Run focused and full App tests**
+- [x] **Step 5: Run focused and full App tests**
 
 Run Task 6 focused tests, then `npm.cmd --prefix app test`. Expected: all tests pass.
 
-- [ ] **Step 6: Commit Task 6**
+- [x] **Step 6: Commit Task 6**
 
 ```powershell
 git add app/src
@@ -486,13 +486,13 @@ git commit -m "feat(local-media): model workflow sources as closed unions"
 - Modify: relevant component/i18n tests
 - Modify: `tests/app-input.browser.test.ts`
 
-- [ ] **Step 1: Write failing UI/i18n/browser tests**
+- [x] **Step 1: Write failing UI/i18n/browser tests**
 
 Cover the attachment menu, picker cancellation, local chip, localized size, remove/replace, retained
 URL draft, keyboard focus/Escape/outside click, local video/audio completion copy, source-aware
 History labels, no audio Locate Video action, and `720x640` overflow.
 
-- [ ] **Step 2: Run focused UI tests and verify RED**
+- [x] **Step 2: Run focused UI tests and verify RED**
 
 ```powershell
 npm.cmd --prefix app test -- --run src/features/history/HistorySheet.test.tsx src/taskWorkspaceViewModel.test.ts src/i18n/resources.test.ts
@@ -500,18 +500,18 @@ npm.cmd --prefix app test -- --run src/features/history/HistorySheet.test.tsx sr
 
 Expected: missing source-aware UI and locale keys.
 
-- [ ] **Step 3: Implement the one-composer UI**
+- [x] **Step 3: Implement the one-composer UI**
 
 Add a left `+` button and one-item attachment menu. Render either the URL input or removable local
 chip from `composerSource.kind`; selection never auto-submits. Keep confirmation/account behavior,
 focus restoration, disabled state, and existing compact visual language.
 
-- [ ] **Step 4: Implement source-aware History/workspace copy**
+- [x] **Step 4: Implement source-aware History/workspace copy**
 
 Use safe local display names without translation, localized media-kind labels, audio-only completion
 copy, and artifact-presence-based actions. Add identical key sets for `zh-CN`, `zh-TW`, and `en-US`.
 
-- [ ] **Step 5: Run App build and browser smoke**
+- [x] **Step 5: Run App build and browser smoke**
 
 ```powershell
 npm.cmd --prefix app test
@@ -522,7 +522,7 @@ npm.cmd --prefix app test -- --run tests/app-input.browser.test.ts
 
 Expected: all tests/lint/build pass.
 
-- [ ] **Step 6: Commit Task 7**
+- [x] **Step 6: Commit Task 7**
 
 ```powershell
 git add app/src tests/app-input.browser.test.ts
@@ -537,17 +537,17 @@ git commit -m "feat(local-media): add localized file import composer"
 - Modify: `TASKS.md`
 - Modify: architecture/security/audit documents only where implementation evidence changes
 
-- [ ] **Step 1: Refresh packaged worker through the repository script**
+- [x] **Step 1: Refresh packaged worker through the repository script**
 
 Discover and run the existing canonical-to-resource synchronization command; do not hand-edit the
 ignored mirror.
 
-- [ ] **Step 2: Run cross-language and privacy gates**
+- [x] **Step 2: Run cross-language and privacy gates**
 
 Verify contract parity, mirror byte equality, original-path absence in frontend/argv/env/results/
 progress/errors/logs/manifests/prompts, all allowlists, and URL/ASR/AI Credits regressions.
 
-- [ ] **Step 3: Run the complete automated gate**
+- [x] **Step 3: Run the complete automated gate**
 
 ```powershell
 npm.cmd --prefix app test
@@ -566,12 +566,17 @@ git diff --check
 Expected: every command exits zero. Run Rust outside the restricted process sandbox on Windows so
 the existing `taskkill` fixtures can execute.
 
-- [ ] **Step 4: Record native evidence and residual risk**
+- [x] **Step 4: Record native evidence and residual risk**
 
 Record Windows MP4/WMV/MP3/WAV evidence if fixtures and a Tauri window are available. Keep macOS,
 unavailable codecs, or unavailable real-device evidence explicitly unverified.
 
-- [ ] **Step 5: Update living documents and commit**
+Recorded result: the Windows no-bundle executable was built, but no representative media fixtures
+or interactive Tauri window were available in this session. Windows MP4/WMV/MP3/WAV decoding,
+native picker/filesystem behavior, and all macOS evidence therefore remain explicitly unverified;
+the active ExecPlan stays active.
+
+- [x] **Step 5: Update living documents and commit**
 
 Mark only actually verified checkboxes, record exact counts, keep the ExecPlan active if any required
 native acceptance is unavailable, and commit:

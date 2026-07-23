@@ -157,10 +157,10 @@
   kind, lowercase extension, and positive integer byte count. Its local-media module contains
   no complete-path field and rejects missing, extra, wrong-type, wrong-kind, or unsafe metadata with
   the fixed `LOCAL_MEDIA_SELECTION_INVALID` code.
-- Rust path-bearing serialization is available only as a pure contract constructor for the later
-  native command. It requires an absolute path, matching source/display extensions, a closed media
-  kind/extension pair, the supported ASR model, and a safe basename; failures return one fixed
-  non-echoing message. Token-bearing Rust DTOs deliberately do not implement `Debug`.
+- Rust path-bearing serialization is private to the native command. It requires an absolute path,
+  matching source/display extensions, a closed media kind/extension pair, the supported ASR model,
+  and a safe basename; failures return one fixed non-echoing message. Token-bearing Rust DTOs
+  deliberately do not implement `Debug`.
 - Python parses the exact six-field local worker request into a path-bearing model whose path and
   safe display name are excluded from repr. Missing, additional, wrong-version/type/kind/extension,
   relative-path, unsafe-basename, or unsupported-model inputs fail before any filesystem or media
@@ -169,15 +169,14 @@
   transport policy permits a full path only in Rust selection memory, bounded worker stdin, and
   worker memory; the token is forbidden from worker input/output, diagnostics, persistence, prompts,
   and cloud traffic.
-- Runtime activation must not pass the original selected path from Python to ffprobe or FFmpeg.
+- Runtime does not pass the original selected path from Python to ffprobe or FFmpeg.
   Python opens the original path itself, copies its bytes to a generic task-owned staging filename,
   and gives media tools only that staging path. A validated video staging file may be atomically
   promoted to `media/video.<ext>`; audio staging must be removed after the official WAV commits, and
   failed/cancelled staging remains subject to the existing bounded cleanup/recovery policy.
-- No picker, selection store, worker CLI consumer, FFmpeg/ffprobe execution, manifest producer, log,
-  or network path exists in this step, so no local media bytes or paths can yet leave these pure
-  validation boundaries. The approved implementation activates those consumers as one tested
-  vertical slice rather than registering a partially executable path.
+- The picker, selection store, worker CLI/pipeline, and closed manifest/History/UI consumers were
+  activated together on 2026-07-23. Cross-language, command-capture, recursive privacy, frontend
+  ledger, and fake-AI tests enforce the same path/token exclusions at the executable boundary.
 
 ## 2026-07-20 Video-Processing Application Module Boundary
 
@@ -424,10 +423,10 @@
 
 - Only `worker_runtime::supervisor` may signal a PID/PGID, and only one recorded by the private `ProcessSupervisor` for the current in-process worker or model-download instance. Application modules receive semantic typed-job execution, cancellation, activity, and model-download methods; the lanes themselves and all supervisor mutation/OS termination functions remain private.
 - `WorkerLane::run` is the sole owner of FrameQ worker spawn, register-before-stdin, pipe ownership, reader startup, wait/reap, finish-before-reader-join, terminal classification, and lifecycle diagnostics. It must not accept a PID, PGID, executable, command, environment key, or shell fragment from IPC, UI, worker output, task data, or a log entry.
-- `VideoWorkerFacade::execute(WorkerJob)` is the only application-facing video-lane execution entry.
+- `TaskWorkerFacade::execute(WorkerJob)` is the only application-facing task-lane execution entry.
   It must derive the fixed invocation, lifecycle operation, progress route, lane, and credential
   policy exhaustively. Only `RetryInsights` may resolve server-managed LLM invocation material;
-  process-video and source-identity jobs cannot receive it through their API.
+  process-video, process-local-media, and source-identity jobs cannot receive it through their API.
 - Windows cancellation uses the fixed `taskkill /T /F` argument vector. Unix cancellation uses a fixed `kill` argument vector directed at the worker-created process group, first `TERM` and then bounded-grace `KILL` only if the group remains. No shell interpolation is permitted.
 - A delivered termination signal is not proof of a final cancelled state. State rollback after a signal error and terminal cleanup after child observation must match the same instance ID, so stale cancellation/exit handling cannot hide a real result or interfere with a newer process.
 - A valid structured worker result wins a concurrent cancellation claim. Without a structured result, only the matching `Cancelling` terminal phase becomes cancelled; malformed success is a protocol violation and malformed failure remains a typed unstructured failure.
@@ -500,8 +499,8 @@
 - Python URL orchestration and retry application-flow persistence must use `TaskStoreFacade`.
   `OpenedTask` may expose a
   validated `TaskContext` and normalized transcript metadata, but not the raw manifest payload.
-- Adding the future local-file source variant must change the central support predicate and its
-  contract tests. It must not reintroduce caller-specific URL/local manifest acceptance rules.
+- The local-file source variant extends the central support predicate and its contract tests. It
+  must not reintroduce caller-specific URL/local manifest acceptance rules.
 
 ## 2026-07-19 Media Preparation Facade Enforcement
 
@@ -511,9 +510,9 @@
 - `MediaPreparationFacade` may receive a validated `TaskContext` for bounded task-owned paths, but
   it must not import `TaskStoreFacade`, finalize a result, write a task manifest, invoke ASR, or enter
   InsightFlow/AI.
-- The current facade accepts only `UrlMediaSource`. Future local variants must land together with
-  contract v4 and its real CLI consumer, and must keep the complete local path out of argv, progress,
-  results, errors, logs, manifests, transcripts, prompts, and UI state.
+- The current facade accepts the closed `UrlMediaSource | LocalMediaSource` union. The local variant
+  landed together with contract v4 and its real CLI consumer, and keeps the complete local path out
+  of media-tool argv, progress, results, errors, logs, manifests, transcripts, prompts, and UI state.
 - A local audio result must expose no video path; local video/audio results expose no subtitle
   candidate. Partial media remains unregistered until the task persistence boundary validates the
   final artifact.
@@ -536,9 +535,9 @@
 - The canonical worker is authoritative. Packaged Tauri resources must be generated through the
   supported refresh path and compared recursively by relative file set and bytes; private runtime
   files must never be maintained through hand-edited mirror copies.
-- Future local-media work must extend the approved orchestration/transcript owners deliberately and
-  preserve process-versus-AI isolation; it must not bypass these boundaries through a new private
-  import path.
+- The local-media implementation extends the approved orchestration/transcript owners and preserves
+  process-versus-AI isolation; future source work must not bypass these boundaries through another
+  private import path.
 
 ## 2026-07-05 Task Artifact Path Boundary
 

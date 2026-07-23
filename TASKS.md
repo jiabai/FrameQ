@@ -86,15 +86,17 @@
   `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
   Contract foundation completed 2026-07-20: global v4 now declares the independent local source,
   token-only frontend/IPC metadata, exact Rust/Python worker request, fixed progress/errors, and
-  path/token secrecy while URL `process_video` remains v3. RED preceded implementation; GREEN passed
-  App 549/549, Worker 436/436, Rust 169/169, scripts 23/23, Ruff, lint/build, rustfmt, governance,
-  Tauri release `--no-bundle`, mirror-sync equality, and diff gates. Picker, command, worker
-  CLI/pipeline, manifest, History, and UI remain open and the overall feature therefore stays
-  unchecked.
-  Implementation approach reconfirmed 2026-07-23: use closed frontend submission/source unions,
-  atomically rename the shared internal video facade/lane to task vocabulary, copy sources to generic
-  task-owned staging before media-tool execution, and activate runtime only as one complete vertical
-  slice. This documentation decision does not complete any runtime checkbox.
+  path/token secrecy while URL `process_video` remains v3.
+  Runtime vertical slice implemented through TDD on 2026-07-23: Rust owns selection tokens, native
+  picking, revalidation, strict IPC, and the supervised task lane; Python stages under generic
+  task-owned names, probes/normalizes local sources, preserves video containers, and reuses ASR;
+  manifest/History/workspace/frontend use closed source unions; and the three-locale composer keeps
+  complete paths out of React. Automated GREEN: App 611/611, Worker 574 passed / 2 skipped, Windows
+  Rust 223/223, scripts 25/25, Ruff, lint/build, rustfmt, 63/63 worker mirror equality, Tauri release
+  `--no-bundle`, governance, and diff gates.
+  The feature remains unchecked and its ExecPlan remains active until a real Windows Tauri window
+  proves representative MP4/WMV/MP3/WAV decoding plus picker/path behavior and macOS is either
+  verified or explicitly accepted as residual risk. No real AI Credits were consumed.
 
 - [x] Add desktop i18n and confirmation-time AI output language (2026-07-15) — ✅ Acceptance: bundle `zh-CN`,
   `zh-TW`, and `en-US`; persist `system | locale` in app-local `ui-preferences.json`; localize UI,
@@ -347,10 +349,11 @@
   `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
 
 - [x] Centralize Rust video-worker execution policy behind a typed facade (2026-07-19) - ✅
-  `WorkerJob + VideoWorkerFacade` now uniquely derive CLI invocation, lifecycle operation, progress
-  route, retry-only LLM material, and the private video lane; model download uses a separate semantic
-  runtime method, while `WorkerLane` remains the sole child-lifecycle owner. `ProcessLocalMedia` is
-  intentionally deferred until contract v4 and its Python CLI consumer land atomically. TDD and
+  The prerequisite introduced `WorkerJob + VideoWorkerFacade`; the local-media vertical slice later
+  atomically renamed it to `TaskWorkerFacade` and added `ProcessLocalMedia` with its real Python CLI
+  consumer. It now uniquely derives CLI invocation, lifecycle operation, progress route, retry-only
+  LLM material, and the private task lane; model download uses a separate semantic runtime method,
+  while `WorkerLane` remains the sole child-lifecycle owner. Original TDD and
   gates: expected compile RED, focused policy 3/3, Rust 149/149, app 491/491 + production build,
   worker 394/394, Ruff, scripts 23/23, rustfmt, docs 0/0, and diff check passed. Existing Vite bundle
   size and Python `audioop` deprecation warnings remain non-blocking. Design:

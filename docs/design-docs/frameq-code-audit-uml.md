@@ -11,17 +11,17 @@
 
 ### 一句话认识 FrameQ
 
-FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频链接，Rust/Tauri 负责可信的本机边界和子进程管理，Python worker 完成下载、媒体处理、字幕或 ASR 转写；用户确认后，worker 才会通过 FrameQ server 获取一次性的云端 LLM 调用配置，生成总结或启发内容。视频、音频、文字稿和 AI 结果默认写在用户本机。
+FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频链接或选择一个本地视频/音频文件，Rust/Tauri 负责可信的本机路径边界和子进程管理，Python worker 完成下载或本地 staging、媒体处理、字幕或 ASR 转写；用户确认后，worker 才会通过 FrameQ server 获取一次性的云端 LLM 调用配置，生成总结或启发内容。视频、音频、文字稿和 AI 结果默认写在用户本机。
 
 ### 一次任务的完整故事
 
 先不看类名，一次普通任务可以理解为下面八步：
 
-1. 用户在桌面界面输入视频链接。
-2. React controller 把界面切换到“视频提取中”，并通过 Tauri client 发起 IPC 调用。
-3. Rust/Tauri 校验运行目录和请求，先检查本机是否已有可安全复用的任务。
+1. 用户在桌面界面输入视频链接，或通过 native picker 选择一个本地视频/音频。
+2. React controller 冻结 closed submission/source，并通过独立 URL/local Tauri client 发起 IPC。
+3. Rust/Tauri 校验运行目录和请求；URL 可检查安全缓存，本地 token 则解析并重新验证当前选择。
 4. 没有缓存时，Rust 启动受监督的 Python worker 子进程，并通过受限 stdin 发送请求。
-5. Python worker 解析来源，经媒体准备门面下载并校验视频、准备任务内 video/audio 和字幕候选；私有 orchestration/transcript owner 有可用字幕时直接写出，否则使用已准备的音频运行 ASR。
+5. Python worker 解析来源：URL 经媒体准备门面下载并产生字幕候选；本地文件先复制到 generic task-owned staging，再按 video/audio 闭集准备正式产物。私有 orchestration/transcript owner 对 URL 可用字幕直接写出，其余情况使用已准备的音频运行 ASR。
 6. worker 把进度写到 stderr；Rust 校验后转换成 Tauri event；React 更新进度。最终结果则通过 stdout 返回一次 JSON。
 7. worker 把正式产物和 `frameq-task.json` 写入本机任务目录；React 展示可编辑文字稿。
 8. 只有用户再次确认“总结”或“启发”时，才进入独立 AI 流程并按实际供应商调用消耗额度。
@@ -96,10 +96,10 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | DTO / wire contract | 跨函数、跨进程或跨语言传递的结构化数据形状 |
 | facade | 为上层提供少量稳定入口、在内部协调多个模块的门面 |
 | pipeline | 按阶段执行下载、校验、字幕/ASR 和结果落盘的处理流程 |
-| WorkerJob / VideoWorkerFacade | Rust application module 提交的语义任务与唯一 video-lane 执行门面；门面固定派生 invocation、operation、progress、LLM policy 和 lane |
+| WorkerJob / TaskWorkerFacade | Rust application module 提交的语义任务与唯一 task-lane 执行门面；门面固定派生 invocation、operation、progress、LLM policy 和 lane |
 | WorkerLane | `worker_runtime` 内部受监督进程通道，统一提供 `run`、`cancel` 和 `is_active`；内部组合 `ProcessSupervisor`，application module 不再直接持有 |
 | ProcessSupervisor | `worker_runtime` 内部记录受控子进程实例、阶段和取消竞争的状态机，不是 Python worker 本身，也不是 application module 的直接 API |
-| lane | 一个互斥的受监督进程通道。当前 video 和 ASR model download 各有一个 lane |
+| lane | 一个互斥的受监督进程通道。当前 task 和 ASR model download 各有一个 lane |
 | task manifest | 每个任务的 `frameq-task.json`，是 History、cache、retry 等功能的本地事实来源 |
 | artifact | 任务产生的正式文件，如视频、音频、文字稿、总结和启发 JSON |
 | source identity | 去除敏感参数后可持久化的稳定平台身份；不同于本次下载使用的原始 URL |
@@ -123,21 +123,24 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 前端 task workspace 展示门面、Python media preparation facade、Rust task-result adapter，
 以及后续 video processing、transcript detail、三平台 fallback、ASR、server routes、task
 manifest 和 worker pipeline 的模块边界收口。本文区分“已经存在的生产实现”与
-“2026-07-22 已登记的未来能力”；local-media v4 runtime 仍只是计划，而 worker watchdog
-已在本次 post-baseline 更新中落地并按下方证据标记为当前能力。
+“2026-07-22 已登记的未来能力”；worker watchdog 与 local-media v4 runtime 都已在
+post-baseline 更新中落地，并按下方证据标记为当前能力。
 
 Post-baseline update：原子持久化与 transaction recovery 已在 `61d489a` 落地，Rust-owned
 worker watchdog 已完成实现与 Windows 原生验证；2026-07-23 又把唯一 runner 的 process I/O、
 watchdog、progress 与 terminal 实现拆到四个私有 owner，并把测试按主题迁出 root；同日
 Server Store/PrismaStore 也按语义事务责任拆为稳定 root、私有 Memory/Prisma owners 和 12 个
-consumer-owned type-only capabilities。本文同步这些审计状态、规模和源码位置；未特别标记的
-其余 UML 与依赖快照仍以 `3fd01e8` 为基线。
+consumer-owned type-only capabilities。local-media 又在七个 TDD 提交中原子激活 picker/token、
+task worker job、Python staging/normalization、closed manifest/History source 与前端 composer。
+本文同步这些审计状态、规模和源码位置；未特别标记的其余 UML 与依赖快照仍以 `3fd01e8`
+为基线。
 
 范围规则：
 
-- 图只表示该提交中的生产实现，不把 active ExecPlan 当作已落地代码。
-- `process_local_media` 尚未注册为 Tauri command，也不在 worker 当前请求模型中；全局
-  contract v4 已锁定 local-media 的独立请求，但本基线只画已经落地的 v3 URL 处理流程。
+- 图只表示基线或文中明确标记的 post-baseline 生产实现，不把未完成的 active ExecPlan
+  条目当作已落地代码。
+- `process_local_media` 已作为独立 Tauri command 与 contract-v4 worker CLI/pipeline 落地；
+  URL `process_video` 请求仍保持 v3，两者共享一个 task lane 而不合并 IPC DTO。
 - 独立的 `*.test.*`、`tests/` 和构建脚本不进入主要依赖图；测试入口在源码索引中按职责说明。
 - Rust 测试通常以内联 `#[cfg(test)]` 模块存在，所以物理行数包含同文件内测试。
 - 图中的“大文件”只是审计入口，不等同于已经证明存在设计缺陷。
@@ -871,9 +874,10 @@ model，再构造不可变的 `ProcessVideoWorkerRequest { contract_version, url
 全局 desktop-worker contract 现已升级为 v4，但上面的 `process_video` 请求仍严格保留 v3。
 新增的 local-media 边界是独立闭集：TypeScript 只定义 UUID token 与安全展示元数据；Rust
 定义 token-only IPC 与路径只进入 worker stdin 的序列化器；Python 定义严格六字段解析器和
-隐藏路径/文件名 repr 的领域请求。当前阶段尚未注册 picker、Tauri command、`WorkerJob`
-variant 或 Python CLI consumer，因此图中的 local-media stdin 连线表示已锁定的下一步契约，
-不是已经可执行的产品流程。
+隐藏路径/文件名 repr 的领域请求。2026-07-23 的 post-baseline 实现已经把 picker、
+`process_local_media` Tauri command、`WorkerJob::ProcessLocalMedia` 和 Python CLI consumer
+作为同一纵向切片激活；原始路径只在 Rust selection memory 与 bounded worker stdin/worker
+memory 中存在，媒体工具只接收 generic task-owned staging/official artifact 路径。
 
 ### 可能发生契约漂移的位置
 
@@ -893,7 +897,7 @@ variant 或 Python CLI consumer，因此图中的 local-media stdin 连线表示
 **这张图回答什么：** Rust/Tauri 为什么是代码量最大的区域之一，`process_video` 如何连接运行目录、缓存、worker command、进程监督、日志与 task manifest。
 
 **怎么读：** 从 `LibRegistry` 看 command 如何注册，再沿
-`VideoProcessingModule -> WorkerJob -> VideoWorkerFacade` 看 application 意图怎样被固定映射为
+`VideoProcessingModule -> WorkerJob -> TaskWorkerFacade` 看 application 意图怎样被固定映射为
 内部 command/run request；只有 `worker_runtime` 内部的 `WorkerLane` 接收底层请求，并组合私有
 `ProcessSupervisor` 完成运行顺序。`TaskManifestModule` 一组展示的是独立的本地存储信任边界。
 
@@ -909,6 +913,7 @@ classDiagram
   class VideoProcessingModule {
     <<command module>>
     +processVideo()
+    +processLocalMedia()
     +retryInsights()
     +cancelProcess()
     -cacheLookup()
@@ -924,6 +929,19 @@ classDiagram
   class ProcessVideoWorkerRequest {
     +contractVersion
     +url
+    +asrModel
+  }
+
+  class ProcessLocalMediaIpcRequest {
+    +selectionToken
+  }
+
+  class ProcessLocalMediaWorkerRequest {
+    +contractVersion
+    +sourcePath
+    +mediaKind
+    +displayName
+    +extension
     +asrModel
   }
 
@@ -949,11 +967,12 @@ classDiagram
   class WorkerJob {
     <<closed semantic enumeration>>
     ProcessVideo
+    ProcessLocalMedia
     ResolveSourceIdentity
     RetryInsights
   }
 
-  class VideoWorkerFacade {
+  class TaskWorkerFacade {
     <<application execution facade>>
     +execute(job)
     -prepare(job)
@@ -962,6 +981,7 @@ classDiagram
   class WorkerInvocation {
     <<worker_runtime internal enumeration>>
     ProcessVideo
+    ProcessLocalMedia
     RetryInsights
     ResolveSourceIdentity
   }
@@ -985,6 +1005,7 @@ classDiagram
   class WorkerOperation {
     <<enumeration>>
     ProcessVideo
+    ProcessLocalMedia
     RetryInsights
     ResolveSourceIdentity
     DownloadAsrModel
@@ -998,11 +1019,11 @@ classDiagram
   }
 
   class ProcessSupervisors {
-    -video: WorkerLane
+    -task: WorkerLane
     -asrModelDownload: WorkerLane
-    +videoWorker(paths)
-    +cancelVideo()
-    +isVideoActive()
+    +taskWorker(paths)
+    +cancelTask()
+    +isTaskActive()
     +runAsrModelDownload(command)
     +cancelAsrModelDownload()
   }
@@ -1124,25 +1145,27 @@ classDiagram
   LibRegistry *-- ProcessSupervisors
   VideoProcessingModule --> ProcessVideoIpcRequest
   VideoProcessingModule --> ProcessVideoWorkerRequest
+  VideoProcessingModule --> ProcessLocalMediaIpcRequest
+  VideoProcessingModule --> ProcessLocalMediaWorkerRequest
   VideoProcessingModule --> RetryInsightsRequest
   VideoProcessingModule --> ProcessVideoResult
   VideoProcessingModule --> WorkerJob
-  VideoProcessingModule --> VideoWorkerFacade
+  VideoProcessingModule --> TaskWorkerFacade
   VideoProcessingModule --> ProcessSupervisors
   VideoProcessingModule --> RuntimePaths
   VideoProcessingModule --> TaskManifestModule
   VideoProcessingModule --> DiagnosticsModule
-  VideoWorkerFacade --> WorkerJob : accepts
-  VideoWorkerFacade --> WorkerInvocation : derives
-  VideoWorkerFacade --> WorkerRunRequest : derives
-  VideoWorkerFacade --> AccountModule : retry-only LLM material
-  VideoWorkerFacade --> WorkerLane : fixed video lane
+  TaskWorkerFacade --> WorkerJob : accepts
+  TaskWorkerFacade --> WorkerInvocation : derives
+  TaskWorkerFacade --> WorkerRunRequest : derives
+  TaskWorkerFacade --> AccountModule : retry-only LLM material
+  TaskWorkerFacade --> WorkerLane : fixed task lane
   WorkerInvocation --> WorkerCommandSpec : builds
   WorkerRunRequest *-- WorkerCommandSpec
   WorkerRunRequest --> WorkerOperation
   WorkerRunRequest --> ProgressRoute
   ProcessSupervisors "1" *-- "2" WorkerLane
-  ProcessSupervisors --> VideoWorkerFacade : creates
+  ProcessSupervisors --> TaskWorkerFacade : creates
   WorkerLane --> WorkerRunRequest : internal accepts
   WorkerLane --> WorkerRunOutcome
   WorkerLane --> WorkerRunError
@@ -1163,15 +1186,15 @@ classDiagram
 
 | 责任 | 当前代表模块 | 说明 |
 |------|--------------|------|
-| IPC/application orchestration | `lib.rs`, `video_processing.rs`, `video_processing/url_processing.rs`, `video_processing/url_cache.rs`, `video_processing/retry_insights.rs`, `video_processing/task_result.rs` | 根模块接收 command；focused children 分别组织 URL、cache、retry 与 closed task outcome policy |
+| IPC/application orchestration | `lib.rs`, `local_media.rs`, `video_processing.rs`, `video_processing/{url_processing,url_cache,local_media,retry_insights,task_result}.rs` | 根模块接收 command；focused children 分别拥有 selection、URL/cache、local request、retry 与 closed task outcome policy |
 | 受监督 worker runtime | `worker_runtime/facade.rs`, `command.rs`, `runner.rs` + `runner/{process_io,watchdog,progress,terminal}.rs`, `supervisor.rs` | 分别拥有语义 job 策略、固定 command/env、唯一 child 生命周期编排、四个私有实现职责、私有取消状态与平台信号 |
 | 本地信任与存储 | `runtime.rs`, `task_manifest.rs`, History/Transcript/Settings modules | 决定哪些目录和文件可读写，拒绝链接、越界路径和不受支持 manifest |
 
-三种责任现在已有明确模块边界。`video_processing.rs` 是 68 行的 Tauri adapter；URL
-orchestration、cache、retry 和 task-result policy 均在 focused child 中。它们不读取 raw stderr、
+三种责任现在已有明确模块边界。`video_processing.rs` 是薄 Tauri adapter；URL
+orchestration、local request、cache、retry 和 task-result policy 均在 focused child 中。它们不读取 raw stderr、
 直接 spawn/wait/reap、调用 supervisor `start/finish` 或构造平台终止命令，也不组合 invocation、
 operation、progress、LLM policy 或 lane。继续审计时应确认其他代码不能绕过 storage trust
-boundary、`VideoWorkerFacade` 或内部 `WorkerLane`，而不是重新把低层策略/生命周期 helper 暴露为
+boundary、`TaskWorkerFacade` 或内部 `WorkerLane`，而不是重新把低层策略/生命周期 helper 暴露为
 crate-wide 公共 API。
 
 ### `ProcessSupervisor` 到底是什么
@@ -1179,22 +1202,21 @@ crate-wide 公共 API。
 它不是一个后台任务队列，也不保存业务结果。它是 `worker_runtime::supervisor` 内部状态机，
 只记录某个 lane 当前受控的 child instance、PID/process group 和 `Running/Cancelling` 阶段，
 用 instance ID 防止旧 waiter 清除新进程。application module 看见的是
-`WorkerJob + VideoWorkerFacade` 以及 `ProcessSupervisors` 的语义 cancel/activity/model-download
-方法；video 和 model download 各自仍拥有一个内部 lane，因此可以独立监督，但同一 lane
+`WorkerJob + TaskWorkerFacade` 以及 `ProcessSupervisors` 的语义 cancel/activity/model-download
+方法；task 和 model download 各自仍拥有一个内部 lane，因此可以独立监督，但同一 lane
 不允许同时启动两个 child。
 
 ### Rust 所有权说明
 
 - `ProcessSupervisors` 私有组合两个 `WorkerLane`；每个 lane 私有组合一个 `ProcessSupervisor`。
-- `video_processing.rs` 是 IPC adapter 和 cancel owner；`url_processing.rs` 与
-  `retry_insights.rs` 是 video lane 的两个 current application orchestrator，只能提交语义
-  `WorkerJob`；`url_cache.rs` 无 worker/runtime 依赖。任何 application child 都不能选择
+- `video_processing.rs` 是 IPC adapter 和 cancel owner；`url_processing.rs`、
+  `local_media.rs` 与 `retry_insights.rs` 是 task lane 的 current application orchestrators，
+  只能提交语义 `WorkerJob`；`url_cache.rs` 无 worker/runtime 依赖。任何 application child 都不能选择
   invocation、operation、progress、LLM credentials 或 lane。
-- `worker_runtime/facade.rs` 通过 exhaustive match 唯一派生当前三种 video job 的底层策略；只有
-  retry-insights 会解析 server-managed LLM material。local-media 的 v4 请求类型已经锁定，但
-  `ProcessLocalMedia` 仍必须与真实 Python CLI consumer 同批进入 facade，不能先放置 dead
-  runtime variant。
-- `worker_runtime/command.rs` 拥有固定调用、环境和 bounded stdin；`runner.rs` 是四类操作唯一的
+- `worker_runtime/facade.rs` 通过 exhaustive match 唯一派生当前四种 task job 的底层策略；
+  只有 retry-insights 会解析 server-managed LLM material；local-media 与 Python CLI consumer
+  已同批进入 facade，没有 dead runtime variant 或 compatibility alias。
+- `worker_runtime/command.rs` 拥有固定调用、环境和 bounded stdin；`runner.rs` 是五类操作唯一的
   spawn/register/deliver/read/wait/finish/classify/log 编排；私有 `process_io.rs`、
   `watchdog.rs`、`progress.rs`、`terminal.rs` 各自拥有对应实现，且 application module
   不得导入 child path；`supervisor.rs` 独占实例状态与固定 Windows/macOS 进程树终止。
@@ -1368,8 +1390,21 @@ classDiagram
   }
 
   class UrlMediaSource {
-    <<current closed source variant>>
+    <<closed URL source variant>>
     +request: SourceRequest
+  }
+
+  class ProcessLocalMediaRequest {
+    +sourcePath
+    +mediaKind
+    +displayName
+    +extension
+    +asrModel
+  }
+
+  class LocalMediaSource {
+    <<closed local source variant>>
+    +request: ProcessLocalMediaRequest
   }
 
   class PreparedMedia {
@@ -1463,6 +1498,7 @@ classDiagram
   WorkerService --> TaskStoreFacade
   WorkerService --> ServerManagedInsightClient
   RequestsParser --> ProcessRequest
+  RequestsParser --> ProcessLocalMediaRequest
   RequestsParser --> RetryInsightsRequest
   PipelineRoot --> PipelineShared : direct re-export
   PipelineRoot --> PipelineTranscript : direct re-export
@@ -1473,7 +1509,9 @@ classDiagram
   PipelineContext --> TaskStoreFacade
   PipelineContext *-- SourceRequest
   PipelineOrchestration --> ProcessRequest : receives
+  PipelineOrchestration --> ProcessLocalMediaRequest : receives
   PipelineOrchestration --> UrlMediaSource : constructs
+  PipelineOrchestration --> LocalMediaSource : constructs
   PipelineOrchestration --> MediaPreparationFacade
   PipelineOrchestration --> PreparedMedia : consumes
   PipelineOrchestration --> PipelineTranscript
@@ -1485,7 +1523,9 @@ classDiagram
   PipelineTranscript --> Transcriber
   PipelineInsights --> InsightFlow
   UrlMediaSource *-- SourceRequest
+  LocalMediaSource *-- ProcessLocalMediaRequest
   MediaPreparationFacade --> UrlMediaSource
+  MediaPreparationFacade --> LocalMediaSource
   MediaPreparationFacade --> PreparedMedia : returns
   MediaPreparationFacade --> MediaModule
   MediaPreparationFacade --> SubtitleModule
@@ -1516,13 +1556,15 @@ classDiagram
 ### 用普通语言复述这张图
 
 1. `cli.py` 负责进程协议，也是 source resolution 的生产 composition root：识别固定 mode、读取有上限的 stdin、构建默认平台 resolver，并把它注入 application service。它不应该成为所有 worker helper 的永久公共入口。
-2. `worker_service.py` 提供四类用例：完整视频处理、source identity 预检、AI retry 和模型下载。
+2. `worker_service.py` 提供五类用例：URL 处理、本地媒体处理、source identity 预检、AI retry
+   和模型下载。
 3. `pipeline.py` 只保留稳定 direct re-export。`pipeline_runtime/orchestration.py` 负责完整
-   视频任务的阶段顺序并创建 `UrlMediaSource`、消费 `PreparedMedia`；`transcript.py` 负责
-   subtitle/ASR，`insights.py` 负责 AI target。process owner 无 AI import，AI owner 无媒体、
-   ASR、source 或 task-persistence import。
-4. `MediaPreparationFacade` 是 URL 媒体准备的单一入口：协调下载、fallback、校验、任务内
-   video/audio、字幕发现和稳定进度/错误语义，然后返回 `PreparedMedia`。它不执行 ASR、AI 或 task finalize。
+   URL/本地任务的阶段顺序并创建闭集 `UrlMediaSource | LocalMediaSource`、消费
+   `PreparedMedia`；`transcript.py` 负责 subtitle/ASR，`insights.py` 负责 AI target。process
+   owner 无 AI import，AI owner 无媒体、ASR、source 或 task-persistence import。
+4. `MediaPreparationFacade` 是 URL/本地媒体准备的单一入口：URL 分支协调下载、fallback 与
+   字幕发现；本地分支先复制到 generic task-owned staging，再探测并准备正式 video/audio。
+   两者返回同一 `PreparedMedia`，且 facade 不执行 ASR、AI 或 task finalize。
 5. `MediaModule` 提供 yt-dlp、ffprobe 和 ffmpeg 原语，并按平台与失败类型选择 fallback。三个 fallback 是平台基础设施，不是 UI feature。
 6. `Transcriber` Protocol 已隔离 ASR 调用方式；当前发行路径使用 SenseVoice，但 worker 代码仍保留 Qwen adapter。
 7. `TaskStoreFacade` 统一负责任务 create/open/finalize/preference snapshot 生命周期；raw manifest
@@ -1530,13 +1572,19 @@ classDiagram
 8. `SourceRequest` 暂时持有本次下载 URL，`SourceIdentity` 才能进入 manifest。重构时不能为了减少类型而把这两个概念重新合并。
 9. 平台 adapter 只能返回待验证 URL；`SourceResolver` 必须交回纯 identity policy 校验平台、稳定 ID 与 canonical URL，不能直接制造可持久化身份。
 
-当前 facade 的输入闭集只有 `UrlMediaSource`。`LocalVideoSource` 与 `LocalAudioSource` 必须和
-contract v4、严格 parser 及真实 CLI consumer 同批加入，不能为了“预留扩展”先放置不可达类型。
+当前 facade 的输入闭集是 `UrlMediaSource | LocalMediaSource`。后者与 contract v4、严格
+parser 和真实 CLI consumer 同批加入；没有预留不可达的 video/audio source 类型或松散
+optional-field bag。
 
 完整视频处理的 parser 先要求 wire JSON 精确等于
 `contract_version + url + asr_model`，并验证版本为 3、URL 非空、model 位于当前 allowlist；随后
 领域 `ProcessRequest` 只保留 `url + asr_model`。Rust 已经解析 app-local 配置，因此 Python 不再
 从环境变量二次覆盖本次请求的 ASR model。
+
+本地媒体 parser 则精确要求 contract-v4 六字段请求，得到
+`ProcessLocalMediaRequest(source_path, media_kind, display_name, extension, asr_model)`；路径和
+安全文件名不进入 repr。该请求不经过 URL resolver/cache/subtitle 分支，也不构造
+`SourceIdentity`。
 
 ### `models.py -> source_identity.py -> fallbacks` 如何被解决
 
@@ -1832,7 +1880,7 @@ sequenceDiagram
   participant Task as TaskProcessingController
   participant Client as workerClient.ts
   participant Tauri as video_processing.rs
-  participant Runtime as VideoWorkerFacade / WorkerLane
+  participant Runtime as TaskWorkerFacade / WorkerLane
   participant Worker as cli.py / worker_service.py
   participant Pipeline as pipeline.py stable root / pipeline_runtime owners
   participant Prepare as MediaPreparationFacade
@@ -1913,7 +1961,32 @@ sequenceDiagram
   Task-->>App: render current workspace
 ```
 
-### 正常无缓存路径的七个阶段
+本地媒体不复用 URL identity/cache/subtitle 分支，入口按下面的独立闭集收口：
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Composer as TaskComposer
+  participant Rust as local_media.rs / video_processing/local_media.rs
+  participant Runtime as TaskWorkerFacade / WorkerLane
+  participant Worker as --process-local-media-stdin
+  participant Prepare as MediaPreparationFacade
+  participant Store as TaskStoreFacade
+
+  User->>Composer: select one local video or audio
+  Composer->>Rust: picker command
+  Rust-->>Composer: opaque token + safe metadata
+  User->>Composer: confirm submission
+  Composer->>Rust: process_local_media(selectionToken)
+  Rust->>Rust: resolve token and revalidate ordinary unchanged file
+  Rust->>Runtime: execute WorkerJob::ProcessLocalMedia
+  Runtime->>Worker: bounded stdin with private source path
+  Worker->>Prepare: copy to generic staging, probe, normalize WAV
+  Prepare->>Store: commit closed local source + official artifacts
+  Store-->>Composer: structured task result with safe source summary
+```
+
+### URL 正常无缓存路径的七个阶段
 
 1. **前端冻结本次操作身份。** Task controller 增加 operation ID，后续 progress/result 必须证明自己仍属于当前操作。
 2. **Rust 解析一次执行配置并做便宜的直接缓存检查。** IPC 只含 URL；Rust 校验 app-local
@@ -1921,7 +1994,7 @@ sequenceDiagram
    manifest，就无需启动 Python。
 3. **Rust 做 source identity 预检。** 短链接或分享文本可能需要 Python 平台 parser 才能得到稳定 ID；得到 identity 后再做一次严格缓存检查。
 4. **Rust 启动正式 worker。** Rust 已把 UI 意图解析成 v3
-   `contract_version + url + asr_model` 请求；`VideoWorkerFacade` 固定派生执行策略，内部
+   `contract_version + url + asr_model` 请求；`TaskWorkerFacade` 固定派生执行策略，内部
    `WorkerLane` 把 payload 放在 bounded stdin，而不是
    argv/environment，避免 URL 出现在命令行和普通诊断信息里。
 5. **Python 执行本地 pipeline。** `MediaPreparationFacade` 统一把下载和临时文件放入 cache，
@@ -1944,7 +2017,7 @@ sequenceDiagram
 取消不单独启动另一个 worker：
 
 1. React 将状态切换为 `cancelling`，保留原 task UI 和 `cancellingFromStage`。
-2. `cancel_process` 调用 `ProcessSupervisors::cancel_video()`；其私有 video lane 内部的
+2. `cancel_process` 调用 `ProcessSupervisors::cancel_task()`；其私有 task lane 内部的
    `ProcessSupervisor` claim
    cancellation。
 3. Windows 终止受控 PID tree；macOS 对受控 process group 发送 TERM，并可有界升级到 KILL。
@@ -1965,7 +2038,7 @@ sequenceDiagram
   participant Client as workerClient.ts
   participant Tauri as video_processing.rs
   participant Account as account.rs
-  participant Runtime as VideoWorkerFacade / WorkerLane
+  participant Runtime as TaskWorkerFacade / WorkerLane
   participant Worker as worker_service.py
   participant Insight as insightflow / llm.py
   participant Server as Fastify account service
@@ -2112,21 +2185,21 @@ stateDiagram-v2
 | 原审计项 | 当前状态 | 证据与长期门控 |
 |----------|----------|----------------|
 | `models.py -> source_identity.py -> fallbacks` | 已在 `f22861c` 完成依赖倒置；core identity、application resolution 与 platform adapters 已分层 | `worker/tests/test_import_boundaries.py`、`worker/tests/test_source_resolution.py`；完整设计见 `docs/design-docs/2026-07-18-source-identity-dependency-boundary.md` |
-| `worker_command.rs` 混合 supervisor、OS process、stdin/progress/output 与调用策略 | 已在 `9833bd6` 删除旧模块；`worker_runtime/command.rs`、`runner.rs`、`supervisor.rs` 分层，四类操作统一经过 `WorkerLane::run`，低层状态和终止函数保持私有 | `worker_runtime` 内联 Rust tests、`scripts/tests/unix-process-supervisor-workflow.test.mjs`；完整设计见 `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md` |
+| `worker_command.rs` 混合 supervisor、OS process、stdin/progress/output 与调用策略 | 已在 `9833bd6` 删除旧模块；`worker_runtime/command.rs`、`runner.rs`、`supervisor.rs` 分层，当前五类操作统一经过 `WorkerLane::run`，低层状态和终止函数保持私有 | `worker_runtime` 内联 Rust tests、`scripts/tests/unix-process-supervisor-workflow.test.mjs`；完整设计见 `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md` |
 | `worker_runtime/runner.rs` 物理混合 process I/O、watchdog、progress、terminal 与 1,156 行内联测试 | **已解决**：415 行 root 仍是唯一 `WorkerLane` 生命周期编排；108/273/195/71 行的四个私有 owner 分别拥有 process I/O、watchdog、progress、terminal，测试拆到 273 行聚合器与最大 390 行的 focused children；现有类型路径、生命周期顺序、matching-instance cleanup、structured-result-first、supervisor-only signalling 与安全日志不变 | RED/GREEN exact-tree/visibility/dependency 门禁；runner 28/28、Rust 210/210、App 583/583、scripts 25/25、lint/build/rustfmt/governance/scope/Tauri `--no-bundle` 通过；设计 `docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`，completed ExecPlan `docs/exec-plans/completed/2026-07-23-rust-worker-runner-module-split-plan.md`。macOS hosted workflow 未为本批提交运行 |
 | Rust `WorkerLane::run` 对已注册 child 使用无界 `child.wait()` | **已解决**：`worker_runtime` 为四类当前操作派生固定 idle/absolute policy；instance-bound watchdog 可在 stdin 或 wait 阻塞时终止完整进程树，termination lease 阻止 PID/PGID 复用竞态，结构化结果与显式取消优先级保持不变 | Rust 208/208（其中 worker runtime 56/56）、App 567/567、worker 563 passed / 2 skipped、scripts 25/25、Chromium smoke 28/28、Tauri `--no-bundle`；Windows parent/descendant timeout fixture 通过；设计 `docs/design-docs/2026-07-22-rust-worker-watchdog.md`；completed ExecPlan `docs/exec-plans/completed/2026-07-22-worker-watchdog-plan.md`。macOS runtime evidence 尚待 hosted workflow 实际运行 |
 | Process-video 请求中存在无消费者字段和多重 ASR model owner | 已在 `cfd1233` 升级为 contract v3；TS IPC 只传 `url`，Rust 解析配置并构造 `contract_version + url + asr_model`，Python 严格消费 | `app/src/desktopWorkerContract.test.ts`、`workerClient.test.ts`、Rust `video_processing` tests、`worker/tests/test_contract.py`/`test_requests.py`；完整设计见 `docs/design-docs/2026-07-18-process-video-request-contract-v3.md` |
-| Local-media 新来源可能把路径泄露到 React、argv、日志或松散可选字段 | Contract v4 的纯类型边界已锁定：TS 只有 token/安全元数据，Rust/Python 路径请求严格闭集且固定非回显；原 URL worker request 仍为 v3。picker、command、CLI、pipeline 与 manifest 尚未实现 | `localMediaContract.test.ts`、`local_media_contract_tests.rs`、`worker/tests/test_requests.py`、三端 canonical contract tests，以及 recursive packaged-worker mirror equality test；执行记录见 active local-media ExecPlan |
+| Local-media 新来源可能把路径泄露到 React、argv、日志或松散可选字段 | **已按闭集纵向切片解决**：TS 只有 token/安全元数据与 discriminated unions；Rust picker/store/revalidation、strict command 和 `TaskWorkerFacade` 共享 task lane；Python 只把原始路径用于 file-open/copy，ffprobe/FFmpeg 只见 generic staging/official artifact；manifest/History 只保存安全 basename/kind，原 URL request 仍为 v3 | TDD commits `98afd6e`..`215c5e2`；App 611/611、Worker 574 passed / 2 skipped、Rust 223/223、scripts 25/25、Ruff/lint/build/rustfmt、63/63 mirror、Tauri no-bundle。真实 Windows MP4/WMV/MP3/WAV 与 macOS native acceptance 仍在 active ExecPlan 中明确未验证 |
 | History/cache/transcript/delete 分别重组 manifest privacy 与 artifact path 安全流程，Python pipeline/retry 分别协调任务落盘 | 已在 `eecd0fb` 收口为 Rust `SupportedTask::scan/open` + `TaskEditSession` 和 Python `TaskStoreFacade`；raw Rust manifest/path/write 原语保持模块私有 | Rust facade tests 与既有 History/cache/transcript/delete characterization tests；`worker/tests/test_task_store.py` 与 worker 全量测试；设计见 `docs/design-docs/2026-07-18-task-access-facade.md` |
-| Rust application callers 分别组合 `WorkerInvocation`、`WorkerOperation`、`ProgressRoute`、LLM policy 与 `WorkerLane` | 已在 `e69fed4` 收口为 `WorkerJob + VideoWorkerFacade`；两个 lane 私有，model download 使用独立语义方法；local-media v4 类型已锁定，但 runtime variant 仍与真实 CLI consumer 原子加入 | `worker_runtime::facade::typed_job_policy_tests` 证明三种当前 job 的固定 CLI/operation/progress/LLM policy；Rust facade/runner tests；设计见 `docs/design-docs/2026-07-19-typed-worker-job-facade.md` |
+| Rust application callers 分别组合 `WorkerInvocation`、`WorkerOperation`、`ProgressRoute`、LLM policy 与 `WorkerLane` | 已收口为 `WorkerJob + TaskWorkerFacade`；task/model-download 两个 lane 私有，model download 使用独立语义方法；`ProcessLocalMedia` 与真实 CLI consumer 原子加入，旧 video facade/lane alias 已删除 | `worker_runtime::facade::typed_job_policy_tests` 证明四种 task job 的固定 CLI/operation/progress/LLM policy；Rust facade/runner/local-media tests；设计见 `docs/design-docs/2026-07-19-typed-worker-job-facade.md` |
 | Local/AI workspace 同时读取展示 ViewModel 与原始 `WorkflowState`，重复解释取消、只读与产物操作语义 | 已在 `e68bc4a` 把 cancellation、artifact actions、transcript source 和 target status 全部投影到 `TaskWorkspaceViewModel`；两个 workspace 只消费各自 projection | `taskWorkspaceViewModel.test.ts`、`TaskWorkspaces.test.tsx` 与 i18n rendering tests；音频任务可用 `locateVideo.visible=false` 表达无视频，不需要组件识别 source type |
-| `pipeline.py` 直接协调下载、选择、ffprobe、任务内复制、FFmpeg、音频复用与字幕发现 | 已在 `be31b7f` 收口到 `MediaPreparationFacade.prepare(UrlMediaSource, TaskContext)`；pipeline 只消费 `PreparedMedia`，facade 不拥有 ASR、AI 或 task persistence | `worker/tests/test_media_preparation.py` 的行为/AST boundary tests 与 worker 全量测试；设计见 `docs/design-docs/2026-07-19-media-preparation-facade.md` |
+| `pipeline.py` 直接协调下载、选择、ffprobe、任务内复制、FFmpeg、音频复用与字幕发现 | 已收口到 `MediaPreparationFacade.prepare(UrlMediaSource | LocalMediaSource, TaskContext)`；pipeline 只消费 `PreparedMedia`，facade 不拥有 ASR、AI 或 task persistence；本地分支只把 generic staging/official artifact 交给媒体工具 | `worker/tests/test_media_preparation.py`、local pipeline/argv privacy tests 与 worker 全量测试；设计见 `docs/design-docs/2026-07-19-media-preparation-facade.md` |
 | `pipeline.py` 在 facade 下沉后仍物理混合 shared policy、subtitle/ASR、官方 transcript AI 与 URL task orchestration | 已按职责收口为 39 行唯一稳定 direct-reexport root、空 initializer 和 `shared/transcript/insights/orchestration` 四个私有 owner；process owner 无 AI 依赖，AI owner 无 ASR/media/source/task-persistence 依赖，现有 caller/identity/行为保持不变 | characterization 56/56、ownership 11/11、worker 531/531、app 549/549、正常 Windows 权限 Rust 175/175、scripts 23/23、Ruff/lint/build/rustfmt/Tauri no-bundle、递归 61/61 mirror equality；设计见 `docs/design-docs/2026-07-21-worker-pipeline-module-split.md` |
 | Rust runner 只凭 stdout JSON 含 `status` 判断结构化结果，TypeScript IPC gateway 只依赖静态类型 | 已在 `result_protocol.rs` 与 `workerResultProtocol.ts` 按操作收口；Rust 要求单行 UTF-8 JSON 并解析为 closed DTO，TypeScript 对 Tauri `unknown` 值再次做闭集校验，未知/缺失字段、错误类型、错误 family 与不一致状态均固定失败且不回显 payload | canonical `terminalResults` contract 与 Python/Rust/TypeScript negative tests；全量 worker 411、Rust 157、app 540、scripts 23；设计见 `docs/design-docs/2026-07-19-closed-worker-terminal-results.md` |
 | `App.tsx` 协调多个 controller，但缺少 App 级真实渲染生命周期证据 | 审计原描述已校正：既有 `app-input.browser.test.ts` 本就通过生产 `main.tsx` 在 Chromium 中挂载 `<App />`，覆盖任务、History、文字稿、AI、设置与账户退出；本轮补齐启动账户深链和恢复任务产物定位两条组合根接线 | 深链测试先 RED 后 GREEN，断言唯一 `complete_auth_flow`；产物测试断言唯一 opener 路径与本地化结果；browser 27/27、app 542/542、scripts 23/23、lint/build/docs/diff 通过；设计见 `docs/design-docs/2026-07-19-app-composition-integration-coverage.md` |
 | `useTranscriptDetailController.ts` 混合 result-detail actions、task document persistence 与 browser audio/edit session | 已收口为 126 行稳定 facade；139 行 artifact owner、199 行 document owner 与 250 行 review owner 按失败/状态边界分离，保留 41-key surface、stale task guard，并修复 pending resume 跨任务泄漏 | Characterization 18/18 后抽取，最终 facade 19/19、ownership 1/1、Chromium selected 4/4、App 583/583、scripts 25/25、lint/build/docs/diff 通过；source-boundary 强制 consumer、依赖、`ReturnType` 和 200/250 行限制；设计见 `docs/design-docs/2026-07-23-frontend-transcript-controller-split.md` |
 | `video_processing.rs` 允许调用方传入任意 status/stage/message 来映射 task worker outcome，并与 cache/preflight/command 编排混在同一文件 | 已在 `1fa2f37` 收口到私有 `video_processing/task_result.rs`；调用方只能选择 `ProcessVideo` 或 `RetryInsights` closed context，structured task 透传，错误 family、protocol 和 runtime failure 使用固定安全结果；cache/preflight/诊断仍由父模块拥有 | 4 个 adapter tests 与全部 20 个 `video_processing` tests、完整 Rust 159、app 542、scripts 23、dependency boundary、rustfmt、lint/build/docs/diff 全部通过；设计见 `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md` |
-| `video_processing.rs` 在 task-result 下沉后仍同时拥有 strict AI retry、model-aware URL cache、source preflight、ASR request preparation、cache-hit diagnostics 与 Tauri orchestration | 已按 workflow/failure boundary 收口：68 行 root 保留薄 Tauri delegates/cancel；`retry_insights.rs`、`url_cache.rs`、`url_processing.rs` 分别拥有 retry、cache 与 URL orchestration；没有新增 facade 或 local-media placeholder | 新增 preflight matrix 4 项；retry 6、cache 5、URL 9、task-result 4，共 24 个 focused tests；完整 Rust 163、app 542、scripts 23、dependency scans、rustfmt/lint/build/docs/diff 通过；设计见 `docs/design-docs/2026-07-20-video-processing-module-split.md` |
+| `video_processing.rs` 在 task-result 下沉后仍同时拥有 strict AI retry、model-aware URL cache、source preflight、ASR request preparation、cache-hit diagnostics 与 Tauri orchestration | 已按 workflow/failure boundary 收口：root 保留薄 Tauri delegates/cancel；`retry_insights.rs`、`url_cache.rs`、`url_processing.rs` 与后续原子加入的 `local_media.rs` 分别拥有 retry、cache、URL 与本地 token/request orchestration | 原有 focused 24 项加 local command/selection/facade tests；完整 Rust 223、app 611、scripts 25、dependency scans、rustfmt/lint/build/diff 通过；设计见 `docs/design-docs/2026-07-20-video-processing-module-split.md` 与 active local-media ExecPlan |
 | `transcript_detail.rs` 同时拥有 command/DTO、格式与链接校验、audio cache、segment IO、备份和 Markdown formatting | 已按失败边界收口：134 行 root 只保留 Tauri/runtime composition 与 DTO；`audio_playback.rs`、`segments.rs`、`edit_storage.rs` 分别拥有 cache、codec 与官方编辑存储；没有新增 facade，task trust 仍由 `SupportedTask` / `TaskEditSession` 独占 | 新增 3 组隐式行为矩阵和 1 个 RED/GREEN source-boundary gate；focused 14/14、完整 Rust 173/173、app 549/549、scripts 23/23、rustfmt/lint/build/Tauri no-bundle 通过；设计见 `docs/design-docs/2026-07-20-transcript-detail-module-split.md` |
 | `bilibili_fallback.py` 同时拥有 source、public API/DASH、HTTP/safe streaming、artifact/FFmpeg 与 progress | 已按失败边界收口为 137 行稳定 root adapter，以及 `types/source/playback/transport/artifacts` 私有包；根入口、五个进度 code、候选/产物语义和类型身份保持兼容，没有新增 facade 类或三平台通用框架 | focused 183/183、worker 450/450、app 549/549、Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及 6/6 mirror hash 通过；设计见 `docs/design-docs/2026-07-20-bilibili-fallback-module-split.md` |
 | `xiaohongshu_fallback.py` 同时拥有 source、进程内 CookieJar/HTTP、页面解压/初始状态、stream policy、安全下载与 progress | 已按失败边界收口为 169 行稳定 root adapter，以及 `types/source/page/streams/transport` 私有包；根入口、三项进度、同一 CookieJar、候选/备选次序、原子替换和共享身份保持兼容，没有新增 facade 类或三平台通用框架 | focused 222/222、worker 477/477、app 549/549、Rust 169/169、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 44/44 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md` |
@@ -2134,7 +2207,7 @@ stateDiagram-v2
 | `asr.py` 同时拥有模型 registry、两种 provider、SenseVoice VAD/WAV 与 transcript 文件写出 | 已按失败边界收口为 52 行稳定兼容入口和空 initializer；`types/qwen/sensevoice/registry/artifacts` 五个私有 owner 分离共享 contract、SDK、fallback、cache 环境与文件系统职责，生产调用方仍只导入 root | 行为新增 5 项、边界 9/9、focused 32/32、worker 515/515、app 549/549、正常 Windows 权限 Rust 173/173、scripts 23/23、Ruff/rustfmt/lint/build/Tauri no-bundle 及递归 56/56 mirror equality 通过；设计见 `docs/design-docs/2026-07-20-asr-module-split.md` |
 | `server.ts` 同时创建 Fastify/services、定义 schema、拥有全部 20 个 route 和安全/HTTP mapping | 先按 capability 收口为 112 行稳定 composition root；当前 140 行 root 只组合显式 HTTP policy/services/parser 与 health + 六类业务 registrar，环境与 process lifecycle 进一步由 `runtimeConfig.ts` / `bootstrap.ts` 独占，没有引入 Fastify plugin 层级或万能 facade | 原 route/security characterization 与边界门禁继续通过；生产运维 focused/full Server gates见 active production-operations ExecPlan；route 拆分设计见 `docs/design-docs/2026-07-21-server-route-module-split.md` |
 | `store.ts` / `prismaStore.ts` 物理集中 contracts、Memory fixture、Prisma CRUD、八类语义事务与并发/retry policy | **已解决**：1,054 行 `store.ts` 收口为 2 行 stable direct-reexport root，1,117 行 `prismaStore.ts` 收口为 269 行唯一 production adapter；两棵私有树按 auth/billing/entitlements/LLM config 分责，atomic/concurrency 各有单一 owner，12 个 consumer 只声明 type-only `Pick<Store, ...>` | exact-tree/exports/dependencies/semantic-owner/transaction-client/capability gate 1/1；Server 25 files / 146 passed / 1 Windows skip、scripts 25/25、build、Prisma generation、migration/status/preflight/restore、governance/scope/diff 通过；设计与 completed ExecPlan 见 `docs/design-docs/2026-07-23-server-store-prisma-module-split.md` 和 `docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md`。Hosted Linux、production SMTP/staging、off-host restore 与 live provider 未运行 |
-| `task_manifest.rs` 同时拥有 canonical source policy、raw schema、安全投影、storage/path effects、validated access 与内联测试 | 已按职责收口为 26 行唯一稳定 root 与私有 `source_identity/schema/storage/access/tests`；raw DTO/path/write primitives 不经 root re-export，所有既有调用者路径和 URL-only support predicate 保持不变，没有新增 facade 或 local-media source union | edit-session characterization 先 GREEN，ownership gate 从 missing-owner RED 转为完整私有树 GREEN；focused 15/15、正常 Windows 权限 Rust 175/175、app 549/549、scripts 23/23、rustfmt/lint/build/Tauri no-bundle/governance/scope/diff 通过；设计见 `docs/design-docs/2026-07-21-task-manifest-module-split.md` |
+| `task_manifest.rs` 同时拥有 canonical source policy、raw schema、安全投影、storage/path effects、validated access 与内联测试 | 已按职责收口为稳定 root 与私有 `source_identity/schema/storage/access/tests`；raw DTO/path/write primitives 不经 root re-export。后续 local-media 只在私有 schema/access owner 中加入 closed URL/local source predicate，storage 不接收原始本地路径 | edit-session/ownership/local source/History tests；正常 Windows 权限 Rust 223/223、app 611/611、scripts 25/25、rustfmt/lint/build/Tauri no-bundle/diff 通过；设计见 `docs/design-docs/2026-07-21-task-manifest-module-split.md` 与 active local-media ExecPlan |
 | Python transcript/AI 与 Rust manifest/transcript edit 仍有 direct 或多文件顺序写入 | **已在 `61d489a` 解决**：FrameQ 权威 transcript/AI/preference/manifest/Rust edit writers 均进入受审原子 owner；existing-task 通过 closed prepared/committed journal 恢复到旧或新完整 revision | Phase 2 设计见 `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`；completed ExecPlan `docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`；Worker 563/2 skipped、App 551、Windows Rust 185、scripts 25、63-file mirror 与 Tauri no-bundle 通过。macOS/Unix/真实 Tauri 仍为未验证残余风险 |
 
 ### 如何使用这张表
@@ -2178,8 +2251,9 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 |----------|----------|
 | App composition root | `app/src/App.tsx` |
 | Task processing controller | `app/src/features/workflow/useTaskProcessingController.ts` |
+| URL/local composer UI adapter | `app/src/features/workflow/TaskComposer.tsx` |
 | Workflow state | `app/src/workflowState.ts`, `app/src/desktopWorkerProtocol.ts` |
-| Local-media frontend-safe contract | `app/src/localMediaContract.ts` |
+| Local-media frontend-safe contract/gateway | `app/src/localMediaContract.ts`, `app/src/localMediaClient.ts` |
 | Worker gateway and terminal-result parser | `app/src/workerClient.ts`, `app/src/workerResultProtocol.ts` |
 | Workspace presentation facade | `app/src/taskWorkspaceViewModel.ts` |
 | Workspace presentation consumers | `app/src/features/transcript/LocalTranscriptWorkspace.tsx`, `app/src/features/results/AiGenerationWorkspace.tsx` |
@@ -2200,9 +2274,10 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | UML 节点 | 主要源码 |
 |----------|----------|
 | Command registry | `app/src-tauri/src/lib.rs` |
-| Local-media pure v4 source/transport contract | `app/src-tauri/src/local_media_contract.rs` |
+| Local-media v4 contract and native selection owner | `app/src-tauri/src/local_media_contract.rs`, `app/src-tauri/src/local_media.rs` |
 | Video processing Tauri adapter and cancellation root | `app/src-tauri/src/video_processing.rs` |
 | URL process/config/preflight orchestration | `app/src-tauri/src/video_processing/url_processing.rs` |
+| Local-media token/request orchestration | `app/src-tauri/src/video_processing/local_media.rs` |
 | Model-aware validated URL cache policy | `app/src-tauri/src/video_processing/url_cache.rs` |
 | Strict AI retry orchestration and diagnostics | `app/src-tauri/src/video_processing/retry_insights.rs` |
 | Closed process/retry task-result adapter | `app/src-tauri/src/video_processing/task_result.rs` |
@@ -2234,7 +2309,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Subtitle and ASR stages | `worker/frameq_worker/pipeline_runtime/transcript.py` |
 | Official-transcript AI target | `worker/frameq_worker/pipeline_runtime/insights.py` |
 | Shared pipeline path/progress/failure policy | `worker/frameq_worker/pipeline_runtime/shared.py` |
-| Request/result models, including pure local-media v4 parsing | `worker/frameq_worker/models.py`, `requests.py` |
+| Request/result models, including strict local-media v4 parsing | `worker/frameq_worker/models.py`, `requests.py` |
 | Source identity policy | `worker/frameq_worker/source_identity.py` |
 | Source resolution application service | `worker/frameq_worker/source_resolution.py` |
 | Short-link composition adapters | `worker/frameq_worker/platform_source_resolvers.py` |
