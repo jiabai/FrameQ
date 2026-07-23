@@ -116,7 +116,11 @@ def test_build_ffprobe_command_outputs_json_for_media_file() -> None:
         "-v",
         "error",
         "-show_entries",
-        "format=duration,size:stream=index,codec_type,codec_name,width,height",
+        (
+            "format=duration,size:"
+            "stream=index,codec_type,codec_name,width,height,"
+            "sample_fmt,sample_rate,channels"
+        ),
         "-of",
         "json",
         "outputs/7524373044106677544.mp4",
@@ -171,6 +175,29 @@ def test_parse_ffprobe_json_extracts_video_audio_and_format_summary() -> None:
     assert info.duration_seconds == 271.3
     assert info.size_bytes == 5437347
     assert info.is_valid is True
+
+
+def test_parse_ffprobe_json_recognizes_exact_normalized_pcm_wav_shape() -> None:
+    payload = {
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "audio",
+                "codec_name": "pcm_s16le",
+                "sample_fmt": "s16",
+                "sample_rate": "16000",
+                "channels": 1,
+            }
+        ],
+        "format": {"duration": "10.0", "size": "320000"},
+    }
+
+    info = parse_ffprobe_json(json.dumps(payload))
+
+    assert info.audio_sample_format == "s16"
+    assert info.audio_sample_rate == 16000
+    assert info.audio_channels == 1
+    assert info.is_normalized_pcm_wav is True
 
 
 def test_parse_ffprobe_json_marks_missing_audio_as_invalid() -> None:

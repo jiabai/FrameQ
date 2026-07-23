@@ -17,9 +17,13 @@ from frameq_worker.cli import (
     render_progress_event,
     render_result_json,
     resolve_source_identity_once,
+    run_local_media_once,
     run_worker_once,
 )
-from frameq_worker.desktop_contract import PROCESS_VIDEO_CONTRACT_VERSION
+from frameq_worker.desktop_contract import (
+    LOCAL_MEDIA_CONTRACT_VERSION,
+    PROCESS_VIDEO_CONTRACT_VERSION,
+)
 from frameq_worker.media import CommandResult
 
 DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall"
@@ -67,6 +71,13 @@ class FakeMediaRunner:
             media_path = Path(command[-1])
             if media_path.suffix == ".wav":
                 streams = [{"index": 0, "codec_type": "audio", "codec_name": "pcm_s16le"}]
+                streams[0].update(
+                    {
+                        "sample_fmt": "s16",
+                        "sample_rate": "16000",
+                        "channels": 1,
+                    }
+                )
                 format_payload = {"duration": "10.0", "size": "320000"}
             else:
                 streams = [
@@ -185,6 +196,87 @@ def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
         "?xsec_token=review-secret"
     )
     assert "review-secret" not in capsys.readouterr().err
+
+
+def test_main_reads_local_media_request_from_dedicated_stdin_mode(
+    monkeypatch,
+    capsys,
+) -> None:
+    payload = json.dumps(
+        {
+            "contract_version": LOCAL_MEDIA_CONTRACT_VERSION,
+            "source_path": "C:/Users/review-secret/Podcast.mp3",
+            "media_kind": "audio",
+            "safe_display_name": "Podcast.mp3",
+            "source_extension": "mp3",
+            "asr_model": DEFAULT_ASR_MODEL,
+        }
+    )
+    captured: dict[str, str] = {}
+
+    def fake_run_local_media_once(
+        request_json: str,
+        **_kwargs: object,
+    ) -> dict[str, object]:
+        captured["request_json"] = request_json
+        return {"status": "completed"}
+
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
+    monkeypatch.setattr(cli, "run_local_media_once", fake_run_local_media_once)
+
+    exit_code = cli.main(["--process-local-media-stdin"])
+
+    assert exit_code == 0
+    assert json.loads(captured["request_json"])["media_kind"] == "audio"
+    captured_output = capsys.readouterr()
+    assert "review-secret" not in captured_output.out + captured_output.err
+
+
+def test_run_local_media_once_processes_audio_without_url_resolution_or_path_echo(
+    tmp_path: Path,
+) -> None:
+    private_root = tmp_path / "review-secret"
+    private_root.mkdir()
+    source_path = private_root / "Podcast.mp3"
+    source_path.write_bytes(b"local audio")
+    runner = FakeMediaRunner()
+
+    result = run_local_media_once(
+        json.dumps(
+            {
+                "contract_version": LOCAL_MEDIA_CONTRACT_VERSION,
+                "source_path": str(source_path),
+                "media_kind": "audio",
+                "safe_display_name": "Podcast.mp3",
+                "source_extension": "mp3",
+                "asr_model": DEFAULT_ASR_MODEL,
+            }
+        ),
+        project_root=tmp_path,
+        command_runner=runner,
+        transcriber=FakeTranscriber(),
+        allow_real_asr=False,
+        environ={},
+    )
+    task_dir = task_dir_from_result(result)
+    manifest = manifest_from_result(result)
+    serialized = json.dumps(result) + json.dumps(manifest)
+
+    assert result["status"] == "completed"
+    assert result["artifacts"] == {
+        "audio": "media/audio.wav",
+        "transcript_txt": "transcript/transcript.txt",
+        "transcript_md": "transcript/transcript.md",
+    }
+    assert not list((task_dir / "media").glob("video.*"))
+    assert manifest["source_kind"] == "local_file"
+    assert all(not is_ytdlp_command(command) for command in runner.commands)
+    assert all(
+        "review-secret" not in argument and "Podcast.mp3" not in argument
+        for command in runner.commands
+        for argument in command
+    )
+    assert "review-secret" not in serialized
 
 
 def test_main_rejects_invalid_stdin_without_echoing_payload(monkeypatch, capsys) -> None:

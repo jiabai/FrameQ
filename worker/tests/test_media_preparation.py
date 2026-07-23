@@ -8,9 +8,15 @@ from pathlib import Path
 import pytest
 from frameq_worker import atomic_files
 from frameq_worker.media import CommandResult
+from frameq_worker.models import ProcessLocalMediaRequest
 from frameq_worker.source_identity import SourceIdentity
 from frameq_worker.source_resolution import SourceRequest
-from frameq_worker.task_store import TaskContext, TaskPaths, UrlTaskSource
+from frameq_worker.task_store import (
+    LocalFileTaskSource,
+    TaskContext,
+    TaskPaths,
+    UrlTaskSource,
+)
 
 
 def _build_context(tmp_path: Path, task_id: str) -> TaskContext:
@@ -39,6 +45,30 @@ def _source_request(context: TaskContext) -> SourceRequest:
     return SourceRequest(context.source_identity.canonical_url, context.source_identity)
 
 
+def _build_local_context(
+    tmp_path: Path,
+    request: ProcessLocalMediaRequest,
+    task_id: str,
+) -> TaskContext:
+    paths = TaskPaths(
+        output_root=tmp_path / "outputs",
+        cache_root=tmp_path / "cache",
+        task_id=task_id,
+    )
+    paths.download_dir.mkdir(parents=True)
+    paths.media_dir.mkdir(parents=True)
+    return TaskContext(
+        paths=paths,
+        source=LocalFileTaskSource(
+            display_name=request.safe_display_name,
+            media_kind=request.media_kind,
+            extension=request.source_extension,
+        ),
+        model=request.asr_model,
+        created_at="2026-07-23T00:00:00Z",
+    )
+
+
 def _probe_payload(*, include_video: bool, duration: str = "12.3") -> str:
     streams = [{"codec_type": "audio", "codec_name": "aac"}]
     if include_video:
@@ -47,6 +77,23 @@ def _probe_payload(*, include_video: bool, duration: str = "12.3") -> str:
         {
             "format": {"duration": duration, "size": "12345"},
             "streams": streams,
+        }
+    )
+
+
+def _normalized_wav_probe_payload() -> str:
+    return json.dumps(
+        {
+            "format": {"duration": "12.3", "size": "393600"},
+            "streams": [
+                {
+                    "codec_type": "audio",
+                    "codec_name": "pcm_s16le",
+                    "sample_fmt": "s16",
+                    "sample_rate": "16000",
+                    "channels": 1,
+                }
+            ],
         }
     )
 
@@ -394,3 +441,241 @@ def test_invalid_extracted_audio_is_not_committed(tmp_path: Path) -> None:
     assert str(captured.value) == "Extracted audio could not be validated."
     assert not context.paths.audio_path.exists()
     assert not list(context.paths.media_dir.glob(".audio.*.part.wav"))
+
+
+def test_local_video_uses_generic_staging_preserves_bytes_and_normalizes_audio(
+    tmp_path: Path,
+) -> None:
+    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    private_root = tmp_path / "review-secret"
+    private_root.mkdir()
+    source_path = private_root / "Interview.wmv"
+    source_path.write_bytes(b"original-wmv-bytes")
+    request = ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind="video",
+        safe_display_name="Interview.wmv",
+        source_extension="wmv",
+        asr_model="iic/SenseVoiceSmall",
+    )
+    context = _build_local_context(tmp_path, request, "local-video-task")
+    commands: list[list[str]] = []
+    events: list[dict[str, object]] = []
+
+    def runner(command: list[str]) -> CommandResult:
+        commands.append(command)
+        if command[0] == "ffprobe":
+            payload = (
+                _normalized_wav_probe_payload()
+                if Path(command[-1]).suffix == ".wav"
+                else _probe_payload(include_video=True)
+            )
+            return CommandResult(command, 0, payload, "")
+        if command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"normalized-wav")
+            return CommandResult(command, 0, "", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    prepared = media_preparation.MediaPreparationFacade(
+        command_runner=runner,
+        progress_callback=events.append,
+    ).prepare(media_preparation.LocalMediaSource(request), context)
+    video_path = context.paths.video_path_for_extension("wmv")
+
+    assert prepared.video_path == video_path
+    assert prepared.audio_path == context.paths.audio_path
+    assert prepared.subtitle_candidate is None
+    assert video_path.read_bytes() == b"original-wmv-bytes"
+    assert context.paths.audio_path.read_bytes() == b"normalized-wav"
+    assert all(
+        "review-secret" not in argument and "Interview.wmv" not in argument
+        for command in commands
+        for argument in command
+    )
+    assert [event["message_code"] for event in events] == [
+        "local.media.validating",
+        "local.video.copying",
+        "audio.extract.running",
+    ]
+    assert not list(context.paths.download_dir.glob("local-source-*"))
+    assert not list(context.paths.media_dir.glob(".*.part.*"))
+
+
+def test_local_audio_accepts_cover_art_creates_no_video_and_cleans_stage(
+    tmp_path: Path,
+) -> None:
+    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    private_root = tmp_path / "review-secret"
+    private_root.mkdir()
+    source_path = private_root / "Podcast.mp3"
+    source_path.write_bytes(b"mp3-with-cover-art")
+    request = ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind="audio",
+        safe_display_name="Podcast.mp3",
+        source_extension="mp3",
+        asr_model="iic/SenseVoiceSmall",
+    )
+    context = _build_local_context(tmp_path, request, "local-audio-task")
+    commands: list[list[str]] = []
+    events: list[dict[str, object]] = []
+
+    def runner(command: list[str]) -> CommandResult:
+        commands.append(command)
+        if command[0] == "ffprobe":
+            media_path = Path(command[-1])
+            payload = (
+                _normalized_wav_probe_payload()
+                if media_path.suffix == ".wav"
+                else _probe_payload(include_video=True)
+            )
+            return CommandResult(command, 0, payload, "")
+        if command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"normalized-wav")
+            return CommandResult(command, 0, "", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    prepared = media_preparation.MediaPreparationFacade(
+        command_runner=runner,
+        progress_callback=events.append,
+    ).prepare(media_preparation.LocalMediaSource(request), context)
+
+    assert prepared.video_path is None
+    assert prepared.audio_path == context.paths.audio_path
+    assert not context.paths.video_path.exists()
+    assert not list(context.paths.media_dir.glob("video.*"))
+    assert not list(context.paths.download_dir.glob("local-source-*"))
+    assert all(
+        "review-secret" not in argument and "Podcast.mp3" not in argument
+        for command in commands
+        for argument in command
+    )
+    assert [event["message_code"] for event in events] == [
+        "local.media.validating",
+        "local.audio.normalizing",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("media_kind", "probe_payload", "expected_code"),
+    [
+        (
+            "video",
+            _probe_payload(include_video=True).replace('"audio"', '"data"'),
+            "LOCAL_VIDEO_AUDIO_STREAM_MISSING",
+        ),
+        (
+            "audio",
+            _probe_payload(include_video=False).replace('"audio"', '"data"'),
+            "LOCAL_AUDIO_STREAM_MISSING",
+        ),
+    ],
+)
+def test_local_media_missing_required_streams_fail_with_fixed_codes(
+    tmp_path: Path,
+    media_kind: str,
+    probe_payload: str,
+    expected_code: str,
+) -> None:
+    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    extension = "wmv" if media_kind == "video" else "mp3"
+    source_path = tmp_path / f"private.{extension}"
+    source_path.write_bytes(b"media")
+    request = ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind=media_kind,
+        safe_display_name=f"private.{extension}",
+        source_extension=extension,
+        asr_model="iic/SenseVoiceSmall",
+    )
+    context = _build_local_context(tmp_path, request, f"missing-{media_kind}-stream")
+
+    def runner(command: list[str]) -> CommandResult:
+        if command[0] == "ffprobe":
+            return CommandResult(command, 0, probe_payload, "")
+        raise AssertionError("normalization must not start")
+
+    with pytest.raises(media_preparation.MediaPreparationError) as captured:
+        media_preparation.MediaPreparationFacade(command_runner=runner).prepare(
+            media_preparation.LocalMediaSource(request),
+            context,
+        )
+
+    assert captured.value.code == expected_code
+    assert str(source_path) not in str(captured.value)
+    assert not list(context.paths.download_dir.glob("local-source-*"))
+
+
+def test_local_video_copy_failure_removes_generic_partial_without_path_echo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    private_root = tmp_path / "review-secret"
+    private_root.mkdir()
+    source_path = private_root / "Interview.wmv"
+    source_path.write_bytes(b"video")
+    request = ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind="video",
+        safe_display_name="Interview.wmv",
+        source_extension="wmv",
+        asr_model="iic/SenseVoiceSmall",
+    )
+    context = _build_local_context(tmp_path, request, "local-copy-failure")
+
+    def fail_copy(_source: Path, destination: Path) -> None:
+        destination.write_bytes(b"partial")
+        raise OSError("D:/private/review-secret/Interview.wmv")
+
+    monkeypatch.setattr(media_preparation, "_copy_file_bounded", fail_copy)
+
+    with pytest.raises(media_preparation.MediaPreparationError) as captured:
+        media_preparation.MediaPreparationFacade(
+            command_runner=lambda command: pytest.fail(f"must not run: {command}")
+        ).prepare(media_preparation.LocalMediaSource(request), context)
+
+    assert captured.value.code == "LOCAL_VIDEO_COPY_FAILED"
+    assert "review-secret" not in str(captured.value)
+    assert "Interview.wmv" not in str(captured.value)
+    assert not list(context.paths.download_dir.glob("local-source-*"))
+
+
+def test_local_audio_rejects_non_normalized_wav_and_removes_all_partials(
+    tmp_path: Path,
+) -> None:
+    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    source_path = tmp_path / "Podcast.mp3"
+    source_path.write_bytes(b"audio")
+    request = ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind="audio",
+        safe_display_name="Podcast.mp3",
+        source_extension="mp3",
+        asr_model="iic/SenseVoiceSmall",
+    )
+    context = _build_local_context(tmp_path, request, "local-normalization-failure")
+
+    def runner(command: list[str]) -> CommandResult:
+        if command[0] == "ffprobe":
+            media_path = Path(command[-1])
+            if media_path.suffix == ".wav":
+                payload = json.loads(_normalized_wav_probe_payload())
+                payload["streams"][0]["sample_rate"] = "44100"
+                return CommandResult(command, 0, json.dumps(payload), "")
+            return CommandResult(command, 0, _probe_payload(include_video=False), "")
+        if command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"wrong-rate wav")
+            return CommandResult(command, 0, "", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    with pytest.raises(media_preparation.MediaPreparationError) as captured:
+        media_preparation.MediaPreparationFacade(command_runner=runner).prepare(
+            media_preparation.LocalMediaSource(request),
+            context,
+        )
+
+    assert captured.value.code == "AUDIO_NORMALIZATION_FAILED"
+    assert not context.paths.audio_path.exists()
+    assert not list(context.paths.download_dir.glob("local-source-*"))
+    assert not list(context.paths.media_dir.glob(".*.part.*"))

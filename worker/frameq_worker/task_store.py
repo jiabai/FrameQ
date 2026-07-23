@@ -77,7 +77,12 @@ class TaskPaths:
 
     @property
     def video_path(self) -> Path:
-        return self.media_dir / "video.mp4"
+        return self.video_path_for_extension("mp4")
+
+    def video_path_for_extension(self, extension: str) -> Path:
+        if extension not in VIDEO_EXTENSIONS:
+            raise ValueError("Task video extension is unsupported.")
+        return self.media_dir / f"video.{extension}"
 
     @property
     def audio_path(self) -> Path:
@@ -226,9 +231,9 @@ class TaskStoreFacade:
         recover_task_artifacts(context.paths.task_dir)
         artifact_payloads = result.artifact_payloads
         artifacts = (
-            _artifacts_after_payloads(context.paths, artifact_payloads)
+            _artifacts_after_payloads(context, artifact_payloads)
             if artifact_payloads
-            else task_artifacts_for_existing_files(context.paths)
+            else task_artifacts_for_existing_files(context.paths, context.source)
         )
         task_result = result_with_task(
             result,
@@ -324,9 +329,17 @@ def ensure_task_dirs(paths: TaskPaths) -> None:
         directory.mkdir(parents=True, exist_ok=True)
 
 
-def task_artifacts_for_existing_files(paths: TaskPaths) -> dict[str, str]:
+def task_artifacts_for_existing_files(
+    paths: TaskPaths,
+    source: TaskSource | None = None,
+) -> dict[str, str]:
+    video_path = (
+        paths.video_path_for_extension(source.extension)
+        if isinstance(source, LocalFileTaskSource) and source.media_kind == "video"
+        else paths.video_path
+    )
     candidates = {
-        "video": paths.video_path,
+        "video": video_path,
         "audio": paths.audio_path,
         "transcript_txt": paths.transcript_txt_path,
         "transcript_md": paths.transcript_md_path,
@@ -361,7 +374,9 @@ def result_with_task(
         task_id=context.task_id,
         task_dir=context.paths.task_dir.as_posix(),
         artifacts=(
-            artifacts if artifacts is not None else task_artifacts_for_existing_files(context.paths)
+            artifacts
+            if artifacts is not None
+            else task_artifacts_for_existing_files(context.paths, context.source)
         ),
         text=result.text,
         summary=result.summary,
@@ -477,10 +492,10 @@ _ARTIFACT_KEY_BY_RELATIVE_PATH = {
 
 
 def _artifacts_after_payloads(
-    paths: TaskPaths,
+    context: TaskContext,
     payloads: Mapping[str, bytes | None],
 ) -> dict[str, str]:
-    artifacts = task_artifacts_for_existing_files(paths)
+    artifacts = task_artifacts_for_existing_files(context.paths, context.source)
     for relative_path, content in payloads.items():
         artifact_key = _ARTIFACT_KEY_BY_RELATIVE_PATH.get(relative_path)
         if artifact_key is None:

@@ -159,6 +159,8 @@ def test_local_task_source_is_closed_path_free_unique_and_reopenable(
         now=datetime(2026, 7, 18, 12, 0, tzinfo=UTC),
         random_id="def456",
     )
+    context.paths.video_path_for_extension("wmv").write_bytes(b"wmv")
+    context.paths.audio_path.write_bytes(b"wav")
     finalized = store.finalize(
         context,
         ProcessResult(
@@ -181,6 +183,10 @@ def test_local_task_source_is_closed_path_free_unique_and_reopenable(
     assert context.source_identity is None
     assert opened.context == context
     assert finalized.task_id == context.task_id
+    assert finalized.artifacts == {
+        "video": "media/video.wmv",
+        "audio": "media/audio.wav",
+    }
     assert manifest["source_kind"] == "local_file"
     assert manifest["source_url"] == ""
     assert manifest["source_identity"] is None

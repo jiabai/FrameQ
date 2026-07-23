@@ -96,6 +96,9 @@ class MediaInfo:
     has_audio: bool
     video_codec: str | None
     audio_codec: str | None
+    audio_sample_format: str | None
+    audio_sample_rate: int | None
+    audio_channels: int | None
     width: int | None
     height: int | None
     duration_seconds: float | None
@@ -116,6 +119,16 @@ class MediaInfo:
             and self.duration_seconds > 0
             and self.size_bytes is not None
             and self.size_bytes > 0
+        )
+
+    @property
+    def is_normalized_pcm_wav(self) -> bool:
+        return (
+            self.is_valid_audio
+            and self.audio_codec == "pcm_s16le"
+            and self.audio_sample_format == "s16"
+            and self.audio_sample_rate == 16000
+            and self.audio_channels == 1
         )
 
 
@@ -180,7 +193,11 @@ def build_ffprobe_command(media_path: Path) -> list[str]:
         "-v",
         "error",
         "-show_entries",
-        "format=duration,size:stream=index,codec_type,codec_name,width,height",
+        (
+            "format=duration,size:"
+            "stream=index,codec_type,codec_name,width,height,"
+            "sample_fmt,sample_rate,channels"
+        ),
         "-of",
         "json",
         media_path.as_posix(),
@@ -577,6 +594,13 @@ def parse_ffprobe_json(raw_json: str) -> MediaInfo:
         has_audio=audio_stream is not None,
         video_codec=video_stream.get("codec_name") if video_stream else None,
         audio_codec=audio_stream.get("codec_name") if audio_stream else None,
+        audio_sample_format=audio_stream.get("sample_fmt") if audio_stream else None,
+        audio_sample_rate=(
+            _parse_int(audio_stream.get("sample_rate")) if audio_stream else None
+        ),
+        audio_channels=(
+            _parse_int(audio_stream.get("channels")) if audio_stream else None
+        ),
         width=video_stream.get("width") if video_stream else None,
         height=video_stream.get("height") if video_stream else None,
         duration_seconds=_parse_float(media_format.get("duration")),

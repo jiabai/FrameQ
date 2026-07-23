@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import secrets
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,11 +11,12 @@ from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.media import (
     CommandExecutionError,
     CommandRunner,
+    MediaInfo,
     download_video,
     extract_audio,
     probe_media_file,
 )
-from frameq_worker.models import JobStage
+from frameq_worker.models import JobStage, ProcessLocalMediaRequest
 from frameq_worker.progress_events import build_worker_progress_event
 from frameq_worker.source_resolution import SourceRequest, sanitize_source_text
 from frameq_worker.subtitles import SubtitleTranscript, find_subtitle_transcript
@@ -25,6 +28,11 @@ VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 @dataclass(frozen=True, slots=True)
 class UrlMediaSource:
     request: SourceRequest
+
+
+@dataclass(frozen=True, slots=True)
+class LocalMediaSource:
+    request: ProcessLocalMediaRequest
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +55,17 @@ class MediaPreparationFacade:
     progress_callback: ProgressCallback | None = None
 
     def prepare(
+        self,
+        source: UrlMediaSource | LocalMediaSource,
+        task_context: TaskContext,
+    ) -> PreparedMedia:
+        if isinstance(source, UrlMediaSource):
+            return self._prepare_url(source, task_context)
+        if isinstance(source, LocalMediaSource):
+            return self._prepare_local(source, task_context)
+        raise TypeError("Unsupported media source.")
+
+    def _prepare_url(
         self,
         source: UrlMediaSource,
         task_context: TaskContext,
@@ -115,6 +134,179 @@ class MediaPreparationFacade:
             audio_path=audio_path,
             subtitle_candidate=subtitle_candidate,
         )
+
+    def _prepare_local(
+        self,
+        source: LocalMediaSource,
+        task_context: TaskContext,
+    ) -> PreparedMedia:
+        request = source.request
+        self._emit("local.media.validating", 18)
+        staging_path = self._stage_local_source(request, task_context)
+        try:
+            media_info = self._probe_local_source(staging_path)
+            self._validate_local_streams(request, media_info)
+            if request.media_kind == "video":
+                self._emit("local.video.copying", 34)
+                video_path = task_context.paths.video_path_for_extension(
+                    request.source_extension
+                )
+                self._commit_local_video(staging_path, video_path)
+                self._emit("audio.extract.running", 48)
+                audio_path = self._normalize_local_audio(video_path, task_context)
+                return PreparedMedia(
+                    video_path=video_path,
+                    audio_path=audio_path,
+                    subtitle_candidate=None,
+                )
+
+            self._emit("local.audio.normalizing", 34)
+            audio_path = self._normalize_local_audio(staging_path, task_context)
+            return PreparedMedia(
+                video_path=None,
+                audio_path=audio_path,
+                subtitle_candidate=None,
+            )
+        finally:
+            _remove_file_best_effort(staging_path)
+
+    def _stage_local_source(
+        self,
+        request: ProcessLocalMediaRequest,
+        task_context: TaskContext,
+    ) -> Path:
+        task_context.paths.download_dir.mkdir(parents=True, exist_ok=True)
+        staging_path = task_context.paths.download_dir / (
+            f"local-source-{secrets.token_hex(8)}.{request.source_extension}"
+        )
+        error_code = (
+            "LOCAL_VIDEO_COPY_FAILED"
+            if request.media_kind == "video"
+            else "AUDIO_NORMALIZATION_FAILED"
+        )
+        error_message = (
+            "Local video could not be copied safely."
+            if request.media_kind == "video"
+            else "Local audio could not be prepared safely."
+        )
+        try:
+            _copy_file_bounded(request.source_path, staging_path)
+        except OSError:
+            _remove_file_best_effort(staging_path)
+            raise MediaPreparationError(error_code, error_message) from None
+        return staging_path
+
+    def _probe_local_source(self, staging_path: Path) -> MediaInfo:
+        try:
+            return probe_media_file(staging_path, runner=self.command_runner)
+        except (CommandExecutionError, ValueError, OSError):
+            raise MediaPreparationError(
+                "LOCAL_MEDIA_VALIDATION_FAILED",
+                "Local media could not be validated.",
+            ) from None
+
+    def _validate_local_streams(
+        self,
+        request: ProcessLocalMediaRequest,
+        media_info: MediaInfo,
+    ) -> None:
+        has_video = media_info.has_video
+        has_audio = media_info.has_audio
+        is_valid_audio = media_info.is_valid_audio
+        if request.media_kind == "video":
+            if not has_video:
+                code = (
+                    "LOCAL_MEDIA_KIND_MISMATCH"
+                    if has_audio
+                    else "LOCAL_VIDEO_STREAM_MISSING"
+                )
+                raise MediaPreparationError(
+                    code,
+                    "Local video must contain a valid video stream.",
+                )
+            if not has_audio:
+                raise MediaPreparationError(
+                    "LOCAL_VIDEO_AUDIO_STREAM_MISSING",
+                    "Local video must contain a valid audio stream.",
+                )
+            if not is_valid_audio:
+                raise MediaPreparationError(
+                    "LOCAL_MEDIA_VALIDATION_FAILED",
+                    "Local video stream metadata is invalid.",
+                )
+            return
+
+        if not has_audio:
+            code = "LOCAL_MEDIA_KIND_MISMATCH" if has_video else "LOCAL_AUDIO_STREAM_MISSING"
+            raise MediaPreparationError(
+                code,
+                "Local audio must contain a valid audio stream.",
+            )
+        if not is_valid_audio:
+            raise MediaPreparationError(
+                "LOCAL_MEDIA_VALIDATION_FAILED",
+                "Local audio stream metadata is invalid.",
+            )
+
+    def _commit_local_video(self, source_path: Path, destination_path: Path) -> None:
+        try:
+            with staged_file(
+                destination_path,
+                validator=self._validate_local_video,
+            ) as staging_path:
+                _copy_file_bounded(source_path, staging_path)
+        except MediaPreparationError:
+            raise
+        except (AtomicFileCommitError, OSError):
+            raise MediaPreparationError(
+                "LOCAL_VIDEO_COPY_FAILED",
+                "Local video could not be copied safely.",
+            ) from None
+
+    def _validate_local_video(self, video_path: Path) -> None:
+        media_info = self._probe_local_source(video_path)
+        if not media_info.is_valid:
+            raise MediaPreparationError(
+                "LOCAL_MEDIA_VALIDATION_FAILED",
+                "Local video must contain valid video and audio streams.",
+            )
+
+    def _normalize_local_audio(
+        self,
+        source_path: Path,
+        task_context: TaskContext,
+    ) -> Path:
+        audio_path = task_context.paths.audio_path
+        try:
+            with staged_file(
+                audio_path,
+                validator=self._validate_local_normalized_audio,
+            ) as staging_path:
+                extract_audio(
+                    source_path,
+                    staging_path,
+                    runner=self.command_runner,
+                )
+        except (CommandExecutionError, AtomicFileCommitError):
+            raise MediaPreparationError(
+                "AUDIO_NORMALIZATION_FAILED",
+                "Local audio could not be normalized safely.",
+            ) from None
+        return audio_path
+
+    def _validate_local_normalized_audio(self, audio_path: Path) -> None:
+        try:
+            audio_info = probe_media_file(audio_path, runner=self.command_runner)
+        except (CommandExecutionError, ValueError, OSError):
+            raise MediaPreparationError(
+                "AUDIO_NORMALIZATION_FAILED",
+                "Normalized audio could not be validated.",
+            ) from None
+        if not audio_info.is_normalized_pcm_wav:
+            raise MediaPreparationError(
+                "AUDIO_NORMALIZATION_FAILED",
+                "Normalized audio must be 16 kHz mono 16-bit PCM WAV.",
+            )
 
     def _commit_video(self, source_path: Path, destination_path: Path) -> None:
         try:
@@ -286,3 +478,18 @@ def can_reuse_audio(audio_path: Path, runner: CommandRunner) -> bool:
     except (CommandExecutionError, ValueError):
         return False
     return audio_info.is_valid_audio
+
+
+def _copy_file_bounded(source_path: Path, destination_path: Path) -> None:
+    with source_path.open("rb") as source, destination_path.open("xb") as destination:
+        while chunk := source.read(1024 * 1024):
+            destination.write(chunk)
+        destination.flush()
+        os.fsync(destination.fileno())
+
+
+def _remove_file_best_effort(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass

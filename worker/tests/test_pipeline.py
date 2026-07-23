@@ -4,11 +4,13 @@ from pathlib import Path
 import pytest
 from frameq_worker.asr import Transcript, TranscriptSegment
 from frameq_worker.desktop_contract import OUTPUT_DIR_ENV
+from frameq_worker.media import CommandResult
 from frameq_worker.media_preparation import MediaPreparationError, MediaPreparationFacade
-from frameq_worker.models import ProcessRequest
+from frameq_worker.models import ProcessLocalMediaRequest, ProcessRequest
 from frameq_worker.pipeline import (
     run_asr_transcript_step,
     run_insight_generation_step,
+    run_local_media_pipeline,
     run_prepared_subtitle_transcript_step,
     run_worker_pipeline,
     write_prepared_subtitle_stage,
@@ -74,6 +76,95 @@ def test_run_asr_transcript_step_returns_task_style_artifacts(tmp_path: Path) ->
     }
     assert (tmp_path / "task" / "transcript" / "transcript.txt").read_text(encoding="utf-8").strip()
     assert (tmp_path / "task" / "transcript" / "transcript.md").read_text(encoding="utf-8").strip()
+
+
+def test_local_audio_pipeline_skips_url_subtitles_and_ai_and_persists_path_free_task(
+    tmp_path: Path,
+) -> None:
+    private_root = tmp_path / "review-secret"
+    private_root.mkdir()
+    source_path = private_root / "Podcast.mp3"
+    source_path.write_bytes(b"local audio")
+    request = ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind="audio",
+        safe_display_name="Podcast.mp3",
+        source_extension="mp3",
+        asr_model="iic/SenseVoiceSmall",
+    )
+    commands: list[list[str]] = []
+    events: list[dict[str, object]] = []
+
+    def runner(command: list[str]) -> CommandResult:
+        commands.append(command)
+        assert "yt_dlp" not in command
+        if command[0] == "ffprobe":
+            media_path = Path(command[-1])
+            stream = {
+                "codec_type": "audio",
+                "codec_name": "pcm_s16le" if media_path.suffix == ".wav" else "mp3",
+                "sample_fmt": "s16" if media_path.suffix == ".wav" else "fltp",
+                "sample_rate": "16000" if media_path.suffix == ".wav" else "44100",
+                "channels": 1 if media_path.suffix == ".wav" else 2,
+            }
+            return CommandResult(
+                command,
+                0,
+                json.dumps(
+                    {
+                        "format": {"duration": "10", "size": "1000"},
+                        "streams": [
+                            {"codec_type": "video", "codec_name": "mjpeg"},
+                            stream,
+                        ],
+                    }
+                ),
+                "",
+            )
+        if command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"normalized wav")
+            return CommandResult(command, 0, "", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = run_local_media_pipeline(
+        request=request,
+        project_root=tmp_path,
+        command_runner=runner,
+        transcriber=FakeTranscriber(),
+        allow_real_asr=False,
+        environ={},
+        progress_callback=events.append,
+    )
+    result_value = result.to_dict()
+    task_dir = Path(str(result_value["task_dir"]))
+    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    transcript_markdown = (task_dir / "transcript" / "transcript.md").read_text(
+        encoding="utf-8"
+    )
+    serialized = json.dumps(result_value) + json.dumps(manifest) + transcript_markdown
+
+    assert result_value["status"] == "completed"
+    assert result_value["artifacts"] == {
+        "audio": "media/audio.wav",
+        "transcript_txt": "transcript/transcript.txt",
+        "transcript_md": "transcript/transcript.md",
+    }
+    assert not list((task_dir / "media").glob("video.*"))
+    assert manifest["source_kind"] == "local_file"
+    assert "review-secret" not in serialized
+    assert "Podcast.mp3" in json.dumps(manifest)
+    assert "Podcast.mp3" not in transcript_markdown
+    assert all(
+        "review-secret" not in argument and "Podcast.mp3" not in argument
+        for command in commands
+        for argument in command
+    )
+    assert [event["message_code"] for event in events] == [
+        "local.media.validating",
+        "local.audio.normalizing",
+        "asr.transcribe.starting",
+        "asr.transcribe.running",
+    ]
 
 
 def test_run_asr_transcript_step_maps_asr_errors_to_worker_error(tmp_path: Path) -> None:

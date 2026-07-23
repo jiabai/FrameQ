@@ -34,9 +34,12 @@ EXPECTED_OWNER_SYMBOLS = {
     },
     "insights.py": {"run_insight_generation_step"},
     "orchestration.py": {
+        "LocalPipelineContext",
         "PipelineContext",
         "complete_transcript_stage",
+        "prepare_local_pipeline_context",
         "prepare_pipeline_context",
+        "run_local_media_pipeline",
         "run_worker_pipeline",
     },
 }

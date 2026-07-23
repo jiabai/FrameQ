@@ -20,6 +20,7 @@ from frameq_worker.model_download import (
 )
 from frameq_worker.models import (
     JobStage,
+    ProcessLocalMediaRequest,
     ProcessRequest,
     ProcessResult,
     TranscriptMetadata,
@@ -154,7 +155,7 @@ def write_prepared_subtitle_stage(
 
 
 def prepare_asr_transcriber_stage(
-    request: ProcessRequest,
+    request: ProcessRequest | ProcessLocalMediaRequest,
     project_root: Path,
     transcriber: Transcriber | None,
     allow_real_asr: bool,
@@ -199,7 +200,7 @@ def prepare_asr_transcriber_stage(
 
 
 def run_asr_transcript_stage(
-    request: ProcessRequest,
+    request: ProcessRequest | ProcessLocalMediaRequest,
     project_root: Path,
     audio_path: Path,
     transcriber: Transcriber | None,

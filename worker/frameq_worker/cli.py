@@ -47,6 +47,7 @@ from frameq_worker.requests import (
     optional_env as _optional_env,
 )
 from frameq_worker.requests import (
+    parse_process_local_media_request,
     parse_process_request,
     parse_retry_insights_request,
 )
@@ -82,6 +83,7 @@ __all__ = [
     "find_video_by_stem",
     "main",
     "parse_process_request",
+    "parse_process_local_media_request",
     "parse_retry_insights_request",
     "render_model_download_event",
     "render_progress_event",
@@ -91,6 +93,7 @@ __all__ = [
     "resolve_source_identity_once",
     "retry_insights_once",
     "run_asr_model_download_once",
+    "run_local_media_once",
     "run_worker_once",
     "run_worker_pipeline",
     "should_allow_real_asr",
@@ -163,6 +166,11 @@ def run_worker_once(*args: object, **kwargs: object) -> dict[str, object]:
     return worker_service_module.run_worker_once(*args, **kwargs)
 
 
+def run_local_media_once(*args: object, **kwargs: object) -> dict[str, object]:
+    kwargs.setdefault("transcriber_factory", build_asr_transcriber)
+    return worker_service_module.run_local_media_once(*args, **kwargs)
+
+
 def resolve_source_identity_once(*args: object, **kwargs: object) -> dict[str, object]:
     kwargs.setdefault(
         "source_request_resolver",
@@ -212,6 +220,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Read one RetryInsightsRequest JSON object from stdin.",
     )
     request_group.add_argument(
+        "--process-local-media-stdin",
+        action="store_true",
+        help="Read one ProcessLocalMediaRequest JSON object from stdin.",
+    )
+    request_group.add_argument(
         "--download-asr-model",
         action="store_true",
         help="Download the release ASR model cache into FRAMEQ_MODEL_DIR.",
@@ -229,6 +242,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode
             for enabled, mode in [
                 (args.request_stdin, "process_video"),
+                (args.process_local_media_stdin, "process_local_media"),
                 (args.retry_insights_stdin, "retry_insights"),
                 (args.resolve_source_stdin, "resolve_source_identity"),
             ]
@@ -247,6 +261,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_asr_model_download_once(
             project_root=Path.cwd(),
             progress_callback=print_model_download_event,
+        )
+    elif args.process_local_media_stdin:
+        result = run_local_media_once(
+            request_json or "{}",
+            project_root=Path.cwd(),
+            progress_callback=print_progress_event,
         )
     elif args.retry_insights_stdin:
         result = retry_insights_once(request_json or "{}", project_root=Path.cwd())
