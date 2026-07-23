@@ -1,10 +1,9 @@
 # Server Store / PrismaStore Module Split
 
 - Date: 2026-07-23
-- Status: Design, ExecPlan, and Task 1 concurrency-gate amendment approved by the user on
-  2026-07-23; implementation in progress
+- Status: Implemented and locally verified on 2026-07-23
 - Scope: behavior-neutral TypeScript server persistence refactor
-- ExecPlan: `docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md`
+- ExecPlan: `docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md`
 - Related designs:
   - `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`
   - `docs/design-docs/2026-07-21-server-route-module-split.md`
@@ -232,11 +231,12 @@ define named type-only ports from that contract:
 | `activation.ts` | `ActivationStore` | `createActivationCode`, `redeemActivationCodeAndGrantEntitlement` |
 | `llmConfig.ts` | `LlmConfigStore` | `getLlmConfig`, `upsertLlmConfig` |
 | `entitlementAdjustment.ts` | `EntitlementAdjustmentStore` | `applyEntitlementAdjustmentWithAudit` |
-| desktop account/shared route helpers | `AccountReadStore` / `DesktopSessionStore` | `getUserById`, `getEntitlement`, or `findSessionByTokenHash` as actually consumed |
+| `routes/shared.ts` | `DesktopSessionStore` | `findSessionByTokenHash` |
 | desktop auth route | `DesktopAuthRouteStore` | `revokeSession` |
-| billing route | `BillingReadStore` | `getEntitlement` |
-| desktop LLM route | `LlmQuotaStore` | `findSessionByTokenHash`, `consumeLlmQuota` |
-| administrator route | `AdminStore` | `revokeAdminSession`, `listUsers`, `getEntitlement`, `listActivationCodes`, `listAdminEntitlementAdjustments` |
+| desktop account route | `DesktopAccountStore` | `findSessionByTokenHash`, `getUserById`, `getEntitlement` |
+| billing route | `BillingRouteStore` | `findSessionByTokenHash`, `getEntitlement` |
+| desktop LLM route | `DesktopLlmStore` | `findSessionByTokenHash`, `consumeLlmQuota` |
+| administrator route | `AdminRouteStore` | `revokeAdminSession`, `listUsers`, `getEntitlement`, `listActivationCodes`, `listAdminEntitlementAdjustments` |
 
 Each alias is a local or adjacent `Pick<Store, ...>` type owned by its consumer. It creates no
 runtime object and no second persistence contract. A service cannot name a method outside its
@@ -557,6 +557,32 @@ The implementation closeout must update:
 
 No product specification update is required because this refactor changes no user-visible behavior,
 HTTP contract, persistence schema, or supported operation.
+
+## Implementation Result
+
+The approved tree is implemented. Final physical sizes are:
+
+- stable roots/contracts: `store.ts` 2 lines, `store/contracts.ts` 305,
+  `store/memory.ts` 346, and `prismaStore.ts` 269;
+- Memory private owners: atomic 84, authentication 399, billing 176,
+  entitlement/accounting 246, and LLM configuration 30; and
+- Prisma private owners: concurrency 175, authentication 391, billing 256,
+  entitlement/accounting 309, and LLM configuration 22.
+
+The ownership gate proves the exact trees, stable exports, private dependency direction, line
+limits, sole concurrency-policy owner, eight semantic owners per backend, transaction-client
+confinement, and the exact 12 consumer capability aliases. The complete local Server run passed
+25 test files with 146 tests passed and one Windows POSIX-signal skip; TypeScript compilation,
+Prisma Client generation, repository scripts 25/25, and governance 0 errors / 0 warnings passed.
+
+A disposable SQLite rehearsal applied both reviewed migrations, reported current status, passed
+current-schema preflight, and passed restore smoke on a copied database. The protected schema,
+migrations, dependency files, database/process composition, deployment/CI, App, Worker, and
+contract paths are byte-for-byte unchanged from baseline `86d3e0a`.
+
+This local result does not claim hosted Linux Server CI, production SMTP/staging, off-host restore,
+live WeChat, or live LLM-provider evidence. Those remain release/operations risks until their
+separate gates actually run.
 
 ## Consequences
 

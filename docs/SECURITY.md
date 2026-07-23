@@ -48,6 +48,30 @@
 - Durable design:
   `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`.
 
+## 2026-07-23 Server Store Transaction-Owner Boundary
+
+- `Store` remains one consistency facade and one runtime object. Consumer-owned
+  `Pick<Store, ...>` aliases are erased TypeScript authority declarations, not repositories,
+  transaction handles, or independently injected persistence objects.
+- `Prisma.TransactionClient` is confined to `server/src/prismaStore/` private implementation
+  modules. Routes, services, the public Store contract, and application callers cannot receive a
+  client or a generic transaction callback.
+- Authentication, ticket/session exchange, payment settlement, activation redemption, AI Credit
+  checkout, and administrator entitlement adjustment keep every required read, conditional write,
+  idempotency/audit record, and final read inside one semantic transaction owner.
+- `prismaStore/concurrency.ts` is the sole owner of authentication rate-limit reservation SQL,
+  recognized Prisma/SQLite conflict classification, the fixed three-attempt retry bound, and
+  `attempt * 5` backoff. Retry never surrounds an SMTP, payment-provider, or LLM supplier call.
+- Private persistence modules add no logging or public error surface. Raw OTP/session/ticket/CSRF/
+  activation values, LLM keys, payment payloads, transcripts, prompts, and raw database exception
+  text remain prohibited from diagnostics and public responses.
+- The schema, reviewed migrations, dependency lockfiles, database/process composition, deployment
+  files, desktop App, Worker, and contracts are byte-for-byte unchanged by this refactor. Local
+  migration/preflight/restore and independent-client concurrency evidence do not substitute for
+  unrun hosted CI, production SMTP/staging, off-host restore, or provider validation.
+- Durable design:
+  `docs/design-docs/2026-07-23-server-store-prisma-module-split.md`.
+
 ## 2026-07-22 Release Reliability and Crash-Consistency Boundary
 
 - Authoritative persistence is implemented on `main` at `61d489a`: reviewed owners use atomic

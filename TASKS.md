@@ -127,7 +127,7 @@
 
 ## Refactoring and Technical Debt
 
-- [ ] Split the Server Store/PrismaStore adapters by transaction responsibility (design approved 2026-07-23) — ✅
+- [x] Split the Server Store/PrismaStore adapters by transaction responsibility (completed 2026-07-23) — ✅
   Acceptance: keep `store.ts` and `prismaStore.ts` as the stable import roots and
   retain one full Store instance; preserve every Store/class method, Memory fixture field,
   override-injection seam, closed outcome, query/conditional write, transaction member, retry
@@ -137,9 +137,14 @@
   capabilities; add no public repository, Unit of Work, generic transaction callback, dependency,
   schema/product behavior, or production-readiness claim. Design:
   `docs/design-docs/2026-07-23-server-store-prisma-module-split.md`. ExecPlan:
-  `docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md`. The design,
-  ExecPlan, and evidence-backed Task 1 Prisma/SQLite concurrency-gate amendment are approved;
-  implementation is in progress.
+  `docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md`. Implemented as
+  2-line `store.ts` and 269-line `prismaStore.ts` stable roots, 305/346-line contracts/Memory root,
+  and private Memory owners 84/399/176/246/30 plus Prisma owners 175/391/256/309/22 lines. Exact
+  ownership and 12-capability gates passed; Server 25 files / 146 passed / one Windows POSIX-signal
+  skip, scripts 25/25, TypeScript build, Prisma generation, two-migration deploy/status, current
+  preflight, copied-database restore smoke, governance 0/0, protected-scope and diff gates passed.
+  Hosted Linux Server CI, production SMTP/staging, off-host restore, and live providers were not
+  run and remain separate residual evidence.
 
 - [x] Split the Rust worker runner by private responsibility (completed 2026-07-23) — ✅
   Acceptance: preserve `runner.rs` as the sole `WorkerLane` lifecycle orchestrator and preserve

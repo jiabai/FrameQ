@@ -52,7 +52,7 @@
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
-- 当前 active Server Store/PrismaStore 拆分计划：`docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md`
+- 最近完成 Server Store/PrismaStore 拆分计划：`docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md`
 - 最近完成 Rust worker runner 拆分计划：`docs/exec-plans/completed/2026-07-23-rust-worker-runner-module-split-plan.md`
 - 最近完成前端 Transcript controller 拆分计划：`docs/exec-plans/completed/2026-07-23-frontend-transcript-controller-split-plan.md`
 - 最近完成 Server 并发计划：`docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`

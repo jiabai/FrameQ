@@ -490,6 +490,32 @@
   Production startup and tests continue to import the stable HTTP root instead of assembling
   routes; process lifecycle composition stays outside route modules.
 
+## 2026-07-23 Server Store Adapter Boundary
+
+- `server/src/store.ts` is a two-line stable compatibility root that directly re-exports the full
+  32-method `Store` contract and all record/outcome types from `store/contracts.ts`, plus the actual
+  `MemoryStore` class from `store/memory.ts`. `server/src/prismaStore.ts` remains the only
+  production module exporting `PrismaStore`.
+- `server.ts` still receives one complete Store instance. Services and route helpers do not create
+  child adapters; each declares a local type-only `Pick<Store, ...>` containing only the
+  persistence capabilities it consumes. The complete instance is structurally assigned to those
+  erased types at composition time.
+- Private Memory owners separate authentication, billing, entitlement/accounting, and LLM
+  configuration. One `store/memory/atomic.ts` coordinator serializes semantic operations and
+  snapshots/restores the complete mutable adapter state; capability-local locks or partial
+  snapshots are forbidden.
+- Private Prisma owners separate authentication, billing, entitlement/accounting, and LLM
+  configuration. `prismaStore/concurrency.ts` alone owns authentication rate-limit reservation
+  SQL, recognized conflict/error classification, the fixed three-attempt bound, and
+  `attempt * 5` backoff.
+- Each of the eight cross-record semantic operations has exactly one Memory owner and one Prisma
+  owner. A transaction client may be used only inside the private Prisma tree and never crosses
+  into a service, route, public Store contract, or caller-supplied callback.
+- `server/tests/storeModuleBoundaries.test.ts` locks stable exports, exact private trees, line
+  limits, dependency direction, transaction/concurrency ownership, semantic-operation identity,
+  and all 12 consumer capability aliases. Schema, migrations, runtime composition, HTTP behavior,
+  and the Store/class compatibility surface remain unchanged.
+
 ## 2026-07-10 Server Entitlement Transaction Boundary
 
 - `Store` is the only persistence boundary for payment settlement, activation-code redemption, and administrator entitlement compensation. Its semantic methods return the final entitlement and, for compensation, its audit record; no caller coordinates those writes itself.

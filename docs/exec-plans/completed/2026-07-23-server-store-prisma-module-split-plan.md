@@ -1,7 +1,7 @@
 # Server Store / PrismaStore Module Split Implementation Plan
 
-Status: Approved by the user on 2026-07-23; implementation in progress. The user approved the
-Task 1 Prisma/SQLite concurrency-gate amendment on 2026-07-23.
+Status: Completed and locally verified on 2026-07-23. The user approved the implementation and
+the Task 1 Prisma/SQLite concurrency-gate amendment on 2026-07-23.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this
 > plan task-by-task. Use superpowers:test-driven-development for characterization and the
@@ -133,6 +133,16 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   and all executable statements. Validation: Store ownership 1/1; existing Server module boundaries
   7/7; auth 27/27; admin 5/5; activation 4/4; billing 2/2; LLM quota/config 10/10; routes 11/11;
   TypeScript build and `git diff --check` passed.
+- [x] 2026-07-23: Task 8 completed local regression and operations rehearsal. Validation: Prisma
+  Client 6.19.3 generated; complete Server 25/25 files, 146 passed / one Windows POSIX-signal skip;
+  TypeScript build; repository scripts 25/25; governance 0 errors / 0 warnings; both reviewed
+  migrations deployed with current status; current-schema preflight and copied-database restore
+  smoke passed; protected schema/dependency/runtime/deploy/App/Worker/contract paths were unchanged
+  from `86d3e0a`.
+- [x] 2026-07-23: Durable architecture, security, design, audit, task, agent-map, and ExecPlan index
+  records now describe the implemented roots, private owners, capability boundary, exact sizes,
+  local evidence, and unrun hosted/staging/provider risks. The plan was moved from active to
+  completed before the final documentation checkpoint.
 
 ## Surprises & Discoveries
 
@@ -189,6 +199,12 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   coordinator and the same complete snapshot/rollback behavior.
   Evidence: full non-boundary Server RED in `llmQuota.test.ts`, focused GREEN 10/10, then full
   GREEN 145 passed / one skip.
+- The isolated worktree inherited neither `server/node_modules` nor `app/node_modules`. Server
+  setup was restored with the lockfile-pinned install and repository Prisma generator. The final
+  repository script gate initially passed 18/25 and failed seven i18n checks only because
+  `app/node_modules/typescript` was absent; the unchanged main-worktree dependency tree was linked
+  into the isolated worktree after confirming App dependency files were unchanged, and the rerun
+  passed 25/25. No tracked dependency file changed.
 
 ## Decision Log
 
@@ -227,19 +243,43 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   user-visible behavior, HTTP/wire contract, persistence schema, data retention rule, or supported
   operation.
   Date/Author: 2026-07-23, User + Codex.
+- Decision: Keep the extracted Memory atomic coordinator's Store reference in an ECMAScript
+  private `#state` field. Rationale: an enumerable parameter property introduced a new circular
+  serialization graph, while `#state` preserves the existing `JSON.stringify(store)` behavior and
+  the same complete snapshot/rollback semantics.
+  Date/Author: 2026-07-23, Codex.
 
 ## Outcomes & Retrospective
 
-Implementation is in progress. Task 1 compatibility and concurrency characterization is complete;
-production extraction has not yet started. On completion this section must record final owner
-sizes, exact test counts, TypeScript/Prisma/migration/restore results, protected-scope proof,
-documentation updates, and the implementation commit range.
+The 1,054-line Store hotspot is now a two-line stable direct-reexport root above 305-line contracts,
+a 346-line actual Memory adapter, and private atomic/auth/billing/entitlement/configuration owners
+of 84/399/176/246/30 lines. The 1,117-line Prisma hotspot is now a 269-line sole exported adapter
+above private concurrency/auth/billing/entitlement/configuration owners of
+175/391/256/309/22 lines. All private files remain below the approved 400-line review limit.
 
-Task 1 closed the prior risk that the independent-client OTP tests did not intercept their claimed
-semantic read: both requests now synchronize before transaction admission and both real transaction
-reads are observed. Residual risk after local completion will still include any hosted Linux Server
-CI, production SMTP/staging, and off-host restore evidence not actually run for the resulting
-commits.
+The full 32-method Store, all 24 exported aliases, both class identities/constructors, six
+compatibility methods, 13 Memory fixture fields, override-aware failure injection, closed outcomes,
+queries, transaction membership, fixed conflicts/retries, and one-instance composition remain
+compatible. Twelve services/routes now expose only their exact erased `Pick<Store, ...>` authority;
+no runtime adapter, public repository, Unit of Work, generic transaction callback, schema,
+migration, dependency, HTTP, or product behavior was added.
+
+Characterization-first work repaired the ineffective OTP test seam, the future-GREEN ownership gate
+recorded the required missing-tree and later capability REDs, and focused behavior tests ran after
+each owner moved. The sequence also caught and fixed the extracted coordinator's enumerable
+circular reference before a checkpoint. Implementation checkpoints span `e94b0d0` through
+`ffa601a`; the final documentation/archive checkpoint records this closeout.
+
+Final local evidence: Prisma Client generation; complete Server 25 files / 146 passed / one Windows
+POSIX-signal skip; TypeScript build; repository scripts 25/25; governance 0 errors / 0 warnings;
+two reviewed migrations deployed and current; current-schema preflight; copied-database restore
+smoke; protected-scope proof; and clean diff checks. Schema, migrations, dependencies,
+database/process composition, deployment/CI, App, Worker, contracts, and product specifications are
+unchanged from baseline `86d3e0a`.
+
+Residual risk: the unchanged hosted Linux Server CI was not run for these commits. Production SMTP,
+staging/Nginx/systemd, off-host restore, live WeChat, and live LLM-provider checks were also not run.
+Local SQLite and fake/internal behavior evidence must not be presented as those external gates.
 
 ## Context and Orientation
 
@@ -1173,7 +1213,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   `docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md` to
   `docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md`
 
-- [ ] Run Prisma generation and the complete Server regression:
+- [x] Run Prisma generation and the complete Server regression:
 
   ```powershell
   npm --prefix server run prisma:generate
@@ -1184,7 +1224,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Record exact file/pass/skip counts. The new compatibility and ownership tests increase the
   baseline; no existing test may disappear or be weakened.
 
-- [ ] Rehearse the local migration, current-schema preflight, and isolated restore gates against
+- [x] Rehearse the local migration, current-schema preflight, and isolated restore gates against
   disposable absolute SQLite paths:
 
   ```powershell
@@ -1204,7 +1244,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   Expected: both reviewed migrations deploy, status is current, preflight passes, and the copied
   database passes isolated restore smoke. Cleanup targets only the two explicit temp files.
 
-- [ ] Prove protected code/schema/dependency/operations scope is byte-for-byte unchanged from the
+- [x] Prove protected code/schema/dependency/operations scope is byte-for-byte unchanged from the
   approved code baseline:
 
   ```powershell
@@ -1218,7 +1258,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   git diff --word-diff=porcelain 86d3e0a -- server/src/auth.ts server/src/adminAuth.ts server/src/billing.ts server/src/activation.ts server/src/llmConfig.ts server/src/entitlementAdjustment.ts server/src/routes/shared.ts server/src/routes/desktopAuth.ts server/src/routes/desktopAccount.ts server/src/routes/desktopLlm.ts server/src/routes/billing.ts server/src/routes/admin.ts
   ```
 
-- [ ] Run repository script and governance gates:
+- [x] Run repository script and governance gates:
 
   ```powershell
   node --test scripts/tests/*.test.mjs
@@ -1229,7 +1269,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 
   Record exact Node test and governance counts.
 
-- [ ] Update durable documents with measured facts:
+- [x] Update durable documents with measured facts:
 
   - add the stable Store roots, private semantic owners, one-instance composition, and consumer
     capability boundary to `docs/ARCHITECTURE.md`;
@@ -1243,7 +1283,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   - fill this plan's Progress, Surprises, Decision Log, and Outcomes with actual evidence and
     explicit unrun hosted/staging/provider residual risks.
 
-- [ ] Run governance, diff, protected-scope proof, and clean-status checks again after archival:
+- [x] Run governance, diff, protected-scope proof, and clean-status checks again after archival:
 
   ```powershell
   python scripts/validate_agents_docs.py --level WARN
@@ -1252,7 +1292,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
   git status --short --branch
   ```
 
-- [ ] Create the final authorized documentation/archive checkpoint:
+- [x] Create the final authorized documentation/archive checkpoint:
 
   ```powershell
   git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md docs/design-docs/2026-07-23-server-store-prisma-module-split.md docs/design-docs/frameq-code-audit-uml.md docs/exec-plans/active/index.md docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md docs/exec-plans/completed/index.md docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md
