@@ -21,6 +21,7 @@
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
 - ASR 模块拆分设计：`docs/design-docs/2026-07-20-asr-module-split.md`
 - Transcript detail 模块拆分设计：`docs/design-docs/2026-07-20-transcript-detail-module-split.md`
+- 前端 Transcript controller 拆分设计：`docs/design-docs/2026-07-23-frontend-transcript-controller-split.md`
 - Bilibili fallback 模块拆分设计：`docs/design-docs/2026-07-20-bilibili-fallback-module-split.md`
 - Xiaohongshu fallback 模块拆分设计：`docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md`
 - Douyin fallback 模块拆分设计：`docs/design-docs/2026-07-20-douyin-fallback-module-split.md`
