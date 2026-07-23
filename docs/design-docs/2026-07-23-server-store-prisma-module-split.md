@@ -1,7 +1,7 @@
 # Server Store / PrismaStore Module Split
 
 - Date: 2026-07-23
-- Status: Design approved by the user on 2026-07-23; ExecPlan drafted; implementation not started
+- Status: Design and ExecPlan approved by the user on 2026-07-23; implementation in progress
 - Scope: behavior-neutral TypeScript server persistence refactor
 - ExecPlan: `docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md`
 - Related designs:

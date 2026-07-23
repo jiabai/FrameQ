@@ -1,6 +1,6 @@
 # Server Store / PrismaStore Module Split Implementation Plan
 
-Status: Drafted for user review on 2026-07-23; implementation has not started.
+Status: Approved by the user on 2026-07-23; implementation is in progress.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this
 > plan task-by-task. Use superpowers:test-driven-development for characterization and the
@@ -56,6 +56,14 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   Corrected the design's Prisma import gate to retain `database.ts` as the existing infrastructure
   composition exception. Validation: governance, required-section/fence checks, `git diff --check`, and
   clean-status evidence are recorded in the planning commit handoff.
+- [x] 2026-07-23: The user reviewed and approved this ExecPlan and explicitly authorized P1-3
+  implementation. Validation: approval is recorded in the Codex thread; production edits had not
+  started before this authorization.
+- [x] 2026-07-23: Verified the isolated worktree and established the fresh Server baseline. The
+  worktree initially lacked `server/node_modules`; lockfile-pinned `npm ci` plus
+  `npm --prefix server run prisma:generate` restored the local generated client/engines without
+  changing dependency files. Validation: `.worktrees/` is ignored; Server 23/23 files, 142 passed,
+  one skipped; TypeScript build passed; worktree branch was clean at `dd7ce7d`.
 
 ## Surprises & Discoveries
 
@@ -91,6 +99,13 @@ repository rewrite, a new Unit of Work, a database migration, or production-read
   production-shaped Nginx/systemd, and restore evidence remain governed by the separate active
   operations/release plans.
   Evidence: the design-review validation recorded against code baseline `86d3e0a`.
+- The isolated worktree does not inherit ignored `server/node_modules`. Running tests before local
+  setup first failed at missing TypeScript and then at missing `.prisma/client`/Prisma engines
+  because the dependency install deliberately skipped package scripts. A lockfile-pinned install
+  followed by the repository's existing Prisma generation command restored the exact baseline.
+  Evidence: the first build error resolved to the global missing `typescript/bin/tsc`; the first
+  test run reported missing `.prisma/client/default`; the unchanged rerun passed 142/142 with one
+  skip after Prisma 6.19.3 generation.
 
 ## Decision Log
 
@@ -314,7 +329,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - Create: `server/tests/storeCompatibility.test.ts`
 - Modify: `server/tests/prismaAuthQuotaConcurrency.test.ts`
 
-- [ ] Re-run the approved code baseline before editing:
+- [x] Re-run the approved code baseline before editing:
 
   ```powershell
   npm --prefix server test
