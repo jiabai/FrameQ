@@ -74,7 +74,10 @@ network call, AI Credits behavior, or user-visible copy changes.
   handler/helpers and their untyped boundary; GREEN passed focused 37/37. The first full run found
   one obsolete worker-service monkeypatch seam, then the true-owner correction passed full Worker
   592 passed / 2 skipped with the existing warning, Ruff, and diff check.
-- [ ] Task 7: Extract ASR model download and migrate true-owner test seams.
+- [x] 2026-07-24: Extracted ASR model download and moved terminal-result monkeypatches to the real
+  handler owner. RED failed only for the absent download symbol/handler/re-export; GREEN passed
+  focused 30/30, full Worker 594 passed / 2 skipped with the existing warning, Ruff, and diff
+  check.
 - [ ] Task 8: Atomically close the CLI and facade surfaces and enable the complete boundary gate.
 - [ ] Task 9: Run complete verification, update durable evidence, archive the ExecPlan, and prepare
   the branch for integration.

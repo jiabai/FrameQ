@@ -6,6 +6,7 @@ from pathlib import Path
 
 import frameq_worker.worker_application.insight_retry as insight_retry
 import frameq_worker.worker_application.local_media as local_media
+import frameq_worker.worker_application.model_download as model_download
 import frameq_worker.worker_application.source_identity as source_identity
 import frameq_worker.worker_application.url_processing as url_processing
 import frameq_worker.worker_service as worker_service
@@ -101,3 +102,16 @@ def test_insight_retry_helpers_require_task_paths() -> None:
 
     source = (PRIVATE_ROOT / "insight_retry.py").read_text(encoding="utf-8")
     assert "getattr(paths" not in source
+
+
+def test_model_download_handler_owns_the_model_download_use_case() -> None:
+    assert "run_asr_model_download_once" in _top_level_owned_names(
+        PRIVATE_ROOT / "model_download.py"
+    )
+
+
+def test_worker_service_reexports_model_download_handler_object() -> None:
+    assert (
+        worker_service.run_asr_model_download_once
+        is model_download.run_asr_model_download_once
+    )

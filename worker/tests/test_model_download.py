@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 
 import frameq_worker.model_download as model_download
+import frameq_worker.worker_application.model_download as model_download_handler
 import frameq_worker.worker_service as worker_service
 import pytest
 from frameq_worker.model_download import (
@@ -53,7 +54,7 @@ def test_model_download_terminal_success_omits_local_model_directory(
 ) -> None:
     secret_dir = tmp_path / "review-secret-model-dir"
     monkeypatch.setattr(
-        worker_service,
+        model_download_handler,
         "download_asr_model_cache",
         lambda **_kwargs: secret_dir,
     )
@@ -82,7 +83,11 @@ def test_model_download_terminal_failure_maps_archive_detail_to_fixed_message(
             f"Archive contains unsafe member {secret}",
         )
 
-    monkeypatch.setattr(worker_service, "download_asr_model_cache", fail_download)
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        fail_download,
+    )
 
     result = worker_service.run_asr_model_download_once(project_root=tmp_path)
 
@@ -103,7 +108,11 @@ def test_model_download_terminal_failure_never_exposes_third_party_exception(
     def fail_download(**_kwargs: object) -> None:
         raise RuntimeError(secret)
 
-    monkeypatch.setattr(worker_service, "download_asr_model_cache", fail_download)
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        fail_download,
+    )
 
     result = worker_service.run_asr_model_download_once(project_root=tmp_path)
 
