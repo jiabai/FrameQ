@@ -4,8 +4,9 @@ mod result_protocol;
 mod runner;
 mod supervisor;
 
+use command::build_asr_model_download_command_spec;
 pub(crate) use command::WorkerCommandSpec;
-pub(crate) use facade::{TaskWorkerFacade, WorkerJob};
+pub(crate) use facade::{AsrModelDownloadJob, TaskWorkerFacade, WorkerJob};
 #[cfg(test)]
 pub(crate) use result_protocol::SourceIdentityFailure;
 pub(crate) use result_protocol::{
@@ -43,17 +44,15 @@ impl ProcessSupervisors {
     pub(crate) fn run_asr_model_download(
         &self,
         paths: &RuntimePaths,
-        command: WorkerCommandSpec,
+        job: AsrModelDownloadJob,
         window: Window,
-    ) -> Result<WorkerRunOutcome, WorkerRunError> {
-        self.asr_model_download.run(
+    ) -> Result<Result<WorkerRunOutcome, WorkerRunError>, String> {
+        let request = prepare_asr_model_download_request(
             paths,
-            WorkerRunRequest {
-                operation: WorkerOperation::DownloadAsrModel,
-                command,
-                progress: ProgressRoute::asr_model_download(window),
-            },
-        )
+            job,
+            ProgressRoute::asr_model_download(window),
+        )?;
+        Ok(self.asr_model_download.run(paths, request))
     }
 
     pub(crate) fn cancel_asr_model_download(&self) -> CancelProcessResult {
@@ -71,6 +70,18 @@ impl ProcessSupervisors {
     }
 }
 
+fn prepare_asr_model_download_request(
+    paths: &RuntimePaths,
+    job: AsrModelDownloadJob,
+    progress: ProgressRoute,
+) -> Result<WorkerRunRequest, String> {
+    Ok(WorkerRunRequest {
+        operation: WorkerOperation::DownloadAsrModel,
+        command: build_asr_model_download_command_spec(paths, &job)?,
+        progress,
+    })
+}
+
 pub(crate) async fn run_blocking_worker_command<T, F>(operation: F) -> Result<T, String>
 where
     T: Send + 'static,
@@ -83,7 +94,34 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::run_blocking_worker_command;
+    use super::facade::AsrModelDownloadJob;
+    use super::{
+        prepare_asr_model_download_request, run_blocking_worker_command, ProgressRoute,
+        WorkerOperation,
+    };
+    use crate::RuntimePaths;
+    use std::path::PathBuf;
+
+    #[test]
+    fn asr_model_download_job_derives_operation_progress_and_command() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("frameq-test").join("resources"),
+            user_data_dir: PathBuf::from("frameq-test").join("user-data"),
+        };
+        let job = AsrModelDownloadJob::new(None, None, None, None);
+
+        let request =
+            prepare_asr_model_download_request(&paths, job, ProgressRoute::asr_model_download(()))
+                .expect("prepare model-download request");
+
+        assert_eq!(request.operation, WorkerOperation::DownloadAsrModel);
+        assert!(matches!(request.progress, ProgressRoute::AsrModelDownload));
+        assert_eq!(
+            request.command.args,
+            vec!["-m", "frameq_worker", "--download-asr-model"]
+        );
+        assert_eq!(request.command.stdin_payload, None);
+    }
 
     #[test]
     fn blocking_worker_command_runs_on_background_thread() {
