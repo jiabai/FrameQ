@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-24-python-worker-application-facade-plan.md` | Reduced the Python CLI to a 176-line process adapter and the stable worker facade to five direct imports backed by typed private application handlers, with exact dependency and packaging gates. |
 | `2026-07-24-asr-model-download-job-capability-plan.md` | Replaced crate-visible ASR model-download process construction with an opaque four-value semantic job, runtime-owned fixed command policy, and a source-ownership regression gate. |
 | `2026-07-24-tauri-ipc-runtime-decoding-plan.md` | Decoded five FrameQ-owned Tauri client domains from `unknown` through closed domain parsers with stable non-echoing protocol errors and a source-boundary regression gate. |
 | `2026-07-23-server-store-prisma-module-split-plan.md` | Reduced stable Store/PrismaStore roots to 2/269 lines, split private semantic transaction owners, and narrowed 12 consumer capabilities without changing persistence behavior or schema. |

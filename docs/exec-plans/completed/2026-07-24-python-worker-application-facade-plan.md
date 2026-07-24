@@ -84,8 +84,12 @@ network call, AI Credits behavior, or user-visible copy changes.
   `__all__`, CLI `__all__`/wrappers, and CLI-owned production factories. GREEN passed boundary
   18/18, focused 74/74, full Worker 600 passed / 2 skipped with the existing warning, Ruff, and
   diff check.
-- [ ] Task 9: Run complete verification, update durable evidence, archive the ExecPlan, and prepare
-  the branch for integration.
+- [x] 2026-07-24: Completed full verification and durable evidence. Worker 600 passed / 2 skipped
+  with the existing `audioop` warning; Ruff and repository scripts 27/27 passed; the release Tauri
+  `--no-bundle` build succeeded; the supported generator produced a 70-file byte-identical worker
+  mirror including all seven `worker_application` files; governance and diff gates passed. Updated
+  architecture, security, design/audit, debt, tasks, agent map, and plan indexes; archived this
+  ExecPlan for integration.
 
 ## Surprises & Discoveries
 
@@ -119,6 +123,17 @@ network call, AI Credits behavior, or user-visible copy changes.
   create its default temp directory. The locked project interpreter plus a repository-ignored
   `--basetemp app/src-tauri/target` ran the unchanged baseline successfully: 574 passed, 2 skipped,
   with one existing `pydub/audioop` warning. Ruff also passed.
+- Evidence: repository Node tests initially failed 20/27 because this isolated worktree did not yet
+  contain `app/node_modules/typescript`. Installing the lockfile dependencies in the worktree
+  changed no tracked source or lockfile; the rerun passed 27/27.
+- Evidence: the first cold-cache Tauri release build exceeded the 120-second tool window while
+  compiling dependencies without reporting an error. The warm-cache rerun completed successfully
+  and produced `app/src-tauri/target/release/app.exe`; its existing Vite chunk-size advisory is not
+  a compilation failure.
+- Evidence: Tauri `--no-bundle` validates the release binary but does not persistently refresh the
+  ignored worker mirror by itself. Running the supported
+  `scripts/tauri-dev-fresh-worker.mjs` generator before recursive comparison proved 70/70 relative
+  paths and bytes equal, including the exact seven-file private application tree.
 
 ## Decision Log
 
@@ -148,14 +163,23 @@ network call, AI Credits behavior, or user-visible copy changes.
 
 ## Outcomes & Retrospective
 
-This section will be completed after implementation. It must record:
-
-- final root/private file sizes and exact public exports;
-- RED and GREEN evidence for each extraction slice;
-- full Worker/Ruff/scripts/Tauri/governance results;
-- packaging equality evidence;
-- implementation commit hashes;
-- any unrun native or real-platform checks as residual risk rather than inferred success.
+- Final roots are small and explicit: `cli.py` is 176 lines; `worker_service.py` is 25 lines and
+  exports only the ordered five stable functions. The private tree is exactly `__init__.py` plus
+  `defaults.py` (16), `url_processing.py` (91), `local_media.py` (74),
+  `source_identity.py` (40), `insight_retry.py` (236), and `model_download.py` (70).
+- TDD characterized the real facade/CLI surface first, then captured a failing owner/re-export
+  boundary before each handler extraction. The final closure RED identified the missing exact
+  facade `__all__`, remaining CLI compatibility surface/wrappers, and CLI-owned factories before
+  the 18/18 ownership suite turned GREEN.
+- Implementation commits are `5a77b07`, `b632278`, `d2536cf`, `3610109`, `d140de5`, `5359ee3`,
+  and `cc4d275`; design/plan preparation commits are `ec05d7d` and `cde84f8`.
+- Final validation passed Worker 600 / 2 skipped, Ruff, repository scripts 27/27, release Tauri
+  `--no-bundle`, governance, diff, and recursive 70-file canonical/mirror byte equality. No real
+  platform page, live LLM, real model download, native media workflow, or macOS host check was run;
+  those remain explicit residual risks for release validation, not inferred passes.
+- The main corrective lesson was to migrate tests to true owners at the same time as production
+  composition. This exposed one obsolete monkeypatch and preserved the actual platform-aware
+  short-link default instead of accidentally retaining only the direct URL resolver.
 
 ## Context and Orientation
 

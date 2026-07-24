@@ -571,15 +571,13 @@
   process-versus-AI isolation; future source work must not bypass these boundaries through another
   private import path.
 
-## 2026-07-24 Accepted Python Process-Adapter and Application-Handler Boundary
+## 2026-07-24 Implemented Python Process-Adapter and Application-Handler Boundary
 
-- This boundary is approved but not yet implemented. The current broad `cli.py` and
-  `worker_service.py` remain the source truth until the active TDD ExecPlan completes.
-- The target CLI may parse only the five fixed modes, read one capped stdin object, render
-  contract-validated progress/terminal JSON, dispatch to the stable facade, and select the process
-  exit code. It must not own platform resolution, ASR/LLM factories, request/pipeline helpers,
-  persistence, or model-download behavior, and it must expose no test compatibility namespace.
-- `worker_service.py` will direct-reexport exactly five concrete private application handlers.
+- The CLI parses only the five fixed modes, reads one capped stdin object, renders
+  contract-validated progress/terminal JSON, dispatches to the stable facade, and selects the
+  process exit code. It owns no platform resolution, ASR/LLM factory, request/pipeline helper,
+  persistence, or model-download behavior, and exposes no test compatibility namespace.
+- `worker_service.py` direct-reexports exactly five concrete private application handlers.
   Only that facade may import the use-case handler modules in production; handlers may import the
   defaults owner and existing domain boundaries but may not import sibling handlers, CLI, or the
   facade.
@@ -587,15 +585,16 @@
   stdin and failure results, recovery/commit mappings, progress validation, server-managed Insight
   client construction, output language, AI Credits, model-download sanitization, and existing
   dependency-injection seams.
-- Retry artifact reads must receive `TaskPaths` and use explicit reviewed fields. Dynamic
-  `object/getattr()` path access is outside the accepted boundary.
+- Retry artifact reads receive `TaskPaths` and use explicit reviewed fields. Dynamic
+  `object/getattr()` path access is rejected by a source-boundary gate.
 - No handler may log or return request JSON, raw source URLs beyond the existing safe completed
   source-identity result, local source paths, credentials, prompts, transcript content, generated
   content, full third-party exceptions, or transaction-internal paths. No new network or
   persistence surface is authorized.
-- Design and active execution evidence:
+- Exact-tree, dependency-direction, factory-owner, direct-reexport, typed-path, and package-mirror
+  tests keep this capability boundary closed. Design and completed execution evidence:
   `docs/design-docs/2026-07-24-python-worker-application-facade.md` and
-  `docs/exec-plans/active/2026-07-24-python-worker-application-facade-plan.md`.
+  `docs/exec-plans/completed/2026-07-24-python-worker-application-facade-plan.md`.
 
 ## 2026-07-05 Task Artifact Path Boundary
 

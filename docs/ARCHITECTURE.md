@@ -286,29 +286,28 @@
 - The durable decision is recorded in
   `docs/design-docs/2026-07-21-worker-pipeline-module-split.md`.
 
-## 2026-07-24 Accepted Python worker application-facade boundary
+## 2026-07-24 Implemented Python worker application-facade boundary
 
-- Current implementation remains broader than the accepted target: `cli.py` still owns production
-  source-resolver composition, 40 compatibility exports, and four `*args/**kwargs` wrappers, while
-  `worker_service.py` still implements five independent use cases and erases retry paths to
-  `object/getattr()`. Do not read this section as completed implementation.
-- The accepted target keeps `worker_service.py` as the sole stable Python application facade with
-  exactly five explicit entries: URL processing, local-media processing, source identity, AI
-  retry, and ASR model download. A private empty-initializer `worker_application/` package gives
-  each use case one handler and gives production dependency defaults one separate owner.
-- `cli.py` becomes only a process adapter: fixed mode parsing, bounded stdin, validated
-  progress/result rendering, facade dispatch, and process exit status. It will not re-export ASR,
-  LLM, request, pipeline, media, or application symbols.
-- The current CLI's platform-aware URL/source-identity behavior is a compatibility invariant.
-  Production resolver, transcriber, Insight client, and real-ASR defaults move into the application
-  layer before the CLI wrappers are removed. Existing facade parameter names and injection seams
-  remain stable.
-- AI retry will consume the existing `TaskPaths` type directly; it must not use a dynamic path bag.
-  Contracts, CLI flags, results, progress, task/manifest schemas, artifacts, persistence, network
-  calls, AI Credits, and user-visible behavior remain unchanged.
-- The durable design and active TDD execution plan are
+- `worker_service.py` is now a 25-line sole stable Python application facade with exactly five
+  direct-import entries: URL processing, local-media processing, source identity, AI retry, and
+  ASR model download. The private empty-initializer `worker_application/` package gives each use
+  case one handler and gives production dependency defaults one separate owner.
+- `cli.py` is now a 176-line process adapter limited to fixed mode parsing, bounded stdin,
+  validated progress/result rendering, facade dispatch, and process exit status. It exposes no
+  compatibility `__all__`, broad forwarding wrapper, or production dependency factory.
+- Platform-aware URL/source-identity behavior is preserved. The production resolver, transcriber,
+  Insight client, and real-ASR defaults live in `worker_application/defaults.py`; existing facade
+  parameter names and injection seams remain stable.
+- AI retry consumes `TaskPaths` directly and uses reviewed fields instead of a dynamic
+  `object/getattr()` path bag. Exact-tree, direct-reexport, import-direction, factory-owner, and
+  typed-path gates prevent the former ownership from returning.
+- Contracts, CLI flags, results, progress, task/manifest schemas, artifacts, persistence, network
+  calls, AI Credits, and user-visible behavior remain unchanged. Full Worker validation passed
+  600 tests with 2 skips; Ruff, repository scripts 27/27, Tauri release `--no-bundle`, governance,
+  and recursive 70-file canonical/mirror byte equality also passed.
+- The durable design and completed TDD execution plan are
   `docs/design-docs/2026-07-24-python-worker-application-facade.md` and
-  `docs/exec-plans/active/2026-07-24-python-worker-application-facade-plan.md`.
+  `docs/exec-plans/completed/2026-07-24-python-worker-application-facade-plan.md`.
 
 ## 2026-07-18 Task access facade boundary
 

@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted on 2026-07-24. Implementation is pending a separately reviewed TDD ExecPlan.
+Accepted and implemented through the reviewed TDD ExecPlan on 2026-07-24. Completion evidence is
+archived at
+`docs/exec-plans/completed/2026-07-24-python-worker-application-facade-plan.md`.
 
 This design changes internal Python ownership only. It does not change a desktop-worker contract,
 CLI flag, stdin or result wire shape, progress event, error code, artifact, network request, model

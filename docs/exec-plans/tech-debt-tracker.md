@@ -6,10 +6,24 @@ Last updated: 2026-07-24
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Python worker CLI and application facade remain broad | `cli.py` still exposes a 40-name test-oriented compatibility surface and four untyped forwarding wrappers; `worker_service.py` still co-locates five use cases and AI retry still uses an `object/getattr()` path bag despite the existing `TaskPaths`. | `docs/design-docs/2026-07-24-python-worker-application-facade.md`; `docs/exec-plans/active/2026-07-24-python-worker-application-facade-plan.md` | Keep the five-function `worker_service` facade; extract five private application handlers; reduce CLI to its process adapter; type retry paths as `TaskPaths`; pass characterization, source-boundary, worker, Ruff, packaged-worker, Tauri, and governance gates without protocol or behavior drift. |
 | Hosted/staging server operations evidence remains pending | Fail-closed config, safe logs, proxy trust, health/lifecycle, preflight/restore tools, runbook, and Server CI are implemented and locally tested. This Windows session cannot prove the POSIX child signal fixture, hosted workflow, real SMTP/Nginx/systemd host, or protected off-host restore. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain passing hosted Linux Server CI plus approved non-user SMTP/staging/restore evidence, then rerun and accept the combined release gate. |
 
 ## Completed / Resolved
+
+### Python Worker Application Facade and CLI Boundary
+
+- Status: resolved on 2026-07-24.
+- Resolution: `cli.py` is a 176-line process adapter without compatibility exports, broad wrappers,
+  or production factories; `worker_service.py` is a 25-line exact five-function direct-import
+  facade; five private handlers and one defaults owner contain application composition; AI retry
+  uses `TaskPaths` fields directly.
+- Evidence: seven TDD slices captured characterization and boundary RED before implementation;
+  complete Worker 600 passed / 2 skipped, Ruff, repository scripts 27/27, Tauri release
+  `--no-bundle`, governance, diff, and 70-file canonical/mirror byte equality passed. Exact-tree,
+  dependency, factory-owner, direct-reexport, and typed-path gates prevent regression. Design and
+  archived execution evidence:
+  `docs/design-docs/2026-07-24-python-worker-application-facade.md` and
+  `docs/exec-plans/completed/2026-07-24-python-worker-application-facade-plan.md`.
 
 ### ASR Model Download Process Capability
 
