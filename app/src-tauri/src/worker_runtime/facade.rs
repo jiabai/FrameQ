@@ -180,7 +180,7 @@ impl<'a> TaskWorkerFacade<'a> {
     }
 
     #[cfg(test)]
-    pub(crate) fn prepare_for_test<F>(
+    fn prepare_for_test<F>(
         &self,
         job: WorkerJob,
         resolve_llm: F,

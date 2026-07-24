@@ -5,7 +5,6 @@ mod runner;
 mod supervisor;
 
 use command::build_asr_model_download_command_spec;
-pub(crate) use command::WorkerCommandSpec;
 pub(crate) use facade::{AsrModelDownloadJob, TaskWorkerFacade, WorkerJob};
 #[cfg(test)]
 pub(crate) use result_protocol::SourceIdentityFailure;
@@ -100,7 +99,18 @@ mod tests {
         WorkerOperation,
     };
     use crate::RuntimePaths;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+
+    fn collect_rust_sources(dir: &Path, sources: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read Rust source directory") {
+            let path = entry.expect("read Rust source entry").path();
+            if path.is_dir() {
+                collect_rust_sources(&path, sources);
+            } else if path.extension().and_then(|value| value.to_str()) == Some("rs") {
+                sources.push(path);
+            }
+        }
+    }
 
     #[test]
     fn asr_model_download_job_derives_operation_progress_and_command() {
@@ -121,6 +131,60 @@ mod tests {
             vec!["-m", "frameq_worker", "--download-asr-model"]
         );
         assert_eq!(request.command.stdin_payload, None);
+    }
+
+    #[test]
+    fn raw_worker_process_capability_stays_inside_worker_runtime() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let runtime_dir = src.join("worker_runtime");
+        let command = std::fs::read_to_string(runtime_dir.join("command.rs"))
+            .expect("read worker command owner");
+        let runtime_root =
+            std::fs::read_to_string(runtime_dir.join("mod.rs")).expect("read runtime root");
+        let crate_root = std::fs::read_to_string(src.join("lib.rs")).expect("read crate root");
+        let asr_model =
+            std::fs::read_to_string(src.join("asr_model.rs")).expect("read ASR model owner");
+
+        assert!(command.contains("pub(in crate::worker_runtime) struct WorkerCommandSpec"));
+        let raw_spec_reexport = ["pub(crate) use command::", "WorkerCommandSpec"].concat();
+        assert!(!runtime_root.contains(&raw_spec_reexport));
+        assert!(!crate_root.contains("WorkerCommandSpec"));
+        assert!(asr_model.contains("AsrModelDownloadJob"));
+        for forbidden in [
+            "WorkerCommandSpec",
+            "WorkerInvocation",
+            "WorkerRunRequest",
+            "build_model_download_command_spec",
+            "bundled_python_path",
+            "prepend_to_path",
+        ] {
+            assert!(
+                !asr_model.contains(forbidden),
+                "ASR application owner retains raw process capability {forbidden}"
+            );
+        }
+        assert!(command.contains("--download-asr-model"));
+
+        let mut sources = Vec::new();
+        collect_rust_sources(&src, &mut sources);
+        for path in sources {
+            if path.starts_with(&runtime_dir) {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("read Rust application source");
+            for forbidden in ["WorkerCommandSpec", "WorkerInvocation", "WorkerRunRequest"] {
+                assert!(
+                    !source.contains(forbidden),
+                    "{} imports raw worker capability {forbidden}",
+                    path.display()
+                );
+            }
+            assert!(
+                !source.contains("--download-asr-model"),
+                "{} owns the model-download CLI outside worker_runtime",
+                path.display()
+            );
+        }
     }
 
     #[test]

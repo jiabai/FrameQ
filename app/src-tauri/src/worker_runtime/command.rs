@@ -26,18 +26,18 @@ pub(super) enum WorkerInvocation {
 }
 
 #[derive(Clone)]
-pub(crate) struct WorkerCommandSpec {
-    pub(crate) program: PathBuf,
-    pub(crate) args: Vec<String>,
-    pub(crate) stdin_payload: Option<String>,
-    pub(crate) env: Vec<(String, String)>,
-    pub(crate) env_remove: Vec<String>,
-    pub(crate) current_dir: PathBuf,
+pub(in crate::worker_runtime) struct WorkerCommandSpec {
+    pub(in crate::worker_runtime) program: PathBuf,
+    pub(in crate::worker_runtime) args: Vec<String>,
+    pub(in crate::worker_runtime) stdin_payload: Option<String>,
+    pub(in crate::worker_runtime) env: Vec<(String, String)>,
+    pub(in crate::worker_runtime) env_remove: Vec<String>,
+    pub(in crate::worker_runtime) current_dir: PathBuf,
 }
 
 impl WorkerCommandSpec {
     #[cfg(test)]
-    pub(crate) fn env_map(&self) -> HashMap<String, String> {
+    pub(in crate::worker_runtime) fn env_map(&self) -> HashMap<String, String> {
         self.env.iter().cloned().collect()
     }
 }

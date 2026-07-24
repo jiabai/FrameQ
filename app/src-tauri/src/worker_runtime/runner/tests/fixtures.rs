@@ -1,7 +1,7 @@
 use super::super::{
     ProgressRoute, RunnerHooks, WatchdogPolicy, WorkerLane, WorkerOperation, WorkerRunRequest,
 };
-use crate::worker_runtime::WorkerCommandSpec;
+use crate::worker_runtime::command::WorkerCommandSpec;
 use crate::RuntimePaths;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

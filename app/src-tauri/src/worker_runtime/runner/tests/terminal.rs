@@ -2,9 +2,9 @@ use super::super::progress::StderrSummary;
 use super::super::terminal::{classify_terminal, safe_exit_log_detail, safe_start_log_detail};
 use super::super::{WorkerOperation, WorkerRunErrorKind, WorkerRunOutcome, WorkerTimeoutKind};
 use super::fixtures::{exit_status, valid_task_stdout};
+use crate::worker_runtime::command::WorkerCommandSpec;
 use crate::worker_runtime::result_protocol::{TaskTerminalStatus, ValidatedWorkerResult};
 use crate::worker_runtime::supervisor::ProcessPhase;
-use crate::worker_runtime::WorkerCommandSpec;
 use std::path::PathBuf;
 use std::process::Output;
 

@@ -41,7 +41,7 @@ pub(crate) use asr_model::{DEFAULT_ASR_MODEL, SUPPORTED_ASR_MODELS};
 pub(crate) use asr_model::{ASR_MODEL_DOWNLOAD_EVENT_NAME, MODEL_DOWNLOAD_EVENT_PREFIX};
 
 pub(crate) use worker_runtime::{
-    run_blocking_worker_command, CancelProcessResult, ProcessSupervisors, WorkerCommandSpec,
+    run_blocking_worker_command, CancelProcessResult, ProcessSupervisors,
 };
 
 pub(crate) use history_deletion::HistoryDeletionState;

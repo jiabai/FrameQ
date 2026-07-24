@@ -66,10 +66,10 @@ impl WorkerOperation {
     }
 }
 
-pub(crate) struct WorkerRunRequest {
-    pub(crate) operation: WorkerOperation,
-    pub(crate) command: WorkerCommandSpec,
-    pub(crate) progress: ProgressRoute,
+pub(in crate::worker_runtime) struct WorkerRunRequest {
+    pub(in crate::worker_runtime) operation: WorkerOperation,
+    pub(in crate::worker_runtime) command: WorkerCommandSpec,
+    pub(in crate::worker_runtime) progress: ProgressRoute,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

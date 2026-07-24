@@ -3,9 +3,9 @@ use super::super::{
     WorkerRunOutcome, WorkerRunRequest,
 };
 use super::fixtures::{fixture_request, terminal_fixture_request, test_paths, wait_until_active};
+use crate::worker_runtime::command::WorkerCommandSpec;
 use crate::worker_runtime::result_protocol::{TaskTerminalStatus, ValidatedWorkerResult};
 use crate::worker_runtime::supervisor::CancelProcessStatus;
-use crate::worker_runtime::WorkerCommandSpec;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
