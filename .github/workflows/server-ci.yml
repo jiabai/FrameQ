@@ -39,8 +39,6 @@ jobs:
     name: Node 22 server gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      DATABASE_URL: file:${{ runner.temp }}/frameq-server-ci.sqlite
     defaults:
       run:
         working-directory: server
@@ -54,6 +52,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: server/package-lock.json
+
+      - name: Configure database URL
+        # runner context is unavailable in job-level env; inject via $GITHUB_ENV
+        # so every subsequent step sees DATABASE_URL.
+        run: echo "DATABASE_URL=file:$RUNNER_TEMP/frameq-server-ci.sqlite" >> "$GITHUB_ENV"
 
       - name: Install locked dependencies
         run: npm ci
