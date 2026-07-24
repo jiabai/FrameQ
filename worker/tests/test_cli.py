@@ -180,10 +180,14 @@ def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
         "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
         "?xsec_token=review-secret"
     )
-    captured: dict[str, str] = {}
+    captured: dict[str, object] = {}
 
-    def fake_run_worker_once(request_json: str, **_kwargs: object) -> dict[str, object]:
+    def fake_run_worker_once(
+        request_json: str,
+        **kwargs: object,
+    ) -> dict[str, object]:
         captured["request_json"] = request_json
+        captured.update(kwargs)
         return {"status": "completed"}
 
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
@@ -195,6 +199,8 @@ def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
     assert json.loads(captured["request_json"])["url"].endswith(
         "?xsec_token=review-secret"
     )
+    assert captured["project_root"] == Path.cwd()
+    assert captured["progress_callback"] is cli.print_progress_event
     assert "review-secret" not in capsys.readouterr().err
 
 
@@ -212,13 +218,14 @@ def test_main_reads_local_media_request_from_dedicated_stdin_mode(
             "asr_model": DEFAULT_ASR_MODEL,
         }
     )
-    captured: dict[str, str] = {}
+    captured: dict[str, object] = {}
 
     def fake_run_local_media_once(
         request_json: str,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> dict[str, object]:
         captured["request_json"] = request_json
+        captured.update(kwargs)
         return {"status": "completed"}
 
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
@@ -228,6 +235,8 @@ def test_main_reads_local_media_request_from_dedicated_stdin_mode(
 
     assert exit_code == 0
     assert json.loads(captured["request_json"])["media_kind"] == "audio"
+    assert captured["project_root"] == Path.cwd()
+    assert captured["progress_callback"] is cli.print_progress_event
     captured_output = capsys.readouterr()
     assert "review-secret" not in captured_output.out + captured_output.err
 
@@ -353,6 +362,38 @@ def test_main_resolves_source_identity_from_stdin_without_echoing_secret(
     assert "xsec_token" not in captured.out + captured.err
 
 
+def test_main_dispatches_normalized_source_identity_request(
+    monkeypatch,
+    capsys,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_resolve_source_identity_once(
+        request_json: str,
+    ) -> dict[str, object]:
+        captured["request_json"] = request_json
+        return {"status": "completed"}
+
+    monkeypatch.setattr(
+        cli.sys,
+        "stdin",
+        io.StringIO('{\n  "url": "https://example.test/video"\n}'),
+    )
+    monkeypatch.setattr(
+        cli,
+        "resolve_source_identity_once",
+        fake_resolve_source_identity_once,
+    )
+
+    exit_code = cli.main(["--resolve-source-stdin"])
+
+    assert exit_code == 0
+    assert captured["request_json"] == (
+        '{"url": "https://example.test/video"}'
+    )
+    assert json.loads(capsys.readouterr().out) == {"status": "completed"}
+
+
 def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
     payload = json.dumps(
         {
@@ -361,13 +402,14 @@ def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
             "output_language": "en-US",
         }
     )
-    captured: dict[str, str] = {}
+    captured: dict[str, object] = {}
 
     def fake_retry_insights_once(
         request_json: str,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> dict[str, object]:
         captured["request_json"] = request_json
+        captured.update(kwargs)
         return {"status": "completed"}
 
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
@@ -381,6 +423,7 @@ def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
         "target": "summary",
         "output_language": "en-US",
     }
+    assert captured["project_root"] == Path.cwd()
     assert "safe-task" not in capsys.readouterr().err
 
 
@@ -404,14 +447,22 @@ def test_main_rejects_oversized_stdin_without_echoing_secret(monkeypatch, capsys
 
 
 def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(
-        cli,
-        "run_asr_model_download_once",
-        lambda *args, **kwargs: {
+    captured: dict[str, object] = {}
+
+    def fake_run_asr_model_download_once(
+        **kwargs: object,
+    ) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
             "status": "failed",
             "code": "ASR_MODEL_DOWNLOAD_FAILED",
             "message": "download failed",
-        },
+        }
+
+    monkeypatch.setattr(
+        cli,
+        "run_asr_model_download_once",
+        fake_run_asr_model_download_once,
     )
 
     exit_code = cli.main(["--download-asr-model"])
@@ -420,6 +471,8 @@ def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> 
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "failed"
     assert output["code"] == "ASR_MODEL_DOWNLOAD_FAILED"
+    assert captured["project_root"] == Path.cwd()
+    assert captured["progress_callback"] is cli.print_model_download_event
 
 
 def test_render_helpers_emit_json_and_progress_prefix() -> None:
@@ -496,6 +549,35 @@ def test_source_identity_preflight_uses_cli_platform_resolver(
     assert result["source_url"] == (
         "https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
     )
+
+
+def test_run_worker_once_uses_cli_platform_resolver_for_short_links(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parsed_sources: list[str] = []
+
+    def fake_parse_bilibili_input(source: str) -> SimpleNamespace:
+        parsed_sources.append(source)
+        return SimpleNamespace(
+            full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
+        )
+
+    monkeypatch.setattr(
+        platform_resolvers_module,
+        "parse_bilibili_input",
+        fake_parse_bilibili_input,
+    )
+
+    result = run_worker_once(
+        process_request_json("https://b23.tv/review-short"),
+        project_root=tmp_path,
+        command_runner=FakeMediaRunner(),
+        transcriber=FakeTranscriber(),
+    )
+
+    assert result["status"] == "completed"
+    assert parsed_sources == ["https://b23.tv/review-short"]
 
 
 def test_migration_cli_mode_is_not_supported() -> None:

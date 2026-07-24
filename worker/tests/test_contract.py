@@ -4,19 +4,17 @@ import json
 import re
 from pathlib import Path
 
-import frameq_worker.cli as cli
 from frameq_worker.asr import DEFAULT_ASR_MODEL
-from frameq_worker.cli import (
+from frameq_worker.desktop_contract import (
+    AUDIO_EXTENSIONS,
+    CACHE_DIR_ENV,
+    DESKTOP_WORKER_CONTRACT_VERSION,
+    LOCAL_MEDIA_CONTRACT_VERSION,
     MODEL_DIR_ENV,
     MODEL_DOWNLOAD_EVENT_PREFIX,
     OUTPUT_DIR_ENV,
-    PROGRESS_EVENT_PREFIX,
-)
-from frameq_worker.desktop_contract import (
-    AUDIO_EXTENSIONS,
-    DESKTOP_WORKER_CONTRACT_VERSION,
-    LOCAL_MEDIA_CONTRACT_VERSION,
     PROCESS_VIDEO_CONTRACT_VERSION,
+    PROGRESS_EVENT_PREFIX,
     VIDEO_EXTENSIONS,
 )
 from frameq_worker.models import Insight, JobStage, ProcessResult
@@ -235,8 +233,7 @@ def test_worker_constants_match_desktop_contract() -> None:
     assert MODEL_DOWNLOAD_EVENT_PREFIX == contract["events"]["asrModelDownloadPrefix"]
     assert DEFAULT_ASR_MODEL == contract["asr"]["defaultModel"]
     assert OUTPUT_DIR_ENV == contract["env"]["outputDir"]
-    assert contract["env"].get("cacheDir") == "FRAMEQ_CACHE_DIR"
-    assert getattr(cli, "CACHE_DIR_ENV", None) == contract["env"]["cacheDir"]
+    assert CACHE_DIR_ENV == contract["env"]["cacheDir"]
     assert MODEL_DIR_ENV == contract["env"]["modelDir"]
 
 

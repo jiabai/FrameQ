@@ -51,8 +51,10 @@ network call, AI Credits behavior, or user-visible copy changes.
   isolated branch `codex/python-worker-application-facade`. Commit: `ec05d7d`.
 - [x] 2026-07-24: Registered this detailed TDD ExecPlan in architecture, security, audit, task, and
   active-plan indexes without changing Python production code.
-- [ ] Task 2: Add characterization tests for the five facade signatures and current CLI/default
-  behavior.
+- [x] 2026-07-24: Characterized the five facade signatures/required parameters, all five CLI
+  dispatch paths, true contract-constant owners, and the platform-aware Bilibili short-link
+  default before moving production code. Validation: focused pytest 41/41, focused Ruff, and diff
+  check pass.
 - [ ] Task 3: Add the private tree and extract URL processing.
 - [ ] Task 4: Extract local-media processing.
 - [ ] Task 5: Extract source identity and production source-resolution defaults.
