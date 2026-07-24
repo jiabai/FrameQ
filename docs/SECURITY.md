@@ -571,6 +571,32 @@
   process-versus-AI isolation; future source work must not bypass these boundaries through another
   private import path.
 
+## 2026-07-24 Accepted Python Process-Adapter and Application-Handler Boundary
+
+- This boundary is approved but not yet implemented. The current broad `cli.py` and
+  `worker_service.py` remain the source truth until the active TDD ExecPlan completes.
+- The target CLI may parse only the five fixed modes, read one capped stdin object, render
+  contract-validated progress/terminal JSON, dispatch to the stable facade, and select the process
+  exit code. It must not own platform resolution, ASR/LLM factories, request/pipeline helpers,
+  persistence, or model-download behavior, and it must expose no test compatibility namespace.
+- `worker_service.py` will direct-reexport exactly five concrete private application handlers.
+  Only that facade may import the use-case handler modules in production; handlers may import the
+  defaults owner and existing domain boundaries but may not import sibling handlers, CLI, or the
+  facade.
+- Moving composition must preserve the platform-aware resolver used by the real CLI, all bounded
+  stdin and failure results, recovery/commit mappings, progress validation, server-managed Insight
+  client construction, output language, AI Credits, model-download sanitization, and existing
+  dependency-injection seams.
+- Retry artifact reads must receive `TaskPaths` and use explicit reviewed fields. Dynamic
+  `object/getattr()` path access is outside the accepted boundary.
+- No handler may log or return request JSON, raw source URLs beyond the existing safe completed
+  source-identity result, local source paths, credentials, prompts, transcript content, generated
+  content, full third-party exceptions, or transaction-internal paths. No new network or
+  persistence surface is authorized.
+- Design and active execution evidence:
+  `docs/design-docs/2026-07-24-python-worker-application-facade.md` and
+  `docs/exec-plans/active/2026-07-24-python-worker-application-facade-plan.md`.
+
 ## 2026-07-05 Task Artifact Path Boundary
 
 - Task-manifest artifact-path fields may contain local paths only as relative paths under the owning task directory. Absolute paths, `..`, path traversal, remote URLs, cookies, headers, or credentials must be rejected; the allowlisted `source_identity.canonical_url` is source metadata, not an artifact path.

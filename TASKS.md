@@ -143,6 +143,17 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Close the Python worker application-facade and CLI boundary (2026-07-24) — ✅ Acceptance:
+  preserve all five fixed CLI modes, bounded stdin, progress/result/exit behavior, platform-aware
+  short-link defaults, ASR/AI/model-download injection seams, task persistence, artifacts,
+  failures, output language, Credits, contracts, and packaged-worker behavior; keep
+  `worker_service.py` as an exact five-function stable facade; extract private URL, local-media,
+  source-identity, AI-retry, and model-download handlers plus one defaults owner; make AI retry use
+  `TaskPaths`; remove CLI compatibility exports and `*args/**kwargs`; add characterization and
+  exact AST/dependency/package gates before closure. Design:
+  `docs/design-docs/2026-07-24-python-worker-application-facade.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-24-python-worker-application-facade-plan.md`.
+
 - [x] Close the ASR model-download raw process capability (completed 2026-07-24) — ✅ Acceptance:
   keep model availability and app-local `.env` parsing in `asr_model.rs`, but allow it to submit
   only an opaque `AsrModelDownloadJob` containing the four existing allowlisted override values;
