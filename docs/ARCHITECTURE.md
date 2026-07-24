@@ -474,8 +474,8 @@
 ## 2026-07-10 Desktop Process Supervision and Cancellation Boundary
 
 - `ProcessSupervisors` privately owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running`, `Cancelling`, `CleaningUp`, or typed `TimingOut` phase; absence is the only finished state.
-- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the internal typed `WorkerRunRequest`, but application modules can enter the task-producing lane only through `TaskWorkerFacade` and can enter the model-download lane only through the narrow `ProcessSupervisors` model-download method. Application modules cannot select a lane, operation, progress route, invocation, credential policy, spawn behavior, pipe, wait/reap path, supervisor mutation, or process-tree termination.
-- `worker_runtime/facade.rs` exhaustively derives URL/local/AI task invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane. `command.rs` owns fixed invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` remains the sole owner of spawn/register/stdin/read/wait/finish/parse/classify/log ordering above four private implementation owners: `runner/process_io.rs`, `watchdog.rs`, `progress.rs`, and `terminal.rs`. Application modules cannot import these child paths, and raw composition helpers remain private to this module boundary.
+- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the internal typed `WorkerRunRequest`, and application modules enter the task-producing lane only through `TaskWorkerFacade`. The current model-download method is narrow in lane/operation/progress selection, but `asr_model.rs` still supplies a crate-visible raw `WorkerCommandSpec`; that remaining capability gap is explicitly tracked below. No application module may own spawn, pipe, wait/reap, supervisor mutation, or process-tree termination.
+- `worker_runtime/facade.rs` exhaustively derives URL/local/AI task invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane. `command.rs` owns fixed task invocation/environment construction, while `asr_model.rs` is the current model-download command-policy exception. `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` remains the sole owner of spawn/register/stdin/read/wait/finish/parse/classify/log ordering above four private implementation owners: `runner/process_io.rs`, `watchdog.rs`, `progress.rs`, and `terminal.rs`. Application modules cannot import these child paths.
 - Start, cancellation claim, signal-failure rollback, and terminal cleanup must match the running instance ID. A stale waiter or PID cannot clear or restore a newer child. A duplicate cancellation request returns structured `already_cancelling` and sends no second signal.
 - Registration and watchdog startup occur before one-shot stdin delivery. After terminal observation, the runner stops and joins the watchdog, finishes the matching instance before joining stderr readers, and an internal guard clears only its own instance on every setup or wait failure. A termination-in-flight lease prevents lane reuse until the complete OS termination call returns.
 - Windows terminates the controlled PID with `taskkill /PID <pid> /T /F`. On supported macOS releases, the Unix implementation starts each worker in a fresh process group, sends `TERM` to the negative PGID, waits only for the bounded escalation grace, and sends `KILL` to the same group only if it remains alive. Commands receive only supervisor-owned numeric IDs and are never built through a shell. Linux is not a supported release target.
@@ -496,8 +496,14 @@
 - `TaskWorkerFacade::execute` is the single application-facing task-lane entry. Its exhaustive match
   fixes the CLI mode, lifecycle log operation, progress protocol, lane, and LLM policy; only
   `RetryInsights` resolves server-managed LLM invocation material.
-- ASR model download remains a separate semantic method because it owns a distinct command builder,
-  progress protocol, and lane. It still delegates the complete child lifecycle to `WorkerLane`.
+- ASR model download remains a separate method because it owns a distinct progress protocol and
+  lane, and it still delegates the complete child lifecycle to `WorkerLane`. As of 2026-07-24,
+  however, `asr_model.rs` still constructs the crate-visible executable/argv/env/cwd
+  `WorkerCommandSpec` before calling that method. The accepted
+  `docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md` and active ExecPlan
+  replace that raw input with an opaque `AsrModelDownloadJob`, move its fixed command policy into
+  `worker_runtime::command`, and make `WorkerCommandSpec` runtime-private. This paragraph records an
+  approved pending boundary, not implemented behavior.
 - `ProcessLocalMedia` landed with desktop-worker contract v4 and the Python CLI consumer in the same
   vertical slice as native selection, manifest/History projection, and UI dispatch. That slice also
   renamed the facade and internal accessors to task-lane vocabulary without compatibility aliases,
@@ -877,7 +883,11 @@ graph LR
 ## 架构不变量
 
 - UI 只编排任务和展示状态，不直接调用 `yt-dlp`、`ffmpeg`、ASR 或 LLM。
-- Tauri 应用模块只能通过 `WorkerLane::run`/`cancel`/activity query 管理 FrameQ worker；不得直接 spawn、wait、finish、发送 OS 信号或转发未验证 progress。
+- Tauri 应用模块只能通过 `TaskWorkerFacade::execute(WorkerJob)`、窄模型下载方法以及语义
+  cancel/activity query 管理 FrameQ worker；`WorkerLane::run` 是 runtime 内部入口。当前模型下载
+  方法仍接收 `asr_model.rs` 构造的 raw spec，必须按 2026-07-24 active capability plan 收口为
+  `AsrModelDownloadJob`；应用层始终不得直接 spawn、wait、finish、发送 OS 信号或转发未验证
+  progress。
 - UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
 - `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和私有 process orchestration 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary` 或 `insights` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用。

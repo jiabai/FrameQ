@@ -143,6 +143,16 @@
 
 ## Refactoring and Technical Debt
 
+- [ ] Close the ASR model-download raw process capability (2026-07-24) — ✅ Acceptance:
+  keep model availability and app-local `.env` parsing in `asr_model.rs`, but allow it to submit
+  only an opaque `AsrModelDownloadJob` containing the four existing allowlisted override values;
+  move bundled Python/argv/stdin/env/removal/cwd construction into `worker_runtime::command`;
+  preserve the separate model-download lane, progress, cancellation, watchdog, result/error
+  mapping, CLI bytes, `.env` schema, model files, network behavior, and public protocols; make
+  `WorkerCommandSpec` runtime-private and add a RED/GREEN source-ownership gate. Design:
+  `docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md`.
+
 - [x] Split the Server Store/PrismaStore adapters by transaction responsibility (completed 2026-07-23) — ✅
   Acceptance: keep `store.ts` and `prismaStore.ts` as the stable import roots and
   retain one full Store instance; preserve every Store/class method, Memory fixture field,

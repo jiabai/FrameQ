@@ -6,6 +6,7 @@ Last updated: 2026-07-24
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
+| ASR model download retains crate-visible raw process construction | `asr_model.rs` currently constructs a `pub(crate)` executable/argv/env/cwd `WorkerCommandSpec`, and crate/root re-exports leave a broader process capability than the application needs. Current values are fixed, but the compiler does not enforce the semantic model-download boundary. | `docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`; active ASR model-download capability ExecPlan | Submit only the opaque four-value `AsrModelDownloadJob`; move fixed command construction into `worker_runtime::command`; make `WorkerCommandSpec` runtime-private; pass command, composition, source-boundary, full Rust, build, and governance gates. |
 | Hosted/staging server operations evidence remains pending | Fail-closed config, safe logs, proxy trust, health/lifecycle, preflight/restore tools, runbook, and Server CI are implemented and locally tested. This Windows session cannot prove the POSIX child signal fixture, hosted workflow, real SMTP/Nginx/systemd host, or protected off-host restore. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain passing hosted Linux Server CI plus approved non-user SMTP/staging/restore evidence, then rerun and accept the combined release gate. |
 
 ## Completed / Resolved

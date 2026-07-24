@@ -2186,6 +2186,7 @@ stateDiagram-v2
 
 | 审计项 | 当前事实与风险 | 已批准的最小改善边界 |
 |--------|----------------|----------------------|
+| ASR 模型下载仍可由 application module 构造原始进程规格 | `WorkerCommandSpec` 及字段仍为 `pub(crate)`，经 `worker_runtime/mod.rs` 和 `lib.rs` 两次重导出；`asr_model.rs` 自行决定 bundled Python、`--download-asr-model` argv、完整 env/removal、null stdin 与 cwd，再把 raw spec 交给 `ProcessSupervisors`。当前调用固定且可信，但 Rust 无法阻止其他 crate module 获得同等任意 executable/argv/env/cwd 能力 | 已批准 `AsrModelDownloadJob`：`asr_model.rs` 只保留可用性、`.env` 读取和四项白名单 override 提取；`worker_runtime::command` 独占 raw spec；`ProcessSupervisors` 只接受语义 job；`WorkerCommandSpec` 降为 runtime-private，并以 RED/GREEN source gate 长期阻止重导出或 application 绕过。设计：`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`；active ExecPlan：`docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md` |
 
 ### 已解决审计项
 
