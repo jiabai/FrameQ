@@ -2,6 +2,16 @@
 
 ## Active UI Work
 
+- [x] Close general Tauri IPC runtime-decoding gaps (2026-07-24) — ✅ Account, History,
+  remaining settings, transcript detail, and FrameQ-owned update command runners return
+  `Promise<unknown>`; each domain decodes closed top-level/nested DTOs before state mutation;
+  malformed/accessor/symbol/exotic values fail through stable non-echoing `IpcProtocolError` codes;
+  worker/local-media specialized parsers and valid behavior remain unchanged. ✅ Focused App 64/64,
+  full App 637/637, Rust 223/223, repository scripts 27/27, lint, build, rustfmt, governance, and
+  diff gates pass. Design:
+  `docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md`.
+
 - [x] Split the frontend transcript-detail controller by responsibility (2026-07-23) — ✅
   Acceptance: preserve the existing flat `TranscriptDetailController` surface and all App/view
   consumers while extracting private artifact-detail, task-document, and audio-review owners;

@@ -24,6 +24,7 @@
 - ASR 模块拆分设计：`docs/design-docs/2026-07-20-asr-module-split.md`
 - Transcript detail 模块拆分设计：`docs/design-docs/2026-07-20-transcript-detail-module-split.md`
 - 前端 Transcript controller 拆分设计：`docs/design-docs/2026-07-23-frontend-transcript-controller-split.md`
+- Tauri IPC 运行时解码边界设计：`docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md`
 - Bilibili fallback 模块拆分设计：`docs/design-docs/2026-07-20-bilibili-fallback-module-split.md`
 - Xiaohongshu fallback 模块拆分设计：`docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md`
 - Douyin fallback 模块拆分设计：`docs/design-docs/2026-07-20-douyin-fallback-module-split.md`
@@ -52,6 +53,7 @@
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- 最近完成 Tauri IPC 解码计划：`docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md`
 - 最近完成 Server Store/PrismaStore 拆分计划：`docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md`
 - 最近完成 Rust worker runner 拆分计划：`docs/exec-plans/completed/2026-07-23-rust-worker-runner-module-split-plan.md`
 - 最近完成前端 Transcript controller 拆分计划：`docs/exec-plans/completed/2026-07-23-frontend-transcript-controller-split-plan.md`

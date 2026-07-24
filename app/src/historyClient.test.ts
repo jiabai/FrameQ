@@ -6,6 +6,7 @@ import {
   historyItemToWorkerResult,
   type HistoryCommandRunner,
 } from "./historyClient";
+import { IpcProtocolError } from "./tauriIpcProtocol";
 import type { WorkerResult } from "./workflow";
 
 const FIRST_INSIGHT: WorkerResult["insights"][number] = {
@@ -167,7 +168,117 @@ describe("history client", () => {
       },
     ];
 
-    await expect(getHistory(runner)).rejects.toThrow("HISTORY_SOURCE_INVALID");
+    await expect(getHistory(runner)).rejects.toEqual(
+      new IpcProtocolError("HISTORY_IPC_RESPONSE_INVALID"),
+    );
+  });
+
+  test("rejects malformed History list containers and nested artifacts", async () => {
+    await expect(getHistory(async () => ({ items: [] }))).rejects.toEqual(
+      new IpcProtocolError("HISTORY_IPC_RESPONSE_INVALID"),
+    );
+
+    const secret = "C:\\Users\\private\\task\\transcript.txt";
+    let getterCalls = 0;
+    const artifacts = Object.defineProperty({}, "transcript_txt", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return secret;
+      },
+    });
+    const runner: HistoryCommandRunner = async () => [
+      {
+        task_id: "task-unsafe",
+        id: "task-unsafe",
+        created_at: "2026-07-24T00:00:00Z",
+        source: { kind: "url", url: "https://example.com/video/1" },
+        status: "completed",
+        task_dir: "D:/FrameQ/tasks/task-unsafe",
+        output_dir: "D:/FrameQ/outputs",
+        artifacts,
+        error: null,
+        text_preview: "",
+        insights_count: 0,
+      },
+    ];
+
+    await expect(getHistory(runner)).rejects.toEqual(
+      new IpcProtocolError("HISTORY_IPC_RESPONSE_INVALID"),
+    );
+    expect(getterCalls).toBe(0);
+    await expect(getHistory(runner)).rejects.not.toThrow(secret);
+  });
+
+  test("rejects malformed History detail identity and nested insight data", async () => {
+    const detail = {
+      task_id: "different-task",
+      source: { kind: "url", url: "https://example.com/video/1" },
+      status: "completed",
+      task_dir: "D:/FrameQ/tasks/different-task",
+      artifacts: {},
+      error: null,
+      text: "private transcript",
+      summary: "",
+      transcript: null,
+      insights: [
+        {
+          ...FIRST_INSIGHT,
+          followUpQuestions: "not-an-array",
+        },
+      ],
+    };
+
+    await expect(
+      getHistoryDetail("expected-task", async () => detail),
+    ).rejects.toEqual(
+      new IpcProtocolError("HISTORY_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      getHistoryDetail("expected-task", async () => ({
+        ...detail,
+        task_id: "expected-task",
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("HISTORY_IPC_RESPONSE_INVALID"),
+    );
+  });
+
+  test("rejects malformed History errors, transcripts, and delete results", async () => {
+    const baseDetail = {
+      task_id: "task-detail",
+      source: { kind: "url", url: "https://example.com/video/1" },
+      status: "failed",
+      task_dir: "D:/FrameQ/tasks/task-detail",
+      artifacts: {},
+      error: {
+        code: "FAILURE",
+        message: "safe",
+        stage: "not-a-stage",
+      },
+      text: "",
+      summary: "",
+      transcript: {
+        source: "unknown",
+        language: null,
+        engine: null,
+      },
+      insights: [],
+    };
+
+    await expect(
+      getHistoryDetail("task-detail", async () => baseDetail),
+    ).rejects.toEqual(
+      new IpcProtocolError("HISTORY_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      deleteHistoryTask("task-detail", async () => ({
+        task_id: "different-task",
+        deleted: true,
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("HISTORY_IPC_RESPONSE_INVALID"),
+    );
   });
 
   test("converts a history item into a workflow worker result", () => {

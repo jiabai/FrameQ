@@ -1,6 +1,6 @@
 # Tech Debt Tracker
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## High Priority
 
@@ -9,6 +9,20 @@ Last updated: 2026-07-23
 | Hosted/staging server operations evidence remains pending | Fail-closed config, safe logs, proxy trust, health/lifecycle, preflight/restore tools, runbook, and Server CI are implemented and locally tested. This Windows session cannot prove the POSIX child signal fixture, hosted workflow, real SMTP/Nginx/systemd host, or protected off-host restore. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain passing hosted Linux Server CI plus approved non-user SMTP/staging/restore evidence, then rerun and accept the combined release gate. |
 
 ## Completed / Resolved
+
+### General Tauri IPC Runtime Decoding
+
+- Status: resolved on 2026-07-24.
+- Resolution: five FrameQ-owned client domains now receive `Promise<unknown>` and decode closed
+  top-level and nested DTOs through domain-owned parsers. The shared primitive only performs safe
+  data-property inspection and emits stable non-echoing domain codes; specialized worker,
+  local-media, UI-preference, model-download, and cancellation protocols remain unchanged.
+- Evidence: focused App 64/64, full App 637/637, Rust 223/223, repository scripts 27/27, lint,
+  build, rustfmt, governance, and diff checks pass. The explicit source-boundary test keeps generic
+  `invoke<T>`, direct response assertions, and non-`unknown` runners out of the reviewed clients.
+  Design and archived execution evidence:
+  `docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md` and
+  `docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md`.
 
 ### Server Production Operations — Local Implementation
 

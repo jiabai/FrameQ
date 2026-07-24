@@ -7,6 +7,11 @@ import type {
 import { isLanguagePreference, type LanguagePreference } from "./i18n/locale";
 import type { AsrModelDownloadLocalPhase } from "./modelDownloadState";
 import {
+  IpcProtocolError,
+  readIpcDataArray,
+  readIpcDataObject,
+} from "./tauriIpcProtocol";
+import {
   parseAsrModelDownloadResult,
   parseCancelProcessResult,
   type AsrModelDownloadResult,
@@ -88,6 +93,7 @@ export type UiPreferencesView = {
 };
 
 const defaultSettingsRunner: SettingsCommandRunner = (command, args) => invoke(command, args);
+const SETTINGS_IPC_RESPONSE_INVALID = "SETTINGS_IPC_RESPONSE_INVALID" as const;
 let browserUiPreferences: UiPreferencesView = {
   schemaVersion: 1,
   language: "en-US",
@@ -138,7 +144,9 @@ export async function saveUiPreferences(
 export async function getLlmConfig(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<LlmConfig> {
-  return mapLlmConfigResponse((await runner("get_llm_config", {})) as LlmConfigResponse);
+  return mapLlmConfigResponse(
+    parseLlmConfigResponse(await runner("get_llm_config", {})),
+  );
 }
 
 export async function saveLlmConfig(
@@ -146,12 +154,14 @@ export async function saveLlmConfig(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<LlmConfig> {
   return mapLlmConfigResponse(
-    (await runner("save_llm_config", {
-      config: {
-        output_dir: draft.outputDir,
-        asr_model: draft.asrModel,
-      },
-    })) as LlmConfigResponse,
+    parseLlmConfigResponse(
+      await runner("save_llm_config", {
+        config: {
+          output_dir: draft.outputDir,
+          asr_model: draft.asrModel,
+        },
+      }),
+    ),
   );
 }
 
@@ -159,7 +169,9 @@ export async function getAudioReviewCacheUsage(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<AudioReviewCacheUsage> {
   return mapAudioReviewCacheUsageResponse(
-    (await runner("get_audio_review_cache_usage", {})) as AudioReviewCacheUsageResponse,
+    parseAudioReviewCacheUsageResponse(
+      await runner("get_audio_review_cache_usage", {}),
+    ),
   );
 }
 
@@ -167,7 +179,9 @@ export async function clearAudioReviewCache(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<AudioReviewCacheUsage> {
   return mapAudioReviewCacheUsageResponse(
-    (await runner("clear_audio_review_cache", {})) as AudioReviewCacheUsageResponse,
+    parseAudioReviewCacheUsageResponse(
+      await runner("clear_audio_review_cache", {}),
+    ),
   );
 }
 
@@ -175,7 +189,9 @@ export async function checkFirstRun(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<FirstRunStatus> {
   return mapFirstRunStatusResponse(
-    (await runner("check_first_run", {})) as FirstRunStatusResponse,
+    parseFirstRunStatusResponse(
+      await runner("check_first_run", {}),
+    ),
   );
 }
 
@@ -208,6 +224,107 @@ function mapLlmConfigResponse(response: LlmConfigResponse): LlmConfig {
   };
 }
 
+function parseLlmConfigResponse(value: unknown): LlmConfigResponse {
+  const response = readIpcDataObject(
+    value,
+    [
+      "output_dir",
+      "asr_model",
+      "supported_asr_models",
+      "config_path",
+    ],
+    [],
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  const supportedAsrModels = readIpcDataArray(
+    response.supported_asr_models,
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  if (
+    typeof response.output_dir !== "string" ||
+    typeof response.asr_model !== "string" ||
+    !supportedAsrModels.every((model) => typeof model === "string") ||
+    typeof response.config_path !== "string"
+  ) {
+    throwInvalidSettingsResponse();
+  }
+  return {
+    output_dir: response.output_dir,
+    asr_model: response.asr_model,
+    supported_asr_models: supportedAsrModels,
+    config_path: response.config_path,
+  };
+}
+
+function parseFirstRunStatusResponse(
+  value: unknown,
+): FirstRunStatusResponse {
+  const response = readIpcDataObject(
+    value,
+    [
+      "user_data_dir",
+      "default_output_dir",
+      "asr_model",
+      "asr_model_dir",
+      "asr_model_available",
+      "asr_model_source",
+    ],
+    [],
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  if (
+    typeof response.user_data_dir !== "string" ||
+    typeof response.default_output_dir !== "string" ||
+    typeof response.asr_model !== "string" ||
+    typeof response.asr_model_dir !== "string" ||
+    typeof response.asr_model_available !== "boolean" ||
+    typeof response.asr_model_source !== "string"
+  ) {
+    throwInvalidSettingsResponse();
+  }
+  return {
+    user_data_dir: response.user_data_dir,
+    default_output_dir: response.default_output_dir,
+    asr_model: response.asr_model,
+    asr_model_dir: response.asr_model_dir,
+    asr_model_available: response.asr_model_available,
+    asr_model_source: response.asr_model_source,
+  };
+}
+
+function parseAudioReviewCacheUsageResponse(
+  value: unknown,
+): AudioReviewCacheUsageResponse {
+  const response = readIpcDataObject(
+    value,
+    ["size_bytes", "cache_path"],
+    [],
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  if (
+    !isSafeUnsignedInteger(response.size_bytes) ||
+    typeof response.cache_path !== "string"
+  ) {
+    throwInvalidSettingsResponse();
+  }
+  return {
+    size_bytes: response.size_bytes,
+    cache_path: response.cache_path,
+  };
+}
+
+function isSafeUnsignedInteger(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+  );
+}
+
+function throwInvalidSettingsResponse(): never {
+  throw new IpcProtocolError(SETTINGS_IPC_RESPONSE_INVALID);
+}
+
 function mapFirstRunStatusResponse(response: FirstRunStatusResponse): FirstRunStatus {
   return {
     userDataDir: response.user_data_dir,
@@ -229,14 +346,19 @@ function mapAudioReviewCacheUsageResponse(
 }
 
 function mapUiPreferencesResponse(response: unknown): UiPreferencesView {
-  if (!response || typeof response !== "object" || Array.isArray(response)) {
+  let record: Record<string, unknown>;
+  try {
+    record = readIpcDataObject(
+      response,
+      ["schemaVersion", "language", "recovered"],
+      [],
+      SETTINGS_IPC_RESPONSE_INVALID,
+    );
+  } catch {
     throw new Error("INVALID_UI_PREFERENCES_RESPONSE");
   }
 
-  const record = response as Record<string, unknown>;
-  const expectedKeys = ["language", "recovered", "schemaVersion"];
   if (
-    JSON.stringify(Object.keys(record).sort()) !== JSON.stringify(expectedKeys) ||
     record.schemaVersion !== 1 ||
     !isLanguagePreference(record.language) ||
     typeof record.recovered !== "boolean"

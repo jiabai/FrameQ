@@ -12,6 +12,7 @@ import {
   saveLlmConfig,
   type SettingsCommandRunner,
 } from "./settingsClient";
+import { IpcProtocolError } from "./tauriIpcProtocol";
 
 describe("settings client", () => {
   test("loads first-run status from Tauri", async () => {
@@ -182,6 +183,56 @@ describe("settings client", () => {
     ]);
   });
 
+  test("rejects malformed runtime settings and model arrays", async () => {
+    await expect(
+      getLlmConfig(async () => ({
+        output_dir: "D:\\FrameQ\\outputs",
+        asr_model: "iic/SenseVoiceSmall",
+        supported_asr_models: ["iic/SenseVoiceSmall", 42],
+        config_path: "C:\\Users\\private\\FrameQ\\.env",
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      saveLlmConfig(
+        { outputDir: "", asrModel: "iic/SenseVoiceSmall" },
+        async () => ({
+          output_dir: "",
+          asr_model: "iic/SenseVoiceSmall",
+          supported_asr_models: [],
+          config_path: "C:\\Users\\private\\FrameQ\\.env",
+          unexpected: true,
+        }),
+      ),
+    ).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+  });
+
+  test("rejects malformed audio cache usage and first-run responses", async () => {
+    await expect(
+      getAudioReviewCacheUsage(async () => ({
+        size_bytes: -1,
+        cache_path: "C:\\Users\\private\\cache",
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      checkFirstRun(async () => ({
+        user_data_dir: "C:\\Users\\private\\FrameQ",
+        default_output_dir: "C:\\Users\\private\\FrameQ\\outputs",
+        asr_model: "iic/SenseVoiceSmall",
+        asr_model_dir: "C:\\Users\\private\\FrameQ\\models",
+        asr_model_available: "false",
+        asr_model_source: "modelscope",
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+  });
+
   test("maps Tauri errors to settings errors", async () => {
     const runner: SettingsCommandRunner = async () => {
       throw new Error("Unsupported ASR model");
@@ -239,6 +290,26 @@ describe("settings client", () => {
     await expect(getUiPreferences(runner)).rejects.toThrow(
       "INVALID_UI_PREFERENCES_RESPONSE",
     );
+  });
+
+  test("does not evaluate accessor-backed UI preferences", async () => {
+    let getterCalls = 0;
+    const response = Object.defineProperty(
+      { schemaVersion: 1, language: "system" },
+      "recovered",
+      {
+        enumerable: true,
+        get() {
+          getterCalls += 1;
+          return false;
+        },
+      },
+    );
+
+    await expect(getUiPreferences(async () => response)).rejects.toThrow(
+      "INVALID_UI_PREFERENCES_RESPONSE",
+    );
+    expect(getterCalls).toBe(0);
   });
 
   test("uses an immediate in-memory UI-preferences mock outside Tauri", async () => {

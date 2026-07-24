@@ -9,6 +9,7 @@ import {
   redeemActivationCode,
   type AccountCommandRunner,
 } from "./accountClient";
+import { IpcProtocolError } from "./tauriIpcProtocol";
 
 describe("account client", () => {
   test("maps account status from Tauri", async () => {
@@ -83,6 +84,9 @@ describe("account client", () => {
           status: "paid",
           entitlement_expires_at: "2026-07-22T08:00:00.000Z",
         };
+      }
+      if (command === "logout_account") {
+        return null;
       }
       return {};
     };
@@ -168,5 +172,74 @@ describe("account client", () => {
         args: { code: "fq-abcd-efgh-jklm-npqr" },
       },
     ]);
+  });
+
+  test("rejects malformed account status before mapping defaults", async () => {
+    const secret = "user@example.com";
+    const runner: AccountCommandRunner = async () => ({
+      authenticated: true,
+      email: secret,
+      entitlement_status: "active",
+      entitlement_expires_at: null,
+      llm_quota_limit: -1,
+      llm_quota_used: 0,
+      llm_quota_remaining: 0,
+      llm_quota_resets_at: null,
+      llm_configured: true,
+      last_verified_at: null,
+      can_process: true,
+      can_generate_ai: true,
+      server_error: null,
+    });
+
+    await expect(getAccountStatus(runner)).rejects.toEqual(
+      new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"),
+    );
+    await expect(getAccountStatus(runner)).rejects.not.toThrow(secret);
+  });
+
+  test("rejects malformed auth-flow responses with one stable account code", async () => {
+    await expect(
+      beginAuthFlow(async () => ({
+        auth_url: "https://frameq.example/login",
+        state: "state-1",
+        unexpected: true,
+      })),
+    ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
+
+    await expect(
+      completeAuthFlow("frameq://auth/callback", async () => ({
+        authenticated: true,
+        email: "user@example.com",
+        can_process: true,
+      })),
+    ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
+  });
+
+  test("rejects malformed checkout and checkout-status responses", async () => {
+    await expect(
+      createWechatCheckout(async () => ({
+        order_id: "fq_order",
+        amount_fen: Number.NaN,
+        currency: "CNY",
+        code_url: "weixin://wxpay/bizpayurl?pr=private",
+        expires_at: "2026-06-21T08:30:00.000Z",
+        status: "pending",
+      })),
+    ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
+
+    await expect(
+      getCheckoutStatus("expected-order", async () => ({
+        order_id: "different-order",
+        status: "paid",
+        entitlement_expires_at: null,
+      })),
+    ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
+  });
+
+  test("requires the serialized unit result for logout", async () => {
+    await expect(
+      logoutAccount(async () => ({ arbitrary: "value" })),
+    ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
   });
 });

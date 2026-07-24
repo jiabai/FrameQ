@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-24-tauri-ipc-runtime-decoding-plan.md` | Decoded five FrameQ-owned Tauri client domains from `unknown` through closed domain parsers with stable non-echoing protocol errors and a source-boundary regression gate. |
 | `2026-07-23-server-store-prisma-module-split-plan.md` | Reduced stable Store/PrismaStore roots to 2/269 lines, split private semantic transaction owners, and narrowed 12 consumer capabilities without changing persistence behavior or schema. |
 | `2026-07-23-rust-worker-runner-module-split-plan.md` | Reduced the 2,162-line Rust worker runner to a 415-line sole lifecycle orchestrator with private process-I/O, watchdog, progress, terminal, and focused-test owners without changing behavior or callers. |
 | `2026-07-23-frontend-transcript-controller-split-plan.md` | Reduced the 509-line mixed frontend transcript hook to a stable 126-line facade with private artifact, document, and review owners while preserving its 41-key surface and task isolation. |

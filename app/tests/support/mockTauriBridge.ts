@@ -44,6 +44,21 @@ const secondHistoryTask = {
   text: "历史任务乙完整文字稿",
 };
 
+function historyDetailResponse(task: typeof firstHistoryTask) {
+  return {
+    task_id: task.task_id,
+    source: task.source,
+    status: task.status,
+    task_dir: task.task_dir,
+    artifacts: task.artifacts,
+    error: task.error,
+    text: task.text,
+    summary: task.summary,
+    transcript: task.transcript,
+    insights: task.insights,
+  };
+}
+
 const defaultResponses: Record<string, unknown> = {
   get_ui_preferences: {
     schemaVersion: 1,
@@ -124,8 +139,8 @@ const defaultResponses: Record<string, unknown> = {
     ({ text: _text, summary: _summary, transcript: _transcript, insights: _insights, ...item }) => item,
   ),
   get_history_detail: {
-    "history-task-a": firstHistoryTask,
-    "history-task-b": secondHistoryTask,
+    "history-task-a": historyDetailResponse(firstHistoryTask),
+    "history-task-b": historyDetailResponse(secondHistoryTask),
   },
   process_video: {
     status: "completed",

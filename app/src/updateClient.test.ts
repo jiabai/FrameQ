@@ -11,6 +11,7 @@ import {
   type AppUpdateHandle,
   type UpdatePreferencesCommandRunner,
 } from "./updateClient";
+import { IpcProtocolError } from "./tauriIpcProtocol";
 
 describe("update client", () => {
   test("maps an available Tauri update into app update info", async () => {
@@ -65,7 +66,7 @@ describe("update client", () => {
     expect(runner).toHaveBeenCalledTimes(1);
   });
 
-  test("reports macOS as manual-update delivery and defaults elsewhere to in-app updates", async () => {
+  test("reports the exact FrameQ-owned update delivery response", async () => {
     await expect(
       getUpdateDelivery(async () => ({
         inAppUpdates: false,
@@ -76,11 +77,9 @@ describe("update client", () => {
       releasesUrl: "https://example.com/releases/latest",
     });
 
-    // An empty/partial response keeps the existing Windows behavior.
-    await expect(getUpdateDelivery(async () => ({}))).resolves.toEqual({
-      inAppUpdates: true,
-      releasesUrl: DEFAULT_RELEASES_URL,
-    });
+    await expect(getUpdateDelivery(async () => ({}))).rejects.toEqual(
+      new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
+    );
   });
 
   test("opens the releases page through the opener runner, falling back to the default url", async () => {
@@ -142,5 +141,65 @@ describe("update client", () => {
         },
       },
     ]);
+  });
+
+  test("rejects malformed update delivery and preference responses", async () => {
+    await expect(
+      getUpdateDelivery(async () => ({
+        inAppUpdates: "false",
+        releasesUrl: "https://example.com/releases/latest",
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      getUpdatePreferences(async () => ({
+        lastCheckedAt: "2026-06-23T10:00:00.000Z",
+        postponedUntil: Number.NaN,
+        skippedVersion: null,
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      saveUpdatePreferences(
+        {
+          lastCheckedAt: null,
+          postponedUntil: null,
+          skippedVersion: null,
+        },
+        async () => ({
+          lastCheckedAt: null,
+          postponedUntil: null,
+          skippedVersion: null,
+          unexpected: true,
+        }),
+      ),
+    ).rejects.toEqual(
+      new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
+    );
+  });
+
+  test("does not evaluate accessor-backed update preferences", async () => {
+    let getterCalls = 0;
+    const response = Object.defineProperty(
+      {
+        lastCheckedAt: null,
+        skippedVersion: null,
+      },
+      "postponedUntil",
+      {
+        enumerable: true,
+        get() {
+          getterCalls += 1;
+          return 1_800_000;
+        },
+      },
+    );
+
+    await expect(getUpdatePreferences(async () => response)).rejects.toEqual(
+      new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
+    );
+    expect(getterCalls).toBe(0);
   });
 });

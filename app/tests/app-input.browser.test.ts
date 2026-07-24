@@ -578,6 +578,7 @@ describe("App browser input interactions", () => {
                     llm_configured: true,
                     last_verified_at: null,
                     can_process: true,
+                    can_generate_ai: true,
                     server_error: null
                   };
                 }
@@ -604,6 +605,7 @@ describe("App browser input interactions", () => {
                     text: "transcript",
                     summary: "",
                     insights: [],
+                    transcript: null,
                     error: null
                   };
                 }
@@ -721,6 +723,7 @@ describe("App browser input interactions", () => {
                     llm_configured: true,
                     last_verified_at: null,
                     can_process: true,
+                    can_generate_ai: true,
                     server_error: null
                   };
                 }
@@ -747,6 +750,7 @@ describe("App browser input interactions", () => {
                     text: "完成后的文字稿",
                     summary: "",
                     insights: [],
+                    transcript: null,
                     error: null
                   };
                 }
@@ -754,7 +758,7 @@ describe("App browser input interactions", () => {
                   return null;
                 }
                 if (command === "cancel_process") {
-                  return { cancelled: true, error: null };
+                  return { status: "cancelling", error: null };
                 }
                 throw new Error("Unexpected command: " + command);
               },
@@ -1111,6 +1115,7 @@ describe("App desktop sheet structure", () => {
                     llm_configured: false,
                     last_verified_at: null,
                     can_process: false,
+                    can_generate_ai: false,
                     server_error: null
                   };
                 }

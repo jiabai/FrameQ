@@ -1,5 +1,28 @@
 # Security and Compliance
 
+## 2026-07-24 General Tauri IPC Result Validation Boundary
+
+- Every FrameQ-owned Rust/Tauri command result is untrusted at the TypeScript runtime boundary.
+  Client runners return `Promise<unknown>` and domain parsers must validate closed top-level and
+  nested shapes before any field is read, defaulted, logged, or stored in application state.
+- The shared parsing primitive may inspect only own data-property descriptors on ordinary objects.
+  Arrays where objects are expected, accessors, symbols, exotic prototypes, reflection failures,
+  missing/unknown fields, wrong types, invalid enums, non-finite numbers, and incoherent semantic
+  relationships fail closed.
+- A decoding failure throws only a stable domain-owned `IpcProtocolError` code. The rejected value,
+  raw exception, getter result, account/payment data, URL, path, transcript, artifact content, or
+  updater metadata must not appear in its message, cause, enumerable fields, technical details, or
+  logs.
+- Account, History, settings, transcript detail, and FrameQ-owned update command DTOs are in scope.
+  Existing worker terminal-result and local-media parsers remain authoritative for their families;
+  the behavior-bearing updater plugin handle remains behind its typed plugin adapter.
+- TypeScript decoding is an integrity and compatibility boundary, not an authorization boundary.
+  Account session ownership, supported-task admission, path containment, filesystem mutation, and
+  updater signature verification remain enforced by their existing Rust/plugin owners.
+- The approved design is
+  `docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md`; implementation evidence is
+  archived in `docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md`.
+
 ## 2026-07-22 Server Authentication, Quota, and Operations Hardening
 
 - The authentication/quota check-then-write paths are replaced by semantic Store transactions and

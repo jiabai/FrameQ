@@ -1,5 +1,30 @@
 # FrameQ Architecture
 
+## 2026-07-24 Tauri IPC runtime-decoding boundary
+
+- Ordinary Rust/Tauri command results are runtime-untrusted values even when TypeScript knows the
+  expected DTO. Every reviewed client runner must return `Promise<unknown>` and decode the complete
+  domain shape before any value enters controller or application state.
+- `accountClient.ts`, `historyClient.ts`, `settingsClient.ts`, `transcriptDetailClient.ts`, and the
+  FrameQ-owned command portion of `updateClient.ts` implement the boundary. Each client
+  remains its domain adapter and owns `parseXxxResponse(unknown)` functions.
+- `app/src/tauriIpcProtocol.ts` provides only domain-free safe data-object inspection and a
+  stable non-echoing `IpcProtocolError`. It will not become a generic `BaseClient<T>`, schema
+  registry, code generator, or service locator, and no validation dependency is added.
+- DTOs are closed at top-level and nested boundaries. Accessors, symbols, exotic prototypes,
+  unknown/missing fields, wrong types, invalid enums, non-finite values, and incoherent semantic
+  relationships fail with one fixed response-invalid code per domain. Rejected values are never
+  stringified or attached as causes/details.
+- The existing `workerResultProtocol.ts` and local-media contract remain specialized closed
+  boundaries. The 2026-07-19 worker terminal-result rule is already implemented for Python/Rust
+  worker families; it does not imply that every ordinary Tauri command result is already decoded.
+- Rust remains authoritative for sessions, supported tasks, path containment, filesystem effects,
+  and updater signature trust. This TypeScript anti-corruption layer changes no command, wire
+  shape, product behavior, persistence, network path, AI call, or Credit.
+- The durable decision and implementation sequence are
+  `docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md` and
+  `docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md`.
+
 ## 2026-07-23 Frontend transcript controller ownership boundary
 
 - `app/src/features/transcript/useTranscriptDetailController.ts` remains the only production

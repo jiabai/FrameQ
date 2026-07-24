@@ -3,6 +3,10 @@ import type { InvokeArgs } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  IpcProtocolError,
+  readIpcDataObject,
+} from "./tauriIpcProtocol";
 import type { UpdateDownloadEvent } from "./updateState";
 
 export const DEFAULT_RELEASES_URL = "https://github.com/jiabai/FrameQ/releases/latest";
@@ -11,7 +15,7 @@ export type UpdateDelivery = {
   inAppUpdates: boolean;
   releasesUrl: string;
 };
-export type UpdateDeliveryRunner = () => Promise<Partial<UpdateDelivery>>;
+export type UpdateDeliveryRunner = () => Promise<unknown>;
 export type OpenReleasesRunner = (url: string) => Promise<void>;
 
 export type AppUpdateHandle = {
@@ -45,8 +49,9 @@ const defaultUpdateCheckRunner: UpdateCheckRunner = async () =>
 const defaultPreferencesRunner: UpdatePreferencesCommandRunner = (command, args) =>
   invoke(command, args);
 const defaultDeliveryRunner: UpdateDeliveryRunner = async () =>
-  (await invoke("get_update_delivery")) as Partial<UpdateDelivery>;
+  invoke("get_update_delivery");
 const defaultOpenReleasesRunner: OpenReleasesRunner = (url) => openUrl(url);
+const UPDATE_IPC_RESPONSE_INVALID = "UPDATE_IPC_RESPONSE_INVALID" as const;
 
 export async function getUpdateDelivery(
   runner: UpdateDeliveryRunner = defaultDeliveryRunner,
@@ -61,15 +66,22 @@ export async function openReleasesPage(
   await runner(url && url.length > 0 ? url : DEFAULT_RELEASES_URL);
 }
 
-function mapUpdateDelivery(response: Partial<UpdateDelivery>): UpdateDelivery {
+function mapUpdateDelivery(value: unknown): UpdateDelivery {
+  const response = readIpcDataObject(
+    value,
+    ["inAppUpdates", "releasesUrl"],
+    [],
+    UPDATE_IPC_RESPONSE_INVALID,
+  );
+  if (
+    typeof response.inAppUpdates !== "boolean" ||
+    typeof response.releasesUrl !== "string"
+  ) {
+    throwInvalidUpdateResponse();
+  }
   return {
-    // Default to in-app updates so an unexpected/missing response keeps the
-    // existing Windows behavior; only an explicit false (macOS) disables them.
-    inAppUpdates: response.inAppUpdates !== false,
-    releasesUrl:
-      typeof response.releasesUrl === "string" && response.releasesUrl.length > 0
-        ? response.releasesUrl
-        : DEFAULT_RELEASES_URL,
+    inAppUpdates: response.inAppUpdates,
+    releasesUrl: response.releasesUrl,
   };
 }
 
@@ -108,7 +120,9 @@ export async function relaunchApp(runner: RelaunchRunner = relaunch): Promise<vo
 export async function getUpdatePreferences(
   runner: UpdatePreferencesCommandRunner = defaultPreferencesRunner,
 ): Promise<UpdatePreferences> {
-  return mapUpdatePreferences((await runner("get_update_preferences", {})) as Partial<UpdatePreferences>);
+  return mapUpdatePreferences(
+    await runner("get_update_preferences", {}),
+  );
 }
 
 export async function saveUpdatePreferences(
@@ -116,7 +130,7 @@ export async function saveUpdatePreferences(
   runner: UpdatePreferencesCommandRunner = defaultPreferencesRunner,
 ): Promise<UpdatePreferences> {
   return mapUpdatePreferences(
-    (await runner("save_update_preferences", { preferences })) as Partial<UpdatePreferences>,
+    await runner("save_update_preferences", { preferences }),
   );
 }
 
@@ -168,11 +182,42 @@ function normalizeDownloadEvent(event: unknown): UpdateDownloadEvent | null {
   return null;
 }
 
-function mapUpdatePreferences(response: Partial<UpdatePreferences>): UpdatePreferences {
+function mapUpdatePreferences(value: unknown): UpdatePreferences {
+  const response = readIpcDataObject(
+    value,
+    ["lastCheckedAt", "postponedUntil", "skippedVersion"],
+    [],
+    UPDATE_IPC_RESPONSE_INVALID,
+  );
+  if (
+    !isNullableString(response.lastCheckedAt) ||
+    !isNullableSafeUnsignedInteger(response.postponedUntil) ||
+    !isNullableString(response.skippedVersion)
+  ) {
+    throwInvalidUpdateResponse();
+  }
   return {
-    lastCheckedAt: typeof response.lastCheckedAt === "string" ? response.lastCheckedAt : null,
-    postponedUntil:
-      typeof response.postponedUntil === "number" ? response.postponedUntil : null,
-    skippedVersion: typeof response.skippedVersion === "string" ? response.skippedVersion : null,
+    lastCheckedAt: response.lastCheckedAt,
+    postponedUntil: response.postponedUntil,
+    skippedVersion: response.skippedVersion,
   };
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isNullableSafeUnsignedInteger(
+  value: unknown,
+): value is number | null {
+  return (
+    value === null ||
+    (typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= 0)
+  );
+}
+
+function throwInvalidUpdateResponse(): never {
+  throw new IpcProtocolError(UPDATE_IPC_RESPONSE_INVALID);
 }
