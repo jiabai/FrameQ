@@ -288,6 +288,36 @@ def test_run_local_media_once_processes_audio_without_url_resolution_or_path_ech
     assert "review-secret" not in serialized
 
 
+@pytest.mark.parametrize(
+    "request_json",
+    [
+        '{"source_path":"C:/Users/review-secret/Podcast.mp3"',
+        json.dumps(
+            {
+                "contract_version": LOCAL_MEDIA_CONTRACT_VERSION,
+                "source_path": "C:/Users/review-secret/Podcast.mp3",
+                "media_kind": "video",
+                "safe_display_name": "Podcast.mp3",
+                "source_extension": "mp3",
+                "asr_model": DEFAULT_ASR_MODEL,
+            }
+        ),
+    ],
+)
+def test_run_local_media_once_rejects_invalid_payload_without_path_echo(
+    request_json: str,
+) -> None:
+    result = run_local_media_once(request_json)
+
+    assert result["status"] == "failed"
+    assert result["error"] == {
+        "code": "LOCAL_MEDIA_VALIDATION_FAILED",
+        "message": "Local media request payload was invalid.",
+        "stage": "waiting_input",
+    }
+    assert "review-secret" not in json.dumps(result)
+
+
 def test_main_rejects_invalid_stdin_without_echoing_payload(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         cli.sys,

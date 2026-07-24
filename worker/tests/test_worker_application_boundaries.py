@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import frameq_worker.worker_application.local_media as local_media
 import frameq_worker.worker_application.url_processing as url_processing
 import frameq_worker.worker_service as worker_service
 
@@ -48,3 +49,13 @@ def test_url_processing_handler_owns_the_url_use_case() -> None:
 
 def test_worker_service_reexports_url_handler_object() -> None:
     assert worker_service.run_worker_once is url_processing.run_worker_once
+
+
+def test_local_media_handler_owns_the_local_media_use_case() -> None:
+    assert "run_local_media_once" in _top_level_owned_names(
+        PRIVATE_ROOT / "local_media.py"
+    )
+
+
+def test_worker_service_reexports_local_media_handler_object() -> None:
+    assert worker_service.run_local_media_once is local_media.run_local_media_once

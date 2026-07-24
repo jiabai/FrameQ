@@ -60,7 +60,10 @@ network call, AI Credits behavior, or user-visible copy changes.
   only because `run_worker_once`/`run_worker_pipeline` had no private owner. GREEN passed focused
   41/41, full Worker 581 passed / 2 skipped with the existing `audioop` warning, Ruff, and diff
   check.
-- [ ] Task 4: Extract local-media processing.
+- [x] 2026-07-24: Extracted local-media processing with the existing strict request, default
+  dependencies, injection seams, and persistence failure mapping. RED failed only because the
+  private owner/re-export did not exist; GREEN passed focused 8/8, full Worker 585 passed /
+  2 skipped with the existing warning, Ruff, and diff check.
 - [ ] Task 5: Extract source identity and production source-resolution defaults.
 - [ ] Task 6: Extract AI retry and make `TaskPaths` explicit.
 - [ ] Task 7: Extract ASR model download and migrate true-owner test seams.

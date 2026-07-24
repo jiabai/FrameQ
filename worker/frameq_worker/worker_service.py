@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from frameq_worker.asr import DEFAULT_ASR_MODEL, Transcriber, build_asr_transcriber
+from frameq_worker.asr import DEFAULT_ASR_MODEL
 from frameq_worker.atomic_files import AtomicFileCommitError
 from frameq_worker.config import load_project_env
 from frameq_worker.desktop_contract import (
@@ -17,7 +17,6 @@ from frameq_worker.desktop_contract import (
 )
 from frameq_worker.insightflow import InsightClient
 from frameq_worker.llm import build_insight_client_from_env
-from frameq_worker.media import CommandRunner, run_command
 from frameq_worker.model_download import (
     ARCHIVE_INVALID_ERROR_CODE,
     ModelDownloadError,
@@ -25,17 +24,13 @@ from frameq_worker.model_download import (
 )
 from frameq_worker.models import Insight, JobStage, ProcessResult, TranscriptMetadata, WorkerError
 from frameq_worker.pipeline import (
-    TranscriberFactory,
-    failed_result,
     resolve_cache_dir,
     resolve_output_dir,
     run_insight_generation_step,
-    run_local_media_pipeline,
 )
 from frameq_worker.requests import (
     INVALID_RETRY_PAYLOAD_MESSAGE,
     optional_env,
-    parse_process_local_media_request,
     parse_retry_insights_request,
 )
 from frameq_worker.source_identity import (
@@ -50,7 +45,12 @@ from frameq_worker.task_transaction import (
     TaskArtifactCommitError,
     TaskArtifactRecoveryError,
 )
-from frameq_worker.worker_application.defaults import should_allow_real_asr
+from frameq_worker.worker_application.defaults import (
+    should_allow_real_asr as should_allow_real_asr,
+)
+from frameq_worker.worker_application.local_media import (
+    run_local_media_once as run_local_media_once,
+)
 from frameq_worker.worker_application.url_processing import (
     run_worker_once as run_worker_once,
 )
@@ -58,56 +58,6 @@ from frameq_worker.worker_application.url_processing import (
 InsightClientFactory = Callable[[dict[str, str]], InsightClient | None]
 MODEL_DOWNLOAD_FAILED_MESSAGE = "ASR model download failed."
 MODEL_ARCHIVE_INVALID_MESSAGE = "Downloaded ASR model archive was invalid."
-
-
-def run_local_media_once(
-    request_json: str,
-    project_root: Path | None = None,
-    command_runner: CommandRunner = run_command,
-    transcriber: Transcriber | None = None,
-    transcriber_factory: TranscriberFactory | None = None,
-    allow_real_asr: bool | None = None,
-    environ: dict[str, str] | None = None,
-    progress_callback: ProgressCallback | None = None,
-) -> dict[str, object]:
-    root = project_root or Path.cwd()
-    try:
-        payload = json.loads(request_json)
-        request = parse_process_local_media_request(payload)
-    except (json.JSONDecodeError, ValueError):
-        return failed_result(
-            code="LOCAL_MEDIA_VALIDATION_FAILED",
-            message="Local media request payload was invalid.",
-            stage=JobStage.WAITING_INPUT,
-        ).to_dict()
-
-    runtime_env = load_project_env(root, environ)
-    try:
-        result = run_local_media_pipeline(
-            request=request,
-            project_root=root,
-            command_runner=command_runner,
-            transcriber=transcriber,
-            allow_real_asr=should_allow_real_asr(runtime_env)
-            if allow_real_asr is None
-            else allow_real_asr,
-            environ=runtime_env,
-            transcriber_factory=transcriber_factory or build_asr_transcriber,
-            progress_callback=progress_callback,
-        )
-    except TaskArtifactRecoveryError:
-        result = failed_result(
-            code="TASK_ARTIFACT_RECOVERY_FAILED",
-            message="Task artifacts could not be recovered safely.",
-            stage=JobStage.FAILED,
-        )
-    except (AtomicFileCommitError, TaskArtifactCommitError):
-        result = failed_result(
-            code="TASK_ARTIFACT_COMMIT_FAILED",
-            message="Task artifacts could not be stored safely.",
-            stage=JobStage.FAILED,
-        )
-    return result.to_dict()
 
 
 def resolve_source_identity_once(
