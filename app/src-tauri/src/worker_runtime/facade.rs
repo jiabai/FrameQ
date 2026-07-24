@@ -7,6 +7,45 @@ use crate::RuntimePaths;
 #[cfg(not(test))]
 use tauri::Window;
 
+pub(crate) struct AsrModelDownloadJob {
+    download_url: Option<String>,
+    download_sha256: Option<String>,
+    modelscope_endpoint: Option<String>,
+    sensevoice_revision: Option<String>,
+}
+
+impl AsrModelDownloadJob {
+    pub(crate) fn new(
+        download_url: Option<String>,
+        download_sha256: Option<String>,
+        modelscope_endpoint: Option<String>,
+        sensevoice_revision: Option<String>,
+    ) -> Self {
+        Self {
+            download_url,
+            download_sha256,
+            modelscope_endpoint,
+            sensevoice_revision,
+        }
+    }
+
+    pub(super) fn download_url(&self) -> Option<&str> {
+        self.download_url.as_deref()
+    }
+
+    pub(super) fn download_sha256(&self) -> Option<&str> {
+        self.download_sha256.as_deref()
+    }
+
+    pub(super) fn modelscope_endpoint(&self) -> Option<&str> {
+        self.modelscope_endpoint.as_deref()
+    }
+
+    pub(super) fn sensevoice_revision(&self) -> Option<&str> {
+        self.sensevoice_revision.as_deref()
+    }
+}
+
 pub(crate) enum WorkerJob {
     ProcessVideo {
         payload: String,

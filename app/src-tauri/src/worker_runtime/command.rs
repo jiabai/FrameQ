@@ -1,7 +1,9 @@
+use super::facade::AsrModelDownloadJob;
 use crate::account;
 use crate::settings::{
-    legacy_local_llm_env_removals, LLM_CHECKOUT_REQUEST_ID_ENV, LLM_CHECKOUT_URL_ENV,
-    LLM_SESSION_TOKEN_ENV, LLM_SOURCE_ENV,
+    legacy_local_llm_env_removals, ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV,
+    LLM_CHECKOUT_REQUEST_ID_ENV, LLM_CHECKOUT_URL_ENV, LLM_SESSION_TOKEN_ENV, LLM_SOURCE_ENV,
+    MODELSCOPE_ENDPOINT_ENV, SENSEVOICE_REVISION_ENV,
 };
 use crate::task_manifest;
 use crate::{
@@ -82,6 +84,58 @@ fn executable_available_on_path(path_value: &str, binary_names: &[&str]) -> bool
         binary_names
             .iter()
             .any(|binary_name| directory.join(binary_name).is_file())
+    })
+}
+
+pub(super) fn build_asr_model_download_command_spec(
+    paths: &RuntimePaths,
+    job: &AsrModelDownloadJob,
+) -> Result<WorkerCommandSpec, String> {
+    let path_value = prepend_to_path(&paths.resource_dir.join("bin"))?;
+    let mut env = vec![
+        (
+            "PYTHONPATH".to_string(),
+            path_to_env_string(paths.resource_dir.join("worker")),
+        ),
+        ("PYTHONUTF8".to_string(), "1".to_string()),
+        ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
+        ("PATH".to_string(), path_value),
+        (
+            MODEL_DIR_ENV.to_string(),
+            path_to_env_string(paths.user_data_dir.join("models")),
+        ),
+        (
+            RESOURCE_DIR_ENV.to_string(),
+            path_to_env_string(&paths.resource_dir),
+        ),
+        (
+            USER_DATA_DIR_ENV.to_string(),
+            path_to_env_string(&paths.user_data_dir),
+        ),
+    ];
+
+    for (key, value) in [
+        (ASR_MODEL_DOWNLOAD_URL_ENV, job.download_url()),
+        (ASR_MODEL_DOWNLOAD_SHA256_ENV, job.download_sha256()),
+        (MODELSCOPE_ENDPOINT_ENV, job.modelscope_endpoint()),
+        (SENSEVOICE_REVISION_ENV, job.sensevoice_revision()),
+    ] {
+        if let Some(value) = value {
+            env.push((key.to_string(), value.to_string()));
+        }
+    }
+
+    Ok(WorkerCommandSpec {
+        program: bundled_python_path(&paths.resource_dir),
+        args: vec![
+            "-m".to_string(),
+            "frameq_worker".to_string(),
+            "--download-asr-model".to_string(),
+        ],
+        stdin_payload: None,
+        env,
+        env_remove: legacy_local_llm_env_removals(),
+        current_dir: paths.user_data_dir.clone(),
     })
 }
 
@@ -180,8 +234,12 @@ fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> b
 
 #[cfg(test)]
 mod tests {
-    use super::{build_worker_command_spec, WorkerCommandSpec, WorkerInvocation};
+    use super::{
+        build_asr_model_download_command_spec, build_worker_command_spec, WorkerCommandSpec,
+        WorkerInvocation,
+    };
     use crate::account::ServerManagedLlmInvocation;
+    use crate::worker_runtime::facade::AsrModelDownloadJob;
     use crate::{bundled_python_path, path_to_env_string, RuntimePaths};
     use std::path::PathBuf;
 
@@ -210,6 +268,86 @@ mod tests {
         ] {
             assert!(!spec.env_remove.iter().any(|value| value == key));
         }
+    }
+
+    #[test]
+    fn asr_model_download_job_derives_fixed_command_and_allowlisted_overrides() {
+        let paths = command_test_paths();
+        let job = AsrModelDownloadJob::new(
+            Some("https://cdn.example/sensevoice.zip".to_string()),
+            Some("abc123".to_string()),
+            Some("https://modelscope.example".to_string()),
+            Some("revision-1".to_string()),
+        );
+
+        let spec = build_asr_model_download_command_spec(&paths, &job)
+            .expect("prepare ASR download command");
+        let env = spec.env_map();
+
+        assert_eq!(spec.program, bundled_python_path(&paths.resource_dir));
+        assert_eq!(
+            spec.args,
+            vec!["-m", "frameq_worker", "--download-asr-model"]
+        );
+        assert_eq!(spec.stdin_payload, None);
+        assert_eq!(spec.current_dir, paths.user_data_dir);
+        assert_eq!(
+            env.get("FRAMEQ_MODEL_DIR"),
+            Some(&path_to_env_string(
+                PathBuf::from("frameq-test")
+                    .join("user-data")
+                    .join("models")
+            ))
+        );
+        assert_eq!(
+            env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_URL"),
+            Some(&"https://cdn.example/sensevoice.zip".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256"),
+            Some(&"abc123".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_MODELSCOPE_ENDPOINT"),
+            Some(&"https://modelscope.example".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_SENSEVOICE_REVISION"),
+            Some(&"revision-1".to_string())
+        );
+        assert_removes_legacy_local_llm_env(&spec);
+    }
+
+    #[test]
+    fn asr_model_download_job_omits_optional_overrides_and_keeps_fixed_environment() {
+        let paths = command_test_paths();
+        let job = AsrModelDownloadJob::new(None, None, None, None);
+
+        let spec = build_asr_model_download_command_spec(&paths, &job)
+            .expect("prepare ASR download command");
+        let env = spec.env_map();
+
+        for key in [
+            "FRAMEQ_ASR_MODEL_DOWNLOAD_URL",
+            "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256",
+            "FRAMEQ_MODELSCOPE_ENDPOINT",
+            "FRAMEQ_SENSEVOICE_REVISION",
+        ] {
+            assert!(!env.contains_key(key), "unexpected optional key {key}");
+        }
+        for key in [
+            "PYTHONPATH",
+            "PYTHONUTF8",
+            "PYTHONIOENCODING",
+            "PATH",
+            "FRAMEQ_MODEL_DIR",
+            "FRAMEQ_RESOURCE_DIR",
+            "FRAMEQ_USER_DATA_DIR",
+        ] {
+            assert!(env.contains_key(key), "missing fixed key {key}");
+        }
+        assert_eq!(spec.stdin_payload, None);
+        assert_removes_legacy_local_llm_env(&spec);
     }
 
     #[test]
