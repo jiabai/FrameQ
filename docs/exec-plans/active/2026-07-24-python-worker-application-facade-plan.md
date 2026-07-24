@@ -78,7 +78,12 @@ network call, AI Credits behavior, or user-visible copy changes.
   handler owner. RED failed only for the absent download symbol/handler/re-export; GREEN passed
   focused 30/30, full Worker 594 passed / 2 skipped with the existing warning, Ruff, and diff
   check.
-- [ ] Task 8: Atomically close the CLI and facade surfaces and enable the complete boundary gate.
+- [x] 2026-07-24: Atomically removed the CLI compatibility namespace/wrappers, reduced the facade
+  to its exact five-name direct-import surface, migrated CLI tests to module-qualified dispatch,
+  and enabled the full ownership/dependency gate. Valid RED had three failures: missing facade
+  `__all__`, CLI `__all__`/wrappers, and CLI-owned production factories. GREEN passed boundary
+  18/18, focused 74/74, full Worker 600 passed / 2 skipped with the existing warning, Ruff, and
+  diff check.
 - [ ] Task 9: Run complete verification, update durable evidence, archive the ExecPlan, and prepare
   the branch for integration.
 
@@ -103,6 +108,10 @@ network call, AI Credits behavior, or user-visible copy changes.
   seam: a process-video test patched `worker_service.build_insight_client_from_env`. The production
   path was healthy; moving that assertion to `worker_application.defaults` restored the intended
   "process video never builds an AI client" proof.
+- Evidence: the first draft of the final factory-owner gate also matched
+  `pipeline_runtime/transcript.py`, which legitimately owns domain-level ASR construction. The gate
+  was narrowed before GREEN to the CLI/facade/private application boundary; its valid RED then
+  identified only the three factories still owned by CLI.
 - Evidence: canonical worker source is generated into the ignored Tauri resource mirror. New
   private modules must be verified through `scripts/tauri-dev-fresh-worker.mjs` and the Tauri
   `--no-bundle` build, never hand-edited in `app/src-tauri/resources/worker`.

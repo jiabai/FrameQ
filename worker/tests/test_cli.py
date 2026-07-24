@@ -11,21 +11,23 @@ import pytest
 from frameq_worker import platform_source_resolvers as platform_resolvers_module
 from frameq_worker.asr import Transcript
 from frameq_worker.cli import (
-    MODEL_DOWNLOAD_EVENT_PREFIX,
-    PROGRESS_EVENT_PREFIX,
     render_model_download_event,
     render_progress_event,
     render_result_json,
+)
+from frameq_worker.desktop_contract import (
+    LOCAL_MEDIA_CONTRACT_VERSION,
+    MODEL_DOWNLOAD_EVENT_PREFIX,
+    PROCESS_VIDEO_CONTRACT_VERSION,
+    PROGRESS_EVENT_PREFIX,
+)
+from frameq_worker.media import CommandResult
+from frameq_worker.worker_application import defaults as worker_defaults
+from frameq_worker.worker_service import (
     resolve_source_identity_once,
     run_local_media_once,
     run_worker_once,
 )
-from frameq_worker.desktop_contract import (
-    LOCAL_MEDIA_CONTRACT_VERSION,
-    PROCESS_VIDEO_CONTRACT_VERSION,
-)
-from frameq_worker.media import CommandResult
-from frameq_worker.worker_application import defaults as worker_defaults
 
 DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall"
 
@@ -155,7 +157,7 @@ def manifest_from_result(result: dict[str, object]) -> dict[str, object]:
 
 def test_main_returns_zero_for_structured_worker_failures(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
-        cli,
+        cli.worker_service_module,
         "run_worker_once",
         lambda *args, **kwargs: {
             "status": "failed",
@@ -192,7 +194,11 @@ def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
         return {"status": "completed"}
 
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
-    monkeypatch.setattr(cli, "run_worker_once", fake_run_worker_once)
+    monkeypatch.setattr(
+        cli.worker_service_module,
+        "run_worker_once",
+        fake_run_worker_once,
+    )
 
     exit_code = cli.main(["--request-stdin"])
 
@@ -230,7 +236,11 @@ def test_main_reads_local_media_request_from_dedicated_stdin_mode(
         return {"status": "completed"}
 
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
-    monkeypatch.setattr(cli, "run_local_media_once", fake_run_local_media_once)
+    monkeypatch.setattr(
+        cli.worker_service_module,
+        "run_local_media_once",
+        fake_run_local_media_once,
+    )
 
     exit_code = cli.main(["--process-local-media-stdin"])
 
@@ -411,7 +421,7 @@ def test_main_dispatches_normalized_source_identity_request(
         io.StringIO('{\n  "url": "https://example.test/video"\n}'),
     )
     monkeypatch.setattr(
-        cli,
+        cli.worker_service_module,
         "resolve_source_identity_once",
         fake_resolve_source_identity_once,
     )
@@ -444,7 +454,11 @@ def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
         return {"status": "completed"}
 
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
-    monkeypatch.setattr(cli, "retry_insights_once", fake_retry_insights_once)
+    monkeypatch.setattr(
+        cli.worker_service_module,
+        "retry_insights_once",
+        fake_retry_insights_once,
+    )
 
     exit_code = cli.main(["--retry-insights-stdin"])
 
@@ -491,7 +505,7 @@ def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> 
         }
 
     monkeypatch.setattr(
-        cli,
+        cli.worker_service_module,
         "run_asr_model_download_once",
         fake_run_asr_model_download_once,
     )
