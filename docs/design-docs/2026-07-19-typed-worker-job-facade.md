@@ -57,6 +57,16 @@ The rename adds no new lifecycle owner. It makes the existing serialized lane's 
 closed URL/local/AI job responsibility. All callers and tests move atomically; compatibility aliases
 are rejected because they would leave two names for one policy boundary.
 
+## 2026-07-24 ASR model-download capability closure
+
+The earlier neutral decision that kept the ASR model-download command-policy owner in
+`asr_model.rs` is superseded by
+`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`.
+Application code now submits an opaque `AsrModelDownloadJob`; `worker_runtime` exclusively derives
+the executable, argv, stdin, environment policy, cwd, operation, progress route, and private model
+lane. The completed delivery record is
+`docs/exec-plans/completed/2026-07-24-asr-model-download-job-capability-plan.md`.
+
 ## Consequences
 
 ### Positive
@@ -76,8 +86,8 @@ are rejected because they would leave two names for one policy boundary.
 
 ### Neutral
 
-- ASR model download keeps its existing command-policy owner in `asr_model.rs`, but its
-  operation/progress/lane pairing is submitted through a narrow `ProcessSupervisors` method.
+- ASR model download remains a separate semantic runtime job and private lane; its raw command
+  policy is runtime-owned under the 2026-07-24 capability-closure extension above.
 - Adding local media still requires the separately approved contract-v4 and product implementation.
 
 ## Failure and Security Considerations

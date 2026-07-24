@@ -1,8 +1,8 @@
 # ASR Model Download Job Capability Boundary
 
 - Date: 2026-07-24
-- Status: Accepted on 2026-07-24; implementation pending under
-  `docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md`
+- Status: Implemented and locally verified on 2026-07-24; completed evidence:
+  `docs/exec-plans/completed/2026-07-24-asr-model-download-job-capability-plan.md`
 - Scope: behavior-neutral Rust worker-runtime capability-boundary refactor
 - Related designs:
   - `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
@@ -165,7 +165,10 @@ Runner internals and runtime-owned tests may continue to construct specification
 modules, Tauri command handlers, and other crate modules cannot name or construct the type.
 
 `WorkerInvocation` remains private to runtime command/facade composition. This refactor does not
-widen `WorkerRunRequest`, `WorkerLane`, supervisor state, or runner internals.
+widen `WorkerLane`, supervisor state, or runner internals. Implementation also narrowed
+`WorkerRunRequest` to `crate::worker_runtime` because it contains the private specification, and
+made the same-file `prepare_for_test` seam private rather than suppressing Rust
+`private_interfaces` warnings.
 
 ### Execution boundary
 

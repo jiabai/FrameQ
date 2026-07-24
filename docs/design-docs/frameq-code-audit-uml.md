@@ -988,13 +988,22 @@ classDiagram
     ResolveSourceIdentity
   }
 
+  class AsrModelDownloadJob {
+    <<opaque semantic job>>
+    -downloadUrl: Option
+    -downloadSha256: Option
+    -modelscopeEndpoint: Option
+    -sensevoiceRevision: Option
+  }
+
   class WorkerCommandSpec {
-    +program: PathBuf
-    +args: Vec
-    +stdinPayload: Option
-    +env: Vec
-    +envRemove: Vec
-    +currentDir: PathBuf
+    <<worker_runtime private>>
+    -program: PathBuf
+    -args: Vec
+    -stdinPayload: Option
+    -env: Vec
+    -envRemove: Vec
+    -currentDir: PathBuf
   }
 
   class WorkerRunRequest {
@@ -1026,7 +1035,7 @@ classDiagram
     +taskWorker(paths)
     +cancelTask()
     +isTaskActive()
-    +runAsrModelDownload(command)
+    +runAsrModelDownload(job)
     +cancelAsrModelDownload()
   }
 
@@ -1163,11 +1172,13 @@ classDiagram
   TaskWorkerFacade --> AccountModule : retry-only LLM material
   TaskWorkerFacade --> WorkerLane : fixed task lane
   WorkerInvocation --> WorkerCommandSpec : builds
+  AsrModelDownloadJob --> WorkerCommandSpec : runtime derives
   WorkerRunRequest *-- WorkerCommandSpec
   WorkerRunRequest --> WorkerOperation
   WorkerRunRequest --> ProgressRoute
   ProcessSupervisors "1" *-- "2" WorkerLane
   ProcessSupervisors --> TaskWorkerFacade : creates
+  ProcessSupervisors --> AsrModelDownloadJob : accepts
   WorkerLane --> WorkerRunRequest : internal accepts
   WorkerLane --> WorkerRunOutcome
   WorkerLane --> WorkerRunError
@@ -1204,9 +1215,9 @@ crate-wide 公共 API。
 它不是一个后台任务队列，也不保存业务结果。它是 `worker_runtime::supervisor` 内部状态机，
 只记录某个 lane 当前受控的 child instance、PID/process group 和 `Running/Cancelling` 阶段，
 用 instance ID 防止旧 waiter 清除新进程。application module 看见的是
-`WorkerJob + TaskWorkerFacade` 以及 `ProcessSupervisors` 的语义 cancel/activity/model-download
-方法；task 和 model download 各自仍拥有一个内部 lane，因此可以独立监督，但同一 lane
-不允许同时启动两个 child。
+`WorkerJob + TaskWorkerFacade`、`AsrModelDownloadJob` 以及 `ProcessSupervisors` 的语义
+cancel/activity/model-download 方法；task 和 model download 各自仍拥有一个内部 lane，因此
+可以独立监督，但同一 lane 不允许同时启动两个 child。
 
 ### Rust 所有权说明
 
@@ -1218,6 +1229,10 @@ crate-wide 公共 API。
 - `worker_runtime/facade.rs` 通过 exhaustive match 唯一派生当前四种 task job 的底层策略；
   只有 retry-insights 会解析 server-managed LLM material；local-media 与 Python CLI consumer
   已同批进入 facade，没有 dead runtime variant 或 compatibility alias。
+- `asr_model.rs` 只从 app-local `.env` 提取四项白名单 override 并构造字段私有的
+  `AsrModelDownloadJob`；可执行文件、argv、stdin、env/removal、cwd、operation、progress 和
+  lane 均由 runtime 固定。`WorkerCommandSpec` 与 `WorkerRunRequest` 不能离开
+  `worker_runtime`。
 - `worker_runtime/command.rs` 拥有固定调用、环境和 bounded stdin；`runner.rs` 是五类操作唯一的
   spawn/register/deliver/read/wait/finish/classify/log 编排；私有 `process_io.rs`、
   `watchdog.rs`、`progress.rs`、`terminal.rs` 各自拥有对应实现，且 application module
@@ -2186,12 +2201,12 @@ stateDiagram-v2
 
 | 审计项 | 当前事实与风险 | 已批准的最小改善边界 |
 |--------|----------------|----------------------|
-| ASR 模型下载仍可由 application module 构造原始进程规格 | `WorkerCommandSpec` 及字段仍为 `pub(crate)`，经 `worker_runtime/mod.rs` 和 `lib.rs` 两次重导出；`asr_model.rs` 自行决定 bundled Python、`--download-asr-model` argv、完整 env/removal、null stdin 与 cwd，再把 raw spec 交给 `ProcessSupervisors`。当前调用固定且可信，但 Rust 无法阻止其他 crate module 获得同等任意 executable/argv/env/cwd 能力 | 已批准 `AsrModelDownloadJob`：`asr_model.rs` 只保留可用性、`.env` 读取和四项白名单 override 提取；`worker_runtime::command` 独占 raw spec；`ProcessSupervisors` 只接受语义 job；`WorkerCommandSpec` 降为 runtime-private，并以 RED/GREEN source gate 长期阻止重导出或 application 绕过。设计：`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`；active ExecPlan：`docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md` |
 
 ### 已解决审计项
 
 | 原审计项 | 当前状态 | 证据与长期门控 |
 |----------|----------|----------------|
+| ASR 模型下载仍可由 application module 构造原始进程规格 | **已解决**：`asr_model.rs` 只负责模型可用性、`.env` 解析和四项白名单 override，并提交字段私有的 `AsrModelDownloadJob`；`worker_runtime::command` 独占 bundled Python、argv、stdin、env/removal 与 cwd；`ProcessSupervisors` 固定 operation/progress/lane；`WorkerCommandSpec`、`WorkerRunRequest` 和测试 preparation seam 均已收窄，crate/root raw-spec 重导出删除 | TDD RED 分别证明语义 Job/builder、request composition 和 runtime-private visibility 缺失；GREEN command 7/7、ASR 7/7、runtime 63/63、Rust 226/226、App 637/637、scripts 27/27、build/rustfmt/Tauri no-bundle 通过。`raw_worker_process_capability_stays_inside_worker_runtime` 长期阻止 raw 类型、重导出及 application CLI ownership 回归。设计与 completed ExecPlan：`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`、`docs/exec-plans/completed/2026-07-24-asr-model-download-job-capability-plan.md` |
 | 普通 Tauri IPC command result 的 TypeScript 运行时解码不一致 | **已解决**：`accountClient.ts`、`historyClient.ts`、`settingsClient.ts`、`transcriptDetailClient.ts` 和 FrameQ-owned `updateClient.ts` runner 均返回 `Promise<unknown>`，并由各领域 parser 校验闭集顶层/嵌套 DTO、身份和语义关系；共享 `tauriIpcProtocol.ts` 只负责安全读取普通 data object/array 与稳定非回显错误，不包含领域 schema，也未引入 `BaseClient<T>`、Zod、wire 或 Rust DTO 变更 | TDD focused 64/64、App 637/637、Rust 223/223、scripts 27/27、lint/build/rustfmt/governance/diff 通过；`scripts/tests/tauri-ipc-runtime-decoding-boundary.test.mjs` 长期阻止 reviewed clients 重引入 generic `invoke<T>`、direct response assertion 或非 `unknown` runner；设计与 completed ExecPlan 见 `docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md`、`docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md` |
 | `models.py -> source_identity.py -> fallbacks` | 已在 `f22861c` 完成依赖倒置；core identity、application resolution 与 platform adapters 已分层 | `worker/tests/test_import_boundaries.py`、`worker/tests/test_source_resolution.py`；完整设计见 `docs/design-docs/2026-07-18-source-identity-dependency-boundary.md` |
 | `worker_command.rs` 混合 supervisor、OS process、stdin/progress/output 与调用策略 | 已在 `9833bd6` 删除旧模块；`worker_runtime/command.rs`、`runner.rs`、`supervisor.rs` 分层，当前五类操作统一经过 `WorkerLane::run`，低层状态和终止函数保持私有 | `worker_runtime` 内联 Rust tests、`scripts/tests/unix-process-supervisor-workflow.test.mjs`；完整设计见 `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md` |

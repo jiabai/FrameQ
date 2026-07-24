@@ -444,20 +444,21 @@
 
 ## 2026-07-10 Desktop Process-Tree Cancellation Boundary
 
-- Only `worker_runtime::supervisor` may signal a PID/PGID, and only one recorded by the private `ProcessSupervisor` for the current in-process worker or model-download instance. Application modules receive semantic task-job execution plus cancellation/activity methods; the lanes themselves and all supervisor mutation/OS termination functions remain private. The current ASR model-download caller still supplies a crate-visible raw command specification to its otherwise narrow method, so the semantic model-download capability is not yet fully closed.
+- Only `worker_runtime::supervisor` may signal a PID/PGID, and only one recorded by the private `ProcessSupervisor` for the current in-process worker or model-download instance. Application modules receive semantic task/model-download execution plus cancellation/activity methods; the lanes, raw requests/specifications, and all supervisor mutation/OS termination functions remain private.
 - `WorkerLane::run` is the sole owner of FrameQ worker spawn, register-before-stdin, pipe ownership, reader startup, wait/reap, finish-before-reader-join, terminal classification, and lifecycle diagnostics. It must not accept a PID, PGID, executable, command, environment key, or shell fragment from IPC, UI, worker output, task data, or a log entry.
 - `TaskWorkerFacade::execute(WorkerJob)` is the only application-facing task-lane execution entry.
   It must derive the fixed invocation, lifecycle operation, progress route, lane, and credential
   policy exhaustively. Only `RetryInsights` may resolve server-managed LLM invocation material;
   process-video, process-local-media, and source-identity jobs cannot receive it through their API.
-- The accepted ASR model-download target is
+- The implemented ASR model-download capability is
   `AsrModelDownloadJob -> worker_runtime::command -> WorkerCommandSpec`. The semantic job may carry
   only the existing download URL, SHA-256, ModelScope endpoint, and SenseVoice revision override
   values; executable, argv, stdin, environment keys/removals, cwd, operation, progress route, and
-  lane remain runtime-owned. `WorkerCommandSpec` must become inaccessible outside
-  `worker_runtime`, and lifecycle diagnostics must not render any override value. This target is
-  pending implementation under
-  `docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md`.
+  lane remain runtime-owned. `WorkerCommandSpec` and `WorkerRunRequest` are inaccessible outside
+  `worker_runtime`, and lifecycle diagnostics must not render any override value. The permanent
+  source gate prevents crate/root re-export, raw application imports, and ownership of
+  `--download-asr-model` outside `worker_runtime`. Evidence:
+  `docs/exec-plans/completed/2026-07-24-asr-model-download-job-capability-plan.md`.
 - Windows cancellation uses the fixed `taskkill /T /F` argument vector. Unix cancellation uses a fixed `kill` argument vector directed at the worker-created process group, first `TERM` and then bounded-grace `KILL` only if the group remains. No shell interpolation is permitted.
 - A delivered termination signal is not proof of a final cancelled state. State rollback after a signal error and terminal cleanup after child observation must match the same instance ID, so stale cancellation/exit handling cannot hide a real result or interfere with a newer process.
 - A valid structured worker result wins a concurrent cancellation claim. Without a structured result, only the matching `Cancelling` terminal phase becomes cancelled; malformed success is a protocol violation and malformed failure remains a typed unstructured failure.

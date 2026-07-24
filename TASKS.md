@@ -143,7 +143,7 @@
 
 ## Refactoring and Technical Debt
 
-- [ ] Close the ASR model-download raw process capability (2026-07-24) — ✅ Acceptance:
+- [x] Close the ASR model-download raw process capability (completed 2026-07-24) — ✅ Acceptance:
   keep model availability and app-local `.env` parsing in `asr_model.rs`, but allow it to submit
   only an opaque `AsrModelDownloadJob` containing the four existing allowlisted override values;
   move bundled Python/argv/stdin/env/removal/cwd construction into `worker_runtime::command`;
@@ -151,7 +151,11 @@
   mapping, CLI bytes, `.env` schema, model files, network behavior, and public protocols; make
   `WorkerCommandSpec` runtime-private and add a RED/GREEN source-ownership gate. Design:
   `docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`. ExecPlan:
-  `docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md`.
+  `docs/exec-plans/completed/2026-07-24-asr-model-download-job-capability-plan.md`. Implemented in
+  three TDD slices: command 7/7, ASR 7/7, runtime 63/63, Rust 226/226, App 637/637, scripts 27/27,
+  frontend build, rustfmt, governance, diff, and Tauri release `--no-bundle` passed. The unchanged
+  Windows process-tree tests require permission outside the restricted sandbox; the same exact
+  cancellation test proved 30.07-second sandbox failure versus 0.17-second privileged success.
 
 - [x] Split the Server Store/PrismaStore adapters by transaction responsibility (completed 2026-07-23) — ✅
   Acceptance: keep `store.ts` and `prismaStore.ts` as the stable import roots and

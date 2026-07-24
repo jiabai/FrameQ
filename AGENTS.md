@@ -52,9 +52,9 @@
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
-- 当前 active ASR 模型下载能力边界计划：`docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md`
 - 当前 active 发布计划：`docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 当前 active 功能计划：`docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- 最近完成 ASR 模型下载能力边界计划：`docs/exec-plans/completed/2026-07-24-asr-model-download-job-capability-plan.md`
 - 最近完成 Tauri IPC 解码计划：`docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md`
 - 最近完成 Server Store/PrismaStore 拆分计划：`docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md`
 - 最近完成 Rust worker runner 拆分计划：`docs/exec-plans/completed/2026-07-23-rust-worker-runner-module-split-plan.md`

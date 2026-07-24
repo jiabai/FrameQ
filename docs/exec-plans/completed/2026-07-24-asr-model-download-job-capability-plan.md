@@ -3,8 +3,7 @@
 > This ExecPlan is a living document. The sections Progress, Surprises & Discoveries, Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this
-> plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Do not dispatch subagents
-> from a side conversation.
+> plan task-by-task. Steps use checkbox syntax for tracking.
 
 **Goal:** Make ASR model download enter the Rust worker runtime through a closed semantic job so
 application modules can no longer construct or submit arbitrary child-process specifications.
@@ -46,17 +45,27 @@ Credits.
 - [x] 2026-07-24: Wrote the accepted durable design, this active ExecPlan, and architecture,
   security, audit, debt, task, and index registrations without changing production code.
   Validation: `python scripts/validate_agents_docs.py --level WARN` and `git diff --check`.
-- [ ] 2026-07-24: Add the semantic job and runtime-owned command-policy tests before production
-  implementation. Validation: record the RED compile/test failure and focused GREEN command tests.
-- [ ] 2026-07-24: Migrate the model-download execution entry and application caller while
-  preserving operation, progress, lane, and product-result mapping. Validation: record focused
-  composition and ASR mapping tests.
-- [ ] 2026-07-24: Make the raw command specification runtime-private and add a permanent
-  source-ownership gate. Validation: record the RED visibility/export failure and GREEN boundary
-  test.
-- [ ] 2026-07-24: Run complete verification, record exact results/residual platform risk, update
-  governance evidence, and archive the plan. Validation: all commands under Validation and
-  Acceptance.
+- [x] 2026-07-24: Added the semantic job and runtime-owned command-policy tests before caller
+  migration. RED failed only for missing `AsrModelDownloadJob` and
+  `build_asr_model_download_command_spec`; GREEN passed command 7/7 and facade 5/5, with rustfmt
+  clean. The non-test library reported the expected temporary dead-code warnings until Task 3
+  connects the new policy. Validation: focused Cargo output recorded in the implementation session.
+- [x] 2026-07-24: Migrated the model-download execution entry and application caller while
+  preserving operation, progress, lane, and product-result mapping. RED failed only for the missing
+  `prepare_asr_model_download_request`; GREEN passed composition 1/1, ASR product mapping and
+  availability 7/7, command policy 7/7, and rustfmt. The only remaining warning is the deliberately
+  not-yet-removed crate-root raw-spec re-export targeted by Task 4. Validation: focused Cargo output
+  recorded in the implementation session.
+- [x] 2026-07-24: Made the raw command specification and run request runtime-private, removed both
+  raw-spec re-exports, narrowed the test preparation seam, and added a permanent source-ownership
+  gate. RED failed on the old `pub(crate)` visibility; GREEN passed the boundary 1/1,
+  worker-runtime 63/63, complete Rust 226/226, and rustfmt. Validation: process-tree suites were run
+  outside the restricted sandbox after a same-test sandbox/non-sandbox comparison proved
+  `taskkill` permission was the only cause of the sandbox timeout.
+- [x] 2026-07-24: Completed verification, recorded evidence/residual platform risk, updated
+  governance, and archived the plan. Validation: command 7/7, ASR 7/7, runtime 63/63, Rust 226/226,
+  App 637/637, scripts 27/27, frontend production build, rustfmt, Tauri release `--no-bundle`,
+  governance 0 errors / 0 warnings, and `git diff --check` all pass.
 
 ## Surprises & Discoveries
 
@@ -77,6 +86,23 @@ Credits.
   only behaviorally. It must move to `worker_runtime::command` when command construction moves.
 - Evidence: runner fixtures inside `worker_runtime` legitimately construct raw specifications.
   The visibility change must preserve those private tests while removing crate-root imports.
+- Evidence: starting two first-build Cargo commands concurrently against one new worktree target
+  caused one dependency `rustc` process to exit without a diagnostic. Serial reruns compiled the
+  target and passed the facade and command baselines 5/5 each; subsequent Cargo commands reuse the
+  healthy target.
+- Evidence: the first full `worker_runtime` run inside the restricted sandbox passed 54 tests
+  before cancellation/watchdog process-tree fixtures failed or waited past 60 seconds. The exact
+  blocked-stdin cancellation test failed in-sandbox after 30.07 seconds with
+  `RequestDeliveryFailed`, while the unchanged test passed outside the sandbox in 0.17 seconds;
+  the complete privileged runtime suite then passed 63/63 in 4.89 seconds.
+- Evidence: narrowing `WorkerCommandSpec` exposed compiler `private_interfaces` warnings for the
+  crate-visible `WorkerRunRequest::command` field and test-only `prepare_for_test`. Both values have
+  no application consumer, so they were narrowed to the runtime boundary/private test owner rather
+  than suppressing warnings.
+- Evidence: the isolated worktree initially had no `app/node_modules`, so the first App command
+  stopped before Vitest with `vitest is not recognized`. Installing the existing lockfile added the
+  local dependency tree without changing `package.json` or `package-lock.json`; the rerun passed
+  68 files / 637 tests.
 
 ## Decision Log
 
@@ -96,17 +122,42 @@ Credits.
 - Decision: Make `WorkerCommandSpec` visible only inside `crate::worker_runtime` and remove both
   re-exports. Rationale: file relocation without capability closure would not solve the audit
   finding. Date/Author: 2026-07-24, User + Codex.
+- Decision: Narrow `WorkerRunRequest` to `crate::worker_runtime` and make `prepare_for_test`
+  private to `facade.rs`. Rationale: the raw request contains the newly private spec and has no
+  application consumer; suppressing compiler visibility warnings would leave a misleading broader
+  interface. Date/Author: 2026-07-24, Codex.
 - Decision: Add no product-spec or contract revision. Rationale: valid wire shapes, UI behavior,
   worker CLI, persisted files, and network activity remain unchanged. Date/Author: 2026-07-24,
   User + Codex.
 
 ## Outcomes & Retrospective
 
-Pending implementation. Closeout must state the exact focused/full test counts, whether a native
-Tauri build ran, and any platform evidence not obtained.
+Outcome: ASR model download now crosses the application/runtime boundary only as an opaque
+`AsrModelDownloadJob` with four private optional override values. `asr_model.rs` still owns model
+availability and app-local `.env` extraction; `worker_runtime::command` now owns the exact bundled
+Python program, `-m frameq_worker --download-asr-model` argv, null stdin, fixed/allowlisted
+environment, legacy removal set, and cwd. `ProcessSupervisors` fixes the model operation, progress
+route, and separate lane, while preparation errors remain outside typed runner errors.
 
-Residual risk before implementation: `WorkerCommandSpec` remains crate-visible and ASR model
-download still constructs a raw process specification in the application module.
+`WorkerCommandSpec`, all of its fields, and `WorkerRunRequest` are visible only inside
+`crate::worker_runtime`; crate/root re-exports are gone. The test-only preparation method is private
+to its facade owner. The new recursive source gate prevents application references to raw request,
+invocation, or command-spec types and prevents the model-download CLI flag from moving outside the
+runtime owner.
+
+TDD evidence was captured in three slices: missing job/builder RED to command 7/7 and facade 5/5
+GREEN; missing request-composition RED to composition 1/1 plus ASR 7/7 GREEN; and old visibility
+RED to source boundary 1/1, runtime 63/63, and complete Rust 226/226 GREEN. Complete App 637/637,
+repository scripts 27/27, frontend production build, Tauri release `--no-bundle`, rustfmt,
+governance, and diff gates pass. Implementation commits are `7826521`, `ea45bbc`, and `0e7c5e9`;
+approved planning was recorded in `d55aca6`.
+
+Residual risk: no real model download or macOS-host execution was rerun because executable, argv,
+environment, progress, lifecycle, and wire behavior are compatibility invariants and the change
+adds no network path. Windows process-tree fixtures passed with the required host permission; the
+restricted sandbox cannot deliver `taskkill`, as proved by the exact 30.07-second failure versus
+0.17-second privileged pass. Vite continues to report the existing post-minification chunk-size
+advisory, unrelated to this Rust-only refactor.
 
 ## Context and Orientation
 
@@ -204,7 +255,7 @@ commit.
 - Modify: `app/src-tauri/src/worker_runtime/facade.rs`
 - Modify: `app/src-tauri/src/worker_runtime/command.rs`
 
-- [ ] **Step 1: Confirm the focused baseline is green**
+- [x] **Step 1: Confirm the focused baseline is green**
 
 Run:
 
@@ -215,7 +266,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml worker_runtime::command
 
 Expected: existing typed-job and command-policy tests pass before adding the model job.
 
-- [ ] **Step 2: Write failing command-policy tests**
+- [x] **Step 2: Write failing command-policy tests**
 
 In `worker_runtime/command.rs`, extend the test module to import the not-yet-implemented job and
 builder:
@@ -316,7 +367,7 @@ fn asr_model_download_job_omits_optional_overrides_and_keeps_fixed_environment()
 }
 ```
 
-- [ ] **Step 3: Run the tests and capture RED**
+- [x] **Step 3: Run the tests and capture RED**
 
 Run:
 
@@ -327,7 +378,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml asr_model_download_job_deriv
 Expected: compilation fails because `AsrModelDownloadJob` and
 `build_asr_model_download_command_spec` do not exist. Record that exact failure in `Progress`.
 
-- [ ] **Step 4: Add the minimal opaque semantic job**
+- [x] **Step 4: Add the minimal opaque semantic job**
 
 In `worker_runtime/facade.rs`, add:
 
@@ -375,7 +426,7 @@ impl AsrModelDownloadJob {
 Do not add setters, `HashMap`, public fields, `Default`, a generic override method, raw paths, or
 execution-policy fields.
 
-- [ ] **Step 5: Add the minimal runtime-owned command builder**
+- [x] **Step 5: Add the minimal runtime-owned command builder**
 
 In `worker_runtime/command.rs`, import the four settings constants and
 `AsrModelDownloadJob`. Add:
@@ -436,7 +487,7 @@ pub(super) fn build_asr_model_download_command_spec(
 
 Reuse the existing `WorkerCommandSpec`; do not create a second spec or generic builder.
 
-- [ ] **Step 6: Run focused GREEN and formatting**
+- [x] **Step 6: Run focused GREEN and formatting**
 
 Run:
 
@@ -449,7 +500,7 @@ cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check
 Expected: all focused tests pass; formatting is clean. The new builder may still be unused until
 Task 3, but the existing application path remains unchanged.
 
-- [ ] **Step 7: Commit the semantic policy slice**
+- [x] **Step 7: Commit the semantic policy slice**
 
 ```powershell
 git add app/src-tauri/src/worker_runtime/facade.rs app/src-tauri/src/worker_runtime/command.rs
@@ -463,7 +514,7 @@ git commit -m "refactor(worker): add ASR model download job policy"
 - Modify: `app/src-tauri/src/worker_runtime/mod.rs`
 - Modify: `app/src-tauri/src/asr_model.rs`
 
-- [ ] **Step 1: Write the failing request-composition test**
+- [x] **Step 1: Write the failing request-composition test**
 
 In `worker_runtime/mod.rs`, extend the existing test imports to:
 
@@ -506,7 +557,7 @@ fn asr_model_download_job_derives_operation_progress_and_command() {
 
 Import the exact private runtime types through `super`, plus `RuntimePaths` and `PathBuf`.
 
-- [ ] **Step 2: Run the test and capture RED**
+- [x] **Step 2: Run the test and capture RED**
 
 Run:
 
@@ -517,7 +568,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml asr_model_download_job_deriv
 Expected: compilation fails because `prepare_asr_model_download_request` does not exist. Record the
 failure in `Progress`.
 
-- [ ] **Step 3: Add private preparation and change the semantic method signature**
+- [x] **Step 3: Add private preparation and change the semantic method signature**
 
 In `worker_runtime/mod.rs`, import `build_asr_model_download_command_spec`, re-export
 `AsrModelDownloadJob` only at the `worker_runtime` semantic surface, and add:
@@ -557,7 +608,7 @@ pub(crate) fn run_asr_model_download(
 The method must still select the private `asr_model_download` lane; do not expose a facade that
 lets callers select a lane.
 
-- [ ] **Step 4: Migrate `asr_model.rs` to extract and submit the job**
+- [x] **Step 4: Migrate `asr_model.rs` to extract and submit the job**
 
 Delete `build_model_download_command_spec` and its raw command-policy test. Remove imports for
 `WorkerCommandSpec`, `bundled_python_path`, `prepend_to_path`, child environment constants,
@@ -596,7 +647,7 @@ match map_model_download_run_result(run_result)? {
 Keep `configured_env_value` behavior unchanged, including trimming and process-environment fallback.
 Do not move `.env` parsing into `worker_runtime`.
 
-- [ ] **Step 5: Run focused GREEN and regression mapping tests**
+- [x] **Step 5: Run focused GREEN and regression mapping tests**
 
 Run:
 
@@ -611,7 +662,7 @@ Expected: request composition, command policy, availability, cancellation, timeo
 safe error mapping tests pass. The removed application-level command test is covered by its moved
 runtime-owned replacement.
 
-- [ ] **Step 6: Commit the semantic execution slice**
+- [x] **Step 6: Commit the semantic execution slice**
 
 ```powershell
 git add app/src-tauri/src/worker_runtime/mod.rs app/src-tauri/src/asr_model.rs
@@ -623,13 +674,15 @@ git commit -m "refactor(worker): route ASR download through semantic job"
 **Files:**
 
 - Modify: `app/src-tauri/src/worker_runtime/mod.rs`
+- Modify: `app/src-tauri/src/worker_runtime/facade.rs`
 - Modify: `app/src-tauri/src/worker_runtime/command.rs`
+- Modify: `app/src-tauri/src/worker_runtime/runner.rs`
 - Modify: `app/src-tauri/src/worker_runtime/runner/tests/fixtures.rs`
 - Modify: `app/src-tauri/src/worker_runtime/runner/tests/lifecycle.rs`
 - Modify: `app/src-tauri/src/worker_runtime/runner/tests/terminal.rs`
 - Modify: `app/src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write the failing source-ownership test**
+- [x] **Step 1: Write the failing source-ownership test**
 
 Extend `worker_runtime/mod.rs` tests with this recursive `.rs` source collector:
 
@@ -709,7 +762,7 @@ fn raw_worker_process_capability_stays_inside_worker_runtime() {
 The collector scans `app/src-tauri/src` only. Do not ban ordinary result types,
 `std::process::Command` globally, or test fixtures inside `worker_runtime`.
 
-- [ ] **Step 2: Run the boundary test and capture RED**
+- [x] **Step 2: Run the boundary test and capture RED**
 
 Run:
 
@@ -720,7 +773,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml raw_worker_process_capabilit
 Expected: FAIL because `WorkerCommandSpec` remains `pub(crate)` and is still re-exported by
 `worker_runtime/mod.rs` and `lib.rs`.
 
-- [ ] **Step 3: Restrict visibility and remove re-exports**
+- [x] **Step 3: Restrict visibility and remove re-exports**
 
 In `worker_runtime/command.rs`, change the raw type and fields to:
 
@@ -754,7 +807,7 @@ pub(crate) use command::WorkerCommandSpec;
 from `worker_runtime/mod.rs`, and remove `WorkerCommandSpec` from the crate-root runtime re-export
 in `lib.rs`.
 
-- [ ] **Step 4: Update only internal runner test imports**
+- [x] **Step 4: Update only internal runner test imports**
 
 Change the three runtime test files from:
 
@@ -770,7 +823,7 @@ use crate::worker_runtime::command::WorkerCommandSpec;
 
 No production application import may replace the removed re-export.
 
-- [ ] **Step 5: Run GREEN boundary and complete Rust tests**
+- [x] **Step 5: Run GREEN boundary and complete Rust tests**
 
 Run:
 
@@ -784,7 +837,7 @@ cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check
 Expected: the boundary test and complete Rust suite pass. Current runner lifecycle, model
 availability/result mapping, and task facade tests remain green.
 
-- [ ] **Step 6: Commit the capability closure**
+- [x] **Step 6: Commit the capability closure**
 
 ```powershell
 git add app/src-tauri/src/worker_runtime app/src-tauri/src/lib.rs
@@ -810,7 +863,7 @@ git commit -m "refactor(worker): make process specs runtime-private"
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`
 
-- [ ] **Step 1: Run the complete implementation gate**
+- [x] **Step 1: Run the complete implementation gate**
 
 Run:
 
@@ -837,7 +890,7 @@ No real model download, network request, LLM request, or AI Credit consumption i
 the command bytes and public behavior are unchanged. If the native Tauri build is unavailable,
 record the exact blocker and do not mark the plan completed without explicit acceptance.
 
-- [ ] **Step 2: Review the final diff against protected scope**
+- [x] **Step 2: Review the final diff against protected scope**
 
 Run:
 
@@ -853,14 +906,14 @@ Confirm:
 - no new process entry, lane, retry, network request, or logging field exists; and
 - the application can submit only `WorkerJob` or `AsrModelDownloadJob`.
 
-- [ ] **Step 3: Record evidence and archive**
+- [x] **Step 3: Record evidence and archive**
 
 Update this plan with exact RED/GREEN/full-suite counts and discoveries. Change the design status to
 implemented, update Architecture/Security from pending target to current fact, move the audit/debt
 item to resolved with evidence, check the task, archive the ExecPlan, and update active/completed
 indexes.
 
-- [ ] **Step 4: Commit the verified closeout**
+- [x] **Step 4: Commit the verified closeout**
 
 ```powershell
 git add AGENTS.md TASKS.md docs
