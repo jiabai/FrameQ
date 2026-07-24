@@ -25,6 +25,7 @@ from frameq_worker.desktop_contract import (
     PROCESS_VIDEO_CONTRACT_VERSION,
 )
 from frameq_worker.media import CommandResult
+from frameq_worker.worker_application import defaults as worker_defaults
 
 DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall"
 
@@ -658,7 +659,7 @@ def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
         raise AssertionError("process_video must not construct an AI client")
 
     monkeypatch.setattr(
-        cli.worker_service_module,
+        worker_defaults,
         "build_insight_client_from_env",
         fail_if_ai_client_is_built,
     )

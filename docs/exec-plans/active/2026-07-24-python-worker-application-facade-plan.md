@@ -69,7 +69,11 @@ network call, AI Credits behavior, or user-visible copy changes.
   both the missing handler/re-export and the direct facade's failed Bilibili short-link result;
   GREEN passed focused 12/12, full Worker 589 passed / 2 skipped with the existing warning, Ruff,
   and diff check.
-- [ ] Task 6: Extract AI retry and make `TaskPaths` explicit.
+- [x] 2026-07-24: Extracted AI retry, kept all target/language/preference/task-transaction behavior,
+  and replaced the dynamic path bag with direct `TaskPaths` fields. RED failed only for the absent
+  handler/helpers and their untyped boundary; GREEN passed focused 37/37. The first full run found
+  one obsolete worker-service monkeypatch seam, then the true-owner correction passed full Worker
+  592 passed / 2 skipped with the existing warning, Ruff, and diff check.
 - [ ] Task 7: Extract ASR model download and migrate true-owner test seams.
 - [ ] Task 8: Atomically close the CLI and facade surfaces and enable the complete boundary gate.
 - [ ] Task 9: Run complete verification, update durable evidence, archive the ExecPlan, and prepare
@@ -92,6 +96,10 @@ network call, AI Credits behavior, or user-visible copy changes.
 - Evidence: existing tests patch incidental globals in `cli.py` and `worker_service.py`. After
   ownership moves, CLI dispatch tests must patch `cli.worker_service_module`, while handler behavior
   tests must patch the actual handler module or use existing explicit dependency parameters.
+- Evidence: the first full regression after AI-retry extraction found exactly one such incidental
+  seam: a process-video test patched `worker_service.build_insight_client_from_env`. The production
+  path was healthy; moving that assertion to `worker_application.defaults` restored the intended
+  "process video never builds an AI client" proof.
 - Evidence: canonical worker source is generated into the ignored Tauri resource mirror. New
   private modules must be verified through `scripts/tauri-dev-fresh-worker.mjs` and the Tauri
   `--no-bundle` build, never hand-edited in `app/src-tauri/resources/worker`.

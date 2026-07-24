@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import ast
+import inspect
 from pathlib import Path
 
+import frameq_worker.worker_application.insight_retry as insight_retry
 import frameq_worker.worker_application.local_media as local_media
 import frameq_worker.worker_application.source_identity as source_identity
 import frameq_worker.worker_application.url_processing as url_processing
 import frameq_worker.worker_service as worker_service
+from frameq_worker.task_store import TaskPaths
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
 FRAMEQ_WORKER_ROOT = WORKER_ROOT / "frameq_worker"
@@ -73,3 +76,28 @@ def test_worker_service_reexports_source_identity_handler_object() -> None:
         worker_service.resolve_source_identity_once
         is source_identity.resolve_source_identity_once
     )
+
+
+def test_insight_retry_handler_owns_the_retry_use_case() -> None:
+    assert "retry_insights_once" in _top_level_owned_names(
+        PRIVATE_ROOT / "insight_retry.py"
+    )
+
+
+def test_worker_service_reexports_insight_retry_handler_object() -> None:
+    assert worker_service.retry_insights_once is insight_retry.retry_insights_once
+
+
+def test_insight_retry_helpers_require_task_paths() -> None:
+    for name in {
+        "merge_existing_ai_artifacts",
+        "read_existing_summary",
+        "read_existing_insights",
+    }:
+        parameter = inspect.signature(
+            getattr(insight_retry, name)
+        ).parameters["paths"]
+        assert parameter.annotation in {TaskPaths, "TaskPaths"}
+
+    source = (PRIVATE_ROOT / "insight_retry.py").read_text(encoding="utf-8")
+    assert "getattr(paths" not in source
