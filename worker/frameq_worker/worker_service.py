@@ -33,13 +33,6 @@ from frameq_worker.requests import (
     optional_env,
     parse_retry_insights_request,
 )
-from frameq_worker.source_identity import (
-    SourceIdentityError,
-)
-from frameq_worker.source_resolution import (
-    SourceRequestResolver,
-    resolve_source_request,
-)
 from frameq_worker.task_store import TaskStoreFacade
 from frameq_worker.task_transaction import (
     TaskArtifactCommitError,
@@ -51,6 +44,9 @@ from frameq_worker.worker_application.defaults import (
 from frameq_worker.worker_application.local_media import (
     run_local_media_once as run_local_media_once,
 )
+from frameq_worker.worker_application.source_identity import (
+    resolve_source_identity_once as resolve_source_identity_once,
+)
 from frameq_worker.worker_application.url_processing import (
     run_worker_once as run_worker_once,
 )
@@ -58,37 +54,6 @@ from frameq_worker.worker_application.url_processing import (
 InsightClientFactory = Callable[[dict[str, str]], InsightClient | None]
 MODEL_DOWNLOAD_FAILED_MESSAGE = "ASR model download failed."
 MODEL_ARCHIVE_INVALID_MESSAGE = "Downloaded ASR model archive was invalid."
-
-
-def resolve_source_identity_once(
-    request_json: str,
-    source_request_resolver: SourceRequestResolver = resolve_source_request,
-) -> dict[str, object]:
-    try:
-        payload = json.loads(request_json)
-    except json.JSONDecodeError:
-        return {
-            "status": "failed",
-            "error": {"code": "INVALID_SOURCE_IDENTITY_JSON"},
-        }
-    raw_url = payload.get("url") if isinstance(payload, dict) else None
-    if not isinstance(raw_url, str) or not raw_url.strip():
-        return {
-            "status": "failed",
-            "error": {"code": "INVALID_SOURCE_IDENTITY_PAYLOAD"},
-        }
-    try:
-        identity = source_request_resolver(raw_url).identity
-    except SourceIdentityError:
-        return {
-            "status": "failed",
-            "error": {"code": "SOURCE_IDENTITY_UNAVAILABLE"},
-        }
-    return {
-        "status": "completed",
-        "source_url": identity.canonical_url,
-        "source_identity": identity.to_manifest_dict(),
-    }
 
 
 def retry_insights_once(

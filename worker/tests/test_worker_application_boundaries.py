@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 
 import frameq_worker.worker_application.local_media as local_media
+import frameq_worker.worker_application.source_identity as source_identity
 import frameq_worker.worker_application.url_processing as url_processing
 import frameq_worker.worker_service as worker_service
 
@@ -59,3 +60,16 @@ def test_local_media_handler_owns_the_local_media_use_case() -> None:
 
 def test_worker_service_reexports_local_media_handler_object() -> None:
     assert worker_service.run_local_media_once is local_media.run_local_media_once
+
+
+def test_source_identity_handler_owns_the_source_identity_use_case() -> None:
+    assert "resolve_source_identity_once" in _top_level_owned_names(
+        PRIVATE_ROOT / "source_identity.py"
+    )
+
+
+def test_worker_service_reexports_source_identity_handler_object() -> None:
+    assert (
+        worker_service.resolve_source_identity_once
+        is source_identity.resolve_source_identity_once
+    )

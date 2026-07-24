@@ -64,7 +64,11 @@ network call, AI Credits behavior, or user-visible copy changes.
   dependencies, injection seams, and persistence failure mapping. RED failed only because the
   private owner/re-export did not exist; GREEN passed focused 8/8, full Worker 585 passed /
   2 skipped with the existing warning, Ruff, and diff check.
-- [ ] Task 5: Extract source identity and production source-resolution defaults.
+- [x] 2026-07-24: Extracted source identity and made the stable facade use the same platform-aware
+  production resolver as the real CLI while retaining the injected resolver seam. RED captured
+  both the missing handler/re-export and the direct facade's failed Bilibili short-link result;
+  GREEN passed focused 12/12, full Worker 589 passed / 2 skipped with the existing warning, Ruff,
+  and diff check.
 - [ ] Task 6: Extract AI retry and make `TaskPaths` explicit.
 - [ ] Task 7: Extract ASR model download and migrate true-owner test seams.
 - [ ] Task 8: Atomically close the CLI and facade surfaces and enable the complete boundary gate.
