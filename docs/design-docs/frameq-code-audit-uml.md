@@ -1572,7 +1572,7 @@ classDiagram
 
 ### 用普通语言复述这张图
 
-1. `cli.py` 负责进程协议，也是 source resolution 的生产 composition root：识别固定 mode、读取有上限的 stdin、构建默认平台 resolver，并把它注入 application service。它不应该成为所有 worker helper 的永久公共入口。
+1. `cli.py` 当前负责进程协议，也是 source resolution 的生产 composition root：识别固定 mode、读取有上限的 stdin、构建默认平台 resolver，并把它注入 application service。已接受但尚未实施的 `docs/design-docs/2026-07-24-python-worker-application-facade.md` 会把生产默认组合移入 application 层，并将 CLI 收窄为纯进程 adapter。
 2. `worker_service.py` 提供五类用例：URL 处理、本地媒体处理、source identity 预检、AI retry
    和模型下载。
 3. `pipeline.py` 只保留稳定 direct re-export。`pipeline_runtime/orchestration.py` 负责完整
@@ -1620,13 +1620,15 @@ optional-field bag。
 - `media_preparation.py` 依赖 `media.py`、`subtitles.py` 和 `TaskContext` 的任务内路径，但不导入
   `TaskStoreFacade`、ASR 或 InsightFlow，也不写 manifest 或完成任务。
 - `models.py -> source_identity.py` 是当前核心 import 链，终点是纯 identity policy，不再加载平台基础设施。
-- `worker_service.py` 通过稳定 root 调用 pipeline-owned symbols；只有私有
+- `worker_service.py` 当前通过稳定 root 调用 pipeline-owned symbols；只有私有
   `pipeline_runtime/orchestration.py` 依赖 `SourceRequestResolver` callable，生产实现由
-  `cli.py` 通过 `platform_source_resolvers.py` 注入。
+  `cli.py` 通过 `platform_source_resolvers.py` 注入。已接受的 application-facade 设计会在
+  保留五函数稳定 facade 的同时，把该默认组合移入私有 application defaults owner。
 - `platform_source_resolvers.py -> platform fallback modules` 是当前短链基础设施桥接链；adapter 返回 URL，`source_resolution.py` 再调用纯 identity policy 验证。
 - `media.py` 仍直接依赖平台 fallback 执行下载；这与 source identity 的稳定身份政策已经分离。
-- `cli.py` 为现有测试/调用方继续重导出部分媒体选择 helper，但真实 pipeline 只从
-  `MediaPreparationFacade.prepare()` 进入媒体准备；兼容 surface 仍可在后续审计中缩小。
+- `cli.py` 为现有测试继续重导出 ASR、pipeline、request 与媒体 helper，但真实 pipeline 只从
+  `MediaPreparationFacade.prepare()` 进入媒体准备；已接受的
+  `docs/design-docs/2026-07-24-python-worker-application-facade.md` 将删除该测试兼容 surface。
 - `test_import_boundaries.py` 隔离验证 core import 不加载 `*_fallback`，并以 AST gate 限制核心/application source 模块的基础设施 import。
 - `test_media_preparation.py` 以行为和 AST gate 证明 orchestration owner 不绕过 facade，
   facade 也不吸收 ASR、AI 或 task persistence 所有权；
@@ -2253,9 +2255,9 @@ stateDiagram-v2
 | `app/src-tauri/src/lib.rs` 中的 `greet` | scaffold command 仍在 `generate_handler!` 注册，但 `app/src/` 没有调用点 | 是否可通过 focused command-registry test 后删除，避免无业务含义的公开 IPC surface？ |
 | `transcript_detail.rs` | 历史 1,133 行热点已收口为 134 行稳定 composition root；私有模块分别拥有 audio playback/cache、segment codec 与 official edit storage，完整证据见上方“已解决审计项” | 后续修改应进入对应私有 owner，并保持 root-only Tauri/runtime composition、`SupportedTask` / `TaskEditSession` 信任边界和 source-boundary 门禁；不要继续机械增加 facade |
 | `worker/frameq_worker/pipeline.py` | 历史 589 行热点已收口为 39 行稳定 direct-reexport root；四个私有 owner 分离 shared policy、transcript/ASR、AI target 与 URL orchestration，完整证据见上方“已解决审计项” | 后续修改应进入对应私有 owner，并保持 root-only production imports、exact object identity、process/AI isolation、facade 与 AST 门禁；不要继续机械增加 facade 或重建 generic stage framework |
-| `worker/frameq_worker/worker_service.py` | 仍是四类 worker use case 的 application facade，负责 strict request/runtime config、retry task open/snapshot/finalize 与 model download composition；pipeline 私有 owner 拆分不改变该职责 | 四类用例是否仍保持清晰失败边界；若未来拆分，如何保留一个 task-persistence owner、稳定 stdin/result contract 与 root-only pipeline imports？ |
+| `worker/frameq_worker/worker_service.py` | 仍是五类 worker use case 的 application facade，负责 URL、本地媒体、source identity、AI retry 与 model download composition；五 handler 拆分设计已接受但尚未实施 | 按 `docs/design-docs/2026-07-24-python-worker-application-facade.md` 保留五函数稳定 facade、唯一 retry task-persistence owner、稳定 stdin/result contract 与 root-only handler imports |
 | `app/src-tauri/src/worker_runtime/runner.rs` | 历史 2,162 行热点已收口为 415 行唯一生命周期编排；四个私有 owner 为 108/273/195/71 行，测试聚合器和 focused children 均不超过 390 行；完整证据见上方“已解决审计项” | 后续修改应进入对应 owner，并保持 root-only 生命周期顺序、现有类型路径、matching-instance cleanup、structured-result-first precedence、supervisor-only signalling、validated-progress-only activity 与安全日志；不得新增第二个 executor 或从 application 绕过 root |
-| `worker/frameq_worker/cli.py` | 同时承担进程 adapter、source resolver composition root；`__all__` 还重导出 pipeline、request、ASR 和 helper symbols | 哪些调用方依赖兼容导出；如何保留必要 composition 职责并缩小其他公共 surface？ |
+| `worker/frameq_worker/cli.py` | 同时承担进程 adapter、source resolver composition root；40-name `__all__` 还重导出 pipeline、request、ASR 和 helper symbols，四个 forwarding wrapper 使用 `*args/**kwargs` | 已确认兼容导出只有仓库测试依赖；按 `docs/design-docs/2026-07-24-python-worker-application-facade.md` 迁移测试到真实 owner，并把 CLI 收窄为 mode/stdin/render/dispatch |
 | `worker/frameq_worker/xiaohongshu_fallback.py` | 历史 894 行热点已收口为 169 行稳定 adapter；私有包分别拥有 source/page/streams/transport，完整实现证据见上方“已解决审计项” | 后续平台变化应修改对应私有 owner，并保持 root-only production entry、CookieJar/隐私和 AST 门禁；不要继续机械增加 facade |
 | `worker/frameq_worker/douyin_fallback.py` | 历史 515 行热点已收口为 132 行稳定 adapter；私有包分别拥有 types/source/page/streams/transport，完整实现证据见上方“已解决审计项” | 后续平台变化应修改对应私有 owner，并保持 root-only production entry、同一进程内匿名 CookieJar、Router Data/probe/原子产物语义和 AST 门禁；不要继续机械增加 facade 或抽取三平台通用框架 |
 | `worker/frameq_worker/asr.py` | 历史 676 行热点已收口为 52 行稳定兼容入口；私有包分别拥有 types、Qwen、SenseVoice/VAD、registry/cache 和 artifacts，完整证据见上方“已解决审计项” | 后续修改应进入对应私有 owner，并保持 root-only production import、provider lazy loading、VAD fallback、source-validation-before-write 和 AST 门禁；不要继续机械增加 facade |

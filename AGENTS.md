@@ -13,6 +13,7 @@
 - 设计规范：`docs/DESIGN.md`
 - Task manifest 模块拆分设计：`docs/design-docs/2026-07-21-task-manifest-module-split.md`
 - Worker pipeline 模块拆分设计：`docs/design-docs/2026-07-21-worker-pipeline-module-split.md`
+- Python worker application facade / CLI 边界设计：`docs/design-docs/2026-07-24-python-worker-application-facade.md`
 - Server route 模块拆分设计：`docs/design-docs/2026-07-21-server-route-module-split.md`
 - Server Store/PrismaStore 模块拆分设计：`docs/design-docs/2026-07-23-server-store-prisma-module-split.md`
 - Server 认证/额度/生产运维加固设计：`docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`

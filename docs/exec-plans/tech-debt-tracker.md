@@ -6,6 +6,7 @@ Last updated: 2026-07-24
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
+| Python worker CLI and application facade remain broad | `cli.py` still exposes a 40-name test-oriented compatibility surface and four untyped forwarding wrappers; `worker_service.py` still co-locates five use cases and AI retry still uses an `object/getattr()` path bag despite the existing `TaskPaths`. | `docs/design-docs/2026-07-24-python-worker-application-facade.md`; implementation ExecPlan pending design review | Keep the five-function `worker_service` facade; extract five private application handlers; reduce CLI to its process adapter; type retry paths as `TaskPaths`; pass characterization, source-boundary, worker, Ruff, packaged-worker, Tauri, and governance gates without protocol or behavior drift. |
 | Hosted/staging server operations evidence remains pending | Fail-closed config, safe logs, proxy trust, health/lifecycle, preflight/restore tools, runbook, and Server CI are implemented and locally tested. This Windows session cannot prove the POSIX child signal fixture, hosted workflow, real SMTP/Nginx/systemd host, or protected off-host restore. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain passing hosted Linux Server CI plus approved non-user SMTP/staging/restore evidence, then rerun and accept the combined release gate. |
 
 ## Completed / Resolved
