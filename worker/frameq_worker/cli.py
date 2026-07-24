@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import redirect_stdout
 from io import TextIOBase
 from pathlib import Path
 
@@ -95,6 +96,11 @@ def print_model_download_event(event: dict[str, object]) -> None:
     print(render_model_download_event(event), file=sys.stderr, flush=True)
 
 
+def run_worker_business(call: Callable[[], dict[str, object]]) -> dict[str, object]:
+    with redirect_stdout(sys.stderr):
+        return call()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run one FrameQ worker request.")
     request_group = parser.add_mutually_exclusive_group(required=True)
@@ -147,30 +153,40 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(render_result_json(stdin_failure_result(stdin_mode)))
             return 1
     if is_model_download:
-        result = worker_service_module.run_asr_model_download_once(
-            project_root=Path.cwd(),
-            progress_callback=print_model_download_event,
+        result = run_worker_business(
+            lambda: worker_service_module.run_asr_model_download_once(
+                project_root=Path.cwd(),
+                progress_callback=print_model_download_event,
+            )
         )
     elif args.process_local_media_stdin:
-        result = worker_service_module.run_local_media_once(
-            request_json or "{}",
-            project_root=Path.cwd(),
-            progress_callback=print_progress_event,
+        result = run_worker_business(
+            lambda: worker_service_module.run_local_media_once(
+                request_json or "{}",
+                project_root=Path.cwd(),
+                progress_callback=print_progress_event,
+            )
         )
     elif args.retry_insights_stdin:
-        result = worker_service_module.retry_insights_once(
-            request_json or "{}",
-            project_root=Path.cwd(),
+        result = run_worker_business(
+            lambda: worker_service_module.retry_insights_once(
+                request_json or "{}",
+                project_root=Path.cwd(),
+            )
         )
     elif args.resolve_source_stdin:
-        result = worker_service_module.resolve_source_identity_once(
-            request_json or "{}"
+        result = run_worker_business(
+            lambda: worker_service_module.resolve_source_identity_once(
+                request_json or "{}"
+            )
         )
     else:
-        result = worker_service_module.run_worker_once(
-            request_json or "{}",
-            project_root=Path.cwd(),
-            progress_callback=print_progress_event,
+        result = run_worker_business(
+            lambda: worker_service_module.run_worker_once(
+                request_json or "{}",
+                project_root=Path.cwd(),
+                progress_callback=print_progress_event,
+            )
         )
     print(render_result_json(result))
     return 1 if is_model_download and result.get("status") == "failed" else 0

@@ -215,6 +215,7 @@ def test_cli_is_only_the_process_adapter() -> None:
         "__future__",
         "argparse",
         "collections.abc",
+        "contextlib",
         "frameq_worker",
         "frameq_worker.desktop_contract",
         "frameq_worker.progress_events",

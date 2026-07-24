@@ -252,6 +252,57 @@ def test_main_reads_local_media_request_from_dedicated_stdin_mode(
     assert "review-secret" not in captured_output.out + captured_output.err
 
 
+def test_main_keeps_local_media_business_stdout_out_of_terminal_result(
+    monkeypatch,
+    capsys,
+) -> None:
+    payload = json.dumps(
+        {
+            "contract_version": LOCAL_MEDIA_CONTRACT_VERSION,
+            "source_path": "C:/Users/review-secret/Podcast.mp3",
+            "media_kind": "audio",
+            "safe_display_name": "Podcast.mp3",
+            "source_extension": "mp3",
+            "asr_model": DEFAULT_ASR_MODEL,
+        }
+    )
+
+    def noisy_run_local_media_once(
+        request_json: str,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        assert json.loads(request_json)["media_kind"] == "audio"
+        print("third-party stdout noise")
+        return {
+            "status": "completed",
+            "task_id": "safe-task",
+            "task_dir": "outputs/tasks/safe-task",
+            "artifacts": {"audio": "media/audio.wav"},
+            "text": "safe transcript",
+            "summary": "",
+            "insights": [],
+            "transcript": None,
+            "error": None,
+        }
+
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO(payload))
+    monkeypatch.setattr(
+        cli.worker_service_module,
+        "run_local_media_once",
+        noisy_run_local_media_once,
+    )
+
+    exit_code = cli.main(["--process-local-media-stdin"])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    stdout_lines = [line for line in captured.out.splitlines() if line.strip()]
+    assert len(stdout_lines) == 1
+    assert json.loads(stdout_lines[0])["status"] == "completed"
+    assert "third-party stdout noise" not in captured.out
+    assert "third-party stdout noise" in captured.err
+
+
 def test_run_local_media_once_processes_audio_without_url_resolution_or_path_echo(
     tmp_path: Path,
 ) -> None:
