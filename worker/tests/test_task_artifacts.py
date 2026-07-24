@@ -15,6 +15,7 @@ from frameq_worker.desktop_contract import (
 from frameq_worker.media import CommandResult
 from frameq_worker.models import ProcessRequest
 from frameq_worker.pipeline import run_worker_pipeline
+from frameq_worker.worker_application import url_processing
 from frameq_worker.worker_service import retry_insights_once
 
 
@@ -88,7 +89,7 @@ def test_worker_service_maps_persistence_failures_to_fixed_non_echoing_results(
     def fail_pipeline(**_kwargs: object) -> object:
         raise failure from OSError("D:/private/customer/transcript.txt")
 
-    monkeypatch.setattr(worker_service, "run_worker_pipeline", fail_pipeline)
+    monkeypatch.setattr(url_processing, "run_worker_pipeline", fail_pipeline)
 
     result = worker_service.run_worker_once(
         json.dumps(

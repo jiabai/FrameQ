@@ -55,7 +55,11 @@ network call, AI Credits behavior, or user-visible copy changes.
   dispatch paths, true contract-constant owners, and the platform-aware Bilibili short-link
   default before moving production code. Validation: focused pytest 41/41, focused Ruff, and diff
   check pass.
-- [ ] Task 3: Add the private tree and extract URL processing.
+- [x] 2026-07-24: Added the exact empty-initializer private tree and extracted URL processing plus
+  production defaults. The tree RED failed with the expected empty-set mismatch; the URL RED failed
+  only because `run_worker_once`/`run_worker_pipeline` had no private owner. GREEN passed focused
+  41/41, full Worker 581 passed / 2 skipped with the existing `audioop` warning, Ruff, and diff
+  check.
 - [ ] Task 4: Extract local-media processing.
 - [ ] Task 5: Extract source identity and production source-resolution defaults.
 - [ ] Task 6: Extract AI retry and make `TaskPaths` explicit.
