@@ -91,12 +91,12 @@
   Residual risk: macOS watchdog runtime, macOS locale/layout physical acceptance, macOS local-media
   acceptance (Windows verified). Local-media import remains outside this release.
 
-- [ ] Add single-file local video/audio import (2026-07-16) — ✅ Acceptance: accept MP4/M4V/MOV/MKV/AVI/WMV/WebM
+- [x] Add single-file local video/audio import (2026-07-16) — ✅ Acceptance: accept MP4/M4V/MOV/MKV/AVI/WMV/WebM
   and MP3/WAV/M4A/AAC/FLAC/OGG/Opus/WMA through a Rust-owned native picker and opaque selection
   token; preserve video containers, normalize every source to 16 kHz mono 16-bit PCM WAV, create no
   video artifact for audio tasks, keep full paths out of React/persistence/logs/cloud, and extend
   strict schema-v3 History with a closed local-source variant. ExecPlan:
-  `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
+  `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`.
   Contract foundation completed 2026-07-20: global v4 now declares the independent local source,
   token-only frontend/IPC metadata, exact Rust/Python worker request, fixed progress/errors, and
   path/token secrecy while URL `process_video` remains v3.
@@ -104,12 +104,13 @@
   picking, revalidation, strict IPC, and the supervised task lane; Python stages under generic
   task-owned names, probes/normalizes local sources, preserves video containers, and reuses ASR;
   manifest/History/workspace/frontend use closed source unions; and the three-locale composer keeps
-  complete paths out of React. Automated GREEN: App 611/611, Worker 574 passed / 2 skipped, Windows
-  Rust 223/223, scripts 25/25, Ruff, lint/build, rustfmt, 63/63 worker mirror equality, Tauri release
-  `--no-bundle`, governance, and diff gates.
-  The feature remains unchecked and its ExecPlan active: Windows Tauri acceptance verified
-  (2026-07-25, MP4/WMV/MP3/WAV decoding + picker/path confirmed). macOS acceptance remains as
-  residual risk. No real AI Credits were consumed.
+  complete paths out of React.
+  Archived 2026-07-25: Windows Tauri acceptance confirmed (MP4/WMV/MP3/WAV decoding + picker/path,
+  artifact WAV 16 kHz mono 16-bit PCM, progress, cancellation, History, no path leaks, WMV from
+  packaged FFmpeg). Final automated gates: App 68 files / 637 tests, Rust 226/226, Worker 601 passed
+  / 2 skipped, scripts 26/27 (1 unrelated Windows tar env failure), governance 0/0, lint/rustfmt/
+  Ruff/diff/Tauri no-bundle all passed. macOS acceptance is unverified residual risk. No real AI
+  Credits were consumed.
 
 - [x] Add desktop i18n and confirmation-time AI output language (2026-07-15) — ✅ Acceptance: bundle `zh-CN`,
   `zh-TW`, and `en-US`; persist `system | locale` in app-local `ui-preferences.json`; localize UI,
@@ -387,9 +388,9 @@
   validate media before atomic replacement; preserve previous committed files on failure; register
   only committed ordinary artifacts; and pass focused/full Worker, Ruff, docs, and diff gates. ✅
   Focused 14/14, Worker 406/406, Ruff, governance, and diff checks passed; contract v4 and local
-  source variants remain deferred to the active feature plan.
+  source variants subsequently completed in the archived feature plan.
   Design: `docs/design-docs/2026-07-19-worker-atomic-artifact-commit.md`. ExecPlan:
-  `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
+  `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`.
 
 - [x] Centralize Rust video-worker execution policy behind a typed facade (2026-07-19) - ✅
   The prerequisite introduced `WorkerJob + VideoWorkerFacade`; the local-media vertical slice later

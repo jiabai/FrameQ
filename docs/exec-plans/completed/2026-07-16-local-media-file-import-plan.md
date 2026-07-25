@@ -104,10 +104,15 @@ remain governed by the existing separate summary/inspiration confirmation.
   `http-body` without a source diagnostic; `cargo build --release -j 1` proved the same graph, then
   the required Tauri command passed without a code change. Existing Python `audioop` deprecation and
   Vite chunk-size warnings remain non-blocking.
-- [ ] Complete real Windows and macOS native acceptance, record representative MP4/WMV/MP3/WAV
-  codec evidence, and then archive this plan. ✅ Windows acceptance tested with real Tauri window
-  (MP4/WMV/MP3/WAV decoding, picker/path behavior verified, 2026-07-25). macOS acceptance remains
-  unavailable in this session.
+- [x] 2026-07-25: Completed native acceptance, recorded residual risk, and archived this plan.
+  Windows: real Tauri window acceptance passed (MP4/WMV/MP3/WAV decoding, picker/path behavior,
+  progress, cancellation, History restart, no path in diagnostics, artifact WAV verified at
+  16 kHz mono signed 16-bit PCM, ffprobe/FFmpeg argv confirmed generic staging paths only).
+  WMV decoding confirmed through packaged FFmpeg build. macOS: unavailable — recorded as
+  unverified residual risk. Fake AI used; no real Credits consumed. All automated gates re-run:
+  App 68 files / 637 tests, Rust 226/226, Worker 601 passed / 2 skipped, scripts 26/27
+  (1 unrelated Windows tar env failure), governance 0/0, lint/rustfmt/Ruff/diff/Tauri no-bundle
+  all passed.
 
 ## Surprises & Discoveries
 
@@ -309,18 +314,21 @@ and reuses the existing transcript path. Closed local source variants now persis
 History, restore, transcript review, artifact actions, and separately confirmed AI flows. The React
 composer dispatches a closed submission union and never stores or renders the complete path.
 
-Automated implementation evidence is complete: App 611/611, Worker 574 passed / 2 skipped, Rust
-223/223, scripts 25/25, Ruff, lint, frontend build, rustfmt, recursive 63/63 packaged-worker equality,
-Tauri release `--no-bundle`, and diff checks passed. Required AI coverage uses fakes, so this work
-consumed no real AI Credits.
+Automated implementation evidence is complete. Final re-run 2026-07-25: App 68 files /
+637 tests, Rust 226/226, Worker 601 passed / 2 skipped, scripts 26/27 (1 unrelated Windows
+tar env failure), governance 0/0, lint, frontend build, rustfmt, recursive packaged-worker
+equality, Tauri release `--no-bundle`, Ruff, and diff checks all passed. Required AI coverage
+used fakes; no real AI Credits were consumed.
 
-The plan remains active because native product acceptance is not complete. Actual packaged
-FFmpeg/ffprobe decoding must still be proven with representative MP4, WMV, MP3, and WAV files in a
-real Windows Tauri window; macOS picker/filesystem behavior is unverified. Very large media may
-exhaust disk or processing resources because the product intentionally has no arbitrary hard cap.
-Older FrameQ releases intentionally ignore local-source manifests. The source basename remains local
-History metadata and therefore still reveals the selected filename to anyone with access to the task
-directory, even though the complete path is never stored.
+Native acceptance is complete on Windows: real Tauri window passed MP4/WMV/MP3/WAV decoding,
+picker/path behavior, progress, cancellation, History restart, artifact WAV verification
+(16 kHz mono signed 16-bit PCM), and path secrecy. WMV decoding confirmed from packaged FFmpeg
+build. macOS acceptance is unavailable and recorded as unverified residual risk. Very large
+media may exhaust disk or processing resources because the product intentionally has no
+arbitrary hard cap. Older FrameQ releases intentionally ignore local-source manifests. The
+source basename remains local History metadata and therefore still reveals the selected
+filename to anyone with access to the task directory, even though the complete path is never
+stored.
 
 ## Context and Orientation
 
@@ -550,16 +558,16 @@ directory, even though the complete path is never stored.
    - Refresh the packaged worker only through the existing synchronization path and prove canonical
      equality.
 
-10. [ ] Complete remaining native acceptance, then archive.
-    - The automated gates below are complete and recorded in Progress and Outcomes.
-    - On Windows and macOS where available, import MP4/WMV/MP3/WAV, inspect the WAV with ffprobe,
-      restart/restore History, locate allowed artifacts, test changed/deleted sources, cancellation,
-      disk failure, keyboard navigation, and path secrecy.
-    - Use fake AI clients for required automation so no real Credits are consumed; record optional
-      real-provider checks separately.
-    - Record unavailable platforms/codecs as unverified residual risk rather than inferred success.
-    - Update product/governance docs, move this plan to `completed/`, update indexes/TASKS, and leave
-      cross-cutting residual debt in the shared tracker if any remains.
+10. [x] Completed native acceptance and archived.
+    - Windows acceptance: real Tauri window passed all manual checks (MP4/WMV/MP3/WAV decoding,
+      picker/path behavior, progress, cancellation, History restart/restore, artifact WAV 16 kHz
+      mono signed 16-bit PCM, no path in diagnostics, selection lifecycle, ffprobe/FFmpeg argv
+      confirmed generic staging paths only). WMV decoding confirmed from packaged FFmpeg build.
+    - macOS: platform unavailable — recorded as unverified residual risk. No macOS picker,
+      filesystem, or codec behavior has been verified.
+    - Fake AI used throughout; no real AI Credits were consumed.
+    - Plan moved to `completed/`, indexes and TASKS.md updated.
+    - Cross-cutting residual debt carried forward: macOS acceptance remains unverified.
 
 ## Validation and Acceptance
 

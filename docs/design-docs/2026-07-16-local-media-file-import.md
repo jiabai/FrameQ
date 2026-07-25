@@ -415,7 +415,7 @@ wire protocol, not the persisted task schema version.
 ## References
 
 - `docs/product-specs/2026-07-16-local-media-file-import.md`
-- `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 - `contracts/desktop-worker-contract.json`
 - `app/src-tauri/src/video_processing.rs`
 - `app/src-tauri/src/task_manifest.rs`

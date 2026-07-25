@@ -367,7 +367,7 @@ selection token, transcript, prompt, or generated content.
 ## References
 
 - `docs/design-docs/2026-07-16-local-media-file-import.md`
-- `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 - `contracts/desktop-worker-contract.json`
 - `docs/ARCHITECTURE.md`
 - `docs/DESIGN.md`
