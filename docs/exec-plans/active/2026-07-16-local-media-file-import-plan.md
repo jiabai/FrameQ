@@ -105,8 +105,9 @@ remain governed by the existing separate summary/inspiration confirmation.
   the required Tauri command passed without a code change. Existing Python `audioop` deprecation and
   Vite chunk-size warnings remain non-blocking.
 - [ ] Complete real Windows and macOS native acceptance, record representative MP4/WMV/MP3/WAV
-  codec evidence, and then archive this plan. No suitable media fixtures or interactive Tauri
-  acceptance were available in this implementation session; macOS remains unavailable.
+  codec evidence, and then archive this plan. ✅ Windows acceptance tested with real Tauri window
+  (MP4/WMV/MP3/WAV decoding, picker/path behavior verified, 2026-07-25). macOS acceptance remains
+  unavailable in this session.
 
 ## Surprises & Discoveries
 

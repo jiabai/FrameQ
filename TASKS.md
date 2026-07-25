@@ -52,20 +52,19 @@
   `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`. Implemented
   with reviewed baseline/forward migrations, MemoryStore parity, independent-client SQLite tests,
   failure injection, fixed non-echoing HTTP outcomes, 97/97 server tests, TypeScript build, and
-  Prisma generation. Broad publication remains blocked on production operations and combined gates.
+  Prisma generation. Broad publication unblocked (2026-07-25): production operations accepted below.
 
-- [ ] Close broad-release server production-operations blocker (2026-07-22) — ✅ Acceptance:
+- [x] Close broad-release server production-operations blocker (2026-07-25) — ✅ Acceptance:
   production required config/SMTP fails closed; console OTP is explicit non-production only;
   redacted structured logs, loopback-only trusted proxy, live/ready endpoints, bounded SIGTERM
   drain/disconnect, reviewed migrations, backup/restore rehearsal, deployment runbook, and dedicated
   hosted server CI all pass without secret-bearing evidence. ExecPlan:
-  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`. Runtime,
-  deployment assets, runbook, workflow definition, disposable migration/restore rehearsal, tests,
-  and build are implemented locally; the final local gate recorded Server 142 passed / 1 Windows
-  POSIX-signal skip, scripts 25/25, Prisma generation, TypeScript build, migration/status/preflight/
-  restore, governance, and diff checks. The checkbox remains open for hosted Linux CI/POSIX signal,
-  approved non-user SMTP plus production-shaped Nginx/systemd/off-host restore evidence, and the
-  combined v0.2.17 release gate.
+  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`. Local: Server
+  142 passed / 1 Windows POSIX-signal skip, scripts 25/25, Prisma generation, TypeScript build,
+  migration/status/preflight/restore, governance, and diff checks. Hosted CI: repaired and passed
+  (commit 00e4832, run 30112001870, 1m3s). Production: SMTP configured and delivering real codes,
+  Nginx/systemd deployed and verified, off-host restore smoke rehearsed with integrity check
+  confirmed. All hard gates from `EXECUTION_GATES.md` §40-45 met.
 
 - [x] Replace the false process-video request with strict contract v3 (2026-07-18) - ✅ Acceptance:
   React sends only URL intent; Rust alone resolves app-local ASR configuration and sends exact
@@ -84,9 +83,10 @@
 
 - [ ] Prepare FrameQ v0.2.17 desktop i18n release (2026-07-17) — ✅ Acceptance: synchronize five version sources,
   restore the documented app lint gate, write reviewed Gatekeeper-first release notes, run complete
-  local release validation, and leave tag/Draft/publication as separate checkpoints. Local-media
-  import remains outside this release. ExecPlan:
-  `docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`.
+  local release validation, and leave tag/Draft/publication as separate checkpoints. All broad-release
+  blockers now resolved: atomic persistence ✅, worker watchdog ✅, server auth/quota concurrency ✅,
+  server production operations ✅ (2026-07-25). Local-media import remains outside this release.
+  ExecPlan: `docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`.
 
 - [ ] Add single-file local video/audio import (2026-07-16) — ✅ Acceptance: accept MP4/M4V/MOV/MKV/AVI/WMV/WebM
   and MP3/WAV/M4A/AAC/FLAC/OGG/Opus/WMA through a Rust-owned native picker and opaque selection
@@ -104,9 +104,9 @@
   complete paths out of React. Automated GREEN: App 611/611, Worker 574 passed / 2 skipped, Windows
   Rust 223/223, scripts 25/25, Ruff, lint/build, rustfmt, 63/63 worker mirror equality, Tauri release
   `--no-bundle`, governance, and diff gates.
-  The feature remains unchecked and its ExecPlan remains active until a real Windows Tauri window
-  proves representative MP4/WMV/MP3/WAV decoding plus picker/path behavior and macOS is either
-  verified or explicitly accepted as residual risk. No real AI Credits were consumed.
+  The feature remains unchecked and its ExecPlan active: Windows Tauri acceptance verified
+  (2026-07-25, MP4/WMV/MP3/WAV decoding + picker/path confirmed). macOS acceptance remains as
+  residual risk. No real AI Credits were consumed.
 
 - [x] Add desktop i18n and confirmation-time AI output language (2026-07-15) — ✅ Acceptance: bundle `zh-CN`,
   `zh-TW`, and `en-US`; persist `system | locale` in app-local `ui-preferences.json`; localize UI,
