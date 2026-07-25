@@ -59,7 +59,7 @@
   redacted structured logs, loopback-only trusted proxy, live/ready endpoints, bounded SIGTERM
   drain/disconnect, reviewed migrations, backup/restore rehearsal, deployment runbook, and dedicated
   hosted server CI all pass without secret-bearing evidence. ExecPlan:
-  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`. Local: Server
+  `docs/exec-plans/completed/2026-07-22-server-production-operations-hardening-plan.md`. Local: Server
   142 passed / 1 Windows POSIX-signal skip, scripts 25/25, Prisma generation, TypeScript build,
   migration/status/preflight/restore, governance, and diff checks. Hosted CI: repaired and passed
   (commit 00e4832, run 30112001870, 1m3s). Production: SMTP configured and delivering real codes,
@@ -87,7 +87,7 @@
   All broad-release blockers resolved: atomic persistence ✅, worker watchdog ✅, server auth/quota
   concurrency ✅, server production operations ✅. Tag `v0.2.17` pushed, Desktop Release workflow built
   all three platform artifacts (34m54s), Draft published as stable non-prerelease with reviewed notes.
-  ExecPlan: `docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`.
+  ExecPlan: `docs/exec-plans/completed/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`.
   Residual risk: macOS watchdog runtime, macOS locale/layout physical acceptance, macOS local-media
   acceptance (Windows verified). Local-media import remains outside this release.
 

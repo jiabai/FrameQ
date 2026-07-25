@@ -79,7 +79,7 @@
 - The durable decision is
   `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; implementation steps are
   `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md` and
-  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`.
+  `docs/exec-plans/completed/2026-07-22-server-production-operations-hardening-plan.md`.
 
 ## 2026-07-22 Broad-release reliability boundary (persistence and watchdog implemented)
 

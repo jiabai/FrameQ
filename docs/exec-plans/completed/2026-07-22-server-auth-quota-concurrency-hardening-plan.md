@@ -158,7 +158,7 @@ production-operations ExecPlan, so broad publication is still blocked.
   `server/tests/llmQuota.test.ts`, `server/tests/transactionSafety.test.ts`,
   `server/tests/prismaTransactionSafety.test.ts`, and `server/tests/prismaTestHarness.ts`.
 - Follow-up operations plan:
-  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`.
+  `docs/exec-plans/completed/2026-07-22-server-production-operations-hardening-plan.md`.
 
 ## Plan of Work
 

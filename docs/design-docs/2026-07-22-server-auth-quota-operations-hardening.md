@@ -5,7 +5,7 @@
 - Product spec: `docs/product-specs/2026-07-22-release-reliability-hardening.md`
 - ExecPlans:
   - `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`
-  - `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`
+  - `docs/exec-plans/completed/2026-07-22-server-production-operations-hardening-plan.md`
 
 Implementation status: the purpose-scoped OTP, dispatch-limit, ticket/session, migration, and AI
 Credit transaction boundary is implemented and locally verified with independent Prisma clients.

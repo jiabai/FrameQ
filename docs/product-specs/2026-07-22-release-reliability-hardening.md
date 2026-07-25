@@ -206,7 +206,7 @@ The server hardening boundary is specified by
 `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md` and two ExecPlans:
 
 - `docs/exec-plans/completed/2026-07-22-server-auth-quota-concurrency-hardening-plan.md`; and
-- `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`.
+- `docs/exec-plans/completed/2026-07-22-server-production-operations-hardening-plan.md`.
 
 The authentication/quota plan has accepted local database correctness evidence. The operations
 implementation and disposable local migration/restore rehearsal also pass locally, and the hosted

@@ -312,7 +312,7 @@ Local SQLite and fake/internal behavior evidence must not be presented as those 
   `server/prisma/schema.prisma` and `server/prisma/migrations/`.
 - Server CI and durable operations plan:
   `.github/workflows/server-ci.yml` and
-  `docs/exec-plans/active/2026-07-22-server-production-operations-hardening-plan.md`.
+  `docs/exec-plans/completed/2026-07-22-server-production-operations-hardening-plan.md`.
 - Durable architecture/security:
   `docs/ARCHITECTURE.md` and `docs/SECURITY.md`.
 - Current structural audit:

@@ -315,8 +315,8 @@ an operator/environment concern.
 - [x] Record unavailable staging/SMTP/hosted evidence as residual risk, never as a pass.
 - [x] 2026-07-25: Both server plans (authentication/quota concurrency and production operations) have
   passed. The combined v0.2.17 release gate is ready to rerun.
-- [ ] Move this plan to `completed/` only after local, hosted, and required staging evidence is
-  accepted and both plan indexes are updated.
+- [x] 2026-07-25: Moving this plan to `completed/` — local, hosted CI, and required production
+  staging evidence (SMTP/Nginx/systemd/restore) all accepted; both plan indexes updated.
 
 ## Validation and Acceptance
 
