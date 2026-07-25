@@ -81,12 +81,15 @@
   failures/32 passes, GREEN passed 35/35, worker passed 364/364, and Ruff/docs/diff/live simulation
   passed. ExecPlan: `docs/exec-plans/completed/2026-07-18-youtube-generic-chinese-subtitle-plan.md`.
 
-- [ ] Prepare FrameQ v0.2.17 desktop i18n release (2026-07-17) — ✅ Acceptance: synchronize five version sources,
-  restore the documented app lint gate, write reviewed Gatekeeper-first release notes, run complete
-  local release validation, and leave tag/Draft/publication as separate checkpoints. All broad-release
-  blockers now resolved: atomic persistence ✅, worker watchdog ✅, server auth/quota concurrency ✅,
-  server production operations ✅ (2026-07-25). Local-media import remains outside this release.
+- [x] Prepare and publish FrameQ v0.2.17 desktop i18n release (2026-07-25) — ✅ Acceptance: five version
+  sources synchronized at 0.2.17, app lint gate restored, Gatekeeper-first release notes reviewed, local
+  release validation passed (app 637/637, server 146/1skip, worker 576/2env, build, governance 0/0).
+  All broad-release blockers resolved: atomic persistence ✅, worker watchdog ✅, server auth/quota
+  concurrency ✅, server production operations ✅. Tag `v0.2.17` pushed, Desktop Release workflow built
+  all three platform artifacts (34m54s), Draft published as stable non-prerelease with reviewed notes.
   ExecPlan: `docs/exec-plans/active/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`.
+  Residual risk: macOS watchdog runtime, macOS locale/layout physical acceptance, macOS local-media
+  acceptance (Windows verified). Local-media import remains outside this release.
 
 - [ ] Add single-file local video/audio import (2026-07-16) — ✅ Acceptance: accept MP4/M4V/MOV/MKV/AVI/WMV/WebM
   and MP3/WAV/M4A/AAC/FLAC/OGG/Opus/WMA through a Rust-owned native picker and opaque selection
