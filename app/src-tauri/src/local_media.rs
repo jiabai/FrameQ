@@ -446,13 +446,15 @@ mod tests {
         assert_eq!(
             state
                 .select_for_path(&linked_file)
-                .expect_err("file symlink must fail"),
+                .err()
+                .expect("file symlink must fail"),
             "LOCAL_MEDIA_LINKED"
         );
         assert_eq!(
             state
                 .select_for_path(&linked_dir.join("recording.mp3"))
-                .expect_err("linked ancestor must fail"),
+                .err()
+                .expect("linked ancestor must fail"),
             "LOCAL_MEDIA_LINKED"
         );
 
