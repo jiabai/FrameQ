@@ -46,7 +46,7 @@ pub(crate) struct AsrModelDownloadResult {
     status: String,
 }
 
-fn asr_model_dir(paths: &RuntimePaths, asr_model: &str) -> PathBuf {
+fn asr_model_cache_dir(paths: &RuntimePaths, asr_model: &str) -> PathBuf {
     let root = paths.user_data_dir.join("models");
     if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
         root.join(ONNX_CACHE_DIR_NAME)
@@ -55,9 +55,21 @@ fn asr_model_dir(paths: &RuntimePaths, asr_model: &str) -> PathBuf {
     }
 }
 
+fn asr_model_display_dir(paths: &RuntimePaths, asr_model: &str) -> PathBuf {
+    let model_name = if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
+        "SenseVoiceSmall-onnx"
+    } else {
+        "SenseVoiceSmall"
+    };
+    asr_model_cache_dir(paths, asr_model)
+        .join("models")
+        .join("iic")
+        .join(model_name)
+}
+
 fn asr_model_available(paths: &RuntimePaths, asr_model: &str) -> bool {
     SUPPORTED_ASR_MODELS.contains(&asr_model)
-        && model_marker_exists(&asr_model_dir(paths, asr_model), asr_model)
+        && model_marker_exists(&asr_model_cache_dir(paths, asr_model), asr_model)
 }
 
 fn model_marker_exists(model_dir: &Path, asr_model: &str) -> bool {
@@ -124,7 +136,7 @@ pub(crate) fn get_asr_model_status(
     Ok(AsrModelStatusView {
         user_data_dir: path_to_env_string(&paths.user_data_dir),
         default_output_dir: path_to_env_string(paths.user_data_dir.join("outputs")),
-        asr_model_dir: path_to_env_string(asr_model_dir(&paths, &asr_model)),
+        asr_model_dir: path_to_env_string(asr_model_display_dir(&paths, &asr_model)),
         asr_model_available: asr_model_available(&paths, &asr_model),
         asr_model_source: if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
             "modelscope".to_string()
@@ -257,8 +269,9 @@ pub(crate) fn cancel_asr_model_download(
 #[cfg(test)]
 mod tests {
     use super::{
-        asr_model_available, cancelled_model_download_event, map_model_download_run_result,
-        ModelDownloadRunResult, DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL,
+        asr_model_available, asr_model_display_dir, cancelled_model_download_event,
+        map_model_download_run_result, ModelDownloadRunResult, DEFAULT_ASR_MODEL,
+        SENSEVOICE_SMALL_ONNX_MODEL,
     };
     use crate::settings::supported_asr_models;
     use crate::worker_runtime::{
@@ -278,6 +291,34 @@ mod tests {
                 "iic/SenseVoiceSmall".to_string(),
                 "iic/SenseVoiceSmall-onnx".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn asr_model_display_directory_points_to_selected_runtime_leaf() {
+        let paths = RuntimePaths {
+            resource_dir: PathBuf::from("resources"),
+            user_data_dir: PathBuf::from("app-data"),
+        };
+
+        assert_eq!(
+            asr_model_display_dir(&paths, DEFAULT_ASR_MODEL),
+            paths
+                .user_data_dir
+                .join("models")
+                .join("models")
+                .join("iic")
+                .join("SenseVoiceSmall")
+        );
+        assert_eq!(
+            asr_model_display_dir(&paths, SENSEVOICE_SMALL_ONNX_MODEL),
+            paths
+                .user_data_dir
+                .join("models")
+                .join("onnx")
+                .join("models")
+                .join("iic")
+                .join("SenseVoiceSmall-onnx")
         );
     }
 
