@@ -13,6 +13,9 @@ import pytest
 from frameq_worker.model_download import (
     ARCHIVE_INVALID_ERROR_CODE,
     DEFAULT_SENSEVOICE_REVISION,
+    ONNX_SENSEVOICE_BPE_MODEL_ID,
+    ONNX_SENSEVOICE_MODEL_ID,
+    ONNX_VAD_MODEL_ID,
     SENSEVOICE_MODEL_ID,
     VAD_MODEL_ID,
     ModelDownloadError,
@@ -69,6 +72,35 @@ def test_model_download_terminal_success_omits_local_model_directory(
         "model": SENSEVOICE_MODEL_ID,
     }
     assert "review-secret" not in repr(result)
+
+
+def test_model_download_terminal_uses_allowlisted_onnx_model_and_ignores_pytorch_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_download(**kwargs: object) -> Path:
+        captured.update(kwargs)
+        return tmp_path / "models" / "onnx"
+
+    monkeypatch.setattr(model_download_handler, "download_asr_model_cache", fake_download)
+
+    result = worker_service.run_asr_model_download_once(
+        asr_model=ONNX_SENSEVOICE_MODEL_ID,
+        project_root=tmp_path,
+        environ={
+            "FRAMEQ_ASR_MODEL_DOWNLOAD_URL": "https://third-party.invalid/model.zip",
+            "FRAMEQ_MODELSCOPE_ENDPOINT": "https://third-party.invalid/modelscope",
+        },
+    )
+
+    assert result == {"status": "completed", "model": ONNX_SENSEVOICE_MODEL_ID}
+    assert captured == {
+        "cache_dir": tmp_path / "models",
+        "model_name": ONNX_SENSEVOICE_MODEL_ID,
+        "progress_callback": None,
+    }
 
 
 def test_model_download_terminal_failure_maps_archive_detail_to_fixed_message(
@@ -222,6 +254,100 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
     ] == ["model.pt", "model.pt", "model-file", "model-file"]
     assert all("message" not in event for event in events)
     assert "review-secret" not in repr(events)
+
+
+def test_download_onnx_model_cache_uses_only_official_modelscope_assets(tmp_path: Path) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_snapshot_download(**kwargs: object) -> str:
+        calls.append(kwargs)
+        cache_root = Path(kwargs["cache_dir"])
+        model_id = kwargs["model_id"]
+        if model_id == ONNX_SENSEVOICE_MODEL_ID:
+            target = cache_root / "iic" / "SenseVoiceSmall-onnx"
+            target.mkdir(parents=True)
+            (target / "model_quant.onnx").write_bytes(b"onnx-asr")
+            (target / "config.yaml").write_text("frontend_conf: {}\n", encoding="utf-8")
+            (target / "am.mvn").write_bytes(b"mean")
+            (target / "tokens.json").write_text("{}", encoding="utf-8")
+        elif model_id == ONNX_VAD_MODEL_ID:
+            target = cache_root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-onnx"
+            target.mkdir(parents=True)
+            (target / "model_quant.onnx").write_bytes(b"onnx-vad")
+            (target / "config.yaml").write_text("frontend_conf: {}\n", encoding="utf-8")
+            (target / "am.mvn").write_bytes(b"mean")
+        elif model_id == ONNX_SENSEVOICE_BPE_MODEL_ID:
+            target = cache_root / "iic" / "SenseVoiceSmall"
+            target.mkdir(parents=True)
+            (target / "chn_jpn_yue_eng_ko_spectok.bpe.model").write_bytes(b"bpe")
+        else:
+            raise AssertionError(f"unexpected model source: {model_id}")
+        return str(cache_root)
+
+    result = download_asr_model_cache(
+        cache_dir=tmp_path,
+        model_name=ONNX_SENSEVOICE_MODEL_ID,
+        snapshot_downloader=fake_snapshot_download,
+        onnx_asset_hashes={},
+    )
+
+    assert result == tmp_path / "onnx"
+    assert [call["model_id"] for call in calls] == [
+        ONNX_SENSEVOICE_MODEL_ID,
+        ONNX_VAD_MODEL_ID,
+        ONNX_SENSEVOICE_BPE_MODEL_ID,
+    ]
+    assert all(call["endpoint"] is None for call in calls)
+    assert validate_asr_model_cache(
+        tmp_path,
+        model_name=ONNX_SENSEVOICE_MODEL_ID,
+        onnx_asset_hashes={},
+    )
+    assert not (tmp_path / "onnx" / "models" / "iic" / "SenseVoiceSmall-onnx" / "model.pt").exists()
+
+    bpe_path = (
+        tmp_path
+        / "onnx"
+        / "models"
+        / "iic"
+        / "SenseVoiceSmall-onnx"
+        / "chn_jpn_yue_eng_ko_spectok.bpe.model"
+    )
+    bpe_path.unlink()
+    assert not validate_asr_model_cache(
+        tmp_path,
+        model_name=ONNX_SENSEVOICE_MODEL_ID,
+        onnx_asset_hashes={},
+    )
+
+
+def test_validate_onnx_model_cache_rejects_hash_mismatch(tmp_path: Path) -> None:
+    onnx_root = tmp_path / "onnx"
+    asr_dir = onnx_root / "models" / "iic" / "SenseVoiceSmall-onnx"
+    vad_dir = onnx_root / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-onnx"
+    asr_dir.mkdir(parents=True)
+    vad_dir.mkdir(parents=True)
+    for path in [
+        asr_dir / "model_quant.onnx",
+        asr_dir / "config.yaml",
+        asr_dir / "am.mvn",
+        asr_dir / "tokens.json",
+        asr_dir / "chn_jpn_yue_eng_ko_spectok.bpe.model",
+        vad_dir / "model_quant.onnx",
+        vad_dir / "config.yaml",
+        vad_dir / "am.mvn",
+    ]:
+        path.write_bytes(b"fixture")
+    (onnx_root / "MODEL_VERSION.txt").write_text(
+        f"model={ONNX_SENSEVOICE_MODEL_ID}\nvad={ONNX_VAD_MODEL_ID}\n",
+        encoding="utf-8",
+    )
+
+    assert not validate_asr_model_cache(
+        tmp_path,
+        model_name=ONNX_SENSEVOICE_MODEL_ID,
+        onnx_asset_hashes={Path("models/iic/SenseVoiceSmall-onnx/model_quant.onnx"): "wrong"},
+    )
 
 
 def test_normalize_asr_model_cache_layout_migrates_legacy_only_cache(

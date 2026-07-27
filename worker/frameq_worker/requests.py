@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from frameq_worker.asr import DEFAULT_ASR_MODEL
+from frameq_worker.asr import DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL
 from frameq_worker.desktop_contract import (
     AUDIO_EXTENSIONS,
     LOCAL_MEDIA_CONTRACT_VERSION,
@@ -99,6 +99,8 @@ PROFILE_FIELD_OPTIONS: dict[str, set[str]] = {
         "grand_narrative",
     },
 }
+
+DESKTOP_ASR_MODELS = frozenset({DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL})
 
 GENERATION_FIELD_OPTIONS: dict[str, set[str]] = {
     "goal": {
@@ -200,7 +202,7 @@ def _parse_process_request(payload: object) -> ProcessRequest:
         raise ValueError
 
     asr_model = payload.get("asr_model")
-    if not isinstance(asr_model, str) or asr_model != DEFAULT_ASR_MODEL:
+    if not isinstance(asr_model, str) or asr_model not in DESKTOP_ASR_MODELS:
         raise ValueError
 
     return ProcessRequest(
@@ -251,7 +253,7 @@ def _parse_process_local_media_request(payload: object) -> ProcessLocalMediaRequ
         raise ValueError
 
     asr_model = payload.get("asr_model")
-    if not isinstance(asr_model, str) or asr_model != DEFAULT_ASR_MODEL:
+    if not isinstance(asr_model, str) or asr_model not in DESKTOP_ASR_MODELS:
         raise ValueError
 
     return ProcessLocalMediaRequest(

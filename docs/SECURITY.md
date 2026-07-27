@@ -760,7 +760,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
   不再被新版本读取、迁移或信任。
 - `models/` 存放模型权重缓存，默认不提交仓库。
 - `updates.json` 只存放更新检查偏好，默认不提交仓库；不得包含用户内容、账号 session、release signing private key 或下载包二进制。
-- 对外分发安装包不内置 ASR 模型权重；首启下载的核心本地 ASR 模型（首版 SenseVoice Small）和运行期可写缓存、输出、历史、`.env` 必须写入 app-local data，不得写入安装目录。
+- 对外分发安装包不内置 ASR 模型权重；核心本地 ASR 模型只在用户提交已验证任务且所选模型缺失时下载。模型缓存、运行期可写缓存、输出、历史和 `.env` 必须写入 app-local data，不得写入安装目录。
 - 取消任务会终止当前 worker 进程树；已写入的 `outputs/`、`cache/` 和 `models/` 文件默认保留，不做自动清理。
 
 ## Secrets
@@ -775,7 +775,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 
 - LLM-generated Markdown rendered in the desktop UI must go through the sanitized Markdown renderer. Raw HTML from `summary.md` must be skipped or sanitized and must not be rendered with `dangerouslySetInnerHTML`.
 - 下载、转码和 ASR 默认本地处理。
-- 首启 ASR 模型下载的官方网络边界固定为先访问 ModelScope（`iic/SenseVoiceSmall`），失败或达到有界超时后才访问 Hugging Face（`FunAudioLLM/SenseVoiceSmall`）；不得根据 UI 语言、locale 或账号地区改变顺序。
+- 现有 PyTorch `iic/SenseVoiceSmall` 保留其既有官方 ModelScope 优先、Hugging Face 回退的兼容下载策略，且不得根据 UI 语言、locale 或账号地区改变顺序。ONNX `iic/SenseVoiceSmall-onnx` 仅可访问官方 ModelScope ASR 与 ONNX VAD 模型，不得使用 Hugging Face、镜像、自定义归档或运行期导出回退。
 - 发布方配置 `FRAMEQ_ASR_MODEL_DOWNLOAD_URL` 时只访问该自定义归档源，不得再访问 ModelScope 或 Hugging Face；该配置不得包含凭据、URL 查询 token 或敏感请求头。
 - 模型下载事件、日志和技术详情只允许保留源名称、主机名、公开模型 ID、尝试次数及超时/失败分类；不得保留带 token 的完整 URL、凭据、Cookie、请求头或完整原始下载器输出。
 - ASR 模型选择通过 `FRAMEQ_ASR_MODEL` 保存到本地 `.env`；该键只允许选择受支持的本地 ASR 模型标识，不得携带凭据、URL 查询 token 或敏感请求头。

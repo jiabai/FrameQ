@@ -104,7 +104,7 @@ pub fn run() {
             updates::get_update_preferences,
             updates::save_update_preferences,
             updates::get_update_delivery,
-            asr_model::check_first_run,
+            asr_model::get_asr_model_status,
             asr_model::download_asr_model,
             asr_model::cancel_asr_model_download,
             account::begin_auth_flow,
@@ -226,7 +226,10 @@ mod tests {
 
         assert_eq!(config.output_dir, "D:/FrameQ/results");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
-        assert_eq!(config.supported_asr_models, vec!["iic/SenseVoiceSmall"]);
+        assert_eq!(
+            config.supported_asr_models,
+            vec!["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"]
+        );
     }
 
     #[test]

@@ -3,14 +3,12 @@ use crate::local_media::LocalMediaSelectionState;
 use crate::local_media_contract::{
     parse_process_local_media_ipc_request, serialize_process_local_media_worker_request,
 };
-use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::worker_runtime::{TaskTerminalResult, WorkerJob};
 use crate::{
     ensure_runtime_dirs, resolve_runtime_paths, run_blocking_worker_command, ProcessSupervisors,
 };
 use serde_json::Value;
 use std::fmt;
-use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, State, Window};
 
@@ -80,11 +78,7 @@ fn process_local_media_blocking(
 ) -> Result<TaskTerminalResult, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    let prepared = match resolve_local_media_worker_request(
-        &env_path(&paths),
-        selection_state.as_ref(),
-        request,
-    ) {
+    let prepared = match resolve_local_media_worker_request(selection_state.as_ref(), request) {
         Ok(prepared) => prepared,
         Err(failure) => {
             clear_selection_for_request_failure(selection_state.as_ref(), &failure);
@@ -108,7 +102,6 @@ fn process_local_media_blocking(
 }
 
 fn resolve_local_media_worker_request(
-    dotenv_path: &Path,
     selection_state: &LocalMediaSelectionState,
     request: Value,
 ) -> Result<ResolvedLocalMediaWorkerRequest, LocalMediaRequestFailure> {
@@ -119,6 +112,7 @@ fn resolve_local_media_worker_request(
         }
     })?;
     let selection_token = request.selection_token;
+    let asr_model = request.asr_model;
     let selected =
         selection_state
             .resolve(&selection_token)
@@ -126,16 +120,6 @@ fn resolve_local_media_worker_request(
                 code,
                 selection_token: Some(selection_token.clone()),
             })?;
-    let values = parse_dotenv_values(dotenv_path).map_err(|_| LocalMediaRequestFailure {
-        code: ASR_MODEL_UNSUPPORTED,
-        selection_token: Some(selection_token.clone()),
-    })?;
-    let configured_model = values.get(ASR_MODEL_ENV).cloned();
-    let asr_model =
-        resolve_asr_model_value(configured_model).map_err(|_| LocalMediaRequestFailure {
-            code: ASR_MODEL_UNSUPPORTED,
-            selection_token: Some(selection_token.clone()),
-        })?;
     let worker_payload = serialize_process_local_media_worker_request(
         &selected.path,
         selected.media_kind,
@@ -274,12 +258,12 @@ mod tests {
         let source = write_media(&root, "Interview.WMV");
         let state = LocalMediaSelectionState::default();
         let view = state.select_for_path(&source).expect("select local video");
-        let dotenv = root.join("missing.env");
-
         let prepared = resolve_local_media_worker_request(
-            &dotenv,
             &state,
-            json!({"selectionToken": view.selection_token()}),
+            json!({
+                "selectionToken": view.selection_token(),
+                "asrModel": "iic/SenseVoiceSmall"
+            }),
         )
         .expect("prepare local request");
         let payload: serde_json::Value =
@@ -309,9 +293,8 @@ mod tests {
             }),
             json!({"selectionToken": "7ea6cd50-4dd6-4e89-a0e5-1aee4b68d274"}),
         ] {
-            let error =
-                resolve_local_media_worker_request(Path::new("missing.env"), &state, request)
-                    .expect_err("invalid request must fail");
+            let error = resolve_local_media_worker_request(&state, request)
+                .expect_err("invalid request must fail");
             assert_eq!(error.code, "LOCAL_MEDIA_SELECTION_INVALID");
             assert!(!format!("{error:?}").contains("review-secret"));
         }

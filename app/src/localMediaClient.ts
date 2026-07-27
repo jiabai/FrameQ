@@ -33,7 +33,10 @@ export async function clearLocalMediaSelection(
   selectionToken: string,
   runner: LocalMediaCommandRunner = defaultLocalMediaRunner,
 ): Promise<boolean> {
-  const parsed = parseProcessLocalMediaRequest({ selectionToken });
+  const parsed = parseProcessLocalMediaRequest({
+    selectionToken,
+    asrModel: "iic/SenseVoiceSmall",
+  });
   if (parsed.kind === "invalid") {
     throw new Error(parsed.errorCode);
   }

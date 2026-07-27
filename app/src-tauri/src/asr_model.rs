@@ -23,11 +23,15 @@ use tauri::{AppHandle, Emitter, State, Window};
 
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
 pub(crate) const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
+pub(crate) const SENSEVOICE_SMALL_ONNX_MODEL: &str = "iic/SenseVoiceSmall-onnx";
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
-pub(crate) const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL];
+const SENSEVOICE_ONNX_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-onnx";
+const ONNX_CACHE_DIR_NAME: &str = "onnx";
+const SENSEVOICE_BPE_FILE_NAME: &str = "chn_jpn_yue_eng_ko_spectok.bpe.model";
+pub(crate) const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL];
 
 #[derive(Debug, Serialize)]
-pub(crate) struct FirstRunStatusView {
+pub(crate) struct AsrModelStatusView {
     user_data_dir: String,
     default_output_dir: String,
     asr_model: String,
@@ -42,53 +46,92 @@ pub(crate) struct AsrModelDownloadResult {
     status: String,
 }
 
-fn asr_model_dir(paths: &RuntimePaths) -> PathBuf {
-    paths.user_data_dir.join("models")
+fn asr_model_dir(paths: &RuntimePaths, asr_model: &str) -> PathBuf {
+    let root = paths.user_data_dir.join("models");
+    if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
+        root.join(ONNX_CACHE_DIR_NAME)
+    } else {
+        root
+    }
 }
 
-fn asr_model_available(paths: &RuntimePaths) -> bool {
-    model_marker_exists(&asr_model_dir(paths))
+fn asr_model_available(paths: &RuntimePaths, asr_model: &str) -> bool {
+    SUPPORTED_ASR_MODELS.contains(&asr_model)
+        && model_marker_exists(&asr_model_dir(paths, asr_model), asr_model)
 }
 
-fn model_marker_exists(model_dir: &Path) -> bool {
+fn model_marker_exists(model_dir: &Path, asr_model: &str) -> bool {
     let marker = model_dir.join(MODEL_VERSION_FILE_NAME);
     marker.is_file()
-        && required_model_files_exist(model_dir)
+        && required_model_files_exist(model_dir, asr_model)
         && fs::read_to_string(marker)
-            .map(|content| {
-                content.contains(DEFAULT_ASR_MODEL) && content.contains(SENSEVOICE_VAD_MODEL)
+            .map(|content| match asr_model {
+                DEFAULT_ASR_MODEL => {
+                    content.contains(DEFAULT_ASR_MODEL) && content.contains(SENSEVOICE_VAD_MODEL)
+                }
+                SENSEVOICE_SMALL_ONNX_MODEL => {
+                    content.contains(SENSEVOICE_SMALL_ONNX_MODEL)
+                        && content.contains(SENSEVOICE_ONNX_VAD_MODEL)
+                }
+                _ => false,
             })
             .unwrap_or(false)
 }
 
-fn required_model_files_exist(model_dir: &Path) -> bool {
-    [model_dir.to_path_buf(), model_dir.join("models")]
-        .iter()
-        .any(|model_root| {
-            let sensevoice_model = model_root
-                .join("iic")
-                .join("SenseVoiceSmall")
-                .join("model.pt");
-            let vad_model = model_root
-                .join("iic")
-                .join("speech_fsmn_vad_zh-cn-16k-common-pytorch")
-                .join("model.pt");
-            sensevoice_model.is_file() && vad_model.is_file()
-        })
+fn required_model_files_exist(model_dir: &Path, asr_model: &str) -> bool {
+    match asr_model {
+        DEFAULT_ASR_MODEL => [model_dir.to_path_buf(), model_dir.join("models")]
+            .iter()
+            .any(|model_root| {
+                let sensevoice_model = model_root
+                    .join("iic")
+                    .join("SenseVoiceSmall")
+                    .join("model.pt");
+                let vad_model = model_root
+                    .join("iic")
+                    .join("speech_fsmn_vad_zh-cn-16k-common-pytorch")
+                    .join("model.pt");
+                sensevoice_model.is_file() && vad_model.is_file()
+            }),
+        SENSEVOICE_SMALL_ONNX_MODEL => {
+            let model_root = model_dir.join("models").join("iic");
+            model_root
+                .join("SenseVoiceSmall-onnx")
+                .join("model_quant.onnx")
+                .is_file()
+                && model_root
+                    .join("speech_fsmn_vad_zh-cn-16k-common-onnx")
+                    .join("model_quant.onnx")
+                    .is_file()
+                && model_root
+                    .join("SenseVoiceSmall-onnx")
+                    .join(SENSEVOICE_BPE_FILE_NAME)
+                    .is_file()
+        }
+        _ => false,
+    }
 }
 
 #[tauri::command]
-pub(crate) fn check_first_run(app: AppHandle) -> Result<FirstRunStatusView, String> {
+pub(crate) fn get_asr_model_status(
+    app: AppHandle,
+    asr_model: String,
+) -> Result<AsrModelStatusView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let config_values = parse_dotenv_values(&env_path(&paths))?;
-    Ok(FirstRunStatusView {
+    let asr_model = validate_asr_model(asr_model)?;
+    Ok(AsrModelStatusView {
         user_data_dir: path_to_env_string(&paths.user_data_dir),
         default_output_dir: path_to_env_string(paths.user_data_dir.join("outputs")),
-        asr_model: DEFAULT_ASR_MODEL.to_string(),
-        asr_model_dir: path_to_env_string(asr_model_dir(&paths)),
-        asr_model_available: asr_model_available(&paths),
-        asr_model_source: asr_model_source(&config_values),
+        asr_model_dir: path_to_env_string(asr_model_dir(&paths, &asr_model)),
+        asr_model_available: asr_model_available(&paths, &asr_model),
+        asr_model_source: if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
+            "modelscope".to_string()
+        } else {
+            asr_model_source(&config_values)
+        },
+        asr_model,
     })
 }
 
@@ -97,10 +140,11 @@ pub(crate) async fn download_asr_model(
     window: Window,
     app: AppHandle,
     process_supervisors: State<'_, Arc<ProcessSupervisors>>,
+    asr_model: String,
 ) -> Result<AsrModelDownloadResult, String> {
     let process_supervisors = Arc::clone(process_supervisors.inner());
     run_blocking_worker_command(move || {
-        download_asr_model_blocking(window, app, process_supervisors)
+        download_asr_model_blocking(window, app, process_supervisors, asr_model)
     })
     .await
 }
@@ -109,10 +153,12 @@ fn download_asr_model_blocking(
     window: Window,
     app: AppHandle,
     process_supervisors: Arc<ProcessSupervisors>,
+    asr_model: String,
 ) -> Result<AsrModelDownloadResult, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    if asr_model_available(&paths) {
+    let asr_model = validate_asr_model(asr_model)?;
+    if asr_model_available(&paths, &asr_model) {
         return Ok(AsrModelDownloadResult {
             started: false,
             status: "already_available".to_string(),
@@ -120,12 +166,18 @@ fn download_asr_model_blocking(
     }
 
     let config_values = parse_dotenv_values(&env_path(&paths))?;
-    let job = AsrModelDownloadJob::new(
-        configured_env_value(&config_values, ASR_MODEL_DOWNLOAD_URL_ENV),
-        configured_env_value(&config_values, ASR_MODEL_DOWNLOAD_SHA256_ENV),
-        configured_env_value(&config_values, MODELSCOPE_ENDPOINT_ENV),
-        configured_env_value(&config_values, SENSEVOICE_REVISION_ENV),
-    );
+    let job = if asr_model == DEFAULT_ASR_MODEL {
+        AsrModelDownloadJob::new(
+            asr_model,
+            configured_env_value(&config_values, ASR_MODEL_DOWNLOAD_URL_ENV),
+            configured_env_value(&config_values, ASR_MODEL_DOWNLOAD_SHA256_ENV),
+            configured_env_value(&config_values, MODELSCOPE_ENDPOINT_ENV),
+            configured_env_value(&config_values, SENSEVOICE_REVISION_ENV),
+        )
+    } else {
+        // ONNX artifacts are intentionally fixed to official ModelScope sources.
+        AsrModelDownloadJob::new(asr_model, None, None, None, None)
+    };
     let run_result = process_supervisors.run_asr_model_download(&paths, job, window.clone())?;
     match map_model_download_run_result(run_result)? {
         ModelDownloadRunResult::Completed => Ok(AsrModelDownloadResult {
@@ -142,6 +194,14 @@ fn download_asr_model_blocking(
                 status: "cancelled".to_string(),
             })
         }
+    }
+}
+
+fn validate_asr_model(asr_model: String) -> Result<String, String> {
+    if SUPPORTED_ASR_MODELS.contains(&asr_model.as_str()) {
+        Ok(asr_model)
+    } else {
+        Err("ASR_MODEL_UNSUPPORTED".to_string())
     }
 }
 
@@ -198,7 +258,7 @@ pub(crate) fn cancel_asr_model_download(
 mod tests {
     use super::{
         asr_model_available, cancelled_model_download_event, map_model_download_run_result,
-        ModelDownloadRunResult,
+        ModelDownloadRunResult, DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL,
     };
     use crate::settings::supported_asr_models;
     use crate::worker_runtime::{
@@ -211,10 +271,13 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn release_supported_asr_models_only_exposes_bundled_sensevoice() {
+    fn release_supported_asr_models_exposes_pytorch_and_onnx_sensevoice() {
         assert_eq!(
             supported_asr_models(),
-            vec!["iic/SenseVoiceSmall".to_string()]
+            vec![
+                "iic/SenseVoiceSmall".to_string(),
+                "iic/SenseVoiceSmall-onnx".to_string(),
+            ]
         );
     }
 
@@ -330,7 +393,7 @@ mod tests {
         let model_root = paths.user_data_dir.join("models");
         fs::create_dir_all(&model_root).expect("create user model dir");
 
-        assert!(!asr_model_available(&paths));
+        assert!(!asr_model_available(&paths, DEFAULT_ASR_MODEL));
 
         fs::write(
             model_root.join("MODEL_VERSION.txt"),
@@ -338,7 +401,7 @@ mod tests {
         )
         .expect("write model marker");
 
-        assert!(!asr_model_available(&paths));
+        assert!(!asr_model_available(&paths, DEFAULT_ASR_MODEL));
 
         let sensevoice_dir = model_root
             .join("models")
@@ -353,7 +416,7 @@ mod tests {
         fs::write(sensevoice_dir.join("model.pt"), "sensevoice").expect("write sensevoice model");
         fs::write(vad_dir.join("model.pt"), "vad").expect("write vad model");
 
-        assert!(asr_model_available(&paths));
+        assert!(asr_model_available(&paths, DEFAULT_ASR_MODEL));
     }
 
     #[test]
@@ -379,7 +442,7 @@ mod tests {
         fs::write(sensevoice_dir.join("model.pt"), "sensevoice").expect("write sensevoice model");
         fs::write(vad_dir.join("model.pt"), "vad").expect("write vad model");
 
-        assert!(asr_model_available(&paths));
+        assert!(asr_model_available(&paths, DEFAULT_ASR_MODEL));
     }
 
     #[test]
@@ -396,7 +459,47 @@ mod tests {
         )
         .expect("write model marker");
 
-        assert!(!asr_model_available(&paths));
+        assert!(!asr_model_available(&paths, DEFAULT_ASR_MODEL));
+    }
+
+    #[test]
+    fn onnx_availability_requires_its_quantized_asr_vad_and_bpe_files() {
+        let root = temp_dir("onnx_availability_requires_its_quantized_asr_vad_and_bpe_files");
+        let paths = RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        };
+        let model_root = paths.user_data_dir.join("models").join("onnx");
+        fs::create_dir_all(&model_root).expect("create ONNX model root");
+        fs::write(
+            model_root.join("MODEL_VERSION.txt"),
+            "model=iic/SenseVoiceSmall-onnx\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-onnx\n",
+        )
+        .expect("write ONNX marker");
+
+        assert!(!asr_model_available(&paths, SENSEVOICE_SMALL_ONNX_MODEL));
+
+        let asr_dir = model_root
+            .join("models")
+            .join("iic")
+            .join("SenseVoiceSmall-onnx");
+        let vad_dir = model_root
+            .join("models")
+            .join("iic")
+            .join("speech_fsmn_vad_zh-cn-16k-common-onnx");
+        let bpe_dir = model_root
+            .join("models")
+            .join("iic")
+            .join("SenseVoiceSmall-onnx");
+        fs::create_dir_all(&asr_dir).expect("create ONNX ASR dir");
+        fs::create_dir_all(&vad_dir).expect("create ONNX VAD dir");
+        fs::create_dir_all(&bpe_dir).expect("create ONNX BPE dir");
+        fs::write(asr_dir.join("model_quant.onnx"), "asr").expect("write ONNX ASR");
+        fs::write(vad_dir.join("model_quant.onnx"), "vad").expect("write ONNX VAD");
+        fs::write(bpe_dir.join("chn_jpn_yue_eng_ko_spectok.bpe.model"), "bpe")
+            .expect("write ONNX BPE");
+
+        assert!(asr_model_available(&paths, SENSEVOICE_SMALL_ONNX_MODEL));
     }
 
     fn create_parent(path: PathBuf) -> PathBuf {

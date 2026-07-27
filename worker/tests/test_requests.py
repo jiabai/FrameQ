@@ -164,6 +164,15 @@ def test_process_request_parses_exact_v3_execution_input() -> None:
     assert request.asr_model == "iic/SenseVoiceSmall"
 
 
+def test_process_request_accepts_onnx_desktop_model_snapshot() -> None:
+    payload = valid_process_request()
+    payload["asr_model"] = "iic/SenseVoiceSmall-onnx"
+
+    request = parse_process_request(payload)
+
+    assert request.asr_model == "iic/SenseVoiceSmall-onnx"
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

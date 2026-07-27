@@ -12,8 +12,9 @@ type HookHarness = {
 
 const listenMock = vi.fn();
 const cancelAsrModelDownloadMock = vi.fn();
-const checkFirstRunMock = vi.fn();
+const getAsrModelStatusMock = vi.fn();
 const downloadAsrModelMock = vi.fn();
+const getLlmConfigMock = vi.fn();
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: listenMock,
@@ -22,8 +23,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("../../settingsClient", () => ({
   ASR_MODEL_DOWNLOAD_PROGRESS_EVENT: "asr-model-download-progress",
   cancelAsrModelDownload: cancelAsrModelDownloadMock,
-  checkFirstRun: checkFirstRunMock,
+  getAsrModelStatus: getAsrModelStatusMock,
   downloadAsrModel: downloadAsrModelMock,
+  getLlmConfig: getLlmConfigMock,
 }));
 
 function createHookHarness(): HookHarness {
@@ -90,8 +92,9 @@ describe("useAsrModelDownload cancellation", () => {
     vi.resetModules();
     listenMock.mockReset();
     cancelAsrModelDownloadMock.mockReset();
-    checkFirstRunMock.mockReset();
+    getAsrModelStatusMock.mockReset();
     downloadAsrModelMock.mockReset();
+    getLlmConfigMock.mockReset();
   });
 
   test.each([
@@ -285,7 +288,7 @@ describe("useAsrModelDownload cancellation", () => {
           resolveDownload = resolve;
         }),
     );
-    checkFirstRunMock.mockResolvedValue({
+    getAsrModelStatusMock.mockResolvedValue({
       asrModel: "iic/SenseVoiceSmall",
       asrModelDir: "safe-model-dir",
       asrModelAvailable: false,
@@ -320,7 +323,7 @@ describe("useAsrModelDownload cancellation", () => {
     await download;
     hook = render();
 
-    expect(checkFirstRunMock).not.toHaveBeenCalled();
+    expect(getAsrModelStatusMock).not.toHaveBeenCalled();
     expect(hook.modelDownloadProgress).toEqual({
       phase: "completed",
       wireStatus: "completed",
@@ -617,5 +620,31 @@ describe("useAsrModelDownload cancellation", () => {
 
     now.mockRestore();
     warning.mockRestore();
+  });
+
+  test("checks the selected model only when a task asks to ensure readiness", async () => {
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+    getLlmConfigMock.mockResolvedValue({ asrModel: "iic/SenseVoiceSmall-onnx" });
+    getAsrModelStatusMock.mockResolvedValue({
+      asrModel: "iic/SenseVoiceSmall-onnx",
+      asrModelDir: "safe-model-dir/onnx",
+      asrModelAvailable: true,
+      asrModelSource: "modelscope",
+    });
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    expect(getAsrModelStatusMock).not.toHaveBeenCalled();
+
+    await expect(hook.ensureAsrModelReady()).resolves.toBe("iic/SenseVoiceSmall-onnx");
+    hook = render();
+
+    expect(getAsrModelStatusMock).toHaveBeenCalledWith("iic/SenseVoiceSmall-onnx");
+    expect(downloadAsrModelMock).not.toHaveBeenCalled();
+    expect(hook.asrModelStatus).toMatchObject({
+      model: "iic/SenseVoiceSmall-onnx",
+      available: true,
+    });
+    vi.unstubAllGlobals();
   });
 });

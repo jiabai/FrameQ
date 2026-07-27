@@ -92,9 +92,13 @@ def test_local_media_contract_is_closed_source_typed_and_non_echoing() -> None:
     }
     assert local_media["ipcRequest"] == {
         "type": "object",
-        "required": ["selectionToken"],
+        "required": ["selectionToken", "asrModel"],
         "properties": {
             "selectionToken": {"type": "string", "format": "uuid"},
+            "asrModel": {
+                "type": "string",
+                "enum": ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+            },
         },
         "additionalProperties": False,
     }
@@ -118,7 +122,10 @@ def test_local_media_contract_is_closed_source_typed_and_non_echoing() -> None:
                 "maxLength": 160,
             },
             "source_extension": {"type": "string", "enum": all_extensions},
-            "asr_model": {"type": "string", "enum": ["iic/SenseVoiceSmall"]},
+            "asr_model": {
+                "type": "string",
+                "enum": ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+            },
         },
         "additionalProperties": False,
         "constraints": {
@@ -209,8 +216,14 @@ def test_process_video_contract_separates_ipc_intent_from_worker_execution() -> 
         "configurationOwner": "desktop_rust",
         "ipcRequest": {
             "type": "object",
-            "required": ["url"],
-            "properties": {"url": {"type": "string", "minLength": 1}},
+            "required": ["url", "asrModel"],
+            "properties": {
+                "url": {"type": "string", "minLength": 1},
+                "asrModel": {
+                    "type": "string",
+                    "enum": ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+                },
+            },
             "additionalProperties": False,
         },
         "workerRequest": {
@@ -219,7 +232,10 @@ def test_process_video_contract_separates_ipc_intent_from_worker_execution() -> 
             "properties": {
                 "contract_version": {"const": 3},
                 "url": {"type": "string", "minLength": 1},
-                "asr_model": {"type": "string", "enum": ["iic/SenseVoiceSmall"]},
+                "asr_model": {
+                    "type": "string",
+                    "enum": ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+                },
             },
             "additionalProperties": False,
         },
@@ -422,6 +438,8 @@ def test_progress_argument_schemas_are_closed_and_safe() -> None:
                 "enum": [
                     "iic/SenseVoiceSmall",
                     "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+                    "iic/SenseVoiceSmall-onnx",
+                    "iic/speech_fsmn_vad_zh-cn-16k-common-onnx",
                 ],
             },
             "language": {
@@ -518,6 +536,7 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
         "model.download.cancelled",
         "model.primary.downloading",
         "model.vad.downloading",
+        "model.bpe.downloading",
         "model.archive.extracting",
         "model.archive.reading",
         "model.archive.downloading",
@@ -552,6 +571,11 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
             "allowedArgs": ["model"],
         },
         "model.vad.downloading": {
+            "status": "downloading",
+            "current_file": "forbidden",
+            "allowedArgs": ["model"],
+        },
+        "model.bpe.downloading": {
             "status": "downloading",
             "current_file": "forbidden",
             "allowedArgs": ["model"],

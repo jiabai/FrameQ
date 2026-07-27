@@ -610,7 +610,7 @@ async function main(argv = process.argv.slice(2)) {
     "Install bundled Python dependencies",
   );
   await pruneBundledPythonRuntime(pythonRoot);
-  run(pythonExe, ["-c", "import funasr, modelscope, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
+  run(pythonExe, ["-c", "import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
     env: { PYTHONDONTWRITEBYTECODE: "1", PYTHONPATH: workerRoot },
   });
   smokeTestDenoRuntime(binRoot, options.target, buildRoot);

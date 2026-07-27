@@ -181,11 +181,16 @@ def prepare_asr_transcriber_stage(
         message_args=_asr_model_args(request.asr_model),
     )
     model_cache_dir = resolve_model_cache_dir(project_root=project_root, environ=environ)
-    normalize_asr_model_cache_layout(model_cache_dir)
-    if not validate_asr_model_cache(model_cache_dir):
+    if request.asr_model == "iic/SenseVoiceSmall":
+        normalize_asr_model_cache_layout(model_cache_dir)
+    if not validate_asr_model_cache(model_cache_dir, model_name=request.asr_model):
         return failed_result(
             code="ASR_MODEL_NOT_DOWNLOADED",
-            message="SenseVoice Small model is not downloaded yet.",
+            message=(
+                "SenseVoice Small model is not downloaded yet."
+                if request.asr_model == "iic/SenseVoiceSmall"
+                else "SenseVoiceSmall-ONNX model is not downloaded yet."
+            ),
             stage=JobStage.VIDEO_TRANSCRIBING,
         )
     factory = transcriber_factory or build_asr_transcriber

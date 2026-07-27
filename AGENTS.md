@@ -2,7 +2,7 @@
 
 ## 对外分发补充规则
 
-- 对外分发版本采用轻量安装包 + 首启下载核心本地 ASR 模型（首版为 SenseVoice Small）；安装包不得内置 ASR 权重、LLM key、云端 LLM 模型或用户私有配置。模型版本、缓存、下载进度、取消、失败降级和离线行为必须在产品和 worker 中显式处理。
+- 对外分发版本采用轻量安装包；安装包不得内置 ASR 权重、LLM key、云端 LLM 模型或用户私有配置。核心本地 ASR 模型由用户在提交已验证 URL 或本地媒体任务时按所选模型按需下载到 app-local data，启动时不得自动下载。模型版本、缓存、下载进度、取消、失败降级和离线行为必须在产品和 worker 中显式处理。
 
 <!-- 由 vibe-coding-launcher 生成。详细规则请修改对应 docs/ 文件，并同步本入口地图。 -->
 
@@ -20,6 +20,7 @@
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - Rust worker runner 模块拆分设计：`docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`
 - ASR 模型下载语义 Job 能力边界设计：`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`
+- 可选 ASR 模型与按需下载设计：`docs/design-docs/2026-07-27-selectable-asr-model-on-demand-download.md`
 - Rust worker watchdog 设计：`docs/design-docs/2026-07-22-rust-worker-watchdog.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
@@ -53,6 +54,7 @@
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
+- 最近完成 可选 ASR 模型按需下载计划：`docs/exec-plans/completed/2026-07-27-selectable-asr-model-on-demand-download-plan.md`
 - 最近完成 v0.2.17 发布计划：`docs/exec-plans/completed/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 最近完成 本地媒体文件导入计划：`docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 - 最近完成 Python worker application facade / CLI 计划：`docs/exec-plans/completed/2026-07-24-python-worker-application-facade-plan.md`
@@ -72,7 +74,7 @@
 - 桌面客户端必须本地优先；视频、音频和文字稿默认留在本机。
 - 运行期不得从 `D:\Github\InsightFlow\src\server` 跨目录 import；需要的能力必须复制、裁剪并内置到 `worker/insightflow/`。
 - UI 必须始终显示清晰处理阶段：输入、视频提取、视频转译、话题点生成、完成或失败。
-- 安装包只内置运行时、worker、媒体工具和必要依赖；核心本地 ASR 模型（首版为 SenseVoice Small）由首启引导下载到 app-local data。LLM key、云端 LLM 模型和用户私有配置不打进安装包，模型缓存、下载进度和降级路径要在产品和 worker 中显式处理。
+- 安装包只内置运行时、worker、媒体工具和必要依赖；核心本地 ASR 模型仅在用户提交已验证任务且所选模型缺失时下载到 app-local data，启动时不自动下载。LLM key、云端 LLM 模型和用户私有配置不打进安装包，模型缓存、下载进度和降级路径要在产品和 worker 中显式处理。
 
 ## 开发流程
 

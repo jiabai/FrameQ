@@ -71,7 +71,7 @@ function completedResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
 }
 
 describe("worker client", () => {
-  test("invokes the independent local-media command with a token-only request", async () => {
+  test("invokes the independent local-media command with a frozen model snapshot", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: WorkerCommandRunner = async (command, args) => {
       calls.push({ command, args });
@@ -84,7 +84,10 @@ describe("worker client", () => {
     };
 
     const result = await processLocalMedia(
-      { selectionToken: "01234567-89ab-4def-8abc-0123456789ab" },
+      {
+        selectionToken: "01234567-89ab-4def-8abc-0123456789ab",
+        asrModel: "iic/SenseVoiceSmall-onnx",
+      },
       runner,
     );
 
@@ -94,6 +97,7 @@ describe("worker client", () => {
         args: {
           request: {
             selectionToken: "01234567-89ab-4def-8abc-0123456789ab",
+            asrModel: "iic/SenseVoiceSmall-onnx",
           },
         },
       },
@@ -140,6 +144,7 @@ describe("worker client", () => {
         args: {
           request: {
             url: "https://www.douyin.com/video/7524373044106677544",
+            asrModel: "iic/SenseVoiceSmall",
           },
         },
       },

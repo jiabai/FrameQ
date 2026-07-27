@@ -18,6 +18,7 @@ EXPECTED_PRIVATE_FILES = {
     "qwen.py",
     "registry.py",
     "sensevoice.py",
+    "sensevoice_onnx.py",
     "types.py",
 }
 
@@ -116,6 +117,10 @@ def test_private_modules_own_the_approved_symbols() -> None:
             "_slice_audio_by_milliseconds",
             "_transcribe_sensevoice_vad_blocks",
         },
+        "sensevoice_onnx.py": {
+            "SENSEVOICE_SMALL_ONNX_MODEL",
+            "SenseVoiceOnnxTranscriber",
+        },
         "registry.py": {
             "DEFAULT_ASR_MODEL",
             "DEFAULT_MODEL_CACHE_ENV",
@@ -126,6 +131,7 @@ def test_private_modules_own_the_approved_symbols() -> None:
             "build_asr_transcriber",
             "build_qwen_asr_transcriber",
             "build_sensevoice_transcriber",
+            "build_sensevoice_onnx_transcriber",
             "configure_modelscope_cache_dir",
             "resolve_asr_model_name",
             "resolve_model_cache_dir",
@@ -180,6 +186,7 @@ def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
     qwen = importlib.import_module("frameq_worker.asr_runtime.qwen")
     registry = importlib.import_module("frameq_worker.asr_runtime.registry")
     sensevoice = importlib.import_module("frameq_worker.asr_runtime.sensevoice")
+    sensevoice_onnx = importlib.import_module("frameq_worker.asr_runtime.sensevoice_onnx")
     types = importlib.import_module("frameq_worker.asr_runtime.types")
 
     for name in (
@@ -198,6 +205,7 @@ def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
         assert getattr(public, name) is getattr(types, name)
     assert public.QwenAsrTranscriber is qwen.QwenAsrTranscriber
     assert public.SenseVoiceTranscriber is sensevoice.SenseVoiceTranscriber
+    assert public.SenseVoiceOnnxTranscriber is sensevoice_onnx.SenseVoiceOnnxTranscriber
     for name in (
         "SUPPORTED_ASR_MODELS",
         "asr_model_display_name",
@@ -205,6 +213,7 @@ def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
         "build_asr_transcriber",
         "build_qwen_asr_transcriber",
         "build_sensevoice_transcriber",
+        "build_sensevoice_onnx_transcriber",
         "configure_modelscope_cache_dir",
         "resolve_asr_model_name",
         "resolve_model_cache_dir",
@@ -222,6 +231,11 @@ def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
     )
     assert public.SENSEVOICE_VAD_MODEL == sensevoice.SENSEVOICE_VAD_MODEL == "fsmn-vad"
     assert (
+        public.SENSEVOICE_SMALL_ONNX_MODEL
+        == sensevoice_onnx.SENSEVOICE_SMALL_ONNX_MODEL
+        == "iic/SenseVoiceSmall-onnx"
+    )
+    assert (
         public.SENSEVOICE_VAD_MAX_SEGMENT_TIME_MS
         == sensevoice.SENSEVOICE_VAD_MAX_SEGMENT_TIME_MS
         == 30000
@@ -231,6 +245,7 @@ def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
     assert public.MODELSCOPE_CACHE_ENV == registry.MODELSCOPE_CACHE_ENV == "MODELSCOPE_CACHE"
     assert public.supported_asr_model_names() == [
         "iic/SenseVoiceSmall",
+        "iic/SenseVoiceSmall-onnx",
         "Qwen/Qwen3-ASR-0.6B",
     ]
     assert not hasattr(public, "SENSEVOICE_TAG_PATTERN")
@@ -242,7 +257,14 @@ import json
 import sys
 import frameq_worker.asr
 
-print(json.dumps({name: name in sys.modules for name in ("qwen_asr", "funasr", "numpy")}))
+print(
+    json.dumps(
+        {
+            name: name in sys.modules
+            for name in ("qwen_asr", "funasr", "funasr_onnx", "numpy")
+        }
+    )
+)
 """
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(WORKER_ROOT)
@@ -259,6 +281,7 @@ print(json.dumps({name: name in sys.modules for name in ("qwen_asr", "funasr", "
     assert json.loads(completed.stdout.strip()) == {
         "qwen_asr": False,
         "funasr": False,
+        "funasr_onnx": False,
         "numpy": False,
     }
 
@@ -299,7 +322,8 @@ def test_private_asr_modules_have_no_root_or_application_back_edges() -> None:
 def test_low_level_dependencies_have_one_approved_owner() -> None:
     assert _owners_importing("qwen_asr") == {"qwen.py"}
     assert _owners_importing("funasr") == {"sensevoice.py"}
-    assert _owners_importing("numpy") == {"sensevoice.py"}
+    assert _owners_importing("funasr_onnx") == {"sensevoice_onnx.py"}
+    assert _owners_importing("numpy") == {"sensevoice.py", "sensevoice_onnx.py"}
     assert _owners_importing("wave") == {"sensevoice.py"}
     assert _owners_importing("os") == {"registry.py"}
     assert _owners_importing("json") == {"artifacts.py"}
@@ -308,7 +332,7 @@ def test_low_level_dependencies_have_one_approved_owner() -> None:
 
 
 def test_provider_modules_do_not_depend_on_registry() -> None:
-    for filename in ("qwen.py", "sensevoice.py"):
+    for filename in ("qwen.py", "sensevoice.py", "sensevoice_onnx.py"):
         assert "frameq_worker.asr_runtime.registry" not in _imported_modules(
             PRIVATE_ASR_ROOT / filename
         )

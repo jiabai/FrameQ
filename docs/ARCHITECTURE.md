@@ -767,6 +767,23 @@
 - Worker startup keeps legacy top-level `iic/...` readable for upgrade compatibility, but normalizes it to the canonical layout before real ASR loading.
 - Automatic cleanup is limited to FrameQ's known SenseVoice/VAD legacy directories and stale `._____temp` folders without `model.pt`.
 
+## 2026-07-27 Selectable ASR Models and On-Demand Download
+
+- Desktop startup reads local settings and descriptor-private readiness only; it must not start a
+  model download. The installer contains no ASR weights.
+- `iic/SenseVoiceSmall` remains the default PyTorch compatibility path. The additional
+  `iic/SenseVoiceSmall-onnx` descriptor uses a separate ONNX cache and only official ModelScope
+  SenseVoiceSmall-ONNX plus ONNX VAD sources.
+- Source/account validation precedes model validation and task creation. The validated
+  `asr_model` is frozen into the existing request and task metadata; a missing selection starts
+  only the separate model-download lane and retains no task artifacts.
+- A verified download is atomically promoted to its descriptor-private ready cache, revalidated,
+  and automatically resumes the held URL/local-media intent. Failed, cancelled, corrupt, or
+  offline installs create no task and never fall back to a different model.
+- Rust owns descriptor validation, source-intent retention, and download-lane lifecycle. Python
+  owns official-source acquisition, cache validation, and direct local runtime loading. The ONNX
+  runtime uses `funasr_onnx` directly; it does not use `funasr.AutoModel` or auto-export.
+
 ## 2026-06-21 Account and Billing Boundary
 
 - `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, administrator-issued activation-code monthly passes, entitlement status, Admin Web, and server-managed LLM checkout.
@@ -794,7 +811,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 |------|------|------|
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
 | `app/src-tauri/src/worker_runtime/` | Rust worker 命令构造、单一受监督运行器、实例安全取消、progress 校验路由和进程树终止 | `WorkerLane::run` 已统一 process-video、AI retry、source preflight 与 ASR model download；低层生命周期 API 对应用模块不可见 |
-| `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认启用 SenseVoice Small，但模型缓存由首启下载 |
+| `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认选中 SenseVoice Small，缺失模型仅在已验证任务提交时按选择下载 |
 | `worker/insightflow/` | 从参考实现复制并裁剪后的灵感生成模块 | 已初始化 splitter、prompt、JSON parser、generator；先用 LLM 做话题分段规划，再逐话题生成问题；planner 失败时 fallback 到直接生成 |
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
 | app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...`; legacy top-level `iic/...` is migrated/cleaned best-effort |

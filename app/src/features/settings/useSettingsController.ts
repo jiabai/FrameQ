@@ -18,7 +18,7 @@ import {
 
 export type SettingsCategory = "basic" | "inspiration" | "storage" | "updates" | "advanced";
 
-const defaultAsrModels = ["iic/SenseVoiceSmall"];
+const defaultAsrModels = ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"];
 
 export function useSettingsController() {
   const [settingsOpen, setSettingsOpen] = useState(false);

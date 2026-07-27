@@ -17,6 +17,7 @@ export type LocalMediaSelectionView = {
 
 export type ProcessLocalMediaRequest = {
   selectionToken: string;
+  asrModel: "iic/SenseVoiceSmall" | "iic/SenseVoiceSmall-onnx";
 };
 
 export type LocalMediaParseResult<T> =
@@ -32,6 +33,10 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const UNSAFE_BASENAME_CHARACTER_PATTERN =
   /[\/\\\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
+const DESKTOP_ASR_MODELS = [
+  "iic/SenseVoiceSmall",
+  "iic/SenseVoiceSmall-onnx",
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -121,14 +126,18 @@ export function parseProcessLocalMediaRequest(
 ): LocalMediaParseResult<ProcessLocalMediaRequest> {
   if (
     !isRecord(value) ||
-    !hasExactFields(value, ["selectionToken"]) ||
-    !isSelectionToken(value.selectionToken)
+    !hasExactFields(value, ["selectionToken", "asrModel"]) ||
+    !isSelectionToken(value.selectionToken) ||
+    !DESKTOP_ASR_MODELS.includes(value.asrModel as (typeof DESKTOP_ASR_MODELS)[number])
   ) {
     return INVALID_SELECTION;
   }
 
   return {
     kind: "valid",
-    value: { selectionToken: value.selectionToken },
+    value: {
+      selectionToken: value.selectionToken,
+      asrModel: value.asrModel as ProcessLocalMediaRequest["asrModel"],
+    },
   };
 }

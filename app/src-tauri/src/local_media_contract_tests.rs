@@ -98,10 +98,12 @@ fn local_media_selection_view_rejects_wrong_kind_and_path_without_echoing() {
 fn local_media_ipc_parser_accepts_only_one_canonical_uuid_token() {
     let request = parse_process_local_media_ipc_request(json!({
         "selectionToken": SELECTION_TOKEN,
+        "asrModel": "iic/SenseVoiceSmall-onnx",
     }))
     .expect("valid token-only request");
 
     assert_eq!(request.selection_token, SELECTION_TOKEN);
+    assert_eq!(request.asr_model, "iic/SenseVoiceSmall-onnx");
 }
 
 #[test]

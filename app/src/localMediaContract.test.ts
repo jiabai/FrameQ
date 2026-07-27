@@ -46,7 +46,10 @@ describe("local media frontend-safe contract", () => {
       value: validSelection(),
     });
 
-    const request = { selectionToken: SELECTION_TOKEN } satisfies ProcessLocalMediaRequest;
+    const request = {
+      selectionToken: SELECTION_TOKEN,
+      asrModel: "iic/SenseVoiceSmall-onnx",
+    } satisfies ProcessLocalMediaRequest;
     expect(parseProcessLocalMediaRequest(request)).toEqual({
       kind: "valid",
       value: request,

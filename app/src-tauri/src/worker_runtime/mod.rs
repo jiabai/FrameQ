@@ -113,12 +113,18 @@ mod tests {
     }
 
     #[test]
-    fn asr_model_download_job_derives_operation_progress_and_command() {
+    fn asr_model_download_job_derives_selected_model_command_and_model_root() {
         let paths = RuntimePaths {
             resource_dir: PathBuf::from("frameq-test").join("resources"),
             user_data_dir: PathBuf::from("frameq-test").join("user-data"),
         };
-        let job = AsrModelDownloadJob::new(None, None, None, None);
+        let job = AsrModelDownloadJob::new(
+            "iic/SenseVoiceSmall-onnx".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
 
         let request =
             prepare_asr_model_download_request(&paths, job, ProgressRoute::asr_model_download(()))
@@ -128,9 +134,19 @@ mod tests {
         assert!(matches!(request.progress, ProgressRoute::AsrModelDownload));
         assert_eq!(
             request.command.args,
-            vec!["-m", "frameq_worker", "--download-asr-model"]
+            vec![
+                "-m",
+                "frameq_worker",
+                "--download-asr-model",
+                "--asr-model",
+                "iic/SenseVoiceSmall-onnx",
+            ]
         );
         assert_eq!(request.command.stdin_payload, None);
+        assert_eq!(
+            request.command.env_map().get("FRAMEQ_MODEL_DIR"),
+            Some(&"frameq-test/user-data/models".to_string())
+        );
     }
 
     #[test]

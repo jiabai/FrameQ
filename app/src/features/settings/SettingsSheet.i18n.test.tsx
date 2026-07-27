@@ -64,7 +64,6 @@ function renderSettings(
       updateInstallBlocked={false}
       inAppUpdates
       formatProgressPercent={(value) => `${value}%`}
-      onStartAsrModelDownload={vi.fn()}
       onOpenProfileEditorFromSettings={vi.fn()}
       onCheckForUpdates={vi.fn()}
       onInstallUpdate={vi.fn()}

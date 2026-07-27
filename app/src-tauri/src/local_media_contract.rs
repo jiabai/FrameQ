@@ -10,8 +10,6 @@ pub(crate) const VIDEO_EXTENSIONS: [&str; 7] = ["mp4", "m4v", "mov", "mkv", "avi
 pub(crate) const AUDIO_EXTENSIONS: [&str; 8] =
     ["mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "wma"];
 
-const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
-
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum LocalMediaKind {
@@ -73,11 +71,13 @@ impl LocalMediaSelectionView {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RawProcessLocalMediaIpcRequest {
     selection_token: String,
+    asr_model: String,
 }
 
 #[derive(Eq, PartialEq)]
 pub(crate) struct ProcessLocalMediaIpcRequest {
     pub(crate) selection_token: String,
+    pub(crate) asr_model: String,
 }
 
 pub(crate) fn parse_process_local_media_ipc_request(
@@ -85,11 +85,14 @@ pub(crate) fn parse_process_local_media_ipc_request(
 ) -> Result<ProcessLocalMediaIpcRequest, &'static str> {
     let raw: RawProcessLocalMediaIpcRequest =
         serde_json::from_value(value).map_err(|_| INVALID_LOCAL_MEDIA_SELECTION_CODE)?;
-    if !is_selection_token(&raw.selection_token) {
+    if !is_selection_token(&raw.selection_token)
+        || !crate::SUPPORTED_ASR_MODELS.contains(&raw.asr_model.as_str())
+    {
         return Err(INVALID_LOCAL_MEDIA_SELECTION_CODE);
     }
     Ok(ProcessLocalMediaIpcRequest {
         selection_token: raw.selection_token,
+        asr_model: raw.asr_model,
     })
 }
 
@@ -123,7 +126,7 @@ pub(crate) fn serialize_process_local_media_worker_request(
         || !path_extension_matches
         || !extension_matches_kind(source_extension, media_kind)
         || !is_safe_display_name(safe_display_name, source_extension)
-        || asr_model != DEFAULT_ASR_MODEL
+        || !crate::SUPPORTED_ASR_MODELS.contains(&asr_model)
     {
         return Err(INVALID_LOCAL_MEDIA_WORKER_REQUEST_MESSAGE);
     }

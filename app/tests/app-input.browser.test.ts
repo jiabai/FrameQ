@@ -162,6 +162,20 @@ describe("App browser input interactions", () => {
           language: "en-US",
           recovered: false,
         },
+        get_llm_config: {
+          output_dir: "C:/FrameQ/outputs",
+          asr_model: "iic/SenseVoiceSmall",
+          supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+          config_path: "C:/FrameQ/.env",
+        },
+        get_asr_model_status: {
+          user_data_dir: "C:/FrameQ",
+          default_output_dir: "C:/FrameQ/outputs",
+          asr_model: "iic/SenseVoiceSmall",
+          asr_model_dir: "C:/FrameQ/models",
+          asr_model_available: true,
+          asr_model_source: "modelscope",
+        },
         select_local_media: {
           selectionToken,
           displayName: "Interview.mp3",
@@ -297,7 +311,12 @@ describe("App browser input interactions", () => {
       ).toEqual([
         {
           command: "process_local_media",
-          args: { request: { selectionToken } },
+          args: {
+            request: {
+              selectionToken,
+              asrModel: "iic/SenseVoiceSmall",
+            },
+          },
         },
       ]);
       expect(commands.some((entry) => entry.command === "process_video")).toBe(false);
@@ -555,7 +574,15 @@ describe("App browser input interactions", () => {
                     recovered: false
                   };
                 }
-                if (command === "check_first_run") {
+                if (command === "get_llm_config") {
+                  return {
+                    output_dir: "C:/FrameQ/outputs",
+                    asr_model: "iic/SenseVoiceSmall",
+                    supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+                    config_path: "C:/FrameQ/.env"
+                  };
+                }
+                if (command === "get_asr_model_status") {
                   return {
                     user_data_dir: "C:/FrameQ",
                     default_output_dir: "C:/FrameQ/outputs",
@@ -700,7 +727,15 @@ describe("App browser input interactions", () => {
                     recovered: false
                   };
                 }
-                if (command === "check_first_run") {
+                if (command === "get_llm_config") {
+                  return {
+                    output_dir: "C:/FrameQ/outputs",
+                    asr_model: "iic/SenseVoiceSmall",
+                    supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+                    config_path: "C:/FrameQ/.env"
+                  };
+                }
+                if (command === "get_asr_model_status") {
                   return {
                     user_data_dir: "C:/FrameQ",
                     default_output_dir: "C:/FrameQ/outputs",
@@ -1076,7 +1111,7 @@ describe("App desktop sheet structure", () => {
                   return {
                     output_dir: "D:/FrameQ/outputs",
                     asr_model: "iic/SenseVoiceSmall",
-                    supported_asr_models: ["iic/SenseVoiceSmall"],
+                    supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
                     config_path: "C:/Users/demo/AppData/Local/FrameQ/.env"
                   };
                 }
@@ -1092,7 +1127,7 @@ describe("App desktop sheet structure", () => {
                     cache_path: "C:/Users/demo/AppData/Local/FrameQ/cache/.frameq-audio-review"
                   };
                 }
-                if (command === "check_first_run") {
+                if (command === "get_asr_model_status") {
                   return {
                     user_data_dir: "C:/Users/demo/AppData/Local/FrameQ",
                     default_output_dir: "C:/Users/demo/AppData/Local/FrameQ/outputs",

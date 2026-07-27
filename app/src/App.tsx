@@ -54,6 +54,7 @@ import { renderUiMessage, uiMessage, type UiMessage } from "./i18n/uiMessage";
 const asrModelLabels: Record<string, string> = {
   "Qwen/Qwen3-ASR-0.6B": "Qwen3-ASR 0.6B",
   "iic/SenseVoiceSmall": "SenseVoice Small",
+  "iic/SenseVoiceSmall-onnx": "SenseVoiceSmall-ONNX (≈ 230 MB)",
 };
 
 function formatProgressPercent(value: number): string {
@@ -114,7 +115,6 @@ function App() {
   const {
     modelGuideOpen,
     setModelGuideOpen,
-    openModelGuide,
     asrModelStatus,
     modelDownloadProgress,
     modelDownloadNotice,
@@ -122,6 +122,7 @@ function App() {
     modelDownloadActive,
     refreshAsrModelStatus,
     startAsrModelDownload,
+    ensureAsrModelReady,
     cancelCurrentAsrModelDownload,
   } = useAsrModelDownload();
   const resetTaskUi = useCallback(() => {
@@ -153,6 +154,8 @@ function App() {
   } = useTaskProcessingController({
     onResetTaskUi: resetTaskUi,
     onRetryStarted: prepareInsightRetryUi,
+    ensureAsrModelReady,
+    modelDownloadActive,
     processBlockerMessage: accountProcessBlockerMessage,
     aiBlockerMessage: accountAiBlockerMessage,
   });
@@ -330,37 +333,6 @@ function App() {
     modelGuideOpen,
     modelDownloadActive,
   ]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function openFirstRunSettingsIfNeeded() {
-      try {
-        const firstRun = await refreshAsrModelStatus();
-        if (cancelled) {
-          return;
-        }
-
-        if (!firstRun.asrModelAvailable) {
-          openModelGuide(
-            uiMessage("asrModel.notice.firstRunRequired", {
-              modelDir: firstRun.asrModelDir,
-            }),
-          );
-          return;
-        }
-
-        return;
-      } catch {
-        // Browser-only development and tests do not always provide Tauri commands.
-      }
-    }
-
-    void openFirstRunSettingsIfNeeded();
-    return () => {
-      cancelled = true;
-    };
-  }, [openModelGuide, refreshAsrModelStatus]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -709,7 +681,9 @@ function App() {
         updateInstallBlocked={updateInstallBlocked}
         inAppUpdates={inAppUpdates}
         formatProgressPercent={formatProgressPercent}
-        onStartAsrModelDownload={startAsrModelDownload}
+        onAsrModelSelection={(model) => {
+          void refreshAsrModelStatus(model).catch(() => undefined);
+        }}
         onOpenProfileEditorFromSettings={openProfileEditorFromSettings}
         onCheckForUpdates={checkForUpdates}
         onInstallUpdate={installUpdate}

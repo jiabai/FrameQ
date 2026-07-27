@@ -56,9 +56,9 @@ async function renderModelGuide(
 
 describe("ModelGuideSheet localization", () => {
   test.each([
-    ["zh-CN", "下载 ASR 模型", "取消下载", "42%"],
-    ["zh-TW", "下載 ASR 模型", "取消下載", "42%"],
-    ["en-US", "Download ASR Model", "Cancel Download", "42%"],
+    ["zh-CN", "正在为本任务准备模型", "取消下载", "42%"],
+    ["zh-TW", "正在為本任務準備模型", "取消下載", "42%"],
+    ["en-US", "Preparing Model for This Task", "Cancel Download", "42%"],
   ] as const)(
     "renders model guidance, controls, and locale-aware progress in %s",
     async (locale, title, cancelLabel, percent) => {

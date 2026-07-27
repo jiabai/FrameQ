@@ -8,6 +8,7 @@ use crate::RuntimePaths;
 use tauri::Window;
 
 pub(crate) struct AsrModelDownloadJob {
+    asr_model: String,
     download_url: Option<String>,
     download_sha256: Option<String>,
     modelscope_endpoint: Option<String>,
@@ -16,17 +17,23 @@ pub(crate) struct AsrModelDownloadJob {
 
 impl AsrModelDownloadJob {
     pub(crate) fn new(
+        asr_model: String,
         download_url: Option<String>,
         download_sha256: Option<String>,
         modelscope_endpoint: Option<String>,
         sensevoice_revision: Option<String>,
     ) -> Self {
         Self {
+            asr_model,
             download_url,
             download_sha256,
             modelscope_endpoint,
             sensevoice_revision,
         }
+    }
+
+    pub(super) fn asr_model(&self) -> &str {
+        &self.asr_model
     }
 
     pub(super) fn download_url(&self) -> Option<&str> {

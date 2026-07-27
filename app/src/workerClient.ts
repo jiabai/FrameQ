@@ -42,6 +42,7 @@ export type RetryInsightTarget = "summary" | "insights";
 
 export type ProcessVideoIpcRequest = {
   url: string;
+  asrModel: "iic/SenseVoiceSmall" | "iic/SenseVoiceSmall-onnx";
 };
 
 export type RetryInsightsRequest = RetryInsightsWireRequest;
@@ -52,20 +53,53 @@ const defaultProgressDiagnosticRecorder: ProgressDiagnosticRecorder = (safeCode)
   console.warn(`Dropped invalid worker progress event: ${safeCode}`);
 };
 
+export function processVideo(
+  url: string,
+  runner?: WorkerCommandRunner,
+  onProgress?: WorkerProgressHandler,
+  progressListener?: WorkerProgressListener,
+  recordInvalidProgress?: ProgressDiagnosticRecorder,
+): Promise<WorkerResult>;
+export function processVideo(
+  url: string,
+  asrModel: ProcessVideoIpcRequest["asrModel"],
+  runner?: WorkerCommandRunner,
+  onProgress?: WorkerProgressHandler,
+  progressListener?: WorkerProgressListener,
+  recordInvalidProgress?: ProgressDiagnosticRecorder,
+): Promise<WorkerResult>;
 export async function processVideo(
   url: string,
-  runner: WorkerCommandRunner = defaultWorkerRunner,
-  onProgress?: WorkerProgressHandler,
-  progressListener: WorkerProgressListener = listen,
-  recordInvalidProgress: ProgressDiagnosticRecorder = defaultProgressDiagnosticRecorder,
+  asrModelOrRunner:
+    | ProcessVideoIpcRequest["asrModel"]
+    | WorkerCommandRunner = "iic/SenseVoiceSmall",
+  runnerOrOnProgress?: WorkerCommandRunner | WorkerProgressHandler,
+  onProgressOrListener?: WorkerProgressHandler | WorkerProgressListener,
+  progressListenerOrRecorder?: WorkerProgressListener | ProgressDiagnosticRecorder,
+  recordInvalidProgress?: ProgressDiagnosticRecorder,
 ): Promise<WorkerResult> {
+  const legacyInvocation = typeof asrModelOrRunner === "function";
+  const asrModel = legacyInvocation ? "iic/SenseVoiceSmall" : asrModelOrRunner;
+  const resolvedRunner = legacyInvocation
+    ? asrModelOrRunner
+    : (runnerOrOnProgress as WorkerCommandRunner | undefined) ?? defaultWorkerRunner;
+  const resolvedOnProgress = legacyInvocation
+    ? (runnerOrOnProgress as WorkerProgressHandler | undefined)
+    : (onProgressOrListener as WorkerProgressHandler | undefined);
+  const resolvedProgressListener = legacyInvocation
+    ? (onProgressOrListener as WorkerProgressListener | undefined) ?? listen
+    : (progressListenerOrRecorder as WorkerProgressListener | undefined) ?? listen;
+  const resolvedDiagnosticRecorder = legacyInvocation
+    ? (progressListenerOrRecorder as ProgressDiagnosticRecorder | undefined) ??
+      defaultProgressDiagnosticRecorder
+    : recordInvalidProgress ?? defaultProgressDiagnosticRecorder;
   return runTaskCommand(
     "process_video",
-    { url } satisfies ProcessVideoIpcRequest,
-    runner,
-    onProgress,
-    progressListener,
-    recordInvalidProgress,
+    { url, asrModel } satisfies ProcessVideoIpcRequest,
+    resolvedRunner,
+    resolvedOnProgress,
+    resolvedProgressListener,
+    resolvedDiagnosticRecorder,
   );
 }
 

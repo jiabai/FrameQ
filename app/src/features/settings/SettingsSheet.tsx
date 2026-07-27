@@ -35,7 +35,7 @@ type SettingsSheetProps = {
   updateInstallBlocked: boolean;
   inAppUpdates: boolean;
   formatProgressPercent: (value: number) => string;
-  onStartAsrModelDownload: () => void | Promise<void>;
+  onAsrModelSelection?: (model: string) => void;
   onOpenProfileEditorFromSettings: () => void | Promise<void>;
   onCheckForUpdates: (options?: { silent?: boolean; isCancelled?: () => boolean }) => void | Promise<void>;
   onInstallUpdate: () => void | Promise<void>;
@@ -139,7 +139,7 @@ export function SettingsSheet({
   updateInstallBlocked,
   inAppUpdates,
   formatProgressPercent,
-  onStartAsrModelDownload,
+  onAsrModelSelection,
   onOpenProfileEditorFromSettings,
   onCheckForUpdates,
   onInstallUpdate,
@@ -270,8 +270,12 @@ export function SettingsSheet({
                       <span>{tSettings("basic.asrModel")}</span>
                       <select
                         value={settingsDraft.asrModel}
-                        onChange={(event) => updateSettingsDraft("asrModel", event.currentTarget.value)}
-                        disabled={settingsLoading || settingsSaving}
+                        onChange={(event) => {
+                          const model = event.currentTarget.value;
+                          updateSettingsDraft("asrModel", model);
+                          onAsrModelSelection?.(model);
+                        }}
+                        disabled={settingsLoading || settingsSaving || modelDownloadActive}
                       >
                         {settingsSupportedAsrModels.map((model) => (
                           <option value={model} key={model}>
@@ -291,19 +295,6 @@ export function SettingsSheet({
                           {asrModelStatus.modelDir || tSettings("basic.defaultModelPath")}
                         </small>
                       </div>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => void onStartAsrModelDownload()}
-                        disabled={asrModelStatus.available || modelDownloadActive}
-                      >
-                        <Download size={15} />
-                        <span>
-                          {modelDownloadActive
-                            ? tSettings("basic.downloading")
-                            : tSettings("basic.downloadModel")}
-                        </span>
-                      </button>
                     </div>
                     <label className="field-row">
                       <span>{tSettings("basic.outputDirectory")}</span>

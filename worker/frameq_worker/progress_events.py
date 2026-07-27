@@ -23,6 +23,8 @@ _ALLOWED_MODELS = frozenset(
     {
         "iic/SenseVoiceSmall",
         "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+        "iic/SenseVoiceSmall-onnx",
+        "iic/speech_fsmn_vad_zh-cn-16k-common-onnx",
     }
 )
 WORKER_PROGRESS_STAGES = frozenset(
@@ -97,6 +99,9 @@ MODEL_PROGRESS_REGISTRY: dict[str, ModelProgressSpec] = {
         "downloading", "forbidden", ("model",)
     ),
     "model.vad.downloading": ModelProgressSpec(
+        "downloading", "forbidden", ("model",)
+    ),
+    "model.bpe.downloading": ModelProgressSpec(
         "downloading", "forbidden", ("model",)
     ),
     "model.archive.extracting": ModelProgressSpec("extracting", "forbidden"),

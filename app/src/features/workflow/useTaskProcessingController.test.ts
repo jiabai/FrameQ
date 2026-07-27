@@ -134,7 +134,14 @@ function createWorkerResult(overrides: Partial<WorkerResult> = {}): WorkerResult
   };
 }
 
-async function createController() {
+async function createController(
+  overrides: {
+    ensureAsrModelReady?: () => Promise<
+      "iic/SenseVoiceSmall" | "iic/SenseVoiceSmall-onnx" | null
+    >;
+    modelDownloadActive?: boolean;
+  } = {},
+) {
   const harness = createHookHarness();
   const onResetTaskUi = vi.fn();
   vi.doMock("react", () => ({
@@ -153,6 +160,7 @@ async function createController() {
         onRetryStarted: vi.fn(),
         processBlockerMessage: () => ({ messageCode: "account.notice.processingUnavailable" }),
         aiBlockerMessage: () => ({ messageCode: "account.notice.aiUnavailable" }),
+        ...overrides,
       });
     },
     onResetTaskUi,
@@ -465,6 +473,53 @@ describe("useTaskProcessingController closed local-media source", () => {
     clearLocalMediaSelectionMock.mockResolvedValue(true);
   });
 
+  test("keeps the original input when preparing the selected model is cancelled or fails", async () => {
+    const ensureAsrModelReady = vi.fn().mockResolvedValue(null);
+    const { render } = await createController({ ensureAsrModelReady });
+    let controller = render();
+    controller.updateUrlDraft(SUBMITTED_URL);
+    controller = render();
+
+    await controller.submitTask(
+      URL_SUBMISSION,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+
+    expect(ensureAsrModelReady).toHaveBeenCalledTimes(1);
+    expect(processVideoMock).not.toHaveBeenCalled();
+    expect(controller.workflow.stage).toBe("waiting_input");
+    expect(controller.workflow.composerSource).toEqual({
+      kind: "url",
+      urlDraft: SUBMITTED_URL,
+    });
+  });
+
+  test("freezes the ready ONNX model snapshot into the worker submission", async () => {
+    const ensureAsrModelReady = vi
+      .fn()
+      .mockResolvedValue("iic/SenseVoiceSmall-onnx");
+    processVideoMock.mockResolvedValue(createWorkerResult());
+    const { render } = await createController({ ensureAsrModelReady });
+    let controller = render();
+    controller.updateUrlDraft(SUBMITTED_URL);
+    controller = render();
+
+    await controller.submitTask(
+      URL_SUBMISSION,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+
+    expect(processVideoMock).toHaveBeenCalledWith(
+      SUBMITTED_URL,
+      "iic/SenseVoiceSmall-onnx",
+      undefined,
+      expect.any(Function),
+    );
+  });
+
   test("dispatches token-only local processing and clears the stale composer token on success", async () => {
     processLocalMediaMock.mockResolvedValue(
       createWorkerResult({
@@ -492,7 +547,10 @@ describe("useTaskProcessingController closed local-media source", () => {
     controller = render();
 
     expect(processLocalMediaMock).toHaveBeenCalledWith(
-      { selectionToken: LOCAL_SELECTION.selectionToken },
+      {
+        selectionToken: LOCAL_SELECTION.selectionToken,
+        asrModel: "iic/SenseVoiceSmall",
+      },
       undefined,
       expect.any(Function),
     );
@@ -686,7 +744,12 @@ describe("useTaskProcessingController history restore", () => {
     let progress: ((event: WorkerProgressEvent) => void) | null = null;
     let resolveWorker: ((value: WorkerResult) => void) | null = null;
     processVideoMock.mockImplementation(
-      (_url: string, _runner: unknown, onProgress?: (event: WorkerProgressEvent) => void) => {
+      (
+        _url: string,
+        _asrModel: string,
+        _runner: unknown,
+        onProgress?: (event: WorkerProgressEvent) => void,
+      ) => {
         progress = onProgress ?? null;
         return new Promise<WorkerResult>((resolve) => {
           resolveWorker = resolve;
@@ -985,7 +1048,12 @@ describe("useTaskProcessingController history restore", () => {
     let progress: ((event: WorkerProgressEvent) => void) | null = null;
     let resolveWorker: ((value: WorkerResult) => void) | null = null;
     processVideoMock.mockImplementation(
-      (_url: string, _runner: unknown, onProgress?: (event: WorkerProgressEvent) => void) => {
+      (
+        _url: string,
+        _asrModel: string,
+        _runner: unknown,
+        onProgress?: (event: WorkerProgressEvent) => void,
+      ) => {
         progress = onProgress ?? null;
         return new Promise<WorkerResult>((resolve) => {
           resolveWorker = resolve;

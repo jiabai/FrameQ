@@ -12,6 +12,10 @@ from frameq_worker.asr_runtime.sensevoice import (
     SENSEVOICE_VAD_MODEL,
     SenseVoiceTranscriber,
 )
+from frameq_worker.asr_runtime.sensevoice_onnx import (
+    SENSEVOICE_SMALL_ONNX_MODEL,
+    SenseVoiceOnnxTranscriber,
+)
 from frameq_worker.asr_runtime.types import (
     AsrModelSpec,
     ASRUnsupportedModelError,
@@ -24,6 +28,7 @@ MODELSCOPE_CACHE_ENV = "MODELSCOPE_CACHE"
 
 SUPPORTED_ASR_MODELS: tuple[AsrModelSpec, ...] = (
     AsrModelSpec(SENSEVOICE_SMALL_MODEL, "sensevoice", "SenseVoice Small"),
+    AsrModelSpec(SENSEVOICE_SMALL_ONNX_MODEL, "sensevoice_onnx", "SenseVoiceSmall-ONNX"),
     AsrModelSpec(QWEN_ASR_MODEL, "qwen", "Qwen3-ASR-0.6B"),
 )
 
@@ -93,6 +98,16 @@ def build_sensevoice_transcriber(
     return SenseVoiceTranscriber(model_name=model_name, model_kwargs=model_kwargs)
 
 
+def build_sensevoice_onnx_transcriber(
+    cache_dir: str | PathLike[str] | Path,
+) -> SenseVoiceOnnxTranscriber:
+    model_root = Path(cache_dir) / "onnx" / "models" / "iic"
+    return SenseVoiceOnnxTranscriber(
+        asr_model_dir=model_root / "SenseVoiceSmall-onnx",
+        vad_model_dir=model_root / "speech_fsmn_vad_zh-cn-16k-common-onnx",
+    )
+
+
 def build_asr_transcriber(
     model_name: str = DEFAULT_ASR_MODEL,
     cache_dir: str | PathLike[str] | Path | None = None,
@@ -103,6 +118,10 @@ def build_asr_transcriber(
         return build_qwen_asr_transcriber(model_name=resolved_model, cache_dir=cache_dir)
     if family == "sensevoice":
         return build_sensevoice_transcriber(model_name=resolved_model, cache_dir=cache_dir)
+    if family == "sensevoice_onnx":
+        if cache_dir is None:
+            raise ASRUnsupportedModelError("SenseVoiceSmall-ONNX requires a local model cache.")
+        return build_sensevoice_onnx_transcriber(cache_dir=cache_dir)
     raise ASRUnsupportedModelError(f"Unsupported ASR model: {resolved_model}")
 
 

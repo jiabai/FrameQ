@@ -2,10 +2,10 @@ import { describe, expect, test } from "vitest";
 import {
   ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
   cancelAsrModelDownload,
-  checkFirstRun,
   clearAudioReviewCache,
   downloadAsrModel,
   getAudioReviewCacheUsage,
+  getAsrModelStatus,
   getUiPreferences,
   getLlmConfig,
   saveUiPreferences,
@@ -15,7 +15,7 @@ import {
 import { IpcProtocolError } from "./tauriIpcProtocol";
 
 describe("settings client", () => {
-  test("loads first-run status from Tauri", async () => {
+  test("loads selected ASR model status from Tauri", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: SettingsCommandRunner = async (command, args) => {
       calls.push({ command, args });
@@ -29,9 +29,14 @@ describe("settings client", () => {
       };
     };
 
-    const status = await checkFirstRun(runner);
+    const status = await getAsrModelStatus(runner);
 
-    expect(calls).toEqual([{ command: "check_first_run", args: {} }]);
+    expect(calls).toEqual([
+      {
+        command: "get_asr_model_status",
+        args: { asrModel: "iic/SenseVoiceSmall" },
+      },
+    ]);
     expect(status).toEqual({
       userDataDir: "C:\\Users\\demo\\AppData\\Local\\FrameQ",
       defaultOutputDir: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs",
@@ -62,7 +67,10 @@ describe("settings client", () => {
     });
 
     expect(calls).toEqual([
-      { command: "download_asr_model", args: {} },
+      {
+        command: "download_asr_model",
+        args: { asrModel: "iic/SenseVoiceSmall" },
+      },
       { command: "cancel_asr_model_download", args: {} },
     ]);
     expect(ASR_MODEL_DOWNLOAD_PROGRESS_EVENT).toBe("asr-model-download-progress");
@@ -210,7 +218,7 @@ describe("settings client", () => {
     );
   });
 
-  test("rejects malformed audio cache usage and first-run responses", async () => {
+  test("rejects malformed audio cache usage and model-status responses", async () => {
     await expect(
       getAudioReviewCacheUsage(async () => ({
         size_bytes: -1,
@@ -220,7 +228,7 @@ describe("settings client", () => {
       new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
     );
     await expect(
-      checkFirstRun(async () => ({
+      getAsrModelStatus(async () => ({
         user_data_dir: "C:\\Users\\private\\FrameQ",
         default_output_dir: "C:\\Users\\private\\FrameQ\\outputs",
         asr_model: "iic/SenseVoiceSmall",

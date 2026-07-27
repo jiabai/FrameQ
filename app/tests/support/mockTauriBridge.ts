@@ -65,7 +65,7 @@ const defaultResponses: Record<string, unknown> = {
     language: "zh-CN",
     recovered: false,
   },
-  check_first_run: {
+  get_asr_model_status: {
     user_data_dir: "C:/FrameQ",
     default_output_dir: "C:/FrameQ/outputs",
     asr_model: "iic/SenseVoiceSmall",
@@ -100,7 +100,7 @@ const defaultResponses: Record<string, unknown> = {
   get_llm_config: {
     output_dir: "C:/FrameQ/outputs",
     asr_model: "iic/SenseVoiceSmall",
-    supported_asr_models: ["iic/SenseVoiceSmall"],
+    supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
     config_path: "C:/FrameQ/frameq-settings.json",
   },
   get_audio_review_cache_usage: {

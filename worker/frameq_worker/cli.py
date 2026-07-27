@@ -124,12 +124,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Download the release ASR model cache into FRAMEQ_MODEL_DIR.",
     )
+    parser.add_argument(
+        "--asr-model",
+        help="Allowlisted ASR model ID required with --download-asr-model.",
+    )
     request_group.add_argument(
         "--resolve-source-stdin",
         action="store_true",
         help="Read one source-identity request JSON object from stdin.",
     )
     args = parser.parse_args(argv)
+
+    if args.asr_model is not None and not args.download_asr_model:
+        parser.error("--asr-model is only valid with --download-asr-model")
+    if args.download_asr_model and args.asr_model is None:
+        parser.error("--download-asr-model requires --asr-model")
 
     is_model_download = args.download_asr_model
     stdin_mode = next(
@@ -156,6 +165,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_worker_business(
             lambda: worker_service_module.run_asr_model_download_once(
                 project_root=Path.cwd(),
+                asr_model=args.asr_model,
                 progress_callback=print_model_download_event,
             )
         )

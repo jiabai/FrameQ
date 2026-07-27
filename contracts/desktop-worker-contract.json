@@ -37,7 +37,9 @@
           "type": "string",
           "enum": [
             "iic/SenseVoiceSmall",
-            "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
+            "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+            "iic/SenseVoiceSmall-onnx",
+            "iic/speech_fsmn_vad_zh-cn-16k-common-onnx"
           ]
         },
         "language": {
@@ -224,6 +226,13 @@
           ]
         },
         "model.vad.downloading": {
+          "status": "downloading",
+          "current_file": "forbidden",
+          "allowedArgs": [
+            "model"
+          ]
+        },
+        "model.bpe.downloading": {
           "status": "downloading",
           "current_file": "forbidden",
           "allowedArgs": [
@@ -615,7 +624,8 @@
               "model": {
                 "type": "string",
                 "enum": [
-                  "iic/SenseVoiceSmall"
+                  "iic/SenseVoiceSmall",
+                  "iic/SenseVoiceSmall-onnx"
                 ]
               }
             },
@@ -661,12 +671,20 @@
     "ipcRequest": {
       "type": "object",
       "required": [
-        "url"
+        "url",
+        "asrModel"
       ],
       "properties": {
         "url": {
           "type": "string",
           "minLength": 1
+        },
+        "asrModel": {
+          "type": "string",
+          "enum": [
+            "iic/SenseVoiceSmall",
+            "iic/SenseVoiceSmall-onnx"
+          ]
         }
       },
       "additionalProperties": false
@@ -689,7 +707,8 @@
         "asr_model": {
           "type": "string",
           "enum": [
-            "iic/SenseVoiceSmall"
+            "iic/SenseVoiceSmall",
+            "iic/SenseVoiceSmall-onnx"
           ]
         }
       },
@@ -784,12 +803,20 @@
     "ipcRequest": {
       "type": "object",
       "required": [
-        "selectionToken"
+        "selectionToken",
+        "asrModel"
       ],
       "properties": {
         "selectionToken": {
           "type": "string",
           "format": "uuid"
+        },
+        "asrModel": {
+          "type": "string",
+          "enum": [
+            "iic/SenseVoiceSmall",
+            "iic/SenseVoiceSmall-onnx"
+          ]
         }
       },
       "additionalProperties": false
@@ -847,7 +874,8 @@
         "asr_model": {
           "type": "string",
           "enum": [
-            "iic/SenseVoiceSmall"
+            "iic/SenseVoiceSmall",
+            "iic/SenseVoiceSmall-onnx"
           ]
         }
       },

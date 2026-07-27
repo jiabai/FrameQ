@@ -23,6 +23,7 @@ type DesktopWorkerContract = {
       required: string[];
       properties: {
         url: { type: "string"; minLength: number };
+        asrModel: { type: "string"; enum: string[] };
       };
       additionalProperties: boolean;
     };
@@ -187,8 +188,8 @@ describe("desktop/worker contract", () => {
     expect(contract.contractVersion).toBe(4);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
-    expect(contract.processVideo.ipcRequest.required).toEqual(["url"]);
-    expect(Object.keys(contract.processVideo.ipcRequest.properties)).toEqual(["url"]);
+    expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);
+    expect(Object.keys(contract.processVideo.ipcRequest.properties)).toEqual(["url", "asrModel"]);
     expect(contract.processVideo.workerRequest.required).toEqual([
       "contract_version",
       "url",
@@ -268,9 +269,13 @@ describe("desktop/worker contract", () => {
     });
     expect(localMedia.ipcRequest).toEqual({
       type: "object",
-      required: ["selectionToken"],
+      required: ["selectionToken", "asrModel"],
       properties: {
         selectionToken: { type: "string", format: "uuid" },
+        asrModel: {
+          type: "string",
+          enum: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+        },
       },
       additionalProperties: false,
     });
@@ -290,7 +295,10 @@ describe("desktop/worker contract", () => {
         media_kind: { type: "string", enum: ["video", "audio"] },
         safe_display_name: { type: "string", minLength: 1, maxLength: 160 },
         source_extension: { type: "string", enum: allExtensions },
-        asr_model: { type: "string", enum: ["iic/SenseVoiceSmall"] },
+        asr_model: {
+          type: "string",
+          enum: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+        },
       },
       additionalProperties: false,
       constraints: {
@@ -472,6 +480,7 @@ describe("desktop/worker contract", () => {
     expect(calls[0]?.args).toEqual({
       request: {
         url: "https://www.douyin.com/video/7524373044106677544",
+        asrModel: "iic/SenseVoiceSmall",
       },
     });
     expect(contract.processVideo).toEqual({
@@ -479,9 +488,13 @@ describe("desktop/worker contract", () => {
       configurationOwner: "desktop_rust",
       ipcRequest: {
         type: "object",
-        required: ["url"],
+        required: ["url", "asrModel"],
         properties: {
           url: { type: "string", minLength: 1 },
+          asrModel: {
+            type: "string",
+            enum: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+          },
         },
         additionalProperties: false,
       },
@@ -491,7 +504,10 @@ describe("desktop/worker contract", () => {
         properties: {
           contract_version: { const: 3 },
           url: { type: "string", minLength: 1 },
-          asr_model: { type: "string", enum: [contract.asr.defaultModel] },
+          asr_model: {
+            type: "string",
+            enum: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
+          },
         },
         additionalProperties: false,
       },
@@ -609,6 +625,8 @@ describe("desktop/worker contract", () => {
           enum: [
             "iic/SenseVoiceSmall",
             "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+            "iic/SenseVoiceSmall-onnx",
+            "iic/speech_fsmn_vad_zh-cn-16k-common-onnx",
           ],
         },
         language: {
@@ -720,6 +738,7 @@ describe("desktop/worker contract", () => {
       "model.download.cancelled",
       "model.primary.downloading",
       "model.vad.downloading",
+      "model.bpe.downloading",
       "model.archive.extracting",
       "model.archive.reading",
       "model.archive.downloading",
@@ -759,6 +778,11 @@ describe("desktop/worker contract", () => {
         allowedArgs: ["model"],
       },
       "model.vad.downloading": {
+        status: "downloading",
+        current_file: "forbidden",
+        allowedArgs: ["model"],
+      },
+      "model.bpe.downloading": {
         status: "downloading",
         current_file: "forbidden",
         allowedArgs: ["model"],

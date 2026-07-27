@@ -32,6 +32,8 @@ export const ASR_MODEL_DOWNLOAD_WIRE_STATUSES = [
 export const PROGRESS_MESSAGE_MODELS = [
   "iic/SenseVoiceSmall",
   "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+  "iic/SenseVoiceSmall-onnx",
+  "iic/speech_fsmn_vad_zh-cn-16k-common-onnx",
 ] as const;
 
 type ProgressMessageArgKey = "model" | "language" | "attempt" | "total";
@@ -85,6 +87,11 @@ export const ASR_MODEL_DOWNLOAD_MESSAGE_CODE_RULES = {
     allowedArgs: ["model"],
   },
   "model.vad.downloading": {
+    status: "downloading",
+    current_file: "forbidden",
+    allowedArgs: ["model"],
+  },
+  "model.bpe.downloading": {
     status: "downloading",
     current_file: "forbidden",
     allowedArgs: ["model"],

@@ -47,6 +47,7 @@ EXPECTED_SIGNATURES = {
         "project_root",
         "environ",
         "progress_callback",
+        "asr_model",
     ),
 }
 

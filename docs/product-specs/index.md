@@ -10,6 +10,7 @@
 
 ## Desktop Runtime Spec
 
+- `2026-07-27-selectable-asr-model-on-demand-download.md` - Two selectable local ASR models, model-snapshot task submission, and selected-model on-demand download with automatic resume.
 - `2026-07-22-release-reliability-hardening.md` - Broad-release requirements for crash-consistent desktop persistence, bounded supervised-worker execution, atomic server authentication/AI Credit accounting, and production operations.
 - `2026-07-18-process-video-request-contract-v3.md` - Minimal URL-only desktop intent, Rust-owned ASR configuration, and strict v3 worker execution request with no false fields.
 - `2026-07-16-local-media-file-import.md` - Single-file local video/audio import with opaque Rust-owned selection tokens, normalized local WAV transcription, source-aware artifacts/History, and strict path secrecy.
@@ -38,7 +39,7 @@
 - `2026-07-05-youtube-js-runtime-packaging.md` - Bundle Deno as the packaged JavaScript runtime needed by `yt-dlp` for clean-machine YouTube extraction.
 - `2026-07-05-desktop-diagnostics-logs.md` - Local desktop diagnostics log for installer/runtime debugging, including YouTube JavaScript runtime failures.
 - `2026-06-23-desktop-one-click-updates.md` - Low-noise desktop update reminders and one-click upgrades via GitHub Releases static `latest.json`.
-- `2026-06-18-installer-distribution.md` — 普通用户安装即用分发：内置 runtime，首启下载 SenseVoice Small，用户数据目录和首启配置体验。
+- `2026-06-18-installer-distribution.md` - Historical lightweight-installer distribution baseline. Its model-acquisition behavior is superseded by `2026-07-27-selectable-asr-model-on-demand-download.md`; installer/runtime and app-local-data constraints remain relevant.
 
 <!-- 由 vibe-coding-launcher 生成。 -->
 

@@ -340,7 +340,7 @@ describe("Tauri desktop window configuration", () => {
     // Both macOS jobs import the packaged runtime end to end (exercises the
     // delocated @loader_path links inside the built .app).
     expect(workflow).toContain(
-      'import funasr, modelscope, yt_dlp; import frameq_worker; print(\'bundled runtime import OK\')',
+      'import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print(\'bundled runtime import OK\')',
     );
   });
 
@@ -382,10 +382,12 @@ describe("Tauri desktop window configuration", () => {
     expect(script).toContain("Refusing to package");
   });
 
-  test("installer runtime still includes ModelScope for first-run model download", () => {
+  test("installer runtime includes both ASR engines for on-demand model download", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
-    expect(script).toContain("import funasr, modelscope, yt_dlp; import frameq_worker");
+    expect(script).toContain(
+      "import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker",
+    );
     expect(script).not.toContain("MODEL_VERSION.txt");
   });
 

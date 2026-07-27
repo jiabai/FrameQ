@@ -10,6 +10,7 @@ from frameq_worker.asr import (
     ASRRuntimeError,
     ASRUnsupportedModelError,
     QwenAsrTranscriber,
+    SenseVoiceOnnxTranscriber,
     SenseVoiceTranscriber,
     Transcript,
     TranscriptSegment,
@@ -369,6 +370,7 @@ def test_build_qwen_asr_transcriber_creates_cache_dir_and_passes_it(
 def test_supported_asr_models_include_qwen_and_available_sensevoice_models() -> None:
     assert supported_asr_model_names() == [
         "iic/SenseVoiceSmall",
+        "iic/SenseVoiceSmall-onnx",
         "Qwen/Qwen3-ASR-0.6B",
     ]
 
@@ -394,6 +396,31 @@ def test_build_asr_transcriber_selects_sensevoice_for_small(
     assert small.model_name == "iic/SenseVoiceSmall"
     assert os.environ["MODELSCOPE_CACHE"] == cache_dir.as_posix()
     assert "model_cache_dir" not in small.model_kwargs
+
+
+def test_build_asr_transcriber_selects_direct_onnx_provider(
+    tmp_path: Path,
+) -> None:
+    cache_dir = tmp_path / "models"
+
+    transcriber = build_asr_transcriber(
+        "iic/SenseVoiceSmall-onnx",
+        cache_dir=cache_dir,
+    )
+
+    assert isinstance(transcriber, SenseVoiceOnnxTranscriber)
+    assert (
+        transcriber.asr_model_dir
+        == cache_dir / "onnx" / "models" / "iic" / "SenseVoiceSmall-onnx"
+    )
+    assert (
+        transcriber.vad_model_dir
+        == cache_dir
+        / "onnx"
+        / "models"
+        / "iic"
+        / "speech_fsmn_vad_zh-cn-16k-common-onnx"
+    )
 
 
 def test_sensevoice_transcriber_uses_funasr_generate_api() -> None:

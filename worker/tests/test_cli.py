@@ -561,13 +561,14 @@ def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> 
         fake_run_asr_model_download_once,
     )
 
-    exit_code = cli.main(["--download-asr-model"])
+    exit_code = cli.main(["--download-asr-model", "--asr-model", DEFAULT_ASR_MODEL])
 
     assert exit_code == 1
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "failed"
     assert output["code"] == "ASR_MODEL_DOWNLOAD_FAILED"
     assert captured["project_root"] == Path.cwd()
+    assert captured["asr_model"] == DEFAULT_ASR_MODEL
     assert captured["progress_callback"] is cli.print_model_download_event
 
 

@@ -7,14 +7,28 @@ import { isModelDownloadStalled, shouldApplyModelDownloadUpdate } from "../../mo
 import {
   ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
   cancelAsrModelDownload,
-  checkFirstRun,
+  getAsrModelStatus,
   downloadAsrModel,
+  getLlmConfig,
   type AsrModelDownloadProgress,
-  type FirstRunStatus,
+  type AsrModelStatusResponseView,
 } from "../../settingsClient";
 import type { AsrModelStatus } from "./types";
 
 const DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall" as const;
+const ONNX_ASR_MODEL = "iic/SenseVoiceSmall-onnx" as const;
+type SelectableAsrModel = typeof DEFAULT_ASR_MODEL | typeof ONNX_ASR_MODEL;
+
+function progressModel(model: string): SelectableAsrModel {
+  return model === ONNX_ASR_MODEL ? ONNX_ASR_MODEL : DEFAULT_ASR_MODEL;
+}
+
+function hasTauriRuntime(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)
+  );
+}
 
 function modelDownloadTimeoutNotice(error: unknown): UiMessage | null {
   const code =
@@ -79,7 +93,7 @@ export function useAsrModelDownload() {
     return () => window.clearInterval(interval);
   }, [modelDownloadActive]);
 
-  const updateAsrModelStatus = useCallback((status: FirstRunStatus) => {
+  const updateAsrModelStatus = useCallback((status: AsrModelStatusResponseView) => {
     setAsrModelStatus({
       model: status.asrModel,
       modelDir: status.asrModelDir,
@@ -88,15 +102,17 @@ export function useAsrModelDownload() {
     });
   }, []);
 
-  const refreshAsrModelStatus = useCallback(async (): Promise<FirstRunStatus> => {
-    const status = await checkFirstRun();
+  const refreshAsrModelStatus = useCallback(async (
+    asrModel: string = DEFAULT_ASR_MODEL,
+  ): Promise<AsrModelStatusResponseView> => {
+    const status = await getAsrModelStatus(asrModel);
     updateAsrModelStatus(status);
     return status;
   }, [updateAsrModelStatus]);
 
-  async function startAsrModelDownload() {
+  async function startAsrModelDownload(asrModel = asrModelStatus.model): Promise<boolean> {
     if (modelDownloadActive) {
-      return;
+      return false;
     }
 
     const operationId = modelDownloadOperationIdRef.current + 1;
@@ -114,7 +130,7 @@ export function useAsrModelDownload() {
       wireStatus: null,
       message: {
         messageCode: "model.download.preparing",
-        args: { model: DEFAULT_ASR_MODEL },
+        args: { model: progressModel(asrModel) },
       },
       progress: 0,
     });
@@ -205,10 +221,10 @@ export function useAsrModelDownload() {
           }));
           setModelDownloadNotice(uiMessage("asrModel.notice.cancelled"));
         }
-        return;
+        return false;
       }
 
-      const downloadResult = await downloadAsrModel();
+      const downloadResult = await downloadAsrModel(asrModel);
       if (
         !shouldApplyModelDownloadUpdate({
           operationId,
@@ -216,7 +232,7 @@ export function useAsrModelDownload() {
           phase: modelDownloadPhaseRef.current,
         })
       ) {
-        return;
+        return false;
       }
       if (downloadResult.status === "cancelled") {
         modelDownloadPhaseRef.current = "finished";
@@ -228,9 +244,9 @@ export function useAsrModelDownload() {
           progress: current.progress,
         }));
         setModelDownloadNotice(uiMessage("asrModel.notice.cancelled"));
-        return;
+        return false;
       }
-      const status = await refreshAsrModelStatus();
+      const status = await refreshAsrModelStatus(asrModel);
       if (
         !shouldApplyModelDownloadUpdate({
           operationId,
@@ -238,7 +254,7 @@ export function useAsrModelDownload() {
           phase: modelDownloadPhaseRef.current,
         })
       ) {
-        return;
+        return false;
       }
       modelDownloadPhaseRef.current = "finished";
       if (status.asrModelAvailable) {
@@ -248,11 +264,12 @@ export function useAsrModelDownload() {
           wireStatus: current.wireStatus,
           message: {
             messageCode: "model.download.completed",
-            args: { model: DEFAULT_ASR_MODEL },
+            args: { model: progressModel(asrModel) },
           },
           progress: 100,
         }));
         setModelDownloadNotice(uiMessage("asrModel.notice.available"));
+        return true;
       } else {
         setModelDownloadStalled(false);
         setModelDownloadProgress((current) => ({
@@ -262,6 +279,7 @@ export function useAsrModelDownload() {
           progress: current.progress,
         }));
         setModelDownloadNotice(uiMessage("asrModel.notice.incomplete"));
+        return false;
       }
     } catch (error) {
       if (
@@ -271,7 +289,7 @@ export function useAsrModelDownload() {
           phase: modelDownloadPhaseRef.current,
         })
       ) {
-        return;
+        return false;
       }
       modelDownloadPhaseRef.current = "finished";
       setModelDownloadStalled(false);
@@ -284,12 +302,37 @@ export function useAsrModelDownload() {
       setModelDownloadNotice(
         modelDownloadTimeoutNotice(error) ?? uiMessage("asrModel.notice.downloadFailed"),
       );
+      return false;
     } finally {
       if (unlisten) {
         unlisten();
       }
     }
   }
+
+  const ensureAsrModelReady = useCallback(async (): Promise<SelectableAsrModel | null> => {
+    if (!hasTauriRuntime()) {
+      return DEFAULT_ASR_MODEL;
+    }
+    try {
+      const config = await getLlmConfig();
+      const asrModel = progressModel(config.asrModel);
+      const status = await refreshAsrModelStatus(asrModel);
+      if (status.asrModelAvailable) {
+        return asrModel;
+      }
+      return (await startAsrModelDownload(asrModel)) ? asrModel : null;
+    } catch {
+      setModelGuideOpen(true);
+      setModelDownloadNotice(uiMessage("asrModel.notice.downloadFailed"));
+      setModelDownloadProgress((current) => ({
+        ...current,
+        phase: "failed",
+        message: { messageCode: "model.download.failed", args: {} },
+      }));
+      return null;
+    }
+  }, [refreshAsrModelStatus, startAsrModelDownload]);
 
   async function cancelCurrentAsrModelDownload() {
     const operationId = modelDownloadOperationIdRef.current;
@@ -327,7 +370,7 @@ export function useAsrModelDownload() {
                 wireStatus: null,
                 message: {
                   messageCode: "model.download.preparing",
-                  args: { model: DEFAULT_ASR_MODEL },
+                  args: { model: progressModel(asrModelStatus.model) },
                 },
                 progress: 0,
               },
@@ -376,6 +419,7 @@ export function useAsrModelDownload() {
     modelDownloadActive,
     refreshAsrModelStatus,
     startAsrModelDownload,
+    ensureAsrModelReady,
     cancelCurrentAsrModelDownload,
   };
 }

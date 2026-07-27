@@ -36,7 +36,7 @@ export type LlmConfigDraft = {
   asrModel: string;
 };
 
-export type FirstRunStatus = {
+export type AsrModelStatusResponseView = {
   userDataDir: string;
   defaultOutputDir: string;
   asrModel: string;
@@ -45,7 +45,7 @@ export type FirstRunStatus = {
   asrModelSource: string;
 };
 
-export type FirstRunStatusResponse = {
+export type AsrModelStatusResponse = {
   user_data_dir: string;
   default_output_dir: string;
   asr_model: string;
@@ -185,20 +185,32 @@ export async function clearAudioReviewCache(
   );
 }
 
-export async function checkFirstRun(
+export async function getAsrModelStatus(
+  asrModelOrRunner: string | SettingsCommandRunner = "iic/SenseVoiceSmall",
   runner: SettingsCommandRunner = defaultSettingsRunner,
-): Promise<FirstRunStatus> {
-  return mapFirstRunStatusResponse(
-    parseFirstRunStatusResponse(
-      await runner("check_first_run", {}),
+): Promise<AsrModelStatusResponseView> {
+  const asrModel =
+    typeof asrModelOrRunner === "string" ? asrModelOrRunner : "iic/SenseVoiceSmall";
+  const resolvedRunner =
+    typeof asrModelOrRunner === "function" ? asrModelOrRunner : runner;
+  return mapAsrModelStatusResponse(
+    parseAsrModelStatusResponse(
+      await resolvedRunner("get_asr_model_status", { asrModel }),
     ),
   );
 }
 
 export async function downloadAsrModel(
+  asrModelOrRunner: string | SettingsCommandRunner = "iic/SenseVoiceSmall",
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<AsrModelDownloadResult> {
-  const result = parseAsrModelDownloadResult(await runner("download_asr_model", {}));
+  const asrModel =
+    typeof asrModelOrRunner === "string" ? asrModelOrRunner : "iic/SenseVoiceSmall";
+  const resolvedRunner =
+    typeof asrModelOrRunner === "function" ? asrModelOrRunner : runner;
+  const result = parseAsrModelDownloadResult(
+    await resolvedRunner("download_asr_model", { asrModel }),
+  );
   if (!result) {
     throw new Error("INVALID_ASR_MODEL_DOWNLOAD_RESPONSE");
   }
@@ -256,9 +268,9 @@ function parseLlmConfigResponse(value: unknown): LlmConfigResponse {
   };
 }
 
-function parseFirstRunStatusResponse(
+function parseAsrModelStatusResponse(
   value: unknown,
-): FirstRunStatusResponse {
+): AsrModelStatusResponse {
   const response = readIpcDataObject(
     value,
     [
@@ -325,7 +337,9 @@ function throwInvalidSettingsResponse(): never {
   throw new IpcProtocolError(SETTINGS_IPC_RESPONSE_INVALID);
 }
 
-function mapFirstRunStatusResponse(response: FirstRunStatusResponse): FirstRunStatus {
+function mapAsrModelStatusResponse(
+  response: AsrModelStatusResponse,
+): AsrModelStatusResponseView {
   return {
     userDataDir: response.user_data_dir,
     defaultOutputDir: response.default_output_dir,

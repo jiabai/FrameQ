@@ -56,6 +56,8 @@ const LOCAL_MEDIA_RESELECTION_ERROR_CODES = new Set([
 type UseTaskProcessingControllerOptions = {
   onResetTaskUi: () => void;
   onRetryStarted: () => void;
+  ensureAsrModelReady?: () => Promise<"iic/SenseVoiceSmall" | "iic/SenseVoiceSmall-onnx" | null>;
+  modelDownloadActive?: boolean;
   processBlockerMessage: (account: AccountStatus) => UiMessage;
   aiBlockerMessage: (account: AccountStatus) => UiMessage;
 };
@@ -63,6 +65,8 @@ type UseTaskProcessingControllerOptions = {
 export function useTaskProcessingController({
   onResetTaskUi,
   onRetryStarted,
+  ensureAsrModelReady,
+  modelDownloadActive = false,
   processBlockerMessage,
   aiBlockerMessage,
 }: UseTaskProcessingControllerOptions) {
@@ -71,8 +75,9 @@ export function useTaskProcessingController({
   const cancellationOperationIdRef = useRef<number | null>(null);
 
   const canSubmit =
-    workflow.composerSource.kind === "local_media" ||
-    canSubmitUrl(workflow.composerSource.urlDraft);
+    !modelDownloadActive &&
+    (workflow.composerSource.kind === "local_media" ||
+      canSubmitUrl(workflow.composerSource.urlDraft));
   const toolbarNewTaskButtonState = getToolbarNewTaskButtonState(workflow.stage);
   const canRestoreHistory = !isProcessingStage(workflow.stage);
 
@@ -235,6 +240,12 @@ export function useTaskProcessingController({
         openAccountPanel(processBlockerMessage(account));
         return;
       }
+      const asrModel = ensureAsrModelReady
+        ? await ensureAsrModelReady()
+        : "iic/SenseVoiceSmall";
+      if (!asrModel) {
+        return;
+      }
       const operationId = operationIdRef.current + 1;
       operationIdRef.current = operationId;
       setWorkflow((current) =>
@@ -258,9 +269,17 @@ export function useTaskProcessingController({
       };
       const result =
         prepared.submission.kind === "url"
-          ? await processVideo(prepared.submission.url, undefined, onProgress)
+          ? await processVideo(
+              prepared.submission.url,
+              asrModel,
+              undefined,
+              onProgress,
+            )
           : await processLocalMedia(
-              { selectionToken: prepared.submission.selectionToken },
+              {
+                selectionToken: prepared.submission.selectionToken,
+                asrModel,
+              },
               undefined,
               onProgress,
             );
@@ -304,6 +323,7 @@ export function useTaskProcessingController({
     [
       onResetTaskUi,
       processBlockerMessage,
+      ensureAsrModelReady,
       workflow.composerSource,
     ],
   );

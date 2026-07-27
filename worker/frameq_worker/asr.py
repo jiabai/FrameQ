@@ -17,6 +17,9 @@ from frameq_worker.asr_runtime.registry import (
     build_qwen_asr_transcriber as build_qwen_asr_transcriber,
 )
 from frameq_worker.asr_runtime.registry import (
+    build_sensevoice_onnx_transcriber as build_sensevoice_onnx_transcriber,
+)
+from frameq_worker.asr_runtime.registry import (
     build_sensevoice_transcriber as build_sensevoice_transcriber,
 )
 from frameq_worker.asr_runtime.registry import (
@@ -38,6 +41,12 @@ from frameq_worker.asr_runtime.sensevoice import (
 )
 from frameq_worker.asr_runtime.sensevoice import (
     SenseVoiceTranscriber as SenseVoiceTranscriber,
+)
+from frameq_worker.asr_runtime.sensevoice_onnx import (
+    SENSEVOICE_SMALL_ONNX_MODEL as SENSEVOICE_SMALL_ONNX_MODEL,
+)
+from frameq_worker.asr_runtime.sensevoice_onnx import (
+    SenseVoiceOnnxTranscriber as SenseVoiceOnnxTranscriber,
 )
 from frameq_worker.asr_runtime.types import ASRDependencyError as ASRDependencyError
 from frameq_worker.asr_runtime.types import ASREmptyTranscriptError as ASREmptyTranscriptError

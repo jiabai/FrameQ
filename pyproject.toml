@@ -6,7 +6,9 @@ requires-python = ">=3.11"
 dependencies = [
     "brotli>=1.2.0",
     "funasr>=1.2.7",
+    "funasr-onnx==0.4.2",
     "modelscope>=1.37.1",
+    "onnxruntime>=1.17.0",
     # macOS Intel (x86_64) is pinned to torch 2.2.2 — the last release that ships
     # macOS x86_64 wheels — which only publishes up to CPython 3.12 (cp312) and
     # requires numpy<2. Keep FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 on CPython

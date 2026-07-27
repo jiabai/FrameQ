@@ -131,6 +131,8 @@ pub(super) fn build_asr_model_download_command_spec(
             "-m".to_string(),
             "frameq_worker".to_string(),
             "--download-asr-model".to_string(),
+            "--asr-model".to_string(),
+            job.asr_model().to_string(),
         ],
         stdin_payload: None,
         env,
@@ -274,6 +276,7 @@ mod tests {
     fn asr_model_download_job_derives_fixed_command_and_allowlisted_overrides() {
         let paths = command_test_paths();
         let job = AsrModelDownloadJob::new(
+            "iic/SenseVoiceSmall".to_string(),
             Some("https://cdn.example/sensevoice.zip".to_string()),
             Some("abc123".to_string()),
             Some("https://modelscope.example".to_string()),
@@ -287,7 +290,13 @@ mod tests {
         assert_eq!(spec.program, bundled_python_path(&paths.resource_dir));
         assert_eq!(
             spec.args,
-            vec!["-m", "frameq_worker", "--download-asr-model"]
+            vec![
+                "-m",
+                "frameq_worker",
+                "--download-asr-model",
+                "--asr-model",
+                "iic/SenseVoiceSmall",
+            ]
         );
         assert_eq!(spec.stdin_payload, None);
         assert_eq!(spec.current_dir, paths.user_data_dir);
@@ -321,7 +330,8 @@ mod tests {
     #[test]
     fn asr_model_download_job_omits_optional_overrides_and_keeps_fixed_environment() {
         let paths = command_test_paths();
-        let job = AsrModelDownloadJob::new(None, None, None, None);
+        let job =
+            AsrModelDownloadJob::new("iic/SenseVoiceSmall".to_string(), None, None, None, None);
 
         let spec = build_asr_model_download_command_spec(&paths, &job)
             .expect("prepare ASR download command");

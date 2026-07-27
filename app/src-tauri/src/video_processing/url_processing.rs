@@ -1,7 +1,6 @@
 use super::task_result::{map_task_worker_result, TaskCommandContext};
 use super::url_cache;
 use super::{closed_task_result, ProcessVideoResult, WorkerError};
-use crate::settings::{env_path, parse_dotenv_values, resolve_asr_model_value, ASR_MODEL_ENV};
 use crate::task_manifest;
 use crate::worker_runtime::{
     SourceIdentityTerminalResult, TaskTerminalResult, ValidatedWorkerResult, WorkerJob,
@@ -13,14 +12,14 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, State, Window};
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ProcessVideoIpcRequest {
     url: String,
+    asr_model: String,
 }
 
 #[derive(Serialize)]
@@ -52,7 +51,7 @@ fn process_video_blocking(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    let request = match resolve_process_video_worker_request(&env_path(&paths), request) {
+    let request = match resolve_process_video_worker_request(request) {
         Ok(request) => request,
         Err(error) => {
             return Ok(closed_task_result(serde_json::json!(ProcessVideoResult {
@@ -188,16 +187,15 @@ fn summarize_task_result_for_log(result: &TaskTerminalResult) -> String {
 }
 
 fn resolve_process_video_worker_request(
-    dotenv_path: &Path,
     request: ProcessVideoIpcRequest,
 ) -> Result<ProcessVideoWorkerRequest, String> {
-    let values = parse_dotenv_values(dotenv_path)?;
-    let configured_model = values.get(ASR_MODEL_ENV).cloned();
-    let asr_model = resolve_asr_model_value(configured_model)?;
+    if !crate::SUPPORTED_ASR_MODELS.contains(&request.asr_model.as_str()) {
+        return Err("ASR_MODEL_UNSUPPORTED".to_string());
+    }
     Ok(ProcessVideoWorkerRequest {
         contract_version: PROCESS_VIDEO_CONTRACT_VERSION,
         url: request.url,
-        asr_model,
+        asr_model: request.asr_model,
     })
 }
 
@@ -214,9 +212,6 @@ mod tests {
         ValidatedWorkerResult, WorkerExitSummary, WorkerRunError, WorkerRunErrorKind,
         WorkerRunOutcome, WorkerTimeoutKind,
     };
-    use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn source_identity_preflight_uses_completed_identity_for_second_cache_lookup() {
@@ -331,16 +326,17 @@ mod tests {
     }
 
     #[test]
-    fn process_ipc_request_accepts_url_only() {
+    fn process_ipc_request_accepts_url_and_frozen_asr_model() {
         let request = serde_json::from_str::<ProcessVideoIpcRequest>(
-            r#"{"url":"https://www.douyin.com/video/7524373044106677544"}"#,
+            r#"{"url":"https://www.douyin.com/video/7524373044106677544","asrModel":"iic/SenseVoiceSmall-onnx"}"#,
         )
-        .expect("URL-only process intent");
+        .expect("process intent with a frozen model");
 
         assert_eq!(
             request.url,
             "https://www.douyin.com/video/7524373044106677544"
         );
+        assert_eq!(request.asr_model, "iic/SenseVoiceSmall-onnx");
     }
 
     #[test]
@@ -383,31 +379,16 @@ mod tests {
     }
 
     #[test]
-    fn resolve_process_video_worker_request_uses_configured_asr_model() {
-        let env_path = temp_env_path("resolve_process_video_worker_request");
-        fs::write(&env_path, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall").expect("write test env");
+    fn resolve_process_video_worker_request_uses_the_submitted_model_snapshot() {
         let request = ProcessVideoIpcRequest {
             url: "https://www.douyin.com/video/7646789377271647540".to_string(),
+            asr_model: "iic/SenseVoiceSmall-onnx".to_string(),
         };
 
-        let request = resolve_process_video_worker_request(&env_path, request)
-            .expect("resolve worker request");
+        let request =
+            resolve_process_video_worker_request(request).expect("resolve worker request");
 
         assert_eq!(request.contract_version, PROCESS_VIDEO_CONTRACT_VERSION);
-        assert_eq!(request.asr_model, "iic/SenseVoiceSmall");
-    }
-
-    fn temp_env_path(test_name: &str) -> PathBuf {
-        temp_dir(test_name).join(".env")
-    }
-
-    fn temp_dir(test_name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
-        fs::create_dir_all(&dir).expect("create test dir");
-        dir
+        assert_eq!(request.asr_model, "iic/SenseVoiceSmall-onnx");
     }
 }
