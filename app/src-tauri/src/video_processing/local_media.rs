@@ -219,7 +219,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time after epoch")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!(
+        // macOS exposes /var as a symlink to /private/var; use the physical
+        // temp root so ordinary fixtures do not look like linked sources.
+        let temp_root = std::env::temp_dir()
+            .canonicalize()
+            .expect("resolve physical temp dir");
+        let path = temp_root.join(format!(
             "frameq-local-command-{label}-{}-{nonce}",
             std::process::id()
         ));
