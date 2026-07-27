@@ -72,6 +72,27 @@ and required runtime files before exposing the cache as installed.
 The PyTorch cache keeps its current validation and migration behavior. It must not be rewritten or
 re-downloaded merely because the ONNX model is selected or installed.
 
+## Cache Validation Root and Display Directory
+
+The desktop status boundary exposes two related paths with intentionally different meanings:
+
+- the descriptor-owned **cache validation root** is an internal path used to locate the version
+  marker and validate the complete ASR/VAD cache; and
+- the selected ASR model's **display directory** is the concrete leaf passed to that ASR runtime
+  and shown as its storage location in Settings.
+
+For `iic/SenseVoiceSmall`, the cache validation root remains the app-local `models` directory and
+the display directory is `models/iic/SenseVoiceSmall` beneath it. For
+`iic/SenseVoiceSmall-onnx`, the cache validation root is the app-local `models/onnx` namespace and
+the display directory is `models/iic/SenseVoiceSmall-onnx` beneath that namespace. Platform-native
+absolute paths are returned to the UI.
+
+VAD assets remain sibling runtime dependencies and are validated through the cache root; they are
+not represented as the selected ASR model's storage directory. Availability checks must therefore
+use the cache validation root, while the status projection returned to the UI uses the display
+directory. This separation prevents a present ASR leaf from hiding a missing marker or VAD asset,
+and prevents the UI from presenting a shared cache ancestor as though it were the selected model.
+
 ## Python Runtime Boundary
 
 The ONNX transcriber uses `funasr_onnx` directly with explicit local ASR and VAD directories:
@@ -122,4 +143,6 @@ Implementation needs focused tests for the whitelist across TypeScript/Rust/Pyth
 and task-manifest snapshots, cache isolation, atomic promotion, SHA256/required-file rejection,
 official-source-only ONNX acquisition, direct `funasr_onnx` construction, VAD-only fallback, and
 the complete URL/local-media resume, cancel, failure, and offline flows. Contract/progress schema
-tests must reject stale single-model assumptions and unknown model IDs.
+tests must reject stale single-model assumptions and unknown model IDs. Rust status tests must also
+assert the exact PyTorch and ONNX display leaves independently from availability tests that exercise
+the complete cache validation root.

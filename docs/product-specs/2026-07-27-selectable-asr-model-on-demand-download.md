@@ -50,6 +50,13 @@ start a second install or submit a task with another model.
   download either model.
 - Settings show the two selectable models and their local status (for example, installed or not
   installed). Settings do not offer a manual Download action.
+- For the selected model, Settings labels its storage location with that ASR model's concrete
+  runtime directory, not the shared model-cache root. For the default PyTorch model this is the
+  `models/iic/SenseVoiceSmall` leaf under the PyTorch cache; for the ONNX model this is the
+  `models/iic/SenseVoiceSmall-onnx` leaf under the ONNX cache.
+- The displayed ASR directory is informational. Readiness checks continue to validate the complete
+  descriptor-owned cache, including its version marker, ASR assets, and separate VAD assets; the
+  displayed leaf must not narrow or replace that validation boundary.
 - Choosing a model remains a local preference. The model used by a submitted task is the validated
   task snapshot, not a later read of the preference.
 
@@ -80,3 +87,6 @@ start a second install or submit a task with another model.
   create no processing worker task, and never silently change models.
 - Settings show model status only for acquisition; no startup automatic download or manual
   settings download action remains.
+- Settings reports the selected ASR model's concrete runtime directory rather than a shared cache
+  ancestor, while installed/missing status still covers every required ASR, VAD, marker, and
+  manifest asset owned by that model descriptor.
