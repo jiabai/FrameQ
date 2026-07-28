@@ -24,6 +24,14 @@ from frameq_worker.asr_runtime.types import (
 SENSEVOICE_SMALL_ONNX_MODEL = "iic/SenseVoiceSmall-onnx"
 
 
+def _extract_onnx_text(results: object) -> str:
+    if isinstance(results, str):
+        return results
+    if isinstance(results, list) and all(isinstance(result, str) for result in results):
+        return " ".join(results)
+    return extract_provider_text(results)
+
+
 class SenseVoiceOnnxTranscriber:
     """Direct local `funasr_onnx` adapter with an ONNX-only VAD fallback."""
 
@@ -96,7 +104,7 @@ class SenseVoiceOnnxTranscriber:
         try:
             import numpy as np
 
-            vad_results = self._get_vad().inference(audio_path.as_posix())
+            vad_results = self._get_vad()(audio_path.as_posix())
             vad_segments = _extract_vad_segments(vad_results)
             audio_samples = _read_pcm_wav_mono_float32(audio_path, np)
             if not vad_segments or audio_samples is None:
@@ -109,7 +117,7 @@ class SenseVoiceOnnxTranscriber:
             )
             if not blocks:
                 return None
-            results = asr.inference(
+            results = asr(
                 blocks,
                 language=_sensevoice_language(language),
                 textnorm="withitn",
@@ -123,7 +131,7 @@ class SenseVoiceOnnxTranscriber:
             results = [results]
         segments: list[TranscriptSegment] = []
         for timing, result in zip(valid_segments, results, strict=False):
-            text = _clean_sensevoice_text(extract_provider_text(result))
+            text = _clean_sensevoice_text(_extract_onnx_text(result))
             if text:
                 segments.append(
                     TranscriptSegment(
@@ -143,14 +151,14 @@ class SenseVoiceOnnxTranscriber:
 
     def _transcribe_full_audio(self, asr: Any, audio_path: Path, language: str) -> Transcript:
         try:
-            results = asr.inference(
+            results = asr(
                 audio_path.as_posix(),
                 language=_sensevoice_language(language),
                 textnorm="withitn",
             )
         except Exception as exc:  # noqa: BLE001 - wraps third-party ONNX errors.
             raise ASRRuntimeError(str(exc)) from exc
-        text = _clean_sensevoice_text(extract_provider_text(results))
+        text = _clean_sensevoice_text(_extract_onnx_text(results))
         if not text:
             raise ASREmptyTranscriptError("ASR returned an empty transcript.")
         return Transcript(text=text, language=language)
