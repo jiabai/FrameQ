@@ -24,26 +24,47 @@ An executable probe against the current bundled runtime and official VAD sample 
 contract: the raw result and first element were both lists, the raw preview contained nested
 `[start_ms, end_ms]` pairs, and the shared PyTorch decoder returned zero intervals.
 
+The first real 95-minute acceptance then exposed a second, independent long-audio boundary:
+`Fsmn_vad` is an offline adapter. Before its internal inference loop, it extracts features for the
+complete waveform. The retained audio attempted to allocate a float64 feature matrix with shape
+`(570380, 400)`, approximately 1.70 GiB, and failed before any ASR block could run. Removing the ASR
+fallback was necessary but insufficient; the VAD provider must also receive bounded audio chunks.
+
+A follow-up probe against the same bundled `funasr_onnx 0.4.2` runtime confirmed that
+`Fsmn_vad_online` accepts sequential mono float32 chunks with one persistent `param_dict`. Its
+results use absolute stream milliseconds and endpoint sentinels: `[start_ms, -1]` opens an interval,
+`[-1, end_ms]` closes one, and `[start_ms, end_ms]` may contain a complete interval. Ten-second
+chunks reproduced ordered speech intervals on a retained real-audio prefix without a whole-audio
+feature allocation.
+
 ## Decision
 
 SenseVoiceSmall-ONNX requires VAD segmentation. The ONNX adapter has no full-audio compatibility
 path. It must either produce a transcript from independently inferred VAD blocks or return a typed
 terminal ASR failure.
 
-The ONNX provider module owns a dedicated VAD-result decoder. For the configured
-`batch_size=1`, it accepts exactly one outer batch whose contents are ordered interval pairs.
-Every interval must have coercible millisecond bounds with `end_ms > start_ms`. A structurally
-invalid result is a provider-contract runtime failure rather than an empty VAD result.
+The ONNX provider module owns a dedicated streaming VAD-event collector. It passes consecutive
+ten-second mono float32 views to `Fsmn_vad_online`, reuses one provider state dictionary for the
+entire stream, and sets `is_final=True` only on the last non-empty chunk. The chunk size is an
+application-owned memory bound, not an ASR segment duration.
+
+For `batch_size=1`, each provider call must return exactly one outer batch whose contents are
+ordered endpoint pairs. `-1` is accepted only as the provider sentinel for a missing start or end.
+The collector carries one pending start across chunks, emits only complete intervals with
+`end_ms > start_ms`, rejects duplicate starts, ends without a pending start, backwards/overlapping
+intervals, malformed events, and a start still open after the final call. A structurally invalid
+stream is a provider-contract runtime failure rather than an empty VAD result.
 
 An empty, structurally valid batch means VAD detected no speech and becomes
 `ASR_EMPTY_TRANSCRIPT`. It does not authorize ASR inference.
 
 ## Runtime Data Flow
 
-1. Build or reuse the local quantized ONNX ASR and VAD runners.
-2. Invoke `Fsmn_vad` with the normalized task audio path.
-3. Decode the real `batch_size=1` nested-list result through the ONNX-owned decoder.
-4. Read the normalized PCM WAV into a mono float32 array.
+1. Build or reuse the local quantized ONNX ASR and online VAD runners.
+2. Read the normalized PCM WAV into one mono float32 array.
+3. Invoke `Fsmn_vad_online` over consecutive ten-second views with one persistent state dictionary
+   and a final marker on the last view.
+4. Collect the real `batch_size=1` endpoint-event stream into complete ordered intervals.
 5. Slice ordered VAD intervals into audio-array views and matching timing pairs.
 6. Invoke `SenseVoiceSmall` once for each block, passing one `ndarray` per call.
 7. Normalize non-empty block text and assemble ordered transcript segments.
@@ -58,9 +79,9 @@ best-effort fallback behavior. This change is ONNX-only.
 | Condition | Result | ASR invoked? |
 |---|---|---|
 | VAD provider raises | `ASR_RUNTIME_ERROR` with ONNX VAD context | No |
-| VAD result shape or interval is invalid | `ASR_RUNTIME_ERROR` with fixed contract context | No |
-| VAD returns one valid empty batch | `ASR_EMPTY_TRANSCRIPT` | No |
 | Normalized PCM WAV cannot be read | `ASR_RUNTIME_ERROR` with audio-preparation context | No |
+| VAD event shape/state or completed interval is invalid | `ASR_RUNTIME_ERROR` with fixed contract context | No |
+| Final VAD stream contains no speech interval | `ASR_EMPTY_TRANSCRIPT` | No |
 | Intervals produce no usable audio blocks | `ASR_RUNTIME_ERROR` with slicing context | No |
 | ASR block raises | `ASR_RUNTIME_ERROR` with block position | Only preceding/current blocks |
 | Every ASR block is text-empty | `ASR_EMPTY_TRANSCRIPT` | Once per block |
@@ -73,15 +94,18 @@ URLs, cookies, credentials, request headers, or audio contents.
 
 Focused tests must:
 
-- feed the real nested-list VAD shape without monkeypatching the decoder and prove two intervals
-  cause two ordered ASR calls, each with one audio block;
+- feed start/end events across multiple VAD chunks and prove one persistent provider state, one
+  final marker, ordered interval assembly, and bounded chunk input;
+- prove two completed intervals cause two ordered ASR calls, each with one audio block;
 - prove the ASR runner never receives the original audio path or a `list[ndarray]`;
-- cover VAD provider exceptions, malformed outer/batch/interval shapes, valid empty VAD output,
-  normalized-WAV read failure, unusable slice output, block failure, and all-empty block text;
+- cover VAD provider exceptions, malformed outer/batch/event shapes, invalid endpoint state,
+  incomplete final state, valid no-speech output, normalized-WAV read failure, unusable slice
+  output, block failure, and all-empty block text;
 - assert the expected typed error and zero full-audio retries for every failure path; and
 - retain the source guard that the ONNX provider does not import or call PyTorch `AutoModel`.
 
-Verification also runs the decoder against the bundled `funasr_onnx` VAD and its official sample.
+Verification also runs the streaming collector against the bundled `funasr_onnx` VAD and retained
+real audio.
 Final operational acceptance runs the previously failing 95-minute task audio through the local
 ONNX transcriber, confirms multiple per-block calls complete without a full-audio allocation, and
 produces a non-empty segmented transcript. If that source exposes a separate model/provider

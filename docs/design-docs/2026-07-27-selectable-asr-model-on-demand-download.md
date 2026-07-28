@@ -99,11 +99,12 @@ The ONNX transcriber uses `funasr_onnx` directly with explicit local ASR and VAD
 
 - construct the direct SenseVoiceSmall ONNX runner with `quantize=True` and
   `textnorm='withitn'`;
-- construct/use the direct FSMN VAD runner only when the validated ONNX VAD cache is ready; and
-- decode the `batch_size=1` `funasr_onnx.Fsmn_vad` contract from
-  `list[list[list[int]]]`, shaped as `[[[start_ms, end_ms], ...]]]`, into one ordered interval list
-  at the ONNX provider
-  boundary, without reusing the PyTorch `AutoModel` VAD-result decoder;
+- construct/use the direct `Fsmn_vad_online` runner only when the validated ONNX VAD cache is
+  ready;
+- read normalized PCM once, pass consecutive bounded mono float32 views to the online VAD with one
+  persistent provider state dictionary and one final marker, and collect its `batch_size=1`
+  absolute endpoint events into ordered intervals at the ONNX provider boundary, without reusing
+  the PyTorch `AutoModel` VAD-result decoder;
 - pass each prepared VAD audio block to the ONNX ASR runner in an independent call, preserving
   block order and timing in the transcript;
 - treat VAD inference exceptions, invalid provider shapes, normalized-WAV read failures, unusable

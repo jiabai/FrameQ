@@ -2,19 +2,23 @@
 
 ## 2026-07-29 ONNX VAD result-contract and fail-closed inference boundary
 
-- `funasr_onnx.Fsmn_vad` with `batch_size=1` returns
-  `list[list[list[int]]]`, shaped as `[[[start_ms, end_ms], ...]]]`. The ONNX adapter owns that
-  provider-specific decoder; it does not reuse the PyTorch `AutoModel` dictionary-result decoder.
+- The ONNX adapter uses `funasr_onnx.Fsmn_vad_online`, not the offline `Fsmn_vad` whole-waveform
+  feature path. It passes ten-second mono float32 views with one persistent provider state and a
+  final marker only on the last view, bounding VAD feature allocation independently of media
+  duration.
+- With `batch_size=1`, online VAD returns nested endpoint events whose absolute millisecond
+  bounds may use `-1` as an open/close sentinel. The ONNX adapter owns the strict stateful event
+  collector; it does not reuse the PyTorch `AutoModel` dictionary-result decoder.
 - SenseVoiceSmall-ONNX requires successful VAD preparation. Prepared audio blocks are passed to
   `funasr_onnx.SenseVoiceSmall` one at a time, in timing order; the adapter never passes either
   `list[ndarray]` or the original full-audio path to the ASR runner.
-- VAD inference exceptions, invalid result shapes, normalized-WAV read failures, unusable slices,
-  block runtime failures, and all-empty block output are terminal typed ASR failures. A valid VAD
-  batch with no detected speech is an empty-transcript outcome. No ONNX preparation failure can
-  authorize a full-audio retry.
-- This supersedes the 2026-07-28 pre-block compatibility exception. It prevents both known and
-  future VAD-contract mismatches from allocating full-length ONNX logits while preserving the
-  PyTorch SenseVoiceSmall adapter and transcript artifact contract.
+- VAD inference exceptions, invalid/incomplete event streams, normalized-WAV read failures,
+  unusable slices, block runtime failures, and all-empty block output are terminal typed ASR
+  failures. A valid completed VAD stream with no detected speech is an empty-transcript outcome.
+  No ONNX preparation failure can authorize a full-audio retry.
+- This supersedes the 2026-07-28 pre-block compatibility exception. It prevents both full-length
+  VAD feature matrices and full-length ASR logits while preserving the PyTorch SenseVoiceSmall
+  adapter and transcript artifact contract.
 - The durable product/runtime decision remains in
   `docs/product-specs/2026-07-27-selectable-asr-model-on-demand-download.md` and
   `docs/design-docs/2026-07-29-onnx-vad-result-contract-hardening.md`.

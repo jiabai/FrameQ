@@ -6,13 +6,14 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:executing-plans` and execute these
 > checkbox steps in order. The user selected inline execution; subagent delegation is not in scope.
 
-**Goal:** Decode the real ONNX VAD contract, require one audio-array ASR call per interval, and
-remove every full-audio ONNX retry.
+**Goal:** Stream long audio through the real ONNX VAD contract, require one audio-array ASR call
+per completed interval, and remove every whole-audio VAD/ASR inference path.
 
-**Architecture:** Keep the provider-specific nested-list decoder in `sensevoice_onnx.py` while
-retaining shared PCM reading, slicing, language, and text normalization helpers. Convert the ONNX
-pipeline from optional preparation plus compatibility fallback into a terminal segmented
-pipeline with typed errors at every boundary.
+**Architecture:** Keep the provider-specific online endpoint collector in `sensevoice_onnx.py`
+while retaining shared PCM reading, slicing, language, and text normalization helpers. Read
+normalized PCM once, pass ten-second views through `Fsmn_vad_online` with persistent state, then
+run SenseVoiceSmall once per completed interval. The ONNX pipeline is fail-closed with typed errors
+at every boundary and has no whole-audio provider fallback.
 
 **Tech Stack:** Python 3.12, pytest, NumPy, `funasr_onnx 0.4.2`, ONNX Runtime, Ruff.
 
@@ -35,10 +36,24 @@ stages, error-code family, local-only ASR processing, and transcript artifacts.
 - [x] 2026-07-29: User approved the fail-closed design with mandatory ONNX VAD and no full-audio
   compatibility path.
   Validation: user confirmation “确认方案1”.
-- [ ] 2026-07-29: Add RED regression coverage for the real provider shape and every preparation
+- [x] 2026-07-29: Add RED regression coverage for the offline provider shape and every preparation
   failure boundary.
-  Validation: pending focused pytest evidence.
-- [ ] 2026-07-29: Implement the ONNX-owned VAD decoder and fail-closed segmented pipeline.
+  Validation: focused module produced 10 expected failures and 4 passes before the fail-closed
+  implementation.
+- [x] 2026-07-29: Implement the first ONNX-owned decoder and fail-closed segmented pipeline.
+  Validation: focused ONNX tests 14 passed; neighboring tests 46 passed; full worker suite
+  620 passed / 2 skipped; Ruff passed.
+- [x] 2026-07-29: Run the first retained 95-minute acceptance and identify the remaining
+  whole-audio VAD allocation.
+  Validation: offline `Fsmn_vad` failed before ASR while allocating a float64 `(570380, 400)`
+  feature matrix of approximately 1.70 GiB; the new fail-closed boundary performed zero
+  full-audio ASR retries.
+- [x] 2026-07-29: Verify and document the bundled online VAD stream contract before revising code.
+  Validation: bundled `Fsmn_vad_online` processed a retained 80-second real-audio prefix with
+  1/5/10/30/60-second chunks, persistent state, absolute endpoint events, and ordered completed
+  intervals; the durable design now requires ten-second chunks.
+- [ ] 2026-07-29: Implement and test the strict streaming endpoint collector and online VAD
+  construction.
   Validation: pending focused/full worker evidence.
 - [ ] 2026-07-29: Run bundled-runtime and 95-minute operational acceptance, then complete all
   repository gates.
@@ -58,6 +73,15 @@ Evidence: the 2026-07-28 regression test monkeypatched `_extract_vad_segments` a
 per-block invocation only after prepared blocks existed. It did not exercise the actual
 `Fsmn_vad` result contract or the pre-block fallback boundary.
 
+Evidence: `Fsmn_vad` is not safe as the long-audio segmentation boundary even after decoding its
+result correctly. Its offline frontend extracts the complete waveform before inference and the
+retained 95-minute file failed on a 1.70 GiB float64 feature allocation.
+
+Evidence: bundled `Fsmn_vad_online` accepts audio arrays plus a persistent `param_dict`, carries
+frontend/model/VAD state between calls, and reports absolute millisecond endpoint events. The
+provider uses `-1` to split a speech start and end across calls and can also return both bounds in
+one event.
+
 ## Decision Log
 
 Decision: remove the ONNX full-audio compatibility path for every audio duration.
@@ -75,6 +99,19 @@ Decision: preserve existing worker error codes and distinguish empty speech from
 failed preparation.
 Rationale: valid no-speech output is semantically empty, while malformed/provider/audio failures
 are runtime faults; neither requires a desktop contract or UI schema change.
+Date/Author: 2026-07-29, Codex.
+
+Decision: replace offline `Fsmn_vad` with bundled `Fsmn_vad_online` and use fixed ten-second
+application chunks.
+Rationale: online VAD is the provider-supported stateful interface and bounds feature extraction
+independently of source duration. Ten seconds was verified against retained real audio and keeps
+per-call feature memory small without excessive call overhead.
+Date/Author: 2026-07-29, Codex.
+
+Decision: treat the online endpoint stream as a strict state machine.
+Rationale: accepting malformed starts/ends or an unclosed final start would recreate an ambiguous
+preparation boundary. Duplicate starts, ends without starts, invalid sentinels, unordered
+intervals, and incomplete final state are terminal provider-contract errors.
 Date/Author: 2026-07-29, Codex.
 
 ## Outcomes & Retrospective
@@ -106,7 +143,7 @@ failure boundaries but do not prove the bundled provider completes every real se
 - Modify: `worker/tests/test_sensevoice_onnx.py`
 - Modify: `worker/frameq_worker/asr_runtime/sensevoice_onnx.py`
 
-- [ ] **Step 1: Replace the prepared-block test's decoder monkeypatch with the real provider shape**
+- [x] **Step 1: Replace the prepared-block test's decoder monkeypatch with the real provider shape**
 
 Make `CallableVad.__call__` return the actual `batch_size=1` result and remove the
 `_extract_vad_segments` monkeypatch:
@@ -121,7 +158,7 @@ class CallableVad:
 Keep the existing assertions that two timing intervals produce two ordered ASR calls with
 `"first audio block"` and `"second audio block"`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 ```powershell
 uv run pytest worker/tests/test_sensevoice_onnx.py::test_onnx_transcriber_uses_callable_vad_and_asr_apis_for_segments -q
@@ -130,7 +167,7 @@ uv run pytest worker/tests/test_sensevoice_onnx.py::test_onnx_transcriber_uses_c
 Expected: FAIL because the PyTorch dictionary decoder returns zero intervals and the old code
 performs one full-audio call.
 
-- [ ] **Step 3: Add the strict provider-local decoder**
+- [x] **Step 3: Add the strict provider-local decoder**
 
 Import `_coerce_milliseconds` from the shared SenseVoice helpers and add:
 
@@ -158,7 +195,7 @@ def _decode_onnx_vad_segments(results: object) -> list[list[int]]:
 Replace the ONNX call to shared `_extract_vad_segments` with
 `_decode_onnx_vad_segments(vad_results)`. Do not change the shared PyTorch decoder.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 ```powershell
 uv run pytest worker/tests/test_sensevoice_onnx.py::test_onnx_transcriber_uses_callable_vad_and_asr_apis_for_segments -q
@@ -173,7 +210,7 @@ Expected: `1 passed`.
 - Modify: `worker/tests/test_sensevoice_onnx.py`
 - Modify: `worker/frameq_worker/asr_runtime/sensevoice_onnx.py`
 
-- [ ] **Step 1: Add failure-first tests**
+- [x] **Step 1: Add failure-first tests**
 
 Add these complete focused tests with recording ASR fakes:
 
@@ -380,7 +417,7 @@ Extend the provider source guard with:
 assert "_transcribe_full_audio" not in provider_source
 ```
 
-- [ ] **Step 2: Run the focused module and verify RED**
+- [x] **Step 2: Run the focused module and verify RED**
 
 ```powershell
 uv run pytest worker/tests/test_sensevoice_onnx.py -q
@@ -389,7 +426,7 @@ uv run pytest worker/tests/test_sensevoice_onnx.py -q
 Expected: the new preparation-failure tests fail because the current broad catch returns `None`,
 and the source guard fails because `_transcribe_full_audio` still exists.
 
-- [ ] **Step 3: Replace optional preparation with a terminal segmented pipeline**
+- [x] **Step 3: Replace optional preparation with a terminal segmented pipeline**
 
 Change `transcribe` to:
 
@@ -439,13 +476,73 @@ if not blocks or len(blocks) != len(valid_segments):
 Keep the existing one-call-per-block loop and terminal block/all-empty behavior. Delete
 `_transcribe_full_audio`; do not add any duration-based alternative.
 
-- [ ] **Step 4: Run the focused module and verify GREEN**
+- [x] **Step 4: Run the focused module and verify GREEN**
 
 ```powershell
 uv run pytest worker/tests/test_sensevoice_onnx.py -q
 ```
 
 Expected: all focused ONNX tests pass.
+
+### Task 2A: Replace whole-waveform VAD with bounded online VAD
+
+The original Task 1/2 checkpoint correctly removed the unsafe ASR fallback, but its offline
+`Fsmn_vad` construction was superseded by the real-media discovery recorded above.
+
+**Files:**
+
+- Modify: `worker/tests/test_sensevoice_onnx.py`
+- Modify: `worker/frameq_worker/asr_runtime/sensevoice_onnx.py`
+
+- [ ] **Step 1: Add RED streaming-contract tests**
+
+Add focused tests that use real NumPy arrays and a fake online VAD callable. Prove:
+
+- consecutive chunks are no larger than ten seconds;
+- every call receives the same mutable state dictionary;
+- `is_final` is false before the last non-empty chunk and true on the last chunk only;
+- `[start_ms, -1]` and `[-1, end_ms]` events can span chunks;
+- `[start_ms, end_ms]` completes an interval in one event;
+- completed intervals cause one ordered ndarray-only ASR call each; and
+- malformed event shapes/state, a pending start at final, provider exceptions, and a completed
+  no-speech stream are terminal without any ASR fallback.
+
+Run:
+
+```powershell
+uv run pytest worker/tests/test_sensevoice_onnx.py -q
+```
+
+Expected: the new online-contract tests fail because the production adapter still constructs and
+calls offline `Fsmn_vad`.
+
+- [ ] **Step 2: Implement the bounded online collector**
+
+In `sensevoice_onnx.py`:
+
+- define the ten-second chunk duration at the provider boundary;
+- construct `funasr_onnx.Fsmn_vad_online`;
+- read normalized PCM before invoking VAD;
+- iterate non-empty array views, preserving one `param_dict` and marking only the last view final;
+- strictly decode the single-batch endpoint events into complete ordered intervals; and
+- retain all existing fail-closed preparation, one-block-per-ASR-call, and typed error behavior.
+
+Delete the offline completed-batch decoder once no caller remains. Do not add a compatibility call
+to `Fsmn_vad`, the audio path, `list[ndarray]`, or full-audio SenseVoiceSmall.
+
+- [ ] **Step 3: Run focused GREEN and the bundled online-provider smoke**
+
+```powershell
+uv run pytest worker/tests/test_sensevoice_onnx.py -q
+uv run ruff check worker
+```
+
+Then run the canonical source adapter with bundled Python, bundled `funasr_onnx`, official cached
+VAD assets, and a retained real-audio prefix. Instrument the VAD callable to reject path/list
+inputs and any ndarray longer than ten seconds.
+
+Expected: focused tests and Ruff pass; the real provider returns ordered completed intervals with
+one final call and no whole-audio feature input.
 
 ### Task 3: Regression, packaged runtime, and real-media acceptance
 
@@ -482,12 +579,14 @@ uv run pytest worker/tests/test_packaging.py -q
 Expected: frontend/package preparation exits zero and the generated worker matches the canonical
 worker byte-for-byte.
 
-- [ ] **Step 3: Run the bundled-provider VAD smoke**
+- [ ] **Step 3: Run the bundled-provider online VAD smoke**
 
-Use bundled Python, bundled `funasr_onnx`, the official cached ONNX VAD, and the official VAD sample.
-Pass the raw result to `_decode_onnx_vad_segments`.
+Use bundled Python, bundled `funasr_onnx`, the official cached ONNX VAD, and retained real audio.
+Pass bounded arrays through the canonical streaming collector while recording chunk/state/final
+behavior.
 
-Expected: the raw first element is a list and the decoder returns at least one valid interval.
+Expected: every provider input is an ndarray no longer than ten seconds, the same state dictionary
+is reused, exactly one call is final, and the collector returns ordered intervals.
 
 - [ ] **Step 4: Run the retained 95-minute audio through an instrumented real transcriber**
 
@@ -531,8 +630,8 @@ git diff --check
 Bundled-provider smoke acceptance:
 
 ```text
-Run the bundled Python and packaged worker against the official VAD sample. The ONNX-owned decoder
-must return one or more intervals from the real nested-list result.
+Run the bundled Python and packaged worker against retained real audio. The ONNX-owned streaming
+collector must return one or more intervals while every VAD input remains at or below ten seconds.
 ```
 
 Long-audio operational acceptance:
