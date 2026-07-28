@@ -1,5 +1,7 @@
 # ONNX VAD Result Contract Hardening Plan
 
+- Status: Completed 2026-07-29
+
 > This ExecPlan is a living document. The sections Progress, Surprises & Discoveries, Decision Log,
 > and Outcomes & Retrospective must be kept up to date as work proceeds.
 
@@ -35,7 +37,7 @@ stages, error-code family, local-only ASR processing, and transcript artifacts.
   `parsed_count=0`.
 - [x] 2026-07-29: User approved the fail-closed design with mandatory ONNX VAD and no full-audio
   compatibility path.
-  Validation: user confirmation “确认方案1”.
+  Validation: user confirmed solution 1 and reconfirmed after the interrupted turn.
 - [x] 2026-07-29: Add RED regression coverage for the offline provider shape and every preparation
   failure boundary.
   Validation: focused module produced 10 expected failures and 4 passes before the fail-closed
@@ -52,12 +54,16 @@ stages, error-code family, local-only ASR processing, and transcript artifacts.
   Validation: bundled `Fsmn_vad_online` processed a retained 80-second real-audio prefix with
   1/5/10/30/60-second chunks, persistent state, absolute endpoint events, and ordered completed
   intervals; the durable design now requires ten-second chunks.
-- [ ] 2026-07-29: Implement and test the strict streaming endpoint collector and online VAD
+- [x] 2026-07-29: Implement and test the strict streaming endpoint collector and online VAD
   construction.
-  Validation: pending focused/full worker evidence.
-- [ ] 2026-07-29: Run bundled-runtime and 95-minute operational acceptance, then complete all
+  Validation: streaming-contract RED produced 15 failures / 5 passes, no-event-contract RED
+  produced 3 failures / 17 passes, and final focused ONNX tests passed 20/20 with Ruff clean.
+- [x] 2026-07-29: Run bundled-runtime and 95-minute operational acceptance, then complete all
   repository gates.
-  Validation: pending real-model and quality-gate evidence.
+  Validation: retained audio completed in 202.015 seconds with 571 bounded VAD calls, 808
+  ndarray-only ASR calls, 808 transcript segments, and 21,774 text characters. Full worker tests
+  passed 626 / 2 skipped, frontend tests passed 640, Ruff/lint/build/docs/diff gates passed, and
+  the packaged worker mirror matched the canonical source SHA256.
 
 ## Surprises & Discoveries
 
@@ -127,10 +133,24 @@ Date/Author: 2026-07-29, Codex.
 
 ## Outcomes & Retrospective
 
-Implementation is pending.
+SenseVoiceSmall-ONNX now reads normalized PCM before provider construction, streams ten-second
+array views through `Fsmn_vad_online`, collects absolute endpoint events with a strict state
+machine, and initializes SenseVoiceSmall only after usable intervals exist. The ASR runner receives
+exactly one ndarray per completed interval. The audio path, `list[ndarray]`, offline whole-waveform
+VAD, and full-audio ASR compatibility paths are absent.
 
-Residual risk: until the real 95-minute acceptance completes, automated fakes prove call shape and
-failure boundaries but do not prove the bundled provider completes every real segment.
+The retained 95-minute failure is resolved with real bundled models: 571 VAD calls used one state
+object and exactly one final marker; maximum VAD input was 10.0 seconds. All 808 ASR calls were
+individual ndarrays; maximum ASR input was 20.01 seconds. The run completed in 202.015 seconds with
+808 ordered transcript segments, 21,774 characters, and transcript SHA256
+`78231f5bcd9bba922e401037efce06bfd3d2e6bbce7858e3d9eddc3bca418ce0`.
+
+Residual risk: bundled `funasr_onnx 0.4.2` internally maps both a legitimate no-endpoint chunk and
+its internally caught ONNX runtime warning to bare `[]`, so the adapter cannot distinguish those
+two upstream cases. FrameQ still fails closed for raised provider errors, malformed/incomplete
+event state, audio preparation failures, and every ASR block failure. Normalized PCM remains one
+in-memory float32 array (about 365 MiB for this source); provider feature/logit allocations are now
+bounded independently of media duration.
 
 ## Context and Orientation
 
@@ -505,7 +525,7 @@ The original Task 1/2 checkpoint correctly removed the unsafe ASR fallback, but 
 - Modify: `worker/tests/test_sensevoice_onnx.py`
 - Modify: `worker/frameq_worker/asr_runtime/sensevoice_onnx.py`
 
-- [ ] **Step 1: Add RED streaming-contract tests**
+- [x] **Step 1: Add RED streaming-contract tests**
 
 Add focused tests that use real NumPy arrays and a fake online VAD callable. Prove:
 
@@ -528,7 +548,7 @@ uv run pytest worker/tests/test_sensevoice_onnx.py -q
 Expected: the new online-contract tests fail because the production adapter still constructs and
 calls offline `Fsmn_vad`.
 
-- [ ] **Step 2: Implement the bounded online collector**
+- [x] **Step 2: Implement the bounded online collector**
 
 In `sensevoice_onnx.py`:
 
@@ -542,7 +562,7 @@ In `sensevoice_onnx.py`:
 Delete the offline completed-batch decoder once no caller remains. Do not add a compatibility call
 to `Fsmn_vad`, the audio path, `list[ndarray]`, or full-audio SenseVoiceSmall.
 
-- [ ] **Step 3: Run focused GREEN and the bundled online-provider smoke**
+- [x] **Step 3: Run focused GREEN and the bundled online-provider smoke**
 
 ```powershell
 uv run pytest worker/tests/test_sensevoice_onnx.py -q
@@ -571,7 +591,7 @@ one final call and no whole-audio feature input.
 - Generated verification target:
   `app/src-tauri/target/debug/resources/worker/frameq_worker/asr_runtime/sensevoice_onnx.py`
 
-- [ ] **Step 1: Run focused neighboring and full worker regression**
+- [x] **Step 1: Run focused neighboring and full worker regression**
 
 ```powershell
 uv run pytest worker/tests/test_asr.py worker/tests/test_pipeline.py -q
@@ -581,7 +601,7 @@ uv run ruff check worker
 
 Expected: all tests pass (with only the repository's established skips) and Ruff exits zero.
 
-- [ ] **Step 2: Refresh and verify the packaged worker**
+- [x] **Step 2: Refresh and verify the packaged worker**
 
 ```powershell
 npm --prefix app run build
@@ -591,7 +611,7 @@ uv run pytest worker/tests/test_packaging.py -q
 Expected: frontend/package preparation exits zero and the generated worker matches the canonical
 worker byte-for-byte.
 
-- [ ] **Step 3: Run the bundled-provider online VAD smoke**
+- [x] **Step 3: Run the bundled-provider online VAD smoke**
 
 Use bundled Python, bundled `funasr_onnx`, the official cached ONNX VAD, and retained real audio.
 Pass bounded arrays through the canonical streaming collector while recording chunk/state/final
@@ -600,7 +620,7 @@ behavior.
 Expected: every provider input is an ndarray no longer than ten seconds, the same state dictionary
 is reused, exactly one call is final, and the collector returns ordered intervals.
 
-- [ ] **Step 4: Run the retained 95-minute audio through an instrumented real transcriber**
+- [x] **Step 4: Run the retained 95-minute audio through an instrumented real transcriber**
 
 Wrap the real `SenseVoiceSmall` callable with a recorder that rejects `str` and `list` ASR inputs,
 accepts only one `numpy.ndarray`, and counts calls. Invoke `SenseVoiceOnnxTranscriber.transcribe`
@@ -614,7 +634,7 @@ C:/Users/bicho/AppData/Local/com.frameq.desktop/outputs/tasks/
 Expected: completion with non-empty transcript text, ordered transcript segments, more than one ASR
 call, zero path/list ASR inputs, and no full-audio allocation failure.
 
-- [ ] **Step 5: Complete governance and archive the plan**
+- [x] **Step 5: Complete governance and archive the plan**
 
 Update Progress, Surprises & Discoveries, Outcomes & Retrospective, `TASKS.md`, and both plan
 indexes with exact test/real-media evidence. Move this plan from active to completed, then run:

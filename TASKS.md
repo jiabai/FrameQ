@@ -2,15 +2,16 @@
 
 ## Active UI Work
 
-- [ ] Harden the real ONNX VAD result contract and remove full-audio ONNX fallback (2026-07-29) — ✅ Acceptance:
+- [x] Harden the real ONNX VAD result contract and remove full-audio ONNX fallback (2026-07-29) — ✅ Acceptance:
   stream bounded chunks through bundled `Fsmn_vad_online`, collect its stateful endpoint events,
   require one `ndarray` per SenseVoiceSmall-ONNX call, make every VAD/audio/block preparation
-  failure terminal, and complete real 95-minute operational acceptance; focused tests prove the
-  real provider contract and every fail-closed boundary, full worker/lint/docs gates pass, and the
-  retained long audio produces a non-empty segmented transcript without whole-audio VAD features
-  or a full-audio ASR call. Design:
+  failure terminal, and remove all whole-audio VAD/ASR paths. ✅ Retained 95-minute acceptance:
+  571 VAD calls (10.0 s max, one state, one final), 808 ndarray-only ASR calls (20.01 s max), 808
+  transcript segments, 21,774 characters, 202.015 s elapsed. Focused tests 20/20, full worker
+  626 passed / 2 skipped, frontend 640 passed, Ruff/lint/build/docs/diff gates passed, and packaged
+  worker source matched. Design:
   `docs/design-docs/2026-07-29-onnx-vad-result-contract-hardening.md`. ExecPlan:
-  `docs/exec-plans/active/2026-07-29-onnx-vad-result-contract-hardening-plan.md`.
+  `docs/exec-plans/completed/2026-07-29-onnx-vad-result-contract-hardening-plan.md`.
 
 - [x] Harden SenseVoiceSmall-ONNX segmented inference (2026-07-28) — ✅ pass each prepared VAD
   block to ONNX independently and make a block failure terminal instead of retrying long audio as

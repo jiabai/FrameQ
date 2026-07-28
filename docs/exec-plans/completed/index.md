@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-29-onnx-vad-result-contract-hardening-plan.md` | Replaced whole-waveform ONNX VAD/ASR paths with bounded stateful online VAD and ndarray-only per-interval ASR, verified by the retained 95-minute source. |
 | `2026-07-28-onnx-segment-inference-hardening-plan.md` | Changed SenseVoiceSmall-ONNX from one `list[ndarray]` call to ordered per-block calls and made block inference failures terminal without full-audio retry. |
 | `2026-07-28-bundled-onnx-runtime-integrity-plan.md` | Locked the release-time requirements export, bundled-Python pip install, and ONNX import smoke test; independently verified `funasr-onnx 0.4.2`, `onnxruntime 1.28.0`, and Deno in the Windows package resources without runtime package installation. |
 | `2026-07-27-selectable-asr-model-on-demand-download-plan.md` | Added selectable PyTorch/ONNX SenseVoiceSmall, ModelScope-only verified ONNX cache/download, direct `funasr_onnx` inference, and task-submission-gated download/resume. Live model/network and packaged-platform evidence remains recorded residual risk. |
