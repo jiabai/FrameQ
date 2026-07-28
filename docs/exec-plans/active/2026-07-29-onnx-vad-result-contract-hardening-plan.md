@@ -82,6 +82,11 @@ frontend/model/VAD state between calls, and reports absolute millisecond endpoin
 provider uses `-1` to split a speech start and end across calls and can also return both bounds in
 one event.
 
+Evidence: full-media acceptance reached the twentieth ten-second VAD call before the strict
+collector rejected `[]`. Bundled `E2EVadModel.__call__` appends a batch only when `segment_batch`
+contains a new endpoint, so `[]` is the official per-chunk no-event result rather than a malformed
+outer batch. It does not end the stream or clear a pending start.
+
 ## Decision Log
 
 Decision: remove the ONNX full-audio compatibility path for every audio duration.
@@ -112,6 +117,12 @@ Decision: treat the online endpoint stream as a strict state machine.
 Rationale: accepting malformed starts/ends or an unclosed final start would recreate an ambiguous
 preparation boundary. Duplicate starts, ends without starts, invalid sentinels, unordered
 intervals, and incomplete final state are terminal provider-contract errors.
+Date/Author: 2026-07-29, Codex.
+
+Decision: accept bare `[]` as a valid no-event result for any online VAD chunk, but reject `[[]]`
+and do not decide no-speech until the final chunk has completed with zero full intervals.
+Rationale: this is the exact bundled online scorer contract; rejecting it makes ordinary silence
+terminal, while treating it as a completed empty result would lose endpoint state across chunks.
 Date/Author: 2026-07-29, Codex.
 
 ## Outcomes & Retrospective
@@ -504,8 +515,9 @@ Add focused tests that use real NumPy arrays and a fake online VAD callable. Pro
 - `[start_ms, -1]` and `[-1, end_ms]` events can span chunks;
 - `[start_ms, end_ms]` completes an interval in one event;
 - completed intervals cause one ordered ndarray-only ASR call each; and
-- malformed event shapes/state, a pending start at final, provider exceptions, and a completed
-  no-speech stream are terminal without any ASR fallback.
+- bare per-chunk `[]` preserves state, while malformed event shapes/state, an empty batch wrapper,
+  a pending start at final, provider exceptions, and a completed no-speech stream are terminal
+  without any ASR fallback.
 
 Run:
 

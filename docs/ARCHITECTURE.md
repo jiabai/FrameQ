@@ -6,9 +6,11 @@
   feature path. It passes ten-second mono float32 views with one persistent provider state and a
   final marker only on the last view, bounding VAD feature allocation independently of media
   duration.
-- With `batch_size=1`, online VAD returns nested endpoint events whose absolute millisecond
-  bounds may use `-1` as an open/close sentinel. The ONNX adapter owns the strict stateful event
-  collector; it does not reuse the PyTorch `AutoModel` dictionary-result decoder.
+- With `batch_size=1`, online VAD returns `[]` when a chunk emits no endpoint, or one nested batch
+  of endpoint events whose absolute millisecond bounds may use `-1` as an open/close sentinel.
+  Per-chunk `[]` preserves stream state and is not a no-speech decision. The ONNX adapter owns the
+  strict stateful event collector; it does not reuse the PyTorch `AutoModel` dictionary-result
+  decoder.
 - SenseVoiceSmall-ONNX requires successful VAD preparation. Prepared audio blocks are passed to
   `funasr_onnx.SenseVoiceSmall` one at a time, in timing order; the adapter never passes either
   `list[ndarray]` or the original full-audio path to the ASR runner.

@@ -48,12 +48,14 @@ ten-second mono float32 views to `Fsmn_vad_online`, reuses one provider state di
 entire stream, and sets `is_final=True` only on the last non-empty chunk. The chunk size is an
 application-owned memory bound, not an ASR segment duration.
 
-For `batch_size=1`, each provider call must return exactly one outer batch whose contents are
-ordered endpoint pairs. `-1` is accepted only as the provider sentinel for a missing start or end.
-The collector carries one pending start across chunks, emits only complete intervals with
-`end_ms > start_ms`, rejects duplicate starts, ends without a pending start, backwards/overlapping
-intervals, malformed events, and a start still open after the final call. A structurally invalid
-stream is a provider-contract runtime failure rather than an empty VAD result.
+For `batch_size=1`, an online provider call returns either `[]` when that chunk emits no new
+endpoint or one outer batch containing one or more ordered endpoint pairs. A no-event chunk is not
+itself a no-speech result; the collector continues with the same pending state. `-1` is accepted
+only as the provider sentinel for a missing start or end. The collector carries one pending start
+across chunks, emits only complete intervals with `end_ms > start_ms`, rejects empty batch wrappers,
+duplicate starts, ends without a pending start, backwards/overlapping intervals, malformed events,
+and a start still open after the final call. A structurally invalid stream is a provider-contract
+runtime failure rather than an empty VAD result.
 
 An empty, structurally valid batch means VAD detected no speech and becomes
 `ASR_EMPTY_TRANSCRIPT`. It does not authorize ASR inference.
@@ -81,7 +83,7 @@ best-effort fallback behavior. This change is ONNX-only.
 | VAD provider raises | `ASR_RUNTIME_ERROR` with ONNX VAD context | No |
 | Normalized PCM WAV cannot be read | `ASR_RUNTIME_ERROR` with audio-preparation context | No |
 | VAD event shape/state or completed interval is invalid | `ASR_RUNTIME_ERROR` with fixed contract context | No |
-| Final VAD stream contains no speech interval | `ASR_EMPTY_TRANSCRIPT` | No |
+| Chunks return valid no-event `[]`; final VAD stream contains no completed interval | `ASR_EMPTY_TRANSCRIPT` | No |
 | Intervals produce no usable audio blocks | `ASR_RUNTIME_ERROR` with slicing context | No |
 | ASR block raises | `ASR_RUNTIME_ERROR` with block position | Only preceding/current blocks |
 | Every ASR block is text-empty | `ASR_EMPTY_TRANSCRIPT` | Once per block |
@@ -98,9 +100,9 @@ Focused tests must:
   final marker, ordered interval assembly, and bounded chunk input;
 - prove two completed intervals cause two ordered ASR calls, each with one audio block;
 - prove the ASR runner never receives the original audio path or a `list[ndarray]`;
-- cover VAD provider exceptions, malformed outer/batch/event shapes, invalid endpoint state,
-  incomplete final state, valid no-speech output, normalized-WAV read failure, unusable slice
-  output, block failure, and all-empty block text;
+- cover valid per-chunk no-event `[]`, VAD provider exceptions, malformed outer/batch/event shapes,
+  invalid endpoint state, incomplete final state, completed no-speech output, normalized-WAV read
+  failure, unusable slice output, block failure, and all-empty block text;
 - assert the expected typed error and zero full-audio retries for every failure path; and
 - retain the source guard that the ONNX provider does not import or call PyTorch `AutoModel`.
 
