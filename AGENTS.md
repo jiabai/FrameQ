@@ -21,6 +21,7 @@
 - Rust worker runner 模块拆分设计：`docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`
 - ASR 模型下载语义 Job 能力边界设计：`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`
 - 可选 ASR 模型与按需下载设计：`docs/design-docs/2026-07-27-selectable-asr-model-on-demand-download.md`
+- 内置 ONNX 运行时依赖完整性设计：`docs/design-docs/2026-07-28-bundled-onnx-runtime-integrity.md`
 - Rust worker watchdog 设计：`docs/design-docs/2026-07-22-rust-worker-watchdog.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
