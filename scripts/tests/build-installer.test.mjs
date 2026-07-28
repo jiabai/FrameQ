@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   copyDenoFromArchive,
@@ -13,6 +14,10 @@ import {
   requireBundledDeno,
   requiredDenoBinary,
 } from "../build-installer.mjs";
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const buildInstallerPath = join(testDir, "..", "build-installer.mjs");
+const projectManifestPath = join(testDir, "..", "..", "pyproject.toml");
 
 async function tempRoot(name) {
   return mkdtemp(join(tmpdir(), `frameq-${name}-`));
@@ -73,6 +78,29 @@ test("parseArgs accepts Deno archive and version overrides", () => {
   assert.equal(options.target, "macos-arm64");
   assert.equal(options.denoArchiveUrl, "file:///tmp/deno.zip");
   assert.equal(options.denoVersion, "v2.9.1");
+});
+
+test("installer build installs and imports the bundled ONNX runtime before Tauri packaging", () => {
+  const buildScript = readFileSync(buildInstallerPath, "utf8");
+  const manifest = readFileSync(projectManifestPath, "utf8");
+
+  assert.match(manifest, /"funasr-onnx==0\.4\.2"/);
+  assert.match(manifest, /"onnxruntime>=1\.17\.0"/);
+  assert.match(
+    buildScript,
+    /\["export", "--no-dev", "--format", "requirements-txt", "--output-file", requirementsPath\]/,
+  );
+  assert.match(
+    buildScript,
+    /\["-m", "pip", "install", "--only-binary=llvmlite,cryptography", "-r", requirementsPath\]/,
+  );
+  assert.match(
+    buildScript,
+    /import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
+  );
+  assert.ok(
+    buildScript.indexOf("Python runtime smoke test") < buildScript.indexOf("Build Tauri installer"),
+  );
 });
 
 test("requireBundledDeno fails clearly when skip-download resources lack Deno", async () => {

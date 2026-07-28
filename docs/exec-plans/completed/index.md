@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-28-bundled-onnx-runtime-integrity-plan.md` | Locked the release-time requirements export, bundled-Python pip install, and ONNX import smoke test; independently verified `funasr-onnx 0.4.2`, `onnxruntime 1.28.0`, and Deno in the Windows package resources without runtime package installation. |
 | `2026-07-27-selectable-asr-model-on-demand-download-plan.md` | Added selectable PyTorch/ONNX SenseVoiceSmall, ModelScope-only verified ONNX cache/download, direct `funasr_onnx` inference, and task-submission-gated download/resume. Live model/network and packaged-platform evidence remains recorded residual risk. |
 | `2026-07-16-local-media-file-import-plan.md` | Import one local video or audio file through an opaque Rust-owned selection, normalize audio for local ASR, and preserve strict path/privacy boundaries. macOS acceptance is unverified residual risk. |
 | `2026-07-17-v0.2.17-desktop-i18n-release-plan.md` | Published v0.2.17 as a stable non-prerelease with synchronized version sources, Gatekeeper-first release notes, complete local validation, and all broad-release blockers resolved (atomic persistence, worker watchdog, server auth/quota concurrency, server production operations). |
