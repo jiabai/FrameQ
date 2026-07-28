@@ -4,6 +4,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 
 def test_onnx_transcriber_loads_direct_quantized_asr_and_vad(
     tmp_path: Path,
@@ -105,7 +107,11 @@ def test_onnx_transcriber_uses_callable_vad_and_asr_apis_for_segments(
 
     from frameq_worker.asr_runtime import sensevoice_onnx
 
-    monkeypatch.setattr(sensevoice_onnx, "_extract_vad_segments", lambda _result: [[0, 1000]])
+    monkeypatch.setattr(
+        sensevoice_onnx,
+        "_extract_vad_segments",
+        lambda _result: [[0, 1000], [1000, 2000]],
+    )
     monkeypatch.setattr(
         sensevoice_onnx,
         "_read_pcm_wav_mono_float32",
@@ -114,7 +120,10 @@ def test_onnx_transcriber_uses_callable_vad_and_asr_apis_for_segments(
     monkeypatch.setattr(
         sensevoice_onnx,
         "_slice_audio_by_milliseconds",
-        lambda **_kwargs: (["audio block"], [(0, 1000)]),
+        lambda **_kwargs: (
+            ["first audio block", "second audio block"],
+            [(0, 1000), (1000, 2000)],
+        ),
     )
     transcriber = sensevoice_onnx.SenseVoiceOnnxTranscriber(
         asr_model_dir=tmp_path / "SenseVoiceSmall-onnx",
@@ -126,13 +135,58 @@ def test_onnx_transcriber_uses_callable_vad_and_asr_apis_for_segments(
 
     transcript = transcriber.transcribe(audio_path, language="Chinese")
 
-    assert transcript.text == "片段文字"
+    assert transcript.text == "片段文字 片段文字"
     assert transcript.segments[0].start_ms == 0
     assert transcript.segments[0].end_ms == 1000
+    assert transcript.segments[1].start_ms == 1000
+    assert transcript.segments[1].end_ms == 2000
     assert calls == [
         ("vad", audio_path.as_posix(), {}),
-        ("asr", ["audio block"], {"language": "zh", "textnorm": "withitn"}),
+        ("asr", "first audio block", {"language": "zh", "textnorm": "withitn"}),
+        ("asr", "second audio block", {"language": "zh", "textnorm": "withitn"}),
     ]
+
+
+def test_onnx_segment_failure_does_not_fall_back_to_full_audio(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from frameq_worker.asr_runtime import sensevoice_onnx
+    from frameq_worker.asr_runtime.types import ASRRuntimeError
+
+    calls: list[object] = []
+
+    class FailingSegmentAsr:
+        def __call__(self, audio: object, **_kwargs: object) -> list[str]:
+            calls.append(audio)
+            if isinstance(audio, str):
+                return ["整段回退不应被调用"]
+            raise RuntimeError("segment inference failed")
+
+    monkeypatch.setattr(sensevoice_onnx, "_extract_vad_segments", lambda _result: [[0, 1000]])
+    monkeypatch.setattr(
+        sensevoice_onnx,
+        "_read_pcm_wav_mono_float32",
+        lambda _path, _np: (object(), 16000),
+    )
+    audio_block = object()
+    monkeypatch.setattr(
+        sensevoice_onnx,
+        "_slice_audio_by_milliseconds",
+        lambda **_kwargs: ([audio_block], [(0, 1000)]),
+    )
+    transcriber = sensevoice_onnx.SenseVoiceOnnxTranscriber(
+        asr_model_dir=tmp_path / "SenseVoiceSmall-onnx",
+        vad_model_dir=tmp_path / "vad",
+        asr_factory=lambda **_kwargs: FailingSegmentAsr(),
+        vad_factory=lambda **_kwargs: lambda _audio: [{"value": [[0, 1000]]}],
+    )
+    audio_path = tmp_path / "long-audio.wav"
+
+    with pytest.raises(ASRRuntimeError, match="segment inference failed"):
+        transcriber.transcribe(audio_path, language="Chinese")
+
+    assert calls == [audio_block]
 
 
 def test_onnx_provider_never_imports_or_calls_pytorch_automodel() -> None:

@@ -117,20 +117,27 @@ class SenseVoiceOnnxTranscriber:
             )
             if not blocks:
                 return None
-            results = asr(
-                blocks,
-                language=_sensevoice_language(language),
-                textnorm="withitn",
-            )
         except ASRDependencyError:
             raise
         except Exception:
             return None
 
-        if not isinstance(results, list):
-            results = [results]
         segments: list[TranscriptSegment] = []
-        for timing, result in zip(valid_segments, results, strict=False):
+        total_blocks = len(blocks)
+        for index, (timing, block) in enumerate(
+            zip(valid_segments, blocks, strict=True),
+            start=1,
+        ):
+            try:
+                result = asr(
+                    block,
+                    language=_sensevoice_language(language),
+                    textnorm="withitn",
+                )
+            except Exception as exc:  # noqa: BLE001 - wraps third-party ONNX errors.
+                raise ASRRuntimeError(
+                    f"ONNX ASR segment {index} of {total_blocks} failed: {exc}"
+                ) from exc
             text = _clean_sensevoice_text(_extract_onnx_text(result))
             if text:
                 segments.append(
@@ -142,7 +149,7 @@ class SenseVoiceOnnxTranscriber:
                     )
                 )
         if not segments:
-            return None
+            raise ASREmptyTranscriptError("ASR returned an empty transcript.")
         return Transcript(
             text=" ".join(segment.text for segment in segments),
             language=language,

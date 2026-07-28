@@ -1,5 +1,19 @@
 # FrameQ Architecture
 
+## 2026-07-28 ONNX segmented-inference failure boundary
+
+- SenseVoiceSmall-ONNX keeps VAD preparation separate from ONNX block inference. Prepared audio
+  blocks are passed to `funasr_onnx.SenseVoiceSmall` one at a time, in timing order; the ONNX
+  adapter never passes `list[ndarray]` as one ASR input.
+- A full-audio ONNX compatibility call remains reachable only when no block inference has begun
+  because segmentation could not be prepared. Once block inference starts, any provider exception
+  or an all-empty block result is terminal and cannot trigger a full-audio retry.
+- This boundary prevents long-audio segmented failures from allocating full-length ONNX logits
+  while preserving the existing PyTorch SenseVoiceSmall adapter and transcript artifact contract.
+- The durable product/runtime decision remains in
+  `docs/product-specs/2026-07-27-selectable-asr-model-on-demand-download.md` and
+  `docs/design-docs/2026-07-27-selectable-asr-model-on-demand-download.md`.
+
 ## 2026-07-24 Tauri IPC runtime-decoding boundary
 
 - Ordinary Rust/Tauri command results are runtime-untrusted values even when TypeScript knows the

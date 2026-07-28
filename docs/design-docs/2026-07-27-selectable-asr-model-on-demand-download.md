@@ -100,8 +100,12 @@ The ONNX transcriber uses `funasr_onnx` directly with explicit local ASR and VAD
 - construct the direct SenseVoiceSmall ONNX runner with `quantize=True` and
   `textnorm='withitn'`;
 - construct/use the direct FSMN VAD runner only when the validated ONNX VAD cache is ready; and
-- fall back only from ONNX VAD segmentation to the direct full-audio ONNX ASR call when VAD is
-  unavailable or fails safely.
+- pass each prepared VAD audio block to the ONNX ASR runner in an independent call, preserving
+  block order and timing in the transcript;
+- allow a direct full-audio ONNX compatibility call only when VAD segmentation cannot be prepared
+  before block inference starts; and
+- once any block inference is attempted, map a block runtime failure or an all-empty block result
+  to a terminal ASR error and never retry the original long audio as one ONNX inference.
 
 The ONNX path must not import or invoke `funasr.AutoModel`, use `funasr` export utilities, create
 an ONNX model at runtime, or fall back to PyTorch/another ASR provider. Existing PyTorch
@@ -130,6 +134,8 @@ transcript, account secret, LLM credential, browser cookie, or signed source URL
   `asr_model` value.
 - Startup performs no automatic model download. Installed models require no network activity to
   transcribe.
+- ONNX block inference failures do not cross back into the full-audio compatibility path; this
+  prevents a failed segmented long-audio request from allocating full-length logits.
 - Missing-model install is not a processing task. It blocks new submission and model changes until
   it reaches a terminal state.
 - Failed validation, corrupt files, source failures, cancellation, or offline state never mark an

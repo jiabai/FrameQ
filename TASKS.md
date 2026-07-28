@@ -2,6 +2,12 @@
 
 ## Active UI Work
 
+- [x] Harden SenseVoiceSmall-ONNX segmented inference (2026-07-28) — ✅ pass each prepared VAD
+  block to ONNX independently and make a block failure terminal instead of retrying long audio as
+  one full-audio inference. Focused ONNX tests 5/5, full worker tests 611 passed / 2 skipped, ruff,
+  governance, and diff gates passed. ExecPlan:
+  `docs/exec-plans/completed/2026-07-28-onnx-segment-inference-hardening-plan.md`.
+
 - [x] Add selectable SenseVoiceSmall-ONNX and selected-model on-demand installation (2026-07-27) — preserved the default PyTorch model, added the ModelScope-only `funasr_onnx` runtime/cache validation, and downloads only a missing frozen task model before automatically resuming URL/local-media intent. ✅ Automated acceptance: startup does not download; cancellation/failure creates no task; ONNX never calls `funasr.AutoModel`. Live network/package-platform checks remain release residuals. Product spec: `docs/product-specs/2026-07-27-selectable-asr-model-on-demand-download.md`; ExecPlan: `docs/exec-plans/completed/2026-07-27-selectable-asr-model-on-demand-download-plan.md`.
 
 - [x] Close general Tauri IPC runtime-decoding gaps (2026-07-24) — ✅ Account, History,
