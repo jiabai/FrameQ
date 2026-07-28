@@ -2,6 +2,15 @@
 
 ## Active UI Work
 
+- [ ] Harden the real ONNX VAD result contract and remove full-audio ONNX fallback (2026-07-29) — ✅ Acceptance:
+  decode the bundled `Fsmn_vad` nested-list batch at the ONNX provider boundary, require one
+  `ndarray` per SenseVoiceSmall-ONNX call, make every VAD/audio/block preparation failure terminal,
+  and complete real 95-minute operational acceptance; focused tests prove the real provider shape
+  and every fail-closed boundary, full worker/lint/docs gates pass, and the retained long audio
+  produces a non-empty segmented transcript without a full-audio ONNX call. Design:
+  `docs/design-docs/2026-07-29-onnx-vad-result-contract-hardening.md`. ExecPlan:
+  `docs/exec-plans/active/2026-07-29-onnx-vad-result-contract-hardening-plan.md`.
+
 - [x] Harden SenseVoiceSmall-ONNX segmented inference (2026-07-28) — ✅ pass each prepared VAD
   block to ONNX independently and make a block failure terminal instead of retrying long audio as
   one full-audio inference. Focused ONNX tests 5/5, full worker tests 611 passed / 2 skipped, ruff,

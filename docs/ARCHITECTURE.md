@@ -1,18 +1,23 @@
 # FrameQ Architecture
 
-## 2026-07-28 ONNX segmented-inference failure boundary
+## 2026-07-29 ONNX VAD result-contract and fail-closed inference boundary
 
-- SenseVoiceSmall-ONNX keeps VAD preparation separate from ONNX block inference. Prepared audio
-  blocks are passed to `funasr_onnx.SenseVoiceSmall` one at a time, in timing order; the ONNX
-  adapter never passes `list[ndarray]` as one ASR input.
-- A full-audio ONNX compatibility call remains reachable only when no block inference has begun
-  because segmentation could not be prepared. Once block inference starts, any provider exception
-  or an all-empty block result is terminal and cannot trigger a full-audio retry.
-- This boundary prevents long-audio segmented failures from allocating full-length ONNX logits
-  while preserving the existing PyTorch SenseVoiceSmall adapter and transcript artifact contract.
+- `funasr_onnx.Fsmn_vad` with `batch_size=1` returns
+  `list[list[list[int]]]`, shaped as `[[[start_ms, end_ms], ...]]]`. The ONNX adapter owns that
+  provider-specific decoder; it does not reuse the PyTorch `AutoModel` dictionary-result decoder.
+- SenseVoiceSmall-ONNX requires successful VAD preparation. Prepared audio blocks are passed to
+  `funasr_onnx.SenseVoiceSmall` one at a time, in timing order; the adapter never passes either
+  `list[ndarray]` or the original full-audio path to the ASR runner.
+- VAD inference exceptions, invalid result shapes, normalized-WAV read failures, unusable slices,
+  block runtime failures, and all-empty block output are terminal typed ASR failures. A valid VAD
+  batch with no detected speech is an empty-transcript outcome. No ONNX preparation failure can
+  authorize a full-audio retry.
+- This supersedes the 2026-07-28 pre-block compatibility exception. It prevents both known and
+  future VAD-contract mismatches from allocating full-length ONNX logits while preserving the
+  PyTorch SenseVoiceSmall adapter and transcript artifact contract.
 - The durable product/runtime decision remains in
   `docs/product-specs/2026-07-27-selectable-asr-model-on-demand-download.md` and
-  `docs/design-docs/2026-07-27-selectable-asr-model-on-demand-download.md`.
+  `docs/design-docs/2026-07-29-onnx-vad-result-contract-hardening.md`.
 
 ## 2026-07-24 Tauri IPC runtime-decoding boundary
 

@@ -22,6 +22,7 @@
 - ASR 模型下载语义 Job 能力边界设计：`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`
 - 可选 ASR 模型与按需下载设计：`docs/design-docs/2026-07-27-selectable-asr-model-on-demand-download.md`
 - 内置 ONNX 运行时依赖完整性设计：`docs/design-docs/2026-07-28-bundled-onnx-runtime-integrity.md`
+- ONNX VAD 结果契约与失败闭合设计：`docs/design-docs/2026-07-29-onnx-vad-result-contract-hardening.md`
 - Rust worker watchdog 设计：`docs/design-docs/2026-07-22-rust-worker-watchdog.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
@@ -55,6 +56,7 @@
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
+- 当前 ONNX VAD 结果契约加固计划：`docs/exec-plans/active/2026-07-29-onnx-vad-result-contract-hardening-plan.md`
 - 最近完成 可选 ASR 模型按需下载计划：`docs/exec-plans/completed/2026-07-27-selectable-asr-model-on-demand-download-plan.md`
 - 最近完成 v0.2.17 发布计划：`docs/exec-plans/completed/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
 - 最近完成 本地媒体文件导入计划：`docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`

@@ -100,17 +100,21 @@ The ONNX transcriber uses `funasr_onnx` directly with explicit local ASR and VAD
 - construct the direct SenseVoiceSmall ONNX runner with `quantize=True` and
   `textnorm='withitn'`;
 - construct/use the direct FSMN VAD runner only when the validated ONNX VAD cache is ready; and
+- decode the `batch_size=1` `funasr_onnx.Fsmn_vad` contract from
+  `list[list[list[int]]]`, shaped as `[[[start_ms, end_ms], ...]]]`, into one ordered interval list
+  at the ONNX provider
+  boundary, without reusing the PyTorch `AutoModel` VAD-result decoder;
 - pass each prepared VAD audio block to the ONNX ASR runner in an independent call, preserving
   block order and timing in the transcript;
-- allow a direct full-audio ONNX compatibility call only when VAD segmentation cannot be prepared
-  before block inference starts; and
-- once any block inference is attempted, map a block runtime failure or an all-empty block result
-  to a terminal ASR error and never retry the original long audio as one ONNX inference.
+- treat VAD inference exceptions, invalid provider shapes, normalized-WAV read failures, unusable
+  slices, block runtime failures, and an all-empty block result as terminal typed ASR failures; and
+- never pass the original audio path to SenseVoiceSmall-ONNX as a full-audio compatibility call.
 
 The ONNX path must not import or invoke `funasr.AutoModel`, use `funasr` export utilities, create
 an ONNX model at runtime, or fall back to PyTorch/another ASR provider. Existing PyTorch
 SenseVoice normalization, transcript artifacts, and source compatibility remain owned by their
-current path.
+current path. The detailed correction to the original compatibility boundary is recorded in
+`docs/design-docs/2026-07-29-onnx-vad-result-contract-hardening.md`.
 
 ## Rust, Download Lane, and Source Security
 
@@ -134,8 +138,8 @@ transcript, account secret, LLM credential, browser cookie, or signed source URL
   `asr_model` value.
 - Startup performs no automatic model download. Installed models require no network activity to
   transcribe.
-- ONNX block inference failures do not cross back into the full-audio compatibility path; this
-  prevents a failed segmented long-audio request from allocating full-length logits.
+- ONNX VAD preparation and block inference failures are fail-closed. There is no full-audio ONNX
+  compatibility path, so a provider-contract mismatch cannot allocate full-length logits.
 - Missing-model install is not a processing task. It blocks new submission and model changes until
   it reaches a terminal state.
 - Failed validation, corrupt files, source failures, cancellation, or offline state never mark an
@@ -147,8 +151,8 @@ transcript, account secret, LLM credential, browser cookie, or signed source URL
 
 Implementation needs focused tests for the whitelist across TypeScript/Rust/Python, frozen request
 and task-manifest snapshots, cache isolation, atomic promotion, SHA256/required-file rejection,
-official-source-only ONNX acquisition, direct `funasr_onnx` construction, VAD-only fallback, and
-the complete URL/local-media resume, cancel, failure, and offline flows. Contract/progress schema
-tests must reject stale single-model assumptions and unknown model IDs. Rust status tests must also
-assert the exact PyTorch and ONNX display leaves independently from availability tests that exercise
-the complete cache validation root.
+official-source-only ONNX acquisition, direct `funasr_onnx` construction, mandatory segmented VAD
+inference, and the complete URL/local-media resume, cancel, failure, and offline flows.
+Contract/progress schema tests must reject stale single-model assumptions and unknown model IDs.
+Rust status tests must also assert the exact PyTorch and ONNX display leaves independently from
+availability tests that exercise the complete cache validation root.

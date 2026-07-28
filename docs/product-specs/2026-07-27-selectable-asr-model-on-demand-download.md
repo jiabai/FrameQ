@@ -63,11 +63,13 @@ start a second install or submit a task with another model.
 ## Offline and Failure Behavior
 
 - An installed, validated model starts normally while offline; ASR stays local.
-- ONNX long-audio transcription uses VAD blocks and invokes the ONNX ASR runner once per block.
-  After block inference has started, a block runtime failure or an all-empty block result is
-  terminal for that task and must not retry the original audio as one full-audio ONNX inference.
-  A full-audio ONNX compatibility call remains allowed only when segmentation cannot be prepared
-  before any block inference is attempted.
+- ONNX transcription requires the official ONNX VAD result to be decoded into usable speech
+  blocks and invokes the ONNX ASR runner once per block. The ONNX path never submits the original
+  audio as one full-audio inference, including when VAD inference fails, the provider result shape
+  is invalid, normalized PCM audio cannot be read, or segment slicing produces no usable blocks.
+- A valid ONNX VAD result with no detected speech is an empty-transcript failure. A malformed VAD
+  result or any VAD/block runtime failure is an ASR runtime failure. These failures are terminal
+  for the task and must not silently switch models or retry through another ONNX input shape.
 - If the selected model is missing while offline, FrameQ explains that installation requires a
   connection and leaves the source intent and selection intact. It must not automatically switch
   to the PyTorch model or create a task.
@@ -88,8 +90,10 @@ start a second install or submit a task with another model.
   from its official ModelScope ASR and ONNX-VAD sources.
 - Installed selections proceed to a normal URL or local-media task; missing selections install
   first, revalidate, and then continue the original intent automatically.
-- ONNX VAD blocks are passed to SenseVoiceSmall-ONNX one at a time; a block inference failure is
-  reported as an ASR runtime failure without a full-audio retry.
+- The official batched ONNX VAD result shape is decoded into ordered speech intervals, and every
+  resulting block is passed to SenseVoiceSmall-ONNX as one audio `ndarray` per call.
+- VAD preparation and block inference failures are reported without any full-audio ONNX retry;
+  tests cover the real nested-list VAD result shape and every pre-block failure boundary.
 - Cancelled, failed, or offline missing-model attempts preserve the selection and source intent,
   create no processing worker task, and never silently change models.
 - Settings show model status only for acquisition; no startup automatic download or manual
