@@ -457,6 +457,7 @@ export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
     summary: item.summary,
     insights: item.insights,
     transcript: item.transcript,
+    dissection: null,
     error: item.error,
   };
 }

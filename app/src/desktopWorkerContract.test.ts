@@ -152,6 +152,13 @@ type DesktopWorkerContract = {
     itemKeys: string[];
     preferenceSnapshotArtifact: string;
   };
+  dissectionResult: {
+    schemaVersion: number;
+    artifacts: Record<"json" | "markdown", { key: string; path: string }>;
+    callPlan: Record<string, number>;
+    topLevelKeys: string[];
+    limits: Record<string, number>;
+  };
 };
 
 function loadContract(): DesktopWorkerContract {
@@ -161,10 +168,10 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict desktop contract v4 while preserving process_video v3", () => {
+  test("uses strict desktop contract v5 while preserving process_video v3", () => {
     const contract = loadContract();
 
-    expect(contract.contractVersion).toBe(4);
+    expect(contract.contractVersion).toBe(5);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
   });
 
@@ -185,7 +192,7 @@ describe("desktop/worker contract", () => {
     };
     visit(contract);
 
-    expect(contract.contractVersion).toBe(4);
+    expect(contract.contractVersion).toBe(5);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);
@@ -419,6 +426,7 @@ describe("desktop/worker contract", () => {
       "summary",
       "insights",
       "transcript",
+      "dissection",
       "error",
     ]);
     expect(task.properties.status.enum).toEqual([
@@ -437,6 +445,8 @@ describe("desktop/worker contract", () => {
       "insights",
       "insights_md",
       "preference_snapshot",
+      "dissection",
+      "dissection_md",
     ]);
     expect(task.properties.artifacts.additionalProperties).toBe(false);
     expect(Object.keys(task.properties.insights.items.properties)).toEqual([
@@ -548,7 +558,7 @@ describe("desktop/worker contract", () => {
       required: ["task_id", "target", "output_language"],
       properties: {
         task_id: { type: "string" },
-        target: { type: "string", enum: ["summary", "insights"] },
+        target: { type: "string", enum: ["summary", "insights", "dissection"] },
         output_language: { type: "string", enum: ["zh-CN", "zh-TW", "en-US"] },
         preference_snapshot: { type: "object" },
       },
@@ -567,6 +577,46 @@ describe("desktop/worker contract", () => {
       ...request.required,
       "preference_snapshot",
     ]);
+  });
+
+  test("declares bounded transcript dissection artifacts and call plan", () => {
+    const dissection = loadContract().dissectionResult;
+
+    expect(dissection).toEqual({
+      schemaVersion: 1,
+      artifacts: {
+        json: { key: "dissection", path: "ai/dissection.json" },
+        markdown: { key: "dissection_md", path: "ai/dissection.md" },
+      },
+      callPlan: {
+        version: 1,
+        maxChunkCharacters: 2000,
+        chunksPerMapCall: 4,
+        reduceCalls: 1,
+        maxRepairCalls: 1,
+        maxTotalCalls: 6,
+      },
+      topLevelKeys: [
+        "schemaVersion",
+        "sourceTranscriptSha256",
+        "sourceLanguage",
+        "sourceChunks",
+        "overallNarrative",
+        "segments",
+        "highlights",
+        "reusableTemplate",
+        "audienceFit",
+        "strengths",
+        "weaknesses",
+      ],
+      limits: {
+        highlights: 8,
+        strengths: 6,
+        weaknesses: 6,
+        templateStepsMinimum: 3,
+        templateStepsMaximum: 7,
+      },
+    });
   });
 
   test("defines structured worker and model-download progress events", () => {

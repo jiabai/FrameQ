@@ -33,7 +33,9 @@ export type TaskArtifactKey =
   | "mindmap"
   | "insights"
   | "insights_md"
-  | "preference_snapshot";
+  | "preference_snapshot"
+  | "dissection"
+  | "dissection_md";
 
 export type TaskArtifacts = Partial<Record<TaskArtifactKey, string>>;
 
@@ -41,6 +43,50 @@ export type TranscriptMetadata = {
   source: "asr" | "subtitle";
   language: string | null;
   engine: string | null;
+};
+
+export type DissectionSourceChunk = {
+  id: number;
+  startByte: number;
+  endByte: number;
+  sha256: string;
+};
+
+export type DissectionNarrative = {
+  openingHook: string | null;
+  structureType: string;
+  turningPoint: string | null;
+  closingType: string | null;
+};
+
+export type DissectionSegment = {
+  id: number;
+  title: string;
+  sourceChunkIds: number[];
+  coreClaim: string;
+  supportingPoints: string[];
+  rhetoricalDevices: string[];
+  rhythmNote: string;
+  reusablePattern: string;
+  riskFlags: string[];
+};
+
+export type TranscriptDissection = {
+  schemaVersion: 1;
+  sourceTranscriptSha256: string;
+  sourceLanguage: string | null;
+  sourceChunks: DissectionSourceChunk[];
+  overallNarrative: DissectionNarrative;
+  segments: DissectionSegment[];
+  highlights: string[];
+  reusableTemplate: { name: string; skeleton: string[] };
+  audienceFit: Array<{
+    audience: string;
+    fit: "high" | "medium" | "low";
+    note: string;
+  }>;
+  strengths: string[];
+  weaknesses: string[];
 };
 
 export type TaskSubmission =
@@ -130,6 +176,7 @@ export type WorkerResult = {
   summary: string;
   insights: Insight[];
   transcript: TranscriptMetadata | null;
+  dissection: TranscriptDissection | null;
   error: WorkerErrorResult | null;
 };
 

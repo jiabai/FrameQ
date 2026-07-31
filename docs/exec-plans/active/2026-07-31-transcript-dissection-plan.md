@@ -51,7 +51,7 @@ successful report.
   received explicit user approval to proceed with implementation planning.
 - [x] 2026-07-31: Created this active ExecPlan and mapped contract, Python, Rust, frontend, history,
   persistence, security, and verification boundaries.
-- [ ] Task 1: Version and test the closed cross-language contract.
+- [x] Task 1: Version and test the closed cross-language contract.
 - [ ] Task 2: Build deterministic chunks, call planning, generation, and strict validation.
 - [ ] Task 3: Integrate retry execution and atomic task artifacts.
 - [ ] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
@@ -79,6 +79,11 @@ successful report.
 - History lists are manifest-only, while history detail can read validated artifacts. List rows need
   only the two generic artifact keys; report parsing and transcript integrity work stay in detail
   loading.
+- Rust process-cancellation tests cannot terminate child process trees inside the managed sandbox.
+  The same focused test and the complete 228-test Rust suite pass with normal Windows process
+  permissions; Rust verification that exercises child-process termination must use that boundary.
+- The global desktop-worker contract advances to version 5 while the independently versioned
+  `process_video` and local-media request envelopes remain at versions 3 and 4 respectively.
 
 ## Decision Log
 
@@ -192,7 +197,7 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Modify: `app/src-tauri/src/worker_runtime/command.rs`
 - Modify: `scripts/tests/task-artifact-transaction-contract.test.mjs`
 
-- [ ] Add RED tests that expect desktop contract version `5`, retry target `dissection`, nullable
+- [x] Add RED tests that expect desktop contract version `5`, retry target `dissection`, nullable
   terminal field `dissection`, artifact keys `dissection`/`dissection_md`, fixed paths, exact report
   schemas, and the versioned call-plan constants. Run:
 
@@ -205,19 +210,19 @@ artifact commit. It must never clamp or silently drop invalid content.
 
   Expected: new assertions fail because version 4 and the old closed sets are still present.
 
-- [ ] Change the JSON contract first, then mirror it exactly. Keep the retry wire request limited to
+- [x] Change the JSON contract first, then mirror it exactly. Keep the retry wire request limited to
   `task_id`, `target`, and `output_language`; do not accept transcript text, a path, preferences, or a
   call count from the frontend.
-- [ ] Define Python targets exactly as:
+- [x] Define Python targets exactly as:
 
   ```python
   RetryInsightTarget = Literal["summary", "insights", "dissection"]
   InsightGenerationTarget = Literal["all", "summary", "insights", "dissection"]
   ```
 
-- [ ] Add the nullable structured `dissection` field to every exact terminal result constructor and
+- [x] Add the nullable structured `dissection` field to every exact terminal result constructor and
   decoder. Unknown terminal fields and artifact keys must continue to fail.
-- [ ] Re-run the focused commands and require PASS. Commit only this coherent contract slice:
+- [x] Re-run the focused commands and require PASS. Commit only this coherent contract slice:
 
   ```powershell
   git add contracts worker/frameq_worker/desktop_contract.py worker/frameq_worker/models.py worker/frameq_worker/requests.py worker/tests app/src/desktopWorkerProtocol.ts app/src/desktopWorkerContract.test.ts app/src-tauri/src/lib.rs app/src-tauri/src/worker_runtime/command.rs scripts/tests

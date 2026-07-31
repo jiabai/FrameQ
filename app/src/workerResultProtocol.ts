@@ -9,6 +9,7 @@ export const TASK_RESULT_FIELDS = [
   "summary",
   "insights",
   "transcript",
+  "dissection",
   "error",
 ] as const;
 
@@ -23,6 +24,8 @@ export const TASK_ARTIFACT_KEYS = [
   "insights",
   "insights_md",
   "preference_snapshot",
+  "dissection",
+  "dissection_md",
 ] as const;
 
 export const TASK_INSIGHT_FIELDS = [
@@ -57,6 +60,8 @@ const CANCEL_STATUSES = [
   "failed",
 ] as const;
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+const SHA256 = /^[a-f0-9]{64}$/;
+const SOURCE_LANGUAGE = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/;
 
 type TaskArtifactKey = (typeof TASK_ARTIFACT_KEYS)[number];
 
@@ -132,6 +137,7 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
   const artifacts = parseArtifacts(object.artifacts);
   const insights = parseInsights(object.insights);
   const transcript = parseTranscript(object.transcript);
+  const dissection = parseDissection(object.dissection);
   const error = parseTaskError(object.error);
   if (
     taskId === undefined ||
@@ -141,6 +147,7 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     typeof object.summary !== "string" ||
     insights === null ||
     transcript === undefined ||
+    dissection === undefined ||
     error === undefined
   ) {
     return null;
@@ -160,8 +167,241 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     summary: object.summary,
     insights,
     transcript,
+    dissection,
     error,
   };
+}
+
+function parseDissection(value: unknown): WorkerResult["dissection"] | undefined {
+  if (value === null) {
+    return null;
+  }
+  const object = readExactObject(value, [
+    "schemaVersion",
+    "sourceTranscriptSha256",
+    "sourceLanguage",
+    "sourceChunks",
+    "overallNarrative",
+    "segments",
+    "highlights",
+    "reusableTemplate",
+    "audienceFit",
+    "strengths",
+    "weaknesses",
+  ]);
+  if (
+    !object ||
+    object.schemaVersion !== 1 ||
+    typeof object.sourceTranscriptSha256 !== "string" ||
+    !SHA256.test(object.sourceTranscriptSha256) ||
+    !isSourceLanguage(object.sourceLanguage)
+  ) {
+    return undefined;
+  }
+
+  const sourceChunksRaw = readDataArray(object.sourceChunks);
+  const segmentsRaw = readDataArray(object.segments);
+  const highlights = readStringArray(object.highlights, 8);
+  const strengths = readStringArray(object.strengths, 6);
+  const weaknesses = readStringArray(object.weaknesses, 6);
+  const narrative = parseNarrative(object.overallNarrative);
+  const template = parseReusableTemplate(object.reusableTemplate);
+  const audienceFit = parseAudienceFit(object.audienceFit);
+  if (
+    !sourceChunksRaw ||
+    sourceChunksRaw.length === 0 ||
+    !segmentsRaw ||
+    segmentsRaw.length === 0 ||
+    !highlights ||
+    !strengths ||
+    !weaknesses ||
+    !narrative ||
+    !template ||
+    !audienceFit
+  ) {
+    return undefined;
+  }
+
+  const sourceChunks: NonNullable<WorkerResult["dissection"]>["sourceChunks"] = [];
+  let previousEnd = 0;
+  for (const [index, item] of sourceChunksRaw.entries()) {
+    const chunk = readExactObject(item, ["id", "startByte", "endByte", "sha256"]);
+    if (
+      !chunk ||
+      chunk.id !== index + 1 ||
+      !isSafeUnsignedInteger(chunk.startByte) ||
+      !isSafeUnsignedInteger(chunk.endByte) ||
+      chunk.startByte < previousEnd ||
+      chunk.endByte <= chunk.startByte ||
+      typeof chunk.sha256 !== "string" ||
+      !SHA256.test(chunk.sha256)
+    ) {
+      return undefined;
+    }
+    sourceChunks.push({
+      id: chunk.id,
+      startByte: chunk.startByte,
+      endByte: chunk.endByte,
+      sha256: chunk.sha256,
+    });
+    previousEnd = chunk.endByte;
+  }
+
+  const segments: NonNullable<WorkerResult["dissection"]>["segments"] = [];
+  for (const [index, item] of segmentsRaw.entries()) {
+    const segment = parseDissectionSegment(item, index + 1, sourceChunks.length);
+    if (!segment) {
+      return undefined;
+    }
+    segments.push(segment);
+  }
+
+  return {
+    schemaVersion: 1,
+    sourceTranscriptSha256: object.sourceTranscriptSha256,
+    sourceLanguage: object.sourceLanguage,
+    sourceChunks,
+    overallNarrative: narrative,
+    segments,
+    highlights,
+    reusableTemplate: template,
+    audienceFit,
+    strengths,
+    weaknesses,
+  };
+}
+
+function parseNarrative(
+  value: unknown,
+): NonNullable<WorkerResult["dissection"]>["overallNarrative"] | null {
+  const object = readExactObject(value, [
+    "openingHook",
+    "structureType",
+    "turningPoint",
+    "closingType",
+  ]);
+  const openingHook = object ? nullableNonBlankString(object.openingHook) : undefined;
+  const turningPoint = object ? nullableNonBlankString(object.turningPoint) : undefined;
+  const closingType = object ? nullableNonBlankString(object.closingType) : undefined;
+  if (
+    !object ||
+    openingHook === undefined ||
+    turningPoint === undefined ||
+    closingType === undefined ||
+    !isNonBlankString(object.structureType)
+  ) {
+    return null;
+  }
+  return { openingHook, structureType: object.structureType, turningPoint, closingType };
+}
+
+function parseDissectionSegment(
+  value: unknown,
+  expectedId: number,
+  sourceChunkCount: number,
+): NonNullable<WorkerResult["dissection"]>["segments"][number] | null {
+  const object = readExactObject(value, [
+    "id",
+    "title",
+    "sourceChunkIds",
+    "coreClaim",
+    "supportingPoints",
+    "rhetoricalDevices",
+    "rhythmNote",
+    "reusablePattern",
+    "riskFlags",
+  ]);
+  const sourceChunkIds = object ? readDataArray(object.sourceChunkIds) : null;
+  const supportingPoints = object ? readStringArray(object.supportingPoints) : null;
+  const rhetoricalDevices = object ? readStringArray(object.rhetoricalDevices) : null;
+  const riskFlags = object ? readStringArray(object.riskFlags) : null;
+  if (
+    !object ||
+    object.id !== expectedId ||
+    !isNonBlankString(object.title) ||
+    !isNonBlankString(object.coreClaim) ||
+    !isNonBlankString(object.rhythmNote) ||
+    !isNonBlankString(object.reusablePattern) ||
+    !sourceChunkIds ||
+    sourceChunkIds.length === 0 ||
+    !supportingPoints ||
+    !rhetoricalDevices ||
+    !riskFlags
+  ) {
+    return null;
+  }
+  let previousId = 0;
+  const safeSourceChunkIds: number[] = [];
+  for (const id of sourceChunkIds) {
+    if (!isSafeUnsignedInteger(id) || id <= previousId || id > sourceChunkCount) {
+      return null;
+    }
+    safeSourceChunkIds.push(id);
+    previousId = id;
+  }
+  return {
+    id: object.id,
+    title: object.title,
+    sourceChunkIds: safeSourceChunkIds,
+    coreClaim: object.coreClaim,
+    supportingPoints,
+    rhetoricalDevices,
+    rhythmNote: object.rhythmNote,
+    reusablePattern: object.reusablePattern,
+    riskFlags,
+  };
+}
+
+function parseReusableTemplate(
+  value: unknown,
+): NonNullable<WorkerResult["dissection"]>["reusableTemplate"] | null {
+  const object = readExactObject(value, ["name", "skeleton"]);
+  const skeleton = object ? readStringArray(object.skeleton, 7) : null;
+  return object && isNonBlankString(object.name) && skeleton && skeleton.length >= 3
+    ? { name: object.name, skeleton }
+    : null;
+}
+
+function parseAudienceFit(
+  value: unknown,
+): NonNullable<WorkerResult["dissection"]>["audienceFit"] | null {
+  const items = readDataArray(value);
+  if (!items) {
+    return null;
+  }
+  const result: NonNullable<WorkerResult["dissection"]>["audienceFit"] = [];
+  for (const item of items) {
+    const object = readExactObject(item, ["audience", "fit", "note"]);
+    if (
+      !object ||
+      !isNonBlankString(object.audience) ||
+      !isOneOf(object.fit, ["high", "medium", "low"] as const) ||
+      !isNonBlankString(object.note)
+    ) {
+      return null;
+    }
+    result.push({ audience: object.audience, fit: object.fit, note: object.note });
+  }
+  return result;
+}
+
+function readStringArray(value: unknown, maximum = 32): string[] | null {
+  const items = readDataArray(value);
+  return items && items.length <= maximum && items.every(isNonBlankString)
+    ? (items as string[])
+    : null;
+}
+
+function isNonBlankString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function nullableNonBlankString(value: unknown): string | null | undefined {
+  return value === null ? null : isNonBlankString(value) ? value : undefined;
+}
+
+function isSourceLanguage(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && SOURCE_LANGUAGE.test(value));
 }
 
 function parseArtifacts(value: unknown): WorkerResult["artifacts"] | null {

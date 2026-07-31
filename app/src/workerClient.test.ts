@@ -65,6 +65,7 @@ function completedResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
     summary: "# 要点总结",
     insights: [DEFAULT_INSIGHT],
     transcript: transcript ?? null,
+    dissection: null,
     error: null,
     ...rest,
   };
@@ -173,6 +174,7 @@ describe("worker client", () => {
       summary: "",
       insights: [],
       transcript: null,
+      dissection: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "worker process could not start",
@@ -365,6 +367,31 @@ describe("worker client", () => {
     expect(result.status).toBe("completed");
   });
 
+  test("invokes dissection without transcript paths or preference data", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return completedResult();
+    };
+
+    const result = await retryInsights(
+      { taskId: TASK_ID, target: "dissection", outputLanguage: "zh-CN" },
+      runner,
+    );
+
+    expect(calls).toEqual([{
+      command: "retry_insights",
+      args: {
+        request: {
+          task_id: TASK_ID,
+          target: "dissection",
+          output_language: "zh-CN",
+        },
+      },
+    }]);
+    expect(result.status).toBe("completed");
+  });
+
   test("preserves existing transcript when the retry command fails", async () => {
     const runner: WorkerCommandRunner = async () => {
       throw new Error("retry worker process could not start");
@@ -384,6 +411,7 @@ describe("worker client", () => {
       summary: "",
       insights: [],
       transcript: null,
+      dissection: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "retry worker process could not start",
@@ -501,6 +529,7 @@ describe("worker client", () => {
       summary: "",
       insights: [],
       transcript: null,
+      dissection: null,
       error: {
         code: "WORKER_PROTOCOL_VIOLATION",
         message: "",
@@ -525,6 +554,7 @@ describe("worker client", () => {
       summary: "",
       insights: [],
       transcript: null,
+      dissection: null,
       error: {
         code: "WORKER_PROTOCOL_VIOLATION",
         message: "",

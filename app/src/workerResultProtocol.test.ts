@@ -34,6 +34,7 @@ function validTask(overrides: Partial<WorkerResult> = {}): WorkerResult {
       },
     ],
     transcript: { source: "asr", language: "zh-CN", engine: "SenseVoice" },
+    dissection: null,
     error: null,
     ...overrides,
   };
@@ -147,6 +148,85 @@ describe("worker result protocol", () => {
     expect(parsed?.insights).not.toBe(value.insights);
     expect(parsed?.insights[0]).not.toBe(value.insights[0]);
     expect(parsed?.transcript).not.toBe(value.transcript);
+  });
+
+  test("accepts and deeply copies a closed transcript dissection", () => {
+    const dissection: NonNullable<WorkerResult["dissection"]> = {
+      schemaVersion: 1,
+      sourceTranscriptSha256: "a".repeat(64),
+      sourceLanguage: "zh-CN",
+      sourceChunks: [{ id: 1, startByte: 0, endByte: 6, sha256: "b".repeat(64) }],
+      overallNarrative: {
+        openingHook: "question",
+        structureType: "problem-solution",
+        turningPoint: null,
+        closingType: "call-to-action",
+      },
+      segments: [{
+        id: 1,
+        title: "Opening",
+        sourceChunkIds: [1],
+        coreClaim: "A claim",
+        supportingPoints: ["Evidence"],
+        rhetoricalDevices: ["Question"],
+        rhythmNote: "Fast",
+        reusablePattern: "Question then answer",
+        riskFlags: [],
+      }],
+      highlights: ["Source quote"],
+      reusableTemplate: { name: "Template", skeleton: ["One", "Two", "Three"] },
+      audienceFit: [{ audience: "Beginners", fit: "high", note: "Accessible" }],
+      strengths: ["Clear"],
+      weaknesses: ["Brief"],
+    };
+
+    const parsed = parseWorkerResult(validTask({ dissection }));
+
+    expect(parsed?.dissection).toEqual(dissection);
+    expect(parsed?.dissection).not.toBe(dissection);
+    expect(parsed?.dissection?.sourceChunks).not.toBe(dissection.sourceChunks);
+    expect(parsed?.dissection?.segments[0]).not.toBe(dissection.segments[0]);
+  });
+
+  test("rejects open or malformed transcript dissection payloads", () => {
+    const base = {
+      schemaVersion: 1,
+      sourceTranscriptSha256: "a".repeat(64),
+      sourceLanguage: null,
+      sourceChunks: [{ id: 1, startByte: 0, endByte: 1, sha256: "b".repeat(64) }],
+      overallNarrative: {
+        openingHook: null,
+        structureType: "linear",
+        turningPoint: null,
+        closingType: null,
+      },
+      segments: [{
+        id: 1,
+        title: "Segment",
+        sourceChunkIds: [1],
+        coreClaim: "Claim",
+        supportingPoints: [],
+        rhetoricalDevices: [],
+        rhythmNote: "Even",
+        reusablePattern: "State and support",
+        riskFlags: [],
+      }],
+      highlights: [],
+      reusableTemplate: { name: "Template", skeleton: ["One", "Two", "Three"] },
+      audienceFit: [{ audience: "General", fit: "medium", note: "Neutral" }],
+      strengths: [],
+      weaknesses: [],
+    };
+
+    for (const invalid of [
+      { ...base, secret: "hidden" },
+      { ...base, sourceTranscriptSha256: "not-a-hash" },
+      { ...base, highlights: Array.from({ length: 9 }, () => "quote") },
+      { ...base, segments: [{ ...base.segments[0], sourceChunkIds: [] }] },
+      { ...base, audienceFit: [{ audience: "General", fit: "unknown", note: "No" }] },
+    ]) {
+      expect(parseWorkerResult(validTask({ dissection: invalid as never }))).toBeNull();
+    }
   });
 
   test("rejects accessors and symbols without evaluating rejected content", () => {

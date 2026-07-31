@@ -180,6 +180,12 @@ export type RetryInsightsInput =
       target: "insights";
       outputLanguage: SupportedLocale;
       preferenceSnapshot?: PreferenceSnapshot;
+    }
+  | {
+      taskId: string;
+      target: "dissection";
+      outputLanguage: SupportedLocale;
+      preferenceSnapshot?: never;
     };
 
 export type RetryInsightsWireRequest =
@@ -193,6 +199,11 @@ export type RetryInsightsWireRequest =
       target: "insights";
       output_language: SupportedLocale;
       preference_snapshot?: PreferenceSnapshot;
+    }
+  | {
+      task_id: string;
+      target: "dissection";
+      output_language: SupportedLocale;
     };
 
 export type RetryInsightsParseResult =
@@ -466,7 +477,9 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
       ["preferenceSnapshot"],
     ) ||
     taskId === null ||
-    (payload.target !== "summary" && payload.target !== "insights") ||
+    (payload.target !== "summary" &&
+      payload.target !== "insights" &&
+      payload.target !== "dissection") ||
     !isSupportedLocale(payload.outputLanguage)
   ) {
     return { kind: "invalid", taskId };
@@ -474,18 +487,18 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
 
   const hasSnapshot = hasOwn(payload, "preferenceSnapshot");
   if (
-    (payload.target === "summary" && hasSnapshot) ||
+    (payload.target !== "insights" && hasSnapshot) ||
     (hasSnapshot && !isRecord(payload.preferenceSnapshot))
   ) {
     return { kind: "invalid", taskId };
   }
 
-  if (payload.target === "summary") {
+  if (payload.target === "summary" || payload.target === "dissection") {
     return {
       kind: "valid",
       request: {
         task_id: taskId,
-        target: "summary",
+        target: payload.target,
         output_language: payload.outputLanguage,
       },
     };

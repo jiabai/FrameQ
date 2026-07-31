@@ -16,6 +16,8 @@ enum RetryInsightsTarget {
     Summary,
     #[serde(rename = "insights")]
     Insights,
+    #[serde(rename = "dissection")]
+    Dissection,
 }
 
 impl RetryInsightsTarget {
@@ -23,6 +25,7 @@ impl RetryInsightsTarget {
         match self {
             Self::Summary => "summary",
             Self::Insights => "insights",
+            Self::Dissection => "dissection",
         }
     }
 }
@@ -81,7 +84,7 @@ fn parse_retry_insights_request(
         .preference_snapshot
         .as_ref()
         .is_some_and(|snapshot| !snapshot.is_object())
-        || (wire.target == RetryInsightsTarget::Summary && wire.preference_snapshot.is_some())
+        || (wire.target != RetryInsightsTarget::Insights && wire.preference_snapshot.is_some())
     {
         return Err(INVALID_RETRY_PAYLOAD.to_string());
     }
@@ -230,6 +233,25 @@ mod tests {
     }
 
     #[test]
+    fn retry_dissection_request_uses_only_common_fields() {
+        let request = parse_retry_insights_request(serde_json::json!({
+            "task_id": "20260705-153012-douyin-demo",
+            "target": "dissection",
+            "output_language": "en-US"
+        }))
+        .expect("valid dissection request");
+
+        assert_eq!(
+            serde_json::to_value(request).expect("serialize dissection request"),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "dissection",
+                "output_language": "en-US"
+            })
+        );
+    }
+
+    #[test]
     fn retry_insights_request_rejects_missing_or_invalid_output_language() {
         for payload in [
             serde_json::json!({
@@ -274,6 +296,12 @@ mod tests {
             serde_json::json!({
                 "task_id": "20260705-153012-douyin-demo",
                 "target": "summary",
+                "output_language": "en-US",
+                "preference_snapshot": {}
+            }),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "dissection",
                 "output_language": "en-US",
                 "preference_snapshot": {}
             }),
@@ -339,6 +367,7 @@ mod tests {
             "summary": "private generated body",
             "insights": [],
             "transcript": null,
+            "dissection": null,
             "error": {
                 "code": "LLM_REQUEST_FAILED",
                 "message": "provider said prompt-secret https://secret.example",

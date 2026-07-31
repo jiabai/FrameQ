@@ -48,6 +48,8 @@ pub(crate) use history_deletion::HistoryDeletionState;
 
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
+#[cfg(test)]
+pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 5;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -323,7 +325,7 @@ mod tests {
         .expect("parse desktop worker contract");
 
         assert_eq!(
-            super::local_media_contract::LOCAL_MEDIA_CONTRACT_VERSION,
+            super::DESKTOP_WORKER_CONTRACT_VERSION,
             contract["contractVersion"]
                 .as_u64()
                 .expect("numeric desktop contract version") as u32

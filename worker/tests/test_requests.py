@@ -316,6 +316,31 @@ def test_retry_summary_request_rejects_preference_snapshot() -> None:
         )
 
 
+def test_retry_dissection_request_accepts_only_the_common_wire_fields() -> None:
+    request = parse_retry_insights_request(
+        {
+            "task_id": "task-1",
+            "target": "dissection",
+            "output_language": "zh-CN",
+        }
+    )
+
+    assert request.target == "dissection"
+    assert request.preference_snapshot is None
+
+
+def test_retry_dissection_request_rejects_preference_snapshot() -> None:
+    with pytest.raises(ValueError, match="Retry request payload was invalid"):
+        parse_retry_insights_request(
+            {
+                "task_id": "task-1",
+                "target": "dissection",
+                "output_language": "zh-CN",
+                "preference_snapshot": valid_preference_snapshot(),
+            }
+        )
+
+
 @pytest.mark.parametrize(
     "task_id",
     [

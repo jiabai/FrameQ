@@ -86,6 +86,7 @@ def test_process_result_serializes_task_artifacts_text_and_insights() -> None:
             "language": "zh-Hans",
             "engine": None,
         },
+        "dissection": None,
         "error": None,
     }
 
@@ -115,3 +116,10 @@ def test_partial_result_keeps_task_artifacts_and_structured_error() -> None:
         "message": "InsightFlow LLM configuration is missing.",
         "stage": "insights_generating",
     }
+
+
+def test_process_result_exposes_nullable_dissection_field() -> None:
+    serialized = ProcessResult(status=JobStage.COMPLETED).to_dict()
+
+    assert "dissection" in serialized
+    assert serialized["dissection"] is None

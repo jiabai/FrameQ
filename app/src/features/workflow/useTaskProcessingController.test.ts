@@ -120,6 +120,7 @@ function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
 }
 
 function createWorkerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
+  const { dissection, ...rest } = overrides;
   return {
     status: "completed",
     task_id: "active-task",
@@ -129,8 +130,9 @@ function createWorkerResult(overrides: Partial<WorkerResult> = {}): WorkerResult
     summary: "active summary",
     insights: [],
     transcript: { source: "asr", language: "Chinese", engine: "SenseVoice" },
+    dissection: dissection ?? null,
     error: null,
-    ...overrides,
+    ...rest,
   };
 }
 

@@ -1,5 +1,5 @@
 {
-  "contractVersion": 4,
+  "contractVersion": 5,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "FRAMEQ_PROGRESS ",
@@ -299,6 +299,7 @@
           "summary",
           "insights",
           "transcript",
+          "dissection",
           "error"
         ],
         "properties": {
@@ -361,6 +362,12 @@
                 "type": "string"
               },
               "preference_snapshot": {
+                "type": "string"
+              },
+              "dissection": {
+                "type": "string"
+              },
+              "dissection_md": {
                 "type": "string"
               }
             },
@@ -460,6 +467,163 @@
                         "type": "null"
                       }
                     ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "dissection": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "schemaVersion",
+                  "sourceTranscriptSha256",
+                  "sourceLanguage",
+                  "sourceChunks",
+                  "overallNarrative",
+                  "segments",
+                  "highlights",
+                  "reusableTemplate",
+                  "audienceFit",
+                  "strengths",
+                  "weaknesses"
+                ],
+                "properties": {
+                  "schemaVersion": {
+                    "const": 1
+                  },
+                  "sourceTranscriptSha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "sourceLanguage": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sourceChunks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": ["id", "startByte", "endByte", "sha256"],
+                      "properties": {
+                        "id": { "type": "integer", "minimum": 1 },
+                        "startByte": { "type": "integer", "minimum": 0 },
+                        "endByte": { "type": "integer", "minimum": 1 },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "overallNarrative": {
+                    "type": "object",
+                    "required": ["openingHook", "structureType", "turningPoint", "closingType"],
+                    "properties": {
+                      "openingHook": {
+                        "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+                      },
+                      "structureType": { "type": "string", "minLength": 1 },
+                      "turningPoint": {
+                        "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+                      },
+                      "closingType": {
+                        "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "segments": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id", "title", "sourceChunkIds", "coreClaim", "supportingPoints",
+                        "rhetoricalDevices", "rhythmNote", "reusablePattern", "riskFlags"
+                      ],
+                      "properties": {
+                        "id": { "type": "integer", "minimum": 1 },
+                        "title": { "type": "string", "minLength": 1 },
+                        "sourceChunkIds": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": { "type": "integer", "minimum": 1 }
+                        },
+                        "coreClaim": { "type": "string", "minLength": 1 },
+                        "supportingPoints": {
+                          "type": "array",
+                          "items": { "type": "string", "minLength": 1 }
+                        },
+                        "rhetoricalDevices": {
+                          "type": "array",
+                          "items": { "type": "string", "minLength": 1 }
+                        },
+                        "rhythmNote": { "type": "string", "minLength": 1 },
+                        "reusablePattern": { "type": "string", "minLength": 1 },
+                        "riskFlags": {
+                          "type": "array",
+                          "items": { "type": "string", "minLength": 1 }
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "highlights": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": { "type": "string", "minLength": 1 }
+                  },
+                  "reusableTemplate": {
+                    "type": "object",
+                    "required": ["name", "skeleton"],
+                    "properties": {
+                      "name": { "type": "string", "minLength": 1 },
+                      "skeleton": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 7,
+                        "items": { "type": "string", "minLength": 1 }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "audienceFit": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["audience", "fit", "note"],
+                      "properties": {
+                        "audience": { "type": "string", "minLength": 1 },
+                        "fit": { "type": "string", "enum": ["high", "medium", "low"] },
+                        "note": { "type": "string", "minLength": 1 }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "strengths": {
+                    "type": "array",
+                    "maxItems": 6,
+                    "items": { "type": "string", "minLength": 1 }
+                  },
+                  "weaknesses": {
+                    "type": "array",
+                    "maxItems": 6,
+                    "items": { "type": "string", "minLength": 1 }
                   }
                 },
                 "additionalProperties": false
@@ -966,7 +1130,8 @@
           "type": "string",
           "enum": [
             "summary",
-            "insights"
+            "insights",
+            "dissection"
           ]
         },
         "output_language": {
@@ -1024,6 +1189,7 @@
     "summary",
     "insights",
     "transcript",
+    "dissection",
     "error"
   ],
   "insightResult": {
@@ -1037,5 +1203,46 @@
       "sourceChunkId"
     ],
     "preferenceSnapshotArtifact": "preference_snapshot"
+  },
+  "dissectionResult": {
+    "schemaVersion": 1,
+    "artifacts": {
+      "json": {
+        "key": "dissection",
+        "path": "ai/dissection.json"
+      },
+      "markdown": {
+        "key": "dissection_md",
+        "path": "ai/dissection.md"
+      }
+    },
+    "callPlan": {
+      "version": 1,
+      "maxChunkCharacters": 2000,
+      "chunksPerMapCall": 4,
+      "reduceCalls": 1,
+      "maxRepairCalls": 1,
+      "maxTotalCalls": 6
+    },
+    "topLevelKeys": [
+      "schemaVersion",
+      "sourceTranscriptSha256",
+      "sourceLanguage",
+      "sourceChunks",
+      "overallNarrative",
+      "segments",
+      "highlights",
+      "reusableTemplate",
+      "audienceFit",
+      "strengths",
+      "weaknesses"
+    ],
+    "limits": {
+      "highlights": 8,
+      "strengths": 6,
+      "weaknesses": 6,
+      "templateStepsMinimum": 3,
+      "templateStepsMaximum": 7
+    }
   }
 }

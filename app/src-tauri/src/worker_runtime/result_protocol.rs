@@ -20,6 +20,7 @@ pub(crate) const TASK_RESULT_FIELDS: &[&str] = &[
     "summary",
     "insights",
     "transcript",
+    "dissection",
     "error",
 ];
 pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
@@ -33,6 +34,8 @@ pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
     "insights",
     "insights_md",
     "preference_snapshot",
+    "dissection",
+    "dissection_md",
 ];
 #[cfg(test)]
 pub(crate) const TASK_INSIGHT_FIELDS: &[&str] = &[
@@ -127,6 +130,81 @@ pub(crate) struct TaskTranscript {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct TaskDissectionSourceChunk {
+    pub(crate) id: u64,
+    pub(crate) start_byte: u64,
+    pub(crate) end_byte: u64,
+    pub(crate) sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct TaskDissectionNarrative {
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub(crate) opening_hook: Option<String>,
+    pub(crate) structure_type: String,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub(crate) turning_point: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub(crate) closing_type: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct TaskDissectionSegment {
+    pub(crate) id: u64,
+    pub(crate) title: String,
+    pub(crate) source_chunk_ids: Vec<u64>,
+    pub(crate) core_claim: String,
+    pub(crate) supporting_points: Vec<String>,
+    pub(crate) rhetorical_devices: Vec<String>,
+    pub(crate) rhythm_note: String,
+    pub(crate) reusable_pattern: String,
+    pub(crate) risk_flags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TaskDissectionTemplate {
+    pub(crate) name: String,
+    pub(crate) skeleton: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum TaskDissectionAudienceFitLevel {
+    High,
+    Medium,
+    Low,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TaskDissectionAudienceFit {
+    pub(crate) audience: String,
+    pub(crate) fit: TaskDissectionAudienceFitLevel,
+    pub(crate) note: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct TaskDissection {
+    pub(crate) schema_version: u32,
+    pub(crate) source_transcript_sha256: String,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub(crate) source_language: Option<String>,
+    pub(crate) source_chunks: Vec<TaskDissectionSourceChunk>,
+    pub(crate) overall_narrative: TaskDissectionNarrative,
+    pub(crate) segments: Vec<TaskDissectionSegment>,
+    pub(crate) highlights: Vec<String>,
+    pub(crate) reusable_template: TaskDissectionTemplate,
+    pub(crate) audience_fit: Vec<TaskDissectionAudienceFit>,
+    pub(crate) strengths: Vec<String>,
+    pub(crate) weaknesses: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TaskError {
     pub(crate) code: String,
@@ -148,6 +226,8 @@ pub(crate) struct TaskTerminalResult {
     pub(crate) insights: Vec<TaskInsight>,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub(crate) transcript: Option<TaskTranscript>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub(crate) dissection: Option<TaskDissection>,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub(crate) error: Option<TaskError>,
 }
@@ -242,12 +322,116 @@ fn validate_task_result(
         .error
         .as_ref()
         .is_none_or(|error| is_safe_error_code(&error.code));
+    let dissection_is_safe = result
+        .dissection
+        .as_ref()
+        .is_none_or(validate_task_dissection);
 
-    if error_is_coherent && artifacts_are_known && insights_are_safe && error_is_safe {
+    if error_is_coherent
+        && artifacts_are_known
+        && insights_are_safe
+        && error_is_safe
+        && dissection_is_safe
+    {
         Ok(result)
     } else {
         Err(TerminalResultError::Invalid)
     }
+}
+
+fn validate_task_dissection(dissection: &TaskDissection) -> bool {
+    if dissection.schema_version != 1
+        || !is_sha256(&dissection.source_transcript_sha256)
+        || dissection
+            .source_language
+            .as_ref()
+            .is_some_and(|language| !is_source_language(language))
+        || dissection.source_chunks.is_empty()
+        || dissection.segments.is_empty()
+        || dissection.highlights.len() > 8
+        || dissection.strengths.len() > 6
+        || dissection.weaknesses.len() > 6
+        || !(3..=7).contains(&dissection.reusable_template.skeleton.len())
+        || !is_non_blank(&dissection.overall_narrative.structure_type)
+        || !optional_is_non_blank(&dissection.overall_narrative.opening_hook)
+        || !optional_is_non_blank(&dissection.overall_narrative.turning_point)
+        || !optional_is_non_blank(&dissection.overall_narrative.closing_type)
+        || !is_non_blank(&dissection.reusable_template.name)
+        || !all_non_blank(&dissection.reusable_template.skeleton)
+        || !all_non_blank(&dissection.highlights)
+        || !all_non_blank(&dissection.strengths)
+        || !all_non_blank(&dissection.weaknesses)
+        || dissection
+            .audience_fit
+            .iter()
+            .any(|fit| !is_non_blank(&fit.audience) || !is_non_blank(&fit.note))
+    {
+        return false;
+    }
+
+    let mut previous_end = 0;
+    for (index, chunk) in dissection.source_chunks.iter().enumerate() {
+        if chunk.id != (index + 1) as u64
+            || chunk.start_byte < previous_end
+            || chunk.end_byte <= chunk.start_byte
+            || !is_sha256(&chunk.sha256)
+        {
+            return false;
+        }
+        previous_end = chunk.end_byte;
+    }
+
+    for (index, segment) in dissection.segments.iter().enumerate() {
+        if segment.id != (index + 1) as u64
+            || !is_non_blank(&segment.title)
+            || !is_non_blank(&segment.core_claim)
+            || !is_non_blank(&segment.rhythm_note)
+            || !is_non_blank(&segment.reusable_pattern)
+            || !all_non_blank(&segment.supporting_points)
+            || !all_non_blank(&segment.rhetorical_devices)
+            || !all_non_blank(&segment.risk_flags)
+            || segment.source_chunk_ids.is_empty()
+        {
+            return false;
+        }
+        let mut previous_id = 0;
+        for source_id in &segment.source_chunk_ids {
+            if *source_id <= previous_id || *source_id as usize > dissection.source_chunks.len() {
+                return false;
+            }
+            previous_id = *source_id;
+        }
+    }
+    true
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .as_bytes()
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+}
+
+fn is_source_language(value: &str) -> bool {
+    (2..=35).contains(&value.len())
+        && value.split('-').all(|part| {
+            !part.is_empty()
+                && part.len() <= 8
+                && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+        })
+}
+
+fn is_non_blank(value: &str) -> bool {
+    !value.trim().is_empty()
+}
+
+fn optional_is_non_blank(value: &Option<String>) -> bool {
+    value.as_ref().is_none_or(|text| is_non_blank(text))
+}
+
+fn all_non_blank(values: &[String]) -> bool {
+    values.iter().all(|value| is_non_blank(value))
 }
 
 #[derive(Deserialize)]
@@ -456,6 +640,16 @@ mod tests {
             ),
             Ok(ValidatedWorkerResult::Task(_))
         ));
+
+        let mut dissection = valid_task_value();
+        dissection["dissection"] = valid_dissection_value();
+        assert!(matches!(
+            parse_terminal_result(
+                WorkerOperation::RetryInsights,
+                &serde_json::to_vec(&dissection).expect("serialize dissection fixture"),
+            ),
+            Ok(ValidatedWorkerResult::Task(_))
+        ));
     }
 
     #[test]
@@ -479,6 +673,7 @@ mod tests {
             mutate_task(|value| value["insights"][0]["followUpQuestions"] = json!([1])),
             mutate_task(|value| value["insights"][0]["sourceChunkId"] = json!(-1)),
             mutate_task(|value| value["transcript"]["source"] = json!("generated")),
+            mutate_task(|value| value["dissection"] = valid_dissection_value_with_extra()),
             mutate_task(|value| value["status"] = json!("running")),
         ];
 
@@ -747,8 +942,58 @@ mod tests {
                 "language": "zh",
                 "engine": "SenseVoice"
             },
+            "dissection": null,
             "error": null
         })
+    }
+
+    fn valid_dissection_value() -> Value {
+        json!({
+            "schemaVersion": 1,
+            "sourceTranscriptSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceLanguage": "zh-CN",
+            "sourceChunks": [{
+                "id": 1,
+                "startByte": 0,
+                "endByte": 6,
+                "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }],
+            "overallNarrative": {
+                "openingHook": "question",
+                "structureType": "problem-solution",
+                "turningPoint": null,
+                "closingType": "call-to-action"
+            },
+            "segments": [{
+                "id": 1,
+                "title": "Opening",
+                "sourceChunkIds": [1],
+                "coreClaim": "A claim",
+                "supportingPoints": ["Evidence"],
+                "rhetoricalDevices": ["Question"],
+                "rhythmNote": "Fast",
+                "reusablePattern": "Question then answer",
+                "riskFlags": []
+            }],
+            "highlights": ["Source quote"],
+            "reusableTemplate": {
+                "name": "Template",
+                "skeleton": ["One", "Two", "Three"]
+            },
+            "audienceFit": [{
+                "audience": "Beginners",
+                "fit": "high",
+                "note": "Accessible"
+            }],
+            "strengths": ["Clear"],
+            "weaknesses": ["Brief"]
+        })
+    }
+
+    fn valid_dissection_value_with_extra() -> Value {
+        let mut value = valid_dissection_value();
+        value["secret"] = json!("hidden");
+        value
     }
 
     fn valid_source_identity_value() -> Value {

@@ -28,7 +28,7 @@ def load_contract() -> dict[str, object]:
 def test_contract_version_is_strictly_v4_while_process_video_stays_v3() -> None:
     contract = load_contract()
 
-    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 4
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 5
     assert LOCAL_MEDIA_CONTRACT_VERSION == 4
     assert PROCESS_VIDEO_CONTRACT_VERSION == 3
     assert (
@@ -267,6 +267,7 @@ def test_worker_result_contract_includes_task_artifacts() -> None:
     assert "summary" in contract["workerResultKeys"]
     assert "artifacts" in contract["workerResultKeys"]
     assert "transcript" in contract["workerResultKeys"]
+    assert "dissection" in contract["workerResultKeys"]
 
 
 def test_terminal_result_contract_closes_framing_operations_and_nested_shapes() -> None:
@@ -312,6 +313,8 @@ def test_terminal_result_contract_closes_framing_operations_and_nested_shapes() 
         "insights",
         "insights_md",
         "preference_snapshot",
+        "dissection",
+        "dissection_md",
     }
     assert task["properties"]["artifacts"]["additionalProperties"] is False
     insight_object = task["properties"]["insights"]["items"]
@@ -358,7 +361,10 @@ def test_retry_insights_request_schema_is_closed_and_machine_readable() -> None:
         "required": ["task_id", "target", "output_language"],
         "properties": {
             "task_id": {"type": "string"},
-            "target": {"type": "string", "enum": ["summary", "insights"]},
+            "target": {
+                "type": "string",
+                "enum": ["summary", "insights", "dissection"],
+            },
             "output_language": {
                 "type": "string",
                 "enum": ["zh-CN", "zh-TW", "en-US"],
@@ -379,6 +385,78 @@ def test_retry_insights_request_schema_is_closed_and_machine_readable() -> None:
     assert len(required) == len(set(required))
     assert set(required) <= set(properties)
     assert list(properties) == [*required, "preference_snapshot"]
+
+
+def test_dissection_result_contract_is_closed_and_bounded() -> None:
+    contract = load_contract()["dissectionResult"]
+
+    assert contract["schemaVersion"] == 1
+    assert contract["artifacts"] == {
+        "json": {"key": "dissection", "path": "ai/dissection.json"},
+        "markdown": {"key": "dissection_md", "path": "ai/dissection.md"},
+    }
+    assert contract["callPlan"] == {
+        "version": 1,
+        "maxChunkCharacters": 2000,
+        "chunksPerMapCall": 4,
+        "reduceCalls": 1,
+        "maxRepairCalls": 1,
+        "maxTotalCalls": 6,
+    }
+    assert contract["topLevelKeys"] == [
+        "schemaVersion",
+        "sourceTranscriptSha256",
+        "sourceLanguage",
+        "sourceChunks",
+        "overallNarrative",
+        "segments",
+        "highlights",
+        "reusableTemplate",
+        "audienceFit",
+        "strengths",
+        "weaknesses",
+    ]
+    assert contract["limits"] == {
+        "highlights": 8,
+        "strengths": 6,
+        "weaknesses": 6,
+        "templateStepsMinimum": 3,
+        "templateStepsMaximum": 7,
+    }
+
+
+def test_terminal_dissection_schema_closes_every_nested_object() -> None:
+    schema = load_contract()["terminalResults"]["schemas"]["task"]["properties"][
+        "dissection"
+    ]["oneOf"][1]
+
+    assert list(schema["properties"]) == load_contract()["dissectionResult"][
+        "topLevelKeys"
+    ]
+    assert schema["additionalProperties"] is False
+    for field in (
+        "sourceChunks",
+        "overallNarrative",
+        "segments",
+        "reusableTemplate",
+        "audienceFit",
+    ):
+        nested = schema["properties"][field]
+        if nested["type"] == "array":
+            nested = nested["items"]
+        assert nested["additionalProperties"] is False
+
+    assert schema["properties"]["schemaVersion"] == {"const": 1}
+    assert schema["properties"]["sourceLanguage"]["oneOf"][1] == {"type": "null"}
+    assert schema["properties"]["highlights"]["maxItems"] == 8
+    assert schema["properties"]["strengths"]["maxItems"] == 6
+    assert schema["properties"]["weaknesses"]["maxItems"] == 6
+    assert schema["properties"]["reusableTemplate"]["properties"]["skeleton"] == {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 7,
+        "items": {"type": "string", "minLength": 1},
+    }
 
 
 def test_progress_events_use_structured_codes_and_safe_args() -> None:

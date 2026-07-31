@@ -8,8 +8,8 @@ from typing import Literal
 from frameq_worker.output_language import OutputLanguage
 from frameq_worker.source_identity import SourceIdentity
 
-RetryInsightTarget = Literal["summary", "insights"]
-InsightGenerationTarget = Literal["all", "summary", "insights"]
+RetryInsightTarget = Literal["summary", "insights", "dissection"]
+InsightGenerationTarget = Literal["all", "summary", "insights", "dissection"]
 LocalMediaKind = Literal["video", "audio"]
 
 
@@ -209,6 +209,7 @@ class ProcessResult:
     summary: str = ""
     insights: list[Insight] = field(default_factory=list)
     transcript: TranscriptMetadata | None = None
+    dissection: dict[str, object] | None = None
     error: WorkerError | None = None
     artifact_payloads: dict[str, bytes | None] = field(default_factory=dict, repr=False)
 
@@ -222,5 +223,6 @@ class ProcessResult:
             "summary": self.summary,
             "insights": [insight.to_dict() for insight in self.insights],
             "transcript": self.transcript.to_dict() if self.transcript else None,
+            "dissection": self.dissection,
             "error": self.error.to_dict() if self.error else None,
         }

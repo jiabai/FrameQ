@@ -28,6 +28,7 @@ function renderDetails() {
       },
     ],
     transcript: null,
+    dissection: null,
     error: null,
   });
   const controller = {

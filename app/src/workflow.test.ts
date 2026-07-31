@@ -65,7 +65,7 @@ const SECOND_INSIGHT: WorkerResult["insights"][number] = {
 };
 
 function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
-  const { artifacts, ...rest } = overrides;
+  const { artifacts, dissection, ...rest } = overrides;
   return {
     status: "completed",
     task_id: TASK_ID,
@@ -75,6 +75,7 @@ function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
     summary: "# 要点总结",
     insights: [DEFAULT_INSIGHT],
     transcript: null,
+    dissection: dissection ?? null,
     error: null,
     ...rest,
   };
