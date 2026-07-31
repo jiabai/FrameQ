@@ -75,6 +75,7 @@ export function useTranscriptDetailController({
     transcriptDirty: transcriptDocument.transcriptDirty,
     transcriptLoading: transcriptDocument.transcriptLoading,
     transcriptSaving: transcriptDocument.transcriptSaving,
+    locatedTranscriptRange: transcriptDocument.locatedTranscriptRange,
     activeTranscriptSegmentId:
       transcriptReview.activeTranscriptSegmentId,
     editingTranscriptSegmentId:
@@ -117,6 +118,7 @@ export function useTranscriptDetailController({
       transcriptDocument.updateTranscriptSegmentDraft,
     updateFullTranscriptDraft:
       transcriptDocument.updateFullTranscriptDraft,
+    locateTranscriptByteRange: transcriptDocument.locateTranscriptByteRange,
   };
 }
 

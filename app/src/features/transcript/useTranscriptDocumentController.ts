@@ -20,6 +20,7 @@ import {
   updateTranscriptSegmentText,
 } from "../../transcriptReviewState";
 import type { WorkflowState } from "../../workflow";
+import { utf8ByteRangeToTextRange, type TranscriptTextRange } from "./transcriptByteRange";
 
 type UseTranscriptDocumentControllerOptions = {
   workflow: WorkflowState;
@@ -45,6 +46,7 @@ export function useTranscriptDocumentController({
   const [transcriptDirty, setTranscriptDirty] = useState(false);
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [transcriptSaving, setTranscriptSaving] = useState(false);
+  const [locatedTranscriptRange, setLocatedTranscriptRange] = useState<TranscriptTextRange | null>(null);
   const transcriptLoadTaskIdRef = useRef<string | null>(null);
   const currentTaskIdRef = useRef(workflow.taskId);
   currentTaskIdRef.current = workflow.taskId;
@@ -56,6 +58,7 @@ export function useTranscriptDocumentController({
       setTranscriptDraft(workflow.text);
       setTranscriptSegments([]);
       setTranscriptDirty(false);
+      setLocatedTranscriptRange(null);
       return;
     }
 
@@ -70,6 +73,7 @@ export function useTranscriptDocumentController({
     setTranscriptDraft(workflow.text);
     setTranscriptSegments([]);
     setTranscriptDirty(false);
+    setLocatedTranscriptRange(null);
     const taskId = workflow.taskId;
 
     async function loadDetail() {
@@ -112,6 +116,8 @@ export function useTranscriptDocumentController({
     workflow.text,
   ]);
 
+  useEffect(() => setLocatedTranscriptRange(null), [workflow.text]);
+
   const updateTranscriptSegmentDraft = useCallback(
     (segmentId: string, text: string) => {
       setTranscriptSegments((current) => {
@@ -128,6 +134,12 @@ export function useTranscriptDocumentController({
     setTranscriptDraft(text);
     setTranscriptDirty(true);
   }, []);
+
+  const locateTranscriptByteRange = useCallback((startByte: number, endByte: number) => {
+    const range = utf8ByteRangeToTextRange(transcriptDraft, startByte, endByte);
+    setLocatedTranscriptRange(range);
+    return range !== null;
+  }, [transcriptDraft]);
 
   const saveTranscriptDocument = useCallback(
     async (completeSuccessfulSave: CompleteSuccessfulSave) => {
@@ -191,8 +203,10 @@ export function useTranscriptDocumentController({
     transcriptDirty,
     transcriptLoading,
     transcriptSaving,
+    locatedTranscriptRange,
     saveTranscriptDocument,
     updateTranscriptSegmentDraft,
     updateFullTranscriptDraft,
+    locateTranscriptByteRange,
   };
 }

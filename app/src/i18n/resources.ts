@@ -2,6 +2,7 @@ import type { SupportedLocale } from "./locale";
 import { accountResources } from "./accountResources";
 import { asrModelResources } from "./asrModelResources";
 import { commonFeatureResources } from "./commonResources";
+import { dissectionResources } from "./dissectionResources";
 import { errorResources } from "./errorResources";
 import { historyResources } from "./historyResources";
 import { preferenceResources } from "./preferenceResources";
@@ -133,7 +134,7 @@ export const resources = {
     transcript: transcriptResources["zh-CN"],
     asrModel: asrModelResources["zh-CN"],
     workflow: workflowResources["zh-CN"],
-    synthesis: synthesisResources["zh-CN"],
+    synthesis: { ...synthesisResources["zh-CN"], ...dissectionResources["zh-CN"] },
     updates: updatesResources["zh-CN"],
     errors: errorResources["zh-CN"],
   },
@@ -240,7 +241,7 @@ export const resources = {
     transcript: transcriptResources["zh-TW"],
     asrModel: asrModelResources["zh-TW"],
     workflow: workflowResources["zh-TW"],
-    synthesis: synthesisResources["zh-TW"],
+    synthesis: { ...synthesisResources["zh-TW"], ...dissectionResources["zh-TW"] },
     updates: updatesResources["zh-TW"],
     errors: errorResources["zh-TW"],
   },
@@ -347,7 +348,7 @@ export const resources = {
     transcript: transcriptResources["en-US"],
     asrModel: asrModelResources["en-US"],
     workflow: workflowResources["en-US"],
-    synthesis: synthesisResources["en-US"],
+    synthesis: { ...synthesisResources["en-US"], ...dissectionResources["en-US"] },
     updates: updatesResources["en-US"],
     errors: errorResources["en-US"],
   },

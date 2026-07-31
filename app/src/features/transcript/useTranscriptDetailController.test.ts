@@ -247,6 +247,8 @@ describe("useTranscriptDetailController segment editing", () => {
       "handleTranscriptAudioPlay",
       "handleTranscriptTimeUpdate",
       "hasTranscriptSegments",
+      "locateTranscriptByteRange",
+      "locatedTranscriptRange",
       "openDetailTab",
       "playTranscriptSegment",
       "prepareTranscriptForTaskDeletion",

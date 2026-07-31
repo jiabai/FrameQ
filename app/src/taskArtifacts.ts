@@ -3,7 +3,7 @@ import type { SupportedLocale } from "./i18n/locale";
 import { resources } from "./i18n/resources";
 import type { TaskArtifactKey, WorkflowState } from "./workflowState";
 
-export type DetailTab = "summary" | "insights" | "transcript";
+export type DetailTab = "summary" | "insights" | "dissection" | "transcript";
 export type ExportTarget = DetailTab | "video" | "audio";
 
 export function getDetailText(
@@ -16,6 +16,30 @@ export function getDetailText(
   }
   if (tab === "summary") {
     return state.summary.trim();
+  }
+  if (tab === "dissection") {
+    const report = state.dissection;
+    if (!report) {
+      return "";
+    }
+    return [
+      report.overallNarrative.structureType,
+      ...report.segments.flatMap((segment) => [
+        segment.title,
+        segment.coreClaim,
+        ...segment.supportingPoints,
+        ...segment.rhetoricalDevices,
+        segment.rhythmNote,
+        segment.reusablePattern,
+        ...segment.riskFlags,
+      ]),
+      report.reusableTemplate.name,
+      ...report.reusableTemplate.skeleton,
+      ...report.highlights.slice(0, 8),
+      ...report.strengths.slice(0, 6),
+      ...report.weaknesses.slice(0, 6),
+      ...report.audienceFit.flatMap((item) => [item.audience, item.note]),
+    ].filter(Boolean).join("\n");
   }
   return state.insights
     .map((insight, index) => formatInsightForCopy(insight, index, locale))
@@ -55,6 +79,9 @@ export function getExportPath(tab: ExportTarget, state: WorkflowState): string |
   }
   if (tab === "summary") {
     return getTaskArtifactPath(state, "summary");
+  }
+  if (tab === "dissection") {
+    return getTaskArtifactPath(state, "dissection_md");
   }
   return getTaskArtifactPath(state, "insights_md") ?? getTaskArtifactPath(state, "insights");
 }

@@ -56,7 +56,7 @@ successful report.
 - [x] Task 3: Integrate retry execution and atomic task artifacts.
 - [x] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
 - [x] Task 5: Extend frontend protocols, workflow state, and history state.
-- [ ] Task 6: Add confirmation, report UI, stale handling, source location, and i18n.
+- [x] Task 6: Add confirmation, report UI, stale handling, source location, and i18n.
 - [ ] Task 7: Prove quota, cancellation, privacy, compatibility, packaging, and end-to-end behavior.
 - [ ] Task 8: Run completion gates, update durable docs, and archive this plan.
 
@@ -87,6 +87,9 @@ successful report.
 - JavaScript string length counts UTF-16 code units while Python counts Unicode code points. The
   confirmation call-plan calculator must explicitly iterate code points or emoji-containing
   transcripts can disagree with worker admission.
+- Full browser tests initially failed as a group because their shared Tauri bridge still emitted v4
+  terminal/history fixtures. Keeping those fixtures exact is part of the v5 contract migration; the
+  UI must not weaken strict decoding to accommodate stale test data.
 
 ## Decision Log
 
@@ -434,7 +437,7 @@ artifact commit. It must never clamp or silently drop invalid content.
   npm --prefix app run lint
   ```
 
-- [ ] Commit the frontend state slice:
+- [x] Commit the frontend state slice (`5e671f6`):
 
   ```powershell
   git add app/src
@@ -465,30 +468,30 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Modify: `app/src/App.tsx`
 - Modify: `app/src/App.css`
 
-- [ ] Add RED controller/UI tests for eligibility, quiet disabled states, confirmation without charge,
+- [x] Add RED controller/UI tests for eligibility, quiet disabled states, confirmation without charge,
   title/character/chunk/language/call range/quota/data disclosure, insufficient quota, over-limit
   transcript, generating/cancelling/error/retry, stale banner, report bounds, copy, file location,
   source location, keyboard use, narrow screens, and all three supported UI locales.
-- [ ] Create a focused dissection controller rather than putting source/report concerns into the
+- [x] Create a focused dissection controller rather than putting source/report concerns into the
   insights-preference owner. It may call the existing retry workflow but must never read or save
   insight preferences.
-- [ ] Render dissection as the current third card after summary and insights. Keep the layout ready
+- [x] Render dissection as the current third card after summary and insights. Keep the layout ready
   for the future order summary, insights, draft, dissection without rendering an inactive draft card.
-- [ ] Build the confirmation sheet from the frozen preview snapshot. The final Confirm action sends
+- [x] Build the confirmation sheet from the frozen preview snapshot. The final Confirm action sends
   only task ID, target, and output language; closing the sheet starts no worker and performs no
   checkout.
-- [ ] Render report fields as structured escaped React content. Do not use raw HTML. Enforce display
+- [x] Render report fields as structured escaped React content. Do not use raw HTML. Enforce display
   limits of at most 8 highlights and at most 6 strengths/weaknesses even though strict protocol
   decoding should already reject larger results.
-- [ ] Implement byte-range conversion in the transcript feature. It receives a Rust-validated
+- [x] Implement byte-range conversion in the transcript feature. It receives a Rust-validated
   `startByte`/`endByte`, converts UTF-8 offsets without splitting a code point, selects/scrolls the
   matching current transcript text, and exposes all cited chunks. It must not search for or map the
   splitter `id` through ASR segment IDs.
-- [ ] Disable locator controls whenever Rust returns stale or the current session has saved a changed
+- [x] Disable locator controls whenever Rust returns stale or the current session has saved a changed
   transcript. Preserve View, Copy, Locate File, and Redissection actions.
-- [ ] Add complete `zh-CN`, `zh-TW`, and `en-US` copy, including truthful supplier disclosure,
+- [x] Add complete `zh-CN`, `zh-TW`, and `en-US` copy, including truthful supplier disclosure,
   non-refundable completed calls, stale warning, fixed safe failures, and call range formatting.
-- [ ] Run and require PASS:
+- [x] Run and require PASS (663 full frontend tests, lint, and production build):
 
   ```powershell
   npm --prefix app test -- useTranscriptDissectionController.test.ts TranscriptDissectionConfirmationSheet.test.tsx DissectionReport.test.tsx transcriptByteRange.test.ts transcriptControllerBoundary.test.ts TaskWorkspaces.test.tsx

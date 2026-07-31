@@ -56,6 +56,8 @@ function historyDetailResponse(task: typeof firstHistoryTask) {
     summary: task.summary,
     transcript: task.transcript,
     insights: task.insights,
+    dissection: null,
+    dissection_source_status: null,
   };
 }
 
@@ -151,6 +153,7 @@ const defaultResponses: Record<string, unknown> = {
     summary: "",
     insights: [],
     transcript: null,
+    dissection: null,
     error: null,
   },
   cancel_process: { status: "cancelling", error: null },
@@ -287,6 +290,7 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
                 sourceChunkId: 1
               }] : [],
               transcript: null,
+              dissection: null,
               error: null
             });
           }

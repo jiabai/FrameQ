@@ -7,12 +7,15 @@ import type { WorkflowState } from "../../workflow";
 import type { TranscriptDetailController } from "../transcript/useTranscriptDetailController";
 import { useModalFocus } from "../modal/useModalFocus";
 import { MarkdownContent } from "./MarkdownContent";
+import { DissectionReport } from "./DissectionReport";
 
 type AiResultDetailSheetProps = {
   actionNotice: UiMessage | null;
   controller: TranscriptDetailController;
   workflow: WorkflowState;
   onOpenDirectionEditor: () => void | Promise<void>;
+  onOpenDissectionConfirmation?: () => void;
+  onLocateDissectionChunks?: (chunkIds: number[]) => void;
 };
 
 export function AiResultDetailSheet({
@@ -20,6 +23,8 @@ export function AiResultDetailSheet({
   controller,
   workflow,
   onOpenDirectionEditor,
+  onOpenDissectionConfirmation = () => undefined,
+  onLocateDissectionChunks = () => undefined,
 }: AiResultDetailSheetProps) {
   const { t, i18n } = useTranslation("synthesis");
   const locale = isSupportedLocale(i18n.resolvedLanguage)
@@ -28,14 +33,17 @@ export function AiResultDetailSheet({
   const renderedActionNotice = renderUiMessage(locale, actionNotice);
   const { detailTab, closeDetail, copyDetail, exportDetail, exportPath } = controller;
   const resultDetailModalRef = useModalFocus<HTMLElement>(
-    detailTab === "summary" || detailTab === "insights",
+    detailTab === "summary" || detailTab === "insights" || detailTab === "dissection",
   );
-  if (detailTab !== "summary" && detailTab !== "insights") {
+  if (detailTab !== "summary" && detailTab !== "insights" && detailTab !== "dissection") {
     return null;
   }
 
-  const title =
-    detailTab === "summary" ? t("detail.summaryTitle") : t("detail.insightsTitle");
+  const title = detailTab === "summary"
+    ? t("detail.summaryTitle")
+    : detailTab === "insights"
+      ? t("detail.insightsTitle")
+      : t("dissection.card.title");
   const questionList = new Intl.ListFormat(i18n.resolvedLanguage ?? "en-US", {
     style: "long",
     type: "conjunction",
@@ -77,6 +85,12 @@ export function AiResultDetailSheet({
                 <span>{t("detail.tryAnotherDirection")}</span>
               </button>
             ) : null}
+            {detailTab === "dissection" ? (
+              <button type="button" onClick={onOpenDissectionConfirmation}>
+                <RotateCcw size={16} />
+                <span>{t("action.retry")}</span>
+              </button>
+            ) : null}
             <button type="button" onClick={exportDetail} disabled={!exportPath}>
               <Download size={16} />
               <span>{t("detail.export")}</span>
@@ -93,6 +107,13 @@ export function AiResultDetailSheet({
             <MarkdownContent
               markdown={workflow.summary}
               emptyText={t("detail.summaryEmpty")}
+            />
+          ) : detailTab === "dissection" && workflow.dissection ? (
+            <DissectionReport
+              report={workflow.dissection}
+              stale={workflow.dissectionStale}
+              sourceLocationDisabled={controller.transcriptDirty}
+              onLocateChunks={onLocateDissectionChunks}
             />
           ) : workflow.insights.length > 0 ? (
             <ol className="insight-detail-list">

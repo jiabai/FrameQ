@@ -1,4 +1,4 @@
-import { AlertTriangle, Lightbulb, ListChecks, LoaderCircle, X } from "lucide-react";
+import { AlertTriangle, Lightbulb, ListChecks, LoaderCircle, ScanText, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { TaskWorkspaceViewModel, AiTargetViewModel } from "../../taskWorkspaceViewModel";
@@ -12,6 +12,7 @@ type AiGenerationWorkspaceProps = {
   notice?: UiMessage | null;
   onSummaryAction: () => void;
   onInsightsAction: () => void;
+  onDissectionAction?: () => void;
   onViewTarget: (target: InsightRetryTarget) => void;
   onCancel: () => void;
 };
@@ -22,6 +23,7 @@ export function AiGenerationWorkspace({
   notice = null,
   onSummaryAction,
   onInsightsAction,
+  onDissectionAction = () => undefined,
   onViewTarget,
   onCancel,
 }: AiGenerationWorkspaceProps) {
@@ -93,6 +95,18 @@ export function AiGenerationWorkspace({
           onAction={onInsightsAction}
           onView={() => onViewTarget("insights")}
         />
+        <AiTargetCard
+          target={model.dissection}
+          locale={locale}
+          title={t("dissection.card.title")}
+          description={t("dissection.card.description")}
+          creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
+          blocked={Boolean(blocker)}
+          stale={model.dissectionStale}
+          icon={<ScanText size={18} aria-hidden="true" />}
+          onAction={onDissectionAction}
+          onView={() => onViewTarget("dissection")}
+        />
       </div>
 
       {model.cancellation.visible ? (
@@ -121,6 +135,7 @@ type AiTargetCardProps = {
   description: string;
   creditsSummary: string;
   blocked: boolean;
+  stale?: boolean;
   icon: React.ReactNode;
   onAction: () => void;
   onView: () => void;
@@ -133,6 +148,7 @@ function AiTargetCard({
   description,
   creditsSummary,
   blocked,
+  stale = false,
   icon,
   onAction,
   onView,
@@ -159,6 +175,7 @@ function AiTargetCard({
         </div>
         <span className="ai-target-status">{t(`status.${target.status}`)}</span>
       </div>
+      {stale ? <p className="dissection-card-stale">{t("dissection.card.stale")}</p> : null}
       {target.errorCode ? (
         <p className="ai-target-error">
           {timeoutGuidance ?? t("target.error", { code: target.errorCode })}
@@ -170,9 +187,16 @@ function AiTargetCard({
           <LoaderCircle size={17} className="spin" aria-label={t("status.generating")} />
         ) : null}
         {ready ? (
-          <button type="button" className="secondary-button" onClick={onView}>
-            {t("action.view")}
-          </button>
+          <>
+            <button type="button" className="secondary-button" onClick={onView}>
+              {t("action.view")}
+            </button>
+            {target.target === "dissection" ? (
+              <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={blocked}>
+                {t("action.retry")}
+              </button>
+            ) : null}
+          </>
         ) : (
           <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={disabled}>
             {actionLabel}

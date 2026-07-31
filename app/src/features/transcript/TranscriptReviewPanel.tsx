@@ -7,7 +7,7 @@ import {
   Pencil,
   Play,
 } from "lucide-react";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { clampAudioTime, formatAudioClock } from "../../audioReviewBarState";
@@ -54,6 +54,7 @@ export function TranscriptReviewPanel({
     transcriptDirty,
     transcriptLoading,
     transcriptSaving,
+    locatedTranscriptRange,
     activeTranscriptSegmentId,
     editingTranscriptSegmentId,
     transcriptAudioCurrentTime,
@@ -82,6 +83,32 @@ export function TranscriptReviewPanel({
     updateFullTranscriptDraft,
   } = controller;
   const transcriptEditButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const fullTranscriptRef = useRef<HTMLTextAreaElement | null>(null);
+  const locatedSourceText = locatedTranscriptRange
+    ? transcriptDraft.slice(locatedTranscriptRange.start, locatedTranscriptRange.end)
+    : "";
+  const locatedSegmentId = useMemo(
+    () => transcriptSegments.find((segment) =>
+      locatedSourceText.includes(segment.text.trim()) ||
+      segment.text.includes(locatedSourceText.slice(0, 24))
+    )?.id ?? null,
+    [locatedSourceText, transcriptSegments],
+  );
+  useEffect(() => {
+    if (!locatedTranscriptRange) {
+      return;
+    }
+    if (fullTranscriptRef.current) {
+      fullTranscriptRef.current.focus();
+      fullTranscriptRef.current.setSelectionRange(
+        locatedTranscriptRange.start,
+        locatedTranscriptRange.end,
+      );
+      fullTranscriptRef.current.scrollIntoView({ block: "center" });
+      return;
+    }
+    transcriptSegmentRefs.current[locatedSegmentId ?? ""]?.scrollIntoView({ block: "center" });
+  }, [locatedSegmentId, locatedTranscriptRange, transcriptSegmentRefs]);
   const sourceLabel = transcriptSource
     ? transcriptSource.kind === "subtitle"
       ? transcriptSource.language
@@ -174,7 +201,7 @@ export function TranscriptReviewPanel({
                 ref={(element) => {
                   transcriptSegmentRefs.current[segment.id] = element;
                 }}
-                className={`transcript-segment ${activeTranscriptSegmentId === segment.id ? "active" : ""} ${editingTranscriptSegmentId === segment.id ? "editing" : ""}`}
+                className={`transcript-segment ${activeTranscriptSegmentId === segment.id ? "active" : ""} ${editingTranscriptSegmentId === segment.id ? "editing" : ""} ${locatedSegmentId === segment.id ? "dissection-source" : ""}`}
               >
                 <div className="transcript-segment-header">
                   <button
@@ -249,6 +276,7 @@ export function TranscriptReviewPanel({
           </div>
         ) : (
           <textarea
+            ref={fullTranscriptRef}
             className="transcript-full-editor"
             value={transcriptDraft}
             onFocus={() => beginTranscriptSegmentEdit("full-text")}

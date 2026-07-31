@@ -34,6 +34,8 @@ import { useHistoryController } from "./features/history/useHistoryController";
 import { InsightPreferenceFlow } from "./features/insightPreferences/InsightPreferenceFlow";
 import { OutputLanguageField } from "./features/insightPreferences/OutputLanguageField";
 import { useInsightGenerationController } from "./features/insightPreferences/useInsightGenerationController";
+import { TranscriptDissectionConfirmationSheet } from "./features/dissection/TranscriptDissectionConfirmationSheet";
+import { useTranscriptDissectionController } from "./features/dissection/useTranscriptDissectionController";
 import { AiGenerationWorkspace } from "./features/results/AiGenerationWorkspace";
 import { AiResultDetailSheet } from "./features/results/AiResultDetailSheet";
 import { TaskStatusBanner } from "./features/results/TaskStatusBanner";
@@ -234,6 +236,26 @@ function App() {
     retryInsightGeneration,
     aiBlockerMessage: accountAiBlockerMessage,
   });
+  const dissectionController = useTranscriptDissectionController({
+    workflow,
+    account,
+    openAccountPanel,
+    outputLanguage: resolvedLocale,
+    retryInsightGeneration,
+  });
+  const locateDissectionChunks = useCallback((chunkIds: number[]) => {
+    if (!workflow.dissection || workflow.dissectionStale || transcriptDetailController.transcriptDirty) {
+      return;
+    }
+    const chunk = workflow.dissection.sourceChunks.find((candidate) =>
+      chunkIds.includes(candidate.id)
+    );
+    if (!chunk) {
+      return;
+    }
+    closeDetail();
+    transcriptDetailController.locateTranscriptByteRange(chunk.startByte, chunk.endByte);
+  }, [closeDetail, transcriptDetailController, workflow.dissection, workflow.dissectionStale]);
   const summaryModalRef = useModalFocus<HTMLElement>(summaryConfirmOpen);
   resetInsightGenerationUiRef.current = resetInsightGenerationUi;
   const handleHistoryItemSelected = useCallback(
@@ -514,11 +536,10 @@ function App() {
                   notice={aiActionNotice}
                   onSummaryAction={openSummaryConfirmation}
                   onInsightsAction={() => void openInsightPreferenceFlow()}
+                  onDissectionAction={dissectionController.openConfirmation}
                   onViewTarget={(target) => {
                     setActionNotice(null);
-                    if (target !== "dissection") {
-                      openDetailTab(target);
-                    }
+                    openDetailTab(target);
                   }}
                   onCancel={() => void cancelCurrentProcessing()}
                 />
@@ -657,11 +678,21 @@ function App() {
         />
       ) : null}
 
+      {dissectionController.preview ? (
+        <TranscriptDissectionConfirmationSheet
+          preview={dissectionController.preview}
+          onCancel={dissectionController.closeConfirmation}
+          onConfirm={dissectionController.confirmGeneration}
+        />
+      ) : null}
+
       <AiResultDetailSheet
         actionNotice={actionNotice}
         controller={transcriptDetailController}
         workflow={workflow}
         onOpenDirectionEditor={openDirectionEditorFromDetail}
+        onOpenDissectionConfirmation={dissectionController.openConfirmation}
+        onLocateDissectionChunks={locateDissectionChunks}
       />
 
       <HistorySheet

@@ -159,7 +159,7 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("Cloud AI");
     expect(markup).not.toContain(">本地完成</span>");
     expect(markup).not.toContain(">可选</span>");
-    expect(markup.match(/class="ai-target-status"/g)).toHaveLength(2);
+    expect(markup.match(/class="ai-target-status"/g)).toHaveLength(3);
   });
 
   test("keeps meaningful workspace statuses for active and constrained states", () => {
@@ -360,7 +360,7 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("来源：本地 ASR");
   });
 
-  test("AI workspace has independent summary and inspiration targets without a mindmap target", () => {
+  test("AI workspace has independent summary, inspiration, and dissection targets without a mindmap target", () => {
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
     const markup = renderToStaticMarkup(
@@ -380,13 +380,15 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("要点总结");
     expect(markup).toContain("同时生成 Mermaid 思维导图文件");
     expect(markup).toContain('data-ai-target="insights"');
-    expect(markup.match(/<article class="ai-target-card/g)).toHaveLength(2);
+    expect(markup.match(/<article class="ai-target-card/g)).toHaveLength(3);
+    expect(markup).toContain('data-ai-target="dissection"');
+    expect(markup).toContain("文字稿解剖");
     expect(markup).toContain("启发灵感");
     expect(markup).toContain("AI Credits 余额：8");
     expect(markup).toContain("一次智能提炼可能消耗多个 Credits。");
     expect(markup).not.toContain("当前可用 8 次");
     expect(markup).not.toContain('data-ai-target="mindmap"');
-    expect(markup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(2);
+    expect(markup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(3);
     expect(markup).not.toContain('class="primary-button"');
   });
 
