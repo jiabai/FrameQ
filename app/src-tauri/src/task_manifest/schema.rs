@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
-const SAFE_ARTIFACT_KEYS: [&str; 10] = [
+const SAFE_ARTIFACT_KEYS: [&str; 12] = [
     "video",
     "audio",
     "transcript_txt",
@@ -17,6 +17,8 @@ const SAFE_ARTIFACT_KEYS: [&str; 10] = [
     "insights",
     "insights_md",
     "preference_snapshot",
+    "dissection",
+    "dissection_md",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +29,9 @@ pub(crate) enum TaskArtifact {
     Segments,
     Summary,
     Insights,
+    Dissection,
+    #[allow(dead_code)]
+    DissectionMd,
 }
 
 impl TaskArtifact {
@@ -38,6 +43,8 @@ impl TaskArtifact {
             Self::Segments => "segments",
             Self::Summary => "summary",
             Self::Insights => "insights",
+            Self::Dissection => "dissection",
+            Self::DissectionMd => "dissection_md",
         }
     }
 }
@@ -385,6 +392,14 @@ pub(super) fn validate_relative_artifact_path(
 ) -> Result<PathBuf, String> {
     if !SAFE_ARTIFACT_KEYS.contains(&field) {
         return Err("Task manifest contains an unsupported artifact field.".to_string());
+    }
+    let fixed_dissection_path = match field {
+        "dissection" => Some("ai/dissection.json"),
+        "dissection_md" => Some("ai/dissection.md"),
+        _ => None,
+    };
+    if fixed_dissection_path.is_some_and(|expected| raw_path != expected) {
+        return Err("Dissection artifact path is invalid.".to_string());
     }
     let trimmed = raw_path.trim();
     if trimmed.is_empty() {

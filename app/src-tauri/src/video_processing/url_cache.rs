@@ -95,6 +95,10 @@ fn cached_process_result_from_task(
     };
     let insights = task.read_insights()?;
     let transcript = task.transcript_metadata();
+    let dissection = task.read_dissection()?.and_then(|view| {
+        (view.source_status == task_manifest::DissectionSourceStatus::Current)
+            .then_some(view.report)
+    });
     let status = task.status().to_string();
     let task_id = task.task_id().to_string();
     let created_at = task.created_at().to_string();
@@ -113,6 +117,7 @@ fn cached_process_result_from_task(
         summary,
         insights,
         transcript,
+        dissection,
         error,
     });
     let Ok(result) = TaskTerminalResult::from_value(value) else {

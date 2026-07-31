@@ -1,5 +1,6 @@
 mod access;
 mod coordinator;
+mod dissection;
 mod schema;
 mod source_identity;
 mod storage;
@@ -15,6 +16,7 @@ pub(crate) const SOURCE_PRIVACY_MIGRATION_VERSION: u64 = 2;
 
 #[allow(unused_imports)]
 pub(crate) use access::{SupportedTask, TaskEditSession, TaskScan};
+pub(crate) use dissection::{DissectionSourceStatus, DissectionView};
 #[allow(unused_imports)]
 pub(crate) use schema::{
     parse_insight_view, parse_insights_payload, InsightView, SafeTaskError, TaskArtifact,

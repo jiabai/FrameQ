@@ -231,6 +231,10 @@ mod tests {
         let other_task_id = "20260712-120001-youtube-abcdefghijk";
         let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
         let other_task_dir = write_supported_task(&output_root, other_task_id, "abcdefghijk");
+        fs::create_dir_all(task_dir.join("ai")).expect("create task ai dir");
+        fs::write(task_dir.join("ai/dissection.json"), b"{}").expect("write dissection json");
+        fs::write(task_dir.join("ai/dissection.md"), b"# report")
+            .expect("write dissection markdown");
         let playback_root = cache_root.join(".frameq-audio-review");
         let task_cache = playback_root.join(task_id);
         let other_cache = playback_root.join(other_task_id);

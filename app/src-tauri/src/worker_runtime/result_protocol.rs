@@ -339,7 +339,7 @@ fn validate_task_result(
     }
 }
 
-fn validate_task_dissection(dissection: &TaskDissection) -> bool {
+pub(crate) fn validate_task_dissection(dissection: &TaskDissection) -> bool {
     if dissection.schema_version != 1
         || !is_sha256(&dissection.source_transcript_sha256)
         || dissection

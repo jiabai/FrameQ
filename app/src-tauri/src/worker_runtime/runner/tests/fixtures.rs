@@ -238,7 +238,7 @@ pub(super) fn terminal_fixture_command(require_stdin: bool) -> (PathBuf, Vec<Str
 }
 
 pub(super) fn valid_task_stdout() -> &'static str {
-    r#"{"status":"completed","task_id":"safe-task","task_dir":null,"artifacts":{},"text":"","summary":"","insights":[],"transcript":null,"error":null}"#
+    r#"{"status":"completed","task_id":"safe-task","task_dir":null,"artifacts":{},"text":"","summary":"","insights":[],"transcript":null,"dissection":null,"error":null}"#
 }
 
 pub(super) fn wait_until_active(lane: &WorkerLane) {

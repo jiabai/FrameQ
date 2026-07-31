@@ -33,6 +33,7 @@ struct ProcessVideoResult {
     summary: String,
     insights: Vec<task_manifest::InsightView>,
     transcript: Option<task_manifest::TranscriptMetadata>,
+    dissection: Option<crate::worker_runtime::TaskDissection>,
     error: Option<WorkerError>,
 }
 

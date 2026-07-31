@@ -54,7 +54,7 @@ successful report.
 - [x] Task 1: Version and test the closed cross-language contract.
 - [x] Task 2: Build deterministic chunks, call planning, generation, and strict validation.
 - [x] Task 3: Integrate retry execution and atomic task artifacts.
-- [ ] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
+- [x] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
 - [ ] Task 5: Extend frontend protocols, workflow state, and history state.
 - [ ] Task 6: Add confirmation, report UI, stale handling, source location, and i18n.
 - [ ] Task 7: Prove quota, cancellation, privacy, compatibility, packaging, and end-to-end behavior.
@@ -352,24 +352,24 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Modify: `app/src-tauri/src/history.rs`
 - Modify: `app/src-tauri/src/history_deletion.rs`
 
-- [ ] Add RED Rust tests for exact structured decoding, size/count limits, artifact keys, terminal
+- [x] Add RED Rust tests for exact structured decoding, size/count limits, artifact keys, terminal
   fallback shape, retry target parsing, and the absence of dissection preference fields.
-- [ ] Add deny-unknown-fields Rust DTOs matching the contract. Apply field length, array length,
+- [x] Add deny-unknown-fields Rust DTOs matching the contract. Apply field length, array length,
   enum, hash, range, and reference validation before a worker result crosses the command boundary.
-- [ ] Add `TaskArtifact::Dissection` and `TaskArtifact::DissectionMd` with only the fixed relative
+- [x] Add `TaskArtifact::Dissection` and `TaskArtifact::DissectionMd` with only the fixed relative
   paths. Reuse all existing canonicalization, symlink, task-root, and regular-file checks.
-- [ ] Implement one task-manifest dissection capability that reads the official transcript bytes,
+- [x] Implement one task-manifest dissection capability that reads the official transcript bytes,
   verifies full SHA-256, validates every source range and slice SHA-256, and returns a safe report
   view plus `source_status: "current" | "stale"`. A stale report remains readable but exposes no
   enabled locators. A structurally corrupt declared artifact returns the existing fixed safe task
   error instead of partial content or parser diagnostics.
-- [ ] Invoke that capability after a successful dissection retry before returning to the frontend,
+- [x] Invoke that capability after a successful dissection retry before returning to the frontend,
   and from history-detail loading. Keep history-list loading manifest-only.
-- [ ] Update every cached/synthetic terminal result to include `dissection: null`; restore a valid
+- [x] Update every cached/synthetic terminal result to include `dissection: null`; restore a valid
   existing report only through supported task access, never by unvalidated path reads.
-- [ ] Extend history deletion tests so both fixed dissection files are deleted with the task and no
+- [x] Extend history deletion tests so both fixed dissection files are deleted with the task and no
   path supplied from a report can expand deletion scope.
-- [ ] Run and require PASS:
+- [x] Run and require PASS:
 
   ```powershell
   cargo fmt --manifest-path app/src-tauri/Cargo.toml --check

@@ -109,6 +109,7 @@ fn worker_failure_result(
         "summary": "",
         "insights": [],
         "transcript": null,
+        "dissection": null,
         "error": {
             "code": code,
             "message": message,
@@ -144,6 +145,7 @@ mod tests {
             "summary": "private summary",
             "insights": [],
             "transcript": null,
+            "dissection": null,
             "error": null
         }))
         .expect("valid task result")

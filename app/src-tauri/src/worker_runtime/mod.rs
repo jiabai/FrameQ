@@ -9,8 +9,9 @@ pub(crate) use facade::{AsrModelDownloadJob, TaskWorkerFacade, WorkerJob};
 #[cfg(test)]
 pub(crate) use result_protocol::SourceIdentityFailure;
 pub(crate) use result_protocol::{
-    ModelDownloadTerminalResult, SourceIdentityTerminalResult, TaskTerminalResult,
-    ValidatedWorkerResult, WORKER_PROTOCOL_MESSAGE, WORKER_PROTOCOL_VIOLATION,
+    validate_task_dissection, ModelDownloadTerminalResult, SourceIdentityTerminalResult,
+    TaskDissection, TaskTerminalResult, ValidatedWorkerResult, WORKER_PROTOCOL_MESSAGE,
+    WORKER_PROTOCOL_VIOLATION,
 };
 #[cfg(test)]
 pub(crate) use runner::WorkerExitSummary;

@@ -1,5 +1,6 @@
 use super::{
     coordinator::{acquire_task, try_acquire_task, TaskLease},
+    dissection::build_dissection_view,
     schema::{
         parse_insights_payload, validate_relative_artifact_path, InsightView, SafeTaskError,
         TaskArtifact, TaskManifest, TaskSourceSummary, TranscriptMetadata,
@@ -204,6 +205,21 @@ impl SupportedTask {
             return Ok(vec![]);
         };
         Ok(parse_insights_payload(&payload))
+    }
+
+    pub(crate) fn read_dissection(&self) -> Result<Option<super::DissectionView>, String> {
+        let Some(report_path) = self.validated_existing_artifact_path(TaskArtifact::Dissection)?
+        else {
+            return Ok(None);
+        };
+        let transcript_path = self.required_existing_artifact_path(TaskArtifact::TranscriptTxt)?;
+        let report_bytes = fs::read(report_path)
+            .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
+        let transcript_bytes = fs::read(transcript_path)
+            .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
+        let report = serde_json::from_slice(&report_bytes)
+            .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
+        build_dissection_view(report, &transcript_bytes).map(Some)
     }
 
     pub(crate) fn validated_existing_artifact_path(

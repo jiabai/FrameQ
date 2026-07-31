@@ -51,6 +51,8 @@ pub(crate) struct HistoryDetailView {
     pub(crate) summary: String,
     pub(crate) transcript: Option<task_manifest::TranscriptMetadata>,
     pub(crate) insights: Vec<task_manifest::InsightView>,
+    pub(crate) dissection: Option<crate::worker_runtime::TaskDissection>,
+    pub(crate) dissection_source_status: Option<task_manifest::DissectionSourceStatus>,
 }
 
 #[tauri::command]
@@ -161,6 +163,7 @@ pub(crate) fn load_history_detail_from_output_root(
         .read_text_artifact(task_manifest::TaskArtifact::Summary)?
         .unwrap_or_default();
     let insights = task.read_insights()?;
+    let dissection = task.read_dissection()?;
     Ok(HistoryDetailView {
         task_id: task.task_id().to_string(),
         source: task.source(),
@@ -176,6 +179,8 @@ pub(crate) fn load_history_detail_from_output_root(
         summary,
         transcript: task.transcript_metadata(),
         insights,
+        dissection: dissection.as_ref().map(|view| view.report.clone()),
+        dissection_source_status: dissection.map(|view| view.source_status),
     })
 }
 
@@ -661,6 +666,55 @@ mod tests {
         )
         .expect("load detail");
         assert!(detail.insights.is_empty());
+    }
+
+    #[test]
+    fn history_detail_restores_dissection_and_marks_changed_transcript_stale() {
+        let output_root = temp_dir("history-dissection-integrity");
+        let task_id = "20260731-120000-youtube-abcdefghijk";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::create_dir_all(task_dir.join("ai")).expect("create ai dir");
+        fs::write(task_dir.join("transcript/transcript.txt"), b"abc").expect("write transcript");
+        fs::write(
+            task_dir.join("ai/dissection.json"),
+            r#"{"schemaVersion":1,"sourceTranscriptSha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","sourceLanguage":null,"sourceChunks":[{"id":1,"startByte":0,"endByte":3,"sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}],"overallNarrative":{"openingHook":null,"structureType":"statement","turningPoint":null,"closingType":null},"segments":[{"id":1,"title":"Opening","sourceChunkIds":[1],"coreClaim":"abc","supportingPoints":[],"rhetoricalDevices":[],"rhythmNote":"Brief","reusablePattern":"Direct","riskFlags":[]}],"highlights":["abc"],"reusableTemplate":{"name":"Direct","skeleton":["A","B","C"]},"audienceFit":[],"strengths":["Direct"],"weaknesses":["Brief"]}"#,
+        )
+        .expect("write report");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{"schema_version":3,"source_privacy_migration_version":2,"source_privacy_quarantined":false,"task_id":"{task_id}","created_at":"2026-07-31T12:00:00Z","source_url":"https://www.youtube.com/watch?v=abcdefghijk","source_identity":{{"version":1,"platform":"youtube","stable_id":"abcdefghijk","effective_part":null,"canonical_url":"https://www.youtube.com/watch?v=abcdefghijk"}},"platform":"youtube","status":"completed","artifacts":{{"transcript_txt":"transcript/transcript.txt","dissection":"ai/dissection.json","dissection_md":"ai/dissection.md"}},"error":null,"text_preview":"abc","insights_count":0}}"#
+            ),
+        )
+        .expect("write manifest");
+
+        let current = load_history_detail_from_output_root(
+            &output_root,
+            HistoryDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect("load current report");
+        assert!(current.dissection.is_some());
+        assert_eq!(
+            current.dissection_source_status,
+            Some(task_manifest::DissectionSourceStatus::Current)
+        );
+
+        fs::write(task_dir.join("transcript/transcript.txt"), b"abd").expect("edit transcript");
+        let stale = load_history_detail_from_output_root(
+            &output_root,
+            HistoryDetailRequest {
+                task_id: task_id.to_string(),
+            },
+        )
+        .expect("load stale report");
+        assert!(stale.dissection.is_some());
+        assert_eq!(
+            stale.dissection_source_status,
+            Some(task_manifest::DissectionSourceStatus::Stale)
+        );
     }
 
     #[test]

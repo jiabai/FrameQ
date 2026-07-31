@@ -783,6 +783,7 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
     for declaration in [
         "mod access;",
         "mod coordinator;",
+        "mod dissection;",
         "mod schema;",
         "mod source_identity;",
         "mod storage;",
@@ -870,6 +871,16 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
             );
         }
     }
+}
+
+#[test]
+fn dissection_artifacts_use_only_their_fixed_relative_paths() {
+    assert_eq!(TaskArtifact::Dissection.as_str(), "dissection");
+    assert_eq!(TaskArtifact::DissectionMd.as_str(), "dissection_md");
+    assert!(
+        super::schema::validate_relative_artifact_path("ai/dissection.json", "dissection").is_ok()
+    );
+    assert!(super::schema::validate_relative_artifact_path("ai/other.json", "dissection").is_err());
 }
 
 fn collect_rust_sources(dir: &std::path::Path, sources: &mut Vec<std::path::PathBuf>) {

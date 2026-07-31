@@ -195,6 +195,7 @@ fn local_media_failure_result(code: &'static str) -> TaskTerminalResult {
         "summary": "",
         "insights": [],
         "transcript": null,
+        "dissection": null,
         "error": {
             "code": code,
             "message": message,
@@ -248,6 +249,7 @@ mod tests {
             "summary": "",
             "insights": [],
             "transcript": null,
+            "dissection": null,
             "error": code.map(|code| json!({
                 "code": code,
                 "message": "",

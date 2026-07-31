@@ -119,7 +119,7 @@ fn retry_insights_blocking(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    let _task_lease = task_manifest::acquire_task_mutation(&output_root, &request.task_id)?;
+    let task_lease = task_manifest::acquire_task_mutation(&output_root, &request.task_id)?;
     let request_json = serde_json::to_string(&request)
         .map_err(|_| "Failed to encode worker request.".to_string())?;
     let _ = append_desktop_log(
@@ -127,12 +127,25 @@ fn retry_insights_blocking(
         "worker.retry_insights.start",
         &retry_diagnostic_detail(&request, "started", None),
     );
-    let parsed = map_task_worker_result(
+    let mut parsed = map_task_worker_result(
         process_state
             .task_worker(&paths)
             .execute(WorkerJob::retry_insights(request_json, window))?,
         TaskCommandContext::RetryInsights,
     )?;
+    drop(task_lease);
+    if request.target == RetryInsightsTarget::Dissection && parsed.dissection.is_some() {
+        let task = task_manifest::SupportedTask::open(&output_root, &request.task_id)
+            .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
+        let view = task
+            .read_dissection()
+            .map_err(|_| "Task dissection artifact is invalid.".to_string())?
+            .ok_or_else(|| "Task dissection artifact is invalid.".to_string())?;
+        if view.source_status != task_manifest::DissectionSourceStatus::Current {
+            return Err("Task dissection artifact is invalid.".to_string());
+        }
+        parsed.dissection = Some(view.report);
+    }
     let _ = append_desktop_log(
         &paths,
         "worker.retry_insights.result",
