@@ -218,6 +218,63 @@ def parse_dissection_report(
     )
 
 
+def parse_persisted_dissection(
+    payload: object,
+    *,
+    transcript: str,
+) -> TranscriptDissection:
+    try:
+        root = _closed_object(
+            payload,
+            {
+                "schemaVersion",
+                "sourceTranscriptSha256",
+                "sourceLanguage",
+                "sourceChunks",
+                "overallNarrative",
+                "segments",
+                "highlights",
+                "reusableTemplate",
+                "audienceFit",
+                "strengths",
+                "weaknesses",
+            },
+        )
+        if root["schemaVersion"] != 1 or type(root["schemaVersion"]) is not int:
+            raise ValueError("schema version")
+        source_language = root["sourceLanguage"]
+        if source_language is not None and (
+            not isinstance(source_language, str) or not source_language.strip()
+        ):
+            raise ValueError("source language")
+        semantic_payload = {
+            key: root[key]
+            for key in (
+                "overallNarrative",
+                "segments",
+                "highlights",
+                "reusableTemplate",
+                "audienceFit",
+                "strengths",
+                "weaknesses",
+            )
+        }
+        report = parse_dissection_report(
+            semantic_payload,
+            transcript=transcript,
+            chunks=MarkdownSplitter().split(transcript),
+            source_language=source_language,
+        )
+        if report.to_dict() != root:
+            raise ValueError("provenance")
+        return report
+    except (KeyError, TypeError, ValueError) as exc:
+        raise DissectionGenerationError(
+            "DISSECTION_INVALID_RESULT",
+            "The saved dissection artifact is invalid.",
+        ) from exc
+
+
 def generate_transcript_dissection(
     transcript: str,
     *,

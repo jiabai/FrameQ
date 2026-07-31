@@ -56,7 +56,7 @@ def run_insight_generation_step(
         )
 
     try:
-        transcript_body = transcript_txt_path.read_text(encoding="utf-8").strip()
+        official_transcript_body = transcript_txt_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,
@@ -65,6 +65,23 @@ def run_insight_generation_step(
             error=WorkerError(
                 code="TRANSCRIPT_TEXT_NOT_FOUND",
                 message="Official transcript text could not be read.",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ),
+        )
+
+    transcript_body = official_transcript_body.strip()
+    if not transcript_body:
+        return ProcessResult(
+            status=JobStage.PARTIAL_COMPLETED,
+            text="",
+            transcript=transcript,
+            error=WorkerError(
+                code=(
+                    "DISSECTION_EMPTY_TRANSCRIPT"
+                    if target == "dissection"
+                    else "INSIGHTFLOW_EMPTY_TRANSCRIPT"
+                ),
+                message="Official transcript text is empty.",
                 stage=JobStage.INSIGHTS_GENERATING,
             ),
         )
@@ -117,13 +134,13 @@ def run_insight_generation_step(
     if target == "dissection":
         try:
             dissection_artifacts = run_dissection_generation(
-                transcript_body,
+                official_transcript_body,
                 output_dir=output_dir,
                 client=client,
                 output_language=output_language,
                 source_language=transcript.language if transcript else None,
             )
-        except DissectionGenerationError as exc:
+        except (DissectionGenerationError, InsightGenerationError) as exc:
             generation_error = InsightGenerationError(exc.code, str(exc))
 
     status = JobStage.COMPLETED if generation_error is None else JobStage.PARTIAL_COMPLETED

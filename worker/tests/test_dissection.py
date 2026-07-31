@@ -9,6 +9,7 @@ from frameq_worker.insightflow.dissection import (
     build_dissection_call_plan,
     generate_transcript_dissection,
     parse_dissection_report,
+    parse_persisted_dissection,
 )
 from frameq_worker.insightflow.splitter import MarkdownSplitter
 from frameq_worker.pipeline_runtime.insights import run_insight_generation_step
@@ -227,3 +228,46 @@ def test_pipeline_dispatches_dissection_without_persisting_standalone_files(
     assert set(result.artifact_payloads) == {"ai/dissection.json", "ai/dissection.md"}
     assert not (tmp_path / "task" / "ai" / "dissection.json").exists()
     assert "第一段" in result.artifact_payloads["ai/dissection.md"].decode("utf-8")
+
+
+def test_persisted_parser_rejects_provenance_tampering() -> None:
+    transcript = "第一段🙂。第二段。"
+    report = parse_dissection_report(
+        valid_semantic_report(),
+        transcript=transcript,
+        chunks=MarkdownSplitter().split(transcript),
+        source_language="zh-CN",
+    ).to_dict()
+
+    assert parse_persisted_dissection(report, transcript=transcript).to_dict() == report
+    report["sourceChunks"][0]["endByte"] += 1
+
+    with pytest.raises(DissectionGenerationError) as captured:
+        parse_persisted_dissection(report, transcript=transcript)
+
+    assert captured.value.code == "DISSECTION_INVALID_RESULT"
+
+
+def test_empty_official_transcript_stops_before_any_supplier_call(tmp_path) -> None:
+    transcript_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_path.write_text(" \n\t", encoding="utf-8")
+
+    class NoCallClient:
+        def generate(self, _prompt: str) -> str:
+            raise AssertionError("supplier must not be called")
+
+    result = run_insight_generation_step(
+        transcript_txt_path=transcript_path,
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        client=NoCallClient(),
+        output_language="en-US",
+        target="dissection",
+        persist=False,
+    )
+
+    assert result.status.value == "partial_completed"
+    assert result.error is not None
+    assert result.error.code == "DISSECTION_EMPTY_TRANSCRIPT"
+    assert result.artifact_payloads == {}

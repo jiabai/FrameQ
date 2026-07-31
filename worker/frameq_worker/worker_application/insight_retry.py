@@ -7,6 +7,10 @@ from pathlib import Path
 from frameq_worker.atomic_files import AtomicFileCommitError
 from frameq_worker.config import load_project_env
 from frameq_worker.insightflow import InsightClient
+from frameq_worker.insightflow.dissection import (
+    DissectionGenerationError,
+    parse_persisted_dissection,
+)
 from frameq_worker.models import (
     Insight,
     JobStage,
@@ -145,6 +149,7 @@ def merge_existing_ai_artifacts(
 ) -> ProcessResult:
     summary = result.summary or read_existing_summary(paths)
     insights = result.insights or read_existing_insights(paths)
+    dissection = result.dissection or read_existing_dissection(paths)
     return ProcessResult(
         status=result.status,
         artifacts=result.artifacts,
@@ -152,6 +157,7 @@ def merge_existing_ai_artifacts(
         summary=summary,
         insights=insights,
         transcript=result.transcript,
+        dissection=dissection,
         error=result.error,
         artifact_payloads=result.artifact_payloads,
     )
@@ -216,6 +222,17 @@ def read_existing_insights(paths: TaskPaths) -> list[Insight]:
             )
         )
     return insights
+
+
+def read_existing_dissection(paths: TaskPaths) -> dict[str, object] | None:
+    if not paths.dissection_json.is_file() or not paths.transcript_txt_path.is_file():
+        return None
+    try:
+        payload = json.loads(paths.dissection_json.read_text(encoding="utf-8"))
+        transcript = paths.transcript_txt_path.read_text(encoding="utf-8")
+        return parse_persisted_dissection(payload, transcript=transcript).to_dict()
+    except (OSError, UnicodeError, json.JSONDecodeError, DissectionGenerationError):
+        return None
 
 
 def failed_insight_retry_result(

@@ -43,6 +43,8 @@ _ALLOWED_DESTINATIONS = (
     "ai/mindmap.mmd",
     "ai/insights.json",
     "ai/insights.md",
+    "ai/dissection.json",
+    "ai/dissection.md",
 )
 _ALLOWED_DESTINATION_SET = frozenset(_ALLOWED_DESTINATIONS)
 _INTERNAL_PARENTS = (

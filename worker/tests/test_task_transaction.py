@@ -61,6 +61,68 @@ def test_commit_replaces_complete_bundle_and_cleans_internal_files(tmp_path: Pat
     assert _transaction_internal_files(task_dir) == []
 
 
+def test_transaction_accepts_only_fixed_dissection_artifact_paths(tmp_path: Path) -> None:
+    task_dir = _task_dir(tmp_path)
+
+    commit_task_artifacts(
+        task_dir,
+        {
+            "ai/dissection.json": b'{}\n',
+            "ai/dissection.md": b"# report\n",
+            "frameq-task.json": b'{}\n',
+        },
+    )
+
+    assert (task_dir / "ai" / "dissection.json").read_bytes() == b'{}\n'
+    assert (task_dir / "ai" / "dissection.md").read_bytes() == b"# report\n"
+    with pytest.raises(TaskArtifactCommitError):
+        commit_task_artifacts(task_dir, {"ai/custom-dissection.json": b"{}"})
+
+
+@pytest.mark.parametrize(
+    "failure_event",
+    [
+        "after_journal_prepared",
+        "after_replace:ai/dissection.json",
+        "after_replace:ai/dissection.md",
+        "after_replace:frameq-task.json",
+    ],
+)
+def test_interrupted_dissection_bundle_restores_previous_complete_revision(
+    tmp_path: Path,
+    failure_event: str,
+) -> None:
+    task_dir = _task_dir(tmp_path)
+    old_payloads = {
+        "ai/dissection.json": b'{"revision":"old"}\n',
+        "ai/dissection.md": b"# old\n",
+        "frameq-task.json": b'{"artifacts":{"dissection":"ai/dissection.json"}}\n',
+    }
+    for relative, content in old_payloads.items():
+        path = task_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def interrupt(event: str) -> None:
+        if event == failure_event:
+            raise SimulatedCrash()
+
+    with pytest.raises(SimulatedCrash):
+        commit_task_artifacts(
+            task_dir,
+            {
+                "ai/dissection.json": b'{"revision":"new"}\n',
+                "ai/dissection.md": b"# new\n",
+                "frameq-task.json": b'{"artifacts":{"dissection":"ai/dissection.json"}}\n',
+            },
+            _fault_hook=interrupt,
+        )
+
+    assert recover_task_artifacts(task_dir) == RecoveryOutcome.ROLLED_BACK
+    for relative, content in old_payloads.items():
+        assert (task_dir / relative).read_bytes() == content
+
+
 def test_precommit_crash_recovers_complete_previous_revision_idempotently(
     tmp_path: Path,
 ) -> None:

@@ -53,7 +53,7 @@ successful report.
   persistence, security, and verification boundaries.
 - [x] Task 1: Version and test the closed cross-language contract.
 - [x] Task 2: Build deterministic chunks, call planning, generation, and strict validation.
-- [ ] Task 3: Integrate retry execution and atomic task artifacts.
+- [x] Task 3: Integrate retry execution and atomic task artifacts.
 - [ ] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
 - [ ] Task 5: Extend frontend protocols, workflow state, and history state.
 - [ ] Task 6: Add confirmation, report UI, stale handling, source location, and i18n.
@@ -304,23 +304,23 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Modify: `worker/tests/test_cli.py`
 - Modify: `worker/tests/test_worker_application_boundaries.py`
 
-- [ ] Add RED application tests proving dissection reads only the validated official
+- [x] Add RED application tests proving dissection reads only the validated official
   `transcript/transcript.txt`, accepts `completed` and `partial_completed`, rejects legacy,
   quarantined, missing, invalid, and empty transcripts, and does no checkout on admission failure.
-- [ ] Add `TaskPaths.dissection_json` and `TaskPaths.dissection_markdown`, map them to manifest keys
+- [x] Add `TaskPaths.dissection_json` and `TaskPaths.dissection_markdown`, map them to manifest keys
   `dissection` and `dissection_md`, and add both fixed paths to transaction allowlists. Do not add a
   `has_dissection`, path, count, or report body field to the manifest.
-- [ ] Pass both new files as `ProcessResult.artifact_payloads` into `TaskStoreFacade.finalize()` so
+- [x] Pass both new files as `ProcessResult.artifact_payloads` into `TaskStoreFacade.finalize()` so
   the journal atomically promotes JSON, Markdown, and manifest. Never call a standalone report
   writer before finalization.
-- [ ] Add failure-injection tests at each transaction boundary. A cancelled, invalid, quota-failed,
+- [x] Add failure-injection tests at each transaction boundary. A cancelled, invalid, quota-failed,
   checkout-failed, or interrupted rerun must leave a previous successful JSON, Markdown, and
   manifest mapping byte-for-byte intact; a first failure leaves none of the three visible.
-- [ ] Ensure result reconstruction returns a parsed `dissection` only when the authoritative JSON
+- [x] Ensure result reconstruction returns a parsed `dissection` only when the authoritative JSON
   exists and is valid. Corrupt JSON must not masquerade as a successful report.
-- [ ] Preserve the current preference behavior: only `insights` may save its preference snapshot;
+- [x] Preserve the current preference behavior: only `insights` may save its preference snapshot;
   `dissection` receives no preference payload and mutates no preference artifact.
-- [ ] Run and require PASS:
+- [x] Run and require PASS:
 
   ```powershell
   uv run pytest worker\tests\test_task_artifacts.py worker\tests\test_task_transaction.py worker\tests\test_cli.py worker\tests\test_worker_application_boundaries.py worker\tests\test_dissection.py -q

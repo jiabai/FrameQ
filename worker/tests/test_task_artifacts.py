@@ -12,9 +12,11 @@ from frameq_worker.desktop_contract import (
     OUTPUT_DIR_ENV,
     PROCESS_VIDEO_CONTRACT_VERSION,
 )
+from frameq_worker.insightflow import InsightGenerationError
 from frameq_worker.media import CommandResult
 from frameq_worker.models import ProcessRequest
 from frameq_worker.pipeline import run_worker_pipeline
+from frameq_worker.task_store import TaskPaths
 from frameq_worker.worker_application import url_processing
 from frameq_worker.worker_service import retry_insights_once
 
@@ -43,6 +45,156 @@ class FakeInsightClient:
             '[{"topic":"retry question","matchReason":"matched",'
             '"followUpQuestions":["next"],"suitableUse":"content planning"}]'
         )
+
+
+def test_task_paths_expose_only_fixed_dissection_destinations(tmp_path: Path) -> None:
+    paths = TaskPaths(tmp_path / "outputs", tmp_path / "cache", "task-1")
+
+    assert paths.dissection_json == paths.task_dir / "ai" / "dissection.json"
+    assert paths.dissection_markdown == paths.task_dir / "ai" / "dissection.md"
+
+
+def test_retry_dissection_atomically_publishes_json_markdown_and_manifest(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "outputs"
+    cache_root = tmp_path / "cache"
+    task_id = "20260731-120000-douyin-7524373044106677544"
+    task_dir = output_root / "tasks" / task_id
+    transcript_dir = task_dir / "transcript"
+    transcript_dir.mkdir(parents=True)
+    (transcript_dir / "transcript.txt").write_text(
+        "saved transcript\n", encoding="utf-8"
+    )
+    (task_dir / "frameq-task.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "source_privacy_migration_version": 2,
+                "source_privacy_quarantined": False,
+                "task_id": task_id,
+                "created_at": "2026-07-31T12:00:00Z",
+                "source_url": "https://www.douyin.com/video/7524373044106677544",
+                "source_identity": {
+                    "version": 1,
+                    "platform": "douyin",
+                    "stable_id": "7524373044106677544",
+                    "effective_part": None,
+                    "canonical_url": "https://www.douyin.com/video/7524373044106677544",
+                },
+                "platform": "douyin",
+                "status": "partial_completed",
+                "model": "iic/SenseVoiceSmall",
+                "artifacts": {"transcript_txt": "transcript/transcript.txt"},
+                "error": None,
+                "text_preview": "saved transcript",
+                "insights_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeDissectionClient:
+        def __init__(self) -> None:
+            self.responses = [
+                json.dumps({"observations": ["saved transcript"]}),
+                json.dumps(
+                    {
+                        "overallNarrative": {
+                            "openingHook": None,
+                            "structureType": "statement",
+                            "turningPoint": None,
+                            "closingType": None,
+                        },
+                        "segments": [
+                            {
+                                "id": 1,
+                                "title": "Statement",
+                                "sourceChunkIds": [1],
+                                "coreClaim": "saved transcript",
+                                "supportingPoints": [],
+                                "rhetoricalDevices": [],
+                                "rhythmNote": "Brief",
+                                "reusablePattern": "Direct statement",
+                                "riskFlags": [],
+                            }
+                        ],
+                        "highlights": ["saved transcript"],
+                        "reusableTemplate": {
+                            "name": "Direct",
+                            "skeleton": ["State", "Explain", "Close"],
+                        },
+                        "audienceFit": [],
+                        "strengths": ["Direct"],
+                        "weaknesses": ["Brief"],
+                    }
+                ),
+            ]
+
+        def generate(self, _prompt: str) -> str:
+            return self.responses.pop(0)
+
+    result = retry_insights_once(
+        json.dumps(
+            {
+                "task_id": task_id,
+                "target": "dissection",
+                "output_language": "en-US",
+            }
+        ),
+        project_root=tmp_path,
+        insight_client=FakeDissectionClient(),
+        environ={
+            OUTPUT_DIR_ENV: output_root.as_posix(),
+            CACHE_DIR_ENV: cache_root.as_posix(),
+        },
+    )
+
+    assert result["status"] == "completed"
+    assert result["dissection"]["schemaVersion"] == 1
+    assert result["artifacts"]["dissection"] == "ai/dissection.json"
+    assert result["artifacts"]["dissection_md"] == "ai/dissection.md"
+    assert (task_dir / "ai" / "dissection.json").is_file()
+    assert (task_dir / "ai" / "dissection.md").is_file()
+    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    assert manifest["artifacts"]["dissection"] == "ai/dissection.json"
+    assert "preference_snapshot" not in manifest["artifacts"]
+
+    previous_json = (task_dir / "ai" / "dissection.json").read_bytes()
+    previous_markdown = (task_dir / "ai" / "dissection.md").read_bytes()
+    previous_mapping = dict(manifest["artifacts"])
+
+    class FailingClient:
+        def generate(self, _prompt: str) -> str:
+            raise InsightGenerationError(
+                "INSIGHTFLOW_LLM_REQUEST_FAILED",
+                "safe failure",
+            )
+
+    failed = retry_insights_once(
+        json.dumps(
+            {
+                "task_id": task_id,
+                "target": "dissection",
+                "output_language": "en-US",
+            }
+        ),
+        project_root=tmp_path,
+        insight_client=FailingClient(),
+        environ={
+            OUTPUT_DIR_ENV: output_root.as_posix(),
+            CACHE_DIR_ENV: cache_root.as_posix(),
+        },
+    )
+
+    assert failed["status"] == "partial_completed"
+    assert failed["dissection"] == result["dissection"]
+    assert (task_dir / "ai" / "dissection.json").read_bytes() == previous_json
+    assert (task_dir / "ai" / "dissection.md").read_bytes() == previous_markdown
+    failed_manifest = json.loads(
+        (task_dir / "frameq-task.json").read_text(encoding="utf-8")
+    )
+    assert failed_manifest["artifacts"] == previous_mapping
 
 
 def valid_preference_snapshot() -> dict[str, object]:

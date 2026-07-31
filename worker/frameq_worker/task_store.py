@@ -120,6 +120,14 @@ class TaskPaths:
     def preference_snapshot_path(self) -> Path:
         return self.ai_dir / "preference-snapshot.json"
 
+    @property
+    def dissection_json(self) -> Path:
+        return self.ai_dir / "dissection.json"
+
+    @property
+    def dissection_markdown(self) -> Path:
+        return self.ai_dir / "dissection.md"
+
 
 @dataclass(frozen=True)
 class UrlTaskSource:
@@ -349,6 +357,8 @@ def task_artifacts_for_existing_files(
         "insights": paths.insights_json_path,
         "insights_md": paths.insights_md_path,
         "preference_snapshot": paths.preference_snapshot_path,
+        "dissection": paths.dissection_json,
+        "dissection_md": paths.dissection_markdown,
     }
     return {
         key: path.relative_to(paths.task_dir).as_posix()
@@ -382,6 +392,7 @@ def result_with_task(
         summary=result.summary,
         insights=result.insights,
         transcript=result.transcript,
+        dissection=result.dissection,
         error=result.error,
         artifact_payloads=result.artifact_payloads,
     )
@@ -488,6 +499,8 @@ _ARTIFACT_KEY_BY_RELATIVE_PATH = {
     "ai/mindmap.mmd": "mindmap",
     "ai/insights.json": "insights",
     "ai/insights.md": "insights_md",
+    "ai/dissection.json": "dissection",
+    "ai/dissection.md": "dissection_md",
 }
 
 
