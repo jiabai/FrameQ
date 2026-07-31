@@ -55,7 +55,7 @@ successful report.
 - [x] Task 2: Build deterministic chunks, call planning, generation, and strict validation.
 - [x] Task 3: Integrate retry execution and atomic task artifacts.
 - [x] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
-- [ ] Task 5: Extend frontend protocols, workflow state, and history state.
+- [x] Task 5: Extend frontend protocols, workflow state, and history state.
 - [ ] Task 6: Add confirmation, report UI, stale handling, source location, and i18n.
 - [ ] Task 7: Prove quota, cancellation, privacy, compatibility, packaging, and end-to-end behavior.
 - [ ] Task 8: Run completion gates, update durable docs, and archive this plan.
@@ -80,10 +80,13 @@ successful report.
   only the two generic artifact keys; report parsing and transcript integrity work stay in detail
   loading.
 - Rust process-cancellation tests cannot terminate child process trees inside the managed sandbox.
-  The same focused test and the complete 228-test Rust suite pass with normal Windows process
+  The same focused test and the complete 233-test Rust suite pass with normal Windows process
   permissions; Rust verification that exercises child-process termination must use that boundary.
 - The global desktop-worker contract advances to version 5 while the independently versioned
   `process_video` and local-media request envelopes remain at versions 3 and 4 respectively.
+- JavaScript string length counts UTF-16 code units while Python counts Unicode code points. The
+  confirmation call-plan calculator must explicitly iterate code points or emoji-containing
+  transcripts can disagree with worker admission.
 
 ## Decision Log
 
@@ -407,24 +410,24 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Create: `app/src/features/dissection/dissectionCallPlan.ts`
 - Create: `app/src/features/dissection/dissectionCallPlan.test.ts`
 
-- [ ] Add RED TypeScript tests for exact result/report parsing, artifact keys, the six-call admission
+- [x] Add RED TypeScript tests for exact result/report parsing, artifact keys, the six-call admission
   boundary, mutual exclusion, target-local errors, retry restoration, history stale status, old-task
   compatibility, and preserving a previous report across failed/cancelled reruns.
-- [ ] Implement the preview calculator from contract constants, using the saved transcript and the
+- [x] Implement the preview calculator from contract constants, using the saved transcript and the
   same deterministic splitter rules. Freeze its `chunkCount`, lower/upper bounds, and output
-  language only in confirmation UI state. The worker independently rereads the authoritative task
+  language only in the Task 6 confirmation UI state. The worker independently rereads the authoritative task
   transcript and recalculates; no preview evidence, transcript text, or local path enters worker
   stdin. If the transcript changed before worker admission, the worker's stricter current result
   controls and may reject before checkout.
-- [ ] Widen `InsightRetryTarget` only to `"summary" | "insights" | "dissection"`; do not add
+- [x] Widen `InsightRetryTarget` only to `"summary" | "insights" | "dissection"`; do not add
   `draft`. Add `dissection` and `dissectionStale` to workflow/history state while preserving
   exact-null behavior for old terminal results.
-- [ ] On successful transcript save, retain the old report, mark it stale, and disable its source
+- [x] On successful transcript save, retain the old report, mark it stale, and disable its source
   actions immediately. A successful dissection replacement clears stale. A failed or cancelled
   rerun changes neither the old report nor its prior stale status.
-- [ ] Keep one active AI target globally. Start/cancel/finish/error routing must attribute only to
+- [x] Keep one active AI target globally. Start/cancel/finish/error routing must attribute only to
   dissection and must not change summary, mindmap, insights, transcript, media, or preferences.
-- [ ] Run and require PASS:
+- [x] Run and require PASS (109 focused tests plus lint):
 
   ```powershell
   npm --prefix app test -- workerResultProtocol.test.ts workflowState.test.ts taskWorkspaceViewModel.test.ts historyClient.test.ts useTaskProcessingController.test.ts dissectionCallPlan.test.ts

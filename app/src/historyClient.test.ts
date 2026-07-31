@@ -25,6 +25,34 @@ const SECOND_INSIGHT: WorkerResult["insights"][number] = {
   suitableUse: "团队分享",
   sourceChunkId: 2,
 };
+const FIRST_DISSECTION: NonNullable<WorkerResult["dissection"]> = {
+  schemaVersion: 1,
+  sourceTranscriptSha256: "a".repeat(64),
+  sourceLanguage: null,
+  sourceChunks: [{ id: 1, startByte: 0, endByte: 3, sha256: "b".repeat(64) }],
+  overallNarrative: {
+    openingHook: null,
+    structureType: "statement",
+    turningPoint: null,
+    closingType: null,
+  },
+  segments: [{
+    id: 1,
+    title: "Opening",
+    sourceChunkIds: [1],
+    coreClaim: "abc",
+    supportingPoints: [],
+    rhetoricalDevices: [],
+    rhythmNote: "Brief",
+    reusablePattern: "Direct",
+    riskFlags: [],
+  }],
+  highlights: ["abc"],
+  reusableTemplate: { name: "Direct", skeleton: ["A", "B", "C"] },
+  audienceFit: [],
+  strengths: ["Direct"],
+  weaknesses: ["Brief"],
+};
 
 describe("history client", () => {
   test("deletes a history task through a task-id-only request", async () => {
@@ -127,6 +155,8 @@ describe("history client", () => {
         summary: "selected summary",
         transcript: null,
         insights: [FIRST_INSIGHT, SECOND_INSIGHT],
+        dissection: FIRST_DISSECTION,
+        dissection_source_status: "stale",
       };
     };
 
@@ -138,6 +168,8 @@ describe("history client", () => {
     expect(detail.text).toBe("selected transcript body");
     expect(detail.summary).toBe("selected summary");
     expect(detail.insights).toEqual([FIRST_INSIGHT, SECOND_INSIGHT]);
+    expect(detail.dissection).toEqual(FIRST_DISSECTION);
+    expect(detail.dissectionStale).toBe(true);
     expect(detail.source).toEqual({
       kind: "local_file",
       displayName: "Interview.wmv",
@@ -227,6 +259,8 @@ describe("history client", () => {
           followUpQuestions: "not-an-array",
         },
       ],
+      dissection: null,
+      dissection_source_status: null,
     };
 
     await expect(
@@ -264,6 +298,8 @@ describe("history client", () => {
         engine: null,
       },
       insights: [],
+      dissection: null,
+      dissection_source_status: null,
     };
 
     await expect(
@@ -309,6 +345,8 @@ describe("history client", () => {
         engine: "iic/SenseVoiceSmall",
       },
       insights: [],
+      dissection: null,
+      dissectionStale: false,
     });
 
     expect(result).toEqual({
@@ -329,6 +367,7 @@ describe("history client", () => {
         engine: "iic/SenseVoiceSmall",
       },
       insights: [],
+      dissection: null,
       error: {
         code: "INSIGHTFLOW_CONFIG_MISSING",
         message: "LLM configuration is missing.",

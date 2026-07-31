@@ -87,6 +87,8 @@ function createHistoryDetail(taskId = "task-1"): HistoryItem {
     summary: "",
     transcript: null,
     insights: [],
+    dissection: null,
+    dissectionStale: false,
   };
 }
 

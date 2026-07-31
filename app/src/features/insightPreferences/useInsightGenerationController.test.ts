@@ -111,6 +111,7 @@ function createHookHarness(): HookHarness {
 }
 
 function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
+  const { dissection, dissectionStale, ...rest } = overrides;
   return {
     stage: "partial_completed",
     cancellingFromStage: null,
@@ -137,8 +138,10 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
       transcript_txt: "transcript/transcript.txt",
     },
     transcript: null,
+    dissection: dissection ?? null,
+    dissectionStale: dissectionStale ?? false,
     error: null,
-    ...overrides,
+    ...rest,
   };
 }
 

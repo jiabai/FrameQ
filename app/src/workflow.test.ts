@@ -3,6 +3,7 @@ import {
   cancelProcessing,
   canSubmitUrl,
   confirmProcessingCancellation,
+  finishInsightRetry,
   createInitialWorkflow,
   getDetailText,
   getExportPath,
@@ -63,6 +64,34 @@ const SECOND_INSIGHT: WorkerResult["insights"][number] = {
   suitableUse: "团队分享",
   sourceChunkId: 2,
 };
+const DEFAULT_DISSECTION: NonNullable<WorkerResult["dissection"]> = {
+  schemaVersion: 1,
+  sourceTranscriptSha256: "a".repeat(64),
+  sourceLanguage: "zh-CN",
+  sourceChunks: [{ id: 1, startByte: 0, endByte: 3, sha256: "b".repeat(64) }],
+  overallNarrative: {
+    openingHook: null,
+    structureType: "statement",
+    turningPoint: null,
+    closingType: null,
+  },
+  segments: [{
+    id: 1,
+    title: "Opening",
+    sourceChunkIds: [1],
+    coreClaim: "abc",
+    supportingPoints: [],
+    rhetoricalDevices: [],
+    rhythmNote: "Brief",
+    reusablePattern: "Direct",
+    riskFlags: [],
+  }],
+  highlights: ["abc"],
+  reusableTemplate: { name: "Direct", skeleton: ["A", "B", "C"] },
+  audienceFit: [],
+  strengths: ["Direct"],
+  weaknesses: ["Brief"],
+};
 
 function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
   const { artifacts, dissection, ...rest } = overrides;
@@ -82,6 +111,27 @@ function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
 }
 
 describe("workflow state model", () => {
+  test("keeps a previous dissection and stale state across a failed redissection", () => {
+    const previous = workerResult({
+      dissection: DEFAULT_DISSECTION,
+    });
+    const state = { ...summarizeWorkerResult(previous), dissectionStale: true };
+    const failed = workerResult({
+      status: "partial_completed",
+      dissection: null,
+      error: {
+        code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+        message: "safe failure",
+        stage: "insights_generating",
+      },
+    });
+
+    const next = finishInsightRetry(state, failed, "dissection");
+
+    expect(next.dissection).toEqual(previous.dissection);
+    expect(next.dissectionStale).toBe(true);
+    expect(next.aiTargetErrors.dissection?.code).toBe("INSIGHTFLOW_LLM_REQUEST_FAILED");
+  });
   test("starts with one URL composer branch and no task source", () => {
     const state = createInitialWorkflow();
 
@@ -476,6 +526,22 @@ describe("workflow state model", () => {
     expect(cancelled.stage).toBe("waiting_input");
     expect(cancelled.composerSource).toEqual({ kind: "url", urlDraft: "" });
     expect(cancelled.taskSource).toBeNull();
+  });
+
+  test("keeps the completed task and prior report when redissection cancellation is confirmed", () => {
+    const completed = summarizeWorkerResult(workerResult({
+      dissection: DEFAULT_DISSECTION,
+    }));
+    const cancelling = requestProcessingCancellation(
+      startInsightRetry(completed, "dissection"),
+    );
+
+    const cancelled = confirmProcessingCancellation(cancelling);
+
+    expect(cancelled.stage).toBe("completed");
+    expect(cancelled.taskId).toBe(TASK_ID);
+    expect(cancelled.dissection).toEqual(DEFAULT_DISSECTION);
+    expect(cancelled.activeAiTarget).toBeNull();
   });
 
   test("retains a local selection after cancellation while clearing the running source", () => {

@@ -125,7 +125,9 @@ function aiTargetStatus(
   const ready =
     target === "summary"
       ? Boolean(workflow.summary || workflow.artifacts.summary)
-      : Boolean(workflow.insights.length || workflow.artifacts.insights || workflow.artifacts.insights_md);
+      : target === "insights"
+        ? Boolean(workflow.insights.length || workflow.artifacts.insights || workflow.artifacts.insights_md)
+        : Boolean(workflow.dissection || workflow.artifacts.dissection);
 
   return { target, status: ready ? "ready" : "available", errorCode: null };
 }
@@ -193,6 +195,7 @@ export function createTaskWorkspaceViewModel(
   const readOnly = transcriptReady && (aiActive || isAiCancellation(workflow));
   const summary = aiTargetStatus(workflow, "summary", transcriptReady);
   const insights = aiTargetStatus(workflow, "insights", transcriptReady);
+  const dissection = aiTargetStatus(workflow, "dissection", transcriptReady);
   const owner = cancellationOwner(workflow);
   const aiPhase: AiWorkspacePhase = !transcriptReady
     ? "waiting_transcript"
@@ -268,6 +271,8 @@ export function createTaskWorkspaceViewModel(
       cancellation: workspaceCancellation(owner, "ai", workflow),
       summary,
       insights,
+      dissection,
+      dissectionStale: workflow.dissectionStale,
     },
   };
 }

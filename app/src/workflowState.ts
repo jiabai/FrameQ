@@ -186,7 +186,7 @@ export type WorkerErrorResult = {
   stage: WorkflowStage;
 };
 
-export type InsightRetryTarget = "summary" | "insights";
+export type InsightRetryTarget = "summary" | "insights" | "dissection";
 
 export type ToolbarNewTaskButtonState = {
   disabled: boolean;
@@ -212,6 +212,8 @@ export type WorkflowState = {
   taskDir: string | null;
   artifacts: TaskArtifacts;
   transcript: TranscriptMetadata | null;
+  dissection: TranscriptDissection | null;
+  dissectionStale: boolean;
   error: WorkerErrorResult | null;
 };
 export function createInitialWorkflow(): WorkflowState {
@@ -233,6 +235,8 @@ export function createInitialWorkflow(): WorkflowState {
     taskDir: null,
     artifacts: {},
     transcript: null,
+    dissection: null,
+    dissectionStale: false,
     error: null,
   };
 }
@@ -263,6 +267,8 @@ export function startProcessing(
     taskId: null,
     taskDir: null,
     artifacts: {},
+    dissection: null,
+    dissectionStale: false,
     error: null,
   };
 }
@@ -328,6 +334,24 @@ export function restoreProcessingAfterCancellationFailure(
 }
 
 export function confirmProcessingCancellation(state: WorkflowState): WorkflowState {
+  if (
+    state.cancellingFromStage === "insights_generating" &&
+    state.activeAiTarget !== null &&
+    state.taskId !== null
+  ) {
+    return {
+      ...state,
+      stage: Object.keys(state.aiTargetErrors).length > 0
+        ? "partial_completed"
+        : "completed",
+      cancellingFromStage: null,
+      activeAiTarget: null,
+      statusMessage: null,
+      progressMessage: null,
+      progressPercent: 100,
+      error: null,
+    };
+  }
   return {
     ...createInitialWorkflow(),
     composerSource: state.composerSource,
@@ -383,6 +407,8 @@ export function summarizeWorkerResult(
     taskDir: result.task_dir,
     artifacts: result.artifacts ?? {},
     transcript: result.transcript ?? null,
+    dissection: result.dissection,
+    dissectionStale: false,
     error: result.error,
     aiErrorTarget:
       result.error?.stage === "insights_generating" ? failedAiTarget : null,
@@ -411,6 +437,16 @@ export function finishInsightRetry(
     taskSource: state.taskSource,
     aiErrorTarget: result.error?.stage === "insights_generating" ? target : null,
     aiTargetErrors,
+    dissection:
+      target === "dissection" && result.error && result.dissection === null
+        ? state.dissection
+        : next.dissection,
+    dissectionStale:
+      target === "dissection" && result.error
+        ? state.dissectionStale
+        : target === "dissection" && result.dissection
+          ? false
+          : next.dissectionStale,
   };
 }
 

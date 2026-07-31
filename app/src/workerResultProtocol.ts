@@ -172,7 +172,7 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
   };
 }
 
-function parseDissection(value: unknown): WorkerResult["dissection"] | undefined {
+export function parseDissection(value: unknown): WorkerResult["dissection"] | undefined {
   if (value === null) {
     return null;
   }

@@ -20,6 +20,7 @@ import { parseTaskSourceSummary } from "./workflow";
 import {
   TASK_ARTIFACT_KEYS,
   TASK_INSIGHT_FIELDS,
+  parseDissection,
 } from "./workerResultProtocol";
 
 export type HistoryErrorResponse = {
@@ -53,6 +54,8 @@ export type HistoryDetailResponse = {
   summary: string;
   transcript: TranscriptMetadata | null;
   insights: Insight[];
+  dissection: WorkerResult["dissection"];
+  dissection_source_status: "current" | "stale" | null;
 };
 
 export type HistoryListItem = {
@@ -90,6 +93,8 @@ export type HistoryItem = {
   summary: string;
   transcript: TranscriptMetadata | null;
   insights: Insight[];
+  dissection: WorkerResult["dissection"];
+  dissectionStale: boolean;
 };
 
 export type HistoryCommandRunner = (
@@ -213,18 +218,26 @@ function parseHistoryDetailResponse(
       "summary",
       "transcript",
       "insights",
+      "dissection",
+      "dissection_source_status",
     ],
     [],
     HISTORY_IPC_RESPONSE_INVALID,
   );
   const status = parseHistoryStatus(response.status);
   const error = parseHistoryDetailError(response.error);
+  const dissection = parseDissection(response.dissection);
   if (
     response.task_id !== expectedTaskId ||
     typeof response.task_dir !== "string" ||
     typeof response.text !== "string" ||
     typeof response.summary !== "string" ||
     !isCoherentHistoryError(status, error)
+    || dissection === undefined
+    || (response.dissection_source_status !== null
+      && response.dissection_source_status !== "current"
+      && response.dissection_source_status !== "stale")
+    || (dissection === null) !== (response.dissection_source_status === null)
   ) {
     throwInvalidHistoryResponse();
   }
@@ -239,6 +252,8 @@ function parseHistoryDetailResponse(
     summary: response.summary,
     transcript: parseHistoryTranscript(response.transcript),
     insights: parseHistoryInsights(response.insights),
+    dissection,
+    dissection_source_status: response.dissection_source_status,
   };
 }
 
@@ -457,7 +472,7 @@ export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
     summary: item.summary,
     insights: item.insights,
     transcript: item.transcript,
-    dissection: null,
+    dissection: item.dissection,
     error: item.error,
   };
 }
@@ -490,5 +505,7 @@ function mapHistoryDetailResponse(response: HistoryDetailResponse): HistoryItem 
     summary: response.summary,
     transcript: response.transcript,
     insights: response.insights,
+    dissection: response.dissection,
+    dissectionStale: response.dissection_source_status === "stale",
   };
 }

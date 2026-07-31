@@ -516,7 +516,9 @@ function App() {
                   onInsightsAction={() => void openInsightPreferenceFlow()}
                   onViewTarget={(target) => {
                     setActionNotice(null);
-                    openDetailTab(target);
+                    if (target !== "dissection") {
+                      openDetailTab(target);
+                    }
                   }}
                   onCancel={() => void cancelCurrentProcessing()}
                 />

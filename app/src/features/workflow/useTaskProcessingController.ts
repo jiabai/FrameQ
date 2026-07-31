@@ -158,6 +158,10 @@ export function useTaskProcessingController({
         return {
           ...current,
           text: saved.text,
+          dissectionStale:
+            current.dissection !== null && saved.text !== current.text
+              ? true
+              : current.dissectionStale,
           artifacts: {
             ...current.artifacts,
             ...saved.artifacts,
@@ -200,6 +204,7 @@ export function useTaskProcessingController({
           : { kind: "url", urlDraft: "" };
       setWorkflow({
         ...summarizeWorkerResult(historyItemToWorkerResult(item)),
+        dissectionStale: item.dissectionStale,
         composerSource,
         taskSource: item.source,
       });
@@ -372,7 +377,7 @@ export function useTaskProcessingController({
       setWorkflow((current) => startInsightRetry(current, target));
 
       const result = await retryInsights(
-        target === "summary"
+        target === "summary" || target === "dissection"
           ? { taskId, target, outputLanguage }
           : preferenceSnapshot
             ? { taskId, target, outputLanguage, preferenceSnapshot }
@@ -403,6 +408,7 @@ export function useTaskProcessingController({
             summary: result.summary || current.summary,
             insights: result.insights.length > 0 ? result.insights : current.insights,
             transcript: result.transcript ?? current.transcript,
+            dissection: result.dissection ?? current.dissection,
           },
           target,
         ),

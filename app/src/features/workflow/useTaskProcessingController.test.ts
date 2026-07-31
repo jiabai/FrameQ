@@ -87,7 +87,37 @@ function requireResolver<T>(resolver: ((value: T) => void) | null): (value: T) =
   return resolver;
 }
 
+const TEST_DISSECTION: NonNullable<WorkerResult["dissection"]> = {
+  schemaVersion: 1,
+  sourceTranscriptSha256: "a".repeat(64),
+  sourceLanguage: null,
+  sourceChunks: [{ id: 1, startByte: 0, endByte: 3, sha256: "b".repeat(64) }],
+  overallNarrative: {
+    openingHook: null,
+    structureType: "statement",
+    turningPoint: null,
+    closingType: null,
+  },
+  segments: [{
+    id: 1,
+    title: "Opening",
+    sourceChunkIds: [1],
+    coreClaim: "abc",
+    supportingPoints: [],
+    rhetoricalDevices: [],
+    rhythmNote: "Brief",
+    reusablePattern: "Direct",
+    riskFlags: [],
+  }],
+  highlights: ["abc"],
+  reusableTemplate: { name: "Direct", skeleton: ["A", "B", "C"] },
+  audienceFit: [],
+  strengths: ["Direct"],
+  weaknesses: ["Brief"],
+};
+
 function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
+  const { dissection, dissectionStale, ...rest } = overrides;
   return {
     taskId: "history-task",
     source: {
@@ -115,7 +145,9 @@ function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
         sourceChunkId: null,
       },
     ],
-    ...overrides,
+    dissection: dissection ?? null,
+    dissectionStale: dissectionStale ?? false,
+    ...rest,
   };
 }
 
@@ -1127,5 +1159,36 @@ describe("useTaskProcessingController history restore", () => {
     controller = render();
     expect(controller.workflow.text).toBe("second edited transcript");
     expect(controller.workflow.artifacts.transcript_txt).toBe("second/edited.txt");
+  });
+
+  test("marks an existing dissection stale only when a transcript save changes its text", async () => {
+    const history = createHistoryItem({
+      text: "original transcript",
+      dissection: TEST_DISSECTION,
+      dissectionStale: false,
+    });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(history)).toBe(true);
+    controller = render();
+
+    controller.applyTranscriptSave(history.taskId, {
+      task_id: history.taskId,
+      text: "original transcript",
+      artifacts: history.artifacts,
+      has_original_backup: true,
+    });
+    controller = render();
+    expect(controller.workflow.dissectionStale).toBe(false);
+
+    controller.applyTranscriptSave(history.taskId, {
+      task_id: history.taskId,
+      text: "edited transcript",
+      artifacts: history.artifacts,
+      has_original_backup: true,
+    });
+    controller = render();
+    expect(controller.workflow.dissection).toEqual(TEST_DISSECTION);
+    expect(controller.workflow.dissectionStale).toBe(true);
   });
 });
