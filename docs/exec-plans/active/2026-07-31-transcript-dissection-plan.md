@@ -52,7 +52,7 @@ successful report.
 - [x] 2026-07-31: Created this active ExecPlan and mapped contract, Python, Rust, frontend, history,
   persistence, security, and verification boundaries.
 - [x] Task 1: Version and test the closed cross-language contract.
-- [ ] Task 2: Build deterministic chunks, call planning, generation, and strict validation.
+- [x] Task 2: Build deterministic chunks, call planning, generation, and strict validation.
 - [ ] Task 3: Integrate retry execution and atomic task artifacts.
 - [ ] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
 - [ ] Task 5: Extend frontend protocols, workflow state, and history state.
@@ -244,9 +244,9 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Modify: `worker/tests/test_llm.py`
 - Modify: `worker/tests/test_output_language.py`
 
-- [ ] Write RED splitter tests for stable IDs, 2,000-character limits, contiguous UTF-8 byte ranges,
+- [x] Write RED splitter tests for stable IDs, 2,000-character limits, contiguous UTF-8 byte ranges,
   emoji/CJK boundaries, whole-transcript SHA-256, per-slice SHA-256, and exact reconstruction.
-- [ ] Extend the immutable chunk value with provenance while preserving existing consumers:
+- [x] Extend the immutable chunk value with provenance while preserving existing consumers:
 
   ```python
   @dataclass(frozen=True)
@@ -259,25 +259,25 @@ artifact commit. It must never clamp or silently drop invalid content.
       sha256: str
   ```
 
-- [ ] Write RED call-plan tests for chunk counts 1, 4, 5, 16, 17, and empty input. Assert bounds
+- [x] Write RED call-plan tests for chunk counts 1, 4, 5, 16, 17, and empty input. Assert bounds
   `2..3`, `2..3`, `3..4`, `5..6`; reject 17 chunks before any checkout. Use the same fixed corpus
   in Python and TypeScript tests so a contract-version, splitter, chunk-count, or bound drift fails
   CI before release.
-- [ ] Implement one pure `build_dissection_call_plan()` using the contract constants. Group at most
+- [x] Implement one pure `build_dissection_call_plan()` using the contract constants. Group at most
   four consecutive chunks per map call, make exactly one reduce call, and reserve no more than one
   repair call. Check cancellation before each checkout and after each supplier response.
-- [ ] Write strict parser tests for the complete schema, exact keys, bounded arrays, enums, ordered
+- [x] Write strict parser tests for the complete schema, exact keys, bounded arrays, enums, ordered
   references, valid quotations, output language, hashes, ranges, and one-repair behavior. Include
   malicious HTML, prompt-like unknown fields, source IDs outside the snapshot, and duplicate IDs.
-- [ ] Implement `dissection.py` as pure domain types, parsing, validation, and Markdown projection.
+- [x] Implement `dissection.py` as pure domain types, parsing, validation, and Markdown projection.
   Keep raw supplier responses, prompts, transcript text, and internal summaries out of returned
   errors, progress, logs, and artifacts.
-- [ ] Implement map prompts that receive only their assigned transcript chunks and reduce/repair
+- [x] Implement map prompts that receive only their assigned transcript chunks and reduce/repair
   prompts that receive only the minimum structured intermediate data needed. Do not include video,
   audio, source URL, local paths, preferences, summary, insights, draft, or an older dissection.
-- [ ] Make `pipeline_runtime/dissection.py` the orchestration owner. The existing insights module may
+- [x] Make `pipeline_runtime/dissection.py` the orchestration owner. The existing insights module may
   dispatch the target but must not absorb the new schema and validation implementation.
-- [ ] Run and require PASS:
+- [x] Run and require PASS:
 
   ```powershell
   uv run pytest worker\tests\test_dissection.py worker\tests\test_insights.py worker\tests\test_llm.py worker\tests\test_output_language.py -q

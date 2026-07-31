@@ -249,6 +249,7 @@ def test_source_identity_failure_creates_no_task(tmp_path: Path) -> None:
         "summary": "",
         "insights": [],
         "transcript": None,
+        "dissection": None,
         "error": {
             "code": "SOURCE_IDENTITY_UNAVAILABLE",
             "message": "Could not identify a supported stable video source.",

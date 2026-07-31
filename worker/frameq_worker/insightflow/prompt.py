@@ -2,11 +2,61 @@ from __future__ import annotations
 
 import json
 
+from frameq_worker.insightflow.splitter import MarkdownChunk
 from frameq_worker.models import PreferenceSnapshot
 from frameq_worker.output_language import (
     OutputLanguage,
     output_language_semantics,
 )
+
+
+def build_dissection_map_prompt(
+    chunks: list[MarkdownChunk],
+    output_language: OutputLanguage,
+) -> str:
+    semantics = output_language_semantics(output_language)
+    source = [{"id": chunk.id, "content": chunk.content} for chunk in chunks]
+    return f"""# Transcript dissection map stage
+{semantics.prompt_instruction}
+Analyze only the supplied transcript chunks. Return one closed JSON object containing concise
+segment candidates and observations. Every candidate must cite sourceChunkIds from this batch.
+Do not add facts, preferences, paths, URLs, or prior AI results.
+
+## Transcript chunks
+{json.dumps(source, ensure_ascii=False, separators=(",", ":"))}
+"""
+
+
+def build_dissection_reduce_prompt(
+    map_results: list[dict[str, object]],
+    output_language: OutputLanguage,
+) -> str:
+    semantics = output_language_semantics(output_language)
+    return f"""# Transcript dissection reduce stage
+{semantics.prompt_instruction}
+Combine only the structured map results into one closed JSON object with exactly these keys:
+overallNarrative, segments, highlights, reusableTemplate, audienceFit, strengths, weaknesses.
+Use sequential segment IDs. Keep sourceChunkIds ordered, unique, and non-empty. Use null only for
+optional narrative fields. highlights must be verbatim quotations already present in map data.
+
+## Structured map results
+{json.dumps(map_results, ensure_ascii=False, separators=(",", ":"))}
+"""
+
+
+def build_dissection_repair_prompt(
+    invalid_result: object,
+    output_language: OutputLanguage,
+) -> str:
+    semantics = output_language_semantics(output_language)
+    return f"""# Transcript dissection repair stage
+{semantics.prompt_instruction}
+Repair this structured candidate to the exact reduce-stage schema. Do not introduce source text,
+facts, chunk IDs, or fields absent from the candidate. Return JSON only.
+
+## Invalid structured candidate
+{json.dumps(invalid_result, ensure_ascii=False, separators=(",", ":"))}
+"""
 
 
 def build_topic_plan_prompt(

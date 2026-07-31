@@ -9,6 +9,7 @@ from frameq_worker.insightflow import (
     generate_insights_from_markdown,
     generate_summary_from_markdown,
 )
+from frameq_worker.insightflow.dissection import DissectionGenerationError
 from frameq_worker.models import (
     InsightGenerationTarget,
     JobStage,
@@ -18,6 +19,7 @@ from frameq_worker.models import (
     WorkerError,
 )
 from frameq_worker.output_language import OutputLanguage
+from frameq_worker.pipeline_runtime.dissection import run_dissection_generation
 
 
 def run_insight_generation_step(
@@ -81,6 +83,7 @@ def run_insight_generation_step(
 
     summary_artifacts = None
     insight_artifacts = None
+    dissection_artifacts = None
     generation_error: InsightGenerationError | None = None
 
     if target in {"all", "summary"}:
@@ -111,6 +114,18 @@ def run_insight_generation_step(
             if generation_error is None:
                 generation_error = exc
 
+    if target == "dissection":
+        try:
+            dissection_artifacts = run_dissection_generation(
+                transcript_body,
+                output_dir=output_dir,
+                client=client,
+                output_language=output_language,
+                source_language=transcript.language if transcript else None,
+            )
+        except DissectionGenerationError as exc:
+            generation_error = InsightGenerationError(exc.code, str(exc))
+
     status = JobStage.COMPLETED if generation_error is None else JobStage.PARTIAL_COMPLETED
 
     return ProcessResult(
@@ -130,6 +145,14 @@ def run_insight_generation_step(
             ),
             **(
                 {
+                    "dissection": "ai/dissection.json",
+                    "dissection_md": "ai/dissection.md",
+                }
+                if dissection_artifacts
+                else {}
+            ),
+            **(
+                {
                     "insights": insight_artifacts.json_path.relative_to(
                         output_dir
                     ).as_posix(),
@@ -145,6 +168,9 @@ def run_insight_generation_step(
         summary=summary_artifacts.summary if summary_artifacts else "",
         insights=insight_artifacts.insights if insight_artifacts else [],
         transcript=transcript,
+        dissection=(
+            dissection_artifacts.report.to_dict() if dissection_artifacts else None
+        ),
         artifact_payloads={
             **(
                 {
@@ -156,6 +182,14 @@ def run_insight_generation_step(
                     ).as_posix(): summary_artifacts.mindmap_bytes,
                 }
                 if summary_artifacts
+                else {}
+            ),
+            **(
+                {
+                    "ai/dissection.json": dissection_artifacts.json_bytes,
+                    "ai/dissection.md": dissection_artifacts.markdown_bytes,
+                }
+                if dissection_artifacts
                 else {}
             ),
             **(
