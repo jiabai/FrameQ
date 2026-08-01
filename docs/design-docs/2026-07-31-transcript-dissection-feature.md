@@ -1,7 +1,7 @@
 # 文字稿解剖（Transcript Dissection）功能设计
 
 **Date:** 2026-07-31
-**Status:** Approved design; active ExecPlan
+**Status:** Implemented 2026-08-01
 **Owner module:** `智能提炼` 工作区 / `worker/frameq_worker/insightflow/`
 
 ## Context
@@ -469,6 +469,24 @@ flowchart TD
   静默丢段或提交带错误引用的 artifact。
 - `output_language` 必须为共享 enum 合法值；缺失或非法时 worker 拒绝，返回固定
   invalid-request 错误，不回显输入。
+
+## Implemented Shape and Deviations
+
+- Shipped as the current third `AiGenerationWorkspace` target because `draft` remains intentionally
+  unregistered. The future four-target order in this design is unchanged.
+- The global desktop-worker contract shipped as v5. URL `process_video` and local-media request
+  envelopes retain their independent v3/v4 versions; no compatibility parser was added.
+- Python implements deterministic code-point splitting, UTF-8 byte-range/hash provenance, the
+  bounded map/reduce/optional-repair generator, and atomic report payloads. Rust validates current
+  and history results against the official transcript before returning locator eligibility.
+- The UI keeps a prior successful report viewable not only after an edit, but also while a rerun
+  fails or is cancelled. This is the concrete presentation of the design's “preserve old artifact”
+  rule; only a successful atomic replacement clears its stale marker.
+- Task 7 placed integrated supplier/privacy/cancellation coverage in the existing dissection and
+  browser suites instead of modifying every initially listed candidate test file. This is a test
+  ownership adjustment only; the designed runtime boundary did not change.
+- No server route/schema, dependency, model-download policy, user configuration, or packaging
+  payload was added.
 
 ## Implementation Order
 

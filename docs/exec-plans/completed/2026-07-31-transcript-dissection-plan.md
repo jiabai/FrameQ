@@ -58,7 +58,8 @@ successful report.
 - [x] Task 5: Extend frontend protocols, workflow state, and history state.
 - [x] Task 6: Add confirmation, report UI, stale handling, source location, and i18n.
 - [x] Task 7: Prove quota, cancellation, privacy, compatibility, packaging, and end-to-end behavior.
-- [ ] Task 8: Run completion gates, update durable docs, and archive this plan.
+- [x] 2026-08-01: Task 8 ran completion gates, synchronized durable docs, audited the scoped diff,
+  recorded native/live residual evidence, and archived this plan.
 
 ## Surprises & Discoveries
 
@@ -90,6 +91,11 @@ successful report.
 - Full browser tests initially failed as a group because their shared Tauri bridge still emitted v4
   terminal/history fixtures. Keeping those fixtures exact is part of the v5 contract migration; the
   UI must not weaken strict decoding to accommodate stale test data.
+- A clean Task 8 pytest invocation initially failed during fixture setup because the managed process
+  could not scan the user-level pytest temp root. Re-running the same full suite with a verified
+  worktree-local `--basetemp` passed 661 tests; the temporary tree was then removed.
+- PowerShell resolved `npm` to a policy-blocked `npm.ps1`; invoking the same installed tool through
+  `npm.cmd` ran all frontend gates successfully.
 
 ## Decision Log
 
@@ -114,12 +120,39 @@ successful report.
 - Decision: Keep the manifest generic with `dissection` and `dissection_md`; add no parallel boolean,
   path, or count fields. Rationale: artifact presence already models durable availability.
   Date/Author: 2026-07-31, User + Codex.
+- Decision: Preserve the previous successful report in the UI when a rerun fails or is cancelled,
+  in addition to preserving it on disk. Rationale: target-scoped failure must not hide the last
+  usable local artifact. Date/Author: 2026-08-01, Codex.
+- Decision: Archive with live paid-supplier and native packaged cross-platform UX checks recorded
+  as release residuals. Rationale: deterministic fake-supplier, browser, protocol, packaging, and
+  native Windows process evidence close implementation correctness without authorizing paid calls
+  or claiming unperformed physical-host acceptance. Date/Author: 2026-08-01, Codex.
 
 ## Outcomes & Retrospective
 
-Not implemented yet. During execution, record completed behavior, exact validation evidence,
-manual checks, deviations from this plan, and residual release risks here before moving this file to
-`docs/exec-plans/completed/`.
+Implemented the independent `dissection` AI target end to end. Contract v5, Python bounded
+map/reduce/repair generation, task-journal publication, Rust task/source validation, History
+recovery, and the React confirmation/report/stale/location flows now agree on one closed schema and
+one six-attempt maximum. The current UI has three targets because draft remains deliberately absent.
+
+The most important implementation lesson was that provenance needs two different units at its two
+boundaries: deterministic splitting counts Unicode code points for Python/TypeScript preview parity,
+while local source verification uses UTF-8 bytes and hashes. Keeping both explicit prevented emoji
+drift and avoided misusing ASR segment IDs.
+
+Task 8 evidence: worker `661 passed, 2 skipped` with one existing `audioop` deprecation warning;
+Ruff passed; Rust `233 passed` under normal Windows child-process permissions; frontend `664 passed`;
+TypeScript/i18n lint, rustfmt, and production build passed; repository scripts `29 passed`; governance
+ERROR/WARN reported zero violations; `git diff --check` passed. The production build retains the
+existing 709.44 kB single-chunk warning. The first pytest/temp-root, Rust managed-sandbox, and
+PowerShell `npm.ps1` failures were environment boundaries and were resolved by rerunning the exact
+gates with a worktree basetemp, normal Windows process permission, and `npm.cmd` respectively.
+
+No runtime server/schema, dependency, model, or configuration change was required. The scoped diff
+and packaging tests contain only synthetic fixtures and fixed contract/path names; no user
+transcript/report, source URL, absolute local path, token/key, or private configuration is bundled.
+Remaining release evidence is a live paid-supplier/quota run and physical native packaged UX on each
+supported platform. Those are explicitly unperformed residuals, not pass claims.
 
 ## Contract Invariants
 
@@ -290,7 +323,7 @@ artifact commit. It must never clamp or silently drop invalid content.
   uv run ruff check worker
   ```
 
-- [ ] Commit the worker domain slice:
+- [x] Commit the worker domain slice (`c4ce2b2`):
 
   ```powershell
   git add worker/frameq_worker/insightflow worker/frameq_worker/pipeline_runtime worker/tests
@@ -333,7 +366,7 @@ artifact commit. It must never clamp or silently drop invalid content.
   uv run ruff check worker
   ```
 
-- [ ] Commit the application/persistence slice:
+- [x] Commit the application/persistence slice (`5f29149`):
 
   ```powershell
   git add worker/frameq_worker worker/tests
@@ -385,7 +418,7 @@ artifact commit. It must never clamp or silently drop invalid content.
   cargo test --manifest-path app/src-tauri/Cargo.toml history
   ```
 
-- [ ] Commit the Rust boundary slice:
+- [x] Commit the Rust boundary slice (`473f58f`):
 
   ```powershell
   git add app/src-tauri/src
@@ -549,7 +582,7 @@ artifact commit. It must never clamp or silently drop invalid content.
   node --test scripts/tests/*.test.mjs
   ```
 
-- [ ] Commit the integration slice:
+- [x] Commit the integration slice (`3935c71`):
 
   ```powershell
   git add worker app scripts contracts
@@ -571,20 +604,21 @@ artifact commit. It must never clamp or silently drop invalid content.
   `docs/exec-plans/completed/2026-07-31-transcript-dissection-plan.md`
 - Modify: `docs/exec-plans/completed/index.md`
 
-- [ ] Update architecture ownership, UI behavior, privacy/data-flow rules, fixed artifacts, contract
+- [x] Update architecture ownership, UI behavior, privacy/data-flow rules, fixed artifacts, contract
   version, and task status. Record implementation deviations in the durable design before changing
   its status to implemented.
-- [ ] Run the complete validation matrix below from a clean command invocation. Do not mark a row
+- [x] Run the complete validation matrix below from a clean command invocation. Do not mark a row
   complete from an earlier or partial run.
-- [ ] Manually inspect `git diff`, built resources, logs, errors, and fixtures for transcript/report
+- [x] Manually inspect `git diff`, built resources, logs, errors, and fixtures for transcript/report
   content, URLs, local absolute paths, tokens, keys, and bundled private configuration.
-- [ ] Perform manual UX checks with short Chinese, emoji-containing, and English transcripts; a
-  16-chunk transcript; a 17-chunk rejected transcript; insufficient quota; cancellation after one
-  charged call; stale after edit; restart/history restore; and an old task without dissection.
-- [ ] Update Progress, Surprises & Discoveries, Decision Log, Outcomes & Retrospective, validation
+- [x] Cover short Chinese, emoji-containing, English, 16-chunk, 17-chunk rejection, insufficient
+  quota, cancellation after checkout, stale edit, restart/history, and legacy-no-dissection flows
+  with deterministic worker/browser automation; record live supplier and physical native packaged
+  UX as release residuals rather than claiming manual evidence.
+- [x] Update Progress, Surprises & Discoveries, Decision Log, Outcomes & Retrospective, validation
   evidence, and residual risks. Archive only when all required automated gates pass and external
   manual evidence is either complete or explicitly recorded as a release residual.
-- [ ] Commit governance closure:
+- [x] Commit governance closure:
 
   ```powershell
   git add TASKS.md docs
@@ -605,6 +639,11 @@ artifact commit. It must never clamp or silently drop invalid content.
 | Packaging/contracts | `node --test scripts/tests/*.test.mjs` | All tests pass |
 | Governance | `python scripts/validate_agents_docs.py --level WARN` | No WARN/ERROR violations attributable to this change |
 | Patch hygiene | `git diff --check` | Exit 0 |
+
+Task 8 actual results: worker 661 passed / 2 platform skips; Ruff exit 0; Rust 233 passed; rustfmt
+exit 0; frontend 664 passed; lint/build exit 0; scripts 29 passed; governance 0 WARN/ERROR; diff
+check exit 0. Rust child-process termination tests require normal Windows process permissions and
+passed there; their managed-sandbox failure is not recorded as product evidence.
 
 ## Manual Acceptance Checklist
 
@@ -649,3 +688,6 @@ artifact commit. It must never clamp or silently drop invalid content.
   authoritative and must reject before checkout.
 - Release evidence must explicitly distinguish automated fake-supplier coverage from any live
   supplier/quota test. No live paid call is required unless separately authorized.
+- Live paid-supplier/quota behavior and physical native packaged UI checks on every supported
+  platform were not run in this implementation session. Release owners must perform or explicitly
+  waive those checks before claiming live-provider or cross-platform manual acceptance.

@@ -88,8 +88,8 @@
 - Transcript segments share one quiet list boundary and adjacent dividers; they are not separate
   rounded cards. Playback uses a pale row background with an inset left accent, editing uses a
   contained white editor, and the external focus halo is reserved for keyboard focus.
-- The AI workspace uses a quiet availability/privacy header and one grouped list containing two
-  semantic target rows: `要点总结（同时生成思维导图文件）` and `启发灵感`. Each owns its status,
+- The AI workspace uses a quiet availability/privacy header and one grouped list containing three
+  semantic target rows: `要点总结（同时生成思维导图文件）`, `启发灵感`, and `文字稿解剖`. Each owns its status,
   quota copy, confirm/retry/view actions, progress, and error without another independent card
   border or radius.
 - Workspace headings use the current locale and remain the only visible workspace titles. The task banner owns ready
@@ -99,6 +99,11 @@
   confirmation-sheet submit remains the primary action.
 - AI generation leaves the local workspace readable and playable while disabling transcript
   edit/save with `AI 正在使用已保存版本`. A target failure stays in that target card.
+- `文字稿解剖` never auto-runs. Its confirmation shows frozen transcript facts, output language,
+  deterministic call range, worst-case Credits, and the exact cloud-text disclosure. Its detail
+  sheet renders the structured report, supports copy/export, and locates cited text only when Rust
+  verified the current transcript and UTF-8 source ranges. Saving an edit keeps the former report
+  visible as stale and disables location; a failed rerun also keeps that report available.
 - The completion banner says video, audio, and transcript are saved locally. AI copy says
   confirmation sends transcript fragments only and never implies video/audio upload.
 - Do not use gradient backgrounds, glass stacks, decorative motion, equal-height filler,
@@ -158,7 +163,8 @@
 - Subtitle-first transcript reuse should be invisible in the main single-link workflow: no subtitle picker, no platform-specific tab, and no raw `.vtt` / `.srt` result card.
 - During `视频转译中`, worker progress copy may say `正在检测平台字幕`, `已检测到字幕，跳过 ASR`, or `未检测到字幕，开始 ASR` while staying inside the existing transcription stage.
 - The `完整文字稿` detail view may show a compact source line such as `来源：平台字幕（zh-Hans）` or `来源：本地 ASR`. It should not claim whether the subtitle was manual, automatic, or translated.
-- Result card order and behavior remain unchanged. Video and audio entries still locate local files; the transcript entry opens the readable transcript; AI整理 still shows summary and insights only.
+- Video and audio entries still locate local files; the transcript entry opens the readable transcript;
+  AI整理 shows summary, insights, and dissection. Dissection is third while draft is unimplemented.
 
 ## 2026-07-03 Transcript Audio Review UX
 
@@ -241,13 +247,13 @@ UI 必须围绕以下状态组织：
 - `要点总结` 的独立 AI 详情 sheet 必须通过经净化的 GitHub Flavored Markdown 渲染器展示 `summary.md`；不得渲染 Markdown 中的原始 HTML 或 Mermaid 源码。
 - 主按钮文案固定为 `确认`。
 - 处理和完成态不再显示 URL 输入区域。
-- 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载 `要点总结` 和 `启发灵感` 两个独立 target 卡片。
+- 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载 `要点总结`、`启发灵感` 和 `文字稿解剖` 三个独立 target 卡片。
 - 文字稿直接在左侧工作区审阅，不进入共享 Tab；AI 结果可打开各自的轻量详情 sheet，不与文字稿共用容器。
 - AI 详情 sheet 内部内容独立滚动，支持 `Esc` 关闭。
 - 复制按钮只复制当前工作区或当前 AI 详情的文本；无内容时置灰。
 - 导出按钮在对应 artifact 生成前置灰；启用后定位当前任务目录中的正式 artifact。
 - 进度区优先展示 worker 事件中的具体阶段文案；没有事件时回退到当前阶段默认文案。
-- `要点总结` 或 `启发灵感` 待生成或失败时，点击卡片先打开各自确认流程；`要点总结` 确认后只生成总结和隐藏 Mermaid mindmap，`启发灵感` 确认后只生成灵感，不重新下载视频、重新提取音频或重新转写。Mermaid 文本只写入本地文件，不在 UI 中展示或渲染。
+- 任一 AI target 待生成或失败时，点击卡片先打开各自确认流程；`要点总结` 确认后只生成总结和隐藏 Mermaid mindmap，`启发灵感` 确认后只生成灵感，`文字稿解剖` 确认后只生成结构化解剖报告。它们都不重新下载视频、重新提取音频或重新转写。Mermaid 文本只写入本地文件，不在 UI 中展示或渲染。
 - 取消任务只在处理中显示；点击后先显示“正在取消”并保留当前任务和 operation ID，直到 worker 或模型下载确认取消后才返回输入态并保留刚提交的 URL。
 - 取消信号发送失败时必须恢复可观察的原处理态并显示简明错误；自然完成或失败与取消竞争时，真实终态优先显示，不能被“正在取消”覆盖。
 - 顶部工具区提供设置入口；设置面板用于管理本机 ASR、输出目录和 app-local `.env` 配置文件位置，AI 结果 LLM 由服务端管理员配置。
@@ -278,7 +284,7 @@ UI 必须围绕以下状态组织：
 - 等待输入态的单张输入卡应与桌面窗口比例协调，在默认桌面窗口宽度下使用宽松表单宽度，而不是窄小网页表单。
 - 处理态和完成态采用上下排列：task monitor 在上，结果工作区在下；避免两个大卡片左右并排导致内容被横向割裂。
 - 处理态使用 task monitor：阶段 timeline、百分比、worker 事件文案和取消按钮必须在同一信息层级内可扫描。
-- 完成态使用全宽状态横幅与 62/38 双工作区：左侧是紧凑媒体操作、可滚动文字稿和固定校对操作栏，右侧是两个独立 AI target 卡片；低于 1100 px 时按本地工作区、AI 工作区顺序纵向堆叠。
+- 完成态使用全宽状态横幅与 62/38 双工作区：左侧是紧凑媒体操作、可滚动文字稿和固定校对操作栏，右侧是三个独立 AI target 卡片；低于 1100 px 时按本地工作区、AI 工作区顺序纵向堆叠。
 - 设置面板使用 macOS sheet 质感：分组表单、本地隐私提示、内部滚动和底部固定操作区。
 - 历史面板使用紧凑列表：状态 badge、摘要、时间、输出目录和结果数量/错误码必须可快速扫描。
 - 历史卡片主标题必须区分文字稿预览与来源 URL fallback，最多显示两行；卡片按内容自然高度排列，单行标题不得为视觉等高预留第二行空白。截断内容仍需通过原生可访问文本和 `title` 保留完整值。

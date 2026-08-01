@@ -2,6 +2,17 @@
 
 ## Active UI Work
 
+- [x] Implement transcript dissection generation and persistence (2026-08-01) — ✅ added the third
+  current `智能提炼` target with explicit bounded-call confirmation, contract v5, deterministic
+  UTF-8 source provenance, managed per-call checkout, strict structured generation, atomic
+  `ai/dissection.json` + `ai/dissection.md`, Rust-validated History restoration, stale-safe source
+  location, copy/export, three locales, and preservation of the former report on failed reruns.
+  Automated evidence: worker 661 passed / 2 platform skips, frontend 664 passed, Rust 233 passed,
+  scripts 29 passed, Ruff/lint/rustfmt/build/governance/diff gates passed. Live paid-supplier and
+  native packaged cross-platform UX remain explicit release residuals. Design:
+  `docs/design-docs/2026-07-31-transcript-dissection-feature.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-07-31-transcript-dissection-plan.md`.
+
 - [x] Harden the real ONNX VAD result contract and remove full-audio ONNX fallback (2026-07-29) — ✅ Acceptance:
   stream bounded chunks through bundled `Fsmn_vad_online`, collect its stateful endpoint events,
   require one `ndarray` per SenseVoiceSmall-ONNX call, make every VAD/audio/block preparation

@@ -1,5 +1,27 @@
 # Security and Compliance
 
+## 2026-08-01 Transcript-dissection data-flow and integrity boundary
+
+- Dissection starts only after target-specific confirmation. The preview freezes output language,
+  authoritative transcript facts, the versioned call plan, and worst-case Credits requirement;
+  an over-limit transcript or insufficient quota starts no worker and performs no checkout.
+- Worker stdin contains target/task intent, not transcript text or a frontend-supplied path. Rust
+  admits only a supported task; Python reads one validated `transcript/transcript.txt` snapshot and
+  sends only required transcript-derived chunks/prompts to the checked-out supplier.
+- FrameQ server checkout requests contain account, entitlement, quota, and idempotency data only.
+  Video/audio bytes, source URL, local paths, transcript/prompt/report content, preferences, other
+  AI results, credentials, and private configuration are forbidden from server payloads, logs,
+  progress, errors, fixtures shipped in the package, and diagnostics.
+- The report stores UTF-8 byte ranges and SHA-256 provenance, never copied source snippets. Rust
+  revalidates the official transcript and every cited slice before enabling local source location.
+  A mismatch is viewable as stale but cannot be located; malformed or linked artifacts fail closed.
+- `ai/dissection.json`, `ai/dissection.md`, and manifest references publish through one task journal
+  transaction. Cancellation, supplier/validation failure, and crash recovery preserve the previous
+  complete version and never expose a partial replacement.
+- Contract v5 values remain closed across JSON, Python, Rust, and TypeScript. The installer includes
+  runtime source needed for dissection but no transcript/report fixture, model weight, LLM key, or
+  user configuration.
+
 ## 2026-07-24 General Tauri IPC Result Validation Boundary
 
 - Every FrameQ-owned Rust/Tauri command result is untrusted at the TypeScript runtime boundary.

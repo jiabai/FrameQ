@@ -1,5 +1,28 @@
 # FrameQ Architecture
 
+## 2026-08-01 Transcript-dissection target boundary
+
+- Desktop-worker contract v5 adds the closed `dissection` retry target, terminal result, and
+  `dissection` / `dissection_md` artifact keys. The independently versioned URL and local-media
+  request envelopes remain v3 and v4; neither processing path can auto-run cloud AI.
+- React owns the explicit confirmation and frozen call-plan preview, target-scoped lifecycle,
+  structured report presentation, and conservative stale state after transcript save. While
+  `draft` remains unimplemented, dissection is the third visible AI target.
+- Python owns one validated official-transcript snapshot, deterministic Unicode-code-point chunks
+  with UTF-8 byte provenance, the versioned four-chunks-per-map plus reduce/optional-repair plan,
+  strict report validation, and atomic `ai/dissection.json` + `ai/dissection.md` publication through
+  `TaskStoreFacade.finalize()`. A run can attempt at most six supplier calls.
+- Rust remains the task/path authority. It closes v5 terminal decoding, validates the two fixed
+  artifacts and source transcript/range hashes, restores current or stale reports from History,
+  and never confuses splitter chunk IDs with ASR segment IDs.
+- Every supplier attempt uses the existing server-managed checkout independently. The FrameQ server
+  receives only account/entitlement/quota/checkout data; it does not receive or persist transcript,
+  prompt, report, preferences, URL, or local paths. Cancellation/failure exposes no partial report
+  and preserves the last complete version.
+- Durable behavior and evidence are recorded in
+  `docs/design-docs/2026-07-31-transcript-dissection-feature.md` and
+  `docs/exec-plans/completed/2026-07-31-transcript-dissection-plan.md`.
+
 ## 2026-07-29 ONNX VAD result-contract and fail-closed inference boundary
 
 - The ONNX adapter uses `funasr_onnx.Fsmn_vad_online`, not the offline `Fsmn_vad` whole-waveform

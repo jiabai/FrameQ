@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-07-31-transcript-dissection-plan.md` | Added contract-v5 transcript dissection with bounded managed calls, atomic local reports, strict source provenance, History recovery, stale-safe location, and end-to-end privacy/packaging coverage. |
 | `2026-07-29-onnx-vad-result-contract-hardening-plan.md` | Replaced whole-waveform ONNX VAD/ASR paths with bounded stateful online VAD and ndarray-only per-interval ASR, verified by the retained 95-minute source. |
 | `2026-07-28-onnx-segment-inference-hardening-plan.md` | Changed SenseVoiceSmall-ONNX from one `list[ndarray]` call to ordered per-block calls and made block inference failures terminal without full-audio retry. |
 | `2026-07-28-bundled-onnx-runtime-integrity-plan.md` | Locked the release-time requirements export, bundled-Python pip install, and ONNX import smoke test; independently verified `funasr-onnx 0.4.2`, `onnxruntime 1.28.0`, and Deno in the Windows package resources without runtime package installation. |

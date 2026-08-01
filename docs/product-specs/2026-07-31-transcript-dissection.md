@@ -1,7 +1,7 @@
 # 文字稿解剖（Transcript Dissection）产品规格
 
 **Date:** 2026-07-31
-**Status:** Approved for implementation planning
+**Status:** Implemented 2026-08-01
 **Product area:** `智能提炼` 工作区
 **Target:** `dissection`
 
