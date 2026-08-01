@@ -57,7 +57,7 @@ successful report.
 - [x] Task 4: Add Rust terminal decoding, task access, integrity checks, and history recovery.
 - [x] Task 5: Extend frontend protocols, workflow state, and history state.
 - [x] Task 6: Add confirmation, report UI, stale handling, source location, and i18n.
-- [ ] Task 7: Prove quota, cancellation, privacy, compatibility, packaging, and end-to-end behavior.
+- [x] Task 7: Prove quota, cancellation, privacy, compatibility, packaging, and end-to-end behavior.
 - [ ] Task 8: Run completion gates, update durable docs, and archive this plan.
 
 ## Surprises & Discoveries
@@ -499,7 +499,7 @@ artifact commit. It must never clamp or silently drop invalid content.
   npm --prefix app run build
   ```
 
-- [ ] Commit the UI slice:
+- [x] Commit the UI slice (`f516a19`):
 
   ```powershell
   git add app/src
@@ -518,23 +518,25 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Modify: `app/tests/app-input.browser.test.ts`
 - Modify: relevant `scripts/tests/*.test.mjs`
 
-- [ ] Add an integrated fake-supplier test for 1, 4, 5, and 16 chunks. Assert the exact map/reduce
+- [x] Add an integrated fake-supplier test for 1, 4, 5, and 16 chunks. Assert the exact map/reduce
   call sequence, checkout count, one optional repair, hard stop at six, and no checkout for an
   over-limit authoritative transcript, including one changed after the confirmation preview.
-- [ ] Test cancellation before the first checkout and between every subsequent call. Completed
+- [x] Test cancellation before the first checkout and between every subsequent call. Completed
   checkouts remain consumed; unstarted calls are absent; no partial artifact is committed.
-- [ ] Capture fake server and supplier payloads. Assert the FrameQ server receives only account,
+- [x] Capture fake server and supplier payloads. Assert the FrameQ server receives only account,
   entitlement, quota, and checkout data; the supplier receives only required transcript-derived
   content; neither receives video/audio bytes, URL, absolute paths, preferences, other AI results,
   the final report, or secrets in logs/errors/progress.
-- [ ] Add browser coverage from a completed transcript through confirmation, generation, report,
+- [x] Add browser coverage from a completed transcript through confirmation, generation, report,
   source location, transcript edit, stale state, failed redissection, successful replacement, app
   reload/history restoration, and deletion.
-- [ ] Prove old tasks with no dissection keys load normally, and summary/insights retry behavior and
+- [x] Prove old tasks with no dissection keys load normally, and summary/insights retry behavior and
   existing exact protocol rejection tests remain unchanged.
-- [ ] Verify packaged-worker contract generation includes the version-5 result shape and new Python
+- [x] Verify packaged-worker contract generation includes the version-5 result shape and new Python
   modules without bundling any model, key, user configuration, transcript, or report fixture.
-- [ ] Run and require PASS:
+- [x] Run and require PASS (661 worker tests passed / 2 platform skips; 664 frontend tests passed;
+  233 Rust tests passed after Task 4 with no subsequent Rust changes; 29 script tests, Ruff, TypeScript
+  lint, Cargo fmt, and the production frontend build passed):
 
   ```powershell
   uv run pytest worker\tests -q

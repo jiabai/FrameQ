@@ -272,6 +272,7 @@ export function createTaskWorkspaceViewModel(
       summary,
       insights,
       dissection,
+      dissectionAvailable: workflow.dissection !== null,
       dissectionStale: workflow.dissectionStale,
     },
   };

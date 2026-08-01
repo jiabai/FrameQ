@@ -44,6 +44,35 @@ const secondHistoryTask = {
   text: "历史任务乙完整文字稿",
 };
 
+const smokeDissection = {
+  schemaVersion: 1,
+  sourceTranscriptSha256: "a".repeat(64),
+  sourceLanguage: null,
+  sourceChunks: [{ id: 1, startByte: 0, endByte: 3, sha256: "b".repeat(64) }],
+  overallNarrative: {
+    openingHook: "Question",
+    structureType: "problem-solution",
+    turningPoint: null,
+    closingType: "Call to action",
+  },
+  segments: [{
+    id: 1,
+    title: "Opening",
+    sourceChunkIds: [1],
+    coreClaim: "Core claim",
+    supportingPoints: ["Evidence"],
+    rhetoricalDevices: ["Contrast"],
+    rhythmNote: "Fast",
+    reusablePattern: "Question then answer",
+    riskFlags: [],
+  }],
+  highlights: ["Highlight"],
+  reusableTemplate: { name: "Template", skeleton: ["Hook", "Evidence", "Close"] },
+  audienceFit: [{ audience: "Creators", fit: "high", note: "Actionable" }],
+  strengths: ["Clear"],
+  weaknesses: ["Brief"],
+};
+
 function historyDetailResponse(task: typeof firstHistoryTask) {
   return {
     task_id: task.task_id,
@@ -278,7 +307,9 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
               task_dir: null,
               artifacts: target === "summary"
                 ? { summary: "ai/summary.md", mindmap: "ai/mindmap.mmd" }
-                : { insights: "ai/insights.json" },
+                : target === "dissection"
+                  ? { dissection: "ai/dissection.json", dissection_md: "ai/dissection.md" }
+                  : { insights: "ai/insights.json" },
               text: "",
               summary: target === "summary" ? "模拟要点总结" : "",
               insights: target === "insights" ? [{
@@ -290,7 +321,7 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
                 sourceChunkId: 1
               }] : [],
               transcript: null,
-              dissection: null,
+              dissection: target === "dissection" ? ${JSON.stringify(smokeDissection)} : null,
               error: null
             });
           }

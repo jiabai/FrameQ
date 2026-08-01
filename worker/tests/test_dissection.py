@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from urllib.request import Request
 
 import pytest
 from frameq_worker.insightflow.dissection import (
@@ -12,6 +13,7 @@ from frameq_worker.insightflow.dissection import (
     parse_persisted_dissection,
 )
 from frameq_worker.insightflow.splitter import MarkdownSplitter
+from frameq_worker.llm import ServerManagedInsightClient
 from frameq_worker.pipeline_runtime.insights import run_insight_generation_step
 
 
@@ -271,3 +273,156 @@ def test_empty_official_transcript_stops_before_any_supplier_call(tmp_path) -> N
     assert result.error is not None
     assert result.error.code == "DISSECTION_EMPTY_TRANSCRIPT"
     assert result.artifact_payloads == {}
+
+
+@pytest.mark.parametrize(
+    ("chunk_count", "expected_calls"),
+    [(1, 2), (4, 2), (5, 3), (16, 5)],
+)
+def test_managed_generation_checks_out_once_per_bounded_supplier_call(
+    chunk_count: int,
+    expected_calls: int,
+) -> None:
+    transcript = "x" * (chunk_count * 2000)
+    checkout_payloads: list[dict[str, object]] = []
+    supplier_payloads: list[dict[str, object]] = []
+
+    def transport(request: Request, _timeout: float) -> bytes:
+        payload = json.loads(request.data.decode("utf-8"))  # type: ignore[union-attr]
+        if request.full_url == "https://frameq.test/checkouts":
+            checkout_payloads.append(payload)
+            return json.dumps(
+                {
+                    "provider": "openai_compatible",
+                    "base_url": "https://supplier.test/v1",
+                    "model": "fake-model",
+                    "api_key": "ephemeral-key",
+                    "timeout_seconds": 10,
+                }
+            ).encode()
+        supplier_payloads.append(payload)
+        supplier_call = len(supplier_payloads)
+        map_calls = len(build_dissection_call_plan(chunk_count).map_batches)
+        content: object = (
+            {"batch": supplier_call, "segments": []}
+            if supplier_call <= map_calls
+            else _valid_report_for(transcript)
+        )
+        return json.dumps(
+            {"choices": [{"message": {"content": json.dumps(content)}}]}
+        ).encode()
+
+    client = ServerManagedInsightClient(
+        checkout_url="https://frameq.test/checkouts",
+        session_token="session-secret",
+        request_id="dissection-test",
+        transport=transport,
+    )
+    report = generate_transcript_dissection(
+        transcript,
+        client=client,
+        output_language="en-US",
+        source_language=None,
+    )
+
+    assert report.segments[0].source_chunk_ids == (1,)
+    assert len(checkout_payloads) == expected_calls
+    assert len(supplier_payloads) == expected_calls
+    assert all(set(payload) == {"request_id"} for payload in checkout_payloads)
+    assert [payload["request_id"] for payload in checkout_payloads] == [
+        f"dissection-test-call-{index:04d}"
+        for index in range(1, expected_calls + 1)
+    ]
+    assert all(
+        set(payload) == {"model", "messages", "temperature"}
+        for payload in supplier_payloads
+    )
+    assert all("session-secret" not in json.dumps(payload) for payload in supplier_payloads)
+    assert "x" * 32 in supplier_payloads[0]["messages"][0]["content"]
+    assert "x" * 32 not in supplier_payloads[-1]["messages"][0]["content"]
+
+
+def test_over_limit_transcript_and_cancellation_stop_unstarted_calls() -> None:
+    class CountingClient:
+        def __init__(self) -> None:
+            self.prompts: list[str] = []
+
+        def generate(self, prompt: str) -> str:
+            self.prompts.append(prompt)
+            return json.dumps({"batch": len(self.prompts), "segments": []})
+
+    over_limit_client = CountingClient()
+    with pytest.raises(DissectionGenerationError) as captured:
+        generate_transcript_dissection(
+            "x" * (16 * 2000 + 1),
+            client=over_limit_client,
+            output_language="en-US",
+            source_language=None,
+        )
+    assert captured.value.code == "DISSECTION_TRANSCRIPT_TOO_LARGE"
+    assert over_limit_client.prompts == []
+
+    for completed_calls in range(0, 6):
+        checkout_ids: list[str] = []
+        supplier_calls = [0]
+
+        def transport(
+            request: Request,
+            _timeout: float,
+            current_checkouts=checkout_ids,
+            current_supplier_calls=supplier_calls,
+        ) -> bytes:
+            if request.full_url == "https://frameq.test/checkouts":
+                payload = json.loads(request.data.decode("utf-8"))  # type: ignore[union-attr]
+                current_checkouts.append(payload["request_id"])
+                return json.dumps(
+                    {
+                        "provider": "openai_compatible",
+                        "base_url": "https://supplier.test/v1",
+                        "model": "fake-model",
+                        "api_key": "ephemeral-key",
+                    }
+                ).encode()
+            current_supplier_calls[0] += 1
+            return json.dumps(
+                {
+                    "choices": [
+                        {"message": {"content": json.dumps({"invalid": True})}}
+                    ]
+                }
+            ).encode()
+
+        client = ServerManagedInsightClient(
+            checkout_url="https://frameq.test/checkouts",
+            session_token="session-secret",
+            request_id="cancel-test",
+            transport=transport,
+        )
+
+        def cancel_check(
+            current_checkouts=checkout_ids,
+            limit=completed_calls,
+        ) -> bool:
+            return len(current_checkouts) >= limit
+
+        with pytest.raises(DissectionGenerationError) as cancelled:
+            generate_transcript_dissection(
+                "x" * (16 * 2000),
+                client=client,
+                output_language="en-US",
+                source_language=None,
+                cancel_check=cancel_check,
+            )
+        assert cancelled.value.code == "DISSECTION_CANCELLED"
+        assert len(checkout_ids) == completed_calls
+        assert supplier_calls[0] == completed_calls
+
+
+def _valid_report_for(transcript: str) -> dict[str, object]:
+    report = valid_semantic_report()
+    report["highlights"] = [transcript[:1]]
+    segment = report["segments"][0]
+    assert isinstance(segment, dict)
+    segment["coreClaim"] = transcript[:1]
+    segment["supportingPoints"] = [transcript[:1]]
+    return report

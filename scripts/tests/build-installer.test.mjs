@@ -18,6 +18,7 @@ import {
 const testDir = dirname(fileURLToPath(import.meta.url));
 const buildInstallerPath = join(testDir, "..", "build-installer.mjs");
 const projectManifestPath = join(testDir, "..", "..", "pyproject.toml");
+const repoRoot = join(testDir, "..", "..");
 
 async function tempRoot(name) {
   return mkdtemp(join(tmpdir(), `frameq-${name}-`));
@@ -101,6 +102,28 @@ test("installer build installs and imports the bundled ONNX runtime before Tauri
   assert.ok(
     buildScript.indexOf("Python runtime smoke test") < buildScript.indexOf("Build Tauri installer"),
   );
+});
+
+test("installer bundles the version-5 dissection worker modules without private artifacts", () => {
+  const buildScript = readFileSync(buildInstallerPath, "utf8");
+  const contract = JSON.parse(
+    readFileSync(join(repoRoot, "contracts", "desktop-worker-contract.json"), "utf8"),
+  );
+
+  assert.equal(contract.contractVersion, 5);
+  assert.match(
+    buildScript,
+    /copyDirectoryContents\(join\(repoRoot, "worker", "frameq_worker"\), join\(destination, "frameq_worker"\)\)/,
+  );
+  assert.equal(
+    existsSync(join(repoRoot, "worker", "frameq_worker", "insightflow", "dissection.py")),
+    true,
+  );
+  assert.equal(
+    existsSync(join(repoRoot, "worker", "frameq_worker", "pipeline_runtime", "dissection.py")),
+    true,
+  );
+  assert.doesNotMatch(buildScript, /FRAMEQ_LLM_API_KEY\s*=|dissection\.json["']\s*,\s*["']/);
 });
 
 test("requireBundledDeno fails clearly when skip-download resources lack Deno", async () => {

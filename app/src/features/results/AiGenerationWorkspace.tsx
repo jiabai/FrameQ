@@ -103,6 +103,7 @@ export function AiGenerationWorkspace({
           creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
           blocked={Boolean(blocker)}
           stale={model.dissectionStale}
+          retainedResult={model.dissectionAvailable}
           icon={<ScanText size={18} aria-hidden="true" />}
           onAction={onDissectionAction}
           onView={() => onViewTarget("dissection")}
@@ -136,6 +137,7 @@ type AiTargetCardProps = {
   creditsSummary: string;
   blocked: boolean;
   stale?: boolean;
+  retainedResult?: boolean;
   icon: React.ReactNode;
   onAction: () => void;
   onView: () => void;
@@ -149,6 +151,7 @@ function AiTargetCard({
   creditsSummary,
   blocked,
   stale = false,
+  retainedResult = false,
   icon,
   onAction,
   onView,
@@ -157,6 +160,7 @@ function AiTargetCard({
   const active = target.status === "generating" || target.status === "cancelling";
   const ready = target.status === "ready";
   const failed = target.status === "failed";
+  const viewable = ready || retainedResult;
   const disabled = target.status === "locked" || active || blocked;
   const actionLabel = failed
     ? t("action.retry")
@@ -186,22 +190,16 @@ function AiTargetCard({
         {active ? (
           <LoaderCircle size={17} className="spin" aria-label={t("status.generating")} />
         ) : null}
-        {ready ? (
-          <>
+        {viewable ? (
             <button type="button" className="secondary-button" onClick={onView}>
               {t("action.view")}
             </button>
-            {target.target === "dissection" ? (
-              <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={blocked}>
-                {t("action.retry")}
-              </button>
-            ) : null}
-          </>
-        ) : (
+        ) : null}
+        {!active && (!ready || target.target === "dissection") ? (
           <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={disabled}>
             {actionLabel}
           </button>
-        )}
+        ) : null}
       </div>
     </article>
   );

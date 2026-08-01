@@ -2229,6 +2229,67 @@ describe("App controller-owned lifecycle UI smoke", () => {
     }
   }, 20_000);
 
+  test("confirms, generates, locates, and invalidates a transcript dissection", async () => {
+    const page = await openUiSmokePage({ deferredCommands: ["retry_insights"] });
+    try {
+      await openSmokeHistory(page);
+      await clickSelector(page, ".history-item-select");
+      await waitForRuntimeCondition(page, "!document.querySelector('.history-sheet')");
+      await clickSelector(page, '[data-ai-target="dissection"] .ai-target-action');
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.dissection-confirmation-sheet'))");
+      expect((await readUiSmokeCommands(page)).filter((entry) => entry.command === "retry_insights")).toHaveLength(0);
+
+      await clickSelector(page, ".dissection-confirmation-sheet .primary-button");
+      await waitForRuntimeCondition(page, "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.retry_insights?.length)");
+      const request = (await readUiSmokeCommands(page)).find((entry) => entry.command === "retry_insights");
+      expect(request?.args).toEqual({
+        request: {
+          task_id: "history-task-a",
+          target: "dissection",
+          output_language: "zh-CN",
+        },
+      });
+      await resolveUiSmokeCommand(page, "retry_insights", completedDissectionResult());
+      await waitForRuntimeCondition(page, "document.querySelector('[data-ai-target=\"dissection\"]')?.classList.contains('ready')");
+
+      await clickSelector(page, '[data-ai-target="dissection"] .secondary-button:not(.ai-target-action)');
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.dissection-report'))");
+      await clickSelector(page, ".dissection-segment-card .compact-button");
+      await waitForRuntimeCondition(page, "!document.querySelector('.ai-result-detail-sheet') && document.querySelector('.transcript-full-editor')?.selectionEnd > document.querySelector('.transcript-full-editor')?.selectionStart");
+
+      await replaceTextAreaValue(page, ".transcript-full-editor", "edited transcript");
+      await clickSelector(page, ".transcript-action-bar .primary-button");
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.dissection-card-stale'))");
+
+      await clickSelector(page, '[data-ai-target="dissection"] .ai-target-action');
+      await clickSelector(page, ".dissection-confirmation-sheet .primary-button");
+      await waitForRuntimeCondition(page, "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.retry_insights?.length)");
+      await resolveUiSmokeCommand(page, "retry_insights", {
+        ...completedDissectionResult(),
+        status: "partial_completed",
+        dissection: null,
+        error: {
+          code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+          message: "safe failure",
+          stage: "insights_generating",
+        },
+      });
+      await waitForRuntimeCondition(page, "document.querySelector('[data-ai-target=\"dissection\"]')?.classList.contains('failed')");
+      expect(await evaluateValue(page, "Boolean(document.querySelector('[data-ai-target=\"dissection\"] .secondary-button:not(.ai-target-action)'))")).toBe(true);
+
+      await clickSelector(page, '[data-ai-target="dissection"] .ai-target-action');
+      await clickSelector(page, ".dissection-confirmation-sheet .primary-button");
+      await waitForRuntimeCondition(page, "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.retry_insights?.length)");
+      const replacement = completedDissectionResult();
+      replacement.text = "edited transcript";
+      replacement.dissection.segments[0].coreClaim = "Replacement claim";
+      await resolveUiSmokeCommand(page, "retry_insights", replacement);
+      await waitForRuntimeCondition(page, "document.querySelector('[data-ai-target=\"dissection\"]')?.classList.contains('ready') && !document.querySelector('.dissection-card-stale')");
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
   test("keeps an AI target failure in the right workspace while the local transcript remains ready", async () => {
     const page = await openUiSmokePage({ deferredCommands: ["retry_insights"] });
     try {
@@ -3306,6 +3367,52 @@ function completedSummaryResult() {
     insights: [],
     transcript: null,
     dissection: null,
+    error: null,
+  };
+}
+
+function completedDissectionResult() {
+  return {
+    status: "completed",
+    task_id: "history-task-a",
+    task_dir: "C:/FrameQ/outputs/tasks/history-task-a",
+    artifacts: {
+      transcript_txt: "transcript/transcript.txt",
+      dissection: "ai/dissection.json",
+      dissection_md: "ai/dissection.md",
+    },
+    text: "历史任务甲完整文字稿",
+    summary: "",
+    insights: [],
+    transcript: null,
+    dissection: {
+      schemaVersion: 1,
+      sourceTranscriptSha256: "a".repeat(64),
+      sourceLanguage: null,
+      sourceChunks: [{ id: 1, startByte: 0, endByte: 3, sha256: "b".repeat(64) }],
+      overallNarrative: {
+        openingHook: "问题",
+        structureType: "问题—方案",
+        turningPoint: null,
+        closingType: "行动号召",
+      },
+      segments: [{
+        id: 1,
+        title: "开场",
+        sourceChunkIds: [1],
+        coreClaim: "核心观点",
+        supportingPoints: ["证据"],
+        rhetoricalDevices: ["对比"],
+        rhythmNote: "快速",
+        reusablePattern: "先问后答",
+        riskFlags: [],
+      }],
+      highlights: ["亮点"],
+      reusableTemplate: { name: "模板", skeleton: ["钩子", "证据", "收尾"] },
+      audienceFit: [{ audience: "创作者", fit: "high", note: "可执行" }],
+      strengths: ["清晰"],
+      weaknesses: ["证据较少"],
+    },
     error: null,
   };
 }

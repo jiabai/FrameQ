@@ -10,6 +10,7 @@ PUBLIC_PIPELINE_PATH = FRAMEQ_WORKER_ROOT / "pipeline.py"
 PRIVATE_PIPELINE_ROOT = FRAMEQ_WORKER_ROOT / "pipeline_runtime"
 EXPECTED_PRIVATE_FILES = {
     "__init__.py",
+    "dissection.py",
     "insights.py",
     "orchestration.py",
     "shared.py",
