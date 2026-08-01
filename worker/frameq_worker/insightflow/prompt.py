@@ -9,6 +9,70 @@ from frameq_worker.output_language import (
     output_language_semantics,
 )
 
+_MAP_SCHEMA_EXAMPLE = {
+    "segments": [
+        {
+            "title": "segment title",
+            "sourceChunkIds": [1],
+            "coreClaim": "source-grounded core claim",
+            "supportingPoints": ["source-grounded supporting point"],
+            "rhetoricalDevices": ["rhetorical device and its effect"],
+            "rhythmNote": "textual information-rhythm observation",
+            "reusablePattern": (
+                "must-keep structural function; replaceable [content slot]; optional node; "
+                "applicable type"
+            ),
+            "riskFlags": ["segment-specific inapplicability or cautious verification note"],
+        }
+    ],
+    "highlights": ["verbatim quotation from the supplied chunks"],
+    "strengths": ["source-grounded strength"],
+    "weaknesses": ["source-grounded weakness or global transfer limitation"],
+}
+
+_FINAL_SCHEMA_EXAMPLE = {
+    "overallNarrative": {
+        "openingHook": "opening hook or null",
+        "structureType": "overall progression structure",
+        "turningPoint": "turning point or null",
+        "closingType": "closing type or null",
+    },
+    "segments": [
+        {
+            "id": 1,
+            "title": "segment title",
+            "sourceChunkIds": [1],
+            "coreClaim": "source-grounded core claim",
+            "supportingPoints": ["source-grounded supporting point"],
+            "rhetoricalDevices": ["rhetorical device and its effect"],
+            "rhythmNote": "textual information-rhythm observation",
+            "reusablePattern": (
+                "must-keep structural function; replaceable [content slot]; optional node; "
+                "applicable type"
+            ),
+            "riskFlags": ["segment-specific inapplicability or cautious verification note"],
+        }
+    ],
+    "highlights": ["verbatim quotation present in map data"],
+    "reusableTemplate": {
+        "name": "template name",
+        "skeleton": [
+            "Required: introduce [audience problem]",
+            "Required: support with [core evidence]",
+            "Optional: close with [next action]",
+        ],
+    },
+    "audienceFit": [
+        {"audience": "audience", "fit": "high", "note": "source-grounded reason"}
+    ],
+    "strengths": ["source-grounded strength"],
+    "weaknesses": ["source-grounded weakness or global transfer limitation"],
+}
+
+
+def _schema_example(value: dict[str, object]) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=2)
+
 
 def build_dissection_map_prompt(
     chunks: list[MarkdownChunk],
@@ -16,11 +80,44 @@ def build_dissection_map_prompt(
 ) -> str:
     semantics = output_language_semantics(output_language)
     source = [{"id": chunk.id, "content": chunk.content} for chunk in chunks]
+    valid_chunk_ids = [chunk.id for chunk in chunks]
     return f"""# Transcript dissection map stage
 {semantics.prompt_instruction}
-Analyze only the supplied transcript chunks. Return one closed JSON object containing concise
-segment candidates and observations. Every candidate must cite sourceChunkIds from this batch.
-Do not add facts, preferences, paths, URLs, or prior AI results.
+Act as a senior content editor performing text-only structural analysis. Analyze only the supplied
+transcript chunks. Do not infer visual, audio, speaking-rate, editing, or conversion performance.
+
+## Analysis dimensions
+- Identify meaningful topic segments and boundaries, not arbitrary sentence groups.
+- For every segment, state its core claim, supporting points, rhetorical devices and their effect,
+  textual information rhythm, a transferable writing pattern, and cautious risk flags.
+- Treat risk flags only as claims that may need verification or judgments that may be controversial;
+  never present them as completed fact-checks.
+- Make reusable patterns actionable for writing transfer, but do not copy source wording as a
+  template or invent a product, audience, outcome, or fact.
+- Treat reuse as writing and content-structure transfer only. Each `reusablePattern` must name the
+  structural function that must remain, show replaceable bracketed slots such as `[audience need]`
+  or `[core evidence]`, identify every optional or removable node, include applicable content types,
+  and state any source-grounded inapplicability condition.
+- Put segment-specific inapplicability and transfer risks in `riskFlags`; put global limitations,
+  identity/evidence dependencies, and cases where the structure should not be reused in
+  `weaknesses`.
+- Never claim to analyze shots, camera movement, voice, music, captions, or equipment. Do not infer
+  conversion performance from transcript text.
+
+## Output contract
+- Return JSON only, without Markdown fences, commentary, or extra text.
+- Return one closed object with exactly these four keys: `segments`, `highlights`, `strengths`, and
+  `weaknesses`. Objects at every level must contain exactly the keys shown in the schema example.
+- Return 1 through 8 segments for this batch. `supportingPoints`, `rhetoricalDevices`, and
+  `riskFlags` each contain at most 6 concise strings.
+- `highlights` contains at most 8 verbatim quotations from the supplied chunks.
+- `strengths` and `weaknesses` each contain at most 6 source-grounded strings.
+- Every `sourceChunkIds` array is non-empty, ascending, deduplicated, and contains only IDs from
+  this batch. Legal sourceChunkIds for this batch: {valid_chunk_ids}
+- Do not add facts, preferences, paths, URLs, prior AI results, or unknown fields.
+
+## Exact intermediate JSON schema example
+{_schema_example(_MAP_SCHEMA_EXAMPLE)}
 
 ## Transcript chunks
 {json.dumps(source, ensure_ascii=False, separators=(",", ":"))}
@@ -34,10 +131,38 @@ def build_dissection_reduce_prompt(
     semantics = output_language_semantics(output_language)
     return f"""# Transcript dissection reduce stage
 {semantics.prompt_instruction}
-Combine only the structured map results into one closed JSON object with exactly these keys:
-overallNarrative, segments, highlights, reusableTemplate, audienceFit, strengths, weaknesses.
-Use sequential segment IDs. Keep sourceChunkIds ordered, unique, and non-empty. Use null only for
-optional narrative fields. highlights must be verbatim quotations already present in map data.
+Act as a senior content editor. Combine only the structured map results; do not add source text,
+facts, preferences, paths, URLs, prior AI results, or visual/audio claims.
+
+## Output contract
+- Return JSON only, without Markdown fences, commentary, or extra text.
+- Return one closed object with exactly these keys: `overallNarrative`, `segments`, `highlights`,
+  `reusableTemplate`, `audienceFit`, `strengths`, and `weaknesses`. Nested objects must contain
+  exactly the keys shown in the schema example.
+- `openingHook`, `turningPoint`, and `closingType` are either a non-empty string or null.
+  `structureType` is always a non-empty string.
+- Segment `id` values are sequential integers starting at 1. Every `sourceChunkIds` array is
+  non-empty, ascending, deduplicated, and uses only IDs present in the map results.
+- `supportingPoints`, `rhetoricalDevices`, and `riskFlags` are arrays of concise strings. Risk flags
+  use cautious language and never claim that fact-checking has been completed.
+- `highlights` contains at most 8 items. Every item is a verbatim quotation already present in map
+  data; never rewrite a quotation and still label it as source text.
+- `reusableTemplate.skeleton` contains 3 through 7 actionable, transferable writing steps and does
+  not copy the source verbatim; preserve must-keep nodes, use replaceable bracketed slots in the
+  required output language, mark every step as required or optional/removable, and include
+  applicable content types in the template or corresponding segment patterns.
+- Preserve optional or removable nodes and source-grounded applicability information from map data.
+  Route segment-specific limits to `riskFlags` and store global transfer limits in `weaknesses`,
+  including global inapplicability and identity- or evidence-dependent constraints.
+- Do not invent a product, audience, performance outcome, or use case. Limit recommendations to
+  writing and content-structure transfer; never claim analysis of shots, camera movement, voice,
+  music, captions, equipment, editing, or conversion performance.
+- Every `audienceFit.fit` is exactly one of `"high" | "medium" | "low"` and its note is grounded in
+  the map results.
+- `strengths` and `weaknesses` each contain at most 6 source-grounded strings.
+
+## Exact final semantic JSON schema example
+{_schema_example(_FINAL_SCHEMA_EXAMPLE)}
 
 ## Structured map results
 {json.dumps(map_results, ensure_ascii=False, separators=(",", ":"))}
@@ -47,12 +172,39 @@ optional narrative fields. highlights must be verbatim quotations already presen
 def build_dissection_repair_prompt(
     invalid_result: object,
     output_language: OutputLanguage,
+    *,
+    valid_chunk_ids: tuple[int, ...],
+    validation_category: str,
 ) -> str:
     semantics = output_language_semantics(output_language)
     return f"""# Transcript dissection repair stage
 {semantics.prompt_instruction}
-Repair this structured candidate to the exact reduce-stage schema. Do not introduce source text,
-facts, chunk IDs, or fields absent from the candidate. Return JSON only.
+Repair this structured candidate to the exact final semantic schema below.
+
+## Repair context
+- Validation category: {validation_category}
+- Legal sourceChunkIds: {list(valid_chunk_ids)}
+
+## Repair rules
+- Return JSON only, without Markdown fences, commentary, or extra text.
+- You may add required schema fields that are missing and remove unknown fields.
+- Populate added fields only by reorganizing evidence already present in the candidate. Use null for
+  missing optional narrative fields and empty arrays where the schema permits them.
+- Do not invent facts, quotations, or chunk IDs. Never use a chunk ID outside the legal list.
+- Preserve every valid source-grounded value that already satisfies the schema.
+- Repair structure and preserve actionable reuse guidance already present in the candidate,
+  including required versus optional nodes and replaceable bracketed slots.
+- Preserve applicability and inapplicability plus transfer risks. Repair
+  structure only; do not manufacture missing transfer evidence, products, audiences, outcomes, or
+  use cases.
+- Keep advice limited to writing and content-structure transfer. Never add claims about shots,
+  camera movement, voice, music, captions, equipment, editing, or conversion performance.
+- Enforce sequential segment IDs, ordered unique non-empty sourceChunkIds, the
+  `"high" | "medium" | "low"` fit enum, at most 8 highlights, at most 6 strengths and weaknesses,
+  and 3 through 7 reusable-template steps.
+
+## Exact final semantic JSON schema example
+{_schema_example(_FINAL_SCHEMA_EXAMPLE)}
 
 ## Invalid structured candidate
 {json.dumps(invalid_result, ensure_ascii=False, separators=(",", ":"))}

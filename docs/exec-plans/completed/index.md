@@ -2,6 +2,9 @@
 
 | File | Focus |
 |------|-------|
+| `2026-08-01-transcript-dissection-actionable-reuse-plan.md` | Made existing pattern/template/risk fields produce slot-based writing-transfer guidance with required/optional nodes and explicit applicability limits. |
+| `2026-08-01-transcript-dissection-markdown-completeness-plan.md` | Made the three-language Markdown artifact a complete projection of every user-visible dissection field while excluding internal provenance and preserving all runtime boundaries. |
+| `2026-08-01-transcript-dissection-prompt-contract-hardening-plan.md` | Aligned map/reduce/repair prompts with the strict nested report parser, added safe repair categories and legal chunk context, and preserved schema, quota, and privacy boundaries. |
 | `2026-07-31-transcript-dissection-plan.md` | Added contract-v5 transcript dissection with bounded managed calls, atomic local reports, strict source provenance, History recovery, stale-safe location, and end-to-end privacy/packaging coverage. |
 | `2026-07-29-onnx-vad-result-contract-hardening-plan.md` | Replaced whole-waveform ONNX VAD/ASR paths with bounded stateful online VAD and ndarray-only per-interval ASR, verified by the retained 95-minute source. |
 | `2026-07-28-onnx-segment-inference-hardening-plan.md` | Changed SenseVoiceSmall-ONNX from one `list[ndarray]` call to ordered per-block calls and made block inference failures terminal without full-audio retry. |

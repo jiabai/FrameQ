@@ -488,6 +488,64 @@ flowchart TD
 - No server route/schema, dependency, model-download policy, user configuration, or packaging
   payload was added.
 
+## 2026-08-01 Prompt Contract Hardening
+
+The shipped strict parser exposed a reliability mismatch: map prompts described only generic
+“segment candidates and observations”, reduce prompts named only top-level keys, and the repair
+prompt simultaneously required the exact schema while forbidding fields absent from the invalid
+candidate. Deterministic fake-supplier tests exercised orchestration but could not prove that a live
+supplier had enough instructions to produce the closed nested report.
+
+The hardening keeps report schema version 1, call-plan version 1, artifact paths, quota semantics,
+privacy boundaries, and UI behavior unchanged. `prompt.py` becomes the single presentation owner
+for two explicit schemas:
+
+- A closed map schema with exactly `segments`, `highlights`, `strengths`, and `weaknesses`. Each map
+  segment contains the final segment semantic fields except its final sequential `id`; every
+  `sourceChunkIds` value must come from the current batch.
+- The existing closed final semantic schema with `overallNarrative`, sequential `segments`,
+  `highlights`, `reusableTemplate`, `audienceFit`, `strengths`, and `weaknesses`, including nested
+  keys, enums, nullability, and collection limits already enforced by the parser.
+
+Repair receives the invalid candidate, the sorted legal chunk IDs, and a fixed non-content error
+category produced by the worker. It may add required schema fields or remove unknown fields, but it
+cannot invent source quotations, facts, or chunk IDs outside that legal set. No transcript text is
+added to repair prompts. Focused tests inspect the actual generated prompts for exact key sets,
+analysis dimensions, limits, JSON-only instructions, and the repaired-field rule; orchestration
+tests continue proving that reduce and repair do not receive raw transcript chunks.
+
+## 2026-08-01 Complete Markdown Projection
+
+`TranscriptDissection` remains the only report model. `format_dissection_markdown()` becomes a
+complete deterministic projection of its user-visible semantic fields rather than a shortened
+summary. It uses one locale-owned label set for `zh-CN`, `zh-TW`, and `en-US`, emits optional
+narrative values only when present, and omits headings for empty arrays.
+
+The projection includes all four narrative fields; every segment's claim, supporting points,
+rhetorical devices, rhythm, reusable pattern, risk flags, and source chunk IDs; the reusable
+template name and ordered skeleton; highlights; audience fit with localized fit labels; strengths;
+and weaknesses. It deliberately excludes provenance hashes, byte ranges, schema versions, local
+paths, prompts, and copied transcript chunks. JSON remains authoritative and artifact transaction,
+staleness, source-location, quota, and UI behavior do not change.
+
+## 2026-08-01 Actionable Reuse Prompt Semantics
+
+No report field or contract version is added. Existing fields receive a narrower semantic contract:
+
+- Segment `reusablePattern` states the structural function that must survive, names replaceable
+  content slots, identifies optional/removable nodes, and states applicable content types.
+- `reusableTemplate.skeleton` uses visible bracketed slots in the frozen output language and marks
+  every step as required or optional/removable.
+- Segment-specific transfer limitations stay in `riskFlags`; global inapplicability, identity- or
+  evidence-dependent limitations, and transfer failure modes stay in `weaknesses`.
+
+Map prompts collect this evidence per source batch. Reduce preserves and consolidates it without
+inventing a product, audience, performance outcome, or unsupported use case. Repair preserves these
+semantics when reorganizing an invalid candidate but cannot create missing evidence. All three
+stages explicitly limit the advice to writing/content-structure transfer and forbid claims about
+video frames, shots, camera movement, speaking rate, voice, editing, music, captions, equipment, or
+conversion performance.
+
 ## Implementation Order
 
 1. 审核并确认 `docs/product-specs/2026-07-31-transcript-dissection.md` 的用户可见行为与边界。

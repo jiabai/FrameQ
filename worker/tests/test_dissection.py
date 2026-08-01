@@ -8,9 +8,15 @@ import pytest
 from frameq_worker.insightflow.dissection import (
     DissectionGenerationError,
     build_dissection_call_plan,
+    format_dissection_markdown,
     generate_transcript_dissection,
     parse_dissection_report,
     parse_persisted_dissection,
+)
+from frameq_worker.insightflow.prompt import (
+    build_dissection_map_prompt,
+    build_dissection_reduce_prompt,
+    build_dissection_repair_prompt,
 )
 from frameq_worker.insightflow.splitter import MarkdownSplitter
 from frameq_worker.llm import ServerManagedInsightClient
@@ -111,6 +117,99 @@ def valid_semantic_report() -> dict[str, object]:
     }
 
 
+def test_map_prompt_declares_closed_intermediate_schema_and_analysis_rules() -> None:
+    chunks = MarkdownSplitter(max_length=8).split("开头钩子。中段论证。结尾行动。")[:2]
+
+    prompt = build_dissection_map_prompt(chunks, "zh-CN")
+
+    for key in (
+        '"segments"',
+        '"title"',
+        '"sourceChunkIds"',
+        '"coreClaim"',
+        '"supportingPoints"',
+        '"rhetoricalDevices"',
+        '"rhythmNote"',
+        '"reusablePattern"',
+        '"riskFlags"',
+        '"highlights"',
+        '"strengths"',
+        '"weaknesses"',
+    ):
+        assert key in prompt
+    assert "JSON only" in prompt
+    assert "exactly these four keys" in prompt
+    assert "at most 8" in prompt
+    assert "at most 6" in prompt
+    assert f"Legal sourceChunkIds for this batch: {[chunk.id for chunk in chunks]}" in prompt
+    assert "Do not infer visual, audio, speaking-rate, editing, or conversion" in prompt
+    assert "replaceable bracketed slots" in prompt
+    assert "must remain" in prompt
+    assert "optional or removable" in prompt
+    assert "applicable content types" in prompt
+    assert "inapplicability" in prompt
+    assert "writing and content-structure transfer only" in prompt
+    assert "shots, camera movement, voice, music, captions, or equipment" in prompt
+
+
+def test_reduce_prompt_declares_complete_final_schema_and_parser_limits() -> None:
+    prompt = build_dissection_reduce_prompt(
+        [{"segments": [], "highlights": [], "strengths": [], "weaknesses": []}],
+        "en-US",
+    )
+
+    for key in (
+        '"overallNarrative"',
+        '"openingHook"',
+        '"structureType"',
+        '"turningPoint"',
+        '"closingType"',
+        '"segments"',
+        '"id"',
+        '"sourceChunkIds"',
+        '"reusableTemplate"',
+        '"skeleton"',
+        '"audienceFit"',
+        '"fit"',
+    ):
+        assert key in prompt
+    assert '"high" | "medium" | "low"' in prompt
+    assert "3 through 7" in prompt
+    assert "at most 8" in prompt
+    assert "at most 6" in prompt
+    assert "JSON only" in prompt
+    assert "verbatim quotation" in prompt
+    assert "preserve must-keep nodes" in prompt
+    assert "replaceable bracketed slots" in prompt
+    assert "optional or removable nodes" in prompt
+    assert "applicable content types" in prompt
+    assert "global inapplicability" in prompt
+    assert "store global transfer limits in `weaknesses`" in prompt
+    assert "Do not invent a product, audience, performance outcome, or use case" in prompt
+
+
+def test_repair_prompt_allows_required_fields_with_safe_bounded_context() -> None:
+    prompt = build_dissection_repair_prompt(
+        {"segments": [{"sourceChunkIds": [2]}]},
+        "en-US",
+        valid_chunk_ids=(1, 2),
+        validation_category="source_references",
+    )
+
+    assert "add required schema fields that are missing" in prompt
+    assert "remove unknown fields" in prompt
+    assert "Legal sourceChunkIds: [1, 2]" in prompt
+    assert "Validation category: source_references" in prompt
+    assert "Do not invent facts, quotations, or chunk IDs" in prompt
+    assert "JSON only" in prompt
+    assert "开头钩子" not in prompt
+    assert "preserve actionable reuse guidance" in prompt
+    assert "required versus optional nodes" in prompt
+    assert "replaceable bracketed slots" in prompt
+    assert "applicability and inapplicability" in prompt
+    assert "do not manufacture missing transfer evidence" in prompt
+
+
 def test_parser_builds_closed_report_with_worker_owned_provenance() -> None:
     transcript = "第一段🙂。第二段。"
     chunks = MarkdownSplitter().split(transcript)
@@ -136,6 +235,146 @@ def test_parser_builds_closed_report_with_worker_owned_provenance() -> None:
         }
     ]
     assert payload["sourceLanguage"] == "zh-CN"
+
+
+@pytest.mark.parametrize(
+    ("output_language", "expected_labels"),
+    [
+        (
+            "zh-CN",
+            (
+                "# 文字稿解剖", "开头钩子", "推进结构", "转折", "收尾", "核心论点", "支撑点",
+                "表达手法", "节奏", "可复用模式", "风险标记", "引用片段",
+                "可复用骨架", "受众适配", "适配度：高", "适配度：中", "适配度：低",
+            ),
+        ),
+        (
+            "zh-TW",
+            (
+                "# 逐字稿解剖", "開頭鉤子", "推進結構", "轉折", "收尾", "核心論點", "支持點",
+                "表達手法", "節奏", "可重用模式", "風險標記", "引用片段",
+                "可重用骨架", "受眾適配", "適配度：高", "適配度：中", "適配度：低",
+            ),
+        ),
+        (
+            "en-US",
+            (
+                "# Transcript Dissection", "Opening hook", "Structure", "Turning point",
+                "Closing", "Core claim",
+                "Supporting points", "Rhetorical devices", "Rhythm", "Reusable pattern",
+                "Risk flags", "Source chunks", "Reusable template", "Audience fit",
+                "Fit: High", "Fit: Medium", "Fit: Low",
+            ),
+        ),
+    ],
+)
+def test_markdown_export_contains_every_user_visible_report_field(
+    output_language,
+    expected_labels: tuple[str, ...],
+) -> None:
+    transcript = "HIGHLIGHT_QUOTE UNUSED_TRANSCRIPT_TEXT"
+    payload = valid_semantic_report()
+    payload["overallNarrative"] = {
+        "openingHook": "HOOK_VALUE",
+        "structureType": "STRUCTURE_VALUE",
+        "turningPoint": "TURN_VALUE",
+        "closingType": "CLOSING_VALUE",
+    }
+    payload["segments"] = [
+        {
+            "id": 1,
+            "title": "SEGMENT_TITLE",
+            "sourceChunkIds": [1],
+            "coreClaim": "CORE_VALUE",
+            "supportingPoints": ["SUPPORT_VALUE"],
+            "rhetoricalDevices": ["RHETORIC_VALUE"],
+            "rhythmNote": "RHYTHM_VALUE",
+            "reusablePattern": "PATTERN_VALUE",
+            "riskFlags": ["RISK_VALUE"],
+        }
+    ]
+    payload["highlights"] = ["HIGHLIGHT_QUOTE"]
+    payload["reusableTemplate"] = {
+        "name": "TEMPLATE_NAME",
+        "skeleton": ["STEP_ONE", "STEP_TWO", "STEP_THREE"],
+    }
+    payload["audienceFit"] = [
+        {"audience": "AUDIENCE_HIGH", "fit": "high", "note": "FIT_HIGH_NOTE"},
+        {"audience": "AUDIENCE_MEDIUM", "fit": "medium", "note": "FIT_MEDIUM_NOTE"},
+        {"audience": "AUDIENCE_LOW", "fit": "low", "note": "FIT_LOW_NOTE"},
+    ]
+    payload["strengths"] = ["STRENGTH_VALUE"]
+    payload["weaknesses"] = ["WEAKNESS_VALUE"]
+    report = parse_dissection_report(
+        payload,
+        transcript=transcript,
+        chunks=MarkdownSplitter().split(transcript),
+        source_language="en-US",
+    )
+
+    markdown = format_dissection_markdown(report, output_language)
+
+    for label in expected_labels:
+        assert label in markdown
+    for value in (
+        "HOOK_VALUE", "STRUCTURE_VALUE", "TURN_VALUE", "CLOSING_VALUE",
+        "SEGMENT_TITLE", "CORE_VALUE", "SUPPORT_VALUE", "RHETORIC_VALUE",
+        "RHYTHM_VALUE", "PATTERN_VALUE", "RISK_VALUE", "HIGHLIGHT_QUOTE",
+        "TEMPLATE_NAME", "STEP_ONE", "STEP_TWO", "STEP_THREE", "AUDIENCE_HIGH",
+        "AUDIENCE_MEDIUM", "AUDIENCE_LOW", "FIT_HIGH_NOTE", "FIT_MEDIUM_NOTE",
+        "FIT_LOW_NOTE", "STRENGTH_VALUE", "WEAKNESS_VALUE",
+    ):
+        assert value in markdown
+    for internal_value in (
+        "schemaVersion",
+        "sourceTranscriptSha256",
+        "startByte",
+        "endByte",
+        report.source_transcript_sha256,
+        "UNUSED_TRANSCRIPT_TEXT",
+    ):
+        assert internal_value not in markdown
+
+
+def test_markdown_export_omits_absent_optional_and_empty_sections() -> None:
+    transcript = "第一段。"
+    payload = valid_semantic_report()
+    payload["overallNarrative"] = {
+        "openingHook": None,
+        "structureType": "STRUCTURE_ONLY",
+        "turningPoint": None,
+        "closingType": None,
+    }
+    payload["segments"][0]["supportingPoints"] = []
+    payload["segments"][0]["rhetoricalDevices"] = []
+    payload["segments"][0]["riskFlags"] = []
+    payload["highlights"] = []
+    payload["audienceFit"] = []
+    payload["strengths"] = []
+    payload["weaknesses"] = []
+    report = parse_dissection_report(
+        payload,
+        transcript=transcript,
+        chunks=MarkdownSplitter().split(transcript),
+        source_language="zh-CN",
+    )
+
+    markdown = format_dissection_markdown(report, "en-US")
+
+    assert "STRUCTURE_ONLY" in markdown
+    for absent_heading in (
+        "Opening hook",
+        "Turning point",
+        "Closing",
+        "Supporting points",
+        "Rhetorical devices",
+        "Risk flags",
+        "Highlights",
+        "Audience fit",
+        "Strengths",
+        "Weaknesses",
+    ):
+        assert absent_heading not in markdown
 
 
 @pytest.mark.parametrize(
@@ -193,9 +432,40 @@ def test_generation_uses_map_reduce_and_at_most_one_repair() -> None:
     assert "map stage" in client.prompts[0]
     assert "reduce stage" in client.prompts[1]
     assert "repair stage" in client.prompts[2]
+    assert "Validation category: schema_shape" in client.prompts[2]
+    assert "Legal sourceChunkIds: [1]" in client.prompts[2]
     assert "第一段🙂" in client.prompts[0]
     assert "第一段🙂" not in client.prompts[1]
     assert "第一段🙂" not in client.prompts[2]
+
+
+def test_generation_gives_repair_a_safe_source_reference_category() -> None:
+    invalid_report = valid_semantic_report()
+    invalid_report["segments"][0]["sourceChunkIds"] = [2]
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.prompts: list[str] = []
+            self.responses = [
+                json.dumps({"segments": [], "highlights": [], "strengths": [], "weaknesses": []}),
+                json.dumps(invalid_report),
+                json.dumps(valid_semantic_report()),
+            ]
+
+        def generate(self, prompt: str) -> str:
+            self.prompts.append(prompt)
+            return self.responses[len(self.prompts) - 1]
+
+    client = FakeClient()
+    generate_transcript_dissection(
+        "第一段🙂。第二段。",
+        client=client,
+        output_language="zh-CN",
+        source_language="zh-CN",
+    )
+
+    assert "Validation category: source_references" in client.prompts[2]
+    assert "source references" not in client.prompts[2]
 
 
 def test_pipeline_dispatches_dissection_without_persisting_standalone_files(

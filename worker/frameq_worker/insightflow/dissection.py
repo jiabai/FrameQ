@@ -25,9 +25,16 @@ MAX_CHUNKS = (MAX_TOTAL_CALLS - REDUCE_CALLS - MAX_REPAIR_CALLS) * CHUNKS_PER_MA
 
 
 class DissectionGenerationError(RuntimeError):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        repair_category: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.repair_category = repair_category
 
 
 @dataclass(frozen=True)
@@ -200,6 +207,7 @@ def parse_dissection_report(
         raise DissectionGenerationError(
             "DISSECTION_INVALID_RESULT",
             "The dissection response did not match the required structure.",
+            repair_category=_repair_category(exc),
         ) from exc
 
     return TranscriptDissection(
@@ -312,10 +320,17 @@ def generate_transcript_dissection(
             chunks=chunks,
             source_language=source_language,
         )
-    except DissectionGenerationError:
+    except DissectionGenerationError as validation_error:
         repaired = _generate_json(
             client,
-            build_dissection_repair_prompt(candidate, output_language),
+            build_dissection_repair_prompt(
+                candidate,
+                output_language,
+                valid_chunk_ids=tuple(sorted(by_id)),
+                validation_category=(
+                    validation_error.repair_category or "schema_shape"
+                ),
+            ),
             cancel_check,
         )
         return parse_dissection_report(
@@ -352,44 +367,181 @@ def format_dissection_markdown(
     output_language: OutputLanguage,
 ) -> str:
     labels = {
-        "zh-CN": ("文字稿解剖", "整体叙事", "分段结构", "亮点", "优势", "不足"),
-        "zh-TW": ("文字稿解剖", "整體敘事", "分段結構", "亮點", "優勢", "不足"),
-        "en-US": (
-            "Transcript Dissection",
-            "Overall Narrative",
-            "Segments",
-            "Highlights",
-            "Strengths",
-            "Weaknesses",
-        ),
+        "zh-CN": {
+            "title": "文字稿解剖",
+            "narrative": "整体叙事",
+            "opening_hook": "开头钩子",
+            "structure_type": "推进结构",
+            "turning_point": "转折",
+            "closing_type": "收尾",
+            "segments": "分段结构",
+            "core_claim": "核心论点",
+            "supporting_points": "支撑点",
+            "rhetorical_devices": "表达手法",
+            "rhythm": "节奏",
+            "reusable_pattern": "可复用模式",
+            "risk_flags": "风险标记",
+            "source_chunks": "引用片段",
+            "template": "可复用骨架",
+            "highlights": "亮点",
+            "audience_fit": "受众适配",
+            "fit": "适配度",
+            "note": "说明",
+            "strengths": "优势",
+            "weaknesses": "不足",
+            "fit_high": "高",
+            "fit_medium": "中",
+            "fit_low": "低",
+            "separator": "：",
+        },
+        "zh-TW": {
+            "title": "逐字稿解剖",
+            "narrative": "整體敘事",
+            "opening_hook": "開頭鉤子",
+            "structure_type": "推進結構",
+            "turning_point": "轉折",
+            "closing_type": "收尾",
+            "segments": "分段結構",
+            "core_claim": "核心論點",
+            "supporting_points": "支持點",
+            "rhetorical_devices": "表達手法",
+            "rhythm": "節奏",
+            "reusable_pattern": "可重用模式",
+            "risk_flags": "風險標記",
+            "source_chunks": "引用片段",
+            "template": "可重用骨架",
+            "highlights": "亮點",
+            "audience_fit": "受眾適配",
+            "fit": "適配度",
+            "note": "說明",
+            "strengths": "優勢",
+            "weaknesses": "不足",
+            "fit_high": "高",
+            "fit_medium": "中",
+            "fit_low": "低",
+            "separator": "：",
+        },
+        "en-US": {
+            "title": "Transcript Dissection",
+            "narrative": "Overall Narrative",
+            "opening_hook": "Opening hook",
+            "structure_type": "Structure",
+            "turning_point": "Turning point",
+            "closing_type": "Closing",
+            "segments": "Segments",
+            "core_claim": "Core claim",
+            "supporting_points": "Supporting points",
+            "rhetorical_devices": "Rhetorical devices",
+            "rhythm": "Rhythm",
+            "reusable_pattern": "Reusable pattern",
+            "risk_flags": "Risk flags",
+            "source_chunks": "Source chunks",
+            "template": "Reusable template",
+            "highlights": "Highlights",
+            "audience_fit": "Audience fit",
+            "fit": "Fit",
+            "note": "Note",
+            "strengths": "Strengths",
+            "weaknesses": "Weaknesses",
+            "fit_high": "High",
+            "fit_medium": "Medium",
+            "fit_low": "Low",
+            "separator": ": ",
+        },
     }[output_language]
-    lines = [f"# {labels[0]}", "", f"## {labels[1]}", ""]
-    lines.extend(
-        [
-            f"- {report.overall_narrative.structure_type}",
-            "",
-            f"## {labels[2]}",
-            "",
-        ]
+    narrative = report.overall_narrative
+    lines = [f"# {labels['title']}", "", f"## {labels['narrative']}", ""]
+    _append_markdown_field(
+        lines, labels["opening_hook"], narrative.opening_hook, labels["separator"]
     )
+    _append_markdown_field(
+        lines, labels["structure_type"], narrative.structure_type, labels["separator"]
+    )
+    _append_markdown_field(
+        lines, labels["turning_point"], narrative.turning_point, labels["separator"]
+    )
+    _append_markdown_field(
+        lines, labels["closing_type"], narrative.closing_type, labels["separator"]
+    )
+    lines.extend(["", f"## {labels['segments']}", ""])
     for segment in report.segments:
         lines.extend(
             [
                 f"### {segment.id}. {segment.title}",
                 "",
-                segment.core_claim,
-                "",
-                f"Source chunks: {', '.join(map(str, segment.source_chunk_ids))}",
-                "",
             ]
         )
-    for heading, values in (
-        (labels[3], report.highlights),
-        (labels[4], report.strengths),
-        (labels[5], report.weaknesses),
-    ):
-        lines.extend([f"## {heading}", "", *[f"- {value}" for value in values], ""])
+        _append_markdown_field(
+            lines, labels["core_claim"], segment.core_claim, labels["separator"]
+        )
+        _append_markdown_list(lines, labels["supporting_points"], segment.supporting_points, 4)
+        _append_markdown_list(lines, labels["rhetorical_devices"], segment.rhetorical_devices, 4)
+        _append_markdown_field(
+            lines, labels["rhythm"], segment.rhythm_note, labels["separator"]
+        )
+        _append_markdown_field(
+            lines,
+            labels["reusable_pattern"],
+            segment.reusable_pattern,
+            labels["separator"],
+        )
+        _append_markdown_list(lines, labels["risk_flags"], segment.risk_flags, 4)
+        _append_markdown_field(
+            lines,
+            labels["source_chunks"],
+            ", ".join(map(str, segment.source_chunk_ids)),
+            labels["separator"],
+        )
+        lines.append("")
+
+    lines.extend(
+        [
+            f"## {labels['template']}",
+            "",
+            f"**{report.reusable_template.name}**",
+            "",
+            *[
+                f"{index}. {step}"
+                for index, step in enumerate(report.reusable_template.skeleton, start=1)
+            ],
+            "",
+        ]
+    )
+    _append_markdown_list(lines, labels["highlights"], report.highlights, 2)
+    if report.audience_fit:
+        lines.extend([f"## {labels['audience_fit']}", ""])
+        for item in report.audience_fit:
+            lines.extend(
+                [
+                    f"### {item.audience}",
+                    "",
+                    f"- {labels['fit']}{labels['separator']}{labels[f'fit_{item.fit}']}",
+                    f"- {labels['note']}{labels['separator']}{item.note}",
+                    "",
+                ]
+            )
+    _append_markdown_list(lines, labels["strengths"], report.strengths, 2)
+    _append_markdown_list(lines, labels["weaknesses"], report.weaknesses, 2)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _append_markdown_field(
+    lines: list[str], label: str, value: str | None, separator: str
+) -> None:
+    if value is not None:
+        lines.append(f"- {label}{separator}{value}")
+
+
+def _append_markdown_list(
+    lines: list[str],
+    heading: str,
+    values: tuple[str, ...],
+    heading_level: int,
+) -> None:
+    if values:
+        lines.extend(
+            [f"{'#' * heading_level} {heading}", "", *[f"- {value}" for value in values], ""]
+        )
 
 
 def _generate_json(client: DissectionClient, prompt: str, cancel_check) -> object:
@@ -544,3 +696,14 @@ def _integer_list(value: object) -> list[int]:
     if any(type(item) is not int or item < 1 for item in values):
         raise ValueError("integer array")
     return values
+
+
+def _repair_category(exc: KeyError | TypeError | ValueError) -> str:
+    if isinstance(exc, (KeyError, TypeError)):
+        return "schema_shape"
+    return {
+        "source references": "source_references",
+        "highlight provenance": "quotation_provenance",
+        "array length": "collection_limits",
+        "audience fit": "enum_values",
+    }.get(str(exc), "schema_shape")
