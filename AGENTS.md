@@ -29,6 +29,7 @@
 - ASR 模块拆分设计：`docs/design-docs/2026-07-20-asr-module-split.md`
 - Transcript detail 模块拆分设计：`docs/design-docs/2026-07-20-transcript-detail-module-split.md`
 - 前端 Transcript controller 拆分设计：`docs/design-docs/2026-07-23-frontend-transcript-controller-split.md`
+- 文字稿解剖（Transcript Dissection）功能设计：`docs/design-docs/2026-07-31-transcript-dissection-feature.md`（智能提炼工作区第四张 target 卡片，对已保存文字稿做结构化拆解）
 - Tauri IPC 运行时解码边界设计：`docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md`
 - Bilibili fallback 模块拆分设计：`docs/design-docs/2026-07-20-bilibili-fallback-module-split.md`
 - Xiaohongshu fallback 模块拆分设计：`docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md`
