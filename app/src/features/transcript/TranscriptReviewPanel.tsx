@@ -66,7 +66,6 @@ export function TranscriptReviewPanel({
     transcriptAudioProgress,
     transcriptAudioScrubberMax,
     transcriptAudioScrubberStyle,
-    hasTranscriptSegments,
     copyTranscript,
     exportTranscript,
     saveTranscriptDraft,
@@ -82,6 +81,12 @@ export function TranscriptReviewPanel({
     updateTranscriptSegmentDraft,
     updateFullTranscriptDraft,
   } = controller;
+  const visibleTranscriptSegments = useMemo(
+    () => transcriptSegments.filter(
+      (segment) => segment.text.trim().length > 0 || editingTranscriptSegmentId === segment.id,
+    ),
+    [editingTranscriptSegmentId, transcriptSegments],
+  );
   const transcriptEditButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const fullTranscriptRef = useRef<HTMLTextAreaElement | null>(null);
   const locatedSourceText = locatedTranscriptRange
@@ -193,9 +198,9 @@ export function TranscriptReviewPanel({
       {artifactToolbar}
 
       <div className="transcript-review-scroll">
-        {hasTranscriptSegments ? (
+        {visibleTranscriptSegments.length > 0 ? (
           <div className="transcript-segments">
-            {transcriptSegments.map((segment) => (
+            {visibleTranscriptSegments.map((segment) => (
               <div
                 key={segment.id}
                 ref={(element) => {

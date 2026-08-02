@@ -2261,7 +2261,9 @@ describe("App controller-owned lifecycle UI smoke", () => {
       await clickSelector(page, ".transcript-action-bar .primary-button");
       await waitForRuntimeCondition(page, "Boolean(document.querySelector('.dissection-card-stale'))");
 
-      await clickSelector(page, '[data-ai-target="dissection"] .ai-target-action');
+      await clickSelector(page, '[data-ai-target="dissection"] .secondary-button:not(.ai-target-action)');
+      await waitForRuntimeCondition(page, "Boolean(document.querySelector('.dissection-report'))");
+      await clickSelector(page, '[data-action="redissection"]');
       await clickSelector(page, ".dissection-confirmation-sheet .primary-button");
       await waitForRuntimeCondition(page, "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.retry_insights?.length)");
       await resolveUiSmokeCommand(page, "retry_insights", {

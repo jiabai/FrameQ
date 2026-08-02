@@ -86,9 +86,13 @@ export function AiResultDetailSheet({
               </button>
             ) : null}
             {detailTab === "dissection" ? (
-              <button type="button" onClick={onOpenDissectionConfirmation}>
+              <button
+                type="button"
+                data-action="redissection"
+                onClick={onOpenDissectionConfirmation}
+              >
                 <RotateCcw size={16} />
-                <span>{t("action.retry")}</span>
+                <span>{t("dissection.report.redissection")}</span>
               </button>
             ) : null}
             <button type="button" onClick={exportDetail} disabled={!exportPath}>

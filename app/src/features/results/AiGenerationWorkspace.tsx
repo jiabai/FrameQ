@@ -85,17 +85,6 @@ export function AiGenerationWorkspace({
           onView={() => onViewTarget("summary")}
         />
         <AiTargetCard
-          target={model.insights}
-          locale={locale}
-          title={t("target.insights.title")}
-          description={t("target.insights.description")}
-          creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
-          blocked={Boolean(blocker)}
-          icon={<Lightbulb size={18} aria-hidden="true" />}
-          onAction={onInsightsAction}
-          onView={() => onViewTarget("insights")}
-        />
-        <AiTargetCard
           target={model.dissection}
           locale={locale}
           title={t("dissection.card.title")}
@@ -107,6 +96,17 @@ export function AiGenerationWorkspace({
           icon={<ScanText size={18} aria-hidden="true" />}
           onAction={onDissectionAction}
           onView={() => onViewTarget("dissection")}
+        />
+        <AiTargetCard
+          target={model.insights}
+          locale={locale}
+          title={t("target.insights.title")}
+          description={t("target.insights.description")}
+          creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
+          blocked={Boolean(blocker)}
+          icon={<Lightbulb size={18} aria-hidden="true" />}
+          onAction={onInsightsAction}
+          onView={() => onViewTarget("insights")}
         />
       </div>
 
@@ -195,7 +195,7 @@ function AiTargetCard({
               {t("action.view")}
             </button>
         ) : null}
-        {!active && (!ready || target.target === "dissection") ? (
+        {!active && !ready ? (
           <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={disabled}>
             {actionLabel}
           </button>

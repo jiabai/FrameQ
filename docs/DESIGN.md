@@ -89,7 +89,7 @@
   rounded cards. Playback uses a pale row background with an inset left accent, editing uses a
   contained white editor, and the external focus halo is reserved for keyboard focus.
 - The AI workspace uses a quiet availability/privacy header and one grouped list containing three
-  semantic target rows: `要点总结（同时生成思维导图文件）`, `启发灵感`, and `文字稿解剖`. Each owns its status,
+  semantic target rows: `要点总结（同时生成思维导图文件）`, `文字稿解剖`, and `启发灵感`. Each owns its status,
   quota copy, confirm/retry/view actions, progress, and error without another independent card
   border or radius.
 - Workspace headings use the current locale and remain the only visible workspace titles. The task banner owns ready
@@ -100,8 +100,9 @@
 - AI generation leaves the local workspace readable and playable while disabling transcript
   edit/save with `AI 正在使用已保存版本`. A target failure stays in that target card.
 - `文字稿解剖` never auto-runs. Its confirmation shows frozen transcript facts, output language,
-  deterministic call range, worst-case Credits, and the exact cloud-text disclosure. Its detail
-  sheet renders the structured report, supports copy/export, and locates cited text only when Rust
+  deterministic call range, worst-case Credits, and the exact cloud-text disclosure. A generated
+  card exposes only `查看结果`; its detail sheet renders the structured report, supports
+  copy/export/`重新解剖`, and locates cited text only when Rust
   verified the current transcript and UTF-8 source ranges. Saving an edit keeps the former report
   visible as stale and disables location; a failed rerun also keeps that report available.
 - The completion banner says video, audio, and transcript are saved locally. AI copy says
@@ -164,13 +165,16 @@
 - During `视频转译中`, worker progress copy may say `正在检测平台字幕`, `已检测到字幕，跳过 ASR`, or `未检测到字幕，开始 ASR` while staying inside the existing transcription stage.
 - The `完整文字稿` detail view may show a compact source line such as `来源：平台字幕（zh-Hans）` or `来源：本地 ASR`. It should not claim whether the subtitle was manual, automatic, or translated.
 - Video and audio entries still locate local files; the transcript entry opens the readable transcript;
-  AI整理 shows summary, insights, and dissection. Dissection is third while draft is unimplemented.
+  AI整理 shows summary, dissection, and insights. Dissection is second while draft is unimplemented.
 
 ## 2026-07-03 Transcript Audio Review UX
 
 - The inline `TranscriptReviewPanel` should omit keyword search. Its primary review tools are audio playback, block selection, direct editing, save, copy, export, and locating the saved transcript file.
 - Place the native audio player at the top of the transcript detail content when a validated audio file exists. Keep it compact and persistent above the scrolling transcript blocks.
 - Segment blocks should have stable height behavior, clear hover affordance, one primary selected/highlighted state, and a distinct editing state. Highlight should never depend on speaker count or speaker label.
+- Segment blocks whose text is empty after trimming are hidden from the review list once they are not
+  being edited. Their timing and segment records remain in controller state and persistence so audio
+  alignment is not silently rewritten; an actively edited empty block remains visible until editing ends.
 - Clicking a non-editing transcript block seeks to that segment and starts audio. Playback should advance the highlight to the next segment and keep the active block visible without abrupt layout shifts.
 - Entering edit mode pauses playback and visually locks the edited block. Saving should show concise success feedback and resume audio only when it was playing before edit.
 - Old tasks without segment timing should show a full-text editor and audio player when possible, with click-to-seek affordances hidden or disabled.
@@ -247,7 +251,7 @@ UI 必须围绕以下状态组织：
 - `要点总结` 的独立 AI 详情 sheet 必须通过经净化的 GitHub Flavored Markdown 渲染器展示 `summary.md`；不得渲染 Markdown 中的原始 HTML 或 Mermaid 源码。
 - 主按钮文案固定为 `确认`。
 - 处理和完成态不再显示 URL 输入区域。
-- 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载 `要点总结`、`启发灵感` 和 `文字稿解剖` 三个独立 target 卡片。
+- 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载 `要点总结`、`文字稿解剖` 和 `启发灵感` 三个独立 target 卡片。
 - 文字稿直接在左侧工作区审阅，不进入共享 Tab；AI 结果可打开各自的轻量详情 sheet，不与文字稿共用容器。
 - AI 详情 sheet 内部内容独立滚动，支持 `Esc` 关闭。
 - 复制按钮只复制当前工作区或当前 AI 详情的文本；无内容时置灰。

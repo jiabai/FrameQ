@@ -15,6 +15,7 @@ import { createTaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import type { TranscriptDetailController } from "../transcript/useTranscriptDetailController";
 import { LocalTranscriptWorkspace } from "../transcript/LocalTranscriptWorkspace";
 import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
+import { AiResultDetailSheet } from "./AiResultDetailSheet";
 import { TaskStatusBanner } from "./TaskStatusBanner";
 import { initializeI18n } from "../../i18n/i18n";
 import type { SupportedLocale } from "../../i18n/locale";
@@ -37,6 +38,46 @@ function readyWorkflow(): WorkflowState {
     dissection: null,
     error: null,
   });
+}
+
+function generatedDissectionWorkflow(): WorkflowState {
+  const workflow = readyWorkflow();
+  return {
+    ...workflow,
+    artifacts: {
+      ...workflow.artifacts,
+      dissection: "ai/dissection.json",
+      dissection_md: "ai/dissection.md",
+    },
+    dissection: {
+      schemaVersion: 1,
+      sourceTranscriptSha256: "a".repeat(64),
+      sourceLanguage: "zh-CN",
+      sourceChunks: [{ id: 1, startByte: 0, endByte: 27, sha256: "b".repeat(64) }],
+      overallNarrative: {
+        openingHook: "问题钩子",
+        structureType: "问题—分析—结论",
+        turningPoint: "第二段",
+        closingType: "总结",
+      },
+      segments: [{
+        id: 1,
+        title: "开场",
+        sourceChunkIds: [1],
+        coreClaim: "第一段正式文字稿。",
+        supportingPoints: ["第二段正式文字稿。"],
+        rhetoricalDevices: ["设问"],
+        rhythmNote: "简洁",
+        reusablePattern: "提出[问题]后给出[结论]",
+        riskFlags: [],
+      }],
+      highlights: ["第一段正式文字稿。"],
+      reusableTemplate: { name: "问题解答", skeleton: ["提出问题", "展开分析", "给出结论"] },
+      audienceFit: [{ audience: "初学者", fit: "high", note: "容易理解" }],
+      strengths: ["结构清晰"],
+      weaknesses: ["论据较少"],
+    },
+  };
 }
 
 function aiAccount(quota = 8) {
@@ -327,6 +368,38 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("result-grid");
   });
 
+  test("hides transcript segments whose text was cleared without changing the saved timeline", () => {
+    const workflow = readyWorkflow();
+    const baseController = transcriptController();
+    const segments = [
+      { id: "segment-empty", start_ms: 0, end_ms: 5000, text: "   " },
+      { id: "segment-visible", start_ms: 5000, end_ms: 9000, text: "保留的文字稿内容。" },
+    ];
+    const controller = {
+      ...baseController,
+      transcriptDraft: "保留的文字稿内容。",
+      transcriptSegments: segments,
+      transcriptDetail: baseController.transcriptDetail
+        ? { ...baseController.transcriptDetail, text: "保留的文字稿内容。", segments }
+        : baseController.transcriptDetail,
+    } as TranscriptDetailController;
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={controller}
+        actionNotice={null}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup.match(/class="transcript-segment /g)).toHaveLength(1);
+    expect(markup).not.toContain("segment-empty");
+    expect(markup).toContain("保留的文字稿内容。");
+    expect(controller.transcriptSegments).toHaveLength(2);
+  });
+
   test("renders an audio-only local workspace from the facade model without workflow state", () => {
     const workflow = summarizeWorkerResult({
       status: "completed",
@@ -384,12 +457,61 @@ describe("task domain workspaces", () => {
     expect(markup).toContain('data-ai-target="dissection"');
     expect(markup).toContain("文字稿解剖");
     expect(markup).toContain("启发灵感");
+    expect(markup.indexOf('data-ai-target="dissection"')).toBeLessThan(
+      markup.indexOf('data-ai-target="insights"'),
+    );
     expect(markup).toContain("AI Credits 余额：8");
     expect(markup).toContain("一次智能提炼可能消耗多个 Credits。");
     expect(markup).not.toContain("当前可用 8 次");
     expect(markup).not.toContain('data-ai-target="mindmap"');
     expect(markup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(3);
     expect(markup).not.toContain('class="primary-button"');
+  });
+
+  test("generated dissection card exposes only the view action", () => {
+    const model = createTaskWorkspaceViewModel(generatedDissectionWorkflow(), aiAccount());
+    const markup = renderToStaticMarkup(
+      <AiGenerationWorkspace
+        model={model.ai}
+        quotaRemaining={8}
+        onSummaryAction={vi.fn()}
+        onInsightsAction={vi.fn()}
+        onDissectionAction={vi.fn()}
+        onViewTarget={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const dissectionCard = markup.match(
+      /<article[^>]*data-ai-target="dissection"[\s\S]*?<\/article>/,
+    )?.[0];
+
+    expect(dissectionCard).toBeDefined();
+    expect(dissectionCard).toContain("查看结果");
+    expect(dissectionCard).not.toContain("确认生成");
+    expect(dissectionCard).not.toContain('class="secondary-button ai-target-action"');
+  });
+
+  test("generated dissection detail exposes a specifically named redissection action", () => {
+    const workflow = generatedDissectionWorkflow();
+    const controller = {
+      ...transcriptController(),
+      detailTab: "dissection",
+      detailText: "# 文字稿解剖",
+      exportPath: "D:/FrameQ/outputs/tasks/same-task/ai/dissection.md",
+    } as TranscriptDetailController;
+    const markup = renderToStaticMarkup(
+      <AiResultDetailSheet
+        actionNotice={null}
+        controller={controller}
+        workflow={workflow}
+        onOpenDirectionEditor={vi.fn()}
+        onOpenDissectionConfirmation={vi.fn()}
+        onLocateDissectionChunks={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("重新解剖");
+    expect(markup).not.toContain("重新生成");
   });
 
   test("renders AI cancellation from the facade model without workflow state", () => {

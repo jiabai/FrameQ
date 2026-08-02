@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-08-01-transcript-dissection-ready-action-plan.md` | Removed the misleading generated-card action and moved the explicitly named redissection flow into the report detail sheet. |
 | `2026-08-01-transcript-dissection-actionable-reuse-plan.md` | Made existing pattern/template/risk fields produce slot-based writing-transfer guidance with required/optional nodes and explicit applicability limits. |
 | `2026-08-01-transcript-dissection-markdown-completeness-plan.md` | Made the three-language Markdown artifact a complete projection of every user-visible dissection field while excluding internal provenance and preserving all runtime boundaries. |
 | `2026-08-01-transcript-dissection-prompt-contract-hardening-plan.md` | Aligned map/reduce/repair prompts with the strict nested report parser, added safe repair categories and legal chunk context, and preserved schema, quota, and privacy boundaries. |
