@@ -67,7 +67,7 @@ export function useTranscriptReviewSession({
   }, [transcriptAudioSrc]);
 
   const playTranscriptSegment = useCallback(
-    async (segment: TranscriptSegment) => {
+    async (segment: TranscriptSegment, startTimeSeconds?: number) => {
       if (editingTranscriptSegmentId) {
         return;
       }
@@ -79,7 +79,7 @@ export function useTranscriptReviewSession({
         return;
       }
 
-      if (shouldPauseActiveTranscriptSegment(
+      if (startTimeSeconds === undefined && shouldPauseActiveTranscriptSegment(
         activeTranscriptSegmentId,
         segment.id,
         !audio.paused,
@@ -90,7 +90,7 @@ export function useTranscriptReviewSession({
       }
 
       setActiveTranscriptSegmentId(segment.id);
-      audio.currentTime = segment.start_ms / 1000;
+      audio.currentTime = startTimeSeconds ?? segment.start_ms / 1000;
       audio.playbackRate = 1;
       setTranscriptAudioCurrentTime(audio.currentTime);
       try {

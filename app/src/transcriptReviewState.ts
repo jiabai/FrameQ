@@ -51,3 +51,22 @@ export function shouldPauseActiveTranscriptSegment(
 ): boolean {
   return audioPlaying && activeSegmentId === clickedSegmentId;
 }
+
+/**
+ * Estimate the playback position for a character offset inside a segment.
+ * Word-level timestamps are not available in the transcript contract, so the
+ * offset is mapped proportionally across the segment's start/end interval.
+ */
+export function transcriptTimeFromTextOffset(
+  segment: TranscriptSegment,
+  textOffset: number,
+): number {
+  const textLength = segment.text.length;
+  const durationMs = Math.max(0, segment.end_ms - segment.start_ms);
+  if (textLength === 0 || !Number.isFinite(textOffset)) {
+    return Math.max(0, segment.start_ms) / 1000;
+  }
+
+  const ratio = Math.max(0, Math.min(1, textOffset / textLength));
+  return (Math.max(0, segment.start_ms) + durationMs * ratio) / 1000;
+}

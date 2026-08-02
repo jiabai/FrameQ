@@ -3,6 +3,7 @@ import {
   findActiveTranscriptSegmentId,
   isTranscriptSegmentEditDisabled,
   shouldPauseActiveTranscriptSegment,
+  transcriptTimeFromTextOffset,
   transcriptTextFromSegments,
   updateTranscriptSegmentText,
 } from "./transcriptReviewState";
@@ -40,5 +41,14 @@ describe("transcript review state", () => {
     expect(shouldPauseActiveTranscriptSegment("seg-0001", "seg-0001", false)).toBe(false);
     expect(shouldPauseActiveTranscriptSegment("seg-0001", "seg-0002", true)).toBe(false);
     expect(shouldPauseActiveTranscriptSegment(null, "seg-0001", true)).toBe(false);
+  });
+
+  test("maps a clicked text offset to an estimated segment time", () => {
+    const segment = segments[1]!;
+
+    expect(transcriptTimeFromTextOffset(segment, 0)).toBe(1);
+    expect(transcriptTimeFromTextOffset(segment, segment.text.length / 2)).toBe(1.75);
+    expect(transcriptTimeFromTextOffset(segment, segment.text.length + 10)).toBe(2.5);
+    expect(transcriptTimeFromTextOffset({ ...segment, text: "" }, 0)).toBe(1);
   });
 });

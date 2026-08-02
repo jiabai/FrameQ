@@ -7,17 +7,69 @@ import {
   Pencil,
   Play,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { clampAudioTime, formatAudioClock } from "../../audioReviewBarState";
 import { formatNumber, formatPercent } from "../../i18n/formatters";
 import { resolveSystemLocale } from "../../i18n/locale";
 import type { TranscriptSourceViewModel } from "../../taskWorkspaceViewModel";
-import { isTranscriptSegmentEditDisabled } from "../../transcriptReviewState";
+import type { TranscriptSegment } from "../../transcriptDetailClient";
+import {
+  isTranscriptSegmentEditDisabled,
+  transcriptTimeFromTextOffset,
+} from "../../transcriptReviewState";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
 
 const AUDIO_TIME_SEPARATOR = " / ";
+
+type DocumentWithCaretApi = Document & {
+  caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  caretPositionFromPoint?: (x: number, y: number) => {
+    offsetNode: Node;
+    offset: number;
+  } | null;
+};
+
+function transcriptTextOffsetAtPoint(
+  element: HTMLButtonElement,
+  event: ReactMouseEvent<HTMLButtonElement>,
+): number | null {
+  const documentWithCaretApi = element.ownerDocument as DocumentWithCaretApi;
+  const range = documentWithCaretApi.caretRangeFromPoint?.(
+    event.clientX,
+    event.clientY,
+  );
+  if (range) {
+    return element.contains(range.startContainer) ? range.startOffset : null;
+  }
+
+  const position = documentWithCaretApi.caretPositionFromPoint?.(
+    event.clientX,
+    event.clientY,
+  );
+  if (!position || !element.contains(position.offsetNode)) {
+    return null;
+  }
+  return position.offset;
+}
+
+function estimatedTranscriptTextTime(
+  element: HTMLButtonElement,
+  event: ReactMouseEvent<HTMLButtonElement>,
+  segment: TranscriptSegment,
+): number {
+  const textOffset = transcriptTextOffsetAtPoint(element, event);
+  return textOffset === null
+    ? segment.start_ms / 1000
+    : transcriptTimeFromTextOffset(segment, textOffset);
+}
 
 type TranscriptReviewPanelProps = {
   transcriptSource: TranscriptSourceViewModel;
@@ -271,7 +323,12 @@ export function TranscriptReviewPanel({
                   <button
                     type="button"
                     className="transcript-segment-text"
-                    onClick={() => void playTranscriptSegment(segment)}
+                    onClick={(event) =>
+                      void playTranscriptSegment(
+                        segment,
+                        estimatedTranscriptTextTime(event.currentTarget, event, segment),
+                      )
+                    }
                   >
                     {segment.text}
                   </button>

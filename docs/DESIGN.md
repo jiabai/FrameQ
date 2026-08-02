@@ -176,6 +176,7 @@
   being edited. Their timing and segment records remain in controller state and persistence so audio
   alignment is not silently rewritten; an actively edited empty block remains visible until editing ends.
 - Clicking a non-editing transcript block seeks to that segment and starts audio. Playback should advance the highlight to the next segment and keep the active block visible without abrupt layout shifts.
+- Clicking a position inside the transcript text seeks to an estimated position within that segment's start/end interval; because the current contract has no word-level timestamps, this is proportional text-position mapping rather than word-accurate alignment. Clicking the segment time still starts at the segment start.
 - Entering edit mode pauses playback and visually locks the edited block. Saving should show concise success feedback and resume audio only when it was playing before edit.
 - Old tasks without segment timing should show a full-text editor and audio player when possible, with click-to-seek affordances hidden or disabled.
 - If audio is unavailable, show a quiet local-file status while preserving text editing and save actions.

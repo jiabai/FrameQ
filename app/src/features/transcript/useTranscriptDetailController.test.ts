@@ -680,6 +680,26 @@ describe("useTranscriptDetailController segment editing", () => {
     expect(audio.play).toHaveBeenCalledOnce();
   });
 
+  test("starts a segment at an explicitly estimated text position", async () => {
+    const { render } = await createController();
+    const controller = render();
+    const audio = {
+      currentTime: 0,
+      duration: 3,
+      paused: true,
+      pause: vi.fn(),
+      play: vi.fn().mockResolvedValue(undefined),
+      playbackRate: 1,
+    };
+    controller.transcriptAudioRef.current = audio as unknown as HTMLAudioElement;
+
+    await controller.playTranscriptSegment(controller.transcriptSegments[0]!, 1.75);
+
+    expect(audio.currentTime).toBe(1.75);
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(audio.pause).not.toHaveBeenCalled();
+  });
+
   test("clamps audio scrubbing and follows the matching segment", async () => {
     mocks.loadTranscriptDetail.mockResolvedValueOnce({
       ...detailResponse(),
