@@ -54,6 +54,9 @@
 - 完成门禁：`docs/EXECUTION_GATES.md`
 - 产品规格索引：`docs/product-specs/index.md`
 - 发布可靠性规格：`docs/product-specs/2026-07-22-release-reliability-hardening.md`
+- v0.3.0 发布规格：`docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`
+- v0.3.0 发布计划（active）：`docs/exec-plans/active/2026-08-03-v0.3.0-desktop-feature-release-plan.md`
+- v0.3.0 release notes 草稿：`docs/releases/v0.3.0.md`
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`

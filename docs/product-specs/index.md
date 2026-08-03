@@ -31,6 +31,7 @@
 
 ## Distribution Spec
 
+- `2026-08-03-v0.3.0-desktop-feature-release.md` - Stable v0.3.0 minor three-platform release policy for local-media import, selectable SenseVoiceSmall-ONNX with on-demand download, streaming ONNX VAD fail-closed contracts, transcript dissection AI target, and bundled ONNX runtime integrity; inherits v0.2.17 reliability acceptance without re-running dedicated failure-injection evidence.
 - `2026-07-17-v0.2.17-desktop-i18n-release.md` - Stable v0.2.17 three-platform release policy for the completed desktop localization and confirmation-time AI output-language work, with draft-first artifact validation and unchanged macOS Gatekeeper disclosure.
 - `2026-07-12-v0.2.16-open-source-release.md` - Stable v0.2.16 GitHub Release policy for personal-development, small-user, and open-source distribution with explicit ad-hoc macOS Gatekeeper disclosure and draft-first artifact validation.
 - `2026-07-10-source-url-privacy-boundary.md` - Separate process-local download URLs from safe canonical source identities and keep raw/sensitive URL metadata out of persistence, history, diagnostics, and cloud AI prompts.

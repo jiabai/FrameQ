@@ -2,6 +2,19 @@
 
 ## Active UI Work
 
+- [ ] Prepare and publish FrameQ v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
+  version sources synchronized at 0.3.0, `scripts/tests/release-version.test.mjs` asserts `0.3.0`,
+  complete local release gates pass (scripts, app tests/lint/build, Rust tests/rustfmt, worker
+  tests/Ruff, server tests/build, governance, diff, refreshed packaged-worker SHA-256 equality,
+  Tauri `--no-bundle`), annotated tag `v0.3.0` created and pushed after explicit approval, Desktop
+  Release workflow builds all three platform artifacts from one tagged commit, reviewed
+  `docs/releases/v0.3.0.md` notes replace the generic generated body, and Draft published as stable
+  non-prerelease. Residual risk: macOS watchdog runtime, macOS locale/layout, macOS local-media
+  import, macOS ONNX VAD streaming, transcript dissection real paid-supplier smoke, and native
+  packaged cross-platform UX remain unverified; Windows evidence is recorded for the corresponding
+  gates. Product spec: `docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`. ExecPlan:
+  `docs/exec-plans/active/2026-08-03-v0.3.0-desktop-feature-release-plan.md`.
+
 - [x] Implement transcript dissection generation and persistence (2026-08-01) — ✅ added the third
   current `智能提炼` target with explicit bounded-call confirmation, contract v5, deterministic
   UTF-8 source provenance, managed per-call checkout, strict structured generation, atomic
