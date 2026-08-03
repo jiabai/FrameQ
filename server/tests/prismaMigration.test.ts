@@ -155,6 +155,9 @@ describe("reviewed Prisma migration chain", () => {
     expect(() => runPrisma(databasePath, ["migrate", "deploy"])).toThrow();
     const database = new DatabaseSync(databasePath);
     try {
+      // Prisma CLI can exit with a transient SQLite WAL lock after a failed
+      // migration; wait for it to clear instead of failing with SQLITE_BUSY.
+      database.exec("PRAGMA busy_timeout=5000");
       expect(database.prepare(
         'SELECT "llmQuotaLimit", "llmQuotaUsed" FROM "Entitlement" WHERE "id" = ?',
       ).get("migration-entitlement")).toEqual({ llmQuotaLimit: 0, llmQuotaUsed: 1 });
