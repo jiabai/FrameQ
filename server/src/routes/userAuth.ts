@@ -68,9 +68,17 @@ export function registerUserAuthRoutes(
         return reply.code(503).send({ error: "SERVER_TEMPORARILY_UNAVAILABLE" });
       }
       const publicMessage = publicAuthError(error);
-      return publicMessage
-        ? reply.code(400).send({ error: publicMessage })
-        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
+      if (publicMessage) {
+        return reply.code(400).send({ error: publicMessage });
+      }
+      request.log.error(
+        {
+          event: "user.auth.verify.unhandled_error",
+          err: error,
+        },
+        "Unhandled error during user email verification",
+      );
+      return reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
     }
   });
 
