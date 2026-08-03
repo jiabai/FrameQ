@@ -9,6 +9,11 @@ dependencies = [
     "funasr-onnx==0.4.2",
     "modelscope>=1.37.1",
     "onnxruntime>=1.17.0",
+    # onnxruntime stopped publishing macOS x86_64 wheels at 1.24.0, so on Intel
+    # pip resolves the latest (e.g. 1.28.0) and fails with "No matching
+    # distribution found". Pin below 1.24 to keep the self-contained wheel;
+    # other platforms track modern onnxruntime.
+    "onnxruntime<1.24 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # macOS Intel (x86_64) is pinned to torch 2.2.2 — the last release that ships
     # macOS x86_64 wheels — which only publishes up to CPython 3.12 (cp312) and
     # requires numpy<2. Keep FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 on CPython
