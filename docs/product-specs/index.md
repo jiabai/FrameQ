@@ -2,6 +2,7 @@
 
 ## Account and Billing Spec
 
+- `2026-08-04-server-page-i18n.md` - Per-page language switcher on `/login`, `/dashboard`, `/admin/login`, and `/admin` toggling between Simplified Chinese (default) and English via a non-sensitive `lang` cookie; new `server/src/i18n.ts` module owns the locale type, flat-keyed string dictionary, `t()` lookup, `detectLocale()` cookie resolver, and shared switcher button/styles. No desktop/worker/ASR/store/Prisma changes; no `zh-TW` server locale in this version.
 - `2026-08-03-web-user-dashboard.md` - Browser-side per-user Web dashboard at `/dashboard` with email-OTP cookie-session login that lands on the dashboard, reusing the `desktop_login` OTP purpose and the Admin Web session model; desktop deep-link login stays unchanged. First cut ships account-and-quota content only.
 - `2026-07-10-server-entitlement-transaction-safety.md` - Atomic, retry-safe payment settlement, activation-code redemption, and administrator entitlement compensation.
 - `2026-06-27-admin-entitlement-adjustments.md` - Admin Web manual compensation for entitlement expiry and LLM API-call quota after support incidents.

@@ -1,3 +1,12 @@
+import {
+  buildClientStrings,
+  dateLocale,
+  langSwitcherStyles,
+  renderLangSwitcher,
+  type Locale,
+  t,
+} from "./i18n.js";
+
 export type DashboardAccountView = {
   email: string;
   entitlement_status: "active" | "inactive";
@@ -16,31 +25,43 @@ export type DashboardAccountView = {
 export type DashboardPageInput = {
   account: DashboardAccountView;
   csrfToken: string;
+  locale?: Locale;
 };
 
 export function renderDashboardPage(input: DashboardPageInput): string {
+  const locale = input.locale ?? "zh-CN";
   const a = input.account;
-  const entitlementLabel = a.entitlement_status === "active" ? "已激活" : "未激活";
+  const entitlementLabel =
+    a.entitlement_status === "active"
+      ? t(locale, "dashboard.active")
+      : t(locale, "dashboard.inactive");
   const entitlementClass = a.entitlement_status === "active" ? "tag active" : "tag inactive";
   const expiryText = a.entitlement_expires_at
-    ? formatDate(a.entitlement_expires_at)
+    ? formatDate(a.entitlement_expires_at, locale)
     : "—";
-  const resetText = a.llm_quota_resets_at ? formatDate(a.llm_quota_resets_at) : "—";
+  const resetText = a.llm_quota_resets_at ? formatDate(a.llm_quota_resets_at, locale) : "—";
   const activationText =
     a.activation_code_prefix !== null
-      ? `${escapeHtml(a.activation_code_prefix)}****（绑定于 ${a.activation_code_redeemed_at ? formatDate(a.activation_code_redeemed_at) : "—"}）`
-      : "未绑定激活码";
-  const llmConfiguredText = a.llm_configured ? "已配置" : "未配置";
-  const canProcessText = a.can_process ? "是" : "否";
-  const canGenerateText = a.can_generate_ai ? "是" : "否";
+      ? `${escapeHtml(a.activation_code_prefix)}****（${t(locale, "dashboard.bound_at")} ${a.activation_code_redeemed_at ? formatDate(a.activation_code_redeemed_at, locale) : "—"}）`
+      : t(locale, "dashboard.no_activation_code");
+  const llmConfiguredText = a.llm_configured
+    ? t(locale, "dashboard.configured")
+    : t(locale, "dashboard.not_configured");
+  const canProcessText = a.can_process ? t(locale, "dashboard.yes") : t(locale, "dashboard.no");
+  const canGenerateText = a.can_generate_ai
+    ? t(locale, "dashboard.yes")
+    : t(locale, "dashboard.no");
+
+  const i18n = buildClientStrings(locale);
 
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FrameQ 控制台</title>
+    <title>${t(locale, "dashboard.title")}</title>
     <style>
+      ${langSwitcherStyles()}
       :root {
         color-scheme: light;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -53,6 +74,7 @@ export function renderDashboardPage(input: DashboardPageInput): string {
       header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
       header h1 { margin: 0; font-size: 22px; font-weight: 700; }
       header .email { color: #5f6874; font-size: 14px; }
+      .header-right { display: flex; align-items: center; gap: 8px; }
       button.logout { border: 0; border-radius: 8px; background: #eef2f6; color: #171717; font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
       button.logout:disabled { opacity: 0.6; cursor: wait; }
       .card { background: #ffffff; border: 1px solid #e2e5e9; border-radius: 8px; padding: 20px; box-shadow: 0 6px 20px rgba(17,24,39,0.04); }
@@ -73,49 +95,53 @@ export function renderDashboardPage(input: DashboardPageInput): string {
     <div class="wrap">
       <header>
         <div>
-          <h1>FrameQ 控制台</h1>
+          <h1>${t(locale, "dashboard.title")}</h1>
           <div class="email">${escapeHtml(a.email)}</div>
         </div>
-        <button id="logout" class="logout" type="button">退出登录</button>
+        <div class="header-right">
+          ${renderLangSwitcher(locale)}
+          <button id="logout" class="logout" type="button">${t(locale, "dashboard.logout")}</button>
+        </div>
       </header>
 
       <section class="card">
-        <h2>账号与额度</h2>
-        <div class="row"><span class="k">套餐状态</span><span class="v"><span class="${entitlementClass}">${entitlementLabel}</span></span></div>
-        <div class="row"><span class="k">到期时间</span><span class="v">${expiryText}</span></div>
-        <div class="row"><span class="k">AI Credits 上限</span><span class="v">${a.llm_quota_limit}</span></div>
-        <div class="row"><span class="k">AI Credits 已用</span><span class="v">${a.llm_quota_used}</span></div>
-        <div class="row"><span class="k">AI Credits 剩余</span><span class="v">${a.llm_quota_remaining}</span></div>
-        <div class="row"><span class="k">额度重置时间</span><span class="v">${resetText}</span></div>
-        <div class="row"><span class="k">云端 LLM 配置</span><span class="v">${llmConfiguredText}</span></div>
-        <div class="row"><span class="k">可本地转录</span><span class="v">${canProcessText}</span></div>
-        <div class="row"><span class="k">可生成 AI 内容</span><span class="v">${canGenerateText}</span></div>
+        <h2>${t(locale, "dashboard.account_quota")}</h2>
+        <div class="row"><span class="k">${t(locale, "dashboard.plan_status")}</span><span class="v"><span class="${entitlementClass}">${entitlementLabel}</span></span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.expiry")}</span><span class="v">${expiryText}</span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.credits_limit")}</span><span class="v">${a.llm_quota_limit}</span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.credits_used")}</span><span class="v">${a.llm_quota_used}</span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.credits_remaining")}</span><span class="v">${a.llm_quota_remaining}</span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.reset_time")}</span><span class="v">${resetText}</span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.llm_config")}</span><span class="v">${llmConfiguredText}</span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.can_process")}</span><span class="v">${canProcessText}</span></div>
+        <div class="row"><span class="k">${t(locale, "dashboard.can_generate")}</span><span class="v">${canGenerateText}</span></div>
       </section>
 
       <section class="card">
-        <h2>激活码</h2>
-        <div class="row"><span class="k">当前绑定</span><span class="v">${activationText}</span></div>
+        <h2>${t(locale, "dashboard.activation_code")}</h2>
+        <div class="row"><span class="k">${t(locale, "dashboard.current_binding")}</span><span class="v">${activationText}</span></div>
       </section>
 
       <section class="card">
-        <h2>任务历史</h2>
-        <p class="placeholder">即将推出。当前请在 FrameQ 桌面客户端查看任务历史。</p>
+        <h2>${t(locale, "dashboard.task_history")}</h2>
+        <p class="placeholder">${t(locale, "dashboard.task_history_placeholder")}</p>
       </section>
 
       <section class="card">
-        <h2>偏好设置</h2>
-        <p class="placeholder">即将推出。当前请在 FrameQ 桌面客户端管理偏好设置。</p>
+        <h2>${t(locale, "dashboard.preferences")}</h2>
+        <p class="placeholder">${t(locale, "dashboard.preferences_placeholder")}</p>
       </section>
 
       <div id="status" role="status" aria-live="polite"></div>
     </div>
     <script>
+      const i18n = ${JSON.stringify(i18n)};
       const csrfToken = ${JSON.stringify(input.csrfToken)};
       const logoutBtn = document.getElementById("logout");
       const status = document.getElementById("status");
       logoutBtn.addEventListener("click", async () => {
         logoutBtn.disabled = true;
-        status.textContent = "正在退出...";
+        status.textContent = i18n["dashboard.logging_out"];
         try {
           const response = await fetch("/user/auth/logout", {
             method: "POST",
@@ -125,10 +151,10 @@ export function renderDashboardPage(input: DashboardPageInput): string {
             window.location.href = "/login";
             return;
           }
-          status.textContent = "退出失败，请重试。";
+          status.textContent = i18n["dashboard.logout_failed"];
           status.className = "error";
         } catch (e) {
-          status.textContent = "网络错误，请重试。";
+          status.textContent = i18n["dashboard.network_error"];
           status.className = "error";
         } finally {
           logoutBtn.disabled = false;
@@ -148,10 +174,10 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: Locale): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return iso;
   }
-  return date.toLocaleString("zh-CN", { timeZone: "UTC" }) + " (UTC)";
+  return date.toLocaleString(dateLocale(locale), { timeZone: "UTC" }) + " (UTC)";
 }

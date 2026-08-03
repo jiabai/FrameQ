@@ -1,3 +1,11 @@
+import {
+  buildClientStrings,
+  dateLocale,
+  langSwitcherStyles,
+  renderLangSwitcher,
+  type Locale,
+  t,
+} from "./i18n.js";
 import type {
   ActivationCodeRecord,
   AdminEntitlementAdjustmentRecord,
@@ -6,14 +14,15 @@ import type {
 } from "./store.js";
 import type { PublicLlmConfig } from "./llmConfig.js";
 
-export function renderAdminLoginPage(): string {
+export function renderAdminLoginPage(locale: Locale = "zh-CN"): string {
+  const i18n = buildClientStrings(locale);
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FrameQ Admin Login</title>
-    <style>${adminStyles()}</style>
+    <title>${t(locale, "admin_login.title")}</title>
+    <style>${adminStyles(locale)}</style>
   </head>
   <body class="login-page">
     <main class="login-shell">
@@ -22,28 +31,30 @@ export function renderAdminLoginPage(): string {
           <span class="brand-mark">FQ</span>
           <div>
             <p class="eyebrow">FrameQ Admin</p>
-            <h1 id="login-title">管理员登录</h1>
+            <h1 id="login-title">${t(locale, "admin_login.heading")}</h1>
           </div>
+          ${renderLangSwitcher(locale)}
         </div>
-        <p class="muted">使用管理员邮箱获取验证码，登录后可生成和查看激活码。</p>
+        <p class="muted">${t(locale, "admin_login.intro")}</p>
         <form id="admin-login" class="admin-form">
           <label class="field">
-            <span>管理员邮箱</span>
+            <span>${t(locale, "admin_login.email")}</span>
             <div class="inline-action-field">
               <input id="email" name="email" type="email" autocomplete="email" required />
-              <button id="send-code" class="secondary-button" type="button">获取验证码</button>
+              <button id="send-code" class="secondary-button" type="button">${t(locale, "admin_login.send_code")}</button>
             </div>
           </label>
           <label class="field">
-            <span>邮箱验证码</span>
-            <input id="code" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位数字" required />
+            <span>${t(locale, "admin_login.code")}</span>
+            <input id="code" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="${t(locale, "admin_login.code_placeholder")}" required />
           </label>
-          <button id="signin" class="primary-button" type="submit">登录 FrameQ Admin</button>
+          <button id="signin" class="primary-button" type="submit">${t(locale, "admin_login.signin")}</button>
         </form>
         <p id="status" class="status-message" role="status"></p>
       </section>
     </main>
     <script>
+      const i18n = ${JSON.stringify(i18n)};
       const state = "admin-" + crypto.randomUUID();
       const email = document.getElementById("email");
       const code = document.getElementById("code");
@@ -59,16 +70,16 @@ export function renderAdminLoginPage(): string {
       sendCode.addEventListener("click", async () => {
         if (!email.reportValidity()) return;
         sendCode.disabled = true;
-        setStatus("正在发送验证码...");
+        setStatus(i18n["admin_login.status_sending"]);
         try {
           const response = await fetch("/admin/auth/email/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: email.value, state }),
           });
-          setStatus(response.ok ? "验证码已发送，请查看邮箱。" : "验证码发送失败，请确认邮箱权限。", response.ok ? "success" : "error");
+          setStatus(response.ok ? i18n["admin_login.status_sent"] : i18n["admin_login.status_send_failed"], response.ok ? "success" : "error");
         } catch {
-          setStatus("无法连接 FrameQ 服务端。", "error");
+          setStatus(i18n["admin_login.network_error"], "error");
         } finally {
           sendCode.disabled = false;
         }
@@ -77,7 +88,7 @@ export function renderAdminLoginPage(): string {
       document.getElementById("admin-login").addEventListener("submit", async (event) => {
         event.preventDefault();
         signin.disabled = true;
-        setStatus("正在验证...");
+        setStatus(i18n["admin_login.status_verifying"]);
         try {
           const response = await fetch("/admin/auth/email/verify", {
             method: "POST",
@@ -85,13 +96,13 @@ export function renderAdminLoginPage(): string {
             body: JSON.stringify({ email: email.value, code: code.value, state }),
           });
           if (response.ok) {
-            setStatus("登录成功，正在进入后台...", "success");
+            setStatus(i18n["admin_login.status_success"], "success");
             window.location.href = "/admin";
           } else {
-            setStatus("验证码错误或已过期。", "error");
+            setStatus(i18n["admin_login.status_code_error"], "error");
           }
         } catch {
-          setStatus("无法连接 FrameQ 服务端。", "error");
+          setStatus(i18n["admin_login.network_error"], "error");
         } finally {
           signin.disabled = false;
         }
@@ -109,16 +120,18 @@ export function renderAdminPage(input: {
   llmConfig: PublicLlmConfig;
   activationCodes: ActivationCodeRecord[];
   entitlementAdjustments: AdminEntitlementAdjustmentRecord[];
+  locale?: Locale;
 }): string {
+  const locale = input.locale ?? "zh-CN";
   const userRows = input.users.length
     ? input.users
         .map((user) => {
           const entitlement = input.entitlements.get(user.id);
           const active = Boolean(entitlement && entitlement.expiresAt > new Date());
-          return `<tr><td>${escapeHtml(user.email)}</td><td>${statusBadge(active ? "active" : "inactive", active ? "已激活" : "未激活")}</td><td>${formatDate(entitlement?.expiresAt)}</td></tr>`;
+          return `<tr><td>${escapeHtml(user.email)}</td><td>${statusBadge(active ? "active" : "inactive", active ? t(locale, "admin.user_active") : t(locale, "admin.user_inactive"))}</td><td>${formatDate(entitlement?.expiresAt, locale)}</td></tr>`;
         })
         .join("")
-    : `<tr><td colspan="3" class="empty-cell">暂无用户</td></tr>`;
+    : `<tr><td colspan="3" class="empty-cell">${t(locale, "admin.no_users")}</td></tr>`;
   const quotaRows = input.users.length
     ? input.users
         .map((user) => {
@@ -129,7 +142,7 @@ export function renderAdminPage(input: {
           return `<tr data-user-id="${escapeHtml(user.id)}"><td>${escapeHtml(user.email)}</td><td>${entitlement?.llmQuotaLimit ?? 0}</td><td>${entitlement?.llmQuotaUsed ?? 0}</td><td>${remaining}</td></tr>`;
         })
         .join("")
-    : `<tr><td colspan="4" class="empty-cell">暂无用户</td></tr>`;
+    : `<tr><td colspan="4" class="empty-cell">${t(locale, "admin.no_users")}</td></tr>`;
   const userEmailsById = new Map(input.users.map((user) => [user.id, user.email]));
   const adjustmentRows = input.users.length
     ? input.users
@@ -138,44 +151,46 @@ export function renderAdminPage(input: {
           const remaining = entitlement
             ? Math.max(0, entitlement.llmQuotaLimit - entitlement.llmQuotaUsed)
             : 0;
-          return `<tr data-user-id="${escapeHtml(user.id)}"><td>${escapeHtml(user.email)}</td><td><span class="adjustment-expiry">${formatDate(entitlement?.expiresAt)}</span></td><td><span class="adjustment-remaining">${remaining}</span></td><td><input class="adjustment-extend-days" type="number" min="0" max="365" value="0" aria-label="延长天数" /></td><td><input class="adjustment-quota-add" type="number" min="0" max="100000" value="0" aria-label="增加 LLM API 调用次数" /></td><td><select class="adjustment-reason" aria-label="调整原因"><option value="bug_compensation">bug 补偿</option><option value="support_goodwill">客服关怀</option><option value="manual_repair">手工修复</option><option value="other">其他</option></select></td><td><input class="adjustment-note" type="text" maxlength="1024" placeholder="版本/工单/备注" /></td><td><button class="secondary-button adjustment-save" type="button" data-user-id="${escapeHtml(user.id)}">保存</button><span class="adjustment-status"></span></td></tr>`;
+          return `<tr data-user-id="${escapeHtml(user.id)}"><td>${escapeHtml(user.email)}</td><td><span class="adjustment-expiry">${formatDate(entitlement?.expiresAt, locale)}</span></td><td><span class="adjustment-remaining">${remaining}</span></td><td><input class="adjustment-extend-days" type="number" min="0" max="365" value="0" aria-label="${t(locale, "admin.col_extend_days")}" /></td><td><input class="adjustment-quota-add" type="number" min="0" max="100000" value="0" aria-label="${t(locale, "admin.col_add_quota")}" /></td><td><select class="adjustment-reason" aria-label="${t(locale, "admin.col_reason")}"><option value="bug_compensation">${t(locale, "admin.reason_bug")}</option><option value="support_goodwill">${t(locale, "admin.reason_goodwill")}</option><option value="manual_repair">${t(locale, "admin.reason_repair")}</option><option value="other">${t(locale, "admin.reason_other")}</option></select></td><td><input class="adjustment-note" type="text" maxlength="1024" placeholder="${t(locale, "admin.note_placeholder")}" /></td><td><button class="secondary-button adjustment-save" type="button" data-user-id="${escapeHtml(user.id)}">${t(locale, "admin.save")}</button><span class="adjustment-status"></span></td></tr>`;
         })
         .join("")
-    : `<tr><td colspan="8" class="empty-cell">暂无用户</td></tr>`;
+    : `<tr><td colspan="8" class="empty-cell">${t(locale, "admin.no_users")}</td></tr>`;
   const recentAdjustmentRows = input.entitlementAdjustments.length
     ? input.entitlementAdjustments
         .map((adjustment) => {
           const email = userEmailsById.get(adjustment.userId) ?? adjustment.userId;
-          const beforeExpiry = adjustment.beforeExpiresAt ? formatDate(adjustment.beforeExpiresAt) : "无";
-          const afterExpiry = formatDate(adjustment.afterExpiresAt);
+          const beforeExpiry = adjustment.beforeExpiresAt ? formatDate(adjustment.beforeExpiresAt, locale) : t(locale, "admin.none");
+          const afterExpiry = formatDate(adjustment.afterExpiresAt, locale);
           const quotaDelta = adjustment.afterLlmQuotaLimit - adjustment.beforeLlmQuotaLimit;
-          return `<tr><td>${formatDate(adjustment.createdAt)}</td><td>${escapeHtml(email)}</td><td>${escapeHtml(adjustmentReasonText(adjustment.reason))}</td><td>${escapeHtml(beforeExpiry)} → ${escapeHtml(afterExpiry)}</td><td>${quotaDelta >= 0 ? "+" : ""}${quotaDelta}</td><td>${escapeHtml(adjustment.note ?? "")}</td></tr>`;
+          return `<tr><td>${formatDate(adjustment.createdAt, locale)}</td><td>${escapeHtml(email)}</td><td>${escapeHtml(adjustmentReasonText(adjustment.reason, locale))}</td><td>${escapeHtml(beforeExpiry)} → ${escapeHtml(afterExpiry)}</td><td>${quotaDelta >= 0 ? "+" : ""}${quotaDelta}</td><td>${escapeHtml(adjustment.note ?? "")}</td></tr>`;
         })
         .join("")
-    : `<tr><td colspan="6" class="empty-cell">暂无权益调整记录</td></tr>`;
+    : `<tr><td colspan="6" class="empty-cell">${t(locale, "admin.no_adjustments")}</td></tr>`;
   const codeRows = input.activationCodes.length
     ? input.activationCodes
         .map((code) => {
           const redeemedBy = code.redeemedByUserId
             ? userEmailsById.get(code.redeemedByUserId) ?? code.redeemedByUserId
             : "";
-          return `<tr><td><code>${escapeHtml(code.codePrefix)}</code></td><td>${statusBadge(code.status, activationCodeStatusText(code.status))}</td><td>${code.entitlementDays} 天</td><td>${formatDate(code.redeemBy)}</td><td>${formatDate(code.redeemedAt)}</td><td>${escapeHtml(redeemedBy)}</td></tr>`;
+          return `<tr><td><code>${escapeHtml(code.codePrefix)}</code></td><td>${statusBadge(code.status, activationCodeStatusText(code.status, locale))}</td><td>${code.entitlementDays}${t(locale, "admin.entitlement_days_suffix")}</td><td>${formatDate(code.redeemBy, locale)}</td><td>${formatDate(code.redeemedAt, locale)}</td><td>${escapeHtml(redeemedBy)}</td></tr>`;
         })
         .join("")
-    : `<tr><td colspan="6" class="empty-cell">暂无激活码</td></tr>`;
+    : `<tr><td colspan="6" class="empty-cell">${t(locale, "admin.no_codes")}</td></tr>`;
   const activeUsers = input.users.filter((user) => {
     const entitlement = input.entitlements.get(user.id);
     return Boolean(entitlement && entitlement.expiresAt > new Date());
   }).length;
   const availableCodes = input.activationCodes.filter((code) => code.status === "active" && code.redeemedAt === null).length;
 
+  const i18n = buildClientStrings(locale);
+
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FrameQ Admin</title>
-    <style>${adminStyles()}</style>
+    <title>${t(locale, "admin.title")}</title>
+    <style>${adminStyles(locale)}</style>
   </head>
   <body>
     <main class="admin-shell">
@@ -184,19 +199,20 @@ export function renderAdminPage(input: {
           <span class="brand-mark">FQ</span>
           <div>
             <p class="eyebrow">FrameQ Admin</p>
-            <h1>激活码管理</h1>
+            <h1>${t(locale, "admin.heading")}</h1>
           </div>
         </div>
         <div class="admin-session">
-          <span class="session-chip">已登录：${escapeHtml(input.adminEmail)}</span>
-          <button id="logout-admin" class="secondary-button" type="button">退出登录</button>
+          <span class="session-chip">${t(locale, "admin.logged_in_as")}${escapeHtml(input.adminEmail)}</span>
+          ${renderLangSwitcher(locale)}
+          <button id="logout-admin" class="secondary-button" type="button">${t(locale, "admin.logout")}</button>
         </div>
       </header>
 
       <section class="metrics-grid" aria-label="FrameQ Admin summary">
-        <div class="metric"><span>用户数</span><strong>${input.users.length}</strong></div>
-        <div class="metric"><span>已激活用户</span><strong>${activeUsers}</strong></div>
-        <div class="metric"><span>可兑换激活码</span><strong>${availableCodes}</strong></div>
+        <div class="metric"><span>${t(locale, "admin.users_count")}</span><strong>${input.users.length}</strong></div>
+        <div class="metric"><span>${t(locale, "admin.active_users")}</span><strong>${activeUsers}</strong></div>
+        <div class="metric"><span>${t(locale, "admin.available_codes")}</span><strong>${availableCodes}</strong></div>
       </section>
 
       <section class="admin-panel create-panel">
@@ -218,24 +234,24 @@ export function renderAdminPage(input: {
 
       <section class="admin-panel create-panel">
         <div>
-          <p class="eyebrow">Activation code</p>
-          <h2>生成月卡激活码</h2>
-          <p class="muted">兑换后获得 31 天月卡权益。完整激活码只在这里显示一次，复制后发给用户，数据库只保存哈希和短前缀。</p>
+          <p class="eyebrow">${t(locale, "admin.activation_eyebrow")}</p>
+          <h2>${t(locale, "admin.activation_heading")}</h2>
+          <p class="muted">${t(locale, "admin.activation_desc")}</p>
         </div>
         <div class="create-controls">
           <label class="field compact">
-            <span>激活码有效期</span>
+            <span>${t(locale, "admin.code_validity")}</span>
             <div class="unit-input">
               <input id="redeem-window-days" type="number" min="1" max="365" value="30" />
-              <span>天</span>
+              <span>${t(locale, "admin.days")}</span>
             </div>
           </label>
-          <button id="create-code" class="primary-button" type="button">生成激活码</button>
+          <button id="create-code" class="primary-button" type="button">${t(locale, "admin.generate_code")}</button>
         </div>
         <div id="created-code-card" class="created-code-card" hidden>
-          <span>新激活码</span>
+          <span>${t(locale, "admin.new_code")}</span>
           <code id="created-code"></code>
-          <button id="copy-code" class="secondary-button" type="button">复制</button>
+          <button id="copy-code" class="secondary-button" type="button">${t(locale, "admin.copy")}</button>
         </div>
         <p id="create-status" class="status-message" role="status"></p>
       </section>
@@ -243,13 +259,13 @@ export function renderAdminPage(input: {
       <section class="admin-panel">
         <div class="table-heading">
           <div>
-            <p class="eyebrow">Users</p>
-            <h2>用户状态</h2>
+            <p class="eyebrow">${t(locale, "admin.users_eyebrow")}</p>
+            <h2>${t(locale, "admin.users_heading")}</h2>
           </div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>邮箱</th><th>权益</th><th>到期时间</th></tr></thead>
+            <thead><tr><th>${t(locale, "admin.col_email")}</th><th>${t(locale, "admin.col_entitlement")}</th><th>${t(locale, "admin.col_expiry")}</th></tr></thead>
             <tbody>${userRows}</tbody>
           </table>
         </div>
@@ -258,13 +274,13 @@ export function renderAdminPage(input: {
       <section class="admin-panel">
         <div class="table-heading">
           <div>
-            <p class="eyebrow">LLM quota</p>
-            <h2>LLM API 调用次数（只读）</h2>
+            <p class="eyebrow">${t(locale, "admin.quota_eyebrow")}</p>
+            <h2>${t(locale, "admin.quota_heading")}</h2>
           </div>
         </div>
         <div class="table-wrap">
           <table id="llm-quota-table">
-            <thead><tr><th>邮箱</th><th>总次数</th><th>已用</th><th>剩余次数</th></tr></thead>
+            <thead><tr><th>${t(locale, "admin.col_email")}</th><th>${t(locale, "admin.col_total")}</th><th>${t(locale, "admin.col_used")}</th><th>${t(locale, "admin.col_remaining")}</th></tr></thead>
             <tbody>${quotaRows}</tbody>
           </table>
         </div>
@@ -273,13 +289,13 @@ export function renderAdminPage(input: {
       <section class="admin-panel">
         <div class="table-heading">
           <div>
-            <p class="eyebrow">Compensation</p>
-            <h2>权益补偿（增加额度并留痕）</h2>
+            <p class="eyebrow">${t(locale, "admin.compensation_eyebrow")}</p>
+            <h2>${t(locale, "admin.compensation_heading")}</h2>
           </div>
         </div>
         <div class="table-wrap">
           <table id="entitlement-adjustment-table">
-            <thead><tr><th>邮箱</th><th>当前到期</th><th>剩余次数</th><th>延长天数</th><th>增加 LLM API 调用次数</th><th>原因</th><th>备注</th><th>操作</th></tr></thead>
+            <thead><tr><th>${t(locale, "admin.col_email")}</th><th>${t(locale, "admin.col_current_expiry")}</th><th>${t(locale, "admin.col_remaining")}</th><th>${t(locale, "admin.col_extend_days")}</th><th>${t(locale, "admin.col_add_quota")}</th><th>${t(locale, "admin.col_reason")}</th><th>${t(locale, "admin.col_note")}</th><th>${t(locale, "admin.col_action")}</th></tr></thead>
             <tbody>${adjustmentRows}</tbody>
           </table>
         </div>
@@ -288,13 +304,13 @@ export function renderAdminPage(input: {
       <section class="admin-panel">
         <div class="table-heading">
           <div>
-            <p class="eyebrow">Audit</p>
-            <h2>最近权益调整</h2>
+            <p class="eyebrow">${t(locale, "admin.audit_eyebrow")}</p>
+            <h2>${t(locale, "admin.audit_heading")}</h2>
           </div>
         </div>
         <div class="table-wrap">
           <table id="entitlement-adjustment-history-table">
-            <thead><tr><th>时间</th><th>邮箱</th><th>原因</th><th>到期变化</th><th>额度变化</th><th>备注</th></tr></thead>
+            <thead><tr><th>${t(locale, "admin.col_time")}</th><th>${t(locale, "admin.col_email")}</th><th>${t(locale, "admin.col_reason")}</th><th>${t(locale, "admin.col_expiry_change")}</th><th>${t(locale, "admin.col_quota_change")}</th><th>${t(locale, "admin.col_note")}</th></tr></thead>
             <tbody>${recentAdjustmentRows}</tbody>
           </table>
         </div>
@@ -303,19 +319,20 @@ export function renderAdminPage(input: {
       <section class="admin-panel">
         <div class="table-heading">
           <div>
-            <p class="eyebrow">Codes</p>
-            <h2>激活码状态</h2>
+            <p class="eyebrow">${t(locale, "admin.codes_eyebrow")}</p>
+            <h2>${t(locale, "admin.codes_heading")}</h2>
           </div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>前缀</th><th>状态</th><th>权益</th><th>兑换截止</th><th>兑换时间</th><th>兑换邮箱</th></tr></thead>
+            <thead><tr><th>${t(locale, "admin.col_prefix")}</th><th>${t(locale, "admin.col_status")}</th><th>${t(locale, "admin.col_entitlement_days")}</th><th>${t(locale, "admin.col_redeem_by")}</th><th>${t(locale, "admin.col_redeemed_at")}</th><th>${t(locale, "admin.col_redeemed_by")}</th></tr></thead>
             <tbody>${codeRows}</tbody>
           </table>
         </div>
       </section>
     </main>
     <script>
+      const i18n = ${JSON.stringify(i18n)};
       const csrfToken = ${JSON.stringify(input.csrfToken)};
       const createButton = document.getElementById("create-code");
       const createStatus = document.getElementById("create-status");
@@ -366,7 +383,7 @@ export function renderAdminPage(input: {
           const remaining = row?.querySelector(".adjustment-remaining");
           if (!userId || !extendInput || !quotaInput || !reasonInput || !noteInput || !status) return;
           button.disabled = true;
-          status.textContent = "保存中...";
+          status.textContent = i18n["admin.saving"];
           const payload = {
             reason: reasonInput.value,
             note: noteInput.value,
@@ -383,7 +400,7 @@ export function renderAdminPage(input: {
             });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data) {
-              status.textContent = "保存失败";
+              status.textContent = i18n["admin.save_failed"];
               return;
             }
             if (expiry && data.entitlement_expires_at) {
@@ -395,9 +412,9 @@ export function renderAdminPage(input: {
             extendInput.value = "0";
             quotaInput.value = "0";
             noteInput.value = "";
-            status.textContent = "已保存";
+            status.textContent = i18n["admin.saved"];
           } catch {
-            status.textContent = "无法连接";
+            status.textContent = i18n["admin.cannot_connect"];
           } finally {
             button.disabled = false;
           }
@@ -408,7 +425,7 @@ export function renderAdminPage(input: {
         const redeemWindowDays = Number(document.getElementById("redeem-window-days").value || 30);
         createButton.disabled = true;
         createdCodeCard.hidden = true;
-        setCreateStatus("正在生成激活码...");
+        setCreateStatus(i18n["admin.generating"]);
         try {
           const response = await fetch("/admin/api/activation-codes", {
             method: "POST",
@@ -417,14 +434,14 @@ export function renderAdminPage(input: {
           });
           const data = await response.json();
           if (!response.ok) {
-            setCreateStatus("生成失败，请检查有效期设置。", "error");
+            setCreateStatus(i18n["admin.generate_failed"], "error");
             return;
           }
           createdCode.textContent = data.code;
           createdCodeCard.hidden = false;
-          setCreateStatus("已生成。请立即复制并妥善发送给用户。", "success");
+          setCreateStatus(i18n["admin.generated"], "success");
         } catch {
-          setCreateStatus("无法连接 FrameQ 服务端。", "error");
+          setCreateStatus(i18n["admin_login.network_error"], "error");
         } finally {
           createButton.disabled = false;
         }
@@ -432,7 +449,7 @@ export function renderAdminPage(input: {
 
       copyCode.addEventListener("click", async () => {
         await navigator.clipboard.writeText(createdCode.textContent || "");
-        setCreateStatus("激活码已复制。", "success");
+        setCreateStatus(i18n["admin.code_copied"], "success");
       });
 
       logoutAdmin.addEventListener("click", async () => {
@@ -448,10 +465,10 @@ export function renderAdminPage(input: {
             return;
           }
           logoutAdmin.disabled = false;
-          setCreateStatus("退出登录失败，请刷新后重试。", "error");
+          setCreateStatus(i18n["admin.logout_failed"], "error");
         } catch {
           logoutAdmin.disabled = false;
-          setCreateStatus("无法连接 FrameQ 服务端。", "error");
+          setCreateStatus(i18n["admin_login.network_error"], "error");
         }
       });
     </script>
@@ -459,8 +476,10 @@ export function renderAdminPage(input: {
 </html>`;
 }
 
-function adminStyles(): string {
+function adminStyles(locale: Locale): string {
+  void locale; // styles are locale-independent
   return `
+    ${langSwitcherStyles()}
     :root {
       color: #1f2328;
       background: #f2f4f7;
@@ -680,35 +699,35 @@ function statusBadge(status: string, label: string): string {
   return `<span class="badge ${escapeHtml(status)}">${escapeHtml(label)}</span>`;
 }
 
-function activationCodeStatusText(status: string): string {
+function activationCodeStatusText(status: string, locale: Locale): string {
   const labels: Record<string, string> = {
-    active: "可兑换",
-    redeemed: "已兑换",
-    expired: "已过期",
-    disabled: "已停用",
+    active: t(locale, "admin.code_active"),
+    redeemed: t(locale, "admin.code_redeemed"),
+    expired: t(locale, "admin.code_expired"),
+    disabled: t(locale, "admin.code_disabled"),
   };
   return labels[status] ?? status;
 }
 
-function adjustmentReasonText(reason: string): string {
+function adjustmentReasonText(reason: string, locale: Locale): string {
   switch (reason) {
     case "bug_compensation":
-      return "bug 补偿";
+      return t(locale, "admin.reason_bug");
     case "support_goodwill":
-      return "客服关怀";
+      return t(locale, "admin.reason_goodwill");
     case "manual_repair":
-      return "手工修复";
+      return t(locale, "admin.reason_repair");
     default:
-      return "其他";
+      return t(locale, "admin.reason_other");
   }
 }
 
-function formatDate(value: Date | null | undefined): string {
+function formatDate(value: Date | null | undefined, locale: Locale): string {
   if (!value) {
     return "";
   }
   return escapeHtml(
-    value.toLocaleString("zh-CN", {
+    value.toLocaleString(dateLocale(locale), {
       hour12: false,
       year: "numeric",
       month: "2-digit",

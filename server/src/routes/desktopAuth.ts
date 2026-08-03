@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AuthService } from "../auth.js";
 import { renderLoginPage } from "../loginPage.js";
+import { detectLocale } from "../i18n.js";
 import { sha256 } from "../security.js";
 import type { Store } from "../store.js";
 import { userSessionMaxAgeSeconds } from "../userAuth.js";
@@ -31,10 +32,10 @@ export function registerDesktopAuthRoutes(
   app: FastifyInstance,
   dependencies: DesktopAuthRouteDependencies,
 ): void {
-  app.get("/login", async (_request, reply) => {
+  app.get("/login", async (request, reply) => {
     reply.type("text/html; charset=utf-8");
     reply.header("cache-control", "no-store");
-    return renderLoginPage();
+    return renderLoginPage(detectLocale(request.headers.cookie));
   });
 
   app.post("/auth/email/start", async (request, reply) => {

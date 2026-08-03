@@ -1,11 +1,21 @@
-export function renderLoginPage(): string {
+import {
+  buildClientStrings,
+  langSwitcherStyles,
+  renderLangSwitcher,
+  type Locale,
+  t,
+} from "./i18n.js";
+
+export function renderLoginPage(locale: Locale = "zh-CN"): string {
+  const i18n = buildClientStrings(locale);
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FrameQ Login</title>
+    <title>${t(locale, "login.title")}</title>
     <style>
+      ${langSwitcherStyles()}
       :root {
         color-scheme: light;
         font-family:
@@ -31,6 +41,12 @@ export function renderLoginPage(): string {
         border-radius: 8px;
         padding: 28px;
         box-shadow: 0 18px 55px rgba(17, 24, 39, 0.09);
+        position: relative;
+      }
+      .lang-switch {
+        position: absolute;
+        top: 16px;
+        right: 16px;
       }
       h1 {
         margin: 0 0 8px;
@@ -132,26 +148,28 @@ export function renderLoginPage(): string {
   </head>
   <body>
     <main>
-      <h1>FrameQ Login</h1>
-      <p id="intro">输入邮箱获取验证码，验证成功后会自动回到 FrameQ 客户端。</p>
+      ${renderLangSwitcher(locale)}
+      <h1>${t(locale, "login.title")}</h1>
+      <p id="intro">${t(locale, "login.intro.desktop")}</p>
       <form id="login-form">
-        <label for="email">邮箱</label>
+        <label for="email">${t(locale, "login.email")}</label>
         <input id="email" name="email" type="email" autocomplete="email" required />
-        <button id="send-code" type="button" class="secondary">获取验证码</button>
+        <button id="send-code" type="button" class="secondary">${t(locale, "login.send_code")}</button>
 
-        <label for="code">验证码</label>
+        <label for="code">${t(locale, "login.code")}</label>
         <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required />
-        <button id="verify-code" type="submit">登录 FrameQ</button>
+        <button id="verify-code" type="submit">${t(locale, "login.verify_desktop")}</button>
       </form>
       <div id="status" role="status" aria-live="polite"></div>
-      <a id="fallback" href="#">打开 FrameQ 客户端</a>
+      <a id="fallback" href="#">${t(locale, "login.fallback")}</a>
       <div id="success-panel">
-        <h2>登录成功</h2>
-        <p>此窗口可关闭，请返回并继续使用 FrameQ</p>
-        <a class="dashboard-link" href="/dashboard">去到 Web Dashboard</a>
+        <h2>${t(locale, "login.success_title")}</h2>
+        <p>${t(locale, "login.success_body")}</p>
+        <a class="dashboard-link" href="/dashboard">${t(locale, "login.success_dashboard")}</a>
       </div>
     </main>
     <script>
+      const i18n = ${JSON.stringify(i18n)};
       const params = new URLSearchParams(window.location.search);
       const desktopParam = params.get("desktop");
       const redirectUri = params.get("redirect_uri") || "frameq://auth/callback";
@@ -163,10 +181,10 @@ export function renderLoginPage(): string {
         : (params.get("state") || ("web-" + crypto.randomUUID()));
       const startUrl = desktopMode ? "/auth/email/start" : "/user/auth/email/start";
       const verifyUrl = desktopMode ? "/auth/email/verify" : "/user/auth/email/verify";
-      const verifyButtonLabel = desktopMode ? "登录 FrameQ" : "登录控制台";
+      const verifyButtonLabel = desktopMode ? i18n["login.verify_desktop"] : i18n["login.verify_web"];
       const introText = desktopMode
-        ? "输入邮箱获取验证码，验证成功后会自动回到 FrameQ 客户端。"
-        : "输入邮箱获取验证码，验证成功后会进入 FrameQ 控制台。";
+        ? i18n["login.intro.desktop"]
+        : i18n["login.intro.web"];
       const form = document.getElementById("login-form");
       const emailInput = document.getElementById("email");
       const codeInput = document.getElementById("code");
@@ -187,16 +205,16 @@ export function renderLoginPage(): string {
 
       function assertDesktopLoginRequest() {
         if (!state || !/^[a-zA-Z0-9._~-]{8,160}$/.test(state)) {
-          throw new Error("登录请求已失效，请回到 FrameQ 重新发起登录。");
+          throw new Error(i18n["login.error_state_desktop"]);
         }
         if (redirectUri !== "frameq://auth/callback") {
-          throw new Error("登录回调地址无效，请回到 FrameQ 重新发起登录。");
+          throw new Error(i18n["login.error_callback"]);
         }
       }
 
       function assertLoginRequest() {
         if (!state || !/^[a-zA-Z0-9._~-]{8,160}$/.test(state)) {
-          throw new Error("登录请求已失效，请刷新页面重试。");
+          throw new Error(i18n["login.error_state_web"]);
         }
       }
 
@@ -208,7 +226,7 @@ export function renderLoginPage(): string {
         });
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.error || "请求失败，请稍后重试。");
+          throw new Error(data.error || i18n["login.error_request"]);
         }
         return data;
       }
@@ -224,15 +242,15 @@ export function renderLoginPage(): string {
             return;
           }
           sendButton.disabled = true;
-          setStatus("正在发送验证码...");
+          setStatus(i18n["login.status_sending"]);
           await postJson(startUrl, {
             email: emailInput.value,
             state,
           });
-          setStatus("验证码已发送，请检查邮箱。开发环境会在服务端终端输出验证码。");
+          setStatus(i18n["login.status_sent"]);
           codeInput.focus();
         } catch (error) {
-          setStatus(error instanceof Error ? error.message : "请求失败，请稍后重试。", true);
+          setStatus(error instanceof Error ? error.message : i18n["login.error_request"], true);
         } finally {
           sendButton.disabled = false;
         }
@@ -250,7 +268,7 @@ export function renderLoginPage(): string {
             return;
           }
           verifyButton.disabled = true;
-          setStatus("正在验证...");
+          setStatus(i18n["login.status_verifying"]);
           const data = await postJson(verifyUrl, {
             email: emailInput.value,
             code: codeInput.value,
@@ -273,11 +291,11 @@ export function renderLoginPage(): string {
               // Navigation to a custom scheme may throw in some browsers; ignore.
             }
           } else {
-            setStatus("验证成功，正在进入 FrameQ 控制台...");
+            setStatus(i18n["login.status_verified_web"]);
             window.location.href = data.redirect_url;
           }
         } catch (error) {
-          setStatus(error instanceof Error ? error.message : "验证失败，请重试。", true);
+          setStatus(error instanceof Error ? error.message : i18n["login.error_verify"], true);
         } finally {
           verifyButton.disabled = false;
         }
@@ -293,10 +311,9 @@ export function renderLoginPage(): string {
         form.querySelectorAll("input, button").forEach((node) => {
           node.disabled = true;
         });
-        setStatus(error instanceof Error ? error.message : "登录请求无效。", true);
+        setStatus(error instanceof Error ? error.message : i18n["login.error_invalid"], true);
       }
     </script>
   </body>
 </html>`;
 }
-

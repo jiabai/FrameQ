@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { ActivationCodeRecord } from "../store.js";
 import type { LlmConfigService } from "../llmConfig.js";
 import { renderDashboardPage, type DashboardAccountView } from "../dashboardPage.js";
+import { detectLocale } from "../i18n.js";
 import { sha256 } from "../security.js";
 import type { Store } from "../store.js";
 import { parseCookies } from "./cookies.js";
@@ -42,7 +43,7 @@ export function registerDashboardRoutes(
     const csrfToken = cookies.get("frameq_user_csrf") ?? "";
     reply.type("text/html; charset=utf-8");
     reply.header("cache-control", "no-store");
-    return renderDashboardPage({ account, csrfToken });
+    return renderDashboardPage({ account, csrfToken, locale: detectLocale(request.headers.cookie) });
   });
 
   app.get("/api/dashboard/account", async (request, reply) => {
