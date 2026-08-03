@@ -194,6 +194,11 @@ export type VerifyUserOtpResult =
   | { status: "invalid" }
   | { status: "temporarily_unavailable" };
 
+export type VerifyDesktopOtpAndWebSessionResult =
+  | { status: "verified"; user: UserRecord; ticket: DesktopLoginTicketRecord; session: UserSessionRecord }
+  | { status: "invalid" }
+  | { status: "temporarily_unavailable" };
+
 export type ExchangeDesktopTicketResult =
   | { status: "exchanged"; user: UserRecord; session: SessionRecord }
   | { status: "invalid" }
@@ -220,6 +225,17 @@ export type Store = {
     now: Date;
     ticketExpiresAt: Date;
   }): Promise<VerifyDesktopOtpResult>;
+  verifyDesktopOtpAndCreateTicketAndWebSession(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    ticketHash: string;
+    sessionTokenHash: string;
+    csrfTokenHash: string;
+    now: Date;
+    ticketExpiresAt: Date;
+    sessionExpiresAt: Date;
+  }): Promise<VerifyDesktopOtpAndWebSessionResult>;
   verifyAdminOtpAndCreateSession(input: {
     email: string;
     state: string;

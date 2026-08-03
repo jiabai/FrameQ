@@ -6,12 +6,14 @@ type AuthStore = Pick<
   | "issueEmailOtp"
   | "invalidateIssuedOtpAfterDeliveryFailure"
   | "verifyDesktopOtpAndCreateTicket"
+  | "verifyDesktopOtpAndCreateTicketAndWebSession"
   | "exchangeDesktopTicketAndCreateSession"
 >;
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const TICKET_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const USER_SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 export type AuthServiceOptions = {
   store: AuthStore;
@@ -93,6 +95,52 @@ export class AuthService {
     return {
       ticket,
       redirectUrl: `frameq://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(input.state)}`,
+    };
+  }
+
+  async verifyEmailCodeAndCreateWebSession(input: {
+    email: string;
+    code: string;
+    state: string;
+  }): Promise<{
+    ticket: string;
+    redirectUrl: string;
+    sessionToken: string;
+    csrfToken: string;
+  }> {
+    const email = normalizeEmail(input.email);
+    validateState(input.state);
+    if (!/^\d{6}$/.test(input.code)) {
+      throw new Error("Verification code is invalid or expired.");
+    }
+
+    const now = this.now();
+    const ticket = secureToken("flt_");
+    const sessionToken = secureToken("fqus_");
+    const csrfToken = secureToken("fqcs_");
+    const result = await this.store.verifyDesktopOtpAndCreateTicketAndWebSession({
+      email,
+      state: input.state,
+      codeHash: sha256(input.code),
+      ticketHash: sha256(ticket),
+      sessionTokenHash: sha256(sessionToken),
+      csrfTokenHash: sha256(csrfToken),
+      now,
+      ticketExpiresAt: new Date(now.getTime() + TICKET_TTL_MS),
+      sessionExpiresAt: new Date(now.getTime() + USER_SESSION_TTL_MS),
+    });
+    if (result.status === "temporarily_unavailable") {
+      throw temporarilyUnavailableError();
+    }
+    if (result.status === "invalid") {
+      throw new Error("Verification code is invalid or expired.");
+    }
+
+    return {
+      ticket,
+      redirectUrl: `frameq://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(input.state)}`,
+      sessionToken,
+      csrfToken,
     };
   }
 

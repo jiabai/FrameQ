@@ -55,6 +55,7 @@ const expectedContractTypes = [
   "UserRecord",
   "UserSessionRecord",
   "VerifyAdminOtpResult",
+  "VerifyDesktopOtpAndWebSessionResult",
   "VerifyDesktopOtpResult",
   "VerifyUserOtpResult",
   "WebhookEventRecord",
@@ -93,6 +94,10 @@ const semanticOwners = {
     memory: "store/memory/entitlements.ts",
     prisma: "prismaStore/entitlements.ts",
   },
+  verifyDesktopOtpAndCreateTicketAndWebSession: {
+    memory: "store/memory/userSession.ts",
+    prisma: "prismaStore/userSession.ts",
+  },
   verifyUserOtpAndCreateWebSession: {
     memory: "store/memory/userSession.ts",
     prisma: "prismaStore/userSession.ts",
@@ -119,6 +124,7 @@ const expectedCapabilities = {
       "invalidateIssuedOtpAfterDeliveryFailure",
       "issueEmailOtp",
       "verifyDesktopOtpAndCreateTicket",
+      "verifyDesktopOtpAndCreateTicketAndWebSession",
     ],
   },
   "adminAuth.ts": {
@@ -469,7 +475,7 @@ describe("Store adapter module ownership", () => {
       },
     ]);
     expect(physicalLineCount(storeRoot.source)).toBeLessThanOrEqual(60);
-    expect(physicalLineCount(contracts.source)).toBeLessThanOrEqual(350);
+    expect(physicalLineCount(contracts.source)).toBeLessThanOrEqual(370);
     expect(physicalLineCount(memoryRoot.source)).toBeLessThanOrEqual(400);
     expect(physicalLineCount(prismaRoot.source)).toBeLessThanOrEqual(350);
 

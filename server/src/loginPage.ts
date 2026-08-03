@@ -98,6 +98,36 @@ export function renderLoginPage(): string {
         color: #2463eb;
         font-size: 14px;
       }
+      #success-panel {
+        display: none;
+        text-align: center;
+        padding: 8px 0 4px;
+      }
+      #success-panel h2 {
+        margin: 0 0 12px;
+        font-size: 22px;
+        font-weight: 700;
+        color: #1f7a3a;
+      }
+      #success-panel p {
+        margin: 0 0 16px;
+        color: #5f6874;
+        line-height: 1.6;
+      }
+      #success-panel a.dashboard-link {
+        display: inline-block;
+        padding: 10px 20px;
+        border: 1px solid #2463eb;
+        border-radius: 8px;
+        color: #2463eb;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      #success-panel a.dashboard-link:hover {
+        background: #2463eb;
+        color: #ffffff;
+      }
     </style>
   </head>
   <body>
@@ -115,6 +145,11 @@ export function renderLoginPage(): string {
       </form>
       <div id="status" role="status" aria-live="polite"></div>
       <a id="fallback" href="#">打开 FrameQ 客户端</a>
+      <div id="success-panel">
+        <h2>登录成功</h2>
+        <p>此窗口可关闭，请返回并继续使用 FrameQ</p>
+        <a class="dashboard-link" href="/dashboard">去到 Web Dashboard</a>
+      </div>
     </main>
     <script>
       const params = new URLSearchParams(window.location.search);
@@ -140,6 +175,7 @@ export function renderLoginPage(): string {
       const status = document.getElementById("status");
       const fallback = document.getElementById("fallback");
       const intro = document.getElementById("intro");
+      const successPanel = document.getElementById("success-panel");
 
       verifyButton.textContent = verifyButtonLabel;
       intro.textContent = introText;
@@ -221,13 +257,25 @@ export function renderLoginPage(): string {
             state,
           });
           if (desktopMode) {
-            fallback.href = data.redirect_url;
-            fallback.style.display = "block";
-            setStatus("验证成功，正在打开 FrameQ 客户端...");
+            // Desktop mode: show success panel and trigger the deep link in the background.
+            // The browser stays on this page because frameq:// is a custom scheme
+            // the browser cannot navigate to as a document; it hands it off to the OS.
+            form.style.display = "none";
+            intro.style.display = "none";
+            fallback.style.display = "none";
+            status.style.display = "none";
+            successPanel.style.display = "block";
+            try {
+              setTimeout(() => {
+                window.location.href = data.redirect_url;
+              }, 200);
+            } catch {
+              // Navigation to a custom scheme may throw in some browsers; ignore.
+            }
           } else {
             setStatus("验证成功，正在进入 FrameQ 控制台...");
+            window.location.href = data.redirect_url;
           }
-          window.location.href = data.redirect_url;
         } catch (error) {
           setStatus(error instanceof Error ? error.message : "验证失败，请重试。", true);
         } finally {

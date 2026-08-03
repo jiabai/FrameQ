@@ -247,7 +247,7 @@ describe("server route module boundaries", () => {
       expect(
         allRouteFiles.filter((file) => sources.get(file)?.includes(token)),
         token,
-      ).toEqual(["dashboard.ts", "userAuth.ts"]);
+      ).toEqual(["dashboard.ts", "desktopAuth.ts", "userAuth.ts"]);
     }
   });
 

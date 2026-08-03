@@ -16,6 +16,12 @@ class TemporarilyUnavailableAuthStore extends MemoryStore {
     return { status: "temporarily_unavailable" };
   }
 
+  override async verifyDesktopOtpAndCreateTicketAndWebSession(
+    _input: Parameters<MemoryStore["verifyDesktopOtpAndCreateTicketAndWebSession"]>[0],
+  ): ReturnType<MemoryStore["verifyDesktopOtpAndCreateTicketAndWebSession"]> {
+    return { status: "temporarily_unavailable" };
+  }
+
   override async verifyAdminOtpAndCreateSession(
     _input: Parameters<MemoryStore["verifyAdminOtpAndCreateSession"]>[0],
   ): ReturnType<MemoryStore["verifyAdminOtpAndCreateSession"]> {
@@ -39,6 +45,12 @@ class FailingAuthStore extends MemoryStore {
   override async verifyDesktopOtpAndCreateTicket(
     _input: Parameters<MemoryStore["verifyDesktopOtpAndCreateTicket"]>[0],
   ): ReturnType<MemoryStore["verifyDesktopOtpAndCreateTicket"]> {
+    throw new Error("SQLITE_BUSY seeded authentication database detail");
+  }
+
+  override async verifyDesktopOtpAndCreateTicketAndWebSession(
+    _input: Parameters<MemoryStore["verifyDesktopOtpAndCreateTicketAndWebSession"]>[0],
+  ): ReturnType<MemoryStore["verifyDesktopOtpAndCreateTicketAndWebSession"]> {
     throw new Error("SQLITE_BUSY seeded authentication database detail");
   }
 

@@ -248,6 +248,15 @@ export class PrismaStore implements Store {
     return userSessionOperations.verifyUserOtpAndCreateWebSession(this.prisma, input);
   }
 
+  async verifyDesktopOtpAndCreateTicketAndWebSession(
+    input: Parameters<Store["verifyDesktopOtpAndCreateTicketAndWebSession"]>[0],
+  ): ReturnType<Store["verifyDesktopOtpAndCreateTicketAndWebSession"]> {
+    return userSessionOperations.verifyDesktopOtpAndCreateTicketAndWebSession(
+      this.prisma,
+      input,
+    );
+  }
+
   async createUserSession(
     input: Parameters<Store["createUserSession"]>[0],
   ): ReturnType<Store["createUserSession"]> {

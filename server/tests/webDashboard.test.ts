@@ -300,8 +300,8 @@ describe("web user dashboard login flow", () => {
   });
 });
 
-describe("desktop login regression (must stay unchanged)", () => {
-  test("desktop mode login returns ticket and frameq:// redirect, no user session cookie", async () => {
+describe("desktop login regression (contract preserved, cookies added)", () => {
+  test("desktop mode login returns ticket + frameq:// redirect AND sets user session cookies", async () => {
     const sentCodes: Array<{ email: string; code: string }> = [];
     const { app } = buildTestServer({ sentCodes });
 
@@ -324,20 +324,140 @@ describe("desktop login regression (must stay unchanged)", () => {
     });
     expect(verifyResponse.statusCode).toBe(200);
     const body = verifyResponse.json();
+    // Desktop client contract preserved: ticket + frameq:// redirect_url.
     expect(body).toHaveProperty("ticket");
     expect(body.redirect_url).toMatch(/^frameq:\/\/auth\/callback/);
 
+    // New behavior: the same verify call also sets the web session cookies so the
+    // user can optionally visit /dashboard without re-authenticating.
     const setCookieHeaders = Array.isArray(verifyResponse.headers["set-cookie"])
       ? verifyResponse.headers["set-cookie"]
       : verifyResponse.headers["set-cookie"]
         ? [verifyResponse.headers["set-cookie"]]
         : [];
     const cookieNames = setCookieHeaders.map((h) => h.split("=")[0]);
-    expect(cookieNames).not.toContain("frameq_user_session");
-    expect(cookieNames).not.toContain("frameq_user_csrf");
+    expect(cookieNames).toContain("frameq_user_session");
+    expect(cookieNames).toContain("frameq_user_csrf");
+
+    // Desktop exchange still works with the ticket.
+    const exchangeResponse = await app.inject({
+      method: "POST",
+      url: "/api/desktop/sessions/exchange",
+      payload: { ticket: body.ticket, state },
+    });
+    expect(exchangeResponse.statusCode).toBe(200);
+    const sessionToken = exchangeResponse.json<{ session_token: string }>().session_token;
+
+    const desktopAccount = await app.inject({
+      method: "GET",
+      url: "/api/desktop/account",
+      headers: { authorization: `Bearer ${sessionToken}` },
+    });
+    expect(desktopAccount.statusCode).toBe(200);
+    expect(desktopAccount.json()).toMatchObject({
+      authenticated: true,
+      email: "desktop@example.com",
+    });
   });
 
-  test("desktop login page renders with desktop-mode form targets", async () => {
+  test("desktop-mode verify cookies grant /dashboard access without re-auth", async () => {
+    const sentCodes: Array<{ email: string; code: string }> = [];
+    const { app } = buildTestServer({ sentCodes });
+
+    const state = "desktop-dashboard-state";
+    await app.inject({
+      method: "POST",
+      url: "/auth/email/start",
+      payload: { email: "dash@example.com", state },
+    });
+    const verifyResponse = await app.inject({
+      method: "POST",
+      url: "/auth/email/verify",
+      payload: { email: "dash@example.com", code: sentCodes[0]!.code, state },
+    });
+    expect(verifyResponse.statusCode).toBe(200);
+
+    const cookies = parseCookies(verifyResponse.headers["set-cookie"]);
+    const sessionCookie = cookies.get("frameq_user_session")!;
+    const csrfCookie = cookies.get("frameq_user_csrf")!;
+
+    const dashboardPage = await app.inject({
+      method: "GET",
+      url: "/dashboard",
+      cookies: { frameq_user_session: sessionCookie, frameq_user_csrf: csrfCookie },
+    });
+    expect(dashboardPage.statusCode).toBe(200);
+    expect(dashboardPage.body).toContain("dash@example.com");
+
+    const dashboardJson = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/account",
+      cookies: { frameq_user_session: sessionCookie },
+    });
+    expect(dashboardJson.statusCode).toBe(200);
+    expect(dashboardJson.json()).toMatchObject({ email: "dash@example.com" });
+  });
+
+  test("web logout revokes web session but desktop bearer token stays valid", async () => {
+    const sentCodes: Array<{ email: string; code: string }> = [];
+    const { app } = buildTestServer({ sentCodes });
+
+    const state = "independence-state";
+    await app.inject({
+      method: "POST",
+      url: "/auth/email/start",
+      payload: { email: "independence@example.com", state },
+    });
+    const verifyResponse = await app.inject({
+      method: "POST",
+      url: "/auth/email/verify",
+      payload: { email: "independence@example.com", code: sentCodes[0]!.code, state },
+    });
+    const body = verifyResponse.json<{ ticket: string }>();
+    const cookies = parseCookies(verifyResponse.headers["set-cookie"]);
+    const sessionCookie = cookies.get("frameq_user_session")!;
+    const csrfCookie = cookies.get("frameq_user_csrf")!;
+
+    // Exchange the ticket for a desktop bearer token.
+    const exchangeResponse = await app.inject({
+      method: "POST",
+      url: "/api/desktop/sessions/exchange",
+      payload: { ticket: body.ticket, state },
+    });
+    const desktopToken = exchangeResponse.json<{ session_token: string }>().session_token;
+
+    // Logout of the web dashboard.
+    const logoutResponse = await app.inject({
+      method: "POST",
+      url: "/user/auth/logout",
+      cookies: { frameq_user_session: sessionCookie },
+      headers: { "x-frameq-csrf": csrfCookie },
+    });
+    expect(logoutResponse.statusCode).toBe(200);
+
+    // Web session is revoked: /dashboard redirects to /login.
+    const webAfterLogout = await app.inject({
+      method: "GET",
+      url: "/dashboard",
+      cookies: { frameq_user_session: sessionCookie },
+    });
+    expect(webAfterLogout.statusCode).toBe(302);
+    expect(webAfterLogout.headers.location).toBe("/login");
+
+    // Desktop bearer token still works (session independence).
+    const desktopAccount = await app.inject({
+      method: "GET",
+      url: "/api/desktop/account",
+      headers: { authorization: `Bearer ${desktopToken}` },
+    });
+    expect(desktopAccount.statusCode).toBe(200);
+    expect(desktopAccount.json()).toMatchObject({
+      authenticated: true,
+      email: "independence@example.com",
+    });
+  });
+
+  test("desktop login page renders with desktop-mode form targets and success panel", async () => {
     const { app } = buildTestServer();
 
     const response = await app.inject({
@@ -347,11 +467,16 @@ describe("desktop login regression (must stay unchanged)", () => {
     expect(response.statusCode).toBe(200);
     // The login page script contains both ternary branches (desktop and web) as string
     // literals; we assert the desktop targets are present. Desktop-mode runtime behavior
-    // (no user-session cookie, frameq:// redirect) is verified by the test above.
+    // (frameq:// redirect + cookie setting) is verified by the tests above.
     expect(response.body).toContain("/auth/email/start");
     expect(response.body).toContain("/auth/email/verify");
     expect(response.body).toContain("assertDesktopLoginRequest");
     expect(response.body).toContain('redirectUri !== "frameq://auth/callback"');
+    // Success panel is present (hidden by default, shown after desktop verify).
+    expect(response.body).toContain("登录成功");
+    expect(response.body).toContain("此窗口可关闭，请返回并继续使用 FrameQ");
+    expect(response.body).toContain('href="/dashboard"');
+    expect(response.body).toContain("去到 Web Dashboard");
   });
 });
 

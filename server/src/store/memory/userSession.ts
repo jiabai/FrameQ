@@ -37,6 +37,46 @@ export async function verifyUserOtpAndCreateWebSession(
   });
 }
 
+export async function verifyDesktopOtpAndCreateTicketAndWebSession(
+  context: MemoryAuthContext,
+  input: Parameters<Store["verifyDesktopOtpAndCreateTicketAndWebSession"]>[0],
+): ReturnType<Store["verifyDesktopOtpAndCreateTicketAndWebSession"]> {
+  return context.atomic.run(async () => {
+    const otp = latestUsableOtp(
+      context,
+      "desktop_login",
+      input.email,
+      input.state,
+      input.now,
+    );
+    if (!otp) {
+      return { status: "invalid" };
+    }
+    otp.attempts += 1;
+    if (!constantTimeEqual(otp.codeHash, input.codeHash)) {
+      return { status: "invalid" };
+    }
+    otp.consumedAt = input.now;
+    const user = await context.upsertUserByEmail(input.email, input.now);
+    const ticket = await context.createDesktopLoginTicket({
+      ticketHash: input.ticketHash,
+      state: input.state,
+      userId: user.id,
+      expiresAt: input.ticketExpiresAt,
+      createdAt: input.now,
+    });
+    const session = await context.createUserSession({
+      userId: user.id,
+      email: input.email,
+      tokenHash: input.sessionTokenHash,
+      csrfTokenHash: input.csrfTokenHash,
+      createdAt: input.now,
+      expiresAt: input.sessionExpiresAt,
+    });
+    return { status: "verified", user, ticket, session };
+  });
+}
+
 export async function createUserSession(
   context: MemoryAuthContext,
   input: Omit<UserSessionRecord, "id" | "revokedAt">,

@@ -118,7 +118,12 @@ export function buildServer(dependencies: ServerDependencies) {
   });
 
   registerHealthRoutes(app, readiness);
-  registerDesktopAuthRoutes(app, { store: dependencies.store, auth, now });
+  registerDesktopAuthRoutes(app, {
+    store: dependencies.store,
+    auth,
+    secureCookies: dependencies.secureCookies ?? false,
+    now,
+  });
   registerAdminRoutes(app, {
     store: dependencies.store,
     adminAuth,

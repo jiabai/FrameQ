@@ -276,6 +276,15 @@ export class MemoryStore implements Store {
     return userSessionOperations.verifyUserOtpAndCreateWebSession(this.authContext(), input);
   }
 
+  async verifyDesktopOtpAndCreateTicketAndWebSession(
+    input: Parameters<Store["verifyDesktopOtpAndCreateTicketAndWebSession"]>[0],
+  ): ReturnType<Store["verifyDesktopOtpAndCreateTicketAndWebSession"]> {
+    return userSessionOperations.verifyDesktopOtpAndCreateTicketAndWebSession(
+      this.authContext(),
+      input,
+    );
+  }
+
   async createUserSession(
     input: Parameters<Store["createUserSession"]>[0],
   ): ReturnType<Store["createUserSession"]> {

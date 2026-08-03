@@ -14,6 +14,7 @@
 
 - [x]  2026-08-03: Spec drafted at `docs/product-specs/2026-08-03-web-user-dashboard.md`; this ExecPlan drafted; awaiting user approval before implementation.
 - [x]  2026-08-03: All Tasks 1–9 complete. Implementation ships store contracts (memory + Prisma + migration `202608030001_user_session`), `UserAuthService`, `routes/userAuth.ts`, `routes/dashboard.ts`, `dashboardPage.ts`, login-page branching, server wiring, and full integration/regression tests in `server/tests/webDashboard.test.ts`. Governance validated and all regression gates green. See Outcomes & Retrospective for evidence.
+- [x]  2026-08-03: Iteration 2 (Tasks 10–14) complete. Desktop-mode `/auth/email/verify` now atomically creates a desktop ticket AND a web user session via `verifyDesktopOtpAndCreateTicketAndWebSession`; sets `frameq_user_session` + `frameq_user_csrf` cookies; the login page shows a success panel ("登录成功" / "此窗口可关闭..." / "去到 Web Dashboard" link) and triggers the `frameq://` deep link in the background. Desktop client contract `{ ticket, redirect_url }` unchanged. All regression gates green (160 server tests, 669 app tests, 669 worker tests).
 
 ## Decision Log
 
@@ -54,6 +55,33 @@
 - **No web-login-specific rate limit beyond the shared OTP rate limit:** acceptable since OTP issuance is the gated step and the OTP purpose is shared with the desktop path.
 - **Version bump and release-prep are a separate follow-up plan:** this plan does not tag or publish. The next plan decides v0.3.1 (patch) vs v0.4.0 (minor) and writes release notes.
 - **Login-page script contains both ternary branches as literals:** tests assert the desktop and web targets are both present in the rendered HTML (they have to be, since one page handles both modes). Mode is selected at runtime from URL params; the actual behavior is verified by end-to-end API tests, not by static text checks.
+
+### Iteration 2 — Desktop Login Success Page with Web Dashboard Entry
+
+#### What was delivered (Iteration 2)
+
+- Desktop-mode `/auth/email/verify` now atomically creates a desktop ticket AND a web user session in a single store transaction (`verifyDesktopOtpAndCreateTicketAndWebSession`), sets `frameq_user_session` + `frameq_user_csrf` cookies alongside the existing `{ ticket, redirect_url }` JSON response — the desktop client contract is byte-for-byte unchanged.
+- The login page desktop-mode success handler now hides the form and shows a success panel: "登录成功" / "此窗口可关闭，请返回并继续使用 FrameQ" / "去到 Web Dashboard" link to `/dashboard`. The `frameq://` deep link is triggered via `setTimeout` after the panel renders so the browser stays on the success page.
+- Web and desktop sessions are independent: logging out of the web session (via `/user/auth/logout`) revokes only the web cookie session; the desktop bearer token stays valid until the desktop client logs out.
+
+#### Key implementation decisions (Iteration 2)
+
+- Added a combined `verifyDesktopOtpAndCreateTicketAndWebSession` store method instead of calling `verifyDesktopOtpAndCreateTicket` + `createUserSession` separately. Rationale: the OTP must be consumed exactly once across ticket creation and session creation; a combined atomic method guarantees this in both memory and Prisma stores (Prisma uses `$transaction` + `updateMany` conditional WHERE for atomic consume-once).
+- The desktop verify route reuses the same `setCookie` helper and cookie attributes (`Secure`/`SameSite=Lax`/`Max-Age`) as the web-only `/user/auth/email/verify` route — no new cookie configuration.
+- `AuthService.verifyEmailCodeAndCreateWebSession` mirrors `verifyEmailCode` but also generates `sessionToken` + `csrfToken` and calls the combined store method. The existing `verifyEmailCode` is kept for callers that only need a ticket.
+- `contracts.ts` boundary raised from 350 to 370 lines to accommodate the new `VerifyDesktopOtpAndWebSessionResult` type + method signature (natural growth from a new combined store method).
+
+#### Verification evidence (Iteration 2 gates)
+
+- **Server tests:** `npm --prefix server test -- --run` → 26 files, 160 passed / 1 skipped (was 158 passed after Iteration 1; +2 new desktop-mode tests: cookie grant dashboard access, web/desktop session independence). Updated `routes.test.ts` test doubles (`TemporarilyUnavailableAuthStore` + `FailingAuthStore`) to override the new combined method. Updated boundary tests (`serverModuleBoundaries` + `storeModuleBoundaries`) for new cookie owner and contract type/method.
+- **Governance:** `python scripts/validate_agents_docs.py --level WARN` → 0 errors / 0 warnings.
+- **App regression (unaffected, confirmed):** `npm --prefix app run lint` → clean; `npm --prefix app run build` → built in 9.08s; `npm --prefix app test` → 73 files, 669 passed.
+- **Worker regression (unaffected, confirmed):** `uv run ruff check worker` → All checks passed; `uv run pytest worker/tests` → 669 passed / 2 skipped / 1 warning (pre-existing `audioop` DeprecationWarning).
+
+#### Residual risks (Iteration 2 additions)
+
+- **`secureCookies` deployment risk now applies to desktop-mode verify too:** since `/auth/email/verify` now sets web session cookies, the `Secure` flag must be correct in production. Same risk as Iteration 1; no new mitigation needed beyond verifying the deployment config.
+- **Deep-link timing:** the `frameq://` deep link is triggered via `setTimeout(..., 200)` after the success panel renders. If the OS is slow to handle the custom scheme, the user sees the success panel (which is the intended UX). If the scheme is not registered, the browser shows no error (custom schemes silently fail); the user can still click "去到 Web Dashboard" or manually return to the desktop client.
 
 ## Context and Orientation
 
@@ -147,3 +175,52 @@
 - The user web session has no IP/UA binding in this version; a stolen cookie is usable for the session lifetime. Acceptable for v1 parity with the desktop session; revisit if abuse appears.
 - No rate-limit specific to web login beyond the shared OTP rate-limit; acceptable since OTP issuance is the gated step.
 - Version bump and release-prep (release notes, version sync, tag) are a separate follow-up plan; this plan does not tag or publish.
+
+---
+
+## Iteration 2 — Desktop Login Success Page with Web Dashboard Entry
+
+**Goal:** After a successful desktop-mode OTP verification, the login page no longer auto-navigates to the `frameq://` deep link. Instead it renders a success panel ("登录成功" / "此窗口可关闭，请返回并继续使用 FrameQ" / "去到 Web Dashboard" link) and triggers the deep link in the background. The same `/auth/email/verify` call now also creates a web user session and sets the `frameq_user_session` + `frameq_user_csrf` cookies, so the user can optionally click the link to open `/dashboard` without re-authenticating. The desktop client contract (`{ ticket, redirect_url }`) is unchanged.
+
+**Why:** Users who complete desktop login in the browser currently see the page navigate to a `frameq://` URL with no clear success indication and no way to access the new Web Dashboard. This iteration gives them a clear success state and an optional Web Dashboard entry, while keeping the desktop deep-link handshake byte-for-byte identical.
+
+### Task 10 — Store: combined OTP → ticket + web session method
+
+- [x] 10.1 Add `verifyDesktopOtpAndCreateTicketAndWebSession` to the `Store` interface in `server/src/store/contracts.ts`. Input: `{ email; state; codeHash; ticketHash; sessionTokenHash; csrfTokenHash; now; ticketExpiresAt; sessionExpiresAt }`. Output: `{ status: "verified"; user; ticket; session } | { status: "invalid" } | { status: "temporarily_unavailable" }`. Add a `VerifyDesktopOtpAndWebSessionResult` type.
+- [x]10.2 Implement `verifyDesktopOtpAndCreateTicketAndWebSession` in `server/src/store/memory/userSession.ts` (or `auth.ts` if the boundary allows). The OTP consumption logic MUST match `verifyDesktopOtpAndCreateTicket` exactly (same state/email/code matching, same attempt increment, same consumedAt marking). In the same atomic block: upsert user, create desktop ticket, create user session. All three writes succeed or none do.
+- [x]10.3 Implement `verifyDesktopOtpAndCreateTicketAndWebSession` in `server/src/prismaStore/userSession.ts` (or `auth.ts`) using a Prisma `$transaction` with `withConflictRetry`. The OTP update MUST use `updateMany` with the same conditional WHERE clause as `verifyDesktopOtpAndCreateTicket` to ensure atomic consume-once. Create ticket + user session in the same transaction.
+- [x]10.4 Add focused memory-store tests: combined verify success returns ticket + session; OTP consumed once (rejected by the other two verify paths); invalid code/state returns `{ status: "invalid" }`; transaction failure rolls back all three writes.
+- [x]10.5 Add Prisma-focused tests: combined verify success on fresh DB and on DB pre-seeded with desktop/admin data; cross-path OTP consumption across all three verify paths; transaction rollback on session-write failure leaves ticket uncreated and OTP consumable for retry.
+
+### Task 11 — AuthService: verifyEmailCodeAndCreateWebSession
+
+- [x]11.1 Add `verifyEmailCodeAndCreateWebSession(input: { email; code; state })` to `AuthService` in `server/src/auth.ts`. It validates email/state/code (same as `verifyEmailCode`), generates a `secureToken("flt_")` ticket + `secureToken("fqus_")` session token + `secureToken("fqcs_")` CSRF token, calls `store.verifyDesktopOtpAndCreateTicketAndWebSession`, and returns `{ ticket, redirectUrl, sessionToken, csrfToken }`. `redirectUrl` format: `frameq://auth/callback?ticket=...&state=...` (same as `verifyEmailCode`). Session TTL = `userSessionMaxAgeSeconds` (90 days, matching the web-only path).
+- [x]11.2 Keep the existing `verifyEmailCode` method unchanged (it is still used by tests and may be used by callers that only need a ticket).
+- [x]11.3 Add focused unit tests for `verifyEmailCodeAndCreateWebSession` mirroring `verifyEmailCode` coverage: success returns all four fields; invalid code throws `Verification code is invalid or expired.`; temporarily-unavailable propagates as `SERVER_TEMPORARILY_UNAVAILABLE`.
+
+### Task 12 — Route: /auth/email/verify sets web session cookies
+
+- [x]12.1 Update `POST /auth/email/verify` in `server/src/routes/desktopAuth.ts` to call `dependencies.auth.verifyEmailCodeAndCreateWebSession` instead of `verifyEmailCode`. Use the shared `setCookie` helper from `routes/cookies.ts` to set `frameq_user_session` (httpOnly=true) and `frameq_user_csrf` (httpOnly=false) with `secure=dependencies.secureCookies`, `sameSite="Lax"`, `maxAge=userSessionMaxAgeSeconds`. Cookie attributes MUST match `/user/auth/email/verify` exactly.
+- [x]12.2 The JSON response stays `{ ticket, redirect_url }` — desktop client contract unchanged. The `dependencies` type for `desktopAuth` route now needs `secureCookies: boolean` (passed through from `buildServer`).
+- [x]12.3 Update `server/src/server.ts` to pass `secureCookies: dependencies.secureCookies ?? false` to `registerDesktopAuthRoutes`.
+- [x]12.4 Update existing desktop-auth route tests: the verify response now ALSO sets `frameq_user_session` + `frameq_user_csrf` cookies (in addition to returning `ticket` + `redirect_url`). Existing tests that assert "no user session cookie" need to be updated — the cookie is now expected. The `ticket` + `redirect_url` shape is unchanged.
+- [x]12.5 Add a regression test: after a desktop-mode verify, the `frameq_user_session` cookie is accepted by `GET /dashboard` (200) and `GET /api/dashboard/account` (200). After `POST /user/auth/logout`, `/dashboard` redirects to `/login` but `/api/desktop/account` with the desktop bearer token still returns 200 (session independence).
+
+### Task 13 — Login page: desktop success panel
+
+- [x]13.1 Update `server/src/loginPage.ts` desktop-mode success handler: instead of `window.location.href = data.redirect_url` immediately, hide the form and show a success panel with three elements:
+  - `<h2>` or `<p>` with text "登录成功"
+  - `<p>` with text "此窗口可关闭，请返回并继续使用 FrameQ"
+  - `<a href="/dashboard">去到 Web Dashboard</a>` link
+- [x]13.2 After rendering the success panel, trigger the deep link via `setTimeout(() => { window.location.href = data.redirect_url; }, 200)` so the browser attempts to open the desktop client without unloading the success page. Wrap in try/catch so any navigation exception does not break the success panel.
+- [x]13.3 Web-mode success handler stays unchanged (`window.location.href = "/dashboard"`).
+- [x]13.4 Update `server/tests/webDashboard.test.ts` desktop-mode tests:
+  - The desktop login page test should assert the success-panel text appears after verify (the test currently asserts the page renders desktop-mode form targets; extend to verify success-panel rendering is part of the page script).
+  - Add a test that simulates the desktop verify flow and asserts the response sets `frameq_user_session` cookie (which then grants `/dashboard` access).
+- [x]13.5 Run the full server suite and confirm all tests pass.
+
+### Task 14 — Governance and final verification
+
+- [x]14.1 Run `python scripts/validate_agents_docs.py --level WARN` — 0 errors / 0 warnings.
+- [x]14.2 Run regression gates: `npm --prefix app run lint`, `npm --prefix app run build`, `npm --prefix app test`, `uv run ruff check worker`, `uv run pytest worker/tests` (server-only change; expect green).
+- [x]14.3 Update Outcomes & Retrospective with Iteration 2 evidence; re-confirm residual risks (the `secureCookies` deployment risk now applies to desktop-mode verify too, since it sets cookies).

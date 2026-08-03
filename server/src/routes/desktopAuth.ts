@@ -4,7 +4,9 @@ import type { AuthService } from "../auth.js";
 import { renderLoginPage } from "../loginPage.js";
 import { sha256 } from "../security.js";
 import type { Store } from "../store.js";
+import { userSessionMaxAgeSeconds } from "../userAuth.js";
 import { emailStartSchema, emailVerifySchema } from "./authSchemas.js";
+import { setCookie } from "./cookies.js";
 import {
   bearerToken,
   isServerTemporarilyUnavailable,
@@ -21,6 +23,7 @@ const ticketExchangeSchema = z.object({
 type DesktopAuthRouteDependencies = {
   store: DesktopAuthRouteStore;
   auth: AuthService;
+  secureCookies: boolean;
   now: () => Date;
 };
 
@@ -63,7 +66,17 @@ export function registerDesktopAuthRoutes(
       return reply.code(400).send({ error: "INVALID_REQUEST" });
     }
     try {
-      const result = await dependencies.auth.verifyEmailCode(parsed.data);
+      const result = await dependencies.auth.verifyEmailCodeAndCreateWebSession(parsed.data);
+      setCookie(reply, "frameq_user_session", result.sessionToken, {
+        httpOnly: true,
+        maxAgeSeconds: userSessionMaxAgeSeconds,
+        secure: dependencies.secureCookies,
+      });
+      setCookie(reply, "frameq_user_csrf", result.csrfToken, {
+        httpOnly: false,
+        maxAgeSeconds: userSessionMaxAgeSeconds,
+        secure: dependencies.secureCookies,
+      });
       return {
         ticket: result.ticket,
         redirect_url: result.redirectUrl,
