@@ -17,6 +17,7 @@ model User {
   entitlements Entitlement[]
   redeemedCodes ActivationCode[]
   adminEntitlementAdjustments AdminEntitlementAdjustment[]
+  userSessions  UserSession[]
 }
 
 model EmailOtp {
@@ -149,6 +150,21 @@ model AdminSession {
   expiresAt     DateTime
   revokedAt     DateTime?
 
+  @@index([email])
+}
+
+model UserSession {
+  id            String    @id
+  userId        String
+  email         String
+  tokenHash     String    @unique
+  csrfTokenHash String
+  createdAt     DateTime
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
   @@index([email])
 }
 

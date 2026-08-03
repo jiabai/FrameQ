@@ -8,6 +8,7 @@ import type { LlmConfigService } from "../llmConfig.js";
 import { sha256 } from "../security.js";
 import type { Store } from "../store.js";
 import { emailStartSchema, emailVerifySchema } from "./authSchemas.js";
+import { clearCookie, firstHeader, parseCookies, setCookie } from "./cookies.js";
 import {
   isServerTemporarilyUnavailable,
   llmQuotaRemaining,
@@ -307,57 +308,3 @@ function publicLlmConfigResponse(config: {
   };
 }
 
-function parseCookies(cookieHeader: string | undefined): Map<string, string> {
-  const cookies = new Map<string, string>();
-  for (const part of cookieHeader?.split(";") ?? []) {
-    const [name, ...rest] = part.trim().split("=");
-    if (!name || rest.length === 0) {
-      continue;
-    }
-    cookies.set(name, decodeURIComponent(rest.join("=")));
-  }
-  return cookies;
-}
-
-function setCookie(
-  reply: { header(name: string, value: string | string[]): unknown; getHeader(name: string): unknown },
-  name: string,
-  value: string,
-  options: { httpOnly: boolean; maxAgeSeconds: number; secure: boolean },
-): void {
-  const parts = [
-    `${name}=${encodeURIComponent(value)}`,
-    "Path=/",
-    `Max-Age=${Math.floor(options.maxAgeSeconds)}`,
-    "SameSite=Lax",
-  ];
-  if (options.httpOnly) {
-    parts.push("HttpOnly");
-  }
-  if (options.secure) {
-    parts.push("Secure");
-  }
-  const existing = reply.getHeader("set-cookie");
-  const values = Array.isArray(existing)
-    ? [...existing.map(String), parts.join("; ")]
-    : existing
-      ? [String(existing), parts.join("; ")]
-      : [parts.join("; ")];
-  reply.header("set-cookie", values);
-}
-
-function clearCookie(
-  reply: { header(name: string, value: string | string[]): unknown; getHeader(name: string): unknown },
-  name: string,
-  httpOnly: boolean,
-  secure: boolean,
-): void {
-  setCookie(reply, name, "", { httpOnly, maxAgeSeconds: 0, secure });
-}
-
-function firstHeader(value: string | string[] | undefined): string | null {
-  if (Array.isArray(value)) {
-    return value[0] ?? null;
-  }
-  return value ?? null;
-}

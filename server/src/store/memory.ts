@@ -12,6 +12,7 @@ import type {
   SessionRecord,
   Store,
   UserRecord,
+  UserSessionRecord,
   WebhookEventRecord,
 } from "./contracts.js";
 import { MemoryAtomicCoordinator } from "./memory/atomic.js";
@@ -19,6 +20,7 @@ import * as authOperations from "./memory/auth.js";
 import * as billingOperations from "./memory/billing.js";
 import * as entitlementOperations from "./memory/entitlements.js";
 import * as llmConfigOperations from "./memory/llmConfig.js";
+import * as userSessionOperations from "./memory/userSession.js";
 
 export class MemoryStore implements Store {
   users: UserRecord[] = [];
@@ -34,6 +36,7 @@ export class MemoryStore implements Store {
   adminEntitlementAdjustments: AdminEntitlementAdjustmentRecord[] = [];
   webhookEvents: WebhookEventRecord[] = [];
   authRateLimits: AuthRateLimitRecord[] = [];
+  userSessions: UserSessionRecord[] = [];
   private readonly atomic = new MemoryAtomicCoordinator(this);
 
   async upsertUserByEmail(email: string, now: Date): ReturnType<Store["upsertUserByEmail"]> {
@@ -267,6 +270,32 @@ export class MemoryStore implements Store {
     return authOperations.revokeAdminSession(this.authContext(), tokenHash, now);
   }
 
+  async verifyUserOtpAndCreateWebSession(
+    input: Parameters<Store["verifyUserOtpAndCreateWebSession"]>[0],
+  ): ReturnType<Store["verifyUserOtpAndCreateWebSession"]> {
+    return userSessionOperations.verifyUserOtpAndCreateWebSession(this.authContext(), input);
+  }
+
+  async createUserSession(
+    input: Parameters<Store["createUserSession"]>[0],
+  ): ReturnType<Store["createUserSession"]> {
+    return userSessionOperations.createUserSession(this.authContext(), input);
+  }
+
+  async findUserSessionByTokenHash(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["findUserSessionByTokenHash"]> {
+    return userSessionOperations.findUserSessionByTokenHash(this.authContext(), tokenHash, now);
+  }
+
+  async revokeUserSession(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["revokeUserSession"]> {
+    return userSessionOperations.revokeUserSession(this.authContext(), tokenHash, now);
+  }
+
   async createAdminEntitlementAdjustment(
     input: Parameters<Store["createAdminEntitlementAdjustment"]>[0],
   ): ReturnType<Store["createAdminEntitlementAdjustment"]> {
@@ -341,6 +370,7 @@ export class MemoryStore implements Store {
       createDesktopLoginTicket: this.createDesktopLoginTicket.bind(this),
       createSession: this.createSession.bind(this),
       createAdminSession: this.createAdminSession.bind(this),
+      createUserSession: this.createUserSession.bind(this),
     };
   }
 }

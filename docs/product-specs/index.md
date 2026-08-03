@@ -2,6 +2,7 @@
 
 ## Account and Billing Spec
 
+- `2026-08-03-web-user-dashboard.md` - Browser-side per-user Web dashboard at `/dashboard` with email-OTP cookie-session login that lands on the dashboard, reusing the `desktop_login` OTP purpose and the Admin Web session model; desktop deep-link login stays unchanged. First cut ships account-and-quota content only.
 - `2026-07-10-server-entitlement-transaction-safety.md` - Atomic, retry-safe payment settlement, activation-code redemption, and administrator entitlement compensation.
 - `2026-06-27-admin-entitlement-adjustments.md` - Admin Web manual compensation for entitlement expiry and LLM API-call quota after support incidents.
 - `2026-06-22-server-managed-llm-quota.md` - Server-managed dedicated client LLM config and 20 AI Credits per activation window.

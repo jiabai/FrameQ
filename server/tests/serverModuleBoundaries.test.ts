@@ -10,14 +10,21 @@ const routesRoot = fileURLToPath(new URL("../src/routes/", import.meta.url));
 const featureRouteFiles = [
   "admin.ts",
   "billing.ts",
+  "dashboard.ts",
   "desktopAccount.ts",
   "desktopAuth.ts",
   "desktopLlm.ts",
   "desktopUpdates.ts",
   "health.ts",
+  "userAuth.ts",
 ] as const;
 
-const expectedRouteFiles = [...featureRouteFiles, "authSchemas.ts", "shared.ts"].sort();
+const expectedRouteFiles = [
+  ...featureRouteFiles,
+  "authSchemas.ts",
+  "cookies.ts",
+  "shared.ts",
+].sort();
 
 const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
   "admin.ts": [
@@ -35,6 +42,7 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
     "POST /api/desktop/billing/wechat-native",
     "POST /api/wechat/notify",
   ],
+  "dashboard.ts": ["GET /api/dashboard/account", "GET /dashboard"],
   "desktopAccount.ts": [
     "GET /api/desktop/account",
     "POST /api/desktop/activation-codes/redeem",
@@ -49,6 +57,11 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
   "desktopLlm.ts": ["POST /api/desktop/llm/checkouts"],
   "desktopUpdates.ts": ["GET /api/desktop/updates/:target/:arch/:currentVersion"],
   "health.ts": ["GET /health/live", "GET /health/ready"],
+  "userAuth.ts": [
+    "POST /user/auth/email/start",
+    "POST /user/auth/email/verify",
+    "POST /user/auth/logout",
+  ],
 };
 
 function sourcePath(relativePath: string): string {
@@ -149,6 +162,7 @@ describe("server route module boundaries", () => {
     for (const service of [
       "AuthService",
       "AdminAuthService",
+      "UserAuthService",
       "ActivationCodeService",
       "LlmConfigService",
       "BillingService",
@@ -199,9 +213,10 @@ describe("server route module boundaries", () => {
       "createDesktopLoginTicket(",
       "consumeDesktopLoginTicket(",
       "createAdminSession(",
+      "createUserSession(",
     ];
 
-    for (const relativePath of ["auth.ts", "adminAuth.ts"] as const) {
+    for (const relativePath of ["auth.ts", "adminAuth.ts", "userAuth.ts"] as const) {
       const source = readSource(sourcePath(relativePath));
       for (const call of retiredCalls) {
         expect(source, `${relativePath}: ${call}`).not.toContain(`.${call}`);
@@ -219,10 +234,20 @@ describe("server route module boundaries", () => {
     const rawBodyOwners = allRouteFiles.filter((file) => sources.get(file)?.includes("rawBody"));
 
     expect(rawBodyOwners).toEqual(["billing.ts"]);
-    for (const token of ["frameq_admin_session", "frameq_admin_csrf", "x-frameq-csrf"]) {
+    for (const token of ["frameq_admin_session", "frameq_admin_csrf"]) {
       expect(allRouteFiles.filter((file) => sources.get(file)?.includes(token)), token).toEqual([
         "admin.ts",
       ]);
+    }
+    expect(
+      allRouteFiles.filter((file) => sources.get(file)?.includes("x-frameq-csrf")),
+      "x-frameq-csrf",
+    ).toEqual(["admin.ts", "userAuth.ts"]);
+    for (const token of ["frameq_user_session", "frameq_user_csrf"]) {
+      expect(
+        allRouteFiles.filter((file) => sources.get(file)?.includes(token)),
+        token,
+      ).toEqual(["dashboard.ts", "userAuth.ts"]);
     }
   });
 

@@ -88,6 +88,11 @@ describe("desktop account routes", () => {
       ["POST", "/api/desktop/billing/wechat-native"],
       ["GET", "/api/desktop/billing/orders/:orderId"],
       ["POST", "/api/wechat/notify"],
+      ["POST", "/user/auth/email/start"],
+      ["POST", "/user/auth/email/verify"],
+      ["POST", "/user/auth/logout"],
+      ["GET", "/dashboard"],
+      ["GET", "/api/dashboard/account"],
     ] as const;
 
     for (const [method, url] of routes) {

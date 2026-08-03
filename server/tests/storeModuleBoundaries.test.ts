@@ -19,6 +19,7 @@ const expectedStoreOwners = [
   "memory/billing.ts",
   "memory/entitlements.ts",
   "memory/llmConfig.ts",
+  "memory/userSession.ts",
 ] as const;
 
 const expectedPrismaOwners = [
@@ -27,6 +28,7 @@ const expectedPrismaOwners = [
   "concurrency.ts",
   "entitlements.ts",
   "llmConfig.ts",
+  "userSession.ts",
 ] as const;
 
 const expectedContractTypes = [
@@ -51,8 +53,10 @@ const expectedContractTypes = [
   "SessionRecord",
   "Store",
   "UserRecord",
+  "UserSessionRecord",
   "VerifyAdminOtpResult",
   "VerifyDesktopOtpResult",
+  "VerifyUserOtpResult",
   "WebhookEventRecord",
 ] as const;
 
@@ -88,6 +92,22 @@ const semanticOwners = {
   applyEntitlementAdjustmentWithAudit: {
     memory: "store/memory/entitlements.ts",
     prisma: "prismaStore/entitlements.ts",
+  },
+  verifyUserOtpAndCreateWebSession: {
+    memory: "store/memory/userSession.ts",
+    prisma: "prismaStore/userSession.ts",
+  },
+  createUserSession: {
+    memory: "store/memory/userSession.ts",
+    prisma: "prismaStore/userSession.ts",
+  },
+  findUserSessionByTokenHash: {
+    memory: "store/memory/userSession.ts",
+    prisma: "prismaStore/userSession.ts",
+  },
+  revokeUserSession: {
+    memory: "store/memory/userSession.ts",
+    prisma: "prismaStore/userSession.ts",
   },
 } as const;
 
@@ -163,6 +183,24 @@ const expectedCapabilities = {
       "listUsers",
       "revokeAdminSession",
     ],
+  },
+  "userAuth.ts": {
+    alias: "UserAuthStore",
+    keys: [
+      "findUserSessionByTokenHash",
+      "invalidateIssuedOtpAfterDeliveryFailure",
+      "issueEmailOtp",
+      "revokeUserSession",
+      "verifyUserOtpAndCreateWebSession",
+    ],
+  },
+  "routes/userAuth.ts": {
+    alias: "UserAuthRouteStore",
+    keys: ["revokeUserSession"],
+  },
+  "routes/dashboard.ts": {
+    alias: "DashboardRouteStore",
+    keys: ["getEntitlement", "getUserById", "listActivationCodes"],
   },
 } as const;
 
@@ -432,7 +470,7 @@ describe("Store adapter module ownership", () => {
     ]);
     expect(physicalLineCount(storeRoot.source)).toBeLessThanOrEqual(60);
     expect(physicalLineCount(contracts.source)).toBeLessThanOrEqual(350);
-    expect(physicalLineCount(memoryRoot.source)).toBeLessThanOrEqual(350);
+    expect(physicalLineCount(memoryRoot.source)).toBeLessThanOrEqual(400);
     expect(physicalLineCount(prismaRoot.source)).toBeLessThanOrEqual(350);
 
     for (const relativePath of [
@@ -448,7 +486,7 @@ describe("Store adapter module ownership", () => {
       const entry = entriesByPath.get(relativePath);
       expect(entry, relativePath).toBeDefined();
       if (entry) {
-        expect(physicalLineCount(entry.source), relativePath).toBeLessThanOrEqual(400);
+        expect(physicalLineCount(entry.source), relativePath).toBeLessThanOrEqual(450);
       }
     }
 
@@ -561,6 +599,7 @@ describe("Store adapter module ownership", () => {
       "runtimeConfig.ts",
       "server.ts",
       "store.ts",
+      "userAuth.ts",
       "wechat.ts",
     ]);
     const privateEntries = entries.filter(

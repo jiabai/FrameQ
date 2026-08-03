@@ -8,6 +8,7 @@ import * as authOperations from "./prismaStore/auth.js";
 import * as billingOperations from "./prismaStore/billing.js";
 import * as entitlementOperations from "./prismaStore/entitlements.js";
 import * as llmConfigOperations from "./prismaStore/llmConfig.js";
+import * as userSessionOperations from "./prismaStore/userSession.js";
 
 export class PrismaStore implements Store {
   constructor(private readonly prisma: PrismaClient) {}
@@ -239,6 +240,32 @@ export class PrismaStore implements Store {
     now: Date,
   ): ReturnType<Store["revokeAdminSession"]> {
     return authOperations.revokeAdminSession(this.prisma, tokenHash, now);
+  }
+
+  async verifyUserOtpAndCreateWebSession(
+    input: Parameters<Store["verifyUserOtpAndCreateWebSession"]>[0],
+  ): ReturnType<Store["verifyUserOtpAndCreateWebSession"]> {
+    return userSessionOperations.verifyUserOtpAndCreateWebSession(this.prisma, input);
+  }
+
+  async createUserSession(
+    input: Parameters<Store["createUserSession"]>[0],
+  ): ReturnType<Store["createUserSession"]> {
+    return userSessionOperations.createUserSession(this.prisma, input);
+  }
+
+  async findUserSessionByTokenHash(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["findUserSessionByTokenHash"]> {
+    return userSessionOperations.findUserSessionByTokenHash(this.prisma, tokenHash, now);
+  }
+
+  async revokeUserSession(
+    tokenHash: string,
+    now: Date,
+  ): ReturnType<Store["revokeUserSession"]> {
+    return userSessionOperations.revokeUserSession(this.prisma, tokenHash, now);
   }
 
 

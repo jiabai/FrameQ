@@ -11,6 +11,7 @@ import type {
   OrderRecord,
   SessionRecord,
   UserRecord,
+  UserSessionRecord,
   WebhookEventRecord,
 } from "../contracts.js";
 
@@ -28,6 +29,7 @@ export type MemoryState = {
   adminEntitlementAdjustments: AdminEntitlementAdjustmentRecord[];
   webhookEvents: WebhookEventRecord[];
   authRateLimits: AuthRateLimitRecord[];
+  userSessions: UserSessionRecord[];
 };
 
 export class MemoryAtomicCoordinator {
@@ -59,6 +61,7 @@ export class MemoryAtomicCoordinator {
       adminEntitlementAdjustments: this.#state.adminEntitlementAdjustments,
       webhookEvents: this.#state.webhookEvents,
       authRateLimits: this.#state.authRateLimits,
+      userSessions: this.#state.userSessions,
     });
     try {
       return await operation();
@@ -76,6 +79,7 @@ export class MemoryAtomicCoordinator {
       this.#state.adminEntitlementAdjustments = snapshot.adminEntitlementAdjustments;
       this.#state.webhookEvents = snapshot.webhookEvents;
       this.#state.authRateLimits = snapshot.authRateLimits;
+      this.#state.userSessions = snapshot.userSessions;
       throw error;
     } finally {
       release();

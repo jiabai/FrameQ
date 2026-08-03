@@ -24,6 +24,7 @@ export type MemoryAuthContext = {
   ) => Promise<DesktopLoginTicketRecord>;
   createSession: Store["createSession"];
   createAdminSession: Store["createAdminSession"];
+  createUserSession: Store["createUserSession"];
 };
 
 type RateLimitReservation = {
@@ -307,7 +308,7 @@ export async function revokeAdminSession(
     session.revokedAt = now;
   }
 }
-function latestUsableOtp(
+export function latestUsableOtp(
   context: MemoryAuthContext, purpose: OtpPurpose, email: string, state: string, now: Date,
 ): EmailOtpRecord | null {
   return (

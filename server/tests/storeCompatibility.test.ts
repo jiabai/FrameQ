@@ -36,6 +36,10 @@ const storeMethods = [
   "applyEntitlementAdjustmentWithAudit",
   "listAdminEntitlementAdjustments",
   "createWebhookEvent",
+  "verifyUserOtpAndCreateWebSession",
+  "createUserSession",
+  "findUserSessionByTokenHash",
+  "revokeUserSession",
 ] as const satisfies readonly (keyof Store)[];
 
 const compatibilityMethods = [
@@ -60,6 +64,7 @@ const arrayFixtureFields = [
   "adminEntitlementAdjustments",
   "webhookEvents",
   "authRateLimits",
+  "userSessions",
 ] as const;
 
 type Equal<Left, Right> =

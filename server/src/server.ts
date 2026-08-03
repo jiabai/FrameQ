@@ -19,9 +19,12 @@ import { registerDesktopAuthRoutes } from "./routes/desktopAuth.js";
 import { registerDesktopLlmRoutes } from "./routes/desktopLlm.js";
 import { registerDesktopUpdateRoutes } from "./routes/desktopUpdates.js";
 import { registerHealthRoutes } from "./routes/health.js";
+import { registerDashboardRoutes } from "./routes/dashboard.js";
+import { registerUserAuthRoutes } from "./routes/userAuth.js";
 import type { Store } from "./store.js";
 import { loadDesktopReleaseManifest, type DesktopReleaseManifest } from "./updates.js";
 import { createWechatNotificationParser, type WechatNotificationParser } from "./wechat.js";
+import { UserAuthService } from "./userAuth.js";
 
 export type ServerDependencies = {
   store: Store;
@@ -72,6 +75,11 @@ export function buildServer(dependencies: ServerDependencies) {
     sendOtp: dependencies.sendOtp,
     adminEmail: dependencies.adminEmail,
   });
+  const userAuth = new UserAuthService({
+    store: dependencies.store,
+    now,
+    sendOtp: dependencies.sendOtp,
+  });
   const activationCodes = new ActivationCodeService({
     store: dependencies.store,
     now,
@@ -118,6 +126,18 @@ export function buildServer(dependencies: ServerDependencies) {
     llmConfig,
     entitlementAdjustments,
     secureCookies: dependencies.secureCookies ?? false,
+    now,
+  });
+  registerUserAuthRoutes(app, {
+    store: dependencies.store,
+    userAuth,
+    secureCookies: dependencies.secureCookies ?? false,
+    now,
+  });
+  registerDashboardRoutes(app, {
+    store: dependencies.store,
+    userAuth,
+    llmConfig,
     now,
   });
   registerDesktopAccountRoutes(app, {

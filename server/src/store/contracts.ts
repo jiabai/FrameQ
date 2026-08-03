@@ -118,6 +118,17 @@ export type AdminSessionRecord = {
   revokedAt: Date | null;
 };
 
+export type UserSessionRecord = {
+  id: string;
+  userId: string;
+  email: string;
+  tokenHash: string;
+  csrfTokenHash: string;
+  createdAt: Date;
+  expiresAt: Date;
+  revokedAt: Date | null;
+};
+
 export type AdminEntitlementAdjustmentRecord = {
   id: string;
   adminEmail: string;
@@ -175,6 +186,11 @@ export type VerifyDesktopOtpResult =
 
 export type VerifyAdminOtpResult =
   | { status: "verified"; session: AdminSessionRecord }
+  | { status: "invalid" }
+  | { status: "temporarily_unavailable" };
+
+export type VerifyUserOtpResult =
+  | { status: "verified"; user: UserRecord; session: UserSessionRecord }
   | { status: "invalid" }
   | { status: "temporarily_unavailable" };
 
@@ -283,6 +299,23 @@ export type Store = {
     now: Date,
   ): Promise<AdminSessionRecord | null>;
   revokeAdminSession(tokenHash: string, now: Date): Promise<void>;
+  verifyUserOtpAndCreateWebSession(input: {
+    email: string;
+    state: string;
+    codeHash: string;
+    sessionTokenHash: string;
+    csrfTokenHash: string;
+    now: Date;
+    sessionExpiresAt: Date;
+  }): Promise<VerifyUserOtpResult>;
+  createUserSession(
+    input: Omit<UserSessionRecord, "id" | "revokedAt">,
+  ): Promise<UserSessionRecord>;
+  findUserSessionByTokenHash(
+    tokenHash: string,
+    now: Date,
+  ): Promise<UserSessionRecord | null>;
+  revokeUserSession(tokenHash: string, now: Date): Promise<void>;
   createAdminEntitlementAdjustment(
     input: AdminEntitlementAdjustmentRecord,
   ): Promise<AdminEntitlementAdjustmentRecord>;

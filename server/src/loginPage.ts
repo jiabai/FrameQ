@@ -103,7 +103,7 @@ export function renderLoginPage(): string {
   <body>
     <main>
       <h1>FrameQ Login</h1>
-      <p>输入邮箱获取验证码，验证成功后会自动回到 FrameQ 客户端。</p>
+      <p id="intro">输入邮箱获取验证码，验证成功后会自动回到 FrameQ 客户端。</p>
       <form id="login-form">
         <label for="email">邮箱</label>
         <input id="email" name="email" type="email" autocomplete="email" required />
@@ -118,8 +118,20 @@ export function renderLoginPage(): string {
     </main>
     <script>
       const params = new URLSearchParams(window.location.search);
-      const state = params.get("state") || "";
+      const desktopParam = params.get("desktop");
       const redirectUri = params.get("redirect_uri") || "frameq://auth/callback";
+      // Desktop mode is the OAuth-style deep-link handshake launched by the desktop client.
+      // Everything else (including a plain browser visit to /login) is web mode and lands on /dashboard.
+      const desktopMode = desktopParam === "1" && redirectUri === "frameq://auth/callback";
+      const state = desktopMode
+        ? (params.get("state") || "")
+        : (params.get("state") || ("web-" + crypto.randomUUID()));
+      const startUrl = desktopMode ? "/auth/email/start" : "/user/auth/email/start";
+      const verifyUrl = desktopMode ? "/auth/email/verify" : "/user/auth/email/verify";
+      const verifyButtonLabel = desktopMode ? "登录 FrameQ" : "登录控制台";
+      const introText = desktopMode
+        ? "输入邮箱获取验证码，验证成功后会自动回到 FrameQ 客户端。"
+        : "输入邮箱获取验证码，验证成功后会进入 FrameQ 控制台。";
       const form = document.getElementById("login-form");
       const emailInput = document.getElementById("email");
       const codeInput = document.getElementById("code");
@@ -127,6 +139,10 @@ export function renderLoginPage(): string {
       const verifyButton = document.getElementById("verify-code");
       const status = document.getElementById("status");
       const fallback = document.getElementById("fallback");
+      const intro = document.getElementById("intro");
+
+      verifyButton.textContent = verifyButtonLabel;
+      intro.textContent = introText;
 
       function setStatus(message, isError = false) {
         status.textContent = message;
@@ -139,6 +155,12 @@ export function renderLoginPage(): string {
         }
         if (redirectUri !== "frameq://auth/callback") {
           throw new Error("登录回调地址无效，请回到 FrameQ 重新发起登录。");
+        }
+      }
+
+      function assertLoginRequest() {
+        if (!state || !/^[a-zA-Z0-9._~-]{8,160}$/.test(state)) {
+          throw new Error("登录请求已失效，请刷新页面重试。");
         }
       }
 
@@ -157,13 +179,17 @@ export function renderLoginPage(): string {
 
       sendButton.addEventListener("click", async () => {
         try {
-          assertDesktopLoginRequest();
+          if (desktopMode) {
+            assertDesktopLoginRequest();
+          } else {
+            assertLoginRequest();
+          }
           if (!emailInput.reportValidity()) {
             return;
           }
           sendButton.disabled = true;
           setStatus("正在发送验证码...");
-          await postJson("/auth/email/start", {
+          await postJson(startUrl, {
             email: emailInput.value,
             state,
           });
@@ -179,20 +205,28 @@ export function renderLoginPage(): string {
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
-          assertDesktopLoginRequest();
+          if (desktopMode) {
+            assertDesktopLoginRequest();
+          } else {
+            assertLoginRequest();
+          }
           if (!emailInput.reportValidity() || !codeInput.reportValidity()) {
             return;
           }
           verifyButton.disabled = true;
           setStatus("正在验证...");
-          const data = await postJson("/auth/email/verify", {
+          const data = await postJson(verifyUrl, {
             email: emailInput.value,
             code: codeInput.value,
             state,
           });
-          fallback.href = data.redirect_url;
-          fallback.style.display = "block";
-          setStatus("验证成功，正在打开 FrameQ 客户端...");
+          if (desktopMode) {
+            fallback.href = data.redirect_url;
+            fallback.style.display = "block";
+            setStatus("验证成功，正在打开 FrameQ 客户端...");
+          } else {
+            setStatus("验证成功，正在进入 FrameQ 控制台...");
+          }
           window.location.href = data.redirect_url;
         } catch (error) {
           setStatus(error instanceof Error ? error.message : "验证失败，请重试。", true);
@@ -202,7 +236,11 @@ export function renderLoginPage(): string {
       });
 
       try {
-        assertDesktopLoginRequest();
+        if (desktopMode) {
+          assertDesktopLoginRequest();
+        } else {
+          assertLoginRequest();
+        }
       } catch (error) {
         form.querySelectorAll("input, button").forEach((node) => {
           node.disabled = true;
@@ -213,3 +251,4 @@ export function renderLoginPage(): string {
   </body>
 </html>`;
 }
+

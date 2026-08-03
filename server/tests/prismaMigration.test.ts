@@ -85,7 +85,7 @@ describe("reviewed Prisma migration chain", () => {
     const { databasePath } = temporaryDatabase();
     new DatabaseSync(databasePath).close();
 
-    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("2 migrations");
+    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("3 migrations");
     expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("No pending migrations");
     expect(runPrisma(databasePath, ["migrate", "status"])).toContain(
       "Database schema is up to date",
@@ -101,6 +101,7 @@ describe("reviewed Prisma migration chain", () => {
       expect(migrations).toEqual([
         { migration_name: "202607220001_baseline" },
         { migration_name: "202607220002_auth_quota_hardening" },
+        { migration_name: "202608030001_user_session" },
       ]);
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
