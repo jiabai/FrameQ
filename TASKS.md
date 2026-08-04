@@ -2,6 +2,8 @@
 
 ## Active UI Work
 
+- [ ] 精简 Inspiration Profile 并拆清本次生成偏好边界（2026-08-05）— ✅ Acceptance: Profile v2 只保留角色、职业领域、年龄/阶段、城市语境、性别/视角和常用平台；`styles`/`avoid` 仅由完整六步生成偏好负责；Tauri 将已发布 v1 app-local 文件原子迁移到 schema v2，无完整默认偏好时旧值只进入一次性 edit-only seed；确认页本次偏好优先，历史任务快照、server、AI Credits、summary、mindmap 与解剖边界不变。Design: `docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md`. ExecPlan: `docs/exec-plans/active/2026-08-05-inspiration-profile-generation-preference-boundary-plan.md`.
+
 - [ ] Prepare and publish FrameQ v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
   version sources synchronized at 0.3.0, `scripts/tests/release-version.test.mjs` asserts `0.3.0`,
   complete local release gates pass (scripts, app tests/lint/build, Rust tests/rustfmt, worker

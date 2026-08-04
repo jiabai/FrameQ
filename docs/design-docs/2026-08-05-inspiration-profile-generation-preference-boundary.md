@@ -3,7 +3,7 @@
 ## Status
 
 - Date: 2026-08-05
-- State: proposed for user review
+- State: approved by user on 2026-08-05
 - Scope: desktop Inspiration Profile, per-run generation preferences, app-local preference persistence, task-local preference snapshots, and worker prompt input
 - Related product spec: `docs/product-specs/2026-07-06-personalized-insight-preferences.md`
 

@@ -8,6 +8,18 @@
 
 个性化偏好只影响 `启发灵感` 的生成，不影响 `要点总结` 或 Mermaid mindmap。总结和 mindmap 继续使用原有通用 AI整理策略。
 
+## 2026-08-05 Profile Boundary Revision
+
+长期档案与本次生成偏好的字段边界按
+`docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md` 收敛：
+
+- `我的灵感档案` 只描述相对稳定的长期背景，固定为角色、职业领域、年龄/阶段、城市语境、性别/视角和常用平台六个字段。
+- Profile v1 的 `defaultStyles` 和 `defaultAvoid` 不再属于当前档案契约；表达风格和避免方向由六步 `本次生成偏好` 中的 `styles`、`avoid` 唯一负责。
+- `defaultGenerationPreferences` 只是下一次流程的完整预填值，不是第三层偏好来源。worker 只接收本次最终确认的完整 `generationPreferences`。
+- 已发布客户端的 v1 app-local 文件必须本地原子迁移到 schema v2；历史任务局部快照保持不可变，不能反向更新全局状态。
+
+本节及下文更新后的 v2 契约覆盖本文早期版本中与 `defaultStyles`、`defaultAvoid` 有关的档案语义。
+
 ## Goals
 
 - 让 `启发灵感` 从通用问题升级为贴合用户目的和使用场景的问题。
@@ -32,7 +44,7 @@
 
 FrameQ 使用两层偏好模型：
 
-1. `我的灵感档案`：长期、持久、本地保存。用于描述用户的相对稳定信息，例如角色、职业、城市语境、年龄阶段和常用平台。用户首次使用时可设置，之后默认不重复询问，可在设置中编辑或清空。
+1. `我的灵感档案`：长期、持久、本地保存。只描述用户的相对稳定信息，包括角色、职业、城市语境、年龄阶段、性别/视角和常用平台；不包含表达风格或避免方向。用户首次使用时可设置，之后默认不重复询问，可在设置中编辑或清空。
 2. `本次生成偏好`：每次启发灵感生成前选择。用于描述这次为什么生成灵感、给谁看、想从什么角度启发。它不包含长期个人信息。
 
 `本次生成偏好` 固定为 6 步，其中前 4 步属于 `生成偏好`，后 2 步属于 `更多偏好`。这 6 步不包含 `我的灵感档案`。应用可把用户当前有效的 6 步方向保存为 app-local `defaultGenerationPreferences`，作为之后新任务的默认生成偏好；它只代表当前全局默认方向，不承担历史任务复现职责。
@@ -90,7 +102,7 @@ FrameQ 应在 app-local JSON 配置文件中保存 `defaultGenerationPreferences
 
 ## Option Identity
 
-所有偏好选项都必须由稳定 option id 和当前展示 label 组成。option id 只要求在所属字段内唯一，完整 option identity 是 `(field, id)` 组合，而不是单独的 `id`。例如 `role: "marketing_sales"` 与 `domain: "marketing_sales"` 是两个不同选项；`styles: ["direct_sharp"]` 与 `defaultStyles: ["direct_sharp"]` 也属于不同字段语境。
+所有偏好选项都必须由稳定 option id 和当前展示 label 组成。option id 只要求在所属字段内唯一，完整 option identity 是 `(field, id)` 组合，而不是单独的 `id`。例如 `role: "marketing_sales"` 与 `domain: "marketing_sales"` 是两个不同选项；不同字段即使偶然使用相同 id，也必须按字段作用域查找。
 
 app-local 全局偏好、worker 请求和 prompt 输入必须保留字段结构并使用 option id；UI 使用当前 option registry 将 `(field, id)` 渲染为 label。实现不得把中文 label 当作全局偏好值或 worker 契约，也不得使用扁平的全局 `{ id -> option }` registry。推荐使用 `{ field -> { id -> option } }`，或内部使用 `${field}:${id}` 作为查找 key。任务局部偏好快照可额外保存当次确认时的 `labelSnapshot` 用于历史展示，但其结构化契约仍以 `(field, id)` 为准。
 
@@ -157,7 +169,7 @@ app-local 全局偏好、worker 请求和 prompt 输入必须保留字段结构�
 
 其中 `goal`、`scenario` 和 `audience` 是单选 id；`angles`、`styles` 和 `avoid` 是 option id 数组。
 
-`我的灵感档案` 的 v1 option id 固定如下：
+`我的灵感档案` 的 v2 option id 固定如下：
 
 | 字段 | id | label |
 |------|----|-------|
@@ -205,20 +217,6 @@ app-local 全局偏好、worker 请求和 prompt 输入必须保留字段结构�
 | `platforms` | `podcast` | 播客 |
 | `platforms` | `course_community` | 课程/社群 |
 | `platforms` | `internal_sharing` | 内部分享 |
-| `defaultStyles` | `direct_sharp` | 直接犀利 |
-| `defaultStyles` | `gentle_inspiring` | 温和启发 |
-| `defaultStyles` | `professional_analysis` | 专业分析 |
-| `defaultStyles` | `grounded` | 接地气 |
-| `defaultStyles` | `storytelling` | 故事化 |
-| `defaultStyles` | `short_video_friendly` | 适合短视频 |
-| `defaultStyles` | `long_form_friendly` | 适合长文 |
-| `defaultAvoid` | `chicken_soup` | 太鸡汤 |
-| `defaultAvoid` | `academic` | 太学术 |
-| `defaultAvoid` | `vague` | 太空泛 |
-| `defaultAvoid` | `clickbait` | 太标题党 |
-| `defaultAvoid` | `commercialized` | 太商业化 |
-| `defaultAvoid` | `negative` | 太负面 |
-| `defaultAvoid` | `grand_narrative` | 宏大叙事 |
 
 长期档案单选字段保存对应 option id；多选字段保存 option id 数组。`unspecified` 只用于单选字段，多选字段空数组表示不指定。
 
@@ -226,7 +224,7 @@ app-local 全局偏好、worker 请求和 prompt 输入必须保留字段结构�
 
 `我的灵感档案` 全部使用选项输入，避免用户被迫提供敏感或不确定的信息。单选字段应提供 `不指定` 选项；多选字段不提供 `不指定` 选项，但允许空选，空数组表示该字段不指定。
 
-长期档案中的多选字段包括 `常用平台`、`默认表达偏好` 和 `默认避雷偏好`。这些字段最多选择 3 个，最少可以选择 0 个。确认页摘要只展示用户已选择的长期档案字段；空数组字段默认不展示。worker 构造 prompt 时不得把空数组推断为任何默认平台、表达风格或避雷偏好。
+长期档案中唯一的多选字段是 `常用平台`，最多选择 3 个，最少可以选择 0 个。确认页摘要只展示用户已选择的长期档案字段；空数组字段默认不展示。worker 构造 prompt 时不得把空数组推断为任何默认平台。
 
 `我的灵感档案` 的持久化形状应等价于：
 
@@ -237,9 +235,7 @@ app-local 全局偏好、worker 请求和 prompt 输入必须保留字段结构�
   "stage": "experienced_professional",
   "cityContext": "new_tier1_city",
   "genderPerspective": "unspecified",
-  "platforms": ["douyin", "xiaohongshu"],
-  "defaultStyles": ["direct_sharp", "storytelling"],
-  "defaultAvoid": ["clickbait"]
+  "platforms": ["douyin", "xiaohongshu"]
 }
 ```
 
@@ -257,8 +253,6 @@ app-local 全局偏好、worker 请求和 prompt 输入必须保留字段结构�
 | 城市语境 | 单选 | 一线城市、新一线城市、二三线城市、县城乡镇、海外、不指定 |
 | 性别/视角 | 单选 | 不指定、女性视角、男性视角、中性视角 |
 | 常用平台 | 多选，最多 3 个，可空选 | 抖音、小红书、视频号、B站、公众号、播客、课程/社群、内部分享 |
-| 默认表达偏好 | 多选，最多 3 个，可空选 | 直接犀利、温和启发、专业分析、接地气、故事化、适合短视频、适合长文 |
-| 默认避雷偏好 | 多选，最多 3 个，可空选 | 太鸡汤、太学术、太空泛、太标题党、太商业化、太负面、宏大叙事 |
 
 长期档案保存后应在设置面板中提供 `编辑灵感档案` 和 `清空灵感档案`。清空只作用于 app-local 全局档案状态，只影响之后的新生成，不删除、不修改已经写入本地任务目录的历史 AI 产物、任务 manifest 或导出文件。
 
@@ -371,8 +365,8 @@ app-local 全局偏好、worker 请求和 prompt 输入必须保留字段结构�
 6 步完成后，FrameQ 展示启发灵感确认页：
 
 - 当前视频或文字稿摘要。
-- `我的灵感档案` 摘要，只展示用户已选择的选项。
-- `本次生成偏好` 摘要。
+- 作为主信息的 `本次生成偏好` 摘要，完整展示本次六步最终选择并提供返回修改入口。
+- 作为次级信息的 `你的长期背景` 摘要，只展示 Profile v2 中用户已选择的六个稳定背景字段；它不得再次出现表达风格或避免方向。
 - 本次会消耗的启发灵感额度口径：`1 次额度 = 1 次云端 LLM API 调用尝试`。确认页不得固定显示为 `1 次`；应说明本次生成会按实际 LLM 调用次数扣除，并可展示当前实现的预计调用构成。
 - 明确提示：启发灵感生成会把文字稿片段、本次档案摘要和生成偏好快照发送给管理员配置的云端 LLM 服务；这些偏好不随 `要点总结` 或 Mermaid mindmap 请求发送，也不影响二者的生成方式。
 - 操作按钮：`确认`、`返回修改`、`取消`。
@@ -448,16 +442,31 @@ worker 生成灵感时应把偏好以结构化数据传入灵感 prompt，而不
 - `使用场景` 决定表达颗粒度和可复用性。
 - `关注角度` 决定问题视角和优先排序。
 - `目标受众` 决定语言难度、例子和解释方式。
-- `我的灵感档案` 用于补足用户长期语境，但不能压过本次选择。
+- `我的灵感档案` 只用于补足用户长期语境；当 `常用平台` 与本次 `使用场景` 不同时，以本次 `scenario` 为准。
 - `表达风格` 调整措辞，不改变事实判断。
 - `避免方向` 是硬约束，生成内容应主动避开。
 - worker 不应把完整长文字稿和完整偏好说明直接拼入单次灵感 prompt；应优先使用分段、摘要或候选片段，并将 `我的灵感档案` 和 `本次生成偏好` 作为短结构化 JSON 传入。
 - 每条灵感必须能追溯到文字稿内容，不允许只根据用户画像凭空发散。
 - 当偏好与文字稿内容冲突时，以文字稿事实为准，并在 `匹配理由` 中保持克制。
 
+## App-local Schema v2 Migration
+
+已发布客户端的 `insight-preferences.json` 增加根级 `schemaVersion: 2`。没有
+`schemaVersion` 的现有文件按 v1 读取。Tauri 必须先完整校验，再以原子替换方式迁移：
+
+1. 将 v1 profile 的 `role`、`domain`、`stage`、`cityContext`、`genderPerspective` 和 `platforms` 原样复制到 v2 profile。
+2. 如果已有合法的完整 `defaultGenerationPreferences`，继续保留它，并丢弃 profile 中已废弃的 `defaultStyles` 和 `defaultAvoid`。
+3. 如果没有合法的完整 `defaultGenerationPreferences`，且旧 profile 的 `defaultStyles` 或 `defaultAvoid` 非空，将两者保存为根级、迁移专用的 `legacyGenerationPreferenceSeed`。
+4. `legacyGenerationPreferenceSeed` 只能在用户下一次编辑六步偏好时预填 `styles` 和 `avoid`；它不完整，因此不得启用 `直接生成`，不得发送给 worker，也不得直接写入任务局部快照。
+5. 用户确认一次完整六步偏好后，应用保存新的 `defaultGenerationPreferences` 并删除 migration seed；用户清空 Profile 时也删除 seed，因为它来自旧 Profile 且从未作为生成偏好获得确认。
+
+新安装、新建 Profile 和后续 Profile 编辑均不得创建 migration seed。v1 profile 整体无效时维持现有 `灵感档案需要重新设置` 行为，不逐字段抢救，也不产生 seed。迁移写入失败时必须保留原文件并显示现有本地偏好读取失败提示，不得留下半迁移状态。
+
+历史任务目录中的 `preference-snapshot.json` 是当时生成上下文的不可变证据，可继续包含 v1 profile 字段和冻结的 `labelSnapshot`。应用不得批量改写历史快照，也不得从历史快照恢复全局 Profile、migration seed 或 `defaultGenerationPreferences`。
+
 ## Data and Storage
 
-- `我的灵感档案` 只保存在 app-local data 下的本地配置文件中，建议使用独立 JSON 文件，不写入 app-local `.env`。档案字段保存稳定 option id 或 option id 数组，不保存展示 label。
+- `我的灵感档案` 只保存在 app-local data 下的本地配置文件中，使用独立 JSON 文件，不写入 app-local `.env`。Profile v2 只保存六个稳定背景字段的 option id 或 option id 数组，不保存展示 label。
 - `我的灵感档案` 读取时必须整体验证；任一必需字段缺失、类型错误、未知 option id 或多选超限时，整份 profile 视为无效，不能用于确认页、worker 请求或 prompt 输入。
 - 用户跳过首次档案设置时，应在同一个 app-local 配置文件中保存 `profileSkipped: true`（或等价状态），用于避免后续重复打扰；跳过状态不包含任何画像字段。
 - `defaultGenerationPreferences` 保存在同一个 app-local JSON 配置文件中，只记录用户当前有效的 6 步默认生成偏好 option id；它不得从任务 manifest 推导，也不得包含长期档案字段。读取时必须按当前 option registry 校验，校验失败时清空该全局默认偏好并隐藏 `直接生成`。
@@ -467,7 +476,7 @@ worker 生成灵感时应把偏好以结构化数据传入灵感 prompt，而不
 - `insights.json` 必须使用结构化 Insight schema；任务 manifest 的 `insights_count` 只记录 Insight 对象数量，不复制完整灵感内容。
 - 偏好快照属于本地任务产物的一部分，不上传 FrameQ server。
 - 当 `我的灵感档案` 被跳过或清空时，发送给灵感 prompt 的档案上下文只能表示 `无档案 / 不指定`，不得发送伪造的默认画像。
-- 当长期档案多选字段为空数组时，发送给灵感 prompt 的该字段上下文只能表示 `不指定`，不得补任何默认平台、表达风格或避雷偏好。
+- 当长期档案的 `platforms` 为空数组时，发送给灵感 prompt 的平台上下文只能表示 `不指定`，不得补任何默认平台。
 - 日志、错误文案和诊断信息不得输出完整个人档案、完整生成偏好、完整文字稿或完整 prompt。
 - 清空 `我的灵感档案` 后，后续新任务不再使用旧档案；已经生成的历史任务产物保持不变。应用不得因清空全局档案而遍历、修改或删除历史任务目录、`frameq-task.json`、`insights.json` 或导出文件。
 
@@ -485,19 +494,22 @@ worker 生成灵感时应把偏好以结构化数据传入灵感 prompt，而不
 - 用户跳过首次灵感档案设置后，应用会本地记住跳过状态，后续生成不再重复打扰；跳过状态不会产生或发送任何默认画像。
 - `hasProfile || profileSkipped` 都视为首次引导已完成；`profileSkipped: true` 的用户再次生成时直接进入本次生成偏好或默认生成偏好摘要页。
 - 已设置灵感档案的用户再次生成灵感时，不会重复出现长期信息填写流程。
+- Profile v2 只包含角色、职业领域、年龄/阶段、城市语境、性别/视角和常用平台；长期档案设置、摘要、worker 快照和 prompt 均不再出现 profile-scoped `defaultStyles` 或 `defaultAvoid`。
 - 已设置灵感档案且存在 `defaultGenerationPreferences` 的用户点击 `直接生成` 时，只跳过 6 步选择流程，仍必须进入确认页。
 - `defaultGenerationPreferences` 只能在用户于启发灵感确认页点击 `确认` 后更新；完成 6 步但取消生成时，本次临时选择会被废弃，不得覆盖此前默认生成偏好。
 - `defaultGenerationPreferences` 只保存稳定 option id，不保存展示文案；读取时如果发现未知 id、缺失必填步骤或违反数量限制，应用清空该全局默认偏好，不展示 `直接生成`，并要求用户重新完成 6 步。
 - `我的灵感档案` 读取时如果整体验证失败，应用提示 `灵感档案需要重新设置`，不得使用损坏档案生成摘要或发送给 worker；用户重新设置或主动点击 `跳过` 前，不得把无效 profile 当作 `未设置灵感档案` 继续生成。
-- 长期档案单选字段提供 `不指定`；多选字段允许 0 个选择，空数组表示该字段不指定，并且确认页摘要默认不展示空数组字段。
+- 长期档案单选字段提供 `不指定`；唯一多选字段 `platforms` 允许 0 个选择，空数组表示不指定，并且确认页摘要默认不展示该字段。
 - 本次生成偏好固定为 6 步，且 6 步不包含长期个人信息。
 - Step 1-5 必须选择，未选择时 `下一步` 禁用；Step 6 可跳过，未选择时 `完成选择` 仍可用。
 - 所有输入都是选项，不出现自由文本输入框。
-- `确认` 前展示档案摘要、本次偏好摘要、额度消耗和云端 LLM 数据提示。
+- `确认` 前以本次偏好为主信息、长期背景为次级信息展示摘要，并同时展示额度消耗和云端 LLM 数据提示；两组摘要不得出现重复的表达风格或避免方向。
 - 一次确认后的启发灵感生成按实际云端 LLM API 调用次数扣除额度；失败或部分失败时，已经发起的 LLM 调用额度不自动返还；`换个方向` 后再次确认会按新的调用次数再次扣除。
 - 个性化偏好只影响 `启发灵感`；`要点总结` 和 Mermaid mindmap 的内容不因这些偏好发生个性化调整。
 - 生成结果中的每条灵感包含匹配理由、启发问题和适合用途。
 - `insights.json`、worker `ProcessResult.insights`、UI 详情页、复制文本和 Markdown 导出均使用结构化 Insight schema，不再使用 `string[]` 灵感格式。
 - `换个方向` 只重走本次 6 步偏好，不要求重新填写长期档案。
 - `清空灵感档案` 后，应用删除 app-local 全局档案并设置 `profileSkipped: false`；下次生成灵感时重新展示首次设置引导，新生成不得使用旧档案，历史任务 manifest、`insights.json` 和导出文件保持不变。
+- 合法 v1 app-local 偏好文件会原子迁移为 schema v2；已有完整默认生成偏好保持不变，没有完整默认偏好时旧表达/避雷值只作为一次性迁移 seed 预填下一次编辑，永不直接进入 worker。
+- 历史 v1 任务局部偏好快照保持原样可读，不会反向更新 schema v2 全局状态。
 - FrameQ server 不新增保存用户偏好、文字稿或灵感的接口或字段。
