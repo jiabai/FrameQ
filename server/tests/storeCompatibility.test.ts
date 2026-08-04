@@ -9,6 +9,7 @@ const storeMethods = [
   "issueEmailOtp",
   "invalidateIssuedOtpAfterDeliveryFailure",
   "verifyDesktopOtpAndCreateTicket",
+  "verifyDesktopOtpAndCreateTicketAndWebSession",
   "verifyAdminOtpAndCreateSession",
   "exchangeDesktopTicketAndCreateSession",
   "createSession",
