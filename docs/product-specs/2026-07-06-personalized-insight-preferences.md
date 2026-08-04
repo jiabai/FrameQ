@@ -457,7 +457,7 @@ worker 生成灵感时应把偏好以结构化数据传入灵感 prompt，而不
 1. 将 v1 profile 的 `role`、`domain`、`stage`、`cityContext`、`genderPerspective` 和 `platforms` 原样复制到 v2 profile。
 2. 如果已有合法的完整 `defaultGenerationPreferences`，继续保留它，并丢弃 profile 中已废弃的 `defaultStyles` 和 `defaultAvoid`。
 3. 如果没有合法的完整 `defaultGenerationPreferences`，且旧 profile 的 `defaultStyles` 或 `defaultAvoid` 非空，将两者保存为根级、迁移专用的 `legacyGenerationPreferenceSeed`。
-4. `legacyGenerationPreferenceSeed` 只能在用户下一次编辑六步偏好时预填 `styles` 和 `avoid`；它不完整，因此不得启用 `直接生成`，不得发送给 worker，也不得直接写入任务局部快照。
+4. `legacyGenerationPreferenceSeed` 只能在用户下一次编辑六步偏好时预填 `styles` 和 `avoid`；seed 中 `styles` 沿用 v1 合法上限 3 以避免静默丢值。如果迁移出 3 个 style，Step 5 必须保持不可继续，直到用户主动减为当前合法的 1-2 个。seed 不完整，因此不得启用 `直接生成`，不得发送给 worker，也不得直接写入任务局部快照。
 5. 用户确认一次完整六步偏好后，应用保存新的 `defaultGenerationPreferences` 并删除 migration seed；用户清空 Profile 时也删除 seed，因为它来自旧 Profile 且从未作为生成偏好获得确认。
 
 新安装、新建 Profile 和后续 Profile 编辑均不得创建 migration seed。v1 profile 整体无效时维持现有 `灵感档案需要重新设置` 行为，不逐字段抢救，也不产生 seed。迁移写入失败时必须保留原文件并显示现有本地偏好读取失败提示，不得留下半迁移状态。

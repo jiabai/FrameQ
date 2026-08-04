@@ -56,6 +56,10 @@ transcript dissection, media processing, and historical task artifacts do not ch
 - Decision: Preserve deprecated values only as optional edit-only
   `legacyGenerationPreferenceSeed` when no complete saved default exists. Rationale: prevent silent
   loss without creating a worker-visible third preference source. Date/Author: 2026-08-05 / User + Codex.
+- Decision: Allow the migration seed to retain up to three v1 style ids, while current generation
+  preferences still permit only one or two. Rationale: three styles were valid in Profile v1;
+  truncating them would silently lose user choices, so the style step must require explicit reduction
+  before completion. Date/Author: 2026-08-05 / Codex.
 - Decision: Reuse `crate::atomic_files::atomic_write` for every preferences-file write. Rationale:
   failed migration must retain original bytes. Date/Author: 2026-08-05 / Codex.
 - Decision: Do not add server fields, account sync, history-derived defaults, free-text fields, or a
@@ -277,9 +281,11 @@ Expected: failures because state/flow still lack the seed and form fixtures requ
 export type LegacyGenerationPreferenceSeed = { styles: string[]; avoid: string[] };
 ```
 
-Add it as nullable state. Validate with generation-scoped ids, style max 2, avoid max 3. In
+Add it as nullable state. Validate with generation-scoped ids, legacy style max 3, and avoid max 3. In
 `createInsightPreferenceFlow`, complete defaults take precedence; otherwise copy the seed into the
-empty six-step draft. A seed never selects `default_summary` or enables `Generate now`.
+empty six-step draft. If the seed has three styles, the existing current-generation validation must
+keep Step 5 blocked until the user reduces it to one or two. A seed never selects `default_summary`
+or enables `Generate now`.
 
 - [ ] **Step 4: Remove duplicate form rows and revise hierarchy**
 
@@ -485,7 +491,8 @@ Use every command listed in Task 6 Step 3.
   profile-scoped style or avoid fields.
 - Valid v1 global files migrate atomically to schema v2; existing complete defaults survive.
 - Partial migration seed is edit-only, never enables direct generation, never crosses the worker
-  boundary, and is removed after confirmed complete defaults or profile clearing.
+  boundary, preserves up to three valid v1 styles without truncation, requires explicit reduction to
+  the current maximum of two, and is removed after confirmed complete defaults or profile clearing.
 - Invalid v1 profiles remain reset-required and do not become inferred personas.
 - Confirmation is current-run-first and duplicate-free in all three locales.
 - Current retry payloads contain one six-field profile plus one complete generation object; current
