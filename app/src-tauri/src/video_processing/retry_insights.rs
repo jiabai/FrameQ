@@ -151,6 +151,14 @@ fn parse_retry_insights_request(
     {
         return Err(INVALID_RETRY_PAYLOAD.to_string());
     }
+    if payload
+        .as_object()
+        .and_then(|object| object.get("preference_snapshot"))
+        .and_then(serde_json::Value::as_object)
+        .is_some_and(|snapshot| !snapshot.contains_key("profile"))
+    {
+        return Err(INVALID_RETRY_PAYLOAD.to_string());
+    }
     let wire: RetryInsightsWireRequest =
         serde_json::from_value(payload).map_err(|_| INVALID_RETRY_PAYLOAD.to_string())?;
     if wire.target != RetryInsightsTarget::Insights && wire.preference_snapshot.is_some() {
@@ -457,6 +465,44 @@ mod tests {
         let error = parse_retry_insights_request(payload).expect_err("reject migration seed");
 
         assert_eq!(error, INVALID_RETRY_PAYLOAD);
+    }
+
+    #[test]
+    fn retry_insights_request_requires_explicit_nullable_profile() {
+        let explicit_null = serde_json::json!({
+            "task_id": "20260705-153012-douyin-demo",
+            "target": "insights",
+            "output_language": "zh-TW",
+            "preference_snapshot": {
+                "profile": null,
+                "profileSkipped": true,
+                "generationPreferences": {
+                    "goal": "content_creation",
+                    "scenario": "short_video",
+                    "angles": ["topic_angle"],
+                    "audience": "fans_readers",
+                    "styles": ["grounded"],
+                    "avoid": []
+                },
+                "labelSnapshot": {
+                    "profile": [],
+                    "generationPreferences": []
+                }
+            }
+        });
+        parse_retry_insights_request(explicit_null.clone()).expect("accept explicit null profile");
+
+        let mut missing_profile = explicit_null;
+        missing_profile["preference_snapshot"]
+            .as_object_mut()
+            .expect("snapshot object")
+            .remove("profile");
+
+        let error =
+            parse_retry_insights_request(missing_profile).expect_err("reject missing profile");
+
+        assert_eq!(error, INVALID_RETRY_PAYLOAD);
+        assert!(!error.contains("20260705-153012-douyin-demo"));
     }
 
     #[test]

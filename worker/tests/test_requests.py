@@ -278,6 +278,89 @@ def test_retry_request_parses_preference_snapshot() -> None:
     assert "defaultAvoid" not in serialized
 
 
+def test_preference_snapshot_requires_explicit_nullable_profile() -> None:
+    explicit_null = valid_preference_snapshot()
+    explicit_null["profile"] = None
+    explicit_null["profileSkipped"] = True
+
+    parsed = parse_preference_snapshot(explicit_null)
+
+    assert parsed is not None
+    assert parsed.profile is None
+    assert parsed.profile_skipped is True
+
+    missing_profile = valid_preference_snapshot()
+    missing_profile.pop("profile")
+
+    with pytest.raises(ValueError) as error:
+        parse_preference_snapshot(missing_profile)
+
+    assert str(error.value) == "preference_snapshot fields were invalid."
+
+
+@pytest.mark.parametrize(
+    "layer,expected_error",
+    [
+        ("root", "preference_snapshot fields were invalid."),
+        (
+            "generationPreferences",
+            "preference_snapshot.generationPreferences fields were invalid.",
+        ),
+        ("labelSnapshot", "preference_snapshot.labelSnapshot fields were invalid."),
+        (
+            "profileLabelRow",
+            "preference_snapshot.labelSnapshot.profile item fields were invalid.",
+        ),
+        (
+            "generationLabelRow",
+            "preference_snapshot.labelSnapshot.generationPreferences item fields were invalid.",
+        ),
+        (
+            "labelValue",
+            "preference_snapshot.labelSnapshot value fields were invalid.",
+        ),
+    ],
+)
+def test_preference_snapshot_rejects_additional_properties_at_every_closed_layer(
+    layer: str,
+    expected_error: str,
+) -> None:
+    snapshot = copy.deepcopy(valid_preference_snapshot())
+    if layer == "root":
+        target = snapshot
+    elif layer == "generationPreferences":
+        target = snapshot["generationPreferences"]
+    elif layer == "labelSnapshot":
+        target = snapshot["labelSnapshot"]
+    else:
+        labels = snapshot["labelSnapshot"]
+        assert isinstance(labels, dict)
+        if layer == "profileLabelRow":
+            rows = labels["profile"]
+            assert isinstance(rows, list)
+            target = rows[0]
+        elif layer == "generationLabelRow":
+            rows = labels["generationPreferences"]
+            assert isinstance(rows, list)
+            target = rows[0]
+        else:
+            rows = labels["profile"]
+            assert isinstance(rows, list)
+            row = rows[0]
+            assert isinstance(row, dict)
+            values = row["values"]
+            assert isinstance(values, list)
+            target = values[0]
+    assert isinstance(target, dict)
+    target["reviewSecretField"] = "review-secret-value"
+
+    with pytest.raises(ValueError) as error:
+        parse_preference_snapshot(snapshot)
+
+    assert str(error.value) == expected_error
+    assert "review-secret" not in str(error.value)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
