@@ -25,10 +25,10 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v4_while_process_video_stays_v3() -> None:
+def test_contract_version_is_strictly_v6_while_process_video_stays_v3() -> None:
     contract = load_contract()
 
-    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 5
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 6
     assert LOCAL_MEDIA_CONTRACT_VERSION == 4
     assert PROCESS_VIDEO_CONTRACT_VERSION == 3
     assert (
@@ -595,6 +595,7 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
         "asr.cache.preparing",
         "asr.transcribe.starting",
         "asr.transcribe.running",
+        "ai.generation.running",
         "douyin.page.resolving",
         "douyin.stream.probing",
         "douyin.video.saving",
@@ -687,6 +688,7 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
 
     assert worker_codes["subtitle.detect.found"]["allowedArgs"] == ["language"]
     assert worker_codes["asr.cache.preparing"]["allowedArgs"] == ["model"]
+    assert worker_codes["ai.generation.running"]["allowedArgs"] == ["attempt", "total"]
     assert worker_codes["douyin.stream.retrying"]["allowedArgs"] == ["attempt", "total"]
 
     allowed_statuses = set(progress_contract["asrModelDownload"]["fieldSchemas"]["status"]["enum"])

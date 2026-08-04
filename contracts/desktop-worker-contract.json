@@ -1,5 +1,5 @@
 {
-  "contractVersion": 5,
+  "contractVersion": 6,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "FRAMEQ_PROGRESS ",
@@ -125,6 +125,12 @@
         },
         "asr.transcribe.running": {
           "allowedArgs": []
+        },
+        "ai.generation.running": {
+          "allowedArgs": [
+            "attempt",
+            "total"
+          ]
         },
         "douyin.page.resolving": {
           "allowedArgs": []

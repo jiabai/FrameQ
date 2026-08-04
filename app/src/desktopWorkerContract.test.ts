@@ -168,10 +168,10 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict desktop contract v5 while preserving process_video v3", () => {
+  test("uses strict desktop contract v6 while preserving process_video v3", () => {
     const contract = loadContract();
 
-    expect(contract.contractVersion).toBe(5);
+    expect(contract.contractVersion).toBe(6);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
   });
 
@@ -192,7 +192,7 @@ describe("desktop/worker contract", () => {
     };
     visit(contract);
 
-    expect(contract.contractVersion).toBe(5);
+    expect(contract.contractVersion).toBe(6);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);
@@ -769,6 +769,7 @@ describe("desktop/worker contract", () => {
       "asr.cache.preparing",
       "asr.transcribe.starting",
       "asr.transcribe.running",
+      "ai.generation.running",
       "douyin.page.resolving",
       "douyin.stream.probing",
       "douyin.video.saving",
@@ -867,6 +868,10 @@ describe("desktop/worker contract", () => {
       "language",
     ]);
     expect(progress.worker.messageCodes["asr.cache.preparing"]?.allowedArgs).toEqual(["model"]);
+    expect(progress.worker.messageCodes["ai.generation.running"]?.allowedArgs).toEqual([
+      "attempt",
+      "total",
+    ]);
     expect(progress.worker.messageCodes["douyin.stream.retrying"]?.allowedArgs).toEqual([
       "attempt",
       "total",

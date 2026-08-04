@@ -72,6 +72,7 @@ WORKER_PROGRESS_REGISTRY: dict[str, WorkerProgressSpec] = {
     "asr.cache.preparing": WorkerProgressSpec(("model",)),
     "asr.transcribe.starting": WorkerProgressSpec(),
     "asr.transcribe.running": WorkerProgressSpec(),
+    "ai.generation.running": WorkerProgressSpec(("attempt", "total")),
     "douyin.page.resolving": WorkerProgressSpec(),
     "douyin.stream.probing": WorkerProgressSpec(),
     "douyin.video.saving": WorkerProgressSpec(),

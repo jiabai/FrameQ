@@ -109,4 +109,12 @@ describe("bundled localization resources", () => {
       },
     });
   });
+
+  test("provides generic content-free AI generation progress in every locale", () => {
+    expect(resources["zh-CN"].progress.worker.ai_generation_running).toBe("正在生成 AI 结果。");
+    expect(resources["zh-TW"].progress.worker.ai_generation_running).toBe("正在產生 AI 結果。");
+    expect(resources["en-US"].progress.worker.ai_generation_running).toBe(
+      "Generating AI results.",
+    );
+  });
 });

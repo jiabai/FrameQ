@@ -25,6 +25,11 @@ WORKER_SPECS = {
     ),
     "asr.transcribe.starting": ("video_transcribing", 58, {}),
     "asr.transcribe.running": ("video_transcribing", 68, {}),
+    "ai.generation.running": (
+        "insights_generating",
+        70,
+        {"attempt": 1, "total": 3},
+    ),
     "douyin.page.resolving": ("video_extracting", 22, {}),
     "douyin.stream.probing": ("video_extracting", 26, {}),
     "douyin.video.saving": ("video_extracting", 30, {}),

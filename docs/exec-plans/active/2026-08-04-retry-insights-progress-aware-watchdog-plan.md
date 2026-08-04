@@ -24,7 +24,7 @@ supplier errors remain excluded.
 ## Progress
 
 - [x] 2026-08-04: Reproduced and traced the field failure to `RetryInsights` idle timeout at 600,267 ms; approved design committed as `4fb2dab`. Validation: `C:\Users\bicho\AppData\Local\com.frameq.desktop\logs\frameq-desktop.log` plus source inspection.
-- [ ] 2026-08-04: Register contract v6 AI progress and localized presentation. Validation: execute the RED/GREEN commands in Task 1.
+- [x] 2026-08-04: Registered contract v6 `ai.generation.running`, closed `attempt/total` args, runtime constants, and three-locale copy. Validation: Python 107 passed; Vitest 19 passed; Rust contract constant 1 passed.
 - [ ] 2026-08-04: Wire retry progress and emit bounded dissection attempt events. Validation: execute the RED/GREEN commands in Task 2.
 - [ ] 2026-08-04: Change the Rust timeout policy and complete focused/full gates. Validation: execute the RED/GREEN commands in Tasks 3-4.
 
@@ -69,7 +69,7 @@ is intentionally the final bound for that case.
 - Modify: `app/src/i18n/resources.test.ts`
 - Modify: `app/src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write failing contract and registry tests**
+- [x] **Step 1: Write failing contract and registry tests**
 
 Change the Python, Rust, and TypeScript global contract-version expectations from 5 to 6. Add
 `ai.generation.running` to the expected worker specifications with stage
@@ -85,7 +85,7 @@ resource expectations for the stable generic copy.
 ),
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `uv run pytest worker/tests/test_contract.py worker/tests/test_progress_events.py -q`
 
@@ -95,7 +95,7 @@ Run: `npm --prefix app test -- --run src/desktopWorkerContract.test.ts src/i18n/
 
 Expected: FAIL because the contract is still v5 and the AI code/resources are absent.
 
-- [ ] **Step 3: Implement the minimal closed contract**
+- [x] **Step 3: Implement the minimal closed contract**
 
 Advance the JSON, Python, and Rust global `contractVersion` constants to 6, add the new message code with exact
 `["attempt", "total"]` arguments, mirror it in `WORKER_PROGRESS_REGISTRY`, and add these resource
@@ -107,7 +107,7 @@ ai_generation_running: "正在產生 AI 結果。"
 ai_generation_running: "Generating AI results."
 ```
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
 Run the two commands from Step 2. Expected: both PASS.
 
@@ -201,7 +201,7 @@ absolute_timeout: Duration::from_secs(90 * 60),
 Run:
 
 ```powershell
-cargo test --manifest-path app/src-tauri/Cargo.toml production_watchdog_policies_are_closed_and_conservative
+cargo test --manifest-path app/src-tauri/Cargo.toml worker_operations_own_exact_closed_production_watchdog_policies
 cargo test --manifest-path app/src-tauri/Cargo.toml retry_insights_job_derives_worker_progress_and_resolves_llm_once
 ```
 
