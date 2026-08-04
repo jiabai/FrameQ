@@ -80,24 +80,6 @@ PROFILE_FIELD_OPTIONS: dict[str, set[str]] = {
         "course_community",
         "internal_sharing",
     },
-    "defaultStyles": {
-        "direct_sharp",
-        "gentle_inspiring",
-        "professional_analysis",
-        "grounded",
-        "storytelling",
-        "short_video_friendly",
-        "long_form_friendly",
-    },
-    "defaultAvoid": {
-        "chicken_soup",
-        "academic",
-        "vague",
-        "clickbait",
-        "commercialized",
-        "negative",
-        "grand_narrative",
-    },
 }
 
 DESKTOP_ASR_MODELS = frozenset({DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL})
@@ -345,6 +327,8 @@ def parse_preference_snapshot(payload: object) -> PreferenceSnapshot | None:
 def _parse_inspiration_profile(payload: object) -> InspirationProfile:
     if not isinstance(payload, dict):
         raise ValueError("preference_snapshot.profile must be a JSON object or null.")
+    if set(payload) != set(PROFILE_FIELD_OPTIONS):
+        raise ValueError("preference_snapshot.profile fields were invalid.")
 
     return InspirationProfile(
         role=_read_single_option(payload, "role", PROFILE_FIELD_OPTIONS),
@@ -357,20 +341,6 @@ def _parse_inspiration_profile(payload: object) -> InspirationProfile:
             PROFILE_FIELD_OPTIONS,
         ),
         platforms=_read_multi_option(payload, "platforms", PROFILE_FIELD_OPTIONS, 0, 3),
-        default_styles=_read_multi_option(
-            payload,
-            "defaultStyles",
-            PROFILE_FIELD_OPTIONS,
-            0,
-            3,
-        ),
-        default_avoid=_read_multi_option(
-            payload,
-            "defaultAvoid",
-            PROFILE_FIELD_OPTIONS,
-            0,
-            3,
-        ),
     )
 
 
@@ -408,12 +378,20 @@ def _parse_label_snapshot_items(
     if not isinstance(payload, list):
         raise ValueError(f"preference_snapshot.labelSnapshot.{section} must be a list.")
 
-    return tuple(_parse_label_snapshot_item(item, section) for item in payload)
+    allowed_fields = (
+        PROFILE_FIELD_OPTIONS
+        if section == "profile"
+        else GENERATION_FIELD_OPTIONS
+    )
+    return tuple(
+        _parse_label_snapshot_item(item, section, allowed_fields) for item in payload
+    )
 
 
 def _parse_label_snapshot_item(
     payload: object,
     section: str,
+    allowed_fields: dict[str, set[str]],
 ) -> PreferenceLabelSnapshotItem:
     if not isinstance(payload, dict):
         raise ValueError(f"preference_snapshot.labelSnapshot.{section} items must be objects.")
@@ -421,8 +399,8 @@ def _parse_label_snapshot_item(
     field = payload.get("field")
     label = payload.get("label")
     values = payload.get("values")
-    if not isinstance(field, str) or not field.strip():
-        raise ValueError("preference_snapshot.labelSnapshot item field must be a string.")
+    if not isinstance(field, str) or field not in allowed_fields:
+        raise ValueError("preference_snapshot.labelSnapshot item field was invalid.")
     if not isinstance(label, str):
         raise ValueError("preference_snapshot.labelSnapshot item label must be a string.")
     if not isinstance(values, list):
