@@ -26,7 +26,7 @@ supplier errors remain excluded.
 - [x] 2026-08-04: Reproduced and traced the field failure to `RetryInsights` idle timeout at 600,267 ms; approved design committed as `4fb2dab`. Validation: `C:\Users\bicho\AppData\Local\com.frameq.desktop\logs\frameq-desktop.log` plus source inspection.
 - [x] 2026-08-04: Registered contract v6 `ai.generation.running`, closed `attempt/total` args, runtime constants, and three-locale copy. Validation: Python 107 passed; Vitest 19 passed; Rust contract constant 1 passed.
 - [x] 2026-08-04: Wired retry progress through CLI/application/pipeline and emitted bounded dissection attempt events after cancellation checks. Validation: focused 3 passed; complete CLI/dissection 59 passed.
-- [ ] 2026-08-04: Change the Rust timeout policy and complete focused/full gates. Validation: execute the RED/GREEN commands in Tasks 3-4.
+- [ ] 2026-08-04: Changed the Rust RetryInsights policy to 30-minute idle / 90-minute absolute; integration/full gates remain. Validation: both focused policy tests passed; serialized native runner suite 28 passed.
 
 ## Surprises & Discoveries
 
@@ -34,6 +34,7 @@ supplier errors remain excluded.
 - Evidence: `worker/frameq_worker/cli.py` passes progress callbacks for URL/local-media/model-download modes but not `--retry-insights-stdin`, so Rust receives no validated activity during AI retry.
 - Evidence: progress message codes are a closed shared registry in `contracts/desktop-worker-contract.json`, `worker/frameq_worker/progress_events.py`, and `app/src/desktopWorkerContract.test.ts`; a truthful AI progress code requires a global contract version advance.
 - Evidence: sandboxed direct pytest could not scan the user-level default temporary root, so focused runs used the worktree-local `--basetemp .pytest-tmp`; test behavior was otherwise unchanged.
+- Evidence: native watchdog process-tree fixtures cannot terminate their controlled children inside the command sandbox and degrade into protocol failures after 30 seconds; the same fixture passed in 1.9 seconds with approved native process control, and the complete serialized runner suite passed 28/28.
 
 ## Decision Log
 
@@ -177,7 +178,7 @@ call, on a timer, or from summary/inspiration generators.
 
 Run the command from Step 2. Expected: PASS.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 Stage only the seven Task 2 files and commit `fix: report dissection call progress`.
 
@@ -188,7 +189,7 @@ Stage only the seven Task 2 files and commit `fix: report dissection call progre
 - Modify: `app/src-tauri/src/worker_runtime/facade.rs`
 - Modify: `app/src-tauri/src/worker_runtime/runner/watchdog.rs`
 
-- [ ] **Step 1: Write failing policy expectations**
+- [x] **Step 1: Write failing policy expectations**
 
 Change both exhaustive policy test sites to require:
 
@@ -197,7 +198,7 @@ idle_timeout: Some(Duration::from_secs(30 * 60)),
 absolute_timeout: Duration::from_secs(90 * 60),
 ```
 
-- [ ] **Step 2: Run Rust tests and verify RED**
+- [x] **Step 2: Run Rust tests and verify RED**
 
 Run:
 
@@ -208,12 +209,12 @@ cargo test --manifest-path app/src-tauri/Cargo.toml retry_insights_job_derives_w
 
 Expected: FAIL with the existing 600/1800-second values.
 
-- [ ] **Step 3: Implement the minimal policy change**
+- [x] **Step 3: Implement the minimal policy change**
 
 Change only `WorkerOperation::RetryInsights` in `watchdog.rs` to 30/90 minutes. Keep all other
 operations and lifecycle logic byte-for-byte unchanged.
 
-- [ ] **Step 4: Run Rust tests and verify GREEN**
+- [x] **Step 4: Run Rust tests and verify GREEN**
 
 Run both commands from Step 2, then
 `cargo test --manifest-path app/src-tauri/Cargo.toml worker_runtime::runner::tests`.

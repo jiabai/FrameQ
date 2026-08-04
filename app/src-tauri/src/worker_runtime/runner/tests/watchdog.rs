@@ -31,8 +31,8 @@ fn worker_operations_own_exact_closed_production_watchdog_policies() {
         (
             WorkerOperation::RetryInsights,
             WatchdogPolicy {
-                idle_timeout: Some(Duration::from_secs(10 * 60)),
-                absolute_timeout: Duration::from_secs(30 * 60),
+                idle_timeout: Some(Duration::from_secs(30 * 60)),
+                absolute_timeout: Duration::from_secs(90 * 60),
             },
         ),
         (

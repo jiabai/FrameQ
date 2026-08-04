@@ -366,8 +366,8 @@ mod typed_job_policy_tests {
         assert_eq!(request.operation, WorkerOperation::RetryInsights);
         assert_watchdog_policy(
             request.operation,
-            Some(Duration::from_secs(10 * 60)),
-            Duration::from_secs(30 * 60),
+            Some(Duration::from_secs(30 * 60)),
+            Duration::from_secs(90 * 60),
         );
         assert!(matches!(request.progress, ProgressRoute::Worker));
         assert_eq!(

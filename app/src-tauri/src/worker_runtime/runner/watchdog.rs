@@ -34,8 +34,8 @@ impl WorkerOperation {
                 absolute_timeout: Duration::from_secs(8 * 60 * 60),
             },
             Self::RetryInsights => WatchdogPolicy {
-                idle_timeout: Some(Duration::from_secs(10 * 60)),
-                absolute_timeout: Duration::from_secs(30 * 60),
+                idle_timeout: Some(Duration::from_secs(30 * 60)),
+                absolute_timeout: Duration::from_secs(90 * 60),
             },
             Self::ResolveSourceIdentity => WatchdogPolicy {
                 idle_timeout: None,
