@@ -171,11 +171,28 @@ async function runTaskCommand(
 export async function retryInsights(
   input: RetryInsightsInput,
   runner: WorkerCommandRunner = defaultWorkerRunner,
+  onProgress?: WorkerProgressHandler,
+  progressListener: WorkerProgressListener = listen,
+  recordInvalidProgress: ProgressDiagnosticRecorder = defaultProgressDiagnosticRecorder,
 ): Promise<WorkerResult> {
   const parsed = parseRetryInsightsInput(input);
   if (parsed.kind === "invalid") {
     return invalidRetryPayloadResult(parsed.taskId);
   }
+
+  const unlisten = onProgress
+    ? await progressListener(WORKER_PROGRESS_EVENT, (event) => {
+        const progress = parseWorkerProgressEvent(event.payload);
+        if (progress.kind === "invalid") {
+          recordInvalidProgress(progress.diagnosticCode);
+        } else {
+          if (progress.kind === "unknown") {
+            recordInvalidProgress(progress.diagnosticCode);
+          }
+          onProgress(progress.event);
+        }
+      })
+    : null;
 
   try {
     return (
@@ -203,6 +220,10 @@ export async function retryInsights(
         stage: "insights_generating",
       },
     };
+  } finally {
+    if (unlisten) {
+      await unlisten();
+    }
   }
 }
 

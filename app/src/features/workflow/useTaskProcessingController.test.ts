@@ -487,12 +487,84 @@ describe("useTaskProcessingController watchdog timeouts", () => {
     expect(controller.workflow.summary).toBe(source.summary);
     expect(controller.workflow.insights).toEqual(source.insights);
     expect(retryInsightsMock).toHaveBeenCalledTimes(1);
-    expect(retryInsightsMock).toHaveBeenCalledWith({
-      taskId: "source-task",
-      target: "summary",
-      outputLanguage: "en-US",
-    });
+    expect(retryInsightsMock).toHaveBeenCalledWith(
+      {
+        taskId: "source-task",
+        target: "summary",
+        outputLanguage: "en-US",
+      },
+      undefined,
+      expect.any(Function),
+    );
     expect(openAccountPanel).not.toHaveBeenCalled();
+  });
+
+  test("applies retry progress and preserves the prior dissection after cancellation", async () => {
+    let resolveRetry: ((value: WorkerResult) => void) | null = null;
+    retryInsightsMock.mockImplementation(
+      (_input, _runner, onProgress: (event: WorkerProgressEvent) => void) => {
+        onProgress({
+          stage: "insights_generating",
+          progress: 76,
+          message: {
+            messageCode: "ai.generation.running",
+            args: { attempt: 2, total: 3 },
+          },
+        });
+        return new Promise<WorkerResult>((resolve) => {
+          resolveRetry = resolve;
+        });
+      },
+    );
+    cancelProcessMock.mockResolvedValue({ status: "cancelling" });
+    const source = createHistoryItem({ dissection: TEST_DISSECTION });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+
+    const retry = controller.retryInsightGeneration(
+      "dissection",
+      "zh-CN",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+
+    expect(controller.workflow.progressMessage).toEqual({
+      messageCode: "ai.generation.running",
+      args: { attempt: 2, total: 3 },
+    });
+    expect(controller.workflow.progressPercent).toBe(76);
+    expect(controller.workflow.text).toBe(source.text);
+    expect(controller.workflow.dissection).toEqual(TEST_DISSECTION);
+
+    await controller.cancelCurrentProcessing();
+    requireResolver<WorkerResult>(resolveRetry)(
+      createWorkerResult({
+        status: "failed",
+        task_id: source.taskId,
+        task_dir: source.taskDir,
+        artifacts: {},
+        text: "",
+        summary: "",
+        insights: [],
+        transcript: null,
+        dissection: null,
+        error: {
+          code: "WORKER_CANCELLED",
+          message: "",
+          stage: "insights_generating",
+        },
+      }),
+    );
+    await retry;
+    controller = render();
+
+    expect(controller.workflow.stage).toBe("completed");
+    expect(controller.workflow.text).toBe(source.text);
+    expect(controller.workflow.dissection).toEqual(TEST_DISSECTION);
   });
 });
 
@@ -849,11 +921,15 @@ describe("useTaskProcessingController history restore", () => {
     );
     controller = render();
     expect(controller.workflow.stage).toBe("insights_generating");
-    expect(retryInsightsMock).toHaveBeenCalledWith({
-      taskId: "source-task",
-      target: "insights",
-      outputLanguage: "en-US",
-    });
+    expect(retryInsightsMock).toHaveBeenCalledWith(
+      {
+        taskId: "source-task",
+        target: "insights",
+        outputLanguage: "en-US",
+      },
+      undefined,
+      expect.any(Function),
+    );
     expect(controller.restoreHistoryItem(rejected)).toBe(false);
     requireResolver<WorkerResult>(resolveRetry)(
       createWorkerResult({
@@ -921,11 +997,15 @@ describe("useTaskProcessingController history restore", () => {
     );
     controller = render();
     expect(controller.workflow.activeAiTarget).toBe("summary");
-    expect(retryInsightsMock).toHaveBeenCalledWith({
-      taskId: "source-task",
-      target: "summary",
-      outputLanguage: "zh-TW",
-    });
+    expect(retryInsightsMock).toHaveBeenCalledWith(
+      {
+        taskId: "source-task",
+        target: "summary",
+        outputLanguage: "zh-TW",
+      },
+      undefined,
+      expect.any(Function),
+    );
 
     await retry;
     controller = render();

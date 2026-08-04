@@ -376,12 +376,20 @@ export function useTaskProcessingController({
       onRetryStarted();
       setWorkflow((current) => startInsightRetry(current, target));
 
+      const onProgress = (event: Parameters<typeof mergeProgressEvent>[1]) => {
+        if (operationIdRef.current === operationId) {
+          setWorkflow((current) => mergeProgressEvent(current, event));
+        }
+      };
+
       const result = await retryInsights(
         target === "summary" || target === "dissection"
           ? { taskId, target, outputLanguage }
           : preferenceSnapshot
             ? { taskId, target, outputLanguage, preferenceSnapshot }
             : { taskId, target, outputLanguage },
+        undefined,
+        onProgress,
       );
       if (operationIdRef.current !== operationId) {
         return;

@@ -229,6 +229,45 @@ describe("worker client", () => {
     expect(unlistenCalls).toEqual([WORKER_PROGRESS_EVENT]);
   });
 
+  test("subscribes to retry progress and unregisters after completion", async () => {
+    const progressEvents: unknown[] = [];
+    const unlistenCalls: string[] = [];
+    const listener: WorkerProgressListener = async (eventName, handler) => {
+      handler({
+        event: eventName,
+        id: 1,
+        payload: {
+          stage: "insights_generating",
+          progress: 76,
+          message_code: "ai.generation.running",
+          message_args: { attempt: 2, total: 3 },
+        },
+      });
+      return async () => {
+        unlistenCalls.push(eventName);
+      };
+    };
+
+    await retryInsights(
+      { taskId: TASK_ID, target: "dissection", outputLanguage: "zh-CN" },
+      async () => completedResult(),
+      (event) => progressEvents.push(event),
+      listener,
+    );
+
+    expect(progressEvents).toEqual([
+      {
+        stage: "insights_generating",
+        progress: 76,
+        message: {
+          messageCode: "ai.generation.running",
+          args: { attempt: 2, total: 3 },
+        },
+      },
+    ]);
+    expect(unlistenCalls).toEqual([WORKER_PROGRESS_EVENT]);
+  });
+
   test("drops invalid progress without exposing payload prose and records only a safe code", async () => {
     const progressEvents: unknown[] = [];
     const diagnostics: string[] = [];

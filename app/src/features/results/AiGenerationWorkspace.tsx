@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TaskWorkspaceViewModel, AiTargetViewModel } from "../../taskWorkspaceViewModel";
 import type { InsightRetryTarget } from "../../workflow";
 import { isSupportedLocale, type SupportedLocale } from "../../i18n/locale";
+import { renderWorkerProgressMessage } from "../../i18n/progressMessages";
 import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
 type AiGenerationWorkspaceProps = {
@@ -32,6 +33,13 @@ export function AiGenerationWorkspace({
     ? i18n.resolvedLanguage
     : "en-US";
   const renderedNotice = renderUiMessage(locale, notice);
+  const renderedProgress = model.progressMessage
+    ? renderWorkerProgressMessage(
+        locale,
+        "insights_generating",
+        model.progressMessage,
+      )
+    : null;
   const blocker =
     model.availability === "quota_exhausted"
       ? t("workspace.quotaExhausted")
@@ -60,6 +68,11 @@ export function AiGenerationWorkspace({
       </header>
 
       <p className="ai-privacy-copy">{t("workspace.privacy")}</p>
+      {renderedProgress ? (
+        <p className="ai-progress-message" role="status" aria-live="polite">
+          {renderedProgress}
+        </p>
+      ) : null}
       {blocker ? (
         <p className="ai-availability-blocker" role="status">
           <AlertTriangle size={16} aria-hidden="true" />

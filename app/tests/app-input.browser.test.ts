@@ -2304,6 +2304,56 @@ describe("App controller-owned lifecycle UI smoke", () => {
     }
   }, 15_000);
 
+  test("renders dissection attempt progress and preserves the prior result after cancellation", async () => {
+    const page = await openUiSmokePage({ deferredCommands: ["retry_insights"] });
+    try {
+      await openSmokeHistory(page);
+      await clickSelector(page, ".history-item-select");
+      await waitForRuntimeCondition(page, "!document.querySelector('.history-sheet')");
+
+      await clickSelector(page, '[data-ai-target="dissection"] .ai-target-action');
+      await clickSelector(page, ".dissection-confirmation-sheet .primary-button");
+      await waitForRuntimeCondition(page, "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.retry_insights?.length)");
+      await resolveUiSmokeCommand(page, "retry_insights", completedDissectionResult());
+      await waitForRuntimeCondition(page, "document.querySelector('[data-ai-target=\"dissection\"]')?.classList.contains('ready')");
+
+      await clickSelector(page, '[data-ai-target="dissection"] .secondary-button:not(.ai-target-action)');
+      await clickSelector(page, '[data-action="redissection"]');
+      await clickSelector(page, ".dissection-confirmation-sheet .primary-button");
+      await waitForRuntimeCondition(page, "Boolean(window.__FRAMEQ_UI_SMOKE__.pending.retry_insights?.length)");
+      await page.send("Runtime.evaluate", {
+        expression: `window.__FRAMEQ_UI_SMOKE__.emit("worker-progress", ${JSON.stringify({
+          stage: "insights_generating",
+          progress: 76,
+          message_code: "ai.generation.running",
+          message_args: { attempt: 2, total: 3 },
+        })})`,
+      });
+      await waitForRuntimeCondition(page, "document.body.innerText.includes('正在生成 AI 结果。')");
+
+      await clickSelector(page, ".ai-generation-workspace .ai-cancel-button");
+      await waitForRuntimeCondition(page, "document.body.innerText.includes('正在取消')");
+      await resolveUiSmokeCommand(page, "retry_insights", cancelledWorkerResult());
+      await waitForRuntimeCondition(page, "document.querySelector('[data-ai-target=\"dissection\"]')?.classList.contains('ready')");
+
+      const state = await evaluateValue<Record<string, unknown>>(
+        page,
+        `({
+          transcript: document.querySelector('.transcript-full-editor')?.value ?? '',
+          dissectionActionVisible: Boolean(document.querySelector('[data-ai-target="dissection"] .secondary-button:not(.ai-target-action)')),
+          progressRemoved: !document.body.innerText.includes('正在生成 AI 结果。')
+        })`,
+      );
+      expect(state).toMatchObject({
+        transcript: "历史任务甲完整文字稿",
+        dissectionActionVisible: true,
+        progressRemoved: true,
+      });
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
   test("keeps an AI target failure in the right workspace while the local transcript remains ready", async () => {
     const page = await openUiSmokePage({ deferredCommands: ["retry_insights"] });
     try {

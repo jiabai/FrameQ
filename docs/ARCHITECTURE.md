@@ -13,6 +13,9 @@
   90-minute absolute deadline; only contract-valid progress refreshes idle, while absolute time,
   structured-result precedence, cancellation, process-tree cleanup, Credits, and artifact
   preservation remain unchanged.
+- The TypeScript retry client owns the matching progress-listener lifetime. The workflow controller
+  accepts events only for the active operation ID, and the AI workspace renders the localized safe
+  descriptor while preserving the saved transcript and prior AI result through cancellation.
 - Durable behavior and evidence are recorded in
   `docs/design-docs/2026-08-04-retry-insights-progress-aware-watchdog.md` and
   `docs/exec-plans/completed/2026-08-04-retry-insights-progress-aware-watchdog-plan.md`.

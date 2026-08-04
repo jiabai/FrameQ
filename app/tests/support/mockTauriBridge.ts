@@ -200,6 +200,7 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
       const scenario = ${config};
       const callbacks = {};
       const pending = {};
+      const listeners = {};
       let callbackId = 1;
 
       const smoke = {
@@ -217,6 +218,11 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
           const entry = queue.shift();
           if (!entry) throw new Error("No pending mock command: " + command);
           entry.reject(new Error(message || "mock command failed"));
+        },
+        emit(event, payload) {
+          for (const handler of listeners[event] || []) {
+            callbacks[handler]?.({ event, id: handler, payload });
+          }
         }
       };
       window.__FRAMEQ_UI_SMOKE__ = smoke;
@@ -238,8 +244,16 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
               scenario.responses["plugin:deep-link|get_current"] || []
             );
           }
-          if (command === "plugin:event|listen") return Promise.resolve(1);
-          if (command === "plugin:event|unlisten") return Promise.resolve(null);
+          if (command === "plugin:event|listen") {
+            (listeners[args.event] ||= []).push(args.handler);
+            return Promise.resolve(args.handler);
+          }
+          if (command === "plugin:event|unlisten") {
+            const eventListeners = listeners[args.event] || [];
+            const index = eventListeners.indexOf(args.id);
+            if (index >= 0) eventListeners.splice(index, 1);
+            return Promise.resolve(null);
+          }
           if (Object.prototype.hasOwnProperty.call(scenario.rejectedCommands, command)) {
             return Promise.reject(new Error(scenario.rejectedCommands[command]));
           }

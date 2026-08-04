@@ -1,7 +1,7 @@
 # RetryInsights Progress-Aware Watchdog
 
 - Date: 2026-08-04
-- Status: Design approved; written specification pending review
+- Status: Implemented 2026-08-04
 - Related product specifications:
   - `docs/product-specs/2026-07-22-release-reliability-hardening.md`
   - `docs/product-specs/2026-07-31-transcript-dissection.md`
@@ -9,8 +9,8 @@
 
 ## Problem
 
-`WorkerOperation::RetryInsights` currently has a 10-minute idle deadline and a 30-minute absolute
-deadline. The retry CLI does not pass a progress callback into the Python application path, so a
+Before this change, `WorkerOperation::RetryInsights` had a 10-minute idle deadline and a 30-minute
+absolute deadline. The retry CLI did not pass a progress callback into the Python application path, so a
 summary, inspiration, or transcript-dissection run produces no validated activity while its LLM
 calls execute.
 
@@ -51,7 +51,9 @@ manifest, terminal result, artifact, or AI Credit semantics change.
 4. Dissection computes its frozen bounded call plan and emits `ai.generation.running` before each
    supplier attempt with `attempt <= total <= 6`.
 5. Rust accepts only contract-valid events, records watchdog activity, and forwards the safe event.
-6. The existing structured terminal result, cancellation, timeout precedence, and atomic artifact
+6. The retry client subscribes to validated worker progress for the lifetime of the Tauri command;
+   the workflow controller applies the event and the AI workspace renders its generic localized text.
+7. The existing structured terminal result, cancellation, timeout precedence, and atomic artifact
    commit rules remain authoritative.
 
 Summary and inspiration receive the callback plumbing but do not gain invented call-boundary

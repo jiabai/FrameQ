@@ -27,6 +27,7 @@ supplier errors remain excluded.
 - [x] 2026-08-04: Registered contract v6 `ai.generation.running`, closed `attempt/total` args, runtime constants, and three-locale copy. Validation: Python 107 passed; Vitest 19 passed; Rust contract constant 1 passed.
 - [x] 2026-08-04: Wired retry progress through CLI/application/pipeline and emitted bounded dissection attempt events after cancellation checks. Validation: focused 3 passed; complete CLI/dissection 59 passed.
 - [x] 2026-08-04: Changed the Rust RetryInsights policy to 30-minute idle / 90-minute absolute and completed integration/full code gates. Validation: focused Python 150, Vitest 27, Rust worker_runtime 63; ruff passed; worker 669 passed / 2 skipped; app 670 passed; lint/build passed; governance WARN 0 errors / 0 warnings.
+- [x] 2026-08-04: Pre-merge acceptance review found that retry progress reached Rust but the TypeScript retry client did not subscribe, so the event could not render. Added the listener/controller/UI chain test-first and a no-network browser acceptance covering localized progress, cancellation, and preservation of the prior transcript/dissection. Validation: RED 2 focused failures plus 1 browser failure; GREEN 45 focused tests plus 1 browser acceptance.
 
 ## Surprises & Discoveries
 
@@ -36,6 +37,7 @@ supplier errors remain excluded.
 - Evidence: sandboxed direct pytest could not scan the user-level default temporary root, so focused runs used the worktree-local `--basetemp .pytest-tmp`; test behavior was otherwise unchanged.
 - Evidence: native watchdog process-tree fixtures cannot terminate their controlled children inside the command sandbox and degrade into protocol failures after 30 seconds; the same fixture passed in 1.9 seconds with approved native process control, and the complete serialized runner suite passed 28/28.
 - Evidence: the first cross-boundary protocol run caught the TypeScript literal `WORKER_MESSAGE_CODE_RULES` missing the new contract code; adding the exact closed rule restored shared-contract parity, and the full focused group passed.
+- Evidence: pre-merge browser acceptance exposed a separate consumer gap: `retryInsights()` invoked Tauri without the progress listener used by media jobs, and the AI workspace model did not expose a safe progress descriptor. The final client now owns listener cleanup, the operation-ID guard rejects stale events, and the AI workspace renders only the validated localized descriptor.
 
 ## Decision Log
 
@@ -46,8 +48,11 @@ supplier errors remain excluded.
 ## Outcomes & Retrospective
 
 Implemented global contract v6 AI progress, exact Python retry callback plumbing, content-free
-dissection call-boundary events, and the Rust-owned 30/90-minute policy. Focused cross-boundary,
-complete worker/app, lint, build, and native Windows worker-runtime suites passed. Residual risk: an
+dissection call-boundary events, the Rust-owned 30/90-minute policy, and the frontend
+listener/controller/rendering chain. Focused cross-boundary, complete worker/app, lint, build, and
+native Windows worker-runtime suites passed. A deterministic browser acceptance uses fake IPC and
+therefore consumes no AI Credits or user content while proving progress, cancellation, and prior
+result preservation together. Residual risk: an
 individual supplier/checkout implementation that ignores its own request timeout can remain blocked
 until the 30-minute desktop idle deadline; the watchdog is intentionally the final bound for that
 case. The existing Vite chunk-size warning remains unrelated, and no new macOS native runtime
@@ -292,5 +297,8 @@ Stage only integration documentation/index changes and commit
 - Progress and logs contain no user/supplier content.
 - Cancellation, structured-result precedence, Credits, and atomic artifact behavior remain covered
   by existing suites.
-- Manual regression: start a dissection with a delayed fake supplier, confirm generic AI progress
-  renders without content, cancel it, and confirm the old result/transcript remains available.
+- Deterministic no-network browser acceptance: start a second dissection through delayed fake IPC,
+  emit one validated `ai.generation.running` event, confirm generic localized progress renders,
+  cancel it, return `WORKER_CANCELLED`, and confirm the old result/transcript remains available.
+  Evidence: `npm --prefix app test -- --run tests/app-input.browser.test.ts -t "renders dissection
+  attempt progress and preserves the prior result after cancellation"` passed 1/1.

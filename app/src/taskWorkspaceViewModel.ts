@@ -268,6 +268,8 @@ export function createTaskWorkspaceViewModel(
       phase: aiPhase,
       availability: aiAvailability(account),
       activeTarget: workflow.activeAiTarget,
+      progressMessage:
+        aiActive || isAiCancellation(workflow) ? workflow.progressMessage : null,
       cancellation: workspaceCancellation(owner, "ai", workflow),
       summary,
       insights,
