@@ -6,6 +6,20 @@ import { ASR_MODEL_DOWNLOAD_PROGRESS_EVENT } from "./settingsClient";
 import { processVideo, WORKER_PROGRESS_EVENT } from "./workerClient";
 import type { WorkerResult } from "./workflow";
 
+type MachineReadableSchema = {
+  type?: string;
+  required?: string[];
+  properties?: Record<string, MachineReadableSchema>;
+  oneOf?: MachineReadableSchema[];
+  items?: MachineReadableSchema;
+  enum?: string[];
+  additionalProperties?: boolean;
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+  minLength?: number;
+};
+
 type DesktopWorkerContract = {
   contractVersion: number;
   events: {
@@ -78,7 +92,7 @@ type DesktopWorkerContract = {
         task_id: { type: "string" };
         target: { type: "string"; enum: string[] };
         output_language: { type: "string"; enum: string[] };
-        preference_snapshot: { type: "object" };
+        preference_snapshot: MachineReadableSchema;
       };
       additionalProperties: boolean;
       allOf: Array<{
@@ -553,15 +567,10 @@ describe("desktop/worker contract", () => {
   test("declares a closed retry_insights request schema", () => {
     const request = loadContract().aiGeneration.request;
 
-    expect(request).toEqual({
+    const { properties, ...requestBoundary } = request;
+    expect(requestBoundary).toEqual({
       type: "object",
       required: ["task_id", "target", "output_language"],
-      properties: {
-        task_id: { type: "string" },
-        target: { type: "string", enum: ["summary", "insights", "dissection"] },
-        output_language: { type: "string", enum: ["zh-CN", "zh-TW", "en-US"] },
-        preference_snapshot: { type: "object" },
-      },
       additionalProperties: false,
       allOf: [
         {
@@ -572,11 +581,70 @@ describe("desktop/worker contract", () => {
     });
 
     expect(new Set(request.required).size).toBe(request.required.length);
-    expect(request.required.every((field) => field in request.properties)).toBe(true);
-    expect(Object.keys(request.properties)).toEqual([
+    expect(request.required.every((field) => field in properties)).toBe(true);
+    expect(Object.keys(properties)).toEqual([
       ...request.required,
       "preference_snapshot",
     ]);
+
+    const snapshot = properties.preference_snapshot;
+    expect(snapshot.required).toEqual([
+      "profile",
+      "profileSkipped",
+      "generationPreferences",
+      "labelSnapshot",
+    ]);
+    expect(snapshot.additionalProperties).toBe(false);
+    expect(Object.keys(snapshot.properties ?? {})).toEqual(snapshot.required);
+
+    const profile = snapshot.properties?.profile.oneOf?.[1];
+    if (!profile) {
+      throw new Error("profile schema must be machine readable");
+    }
+    expect(profile.required).toEqual([
+      "role",
+      "domain",
+      "stage",
+      "cityContext",
+      "genderPerspective",
+      "platforms",
+    ]);
+    expect(profile.additionalProperties).toBe(false);
+    expect(Object.keys(profile.properties ?? {})).toEqual(profile.required);
+
+    const generation = snapshot.properties?.generationPreferences;
+    if (!generation) {
+      throw new Error("generation preference schema must be machine readable");
+    }
+    expect(generation.required).toEqual([
+      "goal",
+      "scenario",
+      "angles",
+      "audience",
+      "styles",
+      "avoid",
+    ]);
+    expect(generation.additionalProperties).toBe(false);
+    expect(Object.keys(generation.properties ?? {})).toEqual(generation.required);
+    expect(generation.properties?.styles).toMatchObject({
+      minItems: 1,
+      maxItems: 2,
+      uniqueItems: true,
+    });
+
+    const labels = snapshot.properties?.labelSnapshot;
+    if (!labels) {
+      throw new Error("label snapshot schema must be machine readable");
+    }
+    expect(labels.required).toEqual(["profile", "generationPreferences"]);
+    expect(labels.additionalProperties).toBe(false);
+    expect(labels.properties?.profile.items?.properties?.field.enum).toEqual(profile.required);
+    expect(labels.properties?.generationPreferences.items?.properties?.field.enum).toEqual(
+      generation.required,
+    );
+    expect(JSON.stringify(snapshot)).not.toMatch(
+      /defaultStyles|defaultAvoid|default_styles|default_avoid|legacyGenerationPreferenceSeed/,
+    );
   });
 
   test("declares bounded transcript dissection artifacts and call plan", () => {

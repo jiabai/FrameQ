@@ -356,21 +356,9 @@ def test_process_video_contract_is_transcript_only_and_retry_insights_is_ai_path
 def test_retry_insights_request_schema_is_closed_and_machine_readable() -> None:
     request_contract = load_contract()["aiGeneration"]["request"]
 
-    assert request_contract == {
+    assert {key: value for key, value in request_contract.items() if key != "properties"} == {
         "type": "object",
         "required": ["task_id", "target", "output_language"],
-        "properties": {
-            "task_id": {"type": "string"},
-            "target": {
-                "type": "string",
-                "enum": ["summary", "insights", "dissection"],
-            },
-            "output_language": {
-                "type": "string",
-                "enum": ["zh-CN", "zh-TW", "en-US"],
-            },
-            "preference_snapshot": {"type": "object"},
-        },
         "additionalProperties": False,
         "allOf": [
             {
@@ -385,6 +373,101 @@ def test_retry_insights_request_schema_is_closed_and_machine_readable() -> None:
     assert len(required) == len(set(required))
     assert set(required) <= set(properties)
     assert list(properties) == [*required, "preference_snapshot"]
+
+    snapshot = properties["preference_snapshot"]
+    assert snapshot["type"] == "object"
+    assert snapshot["required"] == [
+        "profile",
+        "profileSkipped",
+        "generationPreferences",
+        "labelSnapshot",
+    ]
+    assert snapshot["additionalProperties"] is False
+    assert list(snapshot["properties"]) == snapshot["required"]
+
+    profile = snapshot["properties"]["profile"]
+    assert profile["oneOf"][0] == {"type": "null"}
+    profile_object = profile["oneOf"][1]
+    assert profile_object["required"] == [
+        "role",
+        "domain",
+        "stage",
+        "cityContext",
+        "genderPerspective",
+        "platforms",
+    ]
+    assert profile_object["additionalProperties"] is False
+    assert list(profile_object["properties"]) == profile_object["required"]
+    assert profile_object["properties"]["platforms"] == {
+        "type": "array",
+        "maxItems": 3,
+        "uniqueItems": True,
+        "items": {
+            "type": "string",
+            "enum": [
+                "douyin",
+                "xiaohongshu",
+                "wechat_channels",
+                "bilibili",
+                "wechat_official_account",
+                "podcast",
+                "course_community",
+                "internal_sharing",
+            ],
+        },
+    }
+
+    generation = snapshot["properties"]["generationPreferences"]
+    assert generation["required"] == [
+        "goal",
+        "scenario",
+        "angles",
+        "audience",
+        "styles",
+        "avoid",
+    ]
+    assert generation["additionalProperties"] is False
+    assert list(generation["properties"]) == generation["required"]
+    assert generation["properties"]["angles"]["minItems"] == 1
+    assert generation["properties"]["angles"]["maxItems"] == 3
+    assert generation["properties"]["angles"]["uniqueItems"] is True
+    assert generation["properties"]["styles"]["minItems"] == 1
+    assert generation["properties"]["styles"]["maxItems"] == 2
+    assert generation["properties"]["styles"]["uniqueItems"] is True
+    assert generation["properties"]["avoid"]["maxItems"] == 3
+    assert generation["properties"]["avoid"]["uniqueItems"] is True
+
+    labels = snapshot["properties"]["labelSnapshot"]
+    assert labels["required"] == ["profile", "generationPreferences"]
+    assert labels["additionalProperties"] is False
+    assert list(labels["properties"]) == labels["required"]
+    profile_label_item = labels["properties"]["profile"]["items"]
+    generation_label_item = labels["properties"]["generationPreferences"]["items"]
+    assert profile_label_item["properties"]["field"]["enum"] == profile_object["required"]
+    assert generation_label_item["properties"]["field"]["enum"] == generation["required"]
+    for item in (profile_label_item, generation_label_item):
+        assert item["required"] == ["field", "label", "values"]
+        assert item["additionalProperties"] is False
+        assert list(item["properties"]) == item["required"]
+        assert item["properties"]["values"]["items"] == {
+            "type": "object",
+            "required": ["id", "label"],
+            "properties": {
+                "id": {"type": "string", "minLength": 1},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        }
+
+    serialized_schema = json.dumps(snapshot, ensure_ascii=False)
+    for deprecated_field in (
+        "defaultStyles",
+        "defaultAvoid",
+        "default_styles",
+        "default_avoid",
+        "legacyGenerationPreferenceSeed",
+    ):
+        assert deprecated_field not in serialized_schema
 
 
 def test_dissection_result_contract_is_closed_and_bounded() -> None:

@@ -150,8 +150,6 @@ const defaultResponses: Record<string, unknown> = {
       cityContext: "new_tier1_city",
       genderPerspective: "unspecified",
       platforms: ["xiaohongshu"],
-      defaultStyles: ["professional_analysis"],
-      defaultAvoid: [],
     },
     profileSkipped: false,
     profileStatus: "valid",
@@ -164,6 +162,7 @@ const defaultResponses: Record<string, unknown> = {
       styles: ["professional_analysis"],
       avoid: [],
     },
+    legacyGenerationPreferenceSeed: null,
     preferencesPath: "C:/FrameQ/insight-preferences.json",
   },
   get_history: [firstHistoryTask, secondHistoryTask].map(

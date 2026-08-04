@@ -104,13 +104,13 @@ test("installer build installs and imports the bundled ONNX runtime before Tauri
   );
 });
 
-test("installer bundles the version-5 dissection worker modules without private artifacts", () => {
+test("installer bundles the version-6 dissection worker modules without private artifacts", () => {
   const buildScript = readFileSync(buildInstallerPath, "utf8");
   const contract = JSON.parse(
     readFileSync(join(repoRoot, "contracts", "desktop-worker-contract.json"), "utf8"),
   );
 
-  assert.equal(contract.contractVersion, 5);
+  assert.equal(contract.contractVersion, 6);
   assert.match(
     buildScript,
     /copyDirectoryContents\(join\(repoRoot, "worker", "frameq_worker"\), join\(destination, "frameq_worker"\)\)/,

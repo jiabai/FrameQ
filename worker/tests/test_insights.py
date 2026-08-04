@@ -314,7 +314,7 @@ def test_build_question_prompt_includes_compact_preference_context() -> None:
     assert "Prefer `generationPreferences`" not in prompt
     assert "Treat `profile.platforms` as background context" in prompt
     assert "follow the current scenario" in prompt
-    assert "Transcript evidence wins over all preferences" in prompt
+    assert "Transcript evidence wins over all preferences." in prompt
 
 
 def test_topic_plan_prompt_uses_narrow_current_scenario_precedence() -> None:
@@ -327,7 +327,7 @@ def test_topic_plan_prompt_uses_narrow_current_scenario_precedence() -> None:
     assert "Prefer `generationPreferences`" not in prompt
     assert "Treat `profile.platforms` as background context" in prompt
     assert "follow the current scenario" in prompt
-    assert "Transcript evidence wins over all preferences" in prompt
+    assert "Transcript evidence wins over all preferences." in prompt
 
 
 def test_non_inspiration_prompt_builders_remain_unpersonalized() -> None:
