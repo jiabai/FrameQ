@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-08-05-inspiration-profile-generation-preference-boundary-plan.md` | Narrowed Inspiration Profile to six stable context fields, made per-run preferences the sole style/avoid owner, atomically migrated v1 app-local preferences to schema v2, closed the current cross-language worker snapshot, and preserved historical task snapshots. |
 | `2026-08-04-retry-insights-progress-aware-watchdog-plan.md` | Extended `RetryInsights` to a 30-minute idle / 90-minute absolute policy and added contract-v6, content-free transcript-dissection call-boundary progress. |
 | `2026-08-01-transcript-dissection-ready-action-plan.md` | Removed the misleading generated-card action and moved the explicitly named redissection flow into the report detail sheet. |
 | `2026-08-01-transcript-dissection-actionable-reuse-plan.md` | Made existing pattern/template/risk fields produce slot-based writing-transfer guidance with required/optional nodes and explicit applicability limits. |

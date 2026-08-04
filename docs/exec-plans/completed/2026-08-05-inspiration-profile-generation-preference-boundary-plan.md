@@ -29,6 +29,13 @@ transcript dissection, media processing, and historical task artifacts do not ch
 
 - [x] 2026-08-05: User approved the six-field Profile v2 boundary and migration design. Validation: approval recorded in `docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md`.
 - [x] 2026-08-05: Updated the personalized-insight product spec, drafted this active implementation plan, and synchronized product/plan/AGENTS/TASKS entry points. Validation: `python scripts/validate_agents_docs.py --level WARN` passed with 0 errors and 0 warnings; `git diff --check` passed with line-ending notices only.
+- [x] 2026-08-05: Narrowed the TypeScript profile domain and presentation to the exact six-field v2 shape while retaining the complete six-step generation model. Validation: commit `cf5348b`; focused App tests passed 14/14; independent specification and quality reviews approved the slice.
+- [x] 2026-08-05: Implemented Tauri-owned schema-v2 persistence, strict v1 validation, single-write atomic migration/mutations, seed precedence/lifecycle, and invalid-v1 byte preservation. Validation: commits `3211201`, `ad3363e`, `aff5804`, `526b4fe`; focused Rust preference tests passed 24/24; final independent specification and quality reviews approved the repaired slice.
+- [x] 2026-08-05: Strictly decoded the optional edit-only seed, separated the desktop flow and form, and made the confirmation sheet current-run-first in all three locales. Validation: commits `22933f9`, `1a7fabb`; focused App tests passed 52/52; independent specification and quality reviews approved the slice.
+- [x] 2026-08-05: Narrowed TypeScript/Rust retry serialization to the v2 profile and generation-owned expression fields. Validation: commit `b855945`; focused App tests passed 19/19 and Rust retry tests passed 10/10; App lint, rustfmt, independent specification review, and independent quality review passed.
+- [x] 2026-08-05: Removed duplicate profile semantics from Python models, request parsing, registries, and Inspiration prompts while retaining summary/mindmap/dissection behavior. Validation: commit `f4da1f0`; focused worker request/insight tests passed 85/85 and Ruff passed; independent specification and quality reviews approved the slice.
+- [x] 2026-08-05: Refreshed the packaged worker, closed the machine-readable preference snapshot, and repaired strict Rust/Python parsing after contract review. Validation: commits `6dac1f6` and `652d15e`; canonical/mirror comparison found 73 files and 0 mismatches; focused post-repair Rust retry tests passed 9/9.
+- [x] 2026-08-05: Completed cross-layer gates and governance/archive synchronization without touching real user state or consuming an AI Credit. Validation: App 692/692; Rust 252/252 before the parity repair plus retry 9/9 after it; Worker 689 passed / 2 skipped with one existing `pydub`/`audioop` warning; scripts 29/29; lint, Ruff, rustfmt, governance, and diff checks passed; production build transformed 2,136 modules with the existing chunk-size warning and 709.41 kB main bundle.
 
 ## Surprises & Discoveries
 
@@ -44,6 +51,22 @@ transcript dissection, media processing, and historical task artifacts do not ch
   to derive global state under the existing local-first security boundary.
 - Evidence: profile removal and the new long-term-context heading require reviewed Simplified
   Chinese, Traditional Chinese, and US English resources and tests.
+- Evidence: the initial machine-readable contract described `preference_snapshot` only as an opaque
+  object; contract review required closing its profile, generation, and label sections and then
+  adding strict Rust/Python parity checks (`6dac1f6`, `652d15e`).
+- Evidence: migration mutations originally risked two atomic writes and invalid-v1 default saving
+  could replace the original bytes before reset. Independent review drove the single-write and
+  preserve-before-reset repairs in `aff5804` and `526b4fe`.
+- Evidence: the released Profile v1 accepted three style IDs while current generation preferences
+  accept at most two. Preserving all three in an edit-only seed avoids silent data loss and keeps
+  Step 5 invalid until the user explicitly resolves the selection.
+- Evidence: the complete local gate run can exercise migration, serialization, UI resources, and
+  generated worker parity without a real supplier call. Native interactive packaged launch was
+  unavailable in the sandbox, so no real app-local user state or AI Credit was used.
+- Evidence: the shared JSON schema closes label field identities but its generic label-ID string
+  still uses `minLength: 1`; whitespace-only precision remains nonblocking because current
+  producers use fixed registries. The cross-language tightening is recorded in
+  `docs/exec-plans/tech-debt-tracker.md`.
 
 ## Decision Log
 
@@ -64,16 +87,47 @@ transcript dissection, media processing, and historical task artifacts do not ch
   failed migration must retain original bytes. Date/Author: 2026-08-05 / Codex.
 - Decision: Do not add server fields, account sync, history-derived defaults, free-text fields, or a
   general inheritance engine. Rationale: all are outside the approved scope. Date/Author: 2026-08-05 / User + Codex.
+- Decision: Close `preference_snapshot` and nested label field identities in the shared JSON
+  contract instead of leaving the object opaque. Rationale: TypeScript, Rust, Python, and the
+  packaged worker need one machine-readable current-shape authority that rejects v1/current drift.
+  Date/Author: 2026-08-05 / Codex after independent contract review.
+- Decision: Preserve the current non-whitespace label-ID tightening as explicit deferred debt.
+  Rationale: fixed option registries and closed field identities make it nonblocking for this
+  boundary, while changing every label validator is a separate cross-language contract decision.
+  Date/Author: 2026-08-05 / Codex.
+- Decision: Do not run a paid live Inspiration request or mutate real app-local preferences for
+  closeout. Rationale: disposable automated fixtures prove the contract/migration paths, while the
+  sandbox cannot provide a trustworthy native interactive packaged session and a real call would
+  unnecessarily consume user state and Credits. Date/Author: 2026-08-05 / Codex.
 
 ## Outcomes & Retrospective
 
-Planned outcome: one six-field long-term profile, one complete current generation direction, local
-v1-to-v2 migration, and no duplicate style/avoid values in confirmation or prompts. Exact automated
-totals and manual evidence will be recorded during implementation.
+Delivered one closed six-field long-term profile and one complete current generation direction.
+Expression styles and avoidance directions now have a single owner; confirmation prioritizes the
+current run, Tauri atomically migrates validated v1 state to schema v2, an optional legacy seed is
+edit-only, and new TypeScript/Rust/Python worker snapshots reject deprecated or additional fields.
+Historical task snapshots remain immutable and server, Credits, summary, mindmap, dissection, ASR,
+download, and media behavior did not change.
 
-Residual risk before implementation: released v1 files may contain combinations absent from current
-fixtures, and native packaged migration/layout behavior remains unverified until the matrix and gates
-below run.
+Complete evidence: App 692/692; Rust 252/252 before the final strict-parser parity repair and retry
+9/9 after it; Worker 689 passed / 2 skipped with the existing `pydub.utils` `audioop` warning;
+repository scripts 29/29; TypeScript lint, Ruff, rustfmt, documentation validation, and diff checks
+passed. The production frontend build transformed 2,136 modules and retained the existing >500 kB
+chunk warning (`main` 709.41 kB). Packaged-worker validation compared 73 canonical files with 0
+mismatches.
+
+The contract hardening landed in `6dac1f6`; independent review then found that Rust/Python still
+accepted nested snapshot drift, repaired in `652d15e`. The Rust repair added the regression cases
+and implementation in the same repair turn, so a separately timed failing Rust RED command was not
+captured; the prior review finding is the failure evidence and post-repair retry 9/9 is the GREEN
+evidence.
+
+Residual risk: native interactive packaged launch and its real app-local migration/layout matrix
+could not run inside the sandbox, and no real supplier request or AI Credit was consumed. The shared
+JSON schema's generic label-ID string permits whitespace-only text even though current producers use
+fixed safe option registries; this nonblocking schema-precision nuance is tracked in
+`docs/exec-plans/tech-debt-tracker.md`. External historical snapshots deliberately remain
+mixed-version local evidence.
 
 ## Context and Orientation
 
@@ -107,7 +161,7 @@ below run.
 - Modify: `app/src/i18n/preferencePresentation.test.ts`
 - Modify: `app/src/i18n/preferencePresentation.ts`
 
-- [ ] **Step 1: Write failing v2 profile and snapshot tests**
+- [x] **Step 1: Write failing v2 profile and snapshot tests**
 
 ```ts
 const PROFILE_V2: InspirationProfile = {
@@ -129,7 +183,7 @@ expect(JSON.stringify(buildPreferenceSnapshot({
 
 Update three-locale summary tests to allow only the six v2 fields.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 npm --prefix app test -- insightPreferences.test.ts preferencePresentation.test.ts
@@ -137,7 +191,7 @@ npm --prefix app test -- insightPreferences.test.ts preferencePresentation.test.
 
 Expected: compile/test failure because profile types and validation still require deprecated fields.
 
-- [ ] **Step 3: Implement the exact six-field contract**
+- [x] **Step 3: Implement the exact six-field contract**
 
 ```ts
 export type ProfileField =
@@ -158,7 +212,7 @@ export const PROFILE_FIELD_ORDER: ProfileField[] = [
 Remove profile-scoped configs/semantics. Before value validation, compare sorted `Object.keys(value)`
 with `PROFILE_FIELD_ORDER` so extra deprecated keys fail closed. Keep generation `styles`/`avoid` unchanged.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run Step 2, then commit only these files with `refactor: narrow inspiration profile contract`.
 
@@ -168,7 +222,7 @@ Run Step 2, then commit only these files with `refactor: narrow inspiration prof
 - Modify: `app/src-tauri/src/insight_preferences.rs`
 - Reuse: `app/src-tauri/src/atomic_files.rs`
 
-- [ ] **Step 1: Write the failing migration matrix**
+- [x] **Step 1: Write the failing migration matrix**
 
 Add Rust tests named:
 
@@ -184,7 +238,7 @@ failed_atomic_replacement_preserves_original_preferences
 Assert schema 2, exact six-field output, seed precedence/lifecycle, original-byte retention, and no
 history-directory access.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 cargo test --manifest-path app/src-tauri/Cargo.toml insight_preferences
@@ -192,7 +246,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml insight_preferences
 
 Expected: compile/test failure because versioned DTOs, seed, and migration do not exist.
 
-- [ ] **Step 3: Define strict current and legacy-only DTOs**
+- [x] **Step 3: Define strict current and legacy-only DTOs**
 
 ```rust
 const INSIGHT_PREFERENCES_SCHEMA_VERSION: u32 = 2;
@@ -219,7 +273,7 @@ pub(crate) struct LegacyGenerationPreferenceSeed {
 Use a private `LegacyInspirationProfileV1` containing the two deprecated arrays. The v2 root and state
 view add optional `legacy_generation_preference_seed`; never map it to complete defaults.
 
-- [ ] **Step 4: Implement validate-first atomic migration**
+- [x] **Step 4: Implement validate-first atomic migration**
 
 Distinguish missing schema version from v2, validate the chosen full shape, then atomically serialize:
 
@@ -236,7 +290,7 @@ fn write_preferences_file(path: &Path, file: &InsightPreferencesFileV2) -> Resul
 Keep complete valid defaults; otherwise derive a seed only from non-empty valid legacy arrays.
 Saving complete defaults and clearing profile remove the seed. New profile saves never create one.
 
-- [ ] **Step 5: Run GREEN, format, and commit**
+- [x] **Step 5: Run GREEN, format, and commit**
 
 ```powershell
 cargo test --manifest-path app/src-tauri/Cargo.toml insight_preferences
@@ -259,7 +313,7 @@ Commit with `feat: migrate inspiration preferences to schema v2`.
 - Modify: `app/src/features/settings/SettingsSheet.tsx`
 - Modify: `app/src/i18n/preferenceResources.ts`
 
-- [ ] **Step 1: Write failing IPC, flow, and UI tests**
+- [x] **Step 1: Write failing IPC, flow, and UI tests**
 
 Decode a seed `{ styles: ["direct_sharp"], avoid: ["clickbait"] }`; reject extra keys, invalid ids,
 duplicates, and cardinality violations. With no complete defaults, assert the flow starts at
@@ -267,7 +321,7 @@ duplicates, and cardinality violations. With no complete defaults, assert the fl
 defaults, assert defaults win. Render all locales and prove six profile fields plus one current-run
 style/avoid group.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 npm --prefix app test -- insightPreferencesClient.test.ts insightPreferenceFlow.test.ts InsightPreferenceFlow.test.tsx useInsightGenerationController.test.ts
@@ -275,7 +329,7 @@ npm --prefix app test -- insightPreferencesClient.test.ts insightPreferenceFlow.
 
 Expected: failures because state/flow still lack the seed and form fixtures require eight fields.
 
-- [ ] **Step 3: Implement strict seed decoding and edit-only prefill**
+- [x] **Step 3: Implement strict seed decoding and edit-only prefill**
 
 ```ts
 export type LegacyGenerationPreferenceSeed = { styles: string[]; avoid: string[] };
@@ -287,14 +341,14 @@ empty six-step draft. If the seed has three styles, the existing current-generat
 keep Step 5 blocked until the user reduces it to one or two. A seed never selects `default_summary`
 or enables `Generate now`.
 
-- [ ] **Step 4: Remove duplicate form rows and revise hierarchy**
+- [x] **Step 4: Remove duplicate form rows and revise hierarchy**
 
 Remove deprecated fields from `EMPTY_PROFILE`. Add reviewed
 `longTermContextGroupTitle` resources. Render final confirmation as current generation summary first,
 then a quiet long-term-context summary. Reuse existing quiet tokens; add no gradients, motion, new
 modal, or extra card stack. Settings retains the `Inspiration Profile` name.
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 Run Step 2 and commit with `feat: separate long-term context from run preferences`.
 
@@ -306,12 +360,12 @@ Run Step 2 and commit with `feat: separate long-term context from run preference
 - Modify: `app/src-tauri/src/video_processing/retry_insights.rs`
 - Modify: `contracts/desktop-worker-contract.json`
 
-- [ ] **Step 1: Write failing exact-payload tests**
+- [x] **Step 1: Write failing exact-payload tests**
 
 Assert `preference_snapshot.profile` exactly contains the six v2 keys. Assert current retry examples
 contain no `defaultStyles`, `defaultAvoid`, or `legacyGenerationPreferenceSeed`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 npm --prefix app test -- workerClient.test.ts
@@ -320,12 +374,12 @@ cargo test --manifest-path app/src-tauri/Cargo.toml retry_insights
 
 Expected: existing fixtures/serialization still contain deprecated keys.
 
-- [ ] **Step 3: Update current DTOs and contract examples**
+- [x] **Step 3: Update current DTOs and contract examples**
 
 Use the exact Task 1 profile with no aliases. Limit profile label rows to current fields. Keep
 `generationPreferences`, `profileSkipped`, billing, output language, and retry target behavior unchanged.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run Step 2 and commit with `refactor: send profile v2 in inspiration retries`.
 
@@ -338,13 +392,13 @@ Run Step 2 and commit with `refactor: send profile v2 in inspiration retries`.
 - Modify: `worker/frameq_worker/requests.py`
 - Modify: `worker/frameq_worker/insightflow/prompt.py`
 
-- [ ] **Step 1: Write failing strict-parser and prompt tests**
+- [x] **Step 1: Write failing strict-parser and prompt tests**
 
 Use six-field fixtures. Assert a current request with deprecated/extra profile keys raises
 `ValueError`. Assert formatted prompts contain generation styles/avoid but no profile equivalents,
 and state that current scenario wins over common platform while transcript facts win over everything.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 uv run pytest worker/tests/test_requests.py worker/tests/test_insights.py -q
@@ -352,7 +406,7 @@ uv run pytest worker/tests/test_requests.py worker/tests/test_insights.py -q
 
 Expected: model construction or exact-key assertions fail.
 
-- [ ] **Step 3: Implement exact v2 model/parser**
+- [x] **Step 3: Implement exact v2 model/parser**
 
 ```python
 @dataclass(frozen=True)
@@ -368,13 +422,13 @@ class InspirationProfile:
 `to_dict()` emits exactly six camelCase keys. Remove deprecated registry entries. Before reading
 values require the exact key set; missing or unexpected keys raise a stable non-echoing `ValueError`.
 
-- [ ] **Step 4: Simplify prompt precedence**
+- [x] **Step 4: Simplify prompt precedence**
 
 Remove broad duplicate-source precedence copy. Add: `profile.platforms` is background; current
 `generationPreferences.scenario` wins when different; transcript evidence always wins. Do not change
 summary, mindmap, or dissection builders.
 
-- [ ] **Step 5: Run GREEN, Ruff, and commit**
+- [x] **Step 5: Run GREEN, Ruff, and commit**
 
 ```powershell
 uv run pytest worker/tests/test_requests.py worker/tests/test_insights.py -q
@@ -389,7 +443,7 @@ Commit with `refactor: remove duplicate profile prompt preferences`.
 - Refresh: `app/src-tauri/resources/worker/`
 - Modify: any current-contract fixtures found by exact deprecated-field search
 
-- [ ] **Step 1: Refresh the packaged worker**
+- [x] **Step 1: Refresh the packaged worker**
 
 ```powershell
 node scripts/tauri-dev-fresh-worker.mjs
@@ -397,7 +451,7 @@ node scripts/tauri-dev-fresh-worker.mjs
 
 Expected: exit 0 and mirrored Python sources match `worker/frameq_worker`; do not hand-copy them.
 
-- [ ] **Step 2: Prove duplicate runtime fields are gone**
+- [x] **Step 2: Prove duplicate runtime fields are gone**
 
 ```powershell
 rg -n "defaultStyles|defaultAvoid|default_styles|default_avoid" app/src app/src-tauri/src worker/frameq_worker contracts
@@ -405,7 +459,7 @@ rg -n "defaultStyles|defaultAvoid|default_styles|default_avoid" app/src app/src-
 
 Expected: matches only in explicitly named v1 migration DTOs/tests, never current runtime contracts.
 
-- [ ] **Step 3: Run complete automated gates**
+- [x] **Step 3: Run complete automated gates**
 
 ```powershell
 npm --prefix app test
@@ -422,13 +476,14 @@ git diff --check
 
 Expected: every command exits 0. Record exact totals, skips, warnings, and unavailable evidence.
 
-- [ ] **Step 4: Run the manual migration/UI matrix**
+- [x] **Step 4: Record migration/UI matrix coverage and unavailable native evidence**
 
-With disposable app-local data, verify: new install; v1 plus complete defaults; v1 without defaults;
-invalid v1; current-first confirmation in three locales; six-field retry serialization; clear profile
-preserving complete defaults and history. Do not consume a real AI Credit merely to inspect payloads.
+Disposable automated fixtures verified: new install; v1 plus complete defaults; v1 without defaults;
+invalid v1; current-first confirmation in three locales; six-field retry serialization; and clear
+profile preserving complete defaults/history. Native interactive packaged launch was unavailable in
+the sandbox, and no real app-local user state or AI Credit was consumed merely to inspect payloads.
 
-- [ ] **Step 5: Commit synchronized resources and regression fixes**
+- [x] **Step 5: Commit synchronized resources and regression fixes**
 
 Inspect `git diff --cached --name-only`; commit only plan-related files with
 `test: verify inspiration preference boundary migration`.
@@ -442,21 +497,21 @@ Inspect `git diff --cached --name-only`; commit only plan-related files with
 - Modify: `TASKS.md`, `AGENTS.md`, active/completed plan indexes
 - Move: this plan from `active/` to `completed/`
 
-- [ ] **Step 1: Update persistent guidance**
+- [x] **Step 1: Update persistent guidance**
 
 Record six-field profile ownership, generation-only expression controls, schema v2 migration, atomic
 writer, edit-only seed, worker shape, and immutable historical snapshots without duplicating option tables.
 
-- [ ] **Step 2: Fill living-document evidence**
+- [x] **Step 2: Fill living-document evidence**
 
 Append dated Progress entries ending in `Validation: ...`; update discoveries/decisions; replace
 planned Outcomes with exact results and residual risks.
 
-- [ ] **Step 3: Complete and archive only after gates pass**
+- [x] **Step 3: Complete and archive only after gates pass**
 
 Mark the task complete, move the plan, update both plan indexes and AGENTS quick entries.
 
-- [ ] **Step 4: Run final documentation checks**
+- [x] **Step 4: Run final documentation checks**
 
 ```powershell
 python scripts/validate_agents_docs.py --level WARN
@@ -466,7 +521,7 @@ git status --short
 
 Expected: 0 governance errors/warnings; clean diff; only intended changes plus pre-existing user-owned changes.
 
-- [ ] **Step 5: Commit governance completion**
+- [x] **Step 5: Commit governance completion**
 
 Commit with `docs: complete inspiration preference boundary plan`.
 

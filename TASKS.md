@@ -2,8 +2,6 @@
 
 ## Active UI Work
 
-- [ ] 精简 Inspiration Profile 并拆清本次生成偏好边界（2026-08-05）— ✅ Acceptance: Profile v2 只保留角色、职业领域、年龄/阶段、城市语境、性别/视角和常用平台；`styles`/`avoid` 仅由完整六步生成偏好负责；Tauri 将已发布 v1 app-local 文件原子迁移到 schema v2，无完整默认偏好时旧值只进入一次性 edit-only seed；确认页本次偏好优先，历史任务快照、server、AI Credits、summary、mindmap 与解剖边界不变。Design: `docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md`. ExecPlan: `docs/exec-plans/active/2026-08-05-inspiration-profile-generation-preference-boundary-plan.md`.
-
 - [ ] Prepare and publish FrameQ v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
   version sources synchronized at 0.3.0, `scripts/tests/release-version.test.mjs` asserts `0.3.0`,
   complete local release gates pass (scripts, app tests/lint/build, Rust tests/rustfmt, worker
@@ -509,6 +507,7 @@
 - [x] 桌面端一键升级 GitHub updater 真实下载/安装测试豁免（2026-06-27）— 因中国境内访问 GitHub Releases 速度过慢，本项目 v1 不再把旧版到新版的 GitHub updater 实测作为验收或发布阻塞项。✅ 验收口径：自动化门禁、manifest/artifact 生成、Tauri 签名校验配置和直接分发新版安装包路径成立；未声明国内 GitHub 网络真实升级链路已实测通过。
 
 ## 已完成
+- [x] 精简 Inspiration Profile 并拆清本次生成偏好边界（2026-08-05）— Profile v2 只保留六项长期背景，表达风格/避免方向仅归完整六步本次偏好；Tauri 将 v1 app-local 文件原子迁移到 schema v2，且只在没有完整默认偏好时保留一次性 edit-only seed；当前重试快照在 JSON/Rust/Python 边界严格闭合，历史任务快照保持不变。✅ 自动化门禁：App 692/692，Rust 252/252 且修复后 retry focused 9/9，Worker 689 passed / 2 skipped，scripts 29/29，lint/Ruff/rustfmt/docs/diff 通过，packaged worker 比较 73 个文件、0 个不匹配；原生交互式 packaged launch 因 sandbox 未执行，未消耗真实 AI Credit。Design: `docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md`. ExecPlan: `docs/exec-plans/completed/2026-08-05-inspiration-profile-generation-preference-boundary-plan.md`.
 - [x] 实现启发话题点个性化偏好流程（2026-07-06）✅ 增加本地 `我的灵感档案`、本次 6 步生成偏好、AI整理确认摘要、偏好快照和个性化话题点 prompt；偏好只进入 `retry_insights` 并只影响启发话题点生成，summary/Mermaid 保持通用；结果改为结构化话题点并展示匹配理由、启发问题和适合用途；偏好快照作为任务本地产物保存，server 无新增偏好/文字稿/话题点持久化。✅ 自动化门禁通过：app 138、worker 141、Rust 50、ruff、前端 build；真实额度消耗的桌面手工回归未在本会话执行。
 - [x] 增加 YouTube/Bilibili 字幕优先 + ASR 兜底（2026-07-05）✅ 公开视频 `yt-dlp` 成功路径会优先复用 YouTube/Bilibili 平台字幕生成正式文字稿，保留视频/音频产物和音频回听；字幕缺失、解析失败或 Bilibili public fallback 路径静默降级到本地 ASR；manifest、历史记录和文字稿 metadata 记录来源，UI 只显示文字稿来源提示，不展示原始字幕文件；不引入登录、Cookie、绕过或下载中心。✅ worker/parser/manifest/Rust/frontend 自动化门禁通过；真实公网字幕样本 smoke 未在本会话执行，保留外部平台可用性残余风险。
 - [x] 增加 YouTube 公开视频下载能力（2026-06-29）✅ 支持 watch、youtu.be 和 Shorts 单视频链接，复用现有 yt-dlp → ffprobe → audio → ASR → AI整理流程；新增 720p 转写优先格式策略、`YOUTUBE_*` 失败文案和签名 media URL/cookie 提示脱敏；不做登录、Cookie、playlist 批量、live、会员/年龄/私有绕过或下载中心。✅ worker/app/Rust/build/docs/diff gates 通过；真实 YouTube live smoke 未执行，保留外部平台可用性残余风险。
