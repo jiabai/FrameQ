@@ -4,13 +4,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
-use crate::{ensure_runtime_dirs, path_to_env_string, resolve_runtime_paths, RuntimePaths};
+use crate::{
+    atomic_files::atomic_write, ensure_runtime_dirs, path_to_env_string, resolve_runtime_paths,
+    RuntimePaths,
+};
 
 pub(crate) const INSIGHT_PREFERENCES_FILE_NAME: &str = "insight-preferences.json";
+const INSIGHT_PREFERENCES_SCHEMA_VERSION: u32 = 2;
 const PROFILE_RESET_REQUIRED_MESSAGE: &str = "灵感档案需要重新设置";
+const PREFERENCES_READ_ERROR: &str = "Failed to read insight preferences.";
+const PREFERENCES_WRITE_ERROR: &str = "Failed to save insight preferences.";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct InspirationProfile {
     pub(crate) role: String,
     pub(crate) domain: String,
@@ -18,8 +24,19 @@ pub(crate) struct InspirationProfile {
     pub(crate) city_context: String,
     pub(crate) gender_perspective: String,
     pub(crate) platforms: Vec<String>,
-    pub(crate) default_styles: Vec<String>,
-    pub(crate) default_avoid: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyInspirationProfileV1 {
+    role: String,
+    domain: String,
+    stage: String,
+    city_context: String,
+    gender_perspective: String,
+    platforms: Vec<String>,
+    default_styles: Vec<String>,
+    default_avoid: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -33,6 +50,13 @@ pub(crate) struct GenerationPreferences {
     pub(crate) avoid: Vec<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct LegacyGenerationPreferenceSeed {
+    pub(crate) styles: Vec<String>,
+    pub(crate) avoid: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct InsightPreferenceStateView {
@@ -41,12 +65,14 @@ pub(crate) struct InsightPreferenceStateView {
     pub(crate) profile_status: String,
     pub(crate) profile_error: Option<String>,
     pub(crate) default_generation_preferences: Option<GenerationPreferences>,
+    pub(crate) legacy_generation_preference_seed: Option<LegacyGenerationPreferenceSeed>,
     pub(crate) preferences_path: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct InsightPreferencesFile {
+    schema_version: u32,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     profile: Option<InspirationProfile>,
@@ -54,6 +80,32 @@ struct InsightPreferencesFile {
     profile_skipped: bool,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    default_generation_preferences: Option<GenerationPreferences>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    legacy_generation_preference_seed: Option<LegacyGenerationPreferenceSeed>,
+}
+
+impl Default for InsightPreferencesFile {
+    fn default() -> Self {
+        Self {
+            schema_version: INSIGHT_PREFERENCES_SCHEMA_VERSION,
+            profile: None,
+            profile_skipped: false,
+            default_generation_preferences: None,
+            legacy_generation_preference_seed: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyInsightPreferencesFileV1 {
+    #[serde(default)]
+    profile: Option<LegacyInspirationProfileV1>,
+    #[serde(default)]
+    profile_skipped: bool,
+    #[serde(default)]
     default_generation_preferences: Option<GenerationPreferences>,
 }
 
@@ -119,15 +171,20 @@ pub(crate) fn load_insight_preferences_from_file(
         ));
     }
 
-    let mut file = read_preferences_file(path)?;
-    let mut default_was_invalid = false;
-    if let Some(preferences) = file.default_generation_preferences.clone() {
-        if !is_valid_generation_preferences(&preferences) {
-            file.default_generation_preferences = None;
-            default_was_invalid = true;
-        }
+    let (mut file, source) = read_preferences_file(path)?;
+    let legacy_profile_is_invalid = source == PreferencesSource::InvalidLegacyV1;
+    let profile_is_invalid = legacy_profile_is_invalid
+        || file
+            .profile
+            .as_ref()
+            .map(|profile| !is_valid_inspiration_profile(profile))
+            .unwrap_or(false);
+    let default_was_invalid = clear_invalid_default_generation_preferences(&mut file);
+    let should_migrate = source == PreferencesSource::ValidLegacyV1;
+    if profile_is_invalid && source != PreferencesSource::V2 {
+        return Ok(state_from_file(path, file, true));
     }
-    if default_was_invalid {
+    if default_was_invalid || should_migrate {
         write_preferences_file(path, &file)?;
     }
 
@@ -168,6 +225,7 @@ pub(crate) fn clear_inspiration_profile_to_file(
     clear_invalid_default_generation_preferences(&mut file);
     file.profile = None;
     file.profile_skipped = false;
+    file.legacy_generation_preference_seed = None;
     write_preferences_file(path, &file)?;
     load_insight_preferences_from_file(path)
 }
@@ -182,6 +240,7 @@ pub(crate) fn save_default_generation_preferences_to_file(
 
     let mut file = read_preferences_file_or_default(path)?;
     file.default_generation_preferences = Some(preferences);
+    file.legacy_generation_preference_seed = None;
     write_preferences_file(path, &file)?;
     load_insight_preferences_from_file(path)
 }
@@ -189,15 +248,18 @@ pub(crate) fn save_default_generation_preferences_to_file(
 fn state_from_file(
     path: &Path,
     file: InsightPreferencesFile,
-    parse_failed: bool,
+    force_profile_invalid: bool,
 ) -> InsightPreferenceStateView {
-    if parse_failed {
+    if force_profile_invalid {
         return InsightPreferenceStateView {
             profile: None,
             profile_skipped: false,
             profile_status: "invalid".to_string(),
             profile_error: Some(PROFILE_RESET_REQUIRED_MESSAGE.to_string()),
-            default_generation_preferences: None,
+            default_generation_preferences: file
+                .default_generation_preferences
+                .filter(is_valid_generation_preferences),
+            legacy_generation_preference_seed: None,
             preferences_path: path_to_env_string(path),
         };
     }
@@ -227,35 +289,115 @@ fn state_from_file(
         default_generation_preferences: file
             .default_generation_preferences
             .filter(is_valid_generation_preferences),
+        legacy_generation_preference_seed: file.legacy_generation_preference_seed,
         preferences_path: path_to_env_string(path),
     }
 }
 
 fn read_preferences_file_or_default(path: &Path) -> Result<InsightPreferencesFile, String> {
     if path.exists() {
-        read_preferences_file(path)
+        read_preferences_file(path).map(|(file, _)| file)
     } else {
         Ok(InsightPreferencesFile::default())
     }
 }
 
-fn read_preferences_file(path: &Path) -> Result<InsightPreferencesFile, String> {
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&content).map_err(|error| error.to_string())
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreferencesSource {
+    V2,
+    ValidLegacyV1,
+    InvalidLegacyV1,
+}
+
+fn read_preferences_file(
+    path: &Path,
+) -> Result<(InsightPreferencesFile, PreferencesSource), String> {
+    let content = fs::read_to_string(path).map_err(|_| PREFERENCES_READ_ERROR.to_string())?;
+    let value: serde_json::Value =
+        serde_json::from_str(&content).map_err(|_| PREFERENCES_READ_ERROR.to_string())?;
+    if value.get("schemaVersion").is_some() {
+        let file: InsightPreferencesFile =
+            serde_json::from_value(value).map_err(|_| PREFERENCES_READ_ERROR.to_string())?;
+        if file.schema_version != INSIGHT_PREFERENCES_SCHEMA_VERSION {
+            return Err(PREFERENCES_READ_ERROR.to_string());
+        }
+        return Ok((file, PreferencesSource::V2));
+    }
+
+    let legacy: LegacyInsightPreferencesFileV1 =
+        serde_json::from_value(value).map_err(|_| PREFERENCES_READ_ERROR.to_string())?;
+    let legacy_profile_is_invalid = legacy
+        .profile
+        .as_ref()
+        .map(|profile| !is_valid_legacy_inspiration_profile(profile))
+        .unwrap_or(false);
+    let source = if legacy_profile_is_invalid {
+        PreferencesSource::InvalidLegacyV1
+    } else {
+        PreferencesSource::ValidLegacyV1
+    };
+    Ok((migrate_legacy_preferences(legacy), source))
 }
 
 fn write_preferences_file(path: &Path, file: &InsightPreferencesFile) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(
-        path,
-        serde_json::to_string_pretty(file).map_err(|error| error.to_string())? + "\n",
-    )
-    .map_err(|error| error.to_string())
+    write_preferences_file_using(path, file, |destination, bytes| {
+        atomic_write(destination, bytes).map_err(|_| ())
+    })
 }
 
-fn clear_invalid_default_generation_preferences(file: &mut InsightPreferencesFile) {
+fn write_preferences_file_using<F>(
+    path: &Path,
+    file: &InsightPreferencesFile,
+    writer: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&Path, &[u8]) -> Result<(), ()>,
+{
+    let content =
+        serde_json::to_string_pretty(file).map_err(|_| PREFERENCES_WRITE_ERROR.to_string())? + "\n";
+    writer(path, content.as_bytes()).map_err(|_| PREFERENCES_WRITE_ERROR.to_string())
+}
+
+fn migrate_legacy_preferences(legacy: LegacyInsightPreferencesFileV1) -> InsightPreferencesFile {
+    let default_generation_preferences = legacy
+        .default_generation_preferences
+        .filter(is_valid_generation_preferences);
+    let (profile, legacy_generation_preference_seed) = match legacy.profile {
+        Some(profile) => {
+            let is_valid = is_valid_legacy_inspiration_profile(&profile);
+            let seed = (is_valid && default_generation_preferences.is_none())
+                .then(|| LegacyGenerationPreferenceSeed {
+                    styles: profile.default_styles.clone(),
+                    avoid: profile.default_avoid.clone(),
+                })
+                .filter(|seed| !seed.styles.is_empty() || !seed.avoid.is_empty());
+            (Some(profile.into()), seed)
+        }
+        None => (None, None),
+    };
+    InsightPreferencesFile {
+        schema_version: INSIGHT_PREFERENCES_SCHEMA_VERSION,
+        profile,
+        profile_skipped: legacy.profile_skipped,
+        default_generation_preferences,
+        legacy_generation_preference_seed,
+    }
+}
+
+impl From<LegacyInspirationProfileV1> for InspirationProfile {
+    fn from(profile: LegacyInspirationProfileV1) -> Self {
+        Self {
+            role: profile.role,
+            domain: profile.domain,
+            stage: profile.stage,
+            city_context: profile.city_context,
+            gender_perspective: profile.gender_perspective,
+            platforms: profile.platforms,
+        }
+    }
+}
+
+fn clear_invalid_default_generation_preferences(file: &mut InsightPreferencesFile) -> bool {
     if file
         .default_generation_preferences
         .as_ref()
@@ -263,10 +405,22 @@ fn clear_invalid_default_generation_preferences(file: &mut InsightPreferencesFil
         .unwrap_or(false)
     {
         file.default_generation_preferences = None;
+        true
+    } else {
+        false
     }
 }
 
 fn is_valid_inspiration_profile(profile: &InspirationProfile) -> bool {
+    is_allowed_single(&profile.role, PROFILE_ROLE_IDS)
+        && is_allowed_single(&profile.domain, PROFILE_DOMAIN_IDS)
+        && is_allowed_single(&profile.stage, PROFILE_STAGE_IDS)
+        && is_allowed_single(&profile.city_context, PROFILE_CITY_CONTEXT_IDS)
+        && is_allowed_single(&profile.gender_perspective, PROFILE_GENDER_PERSPECTIVE_IDS)
+        && is_allowed_multi(&profile.platforms, PROFILE_PLATFORM_IDS, 0, 3)
+}
+
+fn is_valid_legacy_inspiration_profile(profile: &LegacyInspirationProfileV1) -> bool {
     is_allowed_single(&profile.role, PROFILE_ROLE_IDS)
         && is_allowed_single(&profile.domain, PROFILE_DOMAIN_IDS)
         && is_allowed_single(&profile.stage, PROFILE_STAGE_IDS)
@@ -459,6 +613,7 @@ mod tests {
         assert_eq!(saved.profile, Some(valid_profile()));
         assert!(!saved.profile_skipped);
         assert_eq!(saved.profile_status, "valid");
+        assert_eq!(read_json(&path)["schemaVersion"], 2);
 
         let skipped = skip_inspiration_profile_to_file(&path).expect("skip profile");
         assert_eq!(skipped.profile, None);
@@ -578,6 +733,171 @@ mod tests {
         assert!(error.contains("Invalid default generation preferences"));
     }
 
+    #[test]
+    fn migrates_v1_profile_and_keeps_complete_generation_defaults() {
+        let path = temp_file("migrate_v1_with_defaults");
+        write_json(
+            &path,
+            &v1_preferences_json(
+                &["direct_sharp"],
+                &["clickbait"],
+                Some(valid_generation_preferences()),
+            ),
+        );
+
+        let state = load_insight_preferences_from_file(&path).expect("migrate preferences");
+        let written = read_json(&path);
+
+        assert_eq!(state.profile_status, "valid");
+        assert_eq!(
+            state.default_generation_preferences,
+            Some(valid_generation_preferences())
+        );
+        assert_eq!(written["schemaVersion"], 2);
+        assert!(fs::read_to_string(&path)
+            .expect("read migrated preferences")
+            .ends_with('\n'));
+        assert!(written["profile"].get("defaultStyles").is_none());
+        assert!(written["profile"].get("defaultAvoid").is_none());
+        assert!(written.get("legacyGenerationPreferenceSeed").is_none());
+        let legacy_profile = serde_json::json!({
+            "role": "marketing_sales",
+            "domain": "marketing_sales",
+            "stage": "manager",
+            "cityContext": "new_tier1_city",
+            "genderPerspective": "unspecified",
+            "platforms": ["douyin"],
+            "defaultStyles": ["direct_sharp"],
+            "defaultAvoid": []
+        });
+        assert!(serde_json::from_value::<InspirationProfile>(legacy_profile).is_err());
+    }
+
+    #[test]
+    fn migrates_v1_profile_values_to_edit_only_seed_without_defaults() {
+        let path = temp_file("migrate_v1_to_seed");
+        let mut invalid_defaults = valid_generation_preferences();
+        invalid_defaults.styles = vec![];
+        write_json(
+            &path,
+            &v1_preferences_json(
+                &["direct_sharp", "grounded", "storytelling"],
+                &["clickbait", "vague"],
+                Some(invalid_defaults),
+            ),
+        );
+
+        let state = load_insight_preferences_from_file(&path).expect("migrate preferences");
+        let state_json = serde_json::to_value(&state).expect("serialize state");
+        let written = read_json(&path);
+
+        assert_eq!(state.default_generation_preferences, None);
+        assert_eq!(
+            state_json["legacyGenerationPreferenceSeed"]["styles"],
+            serde_json::json!(["direct_sharp", "grounded", "storytelling"])
+        );
+        assert_eq!(
+            state_json["legacyGenerationPreferenceSeed"]["avoid"],
+            serde_json::json!(["clickbait", "vague"])
+        );
+        assert_eq!(written["schemaVersion"], 2);
+        assert_eq!(
+            written["legacyGenerationPreferenceSeed"],
+            state_json["legacyGenerationPreferenceSeed"]
+        );
+    }
+
+    #[test]
+    fn invalid_v1_profile_requires_reset_without_partial_migration() {
+        let path = temp_file("invalid_v1_no_partial_migration");
+        let original = v1_preferences_json(
+            &[
+                "direct_sharp",
+                "grounded",
+                "storytelling",
+                "professional_analysis",
+            ],
+            &["clickbait"],
+            Some(valid_generation_preferences()),
+        );
+        write_json(&path, &original);
+
+        let state = load_insight_preferences_from_file(&path).expect("load invalid profile");
+
+        assert_eq!(state.profile_status, "invalid");
+        assert_eq!(
+            state.default_generation_preferences,
+            Some(valid_generation_preferences())
+        );
+        assert_eq!(fs::read_to_string(&path).expect("read original"), original);
+    }
+
+    #[test]
+    fn confirmed_generation_defaults_remove_migration_seed_atomically() {
+        let path = temp_file("confirm_removes_seed");
+        write_json(&path, &v2_preferences_json(true, true));
+
+        let state =
+            save_default_generation_preferences_to_file(&path, valid_generation_preferences())
+                .expect("save defaults");
+        let written = read_json(&path);
+
+        assert_eq!(
+            state.default_generation_preferences,
+            Some(valid_generation_preferences())
+        );
+        assert!(written.get("legacyGenerationPreferenceSeed").is_none());
+        assert_eq!(written["schemaVersion"], 2);
+    }
+
+    #[test]
+    fn clearing_profile_removes_unconfirmed_migration_seed() {
+        let path = temp_file("clear_removes_seed");
+        write_json(&path, &v2_preferences_json(true, true));
+
+        let state = clear_inspiration_profile_to_file(&path).expect("clear profile");
+        let written = read_json(&path);
+
+        assert_eq!(state.profile, None);
+        assert!(!state.profile_skipped);
+        assert_eq!(
+            state.default_generation_preferences,
+            Some(valid_generation_preferences())
+        );
+        assert!(written.get("legacyGenerationPreferenceSeed").is_none());
+        assert_eq!(written["schemaVersion"], 2);
+    }
+
+    #[test]
+    fn failed_atomic_replacement_preserves_original_preferences_bytes() {
+        let path = temp_file("failed_atomic_replacement");
+        let original = v2_preferences_json(false, false);
+        write_json(&path, &original);
+        let (mut file, _) = read_preferences_file(&path).expect("read preferences");
+        file.profile_skipped = true;
+
+        let error = write_preferences_file_using(&path, &file, |destination, bytes| {
+            crate::atomic_files::atomic_write_with_replace_for_test(
+                destination,
+                bytes,
+                |_staging, _destination| {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "injected replacement failure",
+                    ))
+                },
+            )
+            .map_err(|_| ())
+        })
+        .expect_err("replacement must fail");
+
+        assert_eq!(error, PREFERENCES_WRITE_ERROR);
+        assert_eq!(
+            fs::read(&path).expect("read original bytes"),
+            original.as_bytes()
+        );
+    }
+
     fn valid_profile() -> InspirationProfile {
         InspirationProfile {
             role: "marketing_sales".to_string(),
@@ -586,8 +906,6 @@ mod tests {
             city_context: "new_tier1_city".to_string(),
             gender_perspective: "unspecified".to_string(),
             platforms: vec!["douyin".to_string(), "bilibili".to_string()],
-            default_styles: vec!["direct_sharp".to_string()],
-            default_avoid: vec![],
         }
     }
 
@@ -616,5 +934,58 @@ mod tests {
     fn write_json(path: &PathBuf, content: &str) {
         fs::create_dir_all(path.parent().expect("parent")).expect("create parent");
         fs::write(path, content).expect("write json");
+    }
+
+    fn read_json(path: &PathBuf) -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(path).expect("read json")).expect("parse json")
+    }
+
+    fn v1_preferences_json(
+        default_styles: &[&str],
+        default_avoid: &[&str],
+        defaults: Option<GenerationPreferences>,
+    ) -> String {
+        serde_json::to_string_pretty(&serde_json::json!({
+            "profile": {
+                "role": "marketing_sales",
+                "domain": "marketing_sales",
+                "stage": "manager",
+                "cityContext": "new_tier1_city",
+                "genderPerspective": "unspecified",
+                "platforms": ["douyin", "bilibili"],
+                "defaultStyles": default_styles,
+                "defaultAvoid": default_avoid
+            },
+            "profileSkipped": false,
+            "defaultGenerationPreferences": defaults
+        }))
+        .expect("serialize v1 preferences")
+            + "\n"
+    }
+
+    fn v2_preferences_json(with_seed: bool, with_defaults: bool) -> String {
+        let mut value = serde_json::json!({
+            "schemaVersion": 2,
+            "profile": {
+                "role": "marketing_sales",
+                "domain": "marketing_sales",
+                "stage": "manager",
+                "cityContext": "new_tier1_city",
+                "genderPerspective": "unspecified",
+                "platforms": ["douyin", "bilibili"]
+            },
+            "profileSkipped": false
+        });
+        if with_seed {
+            value["legacyGenerationPreferenceSeed"] = serde_json::json!({
+                "styles": ["grounded"],
+                "avoid": ["clickbait"]
+            });
+        }
+        if with_defaults {
+            value["defaultGenerationPreferences"] =
+                serde_json::to_value(valid_generation_preferences()).expect("serialize defaults");
+        }
+        serde_json::to_string_pretty(&value).expect("serialize v2 preferences") + "\n"
     }
 }
