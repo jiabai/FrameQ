@@ -59,6 +59,7 @@
 - v0.3.0 发布计划（active）：`docs/exec-plans/active/2026-08-03-v0.3.0-desktop-feature-release-plan.md`
 - Server 页面 i18n 规格：`docs/product-specs/2026-08-04-server-page-i18n.md`（`/login`、`/dashboard`、`/admin/login`、`/admin` 增加 zh-CN/en 切换按钮，新 `server/src/i18n.ts` 模块；不涉及 desktop/worker/ASR/store/Prisma）
 - Server 页面 i18n 计划（active）：`docs/exec-plans/active/2026-08-04-server-page-i18n-plan.md`（实现已落地，i18n 专项测试与集成测试为待办任务）
+- RetryInsights 进度感知 watchdog 计划（active）：`docs/exec-plans/active/2026-08-04-retry-insights-progress-aware-watchdog-plan.md`（30 分钟 idle、90 分钟 absolute、解剖调用边界进度）
 - v0.3.0 release notes 草稿：`docs/releases/v0.3.0.md`
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
