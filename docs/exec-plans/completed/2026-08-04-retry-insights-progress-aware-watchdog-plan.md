@@ -26,7 +26,7 @@ supplier errors remain excluded.
 - [x] 2026-08-04: Reproduced and traced the field failure to `RetryInsights` idle timeout at 600,267 ms; approved design committed as `4fb2dab`. Validation: `C:\Users\bicho\AppData\Local\com.frameq.desktop\logs\frameq-desktop.log` plus source inspection.
 - [x] 2026-08-04: Registered contract v6 `ai.generation.running`, closed `attempt/total` args, runtime constants, and three-locale copy. Validation: Python 107 passed; Vitest 19 passed; Rust contract constant 1 passed.
 - [x] 2026-08-04: Wired retry progress through CLI/application/pipeline and emitted bounded dissection attempt events after cancellation checks. Validation: focused 3 passed; complete CLI/dissection 59 passed.
-- [ ] 2026-08-04: Changed the Rust RetryInsights policy to 30-minute idle / 90-minute absolute; integration/full gates remain. Validation: both focused policy tests passed; serialized native runner suite 28 passed.
+- [x] 2026-08-04: Changed the Rust RetryInsights policy to 30-minute idle / 90-minute absolute and completed integration/full code gates. Validation: focused Python 150, Vitest 27, Rust worker_runtime 63; ruff passed; worker 669 passed / 2 skipped; app 670 passed; lint/build passed; governance WARN 0 errors / 0 warnings.
 
 ## Surprises & Discoveries
 
@@ -45,9 +45,13 @@ supplier errors remain excluded.
 
 ## Outcomes & Retrospective
 
-Implementation has not started. Residual risk: an individual supplier/checkout implementation that ignores
-its own request timeout can remain blocked until the 30-minute desktop idle deadline; the watchdog
-is intentionally the final bound for that case.
+Implemented global contract v6 AI progress, exact Python retry callback plumbing, content-free
+dissection call-boundary events, and the Rust-owned 30/90-minute policy. Focused cross-boundary,
+complete worker/app, lint, build, and native Windows worker-runtime suites passed. Residual risk: an
+individual supplier/checkout implementation that ignores its own request timeout can remain blocked
+until the 30-minute desktop idle deadline; the watchdog is intentionally the final bound for that
+case. The existing Vite chunk-size warning remains unrelated, and no new macOS native runtime
+evidence was produced by this Windows-only policy adjustment.
 
 ## Context and Orientation
 
@@ -247,7 +251,7 @@ cargo test --manifest-path app/src-tauri/Cargo.toml worker_runtime
 
 Expected: all PASS with no unexpected warnings.
 
-- [ ] **Step 2: Run repository gates**
+- [x] **Step 2: Run repository gates**
 
 Run:
 
@@ -262,18 +266,18 @@ python scripts/validate_agents_docs.py --level WARN
 
 Expected: all PASS; pre-existing environment skips must be recorded exactly.
 
-- [ ] **Step 3: Update durable documentation and living evidence**
+- [x] **Step 3: Update durable documentation and living evidence**
 
 Add the implemented 30/90-minute policy and validated dissection attempt events to
 `docs/ARCHITECTURE.md`. Replace incomplete Progress entries with dated commands/results, record any
 discoveries/decisions, and complete Outcomes with residual risks.
 
-- [ ] **Step 4: Archive and validate governance**
+- [x] **Step 4: Archive and validate governance**
 
 Move this plan to `completed/`, remove its active-index row, add a completed-index row, then run
 `python scripts/validate_agents_docs.py --level WARN`. Expected: 0 errors and 0 warnings.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 Stage only integration documentation/index changes and commit
 `docs: complete progress-aware watchdog plan`.

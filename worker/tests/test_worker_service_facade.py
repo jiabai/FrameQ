@@ -42,6 +42,7 @@ EXPECTED_SIGNATURES = {
         "insight_client",
         "insight_client_factory",
         "environ",
+        "progress_callback",
     ),
     "run_asr_model_download_once": (
         "project_root",

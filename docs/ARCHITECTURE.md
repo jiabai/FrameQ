@@ -1,5 +1,22 @@
 # FrameQ Architecture
 
+## 2026-08-04 RetryInsights progress-aware watchdog boundary
+
+- Global desktop-worker contract v6 adds the closed `ai.generation.running` worker progress code
+  with integer-only `attempt` / `total` arguments. URL and local-media request envelopes remain
+  independently versioned v3/v4, and task terminal/artifact schemas remain unchanged.
+- Python passes the existing validated progress callback through the retry application and emits
+  one content-free event after cancellation checking and immediately before each real transcript-
+  dissection map/reduce/optional-repair supplier call. The deterministic call-plan maximum is the
+  displayed total; no timer heartbeat or post-call success claim is emitted.
+- Rust keeps timeout ownership in `worker_runtime`. `RetryInsights` now uses a 30-minute idle and
+  90-minute absolute deadline; only contract-valid progress refreshes idle, while absolute time,
+  structured-result precedence, cancellation, process-tree cleanup, Credits, and artifact
+  preservation remain unchanged.
+- Durable behavior and evidence are recorded in
+  `docs/design-docs/2026-08-04-retry-insights-progress-aware-watchdog.md` and
+  `docs/exec-plans/completed/2026-08-04-retry-insights-progress-aware-watchdog-plan.md`.
+
 ## 2026-08-01 Transcript-dissection target boundary
 
 - Desktop-worker contract v5 adds the closed `dissection` retry target, terminal result, and
