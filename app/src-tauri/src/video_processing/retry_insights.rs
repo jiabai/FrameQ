@@ -1,4 +1,5 @@
 use super::task_result::{map_task_worker_result, TaskCommandContext};
+use crate::insight_preferences::InspirationProfile;
 use crate::worker_runtime::{TaskTerminalResult, WorkerJob};
 use crate::{
     append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, run_blocking_worker_command,
@@ -40,6 +41,78 @@ enum OutputLanguage {
     EnUs,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PreferenceSnapshot {
+    profile: Option<InspirationProfile>,
+    profile_skipped: bool,
+    generation_preferences: RetryGenerationPreferences,
+    label_snapshot: PreferenceLabelSnapshot,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RetryGenerationPreferences {
+    goal: String,
+    scenario: String,
+    angles: Vec<String>,
+    audience: String,
+    styles: Vec<String>,
+    avoid: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PreferenceLabelSnapshot {
+    profile: Vec<ProfileLabelSnapshotItem>,
+    generation_preferences: Vec<GenerationLabelSnapshotItem>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ProfileField {
+    Role,
+    Domain,
+    Stage,
+    CityContext,
+    GenderPerspective,
+    Platforms,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GenerationPreferenceField {
+    Goal,
+    Scenario,
+    Angles,
+    Audience,
+    Styles,
+    Avoid,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ProfileLabelSnapshotItem {
+    field: ProfileField,
+    label: String,
+    values: Vec<PreferenceLabelValue>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct GenerationLabelSnapshotItem {
+    field: GenerationPreferenceField,
+    label: String,
+    values: Vec<PreferenceLabelValue>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PreferenceLabelValue {
+    id: String,
+    label: String,
+}
+
 impl OutputLanguage {
     fn as_str(self) -> &'static str {
         match self {
@@ -56,7 +129,7 @@ struct RetryInsightsRequest {
     target: RetryInsightsTarget,
     output_language: OutputLanguage,
     #[serde(skip_serializing_if = "Option::is_none")]
-    preference_snapshot: Option<serde_json::Value>,
+    preference_snapshot: Option<PreferenceSnapshot>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -65,7 +138,7 @@ struct RetryInsightsWireRequest {
     task_id: String,
     target: RetryInsightsTarget,
     output_language: OutputLanguage,
-    preference_snapshot: Option<serde_json::Value>,
+    preference_snapshot: Option<PreferenceSnapshot>,
 }
 
 fn parse_retry_insights_request(
@@ -80,12 +153,7 @@ fn parse_retry_insights_request(
     }
     let wire: RetryInsightsWireRequest =
         serde_json::from_value(payload).map_err(|_| INVALID_RETRY_PAYLOAD.to_string())?;
-    if wire
-        .preference_snapshot
-        .as_ref()
-        .is_some_and(|snapshot| !snapshot.is_object())
-        || (wire.target != RetryInsightsTarget::Insights && wire.preference_snapshot.is_some())
-    {
+    if wire.target != RetryInsightsTarget::Insights && wire.preference_snapshot.is_some() {
         return Err(INVALID_RETRY_PAYLOAD.to_string());
     }
     Ok(RetryInsightsRequest {
@@ -216,8 +284,15 @@ mod tests {
             "target": "insights",
             "output_language": "zh-TW",
             "preference_snapshot": {
-                "profile": null,
-                "profileSkipped": true,
+                "profile": {
+                    "role": "content_creator",
+                    "domain": "content_media",
+                    "stage": "experienced_professional",
+                    "cityContext": "new_tier1_city",
+                    "genderPerspective": "neutral_perspective",
+                    "platforms": ["douyin"]
+                },
+                "profileSkipped": false,
                 "generationPreferences": {
                     "goal": "content_creation",
                     "scenario": "short_video",
@@ -227,7 +302,38 @@ mod tests {
                     "avoid": []
                 },
                 "labelSnapshot": {
-                    "profile": [],
+                    "profile": [
+                        {
+                            "field": "role",
+                            "label": "Role",
+                            "values": [{"id": "content_creator", "label": "Content creator"}]
+                        },
+                        {
+                            "field": "domain",
+                            "label": "Domain",
+                            "values": [{"id": "content_media", "label": "Content and media"}]
+                        },
+                        {
+                            "field": "stage",
+                            "label": "Stage",
+                            "values": [{"id": "experienced_professional", "label": "Experienced professional"}]
+                        },
+                        {
+                            "field": "cityContext",
+                            "label": "City context",
+                            "values": [{"id": "new_tier1_city", "label": "New tier-1 city"}]
+                        },
+                        {
+                            "field": "genderPerspective",
+                            "label": "Gender perspective",
+                            "values": [{"id": "neutral_perspective", "label": "Neutral perspective"}]
+                        },
+                        {
+                            "field": "platforms",
+                            "label": "Platforms",
+                            "values": [{"id": "douyin", "label": "Douyin"}]
+                        }
+                    ],
                     "generationPreferences": []
                 }
             }
@@ -242,7 +348,115 @@ mod tests {
             serialized["preference_snapshot"]["generationPreferences"]["goal"],
             "content_creation"
         );
-        assert_eq!(serialized["preference_snapshot"]["profileSkipped"], true);
+        assert_eq!(serialized["preference_snapshot"]["profileSkipped"], false);
+        assert_eq!(
+            serialized["preference_snapshot"]["profile"],
+            serde_json::json!({
+                "role": "content_creator",
+                "domain": "content_media",
+                "stage": "experienced_professional",
+                "cityContext": "new_tier1_city",
+                "genderPerspective": "neutral_perspective",
+                "platforms": ["douyin"]
+            })
+        );
+        assert_eq!(
+            serialized["preference_snapshot"]["labelSnapshot"]["profile"]
+                .as_array()
+                .expect("profile label rows")
+                .iter()
+                .map(|row| row["field"].as_str().expect("profile field"))
+                .collect::<Vec<_>>(),
+            vec![
+                "role",
+                "domain",
+                "stage",
+                "cityContext",
+                "genderPerspective",
+                "platforms"
+            ]
+        );
+        let serialized_text = serialized.to_string();
+        for forbidden in [
+            "defaultStyles",
+            "defaultAvoid",
+            "legacyGenerationPreferenceSeed",
+        ] {
+            assert!(!serialized_text.contains(forbidden));
+        }
+    }
+
+    #[test]
+    fn retry_insights_request_rejects_deprecated_snapshot_fields() {
+        for legacy_field in ["defaultStyles", "defaultAvoid"] {
+            let mut profile = serde_json::json!({
+                "role": "content_creator",
+                "domain": "content_media",
+                "stage": "experienced_professional",
+                "cityContext": "new_tier1_city",
+                "genderPerspective": "neutral_perspective",
+                "platforms": ["douyin"]
+            });
+            profile
+                .as_object_mut()
+                .expect("profile object")
+                .insert(legacy_field.to_string(), serde_json::json!([]));
+            let payload = serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "insights",
+                "output_language": "zh-TW",
+                "preference_snapshot": {
+                    "profile": profile,
+                    "profileSkipped": false,
+                    "generationPreferences": {
+                        "goal": "content_creation",
+                        "scenario": "short_video",
+                        "angles": ["topic_angle"],
+                        "audience": "fans_readers",
+                        "styles": ["grounded"],
+                        "avoid": []
+                    },
+                    "labelSnapshot": {
+                        "profile": [],
+                        "generationPreferences": []
+                    }
+                }
+            });
+
+            let error = parse_retry_insights_request(payload).expect_err("reject legacy profile");
+
+            assert_eq!(error, INVALID_RETRY_PAYLOAD);
+        }
+
+        let payload = serde_json::json!({
+            "task_id": "20260705-153012-douyin-demo",
+            "target": "insights",
+            "output_language": "zh-TW",
+            "preference_snapshot": {
+                "profile": null,
+                "profileSkipped": true,
+                "generationPreferences": {
+                    "goal": "content_creation",
+                    "scenario": "short_video",
+                    "angles": ["topic_angle"],
+                    "audience": "fans_readers",
+                    "styles": ["grounded"],
+                    "avoid": []
+                },
+                "labelSnapshot": {
+                    "profile": [],
+                    "generationPreferences": []
+                },
+                "legacyGenerationPreferenceSeed": {
+                    "styles": ["grounded"],
+                    "avoid": []
+                }
+            }
+        });
+
+        let error = parse_retry_insights_request(payload).expect_err("reject migration seed");
+
+        assert_eq!(error, INVALID_RETRY_PAYLOAD);
     }
 
     #[test]
@@ -368,7 +582,26 @@ mod tests {
             "task_id": "private-task-id",
             "target": "insights",
             "output_language": "zh-CN",
-            "preference_snapshot": {"prompt": "private-preference"}
+            "preference_snapshot": {
+                "profile": null,
+                "profileSkipped": true,
+                "generationPreferences": {
+                    "goal": "content_creation",
+                    "scenario": "short_video",
+                    "angles": ["topic_angle"],
+                    "audience": "fans_readers",
+                    "styles": ["grounded"],
+                    "avoid": []
+                },
+                "labelSnapshot": {
+                    "profile": [],
+                    "generationPreferences": [{
+                        "field": "goal",
+                        "label": "private-preference",
+                        "values": [{"id": "content_creation", "label": "Content creation"}]
+                    }]
+                }
+            }
         }))
         .expect("valid retry request");
         let result = serde_json::json!({

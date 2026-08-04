@@ -31,8 +31,6 @@ const PREFERENCE_SNAPSHOT: PreferenceSnapshot = buildPreferenceSnapshot({
     cityContext: "new_tier1_city",
     genderPerspective: "neutral_perspective",
     platforms: ["douyin"],
-    defaultStyles: ["grounded"],
-    defaultAvoid: ["clickbait"],
   },
   profileSkipped: false,
   generationPreferences: {
@@ -403,6 +401,30 @@ describe("worker client", () => {
         },
       },
     ]);
+    const request = (calls[0]?.args as {
+      request: { preference_snapshot: PreferenceSnapshot };
+    }).request;
+    expect(Object.keys(request.preference_snapshot.profile ?? {}).sort()).toEqual([
+      "cityContext",
+      "domain",
+      "genderPerspective",
+      "platforms",
+      "role",
+      "stage",
+    ]);
+    expect(
+      request.preference_snapshot.labelSnapshot.profile.map(({ field }) => field),
+    ).toEqual([
+      "role",
+      "domain",
+      "stage",
+      "cityContext",
+      "genderPerspective",
+      "platforms",
+    ]);
+    expect(JSON.stringify(request)).not.toMatch(
+      /defaultStyles|defaultAvoid|legacyGenerationPreferenceSeed/,
+    );
     expect(result.status).toBe("completed");
   });
 
