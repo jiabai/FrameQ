@@ -39,14 +39,15 @@ transcript dissection, media processing, and historical task artifacts do not ch
 
 ## Surprises & Discoveries
 
-- Evidence: `app/src/insightPreferences.ts`, `app/src-tauri/src/insight_preferences.rs`, and
-  `worker/frameq_worker/models.py` each model profile-scoped style and avoidance fields, so hiding
-  form rows alone would leave an inconsistent cross-language contract.
+- Evidence: before this work, `app/src/insightPreferences.ts`,
+  `app/src-tauri/src/insight_preferences.rs`, and `worker/frameq_worker/models.py` each modeled
+  profile-scoped style and avoidance fields, so hiding form rows alone would have left an
+  inconsistent cross-language contract.
 - Evidence: `app/src/insightPreferenceFlow.ts` enables `Generate now` only from complete
   `defaultGenerationPreferences`; a partial seed can remain separate and edit-only.
-- Evidence: `app/src-tauri/src/insight_preferences.rs` currently uses `fs::write`, while
-  `app/src-tauri/src/atomic_files.rs` provides the reviewed repository `atomic_write`; migration
-  must reuse the shared writer.
+- Evidence: the pre-v2 implementation in `app/src-tauri/src/insight_preferences.rs` used
+  `fs::write`, while `app/src-tauri/src/atomic_files.rs` already provided the reviewed repository
+  `atomic_write`; the migration therefore had to reuse the shared writer.
 - Evidence: task-local `ai/preference-snapshot.json` may contain frozen v1 labels and cannot be used
   to derive global state under the existing local-first security boundary.
 - Evidence: profile removal and the new long-term-context heading require reviewed Simplified
