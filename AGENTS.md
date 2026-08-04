@@ -24,6 +24,7 @@
 - 内置 ONNX 运行时依赖完整性设计：`docs/design-docs/2026-07-28-bundled-onnx-runtime-integrity.md`
 - ONNX VAD 结果契约与失败闭合设计：`docs/design-docs/2026-07-29-onnx-vad-result-contract-hardening.md`
 - Rust worker watchdog 设计：`docs/design-docs/2026-07-22-rust-worker-watchdog.md`
+- RetryInsights 进度感知 watchdog 调整设计：`docs/design-docs/2026-08-04-retry-insights-progress-aware-watchdog.md`
 - Typed worker job facade 设计：`docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - Video processing 模块拆分设计：`docs/design-docs/2026-07-20-video-processing-module-split.md`
 - ASR 模块拆分设计：`docs/design-docs/2026-07-20-asr-module-split.md`

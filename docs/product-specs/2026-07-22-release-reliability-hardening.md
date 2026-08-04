@@ -142,13 +142,21 @@ injection, not user settings or wire fields.
 | Operation | Idle deadline | Absolute deadline |
 |---|---:|---:|
 | URL/local media processing | 45 minutes without validated progress | 8 hours |
-| Summary or inspiration generation | 10 minutes without validated progress | 30 minutes |
+| Summary, inspiration, or transcript-dissection generation | 30 minutes without validated progress | 90 minutes |
 | Source-identity preflight | Disabled because the route emits no progress | 3 minutes |
 | ASR model download | 10 minutes without validated download progress | 4 hours |
 
 The future local-media worker job inherits the media-processing policy when its runtime variant is
 implemented. Changing production values requires a documented reliability decision and focused
 tests; it must not require a desktop-worker contract change.
+
+The 2026-08-04 `RetryInsights` adjustment is documented in
+`docs/design-docs/2026-08-04-retry-insights-progress-aware-watchdog.md`. Transcript dissection
+emits a closed, content-free validated progress event before each actual map/reduce/repair supplier
+attempt. This prevents a healthy bounded multi-call plan from looking idle while preserving the
+rule that arbitrary stderr and timer-based heartbeats cannot extend worker life. The new progress
+message code follows the global contract's strict versioning rule; the timeout value change itself
+remains an internal desktop-runtime policy and is not a request field.
 
 ## User-Visible Failure Behavior
 

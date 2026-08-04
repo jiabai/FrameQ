@@ -52,7 +52,7 @@ Production policies are fixed internal constants:
 | `WorkerOperation` | Idle deadline | Absolute deadline |
 |---|---:|---:|
 | `ProcessVideo` and future `ProcessLocalMedia` | 45 minutes | 8 hours |
-| `RetryInsights` | 10 minutes | 30 minutes |
+| `RetryInsights` | 30 minutes | 90 minutes |
 | `ResolveSourceIdentity` | disabled | 3 minutes |
 | `DownloadAsrModel` | 10 minutes | 4 hours |
 
@@ -73,6 +73,14 @@ The conservative media-processing idle duration accounts for long local ASR/nati
 between progress events. If field evidence shows valid consumer workloads exceed it, the value is
 changed by a reviewed runtime decision; weakening activity validation or allowing request-controlled
 timeouts is not an acceptable workaround.
+
+The `RetryInsights` policy was revised on 2026-08-04 after a transcript-dissection run was
+reproducibly terminated at 600,267 ms while the managed supplier timeout could itself be 600
+seconds. The retry CLI previously emitted no validated activity. The revised boundary uses a
+30-minute idle and 90-minute absolute deadline, and transcript dissection emits one closed,
+content-free `ai.generation.running` event before each real map/reduce/optional-repair attempt.
+There is no timer heartbeat while an individual supplier call is blocked. The detailed decision is
+`docs/design-docs/2026-08-04-retry-insights-progress-aware-watchdog.md`.
 
 ## Ownership and Lifecycle
 

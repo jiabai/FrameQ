@@ -99,6 +99,9 @@ FrameQ 当前已实现 `要点总结`（`summary`）与 `启发灵感`（`insigh
 - 前端预检只用于快速阻断。若确认后账户状态发生竞态变化，以每次 server checkout 为准；
   中途额度不足时任务失败闭合，不提交半套新解剖，并明确显示已完成调用可能已消费额度。
 - `dissection` 不隐式运行或扣除 `summary`、`insights`、`draft` 或 Mermaid mindmap 的额度。
+- worker 在每次实际 map、reduce 或可选 repair 调用前发出一个不含内容的受验证进度事件，
+  仅包含当前调用序号与本次确定性计划的总调用数。该事件可刷新桌面 idle watchdog，但不能
+  延长 90 分钟 absolute deadline；供应商调用阻塞期间不发送定时心跳。
 
 ## Report Experience
 
@@ -201,6 +204,8 @@ FrameQ 当前已实现 `要点总结`（`summary`）与 `启发灵感`（`insigh
 | splitter 为空或失败 | 在任何 LLM checkout 前失败，保留旧产物 |
 | LLM checkout 被拒绝 | 显示账号/配置/额度对应的固定安全错误，不扣该次额度 |
 | supplier 失败、超时或拦截 | 本 target 失败；已 checkout 的额度不返还，保留旧产物 |
+| 30 分钟没有受验证调用边界进度 | desktop 终止 worker 并显示 idle timeout；保留旧产物 |
+| worker 总运行达到 90 分钟 | desktop 终止 worker 并显示 execution timeout；保留旧产物 |
 | JSON 或字段校验失败 | 最多一次有界修复；仍失败则不提交新产物 |
 | 引用片段非法 | 失败闭合，不钳制或静默丢段 |
 | 用户取消 | 终止后续调用；已扣额度不返还，旧产物保留 |
