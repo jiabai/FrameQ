@@ -385,12 +385,13 @@ function ConfirmationStep({
         <OutputLanguageField locale={locale} outputLanguage={outputLanguage} />
       </div>
       <SummaryGroup
-        title={copy.profileGroupTitle}
-        lines={summarizeInspirationProfile(flow.profile, locale)}
-      />
-      <SummaryGroup
         title={copy.currentGenerationGroupTitle}
         lines={summarizeGenerationPreferences(flow.generationPreferences, locale)}
+      />
+      <SummaryGroup
+        title={copy.longTermContextGroupTitle}
+        lines={summarizeInspirationProfile(flow.profile, locale)}
+        quiet
       />
       <div className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
@@ -409,9 +410,17 @@ function ConfirmationStep({
   );
 }
 
-function SummaryGroup({ title, lines }: { title: string; lines: string[] }) {
+function SummaryGroup({
+  title,
+  lines,
+  quiet = false,
+}: {
+  title: string;
+  lines: string[];
+  quiet?: boolean;
+}) {
   return (
-    <section className="preference-summary-group">
+    <section className={`preference-summary-group${quiet ? " quiet" : ""}`}>
       <h3>{title}</h3>
       <div className="preference-summary-list">
         {lines.map((line) => (
