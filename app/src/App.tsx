@@ -127,6 +127,19 @@ function App() {
     ensureAsrModelReady,
     cancelCurrentAsrModelDownload,
   } = useAsrModelDownload();
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      return;
+    }
+
+    void refreshAsrModelStatus(settingsController.settingsDraft.asrModel).catch(() => undefined);
+  }, [
+    refreshAsrModelStatus,
+    settingsController.settingsDraft.asrModel,
+    settingsOpen,
+  ]);
+
   const resetTaskUi = useCallback(() => {
     closeDetailForTaskRef.current();
     resetInsightGenerationUiRef.current();

@@ -945,6 +945,14 @@ describe("App desktop sheet structure", () => {
         expression: "document.querySelector('button[aria-label=\"应用设置\"]').click()",
       });
       await waitForRuntimeCondition(page, "document.body.innerText.includes('应用设置')");
+      await waitForRuntimeCondition(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.commands.some((entry) => entry.command === 'get_asr_model_status')",
+      );
+      await waitForRuntimeCondition(
+        page,
+        "document.querySelector('.model-status-badge.ready')?.textContent.includes('ASR 模型已就绪') === true",
+      );
 
       const sheet = await page.send<{ result: { value: Record<string, unknown> } }>(
         "Runtime.evaluate",
@@ -962,6 +970,8 @@ describe("App desktop sheet structure", () => {
             selectedNavCount: document.querySelectorAll('.settings-nav-item.selected').length,
             hasLocateConfigButton: Boolean(document.querySelector('.config-file-row button')),
             hasBasicNotice: Boolean(document.querySelector('.settings-basic-note')),
+            modelReady: document.querySelector('.model-status-badge')?.textContent ?? '',
+            modelDir: document.querySelector('#settings-basic .model-settings-row small')?.textContent ?? '',
             hasLanguageSelector: Boolean(document.querySelector('#ui-language-preference')),
             languageSectionIsFirst: document.querySelector('.settings-sections')?.firstElementChild?.classList.contains('language-settings-section') ?? false,
             hasStickyFooter: Boolean(document.querySelector('.sheet-footer')),
@@ -984,6 +994,8 @@ describe("App desktop sheet structure", () => {
         selectedNavCount: 1,
         hasLocateConfigButton: false,
         hasBasicNotice: true,
+        modelReady: "ASR 模型已就绪",
+        modelDir: "C:/FrameQ/models/SenseVoiceSmall",
         hasLanguageSelector: true,
         languageSectionIsFirst: true,
         hasStickyFooter: true,
