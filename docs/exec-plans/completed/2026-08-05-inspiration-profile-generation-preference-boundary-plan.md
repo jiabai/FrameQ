@@ -127,8 +127,13 @@ Residual risk: native interactive packaged launch and its real app-local migrati
 could not run inside the sandbox, and no real supplier request or AI Credit was consumed. The shared
 JSON schema's generic label-ID string permits whitespace-only text even though current producers use
 fixed safe option registries; this nonblocking schema-precision nuance is tracked in
-`docs/exec-plans/tech-debt-tracker.md`. External historical snapshots deliberately remain
-mixed-version local evidence.
+`docs/exec-plans/tech-debt-tracker.md`. Final whole-branch review also found that app-local
+`GenerationPreferences` is value-strict but not key-exact in TypeScript or Rust persistence: an
+otherwise valid six-step object with an additional property is accepted and later serialized
+without that property. It never crosses the strict worker boundary and does not restore Profile
+overlap, but changing released v1/v2 recovery semantics requires a separate extra-key migration
+matrix that proves no collateral profile reset; that work is tracked in the same debt list.
+External historical snapshots deliberately remain mixed-version local evidence.
 
 ## Context and Orientation
 
