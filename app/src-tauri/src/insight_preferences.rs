@@ -180,11 +180,12 @@ pub(crate) fn load_insight_preferences_from_file(
             .map(|profile| !is_valid_inspiration_profile(profile))
             .unwrap_or(false);
     let default_was_invalid = clear_invalid_default_generation_preferences(&mut file);
+    let seed_was_invalid = clear_invalid_legacy_generation_preference_seed(&mut file);
     let should_migrate = source == PreferencesSource::ValidLegacyV1;
     if profile_is_invalid && source != PreferencesSource::V2 {
         return Ok(state_from_file(path, file, true));
     }
-    if default_was_invalid || should_migrate {
+    if default_was_invalid || seed_was_invalid || should_migrate {
         write_preferences_file(path, &file)?;
     }
 
@@ -411,6 +412,20 @@ fn clear_invalid_default_generation_preferences(file: &mut InsightPreferencesFil
     }
 }
 
+fn clear_invalid_legacy_generation_preference_seed(file: &mut InsightPreferencesFile) -> bool {
+    if file
+        .legacy_generation_preference_seed
+        .as_ref()
+        .map(|seed| !is_valid_legacy_generation_preference_seed(seed))
+        .unwrap_or(false)
+    {
+        file.legacy_generation_preference_seed = None;
+        true
+    } else {
+        false
+    }
+}
+
 fn is_valid_inspiration_profile(profile: &InspirationProfile) -> bool {
     is_allowed_single(&profile.role, PROFILE_ROLE_IDS)
         && is_allowed_single(&profile.domain, PROFILE_DOMAIN_IDS)
@@ -429,6 +444,11 @@ fn is_valid_legacy_inspiration_profile(profile: &LegacyInspirationProfileV1) -> 
         && is_allowed_multi(&profile.platforms, PROFILE_PLATFORM_IDS, 0, 3)
         && is_allowed_multi(&profile.default_styles, PROFILE_DEFAULT_STYLE_IDS, 0, 3)
         && is_allowed_multi(&profile.default_avoid, PROFILE_DEFAULT_AVOID_IDS, 0, 3)
+}
+
+fn is_valid_legacy_generation_preference_seed(seed: &LegacyGenerationPreferenceSeed) -> bool {
+    is_allowed_multi(&seed.styles, GENERATION_STYLE_IDS, 0, 3)
+        && is_allowed_multi(&seed.avoid, GENERATION_AVOID_IDS, 0, 3)
 }
 
 fn is_valid_generation_preferences(preferences: &GenerationPreferences) -> bool {
@@ -869,6 +889,61 @@ mod tests {
     }
 
     #[test]
+    fn unknown_v2_migration_seed_style_is_cleared() {
+        assert_invalid_v2_seed_is_cleared(&["unknown_style"], &["clickbait"]);
+    }
+
+    #[test]
+    fn duplicate_v2_migration_seed_styles_are_cleared() {
+        assert_invalid_v2_seed_is_cleared(&["direct_sharp", "direct_sharp"], &["clickbait"]);
+    }
+
+    #[test]
+    fn duplicate_v2_migration_seed_avoid_values_are_cleared() {
+        assert_invalid_v2_seed_is_cleared(&["direct_sharp"], &["clickbait", "clickbait"]);
+    }
+
+    #[test]
+    fn v2_migration_seed_with_more_than_three_styles_is_cleared() {
+        assert_invalid_v2_seed_is_cleared(
+            &[
+                "direct_sharp",
+                "grounded",
+                "storytelling",
+                "professional_analysis",
+            ],
+            &[],
+        );
+    }
+
+    #[test]
+    fn v2_migration_seed_with_more_than_three_avoid_values_is_cleared() {
+        assert_invalid_v2_seed_is_cleared(&[], &["clickbait", "vague", "academic", "negative"]);
+    }
+
+    #[test]
+    fn valid_three_style_v2_migration_seed_remains_exposed_unchanged() {
+        let path = temp_file("valid_three_style_seed");
+        let styles = ["direct_sharp", "grounded", "storytelling"];
+        let avoid = ["clickbait", "vague", "academic"];
+        write_v2_seed(&path, &styles, &avoid);
+
+        let state = load_insight_preferences_from_file(&path).expect("load preferences");
+
+        assert_eq!(
+            state.legacy_generation_preference_seed,
+            Some(LegacyGenerationPreferenceSeed {
+                styles: styles.iter().map(|value| (*value).to_string()).collect(),
+                avoid: avoid.iter().map(|value| (*value).to_string()).collect(),
+            })
+        );
+        assert_eq!(
+            read_json(&path)["legacyGenerationPreferenceSeed"]["styles"],
+            serde_json::json!(styles)
+        );
+    }
+
+    #[test]
     fn failed_atomic_replacement_preserves_original_preferences_bytes() {
         let path = temp_file("failed_atomic_replacement");
         let original = v2_preferences_json(false, false);
@@ -938,6 +1013,36 @@ mod tests {
 
     fn read_json(path: &PathBuf) -> serde_json::Value {
         serde_json::from_str(&fs::read_to_string(path).expect("read json")).expect("parse json")
+    }
+
+    fn assert_invalid_v2_seed_is_cleared(styles: &[&str], avoid: &[&str]) {
+        let name = format!("invalid_v2_seed_{}_{}", styles.join("_"), avoid.join("_"));
+        let path = temp_file(&name);
+        write_v2_seed(&path, styles, avoid);
+
+        let state = load_insight_preferences_from_file(&path).expect("load preferences");
+        let written = read_json(&path);
+
+        assert_eq!(state.profile, Some(valid_profile()));
+        assert_eq!(
+            state.default_generation_preferences,
+            Some(valid_generation_preferences())
+        );
+        assert_eq!(state.legacy_generation_preference_seed, None);
+        assert!(written.get("legacyGenerationPreferenceSeed").is_none());
+    }
+
+    fn write_v2_seed(path: &PathBuf, styles: &[&str], avoid: &[&str]) {
+        let mut value: serde_json::Value =
+            serde_json::from_str(&v2_preferences_json(false, true)).expect("parse v2 preferences");
+        value["legacyGenerationPreferenceSeed"] = serde_json::json!({
+            "styles": styles,
+            "avoid": avoid
+        });
+        write_json(
+            path,
+            &(serde_json::to_string_pretty(&value).expect("serialize v2 preferences") + "\n"),
+        );
     }
 
     fn v1_preferences_json(
