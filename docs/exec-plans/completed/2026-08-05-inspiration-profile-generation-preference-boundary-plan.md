@@ -92,7 +92,7 @@ transcript dissection, media processing, and historical task artifacts do not ch
   contract instead of leaving the object opaque. Rationale: TypeScript, Rust, Python, and the
   packaged worker need one machine-readable current-shape authority that rejects v1/current drift.
   Date/Author: 2026-08-05 / Codex after independent contract review.
-- Decision: Preserve the current non-whitespace label-ID tightening as explicit deferred debt.
+- Decision: Defer non-whitespace label-ID tightening as explicit debt.
   Rationale: fixed option registries and closed field identities make it nonblocking for this
   boundary, while changing every label validator is a separate cross-language contract decision.
   Date/Author: 2026-08-05 / Codex.
