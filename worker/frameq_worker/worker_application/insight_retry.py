@@ -6,6 +6,7 @@ from pathlib import Path
 
 from frameq_worker.atomic_files import AtomicFileCommitError
 from frameq_worker.config import load_project_env
+from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.insightflow import InsightClient
 from frameq_worker.insightflow.dissection import (
     DissectionGenerationError,
@@ -43,6 +44,7 @@ def retry_insights_once(
     insight_client: InsightClient | None = None,
     insight_client_factory: InsightClientFactory | None = None,
     environ: dict[str, str] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, object]:
     try:
         payload = json.loads(request_json)
@@ -122,6 +124,7 @@ def retry_insights_once(
         target=request.target,
         output_language=request.output_language,
         persist=False,
+        progress_callback=progress_callback,
     )
 
     merged_result = merge_existing_ai_artifacts(task_context.paths, insight_result)

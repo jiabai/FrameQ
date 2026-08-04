@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.insightflow.dissection import (
     DissectionArtifacts,
     DissectionClient,
@@ -18,12 +19,14 @@ def run_dissection_generation(
     client: DissectionClient,
     output_language: OutputLanguage,
     source_language: str | None,
+    progress_callback: ProgressCallback | None = None,
 ) -> DissectionArtifacts:
     report = generate_transcript_dissection(
         transcript,
         client=client,
         output_language=output_language,
         source_language=source_language,
+        progress_callback=progress_callback,
     )
     return build_dissection_artifacts(
         report,

@@ -520,6 +520,7 @@ def test_main_reads_retry_request_from_stdin(monkeypatch, capsys) -> None:
         "output_language": "en-US",
     }
     assert captured["project_root"] == Path.cwd()
+    assert captured["progress_callback"] is cli.print_progress_event
     assert "safe-task" not in capsys.readouterr().err
 
 

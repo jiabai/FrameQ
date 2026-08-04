@@ -182,6 +182,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             lambda: worker_service_module.retry_insights_once(
                 request_json or "{}",
                 project_root=Path.cwd(),
+                progress_callback=print_progress_event,
             )
         )
     elif args.resolve_source_stdin:

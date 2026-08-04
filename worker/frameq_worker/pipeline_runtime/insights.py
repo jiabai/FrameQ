@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.insightflow import (
     InsightClient,
     InsightGenerationError,
@@ -32,6 +33,7 @@ def run_insight_generation_step(
     preference_snapshot: PreferenceSnapshot | None = None,
     target: InsightGenerationTarget = "all",
     persist: bool = True,
+    progress_callback: ProgressCallback | None = None,
 ) -> ProcessResult:
     is_junction = getattr(os.path, "isjunction", lambda _path: False)
     expected_transcript_path = output_dir.parent / "transcript" / "transcript.txt"
@@ -139,6 +141,7 @@ def run_insight_generation_step(
                 client=client,
                 output_language=output_language,
                 source_language=transcript.language if transcript else None,
+                progress_callback=progress_callback,
             )
         except (DissectionGenerationError, InsightGenerationError) as exc:
             generation_error = InsightGenerationError(exc.code, str(exc))

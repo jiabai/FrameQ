@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 from frameq_worker.atomic_files import platform_text_bytes
+from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.insightflow.prompt import (
     build_dissection_map_prompt,
     build_dissection_reduce_prompt,
@@ -15,6 +16,7 @@ from frameq_worker.insightflow.prompt import (
 from frameq_worker.insightflow.splitter import MarkdownChunk, MarkdownSplitter
 from frameq_worker.insightflow.utils import extract_json_from_llm_output
 from frameq_worker.output_language import OutputLanguage
+from frameq_worker.progress_events import build_worker_progress_event
 
 DISSECTION_CALL_PLAN_VERSION = 1
 CHUNKS_PER_MAP_CALL = 4
@@ -290,16 +292,22 @@ def generate_transcript_dissection(
     output_language: OutputLanguage,
     source_language: str | None,
     cancel_check=lambda: False,
+    progress_callback: ProgressCallback | None = None,
 ) -> TranscriptDissection:
     chunks = MarkdownSplitter().split(transcript)
     plan = build_dissection_call_plan(len(chunks))
     by_id = {chunk.id: chunk for chunk in chunks}
     map_results: list[dict[str, object]] = []
+    attempt = 0
     for batch in plan.map_batches:
+        attempt += 1
         parsed = _generate_json(
             client,
             build_dissection_map_prompt([by_id[chunk_id] for chunk_id in batch], output_language),
             cancel_check,
+            progress_callback=progress_callback,
+            attempt=attempt,
+            total=plan.maximum_calls,
         )
         if not isinstance(parsed, dict):
             raise DissectionGenerationError(
@@ -308,10 +316,14 @@ def generate_transcript_dissection(
             )
         map_results.append(parsed)
 
+    attempt += 1
     candidate = _generate_json(
         client,
         build_dissection_reduce_prompt(map_results, output_language),
         cancel_check,
+        progress_callback=progress_callback,
+        attempt=attempt,
+        total=plan.maximum_calls,
     )
     try:
         return parse_dissection_report(
@@ -321,6 +333,7 @@ def generate_transcript_dissection(
             source_language=source_language,
         )
     except DissectionGenerationError as validation_error:
+        attempt += 1
         repaired = _generate_json(
             client,
             build_dissection_repair_prompt(
@@ -332,6 +345,9 @@ def generate_transcript_dissection(
                 ),
             ),
             cancel_check,
+            progress_callback=progress_callback,
+            attempt=attempt,
+            total=plan.maximum_calls,
         )
         return parse_dissection_report(
             repaired,
@@ -544,9 +560,26 @@ def _append_markdown_list(
         )
 
 
-def _generate_json(client: DissectionClient, prompt: str, cancel_check) -> object:
+def _generate_json(
+    client: DissectionClient,
+    prompt: str,
+    cancel_check,
+    *,
+    progress_callback: ProgressCallback | None = None,
+    attempt: int | None = None,
+    total: int | None = None,
+) -> object:
     if cancel_check():
         raise DissectionGenerationError("DISSECTION_CANCELLED", "Dissection was cancelled.")
+    if progress_callback is not None and attempt is not None and total is not None:
+        progress_callback(
+            build_worker_progress_event(
+                "ai.generation.running",
+                stage="insights_generating",
+                progress=70 + ((attempt - 1) * 20 // total),
+                message_args={"attempt": attempt, "total": total},
+            )
+        )
     response = client.generate(prompt)
     if cancel_check():
         raise DissectionGenerationError("DISSECTION_CANCELLED", "Dissection was cancelled.")

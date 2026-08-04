@@ -25,7 +25,7 @@ supplier errors remain excluded.
 
 - [x] 2026-08-04: Reproduced and traced the field failure to `RetryInsights` idle timeout at 600,267 ms; approved design committed as `4fb2dab`. Validation: `C:\Users\bicho\AppData\Local\com.frameq.desktop\logs\frameq-desktop.log` plus source inspection.
 - [x] 2026-08-04: Registered contract v6 `ai.generation.running`, closed `attempt/total` args, runtime constants, and three-locale copy. Validation: Python 107 passed; Vitest 19 passed; Rust contract constant 1 passed.
-- [ ] 2026-08-04: Wire retry progress and emit bounded dissection attempt events. Validation: execute the RED/GREEN commands in Task 2.
+- [x] 2026-08-04: Wired retry progress through CLI/application/pipeline and emitted bounded dissection attempt events after cancellation checks. Validation: focused 3 passed; complete CLI/dissection 59 passed.
 - [ ] 2026-08-04: Change the Rust timeout policy and complete focused/full gates. Validation: execute the RED/GREEN commands in Tasks 3-4.
 
 ## Surprises & Discoveries
@@ -33,6 +33,7 @@ supplier errors remain excluded.
 - Evidence: `app/src-tauri/src/worker_runtime/runner/watchdog.rs` gives `RetryInsights` a 600-second idle deadline, while `server/src/routes/admin.ts` permits `timeout_seconds` up to 600.
 - Evidence: `worker/frameq_worker/cli.py` passes progress callbacks for URL/local-media/model-download modes but not `--retry-insights-stdin`, so Rust receives no validated activity during AI retry.
 - Evidence: progress message codes are a closed shared registry in `contracts/desktop-worker-contract.json`, `worker/frameq_worker/progress_events.py`, and `app/src/desktopWorkerContract.test.ts`; a truthful AI progress code requires a global contract version advance.
+- Evidence: sandboxed direct pytest could not scan the user-level default temporary root, so focused runs used the worktree-local `--basetemp .pytest-tmp`; test behavior was otherwise unchanged.
 
 ## Decision Log
 
@@ -111,7 +112,7 @@ ai_generation_running: "Generating AI results."
 
 Run the two commands from Step 2. Expected: both PASS.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 Stage only the nine Task 1 files and commit `feat: register AI generation progress`.
 
@@ -126,7 +127,7 @@ Stage only the nine Task 1 files and commit `feat: register AI generation progre
 - Modify: `worker/frameq_worker/pipeline_runtime/dissection.py`
 - Modify: `worker/frameq_worker/insightflow/dissection.py`
 
-- [ ] **Step 1: Write failing callback-plumbing and generation tests**
+- [x] **Step 1: Write failing callback-plumbing and generation tests**
 
 Require `test_main_reads_retry_request_from_stdin` to observe
 `captured["progress_callback"] is cli.print_progress_event`. Add a dissection test that captures
@@ -146,13 +147,13 @@ assert events == [
 
 Also cover the valid no-repair path, which emits attempts 1 and 2 only while retaining `total=3`.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `uv run pytest worker/tests/test_cli.py::test_main_reads_retry_request_from_stdin worker/tests/test_dissection.py -q`
 
 Expected: FAIL because the retry CLI omits the callback and generation accepts no callback.
 
-- [ ] **Step 3: Implement minimal typed plumbing and event emission**
+- [x] **Step 3: Implement minimal typed plumbing and event emission**
 
 Add optional `ProgressCallback` parameters from `retry_insights_once()` through the two pipeline
 functions to `generate_transcript_dissection()`. In the CLI pass `print_progress_event`. Before each
@@ -172,7 +173,7 @@ progress_callback(
 Use `plan.maximum_calls` as `total`; do nothing when the callback is `None`. Do not emit after a
 call, on a timer, or from summary/inspiration generators.
 
-- [ ] **Step 4: Run tests and verify GREEN**
+- [x] **Step 4: Run tests and verify GREEN**
 
 Run the command from Step 2. Expected: PASS.
 

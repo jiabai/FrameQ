@@ -420,11 +420,13 @@ def test_generation_uses_map_reduce_and_at_most_one_repair() -> None:
             return self.responses[len(self.prompts) - 1]
 
     client = FakeClient()
+    events: list[dict[str, object]] = []
     report = generate_transcript_dissection(
         "第一段🙂。第二段。",
         client=client,
         output_language="zh-CN",
         source_language="zh-CN",
+        progress_callback=events.append,
     )
 
     assert report.segments[0].source_chunk_ids == (1,)
@@ -437,6 +439,27 @@ def test_generation_uses_map_reduce_and_at_most_one_repair() -> None:
     assert "第一段🙂" in client.prompts[0]
     assert "第一段🙂" not in client.prompts[1]
     assert "第一段🙂" not in client.prompts[2]
+    assert events == [
+        {
+            "stage": "insights_generating",
+            "progress": 70,
+            "message_code": "ai.generation.running",
+            "message_args": {"attempt": 1, "total": 3},
+        },
+        {
+            "stage": "insights_generating",
+            "progress": 76,
+            "message_code": "ai.generation.running",
+            "message_args": {"attempt": 2, "total": 3},
+        },
+        {
+            "stage": "insights_generating",
+            "progress": 83,
+            "message_code": "ai.generation.running",
+            "message_args": {"attempt": 3, "total": 3},
+        },
+    ]
+    assert "第一段" not in json.dumps(events, ensure_ascii=False)
 
 
 def test_generation_gives_repair_a_safe_source_reference_category() -> None:
@@ -485,6 +508,7 @@ def test_pipeline_dispatches_dissection_without_persisting_standalone_files(
         def generate(self, _prompt: str) -> str:
             return self.responses.pop(0)
 
+    events: list[dict[str, object]] = []
     result = run_insight_generation_step(
         transcript_txt_path=transcript_path,
         output_dir=tmp_path / "task" / "ai",
@@ -493,6 +517,7 @@ def test_pipeline_dispatches_dissection_without_persisting_standalone_files(
         output_language="zh-CN",
         target="dissection",
         persist=False,
+        progress_callback=events.append,
     )
 
     assert result.status.value == "completed"
@@ -500,6 +525,20 @@ def test_pipeline_dispatches_dissection_without_persisting_standalone_files(
     assert set(result.artifact_payloads) == {"ai/dissection.json", "ai/dissection.md"}
     assert not (tmp_path / "task" / "ai" / "dissection.json").exists()
     assert "第一段" in result.artifact_payloads["ai/dissection.md"].decode("utf-8")
+    assert events == [
+        {
+            "stage": "insights_generating",
+            "progress": 70,
+            "message_code": "ai.generation.running",
+            "message_args": {"attempt": 1, "total": 3},
+        },
+        {
+            "stage": "insights_generating",
+            "progress": 76,
+            "message_code": "ai.generation.running",
+            "message_args": {"attempt": 2, "total": 3},
+        },
+    ]
 
 
 def test_persisted_parser_rejects_provenance_tampering() -> None:
