@@ -7,6 +7,7 @@ import {
   skipInspirationProfile,
   type InsightPreferenceCommandRunner,
 } from "./insightPreferencesClient";
+import { createInsightPreferenceFlow } from "./insightPreferenceFlow";
 import type { GenerationPreferences, InspirationProfile } from "./insightPreferences";
 
 const PROFILE: InspirationProfile = {
@@ -103,6 +104,29 @@ describe("insight preferences client", () => {
 
     await expect(getInsightPreferences(runner)).resolves.toMatchObject({
       legacyGenerationPreferenceSeed: null,
+    });
+  });
+
+  test.each([
+    { styles: Array(1), avoid: [] },
+    { styles: [], avoid: ["clickbait", , "academic"] },
+    { styles: ["direct_sharp", , "storytelling"], avoid: [] },
+  ])("rejects sparse legacy seed arrays and never prefills them: %o", async (seed) => {
+    const runner: InsightPreferenceCommandRunner = async () => ({
+      ...preferenceState(),
+      defaultGenerationPreferences: null,
+      legacyGenerationPreferenceSeed: seed,
+    });
+
+    const state = await getInsightPreferences(runner);
+    expect(state.legacyGenerationPreferenceSeed).toBeNull();
+    expect(createInsightPreferenceFlow(state).generationPreferences).toEqual({
+      goal: "",
+      scenario: "",
+      angles: [],
+      audience: "",
+      styles: [],
+      avoid: [],
     });
   });
 });

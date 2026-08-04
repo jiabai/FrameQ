@@ -110,16 +110,24 @@ function normalizeLegacySeedValues(
   value: unknown,
   field: "styles" | "avoid",
 ): string[] | null {
-  if (
-    !Array.isArray(value) ||
-    value.length > 3 ||
-    !value.every((item): item is string => typeof item === "string") ||
-    new Set(value).size !== value.length ||
-    !value.every((id) => isPreferenceOptionId(field, id))
-  ) {
+  if (!Array.isArray(value) || value.length > 3) {
     return null;
   }
-  return [...value];
+  const normalized: string[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.prototype.hasOwnProperty.call(value, index)) {
+      return null;
+    }
+    const id: unknown = value[index];
+    if (typeof id !== "string" || !isPreferenceOptionId(field, id)) {
+      return null;
+    }
+    normalized.push(id);
+  }
+  if (new Set(normalized).size !== normalized.length) {
+    return null;
+  }
+  return normalized;
 }
 
 function normalizeProfileStatus(value: unknown): InsightProfileStatus {
