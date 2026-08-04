@@ -6,9 +6,7 @@ export type ProfileField =
   | "stage"
   | "cityContext"
   | "genderPerspective"
-  | "platforms"
-  | "defaultStyles"
-  | "defaultAvoid";
+  | "platforms";
 
 export type GenerationPreferenceField =
   | "goal"
@@ -27,8 +25,6 @@ export type InspirationProfile = {
   cityContext: string;
   genderPerspective: string;
   platforms: string[];
-  defaultStyles: string[];
-  defaultAvoid: string[];
 };
 
 export type GenerationPreferences = {
@@ -88,8 +84,6 @@ export const PROFILE_FIELD_ORDER: ProfileField[] = [
   "cityContext",
   "genderPerspective",
   "platforms",
-  "defaultStyles",
-  "defaultAvoid",
 ];
 
 export const GENERATION_FIELD_ORDER: GenerationPreferenceField[] = [
@@ -130,14 +124,6 @@ const PROFILE_FIELD_CONFIGS: Record<ProfileField, FieldConfig> = {
     mode: "multi", min: 0, max: 3,
     options: options("douyin", "xiaohongshu", "wechat_channels", "bilibili", "wechat_official_account", "podcast", "course_community", "internal_sharing"),
   },
-  defaultStyles: {
-    mode: "multi", min: 0, max: 3,
-    options: options("direct_sharp", "gentle_inspiring", "professional_analysis", "grounded", "storytelling", "short_video_friendly", "long_form_friendly"),
-  },
-  defaultAvoid: {
-    mode: "multi", min: 0, max: 3,
-    options: options("chicken_soup", "academic", "vague", "clickbait", "commercialized", "negative", "grand_narrative"),
-  },
 };
 
 const GENERATION_FIELD_CONFIGS: Record<GenerationPreferenceField, FieldConfig> = {
@@ -176,6 +162,14 @@ export function validateInspirationProfile(value: unknown): InspirationProfile |
   if (!isRecord(value)) {
     return null;
   }
+  const actualKeys = Object.keys(value).sort();
+  const expectedKeys = [...PROFILE_FIELD_ORDER].sort();
+  if (
+    actualKeys.length !== expectedKeys.length ||
+    actualKeys.some((key, index) => key !== expectedKeys[index])
+  ) {
+    return null;
+  }
 
   const role = validateSingleField(value.role, "role");
   const domain = validateSingleField(value.domain, "domain");
@@ -183,8 +177,6 @@ export function validateInspirationProfile(value: unknown): InspirationProfile |
   const cityContext = validateSingleField(value.cityContext, "cityContext");
   const genderPerspective = validateSingleField(value.genderPerspective, "genderPerspective");
   const platforms = validateMultiField(value.platforms, "platforms");
-  const defaultStyles = validateMultiField(value.defaultStyles, "defaultStyles");
-  const defaultAvoid = validateMultiField(value.defaultAvoid, "defaultAvoid");
 
   if (
     role === null ||
@@ -192,9 +184,7 @@ export function validateInspirationProfile(value: unknown): InspirationProfile |
     stage === null ||
     cityContext === null ||
     genderPerspective === null ||
-    platforms === null ||
-    defaultStyles === null ||
-    defaultAvoid === null
+    platforms === null
   ) {
     return null;
   }
@@ -206,8 +196,6 @@ export function validateInspirationProfile(value: unknown): InspirationProfile |
     cityContext,
     genderPerspective,
     platforms,
-    defaultStyles,
-    defaultAvoid,
   };
 }
 
