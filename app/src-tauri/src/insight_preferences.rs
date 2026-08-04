@@ -212,7 +212,7 @@ where
         return Err("Invalid inspiration profile.".to_string());
     }
 
-    let mut file = read_preferences_file_or_default(path)?;
+    let (mut file, _) = read_preferences_file_or_default(path)?;
     normalize_invalid_preferences(&mut file);
     file.profile = Some(profile);
     file.profile_skipped = false;
@@ -235,7 +235,7 @@ fn skip_inspiration_profile_to_file_using_writer<F>(
 where
     F: FnOnce(&Path, &[u8]) -> Result<(), ()>,
 {
-    let mut file = read_preferences_file_or_default(path)?;
+    let (mut file, _) = read_preferences_file_or_default(path)?;
     normalize_invalid_preferences(&mut file);
     file.profile = None;
     file.profile_skipped = true;
@@ -246,7 +246,7 @@ where
 pub(crate) fn clear_inspiration_profile_to_file(
     path: &Path,
 ) -> Result<InsightPreferenceStateView, String> {
-    let mut file = read_preferences_file_or_default(path)?;
+    let (mut file, _) = read_preferences_file_or_default(path)?;
     clear_invalid_default_generation_preferences(&mut file);
     file.profile = None;
     file.profile_skipped = false;
@@ -263,7 +263,10 @@ pub(crate) fn save_default_generation_preferences_to_file(
         return Err("Invalid default generation preferences.".to_string());
     }
 
-    let mut file = read_preferences_file_or_default(path)?;
+    let (mut file, source) = read_preferences_file_or_default(path)?;
+    if source == PreferencesSource::InvalidLegacyV1 {
+        return Err(PROFILE_RESET_REQUIRED_MESSAGE.to_string());
+    }
     file.default_generation_preferences = Some(preferences);
     file.legacy_generation_preference_seed = None;
     write_preferences_file(path, &file)?;
@@ -319,11 +322,13 @@ fn state_from_file(
     }
 }
 
-fn read_preferences_file_or_default(path: &Path) -> Result<InsightPreferencesFile, String> {
+fn read_preferences_file_or_default(
+    path: &Path,
+) -> Result<(InsightPreferencesFile, PreferencesSource), String> {
     if path.exists() {
-        read_preferences_file(path).map(|(file, _)| file)
+        read_preferences_file(path)
     } else {
-        Ok(InsightPreferencesFile::default())
+        Ok((InsightPreferencesFile::default(), PreferencesSource::V2))
     }
 }
 
@@ -883,6 +888,90 @@ mod tests {
     }
 
     #[test]
+    fn default_save_preserves_invalid_v1_preferences_bytes() {
+        let path = temp_file("default_save_preserves_invalid_v1");
+        let original = v1_preferences_json(
+            &[
+                "direct_sharp",
+                "grounded",
+                "storytelling",
+                "professional_analysis",
+            ],
+            &["clickbait"],
+            Some(valid_generation_preferences()),
+        );
+        write_json(&path, &original);
+        let mut replacement = valid_generation_preferences();
+        replacement.goal = "learning_understanding".to_string();
+
+        let error = save_default_generation_preferences_to_file(&path, replacement)
+            .expect_err("invalid legacy profile must be reset first");
+
+        assert_eq!(error, PROFILE_RESET_REQUIRED_MESSAGE);
+        assert_eq!(
+            fs::read(&path).expect("read original bytes"),
+            original.as_bytes()
+        );
+    }
+
+    #[test]
+    fn invalid_v1_resolution_actions_do_not_salvage_legacy_seed() {
+        let save_path = write_invalid_v1_preferences("invalid_v1_save_resolution", None);
+        let saved = save_inspiration_profile_to_file(&save_path, valid_profile())
+            .expect("replace invalid profile");
+
+        let skip_path = write_invalid_v1_preferences("invalid_v1_skip_resolution", None);
+        let skipped = skip_inspiration_profile_to_file(&skip_path).expect("skip invalid profile");
+
+        let clear_path = write_invalid_v1_preferences("invalid_v1_clear_resolution", None);
+        let cleared =
+            clear_inspiration_profile_to_file(&clear_path).expect("clear invalid profile");
+
+        for (path, state) in [
+            (save_path, saved),
+            (skip_path, skipped),
+            (clear_path, cleared),
+        ] {
+            let written = read_json(&path);
+            assert_eq!(state.legacy_generation_preference_seed, None);
+            assert!(written.get("legacyGenerationPreferenceSeed").is_none());
+            assert!(written["profile"].get("defaultStyles").is_none());
+            assert!(written["profile"].get("defaultAvoid").is_none());
+        }
+    }
+
+    #[test]
+    fn invalid_v1_resolution_actions_preserve_valid_complete_defaults() {
+        let defaults = valid_generation_preferences();
+        let save_path = write_invalid_v1_preferences(
+            "invalid_v1_save_preserves_defaults",
+            Some(defaults.clone()),
+        );
+        let saved = save_inspiration_profile_to_file(&save_path, valid_profile())
+            .expect("replace invalid profile");
+
+        let skip_path = write_invalid_v1_preferences(
+            "invalid_v1_skip_preserves_defaults",
+            Some(defaults.clone()),
+        );
+        let skipped = skip_inspiration_profile_to_file(&skip_path).expect("skip invalid profile");
+
+        let clear_path = write_invalid_v1_preferences(
+            "invalid_v1_clear_preserves_defaults",
+            Some(defaults.clone()),
+        );
+        let cleared =
+            clear_inspiration_profile_to_file(&clear_path).expect("clear invalid profile");
+
+        assert_eq!(saved.default_generation_preferences, Some(defaults.clone()));
+        assert_eq!(
+            skipped.default_generation_preferences,
+            Some(defaults.clone())
+        );
+        assert_eq!(cleared.default_generation_preferences, Some(defaults));
+    }
+
+    #[test]
     fn confirmed_generation_defaults_remove_migration_seed_atomically() {
         let path = temp_file("confirm_removes_seed");
         write_json(&path, &v2_preferences_json(true, true));
@@ -974,54 +1063,60 @@ mod tests {
     }
 
     #[test]
-    fn profile_save_normalizes_invalid_seed_before_one_authoritative_write() {
+    fn profile_save_serializes_normalized_seed_in_authoritative_write() {
         let path = temp_file("profile_save_single_write");
         write_v2_seed(&path, &["unknown_style"], &["clickbait"]);
-        let writes = std::cell::Cell::new(0);
+        let serialized = std::cell::RefCell::new(None);
         let mut profile = valid_profile();
         profile.role = "content_creator".to_string();
 
         let state = save_inspiration_profile_to_file_using_writer(
             &path,
             profile.clone(),
-            |destination, bytes| {
-                writes.set(writes.get() + 1);
-                if writes.get() > 1 {
-                    return Err(());
-                }
-                fs::write(destination, bytes).map_err(|_| ())
+            |_destination, bytes| {
+                serialized.replace(Some(bytes.to_vec()));
+                Ok(())
             },
         )
-        .expect("save profile with one write");
-        let written = read_json(&path);
+        .expect("serialize profile save");
+        let written: serde_json::Value = serde_json::from_slice(
+            serialized
+                .borrow()
+                .as_deref()
+                .expect("capture authoritative write"),
+        )
+        .expect("parse authoritative write");
 
-        assert_eq!(writes.get(), 1);
         assert_eq!(state.profile, Some(profile));
         assert_eq!(state.legacy_generation_preference_seed, None);
         assert!(written.get("legacyGenerationPreferenceSeed").is_none());
+        assert_eq!(written["profile"]["role"], "content_creator");
     }
 
     #[test]
-    fn profile_skip_normalizes_invalid_seed_before_one_authoritative_write() {
+    fn profile_skip_serializes_normalized_seed_in_authoritative_write() {
         let path = temp_file("profile_skip_single_write");
         write_v2_seed(&path, &["direct_sharp", "direct_sharp"], &["clickbait"]);
-        let writes = std::cell::Cell::new(0);
+        let serialized = std::cell::RefCell::new(None);
 
-        let state = skip_inspiration_profile_to_file_using_writer(&path, |destination, bytes| {
-            writes.set(writes.get() + 1);
-            if writes.get() > 1 {
-                return Err(());
-            }
-            fs::write(destination, bytes).map_err(|_| ())
+        let state = skip_inspiration_profile_to_file_using_writer(&path, |_destination, bytes| {
+            serialized.replace(Some(bytes.to_vec()));
+            Ok(())
         })
-        .expect("skip profile with one write");
-        let written = read_json(&path);
+        .expect("serialize profile skip");
+        let written: serde_json::Value = serde_json::from_slice(
+            serialized
+                .borrow()
+                .as_deref()
+                .expect("capture authoritative write"),
+        )
+        .expect("parse authoritative write");
 
-        assert_eq!(writes.get(), 1);
         assert_eq!(state.profile, None);
         assert!(state.profile_skipped);
         assert_eq!(state.legacy_generation_preference_seed, None);
         assert!(written.get("legacyGenerationPreferenceSeed").is_none());
+        assert_eq!(written["profileSkipped"], true);
     }
 
     #[test]
@@ -1143,6 +1238,27 @@ mod tests {
             path,
             &(serde_json::to_string_pretty(&value).expect("serialize v2 preferences") + "\n"),
         );
+    }
+
+    fn write_invalid_v1_preferences(
+        name: &str,
+        defaults: Option<GenerationPreferences>,
+    ) -> PathBuf {
+        let path = temp_file(name);
+        write_json(
+            &path,
+            &v1_preferences_json(
+                &[
+                    "direct_sharp",
+                    "grounded",
+                    "storytelling",
+                    "professional_analysis",
+                ],
+                &["clickbait"],
+                defaults,
+            ),
+        );
+        path
     }
 
     fn v1_preferences_json(
