@@ -35,6 +35,7 @@ supplier errors remain excluded.
 - Evidence: progress message codes are a closed shared registry in `contracts/desktop-worker-contract.json`, `worker/frameq_worker/progress_events.py`, and `app/src/desktopWorkerContract.test.ts`; a truthful AI progress code requires a global contract version advance.
 - Evidence: sandboxed direct pytest could not scan the user-level default temporary root, so focused runs used the worktree-local `--basetemp .pytest-tmp`; test behavior was otherwise unchanged.
 - Evidence: native watchdog process-tree fixtures cannot terminate their controlled children inside the command sandbox and degrade into protocol failures after 30 seconds; the same fixture passed in 1.9 seconds with approved native process control, and the complete serialized runner suite passed 28/28.
+- Evidence: the first cross-boundary protocol run caught the TypeScript literal `WORKER_MESSAGE_CODE_RULES` missing the new contract code; adding the exact closed rule restored shared-contract parity, and the full focused group passed.
 
 ## Decision Log
 
@@ -221,7 +222,7 @@ Run both commands from Step 2, then
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 Stage only the three Task 3 files and commit `fix: extend retry worker watchdog`.
 
@@ -234,7 +235,7 @@ Stage only the three Task 3 files and commit `fix: extend retry worker watchdog`
 - Modify: `docs/exec-plans/completed/index.md`
 - Move: active plan to `docs/exec-plans/completed/2026-08-04-retry-insights-progress-aware-watchdog-plan.md`
 
-- [ ] **Step 1: Run focused cross-boundary tests**
+- [x] **Step 1: Run focused cross-boundary tests**
 
 Run:
 

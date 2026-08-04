@@ -51,6 +51,7 @@ export const WORKER_MESSAGE_CODE_RULES = {
   "asr.cache.preparing": { allowedArgs: ["model"] },
   "asr.transcribe.starting": { allowedArgs: [] },
   "asr.transcribe.running": { allowedArgs: [] },
+  "ai.generation.running": { allowedArgs: ["attempt", "total"] },
   "douyin.page.resolving": { allowedArgs: [] },
   "douyin.stream.probing": { allowedArgs: [] },
   "douyin.video.saving": { allowedArgs: [] },
