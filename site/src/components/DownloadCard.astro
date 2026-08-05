@@ -14,12 +14,18 @@ interface Props {
   asset: DownloadAsset;
   /** 是否禁用（平台未验证时） */
   disabled?: boolean;
+  /** reveal 错峰序号，与首页卡片网格一致（index * 80ms） */
+  index?: number;
 }
 
-const { asset, disabled = false } = Astro.props;
+const { asset, disabled = false, index = 0 } = Astro.props;
 ---
 
-<article class={`download-card${disabled ? ' download-card--disabled' : ''}`}>
+<article
+  class={`download-card reveal${disabled ? ' download-card--disabled' : ''}`}
+  data-reveal
+  data-reveal-delay={String(index * 80)}
+>
   <header class="download-card__header">
     <div class="download-card__platform">
       <h3 class="download-card__title">{asset.platform}</h3>

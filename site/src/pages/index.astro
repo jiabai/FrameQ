@@ -56,7 +56,7 @@ const platforms = [...new Set(DOWNLOAD_ASSETS.map((a) => a.platform))];
             <span class="sources__dot sources__dot--supported" aria-hidden="true"></span>
             当前支持
           </h3>
-          <ul class="sources__list">
+          <ul class="sources__list sources__list--supported">
             {SUPPORTED_SOURCES.map((source) => (
               <li>{source}</li>
             ))}
@@ -68,7 +68,7 @@ const platforms = [...new Set(DOWNLOAD_ASSETS.map((a) => a.platform))];
             <span class="sources__dot sources__dot--unsupported" aria-hidden="true"></span>
             不支持
           </h3>
-          <ul class="sources__list">
+          <ul class="sources__list sources__list--unsupported">
             {UNSUPPORTED_SOURCES.map((source) => (
               <li>{source}</li>
             ))}
@@ -192,21 +192,24 @@ const platforms = [...new Set(DOWNLOAD_ASSETS.map((a) => a.platform))];
   }
 
   .sources__list li::before {
-    content: '—';
+    content: '';
     position: absolute;
-    left: 0;
-    color: var(--color-muted);
-    transition: color var(--dur-fast) var(--ease-out);
+    left: 2px;
+    top: 0.62em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-muted);
+    transition: background-color var(--dur-fast) var(--ease-out);
   }
 
-  /* Round 2 P2-5：hover 时缩进 + accent 破折号 */
+  .sources__list--supported li::before { background: var(--color-accent); }
+  .sources__list--unsupported li::before { background: var(--color-destructive); }
+
+  /* Round 2 P2-5：hover 时缩进 + 同组色圆点保持 */
   .sources__list li:hover {
     padding-left: var(--space-5);
     color: var(--color-ink);
-  }
-
-  .sources__list li:hover::before {
-    color: var(--color-accent);
   }
 
   .sources__note {

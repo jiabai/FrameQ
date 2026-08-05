@@ -36,24 +36,24 @@ const LatestNotesContent =
   <section class="section download-page">
     <div class="container">
       <header class="download-page__header">
-        <h1 class="download-page__title">下载 FrameQ</h1>
-        <p class="download-page__version">
+        <h1 class="download-page__title reveal" data-reveal>下载 FrameQ</h1>
+        <p class="download-page__version reveal" data-reveal data-reveal-delay="80">
           当前版本 <span class="mono">{LATEST_VERSION}</span>
         </p>
-        <p class="download-page__lede">
+        <p class="download-page__lede reveal" data-reveal data-reveal-delay="160">
           选择你的平台。所有下载来自 GitHub Releases。
         </p>
       </header>
 
       <!-- 平台下载卡片 -->
       <div class="download-page__cards">
-        {DOWNLOAD_ASSETS.map((asset) => (
-          <DownloadCard asset={asset} />
+        {DOWNLOAD_ASSETS.map((asset, i) => (
+          <DownloadCard asset={asset} index={i} />
         ))}
       </div>
 
       <!-- ASR 模型说明 -->
-      <aside class="download-page__notice" aria-label="ASR 模型说明">
+      <aside class="download-page__notice reveal" data-reveal aria-label="ASR 模型说明">
         <h2 class="download-page__notice-title">关于 ASR 模型</h2>
         <p class="download-page__notice-text">{ASR_MODEL_NOTICE}</p>
         <p class="download-page__notice-text">
@@ -63,10 +63,10 @@ const LatestNotesContent =
       </aside>
 
       <!-- 安装说明 -->
-      <section class="download-page__install" id="macos-install">
+      <section class="download-page__install reveal" data-reveal id="macos-install">
         <h2 class="download-page__install-title">安装说明</h2>
 
-        <div class="download-page__install-group">
+        <div class="download-page__install-group reveal" data-reveal data-reveal-delay="80">
           <h3 class="download-page__install-platform">macOS</h3>
           <ol class="download-page__steps">
             <li>下载对应架构的 DMG 文件（Apple Silicon 选 aarch64，Intel 选 x64）。</li>
@@ -81,7 +81,7 @@ const LatestNotesContent =
           </p>
         </div>
 
-        <div class="download-page__install-group" id="windows-install">
+        <div class="download-page__install-group reveal" data-reveal data-reveal-delay="160" id="windows-install">
           <h3 class="download-page__install-platform">Windows</h3>
           <ol class="download-page__steps">
             <li>下载 <code class="mono">FrameQ_0.3.0_x64-setup.exe</code> 安装包。</li>
@@ -96,7 +96,7 @@ const LatestNotesContent =
 
       <!-- Release Notes -->
       {latestNotes && LatestNotesContent && (
-        <section class="download-page__release-notes" id="release-notes">
+        <section class="download-page__release-notes reveal" data-reveal id="release-notes">
           <h2 class="download-page__rn-title">
             {latestNotes.data.version} 发布说明
           </h2>
@@ -116,6 +116,14 @@ const LatestNotesContent =
 </BaseLayout>
 
 <style>
+  /* Round 2 P3-1：补偿固定悬浮导航。
+     Header.astro: position fixed; top: var(--space-4) → 导航胶囊底部约在 viewport 顶部 74px 处。
+     .section 默认 padding-block: var(--space-3xl) = 64px 不足以避开，故 section 顶部内边距覆写为 6rem (96px)，
+     留 ~56–64px 呼吸间隙。与首页 Hero 的 padding-top: var(--space-32) = 8rem 对齐。 */
+  .download-page {
+    padding-top: 8rem;
+  }
+
   .download-page__header {
     margin-bottom: var(--space-12);
     max-width: var(--content-max-narrow);

@@ -191,11 +191,20 @@
   }
 
   .trust__card-list li::before {
-    content: '—';
+    content: '';
     position: absolute;
-    left: 0;
-    color: var(--color-muted);
+    left: 2px;
+    top: 0.62em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-muted);
   }
+
+  /* 圆点沿用卡片顶部 accent 色，强化三栏语义分工 */
+  .trust__card--local .trust__card-list li::before { background: var(--color-accent); }
+  .trust__card--cloud .trust__card-list li::before { background: var(--color-warn); }
+  .trust__card--never .trust__card-list li::before { background: var(--color-destructive); }
 
   /* ---- 移动端单列 ---- */
   @media (max-width: 768px) {
