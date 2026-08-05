@@ -45,6 +45,10 @@
 - `2026-06-23-desktop-one-click-updates.md` - Low-noise desktop update reminders and one-click upgrades via GitHub Releases static `latest.json`.
 - `2026-06-18-installer-distribution.md` - Historical lightweight-installer distribution baseline. Its model-acquisition behavior is superseded by `2026-07-27-selectable-asr-model-on-demand-download.md`; installer/runtime and app-local-data constraints remain relevant.
 
+## Web Marketing Site Spec
+
+- `2026-08-05-web-marketing-site.md` - Public marketing independent site at top-level `site/` directory using Astro SSG; ships index/download/privacy three pages with OKLCH three-layer tokens migrated from `design-system/globals.css`, Hallmark anti-AI-slop visual system, real product screenshots, and zero analytics/tracking/third-party embeds/cookies; release metadata sourced from real GitHub Releases URLs.
+
 <!-- 由 vibe-coding-launcher 生成。 -->
 
 ## Purpose

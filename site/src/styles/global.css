@@ -1,0 +1,311 @@
+/**
+ * 全局基础样式。导入顺序：
+ * 1. @fontsource 字体（自托管，不加载 Google Fonts CDN）
+ * 2. tokens.css（三层 OKLCH token 系统）
+ * 3. 基础 reset 与排版规则
+ *
+ * 见 docs/product-specs/2026-08-05-web-marketing-site.md § Privacy（不加载外部字体 CDN）。
+ */
+
+/* Geist 字体自托管 — 通过 @fontsource npm 包 */
+@import '@fontsource/geist/400.css';
+@import '@fontsource/geist/500.css';
+@import '@fontsource/geist/600.css';
+@import '@fontsource/geist/700.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
+
+/* Round 1 视觉活力：Fraunces serif display 自托管。
+   - 400/500/600 三个权重覆盖 hero title / footer statement / step number
+   - opsz=9.0 (optical size) 适合 display 字号
+   - 仍不加载外部 CDN，保持 spec § Privacy 约束 */
+@import '@fontsource/fraunces/400.css';
+@import '@fontsource/fraunces/500.css';
+@import '@fontsource/fraunces/600.css';
+
+@import './tokens.css';
+
+/* ==========================================================================
+   Reset & base
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 移动端硬约束：overflow-x: clip（不是 hidden，gate 34） */
+  overflow-x: clip;
+  /* 平滑滚动仅在没有 reduced-motion 时启用 */
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  /* overflow-x: clip on body too — 双重保险 */
+  overflow-x: clip;
+  font-family: var(--font-text);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-ink);
+  background-color: var(--color-paper);
+  /* display headers 长字回行 — gate 51 */
+  overflow-wrap: anywhere;
+  min-width: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ==========================================================================
+   Typography
+   ========================================================================== */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-ink);
+  margin: 0;
+}
+
+/* Headings 永远 roman，不 italic — gate 38a */
+h1, h2, h3, h4, h5, h6 { font-style: normal; }
+
+h1 {
+  font-size: var(--text-display);
+  letter-spacing: var(--tracking-tighter);
+  font-weight: 700;
+}
+
+h2 {
+  font-size: var(--text-3xl);
+  font-weight: 600;
+}
+
+h3 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+/* focus-visible 立即显示，不动画化 — gate。
+   Round 2 P2-2：统一所有交互元素的 focus ring，确保 keyboard 导航可见。 */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* Round 2 P2-2：移除 mouse click 残留的 outline（仅 keyboard 导航显示） */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Round 2 P2-3：details/summary 在打开时保持可见的 focus 态 */
+details:focus-visible,
+summary:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ==========================================================================
+   Layout helpers
+   ========================================================================== */
+
+.container {
+  width: 100%;
+  max-width: var(--content-width);
+  margin-inline: auto;
+  padding-inline: var(--content-padding);
+}
+
+/* section 间距 — SaaS sequence --space-3xl minimum between major sections */
+.section {
+  padding-block: var(--space-3xl);
+}
+
+.section + .section {
+  padding-block: var(--space-3xl);
+}
+
+/* ==========================================================================
+   Motion discipline — 仅 transform/opacity，三缓动
+   ========================================================================== */
+
+/* Round 1 视觉活力：增强 reveal 动画，支持 staggered entrance。
+   使用 data-reveal-delay 属性让同 section 内多个元素错峰入场。
+   仅 transform/opacity，gate 27 reduced-motion 自动降级。 */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0;
+    transform: translateY(12px);
+    transition:
+      opacity var(--dur-slow) var(--ease-out),
+      transform var(--dur-slow) var(--ease-out);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Reveal 变体：从左侧滑入，用于 step number 等左侧 anchor 元素 */
+  .reveal--slide-left {
+    transform: translateX(-16px);
+  }
+
+  .reveal--slide-left.is-visible {
+    transform: translateX(0);
+  }
+
+  /* Reveal 变体：从右侧滑入，用于 trust card 等 aside 元素 */
+  .reveal--slide-right {
+    transform: translateX(16px);
+  }
+
+  .reveal--slide-right.is-visible {
+    transform: translateX(0);
+  }
+
+  /* Reveal 变体：clip 上推，用于 code block / 预览区 */
+  .reveal--clip-up {
+    transform: translateY(24px);
+    clip-path: inset(100% 0 0 0);
+  }
+
+  .reveal--clip-up.is-visible {
+    transform: translateY(0);
+    clip-path: inset(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* reduced-motion 下仅保留 ≤150ms opacity 过渡 */
+  .reveal,
+  .reveal--slide-left,
+  .reveal--slide-right,
+  .reveal--clip-up {
+    opacity: 1;
+    transform: none;
+    clip-path: none;
+    transition: opacity 150ms linear;
+  }
+
+  /* 所有交互微动效的 transform 过渡在 reduced-motion 下降级为仅 opacity（gate 27）。
+     覆盖 CTA 箭头、FAQ 图标、Header CTA 箭头等组件级 transform 过渡。 */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 150ms;
+    animation-duration: 150ms;
+    animation-iteration-count: 1;
+    scroll-behavior: auto;
+  }
+}
+
+/* ==========================================================================
+   Scroll-triggered reveal observer — 极简内联脚本，不阻塞渲染
+   ========================================================================== */
+
+/* Round 1：原生 IntersectionObserver 触发 .is-visible，无 JS 框架依赖。
+   脚本在 BaseLayout 末尾加载，data-reveal 属性标记观察目标。 */
+
+/* ==========================================================================
+   Utility
+   ========================================================================== */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.mono {
+  font-family: var(--font-code);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Round 1 视觉活力：grain texture 工具类。
+   通过 SVG turbulence filter 生成微弱噪点叠加，为 paper 背景添加质感。
+   opacity 0.025 极弱，仅在近距离可感知，不干扰可读性。
+   SVG data-uri 内联，不加载外部资源，保持 spec § Privacy 约束。 */
+.grain-overlay {
+  position: relative;
+}
+
+.grain-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.086 0 0 0 0 0.086 0 0 0 0 0.086 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  z-index: 0;
+}
+
+.grain-overlay > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 移动端：section head 折叠为单列 — gate 52 */
+@media (max-width: 768px) {
+  .section {
+    padding-block: var(--space-2xl);
+  }
+
+  /* Round 2 P2-1：移动端 touch target 最小 44px（WCAG 2.5.5 Target Size）。
+     仅对 nav / footer / CTA / FAQ summary 等块级交互元素生效，
+     不影响正文内联链接（FAQ answer / privacy page 内的 <a>）。 */
+  .nav__link,
+  .nav__cta,
+  .nav__brand,
+  .footer__link,
+  .faq__question,
+  .hero__cta-primary,
+  .hero__cta-secondary,
+  .download-entry__cta {
+    min-height: 44px;
+  }
+}
+
+/* Round 2 P2-1：超小屏（≤480px）hero title 进一步收缩 */
+@media (max-width: 480px) {
+  :root {
+    --text-display-xl: clamp(2.5rem, 12vw, 3.5rem);
+    --text-display-l: clamp(2.25rem, 10vw, 3rem);
+  }
+}

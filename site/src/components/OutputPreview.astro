@@ -1,0 +1,437 @@
+---
+/**
+ * OutputPreview — 输出物预览。
+ *
+ * 展示 FrameQ 的产物类型：文字稿、Markdown 总结、Mermaid 思维导图、AI 灵感结果。
+ * 所有内容标注为示例，非真实用户内容。
+ *
+ * Round 1 视觉活力：
+ * - Code block 添加文件名 header + 行号 + 微弱语法着色
+ * - 卡片添加 elevation 分层（rest / hover）
+ * - reveal staggered entrance
+ *
+ * 状态覆盖：default · hover（标签切换若有）
+ */
+---
+
+<section class="section output" id="output">
+  <div class="container">
+    <header class="output__header reveal">
+      <h2 class="output__title">输出物</h2>
+      <p class="output__lede">
+        每次任务保存在本机，可继续思考或导出。以下为示例，非真实用户内容。
+      </p>
+    </header>
+
+    <div class="output__grid">
+      <article class="output__card reveal" data-reveal data-reveal-delay="0">
+        <div class="output__card-header">
+          <span class="output__card-tag mono">.txt</span>
+          <h3 class="output__card-title">文字稿</h3>
+        </div>
+        <div class="output__card-body output__card-body--transcript">
+          <div class="output__window">
+            <div class="output__window-header">
+              <span class="output__traffic" aria-hidden="true">
+                <span class="output__dot output__dot--red"></span>
+                <span class="output__dot output__dot--yellow"></span>
+                <span class="output__dot output__dot--green"></span>
+              </span>
+              <span class="output__window-name mono">transcript.txt</span>
+              <span class="output__copy" aria-hidden="true" title="示例预览，不可复制">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <rect x="4" y="4" width="7" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M3 9V2.5C3 2.224 3.224 2 3.5 2H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+            </div>
+            <div class="output__window-body">
+              <p class="output__transcript-line">
+                <span class="output__line-num mono" aria-hidden="true">1</span>
+                <span class="output__timestamp mono">00:12</span>
+                今天我们聊一下本地优先的工作流。
+              </p>
+              <p class="output__transcript-line">
+                <span class="output__line-num mono" aria-hidden="true">2</span>
+                <span class="output__timestamp mono">00:18</span>
+                视频转文字是第一步，但不是最后一步。
+              </p>
+              <p class="output__transcript-line">
+                <span class="output__line-num mono" aria-hidden="true">3</span>
+                <span class="output__timestamp mono">00:24</span>
+                保存文字稿之后，真正的思考才刚开始。
+              </p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="output__card reveal" data-reveal data-reveal-delay="80">
+        <div class="output__card-header">
+          <span class="output__card-tag mono">.md</span>
+          <h3 class="output__card-title">Markdown 总结</h3>
+        </div>
+        <div class="output__card-body output__card-body--markdown">
+          <div class="output__window">
+            <div class="output__window-header">
+              <span class="output__traffic" aria-hidden="true">
+                <span class="output__dot output__dot--red"></span>
+                <span class="output__dot output__dot--yellow"></span>
+                <span class="output__dot output__dot--green"></span>
+              </span>
+              <span class="output__window-name mono">summary.md</span>
+              <span class="output__copy" aria-hidden="true" title="示例预览，不可复制">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <rect x="4" y="4" width="7" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M3 9V2.5C3 2.224 3.224 2 3.5 2H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+            </div>
+            <div class="output__window-body">
+              <pre class="output__markdown"><code><span class="output__line mono" aria-hidden="true">1</span><span class="tok-h">## 核心观点</span>
+
+<span class="output__line mono" aria-hidden="true">2</span><span class="tok-bullet">- </span>本地优先不是反云，是反默认上传
+<span class="output__line mono" aria-hidden="true">3</span><span class="tok-bullet">- </span>文字稿是产物，不是终点
+<span class="output__line mono" aria-hidden="true">4</span><span class="tok-bullet">- </span>AI 整理需独立确认，有界额度
+
+<span class="output__line mono" aria-hidden="true">5</span><span class="tok-h">## 待办</span>
+
+<span class="output__line mono" aria-hidden="true">6</span><span class="tok-bullet">- [ ]</span> 阅读文字稿第 <span class="tok-num">3</span> 段
+<span class="output__line mono" aria-hidden="true">7</span><span class="tok-bullet">- [ ]</span> 验证 Mermaid 图结构
+<span class="output__line mono" aria-hidden="true">8</span><span class="tok-comment">&lt;!-- AI 生成，需人工校对 --&gt;</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="output__card reveal" data-reveal data-reveal-delay="160">
+        <div class="output__card-header">
+          <span class="output__card-tag mono output__card-tag--accent">.mmd</span>
+          <h3 class="output__card-title">Mermaid 思维导图</h3>
+        </div>
+        <div class="output__card-body output__card-body--mermaid">
+          <div class="output__window">
+            <div class="output__window-header">
+              <span class="output__traffic" aria-hidden="true">
+                <span class="output__dot output__dot--red"></span>
+                <span class="output__dot output__dot--yellow"></span>
+                <span class="output__dot output__dot--green"></span>
+              </span>
+              <span class="output__window-name mono">mindmap.mmd</span>
+              <span class="output__copy" aria-hidden="true" title="示例预览，不可复制">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <rect x="4" y="4" width="7" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M3 9V2.5C3 2.224 3.224 2 3.5 2H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+            </div>
+            <div class="output__window-body">
+              <pre class="output__mermaid mono"><code><span class="output__line" aria-hidden="true">1</span><span class="tok-keyword">mindmap</span>
+<span class="output__line" aria-hidden="true">2</span>  <span class="tok-h">root((FrameQ))</span>
+<span class="output__line" aria-hidden="true">3</span>    <span class="tok-prop">本地转写</span>
+<span class="output__line" aria-hidden="true">4</span>      SenseVoice Small
+<span class="output__line" aria-hidden="true">5</span>      ONNX VAD
+<span class="output__line" aria-hidden="true">6</span>    <span class="tok-prop">可选 AI</span>
+<span class="output__line" aria-hidden="true">7</span>      总结
+<span class="output__line" aria-hidden="true">8</span>      灵感
+<span class="output__line" aria-hidden="true">9</span>      解剖</code></pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="output__card reveal" data-reveal data-reveal-delay="240">
+        <div class="output__card-header">
+          <span class="output__card-tag mono output__card-tag--accent">.json</span>
+          <h3 class="output__card-title">AI 灵感结果</h3>
+        </div>
+        <div class="output__card-body output__card-body--ai">
+          <div class="output__window">
+            <div class="output__window-header">
+              <span class="output__traffic" aria-hidden="true">
+                <span class="output__dot output__dot--red"></span>
+                <span class="output__dot output__dot--yellow"></span>
+                <span class="output__dot output__dot--green"></span>
+              </span>
+              <span class="output__window-name mono">inspiration.json</span>
+              <span class="output__copy" aria-hidden="true" title="示例预览，不可复制">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <rect x="4" y="4" width="7" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M3 9V2.5C3 2.224 3.224 2 3.5 2H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+            </div>
+            <div class="output__window-body">
+              <p class="output__ai-note">示例产物，标注为示例</p>
+              <p class="output__ai-line">
+                从文字稿提取的可继续思考方向：本地优先的边界、模型按需下载的权衡、
+                AI 整理的确认时序。
+              </p>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<style>
+  .output__header {
+    margin-bottom: var(--space-16);
+    max-width: var(--content-max-narrow);
+  }
+
+  .output__title {
+    font-family: var(--font-heading);
+    font-size: var(--text-3xl);
+    font-weight: 500;
+    margin-bottom: var(--space-3);
+    font-optical-sizing: auto;
+  }
+
+  .output__lede {
+    font-size: var(--text-lg);
+    color: var(--color-ink-2);
+  }
+
+  /* ---- Grid — 2x2 ---- */
+  .output__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-6);
+  }
+
+  /* Round 1：卡片 elevation 分层 */
+  .output__card {
+    background: var(--card-bg);
+    border: var(--rule-hairline) solid var(--card-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    box-shadow: var(--card-shadow-rest);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  .output__card:hover {
+    border-color: var(--color-rule);
+    box-shadow: var(--card-shadow-hover);
+  }
+
+  .output__card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .output__card-tag {
+    display: inline-block;
+    padding-inline: var(--space-2);
+    padding-block: var(--space-1);
+    background: var(--color-paper-2);
+    color: var(--color-ink-2);
+    font-size: var(--text-xs);
+    border-radius: var(--radius-sm);
+    border: var(--rule-hairline) solid var(--color-border);
+  }
+
+  .output__card-tag--accent {
+    background: var(--color-accent-tint-bg);
+    color: var(--color-accent);
+    border-color: var(--color-accent-tint-border);
+  }
+
+  .output__card-title {
+    font-family: var(--font-heading);
+    font-size: var(--text-base);
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+
+  /* ---- Card body 容器 ---- */
+  .output__card-body {
+    min-height: 10rem;
+  }
+
+  /* Round 1：code block window — 文件名 header + body 分层 */
+  .output__window {
+    background: var(--code-bg);
+    border: var(--rule-hairline) solid var(--code-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Round 2 P1-4：window header 三段布局 — traffic lights / filename / copy button */
+  .output__window-header {
+    background: var(--code-header-bg);
+    padding-inline: var(--space-3);
+    padding-block: var(--space-2);
+    border-bottom: var(--rule-hairline) solid var(--code-border);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* macOS-style traffic lights */
+  .output__traffic {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .output__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .output__dot--red { background: oklch(64% 0.19 25); }
+  .output__dot--yellow { background: oklch(80% 0.15 85); }
+  .output__dot--green { background: oklch(70% 0.15 145); }
+
+  .output__window-name {
+    font-size: var(--text-xs);
+    color: var(--color-ink-2);
+    font-weight: 500;
+    flex: 1;
+    text-align: center;
+  }
+
+  /* Copy button — 视觉装饰，不实际复制（示例预览） */
+  .output__copy {
+    color: var(--color-muted);
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    cursor: default;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .output__window:hover .output__copy {
+    color: var(--color-ink-2);
+  }
+
+  .output__window-body {
+    padding: var(--space-3);
+    flex: 1;
+    overflow-x: auto;
+  }
+
+  /* ---- Transcript ---- */
+  .output__card-body--transcript .output__window-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .output__transcript-line {
+    margin: 0;
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    display: grid;
+    grid-template-columns: 1.5rem 3.5rem 1fr;
+    gap: var(--space-2);
+    align-items: baseline;
+  }
+
+  .output__line-num {
+    color: var(--code-line-number-color);
+    font-size: var(--text-xs);
+    user-select: none;
+    text-align: right;
+  }
+
+  .output__timestamp {
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+  }
+
+  /* ---- Markdown / Mermaid ---- */
+  .output__markdown,
+  .output__mermaid {
+    margin: 0;
+    font-family: var(--font-code);
+    font-size: var(--text-xs);
+    color: var(--code-text-color);
+    white-space: pre-wrap;
+    line-height: var(--leading-relaxed);
+  }
+
+  .output__line {
+    display: inline-block;
+    width: 1.5rem;
+    margin-right: var(--space-2);
+    color: var(--code-line-number-color);
+    user-select: none;
+    text-align: right;
+    font-size: var(--text-xs);
+  }
+
+  /* 微弱语法着色 — 仅装饰，非真实 highlight。
+     Round 2 P1-4：新增 tok-num / tok-comment / tok-prop token 类型。 */
+  .tok-h {
+    color: var(--color-ink);
+    font-weight: 500;
+  }
+
+  .tok-bullet {
+    color: var(--code-accent-color);
+  }
+
+  .tok-keyword {
+    color: var(--code-accent-color);
+    font-weight: 500;
+  }
+
+  .tok-num {
+    color: oklch(56% 0.13 60);
+    font-weight: 500;
+  }
+
+  .tok-comment {
+    color: var(--color-muted);
+    font-style: italic;
+  }
+
+  .tok-prop {
+    color: oklch(48% 0.10 256);
+    font-weight: 500;
+  }
+
+  /* ---- AI ---- */
+  .output__card-body--ai .output__window-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .output__ai-note {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    font-style: italic;
+    margin: 0;
+  }
+
+  .output__ai-line {
+    color: var(--color-ink-2);
+    margin: 0;
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+  }
+
+  /* ---- 移动端单列 ---- */
+  @media (max-width: 768px) {
+    .output__grid {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+    }
+  }
+</style>

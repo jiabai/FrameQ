@@ -1,0 +1,231 @@
+---
+/**
+ * Header — N5 Floating pill nav archetype。
+ *
+ * modern-minimal genre 默认：rounded full-pill nav，visibly detached from page edges，
+ * soft blur backdrop，soft shadow。Vercel / Linear / Framer / Raycast 词汇。
+ *
+ * 状态覆盖：default · hover · focus-visible · active
+ * 见 docs/exec-plans/active/2026-08-05-web-marketing-site-plan.md Task 4.4
+ */
+import { PRODUCT_NAME, NAV_LINKS, GITHUB_URL } from '../consts';
+---
+
+<header class="nav">
+  <nav class="nav__inner" aria-label="主导航">
+    <a href="/" class="nav__brand" aria-label={`${PRODUCT_NAME} 首页`}>
+      <span class="nav__brand-mark" aria-hidden="true">F</span>
+      <span class="nav__brand-text">{PRODUCT_NAME}</span>
+    </a>
+
+    <ul class="nav__links">
+      {NAV_LINKS.map((link) => (
+        <li>
+          <a
+            href={link.href}
+            class="nav__link"
+            aria-current={link.href === Astro.url.pathname ? 'page' : undefined}
+            {...(link.href.startsWith('http') ? { target: '_blank', rel: 'noopener' } : {})}
+          >
+            {link.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+
+    <a href="/download" class="nav__cta">
+      下载
+      <svg class="nav__cta-arrow" aria-hidden="true" width="12" height="12" viewBox="0 0 14 14" fill="none">
+        <path d="M3 7H11M11 7L7 3M11 7L7 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+  </nav>
+</header>
+
+<!-- Round 2 P1-5：scroll-triggered 收缩态。滚动超过 20px 添加 .is-scrolled，
+     增强 shadow + blur + 收缩 padding。reduced-motion 下跳过 transition。 -->
+<script>
+  const header = document.querySelector('.nav');
+  if (header) {
+    const updateScroll = () => {
+      if (window.scrollY > 20) {
+        header.classList.add('is-scrolled');
+      } else {
+        header.classList.remove('is-scrolled');
+      }
+    };
+    window.addEventListener('scroll', updateScroll, { passive: true });
+    updateScroll();
+  }
+</script>
+
+<style>
+  .nav {
+    position: fixed;
+    top: var(--space-4);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    width: calc(100% - var(--space-8));
+    max-width: var(--content-max);
+    /* N5 floating pill — visibly detached, blur backdrop, soft shadow */
+    background: var(--header-bg);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: var(--rule-hairline) solid var(--header-border);
+    border-radius: var(--header-radius);
+    box-shadow: var(--header-shadow);
+    /* Round 2 P1-5：transition for scroll state */
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      backdrop-filter var(--dur-base) var(--ease-out),
+      top var(--dur-base) var(--ease-out);
+  }
+
+  /* Round 2 P1-5：滚动后收缩态 — 上移 + 增强 shadow + 更强 blur */
+  .nav.is-scrolled {
+    top: var(--space-2);
+    box-shadow:
+      0 1px 2px oklch(22% 0.014 256 / 0.06),
+      0 8px 24px oklch(22% 0.014 256 / 0.06);
+    backdrop-filter: blur(16px) saturate(200%);
+    -webkit-backdrop-filter: blur(16px) saturate(200%);
+  }
+
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding-inline: var(--space-5);
+    padding-block: var(--space-3);
+    transition: padding-block var(--dur-base) var(--ease-out);
+  }
+
+  .nav.is-scrolled .nav__inner {
+    padding-block: var(--space-2);
+  }
+
+  /* ---- Brand ---- */
+  .nav__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-ink);
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: var(--text-base);
+    letter-spacing: var(--tracking-tight);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .nav__brand:hover {
+    color: var(--color-accent);
+  }
+
+  .nav__brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+
+  /* ---- Links ---- */
+  .nav__links {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .nav__link {
+    display: inline-block;
+    padding-inline: var(--space-3);
+    padding-block: var(--space-2);
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .nav__link:hover {
+    color: var(--color-ink);
+    background-color: var(--color-paper-2);
+  }
+
+  .nav__link[aria-current='page'] {
+    color: var(--color-accent);
+    background-color: var(--color-accent-tint-bg);
+  }
+
+  /* ---- CTA button ---- */
+  .nav__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding-inline: var(--button-padding-x);
+    padding-block: var(--button-padding-y);
+    background: var(--button-bg);
+    color: var(--button-fg);
+    border: var(--rule-hairline) solid var(--button-border);
+    border-radius: var(--button-radius);
+    font-family: var(--font-heading);
+    font-size: var(--button-font-size);
+    font-weight: var(--button-font-weight);
+    /* 8 states: default · hover · focus-visible · active · disabled · loading · error · success */
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  .nav__cta:hover {
+    background: var(--button-bg-hover);
+  }
+
+  .nav__cta:active {
+    transform: translateY(1px);
+  }
+
+  .nav__cta-arrow {
+    display: inline-flex;
+    align-items: center;
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+
+  .nav__cta:hover .nav__cta-arrow {
+    transform: translateX(2px);
+  }
+
+  /* ---- 移动端响应式 ---- */
+  @media (max-width: 768px) {
+    .nav {
+      top: var(--space-3);
+      width: calc(100% - var(--space-4));
+    }
+
+    .nav__inner {
+      padding-inline: var(--space-3);
+      gap: var(--space-2);
+    }
+
+    /* 移动端隐藏中间链接，仅保留品牌 + CTA */
+    .nav__links {
+      display: none;
+    }
+
+    .nav__brand-text {
+      display: none;
+    }
+  }
+</style>

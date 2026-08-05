@@ -1,0 +1,324 @@
+---
+/**
+ * 下载页 — 仅展示真实存在的发行产物。
+ *
+ * - 平台卡片来自 consts.ts DOWNLOAD_ASSETS（GitHub Releases 真实 URL）
+ * - ASR 模型首启按需下载说明
+ * - 安装说明（macOS Gatekeeper + Windows）
+ * - release notes 摘要来自 content collection
+ *
+ * 见 docs/product-specs/2026-08-05-web-marketing-site.md § 下载页。
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import DownloadCard from '../components/DownloadCard.astro';
+import { getCollection, render } from 'astro:content';
+import {
+  PRODUCT_NAME,
+  LATEST_VERSION,
+  DOWNLOAD_ASSETS,
+  ASR_MODEL_NOTICE,
+  GITHUB_URL,
+} from '../consts';
+
+/** release notes 排序：版本号降序 */
+const releaseNotes = (await getCollection('releaseNotes')).sort((a, b) =>
+  b.data.version.localeCompare(a.data.version, undefined, { numeric: true }),
+);
+const latestNotes = releaseNotes[0];
+const LatestNotesContent =
+  latestNotes ? (await render(latestNotes)).Content : null;
+---
+
+<BaseLayout
+  title={`下载 ${PRODUCT_NAME} — ${LATEST_VERSION}`}
+  description={`下载 ${PRODUCT_NAME} ${LATEST_VERSION}。支持 macOS Apple Silicon、macOS Intel、Windows x64。ASR 模型首启按需下载，不内置安装包。`}
+>
+  <section class="section download-page">
+    <div class="container">
+      <header class="download-page__header">
+        <h1 class="download-page__title">下载 FrameQ</h1>
+        <p class="download-page__version">
+          当前版本 <span class="mono">{LATEST_VERSION}</span>
+        </p>
+        <p class="download-page__lede">
+          选择你的平台。所有下载来自 GitHub Releases。
+        </p>
+      </header>
+
+      <!-- 平台下载卡片 -->
+      <div class="download-page__cards">
+        {DOWNLOAD_ASSETS.map((asset) => (
+          <DownloadCard asset={asset} />
+        ))}
+      </div>
+
+      <!-- ASR 模型说明 -->
+      <aside class="download-page__notice" aria-label="ASR 模型说明">
+        <h2 class="download-page__notice-title">关于 ASR 模型</h2>
+        <p class="download-page__notice-text">{ASR_MODEL_NOTICE}</p>
+        <p class="download-page__notice-text">
+          默认 PyTorch SenseVoiceSmall 模型保留不变，新增可选 <code class="mono">funasr_onnx</code> 运行时。
+          启动时不会自动下载模型，取消或失败不会创建任务。
+        </p>
+      </aside>
+
+      <!-- 安装说明 -->
+      <section class="download-page__install" id="macos-install">
+        <h2 class="download-page__install-title">安装说明</h2>
+
+        <div class="download-page__install-group">
+          <h3 class="download-page__install-platform">macOS</h3>
+          <ol class="download-page__steps">
+            <li>下载对应架构的 DMG 文件（Apple Silicon 选 aarch64，Intel 选 x64）。</li>
+            <li>打开 DMG，将 FrameQ 拖入"应用程序"文件夹。</li>
+            <li>首次打开会被 macOS Gatekeeper 阻止。打开<strong>系统设置 → 隐私与安全性</strong>。</li>
+            <li>找到 FrameQ 的拦截提示，点击<strong>"仍要打开"</strong>并确认。</li>
+          </ol>
+          <p class="download-page__install-note">
+            macOS DMG 使用 ad-hoc 签名，未经过 Apple notarization。
+            也可使用终端命令作为后备：
+            <code class="mono">xattr -dr com.apple.quarantine /Applications/FrameQ.app</code>
+          </p>
+        </div>
+
+        <div class="download-page__install-group" id="windows-install">
+          <h3 class="download-page__install-platform">Windows</h3>
+          <ol class="download-page__steps">
+            <li>下载 <code class="mono">FrameQ_0.3.0_x64-setup.exe</code> 安装包。</li>
+            <li>双击运行安装包，按提示完成安装。</li>
+            <li>安装完成后从开始菜单启动 FrameQ。</li>
+          </ol>
+          <p class="download-page__install-note">
+            Windows 使用签名 updater 元数据，支持应用内更新检查。
+          </p>
+        </div>
+      </section>
+
+      <!-- Release Notes -->
+      {latestNotes && LatestNotesContent && (
+        <section class="download-page__release-notes" id="release-notes">
+          <h2 class="download-page__rn-title">
+            {latestNotes.data.version} 发布说明
+          </h2>
+          <p class="download-page__rn-date mono">{latestNotes.data.date}</p>
+          <div class="download-page__rn-body">
+            <LatestNotesContent />
+          </div>
+          <p class="download-page__rn-link">
+            <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noopener">
+              查看全部 Release Notes →
+            </a>
+          </p>
+        </section>
+      )}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .download-page__header {
+    margin-bottom: var(--space-12);
+    max-width: var(--content-max-narrow);
+  }
+
+  .download-page__title {
+    font-size: var(--text-display-s);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tighter);
+    margin-bottom: var(--space-3);
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  .download-page__version {
+    font-size: var(--text-lg);
+    color: var(--color-ink-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .download-page__lede {
+    font-size: var(--text-base);
+    color: var(--color-muted);
+  }
+
+  /* ---- 下载卡片网格 ---- */
+  .download-page__cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-6);
+    margin-bottom: var(--space-16);
+  }
+
+  /* ---- ASR 说明 ---- */
+  .download-page__notice {
+    background: var(--color-paper-2);
+    border: var(--rule-hairline) solid var(--color-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+    margin-bottom: var(--space-16);
+  }
+
+  .download-page__notice-title {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-bottom: var(--space-3);
+  }
+
+  .download-page__notice-text {
+    font-size: var(--text-sm);
+    color: var(--color-ink-2);
+    line-height: var(--leading-relaxed);
+    margin-bottom: var(--space-2);
+  }
+
+  .download-page__notice-text code {
+    font-family: var(--font-code);
+    font-size: var(--text-xs);
+    padding-inline: var(--space-1);
+    padding-block: var(--space-1);
+    background: var(--color-paper-3);
+    border-radius: var(--radius-sm);
+  }
+
+  /* ---- 安装说明 ---- */
+  .download-page__install {
+    margin-bottom: var(--space-16);
+  }
+
+  .download-page__install-title {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    margin-bottom: var(--space-8);
+  }
+
+  .download-page__install-group {
+    margin-bottom: var(--space-8);
+  }
+
+  .download-page__install-platform {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--color-ink);
+    margin-bottom: var(--space-3);
+  }
+
+  .download-page__steps {
+    margin: 0 0 var(--space-3) 0;
+    padding-left: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .download-page__steps li {
+    font-size: var(--text-sm);
+    color: var(--color-ink-2);
+    line-height: var(--leading-relaxed);
+  }
+
+  .download-page__steps code {
+    font-family: var(--font-code);
+    font-size: var(--text-xs);
+    padding-inline: var(--space-1);
+    padding-block: var(--space-1);
+    background: var(--color-paper-2);
+    border-radius: var(--radius-sm);
+  }
+
+  .download-page__install-note {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    line-height: var(--leading-relaxed);
+  }
+
+  .download-page__install-note code {
+    font-family: var(--font-code);
+    font-size: var(--text-xs);
+    padding-inline: var(--space-1);
+    padding-block: var(--space-1);
+    background: var(--color-paper-2);
+    border-radius: var(--radius-sm);
+  }
+
+  /* ---- Release Notes ---- */
+  .download-page__release-notes {
+    border-top: var(--rule-hairline) solid var(--color-rule-2);
+    padding-top: var(--space-12);
+  }
+
+  .download-page__rn-title {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+  }
+
+  .download-page__rn-date {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-bottom: var(--space-6);
+  }
+
+  .download-page__rn-body {
+    max-width: var(--content-max-narrow);
+  }
+
+  .download-page__rn-body :global(h2) {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-top: var(--space-6);
+    margin-bottom: var(--space-3);
+  }
+
+  .download-page__rn-body :global(h2:first-child) {
+    margin-top: 0;
+  }
+
+  .download-page__rn-body :global(p) {
+    font-size: var(--text-sm);
+    color: var(--color-ink-2);
+    line-height: var(--leading-relaxed);
+    margin-bottom: var(--space-3);
+  }
+
+  .download-page__rn-body :global(ul) {
+    margin: 0 0 var(--space-3) 0;
+    padding-left: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .download-page__rn-body :global(li) {
+    font-size: var(--text-sm);
+    color: var(--color-ink-2);
+    line-height: var(--leading-relaxed);
+  }
+
+  .download-page__rn-body :global(code) {
+    font-family: var(--font-code);
+    font-size: var(--text-xs);
+    padding-inline: var(--space-1);
+    padding-block: var(--space-1);
+    background: var(--color-paper-2);
+    border-radius: var(--radius-sm);
+  }
+
+  .download-page__rn-link {
+    margin-top: var(--space-6);
+    font-size: var(--text-sm);
+  }
+
+  /* ---- 移动端 ---- */
+  @media (max-width: 768px) {
+    .download-page__cards {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .download-page__cards {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

@@ -15,3 +15,4 @@
 - 当前桌面 App 不导入本目录中的 CSS。
 - 本目录不得存放产品截图、字体文件、Apple 素材或其他来源和授权不明确的资产。
 - 开始实现宣传站前，必须先建立对应 product spec 和 active ExecPlan，并重新确认品牌、可访问性、性能、隐私和发布要求。
+- `globals.css` 是宣传站的初始设计变量种子（reference-only），不再随宣传站迭代而修改。`site/`（FrameQ Web 宣传站）已采用 `globals.css` 的 hex token 作为迁移源，在 `site/src/styles/tokens.css` 中升级为三层 OKLCH token 系统（primitive → semantic → component），后续 token 演进发生在 `site/`，不回流到本目录。

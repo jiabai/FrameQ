@@ -1,0 +1,26 @@
+{
+  "name": "frameq-site",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "FrameQ public marketing site (Astro SSG). Independent top-level directory; no runtime imports from app/server/worker/design-system.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.0.0",
+    "@fontsource/fraunces": "^5.3.0",
+    "@fontsource/geist": "^5.3.0",
+    "@fontsource/geist-mono": "^5.3.0",
+    "astro": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18.17.1"
+  }
+}

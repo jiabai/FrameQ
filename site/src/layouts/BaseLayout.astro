@@ -1,0 +1,119 @@
+---
+/**
+ * BaseLayout — 全站统一布局骨架。
+ *
+ * - <html lang="zh-CN"> 固定中文
+ * - <head> 含 title / meta description / Open Graph / JSON-LD SoftwareApplication
+ * - <body> 含 Header + slot + Footer
+ * - 不加载 analytics / tracking / 第三方 embed / 外部字体 CDN（spec § Privacy）
+ *
+ * 见 docs/product-specs/2026-08-05-web-marketing-site.md § SEO and Accessibility。
+ */
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { PRODUCT_NAME, PRODUCT_CATEGORY, GITHUB_URL } from '../consts';
+
+interface Props {
+  title: string;
+  description: string;
+  /** OG 图路径，默认 /og/og.png */
+  ogImage?: string;
+}
+
+const { title, description, ogImage = '/og/og.png' } = Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const ogImageURL = new URL(ogImage, Astro.site);
+
+// JSON-LD SoftwareApplication 结构化数据
+const softwareApplication = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: PRODUCT_NAME,
+  applicationCategory: 'MultimediaApplication',
+  operatingSystem: 'macOS, Windows',
+  description: PRODUCT_CATEGORY,
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+};
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalURL} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:image" content={ogImageURL} />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:site_name" content={PRODUCT_NAME} />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageURL} />
+
+    <!-- JSON-LD SoftwareApplication -->
+    <script type="application/ld+json" set:html={JSON.stringify(softwareApplication)} />
+  </head>
+  <body>
+    <a href="#main" class="sr-only">跳到主内容</a>
+    <Header />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer />
+
+    <!-- Round 1 视觉活力：scroll-triggered reveal observer。
+         原生 IntersectionObserver，无 JS 框架依赖，仅在 prefers-reduced-motion=no-preference 时启用。
+         data-reveal 标记观察目标，进入视口添加 .is-visible 触发 CSS transition。 -->
+    <script>
+      const prefersReducedMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+
+      if (!prefersReducedMotion && 'IntersectionObserver' in window) {
+        const reveals = document.querySelectorAll('[data-reveal]');
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                const el = entry.target as HTMLElement;
+                const delay = el.dataset.revealDelay;
+                if (delay) {
+                  el.style.setProperty('--reveal-delay', `${delay}ms`);
+                }
+                el.classList.add('is-visible');
+                observer.unobserve(el);
+              }
+            });
+          },
+          {
+            threshold: 0.12,
+            rootMargin: '0px 0px -8% 0px',
+          },
+        );
+        reveals.forEach((el) => observer.observe(el));
+      } else {
+        // reduced-motion 或无 IntersectionObserver：立即显示所有 reveal 元素
+        document
+          .querySelectorAll('[data-reveal]')
+          .forEach((el) => el.classList.add('is-visible'));
+      }
+    </script>
+  </body>
+</html>

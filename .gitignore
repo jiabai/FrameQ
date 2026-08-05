@@ -50,3 +50,10 @@ __pycache__/
 
 video/*
 lib-external/*
+design-system/banners/*
+
+# Skill runtime caches
+.hallmark/
+
+# Local cargo config (environment-specific tuning)
+app/src-tauri/.cargo/

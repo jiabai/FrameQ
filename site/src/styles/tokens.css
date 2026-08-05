@@ -1,0 +1,256 @@
+/* Hallmark · pre-emit critique: P5 H4 E5 S4 R5 V5
+ * macrostructure: Narrative Workflow · H2 Split diptych hero knobs: ratio=6/6, right=trust-card, divider=negative-space
+ * theme: custom · vibe: "local-first, precise, quietly capable" · paper: oklch(98% 0.005 256) · accent: oklch(52% 0.17 256)
+ * display: Geist · body: Geist · mono: Geist Mono · axes: light / geometric-sans / cool
+ * nav: N5 Floating pill · footer: Ft5 Statement · studied: no · context: explicit · v1.1.0
+ * contrast: pass (40-41) · nav: N5 · footer: Ft5 · slop: pass (42-45) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50-57) · motion: pass (27)
+ * slop test: 58 / 58 ✓
+ */
+
+/* ==========================================================================
+   Primitive tokens — 原始 OKLCH 值，无语义
+   从 design-system/globals.css 的 hex (#0066cc / #1d1d1f / #ffffff / #717171 / #e5e5e5)
+   迁移升级为 OKLCH 三层 token 系统。design-system/globals.css 保持 reference-only 不变。
+   ========================================================================== */
+
+:root {
+  /* ---- Color primitives (OKLCH) ---- */
+  /* FrameQ 蓝 accent — hex #0066cc 真实 OKLCH 转换 ≈ oklch(52% 0.177 256)。
+     早期版本误记为 oklch(56% 0.165 256)，实际过亮，accent on paper 仅 4.45:1 未过 AA。
+     调整为 oklch(52% 0.17 256) 后 accent on paper 5.29:1 / on paper2 4.84:1 / 按钮白字 5.29:1 全部通过 AA。 */
+  --color-blue-600: oklch(52% 0.17 256);
+  --color-blue-500: oklch(58% 0.16 256);
+  --color-blue-700: oklch(48% 0.17 256);
+
+  /* Neutral 色阶 — 从 #1d1d1f / #717171 / #e5e5e5 / #ffffff 迁移，全部 tinted toward 256° */
+  --color-neutral-0: oklch(98% 0.005 256);   /* paper 白，cool-tinted near-white */
+  --color-neutral-50: oklch(95% 0.006 256);
+  --color-neutral-100: oklch(92% 0.008 256);
+  --color-neutral-200: oklch(84% 0.008 256);
+  --color-neutral-300: oklch(78% 0.010 256);
+  --color-neutral-400: oklch(50% 0.014 256);  /* 早期 54% 在 paper2 上仅 4.37:1 未过 AA；50% 在 paper/paper2 均通过 (5.66/5.18) */
+  --color-neutral-500: oklch(42% 0.014 256);
+  --color-neutral-700: oklch(30% 0.014 256);
+  --color-neutral-900: oklch(22% 0.014 256); /* ink 深蓝 tinted */
+
+  /* Destructive — 错误/警告，暖红 */
+  --color-red-600: oklch(56% 0.18 25);
+
+  /* Success — 成功状态，绿。早期 58% 在 paper 上仅 3.82:1 未过 AA；52% 通过 (4.88:1) */
+  --color-green-600: oklch(52% 0.15 145);
+
+  /* Warn — 可选/云端指示色，暖琥珀 */
+  --color-amber-500: oklch(75% 0.14 75);
+
+  /* ---- Typography primitives ---- */
+  /* Round 1 视觉活力：引入 Fraunces serif display 作为 hero/footer statement anchor。
+     Geist 保持 body 字族，Fraunces 仅用于 display-size 标题与 closing statement，
+     形成 sans body + serif display 的性格对比（frontend-design "pair a distinctive
+     display font with a refined body font"）。 */
+  --font-display: 'Fraunces', 'Iowan Old Style', 'Georgia', serif;
+  --font-body: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+
+  /* ---- Spacing primitives (4pt scale) ---- */
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+  --space-20: 5rem;     /* 80px */
+  --space-24: 6rem;     /* 96px */
+  --space-32: 8rem;     /* 128px */
+
+  /* ---- Radius primitives ---- */
+  /* 从 design-system/globals.css --radius: 0.625rem (10px) 迁移 */
+  --radius-sm: 0.375rem;   /* 6px — modern-minimal tight-radius controls */
+  --radius-md: 0.625rem;   /* 10px — design-system 原 --radius 值 */
+  --radius-lg: 0.875rem;   /* 14px */
+  --radius-full: 9999px;   /* pill CTAs */
+
+  /* ---- Easing primitives ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);      /* ease-out — default for entrances */
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);        /* ease-in — for exits */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);   /* ease-in-out — for state transitions */
+
+  /* ---- Duration primitives ---- */
+  --dur-fast: 120ms;     /* hover, focus */
+  --dur-base: 200ms;     /* default transitions */
+  --dur-slow: 400ms;     /* section reveals */
+
+  /* ---- Rule primitives ---- */
+  --rule-hairline: 1px;
+  --rule-thin: 1.5px;
+
+  /* ---- Layout primitives ---- */
+  --content-max: 72rem;       /* 桌面端受控内容宽度 */
+  --content-max-narrow: 48rem; /* 长文阅读宽度 */
+}
+
+/* ==========================================================================
+   Semantic tokens — 语义别名，对齐用途
+   ========================================================================== */
+
+:root {
+  /* ---- Surface ---- */
+  --color-paper: var(--color-neutral-0);       /* 主背景 */
+  --color-paper-2: var(--color-neutral-50);    /* 一级 elevation */
+  --color-paper-3: var(--color-neutral-100);   /* 二级 elevation (panels) */
+
+  /* ---- Text ---- */
+  --color-ink: var(--color-neutral-900);       /* 正文 */
+  --color-ink-2: var(--color-neutral-500);     /* 次要文字 */
+  --color-muted: var(--color-neutral-400);     /* 弱化文字 */
+
+  /* ---- Borders & rules ---- */
+  --color-rule: var(--color-neutral-300);      /* 主分隔线 */
+  --color-rule-2: var(--color-neutral-200);    /* 次分隔线 */
+  --color-border: var(--color-neutral-200);    /* 卡片边框 */
+
+  /* ---- Accent ---- */
+  --color-accent: var(--color-blue-600);       /* FrameQ 蓝 */
+  --color-accent-hover: var(--color-blue-700); /* hover 加深 */
+  --color-accent-ink: var(--color-neutral-0);  /* accent 上的文字（白） */
+  --color-accent-tint-bg: oklch(52% 0.17 256 / 0.08);   /* accent 8% 透明度背景 */
+  --color-accent-tint-border: oklch(52% 0.17 256 / 0.2); /* accent 20% 透明度边框 */
+
+  /* ---- States ---- */
+  --color-focus: oklch(54% 0.20 256);          /* focus ring，高 chroma */
+  --color-destructive: var(--color-red-600);
+  --color-success: var(--color-green-600);
+  --color-warn: var(--color-amber-500);        /* 可选/云端指示色 */
+
+  /* ---- Typography ---- */
+  /* --font-heading 用于 display-size 标题（h1, footer statement, step number），
+     通过 Fraunces serif 形成"editorial display"性格对比。
+     --font-text 用于 body / 长文，保持 Geist sans 的可读性。
+     --font-ui 用于 UI 元素（nav, button, tag），保持 sans 工具感。 */
+  --font-heading: var(--font-display);
+  --font-text: var(--font-body);
+  --font-ui: var(--font-body);
+  --font-code: var(--font-mono);
+
+  /* ---- Spacing scale aliases ---- */
+  --space-xs: var(--space-1);
+  --space-sm: var(--space-2);
+  --space-md: var(--space-4);
+  --space-lg: var(--space-6);
+  --space-xl: var(--space-8);
+  --space-2xl: var(--space-12);
+  --space-3xl: var(--space-16);
+  --space-4xl: var(--space-24);
+
+  /* ---- Text scale ---- */
+  --text-xs: 0.75rem;      /* 12px */
+  --text-sm: 0.875rem;     /* 14px */
+  --text-base: 1rem;       /* 16px */
+  --text-lg: 1.125rem;     /* 18px */
+  --text-xl: 1.25rem;      /* 20px */
+  --text-2xl: 1.5rem;      /* 24px */
+  --text-3xl: 1.875rem;    /* 30px */
+  --text-4xl: 2.25rem;     /* 36px */
+  --text-display: clamp(2.5rem, 5vw + 0.5rem, 4.75rem);     /* 40-76px hero */
+  --text-display-s: clamp(2rem, 4vw + 0.5rem, 3.5rem);      /* 32-56px 长标题 */
+  /* Round 1 新增：display-l 用于 footer statement / hero title 的 editorial 量级，
+     display-mono 用于 WorkflowSteps 巨大数字 anchor。 */
+  --text-display-l: clamp(3rem, 6vw + 0.5rem, 6rem);        /* 48-96px statement */
+  --text-display-mono: clamp(3.5rem, 8vw, 6.5rem);          /* 56-104px step number */
+  /* Round 2 P1-1：display-xl 用于 hero title 的最大张力量级，比 display-l 更激进 */
+  --text-display-xl: clamp(3.5rem, 9vw + 0.5rem, 8rem);     /* 56-128px hero anchor */
+
+  /* ---- Line heights ---- */
+  --leading-tight: 1.1;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  /* ---- Letter spacing ---- */
+  --tracking-tight: -0.025em;
+  --tracking-tighter: -0.035em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+
+  /* ---- Layout aliases ---- */
+  --content-width: var(--content-max);
+  --content-padding: var(--space-6);
+}
+
+/* ==========================================================================
+   Component tokens — 组件级 token
+   ========================================================================== */
+
+:root {
+  /* ---- Button ---- */
+  --button-bg: var(--color-accent);
+  --button-bg-hover: var(--color-accent-hover);
+  --button-fg: var(--color-accent-ink);
+  --button-border: transparent;
+  --button-radius: var(--radius-full);
+  --button-padding-x: var(--space-5);
+  --button-padding-y: var(--space-3);
+  --button-font-size: var(--text-sm);
+  --button-font-weight: 500;
+
+  /* ---- Button secondary (outlined) ---- */
+  --button-secondary-bg: transparent;
+  --button-secondary-bg-hover: var(--color-paper-2);
+  --button-secondary-fg: var(--color-ink);
+  --button-secondary-border: var(--color-rule);
+
+  /* ---- Focus ring ---- */
+  --focus-ring-color: var(--color-focus);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* ---- Header (N5 Floating pill) ---- */
+  --header-bg: oklch(98% 0.005 256 / 0.85);  /* 半透明 paper，配合 backdrop-blur */
+  --header-border: var(--color-rule-2);
+  --header-radius: var(--radius-full);
+  --header-shadow: 0 1px 2px oklch(22% 0.014 256 / 0.05), 0 4px 16px oklch(22% 0.014 256 / 0.04);
+
+  /* ---- Card ---- */
+  --card-bg: var(--color-paper);
+  --card-border: var(--color-border);
+  --card-radius: var(--radius-md);
+  --card-padding: var(--space-6);
+  /* Round 1：卡片 elevation 分层，避免全站同质化 */
+  --card-shadow-rest: 0 1px 2px oklch(22% 0.014 256 / 0.03);
+  --card-shadow-hover: 0 2px 8px oklch(22% 0.014 256 / 0.06), 0 1px 2px oklch(22% 0.014 256 / 0.04);
+
+  /* ---- Hero ---- */
+  --hero-title-color: var(--color-ink);
+  --hero-lede-color: var(--color-ink-2);
+  --hero-max-width: var(--content-max);
+  /* Round 1：hero 背景微弱 radial bloom，为 paper 添加大气感而非平铺色 */
+  --hero-glow: radial-gradient(
+    ellipse 60% 50% at 70% 30%,
+    oklch(52% 0.17 256 / 0.05) 0%,
+    transparent 60%
+  );
+
+  /* ---- Workflow steps ---- */
+  --step-number-color: var(--color-accent);
+  --step-label-color: var(--color-ink-2);
+  /* Round 1：巨大数字 outline 样式 — 用 text-stroke + 透明 fill 形成 editorial anchor */
+  --step-number-outline-fill: transparent;
+  --step-number-outline-stroke: oklch(52% 0.17 256 / 0.25);
+
+  /* ---- Code block (OutputPreview) ---- */
+  --code-bg: var(--color-neutral-100);
+  --code-header-bg: var(--color-paper-3);
+  --code-border: var(--color-border);
+  --code-line-number-color: var(--color-muted);
+  --code-text-color: var(--color-ink-2);
+  --code-accent-color: var(--color-accent);
+
+  /* ---- Footer (Ft5 Statement) ---- */
+  --footer-statement-color: var(--color-ink);
+  --footer-statement-accent: var(--color-accent);
+  --footer-meta-color: var(--color-muted);
+  --footer-border: var(--color-rule-2);
+}
