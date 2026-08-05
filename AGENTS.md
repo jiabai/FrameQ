@@ -57,7 +57,7 @@
 - 产品规格索引：`docs/product-specs/index.md`
 - 发布可靠性规格：`docs/product-specs/2026-07-22-release-reliability-hardening.md`
 - v0.3.1 发布规格：`docs/product-specs/2026-08-05-v0.3.1-desktop-feature-release.md`
-- v0.3.1 发布计划（active）：`docs/exec-plans/active/2026-08-05-v0.3.1-desktop-feature-release-plan.md`（范围：Web user dashboard、Server 页面 i18n、Inspiration Profile v2、进度感知 watchdog、contract v7 + 解剖来源状态、CRLF 出处修复；含 server 专项门禁）
+- v0.3.1 发布计划（completed）：`docs/exec-plans/completed/2026-08-05-v0.3.1-desktop-feature-release-plan.md`（已发布 stable：https://github.com/jiabai/FrameQ/releases/tag/v0.3.1；范围：Web user dashboard、Server 页面 i18n、Inspiration Profile v2、进度感知 watchdog、contract v7 + 解剖来源状态、CRLF 出处修复；含 server 专项门禁）
 - v0.3.0 发布规格：`docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`
 - v0.3.0 发布计划（completed）：`docs/exec-plans/completed/2026-08-03-v0.3.0-desktop-feature-release-plan.md`（已发布 stable：https://github.com/jiabai/FrameQ/releases/tag/v0.3.0）
 - Server 页面 i18n 规格：`docs/product-specs/2026-08-04-server-page-i18n.md`（`/login`、`/dashboard`、`/admin/login`、`/admin` 增加 zh-CN/en 切换按钮，新 `server/src/i18n.ts` 模块；不涉及 desktop/worker/ASR/store/Prisma）

@@ -2,22 +2,23 @@
 
 ## Active UI Work
 
-- [ ] Prepare and publish FrameQ v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance
-  (pending): five version sources synchronized at 0.3.1, `scripts/tests/release-version.test.mjs`
-  asserts `0.3.1`, complete local release gates pass (scripts, app tests/lint/build, Rust
-  tests/rustfmt, worker tests/Ruff, server tests/build, governance, diff, refreshed packaged-worker
-  SHA-256 equality, Tauri `--no-bundle`), plus server gates (hosted server CI, migration
-  status/preflight + copied-DB restore smoke, production `secureCookies` verified on
-  `frameq.8xf.pro`), annotated tag `v0.3.1` created and pushed after explicit approval, Desktop
-  Release workflow builds all three platform artifacts from one tagged commit, reviewed
-  `docs/releases/v0.3.1.md` notes replace the generic generated body, and Draft published as stable
-  non-prerelease. Scope: Web user dashboard, server-page i18n, Inspiration Profile v2 / generation
-  preference boundary, progress-aware retry watchdog, desktop worker contract v7 + dissection
-  source status, transcript provenance CRLF fix. Residual risk: macOS runtime verification gaps,
+- [x] Prepare and publish FrameQ v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance: five
+  version sources synchronized at 0.3.1, `scripts/tests/release-version.test.mjs` asserts
+  `0.3.1`, local release gates pass (scripts 28/29 with pre-existing Windows fs.rm env failure;
+  app lint/test 73 files/699/build; worker Ruff + pytest 690/2 sandbox-symlink env failures;
+  server build + tests 201/1; cargo fmt; governance; diff; packaged-worker mirror equality),
+  server gates pass (hosted Server CI incl. rehearsed isolated restore smoke; fresh-DB migration
+  deploy + backup/restore `integrity_check` ok), annotated tag `v0.3.1` created and pushed after
+  explicit approval, Desktop Release workflow built all three platform artifacts from one tagged
+  commit (run 31022512026 success), reviewed `docs/releases/v0.3.1.md` notes replaced the generic
+  generated body, and Draft published as stable non-prerelease
+  (https://github.com/jiabai/FrameQ/releases/tag/v0.3.1). Gate-fixed contract-v7 regressions:
+  `worker/frameq_worker/desktop_contract.py` 6→7, `build-installer.test.mjs` 6→7, 7 frontend
+  fixtures missing `dissection_source_status`. Residual risk: macOS runtime verification gaps,
   Inspiration Profile v2 packaged launch, transcript dissection real paid-supplier smoke, Web
-  session no IP/UA binding, production `secureCookies` verification. Product spec:
-  `docs/product-specs/2026-08-05-v0.3.1-desktop-feature-release.md`. ExecPlan:
-  `docs/exec-plans/active/2026-08-05-v0.3.1-desktop-feature-release-plan.md`.
+  session no IP/UA binding, production `secureCookies` verification on `frameq.8xf.pro`. Product
+  spec: `docs/product-specs/2026-08-05-v0.3.1-desktop-feature-release.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-08-05-v0.3.1-desktop-feature-release-plan.md`.
 
 - [x] Prepare and publish FrameQ v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
   version sources synchronized at 0.3.0, `scripts/tests/release-version.test.mjs` asserts `0.3.0`,
