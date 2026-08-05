@@ -232,7 +232,7 @@ def read_existing_dissection(paths: TaskPaths) -> dict[str, object] | None:
         return None
     try:
         payload = json.loads(paths.dissection_json.read_text(encoding="utf-8"))
-        transcript = paths.transcript_txt_path.read_text(encoding="utf-8")
+        transcript = paths.transcript_txt_path.read_bytes().decode("utf-8")
         return parse_persisted_dissection(payload, transcript=transcript).to_dict()
     except (OSError, UnicodeError, json.JSONDecodeError, DissectionGenerationError):
         return None

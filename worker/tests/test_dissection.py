@@ -559,6 +559,43 @@ def test_persisted_parser_rejects_provenance_tampering() -> None:
     assert captured.value.code == "DISSECTION_INVALID_RESULT"
 
 
+def test_dissection_uses_raw_utf8_bytes_for_crlf_transcript_provenance(tmp_path) -> None:
+    transcript_path = tmp_path / "task" / "transcript" / "transcript.txt"
+    transcript_path.parent.mkdir(parents=True)
+    transcript_bytes = "第一段。\r\n第二段。\r\n".encode()
+    transcript_path.write_bytes(transcript_bytes)
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.responses = [
+                json.dumps({"batch": 1, "segments": []}),
+                json.dumps(valid_semantic_report()),
+            ]
+
+        def generate(self, _prompt: str) -> str:
+            return self.responses.pop(0)
+
+    result = run_insight_generation_step(
+        transcript_txt_path=transcript_path,
+        output_dir=tmp_path / "task" / "ai",
+        output_stem="",
+        client=FakeClient(),
+        output_language="zh-CN",
+        target="dissection",
+        persist=False,
+    )
+
+    assert result.status.value == "completed"
+    assert result.dissection is not None
+    assert result.dissection["sourceTranscriptSha256"] == hashlib.sha256(
+        transcript_bytes
+    ).hexdigest()
+    assert result.dissection["sourceChunks"][-1]["endByte"] == len(transcript_bytes)
+    for chunk in result.dissection["sourceChunks"]:
+        source_slice = transcript_bytes[chunk["startByte"] : chunk["endByte"]]
+        assert chunk["sha256"] == hashlib.sha256(source_slice).hexdigest()
+
+
 def test_empty_official_transcript_stops_before_any_supplier_call(tmp_path) -> None:
     transcript_path = tmp_path / "task" / "transcript" / "transcript.txt"
     transcript_path.parent.mkdir(parents=True)

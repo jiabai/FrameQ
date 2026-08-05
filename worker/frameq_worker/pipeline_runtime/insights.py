@@ -58,7 +58,8 @@ def run_insight_generation_step(
         )
 
     try:
-        official_transcript_body = transcript_txt_path.read_text(encoding="utf-8")
+        official_transcript_bytes = transcript_txt_path.read_bytes()
+        official_transcript_body = official_transcript_bytes.decode("utf-8")
     except (OSError, UnicodeError):
         return ProcessResult(
             status=JobStage.PARTIAL_COMPLETED,
