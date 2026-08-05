@@ -46,8 +46,6 @@ class InspirationProfile:
     city_context: str
     gender_perspective: str
     platforms: tuple[str, ...] = ()
-    default_styles: tuple[str, ...] = ()
-    default_avoid: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -57,8 +55,6 @@ class InspirationProfile:
             "cityContext": self.city_context,
             "genderPerspective": self.gender_perspective,
             "platforms": list(self.platforms),
-            "defaultStyles": list(self.default_styles),
-            "defaultAvoid": list(self.default_avoid),
         }
 
 

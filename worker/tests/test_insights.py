@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import json
 import multiprocessing
 import queue
@@ -49,8 +50,6 @@ def preference_snapshot():
                 "cityContext": "new_tier1_city",
                 "genderPerspective": "neutral_perspective",
                 "platforms": ["douyin"],
-                "defaultStyles": ["grounded"],
-                "defaultAvoid": ["clickbait"],
             },
             "profileSkipped": False,
             "generationPreferences": {
@@ -312,6 +311,47 @@ def test_build_question_prompt_includes_compact_preference_context() -> None:
         in prompt
     )
     assert '"topic": "启发话题点"' not in prompt
+    assert "Prefer `generationPreferences`" not in prompt
+    assert "Treat `profile.platforms` as background context" in prompt
+    assert "follow the current scenario" in prompt
+    assert "Transcript evidence wins over all preferences." in prompt
+
+
+def test_topic_plan_prompt_uses_narrow_current_scenario_precedence() -> None:
+    prompt = prompt_module.build_topic_plan_prompt(
+        "这是一段用于生成灵感的文字稿。",
+        output_language="zh-CN",
+        preference_snapshot=preference_snapshot(),
+    )
+
+    assert "Prefer `generationPreferences`" not in prompt
+    assert "Treat `profile.platforms` as background context" in prompt
+    assert "follow the current scenario" in prompt
+    assert "Transcript evidence wins over all preferences." in prompt
+
+
+def test_non_inspiration_prompt_builders_remain_unpersonalized() -> None:
+    builders = (
+        prompt_module.build_mindmap_prompt,
+        prompt_module.build_summary_prompt,
+        prompt_module.build_dissection_map_prompt,
+        prompt_module.build_dissection_reduce_prompt,
+        prompt_module.build_dissection_repair_prompt,
+    )
+
+    for builder in builders:
+        assert "preference_snapshot" not in inspect.signature(builder).parameters
+
+
+def test_prompt_snapshot_contains_only_generation_scoped_expression_preferences() -> None:
+    serialized = prompt_module.format_preference_snapshot_for_prompt(
+        preference_snapshot()
+    )
+
+    assert '"styles":["grounded"]' in serialized
+    assert '"avoid":["clickbait"]' in serialized
+    assert "defaultStyles" not in serialized
+    assert "defaultAvoid" not in serialized
 
 
 def test_generate_insights_applies_preferences_to_planner_and_question_prompts(

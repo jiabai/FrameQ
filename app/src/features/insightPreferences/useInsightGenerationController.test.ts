@@ -68,8 +68,6 @@ const PROFILE: InspirationProfile = {
   cityContext: "new_tier1_city",
   genderPerspective: "unspecified",
   platforms: ["douyin"],
-  defaultStyles: ["direct_sharp"],
-  defaultAvoid: [],
 };
 
 const GENERATION_PREFERENCES: GenerationPreferences = {
@@ -173,6 +171,7 @@ function createInsightPreferences(
     profileStatus: "valid",
     profileError: null,
     defaultGenerationPreferences: null,
+    legacyGenerationPreferenceSeed: null,
     preferencesPath: "D:/FrameQ/app-data/insight-preferences.json",
     ...overrides,
   };

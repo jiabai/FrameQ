@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   buildPreferenceSnapshot,
   INSIGHT_PREFERENCE_FIELDS,
+  PROFILE_FIELD_ORDER,
   isPreferenceOptionId,
   type GenerationPreferences,
   type InspirationProfile,
@@ -19,14 +20,12 @@ import {
 import { SUPPORTED_LOCALES } from "./locale";
 
 const PROFILE: InspirationProfile = {
-  role: "marketing_sales",
-  domain: "marketing_sales",
-  stage: "manager",
+  role: "content_creator",
+  domain: "content_media",
+  stage: "experienced_professional",
   cityContext: "new_tier1_city",
   genderPerspective: "unspecified",
-  platforms: ["douyin", "bilibili"],
-  defaultStyles: ["direct_sharp"],
-  defaultAvoid: [],
+  platforms: ["douyin"],
 };
 
 const GENERATION_PREFERENCES: GenerationPreferences = {
@@ -82,8 +81,6 @@ describe("localized preference presentation", () => {
           PROFILE.genderPerspective,
         ])[0],
         platforms: roundTripIds("platforms", PROFILE.platforms),
-        defaultStyles: roundTripIds("defaultStyles", PROFILE.defaultStyles),
-        defaultAvoid: roundTripIds("defaultAvoid", PROFILE.defaultAvoid),
       };
       expect(generationPreferences).toEqual(GENERATION_PREFERENCES);
       expect(profile).toEqual(PROFILE);
@@ -102,9 +99,24 @@ describe("localized preference presentation", () => {
   });
 
   test("summarizes profile and generation choices in the requested UI locale", () => {
-    expect(summarizeInspirationProfile(PROFILE, "zh-TW")).toContain(
-      "我的角色：市場／銷售",
-    );
+    expect(PROFILE_FIELD_ORDER).toEqual([
+      "role",
+      "domain",
+      "stage",
+      "cityContext",
+      "genderPerspective",
+      "platforms",
+    ]);
+    for (const locale of SUPPORTED_LOCALES) {
+      const summary = summarizeInspirationProfile(PROFILE, locale);
+      const allowedLabels = PROFILE_FIELD_ORDER.map(
+        (field) => getPreferenceFieldPresentation(locale, field).label,
+      );
+      expect(summary).not.toHaveLength(0);
+      expect(
+        summary.every((line) => allowedLabels.some((label) => line.startsWith(label))),
+      ).toBe(true);
+    }
     expect(summarizeGenerationPreferences(GENERATION_PREFERENCES, "en-US")).toContain(
       "Goal: Content creation",
     );
@@ -163,6 +175,11 @@ describe("localized preference presentation", () => {
   });
 
   test("keeps business ids, canonical prompt semantics, and localized UI copy separated", () => {
+    expect(INSIGHT_PREFERENCE_FIELDS).not.toHaveProperty("defaultStyles");
+    expect(INSIGHT_PREFERENCE_FIELDS).not.toHaveProperty("defaultAvoid");
+    expect(INSIGHT_PREFERENCE_PROMPT_SEMANTICS).not.toHaveProperty("defaultStyles");
+    expect(INSIGHT_PREFERENCE_PROMPT_SEMANTICS).not.toHaveProperty("defaultAvoid");
+
     for (const [field, config] of Object.entries(INSIGHT_PREFERENCE_FIELDS)) {
       expect(
         Object.keys(

@@ -29,8 +29,6 @@ const EMPTY_PROFILE: InspirationProfile = {
   cityContext: "unspecified",
   genderPerspective: "unspecified",
   platforms: [],
-  defaultStyles: [],
-  defaultAvoid: [],
 };
 
 export function InspirationProfileForm({

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import copy
+import json
 from pathlib import Path
 
 import pytest
 from frameq_worker.requests import (
+    parse_preference_snapshot,
     parse_process_local_media_request,
     parse_process_request,
     parse_retry_insights_request,
@@ -19,8 +22,6 @@ def valid_preference_snapshot() -> dict[str, object]:
             "cityContext": "new_tier1_city",
             "genderPerspective": "neutral_perspective",
             "platforms": ["douyin"],
-            "defaultStyles": ["grounded"],
-            "defaultAvoid": ["clickbait"],
         },
         "profileSkipped": False,
         "generationPreferences": {
@@ -264,6 +265,162 @@ def test_retry_request_parses_preference_snapshot() -> None:
     assert request.preference_snapshot.generation_preferences.goal == "content_creation"
     assert request.preference_snapshot.generation_preferences.angles == ("topic_angle",)
     assert request.preference_snapshot.label_snapshot.generation_preferences[0].field == "goal"
+    assert request.preference_snapshot.profile.to_dict() == {
+        "role": "content_creator",
+        "domain": "content_media",
+        "stage": "experienced_professional",
+        "cityContext": "new_tier1_city",
+        "genderPerspective": "neutral_perspective",
+        "platforms": ["douyin"],
+    }
+    serialized = json.dumps(request.preference_snapshot.to_dict())
+    assert "defaultStyles" not in serialized
+    assert "defaultAvoid" not in serialized
+
+
+def test_preference_snapshot_requires_explicit_nullable_profile() -> None:
+    explicit_null = valid_preference_snapshot()
+    explicit_null["profile"] = None
+    explicit_null["profileSkipped"] = True
+
+    parsed = parse_preference_snapshot(explicit_null)
+
+    assert parsed is not None
+    assert parsed.profile is None
+    assert parsed.profile_skipped is True
+
+    missing_profile = valid_preference_snapshot()
+    missing_profile.pop("profile")
+
+    with pytest.raises(ValueError) as error:
+        parse_preference_snapshot(missing_profile)
+
+    assert str(error.value) == "preference_snapshot fields were invalid."
+
+
+@pytest.mark.parametrize(
+    "layer,expected_error",
+    [
+        ("root", "preference_snapshot fields were invalid."),
+        (
+            "generationPreferences",
+            "preference_snapshot.generationPreferences fields were invalid.",
+        ),
+        ("labelSnapshot", "preference_snapshot.labelSnapshot fields were invalid."),
+        (
+            "profileLabelRow",
+            "preference_snapshot.labelSnapshot.profile item fields were invalid.",
+        ),
+        (
+            "generationLabelRow",
+            "preference_snapshot.labelSnapshot.generationPreferences item fields were invalid.",
+        ),
+        (
+            "labelValue",
+            "preference_snapshot.labelSnapshot value fields were invalid.",
+        ),
+    ],
+)
+def test_preference_snapshot_rejects_additional_properties_at_every_closed_layer(
+    layer: str,
+    expected_error: str,
+) -> None:
+    snapshot = copy.deepcopy(valid_preference_snapshot())
+    if layer == "root":
+        target = snapshot
+    elif layer == "generationPreferences":
+        target = snapshot["generationPreferences"]
+    elif layer == "labelSnapshot":
+        target = snapshot["labelSnapshot"]
+    else:
+        labels = snapshot["labelSnapshot"]
+        assert isinstance(labels, dict)
+        if layer == "profileLabelRow":
+            rows = labels["profile"]
+            assert isinstance(rows, list)
+            target = rows[0]
+        elif layer == "generationLabelRow":
+            rows = labels["generationPreferences"]
+            assert isinstance(rows, list)
+            target = rows[0]
+        else:
+            rows = labels["profile"]
+            assert isinstance(rows, list)
+            row = rows[0]
+            assert isinstance(row, dict)
+            values = row["values"]
+            assert isinstance(values, list)
+            target = values[0]
+    assert isinstance(target, dict)
+    target["reviewSecretField"] = "review-secret-value"
+
+    with pytest.raises(ValueError) as error:
+        parse_preference_snapshot(snapshot)
+
+    assert str(error.value) == expected_error
+    assert "review-secret" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"remove": "role"},
+        {"remove": "platforms"},
+        {"defaultStyles": ["review-secret-style"]},
+        {"defaultAvoid": ["review-secret-avoid"]},
+        {"reviewSecretField": "review-secret-value"},
+    ],
+)
+def test_preference_snapshot_rejects_non_current_profile_shape_without_echoing_input(
+    mutation: dict[str, object],
+) -> None:
+    snapshot = valid_preference_snapshot()
+    profile = snapshot["profile"]
+    assert isinstance(profile, dict)
+    removed = mutation.get("remove")
+    if isinstance(removed, str):
+        profile.pop(removed)
+    else:
+        profile.update(mutation)
+
+    with pytest.raises(ValueError) as error:
+        parse_preference_snapshot(snapshot)
+
+    assert str(error.value) == "preference_snapshot.profile fields were invalid."
+    assert "review-secret" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "section,field",
+    [
+        ("profile", "defaultStyles"),
+        ("profile", "defaultAvoid"),
+        ("profile", "styles"),
+        ("generationPreferences", "role"),
+        ("generationPreferences", "review-secret-field"),
+    ],
+)
+def test_preference_snapshot_rejects_label_fields_outside_their_current_section(
+    section: str,
+    field: str,
+) -> None:
+    snapshot = copy.deepcopy(valid_preference_snapshot())
+    label_snapshot = snapshot["labelSnapshot"]
+    assert isinstance(label_snapshot, dict)
+    rows = label_snapshot[section]
+    assert isinstance(rows, list)
+    row = rows[0]
+    assert isinstance(row, dict)
+    row["field"] = field
+    row["label"] = "review-secret-label"
+
+    with pytest.raises(ValueError) as error:
+        parse_preference_snapshot(snapshot)
+
+    assert str(error.value) == (
+        "preference_snapshot.labelSnapshot item field was invalid."
+    )
+    assert "review-secret" not in str(error.value)
 
 
 def test_retry_request_rejects_invalid_preference_snapshot_options() -> None:

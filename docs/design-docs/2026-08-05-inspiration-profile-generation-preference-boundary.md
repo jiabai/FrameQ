@@ -180,6 +180,9 @@ current v1 shape. Migration is local, deterministic, and atomic:
 
 - it may preselect only the `styles` and `avoid` steps the next time the user edits generation
   preferences;
+- it preserves up to three legacy `defaultStyles` values because that was valid in Profile v1; when
+  three styles are present, the current two-style limit keeps the style step invalid until the user
+  explicitly reduces the selection to one or two;
 - it is never eligible for `Generate now` because it is not a complete six-step selection;
 - it is never sent to the worker or included directly in a task snapshot;
 - it is removed when the user confirms a complete generation preference selection;

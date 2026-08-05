@@ -83,30 +83,6 @@ export const INSIGHT_PREFERENCE_PROMPT_SEMANTICS = {
       internal_sharing: "内部分享",
     },
   },
-  defaultStyles: {
-    label: "默认表达偏好",
-    options: {
-      direct_sharp: "直接犀利",
-      gentle_inspiring: "温和启发",
-      professional_analysis: "专业分析",
-      grounded: "接地气",
-      storytelling: "故事化",
-      short_video_friendly: "适合短视频",
-      long_form_friendly: "适合长文",
-    },
-  },
-  defaultAvoid: {
-    label: "默认避雷偏好",
-    options: {
-      chicken_soup: "太鸡汤",
-      academic: "太学术",
-      vague: "太空泛",
-      clickbait: "太标题党",
-      commercialized: "太商业化",
-      negative: "太负面",
-      grand_narrative: "宏大叙事",
-    },
-  },
   goal: {
     label: "本次目标",
     options: {

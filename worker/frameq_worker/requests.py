@@ -80,24 +80,6 @@ PROFILE_FIELD_OPTIONS: dict[str, set[str]] = {
         "course_community",
         "internal_sharing",
     },
-    "defaultStyles": {
-        "direct_sharp",
-        "gentle_inspiring",
-        "professional_analysis",
-        "grounded",
-        "storytelling",
-        "short_video_friendly",
-        "long_form_friendly",
-    },
-    "defaultAvoid": {
-        "chicken_soup",
-        "academic",
-        "vague",
-        "clickbait",
-        "commercialized",
-        "negative",
-        "grand_narrative",
-    },
 }
 
 DESKTOP_ASR_MODELS = frozenset({DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL})
@@ -177,6 +159,13 @@ INVALID_LOCAL_MEDIA_PAYLOAD_MESSAGE = "Local media request payload was invalid."
 RETRY_REQUEST_FIELDS = frozenset(
     {"task_id", "target", "output_language", "preference_snapshot"}
 )
+PREFERENCE_SNAPSHOT_FIELDS = frozenset(
+    {"profile", "profileSkipped", "generationPreferences", "labelSnapshot"}
+)
+GENERATION_PREFERENCE_FIELDS = frozenset(GENERATION_FIELD_OPTIONS)
+LABEL_SNAPSHOT_FIELDS = frozenset({"profile", "generationPreferences"})
+LABEL_SNAPSHOT_ITEM_FIELDS = frozenset({"field", "label", "values"})
+LABEL_VALUE_FIELDS = frozenset({"id", "label"})
 INVALID_RETRY_PAYLOAD_MESSAGE = "Retry request payload was invalid."
 UNSAFE_BASENAME_CHARACTER_PATTERN = re.compile(
     r"[/\\\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]"
@@ -322,6 +311,8 @@ def parse_preference_snapshot(payload: object) -> PreferenceSnapshot | None:
         return None
     if not isinstance(payload, dict):
         raise ValueError("preference_snapshot must be a JSON object.")
+    if set(payload) != PREFERENCE_SNAPSHOT_FIELDS:
+        raise ValueError("preference_snapshot fields were invalid.")
 
     profile_skipped = payload.get("profileSkipped")
     if not isinstance(profile_skipped, bool):
@@ -345,6 +336,8 @@ def parse_preference_snapshot(payload: object) -> PreferenceSnapshot | None:
 def _parse_inspiration_profile(payload: object) -> InspirationProfile:
     if not isinstance(payload, dict):
         raise ValueError("preference_snapshot.profile must be a JSON object or null.")
+    if set(payload) != set(PROFILE_FIELD_OPTIONS):
+        raise ValueError("preference_snapshot.profile fields were invalid.")
 
     return InspirationProfile(
         role=_read_single_option(payload, "role", PROFILE_FIELD_OPTIONS),
@@ -357,26 +350,14 @@ def _parse_inspiration_profile(payload: object) -> InspirationProfile:
             PROFILE_FIELD_OPTIONS,
         ),
         platforms=_read_multi_option(payload, "platforms", PROFILE_FIELD_OPTIONS, 0, 3),
-        default_styles=_read_multi_option(
-            payload,
-            "defaultStyles",
-            PROFILE_FIELD_OPTIONS,
-            0,
-            3,
-        ),
-        default_avoid=_read_multi_option(
-            payload,
-            "defaultAvoid",
-            PROFILE_FIELD_OPTIONS,
-            0,
-            3,
-        ),
     )
 
 
 def _parse_generation_preferences(payload: object) -> GenerationPreferences:
     if not isinstance(payload, dict):
         raise ValueError("preference_snapshot.generationPreferences must be a JSON object.")
+    if set(payload) != GENERATION_PREFERENCE_FIELDS:
+        raise ValueError("preference_snapshot.generationPreferences fields were invalid.")
 
     return GenerationPreferences(
         goal=_read_single_option(payload, "goal", GENERATION_FIELD_OPTIONS),
@@ -391,6 +372,8 @@ def _parse_generation_preferences(payload: object) -> GenerationPreferences:
 def _parse_label_snapshot(payload: object) -> PreferenceLabelSnapshot:
     if not isinstance(payload, dict):
         raise ValueError("preference_snapshot.labelSnapshot must be a JSON object.")
+    if set(payload) != LABEL_SNAPSHOT_FIELDS:
+        raise ValueError("preference_snapshot.labelSnapshot fields were invalid.")
 
     return PreferenceLabelSnapshot(
         profile=_parse_label_snapshot_items(payload.get("profile"), "profile"),
@@ -408,21 +391,33 @@ def _parse_label_snapshot_items(
     if not isinstance(payload, list):
         raise ValueError(f"preference_snapshot.labelSnapshot.{section} must be a list.")
 
-    return tuple(_parse_label_snapshot_item(item, section) for item in payload)
+    allowed_fields = (
+        PROFILE_FIELD_OPTIONS
+        if section == "profile"
+        else GENERATION_FIELD_OPTIONS
+    )
+    return tuple(
+        _parse_label_snapshot_item(item, section, allowed_fields) for item in payload
+    )
 
 
 def _parse_label_snapshot_item(
     payload: object,
     section: str,
+    allowed_fields: dict[str, set[str]],
 ) -> PreferenceLabelSnapshotItem:
     if not isinstance(payload, dict):
         raise ValueError(f"preference_snapshot.labelSnapshot.{section} items must be objects.")
+    if set(payload) != LABEL_SNAPSHOT_ITEM_FIELDS:
+        raise ValueError(
+            f"preference_snapshot.labelSnapshot.{section} item fields were invalid."
+        )
 
     field = payload.get("field")
     label = payload.get("label")
     values = payload.get("values")
-    if not isinstance(field, str) or not field.strip():
-        raise ValueError("preference_snapshot.labelSnapshot item field must be a string.")
+    if not isinstance(field, str) or field not in allowed_fields:
+        raise ValueError("preference_snapshot.labelSnapshot item field was invalid.")
     if not isinstance(label, str):
         raise ValueError("preference_snapshot.labelSnapshot item label must be a string.")
     if not isinstance(values, list):
@@ -438,6 +433,8 @@ def _parse_label_snapshot_item(
 def _parse_label_value(payload: object) -> PreferenceLabelValue:
     if not isinstance(payload, dict):
         raise ValueError("preference_snapshot.labelSnapshot values must be objects.")
+    if set(payload) != LABEL_VALUE_FIELDS:
+        raise ValueError("preference_snapshot.labelSnapshot value fields were invalid.")
 
     value_id = payload.get("id")
     label = payload.get("label")

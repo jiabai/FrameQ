@@ -13,15 +13,13 @@ import {
   summarizeInspirationProfile,
 } from "./i18n/preferencePresentation";
 
-const VALID_PROFILE: InspirationProfile = {
-  role: "marketing_sales",
-  domain: "marketing_sales",
-  stage: "manager",
+const PROFILE_V2: InspirationProfile = {
+  role: "content_creator",
+  domain: "content_media",
+  stage: "experienced_professional",
   cityContext: "new_tier1_city",
   genderPerspective: "unspecified",
-  platforms: ["douyin", "bilibili"],
-  defaultStyles: ["direct_sharp"],
-  defaultAvoid: [],
+  platforms: ["douyin"],
 };
 
 const VALID_GENERATION_PREFERENCES: GenerationPreferences = {
@@ -35,7 +33,7 @@ const VALID_GENERATION_PREFERENCES: GenerationPreferences = {
 
 describe("insight preferences", () => {
   test("validates a complete inspiration profile with field-scoped option ids", () => {
-    expect(validateInspirationProfile(VALID_PROFILE)).toEqual(VALID_PROFILE);
+    expect(validateInspirationProfile(PROFILE_V2)).toEqual(PROFILE_V2);
     expect(isPreferenceOptionId("role", "marketing_sales")).toBe(true);
     expect(getPreferenceFieldPresentation("zh-CN", "role").options).toContainEqual({
       id: "marketing_sales",
@@ -48,15 +46,18 @@ describe("insight preferences", () => {
   });
 
   test("rejects invalid inspiration profiles instead of silently defaulting them", () => {
-    expect(validateInspirationProfile({ ...VALID_PROFILE, role: "content_creation" })).toBeNull();
+    expect(validateInspirationProfile({ ...PROFILE_V2, role: "content_creation" })).toBeNull();
     expect(
       validateInspirationProfile({
-        ...VALID_PROFILE,
+        ...PROFILE_V2,
         platforms: ["douyin", "bilibili", "podcast", "xiaohongshu"],
       }),
     ).toBeNull();
+    expect(
+      validateInspirationProfile({ ...PROFILE_V2, defaultStyles: ["direct_sharp"] }),
+    ).toBeNull();
 
-    const missingRole = { ...VALID_PROFILE } as Partial<InspirationProfile>;
+    const missingRole = { ...PROFILE_V2 } as Partial<InspirationProfile>;
     delete missingRole.role;
     expect(validateInspirationProfile(missingRole)).toBeNull();
   });
@@ -90,13 +91,12 @@ describe("insight preferences", () => {
   });
 
   test("renders concise summaries from current option labels", () => {
-    expect(summarizeInspirationProfile(VALID_PROFILE, "zh-CN")).toEqual([
-      "我的角色：市场/销售",
-      "职业领域：市场销售",
-      "年龄/阶段：管理者",
+    expect(summarizeInspirationProfile(PROFILE_V2, "zh-CN")).toEqual([
+      "我的角色：内容创作者",
+      "职业领域：内容媒体",
+      "年龄/阶段：成熟职场",
       "城市语境：新一线城市",
-      "常用平台：抖音、B站",
-      "默认表达偏好：直接犀利",
+      "常用平台：抖音",
     ]);
 
     expect(summarizeGenerationPreferences(VALID_GENERATION_PREFERENCES, "zh-CN")).toEqual([
@@ -111,12 +111,13 @@ describe("insight preferences", () => {
 
   test("builds a preference snapshot with ids and separate label snapshots", () => {
     const snapshot = buildPreferenceSnapshot({
-      profile: VALID_PROFILE,
+      profile: PROFILE_V2,
       profileSkipped: false,
       generationPreferences: VALID_GENERATION_PREFERENCES,
     });
 
-    expect(snapshot.profile).toEqual(VALID_PROFILE);
+    expect(snapshot.profile).toEqual(PROFILE_V2);
+    expect(JSON.stringify(snapshot)).not.toMatch(/defaultStyles|defaultAvoid/);
     expect(snapshot.generationPreferences.goal).toBe("content_creation");
     expect(JSON.stringify(snapshot.generationPreferences)).not.toContain("内容创作");
     expect(snapshot.labelSnapshot.generationPreferences).toContainEqual({
@@ -129,7 +130,6 @@ describe("insight preferences", () => {
       label: "常用平台",
       values: [
         { id: "douyin", label: "抖音" },
-        { id: "bilibili", label: "B站" },
       ],
     });
   });

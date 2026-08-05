@@ -387,7 +387,7 @@ class FakeInsightClient:
     def generate(self, prompt: str) -> str:
         if "organize logical mindmaps" in prompt:
             return "mindmap\n  root((pipeline))"
-        if "Mermaid" in prompt and "Transcript" in prompt:
+        if "Create a Key Summary" in prompt:
             return "# summary\n\npipeline summary"
         if "question_count" in prompt:
             return (
@@ -401,7 +401,7 @@ class SummaryOnlyClient:
     def generate(self, prompt: str) -> str:
         if "organize logical mindmaps" in prompt:
             return "mindmap\n  root((summary))"
-        if "Mermaid" in prompt and "Transcript" in prompt:
+        if "Create a Key Summary" in prompt:
             return "# summary\n\nsummary only"
         return "not json"
 
@@ -423,7 +423,7 @@ class CapturingInsightClient:
         self.prompts.append(prompt)
         if "organize logical mindmaps" in prompt:
             return "mindmap\n  root((pipeline))"
-        if "Mermaid" in prompt and "Transcript" in prompt:
+        if "Create a Key Summary" in prompt:
             return "# summary\n\npipeline summary"
         if "question_count" in prompt:
             return '[{"title":"topic","summary":"summary","excerpt":"excerpt","question_count":1}]'

@@ -515,8 +515,20 @@
 
 - `我的灵感档案` and per-run generation preferences are local desktop data by default and must not be uploaded to FrameQ server.
 - The inspiration profile should be stored under app-local data as a constrained JSON file, not in app-local `.env`, because it is product data rather than runtime configuration.
+- The current app-local file is schema v2. Its profile contains exactly the six long-term-context
+  fields, and Tauri must validate before atomically migrating or mutating it. A failed v1 migration
+  preserves the original bytes and must not salvage a partial persona.
+- Deprecated v1 style/avoid values may survive only as the optional edit-only
+  `legacyGenerationPreferenceSeed` when no complete saved generation default exists. That seed must
+  not enter logs, diagnostics, server/quota requests, direct-generation summaries, task snapshots,
+  worker stdin, or prompts, and must be removed after confirmed complete preferences or profile
+  clearing.
 - A skipped inspiration profile may be represented locally by a marker such as `profileSkipped: true`, but skipped means `no profile / unspecified`; the app must not synthesize, log, upload, or send a default persona in its place.
 - Each AI generation confirmation must state that transcript snippets will be sent to the administrator-configured cloud LLM supplier for that output, while the selected preference snapshot is sent only with the `启发灵感` generation request and must not be sent with `要点总结` or Mermaid mindmap requests.
+- A current Inspiration worker snapshot may contain only the resolved six-field profile (or null),
+  the explicit skip marker, one complete current generation preference object, and labels for those
+  exact fields. Historical task-local v1 snapshots remain immutable local evidence and must never
+  update schema v2 global state.
 - Logs, diagnostics, UI errors, server requests, and quota checkout metadata must not include full inspiration profiles, full generation preferences, complete prompts, transcripts, or generated insight content.
 - The account service must not add API fields for storing profiles, generation preferences, transcripts, insight topics, or local task manifest contents.
 - Users must be able to clear the local inspiration profile. Clearing it affects future generation only and must not delete existing local task artifacts.

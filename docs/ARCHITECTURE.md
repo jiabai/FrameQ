@@ -1,5 +1,31 @@
 # FrameQ Architecture
 
+## 2026-08-05 Inspiration Profile v2 and generation-preference boundary
+
+- The current `InspirationProfile` is a closed six-field long-term-context object: `role`,
+  `domain`, `stage`, `cityContext`, `genderPerspective`, and `platforms`. Expression `styles` and
+  `avoid` belong only to the complete six-step `GenerationPreferences` selected for the current
+  Inspiration run; saved defaults are only a future-edit convenience, not another prompt layer.
+- Tauri solely owns app-local `insight-preferences.json` schema v2. It validates released v1 data
+  before migrating, uses the shared same-directory atomic writer for migration and every later
+  mutation, preserves a valid complete generation default, and otherwise may retain deprecated
+  style/avoid IDs only in an optional edit-only `legacyGenerationPreferenceSeed`.
+- TypeScript strictly decodes the v2 state. The migration seed may prefill only the style and avoid
+  steps, never enables direct generation, never enters a task snapshot or worker request, and is
+  removed after a confirmed complete selection or profile clearing. A three-style legacy seed is
+  preserved without truncation and remains invalid until the user explicitly reduces it to the
+  current maximum of two.
+- New retry snapshots are closed across the JSON contract, Rust, and Python: one nullable exact
+  six-field profile, the existing skip marker, one complete current generation preference object,
+  and labels for only those current fields. Common platforms are background context; the current
+  scenario wins when different, and transcript evidence wins over every preference.
+- Existing task-local v1 preference snapshots remain immutable historical evidence. They are not
+  rewritten or used to derive the v2 global profile/defaults. Summary, mindmap, dissection, server,
+  AI Credit, ASR, model-download, and media boundaries are unchanged. Durable rationale and
+  implementation evidence are in
+  `docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md` and
+  `docs/exec-plans/completed/2026-08-05-inspiration-profile-generation-preference-boundary-plan.md`.
+
 ## 2026-08-04 RetryInsights progress-aware watchdog boundary
 
 - Global desktop-worker contract v6 adds the closed `ai.generation.running` worker progress code

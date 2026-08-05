@@ -1107,6 +1107,11 @@ h3 {
   gap: 8px;
 }
 
+.preference-summary-group.quiet {
+  background: var(--surface-subtle);
+  box-shadow: none;
+}
+
 .preference-summary-list {
   display: flex;
   flex-wrap: wrap;

@@ -1149,7 +1149,329 @@
           ]
         },
         "preference_snapshot": {
-          "type": "object"
+          "type": "object",
+          "required": [
+            "profile",
+            "profileSkipped",
+            "generationPreferences",
+            "labelSnapshot"
+          ],
+          "properties": {
+            "profile": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "role",
+                    "domain",
+                    "stage",
+                    "cityContext",
+                    "genderPerspective",
+                    "platforms"
+                  ],
+                  "properties": {
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "content_creator",
+                        "product_ops",
+                        "marketing_sales",
+                        "entrepreneur",
+                        "student_researcher",
+                        "teacher_trainer",
+                        "investor_business_analyst",
+                        "general_learner",
+                        "unspecified"
+                      ]
+                    },
+                    "domain": {
+                      "type": "string",
+                      "enum": [
+                        "content_media",
+                        "product_operations",
+                        "marketing_sales",
+                        "education_training",
+                        "technology_rd",
+                        "management_consulting",
+                        "investment_business",
+                        "freelance",
+                        "general_perspective",
+                        "unspecified"
+                      ]
+                    },
+                    "stage": {
+                      "type": "string",
+                      "enum": [
+                        "student",
+                        "early_career",
+                        "experienced_professional",
+                        "manager",
+                        "entrepreneur_operator",
+                        "retired",
+                        "unspecified"
+                      ]
+                    },
+                    "cityContext": {
+                      "type": "string",
+                      "enum": [
+                        "tier1_city",
+                        "new_tier1_city",
+                        "lower_tier_city",
+                        "county_township",
+                        "overseas",
+                        "unspecified"
+                      ]
+                    },
+                    "genderPerspective": {
+                      "type": "string",
+                      "enum": [
+                        "unspecified",
+                        "female_perspective",
+                        "male_perspective",
+                        "neutral_perspective"
+                      ]
+                    },
+                    "platforms": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "douyin",
+                          "xiaohongshu",
+                          "wechat_channels",
+                          "bilibili",
+                          "wechat_official_account",
+                          "podcast",
+                          "course_community",
+                          "internal_sharing"
+                        ]
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "profileSkipped": {
+              "type": "boolean"
+            },
+            "generationPreferences": {
+              "type": "object",
+              "required": [
+                "goal",
+                "scenario",
+                "angles",
+                "audience",
+                "styles",
+                "avoid"
+              ],
+              "properties": {
+                "goal": {
+                  "type": "string",
+                  "enum": [
+                    "content_creation",
+                    "learning_understanding",
+                    "review_deconstruction",
+                    "business_insight",
+                    "controversy_discussion",
+                    "action_advice"
+                  ]
+                },
+                "scenario": {
+                  "type": "string",
+                  "enum": [
+                    "personal_notes",
+                    "short_video",
+                    "article_official_account",
+                    "livestream_podcast",
+                    "team_sharing",
+                    "client_communication",
+                    "course_community"
+                  ]
+                },
+                "angles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 3,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "topic_angle",
+                      "contrarian_view",
+                      "audience_pain_point",
+                      "practical_advice",
+                      "case_analogy",
+                      "risk_controversy",
+                      "trend_judgment",
+                      "reusable_method",
+                      "memorable_phrase",
+                      "cognitive_refresh"
+                    ]
+                  }
+                },
+                "audience": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "beginners",
+                    "peers",
+                    "clients",
+                    "boss_team",
+                    "fans_readers"
+                  ]
+                },
+                "styles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "direct_sharp",
+                      "gentle_inspiring",
+                      "professional_analysis",
+                      "grounded",
+                      "storytelling",
+                      "short_video_friendly",
+                      "long_form_friendly"
+                    ]
+                  }
+                },
+                "avoid": {
+                  "type": "array",
+                  "maxItems": 3,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "chicken_soup",
+                      "academic",
+                      "vague",
+                      "clickbait",
+                      "commercialized",
+                      "negative",
+                      "grand_narrative"
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "labelSnapshot": {
+              "type": "object",
+              "required": [
+                "profile",
+                "generationPreferences"
+              ],
+              "properties": {
+                "profile": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "field",
+                      "label",
+                      "values"
+                    ],
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "enum": [
+                          "role",
+                          "domain",
+                          "stage",
+                          "cityContext",
+                          "genderPerspective",
+                          "platforms"
+                        ]
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "label"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "label": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "generationPreferences": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "field",
+                      "label",
+                      "values"
+                    ],
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "enum": [
+                          "goal",
+                          "scenario",
+                          "angles",
+                          "audience",
+                          "styles",
+                          "avoid"
+                        ]
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "label"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "label": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false,

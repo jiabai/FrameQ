@@ -21,8 +21,6 @@ const PROFILE: InspirationProfile = {
   cityContext: "new_tier1_city",
   genderPerspective: "unspecified",
   platforms: ["douyin"],
-  defaultStyles: ["direct_sharp"],
-  defaultAvoid: [],
 };
 
 const DEFAULT_GENERATION: GenerationPreferences = {
@@ -71,6 +69,75 @@ describe("insight preference flow", () => {
 
     expect(flow.screen).toBe("default_summary");
     expect(useDefaultGenerationPreferences(flow).screen).toBe("confirmation");
+  });
+
+  test("complete defaults win over a legacy edit-only seed", () => {
+    const flow = createInsightPreferenceFlow(preferenceState({
+      profile: PROFILE,
+      profileStatus: "valid",
+      defaultGenerationPreferences: DEFAULT_GENERATION,
+      legacyGenerationPreferenceSeed: {
+        styles: ["storytelling"],
+        avoid: ["clickbait"],
+      },
+    }));
+
+    expect(flow.screen).toBe("default_summary");
+    expect(flow.generationPreferences).toEqual(DEFAULT_GENERATION);
+  });
+
+  test("prefills only styles and avoid from a legacy seed without completing the draft", () => {
+    const flow = createInsightPreferenceFlow(preferenceState({
+      profile: PROFILE,
+      profileStatus: "valid",
+      defaultGenerationPreferences: null,
+      legacyGenerationPreferenceSeed: {
+        styles: ["direct_sharp"],
+        avoid: ["clickbait"],
+      },
+    }));
+
+    expect(flow.screen).toBe("generation_step");
+    expect(flow.currentStep).toBe("goal");
+    expect(flow.canAdvance).toBe(false);
+    expect(flow.generationPreferences).toEqual({
+      goal: "",
+      scenario: "",
+      angles: [],
+      audience: "",
+      styles: ["direct_sharp"],
+      avoid: ["clickbait"],
+    });
+    expect(flow.defaultGenerationPreferences).toBeNull();
+  });
+
+  test("preserves three seeded styles and blocks the style step until one is deselected", () => {
+    let flow = createInsightPreferenceFlow(preferenceState({
+      profile: PROFILE,
+      profileStatus: "valid",
+      legacyGenerationPreferenceSeed: {
+        styles: ["direct_sharp", "storytelling", "grounded"],
+        avoid: [],
+      },
+    }));
+
+    flow = advanceGenerationStep(selectGenerationOption(flow, "goal", "content_creation"));
+    flow = advanceGenerationStep(selectGenerationOption(flow, "scenario", "short_video"));
+    flow = advanceGenerationStep(selectGenerationOption(flow, "angles", "topic_angle"));
+    flow = advanceGenerationStep(selectGenerationOption(flow, "audience", "beginners"));
+
+    expect(flow.currentStep).toBe("styles");
+    expect(flow.generationPreferences.styles).toEqual([
+      "direct_sharp",
+      "storytelling",
+      "grounded",
+    ]);
+    expect(flow.canAdvance).toBe(false);
+    expect(advanceGenerationStep(flow).currentStep).toBe("styles");
+
+    flow = selectGenerationOption(flow, "styles", "storytelling");
+    expect(flow.generationPreferences.styles).toEqual(["direct_sharp", "grounded"]);
+    expect(flow.canAdvance).toBe(true);
   });
 
   test("skipping profile setup moves directly to the six-step preference flow", () => {
@@ -197,6 +264,7 @@ function preferenceState(overrides: Partial<InsightPreferenceState>): InsightPre
     profileStatus: "missing",
     profileError: null,
     defaultGenerationPreferences: null,
+    legacyGenerationPreferenceSeed: null,
     preferencesPath: "",
     ...overrides,
   };

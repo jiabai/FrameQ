@@ -224,8 +224,10 @@ def build_topic_plan_prompt(
         preference_prompt_section = f"""
 ## Personalization snapshot
 Use this JSON only to select, rank, and assign `question_count` to topic segments.
-Do not use it for a summary or mindmap. Prefer `generationPreferences` when ranking
-segments; use `labelSnapshot` only to understand option meaning.
+Do not use it for a summary or mindmap. Treat `profile.platforms` as background context.
+If it differs from `generationPreferences.scenario`, follow the current scenario.
+Transcript evidence wins over all preferences.
+Use `labelSnapshot` only to understand option meaning.
 ```json
 {format_preference_snapshot_for_prompt(preference_snapshot)}
 ```
@@ -302,7 +304,10 @@ def build_question_prompt(
         preference_prompt_section = f"""
 ## Personalization snapshot
 Use this JSON only to generate inspiration, not a summary or mindmap.
-Prefer `generationPreferences`; use `labelSnapshot` only to understand option meaning.
+Treat `profile.platforms` as background context. If it differs from
+`generationPreferences.scenario`, follow the current scenario.
+Transcript evidence wins over all preferences.
+Use `labelSnapshot` only to understand option meaning.
 ```json
 {format_preference_snapshot_for_prompt(preference_snapshot)}
 ```
@@ -389,8 +394,6 @@ def _profile_to_prompt_dict(snapshot: PreferenceSnapshot) -> dict[str, object] |
         "cityContext": snapshot.profile.city_context,
         "genderPerspective": snapshot.profile.gender_perspective,
         "platforms": list(snapshot.profile.platforms),
-        "defaultStyles": list(snapshot.profile.default_styles),
-        "defaultAvoid": list(snapshot.profile.default_avoid),
     }
 
 
