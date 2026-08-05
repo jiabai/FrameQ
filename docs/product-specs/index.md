@@ -33,6 +33,7 @@
 
 ## Distribution Spec
 
+- `2026-08-05-v0.3.1-desktop-feature-release.md` - Stable v0.3.1 minor three-platform release policy for the Web user dashboard, server-page i18n, Inspiration Profile v2 / per-run generation preference boundary, progress-aware retry watchdog, desktop worker contract v7 + dissection source status, and transcript provenance stability fix; includes mandatory server gates (hosted server CI, migration preflight/restore, production `secureCookies` verification) and excludes the standalone Web marketing site (`site/`).
 - `2026-08-03-v0.3.0-desktop-feature-release.md` - Stable v0.3.0 minor three-platform release policy for local-media import, selectable SenseVoiceSmall-ONNX with on-demand download, streaming ONNX VAD fail-closed contracts, transcript dissection AI target, and bundled ONNX runtime integrity; inherits v0.2.17 reliability acceptance without re-running dedicated failure-injection evidence.
 - `2026-07-17-v0.2.17-desktop-i18n-release.md` - Stable v0.2.17 three-platform release policy for the completed desktop localization and confirmation-time AI output-language work, with draft-first artifact validation and unchanged macOS Gatekeeper disclosure.
 - `2026-07-12-v0.2.16-open-source-release.md` - Stable v0.2.16 GitHub Release policy for personal-development, small-user, and open-source distribution with explicit ad-hoc macOS Gatekeeper disclosure and draft-first artifact validation.

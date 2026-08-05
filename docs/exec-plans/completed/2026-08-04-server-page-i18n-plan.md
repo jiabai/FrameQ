@@ -27,6 +27,10 @@
 - [x] 2026-08-04: Task 1 complete. Created `server/tests/i18n.test.ts` with 29 focused unit tests covering `detectLocale` (missing/empty/malformed/unknown/encoded/mixed-cookie cases), `t()` (existing keys, fallback to default, raw-key fallback), `buildClientStrings` (fresh-object-per-call, locale-specific strings, cross-locale independence), `renderLangSwitcher` (target-locale correctness in both directions, inline script presence, `encodeURIComponent`, cookie attributes `path=/`/`max-age=31536000`/`samesite=lax`), and `langSwitcherStyles` (`.lang-switch` class + hover state). All 29 tests pass.
 - [x] 2026-08-04: Task 2 complete. Created `server/tests/pageI18n.test.ts` with 12 integration tests covering all four pages (`/login`, `/dashboard`, `/admin/login`, `/admin`) in both `zh-CN` (default) and `en` (via `Cookie: lang=en`), plus malformed/unknown cookie fallback, and secret-leak regression (malicious `lang` cookie value not reflected; httpOnly session token not leaked). Discovered and documented that the CSRF token is intentionally rendered into the page's inline script for the logout button — this is by design (CSRF cookie is non-httpOnly) and not a secret leak. All 12 tests pass.
 - [x] 2026-08-04: Task 3 complete. Full server suite `npx vitest run` → 28 files / 201 passed / 1 skipped (was 160 passed before Tasks 1–2; +41 new i18n tests). `tsc --noEmit` → only pre-existing `storeCompatibility.test.ts` errors remain (unrelated). `python scripts/validate_agents_docs.py --level WARN` → 0 errors / 0 warnings. Governance sync verified.
+- [x] 2026-08-05: Archived. All three tasks complete; i18n-specific tests (29 unit + 12 integration) landed.
+  Plan moved to `completed/`. Server-side i18n is included in the v0.3.1 release scope; residual risks
+  (no `zh-TW` locale, no `Accept-Language` fallback, `lang` cookie not `Secure`, real-browser visual
+  click-through unrecorded) carry into the v0.3.1 release notes.
 
 ## Decision Log
 

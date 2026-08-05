@@ -56,15 +56,19 @@
 - 完成门禁：`docs/EXECUTION_GATES.md`
 - 产品规格索引：`docs/product-specs/index.md`
 - 发布可靠性规格：`docs/product-specs/2026-07-22-release-reliability-hardening.md`
+- v0.3.1 发布规格：`docs/product-specs/2026-08-05-v0.3.1-desktop-feature-release.md`
+- v0.3.1 发布计划（active）：`docs/exec-plans/active/2026-08-05-v0.3.1-desktop-feature-release-plan.md`（范围：Web user dashboard、Server 页面 i18n、Inspiration Profile v2、进度感知 watchdog、contract v7 + 解剖来源状态、CRLF 出处修复；含 server 专项门禁）
 - v0.3.0 发布规格：`docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`
-- v0.3.0 发布计划（active）：`docs/exec-plans/active/2026-08-03-v0.3.0-desktop-feature-release-plan.md`
+- v0.3.0 发布计划（completed）：`docs/exec-plans/completed/2026-08-03-v0.3.0-desktop-feature-release-plan.md`（已发布 stable：https://github.com/jiabai/FrameQ/releases/tag/v0.3.0）
 - Server 页面 i18n 规格：`docs/product-specs/2026-08-04-server-page-i18n.md`（`/login`、`/dashboard`、`/admin/login`、`/admin` 增加 zh-CN/en 切换按钮，新 `server/src/i18n.ts` 模块；不涉及 desktop/worker/ASR/store/Prisma）
-- Server 页面 i18n 计划（active）：`docs/exec-plans/active/2026-08-04-server-page-i18n-plan.md`（实现已落地，i18n 专项测试与集成测试为待办任务）
+- Server 页面 i18n 计划（completed）：`docs/exec-plans/completed/2026-08-04-server-page-i18n-plan.md`（29 单测 + 12 集成测试落地，server 201 通过；纳入 v0.3.1）
+- Web 用户控制台计划（completed）：`docs/exec-plans/completed/2026-08-03-web-user-dashboard-plan.md`（`/dashboard` 邮箱 OTP cookie 会话、账号/额度、登录成功面板、OTP 跨路径消费一次；纳入 v0.3.1，`secureCookies` 生产部署验证为发布前残余项）
 - 最近完成 Inspiration Profile / 本次生成偏好边界计划：`docs/exec-plans/completed/2026-08-05-inspiration-profile-generation-preference-boundary-plan.md`（Profile v2 六项长期背景、schema v2 本地原子迁移、一次性 edit-only seed、当前 worker 契约去重）
 - Web 宣传站产品规格：`docs/product-specs/2026-08-05-web-marketing-site.md`（`site/` 顶级目录 Astro 静态站，首页/下载/隐私三页，OKLCH token 从 `design-system/globals.css` 迁移，Hallmark 反 AI-slop 视觉系统，不加载 analytics/tracking/第三方 embed）
 - Web 宣传站实现计划（completed）：`docs/exec-plans/completed/2026-08-05-web-marketing-site-plan.md`（7 个 Task：工程骨架 → Hallmark 设计 → token 系统 → 三页实现 → 验证门禁 → 文档同步；首版不分配版本号）
 - 最近完成 RetryInsights 进度感知 watchdog 计划：`docs/exec-plans/completed/2026-08-04-retry-insights-progress-aware-watchdog-plan.md`（30 分钟 idle、90 分钟 absolute、解剖调用边界进度）
 - v0.3.0 release notes 草稿：`docs/releases/v0.3.0.md`
+- v0.3.1 release notes 草稿：`docs/releases/v0.3.1.md`
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`

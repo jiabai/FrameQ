@@ -2,6 +2,4 @@
 
 | File | Focus |
 |------|-------|
-| `2026-08-04-server-page-i18n-plan.md` | Add a per-page language switcher to `/login`, `/dashboard`, `/admin/login`, and `/admin` toggling between Simplified Chinese (default) and English via a non-sensitive `lang` cookie; new `server/src/i18n.ts` module. Implementation landed; focused i18n tests and integration tests are tracked as open tasks. Version not assigned. |
-| `2026-08-03-web-user-dashboard-plan.md` | Add a per-user Web dashboard at `/dashboard` with email-OTP cookie-session login (reusing `desktop_login` OTP and the Admin Web session model); desktop deep-link login unchanged. First cut ships account-and-quota content only. Version not assigned (post-v0.3.0 iteration). |
-| `2026-08-03-v0.3.0-desktop-feature-release-plan.md` | Prepare, tag, and publish the v0.3.0 desktop feature release (local-media import, selectable ONNX ASR + on-demand download, streaming ONNX VAD fail-closed, transcript dissection, bundled ONNX runtime integrity). |
+| `2026-08-05-v0.3.1-desktop-feature-release-plan.md` | Prepare, tag, and publish the v0.3.1 desktop feature release (Web user dashboard, server-page i18n, Inspiration Profile v2 / generation preference boundary, progress-aware retry watchdog, desktop worker contract v7 + dissection source status, transcript provenance stability fix). Includes mandatory server gates (hosted server CI, migration preflight/restore, production `secureCookies` verification). |

@@ -19,6 +19,7 @@ function renderWorkspace() {
     insights: [],
     transcript: { source: "asr", language: "en", engine: "SenseVoice" },
     dissection: null,
+    dissection_source_status: null,
     error: null,
   });
   const account = {

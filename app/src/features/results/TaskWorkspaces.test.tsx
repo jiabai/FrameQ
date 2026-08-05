@@ -36,6 +36,7 @@ function readyWorkflow(): WorkflowState {
     insights: [],
     transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
     dissection: null,
+    dissection_source_status: null,
     error: null,
   });
 }
@@ -241,6 +242,7 @@ describe("task domain workspaces", () => {
       insights: [],
       transcript: null,
       dissection: null,
+      dissection_source_status: null,
       error: { code: "MEDIA_DOWNLOAD_FAILED", message: "failed", stage: "video_extracting" },
     });
     const failedModel = createTaskWorkspaceViewModel(failedWorkflow, aiAccount());
@@ -415,6 +417,7 @@ describe("task domain workspaces", () => {
       insights: [],
       transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
       dissection: null,
+      dissection_source_status: null,
       error: null,
     });
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
@@ -662,6 +665,7 @@ describe("task domain workspaces", () => {
       insights: [],
       transcript: null,
       dissection: null,
+      dissection_source_status: null,
       error: {
         code: "FUTURE_WORKER_FAILURE",
         message: "Authorization: Bearer super-secret at C:/private/transcript.txt",
@@ -707,6 +711,7 @@ describe("task domain workspaces", () => {
           insights: source.insights,
           transcript: source.transcript,
           dissection: null,
+          dissection_source_status: null,
           error: {
             code: "WORKER_EXECUTION_TIMEOUT",
             message: "untrusted runtime detail",

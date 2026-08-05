@@ -29,6 +29,7 @@ function renderDetails() {
     ],
     transcript: null,
     dissection: null,
+    dissection_source_status: null,
     error: null,
   });
   const controller = {

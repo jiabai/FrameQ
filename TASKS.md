@@ -2,18 +2,36 @@
 
 ## Active UI Work
 
-- [ ] Prepare and publish FrameQ v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
+- [ ] Prepare and publish FrameQ v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance
+  (pending): five version sources synchronized at 0.3.1, `scripts/tests/release-version.test.mjs`
+  asserts `0.3.1`, complete local release gates pass (scripts, app tests/lint/build, Rust
+  tests/rustfmt, worker tests/Ruff, server tests/build, governance, diff, refreshed packaged-worker
+  SHA-256 equality, Tauri `--no-bundle`), plus server gates (hosted server CI, migration
+  status/preflight + copied-DB restore smoke, production `secureCookies` verified on
+  `frameq.8xf.pro`), annotated tag `v0.3.1` created and pushed after explicit approval, Desktop
+  Release workflow builds all three platform artifacts from one tagged commit, reviewed
+  `docs/releases/v0.3.1.md` notes replace the generic generated body, and Draft published as stable
+  non-prerelease. Scope: Web user dashboard, server-page i18n, Inspiration Profile v2 / generation
+  preference boundary, progress-aware retry watchdog, desktop worker contract v7 + dissection
+  source status, transcript provenance CRLF fix. Residual risk: macOS runtime verification gaps,
+  Inspiration Profile v2 packaged launch, transcript dissection real paid-supplier smoke, Web
+  session no IP/UA binding, production `secureCookies` verification. Product spec:
+  `docs/product-specs/2026-08-05-v0.3.1-desktop-feature-release.md`. ExecPlan:
+  `docs/exec-plans/active/2026-08-05-v0.3.1-desktop-feature-release-plan.md`.
+
+- [x] Prepare and publish FrameQ v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
   version sources synchronized at 0.3.0, `scripts/tests/release-version.test.mjs` asserts `0.3.0`,
   complete local release gates pass (scripts, app tests/lint/build, Rust tests/rustfmt, worker
   tests/Ruff, server tests/build, governance, diff, refreshed packaged-worker SHA-256 equality,
   Tauri `--no-bundle`), annotated tag `v0.3.0` created and pushed after explicit approval, Desktop
   Release workflow builds all three platform artifacts from one tagged commit, reviewed
   `docs/releases/v0.3.0.md` notes replace the generic generated body, and Draft published as stable
-  non-prerelease. Residual risk: macOS watchdog runtime, macOS locale/layout, macOS local-media
-  import, macOS ONNX VAD streaming, transcript dissection real paid-supplier smoke, and native
-  packaged cross-platform UX remain unverified; Windows evidence is recorded for the corresponding
-  gates. Product spec: `docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`. ExecPlan:
-  `docs/exec-plans/active/2026-08-03-v0.3.0-desktop-feature-release-plan.md`.
+  non-prerelease (https://github.com/jiabai/FrameQ/releases/tag/v0.3.0). Residual risk: macOS
+  watchdog runtime, macOS locale/layout, macOS local-media import, macOS ONNX VAD streaming,
+  transcript dissection real paid-supplier smoke, and native packaged cross-platform UX remain
+  unverified; Windows evidence is recorded for the corresponding gates. Product spec:
+  `docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`. ExecPlan:
+  `docs/exec-plans/completed/2026-08-03-v0.3.0-desktop-feature-release-plan.md`.
 
 - [x] Implement transcript dissection generation and persistence (2026-08-01) — ✅ added the third
   current `智能提炼` target with explicit bounded-call confirmation, contract v5, deterministic
@@ -507,6 +525,8 @@
 - [x] 桌面端一键升级 GitHub updater 真实下载/安装测试豁免（2026-06-27）— 因中国境内访问 GitHub Releases 速度过慢，本项目 v1 不再把旧版到新版的 GitHub updater 实测作为验收或发布阻塞项。✅ 验收口径：自动化门禁、manifest/artifact 生成、Tauri 签名校验配置和直接分发新版安装包路径成立；未声明国内 GitHub 网络真实升级链路已实测通过。
 
 ## 已完成
+- [x] 实现 Web 用户控制台与桌面登录成功面板（2026-08-03）— ✅ `/dashboard` 邮箱 OTP cookie 会话（复用 `desktop_login` purpose 与 Admin Web 会话模型），账号/额度内容（邮箱、权益到期、AI Credits 限额/已用/剩余/重置、`can_process`/`can_generate_ai`、激活码前缀）；桌面登录成功后显示“登录成功”面板与“去到 Web Dashboard”入口；OTP 行在桌面票据与 Web 会话路径间原子消费一次；Web/桌面会话相互独立。桌面深链登录契约（`{ ticket, redirect_url }`）不变。✅ server 160 通过 / 1 skip，App 669，worker 669，边界/迁移/治理/构建门禁通过。残余风险：生产 `secureCookies` 部署验证（`frameq.8xf.pro`）、Web 会话无 IP/UA 绑定（90 天 TTL）。Spec: `docs/product-specs/2026-08-03-web-user-dashboard.md`. ExecPlan: `docs/exec-plans/completed/2026-08-03-web-user-dashboard-plan.md`.
+- [x] 实现 Server 页面 i18n（2026-08-04）— ✅ `/login`、`/dashboard`、`/admin/login`、`/admin` 四个页面新增 zh-CN（默认）/en 切换按钮，`lang` cookie 记忆，新 `server/src/i18n.ts` 模块；不涉及 desktop/worker/ASR/store/Prisma；不含 `zh-TW`。✅ 29 i18n 单测 + 12 页面集成测试，server 全量 28 文件 / 201 通过 / 1 skip，TypeScript build 与治理验证通过。残余风险：无 `zh-TW`、无 `Accept-Language` 回退、`lang` cookie 非 `Secure`、真实浏览器点击未记录。Spec: `docs/product-specs/2026-08-04-server-page-i18n.md`. ExecPlan: `docs/exec-plans/completed/2026-08-04-server-page-i18n-plan.md`.
 - [x] 精简 Inspiration Profile 并拆清本次生成偏好边界（2026-08-05）— Profile v2 只保留六项长期背景，表达风格/避免方向仅归完整六步本次偏好；Tauri 将 v1 app-local 文件原子迁移到 schema v2，且只在没有完整默认偏好时保留一次性 edit-only seed；当前重试快照在 JSON/Rust/Python 边界严格闭合，历史任务快照保持不变。✅ 自动化门禁：App 692/692，Rust 252/252 且修复后 retry focused 9/9，Worker 689 passed / 2 skipped，scripts 29/29，lint/Ruff/rustfmt/docs/diff 通过，packaged worker 比较 73 个文件、0 个不匹配；原生交互式 packaged launch 因 sandbox 未执行，未消耗真实 AI Credit。Design: `docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md`. ExecPlan: `docs/exec-plans/completed/2026-08-05-inspiration-profile-generation-preference-boundary-plan.md`.
 - [x] 实现启发话题点个性化偏好流程（2026-07-06）✅ 增加本地 `我的灵感档案`、本次 6 步生成偏好、AI整理确认摘要、偏好快照和个性化话题点 prompt；偏好只进入 `retry_insights` 并只影响启发话题点生成，summary/Mermaid 保持通用；结果改为结构化话题点并展示匹配理由、启发问题和适合用途；偏好快照作为任务本地产物保存，server 无新增偏好/文字稿/话题点持久化。✅ 自动化门禁通过：app 138、worker 141、Rust 50、ruff、前端 build；真实额度消耗的桌面手工回归未在本会话执行。
 - [x] 增加 YouTube/Bilibili 字幕优先 + ASR 兜底（2026-07-05）✅ 公开视频 `yt-dlp` 成功路径会优先复用 YouTube/Bilibili 平台字幕生成正式文字稿，保留视频/音频产物和音频回听；字幕缺失、解析失败或 Bilibili public fallback 路径静默降级到本地 ASR；manifest、历史记录和文字稿 metadata 记录来源，UI 只显示文字稿来源提示，不展示原始字幕文件；不引入登录、Cookie、绕过或下载中心。✅ worker/parser/manifest/Rust/frontend 自动化门禁通过；真实公网字幕样本 smoke 未在本会话执行，保留外部平台可用性残余风险。

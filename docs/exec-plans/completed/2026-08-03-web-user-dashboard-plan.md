@@ -15,6 +15,10 @@
 - [x]  2026-08-03: Spec drafted at `docs/product-specs/2026-08-03-web-user-dashboard.md`; this ExecPlan drafted; awaiting user approval before implementation.
 - [x]  2026-08-03: All Tasks 1–9 complete. Implementation ships store contracts (memory + Prisma + migration `202608030001_user_session`), `UserAuthService`, `routes/userAuth.ts`, `routes/dashboard.ts`, `dashboardPage.ts`, login-page branching, server wiring, and full integration/regression tests in `server/tests/webDashboard.test.ts`. Governance validated and all regression gates green. See Outcomes & Retrospective for evidence.
 - [x]  2026-08-03: Iteration 2 (Tasks 10–14) complete. Desktop-mode `/auth/email/verify` now atomically creates a desktop ticket AND a web user session via `verifyDesktopOtpAndCreateTicketAndWebSession`; sets `frameq_user_session` + `frameq_user_csrf` cookies; the login page shows a success panel ("登录成功" / "此窗口可关闭..." / "去到 Web Dashboard" link) and triggers the `frameq://` deep link in the background. Desktop client contract `{ ticket, redirect_url }` unchanged. All regression gates green (160 server tests, 669 app tests, 669 worker tests).
+- [x]  2026-08-05: Archived. All Tasks 1–14 complete. Web user dashboard is included in the v0.3.1
+  release scope; residual risks (production `secureCookies` verification on `frameq.8xf.pro`,
+  no IP/UA binding on web sessions, shared OTP rate limit, deep-link `setTimeout` timing) carry into
+  the v0.3.1 release notes and release-prep plan. Plan moved to `completed/`.
 
 ## Decision Log
 
