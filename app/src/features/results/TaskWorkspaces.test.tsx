@@ -514,6 +514,38 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("重新生成");
   });
 
+  test("dissection detail never falls through to the inspiration empty state when the report object is missing", () => {
+    const workflow = {
+      ...readyWorkflow(),
+      artifacts: {
+        ...readyWorkflow().artifacts,
+        dissection: "ai/dissection.json",
+        dissection_md: "ai/dissection.md",
+      },
+      dissection: null,
+    };
+    const controller = {
+      ...transcriptController(),
+      detailTab: "dissection",
+      detailText: "",
+      exportPath: "D:/FrameQ/outputs/tasks/same-task/ai/dissection.md",
+    } as TranscriptDetailController;
+    const markup = renderToStaticMarkup(
+      <AiResultDetailSheet
+        actionNotice={null}
+        controller={controller}
+        workflow={workflow}
+        onOpenDirectionEditor={vi.fn()}
+        onOpenDissectionConfirmation={vi.fn()}
+        onLocateDissectionChunks={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("文字稿解剖尚未生成。");
+    expect(markup).not.toContain("启发灵感尚未生成。");
+    expect(markup).not.toContain('class="insight-detail-list"');
+  });
+
   test("renders AI cancellation from the facade model without workflow state", () => {
     const workflow = requestProcessingCancellation(
       startInsightRetry(readyWorkflow(), "summary"),

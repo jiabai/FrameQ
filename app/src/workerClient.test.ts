@@ -64,6 +64,7 @@ function completedResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
     insights: [DEFAULT_INSIGHT],
     transcript: transcript ?? null,
     dissection: null,
+    dissection_source_status: null,
     error: null,
     ...rest,
   };
@@ -173,6 +174,7 @@ describe("worker client", () => {
       insights: [],
       transcript: null,
       dissection: null,
+      dissection_source_status: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "worker process could not start",
@@ -473,6 +475,7 @@ describe("worker client", () => {
       insights: [],
       transcript: null,
       dissection: null,
+      dissection_source_status: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "retry worker process could not start",
@@ -591,6 +594,7 @@ describe("worker client", () => {
       insights: [],
       transcript: null,
       dissection: null,
+      dissection_source_status: null,
       error: {
         code: "WORKER_PROTOCOL_VIOLATION",
         message: "",
@@ -616,6 +620,7 @@ describe("worker client", () => {
       insights: [],
       transcript: null,
       dissection: null,
+      dissection_source_status: null,
       error: {
         code: "WORKER_PROTOCOL_VIOLATION",
         message: "",

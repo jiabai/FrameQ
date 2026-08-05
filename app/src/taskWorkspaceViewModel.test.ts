@@ -32,7 +32,7 @@ function entitledAccount(overrides: Partial<AccountStatus> = {}): AccountStatus 
 }
 
 function transcriptResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
-  const { dissection, ...rest } = overrides;
+  const { dissection, dissection_source_status, ...rest } = overrides;
   return {
     status: "completed",
     task_id: TASK_ID,
@@ -48,6 +48,7 @@ function transcriptResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
     insights: [],
     transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
     dissection: dissection ?? null,
+    dissection_source_status: dissection_source_status ?? null,
     error: null,
     ...rest,
   };

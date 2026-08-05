@@ -1,5 +1,5 @@
 {
-  "contractVersion": 6,
+  "contractVersion": 7,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "FRAMEQ_PROGRESS ",
@@ -634,6 +634,13 @@
                 },
                 "additionalProperties": false
               }
+            ]
+          },
+          "dissection_source_status": {
+            "description": "Optional. Omitted by worker stdout (treated as null); populated by the Rust URL cache path so the frontend can mark a stale dissection report without re-reading the transcript.",
+            "oneOf": [
+              { "type": "null" },
+              { "type": "string", "enum": ["current", "stale"] }
             ]
           },
           "error": {

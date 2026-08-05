@@ -35,6 +35,7 @@ function validTask(overrides: Partial<WorkerResult> = {}): WorkerResult {
     ],
     transcript: { source: "asr", language: "zh-CN", engine: "SenseVoice" },
     dissection: null,
+    dissection_source_status: null,
     error: null,
     ...overrides,
   };
@@ -106,6 +107,8 @@ function invalidTaskFixtures(): unknown[] {
     validTask({ status: "completed", error: { code: "SAFE_CODE", message: "", stage: "failed" } }),
     validTask({ status: "partial_completed", error: null }),
     validTask({ status: "failed", error: null }),
+    { ...validTask(), dissection_source_status: "unknown" },
+    { ...validTask(), dissection_source_status: 0 },
   ];
 }
 
@@ -148,6 +151,24 @@ describe("worker result protocol", () => {
     expect(parsed?.insights).not.toBe(value.insights);
     expect(parsed?.insights[0]).not.toBe(value.insights[0]);
     expect(parsed?.transcript).not.toBe(value.transcript);
+  });
+
+  test("parses dissection_source_status across current, stale, and omitted states", () => {
+    const current = parseWorkerResult(
+      validTask({ dissection_source_status: "current" }),
+    );
+    expect(current?.dissection_source_status).toBe("current");
+
+    const stale = parseWorkerResult(
+      validTask({ dissection_source_status: "stale" }),
+    );
+    expect(stale?.dissection_source_status).toBe("stale");
+
+    // Worker stdout omits the field entirely; the parser must treat it as null.
+    const omittedFixture = validTask() as unknown as Record<string, unknown>;
+    delete omittedFixture.dissection_source_status;
+    const omitted = parseWorkerResult(omittedFixture);
+    expect(omitted?.dissection_source_status).toBeNull();
   });
 
   test("accepts and deeply copies a closed transcript dissection", () => {

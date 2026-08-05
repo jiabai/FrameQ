@@ -13,6 +13,8 @@ export const TASK_RESULT_FIELDS = [
   "error",
 ] as const;
 
+const TASK_RESULT_OPTIONAL_FIELDS = ["dissection_source_status"] as const;
+
 export const TASK_ARTIFACT_KEYS = [
   "video",
   "audio",
@@ -62,6 +64,8 @@ const CANCEL_STATUSES = [
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const SOURCE_LANGUAGE = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/;
+const DISSECTION_SOURCE_STATUSES = ["current", "stale"] as const;
+type DissectionSourceStatus = (typeof DISSECTION_SOURCE_STATUSES)[number];
 
 type TaskArtifactKey = (typeof TASK_ARTIFACT_KEYS)[number];
 
@@ -128,7 +132,11 @@ export function parseCancelProcessResult(value: unknown): CancelProcessResult | 
 }
 
 function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
-  const object = readExactObject(value, TASK_RESULT_FIELDS);
+  const object = readObjectWithOptional(
+    value,
+    TASK_RESULT_FIELDS,
+    TASK_RESULT_OPTIONAL_FIELDS,
+  );
   if (!object || !isOneOf(object.status, TASK_TERMINAL_STATUSES)) {
     return null;
   }
@@ -138,6 +146,9 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
   const insights = parseInsights(object.insights);
   const transcript = parseTranscript(object.transcript);
   const dissection = parseDissection(object.dissection);
+  const dissectionSourceStatus = parseDissectionSourceStatus(
+    object.dissection_source_status,
+  );
   const error = parseTaskError(object.error);
   if (
     taskId === undefined ||
@@ -148,6 +159,7 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     insights === null ||
     transcript === undefined ||
     dissection === undefined ||
+    dissectionSourceStatus === undefined ||
     error === undefined
   ) {
     return null;
@@ -168,8 +180,21 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     insights,
     transcript,
     dissection,
+    dissection_source_status: dissectionSourceStatus,
     error,
   };
+}
+
+function parseDissectionSourceStatus(
+  value: unknown,
+): DissectionSourceStatus | null | undefined {
+  if (value === undefined) {
+    return null;
+  }
+  if (value === null) {
+    return null;
+  }
+  return isOneOf(value, DISSECTION_SOURCE_STATUSES) ? value : undefined;
 }
 
 export function parseDissection(value: unknown): WorkerResult["dissection"] | undefined {
@@ -513,6 +538,29 @@ function readExactObject(
     !object ||
     object.keys.length !== expectedKeys.length ||
     !expectedKeys.every((key) => Object.prototype.hasOwnProperty.call(object.values, key))
+  ) {
+    return null;
+  }
+  return object.values;
+}
+
+function readObjectWithOptional(
+  value: unknown,
+  requiredKeys: readonly string[],
+  optionalKeys: readonly string[] = [],
+): Record<string, unknown> | null {
+  const object = readDataObject(value);
+  if (!object) {
+    return null;
+  }
+  const allowed = new Set<string>([...requiredKeys, ...optionalKeys]);
+  if (!object.keys.every((key) => allowed.has(key))) {
+    return null;
+  }
+  if (
+    !requiredKeys.every((key) =>
+      Object.prototype.hasOwnProperty.call(object.values, key),
+    )
   ) {
     return null;
   }

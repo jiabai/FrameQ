@@ -95,10 +95,9 @@ fn cached_process_result_from_task(
     };
     let insights = task.read_insights()?;
     let transcript = task.transcript_metadata();
-    let dissection = task.read_dissection()?.and_then(|view| {
-        (view.source_status == task_manifest::DissectionSourceStatus::Current)
-            .then_some(view.report)
-    });
+    let dissection_view = task.read_dissection()?;
+    let dissection = dissection_view.as_ref().map(|view| view.report.clone());
+    let dissection_source_status = dissection_view.map(|view| view.source_status);
     let status = task.status().to_string();
     let task_id = task.task_id().to_string();
     let created_at = task.created_at().to_string();
@@ -118,6 +117,7 @@ fn cached_process_result_from_task(
         insights,
         transcript,
         dissection,
+        dissection_source_status,
         error,
     });
     let Ok(result) = TaskTerminalResult::from_value(value) else {
@@ -401,6 +401,74 @@ mod tests {
             .as_array()
             .expect("insights array")
             .is_empty());
+    }
+
+    #[test]
+    fn cached_process_result_preserves_stale_dissection_report() {
+        let output_root = temp_dir("cached_process_result_preserves_stale_dissection");
+        let task_id = "20260731-120000-youtube-abcdefghijk";
+        let task_dir = output_root.join("tasks").join(task_id);
+        fs::create_dir_all(task_dir.join("transcript")).expect("create transcript dir");
+        fs::create_dir_all(task_dir.join("ai")).expect("create ai dir");
+        fs::write(task_dir.join("transcript").join("transcript.txt"), b"abc")
+            .expect("write transcript");
+        fs::write(
+            task_dir.join("ai").join("dissection.json"),
+            r#"{"schemaVersion":1,"sourceTranscriptSha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","sourceLanguage":null,"sourceChunks":[{"id":1,"startByte":0,"endByte":3,"sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}],"overallNarrative":{"openingHook":null,"structureType":"statement","turningPoint":null,"closingType":null},"segments":[{"id":1,"title":"Opening","sourceChunkIds":[1],"coreClaim":"abc","supportingPoints":[],"rhetoricalDevices":[],"rhythmNote":"Brief","reusablePattern":"Direct","riskFlags":[]}],"highlights":["abc"],"reusableTemplate":{"name":"Direct","skeleton":["A","B","C"]},"audienceFit":[],"strengths":["Direct"],"weaknesses":["Brief"]}"#,
+        )
+        .expect("write dissection report");
+        fs::write(
+            task_dir.join("frameq-task.json"),
+            format!(
+                r#"{{
+  "schema_version": 3,
+  "source_privacy_migration_version": 2,
+  "task_id": "{task_id}",
+  "created_at": "2026-07-31T12:00:00Z",
+  "source_url": "https://www.youtube.com/watch?v=abcdefghijk",
+  "source_identity": {{
+    "version": 1,
+    "platform": "youtube",
+    "stable_id": "abcdefghijk",
+    "effective_part": null,
+    "canonical_url": "https://www.youtube.com/watch?v=abcdefghijk"
+  }},
+  "platform": "youtube",
+  "status": "completed",
+  "model": "iic/SenseVoiceSmall",
+  "artifacts": {{
+    "transcript_txt": "transcript/transcript.txt",
+    "dissection": "ai/dissection.json"
+  }},
+  "error": null,
+  "text_preview": "abc",
+  "insights_count": 0
+}}"#
+            ),
+        )
+        .expect("write manifest");
+
+        fs::write(task_dir.join("transcript").join("transcript.txt"), b"abd")
+            .expect("edit transcript to stale");
+
+        let cached = cached_process_result_for_url(
+            &output_root,
+            "https://www.youtube.com/watch?v=abcdefghijk",
+            ASR_MODEL,
+        )
+        .expect("read cached result")
+        .expect("same URL should reuse cached task");
+        let cached = task_value(&cached);
+
+        assert_eq!(cached["status"], "completed");
+        assert!(
+            cached["dissection"]["schemaVersion"] == 1,
+            "stale dissection report must still be returned from the URL cache"
+        );
+        assert_eq!(
+            cached["dissection_source_status"], "stale",
+            "URL cache must propagate the stale dissection source status so the frontend can mark the report stale"
+        );
     }
 
     #[test]

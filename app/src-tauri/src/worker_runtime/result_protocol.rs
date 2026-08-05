@@ -23,6 +23,8 @@ pub(crate) const TASK_RESULT_FIELDS: &[&str] = &[
     "dissection",
     "error",
 ];
+#[cfg(test)]
+pub(crate) const TASK_RESULT_OPTIONAL_FIELDS: &[&str] = &["dissection_source_status"];
 pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
     "video",
     "audio",
@@ -228,6 +230,8 @@ pub(crate) struct TaskTerminalResult {
     pub(crate) transcript: Option<TaskTranscript>,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub(crate) dissection: Option<TaskDissection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) dissection_source_status: Option<task_manifest::DissectionSourceStatus>,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub(crate) error: Option<TaskError>,
 }
@@ -609,6 +613,7 @@ mod tests {
         TerminalResultError, ValidatedWorkerResult, TASK_ARTIFACT_KEYS, TASK_INSIGHT_FIELDS,
         TASK_RESULT_FIELDS, TASK_TERMINAL_STATUSES, TERMINAL_OPERATION_FAMILIES,
     };
+    use crate::task_manifest;
     use crate::worker_runtime::runner::WorkerOperation;
     use serde_json::{json, Value};
     use std::collections::BTreeSet;
@@ -1014,6 +1019,69 @@ mod tests {
         let mut value = valid_task_value();
         mutate(&mut value);
         value
+    }
+
+    fn task_with_dissection_source_status(status: &str) -> Value {
+        let mut value = valid_task_value();
+        value["dissection"] = valid_dissection_value();
+        value["dissection_source_status"] = json!(status);
+        value
+    }
+
+    #[test]
+    fn task_result_accepts_optional_dissection_source_status() {
+        // Worker stdout omits the field: parses as None (cache path not taken).
+        let stdout = serde_json::to_vec(&valid_task_value()).expect("serialize worker stdout");
+        let parsed = parse_terminal_result(WorkerOperation::ProcessVideo, &stdout)
+            .expect("worker stdout without dissection_source_status is valid");
+        match parsed {
+            ValidatedWorkerResult::Task(result) => {
+                assert_eq!(result.dissection_source_status, None);
+            }
+            other => panic!("expected Task variant, got {:?}", other),
+        }
+
+        // Cache path propagates "stale".
+        let stale = serde_json::to_vec(&task_with_dissection_source_status("stale"))
+            .expect("serialize stale cache result");
+        match parse_terminal_result(WorkerOperation::ProcessVideo, &stale)
+            .expect("stale dissection_source_status is valid")
+        {
+            ValidatedWorkerResult::Task(result) => {
+                assert_eq!(
+                    result.dissection_source_status,
+                    Some(task_manifest::DissectionSourceStatus::Stale)
+                );
+            }
+            other => panic!("expected Task variant, got {:?}", other),
+        }
+
+        // Cache path propagates "current".
+        let current = serde_json::to_vec(&task_with_dissection_source_status("current"))
+            .expect("serialize current cache result");
+        match parse_terminal_result(WorkerOperation::ProcessVideo, &current)
+            .expect("current dissection_source_status is valid")
+        {
+            ValidatedWorkerResult::Task(result) => {
+                assert_eq!(
+                    result.dissection_source_status,
+                    Some(task_manifest::DissectionSourceStatus::Current)
+                );
+            }
+            other => panic!("expected Task variant, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn task_result_rejects_unknown_dissection_source_status() {
+        let invalid = task_with_dissection_source_status("unknown");
+        assert_eq!(
+            parse_terminal_result(
+                WorkerOperation::ProcessVideo,
+                &serde_json::to_vec(&invalid).expect("serialize invalid status"),
+            ),
+            Err(TerminalResultError::Invalid),
+        );
     }
 
     fn mutate_source(mutate: impl FnOnce(&mut Value)) -> Value {

@@ -152,7 +152,7 @@ function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
 }
 
 function createWorkerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
-  const { dissection, ...rest } = overrides;
+  const { dissection, dissection_source_status, ...rest } = overrides;
   return {
     status: "completed",
     task_id: "active-task",
@@ -163,6 +163,7 @@ function createWorkerResult(overrides: Partial<WorkerResult> = {}): WorkerResult
     insights: [],
     transcript: { source: "asr", language: "Chinese", engine: "SenseVoice" },
     dissection: dissection ?? null,
+    dissection_source_status: dissection_source_status ?? null,
     error: null,
     ...rest,
   };
@@ -552,6 +553,7 @@ describe("useTaskProcessingController watchdog timeouts", () => {
         insights: [],
         transcript: null,
         dissection: null,
+        dissection_source_status: null,
         error: {
           code: "WORKER_CANCELLED",
           message: "",

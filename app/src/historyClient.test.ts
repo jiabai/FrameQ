@@ -368,6 +368,7 @@ describe("history client", () => {
       },
       insights: [],
       dissection: null,
+      dissection_source_status: null,
       error: {
         code: "INSIGHTFLOW_CONFIG_MISSING",
         message: "LLM configuration is missing.",

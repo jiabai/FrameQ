@@ -214,6 +214,7 @@ export async function retryInsights(
       insights: [],
       transcript: null,
       dissection: null,
+      dissection_source_status: null,
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: error instanceof Error ? error.message : String(error),
@@ -256,6 +257,7 @@ function failedResult(code: string, message: string, stage: WorkflowStage): Work
     insights: [],
     transcript: null,
     dissection: null,
+    dissection_source_status: null,
     error: {
       code,
       message,
@@ -275,6 +277,7 @@ function invalidRetryPayloadResult(taskId: string | null): WorkerResult {
     insights: [],
     transcript: null,
     dissection: null,
+    dissection_source_status: null,
     error: {
       code: "INVALID_RETRY_PAYLOAD",
       message: "",
@@ -298,6 +301,7 @@ function protocolViolationResult(
     insights: [],
     transcript: null,
     dissection: null,
+    dissection_source_status: null,
     error: {
       code: "WORKER_PROTOCOL_VIOLATION",
       message: "",

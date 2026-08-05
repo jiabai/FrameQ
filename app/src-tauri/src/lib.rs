@@ -49,7 +49,7 @@ pub(crate) use history_deletion::HistoryDeletionState;
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 #[cfg(test)]
-pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 6;
+pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 7;
 
 #[tauri::command]
 fn greet(name: &str) -> String {

@@ -34,6 +34,8 @@ struct ProcessVideoResult {
     insights: Vec<task_manifest::InsightView>,
     transcript: Option<task_manifest::TranscriptMetadata>,
     dissection: Option<crate::worker_runtime::TaskDissection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dissection_source_status: Option<task_manifest::DissectionSourceStatus>,
     error: Option<WorkerError>,
 }
 

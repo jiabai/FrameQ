@@ -177,6 +177,7 @@ export type WorkerResult = {
   insights: Insight[];
   transcript: TranscriptMetadata | null;
   dissection: TranscriptDissection | null;
+  dissection_source_status: "current" | "stale" | null;
   error: WorkerErrorResult | null;
 };
 
@@ -408,7 +409,7 @@ export function summarizeWorkerResult(
     artifacts: result.artifacts ?? {},
     transcript: result.transcript ?? null,
     dissection: result.dissection,
-    dissectionStale: false,
+    dissectionStale: result.dissection_source_status === "stale",
     error: result.error,
     aiErrorTarget:
       result.error?.stage === "insights_generating" ? failedAiTarget : null,
@@ -442,11 +443,13 @@ export function finishInsightRetry(
         ? state.dissection
         : next.dissection,
     dissectionStale:
-      target === "dissection" && result.error
-        ? state.dissectionStale
-        : target === "dissection" && result.dissection
-          ? false
-          : next.dissectionStale,
+      target === "dissection"
+        ? result.error
+          ? state.dissectionStale
+          : result.dissection
+            ? false
+            : next.dissectionStale
+        : state.dissectionStale,
   };
 }
 

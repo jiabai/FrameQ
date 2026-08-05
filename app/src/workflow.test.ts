@@ -94,7 +94,7 @@ const DEFAULT_DISSECTION: NonNullable<WorkerResult["dissection"]> = {
 };
 
 function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
-  const { artifacts, dissection, ...rest } = overrides;
+  const { artifacts, dissection, dissection_source_status, ...rest } = overrides;
   return {
     status: "completed",
     task_id: TASK_ID,
@@ -105,6 +105,7 @@ function workerResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
     insights: [DEFAULT_INSIGHT],
     transcript: null,
     dissection: dissection ?? null,
+    dissection_source_status: dissection_source_status ?? null,
     error: null,
     ...rest,
   };
@@ -131,6 +132,51 @@ describe("workflow state model", () => {
     expect(next.dissection).toEqual(previous.dissection);
     expect(next.dissectionStale).toBe(true);
     expect(next.aiTargetErrors.dissection?.code).toBe("INSIGHTFLOW_LLM_REQUEST_FAILED");
+  });
+
+  test("propagates stale dissection_source_status from a cached worker result", () => {
+    const cached = workerResult({
+      dissection: DEFAULT_DISSECTION,
+      dissection_source_status: "stale",
+    });
+
+    const state = summarizeWorkerResult(cached);
+
+    expect(state.dissection).toEqual(DEFAULT_DISSECTION);
+    expect(state.dissectionStale).toBe(true);
+  });
+
+  test("treats a current dissection_source_status from a cached worker result as not stale", () => {
+    const cached = workerResult({
+      dissection: DEFAULT_DISSECTION,
+      dissection_source_status: "current",
+    });
+
+    const state = summarizeWorkerResult(cached);
+
+    expect(state.dissectionStale).toBe(false);
+  });
+
+  test("preserves an existing stale marker when retrying a non-dissection target", () => {
+    const previous = workerResult({
+      dissection: DEFAULT_DISSECTION,
+      dissection_source_status: "stale",
+    });
+    const state = summarizeWorkerResult(previous);
+    expect(state.dissectionStale).toBe(true);
+
+    // The caller (useTaskProcessingController) carries forward the prior
+    // dissection object when the worker result omits it; only the stale
+    // marker must survive without the worker echoing source_status.
+    const summaryRetry = workerResult({
+      summary: "# new summary",
+      dissection: DEFAULT_DISSECTION,
+    });
+
+    const next = finishInsightRetry(state, summaryRetry, "summary");
+
+    expect(next.dissection).toEqual(DEFAULT_DISSECTION);
+    expect(next.dissectionStale).toBe(true);
   });
   test("starts with one URL composer branch and no task source", () => {
     const state = createInitialWorkflow();

@@ -473,6 +473,7 @@ export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
     insights: item.insights,
     transcript: item.transcript,
     dissection: item.dissection,
+    dissection_source_status: item.dissectionStale ? "stale" : null,
     error: item.error,
   };
 }

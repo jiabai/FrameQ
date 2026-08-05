@@ -112,13 +112,17 @@ export function AiResultDetailSheet({
               markdown={workflow.summary}
               emptyText={t("detail.summaryEmpty")}
             />
-          ) : detailTab === "dissection" && workflow.dissection ? (
-            <DissectionReport
-              report={workflow.dissection}
-              stale={workflow.dissectionStale}
-              sourceLocationDisabled={controller.transcriptDirty}
-              onLocateChunks={onLocateDissectionChunks}
-            />
+          ) : detailTab === "dissection" ? (
+            workflow.dissection ? (
+              <DissectionReport
+                report={workflow.dissection}
+                stale={workflow.dissectionStale}
+                sourceLocationDisabled={controller.transcriptDirty}
+                onLocateChunks={onLocateDissectionChunks}
+              />
+            ) : (
+              <p>{t("detail.dissectionEmpty")}</p>
+            )
           ) : workflow.insights.length > 0 ? (
             <ol className="insight-detail-list">
               {workflow.insights.map((insight) => (

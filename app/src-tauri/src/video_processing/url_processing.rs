@@ -64,6 +64,7 @@ fn process_video_blocking(
                 insights: vec![],
                 transcript: None,
                 dissection: None,
+                dissection_source_status: None,
                 error: Some(WorkerError {
                     code: "ASR_MODEL_UNSUPPORTED".to_string(),
                     message: error,

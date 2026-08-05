@@ -182,10 +182,10 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict desktop contract v6 while preserving process_video v3", () => {
+  test("uses strict desktop contract v7 while preserving process_video v3", () => {
     const contract = loadContract();
 
-    expect(contract.contractVersion).toBe(6);
+    expect(contract.contractVersion).toBe(7);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
   });
 
@@ -206,7 +206,7 @@ describe("desktop/worker contract", () => {
     };
     visit(contract);
 
-    expect(contract.contractVersion).toBe(6);
+    expect(contract.contractVersion).toBe(7);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);

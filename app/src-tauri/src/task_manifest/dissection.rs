@@ -1,10 +1,10 @@
 use crate::worker_runtime::{validate_task_dissection, TaskDissection};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const INVALID_DISSECTION_ARTIFACT: &str = "Task dissection artifact is invalid.";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum DissectionSourceStatus {
     Current,
