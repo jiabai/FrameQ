@@ -4,12 +4,12 @@
 #
 # What it does:
 #   1. Build the site  -> site/dist
-#   2. Rsync dist/ to the server web root (default /var/www/frameq)
+#   2. Rsync dist/ to the server web root (default /home/ubuntu/FrameQ/site)
 #   3. Print the nginx reload command (run on the server)
 #
 # The marketing site shares the domain frameq.8xf.pro with the FrameQ
 # server app. nginx (deploy/nginx/frameq-server.conf) serves "/" statically
-# from /var/www/frameq and proxies /api/*, /auth/, /admin, /user/, /login,
+# from /home/ubuntu/FrameQ/site and proxies /api/*, /auth/, /admin, /user/, /login,
 # /dashboard to the backend (127.0.0.1:8787).
 #
 # NOTE: site/ is git-ignored, so the source lives only on this machine.
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 DEPLOY_SERVER="${DEPLOY_SERVER:?set DEPLOY_SERVER=user@your-server}"
-REMOTE_WEBROOT="${REMOTE_WEBROOT:-/var/www/frameq}"
+REMOTE_WEBROOT="${REMOTE_WEBROOT:-/home/ubuntu/FrameQ/site}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
