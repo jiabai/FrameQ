@@ -15,10 +15,13 @@
 - [x]  2026-08-03: Spec drafted at `docs/product-specs/2026-08-03-web-user-dashboard.md`; this ExecPlan drafted; awaiting user approval before implementation.
 - [x]  2026-08-03: All Tasks 1–9 complete. Implementation ships store contracts (memory + Prisma + migration `202608030001_user_session`), `UserAuthService`, `routes/userAuth.ts`, `routes/dashboard.ts`, `dashboardPage.ts`, login-page branching, server wiring, and full integration/regression tests in `server/tests/webDashboard.test.ts`. Governance validated and all regression gates green. See Outcomes & Retrospective for evidence.
 - [x]  2026-08-03: Iteration 2 (Tasks 10–14) complete. Desktop-mode `/auth/email/verify` now atomically creates a desktop ticket AND a web user session via `verifyDesktopOtpAndCreateTicketAndWebSession`; sets `frameq_user_session` + `frameq_user_csrf` cookies; the login page shows a success panel ("登录成功" / "此窗口可关闭..." / "去到 Web Dashboard" link) and triggers the `frameq://` deep link in the background. Desktop client contract `{ ticket, redirect_url }` unchanged. All regression gates green (160 server tests, 669 app tests, 669 worker tests).
-- [x]  2026-08-05: Archived. All Tasks 1–14 complete. Web user dashboard is included in the v0.3.1
+- [x] 2026-08-05: Archived. All Tasks 1–14 complete. Web user dashboard is included in the v0.3.1
   release scope; residual risks (production `secureCookies` verification on `frameq.8xf.pro`,
   no IP/UA binding on web sessions, shared OTP rate limit, deep-link `setTimeout` timing) carry into
   the v0.3.1 release notes and release-prep plan. Plan moved to `completed/`.
+- [x] 2026-08-06: Production `secureCookies` verification completed on `frameq.8xf.pro`.
+  Session/CSRF cookies confirmed to carry the `Secure` flag over the production TLS-terminated
+  deployment. Residual risk closed.
 
 ## Decision Log
 
@@ -54,7 +57,7 @@
 
 ### Residual risks (to revisit before release)
 
-- **`secureCookies` deployment verification on `frameq.8xf.pro`:** the `Secure` flag is only set when `secureCookies=true` is wired through the production deployment config. If the reverse proxy terminates TLS but the app sees HTTP, session cookies could transit without the `Secure` flag. Verify the deployment config before announcing the dashboard URL.
+- **`secureCookies` deployment verification on `frameq.8xf.pro`:** the `Secure` flag is only set when `secureCookies=true` is wired through the production deployment config. If the reverse proxy terminates TLS but the app sees HTTP, session cookies could transit without the `Secure` flag. Verify the deployment config before announcing the dashboard URL. **Verified 2026-08-06 on `frameq.8xf.pro`.**
 - **No IP/UA binding on user web sessions:** a stolen cookie is usable for the full 90-day TTL. Acceptable for v1 parity with the desktop session; revisit if abuse appears.
 - **No web-login-specific rate limit beyond the shared OTP rate limit:** acceptable since OTP issuance is the gated step and the OTP purpose is shared with the desktop path.
 - **Version bump and release-prep are a separate follow-up plan:** this plan does not tag or publish. The next plan decides v0.3.1 (patch) vs v0.4.0 (minor) and writes release notes.

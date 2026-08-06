@@ -109,7 +109,10 @@ remain governed by the existing separate summary/inspiration confirmation.
   progress, cancellation, History restart, no path in diagnostics, artifact WAV verified at
   16 kHz mono signed 16-bit PCM, ffprobe/FFmpeg argv confirmed generic staging paths only).
   WMV decoding confirmed through packaged FFmpeg build. macOS: unavailable — recorded as
-  unverified residual risk. Fake AI used; no real Credits consumed. All automated gates re-run:
+  unverified residual risk. **Verified 2026-08-06 on a real macOS host; no longer a residual
+  risk (closed by the v0.3.1 release-prep follow-up; see
+  `docs/exec-plans/completed/2026-08-05-v0.3.1-desktop-feature-release-plan.md`).**
+  Fake AI used; no real Credits consumed. All automated gates re-run:
   App 68 files / 637 tests, Rust 226/226, Worker 601 passed / 2 skipped, scripts 26/27
   (1 unrelated Windows tar env failure), governance 0/0, lint/rustfmt/Ruff/diff/Tauri no-bundle
   all passed.
@@ -323,7 +326,9 @@ used fakes; no real AI Credits were consumed.
 Native acceptance is complete on Windows: real Tauri window passed MP4/WMV/MP3/WAV decoding,
 picker/path behavior, progress, cancellation, History restart, artifact WAV verification
 (16 kHz mono signed 16-bit PCM), and path secrecy. WMV decoding confirmed from packaged FFmpeg
-build. macOS acceptance is unavailable and recorded as unverified residual risk. Very large
+build. macOS acceptance is unavailable and recorded as unverified residual risk. **Verified
+2026-08-06 on a real macOS host; no longer a residual risk (closed by the v0.3.1 release-prep
+follow-up; see `docs/exec-plans/completed/2026-08-05-v0.3.1-desktop-feature-release-plan.md`).** Very large
 media may exhaust disk or processing resources because the product intentionally has no
 arbitrary hard cap. Older FrameQ releases intentionally ignore local-source manifests. The
 source basename remains local History metadata and therefore still reveals the selected
@@ -564,10 +569,13 @@ stored.
       mono signed 16-bit PCM, no path in diagnostics, selection lifecycle, ffprobe/FFmpeg argv
       confirmed generic staging paths only). WMV decoding confirmed from packaged FFmpeg build.
     - macOS: platform unavailable — recorded as unverified residual risk. No macOS picker,
-      filesystem, or codec behavior has been verified.
+      filesystem, or codec behavior has been verified. **Verified 2026-08-06 on a real macOS
+      host; no longer a residual risk (closed by the v0.3.1 release-prep follow-up; see
+      `docs/exec-plans/completed/2026-08-05-v0.3.1-desktop-feature-release-plan.md`).**
     - Fake AI used throughout; no real AI Credits were consumed.
     - Plan moved to `completed/`, indexes and TASKS.md updated.
     - Cross-cutting residual debt carried forward: macOS acceptance remains unverified.
+      **Closed 2026-08-06 on a real macOS host.**
 
 ## Validation and Acceptance
 
