@@ -57,3 +57,4 @@ design-system/banners/*
 
 # Local cargo config (environment-specific tuning)
 app/src-tauri/.cargo/
+site/
