@@ -1,6 +1,6 @@
 # Tech Debt Tracker
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## High Priority
 
@@ -184,7 +184,7 @@ Last updated: 2026-08-05
 | Web 宣传站暗色模式缺失 | 首版仅亮色。暗色模式需 token 系统扩展 `[data-theme="dark"]` 与 `prefers-color-scheme` 媒体查询。 | `site/src/styles/tokens.css`; `site/src/styles/global.css` | 扩展 token 三层系统的 dark 变体，在 BaseLayout 添加主题切换脚本（首版不设 cookie，需评估是否破例）。 |
 | Web 宣传站博客/changelog 自动同步缺失 | release notes 通过 content collections 手动同步，无自动拉取。博客功能未实现。 | `site/src/content.config.ts`; `site/src/content/release-notes/` | 建立 CI 从 `docs/releases/` 自动生成 release notes markdown，或引入博客 content collection 与 RSS。 |
 | Web 宣传站部署 CI 未定 | 构建产物在 `site/dist/`，部署到 GitHub Pages / Cloudflare Pages / Netlify 的 CI 集成未定。`astro.config.mjs` 的 `site` URL 为占位。 | `site/astro.config.mjs`; `site/README.md` | 确认部署目标域名与平台后，建立 CI 构建部署流水线，更新 `site` 字段。 |
-| Web 宣传站真实浏览器视觉验证未跑 | 自动化测试断言 HTML 结构与 token 使用，移动端用 browser subagent（Chromium 内核）验证。Firefox/Safari 跨内核视觉一致性、Lighthouse CLI 性能/SEO 审计未跑。 | `docs/exec-plans/completed/2026-08-05-web-marketing-site-plan.md` Task 6 | 在部署 CI 中加入跨浏览器截图回归与 Lighthouse 自动化审计。 |
+| Web 宣传站真实浏览器视觉验证未跑 | 自动化测试断言 HTML 结构与 token 使用，移动端用 browser subagent（Chromium 内核）验证。Firefox/Safari 跨内核视觉一致性、Lighthouse CLI 性能/SEO 审计未跑。V2 动效（视差/3D 倾斜/涟漪/鼠标跟随）在 Firefox/Safari 下的表现同样未实测。 | `docs/exec-plans/completed/2026-08-05-web-marketing-site-plan.md` Task 6; `docs/exec-plans/completed/2026-08-06-web-site-dynamic-enhancement-plan.md` Task 7 | 在部署 CI 中加入跨浏览器截图回归与 Lighthouse 自动化审计，覆盖 V1 静态布局与 V2 动效两层。 |
 
 2026-07-03 note: ad-hoc signing avoids the non-recoverable damaged-app path only when the signed `.app` is not modified after signing. The release workflow now runs packaged-runtime smoke tests with `PYTHONDONTWRITEBYTECODE=1`, rejects `__pycache__` / `.pyc` files inside packaged resources, and verifies `codesign --deep --strict` before creating the DMG.
 
