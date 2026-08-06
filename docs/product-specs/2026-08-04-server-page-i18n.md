@@ -4,11 +4,11 @@
 
 The FrameQ server renders three user-facing HTML pages — `/login` (desktop + web mode), `/dashboard` (per-user web session), and `/admin` + `/admin/login` (administrator web session). Before this spec, every page hard-coded Simplified Chinese copy in both the server-rendered HTML and the inline client-side script strings (status messages, error copy, button labels, and success-panel text). There was no way for an English-speaking user or administrator to switch the page language, and the desktop client already shipped a fully localized UI (Simplified/Traditional Chinese + English) per `docs/product-specs/2026-07-15-desktop-i18n-ai-output-language.md`, so the web surface was inconsistent with the desktop surface.
 
-This spec introduces a server-side i18n module that supports two locales (`zh-CN` default, `en`) and a per-page language switcher button. The locale is stored in a non-sensitive `lang` cookie and applied to every server-rendered page.
+This spec introduces a server-side i18n module that supports three locales (`zh-CN` default, `en`, `zh-TW`) and a per-page language switcher dropdown. The locale is stored in a non-sensitive `lang` cookie and applied to every server-rendered page. Detected via `lang` cookie → `?lang=` deep-link query → `Accept-Language` header → default.
 
 ## Goals
 
-- Add a single i18n module at `server/src/i18n.ts` that owns the locale type, the string dictionary, the `t()` lookup, the `detectLocale()` cookie-based locale resolution, the `renderLangSwitcher()` button HTML/inline-script, and the shared `langSwitcherStyles()` CSS.
+- Add a single i18n module at `server/src/i18n.ts` that owns the locale type, the string dictionary, the `t()` lookup, the `detectLocale()` locale resolution (cookie → `?lang=` deep link → `Accept-Language` → default), the `renderLangSwitcher()` dropdown HTML/inline-script, and the shared `langSwitcherStyles()` CSS.
 - Cover all user-visible strings on `/login`, `/dashboard`, `/admin/login`, and `/admin` with flat-keyed strings resolved via `t(locale, key)` in both `zh-CN` and `en`.
 - Pass a `locale: Locale` parameter through every page-render function (`renderLoginPage`, `renderDashboardPage`, `renderAdminLoginPage`, `renderAdminPage`) and emit `<html lang="...">` plus a per-page language switcher button.
 - Have every page route (`GET /login`, `GET /dashboard`, `GET /admin/login`, `GET /admin`) read the `lang` cookie via `detectLocale(request.headers.cookie)` and forward the resolved locale to the render function.
@@ -18,16 +18,16 @@ This spec introduces a server-side i18n module that supports two locales (`zh-CN
 ## Non-goals
 
 - No change to the desktop client binary, the Tauri IPC contract, the worker, the ASR path, AI Credit accounting, OTP semantics, store transactions, or Prisma schema. The change is server-side rendering only.
-- No Traditional Chinese (`zh-TW`) server-side locale in this version. The desktop client already ships reviewed Traditional Chinese copy; the server is intentionally limited to `zh-CN` + `en` for v1 to avoid runtime conversion and unreviewed translations. Adding `zh-TW` is a follow-up that requires reviewed copy (per the `docs/DESIGN.md` rule that Traditional Chinese must not be produced by runtime conversion).
-- No `Follow System` mode for the server pages. The browser's `Accept-Language` is intentionally not consulted; the locale is purely cookie-driven so the user's explicit choice is honored across `/login`, `/dashboard`, and `/admin`.
+- Traditional Chinese (`zh-TW`) is supported as a third locale, added after v1. It uses reviewed Traditional Chinese copy per `docs/DESIGN.md` (no runtime conversion). The server renders `zh-TW` for `lang=zh-TW`, `?lang=zh-TW` desktop deep links, and `Accept-Language: zh-TW` / `zh-Hant`.
+- No `Follow System` mode toggle on the server pages. The browser `Accept-Language` is consulted only as a first-visit fallback (after the `lang` cookie and `?lang=` deep link); an explicit `lang` cookie always wins, so a user's choice is honored across `/login`, `/dashboard`, and `/admin`.
 - No change to OTP issuance, rate limiting, dispatch, or auth flow. The `lang` cookie is a non-sensitive preference cookie and is not read by any auth, store, or Prisma code.
 - No new design doc is produced by this spec; the change is a contained rendering refactor that touches no architecture or security boundary.
 - No version-number assignment in this spec. Version bump is decided in the ExecPlan.
 
 ## Locale Model
 
-- Supported locales: `zh-CN` (default) and `en`. The type is `Locale = "zh-CN" | "en"` exported from `server/src/i18n.ts`.
-- The locale is detected from the `lang` cookie via `detectLocale(cookieHeader: string | undefined): Locale`. The cookie value is URL-decoded and validated against the closed set `{"zh-CN", "en"}`; any malformed or unrecognized value falls back to `DEFAULT_LOCALE` (`zh-CN`).
+- Supported locales: `zh-CN` (default), `en`, and `zh-TW`. The type is `Locale = "zh-CN" | "en" | "zh-TW"` exported from `server/src/i18n.ts`. The `zh-TW` strings are reviewed Traditional Chinese copy per `docs/DESIGN.md` (no runtime conversion).
+- The locale is detected via `detectLocale({ cookie, queryLang, acceptLanguage }): Locale`. Resolution order: `lang` cookie → `?lang=` query param (desktop deep link, e.g. `/login?lang=zh-TW`) → `Accept-Language` header → `DEFAULT_LOCALE` (`zh-CN`). The cookie/query value is URL-decoded and validated against the closed set `{"zh-CN", "en", "zh-TW"}`; `Accept-Language` maps `zh-TW`/`zh-Hant*` → `zh-TW`, generic `zh`/`zh-CN`/`zh-Hans` → `zh-CN`, `en` → `en`. Any malformed or unrecognized value falls back to `DEFAULT_LOCALE`.
 - The cookie is set by the per-page language switcher button with `path=/`, `max-age=31536000` (1 year), and `samesite=lax`. The cookie is intentionally **not** `Secure`-only so language switching also works on the local development server (HTTP) and on `frameq.8xf.pro` (HTTPS). The cookie carries no sensitive data and is read only by `detectLocale`.
 - The cookie is **not** `HttpOnly` because it is read by client-side code is unnecessary — the locale is applied server-side on the next request and the client only needs to set the cookie and reload.
 
@@ -50,10 +50,10 @@ This spec introduces a server-side i18n module that supports two locales (`zh-CN
 
 ## Route Wiring
 
-- `GET /login` in `server/src/routes/desktopAuth.ts` reads `detectLocale(request.headers.cookie)` and passes the locale to `renderLoginPage(locale)`.
-- `GET /dashboard` in `server/src/routes/dashboard.ts` reads `detectLocale(request.headers.cookie)` and passes `locale` in the `DashboardPageInput` to `renderDashboardPage`.
-- `GET /admin/login` in `server/src/routes/admin.ts` reads `detectLocale(request.headers.cookie)` and passes the locale to `renderAdminLoginPage(locale)`.
-- `GET /admin` in `server/src/routes/admin.ts` reads `detectLocale(request.headers.cookie)` and passes `locale` in the `renderAdminPage` input.
+- `GET /login` in `server/src/routes/desktopAuth.ts` calls `detectLocale({ cookie: request.headers.cookie, queryLang: extractQueryLang(request.query), acceptLanguage: firstHeader(request.headers["accept-language"]) })` and passes the locale to `renderLoginPage(locale)`. When a valid `?lang=` deep link is present and no `lang` cookie exists, it persists the deep-link locale as a `lang` cookie so post-login pages remember it.
+- `GET /dashboard` in `server/src/routes/dashboard.ts` calls `detectLocale({ cookie, queryLang, acceptLanguage })` and passes `locale` in the `DashboardPageInput` to `renderDashboardPage`.
+- `GET /admin/login` in `server/src/routes/admin.ts` calls `detectLocale({ cookie, queryLang, acceptLanguage })` and passes the locale to `renderAdminLoginPage(locale)`.
+- `GET /admin` in `server/src/routes/admin.ts` calls `detectLocale({ cookie, queryLang, acceptLanguage })` and passes `locale` in the `renderAdminPage` input.
 - No new routes, no new Store methods, no new Prisma models, no new env vars. The route module boundary ownership (`docs/design-docs/2026-07-21-server-route-module-split.md`) is preserved: each route keeps its existing capabilities; the only new import is `detectLocale` from `../i18n.js`.
 
 ## User-visible Behavior
@@ -104,8 +104,8 @@ This spec introduces a server-side i18n module that supports two locales (`zh-CN
 
 ## Residual Risks
 
-- **No `zh-TW` server-side locale.** The desktop client ships Traditional Chinese; the server does not. A user who picks Traditional Chinese on the desktop and then opens the web dashboard will see Simplified Chinese. Tracked as a follow-up; closing it requires reviewed Traditional Chinese copy per `docs/DESIGN.md`.
-- **No `Accept-Language` fallback.** A browser whose language is English but with no `lang` cookie set will see Simplified Chinese on first visit. The user must click the switcher once. Acceptable for v1; revisit if English-first users report friction.
+- **`zh-TW` server-side locale — resolved.** The server now supports `zh-TW` with reviewed Traditional Chinese copy (per `docs/DESIGN.md`, no runtime conversion). A desktop Traditional Chinese user who opens the web dashboard now sees Traditional Chinese.
+- **`Accept-Language` fallback — resolved.** `detectLocale` consults `Accept-Language` as a first-visit fallback (after the `lang` cookie and `?lang=` deep link). A browser whose language is `zh-TW`/`zh-Hant` or `en` with no `lang` cookie set now renders the matching locale on first visit; an explicit `lang` cookie still wins.
 - **Cookie not `Secure`.** The `lang` cookie is set without the `Secure` flag so it works on the local dev server. Since it carries no sensitive data, this is acceptable, but a future hardening pass could gate it behind `secureCookies` to mirror the session cookies.
 - **Inline script uses `document.currentScript.previousElementSibling`.** This is robust in all evergreen browsers but not in IE11; FrameQ server pages are not supported on IE11.
 - **Real browser visual verification not performed.** The integration tests assert the rendered HTML contains the expected locale-specific strings and `<html lang="...">` attribute, but a manual click-through of the switcher button in a real browser has not been recorded. The inline script's behavior (set cookie + reload) is verified by code inspection only.

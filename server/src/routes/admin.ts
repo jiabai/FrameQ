@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ActivationCodeService } from "../activation.js";
 import { adminSessionMaxAgeSeconds, type AdminAuthService } from "../adminAuth.js";
 import { renderAdminLoginPage, renderAdminPage } from "../adminPage.js";
-import { detectLocale } from "../i18n.js";
+import { detectLocale, extractQueryLang } from "../i18n.js";
 import type { EntitlementAdjustmentService } from "../entitlementAdjustment.js";
 import type { LlmConfigService } from "../llmConfig.js";
 import { sha256 } from "../security.js";
@@ -72,7 +72,13 @@ export function registerAdminRoutes(
   app.get("/admin/login", async (request, reply) => {
     reply.type("text/html; charset=utf-8");
     reply.header("cache-control", "no-store");
-    return renderAdminLoginPage(detectLocale(request.headers.cookie));
+    return renderAdminLoginPage(
+      detectLocale({
+        cookie: request.headers.cookie,
+        queryLang: extractQueryLang(request.query),
+        acceptLanguage: firstHeader(request.headers["accept-language"]),
+      }),
+    );
   });
 
   app.post("/admin/auth/email/start", async (request, reply) => {
@@ -177,7 +183,11 @@ export function registerAdminRoutes(
       llmConfig: publicLlmConfig,
       activationCodes: codes,
       entitlementAdjustments,
-      locale: detectLocale(request.headers.cookie),
+      locale: detectLocale({
+        cookie: request.headers.cookie,
+        queryLang: extractQueryLang(request.query),
+        acceptLanguage: firstHeader(request.headers["accept-language"]),
+      }),
     });
   });
 

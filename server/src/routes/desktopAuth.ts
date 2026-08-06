@@ -2,12 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AuthService } from "../auth.js";
 import { renderLoginPage } from "../loginPage.js";
-import { detectLocale } from "../i18n.js";
+import { detectLocale, extractQueryLang, LANG_COOKIE_MAX_AGE, resolveCookieLocale, SUPPORTED_LOCALES } from "../i18n.js";
 import { sha256 } from "../security.js";
 import type { Store } from "../store.js";
 import { userSessionMaxAgeSeconds } from "../userAuth.js";
 import { emailStartSchema, emailVerifySchema } from "./authSchemas.js";
-import { setCookie } from "./cookies.js";
+import { firstHeader, setCookie } from "./cookies.js";
 import {
   bearerToken,
   isServerTemporarilyUnavailable,
@@ -35,7 +35,27 @@ export function registerDesktopAuthRoutes(
   app.get("/login", async (request, reply) => {
     reply.type("text/html; charset=utf-8");
     reply.header("cache-control", "no-store");
-    return renderLoginPage(detectLocale(request.headers.cookie));
+    const queryLang = extractQueryLang(request.query);
+    const locale = detectLocale({
+      cookie: request.headers.cookie,
+      queryLang,
+      acceptLanguage: firstHeader(request.headers["accept-language"]),
+    });
+    // Persist an explicit desktop deep-link locale (?lang=) so post-login pages
+    // remember it, but never clobber an existing explicit cookie choice.
+    const hasCookieLocale = resolveCookieLocale(request.headers.cookie) != null;
+    if (
+      queryLang != null &&
+      (SUPPORTED_LOCALES as string[]).includes(queryLang) &&
+      !hasCookieLocale
+    ) {
+      setCookie(reply, "lang", queryLang, {
+        httpOnly: false,
+        maxAgeSeconds: LANG_COOKIE_MAX_AGE,
+        secure: dependencies.secureCookies,
+      });
+    }
+    return renderLoginPage(locale);
   });
 
   app.post("/auth/email/start", async (request, reply) => {

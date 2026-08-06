@@ -54,6 +54,15 @@ async function performWebLoginReal(
   return parseCookies(verifyResponse.headers["set-cookie"]);
 }
 
+/** Assert the page renders a language dropdown listing all three locales. */
+function expectSwitcher(html: string) {
+  expect(html).toContain('<select class="lang-switch"');
+  expect(html).toContain('<option value="zh-CN"');
+  expect(html).toContain('<option value="en"');
+  expect(html).toContain('<option value="zh-TW"');
+  expect(html).toContain(".lang-switch");
+}
+
 describe("server page i18n — /login", () => {
   test("renders in zh-CN by default (no lang cookie)", async () => {
     const { app } = buildTestServer();
@@ -63,13 +72,10 @@ describe("server page i18n — /login", () => {
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toContain('<html lang="zh-CN">');
-    // Chinese copy from login.intro.desktop (default mode is desktop-ish copy in zh-CN).
     expect(response.body).toContain("FrameQ 客户端");
-    // Switcher button targets en.
-    expect(response.body).toContain('data-target-locale="en"');
+    // Dropdown lists English as an option.
     expect(response.body).toContain(">English<");
-    // Shared switcher styles present.
-    expect(response.body).toContain(".lang-switch");
+    expectSwitcher(response.body);
   });
 
   test("renders in en when lang=en cookie is set", async () => {
@@ -82,12 +88,57 @@ describe("server page i18n — /login", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="en">');
-    // English copy. login.intro.desktop contains "FrameQ client".
     expect(response.body).toContain("Enter your email to receive a verification code");
     expect(response.body).toContain("FrameQ client");
-    // Switcher button targets zh-CN.
-    expect(response.body).toContain('data-target-locale="zh-CN"');
     expect(response.body).toContain(">中文<");
+    expectSwitcher(response.body);
+  });
+
+  test("renders in zh-TW when lang=zh-TW cookie is set", async () => {
+    const { app } = buildTestServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/login",
+      headers: { cookie: "lang=zh-TW" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<html lang="zh-TW">');
+    expect(response.body).toContain("登入 FrameQ");
+    expect(response.body).toContain("輸入電子郵件取得驗證碼");
+    expect(response.body).toContain('<option value="zh-TW" selected>');
+  });
+
+  test("renders in zh-TW from Accept-Language on first visit (no cookie)", async () => {
+    const { app } = buildTestServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/login",
+      headers: { "accept-language": "zh-Hant-TW,zh;q=0.9,en;q=0.8" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<html lang="zh-TW">');
+    expect(response.body).toContain("登入 FrameQ");
+  });
+
+  test("persists an explicit desktop deep-link locale (?lang=zh-TW) as a cookie", async () => {
+    const { app } = buildTestServer();
+    const response = await app.inject({ method: "GET", url: "/login?lang=zh-TW" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<html lang="zh-TW">');
+
+    const cookies = parseCookies(response.headers["set-cookie"]);
+    expect(cookies.get("lang")).toBe("zh-TW");
+
+    // Subsequent navigation without the query param remembers the deep-link choice.
+    const followUp = await app.inject({
+      method: "GET",
+      url: "/login",
+      headers: { cookie: "lang=zh-TW" },
+    });
+    expect(followUp.body).toContain('<html lang="zh-TW">');
   });
 
   test("falls back to zh-CN when lang cookie is malformed", async () => {
@@ -135,14 +186,35 @@ describe("server page i18n — /dashboard", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toContain('<html lang="en">');
-    // English dashboard copy.
     expect(response.body).toContain("FrameQ Dashboard");
     expect(response.body).toContain("Sign out");
     expect(response.body).toContain("Account & quota");
-    // Switcher targets zh-CN.
-    expect(response.body).toContain('data-target-locale="zh-CN"');
+    expect(response.body).toContain(">中文<");
+    expectSwitcher(response.body);
     // Email is rendered verbatim regardless of locale.
     expect(response.body).toContain(email);
+  });
+
+  test("renders in zh-TW from Accept-Language alongside a valid session", async () => {
+    const { app, sentCodes } = buildTestServer();
+    const email = "user@example.com";
+    const sessionCookies = await performWebLoginReal(app, sentCodes, email);
+    const sessionToken = sessionCookies.get("frameq_user_session")!;
+    const csrfToken = sessionCookies.get("frameq_user_csrf")!;
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/dashboard",
+      headers: {
+        cookie: `frameq_user_session=${sessionToken}; frameq_user_csrf=${csrfToken}`,
+        "accept-language": "zh-TW",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<html lang="zh-TW">');
+    expect(response.body).toContain("FrameQ 控制台");
+    expect(response.body).toContain("登出");
   });
 
   test("renders in zh-CN by default (no lang cookie)", async () => {
@@ -179,11 +251,24 @@ describe("server page i18n — /admin/login", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toContain('<html lang="en">');
-    // English admin-login copy.
     expect(response.body).toContain("Admin Sign-in");
     expect(response.body).toContain("Sign in to FrameQ Admin");
-    // Switcher targets zh-CN.
-    expect(response.body).toContain('data-target-locale="zh-CN"');
+    expect(response.body).toContain(">中文<");
+    expectSwitcher(response.body);
+  });
+
+  test("renders in zh-TW when lang=zh-TW cookie is set", async () => {
+    const { app } = buildTestServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/admin/login",
+      headers: { cookie: "lang=zh-TW" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<html lang="zh-TW">');
+    expect(response.body).toContain("管理員登入");
+    expect(response.body).toContain("登入 FrameQ Admin");
   });
 
   test("renders in zh-CN by default (no lang cookie)", async () => {
@@ -232,12 +317,26 @@ describe("server page i18n — /admin", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="en">');
-    // English admin copy.
     expect(response.body).toContain("Activation Code Management");
     expect(response.body).toContain("Signed in:");
     expect(response.body).toContain("Sign out");
-    // Switcher targets zh-CN.
-    expect(response.body).toContain('data-target-locale="zh-CN"');
+    expect(response.body).toContain(">中文<");
+    expectSwitcher(response.body);
+  });
+
+  test("renders in zh-TW when lang=zh-TW cookie is set", async () => {
+    const { app, adminCookie } = await buildAuthenticatedAdminServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: `${adminCookie}; lang=zh-TW` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('<html lang="zh-TW">');
+    expect(response.body).toContain("啟用碼管理");
+    expect(response.body).toContain("已登入：");
+    expect(response.body).toContain("登出");
   });
 
   test("renders in zh-CN by default (no lang cookie)", async () => {
@@ -289,9 +388,6 @@ describe("server page i18n — secret-leak regression", () => {
 
     expect(enResponse.statusCode).toBe(200);
     // The httpOnly session token must never appear in the rendered HTML.
-    // (The CSRF token is intentionally rendered into the page's inline script so
-    // the logout button can send the x-frameq-csrf header; the CSRF cookie is
-    // non-httpOnly by design, so this is not a secret leak.)
     expect(enResponse.body).not.toContain(sessionToken);
   });
 });
