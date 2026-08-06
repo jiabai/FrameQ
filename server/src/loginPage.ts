@@ -41,15 +41,17 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
         border-radius: 8px;
         padding: 28px;
         box-shadow: 0 18px 55px rgba(17, 24, 39, 0.09);
-        position: relative;
       }
-      .lang-switch {
-        position: absolute;
-        top: 16px;
-        right: 16px;
+      .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        margin-bottom: 8px;
       }
-      h1 {
-        margin: 0 0 8px;
+      .page-header h1 {
+        margin: 0;
         font-size: 24px;
         line-height: 1.2;
         font-weight: 700;
@@ -148,8 +150,10 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
   </head>
   <body>
     <main>
-      ${renderLangSwitcher(locale)}
-      <h1>${t(locale, "login.title")}</h1>
+      <header class="page-header">
+        <h1>${t(locale, "login.title")}</h1>
+        ${renderLangSwitcher(locale)}
+      </header>
       <p id="intro">${t(locale, "login.intro.desktop")}</p>
       <form id="login-form">
         <label for="email">${t(locale, "login.email")}</label>
