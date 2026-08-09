@@ -2,6 +2,16 @@
 
 ## Active UI Work
 
+- [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Acceptance when the
+  implementation satisfies the approved product spec and complete ExecPlan gates: global
+  desktop-worker contract v8 structured ASR model-download diagnostics; Rust-owned
+  ASR-only sanitized stderr fallback, seven-day/4 MiB source retention, fixed <=5 MiB ZIP with
+  export-time re-sanitization, native Save As, failure-sheet + Settings > Advanced entry points,
+  three locales, no automatic upload/network probe/model retry/server/LLM/Credits activity.
+  Product spec: `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
+  `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
+  `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
+
 - [x] Prepare and publish FrameQ v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance: five
   version sources synchronized at 0.3.1, `scripts/tests/release-version.test.mjs` asserts
   `0.3.1`, local release gates pass (scripts 28/29 with pre-existing Windows fs.rm env failure;
