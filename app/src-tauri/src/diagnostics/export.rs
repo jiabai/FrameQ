@@ -71,7 +71,10 @@ struct ManifestFileStatus {
     status: ManifestFileState,
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<OmissionReason>,
-    omitted_records: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    omitted_records: Option<u64>,
+    #[serde(skip_serializing_if = "is_false")]
+    omitted_records_unknown: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     record_omission_reason: Option<RecordOmissionReason>,
 }
@@ -90,6 +93,10 @@ struct DiagnosticManifest {
     truncated: bool,
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Debug)]
 struct SafeRecord {
     utc_ms: u64,
@@ -106,6 +113,7 @@ struct SafeLog {
     malformed_records: u64,
     outside_window_records: u64,
     size_limited_records: u64,
+    size_limited_records_unknown: bool,
 }
 
 impl SafeLog {
@@ -122,14 +130,19 @@ impl SafeLog {
     }
 
     fn status(&self) -> ManifestFileStatus {
-        let omitted_records = self
-            .malformed_records
-            .saturating_add(self.outside_window_records)
-            .saturating_add(self.size_limited_records);
+        let omitted_records = (!self.size_limited_records_unknown).then(|| {
+            self.malformed_records
+                .saturating_add(self.outside_window_records)
+                .saturating_add(self.size_limited_records)
+        });
         let reason_count = [
             self.malformed_records,
             self.outside_window_records,
-            self.size_limited_records,
+            if self.size_limited_records > 0 || self.size_limited_records_unknown {
+                1
+            } else {
+                0
+            },
         ]
         .into_iter()
         .filter(|count| *count > 0)
@@ -147,6 +160,7 @@ impl SafeLog {
                 status: ManifestFileState::Omitted,
                 reason: Some(self.omission.unwrap_or(OmissionReason::NoEligibleRecords)),
                 omitted_records,
+                omitted_records_unknown: self.size_limited_records_unknown,
                 record_omission_reason,
             }
         } else {
@@ -155,6 +169,7 @@ impl SafeLog {
                 status: ManifestFileState::Included,
                 reason: None,
                 omitted_records,
+                omitted_records_unknown: self.size_limited_records_unknown,
                 record_omission_reason,
             }
         }
@@ -178,7 +193,7 @@ fn assemble_diagnostic_zip_at(
     let cutoff = now_ms.saturating_sub(RETENTION_MILLIS);
     let mut desktop = collect_desktop_log(paths, cutoff, now_ms);
     let mut asr = collect_asr_log(paths, cutoff, now_ms);
-    enforce_precompression_budget(&mut desktop, &mut asr);
+    let mut retained_log_bytes = enforce_precompression_budget(&mut desktop, &mut asr);
 
     loop {
         let truncated = desktop.truncated || asr.truncated;
@@ -196,7 +211,8 @@ fn assemble_diagnostic_zip_at(
                     name: MANIFEST_FILE_NAME,
                     status: ManifestFileState::Included,
                     reason: None,
-                    omitted_records: 0,
+                    omitted_records: Some(0),
+                    omitted_records_unknown: false,
                     record_omission_reason: None,
                 },
                 desktop.status(),
@@ -208,9 +224,13 @@ fn assemble_diagnostic_zip_at(
         if bytes.len() <= MAX_ZIP_BYTES {
             return Ok(bytes);
         }
-        if !drop_oldest(&mut desktop, &mut asr) {
+        let excess = bytes.len().saturating_sub(MAX_ZIP_BYTES);
+        let batch_target = excess.max(retained_log_bytes.saturating_add(7) / 8);
+        let removed = drop_oldest_bytes(&mut desktop, &mut asr, batch_target);
+        if removed == 0 {
             return Err(());
         }
+        retained_log_bytes = retained_log_bytes.saturating_sub(removed);
     }
 }
 
@@ -228,10 +248,12 @@ fn collect_desktop_log(paths: &RuntimePaths, cutoff: u64, now_ms: u64) -> SafeLo
         malformed_records: 0,
         outside_window_records: 0,
         size_limited_records: 0,
+        size_limited_records_unknown: false,
     };
     let bytes = match source {
         SourceBytes::Bytes { bytes, truncated } => {
             log.truncated = truncated;
+            log.size_limited_records_unknown = truncated;
             bytes
         }
         SourceBytes::Omitted(reason) => {
@@ -339,10 +361,12 @@ fn collect_asr_log(paths: &RuntimePaths, cutoff: u64, now_ms: u64) -> SafeLog {
         malformed_records: 0,
         outside_window_records: 0,
         size_limited_records: 0,
+        size_limited_records_unknown: false,
     };
     let bytes = match source {
         SourceBytes::Bytes { bytes, truncated } => {
             log.truncated = truncated;
+            log.size_limited_records_unknown = truncated;
             bytes
         }
         SourceBytes::Omitted(reason) => {
@@ -753,12 +777,28 @@ fn is_link_or_reparse(metadata: &fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
-fn enforce_precompression_budget(desktop: &mut SafeLog, asr: &mut SafeLog) {
-    while rendered_len(desktop).saturating_add(rendered_len(asr)) > PRECOMPRESSION_LOG_BUDGET {
-        if !drop_oldest(desktop, asr) {
+fn enforce_precompression_budget(desktop: &mut SafeLog, asr: &mut SafeLog) -> usize {
+    enforce_precompression_budget_using(desktop, asr, |desktop, asr| {
+        rendered_len(desktop).saturating_add(rendered_len(asr))
+    })
+}
+
+fn enforce_precompression_budget_using<F>(
+    desktop: &mut SafeLog,
+    asr: &mut SafeLog,
+    measure: F,
+) -> usize
+where
+    F: FnOnce(&SafeLog, &SafeLog) -> usize,
+{
+    let mut total_bytes = measure(desktop, asr);
+    while total_bytes > PRECOMPRESSION_LOG_BUDGET {
+        let Some((removed_bytes, _logical_count)) = drop_oldest(desktop, asr) else {
             break;
-        }
+        };
+        total_bytes = total_bytes.saturating_sub(removed_bytes);
     }
+    total_bytes
 }
 
 fn rendered_len(log: &SafeLog) -> usize {
@@ -768,7 +808,7 @@ fn rendered_len(log: &SafeLog) -> usize {
         .sum()
 }
 
-fn drop_oldest(desktop: &mut SafeLog, asr: &mut SafeLog) -> bool {
+fn drop_oldest(desktop: &mut SafeLog, asr: &mut SafeLog) -> Option<(usize, u64)> {
     let desktop_oldest = desktop.records.last().map(|record| record.utc_ms);
     let asr_oldest = asr.records.last().map(|record| record.utc_ms);
     let target = match (desktop_oldest, asr_oldest) {
@@ -776,7 +816,7 @@ fn drop_oldest(desktop: &mut SafeLog, asr: &mut SafeLog) -> bool {
         (Some(_), Some(_)) => asr,
         (Some(_), None) => desktop,
         (None, Some(_)) => asr,
-        (None, None) => return false,
+        (None, None) => return None,
     };
     let removed = target.records.pop().expect("selected log has a record");
     target.truncated = true;
@@ -786,7 +826,18 @@ fn drop_oldest(desktop: &mut SafeLog, asr: &mut SafeLog) -> bool {
     if target.records.is_empty() {
         target.omission = Some(OmissionReason::SizeLimit);
     }
-    true
+    Some((removed.line.len().saturating_add(1), removed.logical_count))
+}
+
+fn drop_oldest_bytes(desktop: &mut SafeLog, asr: &mut SafeLog, target_bytes: usize) -> usize {
+    let mut removed_bytes = 0_usize;
+    while removed_bytes < target_bytes {
+        let Some((record_bytes, _logical_count)) = drop_oldest(desktop, asr) else {
+            break;
+        };
+        removed_bytes = removed_bytes.saturating_add(record_bytes);
+    }
+    removed_bytes
 }
 
 fn build_zip(
@@ -868,8 +919,9 @@ fn utc_now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        assemble_diagnostic_zip_at, parse_desktop_line, read_fixed_source_with_hook, SourceBytes,
-        MAX_ZIP_BYTES,
+        assemble_diagnostic_zip_at, enforce_precompression_budget_using, parse_desktop_line,
+        read_fixed_source_with_hook, rendered_len, SafeLog, SafeRecord, SourceBytes,
+        MAX_SOURCE_BYTES, MAX_ZIP_BYTES, PRECOMPRESSION_LOG_BUDGET,
     };
     use crate::asr_model::{
         DiagnosticCacheStatus, DiagnosticModelSnapshot, SupportedDiagnosticModel,
@@ -883,6 +935,120 @@ mod tests {
     use zip::ZipArchive;
 
     const NOW: u64 = 1_800_000_000_000;
+
+    #[test]
+    fn precompression_budget_measures_total_once_and_drops_oldest_across_logs() {
+        let mut desktop = safe_log(
+            "frameq-desktop.log",
+            (0..60_000_u64)
+                .map(|index| safe_record(NOW - index * 2, 96))
+                .collect(),
+        );
+        let mut asr = safe_log(
+            "asr-model-download.log",
+            (0..60_000_u64)
+                .map(|index| safe_record(NOW - index * 2 - 1, 96))
+                .collect(),
+        );
+        let measurements = std::cell::Cell::new(0_u32);
+
+        enforce_precompression_budget_using(&mut desktop, &mut asr, |desktop, asr| {
+            measurements.set(measurements.get() + 1);
+            rendered_len(desktop).saturating_add(rendered_len(asr))
+        });
+
+        assert_eq!(measurements.get(), 1);
+        assert!(
+            rendered_len(&desktop).saturating_add(rendered_len(&asr)) <= PRECOMPRESSION_LOG_BUDGET
+        );
+        let newest_removed = [desktop.records.last(), asr.records.last()]
+            .into_iter()
+            .flatten()
+            .map(|record| record.utc_ms)
+            .min()
+            .expect("retained records");
+        assert!(desktop
+            .records
+            .iter()
+            .all(|record| record.utc_ms >= newest_removed));
+        assert!(asr
+            .records
+            .iter()
+            .all(|record| record.utc_ms >= newest_removed));
+        assert!(
+            desktop
+                .records
+                .last()
+                .expect("desktop oldest")
+                .utc_ms
+                .abs_diff(asr.records.last().expect("asr oldest").utc_ms)
+                <= 1
+        );
+    }
+
+    #[test]
+    fn source_tail_truncation_reports_unknown_size_limit_for_valid_logs() {
+        let paths = runtime_paths("tail-truncation-unknown-count");
+        let logs = paths.user_data_dir.join("logs");
+        fs::create_dir_all(&logs).expect("logs");
+        let desktop_line = padded_line(
+            &format!("unix_ms={NOW} event=worker.download_asr_model.start"),
+            1_024,
+        );
+        let asr_record = serde_json::json!({
+            "v": 1,
+            "utc_ms": NOW,
+            "invocation": "inv-0123456789abcdef",
+            "kind": "rejected",
+            "payload": "diagnostic_event_rejected",
+            "count": 1,
+            "truncated": false
+        });
+        let asr_line = padded_line(&asr_record.to_string(), 1_024);
+        let repeats = MAX_SOURCE_BYTES as usize / 1_024;
+        fs::write(
+            logs.join("frameq-desktop.log"),
+            format!("{desktop_line}{}", desktop_line.repeat(repeats)),
+        )
+        .expect("oversized desktop");
+        fs::write(
+            logs.join(ASR_DIAGNOSTIC_LOG_FILE_NAME),
+            format!("{asr_line}{}", asr_line.repeat(repeats)),
+        )
+        .expect("oversized asr");
+
+        let bytes =
+            assemble_diagnostic_zip_at(&paths, &snapshot(), "0.3.1", NOW).expect("assemble zip");
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).expect("zip");
+        let manifest: Value = serde_json::from_slice(&read_entry(&mut archive, "diagnostics.json"))
+            .expect("manifest");
+        assert_eq!(manifest["truncated"], true);
+        for name in ["frameq-desktop.log", "asr-model-download.log"] {
+            let status = manifest["files"]
+                .as_array()
+                .expect("files")
+                .iter()
+                .find(|entry| entry["name"] == name)
+                .expect("status");
+            assert_eq!(status["status"], "included");
+            assert!(status.get("omitted_records").is_none());
+            assert_eq!(status["omitted_records_unknown"], true);
+            assert_eq!(status["record_omission_reason"], "size_limit");
+        }
+    }
+
+    #[test]
+    fn unknown_source_count_combines_with_known_record_omissions_as_multiple() {
+        let mut log = safe_log("frameq-desktop.log", vec![safe_record(NOW, 64)]);
+        log.truncated = true;
+        log.size_limited_records_unknown = true;
+        log.malformed_records = 2;
+
+        let status = serde_json::to_value(log.status()).expect("status");
+        assert!(status.get("omitted_records").is_none());
+        assert_eq!(status["omitted_records_unknown"], true);
+        assert_eq!(status["record_omission_reason"], "multiple");
+    }
 
     #[test]
     fn archive_has_only_fixed_root_entries_and_closed_manifest() {
@@ -1230,6 +1396,32 @@ mod tests {
             model: SupportedDiagnosticModel::SenseVoiceSmall,
             cache_status: DiagnosticCacheStatus::Ready,
         }
+    }
+
+    fn safe_log(name: &'static str, records: Vec<SafeRecord>) -> SafeLog {
+        SafeLog {
+            name,
+            records,
+            omission: None,
+            truncated: false,
+            malformed_records: 0,
+            outside_window_records: 0,
+            size_limited_records: 0,
+            size_limited_records_unknown: false,
+        }
+    }
+
+    fn safe_record(utc_ms: u64, rendered_bytes: usize) -> SafeRecord {
+        SafeRecord {
+            utc_ms,
+            line: "x".repeat(rendered_bytes - 1),
+            logical_count: 1,
+        }
+    }
+
+    fn padded_line(content: &str, total_bytes: usize) -> String {
+        assert!(content.len() < total_bytes);
+        format!("{content}{}\n", " ".repeat(total_bytes - content.len() - 1))
     }
 
     fn seed_desktop(paths: &RuntimePaths, utc_ms: u64, event: &str, detail: &str) {
