@@ -42,6 +42,12 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   code changed. Validation: source inspection of Rust stderr runner/diagnostics/atomic writer,
   Python model-download application/CLI/contract, frontend settings/model-guide controllers, and
   current packaging gates.
+- [x] 2026-08-09: Task 1 completed and passed both independent reviews. Global desktop-worker
+  contract advanced to v8; Python gained immutable, strict diagnostic event validation/rendering;
+  Python-to-canonical conformance tests close drift across fields, enums, regex, bounds, and
+  optional combinations. Validation: focused Python 65 passed; TypeScript contract 14 passed;
+  Rust contract 1 passed; installer 7 passed; Ruff and `git diff --check` passed; spec review and
+  code-quality review approved with no remaining issues.
 
 ## Surprises & Discoveries
 
@@ -188,7 +194,7 @@ Windows-only implementation host and requires release-host smoke evidence.
 - Modify: `app/src-tauri/src/lib.rs`
 - Modify: `scripts/tests/build-installer.test.mjs`
 
-- [ ] **Step 1: Add RED contract tests for v8.** Assert the new prefix, schema version, exact
+- [x] **Step 1: Add RED contract tests for v8.** Assert the new prefix, schema version, exact
   required/optional fields, closed phase/category/code sets, conditional numeric fields, invalid
   policy, and forbidden-content list while asserting request envelope constants remain 3 and 4.
 
@@ -211,7 +217,7 @@ Windows-only implementation host and requires release-host smoke evidence.
   }
   ```
 
-- [ ] **Step 2: Run RED tests.** Run:
+- [x] **Step 2: Run RED tests.** Run:
 
   ```powershell
   uv run pytest worker\tests\test_contract.py worker\tests\test_diagnostic_events.py -q
@@ -223,12 +229,12 @@ Windows-only implementation host and requires release-host smoke evidence.
   Expected: failures report v7/missing `workerDiagnosticPrefix` or missing Python diagnostic module;
   there must be no unrelated test failure accepted as RED evidence.
 
-- [ ] **Step 3: Advance the canonical artifact and constants.** Set global contract version to 8,
+- [x] **Step 3: Advance the canonical artifact and constants.** Set global contract version to 8,
   add `events.workerDiagnosticPrefix = "FRAMEQ_DIAGNOSTIC "`, and add one closed
   `diagnosticEvents` object. Keep `PROCESS_VIDEO_CONTRACT_VERSION = 3` and
   `LOCAL_MEDIA_CONTRACT_VERSION = 4` unchanged.
 
-- [ ] **Step 4: Implement Python event validation/rendering without exception text.** The public
+- [x] **Step 4: Implement Python event validation/rendering without exception text.** The public
   primitive must have a closed dataclass or typed mapping and render only validated values:
 
   ```python
@@ -243,7 +249,7 @@ Windows-only implementation host and requires release-host smoke evidence.
   combinations, and an `exception_type` outside `[A-Za-z][A-Za-z0-9_]{0,79}`. No `message` field
   or arbitrary metadata map exists.
 
-- [ ] **Step 5: Run focused GREEN tests.** Require all four commands from Step 2 to pass and record
+- [x] **Step 5: Run focused GREEN tests.** Require all four commands from Step 2 to pass and record
   exact totals in Progress.
 
 ### Task 2: Classify and emit one terminal model-download diagnostic
