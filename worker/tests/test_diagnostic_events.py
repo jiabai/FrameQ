@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+import json
+import re
+from dataclasses import FrozenInstanceError, fields
+from pathlib import Path
 
+import frameq_worker.diagnostic_events as diagnostic_events
 import pytest
 from frameq_worker.diagnostic_events import (
     DIAGNOSTIC_CODES,
@@ -10,6 +14,27 @@ from frameq_worker.diagnostic_events import (
     render_diagnostic_event,
     validate_diagnostic_event,
 )
+
+
+def load_diagnostic_contract() -> dict[str, object]:
+    contract_path = Path(__file__).parents[2] / "contracts" / "desktop-worker-contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    return contract["diagnosticEvents"]
+
+
+def contract_event(contract: dict[str, object], **overrides: object) -> dict[str, object]:
+    schemas = contract["fieldSchemas"]
+    category_codes = contract["categoryCodes"]
+    category = next(iter(category_codes))
+    values: dict[str, object] = {
+        "version": schemas["version"]["const"],
+        "operation": contract["operation"][0],
+        "phase": schemas["phase"]["enum"][0],
+        "category": category,
+        "code": category_codes[category][0],
+    }
+    values.update(overrides)
+    return values
 
 
 def event_values(**overrides: object) -> dict[str, object]:
@@ -24,31 +49,153 @@ def event_values(**overrides: object) -> dict[str, object]:
     return values
 
 
-def test_closed_values_match_contract_v8() -> None:
-    assert DIAGNOSTIC_PHASES == (
-        "preparing",
-        "primary_model",
-        "vad_model",
-        "bpe_model",
-        "archive_download",
-        "archive_validate",
-        "cache_validate",
-        "cache_promote",
+def test_python_validator_conforms_directly_to_canonical_contract() -> None:
+    contract = load_diagnostic_contract()
+    schemas = contract["fieldSchemas"]
+    required_fields = contract["requiredFields"]
+    optional_fields = contract["optionalFields"]
+    category_codes = contract["categoryCodes"]
+    base = contract_event(contract)
+
+    assert contract["additionalProperties"] is False
+    assert tuple(field.name for field in fields(DiagnosticEvent)) == tuple(
+        [*required_fields, *optional_fields]
     )
-    assert DIAGNOSTIC_CODES == {
-        "network": (
-            "dns_resolution_failed",
-            "connection_timeout",
-            "connection_failed",
-        ),
-        "tls": ("tls_verification_failed", "tls_handshake_failed"),
-        "proxy": ("proxy_configuration_failed", "proxy_connection_failed"),
-        "http": ("http_status_failed",),
-        "filesystem": ("permission_denied", "disk_full", "filesystem_io_failed"),
-        "integrity": ("checksum_mismatch", "archive_invalid", "cache_invalid"),
-        "dependency": ("dependency_unavailable",),
-        "unexpected": ("unexpected_failure",),
+    assert contract["operation"] == schemas["operation"]["enum"]
+    assert tuple(schemas["phase"]["enum"]) == DIAGNOSTIC_PHASES
+    assert list(category_codes) == schemas["category"]["enum"]
+    assert [code for codes in category_codes.values() for code in codes] == schemas[
+        "code"
+    ]["enum"]
+    assert {
+        category: tuple(codes) for category, codes in category_codes.items()
+    } == DIAGNOSTIC_CODES
+
+    for operation in contract["operation"]:
+        assert validate_diagnostic_event({**base, "operation": operation})["operation"] == operation
+    with pytest.raises(ValueError):
+        validate_diagnostic_event({**base, "operation": f"{contract['operation'][0]}_invalid"})
+
+    for phase in schemas["phase"]["enum"]:
+        assert validate_diagnostic_event({**base, "phase": phase})["phase"] == phase
+    with pytest.raises(ValueError):
+        validate_diagnostic_event({**base, "phase": f"{schemas['phase']['enum'][0]}_invalid"})
+
+    all_codes = set(schemas["code"]["enum"])
+    for category, codes in category_codes.items():
+        for code in codes:
+            event = {**base, "category": category, "code": code}
+            assert validate_diagnostic_event(event)["code"] == code
+        mismatched_code = next(iter(all_codes - set(codes)))
+        with pytest.raises(ValueError):
+            validate_diagnostic_event(
+                {**base, "category": category, "code": mismatched_code}
+            )
+
+    exception_schema = schemas["exception_type"]
+    exception_pattern = re.compile(exception_schema["pattern"])
+    assert diagnostic_events._EXCEPTION_TYPE_PATTERN.pattern == exception_schema["pattern"]
+    length_match = re.search(r"\{0,(\d+)\}", exception_schema["pattern"])
+    assert length_match is not None
+    maximum_exception_length = int(length_match.group(1)) + 1
+    exception_candidates = [
+        "Error_1",
+        "A" * maximum_exception_length,
+        "",
+        "1Error",
+        "A" * (maximum_exception_length + 1),
+    ]
+    for candidate in exception_candidates:
+        event = {**base, "exception_type": candidate}
+        if exception_pattern.fullmatch(candidate):
+            assert validate_diagnostic_event(event)["exception_type"] == candidate
+        else:
+            with pytest.raises(ValueError):
+                validate_diagnostic_event(event)
+
+    constraints = contract["optionalFieldConstraints"]
+    http_schema = schemas["http_status"]
+    http_pairs = constraints["http_status"]["allowedCategoryCodes"]
+    for category, codes in category_codes.items():
+        for code in codes:
+            event = {
+                **base,
+                "category": category,
+                "code": code,
+                "http_status": http_schema["minimum"],
+            }
+            if code in http_pairs.get(category, ()):
+                assert validate_diagnostic_event(event)["http_status"] == http_schema["minimum"]
+            else:
+                with pytest.raises(ValueError):
+                    validate_diagnostic_event(event)
+    for status in (http_schema["minimum"], http_schema["maximum"]):
+        category, codes = next(iter(http_pairs.items()))
+        event = {**base, "category": category, "code": codes[0], "http_status": status}
+        assert validate_diagnostic_event(event)["http_status"] == status
+    for status in (http_schema["minimum"] - 1, http_schema["maximum"] + 1):
+        category, codes = next(iter(http_pairs.items()))
+        with pytest.raises(ValueError):
+            validate_diagnostic_event(
+                {**base, "category": category, "code": codes[0], "http_status": status}
+            )
+
+    os_schema = schemas["os_error_code"]
+    os_pairs = constraints["os_error_code"]["allowedCategoryCodes"]
+    for category, codes in category_codes.items():
+        for code in codes:
+            event = {
+                **base,
+                "category": category,
+                "code": code,
+                "os_error_code": os_schema["minimum"],
+            }
+            if code in os_pairs.get(category, ()):
+                assert validate_diagnostic_event(event)["os_error_code"] == os_schema["minimum"]
+            else:
+                with pytest.raises(ValueError):
+                    validate_diagnostic_event(event)
+    os_category, os_codes = next(iter(os_pairs.items()))
+    for error_code in (os_schema["minimum"], os_schema["maximum"]):
+        event = {
+            **base,
+            "category": os_category,
+            "code": os_codes[0],
+            "os_error_code": error_code,
+        }
+        assert validate_diagnostic_event(event)["os_error_code"] == error_code
+    for error_code in (os_schema["minimum"] - 1, os_schema["maximum"] + 1):
+        with pytest.raises(ValueError):
+            validate_diagnostic_event(
+                {
+                    **base,
+                    "category": os_category,
+                    "code": os_codes[0],
+                    "os_error_code": error_code,
+                }
+            )
+
+    assert contract["invalidEventPolicy"] == {
+        "producer": "reject",
+        "consumer": "drop_and_record_code",
     }
+    assert "message" in contract["forbiddenContent"]
+    for forbidden_field in contract["forbiddenContent"]:
+        with pytest.raises(ValueError):
+            validate_diagnostic_event({**base, forbidden_field: "forbidden"})
+
+
+def test_diagnostic_codes_are_runtime_immutable() -> None:
+    original = DIAGNOSTIC_CODES["network"]
+
+    try:
+        with pytest.raises(TypeError):
+            DIAGNOSTIC_CODES["network"] = ("unexpected_failure",)  # type: ignore[index]
+    finally:
+        if DIAGNOSTIC_CODES["network"] != original:
+            DIAGNOSTIC_CODES["network"] = original  # type: ignore[index]
+
+    assert DIAGNOSTIC_CODES["network"] == original
 
 
 def test_renders_frozen_valid_event_as_compact_ascii_json() -> None:
@@ -63,29 +210,13 @@ def test_renders_frozen_valid_event_as_compact_ascii_json() -> None:
         event.phase = "preparing"  # type: ignore[misc]
 
 
-@pytest.mark.parametrize(
-    ("category", "code"),
-    [
-        (category, code)
-        for category, codes in {
-            "network": (
-                "dns_resolution_failed",
-                "connection_timeout",
-                "connection_failed",
-            ),
-            "tls": ("tls_verification_failed", "tls_handshake_failed"),
-            "proxy": ("proxy_configuration_failed", "proxy_connection_failed"),
-            "http": ("http_status_failed",),
-            "filesystem": ("permission_denied", "disk_full", "filesystem_io_failed"),
-            "integrity": ("checksum_mismatch", "archive_invalid", "cache_invalid"),
-            "dependency": ("dependency_unavailable",),
-            "unexpected": ("unexpected_failure",),
-        }.items()
-        for code in codes
-    ],
-)
-def test_accepts_every_closed_category_code_pair(category: str, code: str) -> None:
-    assert validate_diagnostic_event(event_values(category=category, code=code))["code"] == code
+@pytest.mark.parametrize("required_field", load_diagnostic_contract()["requiredFields"])
+def test_rejects_removal_of_each_required_field(required_field: str) -> None:
+    values = contract_event(load_diagnostic_contract())
+    del values[required_field]
+
+    with pytest.raises(ValueError, match="^diagnostic_event_missing_field$"):
+        validate_diagnostic_event(values)
 
 
 @pytest.mark.parametrize(

@@ -4,6 +4,7 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from frameq_worker.desktop_contract import DIAGNOSTIC_EVENT_PREFIX
 
@@ -18,7 +19,7 @@ DIAGNOSTIC_PHASES = (
     "cache_promote",
 )
 
-DIAGNOSTIC_CODES = {
+DIAGNOSTIC_CODES: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "network": (
         "dns_resolution_failed",
         "connection_timeout",
@@ -31,12 +32,12 @@ DIAGNOSTIC_CODES = {
     "integrity": ("checksum_mismatch", "archive_invalid", "cache_invalid"),
     "dependency": ("dependency_unavailable",),
     "unexpected": ("unexpected_failure",),
-}
+})
 
 _REQUIRED_FIELDS = ("version", "operation", "phase", "category", "code")
 _OPTIONAL_FIELDS = ("exception_type", "http_status", "os_error_code")
 _ALLOWED_FIELDS = frozenset((*_REQUIRED_FIELDS, *_OPTIONAL_FIELDS))
-_EXCEPTION_TYPE_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,79}")
+_EXCEPTION_TYPE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
 _OS_ERROR_CODE_MINIMUM = -(2**31)
 _OS_ERROR_CODE_MAXIMUM = 2**31 - 1
 _OS_ERROR_CODE_CATEGORIES = frozenset(("network", "filesystem"))
