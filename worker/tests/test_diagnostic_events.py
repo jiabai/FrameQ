@@ -486,3 +486,38 @@ def test_classifier_omits_unsafe_exception_class_name_and_invalid_integers() -> 
     assert event.exception_type is None
     assert event.os_error_code is None
     assert validate_diagnostic_event(event.to_dict()) == event.to_dict()
+
+
+def test_classifier_safely_falls_back_when_allowlisted_attribute_access_traps() -> None:
+    class AttributeTrapError(RuntimeError):
+        @property
+        def errno(self) -> int:
+            raise KeyboardInterrupt("errno-secret")
+
+        @property
+        def status(self) -> int:
+            raise SystemExit("status-secret")
+
+        @property
+        def code(self) -> int:
+            raise KeyboardInterrupt("code-secret")
+
+        @property
+        def reason(self) -> BaseException:
+            raise SystemExit("reason-secret")
+
+        def __getattribute__(self, name: str) -> object:
+            if name == "__dict__":
+                raise KeyboardInterrupt("dict-secret")
+            return super().__getattribute__(name)
+
+    event = classify_model_download_exception(AttributeTrapError(), "preparing")
+
+    assert event.to_dict() == {
+        "version": 1,
+        "operation": "download_asr_model",
+        "phase": "preparing",
+        "category": "unexpected",
+        "code": "unexpected_failure",
+        "exception_type": "AttributeTrapError",
+    }

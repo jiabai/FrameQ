@@ -286,6 +286,92 @@ def test_model_download_diagnostic_callback_failure_never_masks_result(
     }
 
 
+@pytest.mark.parametrize("callback_failure", [KeyboardInterrupt, SystemExit])
+def test_model_download_base_exception_from_diagnostic_callback_is_supplemental(
+    callback_failure: type[BaseException],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        lambda **_kwargs: (_ for _ in ()).throw(TimeoutError("response-secret")),
+    )
+
+    def fail_callback(_event: object) -> None:
+        raise callback_failure("callback-secret")
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=fail_callback,
+    )
+
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+
+
+def test_model_download_classifier_failure_is_supplemental(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("response-secret")),
+    )
+    monkeypatch.setattr(
+        model_download_handler,
+        "classify_model_download_exception",
+        lambda *_args: (_ for _ in ()).throw(KeyboardInterrupt("classifier-secret")),
+    )
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=lambda _event: None,
+    )
+
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+
+
+def test_model_download_hostile_exception_metadata_cannot_replace_public_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class AttributeTrapError(RuntimeError):
+        @property
+        def errno(self) -> int:
+            raise KeyboardInterrupt("errno-secret")
+
+        def __getattribute__(self, name: str) -> object:
+            if name == "__dict__":
+                raise SystemExit("dict-secret")
+            return super().__getattribute__(name)
+
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        lambda **_kwargs: (_ for _ in ()).throw(AttributeTrapError()),
+    )
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=lambda _event: None,
+    )
+
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+
+
 def test_model_download_success_and_unsupported_model_emit_no_diagnostic(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

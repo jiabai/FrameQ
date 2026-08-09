@@ -140,8 +140,8 @@ def _emit_diagnostic(
 ) -> None:
     if callback is None:
         return
-    event = classify_model_download_exception(exception, phase)
     try:
+        event = classify_model_download_exception(exception, phase)
         callback(event)
-    except Exception:  # noqa: BLE001 - diagnostics cannot replace the public result.
+    except BaseException:  # noqa: BLE001 - supplemental diagnostics cannot mask the result.
         pass

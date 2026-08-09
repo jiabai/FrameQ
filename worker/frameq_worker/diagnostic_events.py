@@ -48,6 +48,7 @@ _EXCEPTION_TYPE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
 _OS_ERROR_CODE_MINIMUM = -(2**31)
 _OS_ERROR_CODE_MAXIMUM = 2**31 - 1
 _OS_ERROR_CODE_CATEGORIES = frozenset(("network", "filesystem"))
+_SAFE_EXCEPTION_ATTRIBUTES = frozenset(("errno", "status", "code", "reason"))
 _MAX_EXCEPTION_CHAIN_DEPTH = 8
 _TIMEOUT_EXCEPTION_NAMES = frozenset(
     {
@@ -120,19 +121,22 @@ def classify_model_download_exception(
     exception: BaseException,
     phase: str,
 ) -> DiagnosticEvent:
-    for candidate in _walk_exception_chain(exception):
-        classification = _classify_exception(candidate)
-        if classification is None:
-            continue
-        category, code, http_status, os_error_code = classification
-        return _diagnostic_event(
-            candidate,
-            phase,
-            category,
-            code,
-            http_status=http_status,
-            os_error_code=os_error_code,
-        )
+    try:
+        for candidate in _walk_exception_chain(exception):
+            classification = _classify_exception(candidate)
+            if classification is None:
+                continue
+            category, code, http_status, os_error_code = classification
+            return _diagnostic_event(
+                candidate,
+                phase,
+                category,
+                code,
+                http_status=http_status,
+                os_error_code=os_error_code,
+            )
+    except BaseException:
+        pass
     return _diagnostic_event(
         exception,
         phase,
@@ -153,13 +157,13 @@ def _walk_exception_chain(exception: BaseException) -> tuple[BaseException, ...]
         seen.add(identity)
         ordered.append(candidate)
 
-        cause = BaseException.__cause__.__get__(candidate, type(candidate))
-        context = BaseException.__context__.__get__(candidate, type(candidate))
+        cause = _safe_exception_link(candidate, BaseException.__cause__)
+        context = _safe_exception_link(candidate, BaseException.__context__)
         for related in (cause, context):
             if isinstance(related, BaseException):
                 pending.append(related)
         if isinstance(candidate, urllib.error.URLError):
-            reason = vars(candidate).get("reason")
+            reason = _safe_exception_attribute(candidate, "reason")
             if isinstance(reason, BaseException):
                 pending.append(reason)
     return tuple(ordered)
@@ -173,15 +177,17 @@ def _classify_exception(
 
     if (
         isinstance(exception, ModelDownloadError)
-        and vars(exception).get("code") == ARCHIVE_INVALID_ERROR_CODE
+        and _safe_exception_attribute(exception, "code") == ARCHIVE_INVALID_ERROR_CODE
     ):
         return "integrity", "archive_invalid", None, None
     if isinstance(exception, urllib.error.HTTPError):
-        http_status = _instance_integer_attribute(exception, "code", 100, 599)
+        http_status = _safe_integer_attribute(exception, "code", 100, 599)
+        if http_status is None:
+            http_status = _safe_integer_attribute(exception, "status", 100, 599)
         if http_status is not None:
             return "http", "http_status_failed", http_status, None
     if isinstance(exception, urllib.error.URLError) and isinstance(
-        vars(exception).get("reason"), BaseException
+        _safe_exception_attribute(exception, "reason"), BaseException
     ):
         return None
     if exception_name in _PROXY_CONFIGURATION_EXCEPTION_NAMES:
@@ -222,9 +228,12 @@ def _diagnostic_event(
     http_status: int | None = None,
     os_error_code: int | None = None,
 ) -> DiagnosticEvent:
-    exception_name = type(exception).__name__
+    exception_name = _safe_exception_type_name(exception)
     exception_type = (
-        exception_name if _EXCEPTION_TYPE_PATTERN.fullmatch(exception_name) is not None else None
+        exception_name
+        if exception_name is not None
+        and _EXCEPTION_TYPE_PATTERN.fullmatch(exception_name) is not None
+        else None
     )
     return DiagnosticEvent(
         version=1,
@@ -239,20 +248,53 @@ def _diagnostic_event(
 
 
 def _os_error_code(exception: BaseException) -> int | None:
-    if isinstance(exception, OSError):
-        value = OSError.errno.__get__(exception, type(exception))
-    else:
-        value = vars(exception).get("errno")
-    return _bounded_integer(value, _OS_ERROR_CODE_MINIMUM, _OS_ERROR_CODE_MAXIMUM)
+    return _safe_integer_attribute(
+        exception,
+        "errno",
+        _OS_ERROR_CODE_MINIMUM,
+        _OS_ERROR_CODE_MAXIMUM,
+    )
 
 
-def _instance_integer_attribute(
+def _safe_integer_attribute(
     exception: BaseException,
     name: str,
     minimum: int,
     maximum: int,
 ) -> int | None:
-    return _bounded_integer(vars(exception).get(name), minimum, maximum)
+    return _bounded_integer(
+        _safe_exception_attribute(exception, name),
+        minimum,
+        maximum,
+    )
+
+
+def _safe_exception_attribute(exception: BaseException, name: str) -> object | None:
+    if name not in _SAFE_EXCEPTION_ATTRIBUTES:
+        return None
+    try:
+        return object.__getattribute__(exception, name)
+    except BaseException:
+        return None
+
+
+def _safe_exception_link(
+    exception: BaseException,
+    descriptor: object,
+) -> BaseException | None:
+    try:
+        related = descriptor.__get__(exception, type(exception))
+    except BaseException:
+        return None
+    return related if isinstance(related, BaseException) else None
+
+
+def _safe_exception_type_name(exception: BaseException) -> str | None:
+    try:
+        name = type.__getattribute__(type(exception), "__name__")
+    except BaseException:
+        return None
+    return name if isinstance(name, str) else None
 
 
 def _bounded_integer(value: object, minimum: int, maximum: int) -> int | None:
