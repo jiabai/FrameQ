@@ -6,6 +6,7 @@ mod account;
 mod asr_model;
 mod atomic_files;
 mod deep_link;
+mod diagnostic_export;
 mod diagnostics;
 mod history;
 mod history_deletion;
@@ -61,6 +62,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(ProcessSupervisors::default()))
+        .manage(Arc::new(diagnostic_export::DiagnosticExportState::default()))
         .manage(Arc::new(HistoryDeletionState::default()))
         .manage(Arc::new(local_media::LocalMediaSelectionState::default()))
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -110,6 +112,7 @@ pub fn run() {
             asr_model::get_asr_model_status,
             asr_model::download_asr_model,
             asr_model::cancel_asr_model_download,
+            diagnostic_export::export_diagnostics,
             account::begin_auth_flow,
             account::complete_auth_flow,
             account::get_account_status,

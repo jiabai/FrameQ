@@ -4,8 +4,8 @@ pub(crate) use crate::progress_event::ASR_MODEL_DOWNLOAD_EVENT_NAME;
 pub(crate) use crate::progress_event::MODEL_DOWNLOAD_EVENT_PREFIX;
 use crate::settings::{
     asr_model_source, configured_env_value, env_path, parse_dotenv_values,
-    ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV, MODELSCOPE_ENDPOINT_ENV,
-    SENSEVOICE_REVISION_ENV,
+    ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV, ASR_MODEL_ENV,
+    MODELSCOPE_ENDPOINT_ENV, SENSEVOICE_REVISION_ENV,
 };
 use crate::worker_runtime::{
     AsrModelDownloadJob, ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerRunError,
@@ -29,6 +29,74 @@ const SENSEVOICE_ONNX_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-on
 const ONNX_CACHE_DIR_NAME: &str = "onnx";
 const SENSEVOICE_BPE_FILE_NAME: &str = "chn_jpn_yue_eng_ko_spectok.bpe.model";
 pub(crate) const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(crate) enum SupportedDiagnosticModel {
+    #[serde(rename = "iic/SenseVoiceSmall")]
+    SenseVoiceSmall,
+    #[serde(rename = "iic/SenseVoiceSmall-onnx")]
+    SenseVoiceSmallOnnx,
+}
+
+impl SupportedDiagnosticModel {
+    fn from_id(value: &str) -> Option<Self> {
+        match value {
+            DEFAULT_ASR_MODEL => Some(Self::SenseVoiceSmall),
+            SENSEVOICE_SMALL_ONNX_MODEL => Some(Self::SenseVoiceSmallOnnx),
+            _ => None,
+        }
+    }
+
+    fn id(self) -> &'static str {
+        match self {
+            Self::SenseVoiceSmall => DEFAULT_ASR_MODEL,
+            Self::SenseVoiceSmallOnnx => SENSEVOICE_SMALL_ONNX_MODEL,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum DiagnosticCacheStatus {
+    Ready,
+    Missing,
+    Invalid,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(crate) struct DiagnosticModelSnapshot {
+    pub(crate) model: SupportedDiagnosticModel,
+    pub(crate) cache_status: DiagnosticCacheStatus,
+}
+
+pub(crate) fn diagnostic_model_snapshot(paths: &RuntimePaths) -> DiagnosticModelSnapshot {
+    let Ok(values) = parse_dotenv_values(&env_path(paths)) else {
+        return DiagnosticModelSnapshot {
+            model: SupportedDiagnosticModel::SenseVoiceSmall,
+            cache_status: DiagnosticCacheStatus::Unknown,
+        };
+    };
+    let configured = configured_env_value(&values, ASR_MODEL_ENV)
+        .unwrap_or_else(|| DEFAULT_ASR_MODEL.to_string());
+    let Some(model) = SupportedDiagnosticModel::from_id(&configured) else {
+        return DiagnosticModelSnapshot {
+            model: SupportedDiagnosticModel::SenseVoiceSmall,
+            cache_status: DiagnosticCacheStatus::Unknown,
+        };
+    };
+    let marker = asr_model_cache_dir(paths, model.id()).join(MODEL_VERSION_FILE_NAME);
+    let cache_status = match marker.try_exists() {
+        Ok(false) => DiagnosticCacheStatus::Missing,
+        Ok(true) if asr_model_available(paths, model.id()) => DiagnosticCacheStatus::Ready,
+        Ok(true) => DiagnosticCacheStatus::Invalid,
+        Err(_) => DiagnosticCacheStatus::Unknown,
+    };
+    DiagnosticModelSnapshot {
+        model,
+        cache_status,
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub(crate) struct AsrModelStatusView {
@@ -270,7 +338,8 @@ pub(crate) fn cancel_asr_model_download(
 mod tests {
     use super::{
         asr_model_available, asr_model_display_dir, cancelled_model_download_event,
-        map_model_download_run_result, ModelDownloadRunResult, DEFAULT_ASR_MODEL,
+        diagnostic_model_snapshot, map_model_download_run_result, DiagnosticCacheStatus,
+        ModelDownloadRunResult, SupportedDiagnosticModel, DEFAULT_ASR_MODEL,
         SENSEVOICE_SMALL_ONNX_MODEL,
     };
     use crate::settings::supported_asr_models;
@@ -458,6 +527,74 @@ mod tests {
         fs::write(vad_dir.join("model.pt"), "vad").expect("write vad model");
 
         assert!(asr_model_available(&paths, DEFAULT_ASR_MODEL));
+    }
+
+    #[test]
+    fn diagnostic_snapshot_is_path_free_and_distinguishes_cache_states() {
+        let root = temp_dir("diagnostic_snapshot_cache_states");
+        let paths = RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        };
+
+        let missing = diagnostic_model_snapshot(&paths);
+        assert_eq!(missing.model, SupportedDiagnosticModel::SenseVoiceSmall);
+        assert_eq!(missing.cache_status, DiagnosticCacheStatus::Missing);
+
+        let model_root = paths.user_data_dir.join("models");
+        fs::create_dir_all(&model_root).expect("model root");
+        fs::write(
+            model_root.join("MODEL_VERSION.txt"),
+            "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
+        )
+        .expect("marker");
+        assert_eq!(
+            diagnostic_model_snapshot(&paths).cache_status,
+            DiagnosticCacheStatus::Invalid
+        );
+
+        let serialized =
+            serde_json::to_value(diagnostic_model_snapshot(&paths)).expect("serialize snapshot");
+        assert_eq!(serialized["model"], DEFAULT_ASR_MODEL);
+        assert_eq!(serialized["cache_status"], "invalid");
+        let rendered = serialized.to_string();
+        assert!(!rendered.contains(root.to_string_lossy().as_ref()));
+        assert_eq!(serialized.as_object().expect("object").len(), 2);
+    }
+
+    #[test]
+    fn diagnostic_snapshot_maps_unsupported_configuration_to_closed_unknown() {
+        let root = temp_dir("diagnostic_snapshot_unknown");
+        let paths = RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        };
+        fs::create_dir_all(&paths.user_data_dir).expect("app data");
+        fs::write(
+            paths.user_data_dir.join(".env"),
+            "FRAMEQ_ASR_MODEL=private/vendor-model\n",
+        )
+        .expect("settings");
+
+        let snapshot = diagnostic_model_snapshot(&paths);
+        assert_eq!(snapshot.model, SupportedDiagnosticModel::SenseVoiceSmall);
+        assert_eq!(snapshot.cache_status, DiagnosticCacheStatus::Unknown);
+        assert!(!serde_json::to_string(&snapshot)
+            .expect("serialize")
+            .contains("private"));
+
+        fs::write(
+            paths.user_data_dir.join(".env"),
+            format!("FRAMEQ_ASR_MODEL={SENSEVOICE_SMALL_ONNX_MODEL}\n"),
+        )
+        .expect("onnx settings");
+        let onnx = diagnostic_model_snapshot(&paths);
+        assert_eq!(onnx.model, SupportedDiagnosticModel::SenseVoiceSmallOnnx);
+        assert_eq!(onnx.cache_status, DiagnosticCacheStatus::Missing);
+        assert_eq!(
+            serde_json::to_value(onnx).expect("serialize onnx")["model"],
+            SENSEVOICE_SMALL_ONNX_MODEL
+        );
     }
 
     #[test]

@@ -4,6 +4,10 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod export;
+
+pub(crate) use export::assemble_diagnostic_zip;
+
 #[allow(dead_code)] // Task 4 wires this complete storage facade into the worker runner.
 mod worker_stderr;
 
