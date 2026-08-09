@@ -32,6 +32,14 @@ export const settingsFeatureResources = {
       description: "高级本机设置保存在 app-local data 的 .env 文件中，LLM 配置仍由服务端统一管理。",
       pathPending: "读取后显示配置文件路径",
       locate: "定位文件",
+      diagnostics: {
+        eyebrow: "诊断信息",
+        heading: "导出诊断信息",
+        description: "导出最近 7 天的安全 ASR 模型下载诊断记录，保存为 ZIP 供你手动发送给支持人员。",
+        privacy: "不含媒体、文字稿、密钥或模型文件，也不会重试网络请求。",
+        action: "导出诊断信息",
+        exporting: "正在导出诊断信息…",
+      },
     },
     footer: { close: "关闭", saving: "保存中", save: "保存配置" },
     notice: {
@@ -83,6 +91,14 @@ export const settingsFeatureResources = {
       description: "進階本機設定儲存在 app-local data 的 .env 檔案；LLM 設定仍由伺服器統一管理。",
       pathPending: "讀取後顯示設定檔路徑",
       locate: "在檔案總管中顯示",
+      diagnostics: {
+        eyebrow: "診斷資訊",
+        heading: "匯出診斷資訊",
+        description: "匯出最近 7 天的安全 ASR 模型下載診斷記錄，儲存為 ZIP 供你手動傳送給支援人員。",
+        privacy: "不含媒體、文字稿、金鑰或模型檔案，也不會重試網路請求。",
+        action: "匯出診斷資訊",
+        exporting: "正在匯出診斷資訊…",
+      },
     },
     footer: { close: "關閉", saving: "儲存中", save: "儲存設定" },
     notice: {
@@ -134,6 +150,14 @@ export const settingsFeatureResources = {
       description: "Advanced local settings are stored in an .env file under app-local data. LLM configuration remains managed by the server.",
       pathPending: "The configuration path appears after loading",
       locate: "Show in folder",
+      diagnostics: {
+        eyebrow: "Diagnostics",
+        heading: "Export diagnostics",
+        description: "Export safe ASR model-download diagnostics from the last 7 days as a ZIP that you can send to support manually.",
+        privacy: "It contains no media, transcripts, keys, or model files and does not retry network requests.",
+        action: "Export diagnostics",
+        exporting: "Exporting diagnostics…",
+      },
     },
     footer: { close: "Close", saving: "Saving", save: "Save settings" },
     notice: {
@@ -150,6 +174,27 @@ export const settingsFeatureResources = {
       configLocateFailed: "The configuration file could not be shown. Check that it still exists.",
       profileCleared: "The Inspiration Profile is cleared. FrameQ will ask again before the next Inspiration generation.",
       profileClearFailed: "The Inspiration Profile could not be cleared. Try again later.",
+    },
+  },
+} as const;
+
+export const diagnosticsResources = {
+  "zh-CN": {
+    notice: {
+      exported: "诊断信息已保存。请手动将 ZIP 文件发送给支持人员。",
+      exportFailed: "无法导出诊断信息，请选择其他保存位置后重试。",
+    },
+  },
+  "zh-TW": {
+    notice: {
+      exported: "診斷資訊已儲存。請手動將 ZIP 檔案傳送給支援人員。",
+      exportFailed: "無法匯出診斷資訊，請選擇其他儲存位置後重試。",
+    },
+  },
+  "en-US": {
+    notice: {
+      exported: "The diagnostic package was saved. Send the ZIP to support manually.",
+      exportFailed: "The diagnostic package could not be exported. Choose another destination and try again.",
     },
   },
 } as const;

@@ -31,6 +31,9 @@ function controller(
     settingsNotice: null,
     settingsLoading: false,
     settingsSaving: false,
+    exportDiagnostics: vi.fn(),
+    diagnosticExportBusy: false,
+    diagnosticExportNotice: null,
     closeSettings: vi.fn(),
     submitSettings: vi.fn(),
     setSettingsCategory: vi.fn(),
@@ -134,5 +137,49 @@ describe("settings localization", () => {
 
     expect(markup).toContain('class="action-notice inline-notice" role="status"');
     expect(markup).toContain('aria-live="polite"');
+  });
+
+  test.each([
+    ["zh-CN", "诊断信息", "导出诊断信息", "最近 7 天"],
+    ["zh-TW", "診斷資訊", "匯出診斷資訊", "最近 7 天"],
+    ["en-US", "Diagnostics", "Export diagnostics", "last 7 days"],
+  ] as const)(
+    "renders the permanent localized diagnostics action in Advanced for %s",
+    async (locale, heading, action, retentionCopy) => {
+      await initializeI18n(locale);
+      const markup = renderSettings(locale, "advanced");
+
+      expect(markup).toContain(heading);
+      expect(markup).toContain(action);
+      expect(markup).toContain(retentionCopy);
+      expect(markup).toContain('type="button"');
+      expect(markup).not.toContain("Open logs directory");
+    },
+  );
+
+  test("keeps diagnostics export separate from settings submit while busy", async () => {
+    await initializeI18n("en-US");
+    const markup = renderSettings("en-US", "advanced", {
+      controller: { diagnosticExportBusy: true },
+    });
+
+    expect(markup).toContain('type="button" class="secondary-button" disabled="" aria-busy="true"');
+    expect(markup).toContain("Exporting diagnostics");
+    expect(markup).not.toContain('type="submit" form="settings-form"><span>Export diagnostics');
+    expect(markup).toContain('id="settings-form"');
+  });
+
+  test("renders only the safe shared diagnostic notice", async () => {
+    await initializeI18n("en-US");
+    const markup = renderSettings("en-US", "advanced", {
+      controller: {
+        diagnosticExportNotice: { messageCode: "diagnostics.notice.exportFailed" },
+      },
+    });
+
+    expect(markup).toContain("The diagnostic package could not be exported");
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).not.toContain("C:/Users/private");
   });
 });

@@ -19,8 +19,12 @@ const progress: AsrModelDownloadProgress = {
 async function renderModelGuide(
   locale: SupportedLocale,
   options: {
-    notice?: ReturnType<typeof uiMessage>;
+    notice?: ReturnType<typeof uiMessage> | null;
     stalled?: boolean;
+    diagnosticExportNotice?: ReturnType<typeof uiMessage>;
+    diagnosticExportBusy?: boolean;
+    modelDownloadActive?: boolean;
+    modelDownloadPhase?: AsrModelDownloadProgress["phase"];
   } = {},
 ): Promise<string> {
   await initializeI18n(locale);
@@ -35,7 +39,7 @@ async function renderModelGuide(
     >
       <ModelGuideSheet
         open
-        modelDownloadActive
+        modelDownloadActive={options.modelDownloadActive ?? true}
         asrModelStatus={{
           model: "iic/SenseVoiceSmall",
           modelDir: "D:/FrameQ/models",
@@ -43,9 +47,17 @@ async function renderModelGuide(
           source: "modelscope",
         }}
         asrModelLabels={{ "iic/SenseVoiceSmall": "SenseVoice Small" }}
-        modelDownloadProgress={progress}
+        modelDownloadProgress={{
+          ...progress,
+          phase: options.modelDownloadPhase ?? progress.phase,
+        }}
         modelDownloadNotice={options.notice ?? null}
         modelDownloadStalled={options.stalled ?? false}
+        diagnosticExportController={{
+          exportDiagnostics: vi.fn(),
+          diagnosticExportBusy: options.diagnosticExportBusy ?? false,
+          diagnosticExportNotice: options.diagnosticExportNotice ?? null,
+        }}
         onClose={vi.fn()}
         onStartDownload={vi.fn()}
         onCancelDownload={vi.fn()}
@@ -97,5 +109,73 @@ describe("ModelGuideSheet localization", () => {
 
     expect(markup).toContain("ModelScope may be responding slowly");
     expect(markup).toContain("wait or cancel the download and try again later");
+  });
+
+  test.each([
+    ["zh-CN", "导出诊断信息", "重试", "最近 7 天", ["媒体", "文字稿", "密钥", "模型文件", "网络"]],
+    ["zh-TW", "匯出診斷資訊", "重試", "最近 7 天", ["媒體", "文字稿", "金鑰", "模型檔案", "網路"]],
+    ["en-US", "Export diagnostics", "Retry", "last 7 days", ["media", "transcript", "key", "model file", "network"]],
+  ] as const)(
+    "shows the localized failure export action and privacy boundary in %s",
+    async (locale, exportLabel, retryLabel, retentionCopy, privacyTokens) => {
+      const markup = await renderModelGuide(locale, {
+        modelDownloadActive: false,
+        modelDownloadPhase: "failed",
+        notice: uiMessage("asrModel.notice.downloadFailed"),
+      });
+
+      expect(markup).toContain(exportLabel);
+      expect(markup).toContain(retryLabel);
+      expect(markup).toContain(retentionCopy);
+      for (const privacyToken of privacyTokens) {
+        expect(markup).toContain(privacyToken);
+      }
+      expect(markup).toContain('type="button"');
+    },
+  );
+
+  test.each([
+    ["running", true, null],
+    ["cancelling", true, null],
+    ["completed", false, uiMessage("asrModel.notice.available")],
+    ["idle", false, null],
+  ] as const)(
+    "does not show the failure export action for %s or ordinary missing state",
+    async (phase, active, notice) => {
+      const markup = await renderModelGuide("en-US", {
+        modelDownloadActive: active,
+        modelDownloadPhase: phase,
+        notice,
+      });
+
+      expect(markup).not.toContain("Export diagnostics");
+    },
+  );
+
+  test("keeps the export action disabled while the shared export is busy", async () => {
+    const markup = await renderModelGuide("en-US", {
+      modelDownloadActive: false,
+      modelDownloadPhase: "failed",
+      notice: uiMessage("asrModel.notice.idleTimeout"),
+      diagnosticExportBusy: true,
+    });
+
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain('class="secondary-button diagnostic-export-button" disabled="" aria-busy="true"');
+    expect(markup).toContain("Exporting diagnostics");
+  });
+
+  test("renders the shared diagnostic notice without exposing raw failure text", async () => {
+    const markup = await renderModelGuide("en-US", {
+      modelDownloadActive: false,
+      modelDownloadPhase: "failed",
+      notice: uiMessage("asrModel.notice.downloadFailed"),
+      diagnosticExportNotice: uiMessage("diagnostics.notice.exported"),
+    });
+
+    expect(markup).toContain("The diagnostic package was saved");
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).not.toContain("C:/Users/private");
   });
 });

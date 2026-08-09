@@ -7,9 +7,16 @@ import { renderAsrModelDownloadMessage } from "../../i18n/progressMessages";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { AsrModelDownloadProgress } from "../../settingsClient";
 import { useModalFocus } from "../modal/useModalFocus";
+import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 import type { AsrModelStatus } from "./types";
 
 const DEFAULT_MODEL_DIRECTORY = "app-local data/models";
+const TERMINAL_FAILURE_NOTICE_CODES = new Set([
+  "asrModel.notice.incomplete",
+  "asrModel.notice.downloadFailed",
+  "asrModel.notice.idleTimeout",
+  "asrModel.notice.executionTimeout",
+]);
 
 type ModelGuideSheetProps = {
   open: boolean;
@@ -19,6 +26,7 @@ type ModelGuideSheetProps = {
   modelDownloadProgress: AsrModelDownloadProgress;
   modelDownloadNotice: UiMessage | null;
   modelDownloadStalled: boolean;
+  diagnosticExportController: DiagnosticExportController;
   onClose: () => void;
   onStartDownload: () => void;
   onCancelDownload: () => void;
@@ -32,6 +40,7 @@ export function ModelGuideSheet({
   modelDownloadProgress,
   modelDownloadNotice,
   modelDownloadStalled,
+  diagnosticExportController,
   onClose,
   onStartDownload,
   onCancelDownload,
@@ -44,6 +53,10 @@ export function ModelGuideSheet({
     modelDownloadProgress,
   );
   const noticeText = renderUiMessage(resolvedLocale, modelDownloadNotice);
+  const diagnosticNoticeText = renderUiMessage(
+    resolvedLocale,
+    diagnosticExportController.diagnosticExportNotice,
+  );
   const source =
     asrModelStatus.source === "custom_url"
       ? t("source.customUrl")
@@ -52,6 +65,12 @@ export function ModelGuideSheet({
         : asrModelStatus.source;
   const progressValue = Math.max(0, Math.min(100, modelDownloadProgress.progress));
   const progressPercent = formatPercent(progressValue / 100, resolvedLocale);
+  const canExportDiagnostics =
+    !modelDownloadActive &&
+    !asrModelStatus.available &&
+    modelDownloadProgress.phase === "failed" &&
+    modelDownloadNotice !== null &&
+    TERMINAL_FAILURE_NOTICE_CODES.has(modelDownloadNotice.messageCode);
 
   if (!open) {
     return null;
@@ -152,6 +171,20 @@ export function ModelGuideSheet({
               {t("guide.stalled")}
             </p>
           ) : null}
+          {canExportDiagnostics ? (
+            <div className="model-guide-diagnostics privacy-callout">
+              <ShieldCheck size={16} />
+              <div>
+                <strong>{t("guide.diagnostics.title")}</strong>
+                <span>{t("guide.diagnostics.privacy")}</span>
+              </div>
+            </div>
+          ) : null}
+          {canExportDiagnostics && diagnosticNoticeText ? (
+            <p className="action-notice inline-notice" role="status" aria-live="polite">
+              {diagnosticNoticeText}
+            </p>
+          ) : null}
         </div>
         <div className="settings-actions sheet-footer">
           <button
@@ -162,6 +195,22 @@ export function ModelGuideSheet({
           >
             <span>{t("guide.later")}</span>
           </button>
+          {canExportDiagnostics ? (
+            <button
+              type="button"
+              className="secondary-button diagnostic-export-button"
+              onClick={() => void diagnosticExportController.exportDiagnostics()}
+              disabled={diagnosticExportController.diagnosticExportBusy}
+              aria-busy={diagnosticExportController.diagnosticExportBusy}
+            >
+              <ShieldCheck size={16} />
+              <span>
+                {diagnosticExportController.diagnosticExportBusy
+                  ? t("guide.diagnostics.exporting")
+                  : t("guide.diagnostics.export")}
+              </span>
+            </button>
+          ) : null}
           {modelDownloadActive ? (
             <button
               type="button"
@@ -182,7 +231,9 @@ export function ModelGuideSheet({
               <span>
                 {asrModelStatus.available
                   ? t("guide.downloaded")
-                  : t("guide.download")}
+                  : modelDownloadProgress.phase === "failed"
+                    ? t("guide.retry")
+                    : t("guide.download")}
               </span>
             </button>
           )}

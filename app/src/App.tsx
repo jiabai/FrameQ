@@ -587,6 +587,7 @@ function App() {
         modelDownloadProgress={modelDownloadProgress}
         modelDownloadNotice={modelDownloadNotice}
         modelDownloadStalled={modelDownloadStalled}
+        diagnosticExportController={diagnosticExportController}
         onClose={() => setModelGuideOpen(false)}
         onStartDownload={startAsrModelDownload}
         onCancelDownload={cancelCurrentAsrModelDownload}
