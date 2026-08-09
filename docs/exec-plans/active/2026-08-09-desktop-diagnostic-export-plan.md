@@ -54,6 +54,13 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   supplemental to the existing terminal result. Validation: focused worker tests 158 passed;
   Ruff and `git diff --check` passed; spec and code-quality reviews approved with no remaining
   issues.
+- [x] 2026-08-10: Task 3 completed and passed both independent reviews. Rust now owns a fixed-path,
+  atomically persisted ASR diagnostic store with strict fail-closed sanitization, bounded
+  per-invocation state, seven-day retention, a 4 MiB file ceiling, and safe handling of malformed,
+  oversized, linked, unreadable, or unwritable prior state. Validation: focused Rust tests 26
+  passed (including atomic replacement failure preservation); `cargo fmt --check` and
+  `git diff --check` passed; spec and code-quality/security reviews approved with no remaining
+  issues.
 
 ## Surprises & Discoveries
 
@@ -334,18 +341,18 @@ Windows-only implementation host and requires release-host smoke evidence.
 - Modify: `app/src-tauri/src/diagnostics.rs`
 - Modify: `app/src-tauri/src/runtime.rs`
 
-- [ ] **Step 1: Add RED storage tests.** Cover the fixed path
+- [x] **Step 1: Add RED storage tests.** Cover the fixed path
   `logs/asr-model-download.log`, structured append/read, UTC filtering, 1,000-character cap,
   adjacent duplicate collapse, 200 fallback-line cap per invocation, 4 MiB rotation, seven-day
   pruning, locked/unreadable prior log neutrality, and no recursive or arbitrary path access.
 
-- [ ] **Step 2: Add RED sanitizer tests with hostile seeds.** Include Windows/UNC/POSIX/home paths,
+- [x] **Step 2: Add RED sanitizer tests with hostile seeds.** Include Windows/UNC/POSIX/home paths,
   app-local paths, usernames, hostnames, IPv4/IPv6, email, HTTP URLs/query strings, proxy URLs,
   environment assignments, Cookie/Authorization, token/key names, task-like IDs, long opaque
   values, controls, and multiline tracebacks. Require fixed replacement tokens and prove every
   seeded secret is absent.
 
-- [ ] **Step 3: Run RED Rust tests.** Run:
+- [x] **Step 3: Run RED Rust tests.** Run:
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml diagnostics::worker_stderr
@@ -353,7 +360,7 @@ Windows-only implementation host and requires release-host smoke evidence.
 
   Expected: module/functions are absent.
 
-- [ ] **Step 4: Implement a narrow facade and invocation sink.** The runner-facing capability must
+- [x] **Step 4: Implement a narrow facade and invocation sink.** The runner-facing capability must
   expose methods, not a path or file handle:
 
   ```rust
@@ -369,12 +376,12 @@ Windows-only implementation host and requires release-host smoke evidence.
   `diagnostics.rs` may construct this sink only for `DownloadAsrModel`. Disk-write failures are
   swallowed after a fixed safe marker and never affect the worker outcome.
 
-- [ ] **Step 5: Implement bounded record storage.** Use a versioned line-oriented internal format
+- [x] **Step 5: Implement bounded record storage.** Use a versioned line-oriented internal format
   with UTC milliseconds, a Rust-generated invocation correlation token unrelated to task/account/
   PID/machine identity, record kind, safe payload, and count/truncation metadata. Prune by parsed
   record timestamp and size; malformed prior lines are omitted, never copied through.
 
-- [ ] **Step 6: Run GREEN storage tests and formatting.** Require focused tests green, then run
+- [x] **Step 6: Run GREEN storage tests and formatting.** Require focused tests green, then run
   `cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check`.
 
 ### Task 4: Parse diagnostic stderr in the existing runner without watchdog or UI leakage
