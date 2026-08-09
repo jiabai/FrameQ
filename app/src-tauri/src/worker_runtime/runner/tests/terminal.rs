@@ -172,3 +172,25 @@ fn lifecycle_log_details_exclude_command_request_paths_and_worker_content() {
         "operation=process_video pid=404 exit=1 stderr=present"
     );
 }
+
+#[test]
+fn model_diagnostic_does_not_change_structured_stdout_terminal_result() {
+    let output = Output {
+        status: exit_status(0),
+        stdout: br#"{"status":"completed","model":"iic/SenseVoiceSmall"}"#.to_vec(),
+        stderr: Vec::new(),
+    };
+
+    let outcome = classify_terminal(
+        WorkerOperation::DownloadAsrModel,
+        &output,
+        Some(ProcessPhase::Running),
+        StderrSummary {
+            had_diagnostic_output: true,
+            reader_failed: false,
+        },
+    )
+    .expect("structured stdout remains authoritative");
+
+    assert!(matches!(outcome, WorkerRunOutcome::Structured(_)));
+}

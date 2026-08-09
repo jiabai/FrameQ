@@ -50,7 +50,6 @@ pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 #[cfg(test)]
 pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 8;
-#[cfg(test)]
 pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "FRAMEQ_DIAGNOSTIC ";
 
 #[tauri::command]
