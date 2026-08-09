@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 pub(crate) const MAX_PAYLOAD_CHARS: usize = 1_000;
 pub(crate) const FALLBACK_LINE_LIMIT: usize = 200;
+pub(crate) const MAX_RECORDS_PER_INVOCATION: usize = 256;
+pub(crate) const MAX_FALLBACK_SCAN_CHARS: usize = 4_096;
 pub(crate) const ASR_DIAGNOSTIC_MAX_BYTES: usize = 4 * 1024 * 1024;
 pub(crate) const RETENTION_MILLIS: u64 = 7 * 24 * 60 * 60 * 1_000;
 const RECORD_VERSION: u8 = 1;
@@ -205,6 +207,7 @@ pub(crate) struct AsrDiagnosticSink {
     utc_ms: u64,
     fallback_lines: usize,
     fallback_limit_recorded: bool,
+    records_truncated: bool,
     records: Vec<StoredDiagnosticRecord>,
 }
 
@@ -220,11 +223,15 @@ impl AsrDiagnosticSink {
             utc_ms,
             fallback_lines: 0,
             fallback_limit_recorded: false,
+            records_truncated: false,
             records: Vec::new(),
         }
     }
 
     pub(crate) fn structured(&mut self, event: &ValidatedDiagnosticEvent) {
+        if self.records_truncated {
+            return;
+        }
         let Ok(payload) = serde_json::to_string(event) else {
             self.internal("structured_serialization_failed", false);
             return;
@@ -233,6 +240,9 @@ impl AsrDiagnosticSink {
     }
 
     pub(crate) fn fallback_line(&mut self, line: &str) {
+        if self.records_truncated {
+            return;
+        }
         if self.fallback_lines >= FALLBACK_LINE_LIMIT {
             if !self.fallback_limit_recorded {
                 self.internal("fallback_limit_reached", true);
@@ -246,6 +256,9 @@ impl AsrDiagnosticSink {
     }
 
     pub(crate) fn rejected(&mut self, code: DiagnosticRejectionCode) {
+        if self.records_truncated {
+            return;
+        }
         self.push(
             StoredRecordKind::Rejected,
             code.payload().to_string(),
@@ -260,10 +273,16 @@ impl AsrDiagnosticSink {
     }
 
     fn internal(&mut self, payload: &str, truncated: bool) {
+        if self.records_truncated {
+            return;
+        }
         self.push(StoredRecordKind::Internal, payload.to_string(), truncated);
     }
 
     fn push(&mut self, kind: StoredRecordKind, payload: String, already_truncated: bool) {
+        if self.records_truncated {
+            return;
+        }
         let (payload, cap_truncated) = truncate_chars(&payload, MAX_PAYLOAD_CHARS);
         if let Some(previous) = self.records.last_mut() {
             if previous.kind == kind && previous.payload == payload {
@@ -271,6 +290,21 @@ impl AsrDiagnosticSink {
                 previous.truncated |= already_truncated || cap_truncated;
                 return;
             }
+        }
+        if self.records.len() >= MAX_RECORDS_PER_INVOCATION.saturating_sub(1) {
+            self.records_truncated = true;
+            if self.records.len() < MAX_RECORDS_PER_INVOCATION {
+                self.records.push(StoredDiagnosticRecord {
+                    version: RECORD_VERSION,
+                    utc_ms: self.utc_ms,
+                    invocation: self.invocation.clone(),
+                    kind: StoredRecordKind::Internal,
+                    payload: "record_limit_reached".to_string(),
+                    count: 1,
+                    truncated: true,
+                });
+            }
+            return;
         }
         self.records.push(StoredDiagnosticRecord {
             version: RECORD_VERSION,
@@ -430,7 +464,9 @@ fn normalize_stored_record(mut record: StoredDiagnosticRecord) -> Option<StoredD
         StoredRecordKind::Internal => {
             if !matches!(
                 record.payload.as_str(),
-                "fallback_limit_reached" | "structured_serialization_failed"
+                "fallback_limit_reached"
+                    | "structured_serialization_failed"
+                    | "record_limit_reached"
             ) {
                 return None;
             }
@@ -464,15 +500,28 @@ pub(crate) fn sanitize_fallback_line(line: &str) -> String {
 }
 
 fn sanitize_fallback_line_bounded(line: &str) -> (String, bool) {
-    let lower_line = line.to_ascii_lowercase();
+    let mut input_chars = line.chars();
+    let scanned = input_chars
+        .by_ref()
+        .take(MAX_FALLBACK_SCAN_CHARS)
+        .collect::<String>();
+    let scan_truncated = input_chars.next().is_some();
+    let lower_line = scanned.to_ascii_lowercase();
     let had_traceback = (lower_line.contains("traceback") && !lower_line.contains("[traceback]"))
-        || line
+        || scanned
             .lines()
             .any(|value| value.trim_start().starts_with("File \""));
-    let had_control = line
+    if had_traceback {
+        return fixed_line_replacement("[traceback]", scan_truncated);
+    }
+    if contains_exception_line(&scanned) {
+        return fixed_line_replacement("[exception]", scan_truncated);
+    }
+
+    let had_control = scanned
         .chars()
         .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'));
-    let normalized = line
+    let normalized = scanned
         .chars()
         .map(|character| {
             if character.is_control() {
@@ -483,8 +532,8 @@ fn sanitize_fallback_line_bounded(line: &str) -> (String, bool) {
         })
         .collect::<String>();
     let mut output = Vec::new();
-    if had_traceback {
-        output.push("[traceback]".to_string());
+    if scan_truncated {
+        output.push("[truncated]".to_string());
     }
     if had_control {
         output.push("[control]".to_string());
@@ -557,24 +606,57 @@ fn sanitize_fallback_line_bounded(line: &str) -> (String, bool) {
             output.push("[ip]".to_string());
         } else if looks_like_email(token) {
             output.push("[email]".to_string());
+        } else if looks_like_hostname(token) {
+            output.push("[host]".to_string());
         } else if looks_task_identifier(token) {
             output.push("[identifier]".to_string());
         } else if looks_opaque(token) {
             output.push("[opaque]".to_string());
         } else if lower == "traceback" {
             continue;
+        } else if let Some(safe_word) = safe_fallback_word(&lower) {
+            output.push(safe_word.to_string());
         } else {
-            output.push(token.to_string());
+            output.push("[text]".to_string());
         }
     }
 
+    output.dedup();
     let collapsed = output.join(" ");
-    let (bounded, truncated) = truncate_chars(&collapsed, MAX_PAYLOAD_CHARS);
+    let (bounded, payload_truncated) = truncate_chars(&collapsed, MAX_PAYLOAD_CHARS);
     if bounded.is_empty() {
-        ("[empty]".to_string(), truncated)
+        ("[empty]".to_string(), scan_truncated || payload_truncated)
     } else {
-        (bounded, truncated)
+        (bounded, scan_truncated || payload_truncated)
     }
+}
+
+fn fixed_line_replacement(marker: &str, truncated: bool) -> (String, bool) {
+    if truncated {
+        (format!("{marker} [truncated]"), true)
+    } else {
+        (marker.to_string(), false)
+    }
+}
+
+fn contains_exception_line(value: &str) -> bool {
+    value.lines().any(|line| {
+        let head = line
+            .trim_start()
+            .split(|character: char| {
+                character == ':' || character == '(' || character.is_whitespace()
+            })
+            .next()
+            .unwrap_or_default();
+        let class_name = head.rsplit('.').next().unwrap_or_default().trim();
+        let lower = class_name.to_ascii_lowercase();
+        (lower.ends_with("error") || lower.ends_with("exception"))
+            && !class_name.is_empty()
+            && class_name.len() <= 80
+            && class_name
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
+    })
 }
 
 fn is_fixed_replacement(value: &str) -> bool {
@@ -592,6 +674,10 @@ fn is_fixed_replacement(value: &str) -> bool {
             | "[email]"
             | "[ip]"
             | "[empty]"
+            | "[exception]"
+            | "[host]"
+            | "[text]"
+            | "[truncated]"
     )
 }
 
@@ -641,6 +727,23 @@ fn looks_like_email(value: &str) -> bool {
     matches!((parts.next(), parts.next(), parts.next()), (Some(local), Some(domain), None) if !local.is_empty() && domain.contains('.'))
 }
 
+fn looks_like_hostname(value: &str) -> bool {
+    let trimmed = value.trim_matches(|character: char| {
+        !character.is_ascii_alphanumeric() && character != '.' && character != '-'
+    });
+    let labels = trimmed.split('.').collect::<Vec<_>>();
+    labels.len() >= 2
+        && labels.iter().all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && label
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || character == '-')
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+        })
+}
+
 fn looks_like_ip(value: &str) -> bool {
     let trimmed = value.trim_matches(|character: char| {
         !character.is_ascii_hexdigit() && character != '.' && character != ':'
@@ -663,6 +766,52 @@ fn looks_opaque(value: &str) -> bool {
         && trimmed
             .chars()
             .any(|character| character.is_ascii_alphabetic())
+}
+
+fn safe_fallback_word(value: &str) -> Option<&'static str> {
+    let candidate = value.trim_matches(|character: char| {
+        !character.is_ascii_alphanumeric() && character != '_' && character != '-'
+    });
+    match candidate {
+        "download" => Some("download"),
+        "model" => Some("model"),
+        "archive" => Some("archive"),
+        "cache" => Some("cache"),
+        "network" => Some("network"),
+        "connection" => Some("connection"),
+        "timeout" | "timed_out" => Some("timeout"),
+        "failed" => Some("failed"),
+        "failure" => Some("failure"),
+        "permission" => Some("permission"),
+        "denied" => Some("denied"),
+        "disk" => Some("disk"),
+        "full" => Some("full"),
+        "checksum" => Some("checksum"),
+        "invalid" => Some("invalid"),
+        "dependency" => Some("dependency"),
+        "unavailable" => Some("unavailable"),
+        "dns" => Some("dns"),
+        "tls" => Some("tls"),
+        "proxy" => Some("proxy"),
+        "http" => Some("http"),
+        "preparing" => Some("preparing"),
+        "primary_model" => Some("primary_model"),
+        "vad_model" => Some("vad_model"),
+        "bpe_model" => Some("bpe_model"),
+        "archive_download" => Some("archive_download"),
+        "archive_validate" => Some("archive_validate"),
+        "cache_validate" => Some("cache_validate"),
+        "cache_promote" => Some("cache_promote"),
+        "modelscope" => Some("modelscope"),
+        "requests" => Some("requests"),
+        "urllib" => Some("urllib"),
+        "ssl" => Some("ssl"),
+        "httpx" => Some("httpx"),
+        "aiohttp" => Some("aiohttp"),
+        "onnxruntime" => Some("onnxruntime"),
+        "funasr" => Some("funasr"),
+        _ => None,
+    }
 }
 
 fn truncate_chars(value: &str, max_chars: usize) -> (String, bool) {
@@ -731,10 +880,11 @@ fn category_accepts_code(category: DiagnosticCategory, code: DiagnosticCode) -> 
 #[cfg(test)]
 mod tests {
     use super::{
-        asr_diagnostic_log_path, read_recent_records_at, sanitize_fallback_line, AsrDiagnosticSink,
-        DiagnosticCategory, DiagnosticCode, DiagnosticPhase, DiagnosticRejectionCode,
-        StoredRecordKind, ValidatedDiagnosticEvent, ASR_DIAGNOSTIC_MAX_BYTES, FALLBACK_LINE_LIMIT,
-        MAX_PAYLOAD_CHARS, RETENTION_MILLIS,
+        asr_diagnostic_log_path, read_recent_records_at, sanitize_fallback_line,
+        sanitize_fallback_line_bounded, AsrDiagnosticSink, DiagnosticCategory, DiagnosticCode,
+        DiagnosticPhase, DiagnosticRejectionCode, StoredRecordKind, ValidatedDiagnosticEvent,
+        ASR_DIAGNOSTIC_MAX_BYTES, FALLBACK_LINE_LIMIT, MAX_FALLBACK_SCAN_CHARS, MAX_PAYLOAD_CHARS,
+        MAX_RECORDS_PER_INVOCATION, RETENTION_MILLIS,
     };
     use crate::RuntimePaths;
     use std::fs;
@@ -812,11 +962,12 @@ mod tests {
         sink.finish();
 
         let records = read_recent_records_at(&paths, 1_800_000_000_000);
-        let fallback_count = records
+        let fallback_records = records
             .iter()
             .filter(|record| record.kind == StoredRecordKind::Fallback)
-            .count();
-        assert_eq!(fallback_count, FALLBACK_LINE_LIMIT);
+            .collect::<Vec<_>>();
+        assert_eq!(fallback_records.len(), 1);
+        assert_eq!(fallback_records[0].count as usize, FALLBACK_LINE_LIMIT);
         assert!(records.iter().any(|record| {
             record.kind == StoredRecordKind::Internal
                 && record.payload == "fallback_limit_reached"
@@ -850,7 +1001,8 @@ mod tests {
         assert!(bytes.len() <= ASR_DIAGNOSTIC_MAX_BYTES);
         let text = String::from_utf8(bytes).expect("utf8 log");
         assert!(!text.contains("corrupt-secret-prior-line"));
-        assert!(text.contains("latest safe failure"));
+        assert!(text.contains("failure"));
+        assert!(!text.contains("latest safe"));
     }
 
     #[test]
@@ -977,7 +1129,7 @@ mod tests {
     #[test]
     fn sanitizer_replaces_hostile_values_with_fixed_tokens() {
         let hostile = concat!(
-            "Traceback File C:\\Users\\alice\\AppData\\Local\\com.frameq.desktop\\logs\\x.py ",
+            "failure at C:\\Users\\alice\\AppData\\Local\\com.frameq.desktop\\logs\\x.py ",
             "UNC=\\\\workstation\\share\\secret POSIX=/home/alice/private HOME=~/private ",
             "user=alice hostname=DESKTOP-SECRET ip=192.168.1.42 ipv6=2001:db8::1 ",
             "email=alice@example.com url=https://alice:pw@example.com/model?q=secret ",
@@ -1012,7 +1164,6 @@ mod tests {
             assert!(!sanitized.contains(secret), "leaked hostile seed: {secret}");
         }
         for replacement in [
-            "[traceback]",
             "[path]",
             "[assignment]",
             "[url]",
@@ -1041,9 +1192,7 @@ mod tests {
         assert!(!sanitized.contains("app.py"));
         assert!(!sanitized.contains("top-secret"));
         assert!(!sanitized.contains('\n'));
-        assert!(sanitized.contains("[traceback]"));
-        assert!(sanitized.contains("[path]"));
-        assert!(sanitized.contains("[credential]") || sanitized.contains("[assignment]"));
+        assert_eq!(sanitized, "[traceback]");
     }
 
     #[test]
@@ -1073,8 +1222,89 @@ mod tests {
     }
 
     #[test]
+    fn sanitizer_fails_closed_for_exception_and_unknown_freeform_text() {
+        let reviewer_seed = "RuntimeError: user Alice on download.internal.example exposed reviewer-secret transcript-content";
+        let generic_seed =
+            "download failed download.internal.example Alice reviewer-secret transcript-content";
+
+        assert_eq!(sanitize_fallback_line(reviewer_seed), "[exception]");
+        let generic = sanitize_fallback_line(generic_seed);
+        assert_eq!(generic, "download failed [host] [text]");
+        for forbidden in [
+            "RuntimeError",
+            "Alice",
+            "download.internal.example",
+            "reviewer-secret",
+            "transcript-content",
+        ] {
+            assert!(!generic.contains(forbidden));
+            assert!(!sanitize_fallback_line(reviewer_seed).contains(forbidden));
+        }
+    }
+
+    #[test]
+    fn all_sink_entry_points_share_one_hard_record_limit_and_one_marker() {
+        let paths = runtime_paths("total-record-limit");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-safe");
+        for index in 0..400 {
+            sink.structured(&sample_event());
+            sink.rejected(DiagnosticRejectionCode::InvalidEvent);
+            sink.internal("structured_serialization_failed", false);
+            sink.fallback_line(&format!("download failure number {index}"));
+        }
+
+        assert_eq!(sink.records.len(), MAX_RECORDS_PER_INVOCATION);
+        assert_eq!(
+            sink.records
+                .iter()
+                .filter(|record| {
+                    record.kind == StoredRecordKind::Internal
+                        && record.payload == "record_limit_reached"
+                })
+                .count(),
+            1
+        );
+        assert_eq!(
+            sink.records.last().map(|record| record.payload.as_str()),
+            Some("record_limit_reached")
+        );
+        sink.finish();
+        let persisted = read_recent_records_at(&paths, 1_800_000_000_000);
+        assert_eq!(persisted.len(), MAX_RECORDS_PER_INVOCATION);
+        assert_eq!(
+            persisted
+                .iter()
+                .filter(|record| record.payload == "record_limit_reached")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn fallback_scan_stops_before_late_exception_content() {
+        let mut input = "download failure ".repeat(MAX_FALLBACK_SCAN_CHARS);
+        input.push_str("Traceback RuntimeError: late-reviewer-secret");
+
+        let (sanitized, truncated) = sanitize_fallback_line_bounded(&input);
+
+        assert!(truncated);
+        assert!(sanitized.chars().count() <= MAX_PAYLOAD_CHARS);
+        assert!(sanitized.contains("[truncated]"));
+        assert!(!sanitized.contains("[traceback]"));
+        assert!(!sanitized.contains("RuntimeError"));
+        assert!(!sanitized.contains("late-reviewer-secret"));
+    }
+
+    #[test]
+    fn dotted_exception_class_line_is_replaced_whole() {
+        let seed = "requests.exceptions.ConnectionError(host='download.internal.example', token='reviewer-secret')";
+
+        assert_eq!(sanitize_fallback_line(seed), "[exception]");
+    }
+
+    #[test]
     fn sanitizer_is_idempotent_for_fixed_replacement_tokens() {
-        let fixed = "[traceback] [path] [assignment] [url] [credential] [identifier] [opaque] [control] [identity] [email] [ip] [empty]";
+        let fixed = "[traceback] [exception] [path] [assignment] [url] [credential] [identifier] [opaque] [control] [identity] [host] [email] [ip] [text] [truncated] [empty]";
 
         assert_eq!(sanitize_fallback_line(fixed), fixed);
     }
