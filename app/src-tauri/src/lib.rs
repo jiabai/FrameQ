@@ -63,6 +63,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(ProcessSupervisors::default()))
         .manage(Arc::new(diagnostic_export::DiagnosticExportState::default()))
+        .manage(Arc::new(asr_model::DiagnosticModelState::default()))
         .manage(Arc::new(HistoryDeletionState::default()))
         .manage(Arc::new(local_media::LocalMediaSelectionState::default()))
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {

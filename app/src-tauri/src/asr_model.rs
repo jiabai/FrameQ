@@ -4,8 +4,8 @@ pub(crate) use crate::progress_event::ASR_MODEL_DOWNLOAD_EVENT_NAME;
 pub(crate) use crate::progress_event::MODEL_DOWNLOAD_EVENT_PREFIX;
 use crate::settings::{
     asr_model_source, configured_env_value, env_path, parse_dotenv_values,
-    ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV, ASR_MODEL_ENV,
-    MODELSCOPE_ENDPOINT_ENV, SENSEVOICE_REVISION_ENV,
+    ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV, MODELSCOPE_ENDPOINT_ENV,
+    SENSEVOICE_REVISION_ENV,
 };
 use crate::worker_runtime::{
     AsrModelDownloadJob, ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerRunError,
@@ -18,7 +18,7 @@ use crate::{
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tauri::{AppHandle, Emitter, State, Window};
 
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
@@ -70,20 +70,35 @@ pub(crate) struct DiagnosticModelSnapshot {
     pub(crate) cache_status: DiagnosticCacheStatus,
 }
 
-pub(crate) fn diagnostic_model_snapshot(paths: &RuntimePaths) -> DiagnosticModelSnapshot {
-    let Ok(values) = parse_dotenv_values(&env_path(paths)) else {
-        return DiagnosticModelSnapshot {
+impl Default for DiagnosticModelSnapshot {
+    fn default() -> Self {
+        Self {
             model: SupportedDiagnosticModel::SenseVoiceSmall,
             cache_status: DiagnosticCacheStatus::Unknown,
-        };
-    };
-    let configured = configured_env_value(&values, ASR_MODEL_ENV)
-        .unwrap_or_else(|| DEFAULT_ASR_MODEL.to_string());
-    let Some(model) = SupportedDiagnosticModel::from_id(&configured) else {
-        return DiagnosticModelSnapshot {
-            model: SupportedDiagnosticModel::SenseVoiceSmall,
-            cache_status: DiagnosticCacheStatus::Unknown,
-        };
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct DiagnosticModelState {
+    snapshot: RwLock<DiagnosticModelSnapshot>,
+}
+
+impl DiagnosticModelState {
+    pub(crate) fn snapshot(&self) -> DiagnosticModelSnapshot {
+        self.snapshot.read().map(|value| *value).unwrap_or_default()
+    }
+
+    fn update(&self, snapshot: DiagnosticModelSnapshot) {
+        if let Ok(mut current) = self.snapshot.write() {
+            *current = snapshot;
+        }
+    }
+}
+
+fn diagnostic_model_snapshot_for(paths: &RuntimePaths, asr_model: &str) -> DiagnosticModelSnapshot {
+    let Some(model) = SupportedDiagnosticModel::from_id(asr_model) else {
+        return DiagnosticModelSnapshot::default();
     };
     let marker = asr_model_cache_dir(paths, model.id()).join(MODEL_VERSION_FILE_NAME);
     let cache_status = match marker.try_exists() {
@@ -96,6 +111,14 @@ pub(crate) fn diagnostic_model_snapshot(paths: &RuntimePaths) -> DiagnosticModel
         model,
         cache_status,
     }
+}
+
+pub(crate) fn refresh_diagnostic_model_state(
+    paths: &RuntimePaths,
+    asr_model: &str,
+    state: &DiagnosticModelState,
+) {
+    state.update(diagnostic_model_snapshot_for(paths, asr_model));
 }
 
 #[derive(Debug, Serialize)]
@@ -195,17 +218,21 @@ fn required_model_files_exist(model_dir: &Path, asr_model: &str) -> bool {
 #[tauri::command]
 pub(crate) fn get_asr_model_status(
     app: AppHandle,
+    diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
     asr_model: String,
 ) -> Result<AsrModelStatusView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    let config_values = parse_dotenv_values(&env_path(&paths))?;
     let asr_model = validate_asr_model(asr_model)?;
+    let snapshot = diagnostic_model_snapshot_for(&paths, &asr_model);
+    diagnostic_state.update(snapshot);
+    let config_values = parse_dotenv_values(&env_path(&paths))?;
+    let available = snapshot.cache_status == DiagnosticCacheStatus::Ready;
     Ok(AsrModelStatusView {
         user_data_dir: path_to_env_string(&paths.user_data_dir),
         default_output_dir: path_to_env_string(paths.user_data_dir.join("outputs")),
         asr_model_dir: path_to_env_string(asr_model_display_dir(&paths, &asr_model)),
-        asr_model_available: asr_model_available(&paths, &asr_model),
+        asr_model_available: available,
         asr_model_source: if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
             "modelscope".to_string()
         } else {
@@ -220,11 +247,19 @@ pub(crate) async fn download_asr_model(
     window: Window,
     app: AppHandle,
     process_supervisors: State<'_, Arc<ProcessSupervisors>>,
+    diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
     asr_model: String,
 ) -> Result<AsrModelDownloadResult, String> {
     let process_supervisors = Arc::clone(process_supervisors.inner());
+    let diagnostic_state = Arc::clone(diagnostic_state.inner());
     run_blocking_worker_command(move || {
-        download_asr_model_blocking(window, app, process_supervisors, asr_model)
+        download_asr_model_blocking(
+            window,
+            app,
+            process_supervisors,
+            diagnostic_state,
+            asr_model.clone(),
+        )
     })
     .await
 }
@@ -233,12 +268,15 @@ fn download_asr_model_blocking(
     window: Window,
     app: AppHandle,
     process_supervisors: Arc<ProcessSupervisors>,
+    diagnostic_state: Arc<DiagnosticModelState>,
     asr_model: String,
 ) -> Result<AsrModelDownloadResult, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let asr_model = validate_asr_model(asr_model)?;
-    if asr_model_available(&paths, &asr_model) {
+    let initial_snapshot = diagnostic_model_snapshot_for(&paths, &asr_model);
+    diagnostic_state.update(initial_snapshot);
+    if initial_snapshot.cache_status == DiagnosticCacheStatus::Ready {
         return Ok(AsrModelDownloadResult {
             started: false,
             status: "already_available".to_string(),
@@ -248,7 +286,7 @@ fn download_asr_model_blocking(
     let config_values = parse_dotenv_values(&env_path(&paths))?;
     let job = if asr_model == DEFAULT_ASR_MODEL {
         AsrModelDownloadJob::new(
-            asr_model,
+            asr_model.clone(),
             configured_env_value(&config_values, ASR_MODEL_DOWNLOAD_URL_ENV),
             configured_env_value(&config_values, ASR_MODEL_DOWNLOAD_SHA256_ENV),
             configured_env_value(&config_values, MODELSCOPE_ENDPOINT_ENV),
@@ -256,15 +294,19 @@ fn download_asr_model_blocking(
         )
     } else {
         // ONNX artifacts are intentionally fixed to official ModelScope sources.
-        AsrModelDownloadJob::new(asr_model, None, None, None, None)
+        AsrModelDownloadJob::new(asr_model.clone(), None, None, None, None)
     };
     let run_result = process_supervisors.run_asr_model_download(&paths, job, window.clone())?;
     match map_model_download_run_result(run_result)? {
-        ModelDownloadRunResult::Completed => Ok(AsrModelDownloadResult {
-            started: true,
-            status: "completed".to_string(),
-        }),
+        ModelDownloadRunResult::Completed => {
+            diagnostic_state.update(diagnostic_model_snapshot_for(&paths, &asr_model));
+            Ok(AsrModelDownloadResult {
+                started: true,
+                status: "completed".to_string(),
+            })
+        }
         ModelDownloadRunResult::Cancelled => {
+            diagnostic_state.update(diagnostic_model_snapshot_for(&paths, &asr_model));
             let _ = window.emit(
                 ASR_MODEL_DOWNLOAD_EVENT_NAME,
                 cancelled_model_download_event(),
@@ -338,7 +380,7 @@ pub(crate) fn cancel_asr_model_download(
 mod tests {
     use super::{
         asr_model_available, asr_model_display_dir, cancelled_model_download_event,
-        diagnostic_model_snapshot, map_model_download_run_result, DiagnosticCacheStatus,
+        diagnostic_model_snapshot_for, map_model_download_run_result, DiagnosticCacheStatus,
         ModelDownloadRunResult, SupportedDiagnosticModel, DEFAULT_ASR_MODEL,
         SENSEVOICE_SMALL_ONNX_MODEL,
     };
@@ -537,7 +579,7 @@ mod tests {
             user_data_dir: root.join("app-data"),
         };
 
-        let missing = diagnostic_model_snapshot(&paths);
+        let missing = diagnostic_model_snapshot_for(&paths, DEFAULT_ASR_MODEL);
         assert_eq!(missing.model, SupportedDiagnosticModel::SenseVoiceSmall);
         assert_eq!(missing.cache_status, DiagnosticCacheStatus::Missing);
 
@@ -549,12 +591,13 @@ mod tests {
         )
         .expect("marker");
         assert_eq!(
-            diagnostic_model_snapshot(&paths).cache_status,
+            diagnostic_model_snapshot_for(&paths, DEFAULT_ASR_MODEL).cache_status,
             DiagnosticCacheStatus::Invalid
         );
 
         let serialized =
-            serde_json::to_value(diagnostic_model_snapshot(&paths)).expect("serialize snapshot");
+            serde_json::to_value(diagnostic_model_snapshot_for(&paths, DEFAULT_ASR_MODEL))
+                .expect("serialize snapshot");
         assert_eq!(serialized["model"], DEFAULT_ASR_MODEL);
         assert_eq!(serialized["cache_status"], "invalid");
         let rendered = serialized.to_string();
@@ -576,7 +619,7 @@ mod tests {
         )
         .expect("settings");
 
-        let snapshot = diagnostic_model_snapshot(&paths);
+        let snapshot = diagnostic_model_snapshot_for(&paths, "private/vendor-model");
         assert_eq!(snapshot.model, SupportedDiagnosticModel::SenseVoiceSmall);
         assert_eq!(snapshot.cache_status, DiagnosticCacheStatus::Unknown);
         assert!(!serde_json::to_string(&snapshot)
@@ -588,12 +631,39 @@ mod tests {
             format!("FRAMEQ_ASR_MODEL={SENSEVOICE_SMALL_ONNX_MODEL}\n"),
         )
         .expect("onnx settings");
-        let onnx = diagnostic_model_snapshot(&paths);
+        let onnx = diagnostic_model_snapshot_for(&paths, SENSEVOICE_SMALL_ONNX_MODEL);
         assert_eq!(onnx.model, SupportedDiagnosticModel::SenseVoiceSmallOnnx);
         assert_eq!(onnx.cache_status, DiagnosticCacheStatus::Missing);
         assert_eq!(
             serde_json::to_value(onnx).expect("serialize onnx")["model"],
             SENSEVOICE_SMALL_ONNX_MODEL
+        );
+    }
+
+    #[test]
+    fn managed_diagnostic_snapshot_defaults_unknown_and_clones_only_closed_values() {
+        let state = super::DiagnosticModelState::default();
+        assert_eq!(
+            state.snapshot(),
+            super::DiagnosticModelSnapshot {
+                model: SupportedDiagnosticModel::SenseVoiceSmall,
+                cache_status: DiagnosticCacheStatus::Unknown,
+            }
+        );
+        state.update(super::DiagnosticModelSnapshot {
+            model: SupportedDiagnosticModel::SenseVoiceSmallOnnx,
+            cache_status: DiagnosticCacheStatus::Ready,
+        });
+        assert_eq!(
+            state.snapshot(),
+            super::DiagnosticModelSnapshot {
+                model: SupportedDiagnosticModel::SenseVoiceSmallOnnx,
+                cache_status: DiagnosticCacheStatus::Ready,
+            }
+        );
+        assert_eq!(
+            serde_json::to_string(&state.snapshot()).expect("serialize"),
+            "{\"model\":\"iic/SenseVoiceSmall-onnx\",\"cache_status\":\"ready\"}"
         );
     }
 

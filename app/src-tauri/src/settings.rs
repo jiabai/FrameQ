@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::AppHandle;
+use std::sync::Arc;
+use tauri::{AppHandle, State};
+
+use crate::asr_model::{refresh_diagnostic_model_state, DiagnosticModelState};
 
 use crate::{
     ensure_runtime_dirs, path_to_env_string, resolve_runtime_paths, RuntimePaths,
@@ -73,20 +76,43 @@ pub(crate) struct AudioReviewCacheUsageView {
 }
 
 #[tauri::command]
-pub(crate) fn get_llm_config(app: AppHandle) -> Result<LlmConfigView, String> {
+pub(crate) fn get_llm_config(
+    app: AppHandle,
+    diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
+) -> Result<LlmConfigView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    load_llm_config_from_file(&env_path(&paths))
+    load_llm_config_for_paths(&paths, diagnostic_state.inner())
 }
 
 #[tauri::command]
 pub(crate) fn save_llm_config(
     app: AppHandle,
+    diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
     config: LlmConfigInput,
 ) -> Result<LlmConfigView, String> {
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    save_llm_config_to_file(&env_path(&paths), config)
+    save_llm_config_for_paths(&paths, diagnostic_state.inner(), config)
+}
+
+fn load_llm_config_for_paths(
+    paths: &RuntimePaths,
+    diagnostic_state: &DiagnosticModelState,
+) -> Result<LlmConfigView, String> {
+    let view = load_llm_config_from_file(&env_path(paths))?;
+    refresh_diagnostic_model_state(paths, &view.asr_model, diagnostic_state);
+    Ok(view)
+}
+
+fn save_llm_config_for_paths(
+    paths: &RuntimePaths,
+    diagnostic_state: &DiagnosticModelState,
+    config: LlmConfigInput,
+) -> Result<LlmConfigView, String> {
+    let view = save_llm_config_to_file(&env_path(paths), config)?;
+    refresh_diagnostic_model_state(paths, &view.asr_model, diagnostic_state);
+    Ok(view)
 }
 
 #[tauri::command]
@@ -387,7 +413,12 @@ fn sanitize_optional_env_value(value: String, label: &str) -> Result<String, Str
 
 #[cfg(test)]
 mod tests {
-    use super::{audio_review_cache_usage_from_cache, clear_audio_review_cache_from_cache};
+    use super::{
+        audio_review_cache_usage_from_cache, clear_audio_review_cache_from_cache,
+        load_llm_config_for_paths, save_llm_config_for_paths, LlmConfigInput,
+    };
+    use crate::asr_model::{DiagnosticCacheStatus, DiagnosticModelState, SupportedDiagnosticModel};
+    use crate::RuntimePaths;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -424,6 +455,56 @@ mod tests {
         assert_eq!(
             fs::read(task_audio).expect("read original task audio"),
             [3_u8; 11]
+        );
+    }
+
+    #[test]
+    fn settings_load_and_save_refresh_only_the_closed_diagnostic_model_snapshot() {
+        let app_root = temp_dir("settings_refresh_diagnostic_snapshot");
+        let paths = RuntimePaths {
+            resource_dir: app_root.join("resources"),
+            user_data_dir: app_root.join("app-data"),
+        };
+        fs::create_dir_all(&paths.user_data_dir).expect("app data");
+        fs::write(
+            paths.user_data_dir.join(".env"),
+            "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\n",
+        )
+        .expect("settings");
+        let state = DiagnosticModelState::default();
+
+        let loaded = load_llm_config_for_paths(&paths, &state).expect("load settings");
+        assert_eq!(loaded.asr_model, "iic/SenseVoiceSmall-onnx");
+        assert_eq!(
+            state.snapshot().model,
+            SupportedDiagnosticModel::SenseVoiceSmallOnnx
+        );
+        assert_eq!(
+            state.snapshot().cache_status,
+            DiagnosticCacheStatus::Missing
+        );
+
+        let saved = save_llm_config_for_paths(
+            &paths,
+            &state,
+            LlmConfigInput {
+                output_dir: String::new(),
+                asr_model: "iic/SenseVoiceSmall".to_string(),
+            },
+        )
+        .expect("save settings");
+        assert_eq!(saved.asr_model, "iic/SenseVoiceSmall");
+        assert_eq!(
+            state.snapshot().model,
+            SupportedDiagnosticModel::SenseVoiceSmall
+        );
+        assert_eq!(
+            state.snapshot().cache_status,
+            DiagnosticCacheStatus::Missing
+        );
+        assert_eq!(
+            serde_json::to_string(&state.snapshot()).expect("serialize"),
+            "{\"model\":\"iic/SenseVoiceSmall\",\"cache_status\":\"missing\"}"
         );
     }
 

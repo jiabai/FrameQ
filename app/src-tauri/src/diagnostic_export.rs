@@ -1,4 +1,4 @@
-use crate::asr_model::diagnostic_model_snapshot;
+use crate::asr_model::{DiagnosticModelSnapshot, DiagnosticModelState};
 use crate::atomic_files::atomic_write;
 use crate::diagnostics::assemble_diagnostic_zip;
 use crate::{resolve_runtime_paths, RuntimePaths};
@@ -95,6 +95,7 @@ where
 #[tauri::command]
 pub(crate) async fn export_diagnostics(app: AppHandle) -> DiagnosticExportResult {
     let state = Arc::clone(app.state::<Arc<DiagnosticExportState>>().inner());
+    let model_state = Arc::clone(app.state::<Arc<DiagnosticModelState>>().inner());
     let command_app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         run_export_core(
@@ -109,7 +110,7 @@ pub(crate) async fn export_diagnostics(app: AppHandle) -> DiagnosticExportResult
                     .map(|path| path.into_path().map_err(|_| ()))
                     .transpose()
             },
-            || assemble_for_app(&command_app),
+            || assemble_for_app(&command_app, model_state.snapshot()),
             |path, bytes| atomic_write(path, bytes).map_err(|_| ()),
         )
     })
@@ -117,10 +118,16 @@ pub(crate) async fn export_diagnostics(app: AppHandle) -> DiagnosticExportResult
     .unwrap_or_else(|_| failed())
 }
 
-fn assemble_for_app(app: &AppHandle) -> Result<Vec<u8>, ()> {
+fn assemble_for_app(app: &AppHandle, snapshot: DiagnosticModelSnapshot) -> Result<Vec<u8>, ()> {
     let paths: RuntimePaths = resolve_runtime_paths(app).map_err(|_| ())?;
-    let snapshot = diagnostic_model_snapshot(&paths);
-    assemble_diagnostic_zip(&paths, &snapshot, env!("CARGO_PKG_VERSION"))
+    assemble_for_paths(&paths, snapshot)
+}
+
+fn assemble_for_paths(
+    paths: &RuntimePaths,
+    snapshot: DiagnosticModelSnapshot,
+) -> Result<Vec<u8>, ()> {
+    assemble_diagnostic_zip(paths, &snapshot, env!("CARGO_PKG_VERSION"))
 }
 
 fn default_export_file_name() -> String {
@@ -159,10 +166,15 @@ fn civil_date_from_unix_days(days: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::{export_to_selection, DiagnosticExportResult, DiagnosticExportState};
+    use crate::asr_model::{
+        DiagnosticCacheStatus, DiagnosticModelSnapshot, SupportedDiagnosticModel,
+    };
     use std::fs;
+    use std::io::{Cursor, Read};
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use zip::ZipArchive;
 
     #[test]
     fn default_name_uses_fixed_zip_shape() {
@@ -324,6 +336,42 @@ mod tests {
             .expect("list root")
             .filter_map(Result::ok)
             .all(|entry| !entry.file_name().to_string_lossy().contains(".part")));
+    }
+
+    #[test]
+    fn export_uses_only_managed_model_snapshot_and_never_reads_settings_or_cache() {
+        let root = temp_dir("managed-snapshot");
+        let paths = crate::RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-local"),
+        };
+        fs::create_dir_all(paths.user_data_dir.join("logs")).expect("logs");
+        fs::create_dir_all(paths.user_data_dir.join(".env")).expect("dotenv trap directory");
+        fs::write(paths.user_data_dir.join("models"), "cache trap").expect("cache trap file");
+        let snapshot = DiagnosticModelSnapshot {
+            model: SupportedDiagnosticModel::SenseVoiceSmallOnnx,
+            cache_status: DiagnosticCacheStatus::Ready,
+        };
+
+        let bytes = super::assemble_for_paths(&paths, snapshot).expect("assemble from memory");
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).expect("open zip");
+        let mut manifest = String::new();
+        archive
+            .by_name("diagnostics.json")
+            .expect("manifest")
+            .read_to_string(&mut manifest)
+            .expect("read manifest");
+        assert!(manifest.contains("iic/SenseVoiceSmall-onnx"));
+        assert!(manifest.contains("\"cache_status\":\"ready\""));
+
+        let source = include_str!("diagnostic_export.rs");
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source");
+        assert!(!production.contains(&["diagnostic_model_", "snapshot(&paths)"].concat()));
+        assert!(!production.contains(&["env_", "path("].concat()));
+        assert!(!production.contains(&["join(\"", "models\")"].concat()));
     }
 
     fn temp_dir(name: &str) -> PathBuf {

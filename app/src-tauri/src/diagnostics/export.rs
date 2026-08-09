@@ -56,12 +56,24 @@ enum OmissionReason {
     SizeLimit,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum RecordOmissionReason {
+    Malformed,
+    OutsideWindow,
+    SizeLimit,
+    Multiple,
+}
+
 #[derive(Debug, Serialize)]
 struct ManifestFileStatus {
     name: &'static str,
     status: ManifestFileState,
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<OmissionReason>,
+    omitted_records: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record_omission_reason: Option<RecordOmissionReason>,
 }
 
 #[derive(Debug, Serialize)]
@@ -82,6 +94,7 @@ struct DiagnosticManifest {
 struct SafeRecord {
     utc_ms: u64,
     line: String,
+    logical_count: u64,
 }
 
 #[derive(Debug)]
@@ -90,6 +103,9 @@ struct SafeLog {
     records: Vec<SafeRecord>,
     omission: Option<OmissionReason>,
     truncated: bool,
+    malformed_records: u64,
+    outside_window_records: u64,
+    size_limited_records: u64,
 }
 
 impl SafeLog {
@@ -106,17 +122,40 @@ impl SafeLog {
     }
 
     fn status(&self) -> ManifestFileStatus {
+        let omitted_records = self
+            .malformed_records
+            .saturating_add(self.outside_window_records)
+            .saturating_add(self.size_limited_records);
+        let reason_count = [
+            self.malformed_records,
+            self.outside_window_records,
+            self.size_limited_records,
+        ]
+        .into_iter()
+        .filter(|count| *count > 0)
+        .count();
+        let record_omission_reason = match reason_count {
+            0 => None,
+            1 if self.malformed_records > 0 => Some(RecordOmissionReason::Malformed),
+            1 if self.outside_window_records > 0 => Some(RecordOmissionReason::OutsideWindow),
+            1 => Some(RecordOmissionReason::SizeLimit),
+            _ => Some(RecordOmissionReason::Multiple),
+        };
         if self.records.is_empty() {
             ManifestFileStatus {
                 name: self.name,
                 status: ManifestFileState::Omitted,
                 reason: Some(self.omission.unwrap_or(OmissionReason::NoEligibleRecords)),
+                omitted_records,
+                record_omission_reason,
             }
         } else {
             ManifestFileStatus {
                 name: self.name,
                 status: ManifestFileState::Included,
                 reason: None,
+                omitted_records,
+                record_omission_reason,
             }
         }
     }
@@ -157,6 +196,8 @@ fn assemble_diagnostic_zip_at(
                     name: MANIFEST_FILE_NAME,
                     status: ManifestFileState::Included,
                     reason: None,
+                    omitted_records: 0,
+                    record_omission_reason: None,
                 },
                 desktop.status(),
                 asr.status(),
@@ -184,6 +225,9 @@ fn collect_desktop_log(paths: &RuntimePaths, cutoff: u64, now_ms: u64) -> SafeLo
         records: Vec::new(),
         omission: None,
         truncated: false,
+        malformed_records: 0,
+        outside_window_records: 0,
+        size_limited_records: 0,
     };
     let bytes = match source {
         SourceBytes::Bytes { bytes, truncated } => {
@@ -205,12 +249,20 @@ fn collect_desktop_log(paths: &RuntimePaths, cutoff: u64, now_ms: u64) -> SafeLo
             Some(record) if record.utc_ms >= cutoff && record.utc_ms <= now_ms => {
                 log.records.push(record)
             }
-            Some(_) => log.truncated = true,
-            None if !line.trim().is_empty() => malformed = true,
+            Some(record) => {
+                log.truncated = true;
+                log.outside_window_records = log
+                    .outside_window_records
+                    .saturating_add(record.logical_count);
+            }
+            None if !line.trim().is_empty() => {
+                malformed = true;
+                log.malformed_records = log.malformed_records.saturating_add(1);
+            }
             None => {}
         }
     }
-    log.truncated |= malformed && !log.records.is_empty();
+    log.truncated |= malformed;
     log.records
         .sort_by(|left, right| right.utc_ms.cmp(&left.utc_ms));
     if log.records.is_empty() {
@@ -231,9 +283,31 @@ fn parse_desktop_line(line: &str) -> Option<SafeRecord> {
     let utc_ms = tokens.next()?.strip_prefix("unix_ms=")?.parse().ok()?;
     let event = tokens.next()?.strip_prefix("event=")?;
     let safe_event = safe_desktop_event(event)?;
+    let suffix = if event == "worker.download_asr_model.result" {
+        let operation = tokens.next()?;
+        let outcome = tokens.next()?;
+        if operation != "operation=download_asr_model" || tokens.next().is_some() {
+            return None;
+        }
+        let outcome = outcome.strip_prefix("outcome=")?;
+        if !matches!(
+            outcome,
+            "idle_timeout"
+                | "absolute_timeout"
+                | "cancelled"
+                | "structured"
+                | "unstructured_failure"
+        ) {
+            return None;
+        }
+        format!(" outcome={outcome}")
+    } else {
+        String::new()
+    };
     Some(SafeRecord {
         utc_ms,
-        line: format!("unix_ms={utc_ms} event={safe_event}"),
+        line: format!("unix_ms={utc_ms} event={safe_event}{suffix}"),
+        logical_count: 1,
     })
 }
 
@@ -262,6 +336,9 @@ fn collect_asr_log(paths: &RuntimePaths, cutoff: u64, now_ms: u64) -> SafeLog {
         records: Vec::new(),
         omission: None,
         truncated: false,
+        malformed_records: 0,
+        outside_window_records: 0,
+        size_limited_records: 0,
     };
     let bytes = match source {
         SourceBytes::Bytes { bytes, truncated } => {
@@ -283,12 +360,20 @@ fn collect_asr_log(paths: &RuntimePaths, cutoff: u64, now_ms: u64) -> SafeLog {
             Some(record) if record.utc_ms >= cutoff && record.utc_ms <= now_ms => {
                 log.records.push(record)
             }
-            Some(_) => log.truncated = true,
-            None if !line.trim().is_empty() => malformed = true,
+            Some(record) => {
+                log.truncated = true;
+                log.outside_window_records = log
+                    .outside_window_records
+                    .saturating_add(record.logical_count);
+            }
+            None if !line.trim().is_empty() => {
+                malformed = true;
+                log.malformed_records = log.malformed_records.saturating_add(1);
+            }
             None => {}
         }
     }
-    log.truncated |= malformed && !log.records.is_empty();
+    log.truncated |= malformed;
     log.records
         .sort_by(|left, right| right.utc_ms.cmp(&left.utc_ms));
     if log.records.is_empty() {
@@ -371,6 +456,7 @@ fn parse_asr_line(line: &str) -> Option<SafeRecord> {
     Some(SafeRecord {
         utc_ms: record.utc_ms,
         line: serde_json::to_string(&rendered).ok()?,
+        logical_count: u64::from(record.count),
     })
 }
 
@@ -388,6 +474,13 @@ enum SourceBytes {
 }
 
 fn read_fixed_source(paths: &RuntimePaths, path: &Path) -> SourceBytes {
+    read_fixed_source_with_hook(paths, path, || {})
+}
+
+fn read_fixed_source_with_hook<F>(paths: &RuntimePaths, path: &Path, hook: F) -> SourceBytes
+where
+    F: FnOnce(),
+{
     let expected_logs = paths.user_data_dir.join(DESKTOP_LOG_DIR_NAME);
     if path.parent() != Some(expected_logs.as_path()) {
         return SourceBytes::Omitted(OmissionReason::UnsafeFile);
@@ -402,20 +495,101 @@ fn read_fixed_source(paths: &RuntimePaths, path: &Path) -> SourceBytes {
             Err(_) => return SourceBytes::Omitted(OmissionReason::Unreadable),
         }
     }
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() && !is_link_or_reparse(&metadata) => {}
+        Ok(_) => return SourceBytes::Omitted(OmissionReason::UnsafeFile),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return SourceBytes::Omitted(OmissionReason::Missing)
         }
         Err(_) => return SourceBytes::Omitted(OmissionReason::Unreadable),
+    }
+    let root_handle = match open_directory_no_follow(&paths.user_data_dir) {
+        Ok(handle) => handle,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return SourceBytes::Omitted(OmissionReason::Missing)
+        }
+        Err(_) => return SourceBytes::Omitted(OmissionReason::UnsafeFile),
     };
-    if !metadata.is_file() || is_link_or_reparse(&metadata) {
+    let logs_handle = match open_directory_no_follow(&expected_logs) {
+        Ok(handle) => handle,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return SourceBytes::Omitted(OmissionReason::Missing)
+        }
+        Err(_) => return SourceBytes::Omitted(OmissionReason::UnsafeFile),
+    };
+    let pre_target = match open_no_follow(path) {
+        Ok(handle) => handle,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return SourceBytes::Omitted(OmissionReason::Missing)
+        }
+        Err(_) => return SourceBytes::Omitted(OmissionReason::UnsafeFile),
+    };
+    if !handle_is_directory(&root_handle)
+        || !handle_is_directory(&logs_handle)
+        || !handle_is_regular_file(&pre_target)
+    {
         return SourceBytes::Omitted(OmissionReason::UnsafeFile);
     }
+    let Some(root_identity) = file_identity(&root_handle) else {
+        return SourceBytes::Omitted(OmissionReason::Unreadable);
+    };
+    let Some(logs_identity) = file_identity(&logs_handle) else {
+        return SourceBytes::Omitted(OmissionReason::Unreadable);
+    };
+    let Some(target_identity) = file_identity(&pre_target) else {
+        return SourceBytes::Omitted(OmissionReason::Unreadable);
+    };
+    let Ok(root_final) = fs::canonicalize(&paths.user_data_dir) else {
+        return SourceBytes::Omitted(OmissionReason::Unreadable);
+    };
+    let Ok(logs_final) = fs::canonicalize(&expected_logs) else {
+        return SourceBytes::Omitted(OmissionReason::Unreadable);
+    };
+    let Ok(target_final) = fs::canonicalize(path) else {
+        return SourceBytes::Omitted(OmissionReason::Unreadable);
+    };
+    if logs_final.parent() != Some(root_final.as_path())
+        || target_final.parent() != Some(logs_final.as_path())
+        || target_final.file_name() != path.file_name()
+    {
+        return SourceBytes::Omitted(OmissionReason::UnsafeFile);
+    }
+    drop(pre_target);
+    hook();
+
+    let current_root = match open_directory_no_follow(&paths.user_data_dir) {
+        Ok(handle) => handle,
+        Err(_) => return SourceBytes::Omitted(OmissionReason::UnsafeFile),
+    };
+    let current_logs = match open_directory_no_follow(&expected_logs) {
+        Ok(handle) => handle,
+        Err(_) => return SourceBytes::Omitted(OmissionReason::UnsafeFile),
+    };
     let mut file = match open_no_follow(path) {
         Ok(file) => file,
-        Err(_) => return SourceBytes::Omitted(OmissionReason::Unreadable),
+        Err(_) => return SourceBytes::Omitted(OmissionReason::UnsafeFile),
     };
+    if file_identity(&current_root) != Some(root_identity)
+        || file_identity(&current_logs) != Some(logs_identity)
+        || file_identity(&file) != Some(target_identity)
+    {
+        return SourceBytes::Omitted(OmissionReason::UnsafeFile);
+    }
+    let Ok(current_root_final) = fs::canonicalize(&paths.user_data_dir) else {
+        return SourceBytes::Omitted(OmissionReason::UnsafeFile);
+    };
+    let Ok(current_logs_final) = fs::canonicalize(&expected_logs) else {
+        return SourceBytes::Omitted(OmissionReason::UnsafeFile);
+    };
+    let Ok(current_target_final) = fs::canonicalize(path) else {
+        return SourceBytes::Omitted(OmissionReason::UnsafeFile);
+    };
+    if current_root_final != root_final
+        || current_logs_final != logs_final
+        || current_target_final != target_final
+    {
+        return SourceBytes::Omitted(OmissionReason::UnsafeFile);
+    }
     let handle_metadata = match file.metadata() {
         Ok(metadata) => metadata,
         Err(_) => return SourceBytes::Omitted(OmissionReason::Unreadable),
@@ -451,6 +625,31 @@ fn read_fixed_source(paths: &RuntimePaths, path: &Path) -> SourceBytes {
     SourceBytes::Bytes { bytes, truncated }
 }
 
+fn open_directory_no_follow(path: &Path) -> std::io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    #[cfg(all(unix, target_os = "linux"))]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        const O_NOFOLLOW: i32 = 0x20_000;
+        options.custom_flags(O_NOFOLLOW);
+    }
+    #[cfg(all(unix, not(target_os = "linux")))]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        const O_NOFOLLOW: i32 = 0x100;
+        options.custom_flags(O_NOFOLLOW);
+    }
+    options.open(path)
+}
+
 fn open_no_follow(path: &Path) -> std::io::Result<File> {
     let mut options = OpenOptions::new();
     options.read(true);
@@ -473,6 +672,74 @@ fn open_no_follow(path: &Path) -> std::io::Result<File> {
         options.custom_flags(O_NOFOLLOW);
     }
     options.open(path)
+}
+
+fn handle_is_directory(file: &File) -> bool {
+    file.metadata()
+        .map(|metadata| metadata.is_dir() && !is_link_or_reparse(&metadata))
+        .unwrap_or(false)
+}
+
+fn handle_is_regular_file(file: &File) -> bool {
+    file.metadata()
+        .map(|metadata| metadata.is_file() && !is_link_or_reparse(&metadata))
+        .unwrap_or(false)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FileIdentity(u64, u64);
+
+#[cfg(windows)]
+fn file_identity(file: &File) -> Option<FileIdentity> {
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+    #[repr(C)]
+    struct ByHandleFileInformation {
+        attributes: u32,
+        creation_time: FileTime,
+        last_access_time: FileTime,
+        last_write_time: FileTime,
+        volume_serial_number: u32,
+        file_size_high: u32,
+        file_size_low: u32,
+        number_of_links: u32,
+        file_index_high: u32,
+        file_index_low: u32,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetFileInformationByHandle(
+            file: *mut core::ffi::c_void,
+            information: *mut ByHandleFileInformation,
+        ) -> i32;
+    }
+
+    let mut information = std::mem::MaybeUninit::<ByHandleFileInformation>::uninit();
+    let succeeded = unsafe {
+        GetFileInformationByHandle(file.as_raw_handle().cast(), information.as_mut_ptr())
+    };
+    if succeeded == 0 {
+        return None;
+    }
+    let information = unsafe { information.assume_init() };
+    let index =
+        (u64::from(information.file_index_high) << 32) | u64::from(information.file_index_low);
+    Some(FileIdentity(
+        u64::from(information.volume_serial_number),
+        index,
+    ))
+}
+
+#[cfg(unix)]
+fn file_identity(file: &File) -> Option<FileIdentity> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = file.metadata().ok()?;
+    Some(FileIdentity(metadata.dev(), metadata.ino()))
 }
 
 #[cfg(windows)]
@@ -511,8 +778,11 @@ fn drop_oldest(desktop: &mut SafeLog, asr: &mut SafeLog) -> bool {
         (None, Some(_)) => asr,
         (None, None) => return false,
     };
-    target.records.pop();
+    let removed = target.records.pop().expect("selected log has a record");
     target.truncated = true;
+    target.size_limited_records = target
+        .size_limited_records
+        .saturating_add(removed.logical_count);
     if target.records.is_empty() {
         target.omission = Some(OmissionReason::SizeLimit);
     }
@@ -597,7 +867,10 @@ fn utc_now_millis() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{assemble_diagnostic_zip_at, MAX_ZIP_BYTES};
+    use super::{
+        assemble_diagnostic_zip_at, parse_desktop_line, read_fixed_source_with_hook, SourceBytes,
+        MAX_ZIP_BYTES,
+    };
     use crate::asr_model::{
         DiagnosticCacheStatus, DiagnosticModelSnapshot, SupportedDiagnosticModel,
     };
@@ -617,7 +890,7 @@ mod tests {
         seed_desktop(
             &paths,
             NOW,
-            "worker.download_asr_model.result",
+            "worker.download_asr_model.start",
             "token=secret",
         );
         seed_asr(&paths, NOW, "connection_timeout");
@@ -697,6 +970,7 @@ mod tests {
             String::from_utf8(read_entry(&mut archive, "diagnostics.json")).expect("manifest utf8");
         assert!(manifest.contains("malformed"));
         assert!(manifest.contains("missing"));
+        assert!(manifest.contains("\"truncated\":true"));
         assert!(!manifest.contains(paths.user_data_dir.to_string_lossy().as_ref()));
 
         let unsafe_paths = runtime_paths("unsafe-source");
@@ -782,6 +1056,173 @@ mod tests {
             .next()
             .expect("newest")
             .contains(&NOW.to_string()));
+    }
+
+    #[test]
+    fn model_result_preserves_only_the_closed_outcome_set() {
+        for outcome in [
+            "idle_timeout",
+            "absolute_timeout",
+            "cancelled",
+            "structured",
+            "unstructured_failure",
+        ] {
+            let parsed = parse_desktop_line(&format!(
+                "unix_ms={NOW} event=worker.download_asr_model.result operation=download_asr_model outcome={outcome}"
+            ))
+            .expect("closed outcome");
+            assert!(parsed.line.contains(&format!("outcome={outcome}")));
+        }
+        for invalid in ["success", "review-secret", "structured extra=private"] {
+            assert!(parse_desktop_line(&format!(
+                "unix_ms={NOW} event=worker.download_asr_model.result operation=download_asr_model outcome={invalid}"
+            ))
+            .is_none());
+        }
+    }
+
+    #[test]
+    fn mixed_valid_and_malformed_sources_report_closed_record_omissions() {
+        let paths = runtime_paths("mixed-records");
+        let logs = paths.user_data_dir.join("logs");
+        fs::create_dir_all(&logs).expect("logs");
+        fs::write(
+            logs.join("frameq-desktop.log"),
+            format!(
+                "unix_ms={NOW} event=worker.download_asr_model.result operation=download_asr_model outcome=structured\nraw desktop secret\n"
+            ),
+        )
+        .expect("desktop mixed");
+        let valid = serde_json::json!({
+            "v": 1,
+            "utc_ms": NOW,
+            "invocation": "inv-0123456789abcdef",
+            "kind": "rejected",
+            "payload": "diagnostic_event_rejected",
+            "count": 1,
+            "truncated": false
+        });
+        fs::write(
+            logs.join(ASR_DIAGNOSTIC_LOG_FILE_NAME),
+            format!("{valid}\n{{\"payload\":\"raw asr secret\"}}\n"),
+        )
+        .expect("asr mixed");
+
+        let bytes =
+            assemble_diagnostic_zip_at(&paths, &snapshot(), "0.3.1", NOW).expect("assemble zip");
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).expect("open zip");
+        let manifest: Value = serde_json::from_slice(&read_entry(&mut archive, "diagnostics.json"))
+            .expect("manifest");
+        assert_eq!(manifest["truncated"], true);
+        for name in ["frameq-desktop.log", "asr-model-download.log"] {
+            let status = manifest["files"]
+                .as_array()
+                .expect("files")
+                .iter()
+                .find(|entry| entry["name"] == name)
+                .expect("file status");
+            assert_eq!(status["status"], "included");
+            assert_eq!(status["omitted_records"], 1);
+            assert_eq!(status["record_omission_reason"], "malformed");
+            assert!(status.get("reason").is_none());
+        }
+    }
+
+    #[test]
+    fn asr_omission_count_preserves_collapsed_record_multiplicity() {
+        let paths = runtime_paths("collapsed-omission-count");
+        let logs = paths.user_data_dir.join("logs");
+        fs::create_dir_all(&logs).expect("logs");
+        let current = serde_json::json!({
+            "v": 1,
+            "utc_ms": NOW,
+            "invocation": "inv-0123456789abcdef",
+            "kind": "rejected",
+            "payload": "diagnostic_event_rejected",
+            "count": 1,
+            "truncated": false
+        });
+        let old = serde_json::json!({
+            "v": 1,
+            "utc_ms": NOW - 8 * 24 * 60 * 60 * 1_000,
+            "invocation": "inv-fedcba9876543210",
+            "kind": "rejected",
+            "payload": "diagnostic_event_rejected",
+            "count": 7,
+            "truncated": false
+        });
+        fs::write(
+            logs.join(ASR_DIAGNOSTIC_LOG_FILE_NAME),
+            format!("{current}\n{old}\n"),
+        )
+        .expect("asr source");
+
+        let bytes =
+            assemble_diagnostic_zip_at(&paths, &snapshot(), "0.3.1", NOW).expect("assemble zip");
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).expect("zip");
+        let manifest: Value = serde_json::from_slice(&read_entry(&mut archive, "diagnostics.json"))
+            .expect("manifest");
+        let status = manifest["files"]
+            .as_array()
+            .expect("files")
+            .iter()
+            .find(|entry| entry["name"] == "asr-model-download.log")
+            .expect("asr status");
+        assert_eq!(status["omitted_records"], 7);
+        assert_eq!(status["record_omission_reason"], "outside_window");
+    }
+
+    #[test]
+    fn source_identity_rejects_target_replacement_between_validation_and_open() {
+        let paths = runtime_paths("target-replacement");
+        let logs = paths.user_data_dir.join("logs");
+        fs::create_dir_all(&logs).expect("logs");
+        let target = logs.join("frameq-desktop.log");
+        fs::write(
+            &target,
+            format!("unix_ms={NOW} event=asr_diagnostic.write_failed\n"),
+        )
+        .expect("original");
+        let backup = logs.join("original.log");
+        let result = read_fixed_source_with_hook(&paths, &target, || {
+            fs::rename(&target, &backup).expect("move original");
+            fs::write(
+                &target,
+                format!("unix_ms={NOW} event=worker.download_asr_model.start\n"),
+            )
+            .expect("replacement");
+        });
+        assert!(matches!(
+            result,
+            SourceBytes::Omitted(super::OmissionReason::UnsafeFile)
+        ));
+    }
+
+    #[test]
+    fn source_identity_rejects_parent_replacement_between_validation_and_open() {
+        let paths = runtime_paths("parent-replacement");
+        let logs = paths.user_data_dir.join("logs");
+        fs::create_dir_all(&logs).expect("logs");
+        let target = logs.join("frameq-desktop.log");
+        fs::write(
+            &target,
+            format!("unix_ms={NOW} event=asr_diagnostic.write_failed\n"),
+        )
+        .expect("original");
+        let moved_logs = paths.user_data_dir.join("logs-original");
+        let result = read_fixed_source_with_hook(&paths, &target, || {
+            fs::rename(&logs, &moved_logs).expect("move logs");
+            fs::create_dir_all(&logs).expect("replacement logs");
+            fs::write(
+                &target,
+                format!("unix_ms={NOW} event=worker.download_asr_model.start\n"),
+            )
+            .expect("replacement target");
+        });
+        assert!(matches!(
+            result,
+            SourceBytes::Omitted(super::OmissionReason::UnsafeFile)
+        ));
     }
 
     fn snapshot() -> DiagnosticModelSnapshot {
