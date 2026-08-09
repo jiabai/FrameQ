@@ -61,6 +61,16 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   passed (including atomic replacement failure preservation); `cargo fmt --check` and
   `git diff --check` passed; spec and code-quality/security reviews approved with no remaining
   issues.
+- [x] 2026-08-10: Task 4 completed and passed both independent reviews. The sole Rust stderr reader
+  now strictly decodes contract-v8 diagnostic events, routes ASR-download-only structured and
+  fail-closed fallback records to the bounded sink, emits only a fixed rejection for invalid
+  input, and keeps diagnostics outside progress, watchdog activity, UI emission, and structured
+  stdout terminal classification. Validation: complete runner suite 36 passed in a clean serial
+  run; diagnostic storage 28 passed; parser/progress 7 passed; terminal 6 passed; watchdog
+  isolation 1 passed; `cargo fmt --check` and `git diff --check` passed; spec and quality/security
+  reviews approved. An implementation-agent rerun intermittently hit existing Windows child-process
+  fixture contamination after timeout, but isolated, grouped, and clean full-run evidence did not
+  reproduce a product regression.
 
 ## Surprises & Discoveries
 
@@ -396,28 +406,28 @@ Windows-only implementation host and requires release-host smoke evidence.
 - Modify: `app/src-tauri/src/worker_runtime/runner/tests.rs`
 - Modify: `app/src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add RED parser tests.** Add a distinct diagnostic record variant and test a valid
+- [x] **Step 1: Add RED parser tests.** Add a distinct diagnostic record variant and test a valid
   event, malformed JSON, duplicate keys, unknown fields, invalid category/code combinations,
   illegal numeric fields, overlong type/line input, and a free-form `message`. Invalid input must
   yield only `diagnostic_event_rejected`, never the raw line.
 
-- [ ] **Step 2: Add RED lifecycle boundary tests.** Prove valid diagnostics are not emitted through
+- [x] **Step 2: Add RED lifecycle boundary tests.** Prove valid diagnostics are not emitted through
   `ProgressRoute`, do not call `record_validated_progress`, do not prevent idle timeout, and do not
   change stdout terminal classification. Prove ordinary stderr is persisted for
   `DownloadAsrModel` but not ProcessVideo, ProcessLocalMedia, RetryInsights, or ResolveSourceIdentity.
 
-- [ ] **Step 3: Run RED runner tests.** Run:
+- [x] **Step 3: Run RED runner tests.** Run:
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml worker_runtime::runner::tests
   ```
 
-- [ ] **Step 4: Implement strict Rust event decoding.** Use a custom serde map visitor or
+- [x] **Step 4: Implement strict Rust event decoding.** Use a custom serde map visitor or
   equivalent duplicate-aware decoder with `deny_unknown_fields` semantics. Do not parse into a
   generic map that silently accepts duplicate keys. Validate against the same v8 enums and field
   combinations as Python.
 
-- [ ] **Step 5: Pass semantic operation and optional sink to `read_stderr`.** The routing shape is:
+- [x] **Step 5: Pass semantic operation and optional sink to `read_stderr`.** The routing shape is:
 
   ```rust
   match inspect_stderr_line(protocol, &line) {
@@ -436,7 +446,7 @@ Windows-only implementation host and requires release-host smoke evidence.
   For non-model operations the sink is a no-op/absent capability; do not condition on frontend
   route names alone.
 
-- [ ] **Step 6: Run focused GREEN tests.** Run the Step 3 command and the existing lifecycle,
+- [x] **Step 6: Run focused GREEN tests.** Run the Step 3 command and the existing lifecycle,
   watchdog, progress, and terminal focused suites. Record exact totals and any environment-only
   failure without weakening assertions.
 
