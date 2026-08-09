@@ -48,6 +48,12 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   optional combinations. Validation: focused Python 65 passed; TypeScript contract 14 passed;
   Rust contract 1 passed; installer 7 passed; Ruff and `git diff --check` passed; spec review and
   code-quality review approved with no remaining issues.
+- [x] 2026-08-10: Task 2 completed and passed both independent reviews. The worker now classifies
+  model-download failures from safe type/numeric metadata, tracks only validated progress phases,
+  emits exactly one closed diagnostic event on stderr, and keeps all diagnostic failures
+  supplemental to the existing terminal result. Validation: focused worker tests 158 passed;
+  Ruff and `git diff --check` passed; spec and code-quality reviews approved with no remaining
+  issues.
 
 ## Surprises & Discoveries
 
@@ -265,13 +271,13 @@ Windows-only implementation host and requires release-host smoke evidence.
 - Modify: `worker/tests/test_worker_service_facade.py`
 - Modify: `worker/tests/test_worker_application_boundaries.py`
 
-- [ ] **Step 1: Add RED classification tests.** Build exception chains for `socket.gaierror`,
+- [x] **Step 1: Add RED classification tests.** Build exception chains for `socket.gaierror`,
   `TimeoutError`, `ssl.SSLCertVerificationError`, `urllib.error.HTTPError`, `PermissionError`,
   `OSError(errno.ENOSPC)`, `ImportError`, archive/integrity `ModelDownloadError`, known proxy class
   names, and unknown exceptions. Assert category/code, bounded type name, legal optional fields,
   and absence of seeded URL/path/token/header/proxy/body strings.
 
-- [ ] **Step 2: Add RED application, facade, boundary, and CLI tests.** Assert a failed invocation emits exactly one
+- [x] **Step 2: Add RED application, facade, boundary, and CLI tests.** Assert a failed invocation emits exactly one
   event before the existing terminal JSON, a successful/cancelled path emits none, and stdout still
   has exactly one terminal result line. Update the exact worker-service signature assertion and
   retain the application facade/import ownership checks. The callback surface is explicit:
@@ -285,7 +291,7 @@ Windows-only implementation host and requires release-host smoke evidence.
   ) -> dict[str, object]: ...
   ```
 
-- [ ] **Step 3: Run RED worker tests.** Run:
+- [x] **Step 3: Run RED worker tests.** Run:
 
   ```powershell
   uv run pytest worker\tests\test_diagnostic_events.py worker\tests\test_model_download.py worker\tests\test_cli.py worker\tests\test_worker_service_facade.py worker\tests\test_worker_application_boundaries.py -q
@@ -294,7 +300,7 @@ Windows-only implementation host and requires release-host smoke evidence.
   Expected: missing classifier/callback assertions fail while existing terminal framing remains
   green.
 
-- [ ] **Step 4: Implement safe classification.** Walk `__cause__`/`__context__` with a small depth
+- [x] **Step 4: Implement safe classification.** Walk `__cause__`/`__context__` with a small depth
   and identity guard. Inspect only exception types, integer errno/status attributes, and existing
   safe `ModelDownloadError.code`; never inspect or serialize `str(exc)`, `repr(exc)`, `args`,
   request/response objects, headers, or bodies. Unknown input returns:
@@ -310,13 +316,13 @@ Windows-only implementation host and requires release-host smoke evidence.
   )
   ```
 
-- [ ] **Step 5: Track phase through the existing progress callback.** Wrap the supplied progress
+- [x] **Step 5: Track phase through the existing progress callback.** Wrap the supplied progress
   callback so each validated model progress `message_code` updates a closed local phase before
   forwarding unchanged. Archive-invalid/cache-invalid known errors may refine the terminal phase
   without reading their messages. Emit once in each terminal exception branch, then return the
   exact existing public `ASR_MODEL_DOWNLOAD_FAILED` or archive-invalid result.
 
-- [ ] **Step 6: Wire CLI stderr rendering and run GREEN tests.** Add
+- [x] **Step 6: Wire CLI stderr rendering and run GREEN tests.** Add
   `print_diagnostic_event`, pass it only to `run_asr_model_download_once`, run the Step 3 suite, and
   run `uv run ruff check worker`.
 
