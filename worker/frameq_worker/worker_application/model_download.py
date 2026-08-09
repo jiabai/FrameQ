@@ -83,14 +83,15 @@ def run_asr_model_download_once(
             **download_options,
         )
     except ModelDownloadError as exc:
+        safe_error_code = _safe_model_download_error_code(exc)
         diagnostic_phase = _refine_archive_invalid_phase(
-            exc,
+            safe_error_code,
             current_phase,
             asr_model,
             download_options,
         )
         _emit_diagnostic(diagnostic_callback, exc, diagnostic_phase)
-        code, message = _safe_model_download_failure(exc.code)
+        code, message = _safe_model_download_failure(safe_error_code)
         return {
             "status": "failed",
             "code": code,
@@ -110,19 +111,27 @@ def run_asr_model_download_once(
     }
 
 
-def _safe_model_download_failure(code: str) -> tuple[str, str]:
+def _safe_model_download_error_code(exception: ModelDownloadError) -> str | None:
+    try:
+        code = object.__getattribute__(exception, "code")
+    except BaseException:
+        return None
+    return code if isinstance(code, str) else None
+
+
+def _safe_model_download_failure(code: str | None) -> tuple[str, str]:
     if code == ARCHIVE_INVALID_ERROR_CODE:
         return code, MODEL_ARCHIVE_INVALID_MESSAGE
     return "ASR_MODEL_DOWNLOAD_FAILED", MODEL_DOWNLOAD_FAILED_MESSAGE
 
 
 def _refine_archive_invalid_phase(
-    exception: ModelDownloadError,
+    error_code: str | None,
     current_phase: str,
     asr_model: str,
     download_options: dict[str, object],
 ) -> str:
-    if exception.code != ARCHIVE_INVALID_ERROR_CODE:
+    if error_code != ARCHIVE_INVALID_ERROR_CODE:
         return current_phase
     if current_phase == "archive_download" and download_options.get("download_url"):
         return "archive_validate"

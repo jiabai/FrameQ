@@ -261,6 +261,50 @@ def test_model_download_refines_archive_invalid_phase_without_message_inspection
     assert diagnostics[0].code == "archive_invalid"
 
 
+@pytest.mark.parametrize("code_failure", [KeyboardInterrupt, SystemExit])
+def test_model_download_hostile_error_code_returns_generic_failure_and_diagnostic(
+    code_failure: type[BaseException],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostics: list[object] = []
+
+    class HostileModelDownloadError(ModelDownloadError):
+        def __init__(self) -> None:
+            RuntimeError.__init__(self, "response-secret")
+
+        @property
+        def code(self) -> str:
+            raise code_failure("code-secret")
+
+    def fail_download(**kwargs: object) -> None:
+        kwargs["progress_callback"](
+            {
+                "status": "downloading",
+                "progress": 20,
+                "message_code": "model.archive.downloading",
+            }
+        )
+        raise HostileModelDownloadError()
+
+    monkeypatch.setattr(model_download_handler, "download_asr_model_cache", fail_download)
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=diagnostics.append,
+    )
+
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+    assert len(diagnostics) == 1
+    assert diagnostics[0].phase == "archive_download"
+    assert diagnostics[0].category == "unexpected"
+    assert diagnostics[0].code == "unexpected_failure"
+
+
 def test_model_download_diagnostic_callback_failure_never_masks_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
