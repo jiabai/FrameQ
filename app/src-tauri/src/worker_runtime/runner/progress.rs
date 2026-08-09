@@ -228,7 +228,7 @@ pub(super) fn route_stderr_record(
         StderrRecord::InvalidDiagnostic => {
             summary.had_diagnostic_output = true;
             if let Some(sink) = diagnostic_sink {
-                sink.rejected(DiagnosticRejectionCode::InvalidEvent);
+                sink.rejected(DiagnosticRejectionCode::DiagnosticEventRejected);
             }
         }
         StderrRecord::Diagnostic => {

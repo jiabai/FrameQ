@@ -81,6 +81,21 @@ fn diagnostic_protocol_rejects_untrusted_shapes_without_echoing_input() {
 }
 
 #[test]
+fn diagnostic_protocol_rejects_explicit_null_optional_fields() {
+    for field in ["exception_type", "http_status", "os_error_code"] {
+        let line = format!(
+            r#"FRAMEQ_DIAGNOSTIC {{"version":1,"operation":"download_asr_model","phase":"preparing","category":"network","code":"connection_failed","{field}":null}}"#
+        );
+
+        assert_eq!(
+            inspect_stderr_line(ProgressProtocol::AsrModelDownload, &line),
+            StderrRecord::InvalidDiagnostic,
+            "explicit null must be rejected for {field}"
+        );
+    }
+}
+
+#[test]
 fn diagnostic_prefix_is_reserved_independently_of_progress_route() {
     for protocol in [
         ProgressProtocol::None,
@@ -167,6 +182,7 @@ fn invalid_diagnostic_is_persisted_only_as_a_fixed_rejection() {
     )
     .expect("rejection log exists");
     assert!(log.contains("\"kind\":\"rejected\""));
+    assert!(log.contains("\"payload\":\"diagnostic_event_rejected\""));
     assert!(!log.contains(secret));
     assert!(!log.contains("not-json"));
 }

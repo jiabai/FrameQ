@@ -2,7 +2,7 @@ use super::append_desktop_log;
 use crate::atomic_files::atomic_write;
 use crate::runtime::ASR_DIAGNOSTIC_LOG_FILE_NAME;
 use crate::{RuntimePaths, DESKTOP_LOG_DIR_NAME};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -184,25 +184,30 @@ struct DiagnosticEventWire {
     phase: DiagnosticPhase,
     category: DiagnosticCategory,
     code: DiagnosticCode,
+    #[serde(default, deserialize_with = "deserialize_present_non_null")]
     exception_type: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_present_non_null")]
     http_status: Option<u16>,
+    #[serde(default, deserialize_with = "deserialize_present_non_null")]
     os_error_code: Option<i32>,
+}
+
+fn deserialize_present_non_null<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DiagnosticRejectionCode {
-    MalformedEvent,
-    InvalidEvent,
-    OversizedEvent,
+    DiagnosticEventRejected,
 }
 
 impl DiagnosticRejectionCode {
     fn payload(self) -> &'static str {
-        match self {
-            Self::MalformedEvent => "malformed_event",
-            Self::InvalidEvent => "invalid_event",
-            Self::OversizedEvent => "oversized_event",
-        }
+        "diagnostic_event_rejected"
     }
 }
 
@@ -260,7 +265,7 @@ impl AsrDiagnosticSink {
             return;
         }
         if !event.is_valid() {
-            self.rejected(DiagnosticRejectionCode::InvalidEvent);
+            self.rejected(DiagnosticRejectionCode::DiagnosticEventRejected);
             return;
         }
         let Ok(payload) = serde_json::to_string(event) else {
@@ -516,10 +521,15 @@ fn normalize_stored_record(mut record: StoredDiagnosticRecord) -> Option<StoredD
             record.truncated |= truncated;
         }
         StoredRecordKind::Rejected => {
-            if !matches!(
+            if matches!(
                 record.payload.as_str(),
-                "malformed_event" | "invalid_event" | "oversized_event"
+                "diagnostic_event_rejected"
+                    | "malformed_event"
+                    | "invalid_event"
+                    | "oversized_event"
             ) {
+                record.payload = "diagnostic_event_rejected".to_string();
+            } else {
                 return None;
             }
         }
@@ -1013,7 +1023,7 @@ mod tests {
         let long_line = "safe ".repeat(MAX_PAYLOAD_CHARS);
         sink.fallback_line(&long_line);
         sink.fallback_line(&long_line);
-        sink.rejected(DiagnosticRejectionCode::MalformedEvent);
+        sink.rejected(DiagnosticRejectionCode::DiagnosticEventRejected);
         sink.finish();
 
         let records = read_recent_records_at(&paths, 1_800_000_000_000);
@@ -1101,6 +1111,34 @@ mod tests {
         assert!(!raw.contains("prior-secret"));
         assert!(raw.contains("[path]"));
         assert!(raw.contains("[credential]"));
+    }
+
+    #[test]
+    fn normalizes_legacy_rejection_reasons_to_one_fixed_summary() {
+        let paths = runtime_paths("normalize-rejection-summary");
+        let now = 1_800_000_000_000_u64;
+        write_raw_lines(
+            &paths,
+            &[
+                record_line(now, "inv-0000000000000001", "rejected", "malformed_event"),
+                record_line(now, "inv-0000000000000002", "rejected", "invalid_event"),
+                record_line(now, "inv-0000000000000003", "rejected", "oversized_event"),
+            ],
+        );
+
+        let sink = AsrDiagnosticSink::new_at(&paths, now, "inv-0123456789abcdef");
+        sink.finish();
+
+        let records = read_recent_records_at(&paths, now);
+        assert_eq!(records.len(), 3);
+        assert!(records.iter().all(|record| {
+            record.kind == StoredRecordKind::Rejected
+                && record.payload == "diagnostic_event_rejected"
+        }));
+        let raw = fs::read_to_string(asr_diagnostic_log_path(&paths)).expect("read log");
+        assert!(!raw.contains("malformed_event"));
+        assert!(!raw.contains("invalid_event"));
+        assert!(!raw.contains("oversized_event"));
     }
 
     #[test]
@@ -1201,6 +1239,19 @@ mod tests {
     }
 
     #[test]
+    fn strict_parser_rejects_explicit_null_optional_fields() {
+        for field in ["exception_type", "http_status", "os_error_code"] {
+            let value = format!(
+                r#"{{"version":1,"operation":"download_asr_model","phase":"preparing","category":"network","code":"connection_failed","{field}":null}}"#
+            );
+            assert!(
+                ValidatedDiagnosticEvent::parse_json(&value).is_err(),
+                "explicit null must be rejected for {field}"
+            );
+        }
+    }
+
+    #[test]
     fn structured_defensively_rejects_forged_invalid_events_before_storage() {
         let paths = runtime_paths("forged-structured-events");
         let now = 1_800_000_000_000_u64;
@@ -1233,7 +1284,7 @@ mod tests {
         let records = read_recent_records_at(&paths, now);
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].kind, StoredRecordKind::Rejected);
-        assert_eq!(records[0].payload, "invalid_event");
+        assert_eq!(records[0].payload, "diagnostic_event_rejected");
         assert_eq!(records[0].count, 2);
         let raw = fs::read_to_string(asr_diagnostic_log_path(&paths)).expect("read log");
         assert!(!raw.contains("alice"));
@@ -1517,7 +1568,7 @@ mod tests {
         let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-0123456789abcdef");
         for index in 0..400 {
             sink.structured(&sample_event());
-            sink.rejected(DiagnosticRejectionCode::InvalidEvent);
+            sink.rejected(DiagnosticRejectionCode::DiagnosticEventRejected);
             sink.internal("structured_serialization_failed", false);
             sink.fallback_line(&format!("download failure number {index}"));
         }
