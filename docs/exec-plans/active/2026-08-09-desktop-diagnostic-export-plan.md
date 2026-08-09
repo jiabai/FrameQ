@@ -79,6 +79,12 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   passed; atomic files 7 passed; non-runner Rust suite 279 passed; `cargo check`,
   `cargo fmt --check`, and `git diff --check` passed; 90,000-record budget case completed in about
   0.42 seconds after O(n) hardening; spec and quality/security reviews approved.
+- [x] 2026-08-10: Task 6 completed and passed both independent reviews. The frontend now invokes
+  the no-argument export command through strict runtime decoding, owns one shared single-flight
+  export hook, keeps cancellation silent, maps failures to fixed safe UI messages, and passes the
+  same capability through Settings without coupling settings busy state or storing paths/logs/ZIP
+  bytes. Validation: focused frontend tests 37 passed; full frontend tests 723 passed; lint and
+  production build passed; spec and quality reviews approved.
 
 ## Surprises & Discoveries
 
@@ -548,7 +554,7 @@ Windows-only implementation host and requires release-host smoke evidence.
 - Modify: `app/src/features/settings/useSettingsController.test.ts`
 - Modify: `app/src/App.tsx`
 
-- [ ] **Step 1: Add RED IPC decoder tests.** Accept only exact closed objects:
+- [x] **Step 1: Add RED IPC decoder tests.** Accept only exact closed objects:
 
   ```ts
   type DiagnosticExportResult =
@@ -561,26 +567,26 @@ Windows-only implementation host and requires release-host smoke evidence.
   symbols, and path/content fields. Assert runner invocation is exactly
   `runner("export_diagnostics", {})`.
 
-- [ ] **Step 2: Add RED hook/controller tests.** Assert one in-flight call, cancellation no notice,
+- [x] **Step 2: Add RED hook/controller tests.** Assert one in-flight call, cancellation no notice,
   success/failure safe `UiMessage`, duplicate click suppression, and no interaction with model
   download cancellation/progress state. Settings uses the same shared action and busy state.
 
-- [ ] **Step 3: Run RED frontend tests.** Run:
+- [x] **Step 3: Run RED frontend tests.** Run:
 
   ```powershell
   npm --prefix app test -- diagnosticExportClient.test.ts useDiagnosticExport.test.ts useSettingsController.test.ts
   ```
 
-- [ ] **Step 4: Implement client and hook.** Runtime-decode with the existing
+- [x] **Step 4: Implement client and hook.** Runtime-decode with the existing
   `tauriIpcProtocol` helpers; map command rejection or malformed response to the same fixed failed
   state without echoing error text. Expose `{ exportDiagnostics, diagnosticExportBusy,
   diagnosticExportNotice }` to both surfaces.
 
-- [ ] **Step 5: Integrate the settings controller and App composition.** Do not add the destination
+- [x] **Step 5: Integrate the settings controller and App composition.** Do not add the destination
   path, logs, or ZIP bytes to React state. Keep the export busy flag separate from settings save/
   load so an export does not submit the settings form.
 
-- [ ] **Step 6: Run focused GREEN tests.** Require Step 3 green and run `npm --prefix app run lint`.
+- [x] **Step 6: Run focused GREEN tests.** Require Step 3 green and run `npm --prefix app run lint`.
 
 ### Task 7: Add both localized user entry points
 
