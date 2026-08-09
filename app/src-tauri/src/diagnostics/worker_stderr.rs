@@ -1,10 +1,10 @@
 use super::append_desktop_log;
+use crate::atomic_files::atomic_write;
 use crate::runtime::ASR_DIAGNOSTIC_LOG_FILE_NAME;
 use crate::{RuntimePaths, DESKTOP_LOG_DIR_NAME};
 use serde::{Deserialize, Serialize};
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -73,8 +73,7 @@ enum DiagnosticOperation {
     DownloadAsrModel,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ValidatedDiagnosticEvent {
     version: u8,
     operation: DiagnosticOperation,
@@ -90,6 +89,21 @@ pub(crate) struct ValidatedDiagnosticEvent {
 }
 
 impl ValidatedDiagnosticEvent {
+    pub(crate) fn parse_json(value: &str) -> Result<Self, ()> {
+        let wire = serde_json::from_str::<DiagnosticEventWire>(value).map_err(|_| ())?;
+        let event = Self {
+            version: wire.version,
+            operation: wire.operation,
+            phase: wire.phase,
+            category: wire.category,
+            code: wire.code,
+            exception_type: wire.exception_type,
+            http_status: wire.http_status,
+            os_error_code: wire.os_error_code,
+        };
+        event.is_valid().then_some(event).ok_or(())
+    }
+
     pub(crate) fn new(
         phase: DiagnosticPhase,
         category: DiagnosticCategory,
@@ -162,6 +176,19 @@ impl ValidatedDiagnosticEvent {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DiagnosticEventWire {
+    version: u8,
+    operation: DiagnosticOperation,
+    phase: DiagnosticPhase,
+    category: DiagnosticCategory,
+    code: DiagnosticCode,
+    exception_type: Option<String>,
+    http_status: Option<u16>,
+    os_error_code: Option<i32>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DiagnosticRejectionCode {
     MalformedEvent,
@@ -232,6 +259,10 @@ impl AsrDiagnosticSink {
         if self.records_truncated {
             return;
         }
+        if !event.is_valid() {
+            self.rejected(DiagnosticRejectionCode::InvalidEvent);
+            return;
+        }
         let Ok(payload) = serde_json::to_string(event) else {
             self.internal("structured_serialization_failed", false);
             return;
@@ -267,7 +298,9 @@ impl AsrDiagnosticSink {
     }
 
     pub(crate) fn finish(self) {
-        if persist_records(&self.paths, self.utc_ms, self.records).is_err() {
+        if persist_records(&self.paths, self.utc_ms, self.records).is_err()
+            && safe_asr_diagnostic_log_path(&self.paths).is_ok()
+        {
             let _ = append_desktop_log(&self.paths, WRITE_FAILURE_EVENT, WRITE_FAILURE_DETAIL);
         }
     }
@@ -341,6 +374,20 @@ fn persist_records(
     now_ms: u64,
     pending: Vec<StoredDiagnosticRecord>,
 ) -> Result<(), ()> {
+    persist_records_using(paths, now_ms, pending, |path, bytes| {
+        atomic_write(path, bytes).map_err(|_| ())
+    })
+}
+
+fn persist_records_using<F>(
+    paths: &RuntimePaths,
+    now_ms: u64,
+    pending: Vec<StoredDiagnosticRecord>,
+    writer: F,
+) -> Result<(), ()>
+where
+    F: FnOnce(&Path, &[u8]) -> Result<(), ()>,
+{
     let _guard = STORE_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -349,31 +396,43 @@ fn persist_records(
     records.extend(pending);
     records.sort_by_key(|record| record.utc_ms);
 
-    let mut lines = records
+    let lines = records
         .into_iter()
         .filter_map(|record| serde_json::to_string(&record).ok())
         .collect::<Vec<_>>();
-    let mut total_bytes = serialized_lines_len(&lines);
-    while total_bytes > ASR_DIAGNOSTIC_MAX_BYTES && !lines.is_empty() {
-        total_bytes = total_bytes.saturating_sub(lines[0].len() + 1);
-        lines.remove(0);
+    let start = bounded_suffix_start(&lines, ASR_DIAGNOSTIC_MAX_BYTES);
+    let selected = &lines[start..];
+    let mut bytes = Vec::with_capacity(serialized_lines_len(selected));
+    for line in selected {
+        bytes.extend_from_slice(line.as_bytes());
+        bytes.push(b'\n');
     }
+    writer(&path, &bytes)
+}
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(path)
-        .map_err(|_| ())?;
-    for line in lines {
-        file.write_all(line.as_bytes()).map_err(|_| ())?;
-        file.write_all(b"\n").map_err(|_| ())?;
+fn bounded_suffix_start(lines: &[String], max_bytes: usize) -> usize {
+    let mut total = 0_usize;
+    for (index, line) in lines.iter().enumerate().rev() {
+        let line_bytes = line.len().saturating_add(1);
+        if total.saturating_add(line_bytes) > max_bytes {
+            return index + 1;
+        }
+        total += line_bytes;
     }
-    file.flush().map_err(|_| ())
+    0
 }
 
 fn safe_asr_diagnostic_log_path(paths: &RuntimePaths) -> Result<PathBuf, ()> {
+    if let Ok(metadata) = fs::symlink_metadata(&paths.user_data_dir) {
+        if !metadata.is_dir() || metadata_is_reparse_point(&metadata) {
+            return Err(());
+        }
+    }
     fs::create_dir_all(&paths.user_data_dir).map_err(|_| ())?;
+    let user_data_metadata = fs::symlink_metadata(&paths.user_data_dir).map_err(|_| ())?;
+    if !user_data_metadata.is_dir() || metadata_is_reparse_point(&user_data_metadata) {
+        return Err(());
+    }
     let logs_dir = paths.user_data_dir.join(DESKTOP_LOG_DIR_NAME);
     if let Ok(metadata) = fs::symlink_metadata(&logs_dir) {
         if !metadata.is_dir() || metadata_is_reparse_point(&metadata) {
@@ -411,9 +470,15 @@ fn metadata_is_reparse_point(metadata: &fs::Metadata) -> bool {
 }
 
 fn read_valid_records(path: PathBuf, now_ms: u64) -> Result<Vec<StoredDiagnosticRecord>, ()> {
+    let metadata = fs::symlink_metadata(&path).map_err(|_| ())?;
+    if !metadata.is_file()
+        || metadata_is_reparse_point(&metadata)
+        || metadata.len() > ASR_DIAGNOSTIC_MAX_BYTES as u64
+    {
+        return Err(());
+    }
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(_) => return Err(()),
     };
     let cutoff = now_ms.saturating_sub(RETENTION_MILLIS);
@@ -442,10 +507,7 @@ fn normalize_stored_record(mut record: StoredDiagnosticRecord) -> Option<StoredD
 
     match record.kind {
         StoredRecordKind::Structured => {
-            let event = serde_json::from_str::<ValidatedDiagnosticEvent>(&record.payload).ok()?;
-            if !event.is_valid() {
-                return None;
-            }
+            let event = ValidatedDiagnosticEvent::parse_json(&record.payload).ok()?;
             record.payload = serde_json::to_string(&event).ok()?;
         }
         StoredRecordKind::Fallback => {
@@ -476,11 +538,11 @@ fn normalize_stored_record(mut record: StoredDiagnosticRecord) -> Option<StoredD
 }
 
 fn valid_invocation_token(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 40
-        && value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    value.len() == 20
+        && value.starts_with("inv-")
+        && value[4..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn random_invocation_token() -> String {
@@ -882,9 +944,9 @@ mod tests {
     use super::{
         asr_diagnostic_log_path, read_recent_records_at, sanitize_fallback_line,
         sanitize_fallback_line_bounded, AsrDiagnosticSink, DiagnosticCategory, DiagnosticCode,
-        DiagnosticPhase, DiagnosticRejectionCode, StoredRecordKind, ValidatedDiagnosticEvent,
-        ASR_DIAGNOSTIC_MAX_BYTES, FALLBACK_LINE_LIMIT, MAX_FALLBACK_SCAN_CHARS, MAX_PAYLOAD_CHARS,
-        MAX_RECORDS_PER_INVOCATION, RETENTION_MILLIS,
+        DiagnosticOperation, DiagnosticPhase, DiagnosticRejectionCode, StoredRecordKind,
+        ValidatedDiagnosticEvent, ASR_DIAGNOSTIC_MAX_BYTES, FALLBACK_LINE_LIMIT,
+        MAX_FALLBACK_SCAN_CHARS, MAX_PAYLOAD_CHARS, MAX_RECORDS_PER_INVOCATION, RETENTION_MILLIS,
     };
     use crate::RuntimePaths;
     use std::fs;
@@ -911,12 +973,22 @@ mod tests {
         write_raw_lines(
             &paths,
             &[
-                record_line(now - RETENTION_MILLIS - 1, "old", "fallback", "expired"),
-                record_line(now - RETENTION_MILLIS, "edge", "fallback", "kept"),
+                record_line(
+                    now - RETENTION_MILLIS - 1,
+                    "inv-0000000000000001",
+                    "fallback",
+                    "expired",
+                ),
+                record_line(
+                    now - RETENTION_MILLIS,
+                    "inv-0000000000000002",
+                    "fallback",
+                    "kept",
+                ),
                 "not-json".to_string(),
             ],
         );
-        let mut sink = AsrDiagnosticSink::new_at(&paths, now, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, now, "inv-0000000000000003");
         sink.structured(&sample_event());
         sink.finish();
 
@@ -926,7 +998,8 @@ mod tests {
             .iter()
             .all(|record| record.utc_ms >= now - RETENTION_MILLIS));
         assert!(records.iter().any(|record| {
-            record.invocation == "inv-safe" && record.kind == StoredRecordKind::Structured
+            record.invocation == "inv-0000000000000003"
+                && record.kind == StoredRecordKind::Structured
         }));
         let raw = fs::read_to_string(asr_diagnostic_log_path(&paths)).expect("read log");
         assert!(!raw.contains("expired"));
@@ -936,7 +1009,7 @@ mod tests {
     #[test]
     fn caps_payloads_and_collapses_adjacent_duplicates() {
         let paths = runtime_paths("bounded-deduplicated");
-        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-0123456789abcdef");
         let long_line = "safe ".repeat(MAX_PAYLOAD_CHARS);
         sink.fallback_line(&long_line);
         sink.fallback_line(&long_line);
@@ -955,7 +1028,7 @@ mod tests {
     #[test]
     fn limits_fallback_lines_per_invocation() {
         let paths = runtime_paths("fallback-limit");
-        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-0123456789abcdef");
         for index in 0..FALLBACK_LINE_LIMIT + 10 {
             sink.fallback_line(&format!("failure number {index}"));
         }
@@ -980,7 +1053,7 @@ mod tests {
         let paths = runtime_paths("size-rotation");
         let now = 1_800_000_000_000_u64;
         let payload = "x".repeat(MAX_PAYLOAD_CHARS);
-        let line = record_line(now, "prior", "fallback", &payload);
+        let line = record_line(now, "inv-0000000000000004", "fallback", &payload);
         let mut lines = Vec::new();
         while lines
             .iter()
@@ -993,7 +1066,7 @@ mod tests {
         lines.insert(0, "corrupt-secret-prior-line".to_string());
         write_raw_lines(&paths, &lines);
 
-        let mut sink = AsrDiagnosticSink::new_at(&paths, now, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, now, "inv-0123456789abcdef");
         sink.fallback_line("latest safe failure");
         sink.finish();
 
@@ -1013,13 +1086,13 @@ mod tests {
             &paths,
             &[record_line(
                 now,
-                "prior",
+                "inv-0000000000000005",
                 "fallback",
                 "failed at C:\\Users\\alice\\private token=prior-secret",
             )],
         );
 
-        let sink = AsrDiagnosticSink::new_at(&paths, now, "inv-safe");
+        let sink = AsrDiagnosticSink::new_at(&paths, now, "inv-0123456789abcdef");
         sink.finish();
 
         let raw = fs::read_to_string(asr_diagnostic_log_path(&paths)).expect("read log");
@@ -1036,7 +1109,7 @@ mod tests {
         let log_path = asr_diagnostic_log_path(&paths);
         fs::create_dir_all(&log_path).expect("replace expected file with directory");
 
-        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-0123456789abcdef");
         sink.fallback_line("download failed");
         sink.finish();
 
@@ -1062,7 +1135,7 @@ mod tests {
             return;
         }
 
-        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-0123456789abcdef");
         sink.fallback_line("safe failure");
         sink.finish();
 
@@ -1080,7 +1153,8 @@ mod tests {
             .map(|index| {
                 let paths = paths.clone();
                 std::thread::spawn(move || {
-                    let mut sink = AsrDiagnosticSink::new_at(&paths, now, &format!("inv-{index}"));
+                    let mut sink =
+                        AsrDiagnosticSink::new_at(&paths, now, &format!("inv-{index:016x}"));
                     sink.fallback_line(&format!("safe failure {index}"));
                     sink.finish();
                 })
@@ -1096,7 +1170,7 @@ mod tests {
             assert!(
                 records
                     .iter()
-                    .any(|record| record.invocation == format!("inv-{index}")),
+                    .any(|record| record.invocation == format!("inv-{index:016x}")),
                 "missing invocation {index}"
             );
         }
@@ -1124,6 +1198,201 @@ mod tests {
         )
         .expect("http event");
         assert!(http.with_http_status(503).is_ok());
+    }
+
+    #[test]
+    fn structured_defensively_rejects_forged_invalid_events_before_storage() {
+        let paths = runtime_paths("forged-structured-events");
+        let now = 1_800_000_000_000_u64;
+        let invalid_exception = ValidatedDiagnosticEvent {
+            version: 1,
+            operation: DiagnosticOperation::DownloadAsrModel,
+            phase: DiagnosticPhase::Preparing,
+            category: DiagnosticCategory::Network,
+            code: DiagnosticCode::ConnectionFailed,
+            exception_type: Some("C:\\Users\\alice\\private".to_string()),
+            http_status: None,
+            os_error_code: None,
+        };
+        let invalid_combination = ValidatedDiagnosticEvent {
+            version: 1,
+            operation: DiagnosticOperation::DownloadAsrModel,
+            phase: DiagnosticPhase::ArchiveDownload,
+            category: DiagnosticCategory::Network,
+            code: DiagnosticCode::ConnectionFailed,
+            exception_type: None,
+            http_status: Some(503),
+            os_error_code: None,
+        };
+        let mut sink = AsrDiagnosticSink::new_at(&paths, now, "inv-0123456789abcdef");
+
+        sink.structured(&invalid_exception);
+        sink.structured(&invalid_combination);
+        sink.finish();
+
+        let records = read_recent_records_at(&paths, now);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].kind, StoredRecordKind::Rejected);
+        assert_eq!(records[0].payload, "invalid_event");
+        assert_eq!(records[0].count, 2);
+        let raw = fs::read_to_string(asr_diagnostic_log_path(&paths)).expect("read log");
+        assert!(!raw.contains("alice"));
+        assert!(!raw.contains("http_status"));
+    }
+
+    #[test]
+    fn stored_structured_payloads_can_only_enter_through_the_private_strict_parser() {
+        let paths = runtime_paths("strict-stored-structured-parser");
+        let now = 1_800_000_000_000_u64;
+        let forged_payload = serde_json::json!({
+            "version": 1,
+            "operation": "download_asr_model",
+            "phase": "preparing",
+            "category": "network",
+            "code": "connection_failed",
+            "exception_type": "C:\\Users\\alice\\private",
+            "http_status": 503,
+            "message": "reviewer-secret",
+        })
+        .to_string();
+        write_raw_lines(
+            &paths,
+            &[record_line(
+                now,
+                "inv-0123456789abcdef",
+                "structured",
+                &forged_payload,
+            )],
+        );
+
+        assert!(read_recent_records_at(&paths, now).is_empty());
+    }
+
+    #[test]
+    fn oversized_prior_log_is_rejected_before_parsing_and_pending_replaces_it() {
+        let paths = runtime_paths("oversized-prior");
+        let now = 1_800_000_000_000_u64;
+        let log_path = asr_diagnostic_log_path(&paths);
+        fs::create_dir_all(log_path.parent().expect("log parent")).expect("create log parent");
+        fs::write(&log_path, vec![b'x'; ASR_DIAGNOSTIC_MAX_BYTES + 1])
+            .expect("write oversized prior log");
+
+        assert!(super::read_valid_records(log_path.clone(), now).is_err());
+        let mut sink = AsrDiagnosticSink::new_at(&paths, now, "inv-0123456789abcdef");
+        sink.fallback_line("download failure");
+        sink.finish();
+
+        let raw = fs::read_to_string(log_path).expect("read replaced log");
+        assert!(raw.contains("download failure"));
+        assert!(raw.len() < ASR_DIAGNOSTIC_MAX_BYTES);
+        assert!(!raw.contains(&"x".repeat(1_024)));
+    }
+
+    #[test]
+    fn invocation_tokens_must_match_the_exact_random_correlation_shape() {
+        let paths = runtime_paths("strict-invocation-token");
+        let now = 1_800_000_000_000_u64;
+        write_raw_lines(
+            &paths,
+            &[
+                record_line(now, "alice-private-task-123", "fallback", "failure"),
+                record_line(now, "inv-0123456789ABCDEF", "fallback", "failure"),
+                record_line(now, "inv-0123456789abcdef", "fallback", "download failure"),
+            ],
+        );
+
+        let records = read_recent_records_at(&paths, now);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].invocation, "inv-0123456789abcdef");
+    }
+
+    #[test]
+    fn linked_user_data_or_logs_directory_is_rejected() {
+        let root = temp_dir("linked-directories");
+        let external_user_data = root.join("external-user-data");
+        fs::create_dir_all(&external_user_data).expect("create external user data");
+        let linked_user_data = root.join("linked-user-data");
+        if create_directory_link(&external_user_data, &linked_user_data).is_ok() {
+            let linked_paths = RuntimePaths {
+                resource_dir: root.join("resources"),
+                user_data_dir: linked_user_data,
+            };
+            let mut sink =
+                AsrDiagnosticSink::new_at(&linked_paths, 1_800_000_000_000, "inv-0123456789abcdef");
+            sink.fallback_line("download failure");
+            sink.finish();
+            assert!(!external_user_data.join("logs").exists());
+        }
+
+        let real_user_data = root.join("real-user-data");
+        fs::create_dir_all(&real_user_data).expect("create real user data");
+        let external_logs = root.join("external-logs");
+        fs::create_dir_all(&external_logs).expect("create external logs");
+        if create_directory_link(&external_logs, &real_user_data.join("logs")).is_ok() {
+            let real_paths = RuntimePaths {
+                resource_dir: root.join("resources"),
+                user_data_dir: real_user_data,
+            };
+            let mut sink =
+                AsrDiagnosticSink::new_at(&real_paths, 1_800_000_000_000, "inv-0123456789abcdef");
+            sink.fallback_line("download failure");
+            sink.finish();
+            assert!(!external_logs.join("asr-model-download.log").exists());
+        }
+    }
+
+    #[test]
+    fn injected_atomic_install_failure_preserves_the_prior_log() {
+        let paths = runtime_paths("atomic-failure-preserves-old");
+        let now = 1_800_000_000_000_u64;
+        let prior = record_line(now, "inv-0000000000000001", "fallback", "download failure") + "\n";
+        let log_path = asr_diagnostic_log_path(&paths);
+        fs::create_dir_all(log_path.parent().expect("log parent")).expect("create log parent");
+        fs::write(&log_path, &prior).expect("write prior log");
+        let pending = vec![super::StoredDiagnosticRecord {
+            version: super::RECORD_VERSION,
+            utc_ms: now,
+            invocation: "inv-0000000000000002".to_string(),
+            kind: StoredRecordKind::Fallback,
+            payload: "network failure".to_string(),
+            count: 1,
+            truncated: false,
+        }];
+
+        let result = super::persist_records_using(&paths, now, pending, |_path, _bytes| Err(()));
+
+        assert!(result.is_err());
+        assert_eq!(fs::read_to_string(log_path).expect("read prior log"), prior);
+    }
+
+    #[test]
+    fn many_legal_records_are_parsed_without_front_removal_behavior() {
+        let paths = runtime_paths("many-legal-records");
+        let now = 1_800_000_000_000_u64;
+        let lines = (0..2_500)
+            .map(|index| {
+                record_line(
+                    now,
+                    &format!("inv-{index:016x}"),
+                    "fallback",
+                    "download failure",
+                )
+            })
+            .collect::<Vec<_>>();
+        write_raw_lines(&paths, &lines);
+
+        let records = super::read_valid_records(asr_diagnostic_log_path(&paths), now)
+            .expect("read bounded legal records");
+
+        assert_eq!(records.len(), 2_500);
+        assert_eq!(
+            records.first().expect("first").invocation,
+            "inv-0000000000000000"
+        );
+        assert_eq!(
+            records.last().expect("last").invocation,
+            "inv-00000000000009c3"
+        );
     }
 
     #[test]
@@ -1245,7 +1514,7 @@ mod tests {
     #[test]
     fn all_sink_entry_points_share_one_hard_record_limit_and_one_marker() {
         let paths = runtime_paths("total-record-limit");
-        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-0123456789abcdef");
         for index in 0..400 {
             sink.structured(&sample_event());
             sink.rejected(DiagnosticRejectionCode::InvalidEvent);
@@ -1326,7 +1595,7 @@ mod tests {
             .open(&log_path)
             .expect("lock diagnostic log");
 
-        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-safe");
+        let mut sink = AsrDiagnosticSink::new_at(&paths, 1_800_000_000_000, "inv-0123456789abcdef");
         sink.fallback_line("safe failure");
         sink.finish();
 
@@ -1382,5 +1651,21 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("frameq-task3-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
+    }
+
+    #[cfg(windows)]
+    fn create_directory_link(
+        target: &std::path::Path,
+        link: &std::path::Path,
+    ) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    #[cfg(not(windows))]
+    fn create_directory_link(
+        target: &std::path::Path,
+        link: &std::path::Path,
+    ) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
     }
 }
