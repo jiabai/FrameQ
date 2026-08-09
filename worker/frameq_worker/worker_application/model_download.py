@@ -21,6 +21,7 @@ from frameq_worker.model_download import (
     ModelDownloadError,
     download_asr_model_cache,
 )
+from frameq_worker.progress_events import validate_model_progress_event
 from frameq_worker.requests import optional_env
 
 MODEL_DOWNLOAD_FAILED_MESSAGE = "ASR model download failed."
@@ -59,9 +60,9 @@ def run_asr_model_download_once(
 
     def track_progress(event: dict[str, object]) -> None:
         nonlocal current_phase
-        message_code = event.get("message_code")
-        if isinstance(message_code, str):
-            current_phase = _PHASE_BY_MESSAGE_CODE.get(message_code, current_phase)
+        validated_event = validate_model_progress_event(event)
+        message_code = validated_event["message_code"]
+        current_phase = _PHASE_BY_MESSAGE_CODE.get(message_code, current_phase)
         if progress_callback is not None:
             progress_callback(event)
 

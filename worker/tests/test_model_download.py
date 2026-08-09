@@ -24,6 +24,10 @@ from frameq_worker.model_download import (
     normalize_asr_model_cache_layout,
     validate_asr_model_cache,
 )
+from frameq_worker.progress_events import (
+    MODEL_PROGRESS_REGISTRY,
+    build_model_progress_event,
+)
 
 PHASE_BY_MESSAGE_CODE = {
     "model.download.preparing": "preparing",
@@ -178,12 +182,20 @@ def test_model_download_tracks_phase_and_forwards_progress_once_unchanged(
 ) -> None:
     progress_events: list[dict[str, object]] = []
     diagnostic_events: list[object] = []
-    progress_event = {
-        "status": "downloading",
-        "progress": 42,
-        "message_code": message_code,
-        "message_args": {"model": SENSEVOICE_MODEL_ID},
-    }
+    progress_spec = MODEL_PROGRESS_REGISTRY[message_code]
+    progress_event = build_model_progress_event(
+        message_code,
+        status=progress_spec.status,
+        progress=42,
+        current_file=(
+            "model.onnx" if progress_spec.current_file == "required" else None
+        ),
+        message_args=(
+            {"model": SENSEVOICE_MODEL_ID}
+            if "model" in progress_spec.allowed_args
+            else None
+        ),
+    )
 
     def fail_download(**kwargs: object) -> None:
         callback = kwargs["progress_callback"]
@@ -259,6 +271,38 @@ def test_model_download_refines_archive_invalid_phase_without_message_inspection
 
     assert diagnostics[0].phase == "archive_validate"
     assert diagnostics[0].code == "archive_invalid"
+
+
+def test_model_download_invalid_progress_does_not_update_diagnostic_phase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostics: list[object] = []
+
+    def emit_invalid_progress(**kwargs: object) -> None:
+        kwargs["progress_callback"](
+            {
+                "status": "downloading",
+                "progress": 20,
+                "message_code": "model.archive.downloading",
+                "unexpected": "field",
+            }
+        )
+
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        emit_invalid_progress,
+    )
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=diagnostics.append,
+    )
+
+    assert result["status"] == "failed"
+    assert len(diagnostics) == 1
+    assert diagnostics[0].phase == "preparing"
 
 
 @pytest.mark.parametrize("code_failure", [KeyboardInterrupt, SystemExit])
