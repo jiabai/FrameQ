@@ -9,6 +9,7 @@ from frameq_worker.desktop_contract import (
     AUDIO_EXTENSIONS,
     CACHE_DIR_ENV,
     DESKTOP_WORKER_CONTRACT_VERSION,
+    DIAGNOSTIC_EVENT_PREFIX,
     LOCAL_MEDIA_CONTRACT_VERSION,
     MODEL_DIR_ENV,
     MODEL_DOWNLOAD_EVENT_PREFIX,
@@ -25,12 +26,15 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v7_while_process_video_stays_v3() -> None:
+def test_contract_version_is_strictly_v8_while_request_versions_stay_fixed() -> None:
     contract = load_contract()
 
-    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 7
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 8
     assert LOCAL_MEDIA_CONTRACT_VERSION == 4
     assert PROCESS_VIDEO_CONTRACT_VERSION == 3
+    assert contract["localMedia"]["workerRequest"]["properties"]["contract_version"] == {
+        "const": LOCAL_MEDIA_CONTRACT_VERSION
+    }
     assert (
         contract["processVideo"]["workerRequest"]["properties"]["contract_version"]
         ["const"]
@@ -247,10 +251,134 @@ def test_worker_constants_match_desktop_contract() -> None:
 
     assert PROGRESS_EVENT_PREFIX == contract["events"]["workerProgressPrefix"]
     assert MODEL_DOWNLOAD_EVENT_PREFIX == contract["events"]["asrModelDownloadPrefix"]
+    assert DIAGNOSTIC_EVENT_PREFIX == contract["events"]["workerDiagnosticPrefix"]
     assert DEFAULT_ASR_MODEL == contract["asr"]["defaultModel"]
     assert OUTPUT_DIR_ENV == contract["env"]["outputDir"]
     assert CACHE_DIR_ENV == contract["env"]["cacheDir"]
     assert MODEL_DIR_ENV == contract["env"]["modelDir"]
+
+
+def test_diagnostic_event_contract_is_closed_safe_and_machine_readable() -> None:
+    diagnostic = load_contract()["diagnosticEvents"]
+
+    assert diagnostic == {
+        "version": 1,
+        "operation": ["download_asr_model"],
+        "requiredFields": ["version", "operation", "phase", "category", "code"],
+        "optionalFields": ["exception_type", "http_status", "os_error_code"],
+        "additionalProperties": False,
+        "fieldSchemas": {
+            "version": {"const": 1},
+            "operation": {"type": "string", "enum": ["download_asr_model"]},
+            "phase": {
+                "type": "string",
+                "enum": [
+                    "preparing",
+                    "primary_model",
+                    "vad_model",
+                    "bpe_model",
+                    "archive_download",
+                    "archive_validate",
+                    "cache_validate",
+                    "cache_promote",
+                ],
+            },
+            "category": {
+                "type": "string",
+                "enum": [
+                    "network",
+                    "tls",
+                    "proxy",
+                    "http",
+                    "filesystem",
+                    "integrity",
+                    "dependency",
+                    "unexpected",
+                ],
+            },
+            "code": {
+                "type": "string",
+                "enum": [
+                    "dns_resolution_failed",
+                    "connection_timeout",
+                    "connection_failed",
+                    "tls_verification_failed",
+                    "tls_handshake_failed",
+                    "proxy_configuration_failed",
+                    "proxy_connection_failed",
+                    "http_status_failed",
+                    "permission_denied",
+                    "disk_full",
+                    "filesystem_io_failed",
+                    "checksum_mismatch",
+                    "archive_invalid",
+                    "cache_invalid",
+                    "dependency_unavailable",
+                    "unexpected_failure",
+                ],
+            },
+            "exception_type": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,79}$",
+            },
+            "http_status": {"type": "integer", "minimum": 100, "maximum": 599},
+            "os_error_code": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647,
+            },
+        },
+        "categoryCodes": {
+            "network": [
+                "dns_resolution_failed",
+                "connection_timeout",
+                "connection_failed",
+            ],
+            "tls": ["tls_verification_failed", "tls_handshake_failed"],
+            "proxy": ["proxy_configuration_failed", "proxy_connection_failed"],
+            "http": ["http_status_failed"],
+            "filesystem": ["permission_denied", "disk_full", "filesystem_io_failed"],
+            "integrity": ["checksum_mismatch", "archive_invalid", "cache_invalid"],
+            "dependency": ["dependency_unavailable"],
+            "unexpected": ["unexpected_failure"],
+        },
+        "optionalFieldConstraints": {
+            "http_status": {
+                "allowedCategoryCodes": {"http": ["http_status_failed"]}
+            },
+            "os_error_code": {
+                "allowedCategoryCodes": {
+                    "network": [
+                        "dns_resolution_failed",
+                        "connection_timeout",
+                        "connection_failed",
+                    ],
+                    "filesystem": [
+                        "permission_denied",
+                        "disk_full",
+                        "filesystem_io_failed",
+                    ],
+                }
+            },
+        },
+        "invalidEventPolicy": {
+            "producer": "reject",
+            "consumer": "drop_and_record_code",
+        },
+        "forbiddenContent": [
+            "message",
+            "freeform",
+            "url",
+            "host",
+            "path",
+            "header",
+            "proxy",
+            "credential",
+            "traceback",
+            "task_content",
+            "user_content",
+        ],
+    }
 
 
 def test_worker_result_keys_match_desktop_contract() -> None:

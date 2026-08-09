@@ -49,7 +49,9 @@ pub(crate) use history_deletion::HistoryDeletionState;
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 #[cfg(test)]
-pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 7;
+pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 8;
+#[cfg(test)]
+pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "FRAMEQ_DIAGNOSTIC ";
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -365,6 +367,10 @@ mod tests {
         assert_eq!(
             super::MODEL_DOWNLOAD_EVENT_PREFIX,
             contract["events"]["asrModelDownloadPrefix"]
+        );
+        assert_eq!(
+            super::DIAGNOSTIC_EVENT_PREFIX,
+            contract["events"]["workerDiagnosticPrefix"]
         );
         assert_eq!(super::DEFAULT_ASR_MODEL, contract["asr"]["defaultModel"]);
         assert_eq!(super::OUTPUT_DIR_ENV, contract["env"]["outputDir"]);

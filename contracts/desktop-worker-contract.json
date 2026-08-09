@@ -1,10 +1,176 @@
 {
-  "contractVersion": 7,
+  "contractVersion": 8,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "FRAMEQ_PROGRESS ",
     "asrModelDownloadProgress": "asr-model-download-progress",
-    "asrModelDownloadPrefix": "FRAMEQ_MODEL_DOWNLOAD "
+    "asrModelDownloadPrefix": "FRAMEQ_MODEL_DOWNLOAD ",
+    "workerDiagnosticPrefix": "FRAMEQ_DIAGNOSTIC "
+  },
+  "diagnosticEvents": {
+    "version": 1,
+    "operation": [
+      "download_asr_model"
+    ],
+    "requiredFields": [
+      "version",
+      "operation",
+      "phase",
+      "category",
+      "code"
+    ],
+    "optionalFields": [
+      "exception_type",
+      "http_status",
+      "os_error_code"
+    ],
+    "additionalProperties": false,
+    "fieldSchemas": {
+      "version": {
+        "const": 1
+      },
+      "operation": {
+        "type": "string",
+        "enum": [
+          "download_asr_model"
+        ]
+      },
+      "phase": {
+        "type": "string",
+        "enum": [
+          "preparing",
+          "primary_model",
+          "vad_model",
+          "bpe_model",
+          "archive_download",
+          "archive_validate",
+          "cache_validate",
+          "cache_promote"
+        ]
+      },
+      "category": {
+        "type": "string",
+        "enum": [
+          "network",
+          "tls",
+          "proxy",
+          "http",
+          "filesystem",
+          "integrity",
+          "dependency",
+          "unexpected"
+        ]
+      },
+      "code": {
+        "type": "string",
+        "enum": [
+          "dns_resolution_failed",
+          "connection_timeout",
+          "connection_failed",
+          "tls_verification_failed",
+          "tls_handshake_failed",
+          "proxy_configuration_failed",
+          "proxy_connection_failed",
+          "http_status_failed",
+          "permission_denied",
+          "disk_full",
+          "filesystem_io_failed",
+          "checksum_mismatch",
+          "archive_invalid",
+          "cache_invalid",
+          "dependency_unavailable",
+          "unexpected_failure"
+        ]
+      },
+      "exception_type": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,79}$"
+      },
+      "http_status": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 599
+      },
+      "os_error_code": {
+        "type": "integer",
+        "minimum": -2147483648,
+        "maximum": 2147483647
+      }
+    },
+    "categoryCodes": {
+      "network": [
+        "dns_resolution_failed",
+        "connection_timeout",
+        "connection_failed"
+      ],
+      "tls": [
+        "tls_verification_failed",
+        "tls_handshake_failed"
+      ],
+      "proxy": [
+        "proxy_configuration_failed",
+        "proxy_connection_failed"
+      ],
+      "http": [
+        "http_status_failed"
+      ],
+      "filesystem": [
+        "permission_denied",
+        "disk_full",
+        "filesystem_io_failed"
+      ],
+      "integrity": [
+        "checksum_mismatch",
+        "archive_invalid",
+        "cache_invalid"
+      ],
+      "dependency": [
+        "dependency_unavailable"
+      ],
+      "unexpected": [
+        "unexpected_failure"
+      ]
+    },
+    "optionalFieldConstraints": {
+      "http_status": {
+        "allowedCategoryCodes": {
+          "http": [
+            "http_status_failed"
+          ]
+        }
+      },
+      "os_error_code": {
+        "allowedCategoryCodes": {
+          "network": [
+            "dns_resolution_failed",
+            "connection_timeout",
+            "connection_failed"
+          ],
+          "filesystem": [
+            "permission_denied",
+            "disk_full",
+            "filesystem_io_failed"
+          ]
+        }
+      }
+    },
+    "invalidEventPolicy": {
+      "producer": "reject",
+      "consumer": "drop_and_record_code"
+    },
+    "forbiddenContent": [
+      "message",
+      "freeform",
+      "url",
+      "host",
+      "path",
+      "header",
+      "proxy",
+      "credential",
+      "traceback",
+      "task_content",
+      "user_content"
+    ]
   },
   "progressEvents": {
     "invalidEventPolicy": {
