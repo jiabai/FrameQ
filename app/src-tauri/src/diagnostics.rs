@@ -4,6 +4,20 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[allow(dead_code)] // Task 4 wires this complete storage facade into the worker runner.
+mod worker_stderr;
+
+#[allow(unused_imports)]
+pub(crate) use worker_stderr::{
+    AsrDiagnosticSink, DiagnosticCategory, DiagnosticCode, DiagnosticPhase,
+    DiagnosticRejectionCode, ValidatedDiagnosticEvent,
+};
+
+#[allow(dead_code)] // Task 4 is the first runner consumer.
+pub(crate) fn begin_asr_model_download_diagnostics(paths: &RuntimePaths) -> AsrDiagnosticSink {
+    AsrDiagnosticSink::new(paths)
+}
+
 const DESKTOP_LOG_FILE_NAME: &str = "frameq-desktop.log";
 
 pub(crate) fn desktop_log_path(paths: &RuntimePaths) -> PathBuf {
