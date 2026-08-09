@@ -15,12 +15,15 @@ import {
   getInsightPreferences,
   type InsightPreferenceState,
 } from "../../insightPreferencesClient";
+import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 
 export type SettingsCategory = "basic" | "inspiration" | "storage" | "updates" | "advanced";
 
 const defaultAsrModels = ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"];
 
-export function useSettingsController() {
+export function useSettingsController(
+  diagnosticExportController: DiagnosticExportController,
+) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("basic");
   const [settingsDraft, setSettingsDraft] = useState<LlmConfigDraft>({
@@ -152,6 +155,7 @@ export function useSettingsController() {
   }, []);
 
   return {
+    ...diagnosticExportController,
     settingsOpen,
     settingsCategory,
     settingsDraft,
