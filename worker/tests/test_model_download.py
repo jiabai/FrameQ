@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import stat
 import tarfile
 import zipfile
@@ -23,6 +24,18 @@ from frameq_worker.model_download import (
     normalize_asr_model_cache_layout,
     validate_asr_model_cache,
 )
+
+PHASE_BY_MESSAGE_CODE = {
+    "model.download.preparing": "preparing",
+    "model.primary.downloading": "primary_model",
+    "model.vad.downloading": "vad_model",
+    "model.bpe.downloading": "bpe_model",
+    "model.archive.downloading": "archive_download",
+    "model.archive.reading": "archive_download",
+    "model.archive.extracting": "archive_validate",
+    "model.file.downloading": "primary_model",
+    "model.file.completed": "primary_model",
+}
 
 
 def create_valid_cache(root: Path) -> None:
@@ -96,10 +109,11 @@ def test_model_download_terminal_uses_allowlisted_onnx_model_and_ignores_pytorch
     )
 
     assert result == {"status": "completed", "model": ONNX_SENSEVOICE_MODEL_ID}
+    captured_progress_callback = captured.pop("progress_callback")
+    assert callable(captured_progress_callback)
     assert captured == {
         "cache_dir": tmp_path / "models",
         "model_name": ONNX_SENSEVOICE_MODEL_ID,
-        "progress_callback": None,
     }
 
 
@@ -156,6 +170,144 @@ def test_model_download_terminal_failure_never_exposes_third_party_exception(
     assert secret not in repr(result)
 
 
+@pytest.mark.parametrize("message_code", PHASE_BY_MESSAGE_CODE)
+def test_model_download_tracks_phase_and_forwards_progress_once_unchanged(
+    message_code: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    progress_events: list[dict[str, object]] = []
+    diagnostic_events: list[object] = []
+    progress_event = {
+        "status": "downloading",
+        "progress": 42,
+        "message_code": message_code,
+        "message_args": {"model": SENSEVOICE_MODEL_ID},
+    }
+
+    def fail_download(**kwargs: object) -> None:
+        callback = kwargs["progress_callback"]
+        assert callable(callback)
+        callback(progress_event)
+        raise RuntimeError("https://private.example C:/Users/name token-secret")
+
+    monkeypatch.setattr(model_download_handler, "download_asr_model_cache", fail_download)
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        progress_callback=progress_events.append,
+        diagnostic_callback=diagnostic_events.append,
+    )
+
+    assert progress_events == [progress_event]
+    assert progress_events[0] is progress_event
+    assert len(diagnostic_events) == 1
+    assert diagnostic_events[0].phase == PHASE_BY_MESSAGE_CODE[message_code]
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+    assert "private.example" not in json.dumps(diagnostic_events[0].to_dict())
+
+
+def test_model_download_defaults_diagnostic_phase_to_preparing_without_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostics: list[object] = []
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        lambda **_kwargs: (_ for _ in ()).throw(TimeoutError("token-secret")),
+    )
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=diagnostics.append,
+    )
+
+    assert len(diagnostics) == 1
+    assert diagnostics[0].phase == "preparing"
+    assert diagnostics[0].code == "connection_timeout"
+    assert "token-secret" not in repr(result) + repr(diagnostics[0].to_dict())
+
+
+def test_model_download_refines_archive_invalid_phase_without_message_inspection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostics: list[object] = []
+
+    def fail_download(**kwargs: object) -> None:
+        kwargs["progress_callback"](
+            {
+                "status": "downloading",
+                "progress": 20,
+                "message_code": "model.archive.downloading",
+            }
+        )
+        raise ModelDownloadError(ARCHIVE_INVALID_ERROR_CODE, "member /home/name token")
+
+    monkeypatch.setattr(model_download_handler, "download_asr_model_cache", fail_download)
+
+    worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        environ={"FRAMEQ_ASR_MODEL_DOWNLOAD_URL": "https://private.example/model.zip"},
+        diagnostic_callback=diagnostics.append,
+    )
+
+    assert diagnostics[0].phase == "archive_validate"
+    assert diagnostics[0].code == "archive_invalid"
+
+
+def test_model_download_diagnostic_callback_failure_never_masks_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("response-secret")),
+    )
+
+    def fail_callback(_event: object) -> None:
+        raise RuntimeError("callback-secret")
+
+    result = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=fail_callback,
+    )
+
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+
+
+def test_model_download_success_and_unsupported_model_emit_no_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostics: list[object] = []
+    monkeypatch.setattr(model_download_handler, "download_asr_model_cache", lambda **_kwargs: None)
+
+    success = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        diagnostic_callback=diagnostics.append,
+    )
+    unsupported = worker_service.run_asr_model_download_once(
+        project_root=tmp_path,
+        asr_model="private/unsupported",
+        diagnostic_callback=diagnostics.append,
+    )
+
+    assert success["status"] == "completed"
+    assert unsupported["code"] == "ASR_MODEL_UNSUPPORTED"
+    assert diagnostics == []
+
+
 def test_validate_asr_model_cache_requires_marker_and_model_files(tmp_path: Path) -> None:
     assert not validate_asr_model_cache(tmp_path)
 
@@ -182,9 +334,7 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
             model_dir = Path(kwargs["cache_dir"]) / "iic" / "SenseVoiceSmall"
         else:
             model_dir = (
-                Path(kwargs["cache_dir"])
-                / "iic"
-                / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+                Path(kwargs["cache_dir"]) / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
             )
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "model.pt").write_bytes(b"model")
@@ -249,9 +399,12 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
         "message_code": "model.download.completed",
         "message_args": {"model": SENSEVOICE_MODEL_ID},
     }
-    assert [
-        event["current_file"] for event in events if "current_file" in event
-    ] == ["model.pt", "model.pt", "model-file", "model-file"]
+    assert [event["current_file"] for event in events if "current_file" in event] == [
+        "model.pt",
+        "model.pt",
+        "model-file",
+        "model-file",
+    ]
     assert all("message" not in event for event in events)
     assert "review-secret" not in repr(events)
 
@@ -361,11 +514,7 @@ def test_normalize_asr_model_cache_layout_migrates_legacy_only_cache(
     assert validate_asr_model_cache(tmp_path)
     assert (tmp_path / "models" / "iic" / "SenseVoiceSmall" / "model.pt").is_file()
     assert (
-        tmp_path
-        / "models"
-        / "iic"
-        / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
-        / "model.pt"
+        tmp_path / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch" / "model.pt"
     ).is_file()
     assert not (tmp_path / "iic" / "SenseVoiceSmall").exists()
     assert not (tmp_path / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch").exists()
@@ -476,9 +625,7 @@ def test_download_asr_model_cache_rejects_tar_symlink_members(tmp_path: Path) ->
         archive.addfile(model_link)
 
         vad_bytes = b"vad"
-        vad_info = tarfile.TarInfo(
-            "models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch/model.pt"
-        )
+        vad_info = tarfile.TarInfo("models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch/model.pt")
         vad_info.size = len(vad_bytes)
         archive.addfile(vad_info, io.BytesIO(vad_bytes))
 

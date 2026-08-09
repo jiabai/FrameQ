@@ -12,6 +12,10 @@ from frameq_worker.desktop_contract import (
     SENSEVOICE_REVISION_ENV,
     ProgressCallback,
 )
+from frameq_worker.diagnostic_events import (
+    DiagnosticCallback,
+    classify_model_download_exception,
+)
 from frameq_worker.model_download import (
     ARCHIVE_INVALID_ERROR_CODE,
     ModelDownloadError,
@@ -22,12 +26,25 @@ from frameq_worker.requests import optional_env
 MODEL_DOWNLOAD_FAILED_MESSAGE = "ASR model download failed."
 MODEL_ARCHIVE_INVALID_MESSAGE = "Downloaded ASR model archive was invalid."
 
+_PHASE_BY_MESSAGE_CODE = {
+    "model.download.preparing": "preparing",
+    "model.primary.downloading": "primary_model",
+    "model.vad.downloading": "vad_model",
+    "model.bpe.downloading": "bpe_model",
+    "model.archive.downloading": "archive_download",
+    "model.archive.reading": "archive_download",
+    "model.archive.extracting": "archive_validate",
+    "model.file.downloading": "primary_model",
+    "model.file.completed": "primary_model",
+}
+
 
 def run_asr_model_download_once(
     project_root: Path | None = None,
     environ: dict[str, str] | None = None,
     progress_callback: ProgressCallback | None = None,
     asr_model: str = DEFAULT_ASR_MODEL,
+    diagnostic_callback: DiagnosticCallback | None = None,
 ) -> dict[str, object]:
     if asr_model not in {DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL}:
         return {
@@ -38,11 +55,20 @@ def run_asr_model_download_once(
     root = project_root or Path.cwd()
     runtime_env = load_project_env(root, environ)
     cache_dir = Path(runtime_env.get(MODEL_DIR_ENV, str(root / "models")))
+    current_phase = "preparing"
+
+    def track_progress(event: dict[str, object]) -> None:
+        nonlocal current_phase
+        message_code = event.get("message_code")
+        if isinstance(message_code, str):
+            current_phase = _PHASE_BY_MESSAGE_CODE.get(message_code, current_phase)
+        if progress_callback is not None:
+            progress_callback(event)
 
     download_options: dict[str, object] = {
         "cache_dir": cache_dir,
         "model_name": asr_model,
-        "progress_callback": progress_callback,
+        "progress_callback": track_progress,
     }
     if asr_model == DEFAULT_ASR_MODEL:
         download_options.update(
@@ -57,13 +83,21 @@ def run_asr_model_download_once(
             **download_options,
         )
     except ModelDownloadError as exc:
+        diagnostic_phase = _refine_archive_invalid_phase(
+            exc,
+            current_phase,
+            asr_model,
+            download_options,
+        )
+        _emit_diagnostic(diagnostic_callback, exc, diagnostic_phase)
         code, message = _safe_model_download_failure(exc.code)
         return {
             "status": "failed",
             "code": code,
             "message": message,
         }
-    except Exception:  # noqa: BLE001 - maps third-party failures to a fixed result.
+    except Exception as exc:  # noqa: BLE001 - maps third-party failures to a fixed result.
+        _emit_diagnostic(diagnostic_callback, exc, current_phase)
         return {
             "status": "failed",
             "code": "ASR_MODEL_DOWNLOAD_FAILED",
@@ -80,3 +114,34 @@ def _safe_model_download_failure(code: str) -> tuple[str, str]:
     if code == ARCHIVE_INVALID_ERROR_CODE:
         return code, MODEL_ARCHIVE_INVALID_MESSAGE
     return "ASR_MODEL_DOWNLOAD_FAILED", MODEL_DOWNLOAD_FAILED_MESSAGE
+
+
+def _refine_archive_invalid_phase(
+    exception: ModelDownloadError,
+    current_phase: str,
+    asr_model: str,
+    download_options: dict[str, object],
+) -> str:
+    if exception.code != ARCHIVE_INVALID_ERROR_CODE:
+        return current_phase
+    if current_phase == "archive_download" and download_options.get("download_url"):
+        return "archive_validate"
+    if current_phase in {"primary_model", "vad_model", "bpe_model"}:
+        return "cache_validate"
+    if current_phase == "preparing" and asr_model == SENSEVOICE_SMALL_ONNX_MODEL:
+        return "cache_validate"
+    return current_phase
+
+
+def _emit_diagnostic(
+    callback: DiagnosticCallback | None,
+    exception: BaseException,
+    phase: str,
+) -> None:
+    if callback is None:
+        return
+    event = classify_model_download_exception(exception, phase)
+    try:
+        callback(event)
+    except Exception:  # noqa: BLE001 - diagnostics cannot replace the public result.
+        pass
