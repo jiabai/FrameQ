@@ -71,6 +71,14 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   reviews approved. An implementation-agent rerun intermittently hit existing Windows child-process
   fixture contamination after timeout, but isolated, grouped, and clean full-run evidence did not
   reproduce a product regression.
+- [x] 2026-08-10: Task 5 completed and passed both independent reviews. Rust now assembles a
+  fixed-entry, closed-manifest ZIP under the final 5 MiB cap, re-sanitizes and time-filters both
+  fixed log sources through no-follow/file-identity checks, reads only a closed in-memory model
+  snapshot, and exposes a busy-guarded native Save As command with path-free results and atomic
+  destination replacement. Validation: export 13 passed; command 7 passed; diagnostic storage 28
+  passed; atomic files 7 passed; non-runner Rust suite 279 passed; `cargo check`,
+  `cargo fmt --check`, and `git diff --check` passed; 90,000-record budget case completed in about
+  0.42 seconds after O(n) hardening; spec and quality/security reviews approved.
 
 ## Surprises & Discoveries
 
@@ -462,28 +470,28 @@ Windows-only implementation host and requires release-host smoke evidence.
 - Modify: `app/src-tauri/Cargo.toml`
 - Modify: `app/src-tauri/Cargo.lock`
 
-- [ ] **Step 1: Add a direct bounded ZIP dependency.** Add `zip = { version = "4.6.1",
+- [x] **Step 1: Add a direct bounded ZIP dependency.** Add `zip = { version = "4.6.1",
   default-features = false, features = ["deflate"] }` and let Cargo update only the direct package
   dependency edge; do not accept unrelated dependency upgrades.
 
-- [ ] **Step 2: Add RED manifest/export tests.** Assert exact root entries, mandatory
+- [x] **Step 2: Add RED manifest/export tests.** Assert exact root entries, mandatory
   `diagnostics.json`, closed schema, supported model/cache enums, fixed omission reasons,
   seven-day filtering, export-time desktop-log re-sanitization, malformed source omission,
   newest-first truncation, truthful `truncated`, completed ZIP <= 5 MiB, and no source directory
   traversal or link/reparse following.
 
-- [ ] **Step 3: Add RED destination tests.** Cover cancellation, process-local busy rejection,
+- [x] **Step 3: Add RED destination tests.** Cover cancellation, process-local busy rejection,
   same-directory staging via `atomic_write`, pre-existing destination replacement/preservation on
   injected failure, exact staging cleanup, no app-local ZIP, and path-free results.
 
-- [ ] **Step 4: Run RED tests.** Run:
+- [x] **Step 4: Run RED tests.** Run:
 
   ```powershell
   cargo test --manifest-path app\src-tauri\Cargo.toml diagnostics::export
   cargo test --manifest-path app\src-tauri\Cargo.toml diagnostic_export
   ```
 
-- [ ] **Step 5: Implement the manifest and ZIP assembler.** The output DTO is closed and contains
+- [x] **Step 5: Implement the manifest and ZIP assembler.** The output DTO is closed and contains
   no arbitrary strings beyond app version and supported public model IDs:
 
   ```rust
@@ -506,11 +514,11 @@ Windows-only implementation host and requires release-host smoke evidence.
   source record, and iteratively remove oldest eligible records if final compressed bytes exceed
   5 MiB.
 
-- [ ] **Step 6: Expose a path-free model snapshot.** Add a narrow helper in `asr_model.rs` that
+- [x] **Step 6: Expose a path-free model snapshot.** Add a narrow helper in `asr_model.rs` that
   returns only supported model enum/ID and `ready|missing|invalid|unknown`; reuse existing cache
   checks without returning display/cache paths or reading model bytes into memory.
 
-- [ ] **Step 7: Implement the Tauri command and state.** Register an
+- [x] **Step 7: Implement the Tauri command and state.** Register an
   `Arc<DiagnosticExportState>`, open `app.dialog().file().set_file_name(...).add_filter(...)`
   through the blocking Save As API, convert the selected `FilePath` internally, assemble bounded
   bytes, and call `atomic_files::atomic_write`. Return a value, not raw rejected-Promise details:
@@ -525,7 +533,7 @@ Windows-only implementation host and requires release-host smoke evidence.
   }
   ```
 
-- [ ] **Step 8: Run GREEN tests and dependency review.** Require both focused suites green, run
+- [x] **Step 8: Run GREEN tests and dependency review.** Require both focused suites green, run
   full `cargo test`, `cargo fmt --check`, and inspect `Cargo.lock` to confirm no unrelated upgrade.
 
 ### Task 6: Add closed frontend IPC decoding and shared export state
