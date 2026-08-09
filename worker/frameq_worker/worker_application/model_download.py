@@ -116,7 +116,7 @@ def _safe_model_download_error_code(exception: ModelDownloadError) -> str | None
         code = object.__getattribute__(exception, "code")
     except BaseException:
         return None
-    return code if isinstance(code, str) else None
+    return code if type(code) is str else None
 
 
 def _safe_model_download_failure(code: str | None) -> tuple[str, str]:

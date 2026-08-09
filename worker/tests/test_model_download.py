@@ -305,6 +305,34 @@ def test_model_download_hostile_error_code_returns_generic_failure_and_diagnosti
     assert diagnostics[0].code == "unexpected_failure"
 
 
+def test_model_download_rejects_hostile_string_subclass_error_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class HostileCode(str):
+        def __eq__(self, _other: object) -> bool:
+            raise KeyboardInterrupt("comparison-secret")
+
+    class HostileModelDownloadError(ModelDownloadError):
+        def __init__(self) -> None:
+            RuntimeError.__init__(self, "response-secret")
+            self.code = HostileCode("MODEL_ARCHIVE_INVALID")
+
+    monkeypatch.setattr(
+        model_download_handler,
+        "download_asr_model_cache",
+        lambda **_kwargs: (_ for _ in ()).throw(HostileModelDownloadError()),
+    )
+
+    result = worker_service.run_asr_model_download_once(project_root=tmp_path)
+
+    assert result == {
+        "status": "failed",
+        "code": "ASR_MODEL_DOWNLOAD_FAILED",
+        "message": "ASR model download failed.",
+    }
+
+
 def test_model_download_diagnostic_callback_failure_never_masks_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
