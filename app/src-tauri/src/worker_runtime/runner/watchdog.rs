@@ -3,6 +3,8 @@ use crate::worker_runtime::supervisor::{
     terminate_process_tree, ProcessInstance, ProcessSupervisor, TimeoutRequestOutcome,
 };
 use crate::{append_desktop_log, RuntimePaths};
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -71,6 +73,8 @@ pub(super) struct WatchdogControl {
     started_at: Instant,
     timing: Mutex<WatchdogTiming>,
     wake: Condvar,
+    #[cfg(test)]
+    validated_progress_count: AtomicUsize,
 }
 
 impl WatchdogControl {
@@ -83,10 +87,14 @@ impl WatchdogControl {
                 last_validated_progress: started_at,
             }),
             wake: Condvar::new(),
+            #[cfg(test)]
+            validated_progress_count: AtomicUsize::new(0),
         }
     }
 
     pub(super) fn record_validated_progress(&self) {
+        #[cfg(test)]
+        self.validated_progress_count.fetch_add(1, Ordering::SeqCst);
         let mut timing = self
             .timing
             .lock()
@@ -95,6 +103,11 @@ impl WatchdogControl {
             timing.last_validated_progress = Instant::now();
             self.wake.notify_all();
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn validated_progress_count_for_test(&self) -> usize {
+        self.validated_progress_count.load(Ordering::SeqCst)
     }
 
     fn wait_for_expiration(&self, policy: WatchdogPolicy) -> Option<WorkerTimeoutKind> {

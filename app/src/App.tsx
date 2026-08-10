@@ -36,6 +36,7 @@ import { OutputLanguageField } from "./features/insightPreferences/OutputLanguag
 import { useInsightGenerationController } from "./features/insightPreferences/useInsightGenerationController";
 import { TranscriptDissectionConfirmationSheet } from "./features/dissection/TranscriptDissectionConfirmationSheet";
 import { useTranscriptDissectionController } from "./features/dissection/useTranscriptDissectionController";
+import { useDiagnosticExport } from "./features/diagnostics/useDiagnosticExport";
 import { AiGenerationWorkspace } from "./features/results/AiGenerationWorkspace";
 import { AiResultDetailSheet } from "./features/results/AiResultDetailSheet";
 import { TaskStatusBanner } from "./features/results/TaskStatusBanner";
@@ -110,7 +111,8 @@ function App() {
   const { t: tUpdates } = useTranslation("updates");
   const { t: tSynthesis } = useTranslation("synthesis");
   const [actionNotice, setActionNotice] = useState<UiMessage | null>(null);
-  const settingsController = useSettingsController();
+  const diagnosticExportController = useDiagnosticExport();
+  const settingsController = useSettingsController(diagnosticExportController);
   const { settingsOpen, closeSettings, openSettings } = settingsController;
   const closeDetailForTaskRef = useRef<() => void>(() => {});
   const resetInsightGenerationUiRef = useRef<() => void>(() => {});
@@ -585,6 +587,7 @@ function App() {
         modelDownloadProgress={modelDownloadProgress}
         modelDownloadNotice={modelDownloadNotice}
         modelDownloadStalled={modelDownloadStalled}
+        diagnosticExportController={diagnosticExportController}
         onClose={() => setModelGuideOpen(false)}
         onStartDownload={startAsrModelDownload}
         onCancelDownload={cancelCurrentAsrModelDownload}

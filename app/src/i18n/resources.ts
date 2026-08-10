@@ -6,7 +6,7 @@ import { dissectionResources } from "./dissectionResources";
 import { errorResources } from "./errorResources";
 import { historyResources } from "./historyResources";
 import { preferenceResources } from "./preferenceResources";
-import { settingsFeatureResources } from "./settingsResources";
+import { diagnosticsResources, settingsFeatureResources } from "./settingsResources";
 import { synthesisResources } from "./synthesisResources";
 import { transcriptResources } from "./transcriptResources";
 import { updatesResources } from "./updatesResources";
@@ -15,6 +15,7 @@ import { workflowResources } from "./workflowResources";
 export const RESOURCE_NAMESPACES = [
   "common",
   "settings",
+  "diagnostics",
   "bootstrap",
   "progress",
   "preferences",
@@ -53,6 +54,7 @@ export const resources = {
         saveFailed: "语言偏好未能保存，已恢复为上次成功保存的设置。",
       },
     },
+    diagnostics: diagnosticsResources["zh-CN"],
     bootstrap: {
       preferencesRecovered: "语言偏好文件已损坏，FrameQ 已恢复为系统语言。",
       preferencesReadFailed: "无法读取语言偏好，FrameQ 暂时使用系统语言。",
@@ -161,6 +163,7 @@ export const resources = {
         saveFailed: "語言偏好無法儲存，已還原為上次成功儲存的設定。",
       },
     },
+    diagnostics: diagnosticsResources["zh-TW"],
     bootstrap: {
       preferencesRecovered: "語言偏好檔案已損毀，FrameQ 已恢復為系統語言。",
       preferencesReadFailed: "無法讀取語言偏好，FrameQ 暫時使用系統語言。",
@@ -269,6 +272,7 @@ export const resources = {
         saveFailed: "The language preference could not be saved. The last saved setting was restored.",
       },
     },
+    diagnostics: diagnosticsResources["en-US"],
     bootstrap: {
       preferencesRecovered: "The language preference file was damaged. FrameQ restored the system language.",
       preferencesReadFailed: "FrameQ could not read the language preference and is temporarily using the system language.",

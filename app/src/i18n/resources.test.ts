@@ -30,6 +30,7 @@ describe("bundled localization resources", () => {
     expect(RESOURCE_NAMESPACES).toEqual([
       "common",
       "settings",
+      "diagnostics",
       "bootstrap",
       "progress",
       "preferences",

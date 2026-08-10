@@ -1830,6 +1830,29 @@ h3 {
   padding: 16px 18px 18px;
 }
 
+.model-guide-diagnostics {
+  align-items: flex-start;
+}
+
+.model-guide-diagnostics > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.model-guide-diagnostics strong {
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.model-guide-diagnostics span {
+  line-height: 1.5;
+}
+
+.diagnostic-export-button {
+  min-width: 0;
+}
+
 .account-modal,
 .account-sheet {
   max-width: 680px;
@@ -2266,6 +2289,18 @@ h3 {
 .settings-status-card strong {
   color: var(--text);
   font-size: 0.96rem;
+}
+
+.diagnostics-export-card {
+  background: rgba(244, 248, 253, 0.86);
+  border-color: rgba(10, 132, 255, 0.2);
+}
+
+.diagnostics-export-card p,
+.diagnostics-export-card small {
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
 }
 
 .settings-status-card > .inspiration-settings-actions {

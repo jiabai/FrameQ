@@ -6,6 +6,7 @@ mod account;
 mod asr_model;
 mod atomic_files;
 mod deep_link;
+mod diagnostic_export;
 mod diagnostics;
 mod history;
 mod history_deletion;
@@ -49,7 +50,8 @@ pub(crate) use history_deletion::HistoryDeletionState;
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 #[cfg(test)]
-pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 7;
+pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 8;
+pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "FRAMEQ_DIAGNOSTIC ";
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -60,6 +62,8 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(ProcessSupervisors::default()))
+        .manage(Arc::new(diagnostic_export::DiagnosticExportState::default()))
+        .manage(Arc::new(asr_model::DiagnosticModelState::default()))
         .manage(Arc::new(HistoryDeletionState::default()))
         .manage(Arc::new(local_media::LocalMediaSelectionState::default()))
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -109,6 +113,7 @@ pub fn run() {
             asr_model::get_asr_model_status,
             asr_model::download_asr_model,
             asr_model::cancel_asr_model_download,
+            diagnostic_export::export_diagnostics,
             account::begin_auth_flow,
             account::complete_auth_flow,
             account::get_account_status,
@@ -365,6 +370,10 @@ mod tests {
         assert_eq!(
             super::MODEL_DOWNLOAD_EVENT_PREFIX,
             contract["events"]["asrModelDownloadPrefix"]
+        );
+        assert_eq!(
+            super::DIAGNOSTIC_EVENT_PREFIX,
+            contract["events"]["workerDiagnosticPrefix"]
         );
         assert_eq!(super::DEFAULT_ASR_MODEL, contract["asr"]["defaultModel"]);
         assert_eq!(super::OUTPUT_DIR_ENV, contract["env"]["outputDir"]);

@@ -1,3 +1,6 @@
+use super::super::progress::{
+    inspect_stderr_line, route_stderr_record, ProgressProtocol, StderrSummary,
+};
 use super::super::watchdog::{
     run_watchdog_with_terminator, select_watchdog_deadline, WatchdogControl,
 };
@@ -232,6 +235,31 @@ fn malformed_diagnostic_empty_and_stdout_spam_do_not_reset_idle_activity() {
 
     assert_eq!(outcome, WorkerRunOutcome::TimedOut(WorkerTimeoutKind::Idle));
     assert!(!lane.is_active());
+}
+
+#[test]
+fn valid_diagnostic_events_do_not_record_watchdog_activity() {
+    let watchdog = Arc::new(WatchdogControl::new());
+    let mut summary = StderrSummary::default();
+    let paths = test_paths("watchdog-valid-diagnostic");
+    let record = inspect_stderr_line(
+        ProgressProtocol::AsrModelDownload,
+        r#"FRAMEQ_DIAGNOSTIC {"version":1,"operation":"download_asr_model","phase":"primary_model","category":"network","code":"connection_timeout","exception_type":"ReadTimeout"}"#,
+    );
+
+    route_stderr_record(
+        record,
+        ProgressProtocol::AsrModelDownload,
+        &ProgressRoute::AsrModelDownload,
+        &paths,
+        &watchdog,
+        None,
+        "",
+        &mut summary,
+    );
+
+    assert_eq!(watchdog.validated_progress_count_for_test(), 0);
+    assert!(summary.had_diagnostic_output);
 }
 
 #[test]

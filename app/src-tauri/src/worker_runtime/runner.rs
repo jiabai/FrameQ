@@ -20,6 +20,7 @@ use super::supervisor::{
     request_process_cancellation, CancelProcessResult, ProcessInstance, ProcessPhase,
     ProcessSupervisor,
 };
+use crate::diagnostics::begin_asr_model_download_diagnostics;
 use crate::{append_desktop_log, RuntimePaths};
 use std::process::Output;
 use std::sync::atomic::AtomicBool;
@@ -252,13 +253,17 @@ impl WorkerLane {
         let progress_paths = paths.clone();
         let reader_hooks = hooks.clone();
         let watchdog_activity = watchdog.activity();
+        let diagnostic_sink = (operation == WorkerOperation::DownloadAsrModel)
+            .then(|| begin_asr_model_download_diagnostics(paths));
         let stderr_reader = std::thread::spawn(move || {
             read_stderr(
                 stderr,
+                operation,
                 progress,
                 progress_paths,
                 reader_hooks,
                 watchdog_activity,
+                diagnostic_sink,
             )
         });
 

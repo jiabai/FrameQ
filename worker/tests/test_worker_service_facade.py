@@ -49,6 +49,7 @@ EXPECTED_SIGNATURES = {
         "environ",
         "progress_callback",
         "asr_model",
+        "diagnostic_callback",
     ),
 }
 
@@ -95,9 +96,7 @@ def test_source_identity_facade_uses_platform_aware_default(
 
     def fake_parse_bilibili_input(source: str) -> SimpleNamespace:
         parsed_sources.append(source)
-        return SimpleNamespace(
-            full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
-        )
+        return SimpleNamespace(full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2")
 
     monkeypatch.setattr(
         platform_resolvers_module,
@@ -110,9 +109,7 @@ def test_source_identity_facade_uses_platform_aware_default(
     )
 
     assert result["status"] == "completed"
-    assert result["source_url"] == (
-        "https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
-    )
+    assert result["source_url"] == ("https://www.bilibili.com/video/BV1Aa411c7mD?p=2")
     assert parsed_sources == ["https://b23.tv/review-short"]
 
 

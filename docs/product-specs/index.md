@@ -12,6 +12,7 @@
 
 ## Desktop Runtime Spec
 
+- `2026-08-09-desktop-diagnostic-export.md` - User-initiated, local-only export of the most recent seven days of privacy-bounded desktop and ASR model-download diagnostics; Rust-owned Save As ZIP, no automatic upload or network probes, ASR-only sanitized stderr fallback, and global desktop-worker contract v8 structured diagnostic events.
 - `2026-07-27-selectable-asr-model-on-demand-download.md` - Two selectable local ASR models, model-snapshot task submission, and selected-model on-demand download with automatic resume.
 - `2026-07-22-release-reliability-hardening.md` - Broad-release requirements for crash-consistent desktop persistence, bounded supervised-worker execution, atomic server authentication/AI Credit accounting, and production operations.
 - `2026-07-18-process-video-request-contract-v3.md` - Minimal URL-only desktop intent, Rust-owned ASR configuration, and strict v3 worker execution request with no false fields.

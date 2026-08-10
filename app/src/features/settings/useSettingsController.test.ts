@@ -7,6 +7,7 @@ import type {
 import type { InsightPreferenceState } from "../../insightPreferencesClient";
 import type { SettingsController } from "./useSettingsController";
 import { uiMessage } from "../../i18n/uiMessage";
+import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 
 type StateUpdater<T> = T | ((current: T) => T);
 
@@ -127,6 +128,12 @@ function mockSettingsLoad(options: {
   return { audioCacheUsage, config, insightPreferences };
 }
 
+const diagnosticExportController: DiagnosticExportController = {
+  diagnosticExportBusy: false,
+  diagnosticExportNotice: null,
+  exportDiagnostics: vi.fn(async () => undefined),
+};
+
 async function createController(): Promise<{
   render: () => SettingsController;
 }> {
@@ -140,7 +147,7 @@ async function createController(): Promise<{
   return {
     render: () => {
       harness.resetRender();
-      return useSettingsController();
+      return useSettingsController(diagnosticExportController);
     },
   };
 }
@@ -157,6 +164,29 @@ describe("useSettingsController", () => {
     for (const mock of Object.values(mocks)) {
       mock.mockReset();
     }
+  });
+
+  test("exposes the shared diagnostic export capability without coupling settings busy state", async () => {
+    const shared: DiagnosticExportController = {
+      diagnosticExportBusy: true,
+      diagnosticExportNotice: { messageCode: "diagnostics.notice.exported" },
+      exportDiagnostics: vi.fn(async () => undefined),
+    };
+    const harness = createHookHarness();
+    vi.doMock("react", () => ({
+      useCallback: harness.useCallback,
+      useState: harness.useState,
+    }));
+    const { useSettingsController } = await import("./useSettingsController");
+
+    harness.resetRender();
+    const controller = useSettingsController(shared);
+
+    expect(controller.diagnosticExportBusy).toBe(true);
+    expect(controller.diagnosticExportNotice).toBe(shared.diagnosticExportNotice);
+    expect(controller.exportDiagnostics).toBe(shared.exportDiagnostics);
+    expect(controller.settingsLoading).toBe(false);
+    expect(controller.settingsSaving).toBe(false);
   });
 
   test("opens settings and loads config, cache usage, and insight preferences", async () => {

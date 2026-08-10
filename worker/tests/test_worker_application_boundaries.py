@@ -76,11 +76,7 @@ def _top_level_assigned_names(path: Path) -> set[str]:
     names: set[str] = set()
     for node in _parse(path).body:
         if isinstance(node, ast.Assign):
-            names.update(
-                target.id
-                for target in node.targets
-                if isinstance(target, ast.Name)
-            )
+            names.update(target.id for target in node.targets if isinstance(target, ast.Name))
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             names.add(node.target.id)
     return names
@@ -90,10 +86,7 @@ def _top_level_imported_bindings(path: Path) -> set[str]:
     bindings: set[str] = set()
     for node in _parse(path).body:
         if isinstance(node, ast.Import):
-            bindings.update(
-                alias.asname or alias.name.split(".")[0]
-                for alias in node.names
-            )
+            bindings.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module != "__future__":
             bindings.update(alias.asname or alias.name for alias in node.names)
     return bindings
@@ -116,9 +109,7 @@ def test_worker_application_private_tree_matches_design() -> None:
 
 
 def test_url_processing_handler_owns_the_url_use_case() -> None:
-    assert "run_worker_once" in _top_level_owned_names(
-        PRIVATE_ROOT / "url_processing.py"
-    )
+    assert "run_worker_once" in _top_level_owned_names(PRIVATE_ROOT / "url_processing.py")
 
 
 def test_worker_service_reexports_url_handler_object() -> None:
@@ -126,9 +117,7 @@ def test_worker_service_reexports_url_handler_object() -> None:
 
 
 def test_local_media_handler_owns_the_local_media_use_case() -> None:
-    assert "run_local_media_once" in _top_level_owned_names(
-        PRIVATE_ROOT / "local_media.py"
-    )
+    assert "run_local_media_once" in _top_level_owned_names(PRIVATE_ROOT / "local_media.py")
 
 
 def test_worker_service_reexports_local_media_handler_object() -> None:
@@ -143,15 +132,12 @@ def test_source_identity_handler_owns_the_source_identity_use_case() -> None:
 
 def test_worker_service_reexports_source_identity_handler_object() -> None:
     assert (
-        worker_service.resolve_source_identity_once
-        is source_identity.resolve_source_identity_once
+        worker_service.resolve_source_identity_once is source_identity.resolve_source_identity_once
     )
 
 
 def test_insight_retry_handler_owns_the_retry_use_case() -> None:
-    assert "retry_insights_once" in _top_level_owned_names(
-        PRIVATE_ROOT / "insight_retry.py"
-    )
+    assert "retry_insights_once" in _top_level_owned_names(PRIVATE_ROOT / "insight_retry.py")
 
 
 def test_worker_service_reexports_insight_retry_handler_object() -> None:
@@ -164,9 +150,7 @@ def test_insight_retry_helpers_require_task_paths() -> None:
         "read_existing_summary",
         "read_existing_insights",
     }:
-        parameter = inspect.signature(
-            getattr(insight_retry, name)
-        ).parameters["paths"]
+        parameter = inspect.signature(getattr(insight_retry, name)).parameters["paths"]
         assert parameter.annotation in {TaskPaths, "TaskPaths"}
 
     source = (PRIVATE_ROOT / "insight_retry.py").read_text(encoding="utf-8")
@@ -180,17 +164,12 @@ def test_model_download_handler_owns_the_model_download_use_case() -> None:
 
 
 def test_worker_service_reexports_model_download_handler_object() -> None:
-    assert (
-        worker_service.run_asr_model_download_once
-        is model_download.run_asr_model_download_once
-    )
+    assert worker_service.run_asr_model_download_once is model_download.run_asr_model_download_once
 
 
 def test_worker_service_has_exact_closed_public_surface() -> None:
     assert worker_service.__all__ == EXPECTED_FACADE_SYMBOLS
-    assert _top_level_imported_bindings(FACADE_PATH) == set(
-        EXPECTED_FACADE_SYMBOLS
-    )
+    assert _top_level_imported_bindings(FACADE_PATH) == set(EXPECTED_FACADE_SYMBOLS)
     assert len(FACADE_PATH.read_text(encoding="utf-8").splitlines()) < 80
 
     allowed_nodes = (ast.Import, ast.ImportFrom)
@@ -218,6 +197,7 @@ def test_cli_is_only_the_process_adapter() -> None:
         "contextlib",
         "frameq_worker",
         "frameq_worker.desktop_contract",
+        "frameq_worker.diagnostic_events",
         "frameq_worker.progress_events",
         "io",
         "json",
@@ -233,10 +213,7 @@ def test_only_facade_imports_application_handlers_in_production() -> None:
             continue
         imported_handlers = _imported_modules(path) & HANDLER_MODULES
         if imported_handlers:
-            violations.append(
-                f"{path.relative_to(WORKER_ROOT)}: "
-                f"{sorted(imported_handlers)}"
-            )
+            violations.append(f"{path.relative_to(WORKER_ROOT)}: {sorted(imported_handlers)}")
 
     assert violations == []
     assert _imported_modules(FACADE_PATH) & HANDLER_MODULES == HANDLER_MODULES
@@ -261,9 +238,7 @@ def test_production_dependency_factories_have_one_defaults_owner() -> None:
     expected_factory_imports = {
         "frameq_worker.asr": "build_asr_transcriber",
         "frameq_worker.llm": "build_insight_client_from_env",
-        "frameq_worker.platform_source_resolvers": (
-            "build_default_source_resolver"
-        ),
+        "frameq_worker.platform_source_resolvers": ("build_default_source_resolver"),
     }
     owners: dict[str, list[str]] = {}
     application_paths = [
@@ -274,13 +249,10 @@ def test_production_dependency_factories_have_one_defaults_owner() -> None:
     for path in application_paths:
         for module, name in expected_factory_imports.items():
             if name in _names_imported_from(path, module):
-                owners.setdefault(name, []).append(
-                    path.relative_to(FRAMEQ_WORKER_ROOT).as_posix()
-                )
+                owners.setdefault(name, []).append(path.relative_to(FRAMEQ_WORKER_ROOT).as_posix())
 
     assert owners == {
-        name: ["worker_application/defaults.py"]
-        for name in expected_factory_imports.values()
+        name: ["worker_application/defaults.py"] for name in expected_factory_imports.values()
     }
 
 

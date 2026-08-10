@@ -1,5 +1,29 @@
 # FrameQ Architecture
 
+## 2026-08-10 Desktop diagnostic export boundary
+
+- The global desktop-worker contract is v8. `FRAMEQ_DIAGNOSTIC ` is a separate, strict stderr
+  channel for one message-free, closed diagnostic event on terminal ASR model-download failure.
+  The Rust worker runner is its only consumer: diagnostic records never enter `ProgressRoute`,
+  never refresh the idle watchdog, never become UI progress, and never alter stdout terminal
+  classification.
+- Python owns safe classification and emits at most one structured event; it does not persist
+  diagnostics. Rust/Tauri owns the fixed app-local `logs/asr-model-download.log` store, sanitization,
+  retention, export, and native Save As. Structured records and ordinary stderr fallback are
+  persisted only for semantic `DownloadAsrModel`; other operations retain the discard-and-marker
+  policy.
+- The Rust-owned ASR store enforces seven-day retention, a 4 MiB file ceiling, 1,000-character
+  sanitized payloads, a 200-line fallback cap per invocation, bounded record count, and adjacent
+  duplicate collapse. Export re-sanitizes both fixed source logs, uses only the fixed ZIP root
+  allowlist `diagnostics.json`, `frameq-desktop.log`, and `asr-model-download.log`, and keeps the
+  final archive at or below 5 MiB with truthful newest-first truncation metadata.
+- The export command accepts no frontend path or content and returns only a closed path-free
+  status. It writes through the native Save As destination with atomic replacement and retains no
+  app-local ZIP. Export performs no upload, DNS/HTTP/network probe, model retry, server request,
+  LLM call, or AI Credits activity; media, transcripts, prompts, generated content, model bytes,
+  paths, URLs, credentials, and machine identity are forbidden from the package.
+
+
 ## 2026-08-05 Inspiration Profile v2 and generation-preference boundary
 
 - The current `InspirationProfile` is a closed six-field long-term-context object: `role`,

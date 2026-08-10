@@ -104,13 +104,14 @@ test("installer build installs and imports the bundled ONNX runtime before Tauri
   );
 });
 
-test("installer bundles the version-7 dissection worker modules without private artifacts", () => {
+test("installer bundles the version-8 diagnostic worker module without private artifacts", () => {
   const buildScript = readFileSync(buildInstallerPath, "utf8");
   const contract = JSON.parse(
     readFileSync(join(repoRoot, "contracts", "desktop-worker-contract.json"), "utf8"),
   );
 
-  assert.equal(contract.contractVersion, 7);
+  assert.equal(contract.contractVersion, 8);
+  assert.equal(contract.events.workerDiagnosticPrefix, "FRAMEQ_DIAGNOSTIC ");
   assert.match(
     buildScript,
     /copyDirectoryContents\(join\(repoRoot, "worker", "frameq_worker"\), join\(destination, "frameq_worker"\)\)/,
@@ -121,6 +122,10 @@ test("installer bundles the version-7 dissection worker modules without private 
   );
   assert.equal(
     existsSync(join(repoRoot, "worker", "frameq_worker", "pipeline_runtime", "dissection.py")),
+    true,
+  );
+  assert.equal(
+    existsSync(join(repoRoot, "worker", "frameq_worker", "diagnostic_events.py")),
     true,
   );
   assert.doesNotMatch(buildScript, /FRAMEQ_LLM_API_KEY\s*=|dissection\.json["']\s*,\s*["']/);

@@ -19,6 +19,7 @@
 - Server 认证/额度/生产运维加固设计：`docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`
 - Rust worker 生命周期设计：`docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - Rust worker runner 模块拆分设计：`docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`
+- 桌面诊断信息导出设计：`docs/design-docs/2026-08-09-desktop-diagnostic-export.md`（用户主动导出最近 7 天安全诊断；Rust 持久化/打包，ASR 下载专用 stderr 兜底，desktop-worker contract v8）
 - ASR 模型下载语义 Job 能力边界设计：`docs/design-docs/2026-07-24-asr-model-download-job-capability-boundary.md`
 - 可选 ASR 模型与按需下载设计：`docs/design-docs/2026-07-27-selectable-asr-model-on-demand-download.md`
 - 内置 ONNX 运行时依赖完整性设计：`docs/design-docs/2026-07-28-bundled-onnx-runtime-integrity.md`
@@ -55,6 +56,7 @@
 - 工作流：`WORKFLOW.md`
 - 完成门禁：`docs/EXECUTION_GATES.md`
 - 产品规格索引：`docs/product-specs/index.md`
+- 桌面诊断信息导出规格：`docs/product-specs/2026-08-09-desktop-diagnostic-export.md`
 - 发布可靠性规格：`docs/product-specs/2026-07-22-release-reliability-hardening.md`
 - v0.3.1 发布规格：`docs/product-specs/2026-08-05-v0.3.1-desktop-feature-release.md`
 - v0.3.1 发布计划（completed）：`docs/exec-plans/completed/2026-08-05-v0.3.1-desktop-feature-release-plan.md`（已发布 stable：https://github.com/jiabai/FrameQ/releases/tag/v0.3.1；范围：Web user dashboard、Server 页面 i18n、Inspiration Profile v2、进度感知 watchdog、contract v7 + 解剖来源状态、CRLF 出处修复；含 server 专项门禁）
@@ -72,6 +74,7 @@
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
+- 当前桌面诊断信息导出计划：`docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`（contract v8 → ASR 下载专用安全日志 → Rust ZIP 导出 → 双入口与三语言 → 自动化门禁已完成；Windows/macOS 原生烟测待目标主机）
 - 最近完成 ONNX VAD 结果契约加固计划：`docs/exec-plans/completed/2026-07-29-onnx-vad-result-contract-hardening-plan.md`
 - 最近完成 可选 ASR 模型按需下载计划：`docs/exec-plans/completed/2026-07-27-selectable-asr-model-on-demand-download-plan.md`
 - 最近完成 v0.2.17 发布计划：`docs/exec-plans/completed/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`

@@ -1,5 +1,27 @@
 # Security and Compliance
 
+## 2026-08-10 Desktop diagnostic export privacy boundary
+
+- Contract v8 adds the strict `FRAMEQ_DIAGNOSTIC ` stderr prefix. It is a non-watchdog,
+  non-progress, non-terminal side channel: only the Rust runner decodes it, and invalid or
+  duplicate/expanded records fail closed to a fixed rejection marker without echoing the input.
+- Python emits only one closed, message-free classification for a terminal ASR model-download
+  failure. Rust is the sole persistence owner. Structured events and sanitized ordinary stderr
+  fallback are authorized only for semantic `DownloadAsrModel`; raw stderr from all other worker
+  operations remains unpersisted.
+- App-local ASR diagnostics are bounded to seven days and 4 MiB; each sanitized payload is at most
+  1,000 characters, fallback capture is at most 200 lines per invocation, and adjacent duplicates
+  are collapsed within bounded storage. Export treats both fixed logs as untrusted, re-sanitizes
+  them, rejects links/reparse paths, and writes only the fixed ZIP allowlist: `diagnostics.json`,
+  `frameq-desktop.log`, and `asr-model-download.log`. The archive is capped at 5 MiB and records
+  closed omission/truncation metadata.
+- The native Save As command receives no frontend path/content and returns no path or ZIP bytes.
+  It retains no app-local archive and performs no upload, DNS/HTTP/network probe, model retry,
+  server request, LLM call, or AI Credits activity. Media, transcripts, prompts, generated text,
+  model files/bytes, `.env`, account data, paths, host/IP identity, URLs, proxy material, tokens,
+  keys, raw exceptions, and tracebacks are forbidden from persisted diagnostics and exports.
+
+
 ## 2026-08-01 Transcript-dissection data-flow and integrity boundary
 
 - Dissection starts only after target-specific confirmation. The preview freezes output language,

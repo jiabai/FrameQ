@@ -192,6 +192,9 @@ export function SettingsSheet({
     audioReviewCacheUsage,
     settingsInsightPreferences,
     settingsNotice,
+    exportDiagnostics,
+    diagnosticExportBusy,
+    diagnosticExportNotice,
     settingsLoading,
     settingsSaving,
     closeSettings,
@@ -204,6 +207,7 @@ export function SettingsSheet({
   } = controller;
   const settingsModalRef = useModalFocus<HTMLElement>(settingsOpen);
   const renderedSettingsNotice = renderUiMessage(locale, settingsNotice);
+  const renderedDiagnosticExportNotice = renderUiMessage(locale, diagnosticExportNotice);
   const renderedUpdateMessage = renderUiMessage(locale, updateState.message);
   const updateProgress = Math.max(0, Math.min(100, updateState.progress));
 
@@ -521,6 +525,33 @@ export function SettingsSheet({
                       <FolderOpen size={15} />
                       <span>{tSettings("advanced.locate")}</span>
                     </button>
+                  </div>
+                  <div className="settings-status-card diagnostics-export-card">
+                    <div>
+                      <span className="section-label">{tSettings("advanced.diagnostics.eyebrow")}</span>
+                      <strong>{tSettings("advanced.diagnostics.heading")}</strong>
+                      <p>{tSettings("advanced.diagnostics.description")}</p>
+                      <small>{tSettings("advanced.diagnostics.privacy")}</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void exportDiagnostics()}
+                      disabled={diagnosticExportBusy}
+                      aria-busy={diagnosticExportBusy}
+                    >
+                      <Download size={15} />
+                      <span>
+                        {diagnosticExportBusy
+                          ? tSettings("advanced.diagnostics.exporting")
+                          : tSettings("advanced.diagnostics.action")}
+                      </span>
+                    </button>
+                    {renderedDiagnosticExportNotice ? (
+                      <p className="action-notice inline-notice" role="status" aria-live="polite">
+                        {renderedDiagnosticExportNotice}
+                      </p>
+                    ) : null}
                   </div>
                 </section>
               ) : null}

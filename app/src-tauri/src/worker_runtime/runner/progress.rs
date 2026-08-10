@@ -1,18 +1,21 @@
 use super::watchdog::WatchdogControl;
-use super::RunnerHooks;
+use super::{RunnerHooks, WorkerOperation};
+use crate::diagnostics::{AsrDiagnosticSink, DiagnosticRejectionCode, ValidatedDiagnosticEvent};
 #[cfg(not(test))]
 use crate::progress_event::ASR_MODEL_DOWNLOAD_EVENT_NAME;
 use crate::progress_event::{
     invalid_progress_log_detail, validate_model_download_event, validate_worker_progress_event,
     MODEL_DOWNLOAD_EVENT_PREFIX,
 };
-use crate::{append_desktop_log, RuntimePaths};
+use crate::{append_desktop_log, RuntimePaths, DIAGNOSTIC_EVENT_PREFIX};
 use std::io::{BufRead, BufReader};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 #[cfg(not(test))]
 use tauri::{Emitter, Window};
+
+const MAX_DIAGNOSTIC_EVENT_CHARS: usize = 1_000;
 
 #[cfg(not(test))]
 pub(crate) enum ProgressRoute {
@@ -97,6 +100,16 @@ pub(super) enum ProgressRecord {
     Empty,
 }
 
+#[derive(Debug, PartialEq)]
+pub(super) enum StderrRecord {
+    ValidatedProgress(serde_json::Value),
+    InvalidProgress(String),
+    ValidatedDiagnostic(ValidatedDiagnosticEvent),
+    InvalidDiagnostic,
+    Diagnostic,
+    Empty,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct StderrSummary {
     pub(super) had_diagnostic_output: bool,
@@ -117,13 +130,16 @@ impl StderrSummary {
 
 pub(super) fn read_stderr(
     stderr: std::process::ChildStderr,
+    operation: WorkerOperation,
     progress: ProgressRoute,
     paths: RuntimePaths,
     hooks: RunnerHooks,
     watchdog: Arc<WatchdogControl>,
+    diagnostic_sink: Option<AsrDiagnosticSink>,
 ) -> StderrSummary {
     let protocol = progress.protocol();
     let mut summary = StderrSummary::default();
+    let mut diagnostic_sink = DiagnosticSinkGuard::new(operation, diagnostic_sink);
     for line in BufReader::new(stderr).lines() {
         let line = match line {
             Ok(line) => line,
@@ -132,21 +148,16 @@ pub(super) fn read_stderr(
                 break;
             }
         };
-        match inspect_progress_line(protocol, &line) {
-            ProgressRecord::Validated(payload) => {
-                watchdog.record_validated_progress();
-                progress.emit(payload);
-            }
-            ProgressRecord::Invalid(detail) => {
-                let event = match protocol {
-                    ProgressProtocol::AsrModelDownload => "worker.model_progress.invalid",
-                    ProgressProtocol::Worker | ProgressProtocol::None => "worker.progress.invalid",
-                };
-                let _ = append_desktop_log(&paths, event, &detail);
-            }
-            ProgressRecord::Diagnostic => summary.had_diagnostic_output = true,
-            ProgressRecord::Empty => {}
-        }
+        route_stderr_record(
+            inspect_stderr_line(protocol, &line),
+            protocol,
+            &progress,
+            &paths,
+            &watchdog,
+            diagnostic_sink.sink_mut(),
+            &line,
+            &mut summary,
+        );
     }
 
     if hooks.panic_stderr_reader {
@@ -160,6 +171,97 @@ pub(super) fn read_stderr(
         }
     }
     summary
+}
+
+struct DiagnosticSinkGuard(Option<AsrDiagnosticSink>);
+
+impl DiagnosticSinkGuard {
+    fn new(operation: WorkerOperation, sink: Option<AsrDiagnosticSink>) -> Self {
+        if operation == WorkerOperation::DownloadAsrModel {
+            Self(sink)
+        } else {
+            Self(None)
+        }
+    }
+
+    fn sink_mut(&mut self) -> Option<&mut AsrDiagnosticSink> {
+        self.0.as_mut()
+    }
+}
+
+impl Drop for DiagnosticSinkGuard {
+    fn drop(&mut self) {
+        if let Some(sink) = self.0.take() {
+            sink.finish();
+        }
+    }
+}
+
+pub(super) fn route_stderr_record(
+    record: StderrRecord,
+    protocol: ProgressProtocol,
+    progress: &ProgressRoute,
+    paths: &RuntimePaths,
+    watchdog: &WatchdogControl,
+    diagnostic_sink: Option<&mut AsrDiagnosticSink>,
+    raw_line: &str,
+    summary: &mut StderrSummary,
+) {
+    match record {
+        StderrRecord::ValidatedProgress(payload) => {
+            watchdog.record_validated_progress();
+            progress.emit(payload);
+        }
+        StderrRecord::InvalidProgress(detail) => {
+            let event = match protocol {
+                ProgressProtocol::AsrModelDownload => "worker.model_progress.invalid",
+                ProgressProtocol::Worker | ProgressProtocol::None => "worker.progress.invalid",
+            };
+            let _ = append_desktop_log(paths, event, &detail);
+        }
+        StderrRecord::ValidatedDiagnostic(event) => {
+            summary.had_diagnostic_output = true;
+            if let Some(sink) = diagnostic_sink {
+                sink.structured(&event);
+            }
+        }
+        StderrRecord::InvalidDiagnostic => {
+            summary.had_diagnostic_output = true;
+            if let Some(sink) = diagnostic_sink {
+                sink.rejected(DiagnosticRejectionCode::DiagnosticEventRejected);
+            }
+        }
+        StderrRecord::Diagnostic => {
+            summary.had_diagnostic_output = true;
+            if let Some(sink) = diagnostic_sink {
+                sink.fallback_line(raw_line);
+            }
+        }
+        StderrRecord::Empty => {}
+    }
+}
+
+pub(super) fn inspect_stderr_line(protocol: ProgressProtocol, line: &str) -> StderrRecord {
+    if line.trim().is_empty() {
+        return StderrRecord::Empty;
+    }
+    if let Some(raw_event) = line.strip_prefix(DIAGNOSTIC_EVENT_PREFIX) {
+        if raw_event.chars().count() > MAX_DIAGNOSTIC_EVENT_CHARS {
+            return StderrRecord::InvalidDiagnostic;
+        }
+        // The strict Task 3 DTO deserializer rejects duplicate and unknown fields before
+        // applying the closed enum, category/code, numeric, and identifier invariants.
+        return ValidatedDiagnosticEvent::parse_json(raw_event)
+            .map(StderrRecord::ValidatedDiagnostic)
+            .unwrap_or(StderrRecord::InvalidDiagnostic);
+    }
+
+    match inspect_progress_line(protocol, line) {
+        ProgressRecord::Validated(payload) => StderrRecord::ValidatedProgress(payload),
+        ProgressRecord::Invalid(detail) => StderrRecord::InvalidProgress(detail),
+        ProgressRecord::Diagnostic => StderrRecord::Diagnostic,
+        ProgressRecord::Empty => StderrRecord::Empty,
+    }
 }
 
 pub(super) fn inspect_progress_line(protocol: ProgressProtocol, line: &str) -> ProgressRecord {

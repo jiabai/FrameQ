@@ -13,6 +13,7 @@ from frameq_worker.desktop_contract import (
     MODEL_DOWNLOAD_EVENT_PREFIX,
     PROGRESS_EVENT_PREFIX,
 )
+from frameq_worker.diagnostic_events import DiagnosticEvent, render_diagnostic_event
 from frameq_worker.progress_events import (
     validate_model_progress_event,
     validate_worker_progress_event,
@@ -96,6 +97,10 @@ def print_model_download_event(event: dict[str, object]) -> None:
     print(render_model_download_event(event), file=sys.stderr, flush=True)
 
 
+def print_diagnostic_event(event: DiagnosticEvent) -> None:
+    print(render_diagnostic_event(event), file=sys.stderr, flush=True)
+
+
 def run_worker_business(call: Callable[[], dict[str, object]]) -> dict[str, object]:
     with redirect_stdout(sys.stderr):
         return call()
@@ -167,6 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 project_root=Path.cwd(),
                 asr_model=args.asr_model,
                 progress_callback=print_model_download_event,
+                diagnostic_callback=print_diagnostic_event,
             )
         )
     elif args.process_local_media_stdin:
@@ -187,9 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     elif args.resolve_source_stdin:
         result = run_worker_business(
-            lambda: worker_service_module.resolve_source_identity_once(
-                request_json or "{}"
-            )
+            lambda: worker_service_module.resolve_source_identity_once(request_json or "{}")
         )
     else:
         result = run_worker_business(

@@ -13,6 +13,8 @@ pub(crate) const CACHE_DIR_NAME: &str = "cache";
 pub(crate) const AUDIO_REVIEW_CACHE_DIR_NAME: &str = ".frameq-audio-review";
 pub(crate) const LEGACY_TEMP_DIR_NAME: &str = "work";
 pub(crate) const DESKTOP_LOG_DIR_NAME: &str = "logs";
+#[allow(dead_code)] // Consumed by the Task 3 facade before Task 4 runner wiring lands.
+pub(crate) const ASR_DIAGNOSTIC_LOG_FILE_NAME: &str = "asr-model-download.log";
 
 #[derive(Debug, Clone)]
 pub(crate) struct RuntimePaths {

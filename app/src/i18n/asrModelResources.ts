@@ -18,6 +18,13 @@ export const asrModelResources = {
       cancel: "取消下载",
       downloaded: "已下载",
       download: "准备模型",
+      retry: "重试",
+      diagnostics: {
+        title: "导出诊断信息",
+        privacy: "仅导出最近 7 天的安全诊断记录；不含媒体、文字稿、密钥或模型文件；不会重新下载模型，也不会测试或探测网络。",
+        export: "导出诊断信息",
+        exporting: "正在导出诊断信息…",
+      },
     },
     source: {
       modelScope: "ModelScope",
@@ -55,6 +62,13 @@ export const asrModelResources = {
       cancel: "取消下載",
       downloaded: "已下載",
       download: "準備模型",
+      retry: "重試",
+      diagnostics: {
+        title: "匯出診斷資訊",
+        privacy: "僅匯出最近 7 天的安全診斷記錄；不含媒體、文字稿、金鑰或模型檔案；不會重新下載模型，也不會測試或探測網路。",
+        export: "匯出診斷資訊",
+        exporting: "正在匯出診斷資訊…",
+      },
     },
     source: {
       modelScope: "ModelScope",
@@ -92,6 +106,13 @@ export const asrModelResources = {
       cancel: "Cancel Download",
       downloaded: "Downloaded",
       download: "Prepare Model",
+      retry: "Retry",
+      diagnostics: {
+        title: "Export diagnostics",
+        privacy: "Exports only safe diagnostic records from the last 7 days. It contains no media, transcripts, keys, or model files; it does not download the model again or test or probe the network.",
+        export: "Export diagnostics",
+        exporting: "Exporting diagnostics…",
+      },
     },
     source: {
       modelScope: "ModelScope",

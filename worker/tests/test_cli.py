@@ -11,6 +11,8 @@ import pytest
 from frameq_worker import platform_source_resolvers as platform_resolvers_module
 from frameq_worker.asr import Transcript
 from frameq_worker.cli import (
+    print_diagnostic_event,
+    render_diagnostic_event,
     render_model_download_event,
     render_progress_event,
     render_result_json,
@@ -21,6 +23,7 @@ from frameq_worker.desktop_contract import (
     PROCESS_VIDEO_CONTRACT_VERSION,
     PROGRESS_EVENT_PREFIX,
 )
+from frameq_worker.diagnostic_events import DiagnosticEvent
 from frameq_worker.media import CommandResult
 from frameq_worker.worker_application import defaults as worker_defaults
 from frameq_worker.worker_service import (
@@ -127,8 +130,7 @@ class FakeInsightClient:
             return "# summary\n\ndesktop summary"
         if self.calls == 3:
             return (
-                '[{"title":"desktop","summary":"summary","excerpt":"excerpt",'
-                '"question_count":1}]'
+                '[{"title":"desktop","summary":"summary","excerpt":"excerpt","question_count":1}]'
             )
         return '["desktop question"]'
 
@@ -180,8 +182,7 @@ def test_main_returns_zero_for_structured_worker_failures(monkeypatch, capsys) -
 
 def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
     payload = process_request_json(
-        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
-        "?xsec_token=review-secret"
+        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456?xsec_token=review-secret"
     )
     captured: dict[str, object] = {}
 
@@ -203,9 +204,7 @@ def test_main_reads_process_request_from_stdin(monkeypatch, capsys) -> None:
     exit_code = cli.main(["--request-stdin"])
 
     assert exit_code == 0
-    assert json.loads(captured["request_json"])["url"].endswith(
-        "?xsec_token=review-secret"
-    )
+    assert json.loads(captured["request_json"])["url"].endswith("?xsec_token=review-secret")
     assert captured["project_root"] == Path.cwd()
     assert captured["progress_callback"] is cli.print_progress_event
     assert "review-secret" not in capsys.readouterr().err
@@ -405,9 +404,7 @@ def test_source_identity_stdin_failure_uses_closed_source_result_without_echo(
     monkeypatch.setattr(
         cli.sys,
         "stdin",
-        io.StringIO(
-            '{"url":"https://example.test/?xsec_token=review-secret"'
-        ),
+        io.StringIO('{"url":"https://example.test/?xsec_token=review-secret"'),
     )
 
     exit_code = cli.main(["--resolve-source-stdin"])
@@ -447,9 +444,7 @@ def test_main_resolves_source_identity_from_stdin_without_echoing_secret(
     captured = capsys.readouterr()
     result = json.loads(captured.out)
     assert result["status"] == "completed"
-    assert result["source_identity"]["canonical_url"].endswith(
-        "/64a1b2c3d4e5f67890123456"
-    )
+    assert result["source_identity"]["canonical_url"].endswith("/64a1b2c3d4e5f67890123456")
     assert "review-secret" not in captured.out + captured.err
     assert "xsec_token" not in captured.out + captured.err
 
@@ -480,9 +475,7 @@ def test_main_dispatches_normalized_source_identity_request(
     exit_code = cli.main(["--resolve-source-stdin"])
 
     assert exit_code == 0
-    assert captured["request_json"] == (
-        '{"url": "https://example.test/video"}'
-    )
+    assert captured["request_json"] == ('{"url": "https://example.test/video"}')
     assert json.loads(capsys.readouterr().out) == {"status": "completed"}
 
 
@@ -571,6 +564,7 @@ def test_main_returns_nonzero_for_failed_model_download(monkeypatch, capsys) -> 
     assert captured["project_root"] == Path.cwd()
     assert captured["asr_model"] == DEFAULT_ASR_MODEL
     assert captured["progress_callback"] is cli.print_model_download_event
+    assert captured["diagnostic_callback"] is cli.print_diagnostic_event
 
 
 def test_render_helpers_emit_json_and_progress_prefix() -> None:
@@ -607,6 +601,46 @@ def test_render_helpers_emit_json_and_progress_prefix() -> None:
     }
 
 
+def test_print_diagnostic_event_writes_one_validated_flushed_stderr_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, object, bool]] = []
+    monkeypatch.setattr(
+        "builtins.print",
+        lambda value, *, file, flush: calls.append((value, file, flush)),
+    )
+    event = DiagnosticEvent(
+        version=1,
+        operation="download_asr_model",
+        phase="primary_model",
+        category="network",
+        code="connection_timeout",
+        exception_type="TimeoutError",
+    )
+
+    print_diagnostic_event(event)
+
+    assert calls == [(render_diagnostic_event(event), cli.sys.stderr, True)]
+
+
+def test_non_model_cli_operations_never_receive_diagnostic_callback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_worker_once(request_json: str, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"status": "completed"}
+
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO("{}"))
+    monkeypatch.setattr(cli.worker_service_module, "run_worker_once", fake_run_worker_once)
+
+    assert cli.main(["--request-stdin"]) == 0
+    assert "diagnostic_callback" not in captured
+    assert len(capsys.readouterr().out.splitlines()) == 1
+
+
 def test_source_identity_preflight_returns_only_safe_identity() -> None:
     result = resolve_source_identity_once(
         json.dumps(
@@ -620,9 +654,7 @@ def test_source_identity_preflight_returns_only_safe_identity() -> None:
     )
 
     assert result["status"] == "completed"
-    assert result["source_url"] == (
-        "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
-    )
+    assert result["source_url"] == ("https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456")
     serialized = json.dumps(result)
     assert "review-secret" not in serialized
     assert "xsec_token" not in serialized
@@ -634,19 +666,13 @@ def test_source_identity_preflight_uses_cli_platform_resolver(
     monkeypatch.setattr(
         platform_resolvers_module,
         "parse_bilibili_input",
-        lambda _source: SimpleNamespace(
-            full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
-        ),
+        lambda _source: SimpleNamespace(full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2"),
     )
 
-    result = resolve_source_identity_once(
-        json.dumps({"url": "https://b23.tv/review-short"})
-    )
+    result = resolve_source_identity_once(json.dumps({"url": "https://b23.tv/review-short"}))
 
     assert result["status"] == "completed"
-    assert result["source_url"] == (
-        "https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
-    )
+    assert result["source_url"] == ("https://www.bilibili.com/video/BV1Aa411c7mD?p=2")
 
 
 def test_run_worker_once_uses_cli_platform_resolver_for_short_links(
@@ -657,9 +683,7 @@ def test_run_worker_once_uses_cli_platform_resolver_for_short_links(
 
     def fake_parse_bilibili_input(source: str) -> SimpleNamespace:
         parsed_sources.append(source)
-        return SimpleNamespace(
-            full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2"
-        )
+        return SimpleNamespace(full_url="https://www.bilibili.com/video/BV1Aa411c7mD?p=2")
 
     monkeypatch.setattr(
         platform_resolvers_module,
@@ -687,9 +711,7 @@ def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Pa
     runner = FakeMediaRunner()
 
     result = run_worker_once(
-        process_request_json(
-            "https://www.douyin.com/video/7524373044106677544"
-        ),
+        process_request_json("https://www.douyin.com/video/7524373044106677544"),
         project_root=tmp_path,
         command_runner=runner,
     )
@@ -731,9 +753,7 @@ def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
         fail_if_ai_client_is_built,
     )
     result = run_worker_once(
-        process_request_json(
-            "https://www.douyin.com/video/7524373044106677544"
-        ),
+        process_request_json("https://www.douyin.com/video/7524373044106677544"),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
@@ -819,9 +839,7 @@ def test_run_worker_once_rejects_retired_ai_field_without_echoing_request(
 
 
 def test_process_video_service_and_pipeline_expose_no_ai_client_parameters() -> None:
-    service_parameters = inspect.signature(
-        cli.worker_service_module.run_worker_once
-    ).parameters
+    service_parameters = inspect.signature(cli.worker_service_module.run_worker_once).parameters
     assert "insight_client" not in service_parameters
     assert "insight_client_factory" not in service_parameters
     assert "insight_client" not in inspect.signature(pipeline.run_worker_pipeline).parameters
@@ -832,9 +850,7 @@ def test_run_worker_once_uses_configured_output_and_cache_roots(tmp_path: Path) 
     custom_output_dir = tmp_path / "app-data" / "outputs"
 
     result = run_worker_once(
-        process_request_json(
-            "https://www.douyin.com/video/7524373044106677544"
-        ),
+        process_request_json("https://www.douyin.com/video/7524373044106677544"),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
@@ -874,9 +890,7 @@ def test_run_worker_once_uses_download_stdout_inside_task_cache_dir(
     runner = FakeMediaRunner()
 
     result = run_worker_once(
-        process_request_json(
-            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        ),
+        process_request_json("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
         project_root=tmp_path,
         command_runner=runner,
         transcriber=FakeTranscriber(),
@@ -901,9 +915,7 @@ def test_run_worker_once_reports_missing_downloaded_asr_model_after_audio_extrac
         raise AssertionError("ASR model should be validated before loading")
 
     result = run_worker_once(
-        process_request_json(
-            "https://www.douyin.com/video/7524373044106677544"
-        ),
+        process_request_json("https://www.douyin.com/video/7524373044106677544"),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber_factory=fail_build_asr_transcriber,
@@ -947,9 +959,7 @@ def test_run_worker_once_uses_explicit_asr_model_instead_of_user_data_env(
         return FakeTranscriber()
 
     result = run_worker_once(
-        process_request_json(
-            "https://www.douyin.com/video/7524373044106677544"
-        ),
+        process_request_json("https://www.douyin.com/video/7524373044106677544"),
         project_root=tmp_path,
         command_runner=FakeMediaRunner(),
         transcriber_factory=fake_build_asr_transcriber,
