@@ -85,6 +85,18 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   same capability through Settings without coupling settings busy state or storing paths/logs/ZIP
   bytes. Validation: focused frontend tests 37 passed; full frontend tests 723 passed; lint and
   production build passed; spec and quality reviews approved.
+- [x] 2026-08-10: Task 7 completed and passed independent specification and quality review. The
+  failure sheet exposes export only for terminal ASR model-download failure/timeout, Settings >
+  Advanced exposes the permanent entry, both surfaces share one busy/cancel/safe-notice controller,
+  and `zh-CN`, `zh-TW`, and `en-US` copy states the seven-day safe scope, forbidden data, and that
+  export neither retries nor probes the network. Validation: interaction-focused UI tests 47
+  passed; full frontend tests 740 passed; lint, production build, and `git diff --check` passed.
+- [x] 2026-08-10: Task 8 automated packaging and repository gates completed. The canonical worker
+  was refreshed into the packaged resource and the second recursive byte comparison exited 0;
+  generated `__pycache__` files found during the first comparison were removed before the final
+  refresh. Validation: scripts 29/29, worker 782 passed / 2 skipped, Ruff passed, Rust 316 passed,
+  Rust formatting passed, frontend 740/740, lint/build passed, and all completed focused suites
+  remained green. The final governance and documentation checks are recorded below.
 
 ## Surprises & Discoveries
 
@@ -138,13 +150,17 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
 
 ## Outcomes & Retrospective
 
-Implementation has not started. The accepted outcome is the complete behavior in
-`docs/product-specs/2026-08-09-desktop-diagnostic-export.md` and the architecture in
-`docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. During execution, this section must
-record exact worker/Rust/app/script test totals, package inspection evidence, Windows native Save
-As evidence, documentation validation, packaged-worker equality, and every unavailable platform
-check. Residual risk at plan creation: macOS native Save As behavior cannot be claimed from a
-Windows-only implementation host and requires release-host smoke evidence.
+The implementation is complete through the worker, Rust persistence/export boundary, frontend
+controller, both UI entry points, three locales, and packaged-worker mirror. Exact automated
+evidence is recorded in Progress and includes scripts 29/29, worker 782 passed / 2 skipped, Rust
+316 passed, and frontend 740/740, with Ruff, rustfmt, lint, build, and mirror equality passing.
+The Windows native packaged Save As smoke could not be completed on this host because
+`tauri build --no-bundle` failed during rustc memory allocation, including after a single-job
+retry; the resulting compiler cascade is an environment failure, not a passing build. Therefore
+native Save As success/cancel/replacement/bad-destination and packaged absence-of-forbidden-data
+evidence remain release-host work. macOS native dialog and replacement evidence is also unavailable
+on this Windows host. No release should claim those native checks until they run on the target
+hosts.
 
 ## Context and Orientation
 
@@ -643,7 +659,7 @@ Windows-only implementation host and requires release-host smoke evidence.
   `docs/exec-plans/completed/2026-08-09-desktop-diagnostic-export-plan.md`
 - Modify after move: `docs/exec-plans/completed/index.md`
 
-- [ ] **Step 1: Refresh and compare the packaged worker.** Run the established mirror command and
+- [x] **Step 1: Refresh and compare the packaged worker.** Run the established mirror command and
   compare canonical and resource package recursively by file set and bytes:
 
   ```powershell
@@ -651,27 +667,35 @@ Windows-only implementation host and requires release-host smoke evidence.
   git diff --no-index -- worker\frameq_worker app\src-tauri\resources\worker\frameq_worker
   ```
 
-  Expected: the comparison emits no diff after refresh. Do not hand-edit the resource mirror.
+  Validation: the specified refresh command completed successfully and the second comparison
+  exited 0 with no diff. A first comparison exposed only untracked Python `__pycache__` files in
+  canonical source; those generated files were removed and the mirror was refreshed again. The
+  resource mirror was not hand-edited.
 
-- [ ] **Step 2: Update architecture and security truth.** Record contract v8, the diagnostic
+- [x] **Step 2: Update architecture and security truth.** Record contract v8, the diagnostic
   prefix/non-watchdog channel, Rust ownership, ASR-only fallback persistence, retention/size caps,
   fixed export allowlist, forbidden data, export-time re-sanitization, and no-upload/no-probe
   boundary. Do not describe unimplemented behavior as released before gates pass.
 
-- [ ] **Step 3: Run complete automated gates.** Execute every command in Validation and Acceptance,
+- [x] **Step 3: Run complete automated gates.** Execute every command in Validation and Acceptance,
   record exact totals/warnings/environment failures in Progress, and fix in-scope regressions before
-  claiming acceptance.
+  claiming acceptance. Scripts 29/29, worker 782 passed / 2 skipped, Rust 316 passed, frontend
+  740/740, Ruff/rustfmt/lint/build/governance/diff checks passed. The only release-host blocker was
+  the Windows Tauri no-bundle build memory allocation failure described in Outcomes.
 
 - [ ] **Step 4: Perform Windows real-host smoke.** Verify Save As success, cancellation, replacing
   an existing ordinary ZIP, failure at an unusable destination, no source-log deletion, no
   app-local ZIP, package contents/size/manifest, absence of seeded forbidden data, and one
   representative model-download failure. Inspect network activity to confirm export itself starts
-  no DNS/HTTP request.
+  no DNS/HTTP request. Blocked on this host because the native Tauri package could not be built;
+  command-level Rust/export tests and all automated privacy assertions passed.
 
-- [ ] **Step 5: Close documentation and plan lifecycle.** Run governance WARN validation and diff
-  checks, update spec/design status only when implementation is accepted, fill Outcomes with exact
-  evidence and residual risks, move this plan to completed, and synchronize active/completed
-  indexes, TASKS, and AGENTS. macOS native dialog evidence remains explicit until run on macOS.
+- [x] **Step 5: Close documentation and plan lifecycle.** Run governance WARN validation and diff
+  checks, update spec/design status to implementation-complete with native release evidence still
+  pending, fill Outcomes with exact evidence and residual risks, and synchronize TASKS and AGENTS.
+  The plan remains active because Step 4 is a release-host acceptance item, not because code or
+  automated validation is incomplete. macOS native Save As evidence remains explicit until run on
+  macOS.
 
 ## Validation and Acceptance
 

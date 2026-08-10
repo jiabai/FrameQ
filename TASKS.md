@@ -2,13 +2,14 @@
 
 ## Active UI Work
 
-- [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Acceptance when the
-  implementation satisfies the approved product spec and complete ExecPlan gates: global
-  desktop-worker contract v8 structured ASR model-download diagnostics; Rust-owned
-  ASR-only sanitized stderr fallback, seven-day/4 MiB source retention, fixed <=5 MiB ZIP with
-  export-time re-sanitization, native Save As, failure-sheet + Settings > Advanced entry points,
-  three locales, no automatic upload/network probe/model retry/server/LLM/Credits activity.
-  Product spec: `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
+- [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
+  release acceptance remains pending Windows native packaged Save As smoke and macOS native dialog
+  evidence. Automated acceptance passed: scripts 29/29, worker 782 passed / 2 skipped, Rust 316
+  passed, frontend 740/740, Ruff/rustfmt/lint/build/governance/diff checks passed, and the refreshed
+  packaged worker matched the canonical worker byte-for-byte. The Windows Tauri no-bundle build
+  could not reach a native smoke because rustc failed memory allocation, including after a single-job
+  retry; do not treat the compiler cascade as a product regression. Product spec:
+  `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
   `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
   `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
 

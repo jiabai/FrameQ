@@ -1,7 +1,7 @@
 # Desktop Diagnostic Export Spec
 
 - Date: 2026-08-09
-- Status: Approved design; implementation not started
+- Status: Implemented; release acceptance pending Windows native packaged smoke and macOS native dialog evidence
 - Related product specs:
   - `docs/product-specs/2026-07-05-desktop-diagnostics-logs.md`
   - `docs/product-specs/2026-07-27-selectable-asr-model-on-demand-download.md`

@@ -1,7 +1,7 @@
 # Desktop Diagnostic Export Design
 
 - Date: 2026-08-09
-- Status: Approved design; implementation not started
+- Status: Implemented; native release smoke evidence pending
 - Product spec: `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`
 - Supersedes: none; narrows and extends the existing desktop diagnostics boundary
 - Related architecture:
