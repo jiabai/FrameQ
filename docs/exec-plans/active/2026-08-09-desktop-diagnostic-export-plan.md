@@ -619,27 +619,27 @@ hosts.
 - Modify: `app/src/i18n/settingsResources.ts`
 - Modify: `app/src/App.css`
 
-- [ ] **Step 1: Add RED model-guide tests.** In each locale, a terminal `failed`/timeout state shows
+- [x] **Step 1: Add RED model-guide tests.** In each locale, a terminal `failed`/timeout state shows
   **Export diagnostics**, retry remains primary, and privacy copy says no media/transcripts/keys/
   model files and no retry/network test. Running, cancelling, completed, and ordinary missing
   states do not show the failure export action.
 
-- [ ] **Step 2: Add RED Settings > Advanced tests.** In each locale, permanently render a
+- [x] **Step 2: Add RED Settings > Advanced tests.** In each locale, permanently render a
   Diagnostics card with seven-day and privacy copy plus the export action. Do not add **Open logs
   directory**. Assert the button is `type="button"`, disables while exporting, and does not submit
   `settings-form`.
 
-- [ ] **Step 3: Run RED UI tests.** Run:
+- [x] **Step 3: Run RED UI tests.** Run:
 
   ```powershell
   npm --prefix app test -- ModelGuideSheet.test.tsx SettingsSheet.i18n.test.tsx useAsrModelDownload.test.ts
   ```
 
-- [ ] **Step 4: Implement reviewed `zh-CN`, `zh-TW`, and `en-US` copy and controls.** Use existing
+- [x] **Step 4: Implement reviewed `zh-CN`, `zh-TW`, and `en-US` copy and controls.** Use existing
   button/card classes where possible; add only narrowly named diagnostic styles. Success copy tells
   the user to send the ZIP manually; failure asks for another destination; cancellation is silent.
 
-- [ ] **Step 5: Run GREEN UI and accessibility regressions.** Require Step 3 green, then run all
+- [x] **Step 5: Run GREEN UI and accessibility regressions.** Require Step 3 green, then run all
   app tests, lint, and production build. Inspect focus order, `aria-live` notice behavior, disabled
   state, and small-window layout.
 
