@@ -45,6 +45,25 @@ export function renderBrandMark(): string {
   return `<span class="brand-mark" aria-hidden="true">FQ</span>`;
 }
 
+/**
+ * Copy of `site/public/favicon.svg` (the FrameQ mark), inlined as a base64
+ * SVG data URI so every server page gets a browser-tab icon without needing a
+ * static-file route. Color (`#0066cc`) matches `--fq-primary`; keep the two in
+ * sync if the brand primary ever changes. Updated once at module load.
+ */
+const FRAMEQ_FAVICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">' +
+  '<rect width="64" height="64" rx="14" fill="#0066cc"/>' +
+  '<text x="32" y="44" font-family="-apple-system, \'Segoe UI\', system-ui, sans-serif" font-size="38" font-weight="600" text-anchor="middle" fill="#ffffff">F</text>' +
+  "</svg>";
+
+const FRAMEQ_FAVICON_URI = `data:image/svg+xml;base64,${Buffer.from(FRAMEQ_FAVICON_SVG, "utf8").toString("base64")}`;
+
+/** `<link rel="icon">` for the FrameQ mark, ready to drop into a page `<head>`. */
+export function faviconLink(): string {
+  return `<link rel="icon" type="image/svg+xml" href="${FRAMEQ_FAVICON_URI}" />`;
+}
+
 /** Options for {@link renderFrameHeader}. */
 export type FrameHeaderOptions = {
   /** Optional eyebrow label above the title (e.g. "FrameQ Admin"). */

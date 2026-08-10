@@ -6,7 +6,7 @@ import {
   t,
 } from "./i18n.js";
 import { basePageCss, designTokenCss } from "./designTokens.js";
-import { brandChromeCss, renderFrameHeader } from "./pageChrome.js";
+import { brandChromeCss, faviconLink, renderFrameHeader } from "./pageChrome.js";
 
 export function renderLoginPage(locale: Locale = "zh-CN"): string {
   const i18n = buildClientStrings(locale);
@@ -16,6 +16,7 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${t(locale, "login.title")}</title>
+    ${faviconLink()}
     <style>
       ${langSwitcherStyles()}
       ${designTokenCss()}
