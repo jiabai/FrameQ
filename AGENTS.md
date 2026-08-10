@@ -72,7 +72,7 @@
 - v0.3.0 release notes 草稿：`docs/releases/v0.3.0.md`
 - v0.3.1 release notes 草稿：`docs/releases/v0.3.1.md`
 - v0.3.2 诊断导出 release notes 草稿：`docs/releases/v0.3.2.md`
-- v0.3.2 诊断导出发布计划：`docs/exec-plans/active/2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md`
+- v0.3.2 诊断导出发布计划（completed）：`docs/exec-plans/completed/2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md`（已发布 stable：https://github.com/jiabai/FrameQ/releases/tag/v0.3.2；Desktop Release workflow 31381193528；Windows updater、Intel DMG、Apple Silicon DMG 均上传）
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`

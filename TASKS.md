@@ -13,12 +13,12 @@
   `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
   `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
 
-- [ ] Prepare and publish FrameQ v0.3.2 desktop diagnostic export release (2026-08-10) — ✅ Acceptance:
+- [x] Prepare and publish FrameQ v0.3.2 desktop diagnostic export release (2026-08-10) — ✅ Acceptance:
   merged
   `codex/desktop-diagnostic-export` into `main`, synchronized five version sources at 0.3.2, and
-  added release notes. Remaining gates: merged local verification, hosted CI/Desktop Release,
-  and final tag/publication. Release plan:
-  `docs/exec-plans/active/2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md`.
+  added release notes. Hosted CI/Desktop Release passed, annotated tag `v0.3.2` was pushed, and
+  stable release publication completed. Release plan:
+  `docs/exec-plans/completed/2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md`.
 
 - [x] Prepare and publish FrameQ v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance: five
   version sources synchronized at 0.3.1, `scripts/tests/release-version.test.mjs` asserts

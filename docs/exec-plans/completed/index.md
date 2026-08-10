@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md` | Published stable v0.3.2 with contract v8 desktop diagnostic export, Windows updater artifacts, and Intel/Apple Silicon macOS DMGs after hosted CI and Desktop Release verification. |
 | `2026-08-06-web-site-dynamic-enhancement-plan.md` | Upgraded the FrameQ web marketing site from "restrained" to "Apple-Inspired Dynamic Light" by adding scroll-triggered reveals, parallax depth, 3D card tilt, ripple-click feedback, and a cursor-following glow — all gated by `prefers-reduced-motion` and touch-device detection. |
 | `2026-08-05-inspiration-profile-generation-preference-boundary-plan.md` | Narrowed Inspiration Profile to six stable context fields, made per-run preferences the sole style/avoid owner, atomically migrated v1 app-local preferences to schema v2, closed the current cross-language worker snapshot, and preserved historical task snapshots. |
 | `2026-08-05-web-marketing-site-plan.md` | Built the FrameQ public marketing site from scratch at top-level `site/` using Astro SSG; shipped index/download/privacy three pages with OKLCH three-layer tokens migrated from `design-system/globals.css`, Hallmark anti-AI-slop visual system (58/58 slop test), and zero analytics/tracking/cookies; seven tasks covering scaffold → Hallmark design → token system → page implementation → validation gates → doc sync. Version not assigned. |
