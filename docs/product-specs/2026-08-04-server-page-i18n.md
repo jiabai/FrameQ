@@ -66,9 +66,9 @@ This spec introduces a server-side i18n module that supports three locales (`zh-
 
 ## Security and Compliance
 
-- The `lang` cookie is a non-sensitive preference cookie. It is not used for authentication, authorization, CSRF, or session identity. It carries only one of two closed values (`zh-CN` or `en`) and is validated server-side; an unrecognized value falls back to `zh-CN` rather than being echoed.
+- The `lang` cookie is a non-sensitive preference cookie. It is not used for authentication, authorization, CSRF, or session identity. It carries one of three closed values (`zh-CN`, `en`, or `zh-TW`) and is validated server-side; an unrecognized value falls back to `zh-CN` rather than being echoed.
 - `detectLocale` does not log the cookie value, does not reflect the cookie into HTML without going through `t()` lookup, and does not pass the cookie to any Store, Prisma, auth, or LLM code path. It is read once per request inside the route handler.
-- The language switcher button's inline script uses `encodeURIComponent(target)` before writing the cookie value, preventing cookie injection via the button's `data-target-locale` attribute. The attribute is a server-rendered closed value (`en` or `zh-CN`), not user input.
+- The language switcher button's inline script uses `encodeURIComponent(target)` before writing the cookie value, preventing cookie injection via the button's `data-target-locale` attribute. The attribute is a server-rendered closed value (`en`, `zh-CN`, or `zh-TW`), not user input.
 - No new logging, no new diagnostic surface, no new persistence. The change touches only rendering.
 - The i18n change does not weaken any existing boundary in `docs/SECURITY.md`: OTP purposes, attempt accounting, ticket/session atomicity, CSRF double-token, `secureCookies` semantics, structured-log redaction, `cache-control: no-store`, secret-leak guards, and Prisma transaction ownership are all unchanged.
 - The page continues to render only account/quota/activation-code-prefix fields; no API key, full activation code, raw URL, file path, transcript, prompt, or LLM config secret is rendered regardless of locale.
@@ -76,11 +76,12 @@ This spec introduces a server-side i18n module that supports three locales (`zh-
 ## Acceptance Criteria
 
 - `GET /login`, `GET /dashboard`, `GET /admin/login`, and `GET /admin` render in `zh-CN` by default when no `lang` cookie is present.
-- Setting `Cookie: lang=en` and re-requesting any of the four pages renders the page in English: `<html lang="en">`, English title, English headings, English button labels, and English client-side `i18n` object.
+- Setting `Cookie: lang=en` or `Cookie: lang=zh-TW` and re-requesting any of the four pages renders the selected locale, including the matching `<html lang="...">`, titles, headings, button labels, and client-side `i18n` object.
+- A first visit without a `lang` cookie consults `?lang=` when present, then `Accept-Language`; `zh-TW`/`zh-Hant*` resolve to `zh-TW`, `zh`/`zh-CN`/`zh-Hans` resolve to `zh-CN`, and English resolves to `en`.
 - Every page contains a language switcher button whose `data-target-locale` is the opposite of the current locale.
 - Every page contains the shared `langSwitcherStyles()` CSS and the inline switcher script that sets the `lang` cookie and reloads.
-- The switcher button's `data-target-locale` is always one of `{"zh-CN", "en"}` (server-rendered, never user-supplied).
-- `detectLocale` returns `zh-CN` for: missing cookie, empty cookie, malformed cookie value, and any value not in `{"zh-CN", "en"}`. Malformed URI-encoded values do not throw (the `try/catch` swallows `URIError`).
+- The switcher button's `data-target-locale` is always one of `{"zh-CN", "en", "zh-TW"}` (server-rendered, never user-supplied).
+- `detectLocale` returns `zh-CN` for missing, empty, malformed, or unknown locale values. Malformed URI-encoded values do not throw (the `try/catch` swallows `URIError`).
 - All previously-passing server tests remain green. The desktop deep-link login contract, web dashboard login, admin login, OTP verify, dashboard rendering, admin rendering, and logout behaviors are byte-for-byte unchanged except for the added locale parameter and the rendered language.
 - No new env var, no new Store method, no new Prisma model, no new migration, no new route, no new design doc.
 - `python scripts/validate_agents_docs.py --level WARN` remains green after governance-index sync.
@@ -89,7 +90,7 @@ This spec introduces a server-side i18n module that supports three locales (`zh-
 
 - Add a focused `server/tests/i18n.test.ts` covering:
   - `detectLocale` for: missing cookie, `lang=zh-CN`, `lang=en`, `lang=fr` (unknown), `lang=%ZZ` (malformed), `lang=zh-CN; other=1` (mixed), URL-encoded values (`lang=en%2DGB` rejected, `lang=zh-CN` accepted).
-  - `t(locale, key)` for: existing key in both locales, key missing in `en` (falls back to `zh-CN`), key missing in both (returns raw key).
+  - `t(locale, key)` for: existing key in all three locales, key missing in a non-default locale (falls back to `zh-CN`), and key missing in all locales (returns raw key).
   - `buildClientStrings` returns a copy (mutating the returned object does not mutate the module's internal map).
   - `renderLangSwitcher("zh-CN")` emits `data-target-locale="en"` and the inline script; `renderLangSwitcher("en")` emits `data-target-locale="zh-CN"`.
 - Extend `server/tests/webDashboard.test.ts` (or a new `server/tests/pageI18n.test.ts`) with integration assertions:
