@@ -44,6 +44,7 @@
 - Task access facade 设计：`docs/design-docs/2026-07-18-task-access-facade.md`
 - Web 宣传站设计规范：`docs/design-docs/web-marketing-site-design.md`
 - Web 宣传站设计参考：`design-system/README.md`
+- Server 网页设计规范（token 模块 `designTokens.ts` / `pageChrome.ts`）：`docs/DESIGN.md`「Server Web Pages Design System」一节
 - 安全规范：`docs/SECURITY.md`
 - 核心信念：`docs/design-docs/core-beliefs.md`
 - EasyDownload 抖音 fallback 参考：`docs/references/easydownload-douyin-fallback.md`

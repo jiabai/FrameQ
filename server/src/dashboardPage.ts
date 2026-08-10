@@ -6,6 +6,8 @@ import {
   type Locale,
   t,
 } from "./i18n.js";
+import { basePageCss, designTokenCss } from "./designTokens.js";
+import { brandChromeCss, renderFrameHeader } from "./pageChrome.js";
 
 export type DashboardAccountView = {
   email: string;
@@ -62,47 +64,42 @@ export function renderDashboardPage(input: DashboardPageInput): string {
     <title>${t(locale, "dashboard.title")}</title>
     <style>
       ${langSwitcherStyles()}
-      :root {
-        color-scheme: light;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f6f7f8;
-        color: #171717;
-      }
-      * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; padding: 24px; }
+      ${designTokenCss()}
+      ${basePageCss()}
+      ${brandChromeCss()}
+      body { padding: 24px; }
       .wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
       header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-      header h1 { margin: 0; font-size: 22px; font-weight: 700; }
-      header .email { color: #5f6874; font-size: 14px; }
+      header h1 { font-size: 22px; font-weight: 700; }
+      header .email { color: var(--fq-text-soft); font-size: 14px; }
       .header-right { display: flex; align-items: center; gap: 8px; }
-      button.logout { border: 0; border-radius: 8px; background: #eef2f6; color: #171717; font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
-      button.logout:disabled { opacity: 0.6; cursor: wait; }
-      .card { background: #ffffff; border: 1px solid #e2e5e9; border-radius: 8px; padding: 20px; box-shadow: 0 6px 20px rgba(17,24,39,0.04); }
-      .card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 700; color: #303845; }
-      .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f2f5; font-size: 14px; }
+      button.logout { border-radius: var(--fq-radius); background: var(--fq-surface-soft); color: var(--fq-text); font-weight: 600; padding: 8px 16px; min-height: 34px; }
+      button.logout:hover { background: var(--fq-surface); }
+      button.logout:disabled { cursor: wait; opacity: 0.6; }
+      .card { background: var(--fq-surface); border: 1px solid var(--fq-border); border-radius: var(--fq-radius); padding: 20px; box-shadow: var(--fq-shadow-card); }
+      .card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 700; color: var(--fq-text); }
+      .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--fq-divider); font-size: 14px; }
       .row:last-child { border-bottom: 0; }
-      .row .k { color: #5f6874; }
-      .row .v { color: #171717; font-weight: 600; text-align: right; word-break: break-all; }
-      .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-      .tag.active { background: #e7f6ec; color: #1f7a3a; }
-      .tag.inactive { background: #fdecec; color: #b42318; }
-      .placeholder { color: #9aa3af; font-size: 14px; }
-      #status { min-height: 20px; color: #5f6874; font-size: 13px; }
-      #status.error { color: #b42318; }
+      .row .k { color: var(--fq-text-soft); }
+      .row .v { color: var(--fq-text); font-weight: 600; text-align: right; word-break: break-all; }
+      .tag { display: inline-block; padding: 2px 8px; border-radius: var(--fq-radius-pill); font-size: 12px; font-weight: 700; }
+      .tag.active { background: var(--fq-success-soft); color: var(--fq-success); }
+      .tag.inactive { background: var(--fq-danger-soft); color: var(--fq-danger); }
+      .placeholder { color: var(--fq-text-soft); font-size: 14px; }
+      #status { min-height: 20px; color: var(--fq-text-soft); font-size: 13px; }
+      #status.error { color: var(--fq-danger); }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <header>
-        <div>
-          <h1>${t(locale, "dashboard.title")}</h1>
-          <div class="email">${escapeHtml(a.email)}</div>
-        </div>
-        <div class="header-right">
+      ${renderFrameHeader({
+        title: t(locale, "dashboard.title"),
+        subtitleHtml: `<div class="email">${escapeHtml(a.email)}</div>`,
+        rightHtml: `<div class="header-right">
           ${renderLangSwitcher(locale)}
           <button id="logout" class="logout" type="button">${t(locale, "dashboard.logout")}</button>
-        </div>
-      </header>
+        </div>`,
+      })}
 
       <section class="card">
         <h2>${t(locale, "dashboard.account_quota")}</h2>

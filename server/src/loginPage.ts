@@ -5,6 +5,8 @@ import {
   type Locale,
   t,
 } from "./i18n.js";
+import { basePageCss, designTokenCss } from "./designTokens.js";
+import { brandChromeCss, renderFrameHeader } from "./pageChrome.js";
 
 export function renderLoginPage(locale: Locale = "zh-CN"): string {
   const i18n = buildClientStrings(locale);
@@ -16,31 +18,21 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
     <title>${t(locale, "login.title")}</title>
     <style>
       ${langSwitcherStyles()}
-      :root {
-        color-scheme: light;
-        font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-          "Segoe UI", sans-serif;
-        background: #f6f7f8;
-        color: #171717;
-      }
-      * {
-        box-sizing: border-box;
-      }
+      ${designTokenCss()}
+      ${basePageCss()}
+      ${brandChromeCss()}
       body {
-        margin: 0;
-        min-height: 100vh;
         display: grid;
         place-items: center;
         padding: 24px;
       }
       main {
         width: min(100%, 420px);
-        background: #ffffff;
-        border: 1px solid #e2e5e9;
-        border-radius: 8px;
+        background: var(--fq-surface);
+        border: 1px solid var(--fq-border);
+        border-radius: var(--fq-radius);
         padding: 28px;
-        box-shadow: 0 18px 55px rgba(17, 24, 39, 0.09);
+        box-shadow: var(--fq-shadow-raised);
       }
       .page-header {
         display: flex;
@@ -51,69 +43,59 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
         margin-bottom: 8px;
       }
       .page-header h1 {
-        margin: 0;
         font-size: 24px;
         line-height: 1.2;
         font-weight: 700;
       }
       p {
         margin: 0 0 20px;
-        color: #5f6874;
+        color: var(--fq-text-soft);
         line-height: 1.6;
       }
       label {
         display: block;
         margin: 16px 0 8px;
-        color: #303845;
+        color: var(--fq-text);
         font-size: 14px;
-        font-weight: 650;
-      }
-      input {
-        width: 100%;
-        height: 44px;
-        border: 1px solid #cfd6df;
-        border-radius: 8px;
-        padding: 0 12px;
-        font: inherit;
-      }
-      input:focus {
-        outline: 3px solid rgba(36, 99, 235, 0.18);
-        border-color: #2463eb;
+        font-weight: 600;
       }
       button {
         width: 100%;
-        height: 44px;
+        min-height: 42px;
         margin-top: 16px;
-        border: 0;
-        border-radius: 8px;
-        background: #171717;
-        color: #ffffff;
-        font: inherit;
+        border-radius: var(--fq-radius);
+        background: var(--fq-primary);
+        color: var(--fq-text-on-primary);
         font-weight: 700;
-        cursor: pointer;
+      }
+      button:hover {
+        background: var(--fq-primary-pressed);
       }
       button.secondary {
-        background: #eef2f6;
-        color: #171717;
+        background: var(--fq-surface-soft);
+        color: var(--fq-text);
+      }
+      button.secondary:hover {
+        background: var(--fq-surface);
       }
       button:disabled {
         cursor: wait;
-        opacity: 0.62;
+        opacity: 0.6;
       }
       #status {
         min-height: 22px;
         margin-top: 16px;
-        color: #5f6874;
+        color: var(--fq-text-soft);
         font-size: 14px;
       }
       #status.error {
-        color: #b42318;
+        color: var(--fq-danger);
       }
       #fallback {
         display: none;
         margin-top: 18px;
         word-break: break-all;
-        color: #2463eb;
+        color: var(--fq-link);
         font-size: 14px;
       }
       #success-panel {
@@ -125,35 +107,36 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
         margin: 0 0 12px;
         font-size: 22px;
         font-weight: 700;
-        color: #1f7a3a;
+        color: var(--fq-success);
       }
       #success-panel p {
         margin: 0 0 16px;
-        color: #5f6874;
+        color: var(--fq-text-soft);
         line-height: 1.6;
       }
       #success-panel a.dashboard-link {
         display: inline-block;
         padding: 10px 20px;
-        border: 1px solid #2463eb;
-        border-radius: 8px;
-        color: #2463eb;
+        border: 1px solid var(--fq-primary);
+        border-radius: var(--fq-radius);
+        color: var(--fq-primary);
         text-decoration: none;
         font-weight: 600;
         font-size: 14px;
       }
       #success-panel a.dashboard-link:hover {
-        background: #2463eb;
-        color: #ffffff;
+        background: var(--fq-primary);
+        color: var(--fq-text-on-primary);
       }
     </style>
   </head>
   <body>
     <main>
-      <header class="page-header">
-        <h1>${t(locale, "login.title")}</h1>
-        ${renderLangSwitcher(locale)}
-      </header>
+      ${renderFrameHeader({
+        wrapperClass: "page-header",
+        title: t(locale, "login.title"),
+        rightHtml: renderLangSwitcher(locale),
+      })}
       <p id="intro">${t(locale, "login.intro.desktop")}</p>
       <form id="login-form">
         <label for="email">${t(locale, "login.email")}</label>

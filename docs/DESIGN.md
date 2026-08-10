@@ -315,3 +315,31 @@ UI 必须围绕以下状态组织：
 ## Error Copy
 
 错误信息必须可行动：说明失败阶段、失败原因、用户能否重试，以及是否保留了已有产物。
+
+## Server Web Pages Design System
+
+Server 端渲染页面（`loginPage.ts` / `dashboardPage.ts` / `adminPage.ts`，对应 `/login` `/dashboard` `/admin`）是独立的设计系统子域：**不得从 `design-system/globals.css` 或 `site/` 导入 token，server 网页只使用本节的 `var(--fq-*)` 集**。规范核心是一组共享模块，而非在每个页面内联样式。
+
+### 共享模块（唯一来源）
+
+- `server/src/designTokens.ts`
+  - `designTokenCss()`：输出 `:root { --fq-* }` 块，是全部颜色/字体/圆角/阴影/focus 的唯一真相来源。主色固定为品牌蓝 `--fq-primary: #0066cc`（与 `design-system/globals.css` 文档值一致）。
+  - `basePageCss()`：输出共享元素底样式（`*` / `body` / `input` / `button` / focus ring）。
+  - 每个页面 `<style>` 顶部必须注入 `${designTokenCss()} ${basePageCss()}`，并删除页面内各自的 `:root` / `*` / `body` / `input` / `button` 重复底样式。
+- `server/src/pageChrome.ts`
+  - `brandChromeCss()`：输出 `.brand-row` / `.brand-mark` / `.eyebrow`。
+  - `renderBrandMark()`：渲染装饰性 `FQ` 品牌 tile（`aria-hidden="true"`，产品名由标题承担）。
+  - `renderFrameHeader({ title, eyebrow?, subtitle?, titleId?, rightHtml?, wrapperClass? })`：渲染标准 `<header>`（品牌行 + 可选右侧动作槽）。四个页面 header 必须全部改调它，不得再手写品牌行。
+
+### 硬规则
+
+- **单一调色板**：新页面/区块一律消费 `var(--fq-*)`，禁止引入第二套颜色字面量（尤其不得混用 Ant Design 蓝 `#1668dc`、近黑按钮 `#171717` 等历史值）。
+- **主操作色统一**：login / dashboard / admin 的主操作按钮均为 `--fq-primary`，跨页不得变色。
+- **无装饰渐变 / 3D / 漂浮色块**：延续桌面与营销站规则，`admin` 登录页不得再使用 `linear-gradient` 氛围底。
+- **字体栈统一**：经 `--fq-font` 注入，禁止在单页写死 `-apple-system` 等局部字体栈。
+- **表格可读性**：长列表使用 `.table-wrap--scroll`（`max-height` + `overflow:auto` + sticky `thead th`）；斑马纹与行 hover 由 token 驱动，不得逐表硬编码。
+- **隐私优先**：server 网页不加载 analytics / 第三方字体 / tracking，与营销站一致。
+
+### 变更契约
+
+修改 server 网页样式时，先改 `designTokens.ts` / `pageChrome.ts`，再回填页面；不要反向在页面里新增字面量。新增 server 页面必须 `import` 这两个模块，不得重建内联 `:root`。

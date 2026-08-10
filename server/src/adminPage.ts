@@ -6,6 +6,8 @@ import {
   type Locale,
   t,
 } from "./i18n.js";
+import { basePageCss, designTokenCss } from "./designTokens.js";
+import { brandChromeCss, renderFrameHeader } from "./pageChrome.js";
 import type {
   ActivationCodeRecord,
   AdminEntitlementAdjustmentRecord,
@@ -27,14 +29,13 @@ export function renderAdminLoginPage(locale: Locale = "zh-CN"): string {
   <body class="login-page">
     <main class="login-shell">
       <section class="login-card" aria-labelledby="login-title">
-        <div class="brand-row">
-          <span class="brand-mark">FQ</span>
-          <div>
-            <p class="eyebrow">FrameQ Admin</p>
-            <h1 id="login-title">${t(locale, "admin_login.heading")}</h1>
-          </div>
-          ${renderLangSwitcher(locale)}
-        </div>
+        ${renderFrameHeader({
+          wrapperClass: "login-card-header",
+          eyebrow: "FrameQ Admin",
+          title: t(locale, "admin_login.heading"),
+          titleId: "login-title",
+          rightHtml: renderLangSwitcher(locale),
+        })}
         <p class="muted">${t(locale, "admin_login.intro")}</p>
         <form id="admin-login" class="admin-form">
           <label class="field">
@@ -194,20 +195,16 @@ export function renderAdminPage(input: {
   </head>
   <body>
     <main class="admin-shell">
-      <header class="admin-header">
-        <div class="brand-row">
-          <span class="brand-mark">FQ</span>
-          <div>
-            <p class="eyebrow">FrameQ Admin</p>
-            <h1>${t(locale, "admin.heading")}</h1>
-          </div>
-        </div>
-        <div class="admin-session">
+      ${renderFrameHeader({
+        wrapperClass: "admin-header",
+        eyebrow: "FrameQ Admin",
+        title: t(locale, "admin.heading"),
+        rightHtml: `<div class="admin-session">
           <span class="session-chip">${t(locale, "admin.logged_in_as")}${escapeHtml(input.adminEmail)}</span>
           ${renderLangSwitcher(locale)}
           <button id="logout-admin" class="secondary-button" type="button">${t(locale, "admin.logout")}</button>
-        </div>
-      </header>
+        </div>`,
+      })}
 
       <section class="metrics-grid" aria-label="FrameQ Admin summary">
         <div class="metric"><span>${t(locale, "admin.users_count")}</span><strong>${input.users.length}</strong></div>
@@ -293,7 +290,7 @@ export function renderAdminPage(input: {
             <h2>${t(locale, "admin.compensation_heading")}</h2>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap table-wrap--scroll">
           <table id="entitlement-adjustment-table">
             <thead><tr><th>${t(locale, "admin.col_email")}</th><th>${t(locale, "admin.col_current_expiry")}</th><th>${t(locale, "admin.col_remaining")}</th><th>${t(locale, "admin.col_extend_days")}</th><th>${t(locale, "admin.col_add_quota")}</th><th>${t(locale, "admin.col_reason")}</th><th>${t(locale, "admin.col_note")}</th><th>${t(locale, "admin.col_action")}</th></tr></thead>
             <tbody>${adjustmentRows}</tbody>
@@ -308,7 +305,7 @@ export function renderAdminPage(input: {
             <h2>${t(locale, "admin.audit_heading")}</h2>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap table-wrap--scroll">
           <table id="entitlement-adjustment-history-table">
             <thead><tr><th>${t(locale, "admin.col_time")}</th><th>${t(locale, "admin.col_email")}</th><th>${t(locale, "admin.col_reason")}</th><th>${t(locale, "admin.col_expiry_change")}</th><th>${t(locale, "admin.col_quota_change")}</th><th>${t(locale, "admin.col_note")}</th></tr></thead>
             <tbody>${recentAdjustmentRows}</tbody>
@@ -480,39 +477,12 @@ function adminStyles(locale: Locale): string {
   void locale; // styles are locale-independent
   return `
     ${langSwitcherStyles()}
-    :root {
-      color: #1f2328;
-      background: #f2f4f7;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-      font-size: 16px;
-      line-height: 1.5;
-      --surface: #ffffff;
-      --surface-soft: #f7f8fa;
-      --text: #1f2328;
-      --muted: #667085;
-      --border: #d7dce3;
-      --border-strong: #c2c9d3;
-      --primary: #1668dc;
-      --primary-pressed: #0f55b8;
-      --success: #1f7a4d;
-      --warning: #9a5b05;
-      --danger: #b42318;
-      --shadow: 0 18px 54px rgba(20, 26, 35, 0.12);
-      --radius: 8px;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; }
-    button, input { font: inherit; }
-    button { border: 0; cursor: pointer; }
-    button:disabled { cursor: not-allowed; opacity: 0.58; }
-    h1, h2, p { margin: 0; }
-    h1 { color: var(--text); font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.08; }
-    h2 { color: var(--text); font-size: 1.08rem; line-height: 1.2; }
+    ${designTokenCss()}
+    ${basePageCss()}
+    h1 { color: var(--fq-text); font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.08; }
+    h2 { color: var(--fq-text); font-size: 1.08rem; line-height: 1.2; }
     .login-page {
       align-items: center;
-      background:
-        linear-gradient(135deg, rgba(22, 104, 220, 0.08), transparent 34%),
-        #f2f4f7;
       display: flex;
       justify-content: center;
       padding: 32px 18px;
@@ -521,58 +491,23 @@ function adminStyles(locale: Locale): string {
     .login-card,
     .admin-panel,
     .metric {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
+      background: var(--fq-surface);
+      border: 1px solid var(--fq-border);
+      border-radius: var(--fq-radius);
+      box-shadow: var(--fq-shadow-raised);
     }
     .login-card { display: grid; gap: 18px; padding: 28px; }
-    .brand-row { align-items: center; display: flex; gap: 12px; min-width: 0; }
-    .brand-mark {
-      align-items: center;
-      background: #111827;
-      border-radius: 7px;
-      color: #ffffff;
-      display: inline-flex;
-      flex: 0 0 auto;
-      font-size: 0.78rem;
-      font-weight: 800;
-      height: 38px;
-      justify-content: center;
-      letter-spacing: 0;
-      width: 38px;
-    }
-    .eyebrow {
-      color: var(--muted);
-      font-size: 0.74rem;
-      font-weight: 760;
-      letter-spacing: 0;
-      margin-bottom: 3px;
-      text-transform: uppercase;
-    }
-    .muted { color: var(--muted); font-size: 0.92rem; }
+    .login-card-header { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+    ${brandChromeCss()}
+    .muted { color: var(--fq-text-soft); font-size: 0.92rem; }
     .admin-form { display: grid; gap: 14px; }
-    .field { color: #333946; display: grid; font-size: 0.88rem; font-weight: 680; gap: 7px; }
+    .field { color: var(--fq-text); display: grid; font-size: 0.88rem; font-weight: 680; gap: 7px; }
     .field.compact { min-width: 180px; }
-    input {
-      background: #ffffff;
-      border: 1px solid var(--border-strong);
-      border-radius: 7px;
-      color: var(--text);
-      min-height: 42px;
-      outline: none;
-      padding: 0 12px;
-      width: 100%;
-    }
-    input:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(22, 104, 220, 0.16);
-    }
     .inline-action-field { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
     .primary-button,
     .secondary-button {
       align-items: center;
-      border-radius: 7px;
+      border-radius: var(--fq-radius);
       display: inline-flex;
       font-weight: 720;
       justify-content: center;
@@ -580,25 +515,25 @@ function adminStyles(locale: Locale): string {
       padding: 0 14px;
       white-space: nowrap;
     }
-    .primary-button { background: var(--primary); color: #ffffff; }
-    .primary-button:hover { background: var(--primary-pressed); }
+    .primary-button { background: var(--fq-primary); color: var(--fq-text-on-primary); }
+    .primary-button:hover { background: var(--fq-primary-pressed); }
     .secondary-button {
-      background: var(--surface-soft);
-      border: 1px solid var(--border);
-      color: #303743;
+      background: var(--fq-surface-soft);
+      border: 1px solid var(--fq-border);
+      color: var(--fq-text);
     }
-    .secondary-button:hover { background: #ffffff; border-color: var(--border-strong); }
-    .status-message { color: var(--muted); font-size: 0.88rem; min-height: 22px; }
-    .status-message[data-tone="success"] { color: var(--success); }
-    .status-message[data-tone="error"] { color: var(--danger); }
+    .secondary-button:hover { background: var(--fq-surface); border-color: var(--fq-border-strong); }
+    .status-message { color: var(--fq-text-soft); font-size: 0.88rem; min-height: 22px; }
+    .status-message[data-tone="success"] { color: var(--fq-success); }
+    .status-message[data-tone="error"] { color: var(--fq-danger); }
     .admin-shell { display: grid; gap: 18px; margin: 0 auto; max-width: 1180px; padding: 28px; }
     .admin-header { align-items: end; display: flex; gap: 16px; justify-content: space-between; }
     .admin-session { align-items: center; display: flex; gap: 10px; }
     .session-chip {
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      color: #303743;
+      background: var(--fq-surface);
+      border: 1px solid var(--fq-border);
+      border-radius: var(--fq-radius-pill);
+      color: var(--fq-text);
       font-size: 0.84rem;
       font-weight: 700;
       min-height: 34px;
@@ -607,8 +542,8 @@ function adminStyles(locale: Locale): string {
     }
     .metrics-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .metric { box-shadow: none; display: grid; gap: 4px; padding: 16px; }
-    .metric span { color: var(--muted); font-size: 0.82rem; font-weight: 680; }
-    .metric strong { color: var(--text); font-size: 1.8rem; line-height: 1; }
+    .metric span { color: var(--fq-text-soft); font-size: 0.82rem; font-weight: 680; }
+    .metric strong { color: var(--fq-text); font-size: 1.8rem; line-height: 1; }
     .admin-panel { box-shadow: none; display: grid; gap: 14px; padding: 18px; }
     .create-panel { grid-template-columns: minmax(0, 1fr) auto; }
     .llm-config-grid { display: grid; gap: 10px; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -617,33 +552,32 @@ function adminStyles(locale: Locale): string {
     .unit-input input { border-bottom-right-radius: 0; border-top-right-radius: 0; }
     .unit-input span {
       align-items: center;
-      background: var(--surface-soft);
-      border: 1px solid var(--border-strong);
+      background: var(--fq-surface-soft);
+      border: 1px solid var(--fq-border-strong);
       border-left: 0;
-      border-radius: 0 7px 7px 0;
-      color: var(--muted);
+      border-radius: 0 var(--fq-radius) var(--fq-radius) 0;
+      color: var(--fq-text-soft);
       display: flex;
       min-height: 42px;
       padding: 0 10px;
     }
     .created-code-card {
       align-items: center;
-      background: #f6fbf8;
+      background: var(--fq-success-soft);
       border: 1px solid rgba(31, 122, 77, 0.24);
-      border-radius: var(--radius);
+      border-radius: var(--fq-radius);
       display: grid;
       gap: 10px;
       grid-column: 1 / -1;
       grid-template-columns: auto minmax(0, 1fr) auto;
       padding: 12px;
     }
-    .created-code-card span { color: var(--success); font-size: 0.82rem; font-weight: 760; }
+    .created-code-card span { color: var(--fq-success); font-size: 0.82rem; font-weight: 760; }
     code {
-      background: var(--surface-soft);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: #111827;
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      background: var(--fq-surface-soft);
+      border: 1px solid var(--fq-border);
+      border-radius: var(--fq-radius-sm);
+      color: var(--fq-text);
       overflow-wrap: anywhere;
       padding: 3px 7px;
     }
@@ -651,31 +585,35 @@ function adminStyles(locale: Locale): string {
     .table-wrap { overflow-x: auto; }
     table { border-collapse: collapse; min-width: 720px; width: 100%; }
     th, td {
-      border-bottom: 1px solid var(--border);
-      color: #303743;
+      border-bottom: 1px solid var(--fq-border);
+      color: var(--fq-text);
       font-size: 0.9rem;
       padding: 10px 8px;
       text-align: left;
       vertical-align: middle;
       white-space: nowrap;
     }
-    th { color: var(--muted); font-size: 0.76rem; font-weight: 760; text-transform: uppercase; }
+    th { background: var(--fq-surface); color: var(--fq-text-soft); font-size: 0.76rem; font-weight: 760; text-transform: uppercase; }
     tr:last-child td { border-bottom: 0; }
+    tbody tr:nth-child(even) { background: var(--fq-surface-soft); }
+    tbody tr:hover { background: var(--fq-primary-soft); }
+    .table-wrap--scroll { max-height: 65vh; overflow: auto; }
+    .table-wrap--scroll thead th { position: sticky; top: 0; z-index: 1; }
     .badge {
-      border: 1px solid var(--border);
-      border-radius: 999px;
+      border: 1px solid var(--fq-border);
+      border-radius: var(--fq-radius-pill);
       display: inline-flex;
       font-size: 0.78rem;
       font-weight: 760;
       min-height: 24px;
       padding: 2px 9px;
     }
-    .badge.active { background: #edf8f2; border-color: rgba(31, 122, 77, 0.2); color: var(--success); }
-    .badge.redeemed { background: #eef4ff; border-color: rgba(22, 104, 220, 0.2); color: var(--primary); }
+    .badge.active { background: var(--fq-success-soft); border-color: rgba(31, 122, 77, 0.2); color: var(--fq-success); }
+    .badge.redeemed { background: var(--fq-primary-soft); border-color: rgba(0, 102, 204, 0.2); color: var(--fq-primary); }
     .badge.inactive,
     .badge.expired,
-    .badge.disabled { background: #fff4f3; border-color: rgba(180, 35, 24, 0.2); color: var(--danger); }
-    .empty-cell { color: var(--muted); text-align: center; }
+    .badge.disabled { background: var(--fq-danger-soft); border-color: rgba(180, 35, 24, 0.2); color: var(--fq-danger); }
+    .empty-cell { color: var(--fq-text-soft); text-align: center; }
     @media (max-width: 760px) {
       .login-page { align-items: stretch; padding-top: 18px; }
       .login-card { padding: 22px; }
