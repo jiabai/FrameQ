@@ -89,8 +89,8 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   failure sheet exposes export only for terminal ASR model-download failure/timeout, Settings >
   Advanced exposes the permanent entry, both surfaces share one busy/cancel/safe-notice controller,
   and `zh-CN`, `zh-TW`, and `en-US` copy states the seven-day safe scope, forbidden data, and that
-  export neither retries nor probes the network. Validation: interaction-focused UI tests 47
-  passed; full frontend tests 740 passed; lint, production build, and `git diff --check` passed.
+  export neither retries nor probes the network. Validation: interaction-focused UI tests 47/47
+  passed; full frontend tests 740/740 passed; lint, production build, and `git diff --check` passed.
 - [x] 2026-08-10: Task 8 automated packaging and repository gates completed. The canonical worker
   was refreshed into the packaged resource and the second recursive byte comparison exited 0;
   generated `__pycache__` files found during the first comparison were removed before the final
@@ -690,7 +690,7 @@ hosts.
   no DNS/HTTP request. Blocked on this host because the native Tauri package could not be built;
   command-level Rust/export tests and all automated privacy assertions passed.
 
-- [x] **Step 5: Close documentation and plan lifecycle.** Run governance WARN validation and diff
+- [x] **Step 5: Close implementation documentation.** Run governance WARN validation and diff
   checks, update spec/design status to implementation-complete with native release evidence still
   pending, fill Outcomes with exact evidence and residual risks, and synchronize TASKS and AGENTS.
   The plan remains active because Step 4 is a release-host acceptance item, not because code or
