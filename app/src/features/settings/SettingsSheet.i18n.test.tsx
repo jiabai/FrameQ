@@ -13,6 +13,67 @@ vi.mock("./LanguagePreferenceField", () => ({
   LanguagePreferenceField: () => null,
 }));
 
+type CapturedButton = { props: Record<string, unknown> };
+type JsxDevArgs = [
+  type: unknown,
+  props: unknown,
+  key?: unknown,
+  isStaticChildren?: boolean,
+  source?: unknown,
+  self?: unknown,
+];
+
+const capturedButtons = vi.hoisted(() => [] as CapturedButton[]);
+
+vi.mock("react/jsx-runtime", async () => {
+  const actual = await vi.importActual<typeof import("react/jsx-runtime")>(
+    "react/jsx-runtime",
+  );
+
+  const captureButton = (type: unknown, props: unknown) => {
+    if (type === "button" && props && typeof props === "object") {
+      capturedButtons.push({ props: props as Record<string, unknown> });
+    }
+  };
+
+  return {
+    ...actual,
+    jsx: (
+      type: Parameters<typeof actual.jsx>[0],
+      props: Parameters<typeof actual.jsx>[1],
+      key?: Parameters<typeof actual.jsx>[2],
+    ) => {
+      captureButton(type, props);
+      return actual.jsx(type, props, key);
+    },
+    jsxs: (
+      type: Parameters<typeof actual.jsxs>[0],
+      props: Parameters<typeof actual.jsxs>[1],
+      key?: Parameters<typeof actual.jsxs>[2],
+    ) => {
+      captureButton(type, props);
+      return actual.jsxs(type, props, key);
+    },
+  };
+});
+
+vi.mock("react/jsx-dev-runtime", async () => {
+  const actual = await vi.importActual<typeof import("react/jsx-dev-runtime")>(
+    "react/jsx-dev-runtime",
+  );
+  const jsxDEV = (actual as typeof actual & { jsxDEV: (...args: JsxDevArgs) => unknown }).jsxDEV;
+
+  return {
+    ...actual,
+    jsxDEV: (...args: JsxDevArgs) => {
+      if (args[0] === "button" && args[1] && typeof args[1] === "object") {
+        capturedButtons.push({ props: args[1] as Record<string, unknown> });
+      }
+      return jsxDEV(...args);
+    },
+  };
+});
+
 function controller(
   category: SettingsCategory,
   overrides: Partial<SettingsController> = {},
@@ -53,6 +114,7 @@ function renderSettings(
     updateState?: UpdateState;
   } = {},
 ) {
+  capturedButtons.length = 0;
   return renderToStaticMarkup(
     <SettingsSheet
       controller={controller(category, options.controller)}
@@ -76,6 +138,23 @@ function renderSettings(
       locale={locale}
     />,
   );
+}
+
+function getDiagnosticExportButton(): CapturedButton {
+  const button = capturedButtons.find(({ props }) => "aria-busy" in props);
+  expect(button).toBeDefined();
+  return button as CapturedButton;
+}
+
+async function clickRenderedButton(button: CapturedButton): Promise<void> {
+  expect(button.props.type).toBe("button");
+  expect(button.props.onClick).toEqual(expect.any(Function));
+
+  if (button.props.disabled === true) {
+    return;
+  }
+
+  await (button.props.onClick as () => void | Promise<void>)();
 }
 
 describe("settings localization", () => {
@@ -169,6 +248,37 @@ describe("settings localization", () => {
     expect(markup).toContain("Exporting diagnostics");
     expect(markup).not.toContain('type="submit" form="settings-form"><span>Export diagnostics');
     expect(markup).toContain('id="settings-form"');
+  });
+
+  test("calls diagnostics export when the Advanced action is clicked", async () => {
+    await initializeI18n("en-US");
+    const exportDiagnostics = vi.fn();
+    const submitSettings = vi.fn();
+
+    renderSettings("en-US", "advanced", {
+      controller: { exportDiagnostics, submitSettings },
+    });
+
+    await clickRenderedButton(getDiagnosticExportButton());
+
+    expect(exportDiagnostics).toHaveBeenCalledTimes(1);
+    expect(submitSettings).not.toHaveBeenCalled();
+  });
+
+  test("does not dispatch duplicate clicks while diagnostics export is busy", async () => {
+    await initializeI18n("en-US");
+    const exportDiagnostics = vi.fn();
+
+    renderSettings("en-US", "advanced", {
+      controller: { diagnosticExportBusy: true, exportDiagnostics },
+    });
+
+    const button = getDiagnosticExportButton();
+    expect(button.props.disabled).toBe(true);
+    await clickRenderedButton(button);
+    await clickRenderedButton(button);
+
+    expect(exportDiagnostics).not.toHaveBeenCalled();
   });
 
   test("renders only the safe shared diagnostic notice", async () => {

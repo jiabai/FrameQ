@@ -6,7 +6,69 @@ import { LocaleProvider } from "../../i18n/LocaleProvider";
 import type { SupportedLocale } from "../../i18n/locale";
 import { uiMessage } from "../../i18n/uiMessage";
 import type { AsrModelDownloadProgress } from "../../settingsClient";
+import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 import { ModelGuideSheet } from "./ModelGuideSheet";
+
+type CapturedButton = { props: Record<string, unknown> };
+type JsxDevArgs = [
+  type: unknown,
+  props: unknown,
+  key?: unknown,
+  isStaticChildren?: boolean,
+  source?: unknown,
+  self?: unknown,
+];
+
+const capturedButtons = vi.hoisted(() => [] as CapturedButton[]);
+
+vi.mock("react/jsx-runtime", async () => {
+  const actual = await vi.importActual<typeof import("react/jsx-runtime")>(
+    "react/jsx-runtime",
+  );
+
+  const captureButton = (type: unknown, props: unknown) => {
+    if (type === "button" && props && typeof props === "object") {
+      capturedButtons.push({ props: props as Record<string, unknown> });
+    }
+  };
+
+  return {
+    ...actual,
+    jsx: (
+      type: Parameters<typeof actual.jsx>[0],
+      props: Parameters<typeof actual.jsx>[1],
+      key?: Parameters<typeof actual.jsx>[2],
+    ) => {
+      captureButton(type, props);
+      return actual.jsx(type, props, key);
+    },
+    jsxs: (
+      type: Parameters<typeof actual.jsxs>[0],
+      props: Parameters<typeof actual.jsxs>[1],
+      key?: Parameters<typeof actual.jsxs>[2],
+    ) => {
+      captureButton(type, props);
+      return actual.jsxs(type, props, key);
+    },
+  };
+});
+
+vi.mock("react/jsx-dev-runtime", async () => {
+  const actual = await vi.importActual<typeof import("react/jsx-dev-runtime")>(
+    "react/jsx-dev-runtime",
+  );
+  const jsxDEV = (actual as typeof actual & { jsxDEV: (...args: JsxDevArgs) => unknown }).jsxDEV;
+
+  return {
+    ...actual,
+    jsxDEV: (...args: JsxDevArgs) => {
+      if (args[0] === "button" && args[1] && typeof args[1] === "object") {
+        capturedButtons.push({ props: args[1] as Record<string, unknown> });
+      }
+      return jsxDEV(...args);
+    },
+  };
+});
 
 const progress: AsrModelDownloadProgress = {
   phase: "running",
@@ -23,11 +85,13 @@ async function renderModelGuide(
     stalled?: boolean;
     diagnosticExportNotice?: ReturnType<typeof uiMessage>;
     diagnosticExportBusy?: boolean;
+    diagnosticExportController?: Partial<DiagnosticExportController>;
     modelDownloadActive?: boolean;
     modelDownloadPhase?: AsrModelDownloadProgress["phase"];
   } = {},
 ): Promise<string> {
   await initializeI18n(locale);
+  capturedButtons.length = 0;
   return renderToStaticMarkup(
     <LocaleProvider
       initialOutcome={{
@@ -57,6 +121,7 @@ async function renderModelGuide(
           exportDiagnostics: vi.fn(),
           diagnosticExportBusy: options.diagnosticExportBusy ?? false,
           diagnosticExportNotice: options.diagnosticExportNotice ?? null,
+          ...options.diagnosticExportController,
         }}
         onClose={vi.fn()}
         onStartDownload={vi.fn()}
@@ -64,6 +129,25 @@ async function renderModelGuide(
       />
     </LocaleProvider>,
   );
+}
+
+function getDiagnosticExportButton(): CapturedButton {
+  const button = capturedButtons.find(
+    ({ props }) => props.className === "secondary-button diagnostic-export-button",
+  );
+  expect(button).toBeDefined();
+  return button as CapturedButton;
+}
+
+async function clickRenderedButton(button: CapturedButton): Promise<void> {
+  expect(button.props.type).toBe("button");
+  expect(button.props.onClick).toEqual(expect.any(Function));
+
+  if (button.props.disabled === true) {
+    return;
+  }
+
+  await (button.props.onClick as () => void | Promise<void>)();
 }
 
 describe("ModelGuideSheet localization", () => {
@@ -162,6 +246,21 @@ describe("ModelGuideSheet localization", () => {
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('class="secondary-button diagnostic-export-button" disabled="" aria-busy="true"');
     expect(markup).toContain("Exporting diagnostics");
+  });
+
+  test("calls the shared export controller when the failure action is clicked", async () => {
+    const exportDiagnostics = vi.fn();
+
+    await renderModelGuide("en-US", {
+      modelDownloadActive: false,
+      modelDownloadPhase: "failed",
+      notice: uiMessage("asrModel.notice.downloadFailed"),
+      diagnosticExportController: { exportDiagnostics },
+    });
+
+    await clickRenderedButton(getDiagnosticExportButton());
+
+    expect(exportDiagnostics).toHaveBeenCalledTimes(1);
   });
 
   test("renders the shared diagnostic notice without exposing raw failure text", async () => {
