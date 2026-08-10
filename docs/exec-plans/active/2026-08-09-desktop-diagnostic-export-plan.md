@@ -97,6 +97,18 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   refresh. Validation: scripts 29/29, worker 782 passed / 2 skipped, Ruff passed, Rust 316 passed,
   Rust formatting passed, frontend 740/740, lint/build passed, and all completed focused suites
   remained green. The final governance and documentation checks are recorded below.
+- [x] 2026-08-10: Fresh Windows recheck completed after the native build was available. The
+  diagnostic focused Rust suites passed (47 `diagnostics`, 7 `diagnostic_export`, 7 runner
+  progress tests); the release no-bundle build exited 0 and the resulting `app.exe` stayed
+  responsive for an 8-second startup check. Scripts passed 29/29, worker passed 782/2 skipped
+  after redirecting `TEMP`/`TMP` to a writable workspace temp root, Ruff passed, frontend passed
+  740/740 with lint/build, governance passed, and the canonical/packaged worker byte comparison
+  exited 0 after removing generated `__pycache__` directories. A fresh full Rust run still hit
+  the existing Windows watchdog/child-process fixture contention and timed out after 300 seconds;
+  this is recorded as an environment residual, not as a passing full Rust gate. The native Save
+  As dialog could not be driven by the available automation surface (Tauri WebView exposed no
+  CDP/UIA tree), so Windows Save As success/cancel/replacement/destination-failure remains a
+  manual acceptance item; no macOS native dialog evidence was attempted on Windows.
 
 ## Surprises & Discoveries
 
