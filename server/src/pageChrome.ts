@@ -17,7 +17,7 @@ export function brandChromeCss(): string {
     .brand-row { align-items: center; display: flex; gap: 12px; min-width: 0; }
     .brand-mark {
       align-items: center;
-      background: var(--fq-text);
+      background: var(--fq-primary);
       border-radius: var(--fq-radius);
       color: var(--fq-text-on-primary);
       display: inline-flex;
