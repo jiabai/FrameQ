@@ -3,15 +3,22 @@
 ## Active UI Work
 
 - [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
-  release acceptance remains pending Windows native packaged Save As smoke and macOS native dialog
-  evidence. Automated acceptance passed: scripts 29/29, worker 782 passed / 2 skipped, Rust 316
-  passed, frontend 740/740, Ruff/rustfmt/lint/build/governance/diff checks passed, and the refreshed
+  Windows native Save As manual verification is complete; macOS native dialog evidence remains
+  pending. Earlier automated acceptance recorded scripts 29/29, worker 782 passed / 2 skipped,
+  Rust 316 passed, frontend 740/740, Ruff/rustfmt/lint/build/governance/diff checks passed, and the refreshed
   packaged worker matched the canonical worker byte-for-byte. The Windows Tauri no-bundle build
   could not reach a native smoke because rustc failed memory allocation, including after a single-job
   retry; do not treat the compiler cascade as a product regression. Product spec:
   `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
   `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
   `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
+
+- [ ] Prepare and publish FrameQ v0.3.2 desktop diagnostic export release (2026-08-10) — ✅ Acceptance:
+  merged
+  `codex/desktop-diagnostic-export` into `main`, synchronized five version sources at 0.3.2, and
+  added release notes. Remaining gates: merged local verification, hosted CI/Desktop Release,
+  and final tag/publication. Release plan:
+  `docs/exec-plans/active/2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md`.
 
 - [x] Prepare and publish FrameQ v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance: five
   version sources synchronized at 0.3.1, `scripts/tests/release-version.test.mjs` asserts

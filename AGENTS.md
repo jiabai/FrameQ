@@ -71,10 +71,12 @@
 - 最近完成 RetryInsights 进度感知 watchdog 计划：`docs/exec-plans/completed/2026-08-04-retry-insights-progress-aware-watchdog-plan.md`（30 分钟 idle、90 分钟 absolute、解剖调用边界进度）
 - v0.3.0 release notes 草稿：`docs/releases/v0.3.0.md`
 - v0.3.1 release notes 草稿：`docs/releases/v0.3.1.md`
+- v0.3.2 诊断导出 release notes 草稿：`docs/releases/v0.3.2.md`
+- v0.3.2 诊断导出发布计划：`docs/exec-plans/active/2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md`
 - 首个产品规格：`docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
 - 执行计划索引：`docs/exec-plans/index.md`
 - 当前执行计划索引：`docs/exec-plans/active/index.md`
-- 当前桌面诊断信息导出计划：`docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`（contract v8 → ASR 下载专用安全日志 → Rust ZIP 导出 → 双入口与三语言 → 自动化门禁已完成；Windows/macOS 原生烟测待目标主机）
+- 当前桌面诊断信息导出计划：`docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`（contract v8 → ASR 下载专用安全日志 → Rust ZIP 导出 → 双入口与三语言 → 自动化门禁已完成；Windows Save As 手测已完成，macOS 原生烟测待目标主机）
 - 最近完成 ONNX VAD 结果契约加固计划：`docs/exec-plans/completed/2026-07-29-onnx-vad-result-contract-hardening-plan.md`
 - 最近完成 可选 ASR 模型按需下载计划：`docs/exec-plans/completed/2026-07-27-selectable-asr-model-on-demand-download-plan.md`
 - 最近完成 v0.2.17 发布计划：`docs/exec-plans/completed/2026-07-17-v0.2.17-desktop-i18n-release-plan.md`
