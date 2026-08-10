@@ -140,18 +140,20 @@ describe("settings localization", () => {
   });
 
   test.each([
-    ["zh-CN", "诊断信息", "导出诊断信息", "最近 7 天"],
-    ["zh-TW", "診斷資訊", "匯出診斷資訊", "最近 7 天"],
-    ["en-US", "Diagnostics", "Export diagnostics", "last 7 days"],
+    ["zh-CN", "诊断信息", "导出诊断信息", ["最近 7 天", "媒体", "文字稿", "密钥", "模型文件", "重新下载模型", "测试或探测网络"]],
+    ["zh-TW", "診斷資訊", "匯出診斷資訊", ["最近 7 天", "媒體", "文字稿", "金鑰", "模型檔案", "重新下載模型", "測試或探測網路"]],
+    ["en-US", "Diagnostics", "Export diagnostics", ["last 7 days", "media", "transcripts", "keys", "model files", "download the model again", "test or probe the network"]],
   ] as const)(
     "renders the permanent localized diagnostics action in Advanced for %s",
-    async (locale, heading, action, retentionCopy) => {
+    async (locale, heading, action, privacyTokens) => {
       await initializeI18n(locale);
       const markup = renderSettings(locale, "advanced");
 
       expect(markup).toContain(heading);
       expect(markup).toContain(action);
-      expect(markup).toContain(retentionCopy);
+      for (const privacyToken of privacyTokens) {
+        expect(markup).toContain(privacyToken);
+      }
       expect(markup).toContain('type="button"');
       expect(markup).not.toContain("Open logs directory");
     },

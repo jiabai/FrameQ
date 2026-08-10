@@ -21,7 +21,7 @@ export const asrModelResources = {
       retry: "重试",
       diagnostics: {
         title: "导出诊断信息",
-        privacy: "仅包含最近 7 天的安全诊断记录，不含媒体、文字稿、密钥或模型文件，也不会重试网络请求。",
+        privacy: "仅导出最近 7 天的安全诊断记录；不含媒体、文字稿、密钥或模型文件；不会重新下载模型，也不会测试或探测网络。",
         export: "导出诊断信息",
         exporting: "正在导出诊断信息…",
       },
@@ -65,7 +65,7 @@ export const asrModelResources = {
       retry: "重試",
       diagnostics: {
         title: "匯出診斷資訊",
-        privacy: "僅包含最近 7 天的安全診斷記錄，不含媒體、文字稿、金鑰或模型檔案，也不會重試網路請求。",
+        privacy: "僅匯出最近 7 天的安全診斷記錄；不含媒體、文字稿、金鑰或模型檔案；不會重新下載模型，也不會測試或探測網路。",
         export: "匯出診斷資訊",
         exporting: "正在匯出診斷資訊…",
       },
@@ -109,7 +109,7 @@ export const asrModelResources = {
       retry: "Retry",
       diagnostics: {
         title: "Export diagnostics",
-        privacy: "Includes only safe diagnostic records from the last 7 days. It contains no media, transcripts, keys, or model files and does not retry network requests.",
+        privacy: "Exports only safe diagnostic records from the last 7 days. It contains no media, transcripts, keys, or model files; it does not download the model again or test or probe the network.",
         export: "Export diagnostics",
         exporting: "Exporting diagnostics…",
       },

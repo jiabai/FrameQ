@@ -112,12 +112,12 @@ describe("ModelGuideSheet localization", () => {
   });
 
   test.each([
-    ["zh-CN", "导出诊断信息", "重试", "最近 7 天", ["媒体", "文字稿", "密钥", "模型文件", "网络"]],
-    ["zh-TW", "匯出診斷資訊", "重試", "最近 7 天", ["媒體", "文字稿", "金鑰", "模型檔案", "網路"]],
-    ["en-US", "Export diagnostics", "Retry", "last 7 days", ["media", "transcript", "key", "model file", "network"]],
+    ["zh-CN", "导出诊断信息", "重试", ["最近 7 天", "媒体", "文字稿", "密钥", "模型文件", "重新下载模型", "测试或探测网络"]],
+    ["zh-TW", "匯出診斷資訊", "重試", ["最近 7 天", "媒體", "文字稿", "金鑰", "模型檔案", "重新下載模型", "測試或探測網路"]],
+    ["en-US", "Export diagnostics", "Retry", ["last 7 days", "media", "transcripts", "keys", "model files", "download the model again", "test or probe the network"]],
   ] as const)(
     "shows the localized failure export action and privacy boundary in %s",
-    async (locale, exportLabel, retryLabel, retentionCopy, privacyTokens) => {
+    async (locale, exportLabel, retryLabel, privacyTokens) => {
       const markup = await renderModelGuide(locale, {
         modelDownloadActive: false,
         modelDownloadPhase: "failed",
@@ -126,7 +126,6 @@ describe("ModelGuideSheet localization", () => {
 
       expect(markup).toContain(exportLabel);
       expect(markup).toContain(retryLabel);
-      expect(markup).toContain(retentionCopy);
       for (const privacyToken of privacyTokens) {
         expect(markup).toContain(privacyToken);
       }
