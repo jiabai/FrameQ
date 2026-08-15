@@ -41,6 +41,8 @@ export const asrModelResources = {
       cancelling: "正在取消模型下载，请等待当前进程结束。",
       cancelFailed: "无法取消模型下载。下载仍在继续，请稍后重试。",
       awaitingFinalResult: "下载已接近结束，正在等待最终结果。",
+      runtimeMissing:
+        "缺少 Windows 运行组件（VC++ 2015-2022 运行库）。请安装 Microsoft Visual C++ Redistributable (x64) 后重试；若已安装，请检查安全软件是否拦截了 FrameQ 的安装文件，必要时重新安装 FrameQ。",
     },
   },
   "zh-TW": {
@@ -85,6 +87,8 @@ export const asrModelResources = {
       cancelling: "正在取消模型下載，請等待目前的處理程序結束。",
       cancelFailed: "無法取消模型下載。下載仍在繼續，請稍後重試。",
       awaitingFinalResult: "下載即將結束，正在等待最終結果。",
+      runtimeMissing:
+        "缺少 Windows 執行元件（VC++ 2015-2022 執行階段）。請安裝 Microsoft Visual C++ Redistributable (x64) 後重試；若已安裝，請檢查安全軟體是否攔截了 FrameQ 的安裝檔案，必要時重新安裝 FrameQ。",
     },
   },
   "en-US": {
@@ -129,6 +133,8 @@ export const asrModelResources = {
       cancelling: "Cancelling the model download. Wait for the current process to finish.",
       cancelFailed: "The model download could not be cancelled. It is still running; try again later.",
       awaitingFinalResult: "The download is almost finished. Waiting for the final result.",
+      runtimeMissing:
+        "Missing Windows runtime components (VC++ 2015-2022). Install the Microsoft Visual C++ Redistributable (x64) and retry; if already installed, check whether your security software blocked FrameQ's installation files, and reinstall FrameQ if needed.",
     },
   },
 } as const;

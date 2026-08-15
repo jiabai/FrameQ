@@ -7,6 +7,7 @@ use crate::settings::{
     ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV, MODELSCOPE_ENDPOINT_ENV,
     SENSEVOICE_REVISION_ENV,
 };
+use crate::vc_runtime::{check_vc_runtime, VcRuntimeStatus};
 use crate::worker_runtime::{
     AsrModelDownloadJob, ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerRunError,
     WorkerRunErrorKind, WorkerRunOutcome, WorkerTimeoutKind, WORKER_PROTOCOL_MESSAGE,
@@ -274,6 +275,9 @@ fn download_asr_model_blocking(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let asr_model = validate_asr_model(asr_model)?;
+    if check_vc_runtime(&paths) != VcRuntimeStatus::Ok {
+        return Err("ASR_MODEL_RUNTIME_MISSING".to_string());
+    }
     let initial_snapshot = diagnostic_model_snapshot_for(&paths, &asr_model);
     diagnostic_state.update(initial_snapshot);
     if initial_snapshot.cache_status == DiagnosticCacheStatus::Ready {

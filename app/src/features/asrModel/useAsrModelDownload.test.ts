@@ -118,6 +118,16 @@ describe("useAsrModelDownload cancellation", () => {
       new Error("ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT"),
       "asrModel.notice.executionTimeout",
     ],
+    [
+      "missing VC++ runtime from a bare Tauri rejection",
+      "ASR_MODEL_RUNTIME_MISSING",
+      "asrModel.notice.runtimeMissing",
+    ],
+    [
+      "missing VC++ runtime from an Error rejection",
+      new Error("ASR_MODEL_RUNTIME_MISSING"),
+      "asrModel.notice.runtimeMissing",
+    ],
   ])("handles %s as a retryable terminal failure", async (_label, rejection, noticeCode) => {
     listenMock.mockResolvedValue(() => undefined);
     downloadAsrModelMock

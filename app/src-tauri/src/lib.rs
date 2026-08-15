@@ -20,6 +20,7 @@ mod task_manifest;
 mod transcript_detail;
 mod ui_preferences;
 mod updates;
+mod vc_runtime;
 mod video_processing;
 mod window_chrome;
 mod worker_runtime;

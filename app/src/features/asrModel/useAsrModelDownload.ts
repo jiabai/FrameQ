@@ -43,6 +43,9 @@ function modelDownloadTimeoutNotice(error: unknown): UiMessage | null {
   if (code === "ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT") {
     return uiMessage("asrModel.notice.executionTimeout");
   }
+  if (code === "ASR_MODEL_RUNTIME_MISSING") {
+    return uiMessage("asrModel.notice.runtimeMissing");
+  }
   return null;
 }
 
