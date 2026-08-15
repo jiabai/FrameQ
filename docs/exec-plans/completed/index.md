@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-08-15-v0.3.3-desktop-feature-release-plan.md` | Published stable v0.3.3 (https://github.com/jiabai/FrameQ/releases/tag/v0.3.3) with VC++ runtime self-check / import-stage diagnostics and stability hardening; all three platform packaging jobs passed; clean-Windows and macOS native smoke deferred to post-release verification. |
 | `2026-08-15-vc-runtime-selfcheck-and-import-diagnostics-plan.md` | Bundled VC++ 2015-2022 runtime DLLs app-local for Windows, added a Rust pre-flight self-check returning the closed `ASR_MODEL_RUNTIME_MISSING` error, and made worker import-stage crashes emit one closed structured diagnostic event; all installer/Rust/Python/frontend gates green with clean-Windows smoke left to release acceptance. |
 | `2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md` | Published stable v0.3.2 with contract v8 desktop diagnostic export, Windows updater artifacts, and Intel/Apple Silicon macOS DMGs after hosted CI and Desktop Release verification. |
 | `2026-08-06-web-site-dynamic-enhancement-plan.md` | Upgraded the FrameQ web marketing site from "restrained" to "Apple-Inspired Dynamic Light" by adding scroll-triggered reveals, parallax depth, 3D card tilt, ripple-click feedback, and a cursor-following glow — all gated by `prefers-reduced-motion` and touch-device detection. |
