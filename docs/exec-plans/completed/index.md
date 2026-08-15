@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-08-15-vc-runtime-selfcheck-and-import-diagnostics-plan.md` | Bundled VC++ 2015-2022 runtime DLLs app-local for Windows, added a Rust pre-flight self-check returning the closed `ASR_MODEL_RUNTIME_MISSING` error, and made worker import-stage crashes emit one closed structured diagnostic event; all installer/Rust/Python/frontend gates green with clean-Windows smoke left to release acceptance. |
 | `2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md` | Published stable v0.3.2 with contract v8 desktop diagnostic export, Windows updater artifacts, and Intel/Apple Silicon macOS DMGs after hosted CI and Desktop Release verification. |
 | `2026-08-06-web-site-dynamic-enhancement-plan.md` | Upgraded the FrameQ web marketing site from "restrained" to "Apple-Inspired Dynamic Light" by adding scroll-triggered reveals, parallax depth, 3D card tilt, ripple-click feedback, and a cursor-following glow — all gated by `prefers-reduced-motion` and touch-device detection. |
 | `2026-08-05-inspiration-profile-generation-preference-boundary-plan.md` | Narrowed Inspiration Profile to six stable context fields, made per-run preferences the sole style/avoid owner, atomically migrated v1 app-local preferences to schema v2, closed the current cross-language worker snapshot, and preserved historical task snapshots. |

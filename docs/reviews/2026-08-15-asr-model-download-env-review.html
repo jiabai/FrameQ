@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASR 模型下载失败排查报告 — 单机环境问题分析</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --accent: #b45309;
+    --accent-soft: #fef3e2;
+    --blue: #2563eb;
+    --blue-soft: #eff6ff;
+    --red: #dc2626;
+    --red-soft: #fef2f2;
+    --green: #16a34a;
+    --green-soft: #f0fdf4;
+    --amber: #d97706;
+    --amber-soft: #fffbeb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+    padding: 32px 16px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header.hero {
+    background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+  }
+  header.hero h1 { font-size: 22px; margin-bottom: 8px; }
+  header.hero p { color: #d1d5db; font-size: 14px; }
+  .badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    margin-right: 6px;
+  }
+  .badge.red { background: var(--red-soft); color: var(--red); }
+  .badge.amber { background: var(--amber-soft); color: var(--amber); }
+  .badge.blue { background: var(--blue-soft); color: var(--blue); }
+  .badge.green { background: var(--green-soft); color: var(--green); }
+  h2 {
+    font-size: 18px;
+    margin: 32px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+  }
+  h3 { font-size: 15px; margin: 18px 0 8px; }
+  p { margin-bottom: 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+  }
+  .panel-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .dot.blue { background: var(--blue); }
+  .dot.red { background: var(--red); }
+  .dot.amber { background: var(--amber); }
+  .dot.green { background: var(--green); }
+  .dot.gray { background: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 10px 0; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; white-space: nowrap; }
+  tr:hover td { background: #fafafa; }
+  code {
+    background: #f3f4f6;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  .timeline { position: relative; padding-left: 28px; margin: 14px 0; }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 9px; top: 6px; bottom: 6px;
+    width: 2px;
+    background: var(--line);
+  }
+  .step { position: relative; margin-bottom: 16px; }
+  .step::before {
+    content: "";
+    position: absolute;
+    left: -25px; top: 6px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .step-title { font-weight: 700; font-size: 14px; }
+  .step-text { font-size: 13.5px; color: #374151; }
+  .step-text code { background: #f3f4f6; }
+  .checklist { list-style: none; }
+  .checklist li { padding: 6px 0 6px 26px; position: relative; font-size: 14px; }
+  .checklist li::before {
+    content: "✓";
+    position: absolute; left: 0; top: 6px;
+    width: 18px; height: 18px;
+    background: var(--green-soft);
+    color: var(--green);
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 18px;
+  }
+  .rank { font-size: 12px; font-weight: 700; border-radius: 6px; padding: 1px 8px; white-space: nowrap; }
+  .rank.r1 { background: var(--red-soft); color: var(--red); }
+  .rank.r2 { background: var(--amber-soft); color: var(--amber); }
+  .rank.r3 { background: var(--blue-soft); color: var(--blue); }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  footer { margin-top: 32px; color: var(--muted); font-size: 12.5px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>ASR 模型下载失败排查报告</h1>
+  <p>FrameQ 桌面端 · 单机（Windows）环境相关问题分析 · 2026-08-15</p>
+</header>
+
+<div class="callout">
+  <strong>核心结论：</strong>模型下载链路本身在别的机器上都正常，失败几乎可以锁定在「这台机器的环境」与下载链路的三个接口点上：<strong>① 继承的环境变量（代理 / MODELSCOPE_DOMAIN）→ ② 网络链路（运营商 / Wi-Fi / IPv6 / 杀软防火墙）→ ③ 本地文件系统（安全软件锁文件、磁盘空间、权限）</strong>。最快的定位方式不是猜，而是让朋友用 v0.3.2 的「诊断导出」功能导出最近 7 天的诊断 ZIP，里面带分类错误码（network / tls / proxy / http / filesystem / integrity），一次就能锁定根因。
+</div>
+
+<h2>1. 下载链路全景</h2>
+<p>ASR 模型下载由一条跨前后端的链路完成，每一步都可能被「单机环境」影响：</p>
+<div class="timeline">
+  <div class="step">
+    <div class="step-title">① 前端触发</div>
+    <div class="step-text">应用内点击下载 / 首次提交任务自动下载（<code>app/src/features/asrModel/useAsrModelDownload.ts</code>），UI 在 45 秒无进度时显示「下载进度暂时没有变化」横幅（<code>modelDownloadState.ts</code>，阈值 45s，仅提示不终止）。</div>
+  </div>
+  <div class="step">
+    <div class="step-title">② Tauri 命令启动 worker 进程</div>
+    <div class="step-text">Rust 侧 <code>download_asr_model</code> 命令用内置 python.exe 启动 worker 子进程（<code>app/src-tauri/src/asr_model.rs</code>），传入 <code>FRAMEQ_MODEL_DIR</code> 等变量。<strong>子进程继承桌面进程的全部环境变量</strong>（<code>process_io.rs</code>，仅移除 LLM 相关旧 key）——这是代理类问题的入口。</div>
+  </div>
+  <div class="step">
+    <div class="step-title">③ Python worker 调 modelscope</div>
+    <div class="step-text">默认走官方 ModelScope <code>snapshot_download</code>（<code>worker/frameq_worker/model_download.py</code>），下载 SenseVoiceSmall（约 900MB+）与 VAD 模型；ONNX 版额外做 8 个文件 SHA256 校验。</div>
+  </div>
+  <div class="step">
+    <div class="step-title">④ watchdog 兜底</div>
+    <div class="step-text">模型下载专用策略：<strong>10 分钟无进度 → idle 超时终止；总时长超 4 小时 → 绝对超时终止</strong>（<code>worker_runtime/runner/watchdog.rs</code>）。终止后 UI 分别提示「长时间没有新的进展」/「超过最长运行时间」。</div>
+  </div>
+  <div class="step">
+    <div class="step-title">⑤ 落地校验</div>
+    <div class="step-text">下载完写 <code>MODEL_VERSION.txt</code>、迁移缓存布局、校验关键文件存在（ONNX 版含 SHA256），失败则任务返回失败，UI 提示「模型下载失败，请检查网络后重试」或「模型下载未完成」。</div>
+  </div>
+</div>
+
+<h2>2. 代码里发现的「环境敏感点」</h2>
+<div class="panel">
+  <div class="panel-title"><span class="dot amber"></span> worker 子进程继承桌面全部环境变量</div>
+  <p>Rust 用 <code>Command::new(...).envs(...)</code> 启动 python worker，只删除 LLM 旧 key（<code>process_io.rs</code>），其余全部继承。Python 侧 requests 会读取 <code>HTTP_PROXY / HTTPS_PROXY / ALL_PROXY / NO_PROXY</code>；modelscope 的 <code>get_domain()</code> 会优先读 <code>MODELSCOPE_DOMAIN</code> 环境变量（modelscope <code>hub/utils/utils.py</code>），<code>INTRA_CLOUD_ACCELERATION_REGION</code> 也会改变下载源。任何一台机器上残留这些变量（加速器、代理软件、其他 AI 工具设置的），下载行为就会与别的机器不同。</p>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot amber"></span> TLS 走 Python 自带证书库，不经系统证书</div>
+  <p>worker 用打包的 Python + certifi 校验证书。如果机器上有安全软件/企业代理做 HTTPS 中间人（MITM），其证书不在 certifi 信任列表里 → <code>tls_verification_failed</code>。系统时间错误也会导致证书校验失败。</p>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot blue"></span> 下载落盘与「改名-替换」模式怕杀软锁文件</div>
+  <p>modelscope 边下边写 <code>._____temp</code> 临时目录再落盘；自定义归档走 <code>tempfile + os.replace</code>。360/火绒/电脑管家等实时防护可能在写入时锁文件或把 <code>model.pt</code>（900MB）当可疑文件处理 → <code>permission_denied / filesystem_io_failed</code>，或下载「成功」但文件被删 → 缓存校验失败。</p>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot gray"></span> 超时窗口对慢网偏紧</div>
+  <p>idle 10 分钟无任何字节进展即被杀。Wi-Fi 不稳、运营商到 modelscope 链路差、IPv6 优先导致握手挂起时，表现就是「下载到一半提示超时」。绝对 4 小时对应约 62KB/s 的平均速度下限。</p>
+</div>
+
+<h2>3. 假设排名（按「只在这台机器出现」的概率）</h2>
+<table>
+  <thead>
+    <tr><th>排名</th><th>假设</th><th>代码依据</th><th>诊断特征</th><th>验证方法</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="rank r1">1</span></td>
+      <td>代理 / 加速器 / MODELSCOPE_DOMAIN 环境变量残留，请求被导向失效代理或错误域名</td>
+      <td>环境继承（process_io.rs）；modelscope 读 MODELSCOPE_DOMAIN / 代理变量</td>
+      <td>proxy_* / connection_failed / connection_timeout / dns_resolution_failed</td>
+      <td>cmd 里 <code>set HTTPS_PROXY</code>、<code>set MODELSCOPE_DOMAIN</code>；关掉加速器后重试</td>
+    </tr>
+    <tr>
+      <td><span class="rank r1">2</span></td>
+      <td>安全软件 / 防火墙拦截：拦 python.exe 联网，或下载中锁文件 / 删文件</td>
+      <td>modelscope 临时目录落盘 + os.replace；校验在下载后</td>
+      <td>permission_denied / filesystem_io_failed / cache_invalid</td>
+      <td>临时退出 360/火绒/管家重试；或加白 FrameQ 目录</td>
+    </tr>
+    <tr>
+      <td><span class="rank r2">3</span></td>
+      <td>网络链路问题：Wi-Fi 不稳、运营商到 modelscope.cn 慢、IPv6 优先握手挂起</td>
+      <td>watchdog idle 10 分钟即终止（watchdog.rs）</td>
+      <td>connection_timeout / 提示「长时间没有新的进展」</td>
+      <td>手机开热点重试；<code>ping modelscope.cn</code>；关 IPv6</td>
+    </tr>
+    <tr>
+      <td><span class="rank r2">4</span></td>
+      <td>TLS 校验失败：MITM 代理 / 杀软 SSL 扫描 / 系统时间错误</td>
+      <td>worker 用自带 certifi，不读系统证书库</td>
+      <td>tls_verification_failed / tls_handshake_failed</td>
+      <td>核对系统时间；关杀软 HTTPS 扫描；诊断 ZIP 看 exception_type</td>
+    </tr>
+    <tr>
+      <td><span class="rank r2">5</span></td>
+      <td>磁盘空间不足 / AppData 权限异常 / TEMP 不可写</td>
+      <td>下载写 %LOCALAPPDATA% 与 %TEMP%</td>
+      <td>disk_full / permission_denied</td>
+      <td>查 C 盘剩余空间（需 &gt;2GB）；检查 AppData 写入权限</td>
+    </tr>
+    <tr>
+      <td><span class="rank r3">6</span></td>
+      <td>上次中断残留的半截缓存 / 损坏的临时目录，反复失败</td>
+      <td>modelscope 缓存按文件存在性判断，可能跳过重下；validate 只查存在不查完整性（PyTorch 版）</td>
+      <td>cache_invalid / archive_invalid / 提示「模型下载未完成」</td>
+      <td>删除 <code>%LOCALAPPDATA%</code> 下 FrameQ 的 <code>models</code> 目录重试</td>
+    </tr>
+    <tr>
+      <td><span class="rank r3">7</span></td>
+      <td>低概率：超长用户名路径（MAX_PATH）、极慢网络超 4 小时、旧系统 TLS 支持</td>
+      <td>模型路径 ~100 字符，通常不触发 260 限制</td>
+      <td>filesystem_io_failed / executionTimeout</td>
+      <td>视诊断结果而定</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>4. 让朋友立刻能做的定位动作</h2>
+<div class="panel">
+  <div class="panel-title"><span class="dot green"></span> 第一步：导出诊断（最快、最准）</div>
+  <p>确认朋友端版本 ≥ v0.3.2（诊断导出是 v0.3.2 加入的），在「设置」或「关于」页面找到<b>诊断导出</b>入口，导出最近 7 天的诊断 ZIP 发回来。ZIP 里包含：</p>
+  <ul>
+    <li><code>asr-model-download.log</code> — ASR 下载专用 stderr 兜底日志</li>
+    <li>分类诊断事件 — <code>operation=download_asr_model</code> + <code>category</code>（network / tls / proxy / http / filesystem / integrity / dependency / unexpected）+ <code>phase</code> + <code>exception_type</code> + <code>os_error_code</code></li>
+    <li>desktop 日志（<code>worker.download_asr_model.*</code>）</li>
+  </ul>
+  <p class="muted">诊断事件由 <code>worker/frameq_worker/diagnostic_events.py</code> 在下载失败时自动生成并落盘，7 天保留窗口。</p>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot blue"></span> 第二步：对照朋友看到的提示文案</div>
+  <table>
+    <thead><tr><th>UI 提示</th><th>对应根因方向</th></tr></thead>
+    <tbody>
+      <tr><td>「模型下载失败，请检查网络后重试」</td><td>大多数网络 / TLS / 代理 / HTTP / 文件系统失败（需要诊断码细分）</td></tr>
+      <tr><td>「模型下载长时间没有新的进展，已停止」</td><td>10 分钟无进度 → 卡死型网络问题（代理失效、Wi-Fi、IPv6）</td></tr>
+      <tr><td>「模型下载已超过最长运行时间」</td><td>极慢网络（&lt;62KB/s 平均）或反复重试耗尽 4 小时</td></tr>
+      <tr><td>「模型下载未完成，请稍后重试」</td><td>下载结束但缓存校验不过 → 文件被删 / 半截 / 损坏</td></tr>
+      <tr><td>「下载进度暂时没有变化」（横幅）</td><td>45 秒无进度提示，非终止，仅提示网络慢</td></tr>
+    </tbody>
+  </table>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot amber"></span> 第三步：立即可试的绕过方案</div>
+  <ul class="checklist">
+    <li>关闭 VPN / 加速器 / 代理软件（或切换节点）后重试；cmd 里 <code>set</code> 查看 HTTP(S)_PROXY、MODELSCOPE_DOMAIN 是否有残留值</li>
+    <li>临时退出 360 / 火绒 / 腾讯管家等安全软件重试；不行就给 FrameQ 的 python.exe 与数据目录加白名单</li>
+    <li>手机开热点连一次，排除家庭路由器 / 运营商链路问题</li>
+    <li>检查 C 盘剩余空间（≥2GB）与系统时间是否准确</li>
+    <li>删除 <code>%LOCALAPPDATA%\</code> 下 FrameQ 的 <code>models</code> 目录（清掉半截缓存）后重试</li>
+    <li>更新到最新版本（v0.3.2 及以上）</li>
+  </ul>
+</div>
+
+<h2>5. 代码改进建议（review 输出）</h2>
+<table>
+  <thead>
+    <tr><th>#</th><th>问题</th><th>建议</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>下载失败时 UI 只有一条通用文案「模型下载失败，请检查网络后重试」，诊断码不展示给用户</td>
+      <td>把 diagnostic category/code 映射为具体提示（代理连接失败 / 证书校验失败 / 磁盘空间不足等），用户可自助判断；至少把诊断事件透出到「查看详情」</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>worker 继承全部环境变量，代理 / MODELSCOPE_DOMAIN 残留会静默改变下载行为</td>
+      <td>下载命令显式清理或固定 proxy 相关变量；诊断 ZIP 中记录「哪些敏感环境变量被设置」（只记 key 不记值），单机问题一次定位</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>PyTorch 版缓存校验只查文件存在，不查大小 / 哈希，半截文件会被当作成功</td>
+      <td>复用 ONNX 版的校验思路：对 model.pt 增加文件大小（或抽样哈希）检查</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>idle 10 分钟对部分慢网偏紧，且失败后无自动重试</td>
+      <td>进度事件已按 chunk 上报，可考虑「慢但有进展」时放宽 idle 判定；或失败后提示一键重试</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>6. 根因确认（2026-08-15 13:29 更新，基于朋友机器导出的诊断日志）</h2>
+<div class="callout">
+  <strong>最新结论：不是网络问题，是 Python worker 进程在启动（import 阶段）快速崩溃，从未进入下载逻辑。</strong>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot red"></span> 三份日志交叉验证的证据</div>
+  <table>
+    <thead><tr><th>日志</th><th>关键证据</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>frameq-desktop.log</td><td>12+ 次尝试全部 5~8 秒退出，全部 <code>unstructured_failure</code></td><td>快速崩溃而非网络慢/超时（模型下载正常需几十分钟）</td></tr>
+      <tr><td>asr-model-download.log</td><td>零条结构化诊断事件，仅脱敏 stderr traceback（[traceback]/[text]/[exception]）</td><td>异常发生在下载代码 try 块之外 = import 阶段（诊断回调已接通，正常失败必有 structured 记录）</td></tr>
+      <tr><td>asr-model-download.log</td><td>无任何 network/connection/timeout/proxy/tls/http/dns/permission/disk 关键词</td><td>排除网络、代理、TLS、磁盘满类别</td></tr>
+      <tr><td>diagnostics.json</td><td>版本 0.3.2、cache_status=missing、三文件均 included</td><td>数据完整可信，模型从未下载成功</td></tr>
+    </tbody>
+  </table>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot amber"></span> 最可能的具体原因（按概率）</div>
+  <ol>
+    <li><b>安全软件（360/火绒/管家）隔离或删除了安装目录文件</b>（.pyd/.dll/.py）— 打包 Python 应用的经典事故，完美解释「只在这台机器」</li>
+    <li><b>安装包解压不完整 / 安装损坏</b>（安装时被安全软件拦截）</li>
+    <li><b>缺 Microsoft Visual C++ 运行库</b>（原生扩展 DLL 加载失败）</li>
+  </ol>
+</div>
+<div class="panel">
+  <div class="panel-title"><span class="dot green"></span> 行动计划</div>
+  <ul class="checklist">
+    <li>先确认：朋友用 FrameQ 转写视频是否也失败（是则 100% 坐实 worker 环境问题）</li>
+    <li>卸载后重新下载安装包重装，安装/运行时对安全软件弹窗选「允许」，并把 FrameQ 安装目录加白名单</li>
+    <li>安装微软官方 Microsoft Visual C++ Redistributable 2015-2022 x64</li>
+    <li>仍失败则运行 frameq-asr-diagnostic.bat（先打开 FrameQ 再双击），把桌面生成的 frameq-err.txt 发回——该文件未脱敏，可精确定位崩在哪一行、哪个模块</li>
+  </ul>
+</div>
+
+<footer>FrameQ · ASR 模型下载单机环境排查 · 基于 2026-08-15 代码库（HEAD 1afb925）分析 · 2026-08-15 追加根因确认</footer>
+
+</div>
+</body>
+</html>
