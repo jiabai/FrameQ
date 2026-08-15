@@ -140,8 +140,8 @@ def create_valid_asr_cache(root: Path) -> None:
     vad_dir = root / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
     sensevoice_dir.mkdir(parents=True)
     vad_dir.mkdir(parents=True)
-    (sensevoice_dir / "model.pt").write_bytes(b"sensevoice")
-    (vad_dir / "model.pt").write_bytes(b"vad")
+    (sensevoice_dir / "model.pt").write_bytes(b"PK\x03\x04sensevoice")
+    (vad_dir / "model.pt").write_bytes(b"PK\x03\x04vad")
     (root / "MODEL_VERSION.txt").write_text(
         "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
         encoding="utf-8",

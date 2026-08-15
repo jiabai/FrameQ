@@ -42,13 +42,17 @@ PHASE_BY_MESSAGE_CODE = {
 }
 
 
+def torch_model_bytes(payload: bytes = b"model-data") -> bytes:
+    return b"PK\x03\x04" + payload
+
+
 def create_valid_cache(root: Path) -> None:
     sensevoice_dir = root / "models" / "iic" / "SenseVoiceSmall"
     vad_dir = root / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
     sensevoice_dir.mkdir(parents=True)
     vad_dir.mkdir(parents=True)
-    (sensevoice_dir / "model.pt").write_bytes(b"sensevoice")
-    (vad_dir / "model.pt").write_bytes(b"vad")
+    (sensevoice_dir / "model.pt").write_bytes(torch_model_bytes(b"sensevoice"))
+    (vad_dir / "model.pt").write_bytes(torch_model_bytes(b"vad"))
     (root / "MODEL_VERSION.txt").write_text(
         "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
         encoding="utf-8",
@@ -60,12 +64,33 @@ def create_valid_legacy_cache(root: Path) -> None:
     vad_dir = root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
     sensevoice_dir.mkdir(parents=True)
     vad_dir.mkdir(parents=True)
-    (sensevoice_dir / "model.pt").write_bytes(b"sensevoice")
-    (vad_dir / "model.pt").write_bytes(b"vad")
+    (sensevoice_dir / "model.pt").write_bytes(torch_model_bytes(b"sensevoice"))
+    (vad_dir / "model.pt").write_bytes(torch_model_bytes(b"vad"))
     (root / "MODEL_VERSION.txt").write_text(
         "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
         encoding="utf-8",
     )
+
+
+def test_validate_asr_model_cache_rejects_plain_text_model_files(tmp_path: Path) -> None:
+    sensevoice_dir = tmp_path / "models" / "iic" / "SenseVoiceSmall"
+    vad_dir = tmp_path / "models" / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+    sensevoice_dir.mkdir(parents=True)
+    vad_dir.mkdir(parents=True)
+    (sensevoice_dir / "model.pt").write_bytes(b"not-a-torch-model")
+    (vad_dir / "model.pt").write_bytes(b"not-a-torch-model")
+
+    (tmp_path / "MODEL_VERSION.txt").write_text(
+        "model=iic/SenseVoiceSmall\nvad=iic/speech_fsmn_vad_zh-cn-16k-common-pytorch\n",
+        encoding="utf-8",
+    )
+    assert not validate_asr_model_cache(tmp_path)
+
+    (sensevoice_dir / "model.pt").write_bytes(torch_model_bytes(b"sensevoice"))
+    assert not validate_asr_model_cache(tmp_path)
+
+    (vad_dir / "model.pt").write_bytes(torch_model_bytes(b"vad"))
+    assert validate_asr_model_cache(tmp_path)
 
 
 def test_model_download_terminal_success_omits_local_model_directory(
@@ -539,7 +564,7 @@ def test_download_asr_model_cache_uses_modelscope_snapshot_download(tmp_path: Pa
                 Path(kwargs["cache_dir"]) / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
             )
         model_dir.mkdir(parents=True, exist_ok=True)
-        (model_dir / "model.pt").write_bytes(b"model")
+        (model_dir / "model.pt").write_bytes(torch_model_bytes(b"model"))
         callback_type = kwargs["progress_callbacks"][0]
         filename = (
             r"C:\review-secret\model.pt"
@@ -732,8 +757,8 @@ def test_normalize_asr_model_cache_layout_removes_duplicate_known_legacy_dirs(
     legacy_sensevoice.mkdir(parents=True)
     legacy_vad.mkdir(parents=True)
     unknown_legacy.mkdir(parents=True)
-    (legacy_sensevoice / "model.pt").write_bytes(b"duplicate-sensevoice")
-    (legacy_vad / "model.pt").write_bytes(b"duplicate-vad")
+    (legacy_sensevoice / "model.pt").write_bytes(torch_model_bytes(b"duplicate-sensevoice"))
+    (legacy_vad / "model.pt").write_bytes(torch_model_bytes(b"duplicate-vad"))
     (unknown_legacy / "model.pt").write_bytes(b"keep-me")
     stale_temp = tmp_path / "._____temp"
     stale_temp.mkdir()
@@ -768,7 +793,7 @@ def test_download_asr_model_cache_extracts_custom_archive_layout(tmp_path: Path)
     assert result == target
     assert validate_asr_model_cache(target)
     sensevoice_model = target / "models" / "iic" / "SenseVoiceSmall" / "model.pt"
-    assert sensevoice_model.read_bytes() == b"sensevoice"
+    assert sensevoice_model.read_bytes() == torch_model_bytes(b"sensevoice")
     assert [event["message_code"] for event in events] == [
         "model.download.preparing",
         "model.archive.reading",
@@ -790,12 +815,18 @@ def test_download_asr_model_cache_emits_remote_archive_code_without_url(
             if file_path.is_file():
                 archive.write(file_path, file_path.relative_to(archive_root))
 
-    def fake_urlretrieve(url: str, destination: Path) -> tuple[str, None]:
-        assert url == "https://models.example/cache.zip?token=review-secret"
+    def fake_download(
+        url: str,
+        destination: Path,
+        *,
+        progress_callback: object = None,
+        urlopen: object = None,
+        max_bytes: int = 0,
+        attempts: int = 3,
+    ) -> None:
         Path(destination).write_bytes(archive_path.read_bytes())
-        return str(destination), None
 
-    monkeypatch.setattr(model_download.urllib.request, "urlretrieve", fake_urlretrieve)
+    monkeypatch.setattr(model_download, "_download_url_to_file", fake_download)
     events: list[dict[str, object]] = []
 
     download_asr_model_cache(

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import logging
 import shutil
 import stat
 import tarfile
 import tempfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Callable, Mapping
@@ -29,6 +32,19 @@ DEFAULT_SENSEVOICE_REVISION = "master"
 MODEL_VERSION_FILE_NAME = "MODEL_VERSION.txt"
 MODEL_DOWNLOAD_ERROR_CODE = "ASR_MODEL_DOWNLOAD_FAILED"
 ARCHIVE_INVALID_ERROR_CODE = "ASR_MODEL_ARCHIVE_INVALID"
+# Minimum free disk space required before starting a model download. The
+# SenseVoiceSmall PyTorch cache is about 1.5 GiB and the ONNX cache about
+# 0.5 GiB; the 2 GiB threshold leaves headroom for staging and temp files.
+MIN_MODEL_DOWNLOAD_FREE_BYTES = 2 * 1024**3
+# Upper bound for a custom model archive so a broken URL cannot fill the disk.
+MAX_MODEL_ARCHIVE_BYTES = 2 * 1024**3
+# torch.save() writes zip archives; require the PK\x03\x04 magic so a
+# truncated or replaced model file is rejected by cache validation.
+_TORCH_MODEL_MAGIC = b"PK\x03\x04"
+# Progress events are emitted at most every 100 ms and at most every 1% so a
+# large model download does not flood the desktop IPC channel.
+PROGRESS_EVENT_MIN_INTERVAL_SECONDS = 0.1
+PROGRESS_EVENT_MIN_PERCENT_STEP = 1.0
 
 ModelDownloadEventCallback = Callable[[dict[str, object]], None]
 SnapshotDownloader = Callable[..., str]
@@ -115,7 +131,57 @@ def _has_required_model_files(cache_dir: Path) -> bool:
 def _has_required_model_files_in_root(model_root: Path) -> bool:
     sensevoice_model = model_root / "iic" / "SenseVoiceSmall" / "model.pt"
     vad_model = model_root / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch" / "model.pt"
-    return sensevoice_model.is_file() and vad_model.is_file()
+    return _is_plausible_torch_model_file(sensevoice_model) and _is_plausible_torch_model_file(
+        vad_model
+    )
+
+
+def _is_plausible_torch_model_file(path: Path) -> bool:
+    """True when the file exists, is non-empty, and starts with the torch zip magic."""
+    try:
+        if not path.is_file() or path.stat().st_size <= 0:
+            return False
+        with path.open("rb") as handle:
+            return handle.read(len(_TORCH_MODEL_MAGIC)) == _TORCH_MODEL_MAGIC
+    except OSError:
+        return False
+
+
+def _remove_stale_onnx_staging_dirs(cache_dir: Path) -> None:
+    """Remove leftover ONNX staging/backup directories from killed downloads."""
+    for pattern in (
+        f".{ONNX_CACHE_DIR_NAME}-staging-*",
+        f".{ONNX_CACHE_DIR_NAME}-backup-*",
+    ):
+        for path in cache_dir.glob(pattern):
+            if not path.is_dir():
+                continue
+            try:
+                shutil.rmtree(path)
+            except OSError:
+                LOGGER.warning(
+                    "Failed to remove stale ONNX model cache directory %s.",
+                    path,
+                    exc_info=True,
+                )
+
+
+def _ensure_model_disk_space(
+    cache_dir: Path,
+    *,
+    disk_usage: Callable[[Path], object] = shutil.disk_usage,
+) -> None:
+    """Fail fast with ENOSPC when the model partition lacks headroom."""
+    try:
+        usage = disk_usage(cache_dir)
+        free_bytes = int(usage.free)
+    except (OSError, AttributeError, TypeError, ValueError):
+        return
+    if free_bytes < MIN_MODEL_DOWNLOAD_FREE_BYTES:
+        raise OSError(
+            errno.ENOSPC,
+            f"Not enough free disk space for the ASR model: {free_bytes} bytes available.",
+        )
 
 
 def _canonical_model_root(cache_dir: Path) -> Path:
@@ -201,6 +267,8 @@ def download_asr_model_cache(
 ) -> Path:
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
+    _remove_stale_onnx_staging_dirs(cache_dir)
+    _ensure_model_disk_space(cache_dir)
     if model_name == ONNX_SENSEVOICE_MODEL_ID:
         if download_url or expected_sha256 or revision or endpoint:
             raise ModelDownloadError(
@@ -530,13 +598,90 @@ def _resolve_archive(
     archive_path = temp_dir / "model-archive"
     _emit(progress_callback, "model.archive.downloading", "downloading", 20)
     try:
-        urllib.request.urlretrieve(download_url, archive_path)  # noqa: S310 - URL is release/user configured.
+        _download_url_to_file(
+            download_url,
+            archive_path,
+            progress_callback=progress_callback,
+        )
+    except urllib.error.HTTPError:
+        # Propagate HTTP errors unwrapped so the diagnostic classifier maps
+        # the status code into the http category instead of unexpected_failure.
+        raise
     except OSError as exc:
         raise ModelDownloadError(
             MODEL_DOWNLOAD_ERROR_CODE,
             f"Failed to download ASR model archive: {exc}",
         ) from exc
     return archive_path
+
+
+def _download_url_to_file(
+    download_url: str,
+    destination: Path,
+    *,
+    progress_callback: ModelDownloadEventCallback | None,
+    urlopen: Callable[..., object] = urllib.request.urlopen,
+    max_bytes: int = MAX_MODEL_ARCHIVE_BYTES,
+    attempts: int = 3,
+) -> None:
+    """Stream a URL to a file with a per-op timeout, size cap, retries, and progress.
+
+    Replaces the previous timeout-less ``urllib.request.urlretrieve`` so a hung
+    custom download source cannot block the worker indefinitely.
+    """
+    last_error: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            response = urlopen(download_url, timeout=30)
+            try:
+                headers = getattr(response, "headers", None)
+                total = int(headers.get("Content-Length") or 0) if headers is not None else 0
+                if total > max_bytes:
+                    raise ModelDownloadError(
+                        MODEL_DOWNLOAD_ERROR_CODE,
+                        f"ASR model archive exceeds the size limit ({total} bytes).",
+                    )
+                downloaded = 0
+                with destination.open("wb") as output:
+                    while True:
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        downloaded += len(chunk)
+                        if downloaded > max_bytes:
+                            raise ModelDownloadError(
+                                MODEL_DOWNLOAD_ERROR_CODE,
+                                "ASR model archive exceeds the size limit.",
+                            )
+                        output.write(chunk)
+                        if total > 0 and progress_callback is not None:
+                            progress = min(75, 20 + int(55 * downloaded / total))
+                            _emit(
+                                progress_callback,
+                                "model.archive.downloading",
+                                "downloading",
+                                progress,
+                            )
+                if downloaded <= 0:
+                    raise ModelDownloadError(
+                        MODEL_DOWNLOAD_ERROR_CODE,
+                        "ASR model archive download produced an empty file.",
+                    )
+                return
+            finally:
+                close = getattr(response, "close", None)
+                if close is not None:
+                    close()
+        except ModelDownloadError:
+            raise
+        except urllib.error.HTTPError:
+            raise
+        except OSError as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(0.5 * (2**attempt))
+    assert last_error is not None
+    raise last_error
 
 
 def _verify_sha256(path: Path, expected_sha256: str) -> None:
@@ -647,6 +792,8 @@ def _make_modelscope_progress_callback(
         def __init__(self, filename: str, file_size: int) -> None:
             super().__init__(filename, file_size)
             self.downloaded = 0
+            self._last_emit_at = 0.0
+            self._last_emit_percent = 0.0
 
         def update(self, size: int) -> None:
             if progress_callback is None:
@@ -655,8 +802,18 @@ def _make_modelscope_progress_callback(
             if self.file_size > 0:
                 file_progress = min(1.0, self.downloaded / self.file_size)
                 progress = start + int(span * file_progress)
+                percent = 100.0 * file_progress
             else:
                 progress = start
+                percent = 0.0
+            now = time.monotonic()
+            if (
+                now - self._last_emit_at < PROGRESS_EVENT_MIN_INTERVAL_SECONDS
+                and percent - self._last_emit_percent < PROGRESS_EVENT_MIN_PERCENT_STEP
+            ):
+                return
+            self._last_emit_at = now
+            self._last_emit_percent = percent
             _emit(
                 progress_callback,
                 "model.file.downloading",
