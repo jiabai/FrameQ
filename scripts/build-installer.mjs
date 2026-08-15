@@ -326,6 +326,47 @@ export function requiredDenoBinary(target) {
   return target === "windows-x64" ? "deno.exe" : "deno";
 }
 
+// python-build-standalone ships vcruntime140.dll so python.exe itself can
+// start on a clean machine, but third-party C extensions (numpy, onnxruntime,
+// pycryptodome, ...) link against the system-level msvcp140.dll and
+// vcruntime140_1.dll from the Microsoft Visual C++ 2015-2022 Redistributable.
+// Bundling them app-local (Microsoft allows app-local deployment) removes the
+// clean-Windows dependency without UAC or a redist install.
+export const WINDOWS_VC_RUNTIME_DLLS = ["msvcp140.dll", "vcruntime140_1.dll", "vcruntime140.dll"];
+
+function defaultWindowsSystemRoot() {
+  return process.env.SystemRoot ?? "C:\\Windows";
+}
+
+export async function bundleWindowsVcRuntimeDlls(pythonRoot, systemRoot = defaultWindowsSystemRoot()) {
+  const system32 = join(systemRoot, "System32");
+  const copied = [];
+  for (const dllName of WINDOWS_VC_RUNTIME_DLLS) {
+    const destinationPath = join(pythonRoot, dllName);
+    if (dllName === "vcruntime140.dll" && existsSync(destinationPath)) {
+      continue;
+    }
+    const sourcePath = join(system32, dllName);
+    if (!existsSync(sourcePath)) {
+      throw new Error(
+        `Could not find VC++ runtime DLL under ${system32}: ${dllName}. ` +
+          "Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) on the build machine.",
+      );
+    }
+    await copyFile(sourcePath, destinationPath);
+    copied.push(dllName);
+  }
+  assertBundledWindowsVcRuntimeDlls(pythonRoot);
+  return copied;
+}
+
+export function assertBundledWindowsVcRuntimeDlls(pythonRoot) {
+  const missing = WINDOWS_VC_RUNTIME_DLLS.filter((dllName) => !existsSync(join(pythonRoot, dllName)));
+  if (missing.length > 0) {
+    throw new Error(`Could not find bundled VC++ runtime DLLs under ${pythonRoot}: ${missing.join(", ")}`);
+  }
+}
+
 function denoArchiveAssetName(target) {
   switch (target) {
     case "windows-x64":
@@ -610,6 +651,9 @@ async function main(argv = process.argv.slice(2)) {
     "Install bundled Python dependencies",
   );
   await pruneBundledPythonRuntime(pythonRoot);
+  if (options.target === "windows-x64") {
+    await bundleWindowsVcRuntimeDlls(pythonRoot);
+  }
   run(pythonExe, ["-c", "import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
     env: { PYTHONDONTWRITEBYTECODE: "1", PYTHONPATH: workerRoot },
   });

@@ -8,11 +8,14 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  assertBundledWindowsVcRuntimeDlls,
+  bundleWindowsVcRuntimeDlls,
   copyDenoFromArchive,
   defaultDenoArchiveUrl,
   parseArgs,
   requireBundledDeno,
   requiredDenoBinary,
+  WINDOWS_VC_RUNTIME_DLLS,
 } from "../build-installer.mjs";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
@@ -164,4 +167,100 @@ test("copyDenoFromArchive extracts Deno into resources bin", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("bundles VC++ runtime DLLs app-local into the python root", async () => {
+  const root = await tempRoot("vc-runtime-bundle");
+  try {
+    const systemRoot = join(root, "System");
+    const pythonRoot = join(root, "python");
+    const system32 = join(systemRoot, "System32");
+    await mkdir(system32, { recursive: true });
+    await mkdir(pythonRoot, { recursive: true });
+    for (const dllName of WINDOWS_VC_RUNTIME_DLLS) {
+      await writeFile(join(system32, dllName), `fake-${dllName}`);
+    }
+
+    const copied = await bundleWindowsVcRuntimeDlls(pythonRoot, systemRoot);
+
+    assert.deepEqual(copied, WINDOWS_VC_RUNTIME_DLLS);
+    for (const dllName of WINDOWS_VC_RUNTIME_DLLS) {
+      assert.equal(readFileSync(join(pythonRoot, dllName), "utf8"), `fake-${dllName}`);
+    }
+    assert.doesNotThrow(() => assertBundledWindowsVcRuntimeDlls(pythonRoot));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps an existing bundled vcruntime140.dll without overwriting it", async () => {
+  const root = await tempRoot("vc-runtime-keep");
+  try {
+    const systemRoot = join(root, "System");
+    const pythonRoot = join(root, "python");
+    const system32 = join(systemRoot, "System32");
+    await mkdir(system32, { recursive: true });
+    await mkdir(pythonRoot, { recursive: true });
+    for (const dllName of WINDOWS_VC_RUNTIME_DLLS) {
+      await writeFile(join(system32, dllName), `fake-${dllName}`);
+    }
+    await writeFile(join(pythonRoot, "vcruntime140.dll"), "bundled-by-python");
+
+    const copied = await bundleWindowsVcRuntimeDlls(pythonRoot, systemRoot);
+
+    assert.deepEqual(copied, ["msvcp140.dll", "vcruntime140_1.dll"]);
+    assert.equal(readFileSync(join(pythonRoot, "vcruntime140.dll"), "utf8"), "bundled-by-python");
+    assert.equal(readFileSync(join(pythonRoot, "msvcp140.dll"), "utf8"), "fake-msvcp140.dll");
+    assert.equal(readFileSync(join(pythonRoot, "vcruntime140_1.dll"), "utf8"), "fake-vcruntime140_1.dll");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("fails clearly when a required VC++ runtime DLL is missing from the system", async () => {
+  const root = await tempRoot("vc-runtime-missing");
+  try {
+    const systemRoot = join(root, "System");
+    const pythonRoot = join(root, "python");
+    const system32 = join(systemRoot, "System32");
+    await mkdir(system32, { recursive: true });
+    await mkdir(pythonRoot, { recursive: true });
+    await writeFile(join(system32, "msvcp140.dll"), "fake-msvcp140.dll");
+    await writeFile(join(system32, "vcruntime140_1.dll"), "fake-vcruntime140_1.dll");
+
+    await assert.rejects(
+      bundleWindowsVcRuntimeDlls(pythonRoot, systemRoot),
+      /Could not find VC\+\+ runtime DLL.*vcruntime140\.dll/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("asserts bundled VC++ runtime DLL presence", async () => {
+  const root = await tempRoot("vc-runtime-assert");
+  try {
+    const pythonRoot = join(root, "python");
+    await mkdir(pythonRoot, { recursive: true });
+
+    assert.throws(() => assertBundledWindowsVcRuntimeDlls(pythonRoot), /Could not find bundled VC\+\+ runtime DLLs/);
+
+    for (const dllName of WINDOWS_VC_RUNTIME_DLLS) {
+      await writeFile(join(pythonRoot, dllName), "fake");
+    }
+    assert.doesNotThrow(() => assertBundledWindowsVcRuntimeDlls(pythonRoot));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("installer bundles VC++ runtime DLLs before the Python runtime smoke test", () => {
+  const buildScript = readFileSync(buildInstallerPath, "utf8");
+
+  assert.match(buildScript, /bundleWindowsVcRuntimeDlls\(pythonRoot\)/);
+  assert.ok(
+    buildScript.indexOf("bundleWindowsVcRuntimeDlls(pythonRoot)") <
+      buildScript.indexOf("Python runtime smoke test"),
+  );
+  assert.match(buildScript, /options\.target === "windows-x64"/);
 });
