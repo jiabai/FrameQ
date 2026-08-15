@@ -72,6 +72,10 @@ jobs:
         shell: cmd
         run: node scripts\build-installer.mjs --target windows-x64 --skip-tauri-build
 
+      - name: Verify packaged worker matches canonical source
+        shell: cmd
+        run: node scripts\verify-packaged-worker.mjs
+
       - name: Build and upload signed updater artifacts
         uses: tauri-apps/tauri-action@v0
         env:

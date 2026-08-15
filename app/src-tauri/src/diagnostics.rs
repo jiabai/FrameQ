@@ -1,7 +1,7 @@
 use crate::{RuntimePaths, DESKTOP_LOG_DIR_NAME};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod export;
@@ -23,12 +23,25 @@ pub(crate) fn begin_asr_model_download_diagnostics(paths: &RuntimePaths) -> AsrD
 }
 
 const DESKTOP_LOG_FILE_NAME: &str = "frameq-desktop.log";
+const DESKTOP_LOG_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 pub(crate) fn desktop_log_path(paths: &RuntimePaths) -> PathBuf {
     paths
         .user_data_dir
         .join(DESKTOP_LOG_DIR_NAME)
         .join(DESKTOP_LOG_FILE_NAME)
+}
+
+fn rotate_desktop_log_if_needed(log_path: &Path, max_bytes: u64) {
+    let Ok(metadata) = fs::metadata(log_path) else {
+        return;
+    };
+    if metadata.len() < max_bytes {
+        return;
+    }
+    let rotated = log_path.with_extension("log.1");
+    let _ = fs::remove_file(&rotated);
+    let _ = fs::rename(log_path, rotated);
 }
 
 pub(crate) fn append_desktop_log(
@@ -40,6 +53,7 @@ pub(crate) fn append_desktop_log(
     if let Some(parent) = log_path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
+    rotate_desktop_log_if_needed(&log_path, DESKTOP_LOG_MAX_BYTES);
 
     let mut file = OpenOptions::new()
         .create(true)
@@ -256,6 +270,50 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn desktop_log_rotates_when_it_exceeds_the_size_cap() {
+        let root = temp_dir("desktop_log_rotates_when_it_exceeds_the_size_cap");
+        let log_path = desktop_log_path(&RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        });
+        fs::create_dir_all(log_path.parent().expect("log parent")).expect("create log dir");
+        fs::write(&log_path, vec![b'x'; 100]).expect("write oversized log");
+
+        super::rotate_desktop_log_if_needed(&log_path, 50);
+
+        let rotated = log_path.with_extension("log.1");
+        assert_eq!(
+            fs::read(&rotated).expect("read rotated log"),
+            vec![b'x'; 100]
+        );
+        assert!(!log_path.exists());
+
+        // A second rotation replaces the previous rotated file.
+        fs::write(&log_path, vec![b'y'; 100]).expect("write oversized log again");
+        super::rotate_desktop_log_if_needed(&log_path, 50);
+        assert_eq!(
+            fs::read(&rotated).expect("read replaced rotated log"),
+            vec![b'y'; 100]
+        );
+    }
+
+    #[test]
+    fn desktop_log_does_not_rotate_below_the_size_cap() {
+        let root = temp_dir("desktop_log_does_not_rotate_below_the_size_cap");
+        let log_path = desktop_log_path(&RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        });
+        fs::create_dir_all(log_path.parent().expect("log parent")).expect("create log dir");
+        fs::write(&log_path, vec![b'x'; 10]).expect("write small log");
+
+        super::rotate_desktop_log_if_needed(&log_path, 50);
+
+        assert!(log_path.exists());
+        assert!(!log_path.with_extension("log.1").exists());
+    }
 
     #[test]
     fn desktop_log_path_lives_under_app_local_logs() {

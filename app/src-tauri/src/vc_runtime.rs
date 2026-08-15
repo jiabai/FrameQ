@@ -25,6 +25,11 @@ pub(crate) enum VcRuntimeStatus {
 #[cfg(windows)]
 pub(crate) fn check_vc_runtime(paths: &RuntimePaths) -> VcRuntimeStatus {
     let python_root = paths.resource_dir.join("python");
+    // Unpackaged/dev environments have no bundled python directory; skip the
+    // check so development runs are not blocked.
+    if !python_root.is_dir() {
+        return VcRuntimeStatus::Ok;
+    }
     let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
     check_vc_runtime_at(&python_root, Path::new(&system_root))
 }
@@ -51,9 +56,9 @@ pub(crate) fn check_vc_runtime_at(python_root: &Path, system_root: &Path) -> VcR
 
 #[cfg(test)]
 mod tests {
-    use super::{check_vc_runtime_at, VcRuntimeStatus, VC_RUNTIME_DLLS};
     #[cfg(not(windows))]
     use super::check_vc_runtime;
+    use super::{check_vc_runtime_at, VcRuntimeStatus, VC_RUNTIME_DLLS};
     #[cfg(not(windows))]
     use crate::RuntimePaths;
     use std::fs;

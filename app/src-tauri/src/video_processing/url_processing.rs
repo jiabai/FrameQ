@@ -295,6 +295,7 @@ mod tests {
             WorkerRunErrorKind::PipeUnavailable,
             WorkerRunErrorKind::WaitFailed,
             WorkerRunErrorKind::WatchdogStartFailed,
+            WorkerRunErrorKind::RuntimeUnavailable,
         ] {
             assert!(matches!(
                 classify_source_identity_preflight_result(Err(WorkerRunError {

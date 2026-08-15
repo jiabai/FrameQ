@@ -7,7 +7,6 @@ use crate::settings::{
     ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV, MODELSCOPE_ENDPOINT_ENV,
     SENSEVOICE_REVISION_ENV,
 };
-use crate::vc_runtime::{check_vc_runtime, VcRuntimeStatus};
 use crate::worker_runtime::{
     AsrModelDownloadJob, ModelDownloadTerminalResult, ValidatedWorkerResult, WorkerRunError,
     WorkerRunErrorKind, WorkerRunOutcome, WorkerTimeoutKind, WORKER_PROTOCOL_MESSAGE,
@@ -164,6 +163,17 @@ fn asr_model_available(paths: &RuntimePaths, asr_model: &str) -> bool {
         && model_marker_exists(&asr_model_cache_dir(paths, asr_model), asr_model)
 }
 
+fn plausible_torch_model(path: &Path) -> bool {
+    use std::io::Read;
+
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return false,
+    };
+    let mut magic = [0u8; 4];
+    file.read_exact(&mut magic).is_ok() && magic == *b"PK\x03\x04"
+}
+
 fn model_marker_exists(model_dir: &Path, asr_model: &str) -> bool {
     let marker = model_dir.join(MODEL_VERSION_FILE_NAME);
     marker.is_file()
@@ -195,7 +205,7 @@ fn required_model_files_exist(model_dir: &Path, asr_model: &str) -> bool {
                     .join("iic")
                     .join("speech_fsmn_vad_zh-cn-16k-common-pytorch")
                     .join("model.pt");
-                sensevoice_model.is_file() && vad_model.is_file()
+                plausible_torch_model(&sensevoice_model) && plausible_torch_model(&vad_model)
             }),
         SENSEVOICE_SMALL_ONNX_MODEL => {
             let model_root = model_dir.join("models").join("iic");
@@ -275,9 +285,6 @@ fn download_asr_model_blocking(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let asr_model = validate_asr_model(asr_model)?;
-    if check_vc_runtime(&paths) != VcRuntimeStatus::Ok {
-        return Err("ASR_MODEL_RUNTIME_MISSING".to_string());
-    }
     let initial_snapshot = diagnostic_model_snapshot_for(&paths, &asr_model);
     diagnostic_state.update(initial_snapshot);
     if initial_snapshot.cache_status == DiagnosticCacheStatus::Ready {
@@ -363,6 +370,7 @@ fn map_model_download_run_result(
             WorkerRunErrorKind::SpawnFailed | WorkerRunErrorKind::RequestDeliveryFailed => {
                 "ASR model download request could not be delivered."
             }
+            WorkerRunErrorKind::RuntimeUnavailable => "ASR_MODEL_RUNTIME_MISSING",
             WorkerRunErrorKind::WatchdogStartFailed => "Worker watchdog failed to start.",
             WorkerRunErrorKind::PipeUnavailable | WorkerRunErrorKind::WaitFailed => {
                 "ASR model download runtime failed."
@@ -523,6 +531,10 @@ mod tests {
                 "ASR model download runtime failed.",
             ),
             (
+                WorkerRunErrorKind::RuntimeUnavailable,
+                "ASR_MODEL_RUNTIME_MISSING",
+            ),
+            (
                 WorkerRunErrorKind::ProtocolViolation,
                 WORKER_PROTOCOL_MESSAGE,
             ),
@@ -569,8 +581,9 @@ mod tests {
             .join("speech_fsmn_vad_zh-cn-16k-common-pytorch");
         fs::create_dir_all(&sensevoice_dir).expect("create sensevoice dir");
         fs::create_dir_all(&vad_dir).expect("create vad dir");
-        fs::write(sensevoice_dir.join("model.pt"), "sensevoice").expect("write sensevoice model");
-        fs::write(vad_dir.join("model.pt"), "vad").expect("write vad model");
+        fs::write(sensevoice_dir.join("model.pt"), b"PK\x03\x04sensevoice")
+            .expect("write sensevoice model");
+        fs::write(vad_dir.join("model.pt"), b"PK\x03\x04vad").expect("write vad model");
 
         assert!(asr_model_available(&paths, DEFAULT_ASR_MODEL));
     }
@@ -691,8 +704,9 @@ mod tests {
             .join("speech_fsmn_vad_zh-cn-16k-common-pytorch");
         fs::create_dir_all(&sensevoice_dir).expect("create sensevoice dir");
         fs::create_dir_all(&vad_dir).expect("create vad dir");
-        fs::write(sensevoice_dir.join("model.pt"), "sensevoice").expect("write sensevoice model");
-        fs::write(vad_dir.join("model.pt"), "vad").expect("write vad model");
+        fs::write(sensevoice_dir.join("model.pt"), b"PK\x03\x04sensevoice")
+            .expect("write sensevoice model");
+        fs::write(vad_dir.join("model.pt"), b"PK\x03\x04vad").expect("write vad model");
 
         assert!(asr_model_available(&paths, DEFAULT_ASR_MODEL));
     }

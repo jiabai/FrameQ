@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FrameQ 稳定性加固审查报告 — 2026-08-15</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1f2328; --muted: #6b7280;
+    --line: #e5e7eb; --red: #dc2626; --red-soft: #fef2f2;
+    --amber: #d97706; --amber-soft: #fffbeb; --blue: #2563eb; --blue-soft: #eff6ff;
+    --green: #16a34a; --green-soft: #f0fdf4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; padding: 32px 16px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header.hero { background: linear-gradient(135deg, #1f2937, #374151); color: #fff; border-radius: 14px; padding: 26px 32px; margin-bottom: 22px; }
+  header.hero h1 { font-size: 21px; margin-bottom: 6px; }
+  header.hero p { color: #d1d5db; font-size: 14px; }
+  h2 { font-size: 18px; margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 15px; margin: 16px 0 8px; }
+  p { margin-bottom: 10px; }
+  .callout { border-left: 4px solid var(--amber); background: var(--amber-soft); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 14px 0; font-size: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .panel-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 10px 0; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; }
+  code { background: #f3f4f6; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; font-family: Consolas, monospace; }
+  .rank { font-size: 12px; font-weight: 700; border-radius: 6px; padding: 1px 8px; white-space: nowrap; }
+  .rank.h { background: var(--red-soft); color: var(--red); }
+  .rank.m { background: var(--amber-soft); color: var(--amber); }
+  .rank.l { background: var(--blue-soft); color: var(--blue); }
+  .ok { color: var(--green); font-weight: 600; }
+  footer { margin-top: 30px; color: var(--muted); font-size: 12.5px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>FrameQ 稳定性加固审查报告</h1>
+  <p>基于 2026-08-15 代码库（HEAD 0c131f1）· 聚焦下载链路、worker 生命周期、诊断与打包</p>
+</header>
+
+<div class="callout">
+  <strong>总体判断：</strong>核心链路已有不错的防护（单实例锁、worker 并发保护、watchdog 双超时、
+modelscope 官方通道内置超时/重试/断点续传、诊断 sink 隔离、ASR 日志 4MiB 轮转）。真正的薄弱点集中在
+<strong>四个高优先级项</strong>：ONNX 缓存残留目录泄漏、自定义归档下载通道无超时、下载前无磁盘空间预检、
+VC++ 预检只覆盖下载命令。建议按「高 → 中」顺序纳入后续迭代，低优先级项可选。
+</div>
+
+<h2>1. 已确认的既有防护（无需重复加固）</h2>
+<div class="panel">
+  <table>
+    <thead><tr><th>防护点</th><th>位置</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td>单实例锁</td><td><code>lib.rs</code> tauri_plugin_single_instance</td><td class="ok">已覆盖</td></tr>
+      <tr><td>worker 并发保护（AlreadyRunning）</td><td><code>worker_runtime/supervisor.rs</code></td><td class="ok">已覆盖</td></tr>
+      <tr><td>watchdog idle 10 分钟 / 绝对 4 小时</td><td><code>runner/watchdog.rs</code></td><td class="ok">已覆盖</td></tr>
+      <tr><td>modelscope 官方通道超时 + 重试 + 断点续传</td><td>modelscope <code>file_download.py</code>（timeout / Retry / Range 续传）</td><td class="ok">已覆盖（实测确认）</td></tr>
+      <tr><td>诊断事件按语义操作隔离（仅 DownloadAsrModel 落盘）</td><td><code>runner/progress.rs</code></td><td class="ok">已覆盖</td></tr>
+      <tr><td>ASR 诊断日志 4MiB 轮转 + 7 天窗口</td><td><code>diagnostics/worker_stderr.rs</code></td><td class="ok">已覆盖</td></tr>
+      <tr><td>import 阶段崩溃诊断兜底</td><td><code>import_stage_diagnostics.py</code> + <code>__main__.py</code> / <code>cli.py</code></td><td class="ok">本批新增</td></tr>
+      <tr><td>VC++ 运行库 app-local 捆绑 + 下载预检</td><td><code>build-installer.mjs</code> / <code>vc_runtime.rs</code></td><td class="ok">本批新增</td></tr>
+      <tr><td>自定义归档 SHA256 校验 + 安全解压（zip/tar 路径穿越防护）</td><td><code>model_download.py</code></td><td class="ok">已覆盖</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>2. 加固建议（按优先级）</h2>
+
+<h3>🔴 高优先级</h3>
+<div class="panel">
+  <table>
+    <thead><tr><th>#</th><th>问题与证据</th><th>影响</th><th>建议修复</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="rank h">H1</span></td>
+        <td><b>ONNX 缓存残留目录无清理</b>：<code>_download_onnx_model_cache</code> 的 <code>.onnx-staging-&lt;uuid&gt;</code> 与 <code>_promote_onnx_cache</code> 的 <code>.onnx-backup-&lt;uuid&gt;</code> 在 watchdog 杀进程 / 断电时残留（每份约 500MB 模型文件）；<code>_remove_stale_temp_dirs</code> 只清理 modelscope 的 <code>._____temp</code></td>
+        <td>多次中断下载后磁盘静默泄漏，可能最终导致磁盘满</td>
+        <td>下载开始前（或 normalize 阶段）清理 <code>onnx-staging-*</code> / <code>onnx-backup-*</code> 残留；加对应单测</td>
+      </tr>
+      <tr>
+        <td><span class="rank h">H2</span></td>
+        <td><b>自定义归档下载通道无超时/重试/进度</b>：<code>_resolve_archive</code> 使用 <code>urllib.request.urlretrieve</code>（无 timeout 参数、无进度回调、无断点），一旦 .env 配置自定义下载源，连接挂起时只能等 watchdog 10 分钟</td>
+        <td>自定义源场景（如镜像/内网分发）稳定性差，UI 无进度</td>
+        <td>复用 <code>download_reliability.py</code> 的流式下载（timeout / stall 检测 / max_bytes / content-type 校验）+ 进度事件；或 requests 流式 + 显式超时</td>
+      </tr>
+      <tr>
+        <td><span class="rank h">H3</span></td>
+        <td><b>下载前无磁盘空间预检</b>：SenseVoiceSmall 全套约 1.5GB+，磁盘不足时下载到一半才 ENOSPC 失败（已有分类但为时已晚）</td>
+        <td>磁盘满用户白等一次大下载</td>
+        <td>下载前检查 app-local 分区可用空间 ≥ 阈值（如 2GB），不足返回明确提示；Rust 或 Python 侧均可</td>
+      </tr>
+      <tr>
+        <td><span class="rank h">H4</span></td>
+        <td><b>VC++ 预检只覆盖下载命令</b>：<code>check_vc_runtime</code> 仅在 <code>download_asr_model</code> 前执行；视频转写等其它 worker 操作在 DLL 缺失时仍会 import 崩溃并显示笼统失败</td>
+        <td>同类问题在转写路径复发时不可诊断</td>
+        <td>把预检下沉到统一 worker spawn 入口（<code>WorkerLane::run</code> 或 <code>spawn_worker_process</code>），或至少让其它操作失败时也能看到 runtime 提示</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>🟡 中优先级</h3>
+<div class="panel">
+  <table>
+    <thead><tr><th>#</th><th>问题与证据</th><th>建议修复</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="rank m">M1</span></td>
+        <td><b>PyTorch 版缓存校验只查文件存在</b>：<code>validate_asr_model_cache</code> 对 <code>model.pt</code> 无大小/哈希校验，截断文件可能被当作成功（ONNX 版已有全套 SHA256）</td>
+        <td>对 model.pt / vad model.pt 增加最小大小校验（或抽样哈希）；与 ONNX 版校验强度对齐</td>
+      </tr>
+      <tr>
+        <td><span class="rank m">M2</span></td>
+        <td><b>依赖版本漂移</b>：pyproject 中 <code>modelscope&gt;=1.37.1</code>、<code>torch&gt;=2.10.0</code> 为下限浮动，不同时间打包解析不同版本；ONNX 资产哈希针对固定文件，但 SDK 行为可能随版本变化</td>
+        <td>锁定精确版本（或提交 uv lockfile），使 CI 打包可复现；发布时记录实际解析版本</td>
+      </tr>
+      <tr>
+        <td><span class="rank m">M3</span></td>
+        <td><b>桌面日志无轮转</b>：<code>frameq-desktop.log</code> 无限 append（ASR 诊断日志有 4MiB 上限，desktop 日志没有）</td>
+        <td>加大小轮转（如 16MiB 滚动保留旧文件）</td>
+      </tr>
+      <tr>
+        <td><span class="rank m">M4</span></td>
+        <td><b>发布 CI 门禁待确认</b>：desktop-release.yml 仅见 build-installer 步骤，未见 pytest / cargo test / npm test 与 canonical↔packaged worker 字节对比门禁</td>
+        <td>确认测试门禁是否在其它 workflow；建议发布 CI 增加字节对比步骤（本批已手动验证一次，应固化）</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>🟢 低优先级</h3>
+<div class="panel">
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="rank l">L1</span></td>
+        <td>下载进度事件无节流</td>
+        <td>modelscope chunk 级事件 → 大文件上千次 IPC/setState；可节流（≥100ms 或 ≥1% 增量）</td>
+      </tr>
+      <tr>
+        <td><span class="rank l">L2</span></td>
+        <td>前端 45s stalled 提示与 10 分钟 watchdog 之间无操作</td>
+        <td>提示已存在，可在 stalled 持续 2 分钟时强化「可取消」引导</td>
+      </tr>
+      <tr>
+        <td><span class="rank l">L3</span></td>
+        <td>app-local DLL 与系统 DLL 版本差异</td>
+        <td>msvcp140 向后兼容良好，风险低；不处理，但可在打包时记录 DLL 版本便于排障</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>3. 建议执行顺序</h2>
+<div class="panel">
+  <ol>
+    <li><b>H1 + H3</b>：纯资源管理修复（清理残留 + 磁盘预检），改动小、单测好写，建议随 v0.3.3 一起发；</li>
+    <li><b>H2</b>：自定义归档通道改造（复用 download_reliability），需要 .env 自定义源场景的测试覆盖；</li>
+    <li><b>H4</b>：预检下沉到统一 spawn 入口，涉及 worker_runtime 公共路径，建议单独一个计划；</li>
+    <li><b>M1-M4</b>：并入后续维护迭代；M4 的字节对比步骤建议在下次发布时固化进 CI。</li>
+  </ol>
+</div>
+
+<h2>4. 实施状态（2026-08-15 14:45 更新）</h2>
+<div class="panel">
+  <table>
+    <thead><tr><th>项</th><th>状态</th><th>验证</th></tr></thead>
+    <tbody>
+      <tr><td>H1 ONNX 残留目录清理</td><td class="ok">✅ 已实施</td><td><code>_remove_stale_onnx_staging_dirs</code> 在下载入口清理 <code>.onnx-staging-*</code> / <code>.onnx-backup-*</code>；新增 2 个单测</td></tr>
+      <tr><td>H2 自定义归档流式下载</td><td class="ok">✅ 已实施</td><td><code>_download_url_to_file</code>：30s 超时、2GiB 上限、3 次退避重试、进度事件、HTTPError 透传（分类 http）；5 个单测</td></tr>
+      <tr><td>H3 磁盘空间预检</td><td class="ok">✅ 已实施</td><td><code>_ensure_model_disk_space</code>：可用空间 &lt;2GiB 时抛 ENOSPC（分类 disk_full）；3 个单测</td></tr>
+      <tr><td>H4 预检下沉统一 spawn 入口</td><td class="ok">✅ 已实施</td><td>runner <code>run_inner</code> spawn 前统一检查；新增 <code>RuntimeUnavailable</code> 错误类型；下载 lane 透传 <code>ASR_MODEL_RUNTIME_MISSING</code>，任务 lane 返回 <code>WORKER_RUNTIME_UNAVAILABLE</code>；dev 环境（无 resources/python）自动跳过</td></tr>
+      <tr><td>M1 模型文件魔数校验</td><td class="ok">✅ 已实施</td><td>Python 与 Rust 双侧要求 model.pt 以 torch zip 魔数（PK\x03\x04）开头；测试数据同步更新</td></tr>
+      <tr><td>M2 依赖锁定</td><td class="ok">✅ 已满足</td><td>仓库已有并提交 <code>uv.lock</code>，打包走 <code>uv export</code>（lockfile 解析），无需改动</td></tr>
+      <tr><td>M3 desktop 日志轮转</td><td class="ok">✅ 已实施</td><td>16MiB 上限，超限滚动为 <code>frameq-desktop.log.1</code>（覆盖旧滚动）；2 个单测</td></tr>
+      <tr><td>M4 CI 字节对比门禁</td><td class="ok">✅ 已实施</td><td>新 <code>scripts/verify-packaged-worker.mjs</code>（排除 __pycache__）+ 2 个单测 + desktop-release.yml Windows job 接入</td></tr>
+      <tr><td>L1 进度事件节流</td><td class="ok">✅ 已实施</td><td>≥100ms 且 ≥1% 才发事件；end 事件不受限；2 个单测</td></tr>
+      <tr><td>L2 / L3</td><td>⏸️ 未做</td><td>低价值，维持原状（stalled 提示已存在；DLL 版本差异风险低）</td></tr>
+    </tbody>
+  </table>
+  <p>验证汇总：worker 804/804、scripts 36/36、Rust 322/322、Ruff / cargo fmt / git diff --check 全过；canonical↔packaged worker 字节一致（对比脚本真实抓出过一次漂移后已刷新）。</p>
+</div>
+
+<footer>FrameQ · 稳定性加固审查 · 2026-08-15 · 基于 HEAD 0c131f1 + 加固实施</footer>
+
+</div>
+</body>
+</html>

@@ -21,6 +21,7 @@ use super::supervisor::{
     ProcessSupervisor,
 };
 use crate::diagnostics::begin_asr_model_download_diagnostics;
+use crate::vc_runtime::{check_vc_runtime, VcRuntimeStatus};
 use crate::{append_desktop_log, RuntimePaths};
 use std::process::Output;
 use std::sync::atomic::AtomicBool;
@@ -82,6 +83,7 @@ pub(crate) enum WorkerRunErrorKind {
     PipeUnavailable,
     WaitFailed,
     ProtocolViolation,
+    RuntimeUnavailable,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -172,6 +174,17 @@ impl WorkerLane {
             &operation.event("start"),
             &safe_start_log_detail(operation, &command),
         );
+
+        // Windows-only pre-flight: the bundled VC++ runtime DLLs must be
+        // present before any worker starts, otherwise C extensions fail at
+        // import with an opaque crash. Unpackaged/dev environments without a
+        // resources/python directory are skipped by the check itself.
+        if check_vc_runtime(paths) != VcRuntimeStatus::Ok {
+            return Err(WorkerRunError::new(
+                WorkerRunErrorKind::RuntimeUnavailable,
+                "ASR_MODEL_RUNTIME_MISSING",
+            ));
+        }
 
         let (mut child, stdin_payload) = spawn_worker_process(command).map_err(|_| {
             WorkerRunError::new(

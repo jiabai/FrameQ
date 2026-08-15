@@ -87,6 +87,11 @@ pub(super) fn map_task_worker_result(
                 "Worker request could not be delivered.",
             )),
             WorkerRunErrorKind::ProtocolViolation => Ok(worker_protocol_failure_result(context)),
+            WorkerRunErrorKind::RuntimeUnavailable => Ok(worker_failure_result(
+                context,
+                "WORKER_RUNTIME_UNAVAILABLE",
+                "Worker runtime components are missing.",
+            )),
             WorkerRunErrorKind::PipeUnavailable | WorkerRunErrorKind::WaitFailed => {
                 Err(error.detail.to_string())
             }
@@ -288,6 +293,10 @@ mod tests {
             (
                 WorkerRunErrorKind::ProtocolViolation,
                 "WORKER_PROTOCOL_VIOLATION",
+            ),
+            (
+                WorkerRunErrorKind::RuntimeUnavailable,
+                "WORKER_RUNTIME_UNAVAILABLE",
             ),
         ] {
             let result = map_task_worker_result(
