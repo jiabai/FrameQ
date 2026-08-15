@@ -256,6 +256,17 @@ def test_production_dependency_factories_have_one_defaults_owner() -> None:
     }
 
 
-def test_main_module_imports_only_cli_main() -> None:
-    assert _imported_modules(MAIN_PATH) == {"frameq_worker.cli"}
+def test_main_module_imports_only_cli_main_and_stdlib_only_guard() -> None:
+    assert _imported_modules(MAIN_PATH) == {
+        "frameq_worker.cli",
+        "frameq_worker.import_stage_diagnostics",
+    }
     assert _names_imported_from(MAIN_PATH, "frameq_worker.cli") == {"main"}
+    assert _names_imported_from(MAIN_PATH, "frameq_worker.import_stage_diagnostics") == {
+        "emit_import_stage_diagnostic"
+    }
+
+
+def test_import_stage_diagnostics_module_imports_stdlib_only() -> None:
+    path = FRAMEQ_WORKER_ROOT / "import_stage_diagnostics.py"
+    assert _imported_modules(path) <= {"__future__", "json", "sys"}

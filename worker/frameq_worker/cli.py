@@ -13,7 +13,11 @@ from frameq_worker.desktop_contract import (
     MODEL_DOWNLOAD_EVENT_PREFIX,
     PROGRESS_EVENT_PREFIX,
 )
-from frameq_worker.diagnostic_events import DiagnosticEvent, render_diagnostic_event
+from frameq_worker.diagnostic_events import (
+    DiagnosticEvent,
+    classify_model_download_exception,
+    render_diagnostic_event,
+)
 from frameq_worker.progress_events import (
     validate_model_progress_event,
     validate_worker_progress_event,
@@ -107,6 +111,20 @@ def run_worker_business(call: Callable[[], dict[str, object]]) -> dict[str, obje
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        return _main_inner(argv)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:  # noqa: BLE001 - outermost diagnostic guard
+        # Covers crashes outside the business try blocks (module import stage,
+        # environment loading, dispatch). The Rust stderr reader records the
+        # structured event only for the ASR model-download lane; other lanes
+        # ignore it, so unconditional emission is safe.
+        print_diagnostic_event(classify_model_download_exception(exc, "preparing"))
+        raise
+
+
+def _main_inner(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run one FrameQ worker request.")
     request_group = parser.add_mutually_exclusive_group(required=True)
     request_group.add_argument(
