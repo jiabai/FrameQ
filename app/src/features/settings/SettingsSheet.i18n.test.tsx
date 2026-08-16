@@ -166,6 +166,7 @@ describe("settings localization", () => {
     await initializeI18n(locale as SupportedLocale);
     const markup = renderSettings(locale as SupportedLocale);
 
+    expect(markup).toContain('data-motion="sheet"');
     expect(markup).toContain(`>${title}</h2>`);
     expect(markup).toContain(`>${nav}</span>`);
     expect(markup).toContain(`>${heading}</h3>`);

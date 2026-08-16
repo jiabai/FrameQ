@@ -166,7 +166,9 @@ export function useAsrModelDownload() {
         ) {
           if (terminal) {
             modelDownloadTerminalEventOperationIdRef.current = operationId;
-            modelDownloadPhaseRef.current = "finished";
+            if (parsed.event.status === "cancelled") {
+              modelDownloadPhaseRef.current = "finished";
+            }
           }
           modelDownloadProgressUpdatedAtRef.current = Date.now();
           setModelDownloadStalled(false);
@@ -296,15 +298,17 @@ export function useAsrModelDownload() {
       }
       modelDownloadPhaseRef.current = "finished";
       setModelDownloadStalled(false);
+      const timeoutNotice = modelDownloadTimeoutNotice(error);
       setModelDownloadProgress((current) => ({
-        phase: "failed",
+        phase:
+          timeoutNotice?.messageCode === "asrModel.notice.runtimeMissing"
+            ? "start_failed"
+            : "failed",
         wireStatus: current.wireStatus,
         message: { messageCode: "model.download.failed", args: {} },
         progress: current.progress,
       }));
-      setModelDownloadNotice(
-        modelDownloadTimeoutNotice(error) ?? uiMessage("asrModel.notice.downloadFailed"),
-      );
+      setModelDownloadNotice(timeoutNotice ?? uiMessage("asrModel.notice.downloadFailed"));
       return false;
     } finally {
       if (unlisten) {
@@ -324,7 +328,12 @@ export function useAsrModelDownload() {
       if (status.asrModelAvailable) {
         return asrModel;
       }
-      return (await startAsrModelDownload(asrModel)) ? asrModel : null;
+      const prepared = await startAsrModelDownload(asrModel);
+      if (!prepared) {
+        return null;
+      }
+      setModelGuideOpen(false);
+      return asrModel;
     } catch {
       setModelGuideOpen(true);
       setModelDownloadNotice(uiMessage("asrModel.notice.downloadFailed"));

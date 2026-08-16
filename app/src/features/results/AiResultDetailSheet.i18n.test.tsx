@@ -62,6 +62,7 @@ describe("AI result detail localization", () => {
       await initializeI18n(locale as SupportedLocale);
       const markup = renderDetails();
 
+      expect(markup).toContain('data-motion="sheet"');
       expect(markup).toContain(`>${title}</h2>`);
       expect(markup).toContain(retry);
       expect(markup).toContain(reason);

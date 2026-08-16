@@ -707,6 +707,10 @@ h3 {
   width: 12%;
 }
 
+.progress-fill[data-motion="asr-progress"] {
+  transition: none;
+}
+
 .progress-fill.video_extracting {
   width: 35%;
 }

@@ -94,18 +94,21 @@ describe("bundled localization resources", () => {
         notice: {
           idleTimeout: "模型下载长时间没有新的进展，已停止。已下载的文件会保留，请稍后重试。",
           executionTimeout: "模型下载已超过最长运行时间，已停止。已下载的文件会保留，请稍后重试。",
+          runtimeMissing: "模型下载进程无法启动。安装包中的 Windows VC++ 运行组件缺失或被安全软件隔离，请重新安装 FrameQ 后重试。",
         },
       },
       "zh-TW": {
         notice: {
           idleTimeout: "模型下載長時間沒有新的進度，已停止。已下載的檔案會保留，請稍後重試。",
           executionTimeout: "模型下載已超過最長執行時間，已停止。已下載的檔案會保留，請稍後重試。",
+          runtimeMissing: "模型下載程序無法啟動。安裝包中的 Windows VC++ 執行元件缺失或被安全軟體隔離，請重新安裝 FrameQ 後重試。",
         },
       },
       "en-US": {
         notice: {
           idleTimeout: "The model download stopped after making no progress for too long. Downloaded files were kept; try again later.",
           executionTimeout: "The model download reached the maximum run time and was stopped. Downloaded files were kept; try again later.",
+          runtimeMissing: "The model download process could not start. Windows VC++ runtime components are missing from the installer or were quarantined by security software; reinstall FrameQ and try again.",
         },
       },
     });

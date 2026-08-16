@@ -1,4 +1,5 @@
 import { AlertTriangle, Lightbulb, ListChecks, LoaderCircle, ScanText, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
 import type { TaskWorkspaceViewModel, AiTargetViewModel } from "../../taskWorkspaceViewModel";
@@ -6,6 +7,7 @@ import type { InsightRetryTarget } from "../../workflow";
 import { isSupportedLocale, type SupportedLocale } from "../../i18n/locale";
 import { renderWorkerProgressMessage } from "../../i18n/progressMessages";
 import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
+import { UI_MOTION_LAYOUT_TRANSITION, UI_MOTION_TRANSITION } from "../../uiMotion";
 
 type AiGenerationWorkspaceProps = {
   model: TaskWorkspaceViewModel["ai"];
@@ -183,7 +185,13 @@ function AiTargetCard({
   const timeoutGuidance = renderTimeoutGuidance(target.errorCode, locale);
 
   return (
-    <article className={`ai-target-card ${target.status}`} data-ai-target={target.target}>
+    <motion.article
+      className={`ai-target-card ${target.status}`}
+      data-ai-target={target.target}
+      data-motion="ai-target"
+      layout
+      transition={UI_MOTION_LAYOUT_TRANSITION}
+    >
       <div className="ai-target-heading">
         <span className="ai-target-icon">{icon}</span>
         <div>
@@ -193,11 +201,19 @@ function AiTargetCard({
         <span className="ai-target-status">{t(`status.${target.status}`)}</span>
       </div>
       {stale ? <p className="dissection-card-stale">{t("dissection.card.stale")}</p> : null}
-      {target.errorCode ? (
-        <p className="ai-target-error">
-          {timeoutGuidance ?? t("target.error", { code: target.errorCode })}
-        </p>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {target.errorCode ? (
+          <motion.p
+            className="ai-target-error"
+            initial={{ opacity: 0, y: -3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={UI_MOTION_TRANSITION}
+          >
+            {timeoutGuidance ?? t("target.error", { code: target.errorCode })}
+          </motion.p>
+        ) : null}
+      </AnimatePresence>
       <small>{creditsSummary}</small>
       <div className="ai-target-actions">
         {active ? (
@@ -214,7 +230,7 @@ function AiTargetCard({
           </button>
         ) : null}
       </div>
-    </article>
+    </motion.article>
   );
 }
 

@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import "./App.css";
 import {
@@ -45,7 +46,7 @@ import { useSettingsController } from "./features/settings/useSettingsController
 import { LocalTranscriptWorkspace } from "./features/transcript/LocalTranscriptWorkspace";
 import { useTranscriptDetailController } from "./features/transcript/useTranscriptDetailController";
 import { useWindowChromeController } from "./features/window/useWindowChromeController";
-import { useModalFocus } from "./features/modal/useModalFocus";
+import { AnimatedSheet } from "./features/modal/AnimatedSheet";
 import { TaskComposer } from "./features/workflow/TaskComposer";
 import { useTaskProcessingController } from "./features/workflow/useTaskProcessingController";
 import { useAppUpdateController } from "./features/updates/useAppUpdateController";
@@ -53,6 +54,7 @@ import { useLocale } from "./i18n/LocaleProvider";
 import { countTextUnits, formatWordCount } from "./i18n/formatters";
 import { getAiCreditsCostHint } from "./aiCreditsCopy";
 import { renderUiMessage, uiMessage, type UiMessage } from "./i18n/uiMessage";
+import { UI_MOTION_TRANSITION } from "./uiMotion";
 
 const asrModelLabels: Record<string, string> = {
   "Qwen/Qwen3-ASR-0.6B": "Qwen3-ASR 0.6B",
@@ -111,6 +113,7 @@ function App() {
   const { t: tUpdates } = useTranslation("updates");
   const { t: tSynthesis } = useTranslation("synthesis");
   const [actionNotice, setActionNotice] = useState<UiMessage | null>(null);
+  const [animateNewTaskEntry, setAnimateNewTaskEntry] = useState(false);
   const diagnosticExportController = useDiagnosticExport();
   const settingsController = useSettingsController(diagnosticExportController);
   const { settingsOpen, closeSettings, openSettings } = settingsController;
@@ -271,7 +274,6 @@ function App() {
     closeDetail();
     transcriptDetailController.locateTranscriptByteRange(chunk.startByte, chunk.endByte);
   }, [closeDetail, transcriptDetailController, workflow.dissection, workflow.dissectionStale]);
-  const summaryModalRef = useModalFocus<HTMLElement>(summaryConfirmOpen);
   resetInsightGenerationUiRef.current = resetInsightGenerationUi;
   const handleHistoryItemSelected = useCallback(
     (item: HistoryItem) => {
@@ -440,6 +442,14 @@ function App() {
     resolvedLocale,
     toolbarNewTaskButtonState.title,
   );
+  const handleNewTaskFromToolbar = useCallback(() => {
+    if (toolbarNewTaskButtonState.disabled) {
+      return;
+    }
+
+    setAnimateNewTaskEntry(true);
+    startNewTaskFromToolbar();
+  }, [startNewTaskFromToolbar, toolbarNewTaskButtonState.disabled]);
 
   return (
     <main className="app-shell">
@@ -505,7 +515,7 @@ function App() {
               <button
                 className="icon-button"
                 type="button"
-                onClick={startNewTaskFromToolbar}
+                onClick={handleNewTaskFromToolbar}
                 aria-label={toolbarNewTaskAriaLabel}
                 title={toolbarNewTaskTitle}
                 disabled={toolbarNewTaskButtonState.disabled}
@@ -521,7 +531,18 @@ function App() {
           aria-label={tWorkflow("input.workspaceAria")}
         >
           {workflow.stage === "waiting_input" ? (
-            <div className="workflow-column">
+            <motion.div
+              className="workflow-column"
+              data-motion="new-task-entry"
+              initial={animateNewTaskEntry ? { opacity: 0, y: 8 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={UI_MOTION_TRANSITION}
+              onAnimationComplete={() => {
+                if (animateNewTaskEntry) {
+                  setAnimateNewTaskEntry(false);
+                }
+              }}
+            >
               <TaskComposer
                 source={workflow.composerSource}
                 canSubmit={canSubmit}
@@ -533,7 +554,7 @@ function App() {
                   void submitTask(submission, account, openAccountPanel);
                 }}
               />
-            </div>
+            </motion.div>
           ) : (
             <>
               <TaskStatusBanner model={taskWorkspaceModel.banner} />
@@ -593,20 +614,12 @@ function App() {
         onCancelDownload={cancelCurrentAsrModelDownload}
       />
 
-      {summaryConfirmOpen ? (
-        <div
-          className="modal-backdrop sheet-backdrop"
-          role="presentation"
-          onClick={closeSummaryConfirmation}
-        >
-          <section
-            ref={summaryModalRef}
-            className="sheet-panel detail-modal preference-flow-sheet"
-            aria-label={tSynthesis("confirmation.ariaLabel")}
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
+      <AnimatedSheet
+        open={summaryConfirmOpen}
+        ariaLabel={tSynthesis("confirmation.ariaLabel")}
+        className="preference-flow-sheet"
+        onBackdropClick={closeSummaryConfirmation}
+      >
             <header className="modal-header sheet-header">
               <div>
                 <p className="section-label">{tSynthesis("confirmation.sectionLabel")}</p>
@@ -673,34 +686,28 @@ function App() {
                 </button>
               </div>
             </div>
-          </section>
-        </div>
-      ) : null}
+      </AnimatedSheet>
 
-      {insightPreferenceFlow ? (
-        <InsightPreferenceFlow
-          flow={insightPreferenceFlow}
-          busy={insightPreferenceBusy || isProcessingStage(workflow.stage)}
-          accountQuotaRemaining={account.llmQuotaRemaining}
-          transcriptText={workflow.text}
-          transcriptPath={currentTranscriptPath}
-          locale={resolvedLocale}
-          outputLanguage={confirmedOutputLanguage ?? resolvedLocale}
-          onFlowChange={setInsightPreferenceFlow}
-          onSkipProfile={skipCurrentProfileSetup}
-          onSaveProfile={saveCurrentProfile}
-          onConfirm={confirmInsightPreferences}
-          onCancel={closeInsightPreferenceFlow}
-        />
-      ) : null}
+      <InsightPreferenceFlow
+        flow={insightPreferenceFlow}
+        busy={insightPreferenceBusy || isProcessingStage(workflow.stage)}
+        accountQuotaRemaining={account.llmQuotaRemaining}
+        transcriptText={workflow.text}
+        transcriptPath={currentTranscriptPath}
+        locale={resolvedLocale}
+        outputLanguage={confirmedOutputLanguage ?? resolvedLocale}
+        onFlowChange={setInsightPreferenceFlow}
+        onSkipProfile={skipCurrentProfileSetup}
+        onSaveProfile={saveCurrentProfile}
+        onConfirm={confirmInsightPreferences}
+        onCancel={closeInsightPreferenceFlow}
+      />
 
-      {dissectionController.preview ? (
-        <TranscriptDissectionConfirmationSheet
-          preview={dissectionController.preview}
-          onCancel={dissectionController.closeConfirmation}
-          onConfirm={dissectionController.confirmGeneration}
-        />
-      ) : null}
+      <TranscriptDissectionConfirmationSheet
+        preview={dissectionController.preview}
+        onCancel={dissectionController.closeConfirmation}
+        onConfirm={dissectionController.confirmGeneration}
+      />
 
       <AiResultDetailSheet
         actionNotice={actionNotice}

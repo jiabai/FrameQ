@@ -10,6 +10,7 @@ export type AsrModelDownloadLocalPhase =
   | "cancelling"
   | "completed"
   | "cancelled"
+  | "start_failed"
   | "failed";
 
 export const MODEL_DOWNLOAD_STALLED_MS = 45_000;

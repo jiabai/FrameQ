@@ -15,9 +15,6 @@ pub(crate) enum VcRuntimeStatus {
     /// The app-local bundle is missing a required runtime DLL (packaging defect
     /// or security-software quarantine).
     AppLocalMissing,
-    /// The app-local bundle is complete, but the system VC++ runtime is absent.
-    /// Guidance copy only; app-local DLLs load first on Windows.
-    SystemMissing,
 }
 
 /// Pre-flight check before spawning a worker on Windows. macOS and Linux
@@ -30,8 +27,7 @@ pub(crate) fn check_vc_runtime(paths: &RuntimePaths) -> VcRuntimeStatus {
     if !python_root.is_dir() {
         return VcRuntimeStatus::Ok;
     }
-    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
-    check_vc_runtime_at(&python_root, Path::new(&system_root))
+    check_vc_runtime_at(&python_root)
 }
 
 #[cfg(not(windows))]
@@ -40,16 +36,12 @@ pub(crate) fn check_vc_runtime(_paths: &RuntimePaths) -> VcRuntimeStatus {
 }
 
 /// Path-injected core so the three-way decision is testable on any platform.
-pub(crate) fn check_vc_runtime_at(python_root: &Path, system_root: &Path) -> VcRuntimeStatus {
+pub(crate) fn check_vc_runtime_at(python_root: &Path) -> VcRuntimeStatus {
     let app_local_missing = VC_RUNTIME_DLLS
         .iter()
         .any(|dll| !python_root.join(dll).is_file());
     if app_local_missing {
         return VcRuntimeStatus::AppLocalMissing;
-    }
-    let system_msvcp = system_root.join("System32").join("msvcp140.dll");
-    if !system_msvcp.is_file() {
-        return VcRuntimeStatus::SystemMissing;
     }
     VcRuntimeStatus::Ok
 }
@@ -84,31 +76,22 @@ mod tests {
     #[test]
     fn ok_when_all_app_local_dlls_are_present() {
         let root = temp_dir("ok");
-        let system_root = root.join("System");
         let python_root = root.join("python");
-        fs::create_dir_all(&system_root.join("System32")).expect("system32 dir");
         fs::create_dir_all(&python_root).expect("python dir");
         populate_dlls(&python_root, VC_RUNTIME_DLLS);
-        populate_dlls(&system_root.join("System32"), &["msvcp140.dll"]);
 
-        assert_eq!(
-            check_vc_runtime_at(&python_root, &system_root),
-            VcRuntimeStatus::Ok
-        );
+        assert_eq!(check_vc_runtime_at(&python_root), VcRuntimeStatus::Ok);
     }
 
     #[test]
     fn app_local_missing_when_msvcp140_absent() {
         let root = temp_dir("missing-msvcp140");
-        let system_root = root.join("System");
         let python_root = root.join("python");
-        fs::create_dir_all(&system_root.join("System32")).expect("system32 dir");
         fs::create_dir_all(&python_root).expect("python dir");
         populate_dlls(&python_root, &["vcruntime140_1.dll"]);
-        populate_dlls(&system_root.join("System32"), &["msvcp140.dll"]);
 
         assert_eq!(
-            check_vc_runtime_at(&python_root, &system_root),
+            check_vc_runtime_at(&python_root),
             VcRuntimeStatus::AppLocalMissing
         );
     }
@@ -116,32 +99,24 @@ mod tests {
     #[test]
     fn app_local_missing_when_vcruntime140_1_absent() {
         let root = temp_dir("missing-vcruntime140-1");
-        let system_root = root.join("System");
         let python_root = root.join("python");
-        fs::create_dir_all(&system_root.join("System32")).expect("system32 dir");
         fs::create_dir_all(&python_root).expect("python dir");
         populate_dlls(&python_root, &["msvcp140.dll"]);
-        populate_dlls(&system_root.join("System32"), &["msvcp140.dll"]);
 
         assert_eq!(
-            check_vc_runtime_at(&python_root, &system_root),
+            check_vc_runtime_at(&python_root),
             VcRuntimeStatus::AppLocalMissing
         );
     }
 
     #[test]
-    fn system_missing_when_app_local_complete_but_system32_lacks_msvcp140() {
-        let root = temp_dir("system-missing");
-        let system_root = root.join("System");
+    fn app_local_runtime_is_sufficient_without_system_redist() {
+        let root = temp_dir("without-system-redist");
         let python_root = root.join("python");
-        fs::create_dir_all(&system_root.join("System32")).expect("system32 dir");
         fs::create_dir_all(&python_root).expect("python dir");
         populate_dlls(&python_root, VC_RUNTIME_DLLS);
 
-        assert_eq!(
-            check_vc_runtime_at(&python_root, &system_root),
-            VcRuntimeStatus::SystemMissing
-        );
+        assert_eq!(check_vc_runtime_at(&python_root), VcRuntimeStatus::Ok);
     }
 
     #[cfg(not(windows))]

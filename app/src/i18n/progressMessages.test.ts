@@ -97,7 +97,7 @@ describe("semantic progress message rendering", () => {
     expect(workerMessage.messageCode).toBe("future.action.running");
   });
 
-  test("local cancelling and failed phases override an older downloading wire status", () => {
+  test("local cancelling, failed, and start-failed phases override an older downloading wire status", () => {
     expect(
       renderAsrModelDownloadMessage("en-US", {
         phase: "cancelling",
@@ -105,6 +105,13 @@ describe("semantic progress message rendering", () => {
         message: { messageCode: "model.cancel.requested", args: {} },
       }),
     ).toBe("Cancelling the ASR model download.");
+    expect(
+      renderAsrModelDownloadMessage("en-US", {
+        phase: "start_failed",
+        wireStatus: "downloading",
+        message: { messageCode: "model.download.failed", args: {} },
+      }),
+    ).toBe("The ASR model download process could not start.");
     expect(
       renderAsrModelDownloadMessage("en-US", {
         phase: "failed",

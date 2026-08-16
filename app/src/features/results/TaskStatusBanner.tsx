@@ -1,10 +1,12 @@
 import { AlertTriangle, CheckCircle2, CircleDashed, LoaderCircle } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
 import { renderUiMessage } from "../../i18n/uiMessage";
 import { isSupportedLocale } from "../../i18n/locale";
 import { renderWorkerProgressMessage } from "../../i18n/progressMessages";
 import type { TaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
+import { UI_MOTION_TRANSITION } from "../../uiMotion";
 
 type TaskStatusBannerProps = {
   model: TaskWorkspaceViewModel["banner"];
@@ -22,24 +24,44 @@ export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
   return (
     <section
       className={`task-status-banner ${model.kind}`}
+      data-motion="task-status"
       aria-label={t("banner.ariaLabel")}
       role="status"
       aria-live="polite"
       aria-atomic="true"
     >
-      {model.kind === "local_complete" ? (
-        <CheckCircle2 size={20} aria-hidden="true" />
-      ) : model.kind === "local_failed" ? (
-        <AlertTriangle size={20} aria-hidden="true" />
-      ) : model.kind === "local_processing" ? (
-        <LoaderCircle size={20} className="spin" aria-hidden="true" />
-      ) : (
-        <CircleDashed size={20} aria-hidden="true" />
-      )}
-      <div>
-        <strong>{t(bannerTitleKey(model.kind))}</strong>
-        <span>{message}</span>
-      </div>
+      <AnimatePresence initial={false} mode="wait">
+        <motion.span
+          key={`icon-${model.kind}`}
+          initial={{ opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -3 }}
+          transition={UI_MOTION_TRANSITION}
+          aria-hidden="true"
+        >
+          {model.kind === "local_complete" ? (
+            <CheckCircle2 size={20} />
+          ) : model.kind === "local_failed" ? (
+            <AlertTriangle size={20} />
+          ) : model.kind === "local_processing" ? (
+            <LoaderCircle size={20} className="spin" />
+          ) : (
+            <CircleDashed size={20} />
+          )}
+        </motion.span>
+      </AnimatePresence>
+      <AnimatePresence initial={false} mode="wait">
+        <motion.div
+          key={`copy-${model.kind}`}
+          initial={{ opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -3 }}
+          transition={UI_MOTION_TRANSITION}
+        >
+          <strong>{t(bannerTitleKey(model.kind))}</strong>
+          <span>{message}</span>
+        </motion.div>
+      </AnimatePresence>
     </section>
   );
 }

@@ -79,6 +79,38 @@ test("refreshes the Tauri worker resource mirror from source worker", async () =
   }
 });
 
+test("stages Windows VC++ runtime DLLs for the dev worker resource", async () => {
+  const root = await tempRoot();
+  const sourceWorker = join(root, "worker", "frameq_worker");
+  const pythonRoot = join(root, "app", "src-tauri", "resources", "python");
+  const systemRoot = join(root, "Windows");
+  const system32 = join(systemRoot, "System32");
+
+  try {
+    await mkdir(sourceWorker, { recursive: true });
+    await mkdir(pythonRoot, { recursive: true });
+    await mkdir(system32, { recursive: true });
+    await writeFile(join(sourceWorker, "__init__.py"), "# fresh worker\n");
+    await writeFile(join(pythonRoot, "vcruntime140.dll"), "bundled python runtime");
+    await writeFile(join(system32, "msvcp140.dll"), "system msvcp runtime");
+    await writeFile(join(system32, "vcruntime140_1.dll"), "system vcruntime runtime");
+
+    await prepareFreshWorkerResource(root, {
+      platform: "win32",
+      systemRoot,
+    });
+
+    assert.equal(await readFile(join(pythonRoot, "msvcp140.dll"), "utf8"), "system msvcp runtime");
+    assert.equal(
+      await readFile(join(pythonRoot, "vcruntime140_1.dll"), "utf8"),
+      "system vcruntime runtime",
+    );
+    assert.equal(await readFile(join(pythonRoot, "vcruntime140.dll"), "utf8"), "bundled python runtime");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("launches npm through cmd.exe on Windows to avoid npm.cmd spawn failures", () => {
   const spec = buildTauriDevSpawnSpec("D:\\Github\\FrameQ", "win32", {
     ComSpec: "C:\\Windows\\System32\\cmd.exe",

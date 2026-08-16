@@ -52,6 +52,12 @@ describe("App result workspace layout styles", () => {
     );
   });
 
+  test("lets Motion own the ASR progress interpolation", () => {
+    expect(appCss).toMatch(
+      /\.progress-fill\[data-motion="asr-progress"\]\s*\{[\s\S]*?transition:\s*none;/,
+    );
+  });
+
   test("stacks the task banner above a domain-specific workspace grid", () => {
     const activeWorkspaceRule = getRuleBody([".workspace.active-layout"]);
     const taskLayoutRule = getRuleBody([".task-workspace-layout"]);

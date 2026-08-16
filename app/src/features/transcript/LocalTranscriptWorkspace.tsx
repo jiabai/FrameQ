@@ -1,9 +1,11 @@
 import { CheckCircle2, Circle, FileAudio, Film, LoaderCircle, X } from "lucide-react";
+import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
 import { isSupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { TaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
+import { UI_MOTION_LAYOUT_TRANSITION } from "../../uiMotion";
 import type { TaskArtifactKey } from "../../workflow";
 import { TranscriptReviewPanel } from "./TranscriptReviewPanel";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
@@ -52,9 +54,18 @@ export function LocalTranscriptWorkspace({
       </header>
 
       {model.phase === "processing" ? (
-        <div className="local-progress" aria-label={t("workspace.progressLabel")}>
+        <div
+          className="local-progress"
+          aria-label={t("workspace.progressLabel")}
+          data-motion="local-stage"
+        >
           {model.progressSteps.map((step) => (
-            <span className={step.state} key={step.id}>
+            <motion.span
+              className={step.state}
+              key={step.id}
+              layout
+              transition={UI_MOTION_LAYOUT_TRANSITION}
+            >
               {step.state === "complete" ? (
                 <CheckCircle2 size={16} aria-hidden="true" />
               ) : step.state === "active" ? (
@@ -63,7 +74,7 @@ export function LocalTranscriptWorkspace({
                 <Circle size={16} aria-hidden="true" />
               )}
               {t(localProgressStepKey(step.id, model.sourceMediaKind))}
-            </span>
+            </motion.span>
           ))}
           {model.cancellation.visible ? (
             <button

@@ -75,6 +75,9 @@ export function renderAsrModelDownloadMessage(
   },
 ): string {
   const translate = progressTranslator(locale);
+  if (state.phase === "start_failed") {
+    return translate("modelPhaseFallback.start_failed");
+  }
   if (
     state.message &&
     isKnownAsrModelDownloadMessageCode(state.message.messageCode)

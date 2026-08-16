@@ -8,7 +8,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   INSIGHT_PREFERENCE_FIELDS,
   type GenerationPreferenceField,
@@ -36,10 +36,10 @@ import {
 } from "../../insightPreferenceFlow";
 import { InspirationProfileForm } from "./InspirationProfileForm";
 import { OutputLanguageField } from "./OutputLanguageField";
-import { useModalFocus } from "../modal/useModalFocus";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 
 type InsightPreferenceFlowProps = {
-  flow: InsightPreferenceFlowState;
+  flow: InsightPreferenceFlowState | null;
   busy: boolean;
   accountQuotaRemaining: number;
   transcriptText: string;
@@ -67,25 +67,32 @@ export function InsightPreferenceFlow({
   onConfirm,
   onCancel,
 }: InsightPreferenceFlowProps) {
-  const preferenceModalRef = useModalFocus<HTMLElement>(true);
+  const [lastFlow, setLastFlow] = useState<InsightPreferenceFlowState | null>(flow);
+  useEffect(() => {
+    if (flow) {
+      setLastFlow(flow);
+    }
+  }, [flow]);
+  const renderFlow = flow ?? lastFlow;
+  if (!renderFlow) {
+    return null;
+  }
+
   const copy = getPreferenceCopy(locale).flow;
   const title =
-    flow.screen === "profile_intro" || flow.screen === "profile_form"
+    renderFlow.screen === "profile_intro" || renderFlow.screen === "profile_form"
       ? copy.titleProfile
-      : flow.screen === "confirmation"
+      : renderFlow.screen === "confirmation"
         ? copy.titleConfirmation
         : copy.titleGeneration;
 
   return (
-    <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={onCancel}>
-      <section
-        ref={preferenceModalRef}
-        className="sheet-panel detail-modal preference-flow-sheet"
-        aria-label={title}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <AnimatedSheet
+      open={flow !== null}
+      ariaLabel={title}
+      className="preference-flow-sheet"
+      onBackdropClick={onCancel}
+    >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{copy.sectionLabel}</p>
@@ -96,23 +103,23 @@ export function InsightPreferenceFlow({
           </button>
         </header>
 
-        {flow.screen === "profile_intro" ? (
+        {renderFlow.screen === "profile_intro" ? (
           <ProfileIntro
             locale={locale}
-            resetRequired={flow.profileResetRequired}
+            resetRequired={renderFlow.profileResetRequired}
             busy={busy}
-            onStart={() => onFlowChange(startProfileSetupInFlow(flow))}
+            onStart={() => onFlowChange(startProfileSetupInFlow(renderFlow))}
             onSkip={onSkipProfile}
           />
         ) : null}
 
-        {flow.screen === "profile_form" ? (
+        {renderFlow.screen === "profile_form" ? (
           <InspirationProfileForm
             locale={locale}
-            initialProfile={flow.profile}
+            initialProfile={renderFlow.profile}
             busy={busy}
             onCancel={() => {
-              const nextFlow = cancelProfileSetupInFlow(flow);
+              const nextFlow = cancelProfileSetupInFlow(renderFlow);
               if (nextFlow) {
                 onFlowChange(nextFlow);
                 return;
@@ -123,42 +130,41 @@ export function InsightPreferenceFlow({
           />
         ) : null}
 
-        {flow.screen === "default_summary" ? (
+        {renderFlow.screen === "default_summary" ? (
           <DefaultSummary
             locale={locale}
-            flow={flow}
+            flow={renderFlow}
             busy={busy}
-            onDirect={() => onFlowChange(useDefaultGenerationPreferences(flow))}
-            onModify={() => onFlowChange(startGenerationPreferenceEditing(flow))}
-            onEditProfile={() => onFlowChange(startProfileSetupInFlow(flow))}
+            onDirect={() => onFlowChange(useDefaultGenerationPreferences(renderFlow))}
+            onModify={() => onFlowChange(startGenerationPreferenceEditing(renderFlow))}
+            onEditProfile={() => onFlowChange(startProfileSetupInFlow(renderFlow))}
           />
         ) : null}
 
-        {flow.screen === "generation_step" ? (
+        {renderFlow.screen === "generation_step" ? (
           <GenerationStep
             locale={locale}
-            flow={flow}
+            flow={renderFlow}
             busy={busy}
             onFlowChange={onFlowChange}
           />
         ) : null}
 
-        {flow.screen === "confirmation" ? (
+        {renderFlow.screen === "confirmation" ? (
           <ConfirmationStep
             locale={locale}
             outputLanguage={outputLanguage}
-            flow={flow}
+            flow={renderFlow}
             busy={busy}
             accountQuotaRemaining={accountQuotaRemaining}
             transcriptText={transcriptText}
             transcriptPath={transcriptPath}
-            onBack={() => onFlowChange(startGenerationPreferenceEditing(flow))}
-            onConfirm={() => onConfirm(flow.generationPreferences)}
+            onBack={() => onFlowChange(startGenerationPreferenceEditing(renderFlow))}
+            onConfirm={() => onConfirm(renderFlow.generationPreferences)}
             onCancel={onCancel}
           />
         ) : null}
-      </section>
-    </div>
+    </AnimatedSheet>
   );
 }
 

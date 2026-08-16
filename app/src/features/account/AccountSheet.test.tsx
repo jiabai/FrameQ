@@ -73,6 +73,7 @@ describe("AccountSheet localization", () => {
 
     await initializeI18n("zh-CN");
     const simplified = renderAccountSheet(props, "zh-CN");
+    expect(simplified).toContain('data-motion="sheet"');
     expect(simplified).toContain('aria-label="账号与授权"');
     expect(simplified).toContain("退出登录");
 

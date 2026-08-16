@@ -1,4 +1,5 @@
 import { Clock3, FileText, FolderOpen, Trash2, TriangleAlert, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
 import type { HistoryListItem } from "../../historyClient";
@@ -6,6 +7,8 @@ import { formatDateTime, formatNumber } from "../../i18n/formatters";
 import { useLocale } from "../../i18n/LocaleProvider";
 import type { SupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
+import { UI_MOTION_LAYOUT_TRANSITION } from "../../uiMotion";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { useModalFocus } from "../modal/useModalFocus";
 import type { HistoryController } from "./useHistoryController";
 
@@ -63,7 +66,6 @@ export function HistorySheet({
   } = controller;
   const { t } = useTranslation("history");
   const { resolvedLocale } = useLocale();
-  const historyModalRef = useModalFocus<HTMLElement>(historyOpen);
   const historyDeleteModalRef = useModalFocus<HTMLElement>(
     Boolean(historyDeleteCandidate),
   );
@@ -81,27 +83,20 @@ export function HistorySheet({
     deletionDisabledReason,
   );
 
-  if (!historyOpen) {
-    return null;
-  }
-
   return (
-    <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={closeHistory}>
-      <section
-        ref={historyModalRef}
-        className="sheet-panel detail-modal history-modal history-sheet"
-        aria-label={t("sheet.ariaLabel")}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
+    <AnimatedSheet
+      open={historyOpen}
+      ariaLabel={t("sheet.ariaLabel")}
+      className="history-modal history-sheet"
+      onBackdropClick={closeHistory}
+      onKeyDown={(event) => {
           if (event.key === "Escape" && historyDeleteCandidate) {
             event.preventDefault();
             event.stopPropagation();
             cancelHistoryItemDeletion();
           }
         }}
-      >
+    >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{t("sheet.eyebrow")}</p>
@@ -144,11 +139,16 @@ export function HistorySheet({
           </p>
         ) : null}
         <div className="history-list">
-          {historyItems.map((item) => (
-            <div
-              className={`history-item ${item.status}`}
-              key={item.id}
-            >
+          <AnimatePresence initial={false} mode="popLayout">
+            {historyItems.map((item) => (
+              <motion.div
+                className={`history-item ${item.status}`}
+                data-motion="history-item"
+                key={item.id}
+                layout
+                transition={UI_MOTION_LAYOUT_TRANSITION}
+                exit={{ opacity: 0, scale: 0.98 }}
+              >
               <button
                 className="history-item-select"
                 type="button"
@@ -247,8 +247,9 @@ export function HistorySheet({
               >
                 <Trash2 size={16} />
               </button>
-            </div>
-          ))}
+              </motion.div>
+            ))}
+          </AnimatePresence>
           {!historyLoading && historyItems.length === 0 ? (
             <div className="history-empty">
               <FileText size={18} />
@@ -297,7 +298,6 @@ export function HistorySheet({
             </section>
           </div>
         ) : null}
-      </section>
-    </div>
+    </AnimatedSheet>
   );
 }

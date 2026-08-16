@@ -3,13 +3,19 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 const MODAL_SOURCES = [
-  ["../../App.tsx", 1],
-  ["../account/AccountSheet.tsx", 1],
-  ["../asrModel/ModelGuideSheet.tsx", 1],
-  ["../history/HistorySheet.tsx", 2],
-  ["../insightPreferences/InsightPreferenceFlow.tsx", 1],
-  ["../results/AiResultDetailSheet.tsx", 1],
-  ["../settings/SettingsSheet.tsx", 1],
+  ["../history/HistorySheet.tsx", 1],
+  ["./AnimatedSheet.tsx", 1],
+] as const;
+
+const ANIMATED_SHEET_SOURCES = [
+  "../../App.tsx",
+  "../account/AccountSheet.tsx",
+  "../asrModel/ModelGuideSheet.tsx",
+  "../history/HistorySheet.tsx",
+  "../insightPreferences/InsightPreferenceFlow.tsx",
+  "../results/AiResultDetailSheet.tsx",
+  "../settings/SettingsSheet.tsx",
+  "../dissection/TranscriptDissectionConfirmationSheet.tsx",
 ] as const;
 
 describe("modal focus integration", () => {
@@ -28,6 +34,18 @@ describe("modal focus integration", () => {
       expect(source.match(/ref=\{\w*ModalRef\}/g) ?? []).toHaveLength(
         expectedCount,
       );
+    },
+  );
+
+  test.each(ANIMATED_SHEET_SOURCES)(
+    "routes %s through the shared AnimatedSheet shell",
+    (relativePath) => {
+      const source = readFileSync(
+        fileURLToPath(new URL(relativePath, import.meta.url)),
+        "utf8",
+      );
+
+      expect(source).toContain("AnimatedSheet");
     },
   );
 });

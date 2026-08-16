@@ -1,5 +1,8 @@
 # Product Specs Index
 
+- `2026-08-16-motion-sheet-lifecycle.md` — Motion 第二阶段：主要 Sheet 的延迟卸载、焦点保持与进出场动效。
+- `2026-08-16-motion-ui-enhancement.md` — Motion 第一阶段：处理阶段、ASR 真实进度、AI target 与历史列表的克制动效。
+
 ## Account and Billing Spec
 
 - `2026-08-04-server-page-i18n.md` - Per-page language switcher on `/login`, `/dashboard`, `/admin/login`, and `/admin` supporting `zh-CN` (default), `en`, and `zh-TW`; locale resolution is `lang` cookie → `?lang=` deep link → `Accept-Language` → default. The `server/src/i18n.ts` module owns the locale type, flat-keyed string dictionary, `t()` lookup, resolver, and shared switcher button/styles. No desktop/worker/ASR/store/Prisma changes.
@@ -63,3 +66,6 @@ Product specs describe user-visible intent and boundaries before implementation 
 | File | Scope |
 |------|-------|
 | `2026-06-16-douyin-video-transcription-client.md` | MVP 桌面客户端：输入抖音 URL，输出最高质量公开视频和文字稿；文字稿完成后可单独确认生成要点总结/Mermaid mindmap 或启发灵感；包含 Douyin share page fallback 行为 |
+
+| `2026-08-16-motion-confirmation-flow.md` | Motion 第三阶段：摘要确认、灵感偏好流程、文字稿解剖确认的延迟卸载与焦点生命周期 |
+| `2026-08-16-asr-model-download-startup-recovery.md` | Windows ASR 模型下载启动失败修复：app-local VC++ 预检与 0% 启动失败语义 |

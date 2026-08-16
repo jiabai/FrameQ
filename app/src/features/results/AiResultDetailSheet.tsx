@@ -1,11 +1,12 @@
 import { Copy, Download, RotateCcw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useEffect, useState } from "react";
 
 import { isSupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { WorkflowState } from "../../workflow";
 import type { TranscriptDetailController } from "../transcript/useTranscriptDetailController";
-import { useModalFocus } from "../modal/useModalFocus";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { MarkdownContent } from "./MarkdownContent";
 import { DissectionReport } from "./DissectionReport";
 
@@ -32,16 +33,19 @@ export function AiResultDetailSheet({
     : "en-US";
   const renderedActionNotice = renderUiMessage(locale, actionNotice);
   const { detailTab, closeDetail, copyDetail, exportDetail, exportPath } = controller;
-  const resultDetailModalRef = useModalFocus<HTMLElement>(
-    detailTab === "summary" || detailTab === "insights" || detailTab === "dissection",
-  );
-  if (detailTab !== "summary" && detailTab !== "insights" && detailTab !== "dissection") {
-    return null;
-  }
+  const detailOpen =
+    detailTab === "summary" || detailTab === "insights" || detailTab === "dissection";
+  const [lastDetailTab, setLastDetailTab] = useState<"summary" | "insights" | "dissection">("summary");
+  useEffect(() => {
+    if (detailOpen) {
+      setLastDetailTab(detailTab);
+    }
+  }, [detailOpen, detailTab]);
+  const contentTab = detailOpen ? detailTab : lastDetailTab;
 
-  const title = detailTab === "summary"
+  const title = contentTab === "summary"
     ? t("detail.summaryTitle")
-    : detailTab === "insights"
+    : contentTab === "insights"
       ? t("detail.insightsTitle")
       : t("dissection.card.title");
   const questionList = new Intl.ListFormat(i18n.resolvedLanguage ?? "en-US", {
@@ -49,15 +53,12 @@ export function AiResultDetailSheet({
     type: "conjunction",
   });
   return (
-    <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={closeDetail}>
-      <section
-        ref={resultDetailModalRef}
-        className="sheet-panel detail-modal ai-result-detail-sheet"
-        aria-label={t("detail.ariaLabel", { title })}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <AnimatedSheet
+      open={detailOpen}
+      ariaLabel={t("detail.ariaLabel", { title })}
+      className="ai-result-detail-sheet"
+      onBackdropClick={closeDetail}
+    >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{t("detail.sectionLabel")}</p>
@@ -79,13 +80,13 @@ export function AiResultDetailSheet({
               <Copy size={16} />
               <span>{t("detail.copy")}</span>
             </button>
-            {detailTab === "insights" ? (
+            {contentTab === "insights" ? (
               <button type="button" onClick={() => void onOpenDirectionEditor()}>
                 <RotateCcw size={16} />
                 <span>{t("detail.tryAnotherDirection")}</span>
               </button>
             ) : null}
-            {detailTab === "dissection" ? (
+            {contentTab === "dissection" ? (
               <button
                 type="button"
                 data-action="redissection"
@@ -107,12 +108,12 @@ export function AiResultDetailSheet({
           </p>
         ) : null}
         <div className="modal-content">
-          {detailTab === "summary" ? (
+          {contentTab === "summary" ? (
             <MarkdownContent
               markdown={workflow.summary}
               emptyText={t("detail.summaryEmpty")}
             />
-          ) : detailTab === "dissection" ? (
+          ) : contentTab === "dissection" ? (
             workflow.dissection ? (
               <DissectionReport
                 report={workflow.dissection}
@@ -143,7 +144,6 @@ export function AiResultDetailSheet({
             <p>{t("detail.insightsEmpty")}</p>
           )}
         </div>
-      </section>
-    </div>
+    </AnimatedSheet>
   );
 }

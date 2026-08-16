@@ -166,7 +166,9 @@ describe("ModelGuideSheet localization", () => {
       expect(markup).toContain("SenseVoice Small");
       expect(markup).toContain("ModelScope");
       expect(markup).toContain("D:/FrameQ/models");
+      expect(markup).toContain('data-motion="sheet"');
       expect(markup).toContain('role="progressbar"');
+      expect(markup).toContain('data-motion="asr-progress"');
       expect(markup).toContain('aria-valuenow="42"');
       expect(markup).toContain('aria-valuemin="0"');
       expect(markup).toContain('aria-valuemax="100"');

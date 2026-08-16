@@ -6,7 +6,7 @@ import { formatDateTime, formatNumber } from "../../i18n/formatters";
 import { useLocale } from "../../i18n/LocaleProvider";
 import type { SupportedLocale } from "../../i18n/locale";
 import { renderUiMessage } from "../../i18n/uiMessage";
-import { useModalFocus } from "../modal/useModalFocus";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 import type { AccountNotice } from "./useAccountController";
 
 type AccountSheetProps = {
@@ -40,27 +40,19 @@ export function AccountSheet({
 }: AccountSheetProps) {
   const { t } = useTranslation("account");
   const { resolvedLocale } = useLocale();
-  const accountModalRef = useModalFocus<HTMLElement>(open);
   const renderedNotice = renderUiMessage(resolvedLocale, accountNotice);
   const quotaResetDate = formatAccountTimestamp(
     account.llmQuotaResetsAt,
     resolvedLocale,
   );
 
-  if (!open) {
-    return null;
-  }
-
   return (
-    <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={onClose}>
-      <section
-        ref={accountModalRef}
-        className="sheet-panel detail-modal account-modal account-sheet"
-        aria-label={t("sheet.ariaLabel")}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <AnimatedSheet
+      open={open}
+      ariaLabel={t("sheet.ariaLabel")}
+      className="account-modal account-sheet"
+      onBackdropClick={onClose}
+    >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{t("sheet.eyebrow")}</p>
@@ -180,8 +172,7 @@ export function AccountSheet({
             </button>
           )}
         </div>
-      </section>
-    </div>
+    </AnimatedSheet>
   );
 }
 

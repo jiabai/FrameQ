@@ -1,12 +1,14 @@
 import { Download, ShieldCheck, X } from "lucide-react";
+import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
 import { formatPercent } from "../../i18n/formatters";
+import { UI_MOTION_TRANSITION } from "../../uiMotion";
 import { useLocale } from "../../i18n/LocaleProvider";
 import { renderAsrModelDownloadMessage } from "../../i18n/progressMessages";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { AsrModelDownloadProgress } from "../../settingsClient";
-import { useModalFocus } from "../modal/useModalFocus";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 import type { AsrModelStatus } from "./types";
 
@@ -47,7 +49,6 @@ export function ModelGuideSheet({
 }: ModelGuideSheetProps) {
   const { t } = useTranslation("asrModel");
   const { resolvedLocale } = useLocale();
-  const modelGuideModalRef = useModalFocus<HTMLElement>(open);
   const progressMessage = renderAsrModelDownloadMessage(
     resolvedLocale,
     modelDownloadProgress,
@@ -72,28 +73,17 @@ export function ModelGuideSheet({
     modelDownloadNotice !== null &&
     TERMINAL_FAILURE_NOTICE_CODES.has(modelDownloadNotice.messageCode);
 
-  if (!open) {
-    return null;
-  }
-
   return (
-    <div
-      className="modal-backdrop sheet-backdrop"
-      role="presentation"
-      onClick={() => {
+    <AnimatedSheet
+      open={open}
+      ariaLabel={t("guide.ariaLabel")}
+      className="model-guide-modal model-guide-sheet"
+      onBackdropClick={() => {
         if (!modelDownloadActive) {
           onClose();
         }
       }}
     >
-      <section
-        ref={modelGuideModalRef}
-        className="sheet-panel detail-modal model-guide-modal model-guide-sheet"
-        aria-label={t("guide.ariaLabel")}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{t("guide.eyebrow")}</p>
@@ -149,9 +139,12 @@ export function ModelGuideSheet({
                 <p>{progressMessage}</p>
               </div>
               <div className="progress-track">
-                <span
+                <motion.span
                   className="progress-fill video_transcribing"
+                  data-motion="asr-progress"
+                  animate={{ width: `${progressValue}%` }}
                   style={{ width: `${progressValue}%` }}
+                  transition={UI_MOTION_TRANSITION}
                 />
               </div>
             </div>
@@ -231,14 +224,14 @@ export function ModelGuideSheet({
               <span>
                 {asrModelStatus.available
                   ? t("guide.downloaded")
-                  : modelDownloadProgress.phase === "failed"
+                  : modelDownloadProgress.phase === "failed" ||
+                      modelDownloadProgress.phase === "start_failed"
                     ? t("guide.retry")
                     : t("guide.download")}
               </span>
             </button>
           )}
         </div>
-      </section>
-    </div>
+    </AnimatedSheet>
   );
 }

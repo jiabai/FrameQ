@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { MotionConfig } from "motion/react";
 import App from "./App";
 import { getUiPreferences } from "./settingsClient";
 import { initializeI18n } from "./i18n/i18n";
@@ -23,7 +24,9 @@ void startLocalizedApplication({
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
         <LocaleProvider initialOutcome={outcome}>
-          <App />
+          <MotionConfig reducedMotion="user">
+            <App />
+          </MotionConfig>
         </LocaleProvider>
       </React.StrictMode>,
     );

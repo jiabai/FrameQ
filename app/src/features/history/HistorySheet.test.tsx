@@ -162,7 +162,9 @@ describe("HistorySheet selection accessibility", () => {
       deletionDisabledReason: uiMessage("history.disabled.deletionWhileProcessing"),
     });
 
+    expect(markup).toContain('data-motion="sheet"');
     expect(markup).toContain('class="history-item completed"');
+    expect(markup).toContain('data-motion="history-item"');
     expect(markup).toContain('class="history-item-select"');
     expect(markup).toContain('class="history-item-delete"');
     expect(markup).toContain('aria-label="永久删除历史任务：history preview"');

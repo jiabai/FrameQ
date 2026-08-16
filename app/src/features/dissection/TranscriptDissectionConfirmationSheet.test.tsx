@@ -25,6 +25,7 @@ describe("TranscriptDissectionConfirmationSheet", () => {
         onConfirm={() => undefined}
       />,
     );
+    expect(markup).toContain('data-motion="sheet"');
     expect(markup).toContain("Interview.mov");
     expect(markup).toContain("4,001");
     expect(markup).toContain("2–3");
@@ -57,6 +58,7 @@ describe("TranscriptDissectionConfirmationSheet", () => {
         onConfirm={() => undefined}
       />,
     );
+    expect(markup).toContain('data-motion="sheet"');
     expect(markup).toContain(title);
     expect(markup).toContain(language);
   });

@@ -23,7 +23,7 @@ import {
 } from "../../i18n/preferencePresentation";
 import type { SettingsCategory, SettingsController } from "./useSettingsController";
 import { LanguagePreferenceField } from "./LanguagePreferenceField";
-import { useModalFocus } from "../modal/useModalFocus";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 
 type SettingsSheetProps = {
   controller: SettingsController;
@@ -205,26 +205,18 @@ export function SettingsSheet({
     clearProfileFromSettings,
     locateSettingsConfigFile,
   } = controller;
-  const settingsModalRef = useModalFocus<HTMLElement>(settingsOpen);
   const renderedSettingsNotice = renderUiMessage(locale, settingsNotice);
   const renderedDiagnosticExportNotice = renderUiMessage(locale, diagnosticExportNotice);
   const renderedUpdateMessage = renderUiMessage(locale, updateState.message);
   const updateProgress = Math.max(0, Math.min(100, updateState.progress));
 
-  if (!settingsOpen) {
-    return null;
-  }
-
   return (
-    <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={closeSettings}>
-      <section
-        ref={settingsModalRef}
-        className="sheet-panel detail-modal settings-modal settings-sheet"
-        aria-label={tSettings("sheet.ariaLabel")}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <AnimatedSheet
+      open={settingsOpen}
+      ariaLabel={tSettings("sheet.ariaLabel")}
+      className="settings-modal settings-sheet"
+      onBackdropClick={closeSettings}
+    >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{tCommon("appName")}</p>
@@ -583,7 +575,6 @@ export function SettingsSheet({
             </span>
           </button>
         </div>
-      </section>
-    </div>
+    </AnimatedSheet>
   );
 }

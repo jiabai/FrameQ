@@ -2,8 +2,11 @@
 
 import { spawn } from "node:child_process";
 import { cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { bundleWindowsVcRuntimeDlls } from "./build-installer.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = resolve(scriptDir, "..");
@@ -52,7 +55,10 @@ function shouldCopyWorkerFile(sourcePath) {
   return name !== "__pycache__" && !name.endsWith(".pyc") && !name.endsWith(".pyo");
 }
 
-export async function prepareFreshWorkerResource(repoRoot = defaultRepoRoot) {
+export async function prepareFreshWorkerResource(
+  repoRoot = defaultRepoRoot,
+  { platform = process.platform, systemRoot = process.env.SystemRoot ?? "C:\\Windows" } = {},
+) {
   const paths = resolveFreshWorkerPaths(repoRoot);
   assertSafeWorkerTarget(paths);
   await assertDirectory(paths.sourceWorker, "Source worker package");
@@ -68,6 +74,14 @@ export async function prepareFreshWorkerResource(repoRoot = defaultRepoRoot) {
     force: true,
     filter: shouldCopyWorkerFile,
   });
+
+  const pythonRoot = resolve(paths.resourcesRoot, "python");
+  if (platform === "win32" && existsSync(pythonRoot)) {
+    const copied = await bundleWindowsVcRuntimeDlls(pythonRoot, systemRoot);
+    if (copied.length > 0) {
+      console.log(`[tauri-dev] Staged Windows VC++ runtime DLLs: ${copied.join(", ")}`);
+    }
+  }
 
   return paths;
 }

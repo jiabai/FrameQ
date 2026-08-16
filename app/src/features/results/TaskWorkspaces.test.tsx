@@ -190,6 +190,7 @@ describe("task domain workspaces", () => {
     expect(markup).toContain('role="status"');
     expect(markup).toContain('aria-live="polite"');
     expect(markup).toContain('aria-atomic="true"');
+    expect(markup).toContain('data-motion="task-status"');
     expect(markup).toContain("视频、音频和文字稿已保存在本机");
     expect(markup).toContain('aria-label="本地文字稿工作区"');
     expect(markup).toContain('data-task-id="same-task"');
@@ -291,6 +292,7 @@ describe("task domain workspaces", () => {
     expect(extractingMarkup).toMatch(
       /<span class="active"><svg[^>]*lucide-loader-circle spin/,
     );
+    expect(extractingMarkup).toContain('data-motion="local-stage"');
     expect(extractingMarkup).not.toMatch(
       /<span class="pending"><svg[^>]*lucide-loader-circle spin/,
     );
@@ -453,6 +455,7 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("智能提炼");
     expect(markup).toContain("确认后仅发送文字稿片段，视频和音频不会上传");
     expect(markup).toContain('data-ai-target="summary"');
+    expect(markup.match(/data-motion="ai-target"/g)).toHaveLength(3);
     expect(markup).toContain("要点总结");
     expect(markup).toContain("同时生成 Mermaid 思维导图文件");
     expect(markup).toContain('data-ai-target="insights"');

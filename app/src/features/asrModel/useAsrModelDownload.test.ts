@@ -102,33 +102,39 @@ describe("useAsrModelDownload cancellation", () => {
       "idle timeout from a bare Tauri rejection",
       "ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT",
       "asrModel.notice.idleTimeout",
+      "failed",
     ],
     [
       "idle timeout from an Error rejection",
       new Error("ASR_MODEL_DOWNLOAD_IDLE_TIMEOUT"),
       "asrModel.notice.idleTimeout",
+      "failed",
     ],
     [
       "execution timeout from a bare Tauri rejection",
       "ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT",
       "asrModel.notice.executionTimeout",
+      "failed",
     ],
     [
       "execution timeout from an Error rejection",
       new Error("ASR_MODEL_DOWNLOAD_EXECUTION_TIMEOUT"),
       "asrModel.notice.executionTimeout",
+      "failed",
     ],
     [
       "missing VC++ runtime from a bare Tauri rejection",
       "ASR_MODEL_RUNTIME_MISSING",
       "asrModel.notice.runtimeMissing",
+      "start_failed",
     ],
     [
       "missing VC++ runtime from an Error rejection",
       new Error("ASR_MODEL_RUNTIME_MISSING"),
       "asrModel.notice.runtimeMissing",
+      "start_failed",
     ],
-  ])("handles %s as a retryable terminal failure", async (_label, rejection, noticeCode) => {
+  ])("handles %s as a retryable terminal failure", async (_label, rejection, noticeCode, expectedPhase) => {
     listenMock.mockResolvedValue(() => undefined);
     downloadAsrModelMock
       .mockRejectedValueOnce(rejection)
@@ -139,13 +145,14 @@ describe("useAsrModelDownload cancellation", () => {
     await hook.startAsrModelDownload();
     hook = render();
 
-    expect(hook.modelDownloadProgress.phase).toBe("failed");
+    expect(hook.modelDownloadProgress.phase).toBe(expectedPhase);
     expect(hook.modelDownloadProgress.message).toEqual({
       messageCode: "model.download.failed",
       args: {},
     });
     expect(hook.modelDownloadNotice).toEqual({ messageCode: noticeCode });
     expect(hook.modelDownloadActive).toBe(false);
+    expect(hook.modelGuideOpen).toBe(true);
 
     await hook.startAsrModelDownload();
     expect(downloadAsrModelMock).toHaveBeenCalledTimes(2);
@@ -282,7 +289,7 @@ describe("useAsrModelDownload cancellation", () => {
     expect(hook.modelDownloadActive).toBe(false);
   });
 
-  test("keeps a completed wire event after the download invoke resolves", async () => {
+  test("verifies success when a completed wire event arrives before the download invoke resolves", async () => {
     let progressHandler: ((event: { payload: unknown }) => void) | null = null;
     let resolveDownload:
       | ((value: { started: true; status: "completed" }) => void)
@@ -301,7 +308,7 @@ describe("useAsrModelDownload cancellation", () => {
     getAsrModelStatusMock.mockResolvedValue({
       asrModel: "iic/SenseVoiceSmall",
       asrModelDir: "safe-model-dir",
-      asrModelAvailable: false,
+      asrModelAvailable: true,
       asrModelSource: "modelscope",
     });
     const render = await createModelDownloadHook();
@@ -330,10 +337,10 @@ describe("useAsrModelDownload cancellation", () => {
     });
 
     requireResolver(resolveDownload)({ started: true, status: "completed" });
-    await download;
+    await expect(download).resolves.toBe(true);
     hook = render();
 
-    expect(getAsrModelStatusMock).not.toHaveBeenCalled();
+    expect(getAsrModelStatusMock).toHaveBeenCalledWith("iic/SenseVoiceSmall");
     expect(hook.modelDownloadProgress).toEqual({
       phase: "completed",
       wireStatus: "completed",
@@ -343,8 +350,11 @@ describe("useAsrModelDownload cancellation", () => {
       },
       progress: 100,
     });
-    expect(hook.modelDownloadNotice).toBeNull();
+    expect(hook.modelDownloadNotice).toEqual({
+      messageCode: "asrModel.notice.available",
+    });
     expect(hook.modelDownloadActive).toBe(false);
+    expect(hook.modelGuideOpen).toBe(true);
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
@@ -395,6 +405,7 @@ describe("useAsrModelDownload cancellation", () => {
     });
     expect(hook.modelDownloadNotice).toBeNull();
     expect(hook.modelDownloadActive).toBe(false);
+    expect(hook.modelGuideOpen).toBe(true);
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
@@ -655,6 +666,35 @@ describe("useAsrModelDownload cancellation", () => {
       model: "iic/SenseVoiceSmall-onnx",
       available: true,
     });
+    vi.unstubAllGlobals();
+  });
+
+  test("closes the guide after task-triggered model preparation succeeds", async () => {
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+    listenMock.mockResolvedValue(() => undefined);
+    getLlmConfigMock.mockResolvedValue({ asrModel: "iic/SenseVoiceSmall" });
+    getAsrModelStatusMock
+      .mockResolvedValueOnce({
+        asrModel: "iic/SenseVoiceSmall",
+        asrModelDir: "safe-model-dir",
+        asrModelAvailable: false,
+        asrModelSource: "modelscope",
+      })
+      .mockResolvedValueOnce({
+        asrModel: "iic/SenseVoiceSmall",
+        asrModelDir: "safe-model-dir",
+        asrModelAvailable: true,
+        asrModelSource: "modelscope",
+      });
+    downloadAsrModelMock.mockResolvedValue({ started: true, status: "completed" });
+    const render = await createModelDownloadHook();
+
+    let hook = render();
+    await expect(hook.ensureAsrModelReady()).resolves.toBe("iic/SenseVoiceSmall");
+    hook = render();
+
+    expect(hook.modelGuideOpen).toBe(false);
+    expect(hook.modelDownloadProgress.phase).toBe("completed");
     vi.unstubAllGlobals();
   });
 });

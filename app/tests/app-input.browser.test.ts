@@ -2941,6 +2941,59 @@ describe("App result detail modal layout", () => {
       await page.close();
     }
   }, 10_000);
+
+  test("animates the input workspace when starting a new task", async () => {
+    const page = await openUiSmokePage({ deferredCommands: ["process_video"] });
+
+    try {
+      const initialEntryOpacity = await evaluateValue<string>(
+        page,
+        "getComputedStyle(document.querySelector('[data-motion=\"new-task-entry\"]')).opacity",
+      );
+      expect(initialEntryOpacity).toBe("1");
+      await submitSmokeVideo(page);
+      await resolveUiSmokeCommand(page, "process_video");
+      await waitForRuntimeCondition(
+        page,
+        "!document.querySelector('.toolbar-tool-group > button:nth-of-type(3)')?.disabled",
+      );
+      await page.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+      });
+      await clickSelector(page, ".toolbar-tool-group > button:nth-of-type(3)");
+      await waitForRuntimeCondition(
+        page,
+        "Boolean(document.querySelector('.command-panel')) && !document.querySelector('.task-workspace-layout')",
+      );
+
+      await page.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+      });
+      const reducedInputReady = await evaluateValue<boolean>(
+        page,
+        `(() => {
+          const input = document.querySelector('#video-url');
+          input?.focus();
+          return document.activeElement === input;
+        })()`,
+      );
+      expect(reducedInputReady).toBe(true);
+
+      const newTaskEntry = await evaluateValue<Record<string, string>>(page, `({
+        motion: document.querySelector('[data-motion="new-task-entry"]')?.getAttribute('data-motion') ?? '',
+        commandPanel: document.querySelector('.command-panel')?.className ?? ''
+      })`);
+      expect(newTaskEntry).toMatchObject({
+        motion: "new-task-entry",
+        commandPanel: expect.stringContaining("command-panel"),
+      });
+    } finally {
+      await page.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+      });
+      await page.close();
+    }
+  }, 15_000);
 });
 
 async function connectToCdp(webSocketDebuggerUrl: string) {

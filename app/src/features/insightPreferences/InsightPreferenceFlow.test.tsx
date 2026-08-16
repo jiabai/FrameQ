@@ -61,6 +61,7 @@ function renderFlow(
 describe("InsightPreferenceFlow localization", () => {
   test("renders independently localized confirmation copy and actual output language", () => {
     const traditional = renderFlow("zh-TW");
+    expect(traditional).toContain('data-motion="sheet"');
     expect(traditional).toContain('aria-label="確認靈感啟發"');
     expect(traditional).toContain('data-output-language="zh-TW"');
     expect(traditional).toContain("本次輸出語言");
