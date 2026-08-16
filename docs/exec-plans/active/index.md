@@ -1,7 +1,5 @@
 # Active Exec Plans
 
-- `2026-08-16-v0.3.5-desktop-feature-release-plan.md` - Publish v0.3.5 with Motion experience
-  enhancements and Windows ASR model-download startup recovery.
 - `2026-08-16-motion-sheet-lifecycle-plan.md` - Motion 第二阶段：Account、Settings、History、ASR Model、AI Detail Sheet 的可访问进出场动效与延迟卸载。
 - `2026-08-16-motion-confirmation-flow-plan.md` - Motion 第三阶段：摘要确认、灵感偏好流程、文字稿解剖确认的 nullable 状态生命周期与延迟卸载。
 - `2026-08-16-asr-model-download-startup-recovery-plan.md` - Windows ASR 模型下载启动失败修复：app-local VC++ 预检与明确的启动失败状态。
