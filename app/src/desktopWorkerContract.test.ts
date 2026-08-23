@@ -647,7 +647,7 @@ describe("desktop/worker contract", () => {
       generation.required,
     );
     expect(JSON.stringify(snapshot)).not.toMatch(
-      /defaultStyles|defaultAvoid|default_styles|default_avoid|legacyGenerationPreferenceSeed/,
+      /defaultStyles|defaultAvoid|default_styles|default_avoid/,
     );
   });
 

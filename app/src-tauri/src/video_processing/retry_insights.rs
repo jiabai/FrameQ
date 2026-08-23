@@ -388,7 +388,6 @@ mod tests {
         for forbidden in [
             "defaultStyles",
             "defaultAvoid",
-            "legacyGenerationPreferenceSeed",
         ] {
             assert!(!serialized_text.contains(forbidden));
         }
@@ -436,35 +435,6 @@ mod tests {
             assert_eq!(error, INVALID_RETRY_PAYLOAD);
         }
 
-        let payload = serde_json::json!({
-            "task_id": "20260705-153012-douyin-demo",
-            "target": "insights",
-            "output_language": "zh-TW",
-            "preference_snapshot": {
-                "profile": null,
-                "profileSkipped": true,
-                "generationPreferences": {
-                    "goal": "content_creation",
-                    "scenario": "short_video",
-                    "angles": ["topic_angle"],
-                    "audience": "fans_readers",
-                    "styles": ["grounded"],
-                    "avoid": []
-                },
-                "labelSnapshot": {
-                    "profile": [],
-                    "generationPreferences": []
-                },
-                "legacyGenerationPreferenceSeed": {
-                    "styles": ["grounded"],
-                    "avoid": []
-                }
-            }
-        });
-
-        let error = parse_retry_insights_request(payload).expect_err("reject migration seed");
-
-        assert_eq!(error, INVALID_RETRY_PAYLOAD);
     }
 
     #[test]

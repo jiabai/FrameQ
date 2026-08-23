@@ -55,11 +55,7 @@ export function createInsightPreferenceFlow(
   const profileResetRequired = state.profileStatus === "invalid";
   const generationPreferences = state.defaultGenerationPreferences
     ? state.defaultGenerationPreferences
-    : {
-        ...EMPTY_GENERATION_PREFERENCES,
-        styles: [...(state.legacyGenerationPreferenceSeed?.styles ?? [])],
-        avoid: [...(state.legacyGenerationPreferenceSeed?.avoid ?? [])],
-      };
+    : { ...EMPTY_GENERATION_PREFERENCES };
   const screen =
     profileResetRequired || !hasCompletedProfileIntro
       ? "profile_intro"

@@ -63,72 +63,10 @@ describe("insight preferences client", () => {
       profileStatus: "missing",
       profileError: null,
       defaultGenerationPreferences: null,
-      legacyGenerationPreferenceSeed: null,
       preferencesPath: "",
     });
   });
 
-  test("decodes a valid legacy generation preference seed", async () => {
-    const runner: InsightPreferenceCommandRunner = async () => ({
-      ...preferenceState(),
-      defaultGenerationPreferences: null,
-      legacyGenerationPreferenceSeed: {
-        styles: ["direct_sharp", "storytelling", "grounded"],
-        avoid: ["clickbait"],
-      },
-    });
-
-    await expect(getInsightPreferences(runner)).resolves.toMatchObject({
-      defaultGenerationPreferences: null,
-      legacyGenerationPreferenceSeed: {
-        styles: ["direct_sharp", "storytelling", "grounded"],
-        avoid: ["clickbait"],
-      },
-    });
-  });
-
-  test.each([
-    { styles: ["unknown_style"], avoid: [] },
-    { styles: ["direct_sharp", "direct_sharp"], avoid: [] },
-    { styles: ["direct_sharp", "storytelling", "grounded", "professional_analysis"], avoid: [] },
-    { styles: [], avoid: ["clickbait", "clickbait"] },
-    { styles: [], avoid: ["clickbait", "academic", "vague", "negative"] },
-    { styles: [], avoid: ["unknown_avoid"] },
-    { styles: [], avoid: [], extra: true },
-    { styles: [] },
-  ])("fails closed for malformed legacy generation preference seeds: %o", async (seed) => {
-    const runner: InsightPreferenceCommandRunner = async () => ({
-      ...preferenceState(),
-      legacyGenerationPreferenceSeed: seed,
-    });
-
-    await expect(getInsightPreferences(runner)).resolves.toMatchObject({
-      legacyGenerationPreferenceSeed: null,
-    });
-  });
-
-  test.each([
-    { styles: Array(1), avoid: [] },
-    { styles: [], avoid: ["clickbait", , "academic"] },
-    { styles: ["direct_sharp", , "storytelling"], avoid: [] },
-  ])("rejects sparse legacy seed arrays and never prefills them: %o", async (seed) => {
-    const runner: InsightPreferenceCommandRunner = async () => ({
-      ...preferenceState(),
-      defaultGenerationPreferences: null,
-      legacyGenerationPreferenceSeed: seed,
-    });
-
-    const state = await getInsightPreferences(runner);
-    expect(state.legacyGenerationPreferenceSeed).toBeNull();
-    expect(createInsightPreferenceFlow(state).generationPreferences).toEqual({
-      goal: "",
-      scenario: "",
-      angles: [],
-      audience: "",
-      styles: [],
-      avoid: [],
-    });
-  });
 });
 
 function preferenceState() {
@@ -138,7 +76,6 @@ function preferenceState() {
     profileStatus: "valid",
     profileError: null,
     defaultGenerationPreferences: GENERATION_PREFERENCES,
-    legacyGenerationPreferenceSeed: null,
     preferencesPath: "D:/FrameQ/insight-preferences.json",
   };
 }

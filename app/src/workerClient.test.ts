@@ -425,7 +425,7 @@ describe("worker client", () => {
       "platforms",
     ]);
     expect(JSON.stringify(request)).not.toMatch(
-      /defaultStyles|defaultAvoid|legacyGenerationPreferenceSeed/,
+      /defaultStyles|defaultAvoid/,
     );
     expect(result.status).toBe("completed");
   });

@@ -101,7 +101,6 @@ function createInsightPreferences(
     profileStatus: "missing",
     profileError: null,
     defaultGenerationPreferences: null,
-    legacyGenerationPreferenceSeed: null,
     preferencesPath: "D:/FrameQ/app-data/insight-preferences.json",
     ...overrides,
   };
