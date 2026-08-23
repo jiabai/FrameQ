@@ -73,6 +73,67 @@ afterAll(async () => {
 });
 
 describe("App browser input interactions", () => {
+  test("stops toolbar dragging when the window position lookup resolves after mouseup", async () => {
+    const page = await openUiSmokePage({ deferredCommands: ["get_window_position"] });
+
+    try {
+      await page.send("Emulation.setDeviceMetricsOverride", {
+        width: 1180,
+        height: 760,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      const point = await evaluateValue<{ x: number; y: number }>(
+        page,
+        `(() => {
+          const rect = document.querySelector('.app-toolbar').getBoundingClientRect();
+          return {
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2),
+          };
+        })()`,
+      );
+
+      await page.send("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        x: point.x,
+        y: point.y,
+        button: "left",
+        buttons: 1,
+        clickCount: 1,
+      });
+      await waitForRuntimeCondition(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.pending.get_window_position?.length === 1",
+      );
+      await page.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        x: point.x + 1,
+        y: point.y + 1,
+        button: "left",
+        buttons: 0,
+        clickCount: 1,
+      });
+      await resolveUiSmokeCommand(page, "get_window_position", { x: 100, y: 100 });
+      await delay(50);
+      await page.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: point.x + 100,
+        y: point.y + 50,
+        buttons: 0,
+      });
+      await delay(100);
+
+      const setPositionCalls = await evaluateValue<number>(
+        page,
+        "window.__FRAMEQ_UI_SMOKE__.commands.filter((entry) => entry.command === 'set_window_position').length",
+      );
+      expect(setPositionCalls).toBe(0);
+    } finally {
+      await page.close();
+    }
+  }, 15_000);
+
   test("renders a macOS-style desktop utility frame around the waiting input state", async () => {
     const target = await requestJson<CdpTarget>(
       cdpPort,

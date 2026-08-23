@@ -16,6 +16,7 @@ type WindowChromeAction = () => Promise<void>;
 
 export function useWindowChromeController() {
   const windowDragSessionRef = useRef<WindowDragSession | null>(null);
+  const windowDragGenerationRef = useRef(0);
   const queuedWindowPositionRef = useRef<WindowPosition | null>(null);
   const windowMoveInFlightRef = useRef(false);
 
@@ -45,8 +46,15 @@ export function useWindowChromeController() {
 
   const beginManualWindowDrag = useCallback(
     async (pointerX: number, pointerY: number) => {
+      const generation = windowDragGenerationRef.current + 1;
+      windowDragGenerationRef.current = generation;
+
       try {
         const position = await getWindowPosition();
+        if (windowDragGenerationRef.current !== generation) {
+          return;
+        }
+
         windowDragSessionRef.current = {
           pointerX,
           pointerY,
@@ -54,6 +62,10 @@ export function useWindowChromeController() {
           windowY: position.y,
         };
       } catch (error) {
+        if (windowDragGenerationRef.current !== generation) {
+          return;
+        }
+
         console.warn("Manual window drag failed to start", error);
         runWindowChromeAction(startWindowDrag);
       }
@@ -93,6 +105,7 @@ export function useWindowChromeController() {
     }
 
     function stopManualWindowDrag() {
+      windowDragGenerationRef.current += 1;
       windowDragSessionRef.current = null;
       queuedWindowPositionRef.current = null;
     }
