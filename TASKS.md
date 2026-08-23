@@ -90,7 +90,9 @@
   (已于 2026-08-23 真实付费烟测闭合：SiliconFlow + deepseek-ai/DeepSeek-V3.2 完整链路
   map→reduce→repair 266.8s 通过；同步修复 highlight 逐字引用强约束与 JSON 弯引号解析，
   见 commit ef236bf), and native packaged cross-platform UX
-  (前者 macOS 项已闭合，其余仍未验证); Windows evidence is recorded for the corresponding gates.
+  (前者 macOS 项已闭合，其余仍未验证；macOS 实测清单已备
+  `docs/references/2026-08-23-macos-native-ux-smoke-checklist.md`，待目标 Mac 执行);
+  Windows evidence is recorded for the corresponding gates.
   Product spec:
   `docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`. ExecPlan:
   `docs/exec-plans/completed/2026-08-03-v0.3.0-desktop-feature-release-plan.md`.
