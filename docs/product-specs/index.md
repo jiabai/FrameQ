@@ -34,7 +34,7 @@
 
 - `2026-07-31-transcript-dissection.md` - Independent `文字稿解剖` AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure, bounded per-run quota, local artifacts, and cross-restart stale detection.
 - `2026-07-12-generate-draft-from-inspiration.md` - Third AI整理 target card `生成文字稿`: turn a single user-selected `Insight` from `启发灵感` into a new draft, with strict single-seed, quota, and local-first privacy boundaries.
-- `2026-07-06-personalized-insight-preferences.md` - Six-field local Inspiration Profile v2 plus per-run six-step generation preferences, with generation-only style/avoid ownership and atomic migration from released v1 app-local preferences.
+- `2026-07-06-personalized-insight-preferences.md` - Six-field local Inspiration Profile v2 plus per-run six-step generation preferences, with generation-only style/avoid ownership and no v1 app-local migration because the feature shipped directly on the v2 schema.
 
 ## Distribution Spec
 

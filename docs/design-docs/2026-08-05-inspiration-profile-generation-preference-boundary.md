@@ -159,41 +159,14 @@ The confirmation sheet must not show inheritance, conflict, or override copy bec
 ownership no longer exists. `platforms` and `scenario` may both appear because their labels and
 meanings are distinct.
 
-## Persistence and Migration
+## Persistence
 
 The app-local `insight-preferences.json` remains owned by Tauri and remains outside `.env`, the task
-directory, and FrameQ server storage.
-
-Implementation should add an explicit root `schemaVersion: 2`. A file without `schemaVersion` is the
-current v1 shape. Migration is local, deterministic, and atomic:
-
-1. Validate the complete v1 file using the v1 option registry and cardinality rules.
-2. Copy the six retained profile fields into the v2 profile.
-3. If a valid `defaultGenerationPreferences` already exists, keep it and discard the deprecated
-   profile `defaultStyles` and `defaultAvoid` values.
-4. If no valid `defaultGenerationPreferences` exists and either deprecated profile field is
-   non-empty, store those two arrays in an optional migration-only
-   `legacyGenerationPreferenceSeed` at the root.
-5. Atomically replace the v1 file with the v2 file. Do not mutate task directories.
-
-`legacyGenerationPreferenceSeed` is not a third preference source. It has a narrow lifecycle:
-
-- it may preselect only the `styles` and `avoid` steps the next time the user edits generation
-  preferences;
-- it preserves up to three legacy `defaultStyles` values because that was valid in Profile v1; when
-  three styles are present, the current two-style limit keeps the style step invalid until the user
-  explicitly reduces the selection to one or two;
-- it is never eligible for `Generate now` because it is not a complete six-step selection;
-- it is never sent to the worker or included directly in a task snapshot;
-- it is removed when the user confirms a complete generation preference selection;
-- it is removed when the user clears the profile, because it came from the deprecated profile fields
-  and was never confirmed as a generation default;
-- new installations and newly saved profiles never create it.
-
-If the v1 profile is malformed, retain the existing reset-required behavior; do not salvage selected
-fields or synthesize a profile. If only `defaultGenerationPreferences` is invalid, clear it under the
-existing rules and migrate the valid profile. Migration failures leave the original file intact and
-surface the existing localized preference-read failure instead of partially writing v2 state.
+directory, and FrameQ server storage. The file uses the v2 shape with an explicit root
+`schemaVersion: 2`. The app has no v1 file migration: FrameQ has shipped only the v2 format since the
+Inspiration Profile feature launched, so every persisted preference file is already v2. New installs
+and every save write the v2 shape directly; no legacy `defaultStyles`/`defaultAvoid` fields and no
+`legacyGenerationPreferenceSeed` migration seed exist.
 
 Historical task-local `preference-snapshot.json` files are immutable evidence of past runs. They may
 retain v1 profile fields and label snapshots. History display may render those historical labels,
@@ -222,12 +195,12 @@ dissection, ASR, model download, and media preparation remain unchanged.
 
 ## Privacy and Failure Boundaries
 
-- Profile, defaults, migration seed, and current drafts remain local until the user confirms
+- Profile, defaults, and current drafts remain local until the user confirms
   Inspiration generation.
 - Only the resolved v2 profile and complete current generation preferences may enter the Inspiration
   worker request.
-- The migration seed must not appear in logs, diagnostics, server requests, quota metadata, or
-  worker command diagnostics.
+- The v2 preference state must not appear in logs, diagnostics, server requests, quota metadata, or
+  worker command diagnostics beyond the confirmed worker request payload.
 - Existing clear-profile behavior affects future generation only and must not delete task-local
   snapshots or generated artifacts.
 - Invalid or partially migrated data must fail closed; it must never become an inferred persona or
@@ -254,9 +227,8 @@ historical backfill, new AI targets, new billable calls, or a general preference
 - TypeScript tests prove v2 profiles reject deprecated fields at public validation boundaries, show
   only six profile fields, preserve six-step generation behavior, and build snapshots without
   duplicate style/avoid labels.
-- Rust tests cover v1-to-v2 atomic migration with and without valid defaults, invalid v1 profile
-  handling, migration-seed lifecycle, clear/skip semantics, and preservation of unrelated app-local
-  preference state.
+- Rust tests cover v2 load/save/clear/skip semantics, schema validation, rejection of unknown or
+  malformed preference fields, and preservation of unrelated app-local preference state.
 - Worker tests prove v2 request parsing, prompt serialization, and absence of profile-scoped style or
   avoid fields; summary, mindmap, and dissection prompts remain unaffected.
 - Contract tests prove TypeScript, Rust, and Python agree on the v2 snapshot shape.
@@ -265,10 +237,6 @@ historical backfill, new AI targets, new billable calls, or a general preference
 ### Manual
 
 - A new user sees six profile fields, then the unchanged six-step run flow.
-- A returning v1 user with complete saved defaults retains those defaults and sees no duplicate
-  profile tags.
-- A returning v1 user without complete saved defaults sees legacy styles/avoidances preselected only
-  when editing the next run, and cannot generate from that partial seed.
 - Confirmation visually prioritizes the current run and shows a quieter six-field long-term context.
 - Clearing the profile leaves generation defaults and historical task artifacts unchanged.
 - A confirmed Inspiration request contains one v2 profile and one complete current direction; no
@@ -276,12 +244,12 @@ historical backfill, new AI targets, new billable calls, or a general preference
 
 ## Rollout and Residual Risk
 
-This is a local schema migration in a released desktop application. Implementation must land behind
-focused migration tests before broad UI cleanup. The primary residual risk is loss or accidental
-reuse of existing optional style selections; the migration seed prevents silent loss when no
-complete saved generation defaults exist. Historical snapshots deliberately remain mixed-version,
-so history rendering must continue to tolerate their frozen v1 label snapshots without treating them
-as current state.
+This feature shipped directly on the v2 schema, so there is no v1-to-v2 migration and no
+`legacyGenerationPreferenceSeed` to preserve. The residual risk is accidental introduction of a
+deprecated field or a third preference source; the v2-only load path fails closed on unknown fields
+and the shared registry owns the single `styles`/`avoid` source. Historical task snapshots remain
+mixed-version by design, so history rendering must continue to tolerate their frozen v1 label
+snapshots without treating them as current state.
 
 No code implementation begins until this design is approved and the product spec plus active
 ExecPlan are updated and reviewed.

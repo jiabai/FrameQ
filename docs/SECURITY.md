@@ -538,13 +538,9 @@
 - `我的灵感档案` and per-run generation preferences are local desktop data by default and must not be uploaded to FrameQ server.
 - The inspiration profile should be stored under app-local data as a constrained JSON file, not in app-local `.env`, because it is product data rather than runtime configuration.
 - The current app-local file is schema v2. Its profile contains exactly the six long-term-context
-  fields, and Tauri must validate before atomically migrating or mutating it. A failed v1 migration
-  preserves the original bytes and must not salvage a partial persona.
-- Deprecated v1 style/avoid values may survive only as the optional edit-only
-  `legacyGenerationPreferenceSeed` when no complete saved generation default exists. That seed must
-  not enter logs, diagnostics, server/quota requests, direct-generation summaries, task snapshots,
-  worker stdin, or prompts, and must be removed after confirmed complete preferences or profile
-  clearing.
+  fields, and Tauri must validate before atomically mutating it. There is no v1 migration: the
+  feature has shipped only the v2 format, so every persisted preference file is already v2 and no
+  legacy `defaultStyles`/`defaultAvoid` or `legacyGenerationPreferenceSeed` exists.
 - A skipped inspiration profile may be represented locally by a marker such as `profileSkipped: true`, but skipped means `no profile / unspecified`; the app must not synthesize, log, upload, or send a default persona in its place.
 - Each AI generation confirmation must state that transcript snippets will be sent to the administrator-configured cloud LLM supplier for that output, while the selected preference snapshot is sent only with the `启发灵感` generation request and must not be sent with `要点总结` or Mermaid mindmap requests.
 - A current Inspiration worker snapshot may contain only the resolved six-field profile (or null),

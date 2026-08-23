@@ -16,7 +16,7 @@
 - `我的灵感档案` 只描述相对稳定的长期背景，固定为角色、职业领域、年龄/阶段、城市语境、性别/视角和常用平台六个字段。
 - Profile v1 的 `defaultStyles` 和 `defaultAvoid` 不再属于当前档案契约；表达风格和避免方向由六步 `本次生成偏好` 中的 `styles`、`avoid` 唯一负责。
 - `defaultGenerationPreferences` 只是下一次流程的完整预填值，不是第三层偏好来源。worker 只接收本次最终确认的完整 `generationPreferences`。
-- 已发布客户端的 v1 app-local 文件必须本地原子迁移到 schema v2；历史任务局部快照保持不可变，不能反向更新全局状态。
+- 该能力自上线起即只使用 schema v2，不存在 v1 app-local 文件迁移；历史任务局部快照保持不可变，不能反向更新全局状态。
 
 本节及下文更新后的 v2 契约覆盖本文早期版本中与 `defaultStyles`、`defaultAvoid` 有关的档案语义。
 
