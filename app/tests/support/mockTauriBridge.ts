@@ -162,7 +162,6 @@ const defaultResponses: Record<string, unknown> = {
       styles: ["professional_analysis"],
       avoid: [],
     },
-    legacyGenerationPreferenceSeed: null,
     preferencesPath: "C:/FrameQ/insight-preferences.json",
   },
   get_history: [firstHistoryTask, secondHistoryTask].map(
