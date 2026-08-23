@@ -150,6 +150,8 @@ def test_map_prompt_declares_closed_intermediate_schema_and_analysis_rules() -> 
     assert "inapplicability" in prompt
     assert "writing and content-structure transfer only" in prompt
     assert "shots, camera movement, voice, music, captions, or equipment" in prompt
+    assert "character-for-character" in prompt
+    assert "do not paraphrase" in prompt
 
 
 def test_reduce_prompt_declares_complete_final_schema_and_parser_limits() -> None:
@@ -179,6 +181,8 @@ def test_reduce_prompt_declares_complete_final_schema_and_parser_limits() -> Non
     assert "at most 6" in prompt
     assert "JSON only" in prompt
     assert "verbatim quotation" in prompt
+    assert "character-for-character" in prompt
+    assert "never paraphrase, summarize, translate, or normalize" in prompt
     assert "preserve must-keep nodes" in prompt
     assert "replaceable bracketed slots" in prompt
     assert "optional or removable nodes" in prompt
@@ -208,6 +212,20 @@ def test_repair_prompt_allows_required_fields_with_safe_bounded_context() -> Non
     assert "replaceable bracketed slots" in prompt
     assert "applicability and inapplicability" in prompt
     assert "do not manufacture missing transfer evidence" in prompt
+
+
+def test_repair_prompt_declares_quotation_provenance_rule() -> None:
+    prompt = build_dissection_repair_prompt(
+        {"highlights": ["paraphrased highlight"]},
+        "en-US",
+        valid_chunk_ids=(1, 2),
+        validation_category="quotation_provenance",
+    )
+
+    assert "Validation category: quotation_provenance" in prompt
+    assert "character-for-character" in prompt
+    assert "quotation" in prompt
+    assert "do not paraphrase, summarize, translate, or normalize" in prompt
 
 
 def test_parser_builds_closed_report_with_worker_owned_provenance() -> None:

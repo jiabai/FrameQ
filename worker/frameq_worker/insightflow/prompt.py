@@ -110,7 +110,9 @@ transcript chunks. Do not infer visual, audio, speaking-rate, editing, or conver
   `weaknesses`. Objects at every level must contain exactly the keys shown in the schema example.
 - Return 1 through 8 segments for this batch. `supportingPoints`, `rhetoricalDevices`, and
   `riskFlags` each contain at most 6 concise strings.
-- `highlights` contains at most 8 verbatim quotations from the supplied chunks.
+- `highlights` contains at most 8 quotations. Every highlight must be a character-for-character
+  substring of a supplied chunk's content: copy the exact original wording including punctuation
+  and spacing; do not paraphrase, summarize, translate, or normalize a quotation.
 - `strengths` and `weaknesses` each contain at most 6 source-grounded strings.
 - Every `sourceChunkIds` array is non-empty, ascending, deduplicated, and contains only IDs from
   this batch. Legal sourceChunkIds for this batch: {valid_chunk_ids}
@@ -145,8 +147,9 @@ facts, preferences, paths, URLs, prior AI results, or visual/audio claims.
   non-empty, ascending, deduplicated, and uses only IDs present in the map results.
 - `supportingPoints`, `rhetoricalDevices`, and `riskFlags` are arrays of concise strings. Risk flags
   use cautious language and never claim that fact-checking has been completed.
-- `highlights` contains at most 8 items. Every item is a verbatim quotation already present in map
-  data; never rewrite a quotation and still label it as source text.
+- `highlights` contains at most 8 items. Every item is a verbatim quotation carried
+  character-for-character from map data; never paraphrase, summarize, translate, or normalize a
+  quotation and still label it as source text.
 - `reusableTemplate.skeleton` contains 3 through 7 actionable, transferable writing steps and does
   not copy the source verbatim; preserve must-keep nodes, use replaceable bracketed slots in the
   required output language, mark every step as required or optional/removable, and include
@@ -191,6 +194,9 @@ Repair this structured candidate to the exact final semantic schema below.
 - Populate added fields only by reorganizing evidence already present in the candidate. Use null for
   missing optional narrative fields and empty arrays where the schema permits them.
 - Do not invent facts, quotations, or chunk IDs. Never use a chunk ID outside the legal list.
+- When the validation category is `quotation_provenance`, every highlight must be a
+  character-for-character quotation carried verbatim from the candidate's source-grounded fields;
+  do not paraphrase, summarize, translate, or normalize a quotation.
 - Preserve every valid source-grounded value that already satisfies the schema.
 - Repair structure and preserve actionable reuse guidance already present in the candidate,
   including required versus optional nodes and replaceable bracketed slots.
