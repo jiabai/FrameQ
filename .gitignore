@@ -37,6 +37,13 @@ server/backups/
 !app/src-tauri/resources/.env.template
 *.local
 
+# Local agent metadata and status
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+
 # Python cache
 __pycache__/
 *.py[cod]
@@ -47,6 +54,11 @@ __pycache__/
 .workbuddy/
 .superpowers/
 .worktrees/
+.openclaw/
+.openclaw-attachments/
+
+# Runtime logs and diagnostics
+error-log/
 
 video/*
 lib-external/*
