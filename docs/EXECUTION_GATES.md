@@ -43,6 +43,9 @@
 - SQLite 生产变更必须使用已审查 baseline + forward migration，且有 preflight、停机备份、
   checksum/权限/异地留存、隔离 restore、`PRAGMA integrity_check` 和匹配 code/database/config
   回滚证据；`prisma db push` 和只有备份没有恢复演练都不能关闭发布门禁。
+- 桌面版本发布（stable tag 推送到 GitHub Releases）后必须同步 `TASKS.md` 版本台账：新增
+  "Prepare and publish FrameQ vX.Y.Z" 条目，记录发布时间、tag、发布链接、验收要点与残余
+  风险，并与 release notes、completed ExecPlan 保持一致；不允许发布后遗留版本记录缺口。
 
 ## Soft Gates
 

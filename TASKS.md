@@ -13,6 +13,41 @@
   `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
   `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
 
+- [x] Prepare and publish FrameQ v0.3.5 desktop feature release (2026-08-16) — ✅ Acceptance:
+  Motion interaction enhancement (processing stage, task state, ASR download progress, AI target
+  and history list animations; Account/Settings/History/ASR Model/AI Detail and confirmation
+  Sheet lifecycle; reduced-motion respect) plus Windows app-local VC++ runtime staging and
+  worker startup preflight fixes; five version sources synchronized at 0.3.5, annotated tag
+  `v0.3.5` (commit `2ce6706`) pushed to origin, Desktop Release workflow built Windows
+  updater/Intel DMG/Apple Silicon DMG, stable release published
+  (https://github.com/jiabai/FrameQ/releases/tag/v0.3.5) with reviewed notes from
+  `docs/releases/v0.3.5.md`. Windows desktop smoke passed (model download startup path and
+  restart-new-task interaction). Release plan:
+  `docs/exec-plans/completed/2026-08-16-v0.3.5-desktop-feature-release-plan.md`.
+
+- [x] Prepare and publish FrameQ v0.3.4 icon release (2026-08-16) — ✅ Acceptance: updated desktop
+  app icon and Windows/macOS bundle icon resources; version source unified at 0.3.4, annotated
+  tag `v0.3.4` (commit `1e20aec`) pushed to origin, Desktop Release workflow generated Windows
+  updater/Intel DMG/Apple Silicon DMG, stable release published
+  (https://github.com/jiabai/FrameQ/releases/tag/v0.3.4) with notes from
+  `docs/releases/v0.3.4.md`. No transcription, model download, task processing, or local data
+  behavior changed. Release plan:
+  `docs/exec-plans/completed/2026-08-16-v0.3.4-icon-release-plan.md`.
+
+- [x] Prepare and publish FrameQ v0.3.3 desktop feature release (2026-08-15) — ✅ Acceptance:
+  Windows VC++ 2015-2022 runtime self-check with runtime-missing guidance, import-stage
+  structured diagnostic fallback, and the model-download stability hardening batch (ONNX staging
+  cleanup, streamed custom-source download with timeout/size limit/retry, disk-space precheck,
+  cache integrity re-download, log rotation, event throttling); five version sources synchronized
+  at 0.3.3, annotated tag `v0.3.3` (commit `3735d04`) pushed after restoring third-party version
+  ranges in package-lock, Desktop Release workflow built all three platform artifacts, stable
+  release published (https://github.com/jiabai/FrameQ/releases/tag/v0.3.3) with reviewed notes
+  from `docs/releases/v0.3.3.md`. Packaged-worker byte equality and bundled runtime DLL
+  assertions added to release CI (`scripts/verify-packaged-worker.mjs`); clean-Windows smoke
+  passed. Local watchdog `taskkill` Access-denied residue is environment-only, not a feature
+  failure. Release plan:
+  `docs/exec-plans/completed/2026-08-15-v0.3.3-desktop-feature-release-plan.md`.
+
 - [x] Prepare and publish FrameQ v0.3.2 desktop diagnostic export release (2026-08-10) — ✅ Acceptance:
   merged
   `codex/desktop-diagnostic-export` into `main`, synchronized five version sources at 0.3.2, and
@@ -33,7 +68,8 @@
   (https://github.com/jiabai/FrameQ/releases/tag/v0.3.1). Gate-fixed contract-v7 regressions:
   `worker/frameq_worker/desktop_contract.py` 6→7, `build-installer.test.mjs` 6→7, 7 frontend
   fixtures missing `dissection_source_status`. Residual risk: Inspiration Profile v2 packaged
-  launch, transcript dissection real paid-supplier smoke, Web session no IP/UA binding. Product
+  launch, Web session no IP/UA binding (transcript dissection real paid-supplier smoke 已于
+  2026-08-23 真实付费烟测闭合，见 v0.3.0 条目). Product
   spec: `docs/product-specs/2026-08-05-v0.3.1-desktop-feature-release.md`. ExecPlan:
   `docs/exec-plans/completed/2026-08-05-v0.3.1-desktop-feature-release-plan.md`.
   `secureCookies` 生产部署验证已于 2026-08-06 在 `frameq.8xf.pro` 完成。macOS watchdog
@@ -50,7 +86,10 @@
   non-prerelease (https://github.com/jiabai/FrameQ/releases/tag/v0.3.0). Residual risk: macOS
   watchdog runtime, macOS locale/layout, macOS local-media import, macOS ONNX VAD streaming
   (已于 2026-08-06 在真实 macOS 主机完成实测验收，不再为残余),
-  transcript dissection real paid-supplier smoke, and native packaged cross-platform UX
+  transcript dissection real paid-supplier smoke
+  (已于 2026-08-23 真实付费烟测闭合：SiliconFlow + deepseek-ai/DeepSeek-V3.2 完整链路
+  map→reduce→repair 266.8s 通过；同步修复 highlight 逐字引用强约束与 JSON 弯引号解析，
+  见 commit ef236bf), and native packaged cross-platform UX
   (前者 macOS 项已闭合，其余仍未验证); Windows evidence is recorded for the corresponding gates.
   Product spec:
   `docs/product-specs/2026-08-03-v0.3.0-desktop-feature-release.md`. ExecPlan:
