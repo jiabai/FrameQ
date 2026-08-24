@@ -156,7 +156,7 @@ useAccountController 增加 activationCodeRequestPending 和 activationCodeReque
 - 邮件服务暂不可用；
 - 自助码无效或不属于当前账号。
 
-请求携带当前 UI locale，Server 只接受 zh-CN、zh-TW、en 闭集；缺失或非法值回退 zh-CN。locale 只选择邮件模板，不参与授权判断。
+请求携带当前 UI locale，Server 只接受 zh-CN、zh-TW、en-US 闭集；缺失或非法值回退 zh-CN。locale 只选择邮件模板，不参与授权判断。
 
 ## 6. Server API
 
