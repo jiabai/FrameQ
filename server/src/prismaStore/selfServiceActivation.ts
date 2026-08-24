@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { ActivationCodeRecord, Store } from "../store/contracts.js";
 import { emailDispatchRateLimitReservations } from "../store/rateLimitPolicy.js";
 import {
+  isPrismaKnownError,
   StoreTemporarilyUnavailableError,
   withConflictRetry,
 } from "./concurrency.js";
@@ -134,74 +135,83 @@ export async function activatePreparedSelfServiceActivationCode(
   prisma: PrismaClient,
   input: Parameters<Store["activatePreparedSelfServiceActivationCode"]>[0],
 ): ReturnType<Store["activatePreparedSelfServiceActivationCode"]> {
-  const attempted = await withConflictRetry(() =>
-    prisma.$transaction(async (tx) => {
-      const code = await tx.activationCode.findUnique({
-        where: { id: input.activationCodeId },
-      });
-      if (
-        !code ||
-        code.issuanceSource !== "self_service_email" ||
-        code.status !== "pending_delivery" ||
-        code.issuedToUserId === null
-      ) {
-        return { status: "invalid" } as const;
-      }
-      if (await expireActivationCodeIfNeeded(tx, code, input.now)) {
-        return { status: "invalid" } as const;
-      }
+  const attempted = await withConflictRetry(async () => {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const code = await tx.activationCode.findUnique({
+          where: { id: input.activationCodeId },
+        });
+        if (
+          !code ||
+          code.issuanceSource !== "self_service_email" ||
+          code.status !== "pending_delivery" ||
+          code.issuedToUserId === null
+        ) {
+          return { status: "invalid" } as const;
+        }
+        if (await expireActivationCodeIfNeeded(tx, code, input.now)) {
+          return { status: "invalid" } as const;
+        }
 
-      const entitlement = await tx.entitlement.findUnique({
-        where: { userId: code.issuedToUserId },
-      });
-      if (isActiveEntitlementAt(entitlement, input.now)) {
-        const disabled = await tx.activationCode.updateMany({
+        const entitlement = await tx.entitlement.findUnique({
+          where: { userId: code.issuedToUserId },
+        });
+        if (isActiveEntitlementAt(entitlement, input.now)) {
+          const disabled = await tx.activationCode.updateMany({
+            where: {
+              id: code.id,
+              issuanceSource: "self_service_email",
+              status: "pending_delivery",
+            },
+            data: {
+              status: "disabled",
+              disabledReason: "activation_became_active",
+            },
+          });
+          return disabled.count === 1
+            ? ({ status: "entitlement_active" } as const)
+            : ({ status: "invalid" } as const);
+        }
+
+        await tx.activationCode.updateMany({
           where: {
-            id: code.id,
+            id: { not: code.id },
             issuanceSource: "self_service_email",
-            status: "pending_delivery",
+            issuedToUserId: code.issuedToUserId,
+            status: "active",
+            sentAt: { lt: input.now },
           },
           data: {
             status: "disabled",
-            disabledReason: "activation_became_active",
+            disabledReason: "superseded",
           },
         });
-        return disabled.count === 1
-          ? ({ status: "entitlement_active" } as const)
-          : ({ status: "invalid" } as const);
-      }
 
-      await tx.activationCode.updateMany({
-        where: {
-          id: { not: code.id },
-          issuanceSource: "self_service_email",
-          issuedToUserId: code.issuedToUserId,
-          status: "active",
-        },
-        data: {
-          status: "disabled",
-          disabledReason: "superseded",
-        },
+        const activated = await tx.activationCode.updateMany({
+          where: {
+            id: code.id,
+            issuanceSource: "self_service_email",
+            issuedToUserId: code.issuedToUserId,
+            status: "pending_delivery",
+            redeemBy: { gt: input.now },
+          },
+          data: {
+            status: "active",
+            sentAt: input.now,
+            disabledReason: null,
+          },
+        });
+        return activated.count === 1
+          ? ({ status: "activated" } as const)
+          : ({ status: "invalid" } as const);
       });
-      const activated = await tx.activationCode.updateMany({
-        where: {
-          id: code.id,
-          issuanceSource: "self_service_email",
-          issuedToUserId: code.issuedToUserId,
-          status: "pending_delivery",
-          redeemBy: { gt: input.now },
-        },
-        data: {
-          status: "active",
-          sentAt: input.now,
-          disabledReason: null,
-        },
-      });
-      return activated.count === 1
-        ? ({ status: "activated" } as const)
-        : ({ status: "invalid" } as const);
-    }),
-  );
+    } catch (error) {
+      if (isPrismaKnownError(error, "P2002")) {
+        return { status: "invalid" } as const;
+      }
+      throw error;
+    }
+  });
   return attempted.status === "exhausted"
     ? { status: "temporarily_unavailable" }
     : attempted.value;

@@ -1,3 +1,4 @@
+import { type Prisma, type PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, test } from "vitest";
 import { ActivationCodeService } from "../src/activation.js";
 import { PrismaStore } from "../src/prismaStore.js";
@@ -16,6 +17,72 @@ const fixtures: Array<{ cleanup: () => Promise<void> }> = [];
 afterEach(async () => {
   await Promise.all(fixtures.splice(0).map((fixture) => fixture.cleanup()));
 });
+
+function createBarrier(parties: number): {
+  waitAtTransactionStart: () => Promise<void>;
+  allArrived: Promise<void>;
+  release: () => void;
+  arrivals: () => number;
+} {
+  let arrivals = 0;
+  let signalAllArrived = () => {};
+  let release = () => {};
+  const allArrived = new Promise<void>((resolve) => {
+    signalAllArrived = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    waitAtTransactionStart: async () => {
+      arrivals += 1;
+      if (arrivals === parties) {
+        signalAllArrived();
+      }
+      await released;
+    },
+    allArrived,
+    release,
+    arrivals: () => arrivals,
+  };
+}
+
+async function waitForBarrierArrivals(barrier: ReturnType<typeof createBarrier>): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      barrier.allArrived,
+      new Promise<void>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`self-service activation gate reached by ${barrier.arrivals()} clients`)),
+          5000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function prismaWithTransactionGate(
+  prisma: PrismaClient,
+  waitAtTransactionStart: () => Promise<void>,
+): PrismaClient {
+  return new Proxy(prisma, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "$transaction" || typeof value !== "function") {
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async (...args: unknown[]) => {
+        await waitAtTransactionStart();
+        return Reflect.apply(value, target, args);
+      };
+    },
+  }) as PrismaClient;
+}
 
 async function createSessionFixture(email = "self-service@example.com") {
   const fixture = await createTemporaryPrismaClient();
@@ -311,6 +378,80 @@ describe("PrismaStore self-service activation lifecycle", () => {
     ).toBe(1);
   });
 
+  test("prevents two concurrent pending codes for one user from both becoming active", async () => {
+    const { fixture, store, user } = await createSessionFixture("concurrent-two-pending@example.com");
+    const secondClient = await fixture.createClient();
+    const barrier = createBarrier(2);
+    const firstStore = new PrismaStore(
+      prismaWithTransactionGate(fixture.prisma, barrier.waitAtTransactionStart),
+    );
+    const secondStore = new PrismaStore(
+      prismaWithTransactionGate(secondClient, barrier.waitAtTransactionStart),
+    );
+
+    const firstPending = await store.createActivationCode({
+      codeHash: sha256("FQ-TWO-PENDING-0001"),
+      codePrefix: "FQ-TP01",
+      status: "pending_delivery",
+      issuanceSource: "self_service_email",
+      entitlementDays: 31,
+      issuedToUserId: user.id,
+      redeemBy,
+      createdAt: now,
+      sentAt: null,
+      redeemedAt: null,
+      redeemedByUserId: null,
+      disabledReason: null,
+    });
+    const secondPending = await store.createActivationCode({
+      codeHash: sha256("FQ-TWO-PENDING-0002"),
+      codePrefix: "FQ-TP02",
+      status: "pending_delivery",
+      issuanceSource: "self_service_email",
+      entitlementDays: 31,
+      issuedToUserId: user.id,
+      redeemBy,
+      createdAt: now,
+      sentAt: null,
+      redeemedAt: null,
+      redeemedByUserId: null,
+      disabledReason: null,
+    });
+
+    const pendingResults = Promise.allSettled([
+      firstStore.activatePreparedSelfServiceActivationCode({ activationCodeId: firstPending.id, now }),
+      secondStore.activatePreparedSelfServiceActivationCode({ activationCodeId: secondPending.id, now }),
+    ]);
+
+    await waitForBarrierArrivals(barrier);
+    barrier.release();
+    const results = await pendingResults;
+
+    expect(
+      results.filter(
+        (result) => result.status === "fulfilled" && result.value.status === "activated",
+      ),
+    ).toHaveLength(1);
+    expect(
+      results.every(
+        (result) =>
+          result.status === "fulfilled" &&
+          (result.value.status === "activated" ||
+            result.value.status === "invalid" ||
+            result.value.status === "temporarily_unavailable"),
+      ),
+    ).toBe(true);
+    expect(
+      await fixture.prisma.activationCode.count({
+        where: {
+          issuanceSource: "self_service_email",
+          issuedToUserId: user.id,
+          status: "active",
+        },
+      }),
+    ).toBeLessThanOrEqual(1);
+  });
+
   test("rejects pending, mismatched, expired, and already-entitled self-service redemption", async () => {
     const { fixture, store, user, session } = await createSessionFixture("guardrails@example.com");
     const otherUser = await store.upsertUserByEmail("other@example.com", now);
@@ -372,13 +513,20 @@ describe("PrismaStore self-service activation lifecycle", () => {
       redeemedByUserId: null,
     });
 
+    const expiredUser = await store.upsertUserByEmail("expired@example.com", now);
+    const expiredSession = await store.createSession({
+      userId: expiredUser.id,
+      tokenHash: "expired-session",
+      createdAt: now,
+      expiresAt: sessionExpiresAt,
+    });
     const expiredCode = await store.createActivationCode({
       codeHash: sha256("FQ-EXPR-SELF-0001"),
       codePrefix: "FQ-EXPR",
       status: "active",
       issuanceSource: "self_service_email",
       entitlementDays: 31,
-      issuedToUserId: user.id,
+      issuedToUserId: expiredUser.id,
       redeemBy: new Date("2026-08-23T08:00:00.000Z"),
       createdAt: now,
       sentAt: now,
@@ -387,13 +535,13 @@ describe("PrismaStore self-service activation lifecycle", () => {
       disabledReason: null,
     });
     const redeemExpiredAt = new Date("2026-08-31T08:00:00.000Z");
-    await store.upsertEntitlement(user.id, new Date("2026-08-24T08:00:00.000Z"), redeemExpiredAt, {
+    await store.upsertEntitlement(expiredUser.id, new Date("2026-08-24T08:00:00.000Z"), redeemExpiredAt, {
       llmQuotaLimit: 20,
       llmQuotaUsed: 0,
     });
     await expect(
       store.redeemActivationCodeAndGrantEntitlement({
-        sessionTokenHash: session.tokenHash,
+        sessionTokenHash: expiredSession.tokenHash,
         codeHash: expiredCode.codeHash,
         now: redeemExpiredAt,
         llmQuotaPerActivation: 20,

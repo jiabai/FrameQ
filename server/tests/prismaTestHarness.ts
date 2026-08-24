@@ -1,5 +1,4 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,8 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const schemaPath = join(serverRoot, "prisma", "schema.prisma");
-const prismaCliPath = join(serverRoot, "node_modules", "prisma", "build", "index.js");
+const migrationsRoot = join(serverRoot, "prisma", "migrations");
 
 type TemporaryPrismaClientOptions = {
   beforeConnect?: (directory: string) => void;
@@ -26,23 +24,15 @@ export async function createTemporaryPrismaClient(options: TemporaryPrismaClient
   try {
     const databasePath = join(directory, "frameq.sqlite").replace(/\\/g, "/");
     const databaseUrl = `file:${databasePath}`;
-    const temporarySchemaPath = join(directory, "schema.prisma");
-    const schema = readFileSync(schemaPath, "utf8").replace(
-      'url      = env("DATABASE_URL")',
-      'url      = "file:./frameq.sqlite"',
-    );
-    writeFileSync(temporarySchemaPath, schema);
-    const migrationSql = execFileSync(
-      process.execPath,
-      [prismaCliPath, "migrate", "diff", "--from-empty", "--to-schema-datamodel", temporarySchemaPath, "--script"],
-      {
-        cwd: serverRoot,
-        stdio: "pipe",
-      },
-    ).toString("utf8");
     const database = new DatabaseSync(databasePath);
     try {
-      database.exec(migrationSql);
+      for (const migrationDirectory of readdirSync(migrationsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort()) {
+        const migrationPath = join(migrationsRoot, migrationDirectory, "migration.sql");
+        database.exec(readFileSync(migrationPath, "utf8"));
+      }
     } finally {
       database.close();
     }

@@ -143,6 +143,7 @@ model ActivationCode {
   issuedToUser     User?     @relation("ActivationCodeIssuedToUser", fields: [issuedToUserId], references: [id])
   redeemedByUser   User?     @relation("ActivationCodeRedeemedByUser", fields: [redeemedByUserId], references: [id])
 
+  // Partial unique index for one active self-service code per user is maintained in SQL migrations.
   @@index([status])
   @@index([issuedToUserId, issuanceSource, status])
   @@index([redeemedByUserId])
