@@ -244,11 +244,15 @@ describe("desktop account routes", () => {
       codeHash: sha256(activationCode),
       codePrefix: "FQ-ABCD",
       status: "active",
+      issuanceSource: "admin",
       entitlementDays: 31,
+      issuedToUserId: null,
       redeemBy: new Date("2026-07-21T08:00:00.000Z"),
       createdAt: new Date("2026-06-21T08:00:00.000Z"),
+      sentAt: new Date("2026-06-21T08:00:00.000Z"),
       redeemedAt: null,
       redeemedByUserId: null,
+      disabledReason: null,
     });
 
     const redeemed = await app.inject({

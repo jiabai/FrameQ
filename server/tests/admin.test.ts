@@ -176,11 +176,15 @@ describe("admin activation code routes", () => {
       codeHash: "code-hash",
       codePrefix: "FQ-ABCD",
       status: "active",
+      issuanceSource: "admin",
       entitlementDays: 31,
+      issuedToUserId: null,
       redeemBy: new Date("2026-07-21T08:00:00.000Z"),
       createdAt: now,
+      sentAt: now,
       redeemedAt: null,
       redeemedByUserId: null,
+      disabledReason: null,
     });
     const app = buildServer({
       store,

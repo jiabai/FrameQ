@@ -274,11 +274,15 @@ describe("web user dashboard login flow", () => {
       codeHash: "test-hash-for-secret-check",
       codePrefix: "FQ-SECRET",
       status: "active",
+      issuanceSource: "admin",
       entitlementDays: 31,
+      issuedToUserId: null,
       redeemBy: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       createdAt: now,
+      sentAt: now,
       redeemedAt: null,
       redeemedByUserId: null,
+      disabledReason: null,
     });
     const user = store.users.find((u) => u.email === "secrets@example.com");
     if (user) {

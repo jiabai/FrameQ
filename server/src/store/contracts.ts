@@ -120,15 +120,15 @@ export type ActivationCodeRecord = {
   codeHash: string;
   codePrefix: string;
   status: ActivationCodeStatus;
-  issuanceSource?: ActivationCodeIssuanceSource;
+  issuanceSource: ActivationCodeIssuanceSource;
   entitlementDays: number;
-  issuedToUserId?: string | null;
+  issuedToUserId: string | null;
   redeemBy: Date;
   createdAt: Date;
-  sentAt?: Date | null;
+  sentAt: Date | null;
   redeemedAt: Date | null;
   redeemedByUserId: string | null;
-  disabledReason?: ActivationCodeDisabledReason | null;
+  disabledReason: ActivationCodeDisabledReason | null;
 };
 
 export type AdminSessionRecord = {
@@ -336,7 +336,7 @@ export type Store = {
     userId: string,
     redeemedAt: Date,
   ): Promise<ActivationCodeRecord | null>;
-  prepareSelfServiceActivationCode?(input: {
+  prepareSelfServiceActivationCode(input: {
     sessionTokenHash: string;
     codeHash: string;
     codePrefix: string;
@@ -345,12 +345,12 @@ export type Store = {
     redeemBy: Date;
     entitlementDays: number;
   }): Promise<PrepareSelfServiceActivationCodeResult>;
-  disablePreparedSelfServiceActivationCode?(input: {
+  disablePreparedSelfServiceActivationCode(input: {
     activationCodeId: string;
     now: Date;
     reason: "delivery_failed";
   }): Promise<ActivationCodeRecord | null>;
-  activatePreparedSelfServiceActivationCode?(input: {
+  activatePreparedSelfServiceActivationCode(input: {
     activationCodeId: string;
     now: Date;
   }): Promise<ActivatePreparedSelfServiceActivationCodeResult>;

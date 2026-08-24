@@ -42,11 +42,15 @@ export class ActivationCodeService {
       codeHash: sha256(normalizeActivationCode(code)),
       codePrefix: code.slice(0, 7),
       status: "active",
+      issuanceSource: "admin",
       entitlementDays: ACTIVATION_CODE_DAYS,
+      issuedToUserId: null,
       redeemBy,
       createdAt: now,
+      sentAt: now,
       redeemedAt: null,
       redeemedByUserId: null,
+      disabledReason: null,
     });
     return {
       code,

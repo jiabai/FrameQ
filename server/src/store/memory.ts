@@ -22,6 +22,10 @@ import * as entitlementOperations from "./memory/entitlements.js";
 import * as llmConfigOperations from "./memory/llmConfig.js";
 import * as userSessionOperations from "./memory/userSession.js";
 
+function unsupportedSelfServiceActivationStoreMethod(method: string): never {
+  throw new Error(`${method} is not implemented yet.`);
+}
+
 export class MemoryStore implements Store {
   users: UserRecord[] = [];
   emailOtps: EmailOtpRecord[] = [];
@@ -233,6 +237,24 @@ export class MemoryStore implements Store {
       userId,
       redeemedAt,
     );
+  }
+
+  async prepareSelfServiceActivationCode(
+    _input: Parameters<Store["prepareSelfServiceActivationCode"]>[0],
+  ): ReturnType<Store["prepareSelfServiceActivationCode"]> {
+    unsupportedSelfServiceActivationStoreMethod("prepareSelfServiceActivationCode");
+  }
+
+  async disablePreparedSelfServiceActivationCode(
+    _input: Parameters<Store["disablePreparedSelfServiceActivationCode"]>[0],
+  ): ReturnType<Store["disablePreparedSelfServiceActivationCode"]> {
+    unsupportedSelfServiceActivationStoreMethod("disablePreparedSelfServiceActivationCode");
+  }
+
+  async activatePreparedSelfServiceActivationCode(
+    _input: Parameters<Store["activatePreparedSelfServiceActivationCode"]>[0],
+  ): ReturnType<Store["activatePreparedSelfServiceActivationCode"]> {
+    unsupportedSelfServiceActivationStoreMethod("activatePreparedSelfServiceActivationCode");
   }
 
   async redeemActivationCodeAndGrantEntitlement(

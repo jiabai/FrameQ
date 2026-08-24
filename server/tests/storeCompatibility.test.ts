@@ -66,12 +66,6 @@ const compatibilityMethods = [
   "consumeDesktopLoginTicket",
 ] as const;
 
-const deferredImplementationMethods = [
-  "prepareSelfServiceActivationCode",
-  "disablePreparedSelfServiceActivationCode",
-  "activatePreparedSelfServiceActivationCode",
-] as const;
-
 const arrayFixtureFields = [
   "users",
   "emailOtps",
@@ -118,15 +112,15 @@ type ActivationCodeRecordShape = Assert<
       codeHash: string;
       codePrefix: string;
       status: "pending_delivery" | "active" | "redeemed" | "expired" | "disabled";
-      issuanceSource?: ActivationCodeIssuanceSource;
+      issuanceSource: ActivationCodeIssuanceSource;
       entitlementDays: number;
-      issuedToUserId?: string | null;
+      issuedToUserId: string | null;
       redeemBy: Date;
       createdAt: Date;
-      sentAt?: Date | null;
+      sentAt: Date | null;
       redeemedAt: Date | null;
       redeemedByUserId: string | null;
-      disabledReason?: ActivationCodeDisabledReason | null;
+      disabledReason: ActivationCodeDisabledReason | null;
     }
   >
 >;
@@ -170,16 +164,13 @@ describe("Store adapter compatibility surface", () => {
     expect(activationCodeRecordShape).toBe(true);
     expect(prepareSelfServiceActivationCodeResultShape).toBe(true);
     expect(activationRedemptionShape).toBe(true);
-    const expectedStoreMethods = [...storeMethods, ...compatibilityMethods];
-    const expectedImplementedMethods = expectedStoreMethods.filter(
-      (method) => !deferredImplementationMethods.includes(method as (typeof deferredImplementationMethods)[number]),
-    );
+    const expectedMethods = [...storeMethods, ...compatibilityMethods];
 
     expect(PublicMemoryStore).toBe(DefiningMemoryStore);
 
     for (const storeClass of [PublicMemoryStore, PrismaStore]) {
       const prototypeMethods = Object.getOwnPropertyNames(storeClass.prototype);
-      for (const method of expectedImplementedMethods) {
+      for (const method of expectedMethods) {
         expect(prototypeMethods, `${storeClass.name}.${method}`).toContain(method);
       }
     }
