@@ -195,7 +195,7 @@ describe("production deployment contracts", () => {
     const envExample = readFileSync(join(serverRoot, ".env.example"), "utf8");
 
     expect(envExample).toContain("FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=");
-    expect(envExample).toContain("Production must set this to 0 or 1 explicitly.");
+    expect(envExample).toContain("Production must set this to true or false explicitly.");
     expect(envExample).toContain("Self-service activation email also requires every SMTP value below.");
     expect(envExample).not.toContain("console fallback");
   });

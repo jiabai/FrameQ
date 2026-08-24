@@ -5,7 +5,7 @@ const completeProductionEnv = {
   NODE_ENV: "production",
   FRAMEQ_SERVER_HOST: "127.0.0.1",
   FRAMEQ_SERVER_PORT: "8787",
-  FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "0",
+  FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "false",
   DATABASE_URL: "file:../data/frameq.sqlite",
   FRAMEQ_ADMIN_EMAIL: "admin@example.com",
   FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY: "production-encryption-secret-at-least-32",
@@ -113,6 +113,21 @@ describe("runtime configuration", () => {
     });
 
     expect(config.selfServiceActivationEnabled).toBe(false);
+  });
+
+  test("production accepts explicit true/false self-service activation values", () => {
+    expect(
+      parseRuntimeConfig({
+        ...completeProductionEnv,
+        FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "true",
+      }).selfServiceActivationEnabled,
+    ).toBe(true);
+    expect(
+      parseRuntimeConfig({
+        ...completeProductionEnv,
+        FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "false",
+      }).selfServiceActivationEnabled,
+    ).toBe(false);
   });
 
   test("production requires an explicit self-service activation flag value", () => {

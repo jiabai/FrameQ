@@ -63,9 +63,6 @@ export function registerDesktopAccountRoutes(
   });
 
   app.post("/api/desktop/activation-codes/request", async (request, reply) => {
-    if (!dependencies.selfServiceActivationEnabled) {
-      return reply.code(404).send({ error: "FEATURE_NOT_AVAILABLE" });
-    }
     const session = await authenticateDesktop(
       dependencies.store,
       request.headers.authorization,
@@ -74,12 +71,15 @@ export function registerDesktopAccountRoutes(
     if (!session) {
       return reply.code(401).send({ error: "AUTH_REQUIRED" });
     }
+    if (
+      !dependencies.selfServiceActivationEnabled ||
+      dependencies.selfServiceActivation === null
+    ) {
+      return reply.code(404).send({ error: "FEATURE_NOT_AVAILABLE" });
+    }
     const parsed = activationRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "INVALID_REQUEST" });
-    }
-    if (!dependencies.selfServiceActivation) {
-      return reply.code(503).send({ error: "ACTIVATION_EMAIL_UNAVAILABLE" });
     }
 
     try {

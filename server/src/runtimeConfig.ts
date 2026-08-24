@@ -248,10 +248,10 @@ function parsePort(
 
 function parseFlag(value: string | undefined, name: string, issues: string[]): boolean {
   const normalized = clean(value);
-  if (!normalized || normalized === "0") {
+  if (!normalized || normalized === "0" || normalized === "false") {
     return false;
   }
-  if (normalized === "1") {
+  if (normalized === "1" || normalized === "true") {
     return true;
   }
   issues.push(name);
@@ -271,10 +271,10 @@ function parseExplicitProductionFlag(
     }
     return false;
   }
-  if (normalized === "0") {
+  if (normalized === "0" || normalized === "false") {
     return false;
   }
-  if (normalized === "1") {
+  if (normalized === "1" || normalized === "true") {
     return true;
   }
   issues.push(name);

@@ -339,6 +339,31 @@ describe("desktop account routes", () => {
     expect(response.json()).toEqual({ error: "FEATURE_NOT_AVAILABLE" });
   });
 
+  test("checks bearer auth before evaluating self-service availability", async () => {
+    const featureOff = buildDesktopAuthApp({
+      selfServiceActivationEnabled: false,
+    });
+    const featureOffResponse = await featureOff.app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/request",
+      payload: { locale: "zh-CN" },
+    });
+    expect(featureOffResponse.statusCode).toBe(401);
+    expect(featureOffResponse.json()).toEqual({ error: "AUTH_REQUIRED" });
+
+    const serviceAbsent = buildDesktopAuthApp({
+      selfServiceActivationEnabled: true,
+      selfServiceActivationService: null,
+    });
+    const serviceAbsentResponse = await serviceAbsent.app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/request",
+      payload: { locale: "zh-CN" },
+    });
+    expect(serviceAbsentResponse.statusCode).toBe(401);
+    expect(serviceAbsentResponse.json()).toEqual({ error: "AUTH_REQUIRED" });
+  });
+
   test("returns activation email unavailable when feature is enabled but service is absent", async () => {
     const { app, readSentCode } = buildDesktopAuthApp({
       selfServiceActivationEnabled: true,
@@ -353,8 +378,8 @@ describe("desktop account routes", () => {
       payload: { locale: "zh-CN" },
     });
 
-    expect(response.statusCode).toBe(503);
-    expect(response.json()).toEqual({ error: "ACTIVATION_EMAIL_UNAVAILABLE" });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "FEATURE_NOT_AVAILABLE" });
   });
 
   test("rejects unauthenticated, invalid, and unknown self-service request bodies", async () => {
