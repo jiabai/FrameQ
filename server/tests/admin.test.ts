@@ -157,7 +157,7 @@ describe("admin activation code routes", () => {
     expect(store.activationCodes[0]?.codeHash).not.toContain(created.json<{ code: string }>().code);
   });
 
-  test("admin page lists users and activation code status", async () => {
+  test("admin page lists users and activation code audit fields without leaking secrets", async () => {
     const store = new MemoryStore();
     const adminToken = "admin-session-token";
     const adminSession = await store.createAdminSession({
@@ -175,16 +175,30 @@ describe("admin activation code routes", () => {
     await store.createActivationCode({
       codeHash: "code-hash",
       codePrefix: "FQ-ABCD",
-      status: "active",
+      status: "pending_delivery",
       issuanceSource: "admin",
       entitlementDays: 31,
       issuedToUserId: null,
       redeemBy: new Date("2026-07-21T08:00:00.000Z"),
       createdAt: now,
-      sentAt: now,
+      sentAt: null,
       redeemedAt: null,
       redeemedByUserId: null,
       disabledReason: null,
+    });
+    await store.createActivationCode({
+      codeHash: "self-service-hash",
+      codePrefix: "FQ-SELF",
+      status: "disabled",
+      issuanceSource: "self_service_email",
+      entitlementDays: 31,
+      issuedToUserId: user.id,
+      redeemBy: new Date("2026-07-25T08:00:00.000Z"),
+      createdAt: now,
+      sentAt: now,
+      redeemedAt: null,
+      redeemedByUserId: null,
+      disabledReason: "delivery_failed",
     });
     const app = buildServer({
       store,
@@ -204,6 +218,7 @@ describe("admin activation code routes", () => {
     expect(response.body).toContain("FrameQ Admin");
     expect(response.body).toContain("user@example.com");
     expect(response.body).toContain("FQ-ABCD");
+    expect(response.body).toContain("FQ-SELF");
     expect(response.body).toContain("已登录");
     expect(response.body).toContain("lantianye@163.com");
     expect(response.body).toContain("退出登录");
@@ -222,6 +237,17 @@ describe("admin activation code routes", () => {
     expect(response.body).toContain("生成月卡激活码");
     expect(response.body).toContain("兑换后获得 31 天月卡权益");
     expect(response.body).toContain("激活码有效期");
+    expect(response.body).toContain("来源");
+    expect(response.body).toContain("绑定邮箱");
+    expect(response.body).toContain("投递/状态");
+    expect(response.body).toContain("停用原因");
+    expect(response.body).toContain("待发送");
+    expect(response.body).toContain("自助邮件");
+    expect(response.body).toContain("投递失败");
+    expect(response.body).toContain(">—<");
+    expect(response.body).not.toContain("code-hash");
+    expect(response.body).not.toContain("self-service-hash");
+    expect(response.body).not.toContain("frameq_admin_session");
     expect(response.body).not.toContain("生成 31 天月卡码");
     expect(response.body).not.toContain("兑换有效期");
   });

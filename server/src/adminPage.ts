@@ -171,13 +171,14 @@ export function renderAdminPage(input: {
   const codeRows = input.activationCodes.length
     ? input.activationCodes
         .map((code) => {
-          const redeemedBy = code.redeemedByUserId
-            ? userEmailsById.get(code.redeemedByUserId) ?? code.redeemedByUserId
-            : "";
-          return `<tr><td><code>${escapeHtml(code.codePrefix)}</code></td><td>${statusBadge(code.status, activationCodeStatusText(code.status, locale))}</td><td>${code.entitlementDays}${t(locale, "admin.entitlement_days_suffix")}</td><td>${formatDate(code.redeemBy, locale)}</td><td>${formatDate(code.redeemedAt, locale)}</td><td>${escapeHtml(redeemedBy)}</td></tr>`;
+          const source = activationCodeSourceText(code.issuanceSource, locale);
+          const boundEmail = resolveUserEmail(code.issuedToUserId, userEmailsById, locale);
+          const redeemedBy = resolveUserEmail(code.redeemedByUserId, userEmailsById, locale);
+          const status = code.status ?? "active";
+          return `<tr><td><code>${escapeHtml(code.codePrefix)}</code></td><td>${escapeHtml(source)}</td><td>${escapeHtml(boundEmail)}</td><td>${statusBadge(status, activationCodeStatusText(status, locale))}</td><td>${escapeHtml(activationCodeDisabledReasonText(code.disabledReason, locale))}</td><td>${formatDateCell(code.createdAt, locale)}</td><td>${formatDateCell(code.sentAt, locale)}</td><td>${formatDateCell(code.redeemedAt, locale)}</td><td>${formatDateCell(code.redeemBy, locale)}</td><td>${code.entitlementDays}${t(locale, "admin.entitlement_days_suffix")}</td><td>${escapeHtml(redeemedBy)}</td></tr>`;
         })
         .join("")
-    : `<tr><td colspan="6" class="empty-cell">${t(locale, "admin.no_codes")}</td></tr>`;
+    : `<tr><td colspan="11" class="empty-cell">${t(locale, "admin.no_codes")}</td></tr>`;
   const activeUsers = input.users.filter((user) => {
     const entitlement = input.entitlements.get(user.id);
     return Boolean(entitlement && entitlement.expiresAt > new Date());
@@ -324,7 +325,7 @@ export function renderAdminPage(input: {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>${t(locale, "admin.col_prefix")}</th><th>${t(locale, "admin.col_status")}</th><th>${t(locale, "admin.col_entitlement_days")}</th><th>${t(locale, "admin.col_redeem_by")}</th><th>${t(locale, "admin.col_redeemed_at")}</th><th>${t(locale, "admin.col_redeemed_by")}</th></tr></thead>
+            <thead><tr><th>${t(locale, "admin.col_prefix")}</th><th>${t(locale, "admin.col_source")}</th><th>${t(locale, "admin.col_bound_email")}</th><th>${t(locale, "admin.col_delivery_status")}</th><th>${t(locale, "admin.col_disabled_reason")}</th><th>${t(locale, "admin.col_created_at")}</th><th>${t(locale, "admin.col_sent_at")}</th><th>${t(locale, "admin.col_redeemed_at")}</th><th>${t(locale, "admin.col_redeem_by")}</th><th>${t(locale, "admin.col_entitlement_days")}</th><th>${t(locale, "admin.col_redeemed_by")}</th></tr></thead>
             <tbody>${codeRows}</tbody>
           </table>
         </div>
@@ -610,11 +611,13 @@ function adminStyles(locale: Locale): string {
       min-height: 24px;
       padding: 2px 9px;
     }
+    .badge.pending_delivery,
     .badge.active { background: var(--fq-success-soft); border-color: rgba(31, 122, 77, 0.2); color: var(--fq-success); }
     .badge.redeemed { background: var(--fq-primary-soft); border-color: rgba(0, 102, 204, 0.2); color: var(--fq-primary); }
     .badge.inactive,
     .badge.expired,
-    .badge.disabled { background: var(--fq-danger-soft); border-color: rgba(180, 35, 24, 0.2); color: var(--fq-danger); }
+    .badge.disabled,
+    .badge.unknown { background: var(--fq-danger-soft); border-color: rgba(180, 35, 24, 0.2); color: var(--fq-danger); }
     .empty-cell { color: var(--fq-text-soft); text-align: center; }
     @media (max-width: 760px) {
       .login-page { align-items: stretch; padding-top: 18px; }
@@ -636,17 +639,51 @@ function adminStyles(locale: Locale): string {
 }
 
 function statusBadge(status: string, label: string): string {
-  return `<span class="badge ${escapeHtml(status)}">${escapeHtml(label)}</span>`;
+  return `<span class="badge ${escapeHtml(badgeClass(status))}">${escapeHtml(label)}</span>`;
 }
 
 function activationCodeStatusText(status: string, locale: Locale): string {
   const labels: Record<string, string> = {
+    pending_delivery: t(locale, "admin.code_pending_delivery"),
     active: t(locale, "admin.code_active"),
     redeemed: t(locale, "admin.code_redeemed"),
     expired: t(locale, "admin.code_expired"),
     disabled: t(locale, "admin.code_disabled"),
   };
   return labels[status] ?? status;
+}
+
+function activationCodeSourceText(source: string | null | undefined, locale: Locale): string {
+  switch (source) {
+    case undefined:
+    case null:
+    case "admin":
+      return t(locale, "admin.code_source_admin");
+    case "self_service_email":
+      return t(locale, "admin.code_source_self_service_email");
+    default:
+      return source;
+  }
+}
+
+function activationCodeDisabledReasonText(
+  reason: string | null | undefined,
+  locale: Locale,
+): string {
+  switch (reason) {
+    case undefined:
+    case null:
+    case "":
+      return emDash();
+    case "delivery_failed":
+      return t(locale, "admin.code_reason_delivery_failed");
+    case "superseded":
+      return t(locale, "admin.code_reason_superseded");
+    case "activation_became_active":
+      return t(locale, "admin.code_reason_activation_became_active");
+    default:
+      return reason;
+  }
 }
 
 function adjustmentReasonText(reason: string, locale: Locale): string {
@@ -678,11 +715,32 @@ function formatDate(value: Date | null | undefined, locale: Locale): string {
   );
 }
 
-function escapeHtml(value: string): string {
-  return value
+function formatDateCell(value: Date | null | undefined, locale: Locale): string {
+  return value ? formatDate(value, locale) : escapeHtml(emDash());
+}
+
+function resolveUserEmail(
+  userId: string | null | undefined,
+  userEmailsById: Map<string, string>,
+  locale: Locale,
+): string {
+  return userId ? (userEmailsById.get(userId) ?? emDash()) : emDash();
+}
+
+function badgeClass(status: string): string {
+  const normalized = status.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  return normalized.length > 0 ? normalized : "unknown";
+}
+
+function escapeHtml(value: string | number): string {
+  return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function emDash(): string {
+  return "—";
 }

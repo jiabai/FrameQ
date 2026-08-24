@@ -269,22 +269,22 @@ describe("web user dashboard login flow", () => {
 
     const sessionCookie = verifyResponse.cookies.get("frameq_user_session")!;
     const csrfCookie = verifyResponse.cookies.get("frameq_user_csrf")!;
+    const user = store.users.find((u) => u.email === "secrets@example.com");
 
     const code = await store.createActivationCode({
       codeHash: "test-hash-for-secret-check",
       codePrefix: "FQ-SECRET",
       status: "active",
-      issuanceSource: "admin",
+      issuanceSource: "self_service_email",
       entitlementDays: 31,
-      issuedToUserId: null,
+      issuedToUserId: user?.id ?? null,
       redeemBy: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       createdAt: now,
-      sentAt: now,
+      sentAt: null,
       redeemedAt: null,
       redeemedByUserId: null,
-      disabledReason: null,
+      disabledReason: "delivery_failed",
     });
-    const user = store.users.find((u) => u.email === "secrets@example.com");
     if (user) {
       await store.markActivationCodeRedeemed(code.codeHash, user.id, now);
     }

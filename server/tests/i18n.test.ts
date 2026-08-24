@@ -39,6 +39,14 @@ describe("t(locale, key)", () => {
     expect(t("zh-CN", "admin.no_users")).toBe("暂无用户");
     expect(t("en", "admin.no_users")).toBe("No users");
     expect(t("zh-TW", "admin.no_users")).toBe("暫無使用者");
+
+    expect(t("zh-CN", "admin.col_source")).toBe("来源");
+    expect(t("en", "admin.col_source")).toBe("Source");
+    expect(t("zh-TW", "admin.col_source")).toBe("來源");
+
+    expect(t("zh-CN", "admin.code_pending_delivery")).toBe("待发送");
+    expect(t("en", "admin.code_pending_delivery")).toBe("Pending delivery");
+    expect(t("zh-TW", "admin.code_pending_delivery")).toBe("待發送");
   });
 
   test("falls back to the default locale when the key is missing from the requested locale", () => {
