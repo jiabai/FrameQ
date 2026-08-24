@@ -45,6 +45,37 @@ class FailAuditWriteStore extends MemoryStore {
   }
 }
 
+class FailOnceSelfServiceCodeCreateStore extends MemoryStore {
+  fail = true;
+
+  override async createActivationCode(input: Parameters<MemoryStore["createActivationCode"]>[0]) {
+    if (this.fail) {
+      this.fail = false;
+      throw new Error("injected self-service code create failure");
+    }
+    return super.createActivationCode(input);
+  }
+}
+
+class FailOnceSelfServiceActivationStore extends MemoryStore {
+  fail = true;
+
+  override async getEntitlement(userId: string) {
+    const entitlement = await super.getEntitlement(userId);
+    const hasPendingPreparedCode = this.activationCodes.some(
+      (code) =>
+        code.issuanceSource === "self_service_email" &&
+        code.status === "pending_delivery" &&
+        code.issuedToUserId === userId,
+    );
+    if (this.fail && entitlement === null && hasPendingPreparedCode) {
+      this.fail = false;
+      throw new Error("injected self-service activation failure");
+    }
+    return entitlement;
+  }
+}
+
 function billingFor(store: MemoryStore): BillingService {
   return new BillingService({
     store,
@@ -66,6 +97,17 @@ async function createPendingOrder(store: MemoryStore) {
     providerPayload: "{}",
   });
   return { user, order };
+}
+
+async function createSelfServiceSession(store: MemoryStore, email = "self-service@example.com") {
+  const user = await store.upsertUserByEmail(email, now);
+  const session = await store.createSession({
+    userId: user.id,
+    tokenHash: `self-service-session-${email}`,
+    createdAt: now,
+    expiresAt: new Date("2026-08-10T08:00:00.000Z"),
+  });
+  return { user, session };
 }
 
 describe("transactional entitlement boundaries in MemoryStore", () => {
@@ -332,5 +374,113 @@ describe("transactional entitlement boundaries in MemoryStore", () => {
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect(await store.getEntitlement(user.id)).toMatchObject({ llmQuotaLimit: 20, llmQuotaUsed: 0 });
+  });
+
+  test("rolls back self-service prepare when code creation fails after reserving rate limits", async () => {
+    const store = new FailOnceSelfServiceCodeCreateStore();
+    const { session } = await createSelfServiceSession(store, "prepare-rollback@example.com");
+
+    await expect(
+      store.prepareSelfServiceActivationCode({
+        sessionTokenHash: session.tokenHash,
+        codeHash: sha256("FQ-PREP-ROLL-BACK-0001"),
+        codePrefix: "FQ-PREP",
+        ip: "203.0.113.61",
+        now,
+        redeemBy: new Date("2026-09-23T08:00:00.000Z"),
+        entitlementDays: 31,
+      }),
+    ).rejects.toThrow("injected self-service code create failure");
+
+    expect(store.activationCodes).toHaveLength(0);
+    expect(store.authRateLimits).toHaveLength(0);
+
+    await expect(
+      store.prepareSelfServiceActivationCode({
+        sessionTokenHash: session.tokenHash,
+        codeHash: sha256("FQ-PREP-ROLL-BACK-0002"),
+        codePrefix: "FQ-PREP",
+        ip: "203.0.113.61",
+        now,
+        redeemBy: new Date("2026-09-23T08:00:00.000Z"),
+        entitlementDays: 31,
+      }),
+    ).resolves.toMatchObject({
+      status: "prepared",
+      retryAt: new Date("2026-07-10T08:01:00.000Z"),
+    });
+  });
+
+  test("leaves no redeemable code when activation fails after SMTP acceptance", async () => {
+    const store = new FailOnceSelfServiceActivationStore();
+    const { user, session } = await createSelfServiceSession(store, "activate-rollback@example.com");
+    const prepared = await store.prepareSelfServiceActivationCode({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-ACTV-ROLL-BACK-0001"),
+      codePrefix: "FQ-ACTV",
+      ip: "203.0.113.62",
+      now,
+      redeemBy: new Date("2026-09-23T08:00:00.000Z"),
+      entitlementDays: 31,
+    });
+    expect(prepared.status).toBe("prepared");
+    const pending = store.activationCodes[0];
+
+    await expect(
+      store.activatePreparedSelfServiceActivationCode({
+        activationCodeId: pending?.id ?? "",
+        now,
+      }),
+    ).rejects.toThrow("injected self-service activation failure");
+
+    expect(pending).toMatchObject({
+      status: "pending_delivery",
+      sentAt: null,
+      redeemedAt: null,
+      disabledReason: null,
+    });
+    await expect(
+      store.redeemActivationCodeAndGrantEntitlement({
+        sessionTokenHash: session.tokenHash,
+        codeHash: pending?.codeHash ?? "",
+        now,
+        llmQuotaPerActivation: 20,
+      }),
+    ).resolves.toEqual({ status: "code_invalid" });
+    expect(await store.getEntitlement(user.id)).toBeNull();
+  });
+
+  test("permits only one concurrent activation of the same prepared self-service code", async () => {
+    const store = new MemoryStore();
+    const { user, session } = await createSelfServiceSession(store, "concurrent-self-service@example.com");
+    const prepared = await store.prepareSelfServiceActivationCode({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-CNCR-ACTV-0001"),
+      codePrefix: "FQ-CNCR",
+      ip: "203.0.113.63",
+      now,
+      redeemBy: new Date("2026-09-23T08:00:00.000Z"),
+      entitlementDays: 31,
+    });
+    expect(prepared.status).toBe("prepared");
+    const activationCodeId = store.activationCodes[0]?.id ?? "";
+
+    const results = await Promise.allSettled([
+      store.activatePreparedSelfServiceActivationCode({ activationCodeId, now }),
+      store.activatePreparedSelfServiceActivationCode({ activationCodeId, now }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
+    expect(results.map((result) => (result.status === "fulfilled" ? result.value.status : "rejected"))).toEqual(
+      expect.arrayContaining(["activated", "invalid"]),
+    );
+    expect(
+      store.activationCodes.filter(
+        (code) =>
+          code.issuanceSource === "self_service_email" &&
+          code.issuedToUserId === user.id &&
+          code.status === "active",
+      ),
+    ).toHaveLength(1);
   });
 });

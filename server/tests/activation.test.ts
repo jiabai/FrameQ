@@ -110,4 +110,48 @@ describe("activation codes", () => {
     ).rejects.toThrow("Activation code is invalid or expired.");
     expect(await store.getEntitlement(user.id)).toBeNull();
   });
+
+  test("rejects a self-service code when the same account already has an active entitlement", async () => {
+    const store = new MemoryStore();
+    const user = await store.upsertUserByEmail("self-service-active@example.com", now);
+    const session = await store.createSession({
+      userId: user.id,
+      tokenHash: "self-service-active-session",
+      createdAt: now,
+      expiresAt: new Date("2026-07-21T08:00:00.000Z"),
+    });
+    await store.upsertEntitlement(user.id, new Date("2026-07-01T08:00:00.000Z"), now, {
+      llmQuotaLimit: 20,
+      llmQuotaUsed: 4,
+    });
+    const service = new ActivationCodeService({ store, now: () => now });
+    const selfServiceCode = await store.createActivationCode({
+      codeHash: sha256("FQ-SELF-ACTV-LOCK-0001"),
+      codePrefix: "FQ-SELF",
+      status: "active",
+      issuanceSource: "self_service_email",
+      entitlementDays: 31,
+      issuedToUserId: user.id,
+      redeemBy: new Date("2026-07-21T08:00:00.000Z"),
+      createdAt: now,
+      sentAt: now,
+      redeemedAt: null,
+      redeemedByUserId: null,
+      disabledReason: null,
+    });
+
+    await expect(
+      service.redeemCode({ sessionTokenHash: session.tokenHash, code: "FQ-SELF-ACTV-LOCK-0001" }),
+    ).rejects.toThrow("Activation code is not redeemable while your entitlement is active.");
+    expect(selfServiceCode).toMatchObject({
+      status: "active",
+      redeemedAt: null,
+      redeemedByUserId: null,
+    });
+    await expect(store.getEntitlement(user.id)).resolves.toMatchObject({
+      expiresAt: new Date("2026-07-01T08:00:00.000Z"),
+      llmQuotaLimit: 20,
+      llmQuotaUsed: 4,
+    });
+  });
 });

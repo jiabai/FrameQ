@@ -75,6 +75,9 @@ export class ActivationCodeService {
     if (redeemed.status === "session_invalid") {
       throw new Error("Desktop session is invalid or expired.");
     }
+    if (redeemed.status === "entitlement_active") {
+      throw new Error("Activation code is not redeemable while your entitlement is active.");
+    }
     if (redeemed.status === "code_invalid") {
       throw invalidActivationCodeError();
     }

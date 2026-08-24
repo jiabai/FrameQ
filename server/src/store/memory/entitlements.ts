@@ -6,6 +6,10 @@ import type {
   Store,
 } from "../contracts.js";
 import type { MemoryAtomicCoordinator, MemoryState } from "./atomic.js";
+import {
+  expireActivationCodeIfNeeded,
+  isActiveEntitlementAt,
+} from "./selfServiceActivation.js";
 
 export type MemoryEntitlementContext = {
   state: MemoryState;
@@ -134,13 +138,36 @@ export async function redeemActivationCodeAndGrantEntitlement(
       return { status: "session_invalid" };
     }
     const code = await context.findActivationCodeByHash(input.codeHash);
-    if (
-      !code ||
-      code.status !== "active" ||
-      code.redeemedAt !== null ||
-      code.redeemBy <= input.now
-    ) {
+    if (!code) {
       return { status: "code_invalid" };
+    }
+    expireActivationCodeIfNeeded(code, input.now);
+    if (code.status !== "active" || code.redeemedAt !== null) {
+      return { status: "code_invalid" };
+    }
+    const existing = await context.getEntitlement(session.userId);
+    if (code.issuanceSource === "self_service_email") {
+      if (code.issuedToUserId !== session.userId) {
+        return { status: "code_invalid" };
+      }
+      if (isActiveEntitlementAt(existing, input.now)) {
+        return { status: "entitlement_active", entitlement: existing as EntitlementRecord };
+      }
+      const redeemed = await context.markActivationCodeRedeemed(
+        input.codeHash,
+        session.userId,
+        input.now,
+      );
+      if (!redeemed) {
+        return { status: "code_invalid" };
+      }
+      const entitlement = await context.upsertEntitlement(
+        session.userId,
+        new Date(input.now.getTime() + redeemed.entitlementDays * 24 * 60 * 60 * 1000),
+        input.now,
+        { llmQuotaLimit: 20, llmQuotaUsed: 0 },
+      );
+      return { status: "redeemed", entitlement };
     }
     const redeemed = await context.markActivationCodeRedeemed(
       input.codeHash,
@@ -150,8 +177,7 @@ export async function redeemActivationCodeAndGrantEntitlement(
     if (!redeemed) {
       return { status: "code_invalid" };
     }
-    const existing = await context.getEntitlement(session.userId);
-    const active = Boolean(existing && existing.expiresAt > input.now);
+    const active = isActiveEntitlementAt(existing, input.now);
     const base = active && existing ? existing.expiresAt : input.now;
     const quota =
       active && existing

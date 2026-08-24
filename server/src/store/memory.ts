@@ -20,11 +20,8 @@ import * as authOperations from "./memory/auth.js";
 import * as billingOperations from "./memory/billing.js";
 import * as entitlementOperations from "./memory/entitlements.js";
 import * as llmConfigOperations from "./memory/llmConfig.js";
+import * as selfServiceActivationOperations from "./memory/selfServiceActivation.js";
 import * as userSessionOperations from "./memory/userSession.js";
-
-function unsupportedSelfServiceActivationStoreMethod(method: string): never {
-  throw new Error(`${method} is not implemented yet.`);
-}
 
 export class MemoryStore implements Store {
   users: UserRecord[] = [];
@@ -240,21 +237,30 @@ export class MemoryStore implements Store {
   }
 
   async prepareSelfServiceActivationCode(
-    _input: Parameters<Store["prepareSelfServiceActivationCode"]>[0],
+    input: Parameters<Store["prepareSelfServiceActivationCode"]>[0],
   ): ReturnType<Store["prepareSelfServiceActivationCode"]> {
-    unsupportedSelfServiceActivationStoreMethod("prepareSelfServiceActivationCode");
+    return selfServiceActivationOperations.prepareSelfServiceActivationCode(
+      this.entitlementContext(),
+      input,
+    );
   }
 
   async disablePreparedSelfServiceActivationCode(
-    _input: Parameters<Store["disablePreparedSelfServiceActivationCode"]>[0],
+    input: Parameters<Store["disablePreparedSelfServiceActivationCode"]>[0],
   ): ReturnType<Store["disablePreparedSelfServiceActivationCode"]> {
-    unsupportedSelfServiceActivationStoreMethod("disablePreparedSelfServiceActivationCode");
+    return selfServiceActivationOperations.disablePreparedSelfServiceActivationCode(
+      this.entitlementContext(),
+      input,
+    );
   }
 
   async activatePreparedSelfServiceActivationCode(
-    _input: Parameters<Store["activatePreparedSelfServiceActivationCode"]>[0],
+    input: Parameters<Store["activatePreparedSelfServiceActivationCode"]>[0],
   ): ReturnType<Store["activatePreparedSelfServiceActivationCode"]> {
-    unsupportedSelfServiceActivationStoreMethod("activatePreparedSelfServiceActivationCode");
+    return selfServiceActivationOperations.activatePreparedSelfServiceActivationCode(
+      this.entitlementContext(),
+      input,
+    );
   }
 
   async redeemActivationCodeAndGrantEntitlement(
@@ -374,6 +380,7 @@ export class MemoryStore implements Store {
       markActivationCodeRedeemed: this.markActivationCodeRedeemed.bind(this),
       getEntitlement: this.getEntitlement.bind(this),
       upsertEntitlement: this.upsertEntitlement.bind(this),
+      createActivationCode: this.createActivationCode.bind(this),
       createAdminEntitlementAdjustment:
         this.createAdminEntitlementAdjustment.bind(this),
     };
