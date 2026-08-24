@@ -1,4 +1,23 @@
-export type OtpPurpose = "desktop_login" | "admin_login";
+export type EmailDispatchPurpose =
+  | "desktop_login"
+  | "admin_login"
+  | "self_service_activation";
+
+export type OtpPurpose = Exclude<EmailDispatchPurpose, "self_service_activation">;
+
+export type ActivationCodeIssuanceSource = "admin" | "self_service_email";
+
+export type ActivationCodeStatus =
+  | "pending_delivery"
+  | "active"
+  | "redeemed"
+  | "expired"
+  | "disabled";
+
+export type ActivationCodeDisabledReason =
+  | "delivery_failed"
+  | "superseded"
+  | "activation_became_active";
 
 export type UserRecord = {
   id: string;
@@ -100,12 +119,16 @@ export type ActivationCodeRecord = {
   id: string;
   codeHash: string;
   codePrefix: string;
-  status: "active" | "redeemed" | "expired" | "disabled";
+  status: ActivationCodeStatus;
+  issuanceSource?: ActivationCodeIssuanceSource;
   entitlementDays: number;
+  issuedToUserId?: string | null;
   redeemBy: Date;
   createdAt: Date;
+  sentAt?: Date | null;
   redeemedAt: Date | null;
   redeemedByUserId: string | null;
+  disabledReason?: ActivationCodeDisabledReason | null;
 };
 
 export type AdminSessionRecord = {
@@ -162,8 +185,22 @@ export type PaidOrderSettlement =
 
 export type ActivationRedemption =
   | { status: "redeemed"; entitlement: EntitlementRecord }
+  | { status: "entitlement_active"; entitlement: EntitlementRecord }
   | { status: "session_invalid" }
   | { status: "code_invalid" };
+
+export type PrepareSelfServiceActivationCodeResult =
+  | { status: "prepared"; code: string; email: string; retryAt: Date }
+  | { status: "session_invalid" }
+  | { status: "entitlement_active" }
+  | { status: "rate_limited"; retryAt: Date }
+  | { status: "temporarily_unavailable" };
+
+export type ActivatePreparedSelfServiceActivationCodeResult =
+  | { status: "activated" }
+  | { status: "entitlement_active" }
+  | { status: "invalid" }
+  | { status: "temporarily_unavailable" };
 
 export type EntitlementAdjustmentApplication =
   | {
@@ -299,6 +336,24 @@ export type Store = {
     userId: string,
     redeemedAt: Date,
   ): Promise<ActivationCodeRecord | null>;
+  prepareSelfServiceActivationCode?(input: {
+    sessionTokenHash: string;
+    codeHash: string;
+    codePrefix: string;
+    ip: string;
+    now: Date;
+    redeemBy: Date;
+    entitlementDays: number;
+  }): Promise<PrepareSelfServiceActivationCodeResult>;
+  disablePreparedSelfServiceActivationCode?(input: {
+    activationCodeId: string;
+    now: Date;
+    reason: "delivery_failed";
+  }): Promise<ActivationCodeRecord | null>;
+  activatePreparedSelfServiceActivationCode?(input: {
+    activationCodeId: string;
+    now: Date;
+  }): Promise<ActivatePreparedSelfServiceActivationCodeResult>;
   redeemActivationCodeAndGrantEntitlement(input: {
     sessionTokenHash: string;
     codeHash: string;

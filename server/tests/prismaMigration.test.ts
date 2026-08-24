@@ -75,6 +75,30 @@ function seedBaseline(databasePath: string, input: { invalidQuota?: boolean } = 
       Date.parse("2026-07-22T08:10:00.000Z"),
       timestamp,
     );
+    database.prepare(
+      'INSERT INTO "ActivationCode" ("id", "codeHash", "codePrefix", "status", "entitlementDays", "redeemBy", "createdAt", "redeemedAt", "redeemedByUserId") VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)',
+    ).run(
+      "legacy-active-code",
+      "legacy-active-code-hash",
+      "FQ-LEGACY",
+      "active",
+      31,
+      Date.parse("2026-08-31T08:00:00.000Z"),
+      timestamp,
+    );
+    database.prepare(
+      'INSERT INTO "ActivationCode" ("id", "codeHash", "codePrefix", "status", "entitlementDays", "redeemBy", "createdAt", "redeemedAt", "redeemedByUserId") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      "legacy-redeemed-code",
+      "legacy-redeemed-code-hash",
+      "FQ-USED",
+      "redeemed",
+      31,
+      Date.parse("2026-08-15T08:00:00.000Z"),
+      timestamp,
+      Date.parse("2026-07-25T08:00:00.000Z"),
+      "migration-user",
+    );
   } finally {
     database.close();
   }
@@ -85,7 +109,7 @@ describe("reviewed Prisma migration chain", () => {
     const { databasePath } = temporaryDatabase();
     new DatabaseSync(databasePath).close();
 
-    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("3 migrations");
+    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("4 migrations");
     expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("No pending migrations");
     expect(runPrisma(databasePath, ["migrate", "status"])).toContain(
       "Database schema is up to date",
@@ -97,11 +121,28 @@ describe("reviewed Prisma migration chain", () => {
       expect(integrity.integrity_check).toBe("ok");
       const otpColumns = database.prepare('PRAGMA table_info("EmailOtp")').all() as Array<{ name: string }>;
       expect(otpColumns.map((column) => column.name)).toContain("purpose");
+      const activationColumns = database.prepare('PRAGMA table_info("ActivationCode")').all() as Array<{ name: string }>;
+      expect(activationColumns.map((column) => column.name)).toEqual([
+        "id",
+        "codeHash",
+        "codePrefix",
+        "status",
+        "issuanceSource",
+        "entitlementDays",
+        "issuedToUserId",
+        "redeemBy",
+        "createdAt",
+        "sentAt",
+        "redeemedAt",
+        "redeemedByUserId",
+        "disabledReason",
+      ]);
       const migrations = database.prepare('SELECT migration_name FROM "_prisma_migrations" ORDER BY migration_name').all();
       expect(migrations).toEqual([
         { migration_name: "202607220001_baseline" },
         { migration_name: "202607220002_auth_quota_hardening" },
         { migration_name: "202608030001_user_session" },
+        { migration_name: "202608240001_self_service_email_activation" },
       ]);
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -109,12 +150,72 @@ describe("reviewed Prisma migration chain", () => {
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       ).run("bad-count", "bad-count-key", "desktop_login", "email_hour", 0, -1, 1, 0)).toThrow();
+      expect(() => database.prepare(
+        'INSERT INTO "ActivationCode" ("id", "codeHash", "codePrefix", "status", "issuanceSource", "entitlementDays", "issuedToUserId", "redeemBy", "createdAt", "sentAt", "redeemedAt", "redeemedByUserId", "disabledReason") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(
+        "bad-activation-status",
+        "bad-activation-status-hash",
+        "FQ-BAD",
+        "draft",
+        "admin",
+        31,
+        null,
+        0,
+        0,
+        null,
+        null,
+        null,
+        null,
+      )).toThrow();
+      expect(() => database.prepare(
+        'INSERT INTO "ActivationCode" ("id", "codeHash", "codePrefix", "status", "issuanceSource", "entitlementDays", "issuedToUserId", "redeemBy", "createdAt", "sentAt", "redeemedAt", "redeemedByUserId", "disabledReason") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(
+        "bad-activation-source",
+        "bad-activation-source-hash",
+        "FQ-BAD",
+        "active",
+        "manual",
+        31,
+        null,
+        0,
+        0,
+        null,
+        null,
+        null,
+        null,
+      )).toThrow();
+      expect(() => database.prepare(
+        'INSERT INTO "ActivationCode" ("id", "codeHash", "codePrefix", "status", "issuanceSource", "entitlementDays", "issuedToUserId", "redeemBy", "createdAt", "sentAt", "redeemedAt", "redeemedByUserId", "disabledReason") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(
+        "bad-disabled-reason",
+        "bad-disabled-reason-hash",
+        "FQ-BAD",
+        "disabled",
+        "admin",
+        31,
+        null,
+        0,
+        0,
+        null,
+        null,
+        null,
+        "unknown_reason",
+      )).toThrow();
+      const activationIndexes = database.prepare('PRAGMA index_list("ActivationCode")').all() as Array<{ name: string }>;
+      expect(activationIndexes.map((index) => index.name)).toEqual(
+        expect.arrayContaining([
+          "ActivationCode_codeHash_key",
+          "ActivationCode_status_idx",
+          "ActivationCode_issuedToUserId_issuanceSource_status_idx",
+          "ActivationCode_redeemedByUserId_idx",
+        ]),
+      );
     } finally {
       database.close();
     }
   }, 30_000);
 
-  test("upgrades a verified baseline, invalidates legacy OTPs, preserves billing data, and supports restore", () => {
+  test("upgrades a verified baseline, invalidates legacy OTPs, backfills activation issuance, preserves billing data, and supports restore", () => {
     const { directory, databasePath } = temporaryDatabase();
     const backupPath = join(directory, "pre-hardening.sqlite");
     applyBaseline(databasePath);
@@ -129,6 +230,26 @@ describe("reviewed Prisma migration chain", () => {
       expect(hardened.prepare(
         'SELECT "llmQuotaLimit", "llmQuotaUsed" FROM "Entitlement" WHERE "id" = ?',
       ).get("migration-entitlement")).toEqual({ llmQuotaLimit: 3, llmQuotaUsed: 1 });
+      expect(hardened.prepare(
+        'SELECT "status", "issuanceSource", "issuedToUserId", "sentAt", "disabledReason", "redeemedByUserId" FROM "ActivationCode" ORDER BY "id"',
+      ).all()).toEqual([
+        {
+          status: "active",
+          issuanceSource: "admin",
+          issuedToUserId: null,
+          sentAt: null,
+          disabledReason: null,
+          redeemedByUserId: null,
+        },
+        {
+          status: "redeemed",
+          issuanceSource: "admin",
+          issuedToUserId: null,
+          sentAt: null,
+          disabledReason: null,
+          redeemedByUserId: "migration-user",
+        },
+      ]);
       expect(hardened.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
     } finally {
       hardened.close();

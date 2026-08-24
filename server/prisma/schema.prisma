@@ -8,14 +8,15 @@ datasource db {
 }
 
 model User {
-  id           String        @id
-  email        String        @unique
-  createdAt    DateTime
-  updatedAt    DateTime
-  sessions     Session[]
-  orders       Order[]
-  entitlements Entitlement[]
-  redeemedCodes ActivationCode[]
+  id                            String        @id
+  email                         String        @unique
+  createdAt                     DateTime
+  updatedAt                     DateTime
+  sessions                      Session[]
+  orders                        Order[]
+  entitlements                  Entitlement[]
+  issuedActivationCodes         ActivationCode[] @relation("ActivationCodeIssuedToUser")
+  redeemedCodes                 ActivationCode[] @relation("ActivationCodeRedeemedByUser")
   adminEntitlementAdjustments AdminEntitlementAdjustment[]
   userSessions  UserSession[]
 }
@@ -130,14 +131,20 @@ model ActivationCode {
   codeHash         String    @unique
   codePrefix       String
   status           String
+  issuanceSource   String
   entitlementDays  Int
+  issuedToUserId   String?
   redeemBy         DateTime
   createdAt        DateTime
+  sentAt           DateTime?
   redeemedAt       DateTime?
   redeemedByUserId String?
-  redeemedByUser   User?     @relation(fields: [redeemedByUserId], references: [id])
+  disabledReason   String?
+  issuedToUser     User?     @relation("ActivationCodeIssuedToUser", fields: [issuedToUserId], references: [id])
+  redeemedByUser   User?     @relation("ActivationCodeRedeemedByUser", fields: [redeemedByUserId], references: [id])
 
   @@index([status])
+  @@index([issuedToUserId, issuanceSource, status])
   @@index([redeemedByUserId])
 }
 

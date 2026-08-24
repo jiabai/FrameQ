@@ -1,7 +1,18 @@
 import { describe, expect, test } from "vitest";
 import { PrismaStore } from "../src/prismaStore.js";
 import { MemoryStore as DefiningMemoryStore } from "../src/store/memory.js";
-import { MemoryStore as PublicMemoryStore, type Store } from "../src/store.js";
+import {
+  MemoryStore as PublicMemoryStore,
+  type ActivationCodeDisabledReason,
+  type ActivationCodeIssuanceSource,
+  type ActivationCodeRecord,
+  type ActivationRedemption,
+  type EmailDispatchPurpose,
+  type EntitlementRecord,
+  type OtpPurpose,
+  type PrepareSelfServiceActivationCodeResult,
+  type Store,
+} from "../src/store.js";
 
 const storeMethods = [
   "upsertUserByEmail",
@@ -27,6 +38,9 @@ const storeMethods = [
   "createActivationCode",
   "findActivationCodeByHash",
   "markActivationCodeRedeemed",
+  "prepareSelfServiceActivationCode",
+  "disablePreparedSelfServiceActivationCode",
+  "activatePreparedSelfServiceActivationCode",
   "redeemActivationCodeAndGrantEntitlement",
   "listActivationCodes",
   "listUsers",
@@ -50,6 +64,12 @@ const compatibilityMethods = [
   "consumeOtp",
   "createDesktopLoginTicket",
   "consumeDesktopLoginTicket",
+] as const;
+
+const deferredImplementationMethods = [
+  "prepareSelfServiceActivationCode",
+  "disablePreparedSelfServiceActivationCode",
+  "activatePreparedSelfServiceActivationCode",
 ] as const;
 
 const arrayFixtureFields = [
@@ -77,20 +97,89 @@ type Assert<Value extends true> = Value;
 type StoreMethodSetIsExact = Assert<
   Equal<keyof Store, (typeof storeMethods)[number]>
 >;
+type EmailDispatchPurposeShape = Assert<
+  Equal<EmailDispatchPurpose, "desktop_login" | "admin_login" | "self_service_activation">
+>;
+type OtpPurposeShape = Assert<Equal<OtpPurpose, "desktop_login" | "admin_login">>;
+type ActivationCodeIssuanceSourceShape = Assert<
+  Equal<ActivationCodeIssuanceSource, "admin" | "self_service_email">
+>;
+type ActivationCodeDisabledReasonShape = Assert<
+  Equal<
+    ActivationCodeDisabledReason,
+    "delivery_failed" | "superseded" | "activation_became_active"
+  >
+>;
+type ActivationCodeRecordShape = Assert<
+  Equal<
+    ActivationCodeRecord,
+    {
+      id: string;
+      codeHash: string;
+      codePrefix: string;
+      status: "pending_delivery" | "active" | "redeemed" | "expired" | "disabled";
+      issuanceSource?: ActivationCodeIssuanceSource;
+      entitlementDays: number;
+      issuedToUserId?: string | null;
+      redeemBy: Date;
+      createdAt: Date;
+      sentAt?: Date | null;
+      redeemedAt: Date | null;
+      redeemedByUserId: string | null;
+      disabledReason?: ActivationCodeDisabledReason | null;
+    }
+  >
+>;
+type PrepareSelfServiceActivationCodeResultShape = Assert<
+  Equal<
+    PrepareSelfServiceActivationCodeResult,
+    | { status: "prepared"; code: string; email: string; retryAt: Date }
+    | { status: "session_invalid" }
+    | { status: "entitlement_active" }
+    | { status: "rate_limited"; retryAt: Date }
+    | { status: "temporarily_unavailable" }
+  >
+>;
+type ActivationRedemptionShape = Assert<
+  Equal<
+    ActivationRedemption,
+    | { status: "redeemed"; entitlement: EntitlementRecord }
+    | { status: "entitlement_active"; entitlement: EntitlementRecord }
+    | { status: "session_invalid" }
+    | { status: "code_invalid" }
+  >
+>;
 
 const storeMethodSetIsExact: StoreMethodSetIsExact = true;
+const emailDispatchPurposeShape: EmailDispatchPurposeShape = true;
+const otpPurposeShape: OtpPurposeShape = true;
+const activationCodeIssuanceSourceShape: ActivationCodeIssuanceSourceShape = true;
+const activationCodeDisabledReasonShape: ActivationCodeDisabledReasonShape = true;
+const activationCodeRecordShape: ActivationCodeRecordShape = true;
+const prepareSelfServiceActivationCodeResultShape: PrepareSelfServiceActivationCodeResultShape = true;
+const activationRedemptionShape: ActivationRedemptionShape = true;
 const now = new Date("2026-07-23T08:00:00.000Z");
 
 describe("Store adapter compatibility surface", () => {
   test("keeps the exact official method set and both class compatibility surfaces", () => {
     expect(storeMethodSetIsExact).toBe(true);
-    const expectedMethods = [...storeMethods, ...compatibilityMethods];
+    expect(emailDispatchPurposeShape).toBe(true);
+    expect(otpPurposeShape).toBe(true);
+    expect(activationCodeIssuanceSourceShape).toBe(true);
+    expect(activationCodeDisabledReasonShape).toBe(true);
+    expect(activationCodeRecordShape).toBe(true);
+    expect(prepareSelfServiceActivationCodeResultShape).toBe(true);
+    expect(activationRedemptionShape).toBe(true);
+    const expectedStoreMethods = [...storeMethods, ...compatibilityMethods];
+    const expectedImplementedMethods = expectedStoreMethods.filter(
+      (method) => !deferredImplementationMethods.includes(method as (typeof deferredImplementationMethods)[number]),
+    );
 
     expect(PublicMemoryStore).toBe(DefiningMemoryStore);
 
     for (const storeClass of [PublicMemoryStore, PrismaStore]) {
       const prototypeMethods = Object.getOwnPropertyNames(storeClass.prototype);
-      for (const method of expectedMethods) {
+      for (const method of expectedImplementedMethods) {
         expect(prototypeMethods, `${storeClass.name}.${method}`).toContain(method);
       }
     }
@@ -137,21 +226,29 @@ describe("Store adapter compatibility surface", () => {
       codeHash: "older-code-hash",
       codePrefix: "FQ-OLD",
       status: "active",
+      issuanceSource: "admin",
       entitlementDays: 31,
+      issuedToUserId: null,
       redeemBy: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       createdAt: now,
+      sentAt: now,
       redeemedAt: null,
       redeemedByUserId: null,
+      disabledReason: null,
     });
     const newerCode = await store.createActivationCode({
       codeHash: "newer-code-hash",
       codePrefix: "FQ-NEW",
-      status: "active",
+      status: "pending_delivery",
+      issuanceSource: "self_service_email",
       entitlementDays: 31,
+      issuedToUserId: alpha.id,
       redeemBy: new Date(later.getTime() + 30 * 24 * 60 * 60 * 1000),
       createdAt: later,
+      sentAt: null,
       redeemedAt: null,
       redeemedByUserId: null,
+      disabledReason: null,
     });
     expect(await store.listActivationCodes()).toEqual([newerCode, olderCode]);
   });
