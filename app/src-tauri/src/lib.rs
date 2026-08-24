@@ -120,6 +120,7 @@ pub fn run() {
             account::get_account_status,
             account::logout_account,
             account::redeem_activation_code,
+            account::request_activation_code,
             account::create_wechat_checkout,
             account::get_checkout_status,
             window_chrome::start_window_drag,
