@@ -67,6 +67,7 @@ FrameQ 持久设计决策文档总入口。`AGENTS.md` 不再逐条列出设计�
 
 ## 功能与特性
 
+- `2026-08-24-self-service-email-activation-code.md` — 未授权或授权过期用户自助申领账号绑定的邮件激活码，保留手动兑换与管理员通用码
 - `2026-07-31-transcript-dissection-feature.md` — 文字稿解剖（Transcript Dissection）功能
 - `2026-08-05-inspiration-profile-generation-preference-boundary.md` — Inspiration Profile / 本次生成偏好边界
 - `2026-08-09-desktop-diagnostic-export.md` — 桌面诊断信息导出

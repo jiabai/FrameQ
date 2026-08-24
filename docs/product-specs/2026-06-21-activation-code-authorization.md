@@ -1,5 +1,10 @@
 # FrameQ Activation Code Authorization Spec
 
+> Supersession note (2026-08-24): the administrator-issued distribution path in this document is
+> retained for administrator universal codes, but it is no longer the planned default desktop
+> unlock path. Inactive or expired users self-request account-bound activation codes by email under
+> `docs/product-specs/2026-08-24-self-service-email-activation-code.md`.
+
 ## Background
 
 FrameQ's first small-user release should keep the email account login flow and use administrator-issued activation codes as the visible monthly pass unlock path.

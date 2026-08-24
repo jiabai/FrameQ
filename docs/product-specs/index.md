@@ -4,8 +4,9 @@
 
 ## Account, Billing & Server
 
-- `2026-06-21-account-billing.md` — Retired self-serve WeChat purchase draft; current visible unlock path is administrator-issued activation-code monthly passes while WeChat purchase is paused.
-- `2026-06-21-activation-code-authorization.md` — Account login with administrator-issued activation codes for 31-day monthly pass access.
+- `2026-08-24-self-service-email-activation-code.md` — Current default unlock intent: inactive or expired desktop users request an account-bound activation code by email, then manually redeem it for a new 31-day window; repeat after every expiry without an administrator.
+- `2026-06-21-account-billing.md` — Retired self-serve WeChat purchase draft; its administrator-issued visible-path statement is superseded by the 2026-08-24 self-service email activation spec.
+- `2026-06-21-activation-code-authorization.md` — Historical administrator-issued activation-code baseline; administrator universal codes remain supported, while the default user distribution path is superseded by the 2026-08-24 self-service email activation spec.
 - `2026-06-22-server-managed-llm-quota.md` — Server-managed dedicated client LLM config and 20 AI Credits per activation window.
 - `2026-06-27-admin-entitlement-adjustments.md` — Admin Web manual compensation for entitlement expiry and LLM API-call quota after support incidents.
 - `2026-07-10-server-entitlement-transaction-safety.md` — Atomic, retry-safe payment settlement, activation-code redemption, and administrator entitlement compensation.
