@@ -173,13 +173,26 @@ export async function activatePreparedSelfServiceActivationCode(
             : ({ status: "invalid" } as const);
         }
 
+        const competingOrNewerActive = await tx.activationCode.findFirst({
+          where: {
+            id: { not: code.id },
+            issuanceSource: "self_service_email",
+            issuedToUserId: code.issuedToUserId,
+            status: "active",
+            createdAt: { gte: code.createdAt },
+          },
+          select: { id: true },
+        });
+        if (competingOrNewerActive) {
+          return { status: "invalid" } as const;
+        }
+
         await tx.activationCode.updateMany({
           where: {
             id: { not: code.id },
             issuanceSource: "self_service_email",
             issuedToUserId: code.issuedToUserId,
             status: "active",
-            sentAt: { lt: input.now },
           },
           data: {
             status: "disabled",

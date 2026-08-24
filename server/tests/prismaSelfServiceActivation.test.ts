@@ -314,6 +314,67 @@ describe("PrismaStore self-service activation lifecycle", () => {
     ).toBe(1);
   });
 
+  test("supersedes an older active code even when its sentAt equals the current activation time", async () => {
+    const { fixture, store, user, session } = await createSessionFixture("same-sent-at@example.com");
+    const olderActive = await store.createActivationCode({
+      codeHash: sha256("FQ-SAME-TIME-ACTV-0001"),
+      codePrefix: "FQ-SAME",
+      status: "active",
+      issuanceSource: "self_service_email",
+      entitlementDays: 31,
+      issuedToUserId: user.id,
+      redeemBy: new Date("2026-09-10T08:00:00.000Z"),
+      createdAt: new Date("2026-08-20T08:00:00.000Z"),
+      sentAt: now,
+      redeemedAt: null,
+      redeemedByUserId: null,
+      disabledReason: null,
+    });
+    const prepared = await store.prepareSelfServiceActivationCode({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-SAME-TIME-ACTV-0002"),
+      codePrefix: "FQ-SAM2",
+      ip: "203.0.113.64",
+      now,
+      redeemBy,
+      entitlementDays: 31,
+    });
+
+    await expect(
+      store.activatePreparedSelfServiceActivationCode({
+        activationCodeId: prepared.status === "prepared" ? prepared.activationCodeId : "",
+        now,
+      }),
+    ).resolves.toEqual({ status: "activated" });
+
+    await expect(
+      fixture.prisma.activationCode.findUnique({ where: { id: olderActive.id } }),
+    ).resolves.toMatchObject({
+      status: "disabled",
+      disabledReason: "superseded",
+      sentAt: now,
+    });
+    await expect(
+      fixture.prisma.activationCode.findUnique({
+        where: { id: prepared.status === "prepared" ? prepared.activationCodeId : "" },
+      }),
+    ).resolves.toMatchObject({
+      status: "active",
+      sentAt: now,
+      issuedToUserId: user.id,
+      disabledReason: null,
+    });
+    expect(
+      await fixture.prisma.activationCode.count({
+        where: {
+          issuanceSource: "self_service_email",
+          issuedToUserId: user.id,
+          status: "active",
+        },
+      }),
+    ).toBe(1);
+  });
+
   test("disables a prepared code when entitlement becomes active before SMTP completion", async () => {
     const { fixture, store, user, session } = await createSessionFixture("became-active@example.com");
     const prepared = await store.prepareSelfServiceActivationCode({
