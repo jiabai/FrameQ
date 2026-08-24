@@ -20,6 +20,7 @@ const expectedStoreOwners = [
   "memory/entitlements.ts",
   "memory/llmConfig.ts",
   "memory/rateLimits.ts",
+  "memory/selfServiceActivation.ts",
   "memory/userSession.ts",
   "rateLimitPolicy.ts",
 ] as const;

@@ -190,7 +190,13 @@ export type ActivationRedemption =
   | { status: "code_invalid" };
 
 export type PrepareSelfServiceActivationCodeResult =
-  | { status: "prepared"; code: string; email: string; retryAt: Date }
+  | {
+      status: "prepared";
+      activationCodeId: string;
+      email: string;
+      retryAt: Date;
+      redeemBy: Date;
+    }
   | { status: "session_invalid" }
   | { status: "entitlement_active" }
   | { status: "rate_limited"; retryAt: Date }

@@ -3,7 +3,7 @@ import { sha256 } from "../src/security.js";
 import { MemoryStore } from "../src/store.js";
 
 const now = new Date("2026-08-24T08:00:00.000Z");
-const sessionExpiresAt = new Date("2026-09-24T08:00:00.000Z");
+const sessionExpiresAt = new Date("2026-12-24T08:00:00.000Z");
 const redeemBy = new Date("2026-09-23T08:00:00.000Z");
 
 async function createSessionFixture(email = "self-service@example.com") {
@@ -34,12 +34,13 @@ describe("MemoryStore self-service activation lifecycle", () => {
 
     expect(prepared).toEqual({
       status: "prepared",
-      code: expect.any(String),
+      activationCodeId: expect.any(String),
       email: user.email,
       retryAt: new Date("2026-08-24T08:01:00.000Z"),
+      redeemBy,
     });
-    expect(prepared.status === "prepared" ? prepared.code : "").toBe("");
     expect(store.activationCodes).toHaveLength(1);
+    expect(store.activationCodes[0]?.id).toEqual(expect.any(String));
     expect(store.activationCodes[0]).toMatchObject({
       codeHash: sha256("FQ-SELF-SVC1-SVC1-SVC1"),
       codePrefix: "FQ-SELF",
@@ -78,6 +79,45 @@ describe("MemoryStore self-service activation lifecycle", () => {
     ).resolves.toEqual({ status: "entitlement_active" });
     expect(store.activationCodes).toHaveLength(0);
     expect(store.authRateLimits).toHaveLength(0);
+  });
+
+  test("rate-limited prepare leaves no new activation code or pending record", async () => {
+    const { store, session } = await createSessionFixture("rate-limited@example.com");
+
+    await expect(
+      store.prepareSelfServiceActivationCode({
+        sessionTokenHash: session.tokenHash,
+        codeHash: sha256("FQ-RATE-LIMIT-0001"),
+        codePrefix: "FQ-RATE",
+        ip: "203.0.113.57",
+        now,
+        redeemBy,
+        entitlementDays: 31,
+      }),
+    ).resolves.toMatchObject({
+      status: "prepared",
+      retryAt: new Date("2026-08-24T08:01:00.000Z"),
+    });
+
+    await expect(
+      store.prepareSelfServiceActivationCode({
+        sessionTokenHash: session.tokenHash,
+        codeHash: sha256("FQ-RATE-LIMIT-0002"),
+        codePrefix: "FQ-RAT2",
+        ip: "203.0.113.57",
+        now: new Date("2026-08-24T08:00:30.000Z"),
+        redeemBy,
+        entitlementDays: 31,
+      }),
+    ).resolves.toEqual({
+      status: "rate_limited",
+      retryAt: new Date("2026-08-24T08:01:00.000Z"),
+    });
+    expect(store.activationCodes).toHaveLength(1);
+    expect(
+      store.activationCodes.filter((code) => code.status === "pending_delivery"),
+    ).toHaveLength(1);
+    expect(store.activationCodes.some((code) => code.codePrefix === "FQ-RAT2")).toBe(false);
   });
 
   test("activates a prepared code, supersedes the older active self-service code, and keeps only one active code", async () => {
@@ -190,6 +230,44 @@ describe("MemoryStore self-service activation lifecycle", () => {
     ).resolves.toBeNull();
   });
 
+  test("disables a pending code when entitlement becomes active before activation", async () => {
+    const { store, user, session } = await createSessionFixture("became-active@example.com");
+    const prepared = await store.prepareSelfServiceActivationCode({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-BECA-ACTV-0001"),
+      codePrefix: "FQ-BECA",
+      ip: "203.0.113.58",
+      now,
+      redeemBy,
+      entitlementDays: 31,
+    });
+    await store.upsertEntitlement(user.id, new Date("2026-09-10T08:00:00.000Z"), now, {
+      llmQuotaLimit: 20,
+      llmQuotaUsed: 0,
+    });
+
+    await expect(
+      store.activatePreparedSelfServiceActivationCode({
+        activationCodeId:
+          store.activationCodes.find((code) => code.codePrefix === "FQ-BECA")?.id ?? "",
+        now: new Date("2026-08-24T08:01:00.000Z"),
+      }),
+    ).resolves.toEqual({ status: "entitlement_active" });
+
+    expect(
+      store.activationCodes.find(
+        (code) =>
+          code.id ===
+          (store.activationCodes.find((code) => code.codePrefix === "FQ-BECA")?.id ?? ""),
+      ),
+    ).toMatchObject({
+      status: "disabled",
+      disabledReason: "activation_became_active",
+      sentAt: null,
+      redeemedAt: null,
+    });
+  });
+
   test("redeems only the bound self-service code, grants a fresh 31-day window, and resets quota after expiry", async () => {
     const { store, user, session } = await createSessionFixture("redeem@example.com");
     const prepareAt = new Date("2026-09-01T08:00:00.000Z");
@@ -204,11 +282,12 @@ describe("MemoryStore self-service activation lifecycle", () => {
       redeemBy: new Date("2026-10-01T08:00:00.000Z"),
       entitlementDays: 31,
     });
-    const prepared = store.activationCodes.find((code) => code.codePrefix === "FQ-REDM");
     await store.activatePreparedSelfServiceActivationCode({
-      activationCodeId: prepared?.id ?? "",
+      activationCodeId:
+        store.activationCodes.find((code) => code.codePrefix === "FQ-REDM")?.id ?? "",
       now: activateAt,
     });
+    const prepared = store.activationCodes.find((code) => code.codePrefix === "FQ-REDM");
 
     await expect(
       store.redeemActivationCodeAndGrantEntitlement({
@@ -231,6 +310,95 @@ describe("MemoryStore self-service activation lifecycle", () => {
       redeemedAt: redeemAt,
       redeemedByUserId: user.id,
     });
+  });
+
+  test("permits repeated prepare and redeem cycles after expiry without getting stuck", async () => {
+    const { store, user, session } = await createSessionFixture("repeatable@example.com");
+    const firstPrepare = await store.prepareSelfServiceActivationCode({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-REPEAT-CYCLE-0001"),
+      codePrefix: "FQ-REP1",
+      ip: "203.0.113.59",
+      now,
+      redeemBy: new Date("2026-09-23T08:00:00.000Z"),
+      entitlementDays: 31,
+    });
+    await store.activatePreparedSelfServiceActivationCode({
+      activationCodeId: firstPrepare.status === "prepared" ? firstPrepare.activationCodeId : "",
+      now: new Date("2026-08-24T08:01:00.000Z"),
+    });
+    await store.redeemActivationCodeAndGrantEntitlement({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-REPEAT-CYCLE-0001"),
+      now: new Date("2026-08-24T08:02:00.000Z"),
+      llmQuotaPerActivation: 20,
+    });
+
+    const secondPrepareAt = new Date("2026-09-25T08:00:00.000Z");
+    const secondPrepare = await store.prepareSelfServiceActivationCode({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-REPEAT-CYCLE-0002"),
+      codePrefix: "FQ-REP2",
+      ip: "203.0.113.59",
+      now: secondPrepareAt,
+      redeemBy: new Date("2026-10-25T08:00:00.000Z"),
+      entitlementDays: 31,
+    });
+    await store.activatePreparedSelfServiceActivationCode({
+      activationCodeId: secondPrepare.status === "prepared" ? secondPrepare.activationCodeId : "",
+      now: new Date("2026-09-25T08:01:00.000Z"),
+    });
+    await store.redeemActivationCodeAndGrantEntitlement({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-REPEAT-CYCLE-0002"),
+      now: new Date("2026-09-25T08:02:00.000Z"),
+      llmQuotaPerActivation: 20,
+    });
+
+    const thirdPrepareAt = new Date("2026-10-27T08:00:00.000Z");
+    const thirdPrepare = await store.prepareSelfServiceActivationCode({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-REPEAT-CYCLE-0003"),
+      codePrefix: "FQ-REP3",
+      ip: "203.0.113.59",
+      now: thirdPrepareAt,
+      redeemBy: new Date("2026-11-26T08:00:00.000Z"),
+      entitlementDays: 31,
+    });
+    await store.activatePreparedSelfServiceActivationCode({
+      activationCodeId: thirdPrepare.status === "prepared" ? thirdPrepare.activationCodeId : "",
+      now: new Date("2026-10-27T08:01:00.000Z"),
+    });
+    const thirdRedemption = await store.redeemActivationCodeAndGrantEntitlement({
+      sessionTokenHash: session.tokenHash,
+      codeHash: sha256("FQ-REPEAT-CYCLE-0003"),
+      now: new Date("2026-10-27T08:02:00.000Z"),
+      llmQuotaPerActivation: 20,
+    });
+
+    expect(thirdRedemption).toMatchObject({
+      status: "redeemed",
+      entitlement: {
+        userId: user.id,
+        llmQuotaLimit: 20,
+        llmQuotaUsed: 0,
+        expiresAt: new Date("2026-11-27T08:02:00.000Z"),
+      },
+    });
+    expect(
+      store.activationCodes.filter((code) => code.status === "redeemed"),
+    ).toHaveLength(3);
+    expect(
+      store.activationCodes.map((code) => ({
+        codePrefix: code.codePrefix,
+        status: code.status,
+        redeemedByUserId: code.redeemedByUserId,
+      })),
+    ).toEqual([
+      { codePrefix: "FQ-REP1", status: "redeemed", redeemedByUserId: user.id },
+      { codePrefix: "FQ-REP2", status: "redeemed", redeemedByUserId: user.id },
+      { codePrefix: "FQ-REP3", status: "redeemed", redeemedByUserId: user.id },
+    ]);
   });
 
   test("rejects pending, mismatched, expired, and active-entitlement self-service redemption without consuming the code", async () => {

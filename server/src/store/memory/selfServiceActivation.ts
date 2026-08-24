@@ -62,7 +62,7 @@ export async function prepareSelfServiceActivationCode(
       code.disabledReason = "superseded";
     }
 
-    await context.createActivationCode({
+    const code = await context.createActivationCode({
       codeHash: input.codeHash,
       codePrefix: input.codePrefix,
       status: "pending_delivery",
@@ -79,9 +79,10 @@ export async function prepareSelfServiceActivationCode(
 
     return {
       status: "prepared",
-      code: "",
+      activationCodeId: code.id,
       email: user.email,
       retryAt: emailMinuteRetryAt(reservations),
+      redeemBy: code.redeemBy,
     };
   });
 }
@@ -128,6 +129,8 @@ export async function activatePreparedSelfServiceActivationCode(
     }
     const entitlement = await context.getEntitlement(code.issuedToUserId);
     if (entitlement && entitlement.expiresAt > input.now) {
+      code.status = "disabled";
+      code.disabledReason = "activation_became_active";
       return { status: "entitlement_active" };
     }
 
