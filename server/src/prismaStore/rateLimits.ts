@@ -22,17 +22,9 @@ export async function reserveEmailDispatchRateLimits(
   tx: Prisma.TransactionClient,
   reservations: EmailDispatchRateLimitReservation[],
   now: Date,
-): Promise<{ status: "reserved" } | { status: "rate_limited"; retryAt: Date }> {
-  try {
-    for (const reservation of reservations) {
-      await reserveEmailDispatchRateLimit(tx, reservation, now);
-    }
-    return { status: "reserved" };
-  } catch (error) {
-    if (error instanceof RateLimitExceededError) {
-      return { status: "rate_limited", retryAt: error.retryAt };
-    }
-    throw error;
+): Promise<void> {
+  for (const reservation of reservations) {
+    await reserveEmailDispatchRateLimit(tx, reservation, now);
   }
 }
 

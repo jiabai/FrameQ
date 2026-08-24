@@ -13,7 +13,11 @@ import {
   StoreTemporarilyUnavailableError,
   withConflictRetry,
 } from "./concurrency.js";
-import { reserveEmailDispatchRateLimits, toEmailDispatchRateLimitReservations } from "./rateLimits.js";
+import {
+  RateLimitExceededError,
+  reserveEmailDispatchRateLimits,
+  toEmailDispatchRateLimitReservations,
+} from "./rateLimits.js";
 
 export async function upsertUserByEmail(
   prisma: PrismaClient, email: string, now: Date,
@@ -42,25 +46,29 @@ export async function issueEmailOtp(
     now: input.createdAt,
   });
   const attempted = await withConflictRetry(async () => {
-    return prisma.$transaction(async (tx) => {
-      const reserved = await reserveEmailDispatchRateLimits(tx, reservations, input.createdAt);
-      if (reserved.status === "rate_limited") {
-        return reserved;
+    try {
+      return await prisma.$transaction(async (tx) => {
+        await reserveEmailDispatchRateLimits(tx, reservations, input.createdAt);
+        await tx.emailOtp.updateMany({
+          where: {
+            purpose: input.purpose,
+            email: input.email,
+            state: input.state,
+            consumedAt: null,
+          },
+          data: { consumedAt: input.createdAt },
+        });
+        await tx.emailOtp.create({
+          data: { ...input, id: otpId, attempts: 0, consumedAt: null },
+        });
+        return { status: "issued", otpId } as const;
+      });
+    } catch (error) {
+      if (error instanceof RateLimitExceededError) {
+        return { status: "rate_limited", retryAt: error.retryAt } as const;
       }
-      await tx.emailOtp.updateMany({
-        where: {
-          purpose: input.purpose,
-          email: input.email,
-          state: input.state,
-          consumedAt: null,
-        },
-        data: { consumedAt: input.createdAt },
-      });
-      await tx.emailOtp.create({
-        data: { ...input, id: otpId, attempts: 0, consumedAt: null },
-      });
-      return { status: "issued", otpId } as const;
-    });
+      throw error;
+    }
   });
   return attempted.status === "exhausted"
     ? { status: "temporarily_unavailable" }
