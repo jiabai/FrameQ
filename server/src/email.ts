@@ -91,6 +91,7 @@ export function buildLoginCodeMessage(input: {
   to: string;
   code: string;
 }): MailMessage {
+  const escapedCode = escapeHtml(input.code);
   return {
     from: input.from,
     to: input.to,
@@ -105,7 +106,7 @@ export function buildLoginCodeMessage(input: {
       '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#171717">',
       "<h2>FrameQ login code</h2>",
       "<p>Your verification code is:</p>",
-      `<p style="font-size:28px;font-weight:700;letter-spacing:4px">${input.code}</p>`,
+      `<p style="font-size:28px;font-weight:700;letter-spacing:4px">${escapedCode}</p>`,
       "<p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>",
       "</div>",
     ].join(""),
@@ -132,8 +133,8 @@ export function createActivationCodeSender(
     async sendActivationCode(input: SendActivationCodeInput): Promise<void> {
       try {
         await transporter.sendMail(buildActivationCodeMessage({ from: smtp.from, input }));
-      } catch (error) {
-        throw new Error(ACTIVATION_EMAIL_FAILED_MESSAGE, { cause: error });
+      } catch {
+        throw new Error(ACTIVATION_EMAIL_FAILED_MESSAGE);
       }
     },
   };

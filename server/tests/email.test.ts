@@ -240,7 +240,23 @@ describe("activation email sender", () => {
       }),
     ).rejects.toMatchObject({
       message: "Activation email delivery failed.",
-      cause: expect.any(Error),
+    });
+
+    await sender.sendActivationCode({
+      email: "user@example.com",
+      code: "FQ-ABCD-EFGH-JKLM-NPQR",
+      locale: "zh-CN",
+      redeemBy: new Date("2026-09-23T08:00:00.000Z"),
+      entitlementDays: 31,
+      llmCredits: 20,
+    }).catch((error: unknown) => {
+      expect(error).toBeInstanceOf(Error);
+      const activationError = error as Error & { cause?: unknown };
+      expect(activationError.message).toBe("Activation email delivery failed.");
+      expect(activationError.cause).toBeUndefined();
+      expect(JSON.stringify(activationError)).not.toContain("user@example.com");
+      expect(JSON.stringify(activationError)).not.toContain("FQ-ABCD-EFGH-JKLM-NPQR");
+      expect(JSON.stringify(activationError)).not.toContain("smtp exploded");
     });
   });
 });
