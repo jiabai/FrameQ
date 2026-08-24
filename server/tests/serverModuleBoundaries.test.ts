@@ -45,6 +45,7 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
   "dashboard.ts": ["GET /api/dashboard/account", "GET /dashboard"],
   "desktopAccount.ts": [
     "GET /api/desktop/account",
+    "POST /api/desktop/activation-codes/request",
     "POST /api/desktop/activation-codes/redeem",
   ],
   "desktopAuth.ts": [

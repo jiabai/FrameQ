@@ -5,6 +5,7 @@ const completeProductionEnv = {
   NODE_ENV: "production",
   FRAMEQ_SERVER_HOST: "127.0.0.1",
   FRAMEQ_SERVER_PORT: "8787",
+  FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "0",
   DATABASE_URL: "file:../data/frameq.sqlite",
   FRAMEQ_ADMIN_EMAIL: "admin@example.com",
   FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY: "production-encryption-secret-at-least-32",
@@ -24,6 +25,7 @@ describe("runtime configuration", () => {
       environment: "production",
       host: "127.0.0.1",
       port: 8787,
+      selfServiceActivationEnabled: false,
       databaseUrl: "file:../data/frameq.sqlite",
       adminEmail: "admin@example.com",
       llmConfigEncryptionKey: "production-encryption-secret-at-least-32",
@@ -46,6 +48,7 @@ describe("runtime configuration", () => {
     "DATABASE_URL",
     "FRAMEQ_ADMIN_EMAIL",
     "FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY",
+    "FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED",
     "SMTP_HOST",
     "SMTP_PORT",
     "SMTP_USER",
@@ -101,6 +104,22 @@ describe("runtime configuration", () => {
     });
     expect(config.allowConsoleOtp).toBe(true);
     expect(config.smtp).toBeNull();
+  });
+
+  test("development defaults self-service activation to disabled", () => {
+    const config = parseRuntimeConfig({
+      NODE_ENV: "development",
+      FRAMEQ_ALLOW_CONSOLE_OTP: "1",
+    });
+
+    expect(config.selfServiceActivationEnabled).toBe(false);
+  });
+
+  test("production requires an explicit self-service activation flag value", () => {
+    const env: Partial<typeof completeProductionEnv> = { ...completeProductionEnv };
+    delete env.FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED;
+
+    expect(() => parseRuntimeConfig(env)).toThrow("FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED");
   });
 
   test("partial SMTP is rejected even when development console delivery is enabled", () => {

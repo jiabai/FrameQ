@@ -190,4 +190,21 @@ describe("production deployment contracts", () => {
     }
     expect(workflow).not.toMatch(/SMTP_PASS|WECHAT_MCH_PRIVATE_KEY|FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY/);
   });
+
+  test("example environment documents the self-service activation and SMTP boundary", () => {
+    const envExample = readFileSync(join(serverRoot, ".env.example"), "utf8");
+
+    expect(envExample).toContain("FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=");
+    expect(envExample).toContain("Production must set this to 0 or 1 explicitly.");
+    expect(envExample).toContain("Self-service activation email also requires every SMTP value below.");
+    expect(envExample).not.toContain("console fallback");
+  });
+
+  test("production startup wires the self-service activation sender through runtime config", () => {
+    const indexSource = readFileSync(join(serverRoot, "src", "index.ts"), "utf8");
+
+    expect(indexSource).toContain("createActivationCodeSender");
+    expect(indexSource).toContain("selfServiceActivationEnabled: runtimeConfig.selfServiceActivationEnabled");
+    expect(indexSource).toContain("sendActivationCode:");
+  });
 });

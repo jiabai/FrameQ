@@ -1,7 +1,7 @@
 import "./env.js";
 import { createServerLifecycle } from "./bootstrap.js";
 import { createDatabaseReadinessChecks, createPrismaClient } from "./database.js";
-import { createOtpSender } from "./email.js";
+import { createActivationCodeSender, createOtpSender } from "./email.js";
 import { createObservabilityConfig } from "./observability.js";
 import { PrismaStore } from "./prismaStore.js";
 import { ReadinessController } from "./readiness.js";
@@ -20,9 +20,13 @@ async function main(): Promise<void> {
     const app = buildServer({
       store: new PrismaStore(prisma),
       sendOtp: createOtpSender(runtimeConfig),
+      sendActivationCode: runtimeConfig.smtp
+        ? createActivationCodeSender(runtimeConfig)
+        : undefined,
       createNativePayment: createWechatNativePayment(runtimeConfig.wechat),
       parseWechatNotification: createWechatNotificationParser(runtimeConfig.wechat),
       adminEmail: runtimeConfig.adminEmail,
+      selfServiceActivationEnabled: runtimeConfig.selfServiceActivationEnabled,
       wechatPayEnabled: runtimeConfig.wechatPayEnabled,
       llmConfigEncryptionKey: runtimeConfig.llmConfigEncryptionKey,
       releaseManifestPath: runtimeConfig.releaseManifestPath,

@@ -26,6 +26,7 @@ export type RuntimeConfig = Readonly<{
   environment: RuntimeEnvironment;
   host: string;
   port: number;
+  selfServiceActivationEnabled: boolean;
   databaseUrl: string;
   adminEmail: string;
   llmConfigEncryptionKey: string | undefined;
@@ -71,6 +72,12 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
   const environment = parseEnvironment(env.NODE_ENV, issues);
   const host = clean(env.FRAMEQ_SERVER_HOST) || "127.0.0.1";
   const port = parsePort(env.FRAMEQ_SERVER_PORT, "FRAMEQ_SERVER_PORT", 8787, issues);
+  const selfServiceActivationEnabled = parseExplicitProductionFlag(
+    env.FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED,
+    "FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED",
+    environment,
+    issues,
+  );
   const databaseUrl = clean(env.DATABASE_URL);
   const adminEmail = clean(env.FRAMEQ_ADMIN_EMAIL);
   const llmConfigEncryptionKey = clean(env.FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY);
@@ -122,6 +129,7 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
     environment,
     host,
     port,
+    selfServiceActivationEnabled,
     databaseUrl: databaseUrl || resolveDatabaseUrlFrom(undefined),
     adminEmail: adminEmail || "lantianye@163.com",
     llmConfigEncryptionKey: llmConfigEncryptionKey || undefined,
@@ -241,6 +249,29 @@ function parsePort(
 function parseFlag(value: string | undefined, name: string, issues: string[]): boolean {
   const normalized = clean(value);
   if (!normalized || normalized === "0") {
+    return false;
+  }
+  if (normalized === "1") {
+    return true;
+  }
+  issues.push(name);
+  return false;
+}
+
+function parseExplicitProductionFlag(
+  value: string | undefined,
+  name: string,
+  environment: RuntimeEnvironment,
+  issues: string[],
+): boolean {
+  const normalized = clean(value);
+  if (!normalized) {
+    if (environment === "production") {
+      issues.push(name);
+    }
+    return false;
+  }
+  if (normalized === "0") {
     return false;
   }
   if (normalized === "1") {

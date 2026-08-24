@@ -1,6 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { buildServer } from "../src/server.js";
 import { sha256 } from "../src/security.js";
+import type {
+  SelfServiceActivationResult,
+  SelfServiceActivationService,
+} from "../src/selfServiceActivation.js";
+import { SelfServiceActivationError } from "../src/selfServiceActivation.js";
 import { MemoryStore } from "../src/store.js";
 
 class TemporarilyUnavailableAuthStore extends MemoryStore {
@@ -67,6 +72,69 @@ class FailingAuthStore extends MemoryStore {
   }
 }
 
+function createSelfServiceStub(
+  implementation: (
+    input: Parameters<SelfServiceActivationService["requestCode"]>[0],
+  ) => Promise<SelfServiceActivationResult>,
+): Pick<SelfServiceActivationService, "requestCode"> {
+  return { requestCode: vi.fn(implementation) };
+}
+
+function buildDesktopAuthApp(options: {
+  store?: MemoryStore;
+  now?: () => Date;
+  selfServiceActivationEnabled?: boolean;
+  selfServiceActivationService?: Pick<SelfServiceActivationService, "requestCode"> | null;
+} = {}) {
+  let sentCode = "";
+  const store = options.store ?? new MemoryStore();
+  const app = buildServer({
+    store,
+    sendOtp: async (_email, code) => {
+      sentCode = code;
+    },
+    createNativePayment: async () => ({
+      codeUrl: "weixin://wxpay/bizpayurl?pr=test",
+      providerPayload: {},
+    }),
+    now: options.now,
+    selfServiceActivationEnabled: options.selfServiceActivationEnabled,
+    selfServiceActivationService: options.selfServiceActivationService,
+  });
+  return { app, store, readSentCode: () => sentCode };
+}
+
+async function createDesktopSession(
+  app: ReturnType<typeof buildServer>,
+  readSentCode: () => string,
+  email = "user@example.com",
+) {
+  const state = `state-${email.replace(/[^a-z0-9]/gi, "-")}`;
+
+  const start = await app.inject({
+    method: "POST",
+    url: "/auth/email/start",
+    payload: { email, state },
+    remoteAddress: "203.0.113.10",
+  });
+  expect(start.statusCode).toBe(200);
+
+  const verify = await app.inject({
+    method: "POST",
+    url: "/auth/email/verify",
+    payload: { email, code: readSentCode(), state },
+  });
+  expect(verify.statusCode).toBe(200);
+
+  const exchange = await app.inject({
+    method: "POST",
+    url: "/api/desktop/sessions/exchange",
+    payload: { ticket: verify.json<{ ticket: string }>().ticket, state },
+  });
+  expect(exchange.statusCode).toBe(200);
+  return exchange.json<{ session_token: string }>().session_token;
+}
+
 describe("desktop account routes", () => {
   test("registers the complete stable HTTP route table", () => {
     const app = buildServer({
@@ -93,6 +161,7 @@ describe("desktop account routes", () => {
       ["POST", "/auth/email/verify"],
       ["POST", "/api/desktop/sessions/exchange"],
       ["GET", "/api/desktop/account"],
+      ["POST", "/api/desktop/activation-codes/request"],
       ["POST", "/api/desktop/logout"],
       ["POST", "/api/desktop/activation-codes/redeem"],
       ["POST", "/api/desktop/llm/checkouts"],
@@ -202,8 +271,233 @@ describe("desktop account routes", () => {
       authenticated: true,
       email: "user@example.com",
       entitlement_status: "inactive",
+      can_request_activation_code: false,
       can_process: false,
     });
+  });
+
+  test("reports self-service capability only when the feature is enabled, available, and inactive", async () => {
+    const now = new Date("2026-08-24T08:00:00.000Z");
+    const service = createSelfServiceStub(async () => {
+      throw new Error("not called");
+    });
+    const { app, store, readSentCode } = buildDesktopAuthApp({
+      now: () => now,
+      selfServiceActivationEnabled: true,
+      selfServiceActivationService: service,
+    });
+    const sessionToken = await createDesktopSession(app, readSentCode, "capability@example.com");
+
+    const inactive = await app.inject({
+      method: "GET",
+      url: "/api/desktop/account",
+      headers: { authorization: `Bearer ${sessionToken}` },
+    });
+    expect(inactive.statusCode).toBe(200);
+    expect(inactive.json()).toMatchObject({
+      email: "capability@example.com",
+      can_request_activation_code: true,
+    });
+
+    const user = store.users.find((entry) => entry.email === "capability@example.com");
+    if (!user) {
+      throw new Error("expected user to exist");
+    }
+    await store.upsertEntitlement(
+      user.id,
+      new Date("2026-09-24T08:00:00.000Z"),
+      now,
+      { llmQuotaLimit: 20, llmQuotaUsed: 0 },
+    );
+
+    const active = await app.inject({
+      method: "GET",
+      url: "/api/desktop/account",
+      headers: { authorization: `Bearer ${sessionToken}` },
+    });
+    expect(active.statusCode).toBe(200);
+    expect(active.json()).toMatchObject({
+      entitlement_status: "active",
+      can_request_activation_code: false,
+    });
+  });
+
+  test("returns feature not available when self-service activation is disabled", async () => {
+    const { app, readSentCode } = buildDesktopAuthApp({
+      selfServiceActivationEnabled: false,
+    });
+    const sessionToken = await createDesktopSession(app, readSentCode, "feature-off@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/request",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { locale: "zh-CN" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "FEATURE_NOT_AVAILABLE" });
+  });
+
+  test("returns activation email unavailable when feature is enabled but service is absent", async () => {
+    const { app, readSentCode } = buildDesktopAuthApp({
+      selfServiceActivationEnabled: true,
+      selfServiceActivationService: null,
+    });
+    const sessionToken = await createDesktopSession(app, readSentCode, "no-smtp@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/request",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { locale: "zh-CN" },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "ACTIVATION_EMAIL_UNAVAILABLE" });
+  });
+
+  test("rejects unauthenticated, invalid, and unknown self-service request bodies", async () => {
+    const service = createSelfServiceStub(async () => ({
+      status: "sent",
+      retryAt: new Date("2026-08-24T09:00:00.000Z"),
+      redeemBy: new Date("2026-08-31T09:00:00.000Z"),
+    } satisfies SelfServiceActivationResult));
+    const { app, readSentCode } = buildDesktopAuthApp({
+      selfServiceActivationEnabled: true,
+      selfServiceActivationService: service,
+    });
+    const sessionToken = await createDesktopSession(app, readSentCode, "invalid-body@example.com");
+
+    const unauthenticated = await app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/request",
+      payload: { locale: "zh-CN" },
+    });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(unauthenticated.json()).toEqual({ error: "AUTH_REQUIRED" });
+
+    const invalidLocale = await app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/request",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { locale: "ja-JP" },
+    });
+    expect(invalidLocale.statusCode).toBe(400);
+    expect(invalidLocale.json()).toEqual({ error: "INVALID_REQUEST" });
+
+    const unknownFields = await app.inject({
+      method: "POST",
+      url: "/api/desktop/activation-codes/request",
+      headers: { authorization: `Bearer ${sessionToken}` },
+      payload: { locale: "zh-CN", email: "attacker@example.com", quota: 999 },
+    });
+    expect(unknownFields.statusCode).toBe(400);
+    expect(unknownFields.json()).toEqual({ error: "INVALID_REQUEST" });
+    expect(service.requestCode).not.toHaveBeenCalled();
+  });
+
+  test("maps self-service activation outcomes to sanitized responses", async () => {
+    const now = new Date("2026-08-24T08:00:00.000Z");
+    const retryAt = new Date("2026-08-24T09:15:00.000Z");
+    const redeemBy = new Date("2026-08-31T08:00:00.000Z");
+    const service = createSelfServiceStub(async () => {
+      throw new Error("placeholder");
+    });
+    const { app, store, readSentCode } = buildDesktopAuthApp({
+      now: () => now,
+      selfServiceActivationEnabled: true,
+      selfServiceActivationService: service,
+    });
+    const sessionToken = await createDesktopSession(app, readSentCode, "mapper@example.com");
+    const user = store.users.find((entry) => entry.email === "mapper@example.com");
+    const session = store.sessions.find((entry) => entry.tokenHash === sha256(sessionToken));
+    if (!user || !session) {
+      throw new Error("expected authenticated session state");
+    }
+
+    const scenarios = [
+      {
+        name: "success",
+        implementation: async () =>
+          ({
+            status: "sent",
+            retryAt,
+            redeemBy,
+          } satisfies SelfServiceActivationResult),
+        expectedStatus: 200,
+        expectedBody: {
+          status: "sent",
+          retry_at: retryAt.toISOString(),
+          redeem_by: redeemBy.toISOString(),
+        },
+      },
+      {
+        name: "rate limited",
+        implementation: async () => {
+          throw new SelfServiceActivationError("ACTIVATION_REQUEST_RATE_LIMITED", { retryAt });
+        },
+        expectedStatus: 429,
+        expectedBody: {
+          error: "ACTIVATION_REQUEST_RATE_LIMITED",
+          retry_at: retryAt.toISOString(),
+        },
+        expectedRetryAfter: "4500",
+      },
+      {
+        name: "active entitlement",
+        implementation: async () => {
+          throw new SelfServiceActivationError("ENTITLEMENT_ACTIVE");
+        },
+        expectedStatus: 409,
+        expectedBody: { error: "ENTITLEMENT_ACTIVE" },
+      },
+      {
+        name: "email unavailable",
+        implementation: async () => {
+          throw new SelfServiceActivationError("ACTIVATION_EMAIL_UNAVAILABLE");
+        },
+        expectedStatus: 503,
+        expectedBody: { error: "ACTIVATION_EMAIL_UNAVAILABLE" },
+      },
+      {
+        name: "temporary unavailable",
+        implementation: async () => {
+          throw new SelfServiceActivationError("SERVER_TEMPORARILY_UNAVAILABLE");
+        },
+        expectedStatus: 503,
+        expectedBody: { error: "SERVER_TEMPORARILY_UNAVAILABLE" },
+      },
+    ] as const;
+
+    for (const scenario of scenarios) {
+      vi.mocked(service.requestCode).mockImplementationOnce(async (input) => {
+        expect(input).toEqual({
+          sessionTokenHash: session.tokenHash,
+          ip: "203.0.113.77",
+          locale: "en-US",
+        });
+        return scenario.implementation();
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/desktop/activation-codes/request",
+        headers: { authorization: `Bearer ${sessionToken}` },
+        remoteAddress: "203.0.113.77",
+        payload: { locale: "en-US" },
+      });
+
+      expect(response.statusCode, scenario.name).toBe(scenario.expectedStatus);
+      expect(response.json(), scenario.name).toEqual(scenario.expectedBody);
+      expect(response.body, scenario.name).not.toContain(user.email);
+      expect(response.body, scenario.name).not.toContain(sessionToken);
+      if ("expectedRetryAfter" in scenario) {
+        expect(response.headers["retry-after"], scenario.name).toBe(scenario.expectedRetryAfter);
+      } else {
+        expect(response.headers["retry-after"], scenario.name).toBeUndefined();
+      }
+    }
   });
 
   test("redeems an activation code through an authenticated desktop session", async () => {

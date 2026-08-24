@@ -21,6 +21,10 @@ import { registerDesktopUpdateRoutes } from "./routes/desktopUpdates.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerUserAuthRoutes } from "./routes/userAuth.js";
+import {
+  SelfServiceActivationService,
+  type ActivationCodeEmailSender,
+} from "./selfServiceActivation.js";
 import type { Store } from "./store.js";
 import { loadDesktopReleaseManifest, type DesktopReleaseManifest } from "./updates.js";
 import { createWechatNotificationParser, type WechatNotificationParser } from "./wechat.js";
@@ -29,11 +33,14 @@ import { UserAuthService } from "./userAuth.js";
 export type ServerDependencies = {
   store: Store;
   sendOtp: (email: string, code: string) => Promise<void>;
+  sendActivationCode?: ActivationCodeEmailSender;
   createNativePayment: (input: {
     outTradeNo: string;
     amountFen: number;
     description: string;
   }) => Promise<NativePaymentResult>;
+  selfServiceActivationEnabled?: boolean;
+  selfServiceActivationService?: Pick<SelfServiceActivationService, "requestCode"> | null;
   parseWechatNotification?: WechatNotificationParser;
   adminEmail?: string;
   wechatPayEnabled?: boolean;
@@ -84,6 +91,17 @@ export function buildServer(dependencies: ServerDependencies) {
     store: dependencies.store,
     now,
   });
+  const selfServiceActivation =
+    dependencies.selfServiceActivationEnabled === true
+      ? (dependencies.selfServiceActivationService ??
+        (dependencies.sendActivationCode
+          ? new SelfServiceActivationService({
+              store: dependencies.store,
+              now,
+              sendActivationCode: dependencies.sendActivationCode,
+            })
+          : null))
+      : null;
   const llmConfig = new LlmConfigService({
     store: dependencies.store,
     now,
@@ -148,6 +166,8 @@ export function buildServer(dependencies: ServerDependencies) {
   registerDesktopAccountRoutes(app, {
     store: dependencies.store,
     activationCodes,
+    selfServiceActivationEnabled: dependencies.selfServiceActivationEnabled === true,
+    selfServiceActivation,
     llmConfig,
     now,
   });
