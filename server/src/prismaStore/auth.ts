@@ -10,12 +10,10 @@ import type {
   UserRecord,
 } from "../store/contracts.js";
 import {
-  RateLimitExceededError,
   StoreTemporarilyUnavailableError,
-  prismaRateLimitReservations,
-  reserveAuthRateLimit,
   withConflictRetry,
 } from "./concurrency.js";
+import { reserveEmailDispatchRateLimits, toEmailDispatchRateLimitReservations } from "./rateLimits.js";
 
 export async function upsertUserByEmail(
   prisma: PrismaClient, email: string, now: Date,
@@ -37,33 +35,32 @@ export async function issueEmailOtp(
   prisma: PrismaClient, input: Parameters<Store["issueEmailOtp"]>[0],
 ): ReturnType<Store["issueEmailOtp"]> {
   const otpId = randomUUID();
-  const reservations = prismaRateLimitReservations(input);
+  const reservations = toEmailDispatchRateLimitReservations({
+    purpose: input.purpose,
+    normalizedEmail: input.email,
+    ip: input.ip,
+    now: input.createdAt,
+  });
   const attempted = await withConflictRetry(async () => {
-    try {
-      return await prisma.$transaction(async (tx) => {
-        for (const reservation of reservations) {
-          await reserveAuthRateLimit(tx, reservation, input.createdAt);
-        }
-        await tx.emailOtp.updateMany({
-          where: {
-            purpose: input.purpose,
-            email: input.email,
-            state: input.state,
-            consumedAt: null,
-          },
-          data: { consumedAt: input.createdAt },
-        });
-        await tx.emailOtp.create({
-          data: { ...input, id: otpId, attempts: 0, consumedAt: null },
-        });
-        return { status: "issued", otpId } as const;
-      });
-    } catch (error) {
-      if (error instanceof RateLimitExceededError) {
-        return { status: "rate_limited", retryAt: error.retryAt } as const;
+    return prisma.$transaction(async (tx) => {
+      const reserved = await reserveEmailDispatchRateLimits(tx, reservations, input.createdAt);
+      if (reserved.status === "rate_limited") {
+        return reserved;
       }
-      throw error;
-    }
+      await tx.emailOtp.updateMany({
+        where: {
+          purpose: input.purpose,
+          email: input.email,
+          state: input.state,
+          consumedAt: null,
+        },
+        data: { consumedAt: input.createdAt },
+      });
+      await tx.emailOtp.create({
+        data: { ...input, id: otpId, attempts: 0, consumedAt: null },
+      });
+      return { status: "issued", otpId } as const;
+    });
   });
   return attempted.status === "exhausted"
     ? { status: "temporarily_unavailable" }

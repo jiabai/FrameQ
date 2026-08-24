@@ -109,7 +109,7 @@ describe("reviewed Prisma migration chain", () => {
     const { databasePath } = temporaryDatabase();
     new DatabaseSync(databasePath).close();
 
-    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("4 migrations");
+    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("5 migrations");
     expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("No pending migrations");
     expect(runPrisma(databasePath, ["migrate", "status"])).toContain(
       "Database schema is up to date",
@@ -143,10 +143,14 @@ describe("reviewed Prisma migration chain", () => {
         { migration_name: "202607220002_auth_quota_hardening" },
         { migration_name: "202608030001_user_session" },
         { migration_name: "202608240001_self_service_email_activation" },
+        { migration_name: "202608240002_auth_rate_limit_self_service_purpose" },
       ]);
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       ).run("bad-purpose", "bad-purpose-key", "draft_login", "email_hour", 0, 1, 1, 0)).toThrow();
+      expect(() => database.prepare(
+        'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run("good-purpose", "good-purpose-key", "self_service_activation", "email_hour", 0, 1, 1, 0)).not.toThrow();
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       ).run("bad-count", "bad-count-key", "desktop_login", "email_hour", 0, -1, 1, 0)).toThrow();

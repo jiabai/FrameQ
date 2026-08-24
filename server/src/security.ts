@@ -8,6 +8,12 @@ export function authRateLimitKey(scope: string, purpose: string, value: string):
   return sha256(`frameq:auth-rate-limit:v1|${scope}|${purpose}|${value}`);
 }
 
+export function startOfFixedWindow(now: Date, windowSeconds: number): Date {
+  return new Date(
+    Math.floor(now.getTime() / (windowSeconds * 1000)) * windowSeconds * 1000,
+  );
+}
+
 export function secureToken(prefix = ""): string {
   return `${prefix}${randomBytes(32).toString("base64url")}`;
 }

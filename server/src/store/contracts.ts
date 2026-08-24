@@ -44,7 +44,7 @@ export type AuthRateLimitScope = "email_minute" | "email_hour" | "ip_hour";
 export type AuthRateLimitRecord = {
   id: string;
   keyHash: string;
-  purpose: OtpPurpose;
+  purpose: EmailDispatchPurpose;
   scope: AuthRateLimitScope;
   windowStartedAt: Date;
   count: number;

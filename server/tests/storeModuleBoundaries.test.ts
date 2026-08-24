@@ -19,7 +19,9 @@ const expectedStoreOwners = [
   "memory/billing.ts",
   "memory/entitlements.ts",
   "memory/llmConfig.ts",
+  "memory/rateLimits.ts",
   "memory/userSession.ts",
+  "rateLimitPolicy.ts",
 ] as const;
 
 const expectedPrismaOwners = [
@@ -28,14 +30,20 @@ const expectedPrismaOwners = [
   "concurrency.ts",
   "entitlements.ts",
   "llmConfig.ts",
+  "rateLimits.ts",
   "userSession.ts",
 ] as const;
 
 const expectedContractTypes = [
+  "ActivatePreparedSelfServiceActivationCodeResult",
+  "ActivationCodeDisabledReason",
+  "ActivationCodeIssuanceSource",
   "ActivationCodeRecord",
+  "ActivationCodeStatus",
   "ActivationRedemption",
   "AdminEntitlementAdjustmentRecord",
   "AdminSessionRecord",
+  "EmailDispatchPurpose",
   "AuthRateLimitRecord",
   "AuthRateLimitScope",
   "DesktopLoginTicketRecord",
@@ -50,6 +58,7 @@ const expectedContractTypes = [
   "OrderRecord",
   "OtpPurpose",
   "PaidOrderSettlement",
+  "PrepareSelfServiceActivationCodeResult",
   "SessionRecord",
   "Store",
   "UserRecord",
@@ -475,8 +484,8 @@ describe("Store adapter module ownership", () => {
       },
     ]);
     expect(physicalLineCount(storeRoot.source)).toBeLessThanOrEqual(60);
-    expect(physicalLineCount(contracts.source)).toBeLessThanOrEqual(370);
-    expect(physicalLineCount(memoryRoot.source)).toBeLessThanOrEqual(400);
+    expect(physicalLineCount(contracts.source)).toBeLessThanOrEqual(430);
+    expect(physicalLineCount(memoryRoot.source)).toBeLessThanOrEqual(430);
     expect(physicalLineCount(prismaRoot.source)).toBeLessThanOrEqual(350);
 
     for (const relativePath of [
@@ -547,11 +556,7 @@ describe("Store adapter module ownership", () => {
     }
 
     const concurrencyMarkers = [
-      /\btype\s+PrismaRateLimitReservation\b/,
-      /\bclass\s+RateLimitExceededError\b/,
       /\bclass\s+StoreTemporarilyUnavailableError\b/,
-      /\bfunction\s+prismaRateLimitReservations\b/,
-      /\bfunction\s+reserveAuthRateLimit\b/,
       /\btype\s+ConflictRetryResult\b/,
       /\bfunction\s+withConflictRetry\b/,
       /\bfunction\s+isRetryablePrismaConflict\b/,
@@ -560,13 +565,24 @@ describe("Store adapter module ownership", () => {
       /\bfunction\s+isPrismaKnownError\b/,
       /maximumAttempts\s*=\s*3/,
       /setTimeout\s*\(\s*resolve\s*,\s*attempt\s*\*\s*5\s*\)/,
-      /INSERT INTO "AuthRateLimit"/,
     ];
     for (const marker of concurrencyMarkers) {
       const owners = entries
         .filter((entry) => marker.test(entry.source))
         .map((entry) => entry.relativePath);
       expect(owners, marker.source).toEqual(["prismaStore/concurrency.ts"]);
+    }
+
+    const prismaRateLimitMarkers = [
+      /\bclass\s+RateLimitExceededError\b/,
+      /\bfunction\s+reserveEmailDispatchRateLimit\b/,
+      /INSERT INTO "AuthRateLimit"/,
+    ];
+    for (const marker of prismaRateLimitMarkers) {
+      const owners = entries
+        .filter((entry) => marker.test(entry.source))
+        .map((entry) => entry.relativePath);
+      expect(owners, marker.source).toEqual(["prismaStore/rateLimits.ts"]);
     }
 
     const memoryEntries = entries.filter((entry) => entry.relativePath.startsWith("store/memory/"));
@@ -624,7 +640,11 @@ describe("Store adapter module ownership", () => {
           if (entry.relativePath.startsWith("store/")) {
             return path.startsWith("prismaStore/");
           }
-          return path.startsWith("store/") && path !== "store/contracts.ts";
+          return (
+            path.startsWith("store/") &&
+            path !== "store/contracts.ts" &&
+            path !== "store/rateLimitPolicy.ts"
+          );
         });
       expect(forbiddenImports, entry.relativePath).toEqual([]);
     }
@@ -634,7 +654,11 @@ describe("Store adapter module ownership", () => {
       ["store/memory/atomic.ts", new Set(["MemoryAtomicCoordinator"])],
       [
         "prismaStore/concurrency.ts",
-        new Set(["RateLimitExceededError", "StoreTemporarilyUnavailableError"]),
+        new Set(["StoreTemporarilyUnavailableError"]),
+      ],
+      [
+        "prismaStore/rateLimits.ts",
+        new Set(["RateLimitExceededError"]),
       ],
     ]);
     for (const entry of privateEntries) {

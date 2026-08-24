@@ -2,8 +2,11 @@ import { describe, expect, test } from "vitest";
 import { AdminAuthService } from "../src/adminAuth.js";
 import { AuthService } from "../src/auth.js";
 import { sha256 } from "../src/security.js";
+import { emailDispatchRateLimitReservations } from "../src/store/rateLimitPolicy.js";
 import type { DesktopLoginTicketRecord } from "../src/store.js";
 import { MemoryStore, type SessionRecord } from "../src/store.js";
+import { MemoryAtomicCoordinator, type MemoryState } from "../src/store/memory/atomic.js";
+import { reserveEmailDispatchRateLimits } from "../src/store/memory/rateLimits.js";
 
 const now = new Date("2026-07-22T08:00:00.000Z");
 
@@ -31,6 +34,25 @@ class FailOnceTicketStore extends MemoryStore {
     }
     return super.createDesktopLoginTicket(input);
   }
+}
+
+function createRateLimitState(): MemoryState {
+  return {
+    users: [],
+    emailOtps: [],
+    desktopLoginTickets: [],
+    sessions: [],
+    orders: [],
+    entitlements: [],
+    llmConfig: null,
+    llmUsageEvents: [],
+    activationCodes: [],
+    adminSessions: [],
+    adminEntitlementAdjustments: [],
+    webhookEvents: [],
+    authRateLimits: [],
+    userSessions: [],
+  };
 }
 
 describe("MemoryStore authentication concurrency boundaries", () => {
@@ -322,6 +344,86 @@ describe("MemoryStore authentication concurrency boundaries", () => {
       expiresAt: new Date(now.getTime() + 10 * 60 * 1000),
       createdAt: now,
     })).resolves.toMatchObject({ status: "rate_limited" });
+  });
+
+  test("shares self-service email dispatch reservations across minute and hour boundaries", async () => {
+    const state = createRateLimitState();
+    const atomic = new MemoryAtomicCoordinator(state);
+    const reserveAt = async (nowAt: string, email: string, ip: string) =>
+      atomic.run(async () =>
+        reserveEmailDispatchRateLimits(
+          state,
+          emailDispatchRateLimitReservations({
+            purpose: "self_service_activation",
+            normalizedEmail: email,
+            ip,
+            now: new Date(nowAt),
+          }),
+          new Date(nowAt),
+        ),
+      );
+
+    await expect(reserveAt("2026-07-22T08:10:05.000Z", "self@example.com", "203.0.113.41")).resolves.toEqual({
+      status: "reserved",
+    });
+    await expect(reserveAt("2026-07-22T08:10:50.000Z", "self@example.com", "203.0.113.41")).resolves.toMatchObject({
+      status: "rate_limited",
+      retryAt: new Date("2026-07-22T08:11:05.000Z"),
+    });
+    await expect(reserveAt("2026-07-22T08:11:05.000Z", "self@example.com", "203.0.113.41")).resolves.toEqual({
+      status: "reserved",
+    });
+
+    const hourlyFollowUps = [
+      "2026-07-22T08:12:06.000Z",
+      "2026-07-22T08:13:07.000Z",
+      "2026-07-22T08:14:08.000Z",
+    ];
+    for (const [index, createdAt] of hourlyFollowUps.entries()) {
+      await expect(
+        reserveAt(
+          createdAt,
+          "self@example.com",
+          `203.0.113.${50 + index}`,
+        ),
+      ).resolves.toEqual({ status: "reserved" });
+    }
+    await expect(reserveAt("2026-07-22T08:15:09.000Z", "self@example.com", "203.0.113.80")).resolves.toMatchObject({
+      status: "rate_limited",
+      retryAt: new Date("2026-07-22T09:00:00.000Z"),
+    });
+    await expect(
+      reserveAt("2026-07-22T08:15:09.000Z", "another-self@example.com", "203.0.113.41"),
+    ).resolves.toEqual({ status: "reserved" });
+    await expect(
+      reserveAt("2026-07-22T09:00:00.000Z", "self@example.com", "203.0.113.41"),
+    ).resolves.toEqual({ status: "reserved" });
+  });
+
+  test("atomically prevents concurrent self-service reservations from oversubscribing the minute window", async () => {
+    const state = createRateLimitState();
+    const atomic = new MemoryAtomicCoordinator(state);
+    const nowAt = new Date("2026-07-22T08:20:00.000Z");
+    const reserve = () =>
+      atomic.run(async () =>
+        reserveEmailDispatchRateLimits(
+          state,
+          emailDispatchRateLimitReservations({
+            purpose: "self_service_activation",
+            normalizedEmail: "race-self@example.com",
+            ip: "203.0.113.81",
+            now: nowAt,
+          }),
+          nowAt,
+        ),
+      );
+
+    const results = await Promise.all([reserve(), reserve()]);
+
+    expect(results.filter((result) => result.status === "reserved")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rate_limited")).toHaveLength(1);
+    expect(state.authRateLimits).toHaveLength(3);
+    expect(state.authRateLimits.every((record) => record.purpose === "self_service_activation")).toBe(true);
   });
 
   test("consumes the final MemoryStore Credit once and reuses an identical request", async () => {

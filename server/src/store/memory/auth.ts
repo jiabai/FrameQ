@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { authRateLimitKey, constantTimeEqual } from "../../security.js";
+import { constantTimeEqual } from "../../security.js";
 import type {
   AdminSessionRecord,
-  AuthRateLimitScope,
   DesktopLoginTicketRecord,
   EmailOtpRecord,
   OtpPurpose,
@@ -10,7 +9,9 @@ import type {
   Store,
   UserRecord,
 } from "../contracts.js";
+import { emailDispatchRateLimitReservations } from "../rateLimitPolicy.js";
 import type { MemoryAtomicCoordinator, MemoryState } from "./atomic.js";
+import { reserveEmailDispatchRateLimits } from "./rateLimits.js";
 export type MemoryAuthContext = {
   state: MemoryState;
   atomic: MemoryAtomicCoordinator;
@@ -25,15 +26,6 @@ export type MemoryAuthContext = {
   createSession: Store["createSession"];
   createAdminSession: Store["createAdminSession"];
   createUserSession: Store["createUserSession"];
-};
-
-type RateLimitReservation = {
-  keyHash: string;
-  purpose: OtpPurpose;
-  scope: AuthRateLimitScope;
-  windowStartedAt: Date;
-  nextAllowedAt: Date;
-  maxCount: number;
 };
 
 export async function upsertUserByEmail(
@@ -57,22 +49,18 @@ export async function issueEmailOtp(
   context: MemoryAuthContext, input: Parameters<Store["issueEmailOtp"]>[0],
 ): ReturnType<Store["issueEmailOtp"]> {
   return context.atomic.run(async () => {
-    const reservations = rateLimitReservations(input);
-    const limitedUntil = reservations
-      .map((reservation) =>
-        planRateLimitReservation(context, reservation, input.createdAt),
-      )
-      .filter((result): result is { allowed: false; retryAt: Date } => !result.allowed)
-      .map((result) => result.retryAt);
-    if (limitedUntil.length > 0) {
-      return {
-        status: "rate_limited",
-        retryAt: new Date(Math.max(...limitedUntil.map((value) => value.getTime()))),
-      };
-    }
-
-    for (const reservation of reservations) {
-      applyRateLimitReservation(context, reservation, input.createdAt);
+    const reserved = reserveEmailDispatchRateLimits(
+      context.state,
+      emailDispatchRateLimitReservations({
+        purpose: input.purpose,
+        normalizedEmail: input.email,
+        ip: input.ip,
+        now: input.createdAt,
+      }),
+      input.createdAt,
+    );
+    if (reserved.status === "rate_limited") {
+      return reserved;
     }
     for (const otp of context.state.emailOtps) {
       if (
@@ -324,77 +312,4 @@ export function latestUsableOtp(
           otp.expiresAt > now,
       ) ?? null
   );
-}
-function planRateLimitReservation(
-  context: MemoryAuthContext, reservation: RateLimitReservation, now: Date,
-): { allowed: true } | { allowed: false; retryAt: Date } {
-  const existing = context.state.authRateLimits.find(
-    (record) => record.keyHash === reservation.keyHash,
-  );
-  if (!existing) {
-    return { allowed: true };
-  }
-  if (reservation.scope === "email_minute") {
-    return existing.nextAllowedAt > now
-      ? { allowed: false, retryAt: existing.nextAllowedAt }
-      : { allowed: true };
-  }
-  const sameWindow =
-    existing.windowStartedAt.getTime() === reservation.windowStartedAt.getTime();
-  if (sameWindow && existing.count >= reservation.maxCount) {
-    return { allowed: false, retryAt: existing.nextAllowedAt };
-  }
-  return { allowed: true };
-}
-function applyRateLimitReservation(
-  context: MemoryAuthContext, reservation: RateLimitReservation, now: Date,
-): void {
-  const existing = context.state.authRateLimits.find(
-    (record) => record.keyHash === reservation.keyHash,
-  );
-  if (!existing) {
-    context.state.authRateLimits.push({
-      id: randomUUID(),
-      keyHash: reservation.keyHash,
-      purpose: reservation.purpose,
-      scope: reservation.scope,
-      windowStartedAt: reservation.windowStartedAt,
-      count: 1,
-      nextAllowedAt: reservation.nextAllowedAt,
-      updatedAt: now,
-    });
-    return;
-  }
-  const sameWindow =
-    existing.windowStartedAt.getTime() === reservation.windowStartedAt.getTime();
-  existing.windowStartedAt = reservation.windowStartedAt;
-  existing.count = sameWindow ? existing.count + 1 : 1;
-  existing.nextAllowedAt = reservation.nextAllowedAt;
-  existing.updatedAt = now;
-}
-function rateLimitReservations(input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">): RateLimitReservation[] {
-  const now = input.createdAt;
-  const hourStart = new Date(
-    Math.floor(now.getTime() / (60 * 60 * 1000)) * 60 * 60 * 1000,
-  );
-  const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
-  const reservation = (
-    scope: AuthRateLimitScope,
-    value: string,
-    windowStartedAt: Date,
-    nextAllowedAt: Date,
-    maxCount: number,
-  ): RateLimitReservation => ({
-    keyHash: authRateLimitKey(scope, input.purpose, value),
-    purpose: input.purpose,
-    scope,
-    windowStartedAt,
-    nextAllowedAt,
-    maxCount,
-  });
-  return [
-    reservation("email_minute", input.email, now, new Date(now.getTime() + 60 * 1000), 1),
-    reservation("email_hour", input.email, hourStart, hourEnd, 5),
-    reservation("ip_hour", input.ip, hourStart, hourEnd, 20),
-  ];
 }

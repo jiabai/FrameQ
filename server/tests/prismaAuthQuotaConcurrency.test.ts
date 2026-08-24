@@ -3,6 +3,8 @@ import { afterEach, describe, expect, test } from "vitest";
 import { AdminAuthService } from "../src/adminAuth.js";
 import { AuthService } from "../src/auth.js";
 import { PrismaStore } from "../src/prismaStore.js";
+import { emailDispatchRateLimitReservations } from "../src/store/rateLimitPolicy.js";
+import { reserveEmailDispatchRateLimits } from "../src/prismaStore/rateLimits.js";
 import {
   createTemporaryPrismaClient,
   prismaWithInjectedWriteFailure,
@@ -226,6 +228,91 @@ describe("PrismaStore authentication and quota concurrency boundaries", () => {
     const counters = await fixture.prisma.authRateLimit.findMany({ orderBy: { scope: "asc" } });
     expect(counters).toHaveLength(3);
     expect(counters.every((counter) => counter.count === 1)).toBe(true);
+  });
+
+  test("shares self-service email dispatch reservations across Prisma minute and hour windows", async () => {
+    const fixture = await createTemporaryPrismaClient();
+    fixtures.push(fixture);
+    const store = fixture.prisma;
+    const reserveAt = async (nowAt: string, email: string, ip: string) =>
+      store.$transaction((tx) =>
+        reserveEmailDispatchRateLimits(
+          tx,
+          emailDispatchRateLimitReservations({
+            purpose: "self_service_activation",
+            normalizedEmail: email,
+            ip,
+            now: new Date(nowAt),
+          }),
+          new Date(nowAt),
+        ),
+      );
+
+    await expect(reserveAt("2026-07-22T08:10:05.000Z", "self@example.com", "203.0.113.91")).resolves.toEqual({
+      status: "reserved",
+    });
+    await expect(reserveAt("2026-07-22T08:10:50.000Z", "self@example.com", "203.0.113.91")).resolves.toMatchObject({
+      status: "rate_limited",
+      retryAt: new Date("2026-07-22T08:11:05.000Z"),
+    });
+    await expect(reserveAt("2026-07-22T08:11:05.000Z", "self@example.com", "203.0.113.91")).resolves.toEqual({
+      status: "reserved",
+    });
+
+    const hourlyFollowUps = [
+      "2026-07-22T08:12:06.000Z",
+      "2026-07-22T08:13:07.000Z",
+      "2026-07-22T08:14:08.000Z",
+    ];
+    for (const [index, createdAt] of hourlyFollowUps.entries()) {
+      await expect(
+        reserveAt(
+          createdAt,
+          "self@example.com",
+          `203.0.113.${92 + index}`,
+        ),
+      ).resolves.toEqual({ status: "reserved" });
+    }
+    await expect(reserveAt("2026-07-22T08:15:09.000Z", "self@example.com", "203.0.113.99")).resolves.toMatchObject({
+      status: "rate_limited",
+      retryAt: new Date("2026-07-22T09:00:00.000Z"),
+    });
+    await expect(
+      reserveAt("2026-07-22T08:15:09.000Z", "another-self@example.com", "203.0.113.91"),
+    ).resolves.toEqual({ status: "reserved" });
+    await expect(
+      reserveAt("2026-07-22T09:00:00.000Z", "self@example.com", "203.0.113.91"),
+    ).resolves.toEqual({ status: "reserved" });
+  });
+
+  test("prevents concurrent Prisma self-service reservations from oversubscribing the minute window", async () => {
+    const fixture = await createTemporaryPrismaClient();
+    fixtures.push(fixture);
+    const secondClient = await fixture.createClient();
+    const nowAt = new Date("2026-07-22T08:20:00.000Z");
+    const reserve = (client: PrismaClient) =>
+      client.$transaction((tx) =>
+        reserveEmailDispatchRateLimits(
+          tx,
+          emailDispatchRateLimitReservations({
+            purpose: "self_service_activation",
+            normalizedEmail: "race-self@example.com",
+            ip: "203.0.113.120",
+            now: nowAt,
+          }),
+          nowAt,
+        ),
+      );
+
+    const results = await Promise.all([reserve(fixture.prisma), reserve(secondClient)]);
+
+    expect(results.filter((result) => result.status === "reserved")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rate_limited")).toHaveLength(1);
+    await expect(fixture.prisma.authRateLimit.findMany({ orderBy: { scope: "asc" } })).resolves.toMatchObject([
+      { purpose: "self_service_activation", count: 1, scope: "email_hour" },
+      { purpose: "self_service_activation", count: 1, scope: "email_minute" },
+      { purpose: "self_service_activation", count: 1, scope: "ip_hour" },
+    ]);
   });
 
   test("bounds a Prisma correct/wrong fifth-attempt race and creates at most one artifact", async () => {
