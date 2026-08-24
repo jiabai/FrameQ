@@ -162,10 +162,11 @@ export class SelfServiceActivationService {
       case "entitlement_active":
         throw new SelfServiceActivationError("ENTITLEMENT_ACTIVE");
       case "invalid":
-      case "temporarily_unavailable":
         throw new SelfServiceActivationError("ACTIVATION_EMAIL_UNAVAILABLE", {
           retryAt: prepared.retryAt,
         });
+      case "temporarily_unavailable":
+        throw serverTemporarilyUnavailable();
     }
   }
 }
@@ -180,4 +181,3 @@ export function parseActivationEmailLocale(locale: string): ActivationEmailLocal
 function serverTemporarilyUnavailable(): SelfServiceActivationError {
   return new SelfServiceActivationError("SERVER_TEMPORARILY_UNAVAILABLE");
 }
-

@@ -221,8 +221,7 @@ describe("self-service activation service", () => {
       },
       {
         activated: { status: "temporarily_unavailable" },
-        expectedCode: "ACTIVATION_EMAIL_UNAVAILABLE",
-        expectedRetryAt: retryAt,
+        expectedCode: "SERVER_TEMPORARILY_UNAVAILABLE",
       },
     ];
 

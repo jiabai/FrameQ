@@ -27,7 +27,7 @@ describe("activation codes", () => {
     expect(store.activationCodes[0]).toMatchObject({
       issuanceSource: "admin",
       issuedToUserId: null,
-      sentAt: null,
+      sentAt: now,
       disabledReason: null,
       status: "active",
     });
@@ -186,7 +186,7 @@ describe("activation codes", () => {
       issuedToUserId: null,
       redeemBy: new Date("2026-07-21T08:00:00.000Z"),
       createdAt: now,
-      sentAt: null,
+      sentAt: now,
       redeemedAt: null,
       redeemedByUserId: null,
       disabledReason: null,

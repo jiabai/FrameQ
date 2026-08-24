@@ -51,7 +51,7 @@ export class ActivationCodeService {
       issuedToUserId: null,
       redeemBy,
       createdAt: now,
-      sentAt: null,
+      sentAt: now,
       redeemedAt: null,
       redeemedByUserId: null,
       disabledReason: null,
