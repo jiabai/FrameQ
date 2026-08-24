@@ -2,17 +2,6 @@
 
 ## Active UI Work
 
-- [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
-  Windows native Save As manual verification is complete; macOS native dialog evidence remains
-  pending. Earlier automated acceptance recorded scripts 29/29, worker 782 passed / 2 skipped,
-  Rust 316 passed, frontend 740/740, Ruff/rustfmt/lint/build/governance/diff checks passed, and the refreshed
-  packaged worker matched the canonical worker byte-for-byte. The Windows Tauri no-bundle build
-  could not reach a native smoke because rustc failed memory allocation, including after a single-job
-  retry; do not treat the compiler cascade as a product regression. Product spec:
-  `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
-  `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
-  `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
-
 - [x] Prepare and publish FrameQ v0.3.5 desktop feature release (2026-08-16) — ✅ Acceptance:
   Motion interaction enhancement (processing stage, task state, ASR download progress, AI target
   and history list animations; Account/Settings/History/ASR Model/AI Detail and confirmation
@@ -569,6 +558,23 @@
 
 ## 进行中
 
+- [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
+  Windows native Save As manual verification is complete; macOS native dialog evidence remains
+  pending. Earlier automated acceptance recorded scripts 29/29, worker 782 passed / 2 skipped,
+  Rust 316 passed, frontend 740/740, Ruff/rustfmt/lint/build/governance/diff checks passed, and the refreshed
+  packaged worker matched the canonical worker byte-for-byte. The Windows Tauri no-bundle build
+  could not reach a native smoke because rustc failed memory allocation, including after a single-job
+  retry; do not treat the compiler cascade as a product regression. Product spec:
+  `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
+  `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
+  `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
+
+## 待办
+
+（无待办任务）
+
+## 已完成
+
 - [x] 实现 History vNext 严格边界（2026-07-11）— 仅接受当前安全 schema v3 manifest；列表只读 manifest，点击后按需读取单任务详情；移除 Rust/Python 后台迁移及旧 schema 兼容路径；旧目录只物理留存并与历史、缓存、详情、编辑和 retry 隔离。✅ 验收：临时探针 supported=1、ignored=1、list 1.687ms、约 1.8MB 单任务 detail 12.094ms；原生 app-local 验收 supported=5、ignored=1、list 1-7ms、detail 4-37ms 且历史打开不启动 Python；app 230、Rust 92、worker 230、server 57、scripts 9、ruff/build/docs/diff 全部通过。
 
 - [x] 补齐 React/UI 自动化 smoke（2026-07-11）✅ 复用现有 Vite + CDP 与 mock Tauri bridge，新增设置加载/失败/缓存清理、processing/retry/cancelling 历史只读、稳定恢复、延迟文字稿保存隔离和 summary/insights target 确认；focused 16/16 连续通过，app 211、Rust 90、worker 249、server 57、scripts 9 及构建/lint 门禁通过。真实 Tauri WebView、安装包和 OS 行为仍明确保留为残余风险。
@@ -582,13 +588,10 @@
 
 - [x] 实现桌面端一键升级（2026-06-23）— Tauri updater + GitHub Releases updater manifest/artifacts；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 代码完成，自动化门禁全部通过（server 32、app 84、Rust 31、worker 99、ruff、build、docs）。✅ 2026-06-27 项目决策：因中国境内访问 GitHub Releases 速度过慢，不再执行旧版到新版的 GitHub updater 真实下载/安装测试；该项作为 v1 测试豁免，不再阻塞发布。
 
-## 待办
-
 - [x] Add manual audio playback cache management in settings (2026-07-07) - Settings shows `$APPLOCALDATA/outputs/.frameq-audio-review` size as `Audio playback cache: <size>` and provides `Clear audio playback cache`; clearing deletes only that app-local playback cache, preserves `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/` source artifacts, and allows cache regeneration when transcript detail is opened again. ✅ Acceptance: settings UI shows cache size, clear action calls a canonicalized Tauri cleanup command, source task audio remains untouched, and tests cover clear + regenerate-on-open.
 - [x] 完成干净 Windows VM 与 macOS arm64/x64 真实安装包验证（2026-07-08）— 用户确认 Windows 与 macOS 安装包验证已完成且无问题；轻量 runtime 安装包在无 Python/uv/ffmpeg 的干净机器完成首启模型下载、URL → 下载 → ASR 文字稿路径。✅ 验收：干净机器安装、首启模型下载、公开视频转写、app-local 数据保留和签名/公证状态记录完成；若最终公开分发 artifact 仍未签名/公证，需在 release note 中显式披露。
 - [x] 桌面端一键升级 GitHub updater 真实下载/安装测试豁免（2026-06-27）— 因中国境内访问 GitHub Releases 速度过慢，本项目 v1 不再把旧版到新版的 GitHub updater 实测作为验收或发布阻塞项。✅ 验收口径：自动化门禁、manifest/artifact 生成、Tauri 签名校验配置和直接分发新版安装包路径成立；未声明国内 GitHub 网络真实升级链路已实测通过。
 
-## 已完成
 - [x] 实现 Web 用户控制台与桌面登录成功面板（2026-08-03）— ✅ `/dashboard` 邮箱 OTP cookie 会话（复用 `desktop_login` purpose 与 Admin Web 会话模型），账号/额度内容（邮箱、权益到期、AI Credits 限额/已用/剩余/重置、`can_process`/`can_generate_ai`、激活码前缀）；桌面登录成功后显示“登录成功”面板与“去到 Web Dashboard”入口；OTP 行在桌面票据与 Web 会话路径间原子消费一次；Web/桌面会话相互独立。桌面深链登录契约（`{ ticket, redirect_url }`）不变。✅ server 160 通过 / 1 skip，App 669，worker 669，边界/迁移/治理/构建门禁通过。残余风险：生产 `secureCookies` 部署验证（`frameq.8xf.pro`）、Web 会话无 IP/UA 绑定（90 天 TTL）。Spec: `docs/product-specs/2026-08-03-web-user-dashboard.md`. ExecPlan: `docs/exec-plans/completed/2026-08-03-web-user-dashboard-plan.md`.
 - [x] 实现 Server 页面 i18n（2026-08-04）— ✅ `/login`、`/dashboard`、`/admin/login`、`/admin` 四个页面新增 zh-CN（默认）/en/zh-TW 三 locale 切换按钮，`lang` cookie 记忆，`detectLocale` 按 `lang` cookie → `?lang=` 深链 → `Accept-Language` header → 默认 `zh-CN` 顺序解析，新 `server/src/i18n.ts` 模块；不涉及 desktop/worker/ASR/store/Prisma。✅ 29 i18n 单测 + 12 页面集成测试，server 全量 28 文件 / 201 通过 / 1 skip，TypeScript build 与治理验证通过。残余风险：`lang` cookie 非 `Secure`、真实浏览器点击未记录。Spec: `docs/product-specs/2026-08-04-server-page-i18n.md`. ExecPlan: `docs/exec-plans/completed/2026-08-04-server-page-i18n-plan.md`.
 - [x] 精简 Inspiration Profile 并拆清本次生成偏好边界（2026-08-05）— Profile v2 只保留六项长期背景，表达风格/避免方向仅归完整六步本次偏好；Tauri 将 v1 app-local 文件原子迁移到 schema v2，且只在没有完整默认偏好时保留一次性 edit-only seed；当前重试快照在 JSON/Rust/Python 边界严格闭合，历史任务快照保持不变。✅ 自动化门禁：App 692/692，Rust 252/252 且修复后 retry focused 9/9，Worker 689 passed / 2 skipped，scripts 29/29，lint/Ruff/rustfmt/docs/diff 通过，packaged worker 比较 73 个文件、0 个不匹配；原生交互式 packaged launch 因 sandbox 未执行，未消耗真实 AI Credit。Design: `docs/design-docs/2026-08-05-inspiration-profile-generation-preference-boundary.md`. ExecPlan: `docs/exec-plans/completed/2026-08-05-inspiration-profile-generation-preference-boundary-plan.md`.

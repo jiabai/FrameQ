@@ -18,6 +18,9 @@
 
 FrameQ is a desktop application that keeps video processing local by default. Paste a supported public or authorized video link, and FrameQ coordinates the local worker to download the video, extract audio, transcribe speech with SenseVoice Small, and export useful files. Summary and insight generation are separate, confirmed steps that use the server-managed LLM checkout and quota flow.
 
+> [!NOTE]
+> Latest stable release: **v0.3.5** (Windows x64, macOS Intel, macOS Apple Silicon). See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
+
 ```text
 Supported video link
   -> yt-dlp download
@@ -66,10 +69,14 @@ Supported video link
 - Public/authorized video download through `yt-dlp`, with focused fallback paths for Douyin, Xiaohongshu, and ordinary Bilibili videos.
 - Media validation with `ffprobe`.
 - Audio extraction with `ffmpeg`.
-- Default release ASR model: `iic/SenseVoiceSmall`.
+- Selectable local ASR models (SenseVoiceSmall default) with on-demand, resumable download into app-local data; PyTorch and ONNX runtimes supported.
 - Optional Qwen ASR adapter remains available for development, but ordinary release builds do not install `qwen-asr` by default.
 - Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
+- Transcript dissection (`文字稿解剖`) AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure and bounded per-run quota.
 - Server-managed account, activation-code monthly pass entitlement, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
+- Browser-side per-user Web dashboard (`/dashboard`) with email-OTP login, plus per-page `zh-CN` / `en` / `zh-TW` switching on the `/login`, `/dashboard`, `/admin/login`, and `/admin` pages.
+- User-initiated, local-only desktop diagnostic export of the most recent seven days from the failure UI and Settings.
+- Motion-enhanced UI with reduced-motion support (processing stage, task state, ASR download progress, AI target, and history list).
 - Exported artifacts:
   - `outputs/tasks/<task_id>/media/video.mp4`
   - `outputs/tasks/<task_id>/media/audio.wav`
