@@ -175,6 +175,14 @@ const expectedCapabilities = {
       "redeemActivationCodeAndGrantEntitlement",
     ],
   },
+  "selfServiceActivation.ts": {
+    alias: "SelfServiceActivationStore",
+    keys: [
+      "activatePreparedSelfServiceActivationCode",
+      "disablePreparedSelfServiceActivationCode",
+      "prepareSelfServiceActivationCode",
+    ],
+  },
   "llmConfig.ts": {
     alias: "LlmConfigStore",
     keys: ["getLlmConfig", "upsertLlmConfig"],

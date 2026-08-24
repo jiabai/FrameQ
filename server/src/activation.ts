@@ -1,15 +1,18 @@
-import { randomBytes } from "node:crypto";
-import { sha256 } from "./security.js";
+import {
+  activationCodeHash,
+  activationCodePrefix,
+  DEFAULT_ENTITLEMENT_DAYS,
+  DEFAULT_REDEEM_WINDOW_DAYS,
+  generateActivationCode,
+  normalizeActivationCode,
+  SELF_SERVICE_LLM_QUOTA,
+} from "./activationPolicy.js";
 import type { ActivationCodeRecord, Store } from "./store.js";
 
 type ActivationStore = Pick<
   Store,
   "createActivationCode" | "redeemActivationCodeAndGrantEntitlement"
 >;
-
-const ACTIVATION_CODE_DAYS = 31;
-const DEFAULT_REDEEM_BY_DAYS = 30;
-const LLM_QUOTA_PER_ACTIVATION = 20;
 
 export type ActivationCodeServiceOptions = {
   store: ActivationStore;
@@ -37,17 +40,18 @@ export class ActivationCodeService {
     const now = this.now();
     const code = generateActivationCode();
     const redeemBy =
-      input.redeemBy ?? new Date(now.getTime() + DEFAULT_REDEEM_BY_DAYS * 24 * 60 * 60 * 1000);
+      input.redeemBy ??
+      new Date(now.getTime() + DEFAULT_REDEEM_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const record = await this.store.createActivationCode({
-      codeHash: sha256(normalizeActivationCode(code)),
-      codePrefix: code.slice(0, 7),
+      codeHash: activationCodeHash(code),
+      codePrefix: activationCodePrefix(code),
       status: "active",
       issuanceSource: "admin",
-      entitlementDays: ACTIVATION_CODE_DAYS,
+      entitlementDays: DEFAULT_ENTITLEMENT_DAYS,
       issuedToUserId: null,
       redeemBy,
       createdAt: now,
-      sentAt: now,
+      sentAt: null,
       redeemedAt: null,
       redeemedByUserId: null,
       disabledReason: null,
@@ -68,9 +72,9 @@ export class ActivationCodeService {
     const now = this.now();
     const redeemed = await this.store.redeemActivationCodeAndGrantEntitlement({
       sessionTokenHash: input.sessionTokenHash,
-      codeHash: sha256(normalizeActivationCode(input.code)),
+      codeHash: activationCodeHash(input.code),
       now,
-      llmQuotaPerActivation: LLM_QUOTA_PER_ACTIVATION,
+      llmQuotaPerActivation: SELF_SERVICE_LLM_QUOTA,
     });
     if (redeemed.status === "session_invalid") {
       throw new Error("Desktop session is invalid or expired.");
@@ -85,23 +89,10 @@ export class ActivationCodeService {
   }
 }
 
-export function normalizeActivationCode(code: string): string {
-  return code.trim().toUpperCase().replace(/\s+/g, "");
-}
-
-function generateActivationCode(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let raw = "";
-  const bytes = randomBytes(16);
-  for (const byte of bytes) {
-    raw += alphabet[byte % alphabet.length];
-  }
-  return `FQ-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}`;
-}
-
 function invalidActivationCodeError(): Error {
   return new Error("Activation code is invalid or expired.");
 }
 
-export const activationCodeDays = ACTIVATION_CODE_DAYS;
-export const llmQuotaPerActivation = LLM_QUOTA_PER_ACTIVATION;
+export { normalizeActivationCode };
+export const activationCodeDays = DEFAULT_ENTITLEMENT_DAYS;
+export const llmQuotaPerActivation = SELF_SERVICE_LLM_QUOTA;

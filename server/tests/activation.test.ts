@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { ActivationCodeService } from "../src/activation.js";
+import {
+  DEFAULT_ENTITLEMENT_DAYS,
+  activationCodeHash,
+  normalizeActivationCode,
+} from "../src/activationPolicy.js";
 import { sha256 } from "../src/security.js";
 import { MemoryStore } from "../src/store.js";
 
@@ -13,12 +18,19 @@ describe("activation codes", () => {
     const generated = await service.generateCode();
 
     expect(generated.code).toMatch(/^FQ-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
-    expect(generated.entitlementDays).toBe(31);
+    expect(generated.entitlementDays).toBe(DEFAULT_ENTITLEMENT_DAYS);
     expect(generated.redeemBy.toISOString()).toBe("2026-07-21T08:00:00.000Z");
     expect(store.activationCodes).toHaveLength(1);
-    expect(store.activationCodes[0]?.codeHash).toBe(sha256(generated.code));
+    expect(store.activationCodes[0]?.codeHash).toBe(activationCodeHash(generated.code));
     expect(store.activationCodes[0]?.codeHash).not.toContain(generated.code);
     expect(store.activationCodes[0]?.codePrefix).toBe(generated.code.slice(0, 7));
+    expect(store.activationCodes[0]).toMatchObject({
+      issuanceSource: "admin",
+      issuedToUserId: null,
+      sentAt: null,
+      disabledReason: null,
+      status: "active",
+    });
   });
 
   test("redeems a valid code and extends entitlement by 31 days from current expiry", async () => {
@@ -153,5 +165,39 @@ describe("activation codes", () => {
       llmQuotaLimit: 20,
       llmQuotaUsed: 4,
     });
+  });
+
+  test("normalizes admin redemption input before hashing", async () => {
+    const store = new MemoryStore();
+    const user = await store.upsertUserByEmail("normalize@example.com", now);
+    const session = await store.createSession({
+      userId: user.id,
+      tokenHash: "normalize-session",
+      createdAt: now,
+      expiresAt: new Date("2026-07-21T08:00:00.000Z"),
+    });
+    const canonicalCode = "FQ-ABCD-EFGH-JKLM-NPQR";
+    await store.createActivationCode({
+      codeHash: sha256(normalizeActivationCode(canonicalCode)),
+      codePrefix: "FQ-ABCD",
+      status: "active",
+      issuanceSource: "admin",
+      entitlementDays: 31,
+      issuedToUserId: null,
+      redeemBy: new Date("2026-07-21T08:00:00.000Z"),
+      createdAt: now,
+      sentAt: null,
+      redeemedAt: null,
+      redeemedByUserId: null,
+      disabledReason: null,
+    });
+    const service = new ActivationCodeService({ store, now: () => now });
+
+    const result = await service.redeemCode({
+      sessionTokenHash: session.tokenHash,
+      code: " fq-abcd-efgh-jklm-npqr ",
+    });
+
+    expect(result.entitlementExpiresAt.toISOString()).toBe("2026-07-22T08:00:00.000Z");
   });
 });
