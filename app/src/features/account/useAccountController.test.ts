@@ -129,6 +129,7 @@ function createAccountStatus(
     lastVerifiedAt: null,
     canProcess: true,
     canGenerateAi: true,
+    canRequestActivationCode: false,
     serverError: null,
     ...overrides,
   };

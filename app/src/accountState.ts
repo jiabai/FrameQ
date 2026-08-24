@@ -11,7 +11,17 @@ export type AccountStatus = {
   lastVerifiedAt: string | null;
   canProcess: boolean;
   canGenerateAi: boolean;
+  canRequestActivationCode: boolean;
   serverError: string | null;
+};
+
+export type ActivationCodeRequestOutcome = "sent";
+
+export type ActivationCodeRequestState = {
+  requesting: boolean;
+  retryAt: string | null;
+  lastOutcome: ActivationCodeRequestOutcome | null;
+  lastErrorCode: string | null;
 };
 
 export function createGuestAccountStatus(): AccountStatus {
@@ -28,6 +38,7 @@ export function createGuestAccountStatus(): AccountStatus {
     lastVerifiedAt: null,
     canProcess: false,
     canGenerateAi: false,
+    canRequestActivationCode: false,
     serverError: null,
   };
 }
@@ -53,7 +64,17 @@ export function createBrowserPreviewAccountStatus(): AccountStatus {
     lastVerifiedAt: null,
     canProcess: true,
     canGenerateAi: true,
+    canRequestActivationCode: false,
     serverError: "Browser preview fallback",
+  };
+}
+
+export function createActivationCodeRequestState(): ActivationCodeRequestState {
+  return {
+    requesting: false,
+    retryAt: null,
+    lastOutcome: null,
+    lastErrorCode: null,
   };
 }
 
@@ -78,4 +99,12 @@ export function canProcessWithAccount(account: AccountStatus): boolean {
 
 export function canGenerateAiWithAccount(account: AccountStatus): boolean {
   return account.authenticated && account.entitlementStatus === "active" && account.canGenerateAi;
+}
+
+export function canRequestActivationCodeWithAccount(account: AccountStatus): boolean {
+  return (
+    account.authenticated &&
+    account.entitlementStatus !== "active" &&
+    account.canRequestActivationCode
+  );
 }

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
+  canRequestActivationCodeWithAccount,
   canGenerateAiWithAccount,
+  createActivationCodeRequestState,
   canProcessWithAccount,
   createAccountStatusFailure,
   createBrowserPreviewAccountStatus,
@@ -21,11 +23,12 @@ describe("account state", () => {
         llmQuotaUsed: 0,
         llmQuotaRemaining: 0,
         llmQuotaResetsAt: null,
-        llmConfigured: false,
-        lastVerifiedAt: "2026-06-21T08:00:00.000Z",
-        canProcess: false,
-        canGenerateAi: false,
-        serverError: null,
+      llmConfigured: false,
+      lastVerifiedAt: "2026-06-21T08:00:00.000Z",
+      canProcess: false,
+      canGenerateAi: false,
+      canRequestActivationCode: false,
+      serverError: null,
       }),
     ).toBe(false);
   });
@@ -44,6 +47,7 @@ describe("account state", () => {
       lastVerifiedAt: "2026-06-21T08:00:00.000Z",
       canProcess: true,
       canGenerateAi: false,
+      canRequestActivationCode: true,
       serverError: null,
     };
 
@@ -65,6 +69,7 @@ describe("account state", () => {
       lastVerifiedAt: "2026-06-21T08:00:00.000Z",
       canProcess: true,
       canGenerateAi: true,
+      canRequestActivationCode: false,
       serverError: null,
     };
 
@@ -75,7 +80,39 @@ describe("account state", () => {
     const status = createAccountStatusFailure("Tauri command failed");
 
     expect(status.serverError).toBe("Tauri command failed");
+    expect(status.canRequestActivationCode).toBe(false);
     expect(canProcessWithAccount(status)).toBe(false);
+  });
+
+  test("keeps self-service activation disabled in guest and browser-preview defaults", () => {
+    expect(createGuestAccountStatus().canRequestActivationCode).toBe(false);
+    expect(createBrowserPreviewAccountStatus().canRequestActivationCode).toBe(false);
+  });
+
+  test("only exposes activation-code request when the signed-in account is inactive and explicitly allowed", () => {
+    expect(canRequestActivationCodeWithAccount(createGuestAccountStatus())).toBe(false);
+    expect(
+      canRequestActivationCodeWithAccount({
+        ...createBrowserPreviewAccountStatus(),
+        entitlementStatus: "inactive",
+        canRequestActivationCode: true,
+      }),
+    ).toBe(true);
+    expect(
+      canRequestActivationCodeWithAccount({
+        ...createBrowserPreviewAccountStatus(),
+        canRequestActivationCode: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("creates an idle activation-code request state for controller follow-up work", () => {
+    expect(createActivationCodeRequestState()).toEqual({
+      requesting: false,
+      retryAt: null,
+      lastOutcome: null,
+      lastErrorCode: null,
+    });
   });
 
   test("browser preview account remains limited to browser preview runtime", () => {

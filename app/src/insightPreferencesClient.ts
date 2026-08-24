@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import {
-  isPreferenceOptionId,
   validateGenerationPreferences,
   validateInspirationProfile,
   type GenerationPreferences,

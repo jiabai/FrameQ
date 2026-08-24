@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import type { AccountStatus } from "./accountState";
+import { isSupportedLocale, type SupportedLocale } from "./i18n/locale";
 import {
   IpcProtocolError,
   readIpcDataObject,
@@ -38,6 +39,59 @@ export type CheckoutStatus = {
   entitlementExpiresAt: string | null;
 };
 
+export type ActivationCodeRequestResult = {
+  status: "sent";
+  retryAt: string;
+  redeemBy: string;
+};
+
+const ACTIVATION_CODE_REQUEST_ERROR_CODES = [
+  "AUTH_REQUIRED",
+  "FEATURE_NOT_AVAILABLE",
+  "ENTITLEMENT_ACTIVE",
+  "ACTIVATION_REQUEST_RATE_LIMITED",
+  "ACTIVATION_EMAIL_UNAVAILABLE",
+  "SERVER_TEMPORARILY_UNAVAILABLE",
+  "INTERNAL_SERVER_ERROR",
+] as const;
+
+export type ActivationCodeRequestErrorCode =
+  (typeof ACTIVATION_CODE_REQUEST_ERROR_CODES)[number];
+
+export class ActivationCodeRequestError extends Error {
+  readonly errorCode: ActivationCodeRequestErrorCode;
+  readonly retryAt: string | null;
+  readonly httpStatus: number | null;
+
+  constructor(
+    errorCode: ActivationCodeRequestErrorCode,
+    options: {
+      retryAt?: string | null;
+      httpStatus?: number | null;
+    } = {},
+  ) {
+    super(errorCode);
+    this.name = "ActivationCodeRequestError";
+    this.errorCode = errorCode;
+    this.retryAt = options.retryAt ?? null;
+    this.httpStatus = options.httpStatus ?? null;
+  }
+
+  toJSON(): {
+    name: string;
+    errorCode: ActivationCodeRequestErrorCode;
+    retryAt: string | null;
+    httpStatus: number | null;
+  } {
+    return {
+      name: this.name,
+      errorCode: this.errorCode,
+      retryAt: this.retryAt,
+      httpStatus: this.httpStatus,
+    };
+  }
+}
+
 type AccountStatusResponse = {
   authenticated: boolean;
   email: string | null;
@@ -51,6 +105,7 @@ type AccountStatusResponse = {
   last_verified_at: string | null;
   can_process: boolean;
   can_generate_ai: boolean;
+  can_request_activation_code: boolean;
   server_error: string | null;
 };
 
@@ -79,6 +134,12 @@ type CheckoutStatusResponse = {
   order_id: string;
   status: string;
   entitlement_expires_at: string | null;
+};
+
+type ActivationCodeRequestResponse = {
+  status: "sent";
+  retry_at: string;
+  redeem_by: string;
 };
 
 const defaultRunner: AccountCommandRunner = (command, args) => invoke(command, args);
@@ -139,6 +200,30 @@ export async function redeemActivationCode(
   );
 }
 
+export async function requestActivationCode(
+  locale: SupportedLocale,
+  runner: AccountCommandRunner = defaultRunner,
+): Promise<ActivationCodeRequestResult> {
+  if (!isSupportedLocale(locale)) {
+    throw new TypeError(
+      "Activation code request locale must be one of zh-CN, zh-TW, en-US.",
+    );
+  }
+
+  try {
+    return mapActivationCodeRequestResponse(
+      parseActivationCodeRequestResponse(
+        await runner("request_activation_code", { locale }),
+      ),
+    );
+  } catch (error) {
+    if (error instanceof IpcProtocolError) {
+      throw error;
+    }
+    throw parseActivationCodeRequestError(error);
+  }
+}
+
 export async function createWechatCheckout(
   runner: AccountCommandRunner = defaultRunner,
 ): Promise<WechatCheckout> {
@@ -179,7 +264,7 @@ function parseAccountStatusResponse(value: unknown): AccountStatusResponse {
       "can_generate_ai",
       "server_error",
     ],
-    [],
+    ["can_request_activation_code"],
     ACCOUNT_IPC_RESPONSE_INVALID,
   );
   if (
@@ -195,6 +280,7 @@ function parseAccountStatusResponse(value: unknown): AccountStatusResponse {
     !isNullableString(response.last_verified_at) ||
     typeof response.can_process !== "boolean" ||
     typeof response.can_generate_ai !== "boolean" ||
+    !isOptionalBoolean(response.can_request_activation_code) ||
     !isNullableString(response.server_error)
   ) {
     throwInvalidAccountResponse();
@@ -212,6 +298,7 @@ function parseAccountStatusResponse(value: unknown): AccountStatusResponse {
     last_verified_at: response.last_verified_at,
     can_process: response.can_process,
     can_generate_ai: response.can_generate_ai,
+    can_request_activation_code: response.can_request_activation_code ?? false,
     server_error: response.server_error,
   };
 }
@@ -318,8 +405,53 @@ function parseCheckoutStatusResponse(
   };
 }
 
+function parseActivationCodeRequestResponse(
+  value: unknown,
+): ActivationCodeRequestResponse {
+  const response = readLooseObject(value);
+  if (
+    response.status !== "sent" ||
+    typeof response.retry_at !== "string" ||
+    typeof response.redeem_by !== "string"
+  ) {
+    throwInvalidAccountResponse();
+  }
+  return {
+    status: "sent",
+    retry_at: response.retry_at,
+    redeem_by: response.redeem_by,
+  };
+}
+
+function parseActivationCodeRequestError(
+  error: unknown,
+): ActivationCodeRequestError {
+  const response = readLooseObjectOrNull(error);
+  const httpStatus = readOptionalHttpStatus(response);
+  const retryAt = isNullableString(response?.retry_at) ? response.retry_at : null;
+  const errorCode = response?.error_code;
+
+  if (isActivationCodeRequestErrorCode(errorCode)) {
+    return new ActivationCodeRequestError(errorCode, { retryAt, httpStatus });
+  }
+
+  if (httpStatus === 503) {
+    return new ActivationCodeRequestError("SERVER_TEMPORARILY_UNAVAILABLE", {
+      httpStatus,
+    });
+  }
+
+  return new ActivationCodeRequestError("INTERNAL_SERVER_ERROR", {
+    httpStatus,
+  });
+}
+
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
+}
+
+function isOptionalBoolean(value: unknown): value is boolean | undefined {
+  return value === undefined || typeof value === "boolean";
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
@@ -348,6 +480,7 @@ function mapAccountStatus(response: AccountStatusResponse): AccountStatus {
     lastVerifiedAt: response.last_verified_at,
     canProcess: response.can_process,
     canGenerateAi: response.can_generate_ai,
+    canRequestActivationCode: response.can_request_activation_code,
     serverError: response.server_error,
   };
 }
@@ -369,4 +502,67 @@ function mapCheckoutStatus(response: CheckoutStatusResponse): CheckoutStatus {
     status: response.status,
     entitlementExpiresAt: response.entitlement_expires_at,
   };
+}
+
+function mapActivationCodeRequestResponse(
+  response: ActivationCodeRequestResponse,
+): ActivationCodeRequestResult {
+  return {
+    status: response.status,
+    retryAt: response.retry_at,
+    redeemBy: response.redeem_by,
+  };
+}
+
+function readLooseObject(value: unknown): Record<string, unknown> {
+  const response = readLooseObjectOrNull(value);
+  if (!response) {
+    throwInvalidAccountResponse();
+  }
+  return response;
+}
+
+function readLooseObjectOrNull(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return null;
+  }
+
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const entries: Array<readonly [string, unknown]> = [];
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (typeof key !== "string") {
+      return null;
+    }
+    const descriptor = descriptors[key];
+    if (!descriptor || !("value" in descriptor)) {
+      return null;
+    }
+    entries.push([key, descriptor.value] as const);
+  }
+
+  return Object.fromEntries(entries);
+}
+
+function isActivationCodeRequestErrorCode(
+  value: unknown,
+): value is ActivationCodeRequestErrorCode {
+  return (
+    typeof value === "string" &&
+    ACTIVATION_CODE_REQUEST_ERROR_CODES.includes(
+      value as ActivationCodeRequestErrorCode,
+    )
+  );
+}
+
+function readOptionalHttpStatus(response: Record<string, unknown> | null): number | null {
+  if (!response) {
+    return null;
+  }
+  const status = response.http_status;
+  return typeof status === "number" && Number.isSafeInteger(status) ? status : null;
 }

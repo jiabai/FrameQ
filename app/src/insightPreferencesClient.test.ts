@@ -7,7 +7,6 @@ import {
   skipInspirationProfile,
   type InsightPreferenceCommandRunner,
 } from "./insightPreferencesClient";
-import { createInsightPreferenceFlow } from "./insightPreferenceFlow";
 import type { GenerationPreferences, InspirationProfile } from "./insightPreferences";
 
 const PROFILE: InspirationProfile = {

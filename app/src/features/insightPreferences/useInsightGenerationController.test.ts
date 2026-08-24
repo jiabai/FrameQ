@@ -157,6 +157,7 @@ function createAccount(overrides: Partial<AccountStatus> = {}): AccountStatus {
     lastVerifiedAt: "2026-07-09T08:00:00.000Z",
     canProcess: true,
     canGenerateAi: true,
+    canRequestActivationCode: false,
     serverError: null,
     ...overrides,
   };
