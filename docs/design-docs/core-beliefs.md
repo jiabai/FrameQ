@@ -16,7 +16,7 @@
 
 ## 3. Runtime independence
 
-InsightFlow 参考仓库只能作为开发来源。FrameQ 运行期必须依赖本项目内置代码，而不是依赖 `D:\Github\InsightFlow\src\server` 这个本机路径。
+InsightFlow 参考仓库只能作为开发来源。FrameQ 运行期必须依赖本项目内置代码（`worker/frameq_worker/insightflow/`），而不是依赖外部仓库或本机路径。
 
 ## 4. Recoverable partial success
 

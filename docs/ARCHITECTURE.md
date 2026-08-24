@@ -927,7 +927,7 @@ FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 work
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
 | `app/src-tauri/src/worker_runtime/` | Rust worker 命令构造、单一受监督运行器、实例安全取消、progress 校验路由和进程树终止 | `WorkerLane::run` 已统一 process-video、AI retry、source preflight 与 ASR model download；低层生命周期 API 对应用模块不可见 |
 | `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认选中 SenseVoice Small，缺失模型仅在已验证任务提交时按选择下载 |
-| `worker/insightflow/` | 从参考实现复制并裁剪后的灵感生成模块 | 已初始化 splitter、prompt、JSON parser、generator；先用 LLM 做话题分段规划，再逐话题生成问题；planner 失败时 fallback 到直接生成 |
+| `worker/frameq_worker/insightflow/` | 从参考实现复制并裁剪后的灵感生成模块 | 已初始化 splitter、prompt、JSON parser、generator；先用 LLM 做话题分段规划，再逐话题生成问题；planner 失败时 fallback 到直接生成 |
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
 | app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...`; legacy top-level `iic/...` is migrated/cleaned best-effort |
 | app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的 `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `frameq-task.json` | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
@@ -1047,7 +1047,7 @@ graph LR
 - UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
 - `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和私有 process orchestration 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary` 或 `insights` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用。
-- `D:\Github\InsightFlow\src\server` 只允许作为开发参考，禁止成为运行期依赖。
+- 外部参考仓库只允许作为开发来源，禁止成为运行期依赖；运行期必须依赖本仓库 `worker/frameq_worker/insightflow/` 内置代码。
 - 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `cache/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。
 - 灵感失败不得阻断文字稿结果，客户端进入 `部分完成` 状态。

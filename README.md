@@ -131,7 +131,7 @@ flowchart LR
   Insight --> Files
 ```
 
-Runtime boundary: the app must not import from `D:\Github\InsightFlow\src\server`. Required InsightFlow behavior lives inside `worker/insightflow/`.
+Runtime boundary: the app must not import code from outside this repository's `server/`. Required InsightFlow behavior lives inside `worker/frameq_worker/insightflow/`.
 
 ## Quick Start
 
@@ -355,7 +355,7 @@ Tauri passes the JSON argument directly. For manual shell smoke tests, stdin scr
 | `app/` | Tauri + React + TypeScript desktop client |
 | `server/` | TypeScript Fastify account, activation-code monthly pass entitlement, and LLM-checkout service |
 | `worker/` | Python worker for download, media validation, audio extraction, ASR, and InsightFlow |
-| `worker/insightflow/` | Embedded InsightFlow topic generation module |
+| `worker/frameq_worker/insightflow/` | Embedded InsightFlow topic generation module |
 | `deploy/` | Server deployment runbook plus Nginx and systemd reference configs |
 | `outputs/` | Task-owned videos, transcripts, summaries, mindmaps, insight files, and task manifests |
 | app-local `cache/` | Temporary downloads, scratch files, and rebuildable task cache |

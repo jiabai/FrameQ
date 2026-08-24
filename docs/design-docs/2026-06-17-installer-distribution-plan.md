@@ -23,7 +23,7 @@
 |------|------|------|
 | Local-first | `core-beliefs.md §1` | 视频/音频/文字稿默认本机处理；云端仅限话题点生成通过 server-managed LLM checkout 使用 |
 | Worker owns heavy processing | `core-beliefs.md §2` | UI 不直接调 yt-dlp/ffmpeg/ASR/LLM |
-| Runtime independence | `core-beliefs.md §3` | 不依赖 `D:\Github\InsightFlow\src\server` |
+| Runtime independence | `core-beliefs.md §3` | 不依赖外部仓库或本机路径，运行期用内置 `worker/frameq_worker/insightflow/` |
 | Recoverable partial success | `core-beliefs.md §4` | 话题点失败不丢文字稿 |
 | Observable progress | `core-beliefs.md §5` | 长耗时阶段必须有可见状态 |
 | Secrets 不硬编码 | `SECURITY.md §Secrets` | LLM Key 不进入桌面安装包和本机 `.env`，只由 FrameQ server 管理员托管 |

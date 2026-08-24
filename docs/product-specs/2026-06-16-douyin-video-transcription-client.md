@@ -154,7 +154,7 @@
 - 不绕过平台访问限制或风控。
 - MVP 不要求字幕 `srt`、批量 URL、OCR 或完整模型管理中心。
 - MVP 不把大模型权重打包进安装包。
-- MVP 不依赖 `D:\Github\InsightFlow\src\server` 作为运行期 import 路径。
+- MVP 不依赖外部仓库作为运行期 import 路径（灵感能力内置到 `worker/frameq_worker/insightflow/`）。
 
 ## 使用场景
 

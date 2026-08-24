@@ -323,7 +323,7 @@ worker 生成解剖时应新增
 ## Module Split & Interfaces（实现侧设计）
 
 解剖能力应内置于 `worker/frameq_worker/insightflow/`，不跨目录 import
-（遵循"运行期不得从 `D:\Github\InsightFlow\src\server` 跨目录 import"铁律）。规划模块树：
+（遵循"运行期不得跨目录 import 本仓库 `server/` 之外的代码"铁律）。规划模块树：
 
 ```text
 worker/frameq_worker/insightflow/
