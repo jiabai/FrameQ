@@ -1,6 +1,3 @@
-# Agent skills
-.agents/skills/
-
 # Dependencies and local environments
 node_modules/
 app/node_modules/
@@ -37,13 +34,6 @@ server/backups/
 !app/src-tauri/resources/.env.template
 *.local
 
-# Local agent metadata and status
-HEARTBEAT.md
-IDENTITY.md
-SOUL.md
-TOOLS.md
-USER.md
-
 # Python cache
 __pycache__/
 *.py[cod]
@@ -52,10 +42,7 @@ __pycache__/
 .tmp/
 
 .workbuddy/
-.superpowers/
 .worktrees/
-.openclaw/
-.openclaw-attachments/
 
 # Runtime logs and diagnostics
 error-log/
