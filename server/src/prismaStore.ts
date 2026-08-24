@@ -8,11 +8,8 @@ import * as authOperations from "./prismaStore/auth.js";
 import * as billingOperations from "./prismaStore/billing.js";
 import * as entitlementOperations from "./prismaStore/entitlements.js";
 import * as llmConfigOperations from "./prismaStore/llmConfig.js";
+import * as selfServiceActivationOperations from "./prismaStore/selfServiceActivation.js";
 import * as userSessionOperations from "./prismaStore/userSession.js";
-
-function unsupportedSelfServiceActivationStoreMethod(method: string): never {
-  throw new Error(`${method} is not implemented yet.`);
-}
 
 export class PrismaStore implements Store {
   constructor(private readonly prisma: PrismaClient) {}
@@ -209,21 +206,30 @@ export class PrismaStore implements Store {
   }
 
   async prepareSelfServiceActivationCode(
-    _input: Parameters<Store["prepareSelfServiceActivationCode"]>[0],
+    input: Parameters<Store["prepareSelfServiceActivationCode"]>[0],
   ): ReturnType<Store["prepareSelfServiceActivationCode"]> {
-    unsupportedSelfServiceActivationStoreMethod("prepareSelfServiceActivationCode");
+    return selfServiceActivationOperations.prepareSelfServiceActivationCode(
+      this.prisma,
+      input,
+    );
   }
 
   async disablePreparedSelfServiceActivationCode(
-    _input: Parameters<Store["disablePreparedSelfServiceActivationCode"]>[0],
+    input: Parameters<Store["disablePreparedSelfServiceActivationCode"]>[0],
   ): ReturnType<Store["disablePreparedSelfServiceActivationCode"]> {
-    unsupportedSelfServiceActivationStoreMethod("disablePreparedSelfServiceActivationCode");
+    return selfServiceActivationOperations.disablePreparedSelfServiceActivationCode(
+      this.prisma,
+      input,
+    );
   }
 
   async activatePreparedSelfServiceActivationCode(
-    _input: Parameters<Store["activatePreparedSelfServiceActivationCode"]>[0],
+    input: Parameters<Store["activatePreparedSelfServiceActivationCode"]>[0],
   ): ReturnType<Store["activatePreparedSelfServiceActivationCode"]> {
-    unsupportedSelfServiceActivationStoreMethod("activatePreparedSelfServiceActivationCode");
+    return selfServiceActivationOperations.activatePreparedSelfServiceActivationCode(
+      this.prisma,
+      input,
+    );
   }
 
   async redeemActivationCodeAndGrantEntitlement(

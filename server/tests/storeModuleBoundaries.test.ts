@@ -32,6 +32,7 @@ const expectedPrismaOwners = [
   "entitlements.ts",
   "llmConfig.ts",
   "rateLimits.ts",
+  "selfServiceActivation.ts",
   "userSession.ts",
 ] as const;
 
@@ -103,6 +104,18 @@ const semanticOwners = {
   applyEntitlementAdjustmentWithAudit: {
     memory: "store/memory/entitlements.ts",
     prisma: "prismaStore/entitlements.ts",
+  },
+  prepareSelfServiceActivationCode: {
+    memory: "store/memory/selfServiceActivation.ts",
+    prisma: "prismaStore/selfServiceActivation.ts",
+  },
+  disablePreparedSelfServiceActivationCode: {
+    memory: "store/memory/selfServiceActivation.ts",
+    prisma: "prismaStore/selfServiceActivation.ts",
+  },
+  activatePreparedSelfServiceActivationCode: {
+    memory: "store/memory/selfServiceActivation.ts",
+    prisma: "prismaStore/selfServiceActivation.ts",
   },
   verifyDesktopOtpAndCreateTicketAndWebSession: {
     memory: "store/memory/userSession.ts",
