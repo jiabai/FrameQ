@@ -218,7 +218,7 @@ export async function requestActivationCode(
     );
   } catch (error) {
     if (error instanceof IpcProtocolError) {
-      throw error;
+      throw new ActivationCodeRequestError("INTERNAL_SERVER_ERROR");
     }
     throw parseActivationCodeRequestError(error);
   }
@@ -408,7 +408,12 @@ function parseCheckoutStatusResponse(
 function parseActivationCodeRequestResponse(
   value: unknown,
 ): ActivationCodeRequestResponse {
-  const response = readLooseObject(value);
+  const response = readIpcDataObject(
+    value,
+    ["status", "retry_at", "redeem_by"],
+    [],
+    ACCOUNT_IPC_RESPONSE_INVALID,
+  );
   if (
     response.status !== "sent" ||
     typeof response.retry_at !== "string" ||
@@ -512,14 +517,6 @@ function mapActivationCodeRequestResponse(
     retryAt: response.retry_at,
     redeemBy: response.redeem_by,
   };
-}
-
-function readLooseObject(value: unknown): Record<string, unknown> {
-  const response = readLooseObjectOrNull(value);
-  if (!response) {
-    throwInvalidAccountResponse();
-  }
-  return response;
 }
 
 function readLooseObjectOrNull(value: unknown): Record<string, unknown> | null {

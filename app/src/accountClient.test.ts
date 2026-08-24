@@ -202,7 +202,7 @@ describe("account client", () => {
     ]);
   });
 
-  test("requests activation codes with a whitelisted locale and ignores extra sensitive fields", async () => {
+  test("requests activation codes with a whitelisted locale when the payload matches the closed IPC shape", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: AccountCommandRunner = async (command, args) => {
       calls.push({ command, args });
@@ -210,8 +210,6 @@ describe("account client", () => {
         status: "sent",
         retry_at: "2026-08-24T12:30:00.000Z",
         redeem_by: "2026-08-31T00:00:00.000Z",
-        code: "SECRET-CODE",
-        email: "user@example.com",
       };
     };
 
@@ -235,6 +233,48 @@ describe("account client", () => {
       requestActivationCode("ja-JP" as "zh-CN", runner),
     ).rejects.toThrow("Activation code request locale must be one of zh-CN, zh-TW, en-US.");
     expect(runner).not.toHaveBeenCalled();
+  });
+
+  test("rejects activation-code success payloads with extra fields and sanitizes sensitive values", async () => {
+    const payloads = [
+      {
+        status: "sent",
+        retry_at: "2026-08-24T12:30:00.000Z",
+        redeem_by: "2026-08-31T00:00:00.000Z",
+        code: "SECRET-CODE",
+      },
+      {
+        status: "sent",
+        retry_at: "2026-08-24T12:30:00.000Z",
+        redeem_by: "2026-08-31T00:00:00.000Z",
+        email: "user@example.com",
+      },
+      {
+        status: "sent",
+        retry_at: "2026-08-24T12:30:00.000Z",
+        redeem_by: "2026-08-31T00:00:00.000Z",
+        extra: { token: "SECRET-TOKEN" },
+      },
+    ];
+
+    for (const payload of payloads) {
+      await expect(
+        requestActivationCode("en-US", async () => payload),
+      ).rejects.toMatchObject({
+        name: "ActivationCodeRequestError",
+        errorCode: "INTERNAL_SERVER_ERROR",
+        retryAt: null,
+        httpStatus: null,
+      });
+
+      try {
+        await requestActivationCode("en-US", async () => payload);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ActivationCodeRequestError);
+        expect(JSON.stringify(error)).not.toContain("SECRET");
+        expect(JSON.stringify(error)).not.toContain("user@example.com");
+      }
+    }
   });
 
   test("rejects malformed activation-code success payloads", async () => {
@@ -267,7 +307,12 @@ describe("account client", () => {
     for (const payload of invalidPayloads) {
       await expect(
         requestActivationCode("en-US", async () => payload),
-      ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
+      ).rejects.toMatchObject({
+        name: "ActivationCodeRequestError",
+        errorCode: "INTERNAL_SERVER_ERROR",
+        retryAt: null,
+        httpStatus: null,
+      });
     }
   });
 
