@@ -5,14 +5,18 @@ import urllib.request
 from collections.abc import Iterator, Mapping
 from http.cookiejar import CookieJar
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from frameq_worker.download_reliability import (
+    VIDEO_CONTENT_TYPES,
     SafeDownloadError,
     write_http_response_atomically,
     write_http_stream_atomically,
 )
+from frameq_worker.xiaohongshu.subtitles import is_allowed_subtitle_url
 from frameq_worker.xiaohongshu.types import (
     HttpResponse,
+    XiaohongshuDownloadClient,
     XiaohongshuFallbackError,
     XiaohongshuHttpClient,
 )
@@ -25,6 +29,15 @@ XHS_REFERER = "https://www.xiaohongshu.com/"
 XHS_MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024
 XHS_DOWNLOAD_CHUNK_BYTES = 256 * 1024
 XHS_NO_PROGRESS_TIMEOUT_SECONDS = 120.0
+XHS_MAX_SUBTITLE_BYTES = 2 * 1024 * 1024
+XHS_SUBTITLE_CONTENT_TYPES = (
+    "application/x-subrip",
+    "application/srt",
+    "text/plain",
+    "text/vtt",
+    "application/octet-stream",
+)
+XHS_SUBTITLE_HOST_SUFFIXES = ("xhscdn.com", "xiaohongshu.com")
 
 
 class UrllibXiaohongshuHttpClient:
@@ -71,6 +84,8 @@ class UrllibXiaohongshuHttpClient:
         timeout_seconds: float = 30.0,
         max_bytes: int | None = None,
         no_progress_timeout_seconds: float | None = None,
+        allowed_content_types: tuple[str, ...] | None = None,
+        allowed_host_suffixes: tuple[str, ...] | None = None,
     ) -> int:
         request_headers = dict(headers or {})
         resume_from = _partial_file_size(destination)
@@ -84,6 +99,8 @@ class UrllibXiaohongshuHttpClient:
                 timeout_seconds=timeout_seconds,
                 max_bytes=max_bytes,
                 no_progress_timeout_seconds=no_progress_timeout_seconds,
+                allowed_content_types=allowed_content_types,
+                allowed_host_suffixes=allowed_host_suffixes,
                 resume_from_bytes=resume_from,
             )
         except SafeDownloadError as exc:
@@ -97,6 +114,8 @@ class UrllibXiaohongshuHttpClient:
                 timeout_seconds=timeout_seconds,
                 max_bytes=max_bytes,
                 no_progress_timeout_seconds=no_progress_timeout_seconds,
+                allowed_content_types=allowed_content_types,
+                allowed_host_suffixes=allowed_host_suffixes,
                 resume_from_bytes=0,
             )
 
@@ -109,11 +128,28 @@ class UrllibXiaohongshuHttpClient:
         timeout_seconds: float,
         max_bytes: int | None,
         no_progress_timeout_seconds: float | None,
+        allowed_content_types: tuple[str, ...] | None,
+        allowed_host_suffixes: tuple[str, ...] | None,
         resume_from_bytes: int,
     ) -> int:
+        if allowed_host_suffixes is not None and not _is_allowed_https_host(
+            url, allowed_host_suffixes
+        ):
+            raise SafeDownloadError(
+                "DOWNLOAD_URL_INVALID",
+                "Download URL host is not allowed.",
+            )
         request = urllib.request.Request(url, headers=headers, method="GET")
         try:
             with self._opener.open(request, timeout=timeout_seconds) as response:
+                response_url = response.geturl()
+                if allowed_host_suffixes is not None and not _is_allowed_https_host(
+                    response_url, allowed_host_suffixes
+                ):
+                    raise SafeDownloadError(
+                        "DOWNLOAD_URL_INVALID",
+                        "Download response host is not allowed.",
+                    )
                 return write_http_stream_atomically(
                     HttpResponse(
                         status=response.status,
@@ -124,10 +160,19 @@ class UrllibXiaohongshuHttpClient:
                     _response_chunks(response),
                     destination,
                     max_bytes=max_bytes,
+                    allowed_content_types=allowed_content_types or VIDEO_CONTENT_TYPES,
                     no_progress_timeout_seconds=no_progress_timeout_seconds,
                     resume_from_bytes=resume_from_bytes,
                 )
         except urllib.error.HTTPError as exc:
+            response_url = exc.geturl()
+            if allowed_host_suffixes is not None and not _is_allowed_https_host(
+                response_url, allowed_host_suffixes
+            ):
+                raise SafeDownloadError(
+                    "DOWNLOAD_URL_INVALID",
+                    "Download response host is not allowed.",
+                ) from None
             return write_http_stream_atomically(
                 HttpResponse(
                     status=exc.code,
@@ -138,6 +183,7 @@ class UrllibXiaohongshuHttpClient:
                 _response_chunks(exc),
                 destination,
                 max_bytes=max_bytes,
+                allowed_content_types=allowed_content_types or VIDEO_CONTENT_TYPES,
                 no_progress_timeout_seconds=no_progress_timeout_seconds,
                 resume_from_bytes=resume_from_bytes,
             )
@@ -175,6 +221,49 @@ def download_stream_to_path(
         response,
         output_path,
         max_bytes=XHS_MAX_VIDEO_BYTES,
+    )
+
+
+def download_subtitle_to_path(
+    subtitle_url: str,
+    output_path: Path,
+    http_client: XiaohongshuDownloadClient,
+) -> int:
+    if not is_allowed_subtitle_url(subtitle_url):
+        raise SafeDownloadError(
+            "DOWNLOAD_URL_INVALID",
+            "Subtitle URL is not allowed.",
+        )
+    downloader = getattr(http_client, "download_to_path", None)
+    if callable(downloader):
+        return int(
+            downloader(
+                subtitle_url,
+                output_path,
+                headers=media_headers(),
+                timeout_seconds=20.0,
+                max_bytes=XHS_MAX_SUBTITLE_BYTES,
+                no_progress_timeout_seconds=30.0,
+                allowed_content_types=XHS_SUBTITLE_CONTENT_TYPES,
+                allowed_host_suffixes=XHS_SUBTITLE_HOST_SUFFIXES,
+            )
+        )
+
+    response = http_client.get(
+        subtitle_url,
+        headers=media_headers(),
+        timeout_seconds=20.0,
+    )
+    if not _is_allowed_https_host(response.url, XHS_SUBTITLE_HOST_SUFFIXES):
+        raise SafeDownloadError(
+            "DOWNLOAD_URL_INVALID",
+            "Subtitle response host is not allowed.",
+        )
+    return write_http_response_atomically(
+        response,
+        output_path,
+        max_bytes=XHS_MAX_SUBTITLE_BYTES,
+        allowed_content_types=XHS_SUBTITLE_CONTENT_TYPES,
     )
 
 
@@ -253,3 +342,20 @@ def _partial_file_size(destination: Path) -> int:
         return part_path.stat().st_size if part_path.is_file() else 0
     except OSError:
         return 0
+
+
+def _is_allowed_https_host(url: str, suffixes: tuple[str, ...]) -> bool:
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname
+    except ValueError:
+        return False
+    if parsed.scheme.lower() != "https" or not hostname:
+        return False
+    if parsed.username is not None or parsed.password is not None:
+        return False
+    normalized_host = hostname.rstrip(".").lower()
+    return any(
+        normalized_host == suffix or normalized_host.endswith(f".{suffix}")
+        for suffix in suffixes
+    )

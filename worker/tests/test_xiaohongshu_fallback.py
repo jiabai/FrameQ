@@ -339,6 +339,122 @@ def test_download_xiaohongshu_video_uses_streaming_download_when_available(
     assert headers["Accept"] == "*/*"
 
 
+def test_download_subtitle_writes_srt_atomically_and_uses_media_headers(
+    tmp_path: Path,
+) -> None:
+    subtitle_url = "https://sns-video-a.xhscdn.com/source.srt"
+    body = b"1\n00:00:00,000 --> 00:00:01,000\nplatform subtitle\n"
+    destination = tmp_path / "note.zh-CN.srt"
+    client = FakeHttpClient(
+        {
+            subtitle_url: [
+                HttpResponse(
+                    status=200,
+                    headers={
+                        "Content-Type": "application/x-subrip",
+                        "Content-Length": str(len(body)),
+                    },
+                    body=body,
+                    url=subtitle_url,
+                )
+            ]
+        }
+    )
+
+    assert (
+        private_transport.download_subtitle_to_path(subtitle_url, destination, client)
+        == len(body)
+    )
+    assert destination.read_bytes() == body
+    assert not destination.with_name(f"{destination.name}.part").exists()
+    assert client.calls[0][1]["Referer"] == "https://www.xiaohongshu.com/"
+    assert client.calls[0][1]["Accept"] == "*/*"
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        HttpResponse(
+            status=404,
+            headers={"Content-Type": "application/x-subrip"},
+            body=b"missing",
+            url="https://sns-video-a.xhscdn.com/source.srt",
+        ),
+        HttpResponse(
+            status=200,
+            headers={"Content-Type": "application/x-subrip"},
+            body=b"",
+            url="https://sns-video-a.xhscdn.com/source.srt",
+        ),
+        HttpResponse(
+            status=200,
+            headers={"Content-Type": "text/html"},
+            body=b"<html>blocked</html>",
+            url="https://sns-video-a.xhscdn.com/source.srt",
+        ),
+        HttpResponse(
+            status=200,
+            headers={"Content-Type": "video/mp4"},
+            body=b"video bytes",
+            url="https://sns-video-a.xhscdn.com/source.srt",
+        ),
+        HttpResponse(
+            status=200,
+            headers={
+                "Content-Type": "application/x-subrip",
+                "Content-Length": str(2 * 1024 * 1024 + 1),
+            },
+            body=b"small body",
+            url="https://sns-video-a.xhscdn.com/source.srt",
+        ),
+        HttpResponse(
+            status=200,
+            headers={"Content-Type": "application/x-subrip"},
+            body=b"x" * (2 * 1024 * 1024 + 1),
+            url="https://sns-video-a.xhscdn.com/source.srt",
+        ),
+    ],
+)
+def test_download_subtitle_rejects_unsafe_response_and_preserves_destination(
+    tmp_path: Path,
+    response: HttpResponse,
+) -> None:
+    subtitle_url = "https://sns-video-a.xhscdn.com/source.srt"
+    destination = tmp_path / "note.zh-CN.srt"
+    destination.write_bytes(b"previous")
+    client = FakeHttpClient({subtitle_url: [response]})
+
+    with pytest.raises(SafeDownloadError):
+        private_transport.download_subtitle_to_path(subtitle_url, destination, client)
+
+    assert destination.read_bytes() == b"previous"
+    assert not destination.with_name(f"{destination.name}.part").exists()
+
+
+def test_download_subtitle_rejects_cross_host_final_url(tmp_path: Path) -> None:
+    subtitle_url = "https://sns-video-a.xhscdn.com/source.srt"
+    destination = tmp_path / "note.zh-CN.srt"
+    destination.write_bytes(b"previous")
+    client = FakeHttpClient(
+        {
+            subtitle_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "application/x-subrip"},
+                    body=b"1\n00:00:00,000 --> 00:00:01,000\ntext\n",
+                    url="https://example.invalid/redirected.srt",
+                )
+            ]
+        }
+    )
+
+    with pytest.raises(SafeDownloadError):
+        private_transport.download_subtitle_to_path(subtitle_url, destination, client)
+
+    assert destination.read_bytes() == b"previous"
+    assert not destination.with_name(f"{destination.name}.part").exists()
+
+
 def test_download_xiaohongshu_video_retries_backup_stream(tmp_path: Path) -> None:
     client = FakeHttpClient(
         {
@@ -737,9 +853,18 @@ def test_invalid_resume_response_restarts_without_range(
         timeout_seconds: float,
         max_bytes: int | None,
         no_progress_timeout_seconds: float | None,
+        allowed_content_types: tuple[str, ...] | None,
+        allowed_host_suffixes: tuple[str, ...] | None,
         resume_from_bytes: int,
     ) -> int:
-        del url, timeout_seconds, max_bytes, no_progress_timeout_seconds
+        del (
+            url,
+            timeout_seconds,
+            max_bytes,
+            no_progress_timeout_seconds,
+            allowed_content_types,
+            allowed_host_suffixes,
+        )
         calls.append((dict(headers), resume_from_bytes, part_path.exists()))
         if len(calls) == 1:
             raise SafeDownloadError(
