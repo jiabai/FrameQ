@@ -1,7 +1,7 @@
 # 自助邮件激活码设计
 
 - 日期：2026-08-24
-- 状态：设计已确认，尚未实现
+- 状态：已实现并归档（2026-08-25）
 - 产品规格：docs/product-specs/2026-08-24-self-service-email-activation-code.md
 - 相关基线：
   - docs/product-specs/2026-06-21-activation-code-authorization.md
@@ -472,11 +472,8 @@ worker 无直接改动，但完整发布门禁仍按 docs/EXECUTION_GATES.md 执
 7. 并发请求和并发兑换都不会创建叠加权益。
 8. 管理员创建的通用码仍可按现有规则兑换和延长有效权益。
 
-## 16. 后续工作门禁
+## 16. 实现结果
 
-本设计确认后，实施前必须：
-
-- 以本设计和产品规格创建 docs/exec-plans/active 下的 ExecPlan；
-- 在 ExecPlan 中列出 schema migration、Store TDD、Server route、邮件模板、Rust IPC、React UI、i18n、Admin Web 和文档同步任务；
-- 由用户确认 ExecPlan 后再修改实现；
-- 实现完成后更新 docs/ARCHITECTURE.md、相关安全说明、TASKS.md 和发布台账。
+- 已按本设计完成 ActivationCode 扩展、三段 migration 链、self-service 发码服务、桌面账号 capability、Rust IPC、React 请求按钮与冷却提示、邮件模板、Admin Web 审计展示以及文档同步。
+- 生产发布顺序按设计执行为 server-first：显式功能开关、SMTP 必需、迁移链先行、桌面 capability 向后兼容。
+- 归档证据见 `docs/exec-plans/completed/2026-08-24-self-service-email-activation-code-plan.md`。

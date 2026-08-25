@@ -1,5 +1,31 @@
 # FrameQ Architecture
 
+## 2026-08-24 Self-service activation email boundary
+
+- The server account surface now has two activation-code issuance paths that share one redemption
+  boundary: administrator universal codes and `self_service_email` account-bound codes. The desktop
+  capability is additive through `GET /api/desktop/account.can_request_activation_code`; older
+  clients can ignore it safely.
+- `POST /api/desktop/activation-codes/request` is auth-first and accepts only the closed locale set
+  `zh-CN`, `zh-TW`, and `en-US`. The route derives the email account from the authenticated session,
+  returns only `status`, `retry_at`, and `redeem_by`, and reports rate limiting through `retry_at`
+  plus `Retry-After`.
+- Self-service issuance is fail-closed across two transactions: prepare one `pending_delivery`
+  bound code and reserve persisted dispatch limits, send the plaintext only through SMTP, then
+  activate the prepared code only after SMTP acceptance. `pending_delivery` never redeems.
+- `ActivationCode` is the single source of truth for issuance source, bound account, status,
+  `sentAt`, and disabled reason. Self-service rows use `pending_delivery`, `active`, `redeemed`,
+  `expired`, and `disabled`; disable reasons are `delivery_failed`, `activation_became_active`, and
+  `superseded`. A partial unique SQLite index allows at most one active self-service code per user.
+- Redemption remains one Store transaction. Administrator codes retain the existing “extend from the
+  later of now/current expiry” behavior. Self-service codes require the bound session user, fail
+  when entitlement is already active, and on success start a fresh 31-day window with quota reset
+  to limit 20 / used 0. After expiry, the same account can repeat the cycle without a lifetime cap.
+- Production rollout is Server-first behind `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED`, which must be
+  explicit in production and defaults false in development/test. Reviewed schema rollout uses the
+  migration chain `202608240001`, `202608240002`, and `202608240003` after the existing baseline
+  and user-session migrations.
+
 ## 2026-08-10 Desktop diagnostic export boundary
 
 - The global desktop-worker contract is v8. `FRAMEQ_DIAGNOSTIC ` is a separate, strict stderr

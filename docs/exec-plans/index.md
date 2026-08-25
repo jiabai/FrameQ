@@ -17,6 +17,8 @@ Exec plans capture task-specific implementation intent, progress, and recovery c
 - Keep active work in `active/`.
 - Move completed work to `completed/`.
 - Capture cross-cutting debt in `tech-debt-tracker.md`.
+- Current completed implementation of the self-service activation email rollout is archived at
+  `completed/2026-08-24-self-service-email-activation-code-plan.md`.
 
 ## Required Sections
 

@@ -1,7 +1,7 @@
 # FrameQ Server Deployment
 
 This directory contains deployment notes and reference configs for the FrameQ account,
-activation-code, LLM-checkout and entitlement server.
+activation-code, self-service activation-email, LLM-checkout, and entitlement server.
 
 - [server-deployment.md](./server-deployment.md) - production deployment runbook.
 - [nginx/frameq-server.conf](./nginx/frameq-server.conf) - Nginx reverse proxy sample.

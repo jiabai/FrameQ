@@ -2,6 +2,23 @@
 
 ## Active UI Work
 
+- [x] Implement self-service email activation codes (2026-08-25) — ✅ Inactive or expired signed-in
+  desktop accounts can request an account-bound activation code by email, manually redeem it for a
+  fresh 31-day entitlement plus 20 AI Credits, and repeat after every expiry without stacking active
+  entitlement. Server rollout is kill-switch guarded by
+  `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` (production explicit true/false, `0`/`1` compatible,
+  dev/test default false) and requires SMTP with no console fallback. New route
+  `POST /api/desktop/activation-codes/request` is auth-first, accepts only locale, returns
+  `status/retry_at/redeem_by`, and pairs with `GET /api/desktop/account.can_request_activation_code`.
+  `ActivationCode` now tracks source/bound account/delivery metadata; self-service rows fail closed
+  through `pending_delivery`, activate only after SMTP acceptance, supersede older active
+  self-service codes, and disable with `delivery_failed`, `activation_became_active`, or
+  `superseded` as needed. Migration chain reviewed:
+  `202608240001_self_service_email_activation`,
+  `202608240002_auth_rate_limit_self_service_purpose`,
+  `202608240003_self_service_active_unique`. Documentation gates and `git diff --check` passed.
+  ExecPlan: `docs/exec-plans/completed/2026-08-24-self-service-email-activation-code-plan.md`.
+
 - [x] Prepare and publish FrameQ v0.3.5 desktop feature release (2026-08-16) — ✅ Acceptance:
   Motion interaction enhancement (processing stage, task state, ASR download progress, AI target
   and history list animations; Account/Settings/History/ASR Model/AI Detail and confirmation

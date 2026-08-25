@@ -2,9 +2,9 @@
 
 ## 1. Supported topology
 
-FrameQ server handles account OTP login, administrator access, activation entitlements, encrypted
-LLM configuration, and atomic AI-credit checkout. It never receives desktop video, audio,
-transcript, or generated-content files.
+FrameQ server handles account OTP login, administrator access, activation entitlements, self-service
+activation email delivery, encrypted LLM configuration, and atomic AI-credit checkout. It never
+receives desktop video, audio, transcript, or generated-content files.
 
 The supported first production topology is one process and one local SQLite database:
 
@@ -32,6 +32,7 @@ production.
 NODE_ENV=production
 FRAMEQ_SERVER_HOST=127.0.0.1
 FRAMEQ_SERVER_PORT=8787
+FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=false
 DATABASE_URL=file:/opt/frameq/FrameQ/server/data/frameq.sqlite
 FRAMEQ_ADMIN_EMAIL=admin@example.com
 FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY=<at-least-32-random-characters>
@@ -44,8 +45,10 @@ WECHAT_PAY_ENABLED=0
 ```
 
 Generate the encryption key with `openssl rand -hex 32`. Back up the exact key separately from the
-database; encrypted LLM credentials cannot be recovered without it. Never put `.env`, database,
-backup, log, certificate private-key, or restore artifacts in Git.
+database; encrypted LLM credentials cannot be recovered without it. `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED`
+must be explicitly set to `true`/`false` in production and also accepts `1`/`0`. Development and
+test default to `false`; production omitting the variable is a startup failure. Never put `.env`,
+database, backup, log, certificate private-key, or restore artifacts in Git.
 
 ## 3. Install and validate code
 
@@ -67,7 +70,17 @@ locked development toolchain as well as runtime dependencies.
 ## 4. Database migration paths
 
 Production schema changes use reviewed Prisma migrations only. The deployment script invokes
-`prisma migrate deploy`; never use schema push against a production database.
+`prisma migrate deploy`; never use schema push against a production database. For the self-service
+activation rollout, the reviewed chain is:
+
+```text
+202607220001_baseline
+202607220002_auth_quota_hardening
+202608030001_user_session
+202608240001_self_service_email_activation
+202608240002_auth_rate_limit_self_service_purpose
+202608240003_self_service_active_unique
+```
 
 For a fresh database, create an empty local file with restrictive permissions, deploy all reviewed
 migrations, then run database preflight and migration status:
@@ -169,6 +182,18 @@ Then verify one non-user test-inbox OTP login, administrator login, ticket excha
 quota checkout with a fake/provider-approved test path, log redaction, and `systemctl restart`.
 Do not record the mailbox, OTP, session, request body, prompt, LLM key, or raw database error.
 
+For self-service activation rollout, also verify:
+
+- `GET /api/desktop/account` reports `can_request_activation_code=false` while the flag is off and
+  `true` only for authenticated accounts whose entitlement is absent or expired.
+- `POST /api/desktop/activation-codes/request` rejects unauthenticated calls first, accepts only
+  `locale` in the closed set `zh-CN|zh-TW|en-US`, and on success returns only `status=sent`,
+  `retry_at`, and `redeem_by`.
+- SMTP delivery succeeds with the reviewed template, and Admin Web shows source/bound account/status
+  metadata without plaintext.
+- A request made while entitlement is active returns `409 ENTITLEMENT_ACTIVE`, and a rate-limited
+  request returns `429` with `retry_at` and `Retry-After`.
+
 Nginx exposes only the exact health paths. Fastify trusts forwarded addresses only when its direct
 peer is loopback. Port 8787 must remain firewalled from the Internet.
 
@@ -177,10 +202,11 @@ peer is loopback. Port 8787 must remain firewalled from the Internet.
 Rollback restores a matched code, database, and configuration set:
 
 1. stop the service;
-2. preserve the failed deployment for offline diagnosis without logging its contents;
-3. restore the prior reviewed code/tag, complete SQLite backup, and matching `.env`/encryption key;
-4. verify SHA-256, run the isolated restore smoke, and confirm migration status with that code;
-5. replace the live set only after rehearsal succeeds, start the service, and repeat health/login/
+2. set `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=false`;
+3. preserve the failed deployment for offline diagnosis without logging its contents;
+4. restore the prior reviewed code/tag, complete SQLite backup, and matching `.env`/encryption key;
+5. verify SHA-256, run the isolated restore smoke, and confirm migration status with that code;
+6. replace the live set only after rehearsal succeeds, start the service, and repeat health/login/
    quota/log-redaction smoke checks.
 
 Do not write an ad-hoc reverse migration and do not reverse-edit live entitlement, usage-event,

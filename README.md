@@ -73,7 +73,7 @@ Supported video link
 - Optional Qwen ASR adapter remains available for development, but ordinary release builds do not install `qwen-asr` by default.
 - Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
 - Transcript dissection (`文字稿解剖`) AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure and bounded per-run quota.
-- Server-managed account, activation-code monthly pass entitlement, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
+- Server-managed account, activation-code monthly pass entitlement, self-service activation-email requests for inactive or expired desktop accounts, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
 - Browser-side per-user Web dashboard (`/dashboard`) with email-OTP login, plus per-page `zh-CN` / `en` / `zh-TW` switching on the `/login`, `/dashboard`, `/admin/login`, and `/admin` pages.
 - User-initiated, local-only desktop diagnostic export of the most recent seven days from the failure UI and Settings.
 - Motion-enhanced UI with reduced-motion support (processing stage, task state, ASR download progress, AI target, and history list).
@@ -121,7 +121,7 @@ flowchart LR
   App --> Account["Account and Quota API"]
   Account --> Server["FrameQ Server"]
   Server --> SQLite["SQLite"]
-  Server --> SMTP["SMTP OTP"]
+  Server --> SMTP["SMTP OTP + activation email"]
 
   App --> Confirm["Insight Confirmation"]
   Confirm --> Checkout["LLM Checkout"]
@@ -273,7 +273,16 @@ This file is for local output, ASR, and model-download settings only. Insight-to
 
 ## Server Deployment
 
-The `server/` service handles account login, activation-code monthly pass entitlement, and server-managed LLM checkout. Users open the 31-day monthly pass by redeeming an administrator-issued activation code; the WeChat purchase channel is paused because of WeChat approval requirements and remains disabled by default.
+The `server/` service handles account login, activation-code monthly pass entitlement, self-service activation-code email delivery, and server-managed LLM checkout. Inactive or expired desktop accounts can request a code by email through `POST /api/desktop/activation-codes/request`; the request is authenticated first, accepts only `locale`, returns only `status`, `retry_at`, and `redeem_by`, and never returns the plaintext code. `GET /api/desktop/account` now advertises the additive `can_request_activation_code` capability so newer clients can show the request action while older clients continue working unchanged. The WeChat purchase channel remains paused and disabled by default.
+
+Self-service rollout is Server-first and fail-closed:
+
+- `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` must be explicitly `true` or `false` in production and accepts `0`/`1` as false/true; development and test default to `false`.
+- The feature is unavailable unless SMTP is configured; missing SMTP or partial SMTP configuration is a production startup failure, and there is no console fallback for activation-code email.
+- Request eligibility is enforced on the Server: only a valid desktop session whose entitlement is missing or expired can request a code.
+- Successful requests are cooled down by persisted dispatch limits: one per email per 60 seconds, five per email per fixed hour, and twenty per trusted client IP per fixed hour. Rate-limited responses return `retry_at` and `Retry-After`.
+- Self-service codes are account-bound and move through `pending_delivery -> active -> redeemed|expired|disabled`. `pending_delivery` codes fail closed and cannot redeem. SMTP acceptance activates the code, supersedes older active self-service codes for that same account, and a later active entitlement disables any waiting pending code with `activation_became_active`.
+- Each successful self-service redemption starts a fresh 31-day entitlement window from `now` and resets quota to `llmQuotaLimit=20` / `llmQuotaUsed=0`. Expired accounts can repeat the cycle without a lifetime cap; active entitlements cannot pre-renew or stack.
 
 Production domain:
 
@@ -316,6 +325,24 @@ npm --prefix server run db:migrate:status
 npm --prefix server run db:preflight -- --mode current
 ```
 
+The current reviewed migration chain for self-service activation rollout is:
+
+```text
+202607220001_baseline
+202607220002_auth_quota_hardening
+202608030001_user_session
+202608240001_self_service_email_activation
+202608240002_auth_rate_limit_self_service_purpose
+202608240003_self_service_active_unique
+```
+
+Production rollout and rollback checklist:
+
+- Deploy the reviewed migration chain and Server code with `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=false`.
+- Verify SMTP delivery, `/health/live`, `/health/ready`, `GET /api/desktop/account`, the request route, and the Admin Web activation-code audit table before enabling the flag.
+- Turn the feature on only after the desktop build that understands `can_request_activation_code` is available.
+- If rollback is needed, switch the flag off first, then restore the matched code/database/config set per `deploy/server-deployment.md`.
+
 See [the production runbook](deploy/server-deployment.md) before migrating, backing up, restoring,
 or rolling back a deployed SQLite database.
 
@@ -353,7 +380,7 @@ Tauri passes the JSON argument directly. For manual shell smoke tests, stdin scr
 | Path | Role |
 | --- | --- |
 | `app/` | Tauri + React + TypeScript desktop client |
-| `server/` | TypeScript Fastify account, activation-code monthly pass entitlement, and LLM-checkout service |
+| `server/` | TypeScript Fastify account, activation-code monthly pass entitlement, self-service activation email, and LLM-checkout service |
 | `worker/` | Python worker for download, media validation, audio extraction, ASR, and InsightFlow |
 | `worker/frameq_worker/insightflow/` | Embedded InsightFlow topic generation module |
 | `deploy/` | Server deployment runbook plus Nginx and systemd reference configs |
@@ -391,6 +418,10 @@ npm --prefix app run tauri -- build --no-bundle
 - FrameQ is for public videos, user-owned videos, or videos the user is authorized to process.
 - FrameQ does not implement bypasses for platform login walls, access controls, CAPTCHA, or privacy restrictions.
 - The account service stores email accounts, OTP metadata, session token hashes, activation-code records, entitlements, encrypted LLM config, and quota events.
+- Self-service activation email derives the destination strictly from the authenticated session. Plaintext codes live only in one email-sending process memory window and the outbound email; they are excluded from logs, Admin HTML, desktop IPC responses, diagnostics, and local UI persistence.
+- The self-service path has no console delivery fallback. Missing SMTP keeps the capability unavailable, and production requires full SMTP configuration before startup succeeds.
+- Activation-code persistence is hash-only. Self-service rows add source, bound account, delivery metadata, and disabled reason, with a partial unique index allowing at most one active self-service code per account.
+- Persisted self-service rate limits use the same reviewed database-backed window policy as OTP dispatch: 60 seconds per email, 5 per email per fixed hour, and 20 per trusted client IP per fixed hour.
 - The account service must not receive video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents.
 - If insight topic generation is enabled, transcript text may be sent to the server-managed OpenAI-compatible LLM provider.
 - Real `.env` files, SQLite databases, backups, logs, model caches, output files, and secrets stay out of git.

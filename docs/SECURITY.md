@@ -1,5 +1,28 @@
 # Security and Compliance
 
+## 2026-08-24 Self-service activation email privacy and abuse boundary
+
+- Self-service activation requests require a valid desktop bearer session. The server derives the
+  destination email from that session and ignores any attacker-supplied email, user ID, quota, or
+  entitlement fields.
+- Plaintext activation codes exist only in one server process memory window and the outbound email.
+  They are forbidden from SQLite rows, structured logs, Admin HTML, desktop IPC results, response
+  bodies, diagnostics, and local UI persistence. There is no console fallback for activation-code
+  email.
+- `ActivationCode` remains hash-only at rest. Self-service rows add only source, bound account,
+  status, delivery timestamps, and disabled reason. `pending_delivery` is fail-closed and cannot be
+  redeemed. SMTP acceptance alone is not treated as delivery proof.
+- Bound-account and active-entitlement checks are enforced inside the redemption Store transaction,
+  not just in routes or UI state. Self-service codes cannot be redeemed by another account, cannot
+  stack with an active entitlement, and on success always reset the quota window to 20 total / 0
+  used for a fresh 31-day entitlement period.
+- The service persists dispatch limits using the reviewed database-backed rate-limit table and the
+  closed `self_service_activation` purpose. The enforced windows are one request per email per
+  60 seconds, five per email per fixed hour, and twenty per trusted client IP per fixed hour.
+- A partial unique SQLite index allows at most one active self-service code per account. New
+  successful activation-email issuance supersedes older active self-service codes, and any prepared
+  code is disabled with `activation_became_active` if entitlement turns active before enablement.
+
 ## 2026-08-10 Desktop diagnostic export privacy boundary
 
 - Contract v8 adds the strict `FRAMEQ_DIAGNOSTIC ` stderr prefix. It is a non-watchdog,

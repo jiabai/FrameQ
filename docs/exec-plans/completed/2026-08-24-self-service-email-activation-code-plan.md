@@ -10,7 +10,7 @@
 
 **Tech Stack:** Fastify 5, TypeScript 5.9, Prisma 6 + SQLite, Nodemailer, Vitest, Tauri 2 + Rust/reqwest/serde, React 19, i18next, Vitest, existing FrameQ Store transaction and operation-ownership patterns.
 
-**Approval status:** Proposed for user confirmation. No implementation code starts until the user approves this plan.
+**Approval status:** Approved and implemented. This archived ExecPlan records the completed rollout evidence.
 
 ---
 
@@ -27,6 +27,8 @@ Only account, activation-code, entitlement, quota, rate-limit, locale, and email
 - [x] 2026-08-24: Product behavior, account binding, unlimited post-expiry renewal, no-stacking rule, and the “extend existing ActivationCode” approach were approved. Validation: `0b0b5fd4` and `15fa80a2` contain the design/spec baseline.
 - [x] 2026-08-24: Mapped the current Store, Prisma migration, SMTP, Fastify route, Rust account IPC, React account controller, AccountSheet, and i18n seams. Validation: read-only inspection of the exact files listed under Context and Orientation.
 - [x] 2026-08-24: Created this active ExecPlan, registered it in the active index, and completed its spec/type/sequence self-review. Validation: 13 ordered tasks, 9 required living-document sections, and 21 product/design coverage checks passed; `python scripts/validate_agents_docs.py --level ERROR` and `--level WARN` both reported 0 errors and 0 warnings.
+- [x] 2026-08-25: Synchronized rollout documentation for README, deployment runbook, architecture, security, design/spec status, and task ledger to match the implemented self-service activation behavior. Validation: `python scripts/validate_agents_docs.py --level ERROR`, `python scripts/validate_agents_docs.py --level WARN`, and `git diff --check`.
+- [x] 2026-08-25: Archived this ExecPlan to `completed/` and removed it from the active index after implementation landed on `main`. Validation: plan file move plus `docs/exec-plans/active/index.md`, `docs/exec-plans/completed/index.md`, and `docs/exec-plans/index.md` updated together.
 
 ## Surprises & Discoveries
 
@@ -51,9 +53,21 @@ Only account, activation-code, entitlement, quota, rate-limit, locale, and email
 
 ## Outcomes & Retrospective
 
-At plan creation, product/design documentation is approved and implementation has not started. The expected outcome is an end-to-end desktop flow with a Server-enforced eligibility gate, account-bound email delivery, manual redemption, unlimited post-expiry cycles, administrator-code regression compatibility, and operational kill switch.
+The completed rollout adds a desktop-visible self-service activation-email path for inactive or
+expired signed-in accounts while preserving the administrator-issued universal-code path. The Server
+now advertises `can_request_activation_code`, accepts auth-first locale-only activation-email
+requests, activates self-service codes only after SMTP acceptance, and redeems them only for the
+bound account when entitlement is inactive. Each successful self-service redemption starts a fresh
+31-day window with `llmQuotaLimit=20` and `llmQuotaUsed=0`, and the same account can repeat after
+expiry without a lifetime cap.
 
-Completion evidence must record exact Server/App/Rust test counts, migration results on fresh and pre-seeded databases, lint/build output, privacy-log assertions, governance validation, and a staging SMTP/manual desktop smoke. Residual risk before implementation: SMTP acceptance cannot prove inbox delivery; the fail-closed two-transaction design can produce a rare email whose code remains unusable after a crash between SMTP acceptance and activation. The UI instructs the user to retry after the persisted cooldown, and no background outbox or recoverable plaintext is introduced.
+This documentation-closeout task intentionally ran only documentation gates, not full code/test
+gates, because implementation and broader verification were already completed before Task 13.
+Results recorded here: `python scripts/validate_agents_docs.py --level ERROR` passed, `python
+scripts/validate_agents_docs.py --level WARN` passed, and `git diff --check` passed. Residual risk:
+SMTP acceptance still does not prove inbox delivery, and the fail-closed two-transaction model can
+leave a delivered-but-unusable email if a crash happens after SMTP acceptance but before activation;
+the supported recovery remains requesting a new code after the persisted cooldown.
 
 ## Context and Orientation
 

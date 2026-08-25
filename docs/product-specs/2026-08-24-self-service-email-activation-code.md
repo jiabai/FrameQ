@@ -1,5 +1,7 @@
 # FrameQ 自助邮件激活码产品规格
 
+> 实现状态：已落地并归档，详见 `docs/exec-plans/completed/2026-08-24-self-service-email-activation-code-plan.md`。
+
 ## 背景
 
 当前桌面端授权流程要求管理员先在 Admin Web 创建一次性激活码，再通过人工渠道交给用户。用户登录桌面端后，在“账号与授权”页面填写激活码，兑换 31 天处理权益和 20 次 AI Credits。
