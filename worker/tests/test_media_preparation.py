@@ -235,6 +235,61 @@ def test_url_media_facade_prepares_task_owned_video_and_audio(tmp_path: Path) ->
     assert events[-1]["stage"] == "video_transcribing"
 
 
+def test_media_facade_reads_xiaohongshu_fallback_subtitle_sidecar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    context = _build_context(tmp_path, "xhs-subtitle-sidecar")
+    source_request = _source_request(context)
+    subtitle_text = "1\n00:00:00,000 --> 00:00:01,000\n平台字幕\n"
+
+    def fake_download_video(
+        _url: str,
+        output_dir: Path,
+        runner: object,
+        progress_callback: object,
+    ) -> CommandResult:
+        del runner, progress_callback
+        video_path = output_dir / "0123456789abcdef01234568.mp4"
+        video_path.write_bytes(b"xhs video")
+        (output_dir / "0123456789abcdef01234568.zh-CN.srt").write_text(
+            subtitle_text,
+            encoding="utf-8",
+        )
+        return CommandResult(
+            command=["xiaohongshu-fallback", "https://www.xiaohongshu.com/explore/"],
+            returncode=0,
+            stdout=video_path.as_posix(),
+            stderr="",
+        )
+
+    def runner(command: list[str]) -> CommandResult:
+        if command[0] == "ffprobe":
+            media_path = Path(command[-1])
+            return CommandResult(
+                command,
+                0,
+                _probe_payload(include_video=media_path.suffix != ".wav"),
+                "",
+            )
+        if command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"xhs wav")
+            return CommandResult(command, 0, "", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(media_preparation, "download_video", fake_download_video)
+
+    prepared = media_preparation.MediaPreparationFacade(command_runner=runner).prepare(
+        media_preparation.UrlMediaSource(source_request),
+        context,
+    )
+
+    assert prepared.subtitle_candidate is not None
+    assert prepared.subtitle_candidate.language == "zh-CN"
+    assert prepared.subtitle_candidate.text == "平台字幕"
+
+
 def test_video_commit_failure_preserves_previous_official_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

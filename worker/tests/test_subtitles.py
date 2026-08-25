@@ -50,6 +50,25 @@ def test_find_subtitle_transcript_prefers_generic_chinese_over_english(
     assert transcript.text == "通用中文字幕"
 
 
+def test_find_subtitle_transcript_prefers_exact_en_us_over_generic_english(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "demo.en.srt").write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nGeneric English\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "demo.en-US.srt").write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nUS English\n",
+        encoding="utf-8",
+    )
+
+    transcript = find_subtitle_transcript(tmp_path)
+
+    assert transcript is not None
+    assert transcript.language == "en-US"
+    assert transcript.text == "US English"
+
+
 def test_find_subtitle_transcript_cleans_vtt_controls_tags_and_rolling_duplicates(
     tmp_path: Path,
 ) -> None:

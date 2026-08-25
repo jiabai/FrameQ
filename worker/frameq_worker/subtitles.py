@@ -12,6 +12,7 @@ PREFERRED_SUBTITLE_LANGUAGES = (
     "zh-CN",
     "zh-Hant",
     "zh",
+    "en-US",
     "en",
     "ja",
     "ko",

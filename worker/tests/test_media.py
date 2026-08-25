@@ -108,6 +108,51 @@ def test_build_ytdlp_command_does_not_add_subtitle_args_to_other_generic_urls() 
     assert "--sub-format" not in command
 
 
+def test_successful_xiaohongshu_ytdlp_probes_platform_subtitle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://www.xiaohongshu.com/explore/0123456789abcdef01234568"
+    probes: list[tuple[str, Path]] = []
+    monkeypatch.setattr(
+        media,
+        "download_xiaohongshu_subtitle",
+        lambda probe_url, output_dir: probes.append((probe_url, output_dir)) or None,
+        raising=False,
+    )
+
+    result = download_video(
+        url,
+        tmp_path,
+        runner=lambda command: CommandResult(command, 0, "video.mp4", ""),
+    )
+
+    assert result.returncode == 0
+    assert probes == [(url, tmp_path)]
+
+
+def test_successful_non_xiaohongshu_ytdlp_does_not_probe_platform_subtitle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probes: list[tuple[str, Path]] = []
+    monkeypatch.setattr(
+        media,
+        "download_xiaohongshu_subtitle",
+        lambda probe_url, output_dir: probes.append((probe_url, output_dir)) or None,
+        raising=False,
+    )
+
+    result = download_video(
+        "https://www.douyin.com/video/7524373044106677544",
+        tmp_path,
+        runner=lambda command: CommandResult(command, 0, "video.mp4", ""),
+    )
+
+    assert result.returncode == 0
+    assert probes == []
+
+
 def test_build_ffprobe_command_outputs_json_for_media_file() -> None:
     command = build_ffprobe_command(Path("outputs/7524373044106677544.mp4"))
 

@@ -20,6 +20,7 @@ from frameq_worker.douyin_fallback import (
 )
 from frameq_worker.xiaohongshu_fallback import (
     XiaohongshuFallbackError,
+    download_xiaohongshu_subtitle,
     download_xiaohongshu_video,
 )
 
@@ -290,6 +291,8 @@ def download_video(
         if is_youtube_video:
             raise CommandExecutionError(classify_youtube_download_failure(result))
         raise CommandExecutionError(result)
+    if result.returncode == 0:
+        _probe_xiaohongshu_subtitle_after_ytdlp(url, output_dir)
     return result
 
 
@@ -347,6 +350,12 @@ def should_attempt_xiaohongshu_fallback(url: str, failure_message: str) -> bool:
         url,
         XIAOHONGSHU_HOST_SUFFIXES,
     )
+
+
+def _probe_xiaohongshu_subtitle_after_ytdlp(url: str, output_dir: Path) -> None:
+    if not _contains_supported_url(url, XIAOHONGSHU_HOST_SUFFIXES):
+        return
+    download_xiaohongshu_subtitle(url, output_dir)
 
 
 def should_attempt_bilibili_fallback(url: str, failure_message: str) -> bool:
