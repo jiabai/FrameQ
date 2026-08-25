@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker import task_transaction, worker_service
+from frameq_worker import media, task_transaction, worker_service
 from frameq_worker.asr import Transcript
 from frameq_worker.atomic_files import AtomicFileCommitError
 from frameq_worker.desktop_contract import (
@@ -45,6 +45,18 @@ class FakeInsightClient:
             '[{"topic":"retry question","matchReason":"matched",'
             '"followUpQuestions":["next"],"suitableUse":"content planning"}]'
         )
+
+
+def _video_probe_payload() -> str:
+    return json.dumps(
+        {
+            "format": {"duration": "12.3", "size": "12345"},
+            "streams": [
+                {"codec_type": "video", "codec_name": "h264"},
+                {"codec_type": "audio", "codec_name": "aac"},
+            ],
+        }
+    )
 
 
 def test_task_paths_expose_only_fixed_dissection_destinations(tmp_path: Path) -> None:
@@ -541,6 +553,142 @@ def test_worker_pipeline_uses_platform_subtitle_before_asr_model_ready(
     assert manifest["schema_version"] == 3
     assert manifest["model"] == "iic/SenseVoiceSmall"
     assert manifest["transcript"] == result["transcript"]
+
+
+def test_xiaohongshu_platform_subtitle_skips_asr_and_stays_task_local(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "outputs"
+    cache_root = tmp_path / "cache"
+    note_id = "0123456789abcdef01234568"
+    url = f"https://www.xiaohongshu.com/explore/{note_id}"
+    events: list[dict[str, object]] = []
+
+    def fake_xiaohongshu_download(
+        _url: str,
+        output_dir: Path,
+        *,
+        progress_callback: object | None = None,
+    ) -> Path:
+        del progress_callback
+        video_path = output_dir / f"{note_id}.mp4"
+        video_path.parent.mkdir(parents=True, exist_ok=True)
+        video_path.write_bytes(b"fake xhs video")
+        (output_dir / f"{note_id}.zh-CN.srt").write_text(
+            "1\n00:00:00,000 --> 00:00:01,000\n小红书平台字幕第一句\n\n"
+            "2\n00:00:01,000 --> 00:00:02,000\n小红书平台字幕第二句\n",
+            encoding="utf-8",
+        )
+        return video_path
+
+    def runner(command: list[str]) -> CommandResult:
+        if "yt_dlp" in command:
+            return CommandResult(command, 1, "", "ERROR: unsupported URL")
+        if command[0] == "ffprobe":
+            return CommandResult(command, 0, _video_probe_payload(), "")
+        if command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"fake wav")
+            return CommandResult(command, 0, "", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(media, "download_xiaohongshu_video", fake_xiaohongshu_download)
+
+    result = run_worker_pipeline(
+        request=ProcessRequest(url=url, asr_model="iic/SenseVoiceSmall"),
+        project_root=tmp_path,
+        command_runner=runner,
+        transcriber=None,
+        allow_real_asr=False,
+        environ={
+            OUTPUT_DIR_ENV: output_root.as_posix(),
+            CACHE_DIR_ENV: cache_root.as_posix(),
+        },
+        progress_callback=events.append,
+    ).to_dict()
+
+    assert result["status"] == "completed"
+    assert result["text"] == "小红书平台字幕第一句\n小红书平台字幕第二句"
+    assert result["transcript"] == {
+        "source": "subtitle",
+        "language": "zh-CN",
+        "engine": None,
+    }
+    task_dir = Path(str(result["task_dir"]))
+    transcript_md = (task_dir / "transcript" / "transcript.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Transcript Source: Platform subtitle" in transcript_md
+    assert "Model:" not in transcript_md
+    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    assert manifest["model"] == "iic/SenseVoiceSmall"
+    assert manifest["transcript"] == result["transcript"]
+    download_dir = cache_root / "tasks" / str(result["task_id"]) / "download"
+    assert list(download_dir.glob("*.srt"))
+    assert "srt" not in manifest["artifacts"]
+    event_codes = [event["message_code"] for event in events]
+    assert event_codes.index("subtitle.detect.running") < event_codes.index(
+        "subtitle.detect.found"
+    )
+    assert not {
+        "asr.cache.preparing",
+        "asr.transcribe.starting",
+        "asr.transcribe.running",
+    } & set(event_codes)
+
+
+def test_xiaohongshu_platform_subtitle_miss_falls_back_to_asr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "outputs"
+    cache_root = tmp_path / "cache"
+    note_id = "0123456789abcdef01234568"
+    url = f"https://www.xiaohongshu.com/explore/{note_id}"
+    transcribe_calls = 0
+
+    def runner(command: list[str]) -> CommandResult:
+        if "yt_dlp" in command:
+            output_template = command[command.index("-o") + 1]
+            video_path = Path(output_template.replace("%(id)s.%(ext)s", f"{note_id}.mp4"))
+            video_path.parent.mkdir(parents=True, exist_ok=True)
+            video_path.write_bytes(b"fake xhs video")
+            return CommandResult(command, 0, video_path.as_posix(), "")
+        if command[0] == "ffprobe":
+            return CommandResult(command, 0, _video_probe_payload(), "")
+        if command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"fake wav")
+            return CommandResult(command, 0, "", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    class TrackingTranscriber:
+        def transcribe(self, audio_path: Path, language: str = "Chinese") -> Transcript:
+            nonlocal transcribe_calls
+            del audio_path
+            transcribe_calls += 1
+            return Transcript(text="ASR fallback transcript", language=language)
+
+    monkeypatch.setattr(media, "download_xiaohongshu_subtitle", lambda *_args: None)
+
+    result = run_worker_pipeline(
+        request=ProcessRequest(url=url, asr_model="iic/SenseVoiceSmall"),
+        project_root=tmp_path,
+        command_runner=runner,
+        transcriber=TrackingTranscriber(),
+        allow_real_asr=False,
+        environ={
+            OUTPUT_DIR_ENV: output_root.as_posix(),
+            CACHE_DIR_ENV: cache_root.as_posix(),
+        },
+    ).to_dict()
+
+    assert result["status"] == "completed"
+    assert result["transcript"]["source"] == "asr"
+    assert transcribe_calls == 1
+    assert "Platform subtitle" not in (
+        Path(str(result["task_dir"])) / "transcript" / "transcript.md"
+    ).read_text(encoding="utf-8")
+    assert not list((cache_root / "tasks" / str(result["task_id"]) / "download").glob("*.srt"))
 
 
 def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path: Path) -> None:
