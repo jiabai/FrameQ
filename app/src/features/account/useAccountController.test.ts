@@ -8,28 +8,51 @@ type StateUpdater<T> = T | ((current: T) => T);
 
 type HookHarness = {
   resetRender: () => void;
-  useCallback: <T extends (...args: never[]) => unknown>(callback: T) => T;
-  useEffect: () => void;
-  useMemo: <T>(factory: () => T) => T;
+  runEffects: () => void;
+  unmount: () => void;
+  useCallback: <T extends (...args: never[]) => unknown>(callback: T, deps?: unknown[]) => T;
+  useEffect: (effect: () => void | (() => void), deps?: unknown[]) => void;
+  useMemo: <T>(factory: () => T, deps?: unknown[]) => T;
   useRef: <T>(initialValue: T) => { current: T };
   useState: <T>(initialValue: T | (() => T)) => [T, (next: StateUpdater<T>) => void];
 };
 
-const beginAuthFlowMock = vi.fn<() => Promise<{ authUrl: string }>>();
-const completeAuthFlowMock = vi.fn<(callbackUrl: string) => Promise<void>>();
-const getAccountStatusMock = vi.fn<() => Promise<AccountStatus>>();
-const logoutAccountMock = vi.fn<() => Promise<void>>();
-const redeemActivationCodeMock = vi.fn<(code: string) => Promise<AccountStatus>>();
-const openUrlMock = vi.fn<(url: string) => Promise<void>>();
+const {
+  beginAuthFlowMock,
+  completeAuthFlowMock,
+  getAccountStatusMock,
+  logoutAccountMock,
+  redeemActivationCodeMock,
+  requestActivationCodeMock,
+  openUrlMock,
+} = vi.hoisted(() => ({
+  beginAuthFlowMock: vi.fn<() => Promise<{ authUrl: string }>>(),
+  completeAuthFlowMock: vi.fn<(callbackUrl: string) => Promise<void>>(),
+  getAccountStatusMock: vi.fn<() => Promise<AccountStatus>>(),
+  logoutAccountMock: vi.fn<() => Promise<void>>(),
+  redeemActivationCodeMock: vi.fn<(code: string) => Promise<AccountStatus>>(),
+  requestActivationCodeMock: vi.fn<
+    (locale: SupportedLocale) => Promise<{ status: "sent"; retryAt: string; redeemBy: string }>
+  >(),
+  openUrlMock: vi.fn<(url: string) => Promise<void>>(),
+}));
 let currentLocale: SupportedLocale = "en-US";
 
-vi.mock("../../accountClient", () => ({
+vi.mock("../../accountClient", async () => {
+  const actual = await vi.importActual<typeof import("../../accountClient")>(
+    "../../accountClient",
+  );
+
+  return {
+  ...actual,
   beginAuthFlow: beginAuthFlowMock,
   completeAuthFlow: completeAuthFlowMock,
   getAccountStatus: getAccountStatusMock,
   logoutAccount: logoutAccountMock,
   redeemActivationCode: redeemActivationCodeMock,
-}));
+  requestActivationCode: requestActivationCodeMock,
+  };
+});
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: openUrlMock }));
 
@@ -43,15 +66,89 @@ vi.mock("../../i18n/LocaleProvider", () => ({
 
 function createHookHarness(): HookHarness {
   const states: unknown[] = [];
+  const effects = new Map<number, { effect: () => void | (() => void); deps?: unknown[]; cleanup?: () => void }>();
+  const pendingEffects = new Set<number>();
   let cursor = 0;
+  let mounted = true;
 
   return {
     resetRender: () => {
       cursor = 0;
     },
-    useCallback: (callback) => callback,
-    useEffect: () => undefined,
-    useMemo: (factory) => factory(),
+    runEffects: () => {
+      for (const effectIndex of pendingEffects) {
+        const record = effects.get(effectIndex);
+        if (!record) {
+          continue;
+        }
+        if (String(record.effect).includes("refreshAccountStatus")) {
+          continue;
+        }
+        record.cleanup?.();
+        const cleanup = record.effect();
+        record.cleanup = typeof cleanup === "function" ? cleanup : undefined;
+      }
+      pendingEffects.clear();
+    },
+    unmount: () => {
+      mounted = false;
+      for (const record of effects.values()) {
+        record.cleanup?.();
+      }
+      effects.clear();
+      pendingEffects.clear();
+    },
+    useCallback: (callback, deps) => {
+      const stateIndex = cursor;
+      cursor += 1;
+      const previous = states[stateIndex] as { callback: typeof callback; deps?: unknown[] } | undefined;
+      const depsChanged =
+        !previous ||
+        !deps ||
+        !previous.deps ||
+        deps.length !== previous.deps.length ||
+        deps.some((dependency, index) => !Object.is(dependency, previous.deps?.[index]));
+      if (depsChanged) {
+        states[stateIndex] = { callback, deps };
+      }
+      return (states[stateIndex] as { callback: typeof callback }).callback;
+    },
+    useEffect: (effect, deps) => {
+      const effectIndex = cursor;
+      cursor += 1;
+      const previous = effects.get(effectIndex);
+      const depsChanged =
+        !previous ||
+        !deps ||
+        !previous.deps ||
+        deps.length !== previous.deps.length ||
+        deps.some((dependency, index) => !Object.is(dependency, previous.deps?.[index]));
+
+      effects.set(effectIndex, {
+        effect,
+        deps,
+        cleanup: previous?.cleanup,
+      });
+
+      if (depsChanged) {
+        pendingEffects.add(effectIndex);
+      }
+    },
+    useMemo: <T,>(factory: () => T, deps?: unknown[]) => {
+      const stateIndex = cursor;
+      cursor += 1;
+      const previous = states[stateIndex] as { deps?: unknown[]; value: T } | undefined;
+      const depsChanged =
+        !previous ||
+        !deps ||
+        !previous.deps ||
+        deps.length !== previous.deps.length ||
+        deps.some((dependency, index) => !Object.is(dependency, previous.deps?.[index]));
+      if (depsChanged) {
+        states[stateIndex] = { deps, value: factory() };
+      }
+      return (states[stateIndex] as { value: T }).value;
+    },
     useRef: <T,>(initialValue: T) => {
       const stateIndex = cursor;
       cursor += 1;
@@ -70,6 +167,9 @@ function createHookHarness(): HookHarness {
             : initialValue;
       }
       const setState = (next: StateUpdater<T>) => {
+        if (!mounted) {
+          return;
+        }
         states[stateIndex] =
           typeof next === "function"
             ? (next as (current: T) => T)(states[stateIndex] as T)
@@ -97,8 +197,11 @@ async function createController() {
   return {
     render: () => {
       harness.resetRender();
-      return useAccountController({ onSignedOut });
+      const controller = useAccountController({ onSignedOut });
+      harness.runEffects();
+      return controller;
     },
+    unmount: harness.unmount,
     onSignedOut,
   };
 }
@@ -155,7 +258,9 @@ describe("useAccountController semantic notices", () => {
     getAccountStatusMock.mockReset();
     logoutAccountMock.mockReset();
     redeemActivationCodeMock.mockReset();
+    requestActivationCodeMock.mockReset();
     openUrlMock.mockReset();
+    vi.useRealTimers();
   });
 
   test("does not retain raw account refresh failures", async () => {
@@ -281,5 +386,112 @@ describe("useAccountController semantic notices", () => {
     controller = render();
     expect(controller.accountChipLabel).toBe("授權有效");
     expect(controller.accountStatusText).toBe("授權有效");
+  });
+
+  test("requests an activation code with the current locale, refreshes status, and clears cooldown after retryAt", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T04:00:00.000Z"));
+    const retryAt = "2026-08-25T04:05:00.000Z";
+    requestActivationCodeMock.mockResolvedValueOnce({
+      status: "sent",
+      retryAt,
+      redeemBy: "2026-09-24T00:00:00.000Z",
+    });
+    getAccountStatusMock.mockResolvedValueOnce(
+      createAccountStatus("member@example.test", {
+        entitlementStatus: "inactive",
+        canProcess: false,
+        canRequestActivationCode: true,
+      }),
+    );
+    const { render } = await createController();
+
+    let controller = render();
+    await controller.refreshAccountStatus();
+    controller = render();
+    const pendingRequest = controller.requestActivationCodeByEmail();
+    controller = render();
+
+    expect(requestActivationCodeMock).toHaveBeenCalledWith("en-US");
+    expect(controller.activationCodeRequest.status).toBe("pending");
+
+    await pendingRequest;
+    controller = render();
+    expect(controller.activationCodeRequest.status).toBe("success");
+    expect(controller.activationCodeRequest.retryAt).toBe(retryAt);
+    expect(controller.accountNotice).toEqual({
+      messageCode: "account.notice.activationCodeSent",
+    });
+    expect(getAccountStatusMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    controller = render();
+    expect(controller.activationCodeRequest.status).toBe("idle");
+    expect(controller.activationCodeRequest.retryAt).toBeNull();
+  });
+
+  test("maps activation code request failures to semantic notices without leaking raw details", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T04:30:00.000Z"));
+    requestActivationCodeMock.mockRejectedValueOnce(
+      new (await import("../../accountClient")).ActivationCodeRequestError("ACTIVATION_REQUEST_RATE_LIMITED", {
+        retryAt: "2026-08-25T05:00:00.000Z",
+        httpStatus: 429,
+      }),
+    );
+    getAccountStatusMock.mockResolvedValueOnce(
+      createAccountStatus("member@example.test", {
+        entitlementStatus: "inactive",
+        canProcess: false,
+        canRequestActivationCode: true,
+      }),
+    );
+    const { render } = await createController();
+
+    let controller = render();
+    await controller.refreshAccountStatus();
+    controller = render();
+    await controller.requestActivationCodeByEmail();
+    controller = render();
+
+    expect(controller.activationCodeRequest.status).toBe("error");
+    expect(controller.activationCodeRequest.retryAt).toBe("2026-08-25T05:00:00.000Z");
+    expectSafeMessage(
+      controller.accountNotice,
+      "account.notice.activationCodeRateLimited",
+      "token-SECRET",
+    );
+    expect(JSON.stringify(controller.activationCodeRequest)).not.toContain("token-SECRET");
+  });
+
+  test("cleans activation code cooldown timers on unmount", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T05:30:00.000Z"));
+    requestActivationCodeMock.mockResolvedValueOnce({
+      status: "sent",
+      retryAt: "2026-08-25T06:00:00.000Z",
+      redeemBy: "2026-09-24T00:00:00.000Z",
+    });
+    getAccountStatusMock.mockResolvedValueOnce(
+      createAccountStatus("member@example.test", {
+        entitlementStatus: "inactive",
+        canProcess: false,
+        canRequestActivationCode: true,
+      }),
+    );
+    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+    const { render, unmount } = await createController();
+
+    let controller = render();
+    await controller.refreshAccountStatus();
+    controller = render();
+    await controller.requestActivationCodeByEmail();
+    controller = render();
+    expect(controller.activationCodeRequest.status).toBe("success");
+
+    unmount();
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
   });
 });

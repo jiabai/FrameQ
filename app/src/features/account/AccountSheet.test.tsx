@@ -36,8 +36,14 @@ function createProps(
     accountLoading: false,
     activationCodeDraft: "",
     activationRedeeming: false,
+    activationCodeRequest: {
+      status: "idle",
+      retryAt: null,
+      error: null,
+    },
     onClose: () => undefined,
     onActivationCodeChange: () => undefined,
+    onRequestActivationCode: () => undefined,
     onRedeemActivationCode: () => undefined,
     onSignOut: () => undefined,
     onStartLogin: () => undefined,
@@ -123,5 +129,73 @@ describe("AccountSheet localization", () => {
     await initializeI18n("en-US");
     const markup = renderAccountSheet(props, "en-US");
     expect(markup).toContain(formatDateTime(new Date(resetAt), "en-US"));
+  });
+
+  test("renders the activation request button only when the account can request a code", async () => {
+    await initializeI18n("en-US");
+
+    const eligibleMarkup = renderAccountSheet(
+      createProps({
+        account: createAccount({
+          entitlementStatus: "inactive",
+          canProcess: false,
+          canRequestActivationCode: true,
+        }),
+      }),
+      "en-US",
+    );
+    expect(eligibleMarkup).toContain("Request activation code");
+    expect(eligibleMarkup).toContain('aria-label="Request activation code"');
+
+    const hiddenForActiveMarkup = renderAccountSheet(
+      createProps({ account: createAccount({ canRequestActivationCode: true }) }),
+      "en-US",
+    );
+    expect(hiddenForActiveMarkup).not.toContain("Request activation code");
+
+    const hiddenForGuestMarkup = renderAccountSheet(
+      createProps({ account: createGuestAccountStatus() }),
+      "en-US",
+    );
+    expect(hiddenForGuestMarkup).not.toContain("Request activation code");
+  });
+
+  test("disables the activation request button during pending and cooldown states", async () => {
+    await initializeI18n("en-US");
+    const pendingMarkup = renderAccountSheet(
+      createProps({
+        account: createAccount({
+          entitlementStatus: "inactive",
+          canProcess: false,
+          canRequestActivationCode: true,
+        }),
+        activationCodeRequest: {
+          status: "pending",
+          retryAt: null,
+          error: null,
+        },
+      }),
+      "en-US",
+    );
+    expect(pendingMarkup).toContain(">Sending<");
+    expect(pendingMarkup).toContain("disabled");
+
+    const cooldownMarkup = renderAccountSheet(
+      createProps({
+        account: createAccount({
+          entitlementStatus: "inactive",
+          canProcess: false,
+          canRequestActivationCode: true,
+        }),
+        activationCodeRequest: {
+          status: "success",
+          retryAt: "2026-08-25T05:30:00.000Z",
+          error: null,
+        },
+      }),
+      "en-US",
+    );
+    expect(cooldownMarkup).toContain("Try again after");
+    expect(cooldownMarkup).toContain("disabled");
   });
 });

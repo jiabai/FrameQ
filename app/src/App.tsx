@@ -199,6 +199,7 @@ function App() {
     accountOpen,
     accountNotice,
     accountLoading,
+    activationCodeRequest,
     activationCodeDraft,
     activationRedeeming,
     accountChipLabel,
@@ -206,6 +207,7 @@ function App() {
     closeAccountPanel,
     handleAuthCallback,
     openAccountPanel,
+    requestActivationCodeByEmail,
     redeemActivationCodeFromInput,
     refreshAccountStatus,
     setActivationCodeDraft,
@@ -591,10 +593,12 @@ function App() {
         accountStatusText={accountStatusText}
         accountNotice={accountNotice}
         accountLoading={accountLoading}
+        activationCodeRequest={activationCodeRequest}
         activationCodeDraft={activationCodeDraft}
         activationRedeeming={activationRedeeming}
         onClose={closeAccountPanel}
         onActivationCodeChange={setActivationCodeDraft}
+        onRequestActivationCode={requestActivationCodeByEmail}
         onRedeemActivationCode={redeemActivationCodeFromInput}
         onSignOut={signOutAccount}
         onStartLogin={startLoginFlow}

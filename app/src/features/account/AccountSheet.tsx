@@ -1,13 +1,20 @@
 import { KeyRound, ShieldCheck, UserRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { canProcessWithAccount, type AccountStatus } from "../../accountState";
+import {
+  canProcessWithAccount,
+  canRequestActivationCodeWithAccount,
+  type AccountStatus,
+} from "../../accountState";
 import { formatDateTime, formatNumber } from "../../i18n/formatters";
 import { useLocale } from "../../i18n/LocaleProvider";
 import type { SupportedLocale } from "../../i18n/locale";
 import { renderUiMessage } from "../../i18n/uiMessage";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
-import type { AccountNotice } from "./useAccountController";
+import type {
+  AccountNotice,
+  ActivationCodeRequestState,
+} from "./useAccountController";
 
 type AccountSheetProps = {
   open: boolean;
@@ -17,8 +24,10 @@ type AccountSheetProps = {
   accountLoading: boolean;
   activationCodeDraft: string;
   activationRedeeming: boolean;
+  activationCodeRequest: ActivationCodeRequestState;
   onClose: () => void;
   onActivationCodeChange: (value: string) => void;
+  onRequestActivationCode: () => void;
   onRedeemActivationCode: () => void;
   onSignOut: () => void;
   onStartLogin: () => void;
@@ -32,8 +41,10 @@ export function AccountSheet({
   accountLoading,
   activationCodeDraft,
   activationRedeeming,
+  activationCodeRequest,
   onClose,
   onActivationCodeChange,
+  onRequestActivationCode,
   onRedeemActivationCode,
   onSignOut,
   onStartLogin,
@@ -45,6 +56,22 @@ export function AccountSheet({
     account.llmQuotaResetsAt,
     resolvedLocale,
   );
+  const activationRequestRetryDate = formatAccountTimestamp(
+    activationCodeRequest.retryAt,
+    resolvedLocale,
+  );
+  const activationRequestCoolingDown = activationRequestRetryDate !== null;
+  const activationRequestDisabled =
+    activationCodeRequest.status === "pending" || activationRequestCoolingDown;
+  const canRequestActivationCode = canRequestActivationCodeWithAccount(account);
+  const shouldShowActivationRequest =
+    account.authenticated && canRequestActivationCode;
+  const activationRequestLabel =
+    activationCodeRequest.status === "pending"
+      ? t("actions.activationCodeSending")
+      : activationRequestRetryDate
+        ? t("actions.activationCodeCooldown", { date: activationRequestRetryDate })
+        : t("actions.requestActivationCode");
 
   return (
     <AnimatedSheet
@@ -113,6 +140,17 @@ export function AccountSheet({
                 <strong>{t("activation.title")}</strong>
                 <small>{t("activation.description")}</small>
               </div>
+              {shouldShowActivationRequest ? (
+                <button
+                  type="button"
+                  className="secondary-button activation-request-button"
+                  onClick={onRequestActivationCode}
+                  disabled={activationRequestDisabled}
+                  aria-label={t("actions.requestActivationCode")}
+                >
+                  <span>{activationRequestLabel}</span>
+                </button>
+              ) : null}
               <input
                 className="activation-code-input"
                 value={activationCodeDraft}

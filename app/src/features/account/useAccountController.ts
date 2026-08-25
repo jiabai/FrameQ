@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import {
+  ActivationCodeRequestError,
   beginAuthFlow,
   completeAuthFlow,
   getAccountStatus,
   logoutAccount,
   redeemActivationCode,
+  requestActivationCode,
 } from "../../accountClient";
 import {
   canProcessWithAccount,
+  canRequestActivationCodeWithAccount,
   createAccountStatusFailure,
   createBrowserPreviewAccountStatus,
   createGuestAccountStatus,
@@ -28,6 +31,18 @@ type UseAccountControllerOptions = {
 export const ACCOUNT_STATUS_UNAVAILABLE_CODE = "ACCOUNT_STATUS_UNAVAILABLE";
 
 export type AccountNotice = UiMessage | null;
+export type ActivationCodeRequestStatus = "idle" | "pending" | "success" | "error";
+export type ActivationCodeRequestState = Readonly<{
+  status: ActivationCodeRequestStatus;
+  retryAt: string | null;
+  error: ActivationCodeRequestError | null;
+}>;
+
+const IDLE_ACTIVATION_CODE_REQUEST_STATE: ActivationCodeRequestState = {
+  status: "idle",
+  retryAt: null,
+  error: null,
+};
 
 function sanitizeAccountStatus(status: AccountStatus): AccountStatus {
   return status.serverError
@@ -90,6 +105,33 @@ function getAccountStatusMessage(
   );
 }
 
+function mapActivationCodeRequestErrorToNotice(
+  error: ActivationCodeRequestError,
+): UiMessage {
+  switch (error.errorCode) {
+    case "AUTH_REQUIRED":
+      return uiMessage("account.notice.activationCodeAuthRequired");
+    case "FEATURE_NOT_AVAILABLE":
+      return uiMessage("account.notice.activationCodeFeatureUnavailable");
+    case "ENTITLEMENT_ACTIVE":
+      return uiMessage("account.notice.activationCodeAlreadyActive");
+    case "ACTIVATION_REQUEST_RATE_LIMITED":
+      return uiMessage("account.notice.activationCodeRateLimited");
+    case "ACTIVATION_EMAIL_UNAVAILABLE":
+      return uiMessage("account.notice.activationCodeEmailUnavailable");
+    default:
+      return uiMessage("account.notice.activationCodeServerUnavailable");
+  }
+}
+
+function normalizeRetryAt(retryAt: string | null): string | null {
+  if (!retryAt) {
+    return null;
+  }
+  const timestamp = new Date(retryAt).getTime();
+  return Number.isFinite(timestamp) && timestamp > Date.now() ? retryAt : null;
+}
+
 export function useAccountController({
   onSignedOut,
 }: UseAccountControllerOptions) {
@@ -100,9 +142,59 @@ export function useAccountController({
   const [accountLoading, setAccountLoading] = useState(false);
   const [activationCodeDraft, setActivationCodeDraft] = useState("");
   const [activationRedeeming, setActivationRedeeming] = useState(false);
+  const [activationCodeRequest, setActivationCodeRequest] = useState<ActivationCodeRequestState>(
+    IDLE_ACTIVATION_CODE_REQUEST_STATE,
+  );
   const refreshRequestIdRef = useRef(0);
   const activeOperationIdRef = useRef(0);
   const activeOperationPendingRef = useRef<number | null>(null);
+  const activationCodeRequestVersionRef = useRef(0);
+  const activationCodeRequestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearActivationCodeRequestTimeout = useCallback(() => {
+    if (activationCodeRequestTimeoutRef.current !== null) {
+      clearTimeout(activationCodeRequestTimeoutRef.current);
+      activationCodeRequestTimeoutRef.current = null;
+    }
+  }, []);
+
+  const commitActivationCodeRequestState = useCallback(
+    (nextState: ActivationCodeRequestState) => {
+      const normalizedRetryAt = normalizeRetryAt(nextState.retryAt);
+      const committedState =
+        nextState.status === "idle"
+          ? IDLE_ACTIVATION_CODE_REQUEST_STATE
+          : {
+              ...nextState,
+              retryAt: normalizedRetryAt,
+            };
+      activationCodeRequestVersionRef.current += 1;
+      const version = activationCodeRequestVersionRef.current;
+      clearActivationCodeRequestTimeout();
+      setActivationCodeRequest(committedState);
+
+      if (!normalizedRetryAt) {
+        return;
+      }
+
+      const delay = new Date(normalizedRetryAt).getTime() - Date.now();
+      if (delay <= 0) {
+        activationCodeRequestVersionRef.current += 1;
+        setActivationCodeRequest(IDLE_ACTIVATION_CODE_REQUEST_STATE);
+        return;
+      }
+
+      activationCodeRequestTimeoutRef.current = setTimeout(() => {
+        if (activationCodeRequestVersionRef.current !== version) {
+          return;
+        }
+        activationCodeRequestTimeoutRef.current = null;
+        activationCodeRequestVersionRef.current += 1;
+        setActivationCodeRequest(IDLE_ACTIVATION_CODE_REQUEST_STATE);
+      }, delay);
+    },
+    [clearActivationCodeRequestTimeout],
+  );
 
   const beginActiveOperation = useCallback(() => {
     const operationId = activeOperationIdRef.current + 1;
@@ -119,6 +211,13 @@ export function useAccountController({
     activeOperationPendingRef.current = null;
     return true;
   }, []);
+
+  useEffect(
+    () => () => {
+      clearActivationCodeRequestTimeout();
+    },
+    [clearActivationCodeRequestTimeout],
+  );
 
   const runAccountStatusRefresh = useCallback(async (
     activeOperationId: number | null,
@@ -274,6 +373,63 @@ export function useAccountController({
     }
   }, [activationCodeDraft, beginActiveOperation, finishActiveOperation]);
 
+  const requestActivationCodeByEmail = useCallback(async () => {
+    if (
+      activationCodeRequest.status === "pending" ||
+      !canRequestActivationCodeWithAccount(account)
+    ) {
+      return;
+    }
+    const operationId = beginActiveOperation();
+    setActivationRedeeming(false);
+    commitActivationCodeRequestState({
+      status: "pending",
+      retryAt: activationCodeRequest.retryAt,
+      error: null,
+    });
+    setAccountNotice(null);
+    try {
+      const result = await requestActivationCode(resolvedLocale);
+      if (activeOperationPendingRef.current !== operationId) {
+        return;
+      }
+      commitActivationCodeRequestState({
+        status: "success",
+        retryAt: result.retryAt,
+        error: null,
+      });
+      await runAccountStatusRefresh(operationId);
+      if (activeOperationPendingRef.current === operationId) {
+        setAccountNotice(uiMessage("account.notice.activationCodeSent"));
+      }
+    } catch (error) {
+      if (activeOperationPendingRef.current !== operationId) {
+        return;
+      }
+      const activationRequestError =
+        error instanceof ActivationCodeRequestError
+          ? error
+          : new ActivationCodeRequestError("INTERNAL_SERVER_ERROR");
+      commitActivationCodeRequestState({
+        status: "error",
+        retryAt: activationRequestError.retryAt,
+        error: activationRequestError,
+      });
+      setAccountNotice(mapActivationCodeRequestErrorToNotice(activationRequestError));
+    } finally {
+      finishActiveOperation(operationId);
+    }
+  }, [
+    account,
+    activationCodeRequest.retryAt,
+    activationCodeRequest.status,
+    beginActiveOperation,
+    commitActivationCodeRequestState,
+    finishActiveOperation,
+    resolvedLocale,
+    runAccountStatusRefresh,
+  ]);
+
   const signOutAccount = useCallback(async () => {
     const operationId = beginActiveOperation();
     setActivationRedeeming(false);
@@ -321,6 +477,7 @@ export function useAccountController({
     accountOpen,
     accountNotice,
     accountLoading,
+    activationCodeRequest,
     activationCodeDraft,
     activationRedeeming,
     accountChipLabel,
@@ -328,6 +485,7 @@ export function useAccountController({
     closeAccountPanel,
     handleAuthCallback,
     openAccountPanel,
+    requestActivationCodeByEmail,
     redeemActivationCodeFromInput,
     refreshAccountStatus,
     setActivationCodeDraft,

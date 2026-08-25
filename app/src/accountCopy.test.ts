@@ -29,4 +29,21 @@ describe("account copy", () => {
       expect(content, label).not.toContain("LLM API 调用次数");
     }
   });
+
+  test("includes activation request copy for every locale", async () => {
+    const { accountResources } = await import("./i18n/accountResources");
+
+    expect(accountResources["zh-CN"].actions.requestActivationCode).toBeTruthy();
+    expect(accountResources["zh-CN"].actions.activationCodeSending).toBeTruthy();
+    expect(accountResources["zh-CN"].notice.activationCodeSent).toBeTruthy();
+    expect(accountResources["zh-CN"].notice.activationCodeAuthRequired).toBeTruthy();
+    expect(accountResources["zh-CN"].notice.activationCodeFeatureUnavailable).toBeTruthy();
+    expect(accountResources["zh-CN"].notice.activationCodeAlreadyActive).toBeTruthy();
+    expect(accountResources["zh-CN"].notice.activationCodeRateLimited).toBeTruthy();
+    expect(accountResources["zh-CN"].notice.activationCodeEmailUnavailable).toBeTruthy();
+    expect(accountResources["zh-CN"].notice.activationCodeServerUnavailable).toBeTruthy();
+
+    expect(accountResources["zh-TW"].actions.requestActivationCode).toBeTruthy();
+    expect(accountResources["en-US"].actions.requestActivationCode).toBeTruthy();
+  });
 });

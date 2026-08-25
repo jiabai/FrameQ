@@ -1939,6 +1939,11 @@ h3 {
   grid-template-columns: 1fr;
 }
 
+.activation-request-button {
+  justify-self: start;
+  min-height: 38px;
+}
+
 .activation-code-input {
   background: #ffffff;
   border: 1px solid var(--border-strong);
