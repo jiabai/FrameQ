@@ -40,6 +40,7 @@
 - `2026-07-16-local-media-file-import.md` — Single-file local video/audio import with opaque Rust-owned selection tokens, normalized local WAV transcription, and strict path secrecy.
 - `2026-07-18-process-video-request-contract-v3.md` — Minimal URL-only desktop intent, Rust-owned ASR configuration, and strict v3 worker execution request.
 - `2026-07-27-selectable-asr-model-on-demand-download.md` — Two selectable local ASR models, model-snapshot task submission, and selected-model on-demand download with automatic resume.
+- `2026-08-25-xiaohongshu-platform-subtitle-first-transcript.md` — Reuse verified Xiaohongshu platform SRT subtitles before local ASR in the existing single-link transcription flow; missing or malformed subtitles fall back to ASR, with no standalone subtitle-download UI.
 
 ## History & Workspace
 
