@@ -43,6 +43,13 @@ class XiaohongshuStreamCandidate:
     headers: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class XiaohongshuSubtitleTrack:
+    language: str
+    url: str
+    suffix: str
+
+
 class XiaohongshuHttpClient(Protocol):
     def get(
         self,
@@ -62,4 +69,6 @@ class XiaohongshuDownloadClient(XiaohongshuHttpClient, Protocol):
         timeout_seconds: float = 30.0,
         max_bytes: int | None = None,
         no_progress_timeout_seconds: float | None = None,
+        allowed_content_types: tuple[str, ...] | None = None,
+        allowed_host_suffixes: tuple[str, ...] | None = None,
     ) -> int: ...

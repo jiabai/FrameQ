@@ -12,6 +12,7 @@ PRIVATE_MODULES = {
     "source": PRIVATE_PACKAGE / "source.py",
     "page": PRIVATE_PACKAGE / "page.py",
     "streams": PRIVATE_PACKAGE / "streams.py",
+    "subtitles": PRIVATE_PACKAGE / "subtitles.py",
     "transport": PRIVATE_PACKAGE / "transport.py",
 }
 FORBIDDEN_PRIVATE_IMPORT_PREFIXES = (
@@ -118,6 +119,19 @@ def test_stream_policy_has_no_network_filesystem_or_progress_dependencies() -> N
     }
 
     assert not forbidden & stream_imports
+
+
+def test_subtitle_policy_has_no_network_filesystem_or_progress_dependencies() -> None:
+    subtitle_imports = _imported_modules(PRIVATE_MODULES["subtitles"])
+    forbidden = {
+        "frameq_worker.download_reliability",
+        "frameq_worker.progress_events",
+        "http.cookiejar",
+        "pathlib",
+        "urllib.request",
+    }
+
+    assert not forbidden & subtitle_imports
 
 
 def test_xiaohongshu_root_owns_all_registered_progress_codes() -> None:
