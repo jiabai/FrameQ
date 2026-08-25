@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-08-25-xiaohongshu-platform-subtitle-first-transcript-plan.md` | Implemented Xiaohongshu platform-subtitle-first transcript reuse in the existing single-link flow, with deterministic `mediaV2` selection, bounded atomic subtitle download, ASR fallback, package parity, and documented live/upstream residuals. |
 | `2026-08-24-self-service-email-activation-code-plan.md` | Added account-bound self-service activation-code email requests for inactive or expired desktop users, fail-closed delivery activation, additive account capability negotiation, and source-aware redemption that resets each renewed 31-day / 20-credit cycle without stacking active entitlement. |
 | `2026-08-16-motion-ui-enhancement-plan.md` | Motion 第一阶段 UI 表现层：处理阶段、ASR 真实进度、AI target 与历史列表的状态变化动效；不改 worker、Tauri IPC、workflow 或持久化。 |
 | `2026-08-16-motion-sheet-lifecycle-plan.md` | Motion 第二阶段：Account、Settings、History、ASR Model、AI Detail Sheet 的可访问进出场动效与延迟卸载。 |

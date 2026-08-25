@@ -1,5 +1,24 @@
 # FrameQ Architecture
 
+## 2026-08-25 Xiaohongshu platform-subtitle-first boundary
+
+- The existing single-link worker flow now interprets the verified public Xiaohongshu
+  `note.video.mediaV2` JSON string through the private `xiaohongshu/subtitles.py` policy. It
+  deterministically selects one validated `source`/Chinese/English track and never exposes raw
+  `mediaV2` or signed URLs to the rest of the application.
+- The Xiaohongshu root adapter owns page composition. The fallback video path reuses the one
+  already-loaded note object after MP4 success; an ordinary successful `yt-dlp` path performs one
+  separate best-effort sidecar probe. Subtitle failure never changes a successful video
+  `CommandResult` or MP4 outcome.
+- `xiaohongshu/transport.py` owns subtitle HTTP policy: HTTPS credential-free initial/final hosts,
+  approved Xiaohongshu resource suffixes, bounded SRT/VTT content types, a 2 MiB limit, and
+  atomic `.part` replacement. The generic video downloader keeps its existing defaults.
+- The sidecar is written only under `cache/tasks/<task_id>/download/`; `MediaPreparationFacade`
+  continues to consume it through `find_subtitle_transcript`. Existing transcript runtime writes
+  `source=subtitle`, safe language, and `engine=null`, skips ASR on a valid candidate, and falls
+  back to the unchanged ASR path on a miss. No desktop-worker contract, top-level stage, UI, AI,
+  History, or server boundary changes.
+
 ## 2026-08-24 Self-service activation email boundary
 
 - The server account surface now has two activation-code issuance paths that share one redemption

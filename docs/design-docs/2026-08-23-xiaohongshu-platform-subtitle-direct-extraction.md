@@ -1,7 +1,7 @@
 # 小红书平台字幕直接提取方案
 
 **日期：** 2026-08-23
-**状态：** 已完成真实页面验证，待按本方案立项实现
+**状态：** 已完成真实页面验证，并已按确认后的 ExecPlan 实现
 **范围：** 小红书公开视频笔记的已有平台字幕；不包含 ASR 生成字幕
 
 ## 1. 决策摘要
@@ -119,9 +119,9 @@ write_subtitle_atomically(subtitle.body, output_path)
 
 ### 6.3 独立“直接提取字幕”模式
 
-如果调用方的目标就是下载平台字幕，而不是完成视频转写，则字幕缺失应返回明确的
-`XHS_SUBTITLE_NOT_FOUND` 类结构化结果，不能静默调用 ASR。该模式输出原始 SRT，不把字幕
-改写成 ASR 风格文本；需要纯文本时，另行调用现有字幕解析器生成派生文本。
+独立字幕下载中心不属于本次产品范围；当前实现只在既有单链接视频转写流程中自动获取一条
+平台字幕 sidecar。需要正式文字稿时继续走现有 transcript 产物路径，不新增独立 job、导出入口
+或“全部语言”下载能力。
 
 ## 7. 失败、边界与安全
 
@@ -148,20 +148,20 @@ write_subtitle_atomically(subtitle.body, output_path)
 - 页面响应解码、字幕响应和本地原子写入都必须有大小上限；临时文件只能位于目标目录旁边。
 - 平台字幕文本属于用户本地任务内容，默认只写入本地任务产物，不上传到 FrameQ server。
 
-## 8. 实现拆分建议
+## 8. 已实现的拆分与边界
 
-这项能力改变小红书下载和字幕用户可见行为，进入实现前应另建 product spec 与 ExecPlan。
-建议拆分为：
+本方案已由 product spec 和 ExecPlan 立项并完成实现，实际拆分为：
 
-1. **平台轨道解析**：在 `worker/frameq_worker/xiaohongshu/` 增加只负责 `mediaV2` 解码、轨道
+1. **平台轨道解析**：`worker/frameq_worker/xiaohongshu/subtitles.py` 只负责 `mediaV2` 解码、轨道
    标准化、语言排序和 URL 安全校验的私有模块。
-2. **根适配器组合**：继续以 `xiaohongshu_fallback.py` 为生产入口，在一次页面读取中复用 note
-   对象，避免重复请求；保留现有 MP4 调用签名。
-3. **字幕原子下载**：复用 `transport.py` 的请求边界和仓库原子文件提交能力，不影响已完成 MP4。
-4. **流水线接入**：让 `media_preparation.py` 只消费已落地的 `.srt` / `.vtt`，继续保持字幕优先、
+2. **根适配器组合**：`xiaohongshu_fallback.py` 在 fallback 路径复用一次页面读取的 note 对象；
+   `media.py` 只在成功的 XHS `yt-dlp` 路径触发一次独立 best-effort sidecar 探测。
+3. **字幕原子下载**：`xiaohongshu/transport.py` 复用现有原子文件提交能力并增加最终主机、类型、
+   2 MiB 大小和空响应校验，不影响已完成 MP4。
+4. **流水线接入**：`media_preparation.py` 只消费已落地的 `.srt` / `.vtt`，继续保持字幕优先、
    ASR 兜底的通用策略。
-5. **独立提取接口**：如产品需要“只下载字幕”，增加独立的 typed worker job/result，不把它
-   塞进现有“视频下载失败”错误或 ASR 分支。
+5. **契约边界**：不新增 desktop-worker message code、顶层 JobStage、UI 控件、server 请求或
+   manifest artifact；平台字幕沿用现有 source/language metadata 和进度事件。
 
 ## 9. 验收清单
 
@@ -172,7 +172,7 @@ write_subtitle_atomically(subtitle.body, output_path)
 - `mediaV2` 缺失、畸形 JSON、无字幕、失效签名、非 2xx、空响应、超限和非法 SRT 均能闭合；
 - 视频下载成功但字幕失败时，MP4 保留、任务按现有 ASR 路径完成；
 - 字幕命中时 transcript metadata 为 `source=subtitle`，不得出现 ASR engine；
-- 独立字幕提取模式在无字幕时失败，不调用 ASR；
+- 既有单链接视频转写路径在无字幕时回退 ASR，不新增独立字幕任务；
 - 不记录 `xsec_token`、签名 URL、Cookie、完整请求头或响应正文；
 - `worker/tests/test_xiaohongshu_fallback.py`、字幕解析测试、模块边界测试和完整 worker 门禁通过；
 - `python scripts/validate_agents_docs.py --level WARN` 通过，除仓库已有治理警告外不得新增警告。

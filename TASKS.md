@@ -1,5 +1,14 @@
 # Tasks
 
+## Completed Worker Work
+
+- [x] 增加小红书平台字幕优先转写（2026-08-25）— ✅ 从公开 note 的 `mediaV2.video.subtitles`
+  选择一条安全的 `source`/中文/英文平台 SRT；fallback 与成功 `yt-dlp` 两条路径均 best-effort
+  下载到 task cache，命中时复用现有 transcript pipeline 并跳过 ASR，缺失/异常时回退原 ASR。
+  字幕传输限制为 HTTPS credential-free Xiaohongshu host、允许内容类型、2 MiB 和原子 `.part`
+  提交；不新增 UI、IPC contract、顶层阶段、manifest artifact、Cookie/login/CAPTCHA 或 server
+  数据流。ExecPlan：`docs/exec-plans/completed/2026-08-25-xiaohongshu-platform-subtitle-first-transcript-plan.md`。
+
 ## Active UI Work
 
 - [x] Implement self-service email activation codes (2026-08-25) — ✅ Inactive or expired signed-in

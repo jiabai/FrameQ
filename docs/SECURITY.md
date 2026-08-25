@@ -1,5 +1,23 @@
 # Security and Compliance
 
+## 2026-08-25 Xiaohongshu platform subtitle privacy and download boundary
+
+- Only public or already-authorized Xiaohongshu links are in scope. The worker does not import
+  browser cookies, log in, solve CAPTCHA, or bypass private/access-controlled content.
+- `xsec_token` is used only in the in-memory public-page request. A signed subtitle query is used
+  only for that transient download; neither value is written to manifests, History, logs,
+  diagnostics, UI messages, AI prompts, server requests, or subtitle file contents.
+- Subtitle URLs must be HTTPS, credential-free, and on an exact/subdomain-matched
+  `xhscdn.com`/`xiaohongshu.com` host both before the request and after redirects. Responses are
+  restricted to subtitle-safe content types, non-empty bodies, and at most 2 MiB; atomic `.part`
+  cleanup prevents partial files from reaching the parser.
+- Raw SRT/VTT exists only in the task cache download directory and is not a registered manifest
+  artifact. The existing transcript pipeline reads the parsed result locally; FrameQ server never
+  receives the video, subtitle, transcript, or signed URL.
+- Subtitle acquisition is best-effort. Invalid metadata, expired signatures, blocked responses,
+  oversized content, and parse misses fall back to local ASR without replacing a successful MP4
+  with a subtitle error. The normal video-download errors remain authoritative.
+
 ## 2026-08-24 Self-service activation email privacy and abuse boundary
 
 - Self-service activation requests require a valid desktop bearer session. The server derives the

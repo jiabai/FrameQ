@@ -1,6 +1,6 @@
 # 小红书平台字幕优先转写
 
-**状态：** Proposed
+**状态：** Implemented
 
 **日期：** 2026-08-25
 
@@ -159,15 +159,22 @@ FrameQ 应复用现有小红书页面解析和 HTTP transport，在同一次 not
 - 现有小红书图片笔记、私有/风控/CAPTCHA 页面和无视频流错误语义不改变。
 - AI 整理仍只读取正式 `transcript.txt`，不直接读取小红书原始 SRT。
 
-## 10. 实施前置条件
+## 10. 实施记录
 
-本 spec 只定义产品意图和边界，不授权立即实现。进入实现前需要创建并确认独立 ExecPlan，至少覆盖：
+本 spec 已按确认后的 ExecPlan 实现。实现保持既有单链接流程、契约、顶层阶段、UI、History、
+AI 和 server 边界不变，具体落点为：
 
-1. 小红书平台轨道解析、语言排序和安全校验；
-2. 小红书 fallback 在一次页面请求中复用 note 状态并 best-effort 下载字幕；
-3. 临时字幕原子写入与现有 `find_subtitle_transcript` 接入；
-4. transcript source metadata、进度事件和 UI 来源展示；
-5. 缺失/异常回退 ASR、真实样本和全量 worker/app 门禁。
+1. `worker/frameq_worker/xiaohongshu/subtitles.py` 负责 `mediaV2` 解码、轨道选择、语言规范化和 URL allowlist；
+2. `xiaohongshu_fallback.py` 在 fallback 路径复用一次页面解析，并提供成功 `yt-dlp` 路径使用的 best-effort sidecar 入口；
+3. `xiaohongshu/transport.py` 负责字幕响应的主机、类型、大小和原子落盘约束；
+4. 现有 `MediaPreparationFacade`、transcript metadata、进度事件和 UI 来源文案继续作为消费者；
+5. 命中跳过 ASR，缺失/异常回退原有 ASR，原始字幕只保留在 task cache 中。
+
+执行计划与验证证据：
+
+- ExecPlan：`docs/exec-plans/completed/2026-08-25-xiaohongshu-platform-subtitle-first-transcript-plan.md`；
+- 实现提交：`4ed0e74`、`f2975d9`、`008f18b`、`673fc86`、`e5d3fa9`；
+- 完整 worker 门禁、app lint、打包镜像比较，以及四条公开样本 smoke 结果记录在该 ExecPlan 的最终 Progress/Outcomes 中；app 全量测试保留一条与本次改动无关的既有 browser-smoke 失败，当前四条样本请求均未返回可用字幕。
 
 ## 11. 依据与现状
 
