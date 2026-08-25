@@ -49,6 +49,7 @@ pub(crate) struct AccountStatusView {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ServerAccountStatus {
     authenticated: bool,
     email: String,
@@ -67,6 +68,7 @@ struct ServerAccountStatus {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SessionExchangeResponse {
     session_token: String,
     email: String,
@@ -82,6 +84,7 @@ pub(crate) struct CompleteAuthFlowResult {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ActivationCodeRequestView {
     status: String,
     retry_at: Option<String>,
@@ -121,6 +124,7 @@ pub(crate) struct WechatCheckoutView {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ServerWechatCheckout {
     order_id: String,
     amount_fen: i32,
@@ -138,6 +142,7 @@ pub(crate) struct CheckoutStatusView {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ServerCheckoutStatus {
     order_id: String,
     status: String,
@@ -792,6 +797,29 @@ mod tests {
     }
 
     #[test]
+    fn server_account_status_rejects_unknown_success_fields() {
+        let error = serde_json::from_value::<ServerAccountStatus>(json!({
+            "authenticated": true,
+            "email": "user@example.com",
+            "entitlement_status": "active",
+            "entitlement_expires_at": "2026-07-22T08:00:00.000Z",
+            "llm_quota_limit": 20,
+            "llm_quota_used": 3,
+            "llm_quota_remaining": 17,
+            "llm_quota_resets_at": "2026-07-22T08:00:00.000Z",
+            "llm_configured": true,
+            "last_verified_at": "2026-06-21T08:00:00.000Z",
+            "can_process": true,
+            "can_generate_ai": true,
+            "can_request_activation_code": true,
+            "session_token": "secret-should-not-be-accepted"
+        }))
+        .expect_err("unknown success fields must fail closed");
+
+        assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
     fn guest_account_status_blocks_processing_and_ai_generation() {
         let value = serde_json::to_value(guest_account_status()).expect("serialize guest status");
 
@@ -829,11 +857,11 @@ mod tests {
     }
 
     #[test]
-    fn request_activation_code_success_uses_expected_http_shape_and_redacts_sensitive_fields() {
+    fn request_activation_code_success_uses_expected_http_shape() {
         let server = TestHttpServer::spawn(TestHttpResponse {
             status_line: "HTTP/1.1 200 OK".to_string(),
             headers: vec![("Content-Type".to_string(), "application/json".to_string())],
-            body: r#"{"status":"sent","retry_at":"2026-08-24T12:30:00Z","redeem_by":"2026-08-31T00:00:00Z","code":"SECRET-CODE","email":"user@example.com"}"#.to_string(),
+            body: r#"{"status":"sent","retry_at":"2026-08-24T12:30:00Z","redeem_by":"2026-08-31T00:00:00Z"}"#.to_string(),
         });
 
         let result = tauri::async_runtime::block_on(request_activation_code_from_server(
@@ -859,8 +887,6 @@ mod tests {
         assert_eq!(value["status"], "sent");
         assert_eq!(value["retry_at"], "2026-08-24T12:30:00Z");
         assert_eq!(value["redeem_by"], "2026-08-31T00:00:00Z");
-        assert!(value.get("code").is_none());
-        assert!(value.get("email").is_none());
     }
 
     #[test]
@@ -970,6 +996,23 @@ mod tests {
 
     #[test]
     fn request_activation_code_sanitizes_invalid_server_json_and_bodies() {
+        let extra_field_server = TestHttpServer::spawn(TestHttpResponse {
+            status_line: "HTTP/1.1 200 OK".to_string(),
+            headers: vec![("Content-Type".to_string(), "application/json".to_string())],
+            body: r#"{"status":"sent","retry_at":"2026-08-24T12:30:00Z","redeem_by":"2026-08-31T00:00:00Z","code":"SECRET-CODE"}"#.to_string(),
+        });
+
+        let extra_field_error =
+            tauri::async_runtime::block_on(request_activation_code_from_server(
+                &extra_field_server.base_url(),
+                "session-secret",
+                "en-US",
+            ))
+            .expect_err("unknown success fields must fail");
+
+        assert_eq!(extra_field_error.error_code, "INTERNAL_SERVER_ERROR");
+        assert!(!extra_field_error.message.contains("SECRET"));
+
         let invalid_json_server = TestHttpServer::spawn(TestHttpResponse {
             status_line: "HTTP/1.1 200 OK".to_string(),
             headers: vec![("Content-Type".to_string(), "application/json".to_string())],

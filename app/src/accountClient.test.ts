@@ -79,6 +79,30 @@ describe("account client", () => {
     });
   });
 
+  test("rejects account status success payloads with extra fields", async () => {
+    const runner: AccountCommandRunner = async () => ({
+      authenticated: true,
+      email: "user@example.com",
+      entitlement_status: "inactive",
+      entitlement_expires_at: null,
+      llm_quota_limit: 20,
+      llm_quota_used: 3,
+      llm_quota_remaining: 17,
+      llm_quota_resets_at: "2026-07-22T08:00:00.000Z",
+      llm_configured: true,
+      last_verified_at: "2026-06-21T08:00:00.000Z",
+      can_process: false,
+      can_generate_ai: false,
+      can_request_activation_code: true,
+      server_error: null,
+      session_token: "secret-session-token",
+    });
+
+    await expect(getAccountStatus(runner)).rejects.toEqual(
+      new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"),
+    );
+  });
+
   test("invokes login, callback completion, logout, checkout, and order status commands", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: AccountCommandRunner = async (command, args) => {
