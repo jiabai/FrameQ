@@ -128,6 +128,29 @@ def video_state(note_id: str = NOTE_ID) -> dict[str, object]:
     }
 
 
+def subtitle_video_state(note_id: str = NOTE_ID) -> dict[str, object]:
+    state = video_state(note_id)
+    note = state["note"]["noteDetailMap"][note_id]["note"]
+    note["video"]["mediaV2"] = json.dumps(
+        {
+            "video": {
+                "subtitles": {
+                    "source": [
+                        {
+                            "language": "zh-CN",
+                            "url": (
+                                "https://sns-video-a.xhscdn.com/source.srt"
+                                "?sign=redacted-fixture"
+                            ),
+                        }
+                    ]
+                }
+            }
+        }
+    )
+    return state
+
+
 def test_parse_xiaohongshu_input_accepts_short_link_share_text_and_xsec_token() -> None:
     client = FakeHttpClient(
         {
@@ -309,6 +332,170 @@ def test_download_xiaohongshu_video_fetches_page_and_downloads_best_stream(
         },
     ]
     assert all("message" not in event for event in events)
+
+
+def test_download_xiaohongshu_video_reuses_one_page_for_platform_subtitle(
+    tmp_path: Path,
+) -> None:
+    page_url = f"https://www.xiaohongshu.com/explore/{NOTE_ID}?xsec_token=token123"
+    subtitle_url = (
+        "https://sns-video-a.xhscdn.com/source.srt?sign=redacted-fixture"
+    )
+    subtitle_body = b"1\n00:00:00,000 --> 00:00:01,000\nplatform subtitle\n"
+    client = FakeHttpClient(
+        {
+            page_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=wrap_initial_state(subtitle_video_state()),
+                    url=page_url,
+                )
+            ],
+            "https://cdn.example/h265.mp4": [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "video/mp4"},
+                    body=b"mp4 bytes",
+                    url="https://cdn.example/h265.mp4",
+                )
+            ],
+            subtitle_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "application/x-subrip"},
+                    body=subtitle_body,
+                    url=subtitle_url,
+                )
+            ],
+        }
+    )
+
+    path = download_xiaohongshu_video(
+        page_url,
+        output_dir=tmp_path,
+        http_client=client,
+    )
+
+    assert path.read_bytes() == b"mp4 bytes"
+    assert (tmp_path / f"{NOTE_ID}.zh-CN.srt").read_bytes() == subtitle_body
+    assert [call[0] for call in client.calls] == [
+        page_url,
+        "https://cdn.example/h265.mp4",
+        subtitle_url,
+    ]
+
+
+def test_platform_subtitle_failure_does_not_fail_video_download(tmp_path: Path) -> None:
+    page_url = f"https://www.xiaohongshu.com/explore/{NOTE_ID}"
+    subtitle_url = (
+        "https://sns-video-a.xhscdn.com/source.srt?sign=redacted-fixture"
+    )
+    client = FakeHttpClient(
+        {
+            page_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=wrap_initial_state(subtitle_video_state()),
+                    url=page_url,
+                )
+            ],
+            "https://cdn.example/h265.mp4": [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "video/mp4"},
+                    body=b"mp4 bytes",
+                    url="https://cdn.example/h265.mp4",
+                )
+            ],
+            subtitle_url: [
+                HttpResponse(
+                    status=403,
+                    headers={"Content-Type": "text/html"},
+                    body=b"expired",
+                    url=subtitle_url,
+                )
+            ],
+        }
+    )
+
+    path = download_xiaohongshu_video(
+        page_url,
+        output_dir=tmp_path,
+        http_client=client,
+    )
+
+    assert path.read_bytes() == b"mp4 bytes"
+    assert not list(tmp_path.glob("*.srt"))
+
+
+def test_download_xiaohongshu_subtitle_loads_page_once_for_ytdlp_success(
+    tmp_path: Path,
+) -> None:
+    page_url = f"https://www.xiaohongshu.com/explore/{NOTE_ID}"
+    subtitle_url = (
+        "https://sns-video-a.xhscdn.com/source.srt?sign=redacted-fixture"
+    )
+    subtitle_body = b"1\n00:00:00,000 --> 00:00:01,000\nplatform subtitle\n"
+    client = FakeHttpClient(
+        {
+            page_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=wrap_initial_state(subtitle_video_state()),
+                    url=page_url,
+                )
+            ],
+            subtitle_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "application/x-subrip"},
+                    body=subtitle_body,
+                    url=subtitle_url,
+                )
+            ],
+        }
+    )
+
+    path = xiaohongshu_fallback.download_xiaohongshu_subtitle(
+        page_url,
+        output_dir=tmp_path,
+        http_client=client,
+    )
+
+    assert path == tmp_path / f"{NOTE_ID}.zh-CN.srt"
+    assert path.read_bytes() == subtitle_body
+    assert [call[0] for call in client.calls] == [page_url, subtitle_url]
+
+
+def test_download_xiaohongshu_subtitle_returns_none_when_track_is_absent(
+    tmp_path: Path,
+) -> None:
+    page_url = f"https://www.xiaohongshu.com/explore/{NOTE_ID}"
+    client = FakeHttpClient(
+        {
+            page_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=wrap_initial_state(video_state()),
+                    url=page_url,
+                )
+            ]
+        }
+    )
+
+    assert (
+        xiaohongshu_fallback.download_xiaohongshu_subtitle(
+            page_url,
+            output_dir=tmp_path,
+            http_client=client,
+        )
+        is None
+    )
+    assert not list(tmp_path.iterdir())
 
 
 def test_download_xiaohongshu_video_uses_streaming_download_when_available(
@@ -638,6 +825,7 @@ def test_xiaohongshu_root_compatibility_surface_is_stable() -> None:
         "build_explore_url",
         "parse_video_stream_candidates",
         "download_xiaohongshu_video",
+        "download_xiaohongshu_subtitle",
         "_decode_response_body",
         "_download_first_available_stream",
         "_page_headers",

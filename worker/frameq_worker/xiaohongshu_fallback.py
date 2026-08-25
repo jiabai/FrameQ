@@ -29,6 +29,7 @@ from frameq_worker.xiaohongshu.streams import (
 from frameq_worker.xiaohongshu.streams import (
     parse_video_streams,
 )
+from frameq_worker.xiaohongshu.subtitles import select_preferred_subtitle_track
 from frameq_worker.xiaohongshu.transport import (
     XHS_DESKTOP_USER_AGENT as _XHS_DESKTOP_USER_AGENT,
 )
@@ -36,11 +37,17 @@ from frameq_worker.xiaohongshu.transport import (
     XHS_REFERER as _XHS_REFERER,
 )
 from frameq_worker.xiaohongshu.transport import (
+    SafeDownloadError as _SafeDownloadError,
+)
+from frameq_worker.xiaohongshu.transport import (
     UrllibXiaohongshuHttpClient,
     is_download_attempt_error,
 )
 from frameq_worker.xiaohongshu.transport import (
     download_stream_to_path as _download_stream_to_path,
+)
+from frameq_worker.xiaohongshu.transport import (
+    download_subtitle_to_path as _download_subtitle_to_path,
 )
 from frameq_worker.xiaohongshu.transport import (
     map_download_error as _map_download_error,
@@ -86,6 +93,57 @@ def parse_video_stream_candidates(
     return parse_video_streams(note_obj, candidate_headers=_media_headers())
 
 
+def download_xiaohongshu_subtitle(
+    raw_input: str,
+    output_dir: Path,
+    http_client: XiaohongshuDownloadClient | None = None,
+) -> Path | None:
+    client = http_client or UrllibXiaohongshuHttpClient()
+    try:
+        parsed = parse_xiaohongshu_input(raw_input, http_client=client)
+        note_obj = _load_public_note(parsed, client)
+        return _download_preferred_subtitle_best_effort(
+            note_obj,
+            parsed.note_id,
+            output_dir,
+            client,
+        )
+    except (XiaohongshuFallbackError, _SafeDownloadError, OSError):
+        return None
+
+
+def _load_public_note(
+    parsed: XiaohongshuParseResult,
+    client: XiaohongshuHttpClient,
+) -> Mapping[str, object]:
+    page_response = client.get(
+        build_explore_url(parsed.note_id, parsed.xsec_token),
+        headers=_page_headers(),
+        timeout_seconds=10.0,
+    )
+    _raise_for_page_response(page_response)
+    state = _extract_initial_state(_decode_response_body(page_response))
+    return _lookup_note(state, parsed.note_id)
+
+
+def _download_preferred_subtitle_best_effort(
+    note_obj: Mapping[str, object],
+    note_id: str,
+    output_dir: Path,
+    http_client: XiaohongshuDownloadClient,
+) -> Path | None:
+    track = select_preferred_subtitle_track(note_obj)
+    if track is None:
+        return None
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{note_id}.{track.language}{track.suffix}"
+    try:
+        _download_subtitle_to_path(track.url, output_path, http_client)
+    except (_SafeDownloadError, XiaohongshuFallbackError, OSError):
+        return None
+    return output_path
+
+
 def download_xiaohongshu_video(
     raw_input: str,
     output_dir: Path,
@@ -96,15 +154,7 @@ def download_xiaohongshu_video(
     parsed = parse_xiaohongshu_input(raw_input, http_client=client)
 
     _emit_progress(progress_callback, "xiaohongshu.page.resolving", 22)
-    page_response = client.get(
-        build_explore_url(parsed.note_id, parsed.xsec_token),
-        headers=_page_headers(),
-        timeout_seconds=10.0,
-    )
-    _raise_for_page_response(page_response)
-
-    state = _extract_initial_state(_decode_response_body(page_response))
-    note_obj = _lookup_note(state, parsed.note_id)
+    note_obj = _load_public_note(parsed, client)
     candidates = parse_video_streams(note_obj, candidate_headers=_media_headers())
     if not candidates:
         if _is_image_only_note(note_obj):
@@ -120,12 +170,19 @@ def download_xiaohongshu_video(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{parsed.note_id}.mp4"
     _emit_progress(progress_callback, "xiaohongshu.video.saving", 30)
-    return _download_first_available_stream(
+    video_path = _download_first_available_stream(
         candidates,
         output_path=output_path,
         http_client=client,
         progress_callback=progress_callback,
     )
+    _download_preferred_subtitle_best_effort(
+        note_obj,
+        parsed.note_id,
+        output_dir,
+        client,
+    )
+    return video_path
 
 
 def _download_first_available_stream(
