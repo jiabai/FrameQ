@@ -71,6 +71,32 @@ def test_falls_back_to_preferred_language_group_and_normalizes_language() -> Non
     )
 
 
+def test_selects_platform_numeric_srt_format() -> None:
+    note = note_with_groups(
+        {
+            "source": [
+                {
+                    "language": "zh-CN",
+                    "url": (
+                        "https://sns-subtitle-s1.xhscdn.com/source.srt"
+                        "?sign=redacted"
+                    ),
+                    "format": 0,
+                }
+            ]
+        }
+    )
+
+    assert select_preferred_subtitle_track(note) == XiaohongshuSubtitleTrack(
+        language="zh-CN",
+        url=(
+            "https://sns-subtitle-s1.xhscdn.com/source.srt"
+            "?sign=redacted"
+        ),
+        suffix=".srt",
+    )
+
+
 @pytest.mark.parametrize(
     "note",
     [
@@ -108,6 +134,11 @@ def test_malformed_media_v2_returns_none(note: dict[str, object]) -> None:
         {
             "url": "https://sns-video-a.xhscdn.com/source.srt",
             "language": "not a language",
+        },
+        {
+            "url": "https://sns-video-a.xhscdn.com/source.srt",
+            "language": "zh-CN",
+            "format": 1,
         },
         {"url": "https://sns-video-a.xhscdn.com/source.srt"},
     ],

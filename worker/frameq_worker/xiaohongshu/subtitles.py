@@ -64,13 +64,15 @@ def is_allowed_subtitle_url(url: str) -> bool:
 
 def _suffix_for_track(track: Mapping[str, object], url: str) -> str | None:
     explicit_format = track.get("format")
-    if explicit_format is not None:
-        if not isinstance(explicit_format, str):
-            return None
+    if isinstance(explicit_format, str):
         format_name = explicit_format.strip().lower().lstrip(".")
         if format_name not in {"srt", "vtt"}:
             return None
         return f".{format_name}"
+    if explicit_format is not None and not (
+        type(explicit_format) is int and explicit_format == 0
+    ):
+        return None
 
     path = urlsplit(url).path.lower()
     for suffix in _SUPPORTED_SUFFIXES:
