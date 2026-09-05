@@ -15,6 +15,8 @@
 
 ## Desktop Runtime, Packaging & Distribution
 
+- `2026-09-05-v0.3.6-desktop-release.md` — v0.3.6 desktop release scope and acceptance.
+
 - `2026-06-18-installer-distribution.md` — Historical lightweight-installer distribution baseline; model-acquisition behavior superseded by `2026-07-27-selectable-asr-model-on-demand-download.md`.
 - `2026-06-23-desktop-one-click-updates.md` — Low-noise desktop update reminders and one-click upgrades via GitHub Releases static `latest.json`.
 - `2026-07-05-app-local-cache-dir-rename.md` — Use `cache/` for the app-local temporary task area and retire the legacy worker env contract.

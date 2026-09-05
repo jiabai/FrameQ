@@ -59,6 +59,7 @@ FrameQ 持久设计决策文档总入口。`AGENTS.md` 不再逐条列出设计�
 
 ## 平台字幕与导入
 
+- `2026-08-25-xiaohongshu-format-enum-design.md` — 小红书字幕数字格式枚举 `0` 兼容与未知格式拒绝
 - `2026-08-23-douyin-platform-subtitle-direct-extraction.md` — 抖音平台字幕直取
 - `2026-08-23-xiaohongshu-platform-subtitle-direct-extraction.md` — 小红书平台字幕直取
 - `2026-07-05-youtube-bilibili-subtitle-first-asr-fallback.md` — YouTube/Bilibili 字幕优先、ASR 兜底
