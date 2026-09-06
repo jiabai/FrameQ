@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-09-05-v0.3.6-desktop-release-plan.md` | Published stable v0.3.6 with Xiaohongshu platform-subtitle reuse, self-service activation client support, post-v0.3.5 fixes, and Windows/macOS desktop artifacts after local and hosted validation. |
 | `2026-08-25-xiaohongshu-format-enum-plan.md` | Completed numeric `format: 0` compatibility for Xiaohongshu subtitle tracks, with regression coverage and live subtitle-only verification. |
 | `2026-08-25-xiaohongshu-platform-subtitle-first-transcript-plan.md` | Implemented Xiaohongshu platform-subtitle-first transcript reuse in the existing single-link flow, with deterministic `mediaV2` selection, bounded atomic subtitle download, ASR fallback, package parity, and documented live/upstream residuals. |
 | `2026-08-24-self-service-email-activation-code-plan.md` | Added account-bound self-service activation-code email requests for inactive or expired desktop users, fail-closed delivery activation, additive account capability negotiation, and source-aware redemption that resets each renewed 31-day / 20-credit cycle without stacking active entitlement. |

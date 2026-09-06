@@ -11,6 +11,15 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.3.6 desktop release (2026-09-06) — ✅ Current desktop source was
+  committed to `main` (`9fc7834`) and tagged `v0.3.6`; local release gates passed (Worker 854/2
+  skipped, frontend 762, Server 291/1 skipped, Rust 315, scripts 37), hosted Server CI and macOS
+  ProcessSupervisor passed, and Desktop Release built the Windows updater/installer, `latest.json`,
+  Intel DMG, and Apple Silicon DMG. Includes Xiaohongshu platform subtitle reuse with numeric
+  `format: 0`, self-service activation client support, and post-v0.3.5 fixes. Release notes:
+  `docs/releases/v0.3.6.md`; plan:
+  `docs/exec-plans/completed/2026-09-05-v0.3.6-desktop-release-plan.md`.
+
 - [x] Implement self-service email activation codes (2026-08-25) — ✅ Inactive or expired signed-in
   desktop accounts can request an account-bound activation code by email, manually redeem it for a
   fresh 31-day entitlement plus 20 AI Credits, and repeat after every expiry without stacking active
