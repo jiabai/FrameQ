@@ -18,7 +18,11 @@
   Intel DMG, and Apple Silicon DMG. Includes Xiaohongshu platform subtitle reuse with numeric
   `format: 0`, self-service activation client support, and post-v0.3.5 fixes. Release notes:
   `docs/releases/v0.3.6.md`; plan:
-  `docs/exec-plans/completed/2026-09-05-v0.3.6-desktop-release-plan.md`.
+  `docs/exec-plans/completed/2026-09-05-v0.3.6-desktop-release-plan.md`. Stable Release was
+  published at 2026-09-06 18:16:35 +08:00:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.3.6. Residual risk: clean-machine Windows and
+  macOS native UI smoke was not separately repeated for this release; public-platform availability
+  and deployed server capability remain external dependencies.
 
 - [x] Implement self-service email activation codes (2026-08-25) — ✅ Inactive or expired signed-in
   desktop accounts can request an account-bound activation code by email, manually redeem it for a
