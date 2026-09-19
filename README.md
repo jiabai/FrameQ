@@ -19,7 +19,7 @@
 FrameQ is a desktop application that keeps video processing local by default. Paste a supported public or authorized video link, and FrameQ coordinates the local worker to download the video, extract audio, transcribe speech with SenseVoice Small, and export useful files. Summary and insight generation are separate, confirmed steps that use the server-managed LLM checkout and quota flow.
 
 > [!NOTE]
-> Latest stable release: **v0.3.6** (Windows x64, macOS Intel, macOS Apple Silicon). See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
+> Latest stable release: **v0.3.8** (Windows x64, macOS Intel, macOS Apple Silicon). See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
 
 ```text
 Supported video link
@@ -355,7 +355,7 @@ $env:PYTHONPATH = "$PWD\worker"
 @'
 import json
 from pathlib import Path
-from frameq_worker.cli import retry_insights_once
+from frameq_worker.worker_service import retry_insights_once
 
 result = retry_insights_once(
     json.dumps({
