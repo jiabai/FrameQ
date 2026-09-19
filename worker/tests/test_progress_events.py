@@ -31,6 +31,11 @@ WORKER_SPECS = {
         {"attempt": 1, "total": 3},
     ),
     "douyin.page.resolving": ("video_extracting", 22, {}),
+    "douyin.page.retrying": (
+        "video_extracting",
+        22,
+        {"attempt": 2, "total": 3},
+    ),
     "douyin.stream.probing": ("video_extracting", 26, {}),
     "douyin.video.saving": ("video_extracting", 30, {}),
     "douyin.stream.retrying": (

@@ -91,11 +91,17 @@ export function buildTauriDevSpawnSpec(
   platform = process.platform,
   env = process.env,
 ) {
+  const childEnv = { ...env };
+  if (platform === "win32" && !childEnv.CARGO_BUILD_JOBS) {
+    childEnv.CARGO_BUILD_JOBS = "1";
+  }
+
   if (platform === "win32") {
     return {
       command: env.ComSpec || "cmd.exe",
       args: ["/d", "/s", "/c", "npm --prefix app run tauri dev"],
       cwd: resolve(repoRoot),
+      env: childEnv,
     };
   }
 
@@ -103,6 +109,7 @@ export function buildTauriDevSpawnSpec(
     command: "npm",
     args: ["--prefix", "app", "run", "tauri", "dev"],
     cwd: resolve(repoRoot),
+    env: childEnv,
   };
 }
 
@@ -111,7 +118,7 @@ export function runTauriDev(repoRoot = defaultRepoRoot) {
     const spec = buildTauriDevSpawnSpec(repoRoot);
     const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: process.env,
+      env: spec.env,
       stdio: "inherit",
       windowsHide: false,
     });

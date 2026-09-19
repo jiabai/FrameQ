@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import random
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from frameq_worker.douyin.page import parse_share_page_router_data
@@ -26,6 +29,16 @@ from frameq_worker.douyin.types import (
 from frameq_worker.douyin.types import HttpResponse as HttpResponse
 from frameq_worker.progress_events import build_worker_progress_event
 
+SHARE_PAGE_ATTEMPTS = 3
+SHARE_PAGE_RETRY_DELAY_RANGE_SECONDS = (3.0, 10.0)
+SHARE_PAGE_RETRYABLE_ERROR_CODES = frozenset(
+    {
+        "DOUYIN_ROUTER_DATA_MISSING",
+        "DOUYIN_ROUTER_DATA_MALFORMED",
+        "DOUYIN_SHARE_PAGE_UNAVAILABLE",
+    }
+)
+
 
 def download_first_available_candidate(
     aweme_id: str,
@@ -50,22 +63,48 @@ def download_first_available_candidate(
     )
 
 
-def download_douyin_video(
-    url: str,
-    output_dir: Path,
-    http_client: UrllibDouyinHttpClient | None = None,
+def resolve_share_page_item(
+    aweme_id: str,
+    http_client: UrllibDouyinHttpClient,
     progress_callback: object | None = None,
-) -> Path:
-    client = http_client or UrllibDouyinHttpClient()
-    aweme_id = resolve_aweme_id_from_input(url, http_client=client)
-    if aweme_id is None:
-        raise DouyinFallbackError(
-            "DOUYIN_ID_PARSE_FAILED",
-            "Could not extract Douyin video ID from URL.",
-        )
+    sleeper: Callable[[float], None] | None = None,
+) -> dict[str, object]:
+    """Fetch and parse the public share page, retrying transient SSR degradation.
 
-    _emit_progress(progress_callback, "douyin.page.resolving", 22)
-    share_response = client.get(
+    The Douyin share page intermittently serves a slimmed-down document without
+    ``videoInfoRes``. That is a transient server-side variant, so the same
+    request is retried after a randomized delay instead of failing the task.
+    """
+    sleep = sleeper or time.sleep
+    last_error: DouyinFallbackError | None = None
+
+    for attempt in range(1, SHARE_PAGE_ATTEMPTS + 1):
+        try:
+            return _fetch_share_page_item(aweme_id, http_client)
+        except DouyinFallbackError as exc:
+            if exc.code not in SHARE_PAGE_RETRYABLE_ERROR_CODES:
+                raise
+            last_error = exc
+            next_attempt = attempt + 1
+            if next_attempt > SHARE_PAGE_ATTEMPTS:
+                break
+            _emit_progress(
+                progress_callback,
+                "douyin.page.retrying",
+                22,
+                {"attempt": next_attempt, "total": SHARE_PAGE_ATTEMPTS},
+            )
+            sleep(random.uniform(*SHARE_PAGE_RETRY_DELAY_RANGE_SECONDS))
+
+    assert last_error is not None
+    raise last_error
+
+
+def _fetch_share_page_item(
+    aweme_id: str,
+    http_client: UrllibDouyinHttpClient,
+) -> dict[str, object]:
+    share_response = http_client.get(
         build_share_page_url(aweme_id),
         headers=public_headers(),
         timeout_seconds=10.0,
@@ -76,9 +115,34 @@ def download_douyin_video(
             "Douyin public share page was unavailable.",
         )
 
-    item = parse_share_page_router_data(
+    return parse_share_page_router_data(
         share_response.body.decode("utf-8", errors="replace")
     )
+
+
+def download_douyin_video(
+    url: str,
+    output_dir: Path,
+    http_client: UrllibDouyinHttpClient | None = None,
+    progress_callback: object | None = None,
+    sleeper: Callable[[float], None] | None = None,
+) -> Path:
+    client = http_client or UrllibDouyinHttpClient()
+    aweme_id = resolve_aweme_id_from_input(url, http_client=client)
+    if aweme_id is None:
+        raise DouyinFallbackError(
+            "DOUYIN_ID_PARSE_FAILED",
+            "Could not extract Douyin video ID from URL.",
+        )
+
+    _emit_progress(progress_callback, "douyin.page.resolving", 22)
+    item = resolve_share_page_item(
+        aweme_id,
+        http_client=client,
+        progress_callback=progress_callback,
+        sleeper=sleeper,
+    )
+
     _emit_progress(progress_callback, "douyin.stream.probing", 26)
     candidates = collect_stream_candidates(item, http_client=client)
     if not candidates:

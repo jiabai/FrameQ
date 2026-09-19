@@ -124,3 +124,11 @@ test("launches npm through cmd.exe on Windows to avoid npm.cmd spawn failures", 
     "npm --prefix app run tauri dev",
   ]);
 });
+
+test("limits Windows Tauri dev builds to one Cargo job", () => {
+  const spec = buildTauriDevSpawnSpec("D:\\Github\\FrameQ", "win32", {
+    ComSpec: "C:\\Windows\\System32\\cmd.exe",
+  });
+
+  assert.equal(spec.env.CARGO_BUILD_JOBS, "1");
+});

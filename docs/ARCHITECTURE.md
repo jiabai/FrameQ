@@ -296,9 +296,9 @@
 
 ## 2026-07-20 Douyin fallback module boundary
 
-- `douyin_fallback.py` is now a 132-line stable compatibility/application adapter. It retains the
-  complete fallback sequence, default dependency composition, output naming, candidate-order
-  wrapper, and all four `douyin.*` progress events.
+- `douyin_fallback.py` is now the stable compatibility/application adapter. It retains the complete
+  fallback sequence, default dependency composition, output naming, candidate-order wrapper, and
+  all five `douyin.*` progress events, including bounded share-page retry orchestration.
 - The private `douyin/` package separates immutable shared types, source/short-link policy, pure
   Router Data interpretation, bit-rate/ratio-probe stream policy, and CookieJar/urllib/atomic-write
   transport. The package initializer exports nothing, and production consumers outside the package

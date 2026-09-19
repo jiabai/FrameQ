@@ -54,6 +54,11 @@ pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 8;
 pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "FRAMEQ_DIAGNOSTIC ";
 
+#[cfg(any(windows, target_os = "linux"))]
+fn register_deep_links_on_startup() -> bool {
+    cfg!(target_os = "linux") || !cfg!(debug_assertions)
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -79,8 +84,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             #[cfg(any(windows, target_os = "linux"))]
-            if let Err(error) = app.deep_link().register_all() {
-                eprintln!("[frameq] failed to register deep links: {error}");
+            if register_deep_links_on_startup() {
+                if let Err(error) = app.deep_link().register_all() {
+                    eprintln!("[frameq] failed to register deep links: {error}");
+                }
             }
             Ok(())
         })
@@ -141,6 +148,8 @@ mod tests {
         server_base_url, AuthCallback,
     };
     use super::path_to_env_string;
+    #[cfg(all(debug_assertions, windows))]
+    use super::register_deep_links_on_startup;
     use super::settings::{load_llm_config_from_file, save_llm_config_to_file, LlmConfigInput};
     use std::fs;
     use std::path::PathBuf;
@@ -155,6 +164,12 @@ mod tests {
             url,
             "https://frameq.example/login?desktop=1&state=state-123456&redirect_uri=frameq%3A%2F%2Fauth%2Fcallback"
         );
+    }
+
+    #[cfg(all(debug_assertions, windows))]
+    #[test]
+    fn debug_builds_do_not_register_deep_links_during_startup() {
+        assert!(!register_deep_links_on_startup());
     }
 
     #[test]

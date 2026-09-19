@@ -843,6 +843,7 @@ describe("desktop/worker contract", () => {
       "asr.transcribe.running",
       "ai.generation.running",
       "douyin.page.resolving",
+      "douyin.page.retrying",
       "douyin.stream.probing",
       "douyin.video.saving",
       "douyin.stream.retrying",

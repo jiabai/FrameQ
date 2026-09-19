@@ -34,7 +34,7 @@
 
 ## Input & Media Processing
 
-- `2026-06-16-douyin-video-transcription-client.md` — MVP desktop client: input a Douyin URL, output highest-quality public video and transcript; includes Douyin share-page fallback.
+- `2026-06-16-douyin-video-transcription-client.md` — MVP desktop client: input a Douyin URL, output highest-quality public video and transcript; includes Douyin share-page fallback and the 2026-09-16 share-page retry with a randomized 3 to 10 second wait.
 - `2026-07-05-repeat-url-task-reuse.md` — Reuse an existing completed local task when the same public video URL is submitted again.
 - `2026-07-05-processing-toolbar-new-task-guard.md` — Disable the toolbar new-task/reset action while a video task is actively processing.
 - `2026-07-10-source-url-privacy-boundary.md` — Separate process-local download URLs from safe canonical source identities; keep raw URL metadata out of persistence, history, diagnostics, and cloud AI prompts.

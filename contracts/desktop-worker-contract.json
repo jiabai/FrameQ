@@ -301,6 +301,12 @@
         "douyin.page.resolving": {
           "allowedArgs": []
         },
+        "douyin.page.retrying": {
+          "allowedArgs": [
+            "attempt",
+            "total"
+          ]
+        },
         "douyin.stream.probing": {
           "allowedArgs": []
         },

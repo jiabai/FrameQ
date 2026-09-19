@@ -808,6 +808,7 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
         "asr.transcribe.running",
         "ai.generation.running",
         "douyin.page.resolving",
+        "douyin.page.retrying",
         "douyin.stream.probing",
         "douyin.video.saving",
         "douyin.stream.retrying",

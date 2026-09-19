@@ -6,6 +6,28 @@
 > strict History vNext specification; older schema compatibility statements below are historical and
 > do not authorize runtime migration or loading of unsupported tasks.
 
+## 2026-09-16 Douyin Share Page Retry
+
+- The Douyin public share page intermittently serves a slimmed-down document that has no `videoInfoRes`. FrameQ should treat that variant as a transient server-side behavior instead of failing the task on the first response.
+- FrameQ should retry the public share page fetch and parse up to three attempts in total, meaning one initial attempt plus at most two retries.
+- Between two consecutive attempts the worker must wait a randomized delay of 3 to 10 seconds. Each wait is drawn independently, so repeated retries must not produce a fixed or predictable rhythm.
+- The retry scope is the share page only. Video ID resolution, stream probing, stream download, audio extraction, subtitle detection, and ASR keep their existing behavior, and the existing stream-level retry that emits `douyin.stream.retrying` is unchanged.
+- A retry must be visible to the user: the worker emits the closed progress message code `douyin.page.retrying` with the `attempt` and `total` arguments, and it emits that event before the randomized wait begins. The user sees an explicit retry state rather than an apparently stalled task.
+- Retryable share page failures are exactly `DOUYIN_ROUTER_DATA_MISSING`, `DOUYIN_ROUTER_DATA_MALFORMED`, and `DOUYIN_SHARE_PAGE_UNAVAILABLE`. Any other failure in the share page step keeps failing immediately.
+- After the final attempt the last share page error is surfaced unchanged, so the existing error taxonomy and localized copy remain authoritative and no new user-facing error text is introduced.
+- The retry must not change privacy or authorization behavior. It re-requests the same public share page URL with the same public request headers, and no share page body, cookie, credential, or raw source URL enters diagnostics, telemetry, or task persistence.
+- The randomized wait must remain a worker-internal detail. It is not persisted, not reported as a metric, and not exposed to the account service.
+
+## 2026-09-16 Windows Tauri Dev Startup
+
+- `npm --prefix app run tauri:dev:fresh-worker` should start the Vite/Tauri desktop in a constrained
+  Windows Cargo build mode when the caller has not already selected a `CARGO_BUILD_JOBS` value;
+  this avoids exhausting the host page file during the first native build while preserving an
+  explicit caller override.
+- Windows debug startup should not attempt to register the packaged `frameq://` protocol in the
+  user registry. Release startup keeps the existing registration behavior, and the single-instance
+  deep-link argument path remains available for development runs.
+
 ## 2026-07-05 Task-Owned Artifact Layout
 
 - Each new processing run should create one task-owned output directory under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`.

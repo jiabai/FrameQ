@@ -53,6 +53,7 @@ export const WORKER_MESSAGE_CODE_RULES = {
   "asr.transcribe.running": { allowedArgs: [] },
   "ai.generation.running": { allowedArgs: ["attempt", "total"] },
   "douyin.page.resolving": { allowedArgs: [] },
+  "douyin.page.retrying": { allowedArgs: ["attempt", "total"] },
   "douyin.stream.probing": { allowedArgs: [] },
   "douyin.video.saving": { allowedArgs: [] },
   "douyin.stream.retrying": { allowedArgs: ["attempt", "total"] },

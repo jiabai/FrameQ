@@ -5,6 +5,7 @@ import pytest
 from frameq_worker.douyin_fallback import (
     DOUYIN_MOBILE_USER_AGENT,
     PLAY_QUALITIES,
+    SHARE_PAGE_ATTEMPTS,
     DouyinFallbackError,
     DouyinStreamCandidate,
     HttpResponse,
@@ -57,6 +58,65 @@ class FakeHttpClient:
         if isinstance(item, Exception):
             raise item
         return item
+
+
+DEGRADED_SHARE_PAGE_HTML = """
+<script>window._ROUTER_DATA = {
+  "loaderData": {"video_(id)/page": {"itemId": "7653372612151692594"}}
+};</script>
+"""
+
+
+def share_page_html(aweme_id: str, video_uri: str) -> str:
+    return f"""
+    <script>window._ROUTER_DATA = {{
+      "loaderData": {{"video_(id)/page": {{"videoInfoRes": {{"item_list": [{{
+        "aweme_id": "{aweme_id}",
+        "video": {{"play_addr": {{"uri": "{video_uri}"}}}}
+      }}]}}}}}}
+    }};</script>
+    """
+
+
+def html_response(html: str) -> HttpResponse:
+    return HttpResponse(200, {"Content-Type": "text/html"}, html.encode(), "share")
+
+
+def degraded_share_page_responses() -> list[HttpResponse]:
+    return [
+        html_response(DEGRADED_SHARE_PAGE_HTML)
+        for _ in range(SHARE_PAGE_ATTEMPTS)
+    ]
+
+
+def successful_playback_responses(video_uri: str) -> dict[str, list[HttpResponse | Exception]]:
+    responses: dict[str, list[HttpResponse | Exception]] = {
+        "https://cdn.example/video.mp4": [
+            HttpResponse(
+                200,
+                {"Content-Type": "video/mp4"},
+                b"video",
+                "https://cdn.example/video.mp4",
+            )
+        ]
+    }
+    for quality in PLAY_QUALITIES:
+        play_url = build_play_url(video_uri, quality)
+        if quality == "1080p":
+            responses[play_url] = [
+                HttpResponse(
+                    206,
+                    {
+                        "Content-Type": "video/mp4",
+                        "Content-Range": "bytes 0-1/5000",
+                    },
+                    b"ok",
+                    "https://cdn.example/video.mp4",
+                )
+            ]
+        else:
+            responses[play_url] = [HttpResponse(404, {}, b"", play_url)]
+    return responses
 
 
 def test_root_exposes_the_repository_observed_compatibility_surface() -> None:
@@ -440,43 +500,10 @@ def test_retry_progress_never_interrupts_more_than_100_real_candidates(
 def test_download_douyin_video_emits_closed_structured_progress(tmp_path: Path) -> None:
     aweme_id = "7653372612151692594"
     video_uri = "v0200fg10000demo"
-    share_html = f"""
-    <script>window._ROUTER_DATA = {{
-      "loaderData": {{"video_(id)/page": {{"videoInfoRes": {{"item_list": [{{
-        "aweme_id": "{aweme_id}",
-        "video": {{"play_addr": {{"uri": "{video_uri}"}}}}
-      }}]}}}}}}
-    }};</script>
-    """
-    responses: dict[str, list[HttpResponse | Exception]] = {
-        build_share_page_url(aweme_id): [
-            HttpResponse(200, {"Content-Type": "text/html"}, share_html.encode(), "share")
-        ],
-        "https://cdn.example/video.mp4": [
-            HttpResponse(
-                200,
-                {"Content-Type": "video/mp4"},
-                b"video",
-                "https://cdn.example/video.mp4",
-            )
-        ],
-    }
-    for quality in PLAY_QUALITIES:
-        play_url = build_play_url(video_uri, quality)
-        if quality == "1080p":
-            responses[play_url] = [
-                HttpResponse(
-                    206,
-                    {
-                        "Content-Type": "video/mp4",
-                        "Content-Range": "bytes 0-1/5000",
-                    },
-                    b"ok",
-                    "https://cdn.example/video.mp4",
-                )
-            ]
-        else:
-            responses[play_url] = [HttpResponse(404, {}, b"", play_url)]
+    responses = successful_playback_responses(video_uri)
+    responses[build_share_page_url(aweme_id)] = [
+        html_response(share_page_html(aweme_id, video_uri))
+    ]
     client = FakeHttpClient(responses)
     events: list[dict[str, object]] = []
 
@@ -510,4 +537,147 @@ def test_download_douyin_video_emits_closed_structured_progress(tmp_path: Path) 
         build_share_page_url(aweme_id),
         *(build_play_url(video_uri, quality) for quality in PLAY_QUALITIES),
         "https://cdn.example/video.mp4",
+    ]
+
+
+def test_share_page_retry_recovers_from_a_degraded_page_after_a_random_delay(
+    tmp_path: Path,
+) -> None:
+    aweme_id = "7653372612151692594"
+    video_uri = "v0200fg10000demo"
+    share_url = build_share_page_url(aweme_id)
+    responses = successful_playback_responses(video_uri)
+    responses[share_url] = [
+        html_response(DEGRADED_SHARE_PAGE_HTML),
+        html_response(share_page_html(aweme_id, video_uri)),
+    ]
+    client = FakeHttpClient(responses)
+    events: list[dict[str, object]] = []
+    delays: list[float] = []
+    events_emitted_before_waiting: list[int] = []
+
+    def record_sleep(seconds: float) -> None:
+        delays.append(seconds)
+        events_emitted_before_waiting.append(len(events))
+
+    result = download_douyin_video(
+        f"https://www.douyin.com/video/{aweme_id}",
+        output_dir=tmp_path,
+        http_client=client,
+        progress_callback=events.append,
+        sleeper=record_sleep,
+    )
+
+    assert result.read_bytes() == b"video"
+    assert len(delays) == 1
+    assert 3.0 <= delays[0] <= 10.0
+    assert events_emitted_before_waiting == [2]
+    assert [event["message_code"] for event in events] == [
+        "douyin.page.resolving",
+        "douyin.page.retrying",
+        "douyin.stream.probing",
+        "douyin.video.saving",
+    ]
+    assert events[1]["message_args"] == {"attempt": 2, "total": 3}
+    assert [url for url, _headers in client.calls if url == share_url] == [
+        share_url,
+        share_url,
+    ]
+
+
+def test_share_page_retry_gives_up_after_the_declared_attempts(
+    tmp_path: Path,
+) -> None:
+    aweme_id = "7653372612151692594"
+    share_url = build_share_page_url(aweme_id)
+    client = FakeHttpClient(
+        {
+            share_url: degraded_share_page_responses()
+        }
+    )
+    events: list[dict[str, object]] = []
+    delays: list[float] = []
+
+    with pytest.raises(DouyinFallbackError) as exc_info:
+        download_douyin_video(
+            f"https://www.douyin.com/video/{aweme_id}",
+            output_dir=tmp_path,
+            http_client=client,
+            progress_callback=events.append,
+            sleeper=delays.append,
+        )
+
+    assert exc_info.value.code == "DOUYIN_ROUTER_DATA_MISSING"
+    assert len(delays) == SHARE_PAGE_ATTEMPTS - 1
+    assert all(3.0 <= delay <= 10.0 for delay in delays)
+    assert [url for url, _headers in client.calls] == [share_url] * SHARE_PAGE_ATTEMPTS
+    assert [
+        event["message_args"]
+        for event in events
+        if event["message_code"] == "douyin.page.retrying"
+    ] == [{"attempt": 2, "total": 3}, {"attempt": 3, "total": 3}]
+    assert not (tmp_path / f"{aweme_id}.mp4").exists()
+
+
+def test_share_page_retry_delay_varies_between_three_and_ten_seconds(
+    tmp_path: Path,
+) -> None:
+    aweme_id = "7653372612151692594"
+    share_url = build_share_page_url(aweme_id)
+    observed: set[float] = set()
+
+    for _ in range(25):
+        client = FakeHttpClient(
+            {
+                share_url: degraded_share_page_responses()
+            }
+        )
+        delays: list[float] = []
+        with pytest.raises(DouyinFallbackError):
+            download_douyin_video(
+                f"https://www.douyin.com/video/{aweme_id}",
+                output_dir=tmp_path,
+                http_client=client,
+                sleeper=delays.append,
+            )
+        assert len(delays) == SHARE_PAGE_ATTEMPTS - 1
+        assert all(3.0 <= delay <= 10.0 for delay in delays)
+        observed.update(delays)
+
+    assert len(observed) > 1
+
+
+def test_share_page_retry_does_not_cover_stream_failures(tmp_path: Path) -> None:
+    aweme_id = "7653372612151692594"
+    video_uri = "v0200fg10000demo"
+    share_url = build_share_page_url(aweme_id)
+    client = FakeHttpClient(
+        {
+            share_url: [html_response(share_page_html(aweme_id, video_uri))],
+            **{
+                build_play_url(video_uri, quality): [
+                    HttpResponse(404, {}, b"", build_play_url(video_uri, quality))
+                ]
+                for quality in PLAY_QUALITIES
+            },
+        }
+    )
+    events: list[dict[str, object]] = []
+    delays: list[float] = []
+
+    with pytest.raises(DouyinFallbackError) as exc_info:
+        download_douyin_video(
+            f"https://www.douyin.com/video/{aweme_id}",
+            output_dir=tmp_path,
+            http_client=client,
+            progress_callback=events.append,
+            sleeper=delays.append,
+        )
+
+    assert exc_info.value.code == "DOUYIN_NO_PLAYABLE_STREAM"
+    assert delays == []
+    assert [url for url, _headers in client.calls].count(share_url) == 1
+    assert [event["message_code"] for event in events] == [
+        "douyin.page.resolving",
+        "douyin.stream.probing",
     ]
