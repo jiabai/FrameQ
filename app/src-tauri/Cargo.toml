@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.3.6"
+version = "0.3.7"
 description = "FrameQ desktop video transcription client"
 authors = ["FrameQ"]
 edition = "2021"

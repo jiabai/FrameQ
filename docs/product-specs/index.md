@@ -15,6 +15,7 @@
 
 ## Desktop Runtime, Packaging & Distribution
 
+- `2026-09-19-v0.3.7-desktop-release.md` — v0.3.7 desktop release scope and acceptance; bounded Douyin share-page retry and the neutralized activation-panel title.
 - `2026-09-05-v0.3.6-desktop-release.md` — v0.3.6 desktop release scope and acceptance.
 
 - `2026-06-18-installer-distribution.md` — Historical lightweight-installer distribution baseline; model-acquisition behavior superseded by `2026-07-27-selectable-asr-model-on-demand-download.md`.

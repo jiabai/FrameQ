@@ -21,8 +21,12 @@ Exec plans capture task-specific implementation intent, progress, and recovery c
   `completed/2026-08-24-self-service-email-activation-code-plan.md` covers the code (its Task 1-13
   checkboxes were never back-filled, so read its `Completion Audit (2026-09-19)` section instead),
   and `completed/2026-09-19-self-service-activation-server-rollout-plan.md` covers the production
-  deployment that landed on 2026-09-19. The feature is deployed and enabled; the only outstanding
-  acceptance item is the authenticated request/email/redeem smoke, which needs a test mailbox.
+  deployment that landed on 2026-09-19. The feature is deployed and enabled, and the authenticated
+  request/email/redeem smoke was executed against production with a real mailbox on 2026-09-19:
+  every step returned 200, the ledger went from zero to one `self_service_email` code, the redeemed
+  entitlement carries the declared 31-day window and 20-credit limit, and replaying a consumed code
+  or presenting an unknown one both return 400. See
+  `tech-debt-tracker.md` -> Completed / Resolved -> Live Activation Email Path.
 
 ## Required Sections
 
