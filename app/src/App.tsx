@@ -312,6 +312,7 @@ function App() {
     updateToolbarVisible,
     updateSpinnerVisible,
     inAppUpdates,
+    currentVersion,
     checkForUpdates,
     installUpdate,
     postponeUpdateReminder,
@@ -740,6 +741,7 @@ function App() {
         updateBusy={updateBusy}
         updateInstallBlocked={updateInstallBlocked}
         inAppUpdates={inAppUpdates}
+        currentVersion={currentVersion}
         formatProgressPercent={formatProgressPercent}
         onAsrModelSelection={(model) => {
           void refreshAsrModelStatus(model).catch(() => undefined);

@@ -40,6 +40,7 @@ export function useAppUpdateController({
   const [updateState, setUpdateState] = useState(createInitialUpdateState);
   const [inAppUpdates, setInAppUpdates] = useState(true);
   const [deliveryLoaded, setDeliveryLoaded] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState("");
   const updateInfoRef = useRef<AppUpdateInfo | null>(null);
   const releasesUrlRef = useRef<string>(DEFAULT_RELEASES_URL);
   const updatePreferencesRef = useRef<UpdatePreferences>(createDefaultUpdatePreferences());
@@ -161,6 +162,7 @@ export function useAppUpdateController({
         }
         releasesUrlRef.current = delivery.releasesUrl;
         setInAppUpdates(delivery.inAppUpdates);
+        setCurrentVersion(delivery.currentVersion);
       } catch (error) {
         logSafeUpdateWarning("UPDATE_DELIVERY_LOAD_FAILED", error);
       } finally {
@@ -272,6 +274,7 @@ export function useAppUpdateController({
     updateToolbarVisible,
     updateSpinnerVisible,
     inAppUpdates,
+    currentVersion,
     checkForUpdates,
     installUpdate,
     postponeUpdateReminder,

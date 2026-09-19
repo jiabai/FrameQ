@@ -14,6 +14,7 @@ export const DEFAULT_RELEASES_URL = "https://github.com/jiabai/FrameQ/releases/l
 export type UpdateDelivery = {
   inAppUpdates: boolean;
   releasesUrl: string;
+  currentVersion: string;
 };
 export type UpdateDeliveryRunner = () => Promise<unknown>;
 export type OpenReleasesRunner = (url: string) => Promise<void>;
@@ -69,19 +70,21 @@ export async function openReleasesPage(
 function mapUpdateDelivery(value: unknown): UpdateDelivery {
   const response = readIpcDataObject(
     value,
-    ["inAppUpdates", "releasesUrl"],
+    ["inAppUpdates", "releasesUrl", "currentVersion"],
     [],
     UPDATE_IPC_RESPONSE_INVALID,
   );
   if (
     typeof response.inAppUpdates !== "boolean" ||
-    typeof response.releasesUrl !== "string"
+    typeof response.releasesUrl !== "string" ||
+    typeof response.currentVersion !== "string"
   ) {
     throwInvalidUpdateResponse();
   }
   return {
     inAppUpdates: response.inAppUpdates,
     releasesUrl: response.releasesUrl,
+    currentVersion: response.currentVersion,
   };
 }
 

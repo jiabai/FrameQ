@@ -112,6 +112,7 @@ function renderSettings(
   options: {
     controller?: Partial<SettingsController>;
     updateState?: UpdateState;
+    currentVersion?: string;
   } = {},
 ) {
   capturedButtons.length = 0;
@@ -128,6 +129,7 @@ function renderSettings(
       updateBusy={false}
       updateInstallBlocked={false}
       inAppUpdates
+      currentVersion={options.currentVersion ?? "0.3.7"}
       formatProgressPercent={(value) => `${value}%`}
       onOpenProfileEditorFromSettings={vi.fn()}
       onCheckForUpdates={vi.fn()}
@@ -207,6 +209,26 @@ describe("settings localization", () => {
       expect(markup).toContain('aria-valuemax="100"');
     },
   );
+
+  test.each([
+    ["zh-CN", "当前版本 v0.3.7"],
+    ["zh-TW", "目前版本 v0.3.7"],
+    ["en-US", "Current version v0.3.7"],
+  ] as const)("shows the running app version in Updates for %s", async (locale, expected) => {
+    await initializeI18n(locale);
+    const markup = renderSettings(locale, "updates");
+
+    expect(markup).toContain(expected);
+    expect(markup).toContain('data-current-version="0.3.7"');
+  });
+
+  test("hides the version line when the delivery response has no version yet", async () => {
+    await initializeI18n("en-US");
+    const markup = renderSettings("en-US", "updates", { currentVersion: "" });
+
+    expect(markup).not.toContain("Current version");
+    expect(markup).not.toContain("data-current-version");
+  });
 
   test("announces asynchronous settings notices without interrupting the user", async () => {
     await initializeI18n("en-US");

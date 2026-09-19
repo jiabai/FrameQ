@@ -9,6 +9,7 @@ export const updatesResources = {
       manualStatus: "手动更新",
       stableVersion: "FrameQ stable",
       versionLabel: "FrameQ {{version}}",
+      currentVersion: "当前版本 v{{version}}",
       downloadProgressAria: "应用更新下载进度",
     },
     status: {
@@ -44,6 +45,7 @@ export const updatesResources = {
       manualStatus: "手動更新",
       stableVersion: "FrameQ stable",
       versionLabel: "FrameQ {{version}}",
+      currentVersion: "目前版本 v{{version}}",
       downloadProgressAria: "應用程式更新下載進度",
     },
     status: {
@@ -79,6 +81,7 @@ export const updatesResources = {
       manualStatus: "Manual update",
       stableVersion: "FrameQ stable",
       versionLabel: "FrameQ {{version}}",
+      currentVersion: "Current version v{{version}}",
       downloadProgressAria: "Update download progress",
     },
     status: {

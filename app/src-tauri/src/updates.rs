@@ -11,9 +11,16 @@ const RELEASES_PAGE_URL: &str = "https://github.com/jiabai/FrameQ/releases/lates
 pub(crate) struct UpdateDeliveryView {
     in_app_updates: bool,
     releases_url: String,
+    /// The version this build actually is, shown in the settings "App Updates"
+    /// section so users can tell which build they are running without opening
+    /// the releases page. `CARGO_PKG_VERSION` stays in lockstep with
+    /// `tauri.conf.json` because `scripts/check-release-version.mjs` refuses a
+    /// release where the version files disagree.
+    current_version: String,
 }
 
-/// Reports whether the Tauri in-app updater can deliver updates on this platform.
+/// Reports whether the Tauri in-app updater can deliver updates on this platform
+/// and which app version this build is.
 ///
 /// The release pipeline only publishes Windows updater artifacts and a
 /// Windows-only `latest.json`, so macOS ships DMGs that users re-download
@@ -24,6 +31,7 @@ pub(crate) fn get_update_delivery() -> UpdateDeliveryView {
     UpdateDeliveryView {
         in_app_updates: !cfg!(target_os = "macos"),
         releases_url: RELEASES_PAGE_URL.to_string(),
+        current_version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }
 
@@ -101,6 +109,7 @@ mod tests {
             delivery.releases_url,
             "https://github.com/jiabai/FrameQ/releases/latest"
         );
+        assert_eq!(delivery.current_version, env!("CARGO_PKG_VERSION"));
     }
 
     #[test]

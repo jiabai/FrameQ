@@ -15,6 +15,7 @@ FrameQ already ships as a lightweight desktop installer with bundled runtime res
 ## User-visible Requirements
 
 - Startup performs a delayed, silent update check; manual checking is available in Settings.
+- The Settings `应用更新` / `App Updates` section always shows the version of the running build, so a user can tell which build they have without opening the releases page. The value comes from the desktop bundle's own version and matches the version the updater compares against.
 - If the app is already current, manual check reports that no update is available.
 - If an update is available, the user sees version notes and an `一键升级` action.
 - If video processing, insight generation, or ASR model download is active, installation is blocked with a message that the task should finish first.

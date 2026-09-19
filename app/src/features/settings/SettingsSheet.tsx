@@ -34,6 +34,7 @@ type SettingsSheetProps = {
   updateBusy: boolean;
   updateInstallBlocked: boolean;
   inAppUpdates: boolean;
+  currentVersion: string;
   formatProgressPercent: (value: number) => string;
   onAsrModelSelection?: (model: string) => void;
   onOpenProfileEditorFromSettings: () => void | Promise<void>;
@@ -138,6 +139,7 @@ export function SettingsSheet({
   updateBusy,
   updateInstallBlocked,
   inAppUpdates,
+  currentVersion,
   formatProgressPercent,
   onAsrModelSelection,
   onOpenProfileEditorFromSettings,
@@ -405,6 +407,11 @@ export function SettingsSheet({
                           ? tUpdates(`status.${updateState.status}`)
                           : tUpdates("section.manualStatus")}
                       </span>
+                      {currentVersion ? (
+                        <small data-current-version={currentVersion}>
+                          {tUpdates("section.currentVersion", { version: currentVersion })}
+                        </small>
+                      ) : null}
                       <strong>
                         {updateState.availableVersion
                           ? tUpdates("section.versionLabel", {

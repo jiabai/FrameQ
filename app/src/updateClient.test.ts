@@ -71,10 +71,12 @@ describe("update client", () => {
       getUpdateDelivery(async () => ({
         inAppUpdates: false,
         releasesUrl: "https://example.com/releases/latest",
+        currentVersion: "0.3.7",
       })),
     ).resolves.toEqual({
       inAppUpdates: false,
       releasesUrl: "https://example.com/releases/latest",
+      currentVersion: "0.3.7",
     });
 
     await expect(getUpdateDelivery(async () => ({}))).rejects.toEqual(
@@ -148,6 +150,24 @@ describe("update client", () => {
       getUpdateDelivery(async () => ({
         inAppUpdates: "false",
         releasesUrl: "https://example.com/releases/latest",
+        currentVersion: "0.3.7",
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      getUpdateDelivery(async () => ({
+        inAppUpdates: false,
+        releasesUrl: "https://example.com/releases/latest",
+      })),
+    ).rejects.toEqual(
+      new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
+    );
+    await expect(
+      getUpdateDelivery(async () => ({
+        inAppUpdates: false,
+        releasesUrl: "https://example.com/releases/latest",
+        currentVersion: 3,
       })),
     ).rejects.toEqual(
       new IpcProtocolError("UPDATE_IPC_RESPONSE_INVALID"),
