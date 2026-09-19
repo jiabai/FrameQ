@@ -11,6 +11,27 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.3.7 desktop release (2026-09-19) — ✅ Release commit `9a0cd65`
+  committed to `main` and tagged `v0.3.7`; local release gates passed (Worker 858/2 skipped,
+  Douyin-focused 147, Ruff clean, frontend 762/762, Server 292/1 skipped, scripts 50, docs
+  governance 0 errors/0 warnings), and Desktop Release run `35434877136` finished green on all three
+  platform jobs. The draft carried five assets identical in shape to v0.3.6; the `latest.json`
+  signature was cross-checked byte-for-byte against the uploaded `.sig`. Includes the bounded Douyin
+  share-page retry with a randomized 3 to 10 second wait and its `douyin.page.retrying` progress
+  event and the neutralized activation-panel title in three locales (`5c9e974`, `5dc08e8`); the
+  marketing-site privacy/FAQ terminology cleanup is recorded in `e49f8bf` (the `site/` tree is
+  gitignored, so the copy change itself is not a commit). Release notes: `docs/releases/v0.3.7.md`; plan:
+  `docs/exec-plans/completed/2026-09-19-v0.3.7-desktop-release-plan.md`. Stable Release was
+  published at 2026-09-19 18:22:07 +08:00:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.3.7. Two things to note for the next release:
+  the workflow does not set the release body, so it must be written from `docs/releases/<tag>.md`
+  after publishing (the v0.3.7 draft initially showed the generic `tauri-action` placeholder), and
+  `macos-intel-acceptance.yml` is `workflow_dispatch`-only so it does not run on a tag push.
+  Residual risk: clean-machine Windows and macOS native UI smoke was not repeated; macOS builds
+  remain ad-hoc signed without notarization; the share-page retry emits no distinct diagnostic event,
+  so an exported bundle cannot tell a first-attempt success from a retried one; public-platform
+  availability and deployed server capability remain external dependencies.
+
 - [x] Prepare and publish FrameQ v0.3.6 desktop release (2026-09-06) — ✅ Current desktop source was
   committed to `main` (`9fc7834`) and tagged `v0.3.6`; local release gates passed (Worker 854/2
   skipped, frontend 762, Server 291/1 skipped, Rust 315, scripts 37), hosted Server CI and macOS

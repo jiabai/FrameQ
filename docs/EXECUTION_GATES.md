@@ -46,6 +46,10 @@
 - 桌面版本发布（stable tag 推送到 GitHub Releases）后必须同步 `TASKS.md` 版本台账：新增
   "Prepare and publish FrameQ vX.Y.Z" 条目，记录发布时间、tag、发布链接、验收要点与残余
   风险，并与 release notes、completed ExecPlan 保持一致；不允许发布后遗留版本记录缺口。
+- `desktop-release.yml` **不设置 release 正文**，draft 上显示的是 `tauri-action` 的通用占位
+  文本（`FrameQ desktop installer and Tauri updater artifacts.`）。发布时必须用
+  `gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md` 把已审阅的 notes 写上去，并
+  回读比对正文与源文件一致；只看到 draft 变 published 不能算发布完成。
 
 ## Soft Gates
 
