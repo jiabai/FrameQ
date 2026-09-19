@@ -171,6 +171,10 @@ Notes that cost time to rediscover:
 - Component tables are rebuilt by some migrations (`ActivationCode`, `Entitlement`, `EmailOtp`). Check
   for the constraints the rebuild will add before running it — for example, a new `UNIQUE` index on
   `ActivationCode.codeHash` fails if the legacy table contains duplicates.
+- Prisma stores `DateTime` columns in SQLite as integer Unix milliseconds, so `date(createdAt)` in a
+  `sqlite3` / `python3` spot check returns `NULL` for every row. Use
+  `date(createdAt / 1000, 'unixepoch')` instead; a page of `NULL` dates is a query bug, not
+  missing data.
 
 ## 5. Stop-the-service backup
 
