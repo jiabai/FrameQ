@@ -11,6 +11,30 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.3.8 desktop release (2026-09-19) — ✅ Tag target `fc83df9`
+  committed to `main` and tagged `v0.3.8` (`909c232` yt-dlp fix, `3711aeb` version display,
+  `e5c16c4` release prep, `fc83df9` docs correction); local release gates passed (Worker 858/2
+  skipped, Ruff clean, frontend 766/766, app lint and build, Server 292/1 skipped, Server build,
+  scripts 50, docs governance 0 errors/0 warnings), hosted macOS ProcessSupervisor passed on
+  `e5c16c4` (the only Rust compile evidence available, since this workstation has no cargo), and
+  Desktop Release run `35445817959` finished green on all three platform jobs. The draft carried
+  five assets identical to v0.3.7 after normalizing the version; the `latest.json` Windows signature
+  was cross-checked byte-for-byte against the uploaded `.sig` (416 chars each), and build logs
+  confirm every bundled runtime installed `yt-dlp-2026.8.19` before its `import yt_dlp` smoke test.
+  Content: the bundled `yt-dlp` moved from the locked `2026.7.4` to `2026.8.19` in `uv.lock` — the
+  only source the installer resolves runtime dependencies from — because YouTube's player change
+  made the old version receive expired media URLs and fail every download with HTTP 403; and
+  Settings > App Updates now shows the compile-time version next to the update status. Release notes:
+  `docs/releases/v0.3.8.md`; plan: `docs/exec-plans/completed/2026-09-19-v0.3.8-desktop-release-plan.md`.
+  Stable Release was published at 2026-09-19 22:10:06 +08:00:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.3.8. Residual risk: the workflow still does not
+  set the release body, so it must be written from `docs/releases/<tag>.md` after publishing;
+  `macos-intel-acceptance.yml` remains `workflow_dispatch`-only so it did not run on this tag push;
+  clean-machine Windows and macOS native UI smoke was not repeated; macOS builds remain ad-hoc signed
+  without notarization; `403`/`429` platform rejections still fall into the generic
+  `YOUTUBE_DOWNLOAD_FAILED` copy that tells the user to check a healthy network; public-platform
+  availability and deployed server capability remain external dependencies.
+
 - [x] Prepare and publish FrameQ v0.3.7 desktop release (2026-09-19) — ✅ Release commit `9a0cd65`
   committed to `main` and tagged `v0.3.7`; local release gates passed (Worker 858/2 skipped,
   Douyin-focused 147, Ruff clean, frontend 762/762, Server 292/1 skipped, scripts 50, docs
