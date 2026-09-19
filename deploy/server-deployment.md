@@ -18,6 +18,32 @@ Run exactly one FrameQ server instance for each SQLite file. Do not place the da
 SMB, a synchronized folder, or shared storage. Changing the proxy or database topology requires a
 new architecture review and trusted-proxy tests.
 
+### 1a. The instance that is actually deployed
+
+Sections 3 to 9 are written against the reference layout. The production host as of 2026-09-19 runs
+the same architecture under a different account and prefix, so translate before pasting commands:
+
+| Reference | Live production |
+| --- | --- |
+| service account `frameq` | `ubuntu` |
+| checkout `/opt/frameq/FrameQ` | `/home/ubuntu/FrameQ` |
+| Node.js from the system packages | Node.js 24.14.1 installed with nvm for `ubuntu` |
+
+Everything below the checkout root keeps the same relative shape (`server/.env` mode `0600`,
+`server/data/frameq.sqlite`, `server/backups/<stamp>/`). Confirm which instance you are on before
+mutating anything - `systemctl show frameq-server -p ExecStart` and
+`git -C <checkout> rev-parse HEAD` - instead of assuming the reference paths exist.
+
+A non-interactive SSH session (`ssh host 'cmd'`, or any scripted client) does not load the login
+shell, so nvm is not sourced and `node` / `npm` / `npx` are not on `PATH`. Either wrap the command in
+`bash -lc '...'` or export the nvm bin directory first; otherwise a migration step fails with
+`npx: command not found` while the database is fine.
+
+The marketing site is the one place the two layouts already agree: live Nginx serves it from
+`root /home/ubuntu/FrameQ/site`, which is also the default `REMOTE_WEBROOT` in
+`scripts/deploy-marketing.sh` and the `root` in `deploy/nginx/frameq-server.conf`. Deploying the
+site needs no path override; only the checkout prefix in Sections 3 to 9 differs.
+
 ## 2. Host and secrets
 
 Use Ubuntu 22.04/24.04 or an equivalent supported Linux host, Node.js 22, Nginx, HTTPS, and a

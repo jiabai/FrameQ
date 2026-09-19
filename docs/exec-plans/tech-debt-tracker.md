@@ -1,12 +1,20 @@
 # Tech Debt Tracker
 
-Last updated: 2026-08-06
+Last updated: 2026-09-19
 
 ## High Priority
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| Hosted/staging server operations evidence remains pending | Fail-closed config, safe logs, proxy trust, health/lifecycle, preflight/restore tools, runbook, and Server CI are implemented and locally tested. This Windows session cannot prove the POSIX child signal fixture, hosted workflow, real SMTP/Nginx/systemd host, or protected off-host restore. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain passing hosted Linux Server CI plus approved non-user SMTP/staging/restore evidence, then rerun and accept the combined release gate. |
+| The live activation email path has never sent a message | Production was deployed on 2026-09-19 with `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true` and all six migrations applied, and the ledger contains zero `self_service_email` codes. OTP login proves the SMTP transport works, and the store/route/service gates are green, so what remains unexercised is exactly the part unique to this feature: minting the code, rendering the three-locale activation email, and the redeem-once semantics that follow it. | `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md` | Run the authenticated request/email/redeem smoke against production with a test mailbox and record the status codes. |
+| Hosted/staging server operations evidence remains pending | Real-host evidence landed on 2026-09-19: deployment on the live Ubuntu/systemd/Nginx host, six migrations applied to the production database without data loss, an isolated restore rehearsal from a production backup, and an off-host backup copy verified by sha256. Hosted Linux Server CI is green on `main`. The POSIX child-signal fixture is the remaining item this Windows session cannot prove. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain the POSIX child-signal fixture result on a Linux host, then rerun and accept the combined release gate. |
+
+## Medium Priority
+
+| Topic | Why it matters | Source | Removal Condition |
+|------|----------------|--------|-------------------|
+| Douyin share page attempt count is an unvalidated judgment call | `SHARE_PAGE_ATTEMPTS` is three, derived from a measured one-in-three degradation rate with a worst case of roughly 20 seconds of added latency. The change reached `main` on 2026-09-16 and no desktop release contains it yet, so the constant has no field data behind it. | `docs/exec-plans/completed/2026-09-16-douyin-share-page-retry-plan.md` | Ship it in a desktop release, then revisit the constant if field reports still show share page failures. |
+| Douyin share page retries are invisible to diagnostics | The share page parse path emits no diagnostic event, so a run that only succeeded after two retries is indistinguishable from a first-try success in an exported diagnostics bundle. | `docs/exec-plans/completed/2026-09-16-douyin-share-page-retry-plan.md` | Add a share page diagnostic event, or record the deliberate decision to stay inside the closed progress contract. |
 
 ## Completed / Resolved
 

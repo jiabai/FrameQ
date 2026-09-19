@@ -107,14 +107,20 @@ and localized copy stay authoritative and no new user-facing error text is intro
 
 ## Outcomes & Retrospective
 
-Delivered as specified. The share page step is now resilient to the observed transient variant, the
-retry is visible in the UI, and every existing behavior outside the share page is unchanged.
+Delivered on `main` as specified. The share page step is resilient to the observed transient
+variant, the retry is visible in the UI, and every existing behavior outside the share page is
+unchanged. Hosted Server CI and the macOS ProcessSupervisor workflow both passed on the change
+commit (`5c9e974`).
 
-Two follow-ups remain open and are not part of this plan. First, three attempts remains a judgment
-call under a randomized server-side variant; if field reports continue, the constant is the single
-place to raise. Second, the share page parse path still has no diagnostic event, so repeated
-retries are invisible in exported diagnostics. That was intentionally left out to keep this change
-inside the existing closed progress contract.
+**It is not in a desktop release yet.** The retry lives in the packaged Python worker, so users
+receive it only through a desktop build, and the newest release `v0.3.6` predates the change by ten
+days. This plan is therefore complete as code, not as delivered software, and the constant below
+should not be treated as validated until a release containing it has field time.
+
+Two follow-ups were out of scope here and now live in `tech-debt-tracker.md` under Medium Priority,
+so they no longer depend on this file: the attempts constant is an unvalidated judgment call, and
+the share page parse path emits no diagnostic event, which was deliberately excluded to stay inside
+the existing closed progress contract.
 
 ## Validation
 

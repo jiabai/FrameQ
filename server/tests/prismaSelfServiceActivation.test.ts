@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { ActivationCodeService } from "../src/activation.js";
 import { PrismaStore } from "../src/prismaStore.js";
 import { sha256 } from "../src/security.js";
+import { buildServer } from "../src/server.js";
 import {
   createTemporaryPrismaClient,
   prismaWithInjectedWriteFailure,
@@ -829,5 +830,67 @@ describe("PrismaStore self-service activation lifecycle", () => {
       retryAt: new Date("2026-08-24T08:01:00.000Z"),
     });
     expect(await fixture.prisma.activationCode.count()).toBe(1);
+  });
+});
+
+describe("self-service activation retry signal over the real store", () => {
+  // The route emits Retry-After only when the service throws with a retryAt, and the Prisma
+  // store always attaches one to rate_limited. This pins the composition down at the HTTP
+  // layer, after the value has round-tripped through SQLite, instead of trusting a stub-level
+  // route test and a store-level test to add up to the same conclusion.
+  test("reports Retry-After seconds on the rate-limited response", async () => {
+    const fixture = await createTemporaryPrismaClient();
+    fixtures.push(fixture);
+    const store = new PrismaStore(fixture.prisma);
+    const user = await store.upsertUserByEmail("retry-after@example.com", now);
+    const sessionToken = "desktop-session-retry-after";
+    await store.createSession({
+      userId: user.id,
+      tokenHash: sha256(sessionToken),
+      createdAt: now,
+      expiresAt: sessionExpiresAt,
+    });
+
+    let clock = now;
+    const app = buildServer({
+      store,
+      now: () => clock,
+      selfServiceActivationEnabled: true,
+      sendOtp: async () => {},
+      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
+      sendActivationCode: {
+        sendActivationCode: async () => {
+          throw new Error("smtp unavailable");
+        },
+      },
+    });
+
+    const requestCode = () =>
+      app.inject({
+        method: "POST",
+        url: "/api/desktop/activation-codes/request",
+        headers: { authorization: `Bearer ${sessionToken}` },
+        remoteAddress: "203.0.113.91",
+        payload: { locale: "zh-CN" },
+      });
+
+    // Delivery fails, so the reservation this call already took survives while the
+    // entitlement stays inactive. That is the only shape that reaches the limiter over HTTP:
+    // an activated entitlement answers 409 before the limiter is consulted.
+    const unavailable = await requestCode();
+    expect(unavailable.statusCode).toBe(503);
+    expect(unavailable.json()).toEqual({ error: "ACTIVATION_EMAIL_UNAVAILABLE" });
+    expect(unavailable.headers["retry-after"]).toBeUndefined();
+
+    clock = new Date(now.getTime() + 30_000);
+    const limited = await requestCode();
+    await app.close();
+
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toEqual({
+      error: "ACTIVATION_REQUEST_RATE_LIMITED",
+      retry_at: "2026-08-24T08:01:00.000Z",
+    });
+    expect(limited.headers["retry-after"]).toBe("30");
   });
 });
