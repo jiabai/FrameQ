@@ -6,7 +6,6 @@ Last updated: 2026-09-19
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| The live activation email path has never sent a message | Production was deployed on 2026-09-19 with `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true` and all six migrations applied, and the ledger contains zero `self_service_email` codes. OTP login proves the SMTP transport works, and the store/route/service gates are green, so what remains unexercised is exactly the part unique to this feature: minting the code, rendering the three-locale activation email, and the redeem-once semantics that follow it. | `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md` | Run the authenticated request/email/redeem smoke against production with a test mailbox and record the status codes. |
 | Hosted/staging server operations evidence remains pending | Real-host evidence landed on 2026-09-19: deployment on the live Ubuntu/systemd/Nginx host, six migrations applied to the production database without data loss, an isolated restore rehearsal from a production backup, and an off-host backup copy verified by sha256. Hosted Linux Server CI is green on `main`. The POSIX child-signal fixture is the remaining item this Windows session cannot prove. | `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`; active production-operations ExecPlan | Obtain the POSIX child-signal fixture result on a Linux host, then rerun and accept the combined release gate. |
 
 ## Medium Priority
@@ -15,6 +14,7 @@ Last updated: 2026-09-19
 |------|----------------|--------|-------------------|
 | Douyin share page attempt count is an unvalidated judgment call | `SHARE_PAGE_ATTEMPTS` is three, derived from a measured one-in-three degradation rate with a worst case of roughly 20 seconds of added latency. The change reached `main` on 2026-09-16 and no desktop release contains it yet, so the constant has no field data behind it. | `docs/exec-plans/completed/2026-09-16-douyin-share-page-retry-plan.md` | Ship it in a desktop release, then revisit the constant if field reports still show share page failures. |
 | Douyin share page retries are invisible to diagnostics | The share page parse path emits no diagnostic event, so a run that only succeeded after two retries is indistinguishable from a first-try success in an exported diagnostics bundle. | `docs/exec-plans/completed/2026-09-16-douyin-share-page-retry-plan.md` | Add a share page diagnostic event, or record the deliberate decision to stay inside the closed progress contract. |
+| Short numeric one-time codes are stored as a bare single-round digest | `otpCode()` produces a six-digit numeric code and the store persists only `sha256(code)`, so the entire space is one million hashes and anyone who can read the database can recover a live login code in well under a second; the same bare-digest pattern is used for activation codes, where the eighty-bit space makes it harmless. Database read access is already a severe breach, so this is defense in depth rather than a standalone entry point, but it does remove the second factor's value for any account that has just requested a code. | `server/src/security.ts`; `server/src/prismaStore/auth.ts` | Hash short numeric secrets with a per-row secret or an HMAC key instead of a bare single-round digest, keeping verification constant-time and attempt-bounded. |
 
 ## Completed / Resolved
 
@@ -167,6 +167,24 @@ Last updated: 2026-09-19
 - Resolution: Settings now shows the app-local audio playback cache size and provides a clear action backed by canonicalized Tauri commands.
 - Safety boundary: clearing removes only app-local `cache/.frameq-audio-review`, preserves source task artifacts under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`, and the cache regenerates when transcript detail is opened again.
 - Evidence: `app/src/App.tsx`, `app/src/settingsClient.ts`, `app/src-tauri/src/settings.rs`, `app/src-tauri/src/transcript_detail.rs`, and focused audio cache tests.
+
+### Live Activation Email Path
+
+- Status: resolved on 2026-09-19.
+- Resolution: the self-service activation path was executed end to end against production with a
+  real test mailbox, covering the three things that no earlier evidence had exercised -- minting a
+  code, delivering the activation email, and the redeem-once semantics that follow it.
+- Evidence: `POST /auth/email/start` 200, `POST /auth/email/verify` 200, `POST
+  /api/desktop/sessions/exchange` 200, and `GET /api/desktop/account` reporting
+  `entitlement_status=inactive` with `can_request_activation_code=true`. `POST
+  /api/desktop/activation-codes/request` returned 200, wrote `sentAt`, and moved the ledger from
+  zero to one `self_service_email` code; the delivered code was legible in the mailbox. `POST
+  /api/desktop/activation-codes/redeem` returned 200 and the same response flipped the account to
+  `entitlement_status=active`, `can_process=true`, and `can_generate_ai=true`. The persisted
+  entitlement is `status=active`, `llmQuotaLimit=20`, `llmQuotaUsed=0`,
+  `expiresAt - redeemedAt = 31 days`, and `redeemBy - sentAt = 30 days`. Replaying the consumed
+  code and redeeming an unknown code both returned 400 with the same generic message, confirming
+  single-use enforcement and the absence of an oracle.
 
 ## Accepted / Deferred
 
