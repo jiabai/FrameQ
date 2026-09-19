@@ -645,6 +645,22 @@
 
 ## 已完成
 
+- [x] 清理营销站隐私页与 FAQ 的残留开发术语并上线（2026-09-19）— ✅ 已部署：`https://frameq.8xf.pro` 首页与
+  隐私页的 `LLM` / `ASR 权重` / `app-local data` / `server-managed` / `有界额度` 全部归零，线上三页经 nginx
+  回读的 sha256 与本地 `site/dist` **逐字节一致**，演示视频哈希未变。改动 6 个源文件共 22 处：
+  `pages/privacy.astro`（16 处）、`pages/index.astro`（meta）、`components/OutputPreview.astro`（有界额度→有额度上限）、
+  `consts.ts`（`TRUST_COPY` 云端 LLM→云端 AI）、`content/faq/01-asr-model-download.md`、`content/faq/03-ai-upload.md`。
+  **方法**：不自行造词，先定"目标口径基准"——首页 `TrustBoundary.astro` 三栏早已是目标语域
+  （「语音识别模型文件」「AI 服务密钥或云端 AI 模型」「统计代码、追踪脚本或第三方内容」），隐私页是唯一还在讲
+  开发词的一页，因此全部向三栏对齐、逐条可映射。**明确判定"不改"的三处**（防下轮重开）：下载页的
+  ASR / SenseVoiceSmall / `funasr_onnx`（与桌面端 i18n 一致，App 自己就叫「ASR 模型」）；`OutputPreview` 的格式
+  标签与模型名（该组件故意是产物格式预览，改了失真）；隐私页的 Google Analytics / Plausible / Hotjar 具名清单
+  （产品名，隐私语义需要保留）。部署证据：SFTP 按 sha256 比较，上传 2（`index.html`、`privacy/index.html`）、
+  删除 0、跳过 79，重跑 81/81 哈希一致（幂等）；部署前整站备份
+  `/home/ubuntu/FrameQ/backups/webroot-20260919T070137Z.tar.gz`（5.9 MB，87 条目，sha256 `91a2d3e6…`）。
+  **注意 FAQ 只渲染在首页**，下载页不变是正确的（其 `funasr_onnx` 来自 ASR 说明卡片而非 FAQ）。
+  `site/` 仍 gitignore，本条无对应提交。
+
 - [x] 重建营销站并把对外版本从 v0.3.3 更新到 v0.3.6（2026-09-19 发现并当日上线）— ✅ 已部署：站点源同步到
   v0.3.6 并发布，线上 `https://frameq.8xf.pro` 三个页面的版本号全部为 v0.3.6、零处 v0.3.3，下载链接指向
   `releases/download/v0.3.6/`，线上三页与本地 `site/dist` **逐字节一致**，演示视频哈希部署前后未变。
