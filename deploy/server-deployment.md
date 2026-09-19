@@ -109,6 +109,69 @@ The baseline check rejects negative or overused quota state. Do not clamp, delet
 accounting rows to force a migration through. The forward migration deliberately invalidates
 outstanding legacy OTPs because their purpose cannot be inferred safely.
 
+### 4a. Database whose schema is already ahead of its migration history
+
+The procedure above only applies when the database is still at the *baseline* schema. A database that
+was created with `prisma db push` at a later schema has no `_prisma_migrations` table at all, and
+resolving only the baseline is then wrong: `migrate deploy` would re-run every later migration,
+which fails as soon as one of them issues a `CREATE TABLE` for a table that already exists.
+
+You can tell the two cases apart with the preflight itself. On a database that is already past the
+baseline, `--mode baseline` fails with `UNEXPECTED_BASELINE_SCHEMA` (baseline mode requires
+`EmailOtp` to *not* have a `purpose` column) and `--mode current` fails with
+`MIGRATION_HISTORY_INCOMPATIBLE`.
+
+Before choosing a path, prove which migrations the existing schema already equals. Build a scratch
+database from the migration files and compare its schema to the live one; if they match, every one of
+those migrations can be marked applied.
+
+```bash
+# 1. Build a scratch database from the reviewed migrations, in order.
+#    Any SQLite client works; the point is to run each migration.sql exactly once.
+python3 - <<'PY'
+import os, sqlite3
+root = "prisma/migrations"
+order = sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d)))
+con = sqlite3.connect("/var/tmp/schema-probe.sqlite")
+for name in order:
+    with open(os.path.join(root, name, "migration.sql"), encoding="utf-8") as fh:
+        con.executescript(fh.read())
+    con.commit()
+rows = con.execute(
+    "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' "
+    "AND name <> '_prisma_migrations' ORDER BY type, name"
+).fetchall()
+with open("/var/tmp/schema-probe.txt", "w", encoding="utf-8") as out:
+    for kind, name, sql in rows:
+        out.write(f"{kind}|{name}|{' '.join((sql or '').split())}\n")
+PY
+
+# 2. Dump the live schema the same way and diff the two files.
+#    Repeat for the prefixes you intend to mark applied: if 0001+0002+0003 matches the live
+#    database, resolve exactly those three.
+
+# 3. Mark the matching prefix as applied, then deploy the remainder.
+cd /opt/frameq/FrameQ/server
+for m in 202607220001_baseline 202607220002_auth_quota_hardening 202608030001_user_session; do
+  sudo -u frameq env DATABASE_URL="file:$PWD/data/frameq.sqlite" \
+    npx prisma migrate resolve --applied "$m"
+done
+sudo -u frameq npm run db:migrate:deploy
+sudo -u frameq npm run db:migrate:status      # expect "Database schema is up to date!"
+sudo -u frameq npm run db:preflight -- --mode current
+```
+
+Notes that cost time to rediscover:
+
+- `prisma migrate status` writes its verdict to stderr. Piping stdout alone silently hides
+  "Database schema is up to date!".
+- Always pass an absolute `DATABASE_URL` when operating on a copy. Prisma does not override an
+  existing environment variable from `.env`, which is what makes an isolated rehearsal safe, but it
+  also means a wrong relative value in `.env` resolves against `prisma/`, not the working directory.
+- Component tables are rebuilt by some migrations (`ActivationCode`, `Entitlement`, `EmailOtp`). Check
+  for the constraints the rebuild will add before running it — for example, a new `UNIQUE` index on
+  `ActivationCode.codeHash` fails if the legacy table contains duplicates.
+
 ## 5. Stop-the-service backup
 
 Always stop the service before copying SQLite. This avoids an incomplete main/WAL/SHM set and also

@@ -587,6 +587,24 @@
 
 ## Account and Billing
 
+- [x] Roll out self-service email activation to the production server (2026-09-19) ✅ 生产
+  `https://frameq.8xf.pro` 已从 `1afb925` 快进部署到 `5c9e974`，三条 20260824 迁移全部应用
+  （共 6 条，`Database schema is up to date!`），`FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true`，
+  `.env` 权限 600，服务 `active (running)` 且 `Result=success`。两阶段灰度：Phase A（开关 false）
+  探针报 `ROLLOUT_STATE=route_registered`，回归面全绿（`/health/live`、`/health/ready` 200，
+  `/login` 200、`/admin/login` 200、`/dashboard` 302、营销站 `/`、`/privacy`、`/download` 200，
+  桌面 API 形状不变）；Phase B（开关 true）重启换 PID，健康仍 200/200，真实配置解析器确认
+  `environment: production` 且 `selfServiceActivationEnabled: true`。零数据丢失：十张表行数迁移
+  前后完全一致（11 users、11 activation codes、128 usage events），11 条历史激活码回填
+  `issuanceSource='admin'`；备份 `20260919T045124Z` 含 `SHA256SUMS` 校验通过，并已拉取站外副本。
+  隔离副本预演（种子测试账号、未发信）已端到端复现开关语义：关= `can_request_activation_code=false`
+  + `404 FEATURE_NOT_AVAILABLE`；开= 无权益用户 `true`、有权益用户 `false` + `409 ENTITLEMENT_ACTIVE`、
+  限流 `429 ACTIVATION_REQUEST_RATE_LIMITED`、坏 locale/多余字段/空体 `400 INVALID_REQUEST`，且
+  未产生任何激活码行。生产库零预演残留。执行计划：
+  `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md`。
+  残余风险：真机认证冒烟（请求→收信→兑换→权益）与 Admin Web 元数据核对尚未执行，需要真实测试
+  邮箱；SMTP 接受不等于送达。
+
 - [x] Make payment settlement, activation-code redemption, and administrator compensation transactional (2026-07-10) ✅ Store semantic transaction boundaries now commit all related state together; administrator quota grants use the same audited additive adjustment and have no remaining-quota bypass; verified webhook replays recover only deterministic old payment states, while ambiguous old activation/admin states require audited `manual_repair`. WeChat billing remains disabled/unintegrated. Server/worker/app/Rust/docs/diff gates passed.
 
 - [x] Add server-managed LLM config and monthly insight quota (2026-06-22) ✅ Admin Web owns encrypted dedicated FrameQ client LLM config and per-user quota editing; desktop accounts quota per cloud LLM API call attempt; settings no longer exposes LLM fields; server/app/Rust/worker/docs gates passed.
@@ -596,6 +614,19 @@
 - [x] Add account login and entitlement foundation (2026-06-21) ✅ TypeScript Fastify service with Prisma SQLite, email OTP login, desktop deep-link session exchange, entitlement model, and client-side processing gate; server/app/Rust/docs gates passed.
 
 ## 进行中
+
+- [ ] Run the authenticated self-service activation smoke against production (2026-09-19) — ✅ 部署与
+  隔离预演已完成并留证（见 `## Account and Billing` 与
+  `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md`），剩余唯一
+  未完成的验收项是**真机认证冒烟**：需要一个权益缺失/已过期的测试账号，走
+  `GET /api/desktop/account`（`can_request_activation_code=true`）→
+  `POST /api/desktop/activation-codes/request`（仅 `{"locale":"zh-CN"}`，期望 `status=sent`）、
+  人工读信确认三语模板与 31 天/20 Credits/不得转发提示 → 再查 `GET /api/desktop/account`
+  （`can_request_activation_code` 转 false）→ `POST /api/desktop/activation-codes/redeem`
+  （权益 active、`llm_quota_limit=20`、`llm_quota_used=0`、`can_process=true`）→ 权益有效期内重复
+  申领期望 `409 ENTITLEMENT_ACTIVE` → 一分钟内二次申领期望 `429 ACTIVATION_REQUEST_RATE_LIMITED`
+  且带 `Retry-After`。同时核对 Admin Web 激活码列表渲染来源/绑定账号/状态且无明文。记录纪律：只留
+  HTTP 状态码与错误码，不留邮箱、激活码、会话 token 或请求体。阻塞原因：缺真实测试邮箱。
 
 - [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
   Windows native Save As manual verification is complete; macOS native dialog evidence remains

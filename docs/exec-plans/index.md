@@ -17,8 +17,12 @@ Exec plans capture task-specific implementation intent, progress, and recovery c
 - Keep active work in `active/`.
 - Move completed work to `completed/`.
 - Capture cross-cutting debt in `tech-debt-tracker.md`.
-- Current completed implementation of the self-service activation email rollout is archived at
-  `completed/2026-08-24-self-service-email-activation-code-plan.md`.
+- The self-service activation email rollout is archived in two parts:
+  `completed/2026-08-24-self-service-email-activation-code-plan.md` covers the code (its Task 1-13
+  checkboxes were never back-filled, so read its `Completion Audit (2026-09-19)` section instead),
+  and `completed/2026-09-19-self-service-activation-server-rollout-plan.md` covers the production
+  deployment that landed on 2026-09-19. The feature is deployed and enabled; the only outstanding
+  acceptance item is the authenticated request/email/redeem smoke, which needs a test mailbox.
 
 ## Required Sections
 

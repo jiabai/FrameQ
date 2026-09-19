@@ -1,7 +1,7 @@
 # 自助邮件激活码设计
 
 - 日期：2026-08-24
-- 状态：已实现并归档（2026-08-25）
+- 状态：已实现并归档（2026-08-25）；服务端已于 2026-09-19 上线生产（`5c9e974`，开关 true）
 - 产品规格：docs/product-specs/2026-08-24-self-service-email-activation-code.md
 - 相关基线：
   - docs/product-specs/2026-06-21-activation-code-authorization.md

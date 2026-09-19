@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-09-19-self-service-activation-server-rollout-plan.md` | Deployed the already-implemented self-service activation code feature to production: matched code/database/config backup with off-host verification, isolated migration + authenticated-session rehearsal, fast-forward to `5c9e974`, all six migrations applied with zero data loss, and a two-phase gray rollout behind `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` (flag off regression sweep, then flag on). Also rewrote `scripts/check-self-service-rollout.mjs` after finding its state model could not distinguish flag state from unauthenticated probes. One acceptance item remains open: the authenticated request/email/redeem smoke needs a test mailbox. |
 | `2026-09-05-v0.3.6-desktop-release-plan.md` | Published stable v0.3.6 with Xiaohongshu platform-subtitle reuse, self-service activation client support, post-v0.3.5 fixes, and Windows/macOS desktop artifacts after local and hosted validation. |
 | `2026-08-25-xiaohongshu-format-enum-plan.md` | Completed numeric `format: 0` compatibility for Xiaohongshu subtitle tracks, with regression coverage and live subtitle-only verification. |
 | `2026-08-25-xiaohongshu-platform-subtitle-first-transcript-plan.md` | Implemented Xiaohongshu platform-subtitle-first transcript reuse in the existing single-link flow, with deterministic `mediaV2` selection, bounded atomic subtitle download, ASR fallback, package parity, and documented live/upstream residuals. |

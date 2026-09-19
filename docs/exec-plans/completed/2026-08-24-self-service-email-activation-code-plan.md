@@ -10,7 +10,9 @@
 
 **Tech Stack:** Fastify 5, TypeScript 5.9, Prisma 6 + SQLite, Nodemailer, Vitest, Tauri 2 + Rust/reqwest/serde, React 19, i18next, Vitest, existing FrameQ Store transaction and operation-ownership patterns.
 
-**Approval status:** Approved and implemented. This archived ExecPlan records the completed rollout evidence.
+**Approval status:** Approved, implemented in code, and deployed to production on 2026-09-19 (commit
+`5c9e974`, all three 20260824 migrations applied, `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true`). The
+authenticated SMTP smoke is still outstanding; see `Completion Audit (2026-09-19)` below.
 
 ---
 
@@ -29,6 +31,67 @@ Only account, activation-code, entitlement, quota, rate-limit, locale, and email
 - [x] 2026-08-24: Created this active ExecPlan, registered it in the active index, and completed its spec/type/sequence self-review. Validation: 13 ordered tasks, 9 required living-document sections, and 21 product/design coverage checks passed; `python scripts/validate_agents_docs.py --level ERROR` and `--level WARN` both reported 0 errors and 0 warnings.
 - [x] 2026-08-25: Synchronized rollout documentation for README, deployment runbook, architecture, security, design/spec status, and task ledger to match the implemented self-service activation behavior. Validation: `python scripts/validate_agents_docs.py --level ERROR`, `python scripts/validate_agents_docs.py --level WARN`, and `git diff --check`.
 - [x] 2026-08-25: Archived this ExecPlan to `completed/` and removed it from the active index after implementation landed on `main`. Validation: plan file move plus `docs/exec-plans/active/index.md`, `docs/exec-plans/completed/index.md`, and `docs/exec-plans/index.md` updated together.
+
+## Completion Audit (2026-09-19)
+
+**Do not use the `- [ ]` Step checkboxes below as a completion signal.** The ~60 Step-level checkboxes
+under Task 1–13 were never back-filled when the plan was archived; only the five `Progress` entries
+above are trustworthy. This section records what was re-verified against the repository on
+2026-09-19, and what genuinely remains open.
+
+### Re-verified landing evidence
+
+| Task | Evidence re-checked | Verdict |
+| --- | --- | --- |
+| 1 | `ActivationCode` carries `issuanceSource`, `issuedToUserId`, `sentAt`, `disabledReason`, partial-unique index note (`server/prisma/schema.prisma:129`); migrations `202608240001`, `202608240002`, `202608240003` | Landed |
+| 2 | `server/src/store/rateLimitPolicy.ts` shared reservations; `server/tests/rateLimitPolicy.test.ts` | Landed |
+| 3 | `server/src/store/memory/selfServiceActivation.ts`, `store/memory/atomic.ts`; `server/tests/selfServiceActivationStore.test.ts` | Landed |
+| 4 | `server/src/prismaStore/selfServiceActivation.ts`, `prismaStore/rateLimits.ts`; `server/tests/prismaSelfServiceActivation.test.ts` | Landed |
+| 5 | `server/src/activationPolicy.ts`, `server/src/selfServiceActivation.ts`; `server/tests/selfServiceActivation.test.ts` | Landed |
+| 6 | `createActivationCodeSender` + three-locale `ACTIVATION_EMAIL_COPY` in `server/src/email.ts`; `server/tests/email.test.ts` | Landed |
+| 7 | `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` in `server/src/runtimeConfig.ts`; capability + route in `server/src/routes/desktopAccount.ts`; frozen route table and behavior cases in `server/tests/routes.test.ts` | Landed |
+| 8 | Admin Web source/bound-account rendering in `server/src/adminPage.ts`; `server/tests/adminPage.test.ts`; commit `5a3ed84` | Landed |
+| 9 | `request_activation_code` / `redeem_activation_code` in `app/src-tauri/src/account.rs`, registered in `app/src-tauri/src/lib.rs` | Landed |
+| 10 | `can_request_activation_code` accepted as an **optional** IPC key with `?? false` default (`app/src/accountClient.ts:267`), decoder in `app/src/tauriIpcProtocol.ts` | Landed |
+| 11 | `app/src/features/account/useAccountController.ts`, `AccountSheet.tsx`, three-locale copy in `app/src/i18n/accountResources.ts` | Landed |
+| 12 | Cross-layer suites `server/tests/{authQuotaConcurrency,prismaAuthQuotaConcurrency,storeCompatibility,storeModuleBoundaries,serverModuleBoundaries}.test.ts` | Landed |
+| 13 | `deploy/server-deployment.md` rollout section, product spec, design doc, archive move; commits `0b0b5fd4`, `15fa80a2`, `61d4cf5`, `37fac23` | Partially landed - see below |
+
+Focused re-run on 2026-09-19: `npm test -- activation routes` in `server/` -> 5 files, 56 tests passed.
+
+### Still open
+
+1. **Closed 2026-09-19: production deployment happened.** `https://frameq.8xf.pro` was fast-forwarded
+   from `1afb925` to `5c9e974`, all three 20260824 migrations were applied (six applied in total,
+   `Database schema is up to date!`), and `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` was flipped to
+   `true` after a flag-off Phase A regression sweep. `GET /api/desktop/account` can now advertise
+   `can_request_activation_code=true`. Evidence and the full evidence table:
+   `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md`.
+2. **Task 13 Step 3 (complete automated gates) was never back-filled here.** It was in fact
+   satisfied later at v0.3.6 release time (Server 291 passed / 1 skipped), recorded in
+   `docs/exec-plans/completed/2026-09-05-v0.3.6-desktop-release-plan.md`. Treat that release plan as
+   the gate evidence, not this file. The rollout re-ran the gates on the deployed commit: 292 passed.
+3. **Task 13 Step 4 (authenticated SMTP and packaged-desktop smoke) is still open.** The
+   `Outcomes` section above already states that only documentation gates ran during closeout. The
+   deployment plan reproduced the flag and error semantics end to end on an isolated copy with real
+   sessions (no email sent), but the production happy path - request -> email arrives -> redeem ->
+   entitlement - has not been run because it needs a test mailbox. This is the one remaining
+   acceptance item. It also carries the unresolved `Retry-After` header observation.
+4. Closed: the three SQL migrations are applied to the production database (zero data loss; all ten
+   table row counts unchanged, and all 11 pre-existing codes carry `issuanceSource='admin'`).
+
+### Verification tooling added
+
+`scripts/check-self-service-rollout.mjs` (+ `scripts/tests/self-service-rollout.test.mjs`) classifies
+the rollout from unauthenticated probes only: `not_deployed` (bare Fastify 404) and
+`route_registered` (`401 AUTH_REQUIRED`). It deliberately does **not** claim to know whether the flag
+is enabled. The request route authenticates before it evaluates the flag
+(`server/src/routes/desktopAccount.ts:66-79`), so an anonymous caller gets the same `401 AUTH_REQUIRED`
+whether the flag is on or off - measured byte-identical - and `404 FEATURE_NOT_AVAILABLE` is only
+reachable once a valid session exists. The probe also asserts auth-first ordering so a deployment
+cannot leak the flag state to unauthenticated callers. **Corrected 2026-09-19:** an earlier revision of
+this section described a `feature_disabled`/`live` pair that the probe cannot actually distinguish;
+that model was wrong and is superseded.
 
 ## Surprises & Discoveries
 

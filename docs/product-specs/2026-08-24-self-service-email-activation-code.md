@@ -1,6 +1,10 @@
 # FrameQ 自助邮件激活码产品规格
 
-> 实现状态：已落地并归档，详见 `docs/exec-plans/completed/2026-08-24-self-service-email-activation-code-plan.md`。
+> 实现状态：代码已落地并归档（2026-08-25），服务端已于 2026-09-19 部署上线（提交 `5c9e974`，
+> 三条 20260824 迁移已应用，`FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true`）。详见
+> `docs/exec-plans/completed/2026-08-24-self-service-email-activation-code-plan.md` 与
+> `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md`。
+> 仍需真机认证冒烟（请求 → 收信 → 兑换 → 权益）作为最终送达证据，见上线计划的 Still open。
 
 ## 背景
 
