@@ -15,6 +15,7 @@
 
 ## Desktop Runtime, Packaging & Distribution
 
+- `2026-09-19-v0.3.8-desktop-release.md` — v0.3.8 desktop release scope and acceptance; bundled `yt-dlp` upgrade 2026.7.4 -> 2026.8.19 to restore YouTube media-stream downloads for already-installed users, plus a read-only current-version line in Settings.
 - `2026-09-19-v0.3.7-desktop-release.md` — v0.3.7 desktop release scope and acceptance; bounded Douyin share-page retry and the neutralized activation-panel title.
 - `2026-09-05-v0.3.6-desktop-release.md` — v0.3.6 desktop release scope and acceptance.
 
