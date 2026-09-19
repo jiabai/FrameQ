@@ -641,21 +641,25 @@
 
 ## 待办
 
-- [ ] 重建营销站并把对外版本从 v0.3.3 更新到 v0.3.6（2026-09-19 发现）— ✅ 现状已核实：线上
-  `https://frameq.8xf.pro` 的静态产物最后构建于 2026-08-15，`site/dist` 与服务器 webroot
-  `/home/ubuntu/FrameQ/site` 同为 8-15 17:42，下载页硬编码
-  `releases/download/v0.3.3/FrameQ_0.3.3_x64-setup.exe`，首页展示 `v0.3.3`。而 GitHub Releases
-  最新为 `v0.3.6`（2026-09-06），`site/src/consts.ts` 的 `LATEST_VERSION` 与
-  `RELEASE_NOTES_PATH` 都停在 v0.3.3 —— 与自身注释"与 `docs/releases/` 最新文件一致"已矛盾
-  （仓库里 v0.3.4/v0.3.5/v0.3.6 三篇都在）。**影响**：自助激活的客户端 UI 随 v0.3.6 才发布，
-  从官网安装的新用户拿到的是 v0.3.3，看不到申领按钮，服务端刚上线（2026-09-19）的能力对新用户
-  不可达；存量安装在应用内更新到 v0.3.6 后可用。**动作**：改 `site/src/consts.ts` 版本、补
-  `site/src/content/release-notes/` 的 v0.3.4/0.3.5/0.3.6 三篇（素材在 `docs/releases/`）、
-  重建后用 `scripts/deploy-marketing.sh` 发布（其 `REMOTE_WEBROOT` 默认值已核对与线上 nginx
-  `root` 一致，无需覆盖）。注意 `site/` 已 gitignore，改动不进版本控制；文案须按去术语约定撰写，
-  建议措辞先确认再发。
+（无待办任务）
 
 ## 已完成
+
+- [x] 重建营销站并把对外版本从 v0.3.3 更新到 v0.3.6（2026-09-19 发现并当日上线）— ✅ 已部署：站点源同步到
+  v0.3.6 并发布，线上 `https://frameq.8xf.pro` 三个页面的版本号全部为 v0.3.6、零处 v0.3.3，下载链接指向
+  `releases/download/v0.3.6/`，线上三页与本地 `site/dist` **逐字节一致**，演示视频哈希部署前后未变。
+  改动：`site/src/consts.ts` 的 `LATEST_VERSION` → `v0.3.6`、`RELEASE_NOTES_PATH` → `docs/releases/v0.3.6.md`，
+  并新增私有 `VERSION_NUMBER` 派生三个产物名与 footer 标签（此前版本号散在 5 处）；
+  `site/src/pages/download.astro` 的 Windows 安装步骤原先**再硬编码一份** `FrameQ_0.3.3_x64-setup.exe`，
+  改为从 `DOWNLOAD_ASSETS` 查找、缺失时构建期抛错；补齐 `site/src/content/release-notes/` 的
+  v0.3.4/v0.3.5/v0.3.6 三篇（去术语文案，素材取自 `docs/releases/`）。**动因**：自助激活的客户端 UI 随
+  v0.3.6 才发布，此前从官网安装的新用户拿到的是 v0.3.3、看不到申领按钮，服务端当日上线的能力对官网渠道不可达。
+  部署证据：本机无 `rsync`（Git Bash 不带），改用 SFTP 按 **sha256** 比较同步 —— 上传 3 个 HTML、删除 0、
+  跳过 78，重跑比对 81/81 哈希一致（幂等）。**教训**：本次 `0.3.3` → `0.3.6` 字符数相同，`index.html`
+  （41472 字节）与 `privacy/index.html`（19200 字节）的字节数前后**完全不变**，任何按大小判断的同步都会静默
+  漏更新，必须比内容哈希。部署前已整站备份
+  `/home/ubuntu/FrameQ/backups/webroot-20260919T060139Z.tar.gz`（6.2 MB，权限 600）。`site/` 仍 gitignore，
+  本条无对应提交。
 
 - [x] 实现 History vNext 严格边界（2026-07-11）— 仅接受当前安全 schema v3 manifest；列表只读 manifest，点击后按需读取单任务详情；移除 Rust/Python 后台迁移及旧 schema 兼容路径；旧目录只物理留存并与历史、缓存、详情、编辑和 retry 隔离。✅ 验收：临时探针 supported=1、ignored=1、list 1.687ms、约 1.8MB 单任务 detail 12.094ms；原生 app-local 验收 supported=5、ignored=1、list 1-7ms、detail 4-37ms 且历史打开不启动 Python；app 230、Rust 92、worker 230、server 57、scripts 9、ruff/build/docs/diff 全部通过。
 

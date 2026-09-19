@@ -15,6 +15,16 @@
 # NOTE: site/ is git-ignored, so the source lives only on this machine.
 # Build happens locally and only dist/ is transferred.
 #
+# Deploying from a machine without rsync (Windows Git Bash does not ship one):
+# sync dist/ over SFTP instead, but compare content HASHES, not sizes. The
+# v0.3.3 -> v0.3.6 bump turned "0.3.3" into "0.3.6" - same character count - so
+# index.html stayed at 41472 bytes and privacy/index.html at 19200 bytes while
+# their contents changed. A size-based sync silently skips both pages.
+#
+# `--delete` is safe here: the demo video lives inside dist/ (copied from the
+# site's public/ directory), so it is always present on the source side. Check
+# `ls dist/video/` before assuming a webroot file is "server-only".
+#
 # Usage:
 #   DEPLOY_SERVER=user@host ./scripts/deploy-marketing.sh
 #   DEPLOY_SERVER=user@host REMOTE_WEBROOT=/srv/www/frameq ./scripts/deploy-marketing.sh
