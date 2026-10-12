@@ -443,6 +443,7 @@ def test_terminal_result_contract_closes_framing_operations_and_nested_shapes() 
         "preference_snapshot",
         "dissection",
         "dissection_md",
+        "draft",
     }
     assert task["properties"]["artifacts"]["additionalProperties"] is False
     insight_object = task["properties"]["insights"]["items"]

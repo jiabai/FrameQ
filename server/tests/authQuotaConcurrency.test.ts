@@ -52,6 +52,7 @@ function createRateLimitState(): MemoryState {
     webhookEvents: [],
     authRateLimits: [],
     userSessions: [],
+    anysearchConfig: null,
   };
 }
 

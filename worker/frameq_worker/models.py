@@ -8,7 +8,7 @@ from typing import Literal
 from frameq_worker.output_language import OutputLanguage
 from frameq_worker.source_identity import SourceIdentity
 
-RetryInsightTarget = Literal["summary", "insights", "dissection"]
+RetryInsightTarget = Literal["summary", "insights", "dissection", "draft"]
 InsightGenerationTarget = Literal["all", "summary", "insights", "dissection"]
 LocalMediaKind = Literal["video", "audio"]
 
@@ -18,6 +18,7 @@ class JobStage(StrEnum):
     VIDEO_EXTRACTING = "video_extracting"
     VIDEO_TRANSCRIBING = "video_transcribing"
     INSIGHTS_GENERATING = "insights_generating"
+    DRAFT_GENERATING = "draft_generating"
     COMPLETED = "completed"
     PARTIAL_COMPLETED = "partial_completed"
     FAILED = "failed"
@@ -140,6 +141,13 @@ class RetryInsightsRequest:
     target: RetryInsightTarget
     output_language: OutputLanguage
     preference_snapshot: PreferenceSnapshot | None = None
+    # preference_snapshot for draft is read from disk, not sent over the wire.
+    # insight_id is the seed Insight id; required (non-null) when target == "draft".
+    insight_id: int | None = None
+    # platform：用户在确认页选择的 draft 目标平台 id（9-id 词表之一）。
+    # target == "draft" 时必填且须 ∈ DRAFT_PLATFORM_IDS（见 insightflow.prompt）；
+    # 其余 target 不携带（出现即非法）。请求级字段，不持久化、不进 manifest、不回写档案。
+    platform: str | None = None
 
 
 @dataclass(frozen=True)
@@ -208,6 +216,7 @@ class ProcessResult:
     dissection: dict[str, object] | None = None
     error: WorkerError | None = None
     artifact_payloads: dict[str, bytes | None] = field(default_factory=dict, repr=False)
+    draft: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -221,4 +230,5 @@ class ProcessResult:
             "transcript": self.transcript.to_dict() if self.transcript else None,
             "dissection": self.dissection,
             "error": self.error.to_dict() if self.error else None,
+            "draft": self.draft,
         }

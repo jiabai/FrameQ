@@ -138,6 +138,9 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
     transcript: null,
     dissection: dissection ?? null,
     dissectionStale: dissectionStale ?? false,
+    draft: "",
+    draftEdited: false,
+    draftSeedInsightId: null,
     error: null,
     ...rest,
   };

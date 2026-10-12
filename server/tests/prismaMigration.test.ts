@@ -109,7 +109,7 @@ describe("reviewed Prisma migration chain", () => {
     const { databasePath } = temporaryDatabase();
     new DatabaseSync(databasePath).close();
 
-    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("6 migrations");
+    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("7 migrations");
     expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("No pending migrations");
     expect(runPrisma(databasePath, ["migrate", "status"])).toContain(
       "Database schema is up to date",
@@ -145,6 +145,7 @@ describe("reviewed Prisma migration chain", () => {
         { migration_name: "202608240001_self_service_email_activation" },
         { migration_name: "202608240002_auth_rate_limit_self_service_purpose" },
         { migration_name: "202608240003_self_service_active_unique" },
+        { migration_name: "202610100001_anysearch_config" },
       ]);
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

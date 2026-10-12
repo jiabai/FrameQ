@@ -31,6 +31,7 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
     "GET /admin",
     "GET /admin/login",
     "POST /admin/api/activation-codes",
+    "POST /admin/api/anysearch-config",
     "POST /admin/api/llm-config",
     "POST /admin/api/users/:userId/entitlement-adjustments",
     "POST /admin/auth/email/start",
@@ -55,7 +56,10 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
     "POST /auth/email/start",
     "POST /auth/email/verify",
   ],
-  "desktopLlm.ts": ["POST /api/desktop/llm/checkouts"],
+  "desktopLlm.ts": [
+    "POST /api/desktop/llm/checkouts",
+    "POST /api/desktop/anysearch/checkout",
+  ],
   "desktopUpdates.ts": ["GET /api/desktop/updates/:target/:arch/:currentVersion"],
   "health.ts": ["GET /health/live", "GET /health/ready"],
   "userAuth.ts": [

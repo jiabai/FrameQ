@@ -21,6 +21,7 @@ pub(crate) const TASK_RESULT_FIELDS: &[&str] = &[
     "insights",
     "transcript",
     "dissection",
+    "draft",
     "error",
 ];
 #[cfg(test)]
@@ -38,6 +39,7 @@ pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
     "preference_snapshot",
     "dissection",
     "dissection_md",
+    "draft",
 ];
 #[cfg(test)]
 pub(crate) const TASK_INSIGHT_FIELDS: &[&str] = &[
@@ -97,6 +99,9 @@ pub(crate) enum TaskErrorStage {
     VideoExtracting,
     VideoTranscribing,
     InsightsGenerating,
+    // Error-only stage for draft generation failures; draft progress reuses
+    // InsightsGenerating so it never appears as a live progress phase.
+    DraftGenerating,
     Completed,
     PartialCompleted,
     Failed,
@@ -232,6 +237,10 @@ pub(crate) struct TaskTerminalResult {
     pub(crate) dissection: Option<TaskDissection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) dissection_source_status: Option<task_manifest::DissectionSourceStatus>,
+    // Draft article markdown produced by target="draft" agent runs; empty string
+    // when the task has no draft (and for older worker output without the field).
+    #[serde(default)]
+    pub(crate) draft: String,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub(crate) error: Option<TaskError>,
 }

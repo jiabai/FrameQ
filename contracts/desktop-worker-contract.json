@@ -478,6 +478,7 @@
           "insights",
           "transcript",
           "dissection",
+          "draft",
           "error"
         ],
         "properties": {
@@ -546,6 +547,9 @@
                 "type": "string"
               },
               "dissection_md": {
+                "type": "string"
+              },
+              "draft": {
                 "type": "string"
               }
             },
@@ -813,6 +817,13 @@
             "oneOf": [
               { "type": "null" },
               { "type": "string", "enum": ["current", "stale"] }
+            ]
+          },
+          "draft": {
+            "description": "Optional draft article artifact produced by the target=\"draft\" agent route; null or omitted when the task has no draft.",
+            "oneOf": [
+              { "type": "null" },
+              { "type": "string" }
             ]
           },
           "error": {
@@ -1697,6 +1708,7 @@
     "insights",
     "transcript",
     "dissection",
+    "draft",
     "error"
   ],
   "insightResult": {

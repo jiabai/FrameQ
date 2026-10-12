@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
-const SAFE_ARTIFACT_KEYS: [&str; 12] = [
+const SAFE_ARTIFACT_KEYS: [&str; 13] = [
     "video",
     "audio",
     "transcript_txt",
@@ -19,6 +19,7 @@ const SAFE_ARTIFACT_KEYS: [&str; 12] = [
     "preference_snapshot",
     "dissection",
     "dissection_md",
+    "draft",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,8 @@ pub(crate) enum TaskArtifact {
     Dissection,
     #[allow(dead_code)]
     DissectionMd,
+    #[allow(dead_code)]
+    Draft,
 }
 
 impl TaskArtifact {
@@ -45,6 +48,7 @@ impl TaskArtifact {
             Self::Insights => "insights",
             Self::Dissection => "dissection",
             Self::DissectionMd => "dissection_md",
+            Self::Draft => "draft",
         }
     }
 }
@@ -239,6 +243,8 @@ pub(super) struct TaskManifest {
     pub(super) error: Option<TaskManifestError>,
     #[serde(default)]
     pub(super) text_preview: String,
+    #[serde(default)]
+    pub(super) draft_seed_insight_id: Option<i64>,
     #[serde(default)]
     pub(super) insights_count: usize,
     #[serde(flatten)]

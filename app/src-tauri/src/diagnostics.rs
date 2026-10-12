@@ -378,6 +378,38 @@ mod tests {
     }
 
     #[test]
+    fn worker_result_log_summary_never_outputs_draft_summary_or_transcript_bodies() {
+        // Privacy guarantee (Task 4.3): the desktop log file must never contain
+        // the full draft body, summary body, transcript text, or any preference
+        // snapshot. The summarizer must only emit status / task_id / error metadata.
+        let draft_body = "# Draft Title\n\nA long markdown body SECRET-DRAFT-MARKER that must never reach the log file.";
+        let summary_body = "# Summary Title\n\nSECRET-SUMMARY-MARKER never in logs.";
+        let transcript_text = "SECRET-TRANSCRIPT-MARKER transcript text never in logs.";
+        let result = serde_json::json!({
+            "status": "completed",
+            "task_id": "20260714-100000-douyin-demo",
+            "draft": draft_body,
+            "summary": summary_body,
+            "text": transcript_text,
+            "transcript": {
+                "segments": [{"text": "SECRET-SEGMENT-MARKER"}]
+            }
+        });
+
+        let summary = summarize_worker_result_for_log(&result);
+
+        assert!(summary.contains("status=completed"));
+        assert!(summary.contains("task_id=20260714-100000-douyin-demo"));
+        // Hard privacy assertions: no body content may leak.
+        assert!(!summary.contains("SECRET-DRAFT-MARKER"));
+        assert!(!summary.contains("SECRET-SUMMARY-MARKER"));
+        assert!(!summary.contains("SECRET-TRANSCRIPT-MARKER"));
+        assert!(!summary.contains("SECRET-SEGMENT-MARKER"));
+        assert!(!summary.contains("Draft Title"));
+        assert!(!summary.contains("Summary Title"));
+    }
+
+    #[test]
     fn diagnostic_text_redacts_llm_and_cookie_material() {
         let sanitized = sanitize_diagnostic_text(
             "FRAMEQ_LLM_API_KEY=secret\nFRAMEQ_LLM_SESSION_TOKEN=token\nAuthorization: Bearer abc\nCookie: SID=1\n--cookies-from-browser chrome",

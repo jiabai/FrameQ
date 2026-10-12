@@ -14,6 +14,7 @@ const srcRoot = fileURLToPath(new URL("../src/", import.meta.url));
 const expectedStoreOwners = [
   "contracts.ts",
   "memory.ts",
+  "memory/anysearchConfig.ts",
   "memory/atomic.ts",
   "memory/auth.ts",
   "memory/billing.ts",
@@ -26,6 +27,7 @@ const expectedStoreOwners = [
 ] as const;
 
 const expectedPrismaOwners = [
+  "anysearchConfig.ts",
   "auth.ts",
   "billing.ts",
   "concurrency.ts",
@@ -45,6 +47,7 @@ const expectedContractTypes = [
   "ActivationRedemption",
   "AdminEntitlementAdjustmentRecord",
   "AdminSessionRecord",
+  "AnysearchConfigRecord",
   "EmailDispatchPurpose",
   "AuthRateLimitRecord",
   "AuthRateLimitScope",

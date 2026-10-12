@@ -65,6 +65,7 @@ function completedResult(overrides: Partial<WorkerResult> = {}): WorkerResult {
     transcript: transcript ?? null,
     dissection: null,
     dissection_source_status: null,
+    draft: "",
     error: null,
     ...rest,
   };
@@ -175,6 +176,7 @@ describe("worker client", () => {
       transcript: null,
       dissection: null,
       dissection_source_status: null,
+      draft: "",
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "worker process could not start",
@@ -476,6 +478,7 @@ describe("worker client", () => {
       transcript: null,
       dissection: null,
       dissection_source_status: null,
+      draft: "",
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: "retry worker process could not start",
@@ -537,6 +540,49 @@ describe("worker client", () => {
         outputLanguage: "en-US",
         extra: "request-secret-value",
       },
+      {
+        taskId: TASK_ID,
+        target: "insights",
+        outputLanguage: "en-US",
+        preferenceSnapshot: PREFERENCE_SNAPSHOT,
+        platform: "douyin",
+      },
+      { taskId: TASK_ID, target: "draft", outputLanguage: "zh-CN" },
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 7,
+      },
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 7,
+        platform: "",
+      },
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: -1,
+        platform: "xiaohongshu",
+      },
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 1.5,
+        platform: "xiaohongshu",
+      },
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 7,
+        platform: "xiaohongshu",
+        preferenceSnapshot: PREFERENCE_SNAPSHOT,
+      },
     ];
 
     for (const payload of invalidPayloads) {
@@ -550,6 +596,131 @@ describe("worker client", () => {
     }
 
     expect(runner).not.toHaveBeenCalled();
+  });
+
+  test("sends insight_id and platform without preference_snapshot for the draft target", async () => {
+    // A1: the worker reads the preference snapshot from disk for draft
+    // generation, so the wire request MUST NOT carry preference_snapshot.
+    // insight_id selects the seed insight; platform carries the user-selected
+    // draft platform.
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return completedResult({
+        draft: "# 草稿正文",
+      });
+    };
+
+    const result = await retryInsights(
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 7,
+        platform: "xiaohongshu",
+      },
+      runner,
+    );
+
+    expect(calls).toEqual([
+      {
+        command: "retry_insights",
+        args: {
+          request: {
+            task_id: TASK_ID,
+            target: "draft",
+            output_language: "zh-CN",
+            insight_id: 7,
+            platform: "xiaohongshu",
+          },
+        },
+      },
+    ]);
+    expect(result.draft).toBe("# 草稿正文");
+  });
+
+  test("rejects a draft retry that carries a preference snapshot", async () => {
+    // A1: the worker reads the preference snapshot from disk for draft
+    // generation, so a snapshot on a draft retry is an invalid payload.
+    const runner = vi.fn<WorkerCommandRunner>();
+
+    const result = await retryInsights(
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 3,
+        platform: "xiaohongshu",
+        preferenceSnapshot: PREFERENCE_SNAPSHOT,
+      } as never,
+      runner,
+    );
+
+    expect(runner).not.toHaveBeenCalled();
+    expect(result.error).toEqual({
+      code: "INVALID_RETRY_PAYLOAD",
+      message: "",
+      stage: "insights_generating",
+    });
+  });
+
+  test("keeps sending preference_snapshot and no insight_id or platform for the insights target", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: WorkerCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return completedResult();
+    };
+
+    await retryInsights(
+      {
+        taskId: TASK_ID,
+        target: "insights",
+        outputLanguage: "zh-CN",
+        preferenceSnapshot: PREFERENCE_SNAPSHOT,
+      },
+      runner,
+    );
+
+    const request = (calls[0]?.args as { request: Record<string, unknown> }).request;
+    expect(request.preference_snapshot).toEqual(PREFERENCE_SNAPSHOT);
+    expect(request).not.toHaveProperty("insight_id");
+    expect(request).not.toHaveProperty("platform");
+  });
+
+  test("maps thrown Tauri errors on draft retries to the draft_generating stage", async () => {
+    const runner: WorkerCommandRunner = async () => {
+      throw new Error("retry worker process could not start");
+    };
+
+    const result = await retryInsights(
+      {
+        taskId: TASK_ID,
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 7,
+        platform: "xiaohongshu",
+      },
+      runner,
+    );
+
+    expect(result).toEqual({
+      status: "partial_completed",
+      task_id: TASK_ID,
+      task_dir: null,
+      artifacts: {},
+      text: "",
+      summary: "",
+      insights: [],
+      transcript: null,
+      dissection: null,
+      dissection_source_status: null,
+      draft: "",
+      error: {
+        code: "TAURI_COMMAND_FAILED",
+        message: "retry worker process could not start",
+        stage: "draft_generating",
+      },
+    });
   });
 
   test("invokes the Tauri cancel_process command", async () => {
@@ -595,6 +766,7 @@ describe("worker client", () => {
       transcript: null,
       dissection: null,
       dissection_source_status: null,
+      draft: "",
       error: {
         code: "WORKER_PROTOCOL_VIOLATION",
         message: "",
@@ -621,6 +793,7 @@ describe("worker client", () => {
       transcript: null,
       dissection: null,
       dissection_source_status: null,
+      draft: "",
       error: {
         code: "WORKER_PROTOCOL_VIOLATION",
         message: "",

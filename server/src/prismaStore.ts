@@ -4,6 +4,7 @@ import type {
   EmailOtpRecord,
   Store,
 } from "./store.js";
+import * as anysearchConfigOperations from "./prismaStore/anysearchConfig.js";
 import * as authOperations from "./prismaStore/auth.js";
 import * as billingOperations from "./prismaStore/billing.js";
 import * as entitlementOperations from "./prismaStore/entitlements.js";
@@ -179,6 +180,16 @@ export class PrismaStore implements Store {
     return llmConfigOperations.upsertLlmConfig(this.prisma, input, now);
   }
 
+  async getAnysearchConfig(): ReturnType<Store["getAnysearchConfig"]> {
+    return anysearchConfigOperations.getAnysearchConfig(this.prisma);
+  }
+
+  async upsertAnysearchConfig(
+    input: Parameters<Store["upsertAnysearchConfig"]>[0],
+    now: Date,
+  ): ReturnType<Store["upsertAnysearchConfig"]> {
+    return anysearchConfigOperations.upsertAnysearchConfig(this.prisma, input, now);
+  }
 
   async createActivationCode(
     input: Parameters<Store["createActivationCode"]>[0],

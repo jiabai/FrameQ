@@ -1,4 +1,4 @@
-import { Copy, Download, RotateCcw, X } from "lucide-react";
+import { Copy, Download, RotateCcw, Sprout, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 
@@ -17,6 +17,10 @@ type AiResultDetailSheetProps = {
   onOpenDirectionEditor: () => void | Promise<void>;
   onOpenDissectionConfirmation?: () => void;
   onLocateDissectionChunks?: (chunkIds: number[]) => void;
+  // Select/clear the single draft seed insight. The selected id lives on
+  // workflow.draftSeedInsightId; these callbacks mutate it via the controller.
+  onSelectDraftSeed?: (insightId: number) => void;
+  onClearDraftSeed?: () => void;
 };
 
 export function AiResultDetailSheet({
@@ -26,6 +30,8 @@ export function AiResultDetailSheet({
   onOpenDirectionEditor,
   onOpenDissectionConfirmation = () => undefined,
   onLocateDissectionChunks = () => undefined,
+  onSelectDraftSeed,
+  onClearDraftSeed,
 }: AiResultDetailSheetProps) {
   const { t, i18n } = useTranslation("synthesis");
   const locale = isSupportedLocale(i18n.resolvedLanguage)
@@ -52,6 +58,7 @@ export function AiResultDetailSheet({
     style: "long",
     type: "conjunction",
   });
+  const seedId = workflow.draftSeedInsightId;
   return (
     <AnimatedSheet
       open={detailOpen}
@@ -126,19 +133,54 @@ export function AiResultDetailSheet({
             )
           ) : workflow.insights.length > 0 ? (
             <ol className="insight-detail-list">
-              {workflow.insights.map((insight) => (
-                <li className="insight-detail-item" key={insight.id}>
-                  <h3>{insight.topic}</h3>
-                  <dl>
-                    <div><dt>{t("detail.matchReason")}</dt><dd>{insight.matchReason}</dd></div>
-                    <div>
-                      <dt>{t("detail.questions")}</dt>
-                      <dd>{questionList.format(insight.followUpQuestions)}</dd>
-                    </div>
-                    <div><dt>{t("detail.suitableUse")}</dt><dd>{insight.suitableUse}</dd></div>
-                  </dl>
-                </li>
-              ))}
+              {workflow.insights.map((insight) => {
+                const selected = seedId === insight.id;
+                return (
+                  <li
+                    className={`insight-detail-item${selected ? " draft-seed-selected" : ""}`}
+                    key={insight.id}
+                    aria-current={selected ? "true" : undefined}
+                  >
+                    <h3>{insight.topic}</h3>
+                    <dl>
+                      <div><dt>{t("detail.matchReason")}</dt><dd>{insight.matchReason}</dd></div>
+                      <div>
+                        <dt>{t("detail.questions")}</dt>
+                        <dd>{questionList.format(insight.followUpQuestions)}</dd>
+                      </div>
+                      <div><dt>{t("detail.suitableUse")}</dt><dd>{insight.suitableUse}</dd></div>
+                    </dl>
+                    {onSelectDraftSeed && onClearDraftSeed ? (
+                      <div className="insight-detail-seed-action">
+                        {selected ? (
+                          <>
+                            <p className="draft-seed-summary">
+                              <Sprout size={15} aria-hidden="true" />
+                              <span>{t("detail.draftSeedSelected")}</span>
+                            </p>
+                            <button
+                              type="button"
+                              className="secondary-button compact-button"
+                              onClick={() => onClearDraftSeed()}
+                            >
+                              {t("detail.clearDraftSeed")}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="secondary-button compact-button"
+                            onClick={() => onSelectDraftSeed(insight.id)}
+                          >
+                            <Sprout size={15} aria-hidden="true" />
+                            <span>{t("detail.selectDraftSeed")}</span>
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ol>
           ) : (
             <p>{t("detail.insightsEmpty")}</p>

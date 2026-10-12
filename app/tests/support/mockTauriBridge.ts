@@ -181,6 +181,7 @@ const defaultResponses: Record<string, unknown> = {
     insights: [],
     transcript: null,
     dissection: null,
+    draft: null,
     error: null,
   },
   cancel_process: { status: "cancelling", error: null },
@@ -334,6 +335,7 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
               }] : [],
               transcript: null,
               dissection: target === "dissection" ? ${JSON.stringify(smokeDissection)} : null,
+              draft: null,
               error: null
             });
           }

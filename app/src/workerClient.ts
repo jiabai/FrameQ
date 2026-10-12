@@ -38,7 +38,7 @@ export type WorkerProgressListener = (
 export type WorkerProgressHandler = (event: WorkerProgressEvent) => void;
 export type ProgressDiagnosticRecorder = (safeCode: string) => void;
 
-export type RetryInsightTarget = "summary" | "insights";
+export type RetryInsightTarget = "summary" | "insights" | "dissection" | "draft";
 
 export type ProcessVideoIpcRequest = {
   url: string;
@@ -215,10 +215,14 @@ export async function retryInsights(
       transcript: null,
       dissection: null,
       dissection_source_status: null,
+      draft: "",
       error: {
         code: "TAURI_COMMAND_FAILED",
         message: error instanceof Error ? error.message : String(error),
-        stage: "insights_generating",
+        stage:
+          parsed.request.target === "draft"
+            ? "draft_generating"
+            : "insights_generating",
       },
     };
   } finally {
@@ -258,6 +262,7 @@ function failedResult(code: string, message: string, stage: WorkflowStage): Work
     transcript: null,
     dissection: null,
     dissection_source_status: null,
+    draft: "",
     error: {
       code,
       message,
@@ -278,6 +283,7 @@ function invalidRetryPayloadResult(taskId: string | null): WorkerResult {
     transcript: null,
     dissection: null,
     dissection_source_status: null,
+    draft: "",
     error: {
       code: "INVALID_RETRY_PAYLOAD",
       message: "",
@@ -302,6 +308,7 @@ function protocolViolationResult(
     transcript: null,
     dissection: null,
     dissection_source_status: null,
+    draft: "",
     error: {
       code: "WORKER_PROTOCOL_VIOLATION",
       message: "",

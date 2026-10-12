@@ -263,6 +263,7 @@ describe("App browser input interactions", () => {
             engine: "SenseVoice",
           },
           dissection: null,
+          draft: null,
           error: null,
         },
       },
@@ -696,6 +697,7 @@ describe("App browser input interactions", () => {
                     insights: [],
                     transcript: null,
                     dissection: null,
+                    draft: null,
                     error: null
                   };
                 }
@@ -850,6 +852,7 @@ describe("App browser input interactions", () => {
                     insights: [],
                     transcript: null,
                     dissection: null,
+                    draft: null,
                     error: null
                   };
                 }
@@ -1658,7 +1661,7 @@ describe.sequential("App controller-owned lifecycle UI smoke", () => {
             targetRowsBorderless: targetRows.every((item) => parseFloat(getComputedStyle(item).borderLeftWidth) === 0),
             noEnglishEyebrows: !document.body.innerText.includes('LOCAL TRANSCRIPT') && !document.body.innerText.includes('CLOUD AI'),
             noRedundantWorkspaceStatus: !document.querySelector('.local-transcript-workspace .workspace-status-badge') && !document.querySelector('.ai-generation-workspace .workspace-status-badge'),
-            quietTargetActions: document.querySelectorAll('.ai-target-action').length === 3
+            quietTargetActions: document.querySelectorAll('.ai-target-action').length === 4
           };
         })()`,
       );
@@ -2292,7 +2295,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
             localEditorDisabled: document.querySelector('.transcript-full-editor')?.disabled ?? null
           })`,
         );
-        expect(state.disabledTargets).toBe(3);
+        expect(state.disabledTargets).toBe(4);
         expect(state.localTask).toBe("history-task-a");
         expect(state.localEditorDisabled).toBe(false);
         expect(String(state.blocker)).toMatch(/AI Credits 已用完|暂不可用/);
@@ -2435,6 +2438,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         insights: [],
         transcript: null,
         dissection: null,
+        draft: null,
         error: {
           code: "INSIGHTFLOW_EMPTY_SUMMARY",
           message: "No summary returned.",
@@ -2501,6 +2505,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         insights: [],
         transcript: null,
         dissection: null,
+        draft: null,
         error: {
           code: "WORKER_EXECUTION_TIMEOUT",
           message: "Authorization: Bearer private-runtime-detail",
@@ -2735,7 +2740,10 @@ describe("App controller-owned lifecycle UI smoke", () => {
         outputLanguage: "zh-TW",
       });
       expect(String(summaryLanguage.label)).toContain("繁體中文");
-      await clickSelector(page, ".preference-flow-sheet .sheet-footer .primary-button");
+      // Scope to the summary confirmation sheet by aria-label: the insights
+      // preference flow sheet shares the .preference-flow-sheet class, and a
+      // not-yet-unmounted sibling sheet must never receive this click.
+      await clickSelector(page, '[aria-label="確認重點摘要"] .sheet-footer .primary-button');
       await waitForRuntimeCondition(
         page,
         "window.__FRAMEQ_UI_SMOKE__.commands.some((entry) => entry.command === 'retry_insights' && entry.args?.request?.target === 'summary')",
@@ -2780,7 +2788,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         page,
         "document.querySelector('.preference-flow-sheet [data-output-language=\"zh-TW\"]')?.textContent.includes('繁體中文')",
       );
-      await clickSelector(page, ".preference-flow-sheet .sheet-footer .primary-button");
+      await clickSelector(page, '[aria-label="確認靈感啟發"] .sheet-footer .primary-button');
       await waitForRuntimeCondition(
         page,
         "window.__FRAMEQ_UI_SMOKE__.pending.save_default_generation_preferences?.length === 1",
@@ -2815,7 +2823,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         page,
         "document.querySelector('.preference-flow-sheet [data-output-language=\"en-US\"]')?.textContent.includes('English (US)')",
       );
-      await clickButtonContaining(page, ".preference-flow-sheet .primary-button", "Confirm");
+      await clickSelector(page, '[aria-label="Confirm Inspiration"] .sheet-footer .primary-button');
       await waitForRuntimeCondition(
         page,
         "window.__FRAMEQ_UI_SMOKE__.pending.save_default_generation_preferences?.length === 1",
@@ -3526,6 +3534,7 @@ function cancelledWorkerResult() {
     insights: [],
     transcript: null,
     dissection: null,
+    draft: null,
     error: {
       code: "WORKER_CANCELLED",
       message: "任务已取消。",
@@ -3545,6 +3554,7 @@ function completedSummaryResult() {
     insights: [],
     transcript: null,
     dissection: null,
+    draft: null,
     error: null,
   };
 }
@@ -3591,6 +3601,7 @@ function completedDissectionResult() {
       strengths: ["清晰"],
       weaknesses: ["证据较少"],
     },
+    draft: null,
     error: null,
   };
 }

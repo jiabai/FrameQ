@@ -55,6 +55,8 @@ const storeMethods = [
   "createUserSession",
   "findUserSessionByTokenHash",
   "revokeUserSession",
+  "getAnysearchConfig",
+  "upsertAnysearchConfig",
 ] as const satisfies readonly (keyof Store)[];
 
 const compatibilityMethods = [

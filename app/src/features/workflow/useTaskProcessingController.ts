@@ -10,6 +10,7 @@ import {
   canSubmitUrl,
   confirmProcessingCancellation,
   createInitialWorkflow,
+  editDraft,
   finishInsightRetry,
   getToolbarNewTaskButtonState,
   isProcessingStage,
@@ -21,6 +22,7 @@ import {
   startProcessing,
   summarizeWorkerResult,
   type InsightRetryTarget,
+  type TaskArtifacts,
   type TaskComposerSource,
   type TaskSourceSummary,
   type TaskSubmission,
@@ -30,6 +32,7 @@ import {
   processLocalMedia,
   processVideo,
   retryInsights,
+  type RetryInsightsInput,
 } from "../../workerClient";
 import type { PreferenceSnapshot } from "../../insightPreferences";
 import type { SupportedLocale } from "../../i18n/locale";
@@ -168,6 +171,16 @@ export function useTaskProcessingController({
           },
         };
       });
+    },
+    [],
+  );
+
+  const applyDraftSave = useCallback(
+    (markdown: string, artifacts: TaskArtifacts) => {
+      setWorkflow((current) => ({
+        ...editDraft(current, markdown),
+        artifacts: { ...current.artifacts, ...artifacts },
+      }));
     },
     [],
   );
@@ -361,6 +374,10 @@ export function useTaskProcessingController({
       account: AccountStatus,
       openAccountPanel: OpenAccountPanel,
       onRetryCompleted?: () => void,
+      insightId?: number,
+      // User-selected draft platform id (9-id vocabulary). Forwarded only for
+      // target="draft"; absent for summary/insights (worker rejects it there).
+      platform?: string,
     ) => {
       if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
         return;
@@ -371,6 +388,20 @@ export function useTaskProcessingController({
       }
 
       const taskId = workflow.taskId;
+      // Draft requires the seed insight id and the user-selected platform;
+      // confirmDraftGeneration always supplies both (the card is only
+      // available once a seed is selected). Guard defensively anyway.
+      const retryInput: RetryInsightsInput | null =
+        target === "draft"
+          ? insightId !== undefined && platform !== undefined
+            ? { taskId, target, outputLanguage, insightId, platform }
+            : null
+          : target === "insights" && preferenceSnapshot
+            ? { taskId, target, outputLanguage, preferenceSnapshot }
+            : { taskId, target, outputLanguage };
+      if (retryInput === null) {
+        return;
+      }
       const operationId = operationIdRef.current + 1;
       operationIdRef.current = operationId;
       onRetryStarted();
@@ -383,11 +414,7 @@ export function useTaskProcessingController({
       };
 
       const result = await retryInsights(
-        target === "summary" || target === "dissection"
-          ? { taskId, target, outputLanguage }
-          : preferenceSnapshot
-            ? { taskId, target, outputLanguage, preferenceSnapshot }
-            : { taskId, target, outputLanguage },
+        retryInput,
         undefined,
         onProgress,
       );
@@ -432,6 +459,11 @@ export function useTaskProcessingController({
     ],
   );
 
+  // Select/clear the single draft seed insight. Pass null to clear.
+  const setDraftSeedInsightId = useCallback((insightId: number | null) => {
+    setWorkflow((current) => ({ ...current, draftSeedInsightId: insightId }));
+  }, []);
+
   return {
     workflow,
     canSubmit,
@@ -444,9 +476,11 @@ export function useTaskProcessingController({
     setLocalMediaSelection,
     removeLocalMediaSelection,
     applyTranscriptSave,
+    applyDraftSave,
     completeHistoryTaskDeletion,
     restoreHistoryItem,
     retryInsightGeneration,
+    setDraftSeedInsightId,
     startNewTaskFromToolbar,
     submitTask,
   };

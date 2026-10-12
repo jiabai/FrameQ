@@ -15,7 +15,7 @@ const MAX_ENTRIES: usize = 8;
 const MAX_JOURNAL_BYTES: u64 = 64 * 1024;
 const COMMIT_ERROR: &str = "Task artifacts could not be stored safely.";
 const RECOVERY_ERROR: &str = "Task artifacts could not be recovered safely.";
-const ALLOWED_DESTINATIONS: [&str; 10] = [
+const ALLOWED_DESTINATIONS: [&str; 12] = [
     "frameq-task.json",
     "transcript/transcript.txt",
     "transcript/transcript.md",
@@ -26,6 +26,8 @@ const ALLOWED_DESTINATIONS: [&str; 10] = [
     "ai/mindmap.mmd",
     "ai/insights.json",
     "ai/insights.md",
+    "ai/draft.md",
+    "ai/original/draft.md",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

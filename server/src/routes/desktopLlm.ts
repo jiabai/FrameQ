@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { AnysearchConfigService } from "../anysearchConfig.js";
 import type { LlmConfigService } from "../llmConfig.js";
 import type { Store } from "../store.js";
 import { authenticateDesktop, llmQuotaRemaining } from "./shared.js";
@@ -17,6 +18,7 @@ const llmCheckoutSchema = z.object({
 type DesktopLlmRouteDependencies = {
   store: DesktopLlmStore;
   llmConfig: LlmConfigService;
+  anysearchConfig: AnysearchConfigService;
   now: () => Date;
 };
 
@@ -65,6 +67,25 @@ export function registerDesktopLlmRoutes(
       api_key: config.apiKey,
       timeout_seconds: config.timeoutSeconds,
       quota_remaining: remaining,
+    };
+  });
+
+  app.post("/api/desktop/anysearch/checkout", async (request, reply) => {
+    const session = await authenticateDesktop(
+      dependencies.store,
+      request.headers.authorization,
+      dependencies.now(),
+    );
+    if (!session) {
+      return reply.code(401).send({ error: "AUTH_REQUIRED" });
+    }
+    const cfg = await dependencies.anysearchConfig.getDesktopConfig();
+    if (!cfg) {
+      return reply.code(400).send({ error: "ANYSEARCH_CONFIG_MISSING" });
+    }
+    return {
+      mcp_url: cfg.mcpUrl,
+      api_key: cfg.apiKey,
     };
   });
 }

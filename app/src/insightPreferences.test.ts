@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  DRAFT_PLATFORM_IDS,
+  DRAFT_PLATFORMS,
   buildPreferenceSnapshot,
+  deriveDefaultDraftPlatform,
   isPreferenceOptionId,
   validateGenerationPreferences,
   validateInspirationProfile,
@@ -132,5 +135,56 @@ describe("insight preferences", () => {
         { id: "douyin", label: "抖音" },
       ],
     });
+  });
+});
+
+describe("draft platform selection", () => {
+  test("DRAFT_PLATFORMS exposes exactly the 9 stable ids", () => {
+    // 9-id vocabulary shared with the worker: the selector must
+    // surface every draft platform the worker accepts, no more, no less.
+    // Display labels live in the synthesis i18n resources (draftPlatform.*),
+    // not in this module — they are covered by the resources tests.
+    expect(DRAFT_PLATFORMS).toEqual([
+      "wechat_official_account",
+      "xiaohongshu",
+      "wechat_channels",
+      "douyin",
+      "tiktok",
+      "twitter",
+      "bilibili",
+      "youtube",
+      "other",
+    ]);
+
+    // DRAFT_PLATFORM_IDS must match the 9 selector ids (used by derivation + by
+    // callers that need O(1) membership checks).
+    expect(DRAFT_PLATFORM_IDS).toBeInstanceOf(Set);
+    expect([...DRAFT_PLATFORM_IDS].sort()).toEqual([...DRAFT_PLATFORMS].sort());
+  });
+
+  test("deriveDefaultDraftPlatform preselects the single mappable profile platform (identity)", () => {
+    expect(deriveDefaultDraftPlatform(["xiaohongshu"])).toBe("xiaohongshu");
+    expect(deriveDefaultDraftPlatform(["douyin"])).toBe("douyin");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other when the profile has no platforms", () => {
+    expect(deriveDefaultDraftPlatform([])).toBe("other");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other when the profile has two or more platforms", () => {
+    expect(deriveDefaultDraftPlatform(["xiaohongshu", "douyin"])).toBe("other");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other for a single unmappable platform id", () => {
+    // podcast / course_community / internal_sharing are profile-only ids not in
+    // the 9-id draft vocabulary → cannot be identity-mapped.
+    expect(deriveDefaultDraftPlatform(["podcast"])).toBe("other");
+    expect(deriveDefaultDraftPlatform(["course_community"])).toBe("other");
+    expect(deriveDefaultDraftPlatform(["internal_sharing"])).toBe("other");
+  });
+
+  test("deriveDefaultDraftPlatform falls back to other for null or undefined input", () => {
+    expect(deriveDefaultDraftPlatform(null)).toBe("other");
+    expect(deriveDefaultDraftPlatform(undefined)).toBe("other");
   });
 });

@@ -20,6 +20,7 @@ function renderWorkspace() {
     transcript: { source: "asr", language: "en", engine: "SenseVoice" },
     dissection: null,
     dissection_source_status: null,
+    draft: "",
     error: null,
   });
   const account = {
@@ -40,6 +41,7 @@ function renderWorkspace() {
       onSummaryAction={vi.fn()}
       onInsightsAction={vi.fn()}
       onDissectionAction={vi.fn()}
+      onDraftAction={vi.fn()}
       onViewTarget={vi.fn()}
       onCancel={vi.fn()}
     />,

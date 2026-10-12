@@ -10,6 +10,7 @@ from frameq_worker.desktop_contract import (
     PROCESS_VIDEO_CONTRACT_VERSION,
     VIDEO_EXTENSIONS,
 )
+from frameq_worker.insightflow.prompt import DRAFT_PLATFORM_IDS
 from frameq_worker.models import (
     GenerationPreferences,
     InspirationProfile,
@@ -157,7 +158,14 @@ LOCAL_MEDIA_REQUEST_FIELDS = frozenset(
 )
 INVALID_LOCAL_MEDIA_PAYLOAD_MESSAGE = "Local media request payload was invalid."
 RETRY_REQUEST_FIELDS = frozenset(
-    {"task_id", "target", "output_language", "preference_snapshot"}
+    {
+        "task_id",
+        "target",
+        "output_language",
+        "preference_snapshot",
+        "insight_id",
+        "platform",
+    }
 )
 PREFERENCE_SNAPSHOT_FIELDS = frozenset(
     {"profile", "profileSkipped", "generationPreferences", "labelSnapshot"}
@@ -284,7 +292,7 @@ def _parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
         raise ValueError
 
     target = payload.get("target")
-    if target not in {"summary", "insights", "dissection"}:
+    if target not in {"summary", "insights", "dissection", "draft"}:
         raise ValueError
 
     output_language = payload.get("output_language")
@@ -298,11 +306,38 @@ def _parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
             raise ValueError
         preference_snapshot = parse_preference_snapshot(raw_preference_snapshot)
 
+    # platform：请求级字段，仅 target="draft" 携带；非 draft target 出现即非法。
+    raw_platform = payload.get("platform")
+    if target != "draft" and raw_platform is not None:
+        raise ValueError
+
+    insight_id: int | None = None
+    platform: str | None = None
+    if target == "draft":
+        # seed is a single Insight id, validated against insights.json in the worker.
+        if "insight_id" not in payload or payload.get("insight_id") is None:
+            raise ValueError
+        raw_insight_id = payload.get("insight_id")
+        # bool is a subclass of int — reject True/False explicitly.
+        if isinstance(raw_insight_id, bool) or not isinstance(raw_insight_id, int):
+            raise ValueError
+        insight_id = raw_insight_id
+
+        # platform 校验在 checkout 之前：缺失 / 非字符串 / 空白 / 非 9-id 词表
+        # 均抛 ValueError（→ INVALID_RETRY_PAYLOAD，不消耗额度）。
+        if not isinstance(raw_platform, str):
+            raise ValueError
+        platform = raw_platform.strip()
+        if not platform or platform not in DRAFT_PLATFORM_IDS:
+            raise ValueError
+
     return RetryInsightsRequest(
         task_id=task_id,
         target=target,
         output_language=output_language,
         preference_snapshot=preference_snapshot,
+        insight_id=insight_id,
+        platform=platform,
     )
 
 

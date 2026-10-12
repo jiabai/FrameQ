@@ -59,6 +59,12 @@ function buildPage(input: {
       apiKeyLast4: "4321",
       updatedAt: now,
     },
+    anysearchConfig: {
+      mcpUrl: "https://anysearch.example/mcp",
+      hasApiKey: false,
+      apiKeyLast4: "",
+      updatedAt: null,
+    },
     activationCodes:
       input.activationCodes ??
       ([

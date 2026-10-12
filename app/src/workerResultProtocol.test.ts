@@ -15,7 +15,9 @@ import type { WorkerResult } from "./workflow";
 
 const TASK_ID = "20260719-closed-result";
 
-function validTask(overrides: Partial<WorkerResult> = {}): WorkerResult {
+function validTask(
+  overrides: Omit<Partial<WorkerResult>, "draft"> & { draft?: string } = {},
+): WorkerResult {
   return {
     status: "completed",
     task_id: TASK_ID,
@@ -36,6 +38,7 @@ function validTask(overrides: Partial<WorkerResult> = {}): WorkerResult {
     transcript: { source: "asr", language: "zh-CN", engine: "SenseVoice" },
     dissection: null,
     dissection_source_status: null,
+    draft: "",
     error: null,
     ...overrides,
   };

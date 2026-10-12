@@ -36,6 +36,8 @@ const publicOperationErrors = new Set([
   "LLM model is required.",
   "LLM timeout seconds must be between 1 and 600.",
   "FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY is required.",
+  "Anysearch MCP URL is required.",
+  "Anysearch MCP URL must start with http:// or https://.",
   "invalid wechat signature",
   "invalid notification",
   "WeChat notification verification is not configured.",

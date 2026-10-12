@@ -164,6 +164,7 @@ function createWorkerResult(overrides: Partial<WorkerResult> = {}): WorkerResult
     transcript: { source: "asr", language: "Chinese", engine: "SenseVoice" },
     dissection: dissection ?? null,
     dissection_source_status: dissection_source_status ?? null,
+    draft: "",
     error: null,
     ...rest,
   };
@@ -1272,5 +1273,230 @@ describe("useTaskProcessingController history restore", () => {
     controller = render();
     expect(controller.workflow.dissection).toEqual(TEST_DISSECTION);
     expect(controller.workflow.dissectionStale).toBe(true);
+  });
+});
+
+describe("useTaskProcessingController draft target wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    cancelProcessMock.mockReset();
+    processVideoMock.mockReset();
+    retryInsightsMock.mockReset();
+  });
+
+  test("rejects a draft request without the platform and forwards insight_id + platform otherwise", async () => {
+    retryInsightsMock.mockResolvedValue(
+      createWorkerResult({ draft: "# 草稿正文" }),
+    );
+    const source = createHistoryItem({
+      taskId: "source-task",
+      insights: [
+        {
+          id: 7,
+          topic: "seed insight",
+          matchReason: "reason",
+          followUpQuestions: ["q"],
+          suitableUse: "use",
+          sourceChunkId: null,
+        },
+      ],
+    });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+
+    // Draft requires both the seed insight id and the user-selected platform;
+    // omitting the platform is a no-op (no worker call, no quota).
+    await controller.retryInsightGeneration(
+      "draft",
+      "zh-CN",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+      undefined,
+      7,
+    );
+    expect(retryInsightsMock).not.toHaveBeenCalled();
+
+    await controller.retryInsightGeneration(
+      "draft",
+      "zh-CN",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+      undefined,
+      7,
+      "xiaohongshu",
+    );
+
+    expect(retryInsightsMock).toHaveBeenCalledTimes(1);
+    expect(retryInsightsMock).toHaveBeenCalledWith(
+      {
+        taskId: "source-task",
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 7,
+        platform: "xiaohongshu",
+      },
+      undefined,
+      expect.any(Function),
+    );
+  });
+
+  test("forwards the user-selected platform to retryInsights for the draft target", async () => {
+    retryInsightsMock.mockResolvedValue(
+      createWorkerResult({ draft: "# 草稿正文" }),
+    );
+    const source = createHistoryItem({
+      taskId: "source-task",
+      insights: [
+        {
+          id: 7,
+          topic: "seed insight",
+          matchReason: "reason",
+          followUpQuestions: ["q"],
+          suitableUse: "use",
+          sourceChunkId: null,
+        },
+      ],
+    });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+
+    await controller.retryInsightGeneration(
+      "draft",
+      "zh-CN",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+      undefined,
+      7,
+      "douyin",
+    );
+
+    expect(retryInsightsMock).toHaveBeenCalledTimes(1);
+    expect(retryInsightsMock).toHaveBeenCalledWith(
+      {
+        taskId: "source-task",
+        target: "draft",
+        outputLanguage: "zh-CN",
+        insightId: 7,
+        platform: "douyin",
+      },
+      undefined,
+      expect.any(Function),
+    );
+  });
+
+  test("routes a blocked draft request through aiBlockerMessage and opens the account panel", async () => {
+    // When the account cannot generate AI, the draft request must be gated by
+    // aiBlockerMessage (surfaced via openAccountPanel) and never reach the worker.
+    const harness = createHookHarness();
+    const onResetTaskUi = vi.fn();
+    const blocker = { messageCode: "account.notice.creditsExhausted" } as const;
+    vi.doMock("react", () => ({
+      useCallback: harness.useCallback,
+      useMemo: harness.useMemo,
+      useRef: harness.useRef,
+      useState: harness.useState,
+    }));
+    const { useTaskProcessingController } = await import("./useTaskProcessingController");
+    const render = () => {
+      harness.resetRender();
+      return useTaskProcessingController({
+        onResetTaskUi,
+        onRetryStarted: vi.fn(),
+        processBlockerMessage: () => ({ messageCode: "account.notice.processingUnavailable" }),
+        aiBlockerMessage: () => blocker,
+      });
+    };
+
+    const source = createHistoryItem({ taskId: "source-task" });
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+
+    const openAccountPanel = vi.fn();
+    // Quota-exhausted account: cannot generate AI.
+    const blockedAccount = {
+      ...createBrowserPreviewAccountStatus(),
+      authenticated: true,
+      entitlementStatus: "active" as const,
+      llmConfigured: true,
+      llmQuotaRemaining: 0,
+      canGenerateAi: false,
+    };
+
+    await controller.retryInsightGeneration(
+      "draft",
+      "zh-CN",
+      null,
+      blockedAccount,
+      openAccountPanel,
+      undefined,
+      7,
+      "xiaohongshu",
+    );
+
+    expect(openAccountPanel).toHaveBeenCalledWith(blocker);
+    expect(retryInsightsMock).not.toHaveBeenCalled();
+  });
+
+  test("clears draftSeedInsightId when insights regeneration succeeds", async () => {
+    // 6.5 (local-state half): regenerating 启发灵感 replaces the insight list,
+    // invalidating the previously selected seed. The controller must clear the
+    // local draftSeedInsightId on insights-regen success.
+    retryInsightsMock.mockResolvedValue(
+      createWorkerResult({
+        task_id: "source-task",
+        artifacts: { insights: "ai/fresh-insights.json" },
+        insights: [
+          {
+            id: 99,
+            topic: "fresh insight",
+            matchReason: "fresh",
+            followUpQuestions: ["q"],
+            suitableUse: "use",
+            sourceChunkId: null,
+          },
+        ],
+      }),
+    );
+    const source = createHistoryItem({
+      taskId: "source-task",
+      insights: [
+        {
+          id: 7,
+          topic: "old seed",
+          matchReason: "reason",
+          followUpQuestions: ["q"],
+          suitableUse: "use",
+          sourceChunkId: null,
+        },
+      ],
+    });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.restoreHistoryItem(source)).toBe(true);
+    controller = render();
+    // Simulate the user selecting insight 7 as the draft seed.
+    controller.setDraftSeedInsightId(7);
+    controller = render();
+    expect(controller.workflow.draftSeedInsightId).toBe(7);
+
+    await controller.retryInsightGeneration(
+      "insights",
+      "zh-CN",
+      null,
+      createBrowserPreviewAccountStatus(),
+      vi.fn(),
+    );
+    controller = render();
+
+    expect(controller.workflow.insights[0]?.id).toBe(99);
+    expect(controller.workflow.draftSeedInsightId).toBeNull();
   });
 });

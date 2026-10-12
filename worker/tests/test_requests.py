@@ -498,6 +498,178 @@ def test_retry_dissection_request_rejects_preference_snapshot() -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# Task 2.2: target="draft"
+# ---------------------------------------------------------------------------
+
+
+def test_retry_request_accepts_draft_target_with_insight_id() -> None:
+    request = parse_retry_insights_request(
+        {
+            "task_id": "20260705-153012-douyin-demo",
+            "target": "draft",
+            "insight_id": 7,
+            "platform": "douyin",
+            "output_language": "zh-CN",
+        }
+    )
+
+    assert request.target == "draft"
+    assert request.insight_id == 7
+    assert request.platform == "douyin"
+    # preference_snapshot is rejected on draft — and absent here.
+    assert request.preference_snapshot is None
+
+
+def test_retry_draft_target_requires_insight_id() -> None:
+    with pytest.raises(ValueError):
+        parse_retry_insights_request(
+            {
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "draft",
+                "output_language": "zh-CN",
+            }
+        )
+
+
+def test_retry_draft_target_rejects_null_insight_id() -> None:
+    with pytest.raises(ValueError):
+        parse_retry_insights_request(
+            {
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "draft",
+                "insight_id": None,
+                "output_language": "zh-CN",
+            }
+        )
+
+
+def test_retry_draft_target_rejects_preference_snapshot() -> None:
+    # preference_snapshot MUST NOT be sent for draft (read from disk instead).
+    with pytest.raises(ValueError):
+        parse_retry_insights_request(
+            {
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "draft",
+                "insight_id": 7,
+                "preference_snapshot": valid_preference_snapshot(),
+                "output_language": "zh-CN",
+            }
+        )
+
+
+def test_retry_draft_target_rejects_non_int_insight_id() -> None:
+    with pytest.raises(ValueError):
+        parse_retry_insights_request(
+            {
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "draft",
+                "insight_id": "not-an-int",
+                "output_language": "zh-CN",
+            }
+        )
+
+
+# ---------------------------------------------------------------------------
+# Task 2: draft target — platform validation (9-id vocabulary)
+# ---------------------------------------------------------------------------
+
+
+def test_retry_draft_target_requires_platform() -> None:
+    # platform 是请求级字段，draft 必须携带；缺失在 checkout 前失败、不扣额度。
+    with pytest.raises(ValueError):
+        parse_retry_insights_request(
+            {
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "draft",
+                "insight_id": 7,
+                "output_language": "zh-CN",
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "platform",
+    [
+        "podcast",  # 档案词表项，但不在 draft 9-id 词表内
+        "wechat",  # 拼写错误（合法 id 是 wechat_official_account / wechat_channels）
+        "",  # 空串
+        "   ",  # 纯空白 → strip 后为空
+        "DOUYIN",  # 大小写不匹配（id 大小写敏感）
+        "unknown_platform",  # 完全不存在的 id
+    ],
+)
+def test_retry_draft_target_rejects_invalid_platform(platform: str) -> None:
+    with pytest.raises(ValueError):
+        parse_retry_insights_request(
+            {
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "draft",
+                "insight_id": 7,
+                "platform": platform,
+                "output_language": "zh-CN",
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "platform,expected",
+    [
+        ("wechat_official_account", "wechat_official_account"),
+        ("xiaohongshu", "xiaohongshu"),
+        ("wechat_channels", "wechat_channels"),
+        ("douyin", "douyin"),
+        ("tiktok", "tiktok"),
+        ("twitter", "twitter"),
+        ("bilibili", "bilibili"),
+        ("youtube", "youtube"),
+        ("other", "other"),
+        ("  douyin  ", "douyin"),  # 前后空白被 strip
+    ],
+)
+def test_retry_draft_target_accepts_valid_platform(platform: str, expected: str) -> None:
+    request = parse_retry_insights_request(
+        {
+            "task_id": "20260705-153012-douyin-demo",
+            "target": "draft",
+            "insight_id": 7,
+            "platform": platform,
+            "output_language": "zh-CN",
+        }
+    )
+    assert request.target == "draft"
+    assert request.platform == expected
+
+
+@pytest.mark.parametrize("target", ["summary", "insights"])
+def test_retry_non_draft_target_rejects_platform(target: str) -> None:
+    # platform 仅 target="draft" 携带；其余 target 出现即非法。
+    with pytest.raises(ValueError):
+        parse_retry_insights_request(
+            {
+                "task_id": "20260705-153012-douyin-demo",
+                "target": target,
+                "platform": "douyin",
+                "output_language": "zh-CN",
+            }
+        )
+
+
+@pytest.mark.parametrize("target", ["summary", "insights"])
+def test_retry_non_draft_target_without_platform_parses_with_none(
+    target: str,
+) -> None:
+    request = parse_retry_insights_request(
+        {
+            "task_id": "20260705-153012-douyin-demo",
+            "target": target,
+            "output_language": "zh-CN",
+        }
+    )
+    assert request.target == target
+    assert request.platform is None
+
+
 @pytest.mark.parametrize(
     "task_id",
     [
