@@ -65,15 +65,22 @@ pub(crate) fn load_draft_detail_from_output_root(
 ) -> Result<DraftDetailView, String> {
     let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
 
-    let markdown = task.read_text_artifact(task_manifest::TaskArtifact::Draft)?;
-    let has_original_backup = task
-        .validated_existing_artifact_path(task_manifest::TaskArtifact::Draft)?
+    // A draft can be declared in the manifest while its file is missing (for
+    // example before the worker result lands); render an empty view instead
+    // of failing the whole detail load.
+    let draft_path = task.validated_existing_artifact_path(task_manifest::TaskArtifact::Draft)?;
+    let markdown = draft_path
+        .as_ref()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .map(|text| text.trim().to_string())
+        .unwrap_or_default();
+    let has_original_backup = draft_path
         .map(|draft_path| original_backup_path(&draft_path).is_file())
         .unwrap_or(false);
 
     Ok(DraftDetailView {
         task_id: request.task_id,
-        markdown: markdown.unwrap_or_default(),
+        markdown,
         has_original_backup,
         draft_seed_insight_id: task.draft_seed_insight_id(),
     })
@@ -90,8 +97,7 @@ pub(crate) fn save_draft_edit_to_output_root(
 
     let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
     let mut edit = task.into_edit_session();
-    let draft_path =
-        edit.required_existing_artifact_path(task_manifest::TaskArtifact::Draft)?;
+    let draft_path = edit.required_existing_artifact_path(task_manifest::TaskArtifact::Draft)?;
     reject_linked_artifact_target(&draft_path)?;
     edit.validate_existing_path(&draft_path, task_manifest::TaskArtifact::Draft)?;
 
@@ -102,11 +108,14 @@ pub(crate) fn save_draft_edit_to_output_root(
     let backup_bytes = if backup_path.exists() {
         None
     } else {
-        Some(
-            fs::read(&draft_path).map_err(|_| "Failed to create draft backup.".to_string())?,
-        )
+        Some(fs::read(&draft_path).map_err(|_| "Failed to create draft backup.".to_string())?)
     };
-    edit.validate_existing_path(&backup_path, task_manifest::TaskArtifact::Draft)?;
+    // The backup target may not exist yet on the first save; containment is
+    // already enforced via `ensure_artifact_parent`, so only existing paths
+    // get the canonicalized artifact check.
+    if backup_path.exists() {
+        edit.validate_existing_path(&backup_path, task_manifest::TaskArtifact::Draft)?;
+    }
 
     edit.set_artifact(
         task_manifest::TaskArtifact::Draft,
@@ -309,20 +318,16 @@ mod tests {
         assert_eq!(result.markdown, "user edited draft");
         assert!(result.has_original_backup);
         assert_eq!(
-            fs::read_to_string(
-                task_dir
-                    .join("ai")
-                    .join("original")
-                    .join("draft.md")
-            )
-            .expect("read backup"),
+            fs::read_to_string(task_dir.join("ai").join("original").join("draft.md"))
+                .expect("read backup"),
             "original AI draft\n"
         );
         assert_eq!(
             fs::read_to_string(task_dir.join("ai").join("draft.md")).expect("read saved"),
             "user edited draft\n"
         );
-        let manifest = fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
+        let manifest =
+            fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
         assert!(manifest.contains(r#""draft": "ai/draft.md""#));
     }
 
@@ -354,13 +359,8 @@ mod tests {
         .expect("save second time");
 
         assert_eq!(
-            fs::read_to_string(
-                task_dir
-                    .join("ai")
-                    .join("original")
-                    .join("draft.md")
-            )
-            .expect("read backup"),
+            fs::read_to_string(task_dir.join("ai").join("original").join("draft.md"))
+                .expect("read backup"),
             "original AI draft\n"
         );
     }

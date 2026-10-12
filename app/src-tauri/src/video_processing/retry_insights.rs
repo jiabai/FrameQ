@@ -190,10 +190,7 @@ fn parse_retry_insights_request(
             if platform.is_empty() {
                 return Err(INVALID_RETRY_PAYLOAD.to_string());
             }
-            (
-                Some(insight_id),
-                Some(platform.to_string()),
-            )
+            (Some(insight_id), Some(platform.to_string()))
         }
         _ => {
             if wire.insight_id.is_some() || wire.platform.is_some() {
