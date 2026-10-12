@@ -422,10 +422,7 @@ mod tests {
             ]
         );
         let serialized_text = serialized.to_string();
-        for forbidden in [
-            "defaultStyles",
-            "defaultAvoid",
-        ] {
+        for forbidden in ["defaultStyles", "defaultAvoid"] {
             assert!(!serialized_text.contains(forbidden));
         }
     }
@@ -471,7 +468,6 @@ mod tests {
 
             assert_eq!(error, INVALID_RETRY_PAYLOAD);
         }
-
     }
 
     #[test]

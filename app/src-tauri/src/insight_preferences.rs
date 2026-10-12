@@ -549,7 +549,9 @@ mod tests {
         let error = load_insight_preferences_from_file(&path).expect_err("read must fail closed");
 
         assert_eq!(error, PREFERENCES_READ_ERROR);
-        assert!(fs::read_to_string(&path).expect("read original bytes").contains("defaultStyles"));
+        assert!(fs::read_to_string(&path)
+            .expect("read original bytes")
+            .contains("defaultStyles"));
     }
 
     #[test]
