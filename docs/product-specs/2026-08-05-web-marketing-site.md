@@ -2,6 +2,10 @@
 
 ## Status
 
+2026-10-11 visual revision approved by the user: all three existing `site/` routes adopt the Oil Find reference system documented in `docs/design-docs/web-marketing-site-design.md`. This revision supersedes the historical OKLCH migration/font-pairing/floating-navigation styling below; route, content, release, SEO, and privacy requirements still apply. Execution: `docs/exec-plans/completed/2026-10-11-site-native-surface-redesign-plan.md`.
+
+Current visual acceptance: #eef1f5/#e6eaf0 canvas with one subtle top blue wash; system UI/display/mono stacks; 800px primary content column, 1080px navigation maximum; 46px/600 hero and 28px/600 section headings; 16px white 74% surfaces and a 22px white 90% demo surface; 10px controls and 14px primary hero CTA; 104px desktop/76px mobile section spacing. Use #2f7cf6 for highlights and the large CTA, #1f66d6 for small filled controls and text links; readable muted text is stronger than the reference's 42% alpha. Mobile controls retain at least 44px touch height. No simulated window chrome, grain, cursor-following glow, 3D tilt, parallax, or ripple effects. Reduced motion disables transforms/animation; content remains visible without JavaScript. The reference is visual inspiration, not a source of FrameQ content or claims.
+
 Draft。本 spec 定义 FrameQ 公开宣传独立站的产品边界、信息架构、技术栈、设计系统迁移、内容安全约束和验收门禁。它是 [`docs/design-docs/web-marketing-site-design.md`](../design-docs/web-marketing-site-design.md) 的下位实现规格：当二者冲突时，以 design-doc 与 `docs/DESIGN.md` 为上位约束，以本 spec 锁定具体技术决策与页面清单。
 
 ## Background
@@ -87,14 +91,15 @@ site/
 
 ## Design System Migration
 
-- 从 `design-system/globals.css` 的 hex token（`#0066cc` `#1d1d1f` `#e5e5e5` 等）迁移到 `site/src/styles/tokens.css` 的 OKLCH 三层 token 系统。
-- `#0066cc`（FrameQ 蓝）转换为 OKLCH 锚点（约 `oklch(56% 0.18 254)`），作为 `--color-accent` primitive token。
-- 三层结构：
-  - **Primitive** — 原始 OKLCH 值（`--color-blue-600: oklch(56% 0.18 254)`）。
-  - **Semantic** — 语义别名（`--color-accent: var(--color-blue-600)` `--color-paper: var(--color-neutral-0)` `--color-ink: var(--color-neutral-900)`）。
-  - **Component** — 组件级 token（`--button-bg: var(--color-accent)` `--hero-title-color: var(--color-ink)`）。
-- `design-system/globals.css` 保持不变，仍作为 reference-only 历史种子。
-- Hallmark 的 `tokens.css` 输出与本 spec 的 `site/src/styles/tokens.css` 是同一文件；Hallmark 在 Build 阶段直接产出此文件。
+Current implementation (2026-10-11) is the user-approved Native Surface system in `site/DESIGN.md` and `site/src/styles/tokens.css`. It supersedes the initial OKLCH migration and V2 decorative-motion direction.
+
+- Primitive → semantic → component tokens remain the architecture; colors use exact reference hex/RGBA values with documented accessibility adaptations.
+- System UI/display/mono stacks replace Fraunces/Geist font downloads.
+- Main content column is 800px; navigation maximum is 1080px; body text is 14px and long prose 15px.
+- Shared compact navigation, centered hero, translucent surfaces, fine rules, and short state feedback apply to all three routes.
+- Secondary text uses 66% black; muted text 64%, giving approximately 5.00:1/4.70:1 against the darkest #e6eaf0 canvas. Small blue buttons/links use #1f66d6; the reference blue large CTA uses 20px/700 type.
+- Components only style states they actually expose: link hover/press/focus, disabled download affordance, and native FAQ open/closed. No simulated loading, success, or error behavior is introduced.
+- No runtime imports from other project modules, tracking, external embeds, or downloaded fonts.
 
 ## Information Architecture
 
