@@ -620,7 +620,8 @@ mod tests {
     use super::{
         parse_terminal_result, ModelDownloadTerminalResult, SourceIdentityTerminalResult,
         TerminalResultError, ValidatedWorkerResult, TASK_ARTIFACT_KEYS, TASK_INSIGHT_FIELDS,
-        TASK_RESULT_FIELDS, TASK_TERMINAL_STATUSES, TERMINAL_OPERATION_FAMILIES,
+        TASK_RESULT_FIELDS, TASK_RESULT_OPTIONAL_FIELDS, TASK_TERMINAL_STATUSES,
+        TERMINAL_OPERATION_FAMILIES,
     };
     use crate::task_manifest;
     use crate::worker_runtime::runner::WorkerOperation;
@@ -903,6 +904,21 @@ mod tests {
         assert_eq!(
             terminal["schemas"]["task"]["required"],
             json!(TASK_RESULT_FIELDS)
+        );
+        let contract_task_properties: BTreeSet<&str> = terminal["schemas"]["task"]["properties"]
+            .as_object()
+            .expect("task properties")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let contract_required: BTreeSet<&str> = TASK_RESULT_FIELDS.iter().copied().collect();
+        let contract_optional: BTreeSet<&str> = contract_task_properties
+            .difference(&contract_required)
+            .copied()
+            .collect();
+        assert_eq!(
+            contract_optional,
+            TASK_RESULT_OPTIONAL_FIELDS.iter().copied().collect()
         );
         assert_eq!(
             terminal["schemas"]["task"]["properties"]["status"]["enum"],
