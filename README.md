@@ -331,7 +331,7 @@ npm --prefix server run db:migrate:status
 npm --prefix server run db:preflight -- --mode current
 ```
 
-The current reviewed migration chain for self-service activation rollout is:
+The reviewed migration chain is:
 
 ```text
 202607220001_baseline
@@ -340,6 +340,7 @@ The current reviewed migration chain for self-service activation rollout is:
 202608240001_self_service_email_activation
 202608240002_auth_rate_limit_self_service_purpose
 202608240003_self_service_active_unique
+202610100001_anysearch_config
 ```
 
 Production rollout and rollback checklist:

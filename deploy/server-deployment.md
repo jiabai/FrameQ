@@ -96,8 +96,7 @@ locked development toolchain as well as runtime dependencies.
 ## 4. Database migration paths
 
 Production schema changes use reviewed Prisma migrations only. The deployment script invokes
-`prisma migrate deploy`; never use schema push against a production database. For the self-service
-activation rollout, the reviewed chain is:
+`prisma migrate deploy`; never use schema push against a production database. The reviewed chain is:
 
 ```text
 202607220001_baseline
@@ -106,6 +105,7 @@ activation rollout, the reviewed chain is:
 202608240001_self_service_email_activation
 202608240002_auth_rate_limit_self_service_purpose
 202608240003_self_service_active_unique
+202610100001_anysearch_config
 ```
 
 For a fresh database, create an empty local file with restrictive permissions, deploy all reviewed
@@ -286,6 +286,13 @@ For self-service activation rollout, also verify:
   metadata without plaintext.
 - A request made while entitlement is active returns `409 ENTITLEMENT_ACTIVE`, and a rate-limited
   request returns `429` with `retry_at` and `Retry-After`.
+
+For anysearch-backed draft generation, also verify:
+
+- `POST /api/desktop/anysearch/checkout` returns `401 AUTH_REQUIRED` without a desktop session.
+- With no stored configuration the same route returns `400 ANYSEARCH_CONFIG_MISSING`.
+- After the Admin page stores `mcpUrl` and an API key, the authenticated checkout returns
+  `mcp_url` and `api_key`, while the Admin read view returns only `hasApiKey` and `apiKeyLast4`.
 
 Nginx exposes only the exact health paths. Fastify trusts forwarded addresses only when its direct
 peer is loopback. Port 8787 must remain firewalled from the Internet.
