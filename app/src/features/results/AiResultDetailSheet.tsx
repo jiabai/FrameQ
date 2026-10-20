@@ -1,4 +1,4 @@
-import { Copy, Download, RotateCcw, Sprout, X } from "lucide-react";
+import { Copy, Download, Maximize2, Minimize2, RotateCcw, Sprout, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 
@@ -42,11 +42,19 @@ export function AiResultDetailSheet({
   const detailOpen =
     detailTab === "summary" || detailTab === "insights" || detailTab === "dissection";
   const [lastDetailTab, setLastDetailTab] = useState<"summary" | "insights" | "dissection">("summary");
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     if (detailOpen) {
       setLastDetailTab(detailTab);
     }
   }, [detailOpen, detailTab]);
+  // The sheet stays mounted through its closing animation, so the expanded
+  // flag has to be cleared explicitly rather than by unmount.
+  useEffect(() => {
+    if (!detailOpen) {
+      setExpanded(false);
+    }
+  }, [detailOpen]);
   const contentTab = detailOpen ? detailTab : lastDetailTab;
 
   const title = contentTab === "summary"
@@ -63,7 +71,7 @@ export function AiResultDetailSheet({
     <AnimatedSheet
       open={detailOpen}
       ariaLabel={t("detail.ariaLabel", { title })}
-      className="ai-result-detail-sheet"
+      className={`ai-result-detail-sheet${expanded ? " is-expanded" : ""}`}
       onBackdropClick={closeDetail}
     >
         <header className="modal-header sheet-header">
@@ -106,6 +114,19 @@ export function AiResultDetailSheet({
             <button type="button" onClick={exportDetail} disabled={!exportPath}>
               <Download size={16} />
               <span>{t("detail.export")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded((current) => !current)}
+              aria-pressed={expanded}
+              aria-label={
+                expanded ? t("detail.exitFullscreen") : t("detail.fullscreen")
+              }
+            >
+              {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              <span>
+                {expanded ? t("detail.exitFullscreen") : t("detail.fullscreen")}
+              </span>
             </button>
           </div>
         </div>

@@ -28,22 +28,13 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   revealItemInDir: mocks.revealItemInDir,
 }));
 
-// Clipboard & URL mocks (jsdom doesn't fully support these)
+// Clipboard mocks (jsdom doesn't fully support this)
 const clipboardWriteSpy = vi.fn();
 beforeEach(() => {
   Object.assign(navigator, {
     clipboard: { writeText: clipboardWriteSpy },
   });
   clipboardWriteSpy.mockReset();
-});
-
-const createObjectURLSpy = vi.fn(() => "blob:mock-url");
-const revokeObjectURLSpy = vi.fn();
-beforeEach(() => {
-  globalThis.URL.createObjectURL = createObjectURLSpy;
-  globalThis.URL.revokeObjectURL = revokeObjectURLSpy;
-  createObjectURLSpy.mockReset().mockReturnValue("blob:mock-url");
-  revokeObjectURLSpy.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -104,13 +95,6 @@ function renderSheet(props: Partial<Parameters<typeof DraftResultSheet>[0]> = {}
   };
 }
 
-/** Check that a DOM element exists in the document. */
-function expectInDocument(selector: string): HTMLElement {
-  const el = document.querySelector(selector);
-  expect(el, `expected ${selector} to be in the document`).not.toBeNull();
-  return el as HTMLElement;
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -137,18 +121,15 @@ describe("DraftResultSheet", () => {
 
   // ---- 1. Open loads from disk ----
 
-  test("on open, calls loadDraftDetail and displays loaded markdown in textarea and preview", async () => {
+  test("on open, loads from disk and renders Markdown without the raw editor", async () => {
     renderSheet();
 
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledWith("task-draft-1"));
 
-    // textarea shows loaded content
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-    await waitFor(() => expect(textarea.value).toBe("# 标题\n\n从磁盘加载的内容"));
-
-    // Right side preview renders same content (ReactMarkdown strips markdown to HTML)
     const preview = screen.getByTestId("markdown-preview");
-    await waitFor(() => expect(preview.textContent).toContain("标题"));
+    await waitFor(() => expect(preview.textContent).toContain("从磁盘加载的内容"));
+
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   // ---- 2. Load failure fallback ----
@@ -159,8 +140,8 @@ describe("DraftResultSheet", () => {
     renderSheet();
 
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-    await waitFor(() => expect(textarea.value).toBe("# 标题\n\n原始草稿内容"));
+    const preview = screen.getByTestId("markdown-preview");
+    await waitFor(() => expect(preview.textContent).toContain("原始草稿内容"));
     expect(document.querySelector(".action-notice")?.textContent).toContain("无法读取草稿");
   });
 
@@ -169,11 +150,13 @@ describe("DraftResultSheet", () => {
   test("editing textarea sets dirty, save calls saveDraftEdit + onSaved + clears dirty + shows notice", async () => {
     const { onSaved } = renderSheet();
 
-    // Wait for load
+    // Wait for load, then enter edit mode
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: "编辑模式" }));
 
     // Edit
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("# 标题\n\n从磁盘加载的内容");
     await act(async () => {
       fireEvent.change(textarea, { target: { value: "# 标题\n\n修改后的内容" } });
     });
@@ -206,6 +189,7 @@ describe("DraftResultSheet", () => {
 
     const { onSaved } = renderSheet();
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: "编辑模式" }));
 
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
     await act(async () => {
@@ -244,127 +228,56 @@ describe("DraftResultSheet", () => {
     expect(clipboardWriteSpy).toHaveBeenCalledWith("# 标题\n\n从磁盘加载的内容");
   });
 
-  // ---- 6. Download ----
+  // ---- 6. No download, render/edit toggle, full screen ----
 
-  test("download creates Blob with buffer content and triggers download with correct filename", async () => {
+  test("does not render a download button", async () => {
     renderSheet();
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
 
-    const downloadButton = screen.getByRole("button", { name: "下载" });
-    await act(async () => {
-      fireEvent.click(downloadButton);
-    });
-
-    expect(createObjectURLSpy).toHaveBeenCalledOnce();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const blobArg = (createObjectURLSpy as any).mock.calls[0][0] as Blob;
-    expect(blobArg).toBeInstanceOf(Blob);
-    expect(blobArg.type).toBe("text/markdown");
-
-    // Read blob content
-    const text = await blobArg.text();
-    expect(text).toBe("# 标题\n\n从磁盘加载的内容");
-
-    // revokeObjectURL is deferred via setTimeout(1000); it will fire after
-    // the download anchor click completes, so we don't assert it synchronously.
+    expect(screen.queryByRole("button", { name: "下载" })).toBeNull();
   });
 
-  test("download uses first-line heading as filename", async () => {
+  test("edit mode replaces the rendered view until the user returns to it", async () => {
     renderSheet();
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
 
-    // Intercept createElement to capture the anchor
-    const originalCreateElement = document.createElement.bind(document);
-    let capturedAnchor: HTMLAnchorElement | null = null;
-    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
-      const el = originalCreateElement(tag);
-      if (tag === "a") capturedAnchor = el as HTMLAnchorElement;
-      return el;
-    });
+    expect(screen.getByTestId("markdown-preview")).not.toBeNull();
 
-    const downloadButton = screen.getByRole("button", { name: "下载" });
-    await act(async () => {
-      fireEvent.click(downloadButton);
-    });
+    fireEvent.click(screen.getByRole("button", { name: "编辑模式" }));
+    expect(screen.queryByTestId("markdown-preview")).toBeNull();
+    await waitFor(() =>
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+        "# 标题\n\n从磁盘加载的内容",
+      ),
+    );
 
-    expect(capturedAnchor).not.toBeNull();
-    expect((capturedAnchor as unknown as HTMLAnchorElement).getAttribute("download")).toBe("标题.md");
-    expect((capturedAnchor as unknown as HTMLAnchorElement).href).toBe("blob:mock-url");
-
-    vi.restoreAllMocks();
+    fireEvent.click(screen.getByRole("button", { name: "渲染模式" }));
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByTestId("markdown-preview").textContent).toContain(
+      "从磁盘加载的内容",
+    );
   });
 
-  test("download uses taskId as filename when no heading", async () => {
-    mocks.loadDraftDetail.mockResolvedValue({
-      task_id: "task-draft-1",
-      markdown: "无标题内容",
-      has_original_backup: false,
-      draft_seed_insight_id: null,
-    });
-
+  test("full-screen button expands and restores the sheet", async () => {
     renderSheet();
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
 
-    // Intercept createElement to capture the anchor
-    const originalCreateElement = document.createElement.bind(document);
-    let capturedAnchor: HTMLAnchorElement | null = null;
-    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
-      const el = originalCreateElement(tag);
-      if (tag === "a") capturedAnchor = el as HTMLAnchorElement;
-      return el;
-    });
+    const sheet = document.querySelector(".draft-result-sheet") as HTMLElement;
+    expect(sheet.classList.contains("is-expanded")).toBe(false);
 
-    const downloadButton = screen.getByRole("button", { name: "下载" });
-    await act(async () => {
-      fireEvent.click(downloadButton);
-    });
+    fireEvent.click(screen.getByRole("button", { name: "全屏" }));
+    expect(sheet.classList.contains("is-expanded")).toBe(true);
 
-    expect((capturedAnchor as unknown as HTMLAnchorElement).getAttribute("download")).toBe("task-draft-1.md");
-
-    vi.restoreAllMocks();
+    fireEvent.click(screen.getByRole("button", { name: "退出全屏" }));
+    expect(sheet.classList.contains("is-expanded")).toBe(false);
   });
 
-  // ---- 7. Dirty blocks download/export ----
-
-  test("dirty state allows clicking download but shows save-first notice", async () => {
-    renderSheet();
-    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
-
-    // Edit to make dirty
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-    await act(async () => {
-      fireEvent.change(textarea, { target: { value: "# 标题\n\n脏数据" } });
-    });
-
-    const downloadButton = screen.getByRole("button", { name: "下载" }) as HTMLButtonElement;
-    // dirty should NOT disable the download button
-    expect(downloadButton.disabled).toBe(false);
-
-    await act(async () => {
-      fireEvent.click(downloadButton);
-    });
-
-    // Should show save-first notice and NOT trigger download
-    expect(document.querySelector(".action-notice")?.textContent).toContain("有未保存修改，请先保存后再下载");
-    expect(createObjectURLSpy).not.toHaveBeenCalled();
-
-    // After save, download proceeds normally
-    mocks.saveDraftEdit.mockResolvedValue(defaultSaveResponse);
-    const saveButton = screen.getByRole("button", { name: "保存" });
-    await act(async () => {
-      fireEvent.click(saveButton);
-    });
-    await waitFor(() => expect(mocks.saveDraftEdit).toHaveBeenCalledOnce());
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "下载" }));
-    });
-    expect(createObjectURLSpy).toHaveBeenCalledOnce();
-  });
+  // ---- 7. Dirty blocks export ----
 
   test("dirty state allows clicking export but shows save-first notice", async () => {
     renderSheet();
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: "编辑模式" }));
 
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
     await act(async () => {
@@ -386,6 +299,7 @@ describe("DraftResultSheet", () => {
   test("after save, export works", async () => {
     renderSheet();
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: "编辑模式" }));
 
     // Edit to make dirty, then save
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
@@ -490,15 +404,5 @@ describe("DraftResultSheet", () => {
   test("renders nothing when open is false", () => {
     const { container } = renderSheet({ open: false });
     expect(container.innerHTML).toBe("");
-  });
-
-  // ---- 11. Split layout ----
-
-  test("renders split editor layout with textarea and preview", async () => {
-    renderSheet();
-    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
-
-    expectInDocument("textarea.draft-textarea");
-    expectInDocument("[data-testid='markdown-preview']");
   });
 });

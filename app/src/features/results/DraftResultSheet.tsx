@@ -1,4 +1,14 @@
-import { Copy, Download, RefreshCw, Save, X } from "lucide-react";
+import {
+  Copy,
+  Eye,
+  FolderOpen,
+  Maximize2,
+  Minimize2,
+  Pencil,
+  RefreshCw,
+  Save,
+  X,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -28,22 +38,9 @@ type DraftResultSheetProps = {
 };
 
 /**
- * Extracts a download filename from the buffer's first heading line,
- * or falls back to the taskId.
- */
-function draftDownloadFilename(buffer: string, fallbackTaskId: string | null): string {
-  const firstLine = buffer.split("\n").map(l => l.trim()).find(l => l.length > 0) ?? "";
-  const headingMatch = firstLine.match(/^#{1,6}\s+(.+)$/);
-  if (headingMatch) {
-    const title = headingMatch[1].trim().replace(/[\\/:*?"<>|]/g, "_");
-    if (title) return `${title}.md`;
-  }
-  return `${fallbackTaskId ?? "draft"}.md`;
-}
-
-/**
- * Self-contained split-pane draft editor: left textarea, right MarkdownContent
- * preview. Loads from disk on open, supports save/dirty/copy/download/export.
+ * Self-contained draft result sheet: rendered Markdown by default, an explicit
+ * edit mode for the raw Markdown buffer, and a full-screen toggle. Loads from
+ * disk on open, supports save/dirty/copy/export.
  */
 export function DraftResultSheet({
   open,
@@ -58,6 +55,8 @@ export function DraftResultSheet({
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState<UiMessage | null>(null);
   const [detailSeedId, setDetailSeedId] = useState<number | null>(null);
   const loadTaskIdRef = useRef<string | null>(null);
@@ -69,7 +68,12 @@ export function DraftResultSheet({
   // ---- Open: load from disk ----
 
   useEffect(() => {
-    if (!open || !workflow.taskId) {
+    if (!open) {
+      setEditing(false);
+      setExpanded(false);
+      return;
+    }
+    if (!workflow.taskId) {
       return;
     }
 
@@ -162,31 +166,6 @@ export function DraftResultSheet({
     }
   }, [buffer]);
 
-  // ---- Download ----
-
-  const handleDownload = useCallback(() => {
-    if (dirty) {
-      setNotice(uiMessage("synthesis.draftResult.downloadDirty"));
-      return;
-    }
-    if (!buffer.trim()) {
-      setNotice(uiMessage("synthesis.draftResult.downloadEmpty"));
-      return;
-    }
-
-    const blob = new Blob([buffer], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const filename = draftDownloadFilename(buffer, workflow.taskId);
-
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, [buffer, dirty, workflow.taskId]);
-
   // ---- Export (locate file on disk) ----
 
   const handleExport = useCallback(async () => {
@@ -218,7 +197,7 @@ export function DraftResultSheet({
   return (
     <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={onClose}>
       <section
-        className="sheet-panel detail-modal ai-result-detail-sheet draft-result-sheet"
+        className={`sheet-panel detail-modal ai-result-detail-sheet draft-result-sheet${expanded ? " is-expanded" : ""}`}
         aria-label={t("draftResult.ariaLabel")}
         role="dialog"
         aria-modal="true"
@@ -235,8 +214,24 @@ export function DraftResultSheet({
         </header>
 
         <div className="modal-tools">
-          <span className="draft-editor-label">{loading ? t("draftResult.loading") : t("draftResult.editing")}</span>
+          <span className="draft-editor-label">
+            {loading
+              ? t("draftResult.loading")
+              : editing
+                ? t("draftResult.editing")
+                : t("draftResult.preview")}
+          </span>
           <div className="tool-actions">
+            <button
+              type="button"
+              onClick={() => setEditing((current) => !current)}
+              aria-pressed={editing}
+            >
+              {editing ? <Eye size={16} /> : <Pencil size={16} />}
+              <span>
+                {editing ? t("draftResult.renderMode") : t("draftResult.editing")}
+              </span>
+            </button>
             <button
               type="button"
               onClick={handleSave}
@@ -250,17 +245,30 @@ export function DraftResultSheet({
               <Copy size={16} />
               <span>{t("draftResult.copy")}</span>
             </button>
-            <button type="button" onClick={handleDownload} disabled={!buffer.trim()}>
-              <Download size={16} />
-              <span>{t("draftResult.download")}</span>
-            </button>
             <button
               type="button"
               onClick={handleExport}
               disabled={!getTaskArtifactPath(workflow, "draft")}
             >
-              <Download size={16} />
+              <FolderOpen size={16} />
               <span>{t("draftResult.export")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded((current) => !current)}
+              aria-pressed={expanded}
+              aria-label={
+                expanded
+                  ? t("draftResult.exitFullscreen")
+                  : t("draftResult.fullscreen")
+              }
+            >
+              {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              <span>
+                {expanded
+                  ? t("draftResult.exitFullscreen")
+                  : t("draftResult.fullscreen")}
+              </span>
             </button>
             <button
               type="button"
@@ -275,8 +283,8 @@ export function DraftResultSheet({
 
         {renderedNotice ? <p className="action-notice">{renderedNotice}</p> : null}
 
-        <div className="modal-content draft-split-editor">
-          <div className="draft-editor-pane">
+        {editing ? (
+          <div className="modal-content draft-editor-pane">
             <textarea
               className="draft-textarea"
               value={buffer}
@@ -285,10 +293,11 @@ export function DraftResultSheet({
               aria-label={t("draftResult.editAria")}
             />
           </div>
-          <div className="draft-preview-pane" data-testid="markdown-preview">
+        ) : (
+          <div className="modal-content draft-preview-pane" data-testid="markdown-preview">
             <MarkdownContent markdown={buffer} emptyText={t("draftResult.empty")} />
           </div>
-        </div>
+        )}
       </section>
     </div>
   );

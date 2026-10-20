@@ -904,6 +904,7 @@ h3 {
 
 .tool-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1168,34 +1169,35 @@ h3 {
   padding-left: 24px;
 }
 
-/* ---- Draft split editor ---- */
-.draft-split-editor {
-  display: flex;
-  flex-direction: row;
-  gap: 0;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0;
-  white-space: normal;
+/* ---- Draft result sheet ---- */
+.draft-result-sheet {
+  height: min(720px, 88vh);
+}
+
+.draft-result-sheet.is-expanded {
+  height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px);
+  max-width: calc(100vw - 32px);
+  width: calc(100vw - 32px);
 }
 
 .draft-editor-pane {
   display: flex;
-  flex: 1 1 50%;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  border-right: 1px solid var(--border, #e0e2e6);
+  padding: 0;
+  white-space: normal;
 }
 
 .draft-preview-pane {
   display: flex;
-  flex: 1 1 50%;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
   overflow: auto;
-  padding: 16px 22px 24px;
 }
 
 .draft-textarea {
@@ -1217,18 +1219,6 @@ h3 {
 .draft-editor-label {
   font-size: 0.82rem;
   opacity: 0.7;
-}
-
-@media (max-width: 720px) {
-  .draft-split-editor {
-    flex-direction: column;
-  }
-
-  .draft-editor-pane {
-    border-right: none;
-    border-bottom: 1px solid var(--border, #e0e2e6);
-    max-height: 40vh;
-  }
 }
 
 .markdown-empty {
@@ -2806,6 +2796,13 @@ h3 {
 
 .ai-result-detail-sheet {
   max-width: 860px;
+}
+
+.ai-result-detail-sheet.is-expanded {
+  height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px);
+  max-width: calc(100vw - 32px);
+  width: calc(100vw - 32px);
 }
 
 .dissection-confirmation-sheet {

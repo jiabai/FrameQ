@@ -212,7 +212,7 @@ graph TD; A-->B
     expect(preview.innerHTML).not.toContain("onerror");
   });
 
-  test("exposes copy + download + export + regenerate actions and is a separate container from the transcript", async () => {
+  test("exposes edit + copy + export + full-screen + regenerate actions and is a separate container from the transcript", async () => {
     const workflow = workflowWithSeed();
     workflow.draft = "文字稿正文。";
     workflow.artifacts.draft = "ai/draft.md";
@@ -229,9 +229,11 @@ graph TD; A-->B
 
     await waitFor(() => expect(draftMocks.loadDraftDetail).toHaveBeenCalledOnce());
 
+    expect(screen.getByRole("button", { name: "编辑模式" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /复制/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "下载" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "下载" })).toBeNull();
     expect(screen.getByRole("button", { name: "导出" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "全屏" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /重新生成/ })).toBeTruthy();
     // The draft viewer is its own dialog (separate container from transcript).
     expect(screen.getByRole("dialog")).toBeTruthy();
