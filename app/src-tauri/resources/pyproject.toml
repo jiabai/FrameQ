@@ -9,6 +9,11 @@ dependencies = [
     "funasr-onnx==0.4.2",
     "modelscope>=1.37.1",
     "onnxruntime>=1.17.0",
+    # onnxruntime stopped publishing macOS x86_64 wheels at 1.24.0, so on Intel
+    # pip resolves the latest (e.g. 1.28.0) and fails with "No matching
+    # distribution found". Pin below 1.24 to keep the self-contained wheel;
+    # other platforms track modern onnxruntime.
+    "onnxruntime<1.24 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # macOS Intel (x86_64) is pinned to torch 2.2.2 — the last release that ships
     # macOS x86_64 wheels — which only publishes up to CPython 3.12 (cp312) and
     # requires numpy<2. Keep FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 on CPython
@@ -34,6 +39,12 @@ dependencies = [
     # Pin mac-x64 below 49 to use the self-contained universal2 wheel instead.
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "yt-dlp>=2026.6.9",
+    "agent-runtime",
+    # agent-runtime 0.1.1 imports ``mcp.client.streamable_http.streamablehttp_client``
+    # inside a try/except that only logs on failure, so mcp 2.x (which renamed it to
+    # ``streamable_http_client``) turns into a NameError at MCP connect time instead of
+    # an import error. Keep mcp on 1.x until agent-runtime ships a 2.x-compatible tag.
+    "mcp>=1.8.0,<2",
 ]
 
 [project.optional-dependencies]
@@ -48,3 +59,6 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["worker"]
 testpaths = ["worker/tests"]
+
+[tool.uv.sources]
+agent-runtime = { git = "https://github.com/ArMiku/agent-runtime-template.git", tag = "0.1.1" }
