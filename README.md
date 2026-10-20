@@ -150,7 +150,7 @@ Run focused checks:
 
 ```powershell
 uv run ruff check worker
-uv run pytest worker\tests
+uv run pytest worker/tests
 npm --prefix app test
 npm --prefix server test
 ```
@@ -400,14 +400,14 @@ Tauri passes the JSON argument directly. For manual shell smoke tests, stdin scr
 Before claiming a change is complete:
 
 ```powershell
-python scripts/validate_agents_docs.py --level WARN
+uv run python scripts/validate_agents_docs.py --level WARN
 uv run ruff check worker
-uv run pytest worker\tests
+uv run pytest worker/tests
 npm --prefix app test
 npm --prefix app run build
 npm --prefix server test
 npm --prefix server run build
-cargo test --manifest-path app\src-tauri\Cargo.toml
+cargo test --manifest-path app/src-tauri/Cargo.toml
 ```
 
 For desktop release validation:
