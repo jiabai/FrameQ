@@ -5,7 +5,6 @@ description = "Python worker for FrameQ desktop video transcription workflows."
 requires-python = ">=3.11"
 dependencies = [
     "brotli>=1.2.0",
-    "funasr>=1.2.7",
     "funasr-onnx==0.4.2",
     "modelscope>=1.37.1",
     "onnxruntime>=1.17.0",
@@ -19,12 +18,10 @@ dependencies = [
     # requires numpy<2. Keep FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 on CPython
     # 3.11 or 3.12: a newer standalone (e.g. 3.13) has no torch==2.2.2 wheel, so
     # the Intel build fails at pip install / the import smoke test in
-    # scripts/build-installer.mjs. Other platforms track modern torch below.
+    # scripts/build-installer.mjs. The numpy<2 pin below keeps the bundled and
+    # component runtimes on the same numpy build, so the component may shadow
+    # it via sys.path without a version skew.
     "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torch==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torch>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "torchaudio==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torchaudio>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # macOS Intel also pins numba/llvmlite (pulled in transitively by funasr) to
     # the last releases that publish self-contained macOS x86_64 wheels: llvmlite
     # 0.45.1 and numba 0.62.1. Newer versions (llvmlite >= 0.46, numba >= 0.63)
@@ -45,6 +42,20 @@ dependencies = [
     # ``streamable_http_client``) turns into a NameError at MCP connect time instead of
     # an import error. Keep mcp on 1.x until agent-runtime ships a 2.x-compatible tag.
     "mcp>=1.8.0,<2",
+]
+
+# The PyTorch ASR family runtime ships as a separate on-demand component, not in
+# the installer. `uv export --no-dev` (extras excluded) builds the bundled
+# runtime; `uv export --no-dev --extra pytorch` builds the component. See
+# docs/product-specs/2026-10-20-lightweight-installer-runtime-trim.md and the
+# externalization exec plan.
+[project.optional-dependencies]
+pytorch = [
+    "funasr>=1.2.7",
+    "torch==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torchaudio==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torchaudio>=2.10.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [dependency-groups]

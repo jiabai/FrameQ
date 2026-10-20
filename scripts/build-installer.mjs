@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { createWriteStream, existsSync } from "node:fs";
+import { createWriteStream, existsSync, readFileSync } from "node:fs";
 import { chmod, copyFile, cp, mkdir, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { pipeline } from "node:stream/promises";
@@ -15,6 +16,14 @@ const repoRoot = resolve(scriptDir, "..");
 const appRoot = join(repoRoot, "app");
 const tauriRoot = join(appRoot, "src-tauri");
 const resourcesRoot = join(tauriRoot, "resources");
+
+// 归档一律用 Windows 自带的 bsdtar（System32）：本地 Git Bash 的 GNU tar 会把
+// `D:/...` 当成远程主机（"Cannot connect to D: resolve failed"），也不支持
+// `-a` 按扩展名打包 zip。CI 与本机都直接给绝对路径，绕开 PATH 差异。
+const tarCommand =
+  process.platform === "win32"
+    ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+    : "tar";
 
 export function parseArgs(argv) {
   const options = {
@@ -179,7 +188,7 @@ async function prepareArchiveInput(value, destinationDirectory, fallbackName) {
 
 async function expandArchiveFile(archive, destination) {
   await mkdir(destination, { recursive: true });
-  run("tar", ["-xf", archive, "-C", destination], `Extract archive ${archive}`);
+  run(tarCommand, ["-xf", archive, "-C", destination], `Extract archive ${archive}`);
 }
 
 async function copyDirectoryContents(source, destination) {
@@ -557,8 +566,126 @@ async function findSitePackagesDirectories(root) {
   return directories;
 }
 
-async function pruneBundledPythonRuntime(root) {
-  const prunedFilePatterns = ["*.pdb", "*.lib", "*.pyc", "*.pyo", "*.h", "*.hpp"];
+const BUNDLED_MANIFEST_NAME = "runtime-manifest.json";
+const COMPONENT_SITE_PACKAGES_NAME = "site-packages";
+
+// uv.lock 的 SHA256 作为运行时指纹：包内与组件各写一份 runtime-manifest.json，
+// worker 比对两者，不一致按缺失处理。锁文件里任何影响解析的改动都会换指纹。
+function computeLockFingerprint() {
+  return createHash("sha256").update(readFileSync(join(repoRoot, "uv.lock"))).digest("hex");
+}
+
+export { computeLockFingerprint };
+
+function runtimeManifestPayload(fingerprint, runtimeKind, target) {
+  return `${JSON.stringify(
+    {
+      lock_fingerprint: fingerprint,
+      runtime_kind: runtimeKind,
+      target,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function distributionNameFromMetadata(distInfoDirectory) {
+  const metadataPath = join(distInfoDirectory, "METADATA");
+  if (!existsSync(metadataPath)) {
+    return null;
+  }
+  const match = readFileSync(metadataPath, "utf8").match(/^Name:\s*(.+)$/m);
+  return match ? match[1].trim().toLowerCase().replace(/_/g, "-") : null;
+}
+
+async function collectDistributionNames(sitePackages) {
+  const names = new Set();
+  for (const entry of await readdir(sitePackages, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.toLowerCase().endsWith(".dist-info")) {
+      continue;
+    }
+    const name = distributionNameFromMetadata(join(sitePackages, entry.name));
+    if (name) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+// 组件导出的是「基础依赖 + pytorch extra」全集，其中基础依赖与包内完全同版本
+// （同一份 uv.lock）。这里按发行版名把与包内重叠的部分从组件里删掉，只留下
+// PyTorch 族的独占闭包。发行版名到顶层目录的映射用 RECORD 文件还原，避免
+// 手写 dist name 与 import name 的对照表（Pillow->PIL、funasr-onnx->funasr_onnx）。
+async function harvestComponentSitePackages(componentSitePackages, bundledSitePackages) {
+  const bundledNames = await collectDistributionNames(bundledSitePackages);
+  let removedDistributions = 0;
+  for (const entry of await readdir(componentSitePackages, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.toLowerCase().endsWith(".dist-info")) {
+      continue;
+    }
+    const distInfoDirectory = join(componentSitePackages, entry.name);
+    const name = distributionNameFromMetadata(distInfoDirectory);
+    if (!name || !bundledNames.has(name)) {
+      continue;
+    }
+    const ownedTopLevel = new Set();
+    const recordPath = join(distInfoDirectory, "RECORD");
+    if (existsSync(recordPath)) {
+      for (const line of readFileSync(recordPath, "utf8").split(/\r?\n/)) {
+        const rawPath = line.split(",")[0]?.trim() ?? "";
+        if (!rawPath) {
+          continue;
+        }
+        const unquoted = rawPath.replace(/^"(.*)"$/, "$1").replace(/""/g, '"');
+        const firstSegment = unquoted.split(/[\\/]/)[0];
+        if (firstSegment && !firstSegment.toLowerCase().endsWith(".dist-info")) {
+          ownedTopLevel.add(firstSegment);
+        }
+      }
+    }
+    await rm(distInfoDirectory, { recursive: true, force: true });
+    for (const segment of ownedTopLevel) {
+      await rm(join(componentSitePackages, segment), { recursive: true, force: true });
+    }
+    removedDistributions += 1;
+  }
+  return removedDistributions;
+}
+
+// PyTorch 族运行时组件：独立 site-packages + runtime-manifest.json，打成 zip
+// 供 CI 上传到 GitHub Releases，worker 按需下载后注入 sys.path。
+export async function buildPytorchRuntimeComponent({
+  pythonExe,
+  target,
+  buildRoot,
+  fingerprint,
+  workerRoot,
+  bundledSitePackages,
+}) {
+  const componentStaging = join(buildRoot, "pytorch-component");
+  const componentSitePackages = join(componentStaging, COMPONENT_SITE_PACKAGES_NAME);
+  run(commandName("uv"), ["export", "--no-dev", "--format", "requirements-txt", "--extra", "pytorch", "--output-file", join(buildRoot, "requirements-pytorch.txt")], "Export PyTorch component requirements");
+  run(commandName("uv"), ["pip", "install", "--python", pythonExe, "--target", componentSitePackages, "-r", join(buildRoot, "requirements-pytorch.txt")], "Install PyTorch component dependencies");
+  const removedDistributions = await harvestComponentSitePackages(componentSitePackages, bundledSitePackages);
+  await writeFile(join(componentStaging, BUNDLED_MANIFEST_NAME), runtimeManifestPayload(fingerprint, "pytorch-component", target));
+  const componentZipPath = join(buildRoot, `frameq-pytorch-runtime-${target}.zip`);
+  run(tarCommand, ["-a", "-c", "-f", componentZipPath, "-C", componentStaging, COMPONENT_SITE_PACKAGES_NAME, BUNDLED_MANIFEST_NAME], "Package PyTorch runtime component");
+  await removePythonCaches(componentStaging);
+  run(
+    pythonExe,
+    ["-c", "import funasr, torch, torchaudio; import frameq_worker"],
+    "PyTorch component import smoke test",
+    {
+      env: {
+        PYTHONDONTWRITEBYTECODE: "1",
+        PYTHONPATH: [componentSitePackages, workerRoot].join(delimiter),
+      },
+    },
+  );
+  return { componentZipPath, removedDistributions };
+}
+
+async function pruneBundledPythonRuntime(root) {  const prunedFilePatterns = ["*.pdb", "*.lib", "*.pyc", "*.pyo", "*.h", "*.hpp"];
   const prunedExtensions = new Set(prunedFilePatterns.map((pattern) => pattern.slice(1)));
   const prunedDirectoryNames = new Set(["__pycache__", "tests", "test"]);
 
@@ -654,9 +781,30 @@ async function main(argv = process.argv.slice(2)) {
   if (options.target === "windows-x64") {
     await bundleWindowsVcRuntimeDlls(pythonRoot);
   }
-  run(pythonExe, ["-c", "import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
+  // PyTorch 族已外置：包内只保 ONNX 路径，funasr 与 torch 由按需组件提供。
+  run(pythonExe, ["-c", "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
     env: { PYTHONDONTWRITEBYTECODE: "1", PYTHONPATH: workerRoot },
   });
+  const lockFingerprint = computeLockFingerprint();
+  await writeFile(
+    join(resourcesRoot, BUNDLED_MANIFEST_NAME),
+    runtimeManifestPayload(lockFingerprint, "bundled", options.target),
+  );
+  const [bundledSitePackages] = await findSitePackagesDirectories(pythonRoot);
+  if (!bundledSitePackages) {
+    throw new Error("Could not locate the bundled site-packages directory for the component diff.");
+  }
+  const { componentZipPath, removedDistributions } = await buildPytorchRuntimeComponent({
+    pythonExe,
+    target: options.target,
+    buildRoot,
+    fingerprint: lockFingerprint,
+    workerRoot,
+    bundledSitePackages,
+  });
+  console.log(
+    `PyTorch runtime component ready at ${componentZipPath} (${removedDistributions} shared distributions removed)`,
+  );
   smokeTestDenoRuntime(binRoot, options.target, buildRoot);
   await removePythonCaches(pythonRoot);
   await removePythonCaches(workerRoot);

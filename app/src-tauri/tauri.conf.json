@@ -55,6 +55,7 @@
       "resources/worker/**/*",
       "resources/bin/**/*",
       "resources/pyproject.toml",
+      "resources/runtime-manifest.json",
       "resources/.env.template"
     ],
     "windows": {

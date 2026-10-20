@@ -338,10 +338,12 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain('RES="$APP/Contents/Resources/resources"');
 
     // Both macOS jobs import the packaged runtime end to end (exercises the
-    // delocated @loader_path links inside the built .app).
+    // delocated @loader_path links inside the built .app). funasr 外置到组件，
+    // 包内冒烟只保 ONNX 路径。
     expect(workflow).toContain(
-      'import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print(\'bundled runtime import OK\')',
+      'import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print(\'bundled runtime import OK\')',
     );
+    expect(workflow).toContain('test -f "$RES/runtime-manifest.json"');
   });
 
   test("desktop release workflow does not mutate signed macOS app bundles during smoke tests", () => {
@@ -382,30 +384,44 @@ describe("Tauri desktop window configuration", () => {
     expect(script).toContain("Refusing to package");
   });
 
-  test("installer runtime includes both ASR engines for on-demand model download", () => {
+  test("installer runtime keeps the ONNX engine and defers funasr to the component", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
+    // 包内只保 ONNX 路径；funasr/torch 由按需组件提供，组件侧单独冒烟。
     expect(script).toContain(
-      "import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker",
+      "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker",
     );
+    expect(script).toContain('"--extra", "pytorch"');
+    expect(script).toContain("import funasr, torch, torchaudio; import frameq_worker");
+    expect(script).toContain('BUNDLED_MANIFEST_NAME = "runtime-manifest.json"');
     expect(script).not.toContain("MODEL_VERSION.txt");
   });
 
-  test("installer release runtime keeps the Qwen adapter out of the manifest", () => {
+  test("installer release manifest keeps the pytorch family in an extra, not base deps", () => {
     const manifest = readFileSync(workerManifestPath, "utf8");
     const projectDependencies = manifest.match(/dependencies = \[([\s\S]*?)\]\s*\n/)?.[1] ?? "";
+    const pytorchExtra = manifest.match(/pytorch = \[([\s\S]*?)\]/)?.[1] ?? "";
 
     expect(projectDependencies).not.toContain("qwen");
     expect(manifest).not.toContain("qwen-asr");
-    expect(manifest).not.toContain("[project.optional-dependencies]");
+    // PyTorch 族的运行时全部移到 pytorch extra，包内基础依赖不含它们。
+    // 断言用带引号的形式，避免撞上注释里的文字。
+    expect(pytorchExtra).toContain('"funasr>=1.2.7"');
+    expect(pytorchExtra).toContain('"torch==2.2.2');
+    expect(pytorchExtra).toContain('"torch>=2.10.0');
+    expect(pytorchExtra).toContain('"torchaudio==2.2.2');
+    expect(pytorchExtra).toContain('"torchaudio>=2.10.0');
+    expect(projectDependencies).not.toContain('"funasr>=1.2.7"');
+    expect(projectDependencies).not.toContain('"torch==2.2.2');
+    expect(projectDependencies).not.toContain('"torch>=2.10.0');
+    expect(projectDependencies).not.toContain('"torchaudio==2.2.2');
+    expect(projectDependencies).not.toContain('"torchaudio>=2.10.0');
     expect(projectDependencies).toContain("numpy<2");
-    expect(projectDependencies).toContain("torch==2.2.2");
-    expect(projectDependencies).toContain("torch>=2.10.0");
-    expect(projectDependencies).toContain("torchaudio==2.2.2");
-    expect(projectDependencies).toContain("torchaudio>=2.10.0");
+    expect(projectDependencies).toContain("funasr-onnx==0.4.2");
     expect(projectDependencies).toContain("platform_machine == 'x86_64'");
     // macOS Intel pins numba/llvmlite to the last releases with prebuilt x86_64
-    // wheels, so pip never source-builds llvmlite (which needs LLVM).
+    // wheels, so pip never source-builds llvmlite (which needs LLVM). 两条路径
+    // 都会用到 numba（librosa），pin 留在基础依赖里保证两侧版本一致。
     expect(projectDependencies).toContain("llvmlite==0.45.1");
     expect(projectDependencies).toContain("numba==0.62.1");
     expect(projectDependencies).toContain("cryptography<49");

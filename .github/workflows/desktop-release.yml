@@ -106,6 +106,12 @@ jobs:
           node scripts\normalize-updater-manifest.mjs "%MANIFEST_DIR%\latest.json"
           gh release upload "%RELEASE_TAG%" "%MANIFEST_DIR%\latest.json" --clobber
 
+      - name: Upload PyTorch runtime component to the release
+        shell: cmd
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "%RELEASE_TAG%" "build\installer-runtime\windows-x64\frameq-pytorch-runtime-windows-x64.zip" --clobber
+
   macos-x64-dmg-artifact:
     name: macOS Intel DMG artifact
     needs: windows-updater-artifacts
@@ -150,7 +156,8 @@ jobs:
         run: |
           APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app"
           RES="$APP/Contents/Resources/resources"
-          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          test -f "$RES/runtime-manifest.json" && echo "bundled runtime manifest OK"
           DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/frameq-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
           if find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
             echo "Packaged runtime smoke test mutated the signed app bundle." >&2
@@ -166,6 +173,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "$RELEASE_TAG" app/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg --clobber
+
+      - name: Upload PyTorch runtime component to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$RELEASE_TAG" build/installer-runtime/macos-x64/frameq-pytorch-runtime-macos-x64.zip --clobber
 
   macos-arm64-dmg-artifact:
     name: macOS Apple Silicon DMG artifact
@@ -211,7 +223,8 @@ jobs:
         run: |
           APP="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/FrameQ.app"
           RES="$APP/Contents/Resources/resources"
-          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          test -f "$RES/runtime-manifest.json" && echo "bundled runtime manifest OK"
           DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/frameq-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
           if find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
             echo "Packaged runtime smoke test mutated the signed app bundle." >&2
@@ -227,3 +240,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "$RELEASE_TAG" app/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg --clobber
+
+      - name: Upload PyTorch runtime component to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$RELEASE_TAG" build/installer-runtime/macos-arm64/frameq-pytorch-runtime-macos-arm64.zip --clobber
