@@ -5,7 +5,9 @@ from pathlib import Path
 from frameq_worker.asr import (
     DEFAULT_ASR_MODEL,
     ASRError,
+    ASRUnsupportedModelError,
     Transcriber,
+    asr_model_family,
     build_asr_transcriber,
     resolve_model_cache_dir,
     transcribe_and_write,
@@ -31,6 +33,17 @@ from frameq_worker.pipeline_runtime.shared import (
     failed_result,
 )
 from frameq_worker.progress_events import normalize_language_tag, normalize_model_arg
+from frameq_worker.runtime_component import (
+    RUNTIME_COMPONENT_MISSING,
+    RUNTIME_COMPONENT_READY,
+    RUNTIME_COMPONENT_STALE,
+    RUNTIME_COMPONENT_UNGATED,
+    evaluate_component,
+    install_sys_path,
+    locate_bundled_manifest,
+    read_manifest_fingerprint,
+    resolve_component_dir,
+)
 from frameq_worker.source_identity import SourceIdentity
 from frameq_worker.subtitles import SubtitleTranscript
 from frameq_worker.task_store import TaskContext
@@ -153,6 +166,33 @@ def write_prepared_subtitle_stage(
     return subtitle_result
 
 
+def evaluate_pytorch_component_gate(
+    *,
+    model_name: str,
+    project_root: Path,
+    environ: dict[str, str],
+) -> tuple[str, Path | None]:
+    """PyTorch 族的运行时组件门禁，返回 ``(状态, 组件目录)``。
+
+    仅 PyTorch 族（family 为 ``sensevoice``）参与检查。包内运行时未裁剪
+    （本地 dev 或外置之前的旧版安装，找不到包内 manifest）时返回 ``ungated``，
+    保持原有行为；不支持的模型名同样放行，让下游按既有路径报错。
+    """
+    try:
+        family = asr_model_family(model_name)
+    except ASRUnsupportedModelError:
+        return RUNTIME_COMPONENT_UNGATED, None
+    if family != "sensevoice":
+        return RUNTIME_COMPONENT_UNGATED, None
+
+    bundled_manifest = locate_bundled_manifest(project_root=project_root, environ=environ)
+    bundled_fingerprint = (
+        read_manifest_fingerprint(bundled_manifest) if bundled_manifest is not None else None
+    )
+    component_dir = resolve_component_dir(environ)
+    return evaluate_component(component_dir, bundled_fingerprint), component_dir
+
+
 def prepare_asr_transcriber_stage(
     request: ProcessRequest | ProcessLocalMediaRequest,
     project_root: Path,
@@ -171,6 +211,29 @@ def prepare_asr_transcriber_stage(
 
     if transcriber is not None:
         return transcriber
+
+    component_status, component_dir = evaluate_pytorch_component_gate(
+        model_name=request.asr_model,
+        project_root=project_root,
+        environ=environ,
+    )
+    if component_status == RUNTIME_COMPONENT_MISSING:
+        return failed_result(
+            code="ASR_RUNTIME_COMPONENT_MISSING",
+            message="The PyTorch runtime component is not downloaded yet.",
+            stage=JobStage.VIDEO_TRANSCRIBING,
+        )
+    if component_status == RUNTIME_COMPONENT_STALE:
+        return failed_result(
+            code="ASR_RUNTIME_COMPONENT_STALE",
+            message=(
+                "The downloaded PyTorch runtime component does not match this "
+                "app version. Download it again."
+            ),
+            stage=JobStage.VIDEO_TRANSCRIBING,
+        )
+    if component_status == RUNTIME_COMPONENT_READY and component_dir is not None:
+        install_sys_path(component_dir)
 
     emit_progress(
         progress_callback,

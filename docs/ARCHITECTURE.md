@@ -1109,6 +1109,7 @@ graph LR
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
 - `worker/frameq_worker/asr.py`：稳定 ASR 导入入口；实现按 failure boundary 位于私有 `asr_runtime/` 的 types、registry、SenseVoice/VAD、ONNX 和 artifact owners。
 - `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
+- `worker/frameq_worker/runtime_component.py`：PyTorch 运行时组件的检测、指纹比对与 `sys.path` 注入；包内 manifest 缺失时门禁不生效，保持未裁剪运行时的原有行为。
 - `worker/frameq_worker/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
 - `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client；桌面灵感生成通过 server-managed checkout env 创建 client，默认使用 `temperature=0.7`。
 - `worker/frameq_worker/pipeline.py`：稳定 pipeline 导入入口；`pipeline_runtime/shared.py`、

@@ -16,10 +16,12 @@
 
 ## Progress
 
-- [ ] Stage 1：worker 组件契约（检测、指纹、`sys.path` 注入、缺失错误码）+ 单测
+- [x] Stage 1：worker 组件契约（检测、指纹、`sys.path` 注入、缺失错误码）+ 单测（2026-10-20 完成，提交待填）
 - [ ] Stage 2：构建脚本双依赖集与组件打包，本地 `--skip-tauri-build` 验证
 - [ ] Stage 3：组件托管与下载（URL、进度、断点续传、校验）+ 设置页入口
 - [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
+
+Stage 1 落地记录：模块放顶层 `worker/frameq_worker/runtime_component.py`（组件门禁属运行时供给，与 `model_download.py` 平级，不进 `asr_runtime/` 以免破坏封闭的模块树清单）；门禁抽成 `transcript.py` 的纯函数 `evaluate_pytorch_component_gate` 便于单测；包内 manifest 缺失时门禁不生效，dev 与旧版安装不受影响；新增错误码 `ASR_RUNTIME_COMPONENT_MISSING` 与 `ASR_RUNTIME_COMPONENT_STALE`，前端 `WORKER_ERROR_MESSAGE_CODES` 映射与文案留到 Stage 3 与下载入口一起做。
 
 ## Surprises & Discoveries
 
