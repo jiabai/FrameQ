@@ -36,47 +36,15 @@ FrameQ 是本地优先的桌面应用：粘贴公开或已授权的视频链接�
 
 ## 常用命令
 
-安装依赖：
+- 安装依赖：`uv sync --dev`、`(cd app && npm install)`、`(cd server && npm install)`
+- Worker 检查：`uv run ruff check worker`、`uv run pytest worker/tests`
+- 前端检查：`npm --prefix app test`、`npm --prefix app run lint`、`npm --prefix app run build`
+- 服务端检查：`npm --prefix server test`、`npm --prefix server run build`
+- Rust 检查：`cargo test --manifest-path app/src-tauri/Cargo.toml`
+- 文档治理：`uv run python scripts/validate_agents_docs.py --level ERROR`、`uv run python scripts/validate_agents_docs.py --level WARN`
+- 打包冒烟：`npm --prefix app run tauri -- build --no-bundle`
 
-- `uv sync --dev`
-- `(cd app && npm install)`
-- `(cd server && npm install)`
-
-`npm --prefix <dir> install` 在 npm 10 下会失败，`install` 子命令不读取 prefix 配置。`npm --prefix <dir> run <script>` 与 `npm --prefix <dir> test` 不受影响。
-
-Worker（Python）：
-
-- `uv run ruff check worker`
-- `uv run pytest worker/tests`
-
-前端（app）：
-
-- `npm --prefix app test`
-- `npm --prefix app run lint`
-- `npm --prefix app run build`
-- `npm --prefix app run tauri -- build --no-bundle`
-
-服务端（server）：
-
-- `npm --prefix server test`
-- `npm --prefix server run build`
-
-Rust（Tauri 后端）：
-
-- `cargo test --manifest-path app/src-tauri/Cargo.toml`
-
-文档治理校验：
-
-- `uv run python scripts/validate_agents_docs.py --level ERROR`
-- `uv run python scripts/validate_agents_docs.py --level WARN`
-
-## 测试
-
-- Worker：pytest，用例在 `worker/tests/`。
-- 前端：Vitest，`npm --prefix app test` 已内置 `--no-file-parallelism`。
-- 服务端：Vitest。
-- Rust：cargo test。
-- 完成前的完整门禁见 `docs/EXECUTION_GATES.md`。
+`npm --prefix app test` 已内置 `--no-file-parallelism`，用例在 `worker/tests/`。`npm --prefix <dir> install` 在 npm 10 下会失败，`install` 子命令不读取 prefix 配置，`run` 与 `test` 子命令不受影响。完整门禁条件见 `docs/EXECUTION_GATES.md`。
 
 ## 核心信念
 
@@ -93,15 +61,13 @@ Rust（Tauri 后端）：
 
 代码风格：
 
-- Python：ruff（`ruff.toml`），`uv run ruff check worker` 通过。
-- TypeScript：`npm --prefix app run lint` 通过。该脚本串联 `tsc --noEmit` 与 `scripts/check-i18n-literals.mjs`。`npm --prefix app run build` 的内容是 `tsc && vite build`。
-- 提交信息：英文 conventional commits（如 `fix(server): ...`）。
+- Python 用 ruff（`ruff.toml`）。
+- TypeScript 由 `npm --prefix app run lint` 检查，内含 `tsc --noEmit` 与 `scripts/check-i18n-literals.mjs`。
+- 提交信息用英文 conventional commits（如 `fix(server): ...`）。
 
 ## 开发流程
 
-非平凡改动（改变用户可见行为或新增边界）按 `WORKFLOW.md` 推进：先读本文件与相关文档 → 更新 product spec → 更新 ExecPlan → 确认后实现。轻量改动仍需 inspect、最小验证、文档同步，并在最终说明列出验证结果与残余风险。
-
-文件放置约定：产品规格 `docs/product-specs/`；设计决策 `docs/design-docs/`；外部参考 `docs/references/`；进行中计划 `docs/exec-plans/active/`；完成计划 `docs/exec-plans/completed/`。
+非平凡改动（改变用户可见行为或新增边界）按 `WORKFLOW.md` 推进：先读 `RULES.md` 与相关文档 → 更新 product spec → 更新 ExecPlan → 确认后实现。轻量改动仍需 inspect、最小验证、文档同步，并在最终说明列出验证结果与残余风险。
 
 Git 工作流：提交直接进入 `main`，无 feature-branch 工作流。桌面端发布走 `v*` tag → GitHub Releases，发布完成后有三件事必须做：
 
@@ -111,17 +77,10 @@ Git 工作流：提交直接进入 `main`，无 feature-branch 工作流。桌�
 
 ## 快速入口
 
-- 产品规格索引：`docs/product-specs/index.md`
-- 架构：`docs/ARCHITECTURE.md`
-- 设计规范：`docs/DESIGN.md`
-- 设计决策索引：`docs/design-docs/index.md`
-- 外部参考索引：`docs/references/index.md`
-- 安全规范：`docs/SECURITY.md`
-- 完成门禁：`docs/EXECUTION_GATES.md`
-- 执行计划索引：`docs/exec-plans/index.md`
-- 当前执行计划：`docs/exec-plans/active/index.md`
-- 技术债：`docs/exec-plans/tech-debt-tracker.md`
-- 发布记录：`docs/releases/`
-- 工作流：`WORKFLOW.md`
-- 硬性规则：`RULES.md`
-- 任务清单：`TASKS.md`
+动手前先读 `RULES.md` 与 `WORKFLOW.md`，收尾对照 `docs/EXECUTION_GATES.md`。
+
+按改动范围查阅：`docs/ARCHITECTURE.md`、`docs/DESIGN.md`、`docs/SECURITY.md`。
+
+索引：`docs/product-specs/index.md`、`docs/design-docs/index.md`、`docs/references/index.md`、`docs/exec-plans/index.md`、`docs/exec-plans/active/index.md`。
+
+台账：`docs/exec-plans/tech-debt-tracker.md`、`docs/releases/`、`TASKS.md`。
