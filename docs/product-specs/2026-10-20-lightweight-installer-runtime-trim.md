@@ -2,47 +2,48 @@
 
 ## Background
 
-2026-10-20 的首次安装失败报告把安装阶段的写入量摆到了台面上：包内 `resources/python` 是 36,588 个文件、1,081 MB，安装器顺序解压，安全软件有十几分钟窗口可以拦截。
+2026-10-20 的首次安装失败报告把安装阶段的写入量摆到了台面上：`resources/python` 是包内最大的一块，安装器顺序解压，安全软件有十几分钟窗口可以拦截。
 
-实测分布（`app/src-tauri/resources/python`，按文件字节求和）：
+实测分布（`app/src-tauri/resources/python`，排除 `__pycache__` 与 `*.pyc`）：
 
 | 项 | 文件数 | 体积 |
 | --- | --- | --- |
-| 合计 | 36,588 | 1,081 MB |
-| `Lib/site-packages` 合计 | 34,157 | 1,026 MB |
-| torch | 3,160 | 338 MB |
-| transformers | 2,286 | 52 MB |
-| sympy | 1,298 | 28 MB |
-| sklearn | 779 | 25 MB |
-| llvmlite | 61 | 102 MB |
-| numba | 499 | 10 MB |
-| torchaudio | 154 | 2 MB |
-| funasr | 834 | 8 MB |
-| 字节码 `*.pyc` | 11,188 | 122 MB |
+| CI 实际分发 | 25,016 | 950 MB |
+| torch | 2,201 | 320 MB |
+| transformers | 2,238 | 50 MB |
+| sympy | 888 | 17 MB |
+| funasr（PyTorch 版） | 426 | 4 MB |
+| 其余 torch 闭包 | 1,809 | 30 MB |
+| llvmlite | 31 | 102 MB |
+| scipy | 856 | 70 MB |
+| onnxruntime | 318 | 39 MB |
+| jieba | 54 | 36 MB |
+| scikit-learn | 578 | 20 MB |
+| numba | 356 | 6 MB |
 
-torch 这一整套只服务 PyTorch 族的 `iic/SenseVoiceSmall`，而默认模型恰好是 PyTorch 版，于是它变成必需项。字节码是 pip 安装时顺手编译出来的产物，属于安装期的一次性成本。
+**字节码不在这张表里，也不在包里。** `scripts/build-installer.mjs` 已经在两处清掉它：`pruneBundledPythonRuntime`（`*.pyc`、`*.pyo`、`__pycache__`）与冒烟测试之后的 `removePythonCaches`。本机目录下那 11,526 个 `.pyc` 是本地跑 dev 时 Python 重新生成的，不是包内容，也不进 CI 产物。
 
-两项合计可以移出 20,259 个文件与 687 MB。
+torch 这一整套只服务 PyTorch 族的 `iic/SenseVoiceSmall`，而默认模型恰好是 PyTorch 版，于是它变成必需项。用 `uv export --prune torch --prune torchaudio --prune funasr` 可以从同一份 `uv.lock` 切出「不含 PyTorch 族」的依赖集，实测可外置 7,562 个文件、421 MB。
 
 ## Goals
 
 - 默认模型从 `iic/SenseVoiceSmall` 切到 `iic/SenseVoiceSmall-onnx`。
-- PyTorch 族的运行时（torch、torchaudio、llvmlite、numba、transformers、sympy、scikit-learn、funasr）移出安装包，改为用户选中对应模型时下载的独立组件。
-- 安装包不再分发 `*.pyc`，由 Python 在目标机首次导入时就地生成。
-- 安装后 `resources/python` 的文件数降到 17,000 以内，体积降到 400 MB 以内。
+- PyTorch 族的运行时（torch、torchaudio、funasr 及其闭包，含 transformers、sympy、tokenizers、safetensors、huggingface-hub、hydra-core、omegaconf、oss2、aliyun-sdk 等）移出安装包，改为用户选中对应模型时下载的独立组件。
+- 安装后 `resources/python` 的文件数降到 18,000 以内，体积降到 550 MB 以内。
 
 两个 SenseVoice 模型仍然可选，功能不减。
 
 ## Non-goals
 
-- 不改 ONNX 运行时的组成，`funasr-onnx`、`onnxruntime`、`scipy`、`librosa`、`jieba`、`kaldi-native-fbank`、`sentencepiece` 继续留在安装包内。
+- 不改 ONNX 运行时的依赖组成。`funasr-onnx` 会拉起 `librosa`，`librosa` 又带出 `scikit-learn`、`numba`、`llvmlite`、`scipy`，这条链合计约 234 MB 属于 ONNX 路径自身所需，本次不动，因此 400 MB 这个量级达不到。
 - 不改模型文件的缓存位置、下载通道与进度事件。
 - 不改 `installMode`、默认安装目录，以及已经提交的 NSIS 钩子。
 - 不动 `tcl`、`pip` 与站点包里的测试目录，它们体积有限，留待单独评估。
+- 不动 `.pyc` 处理，构建脚本已经清干净了。
 
 ## Runtime Component
 
-PyTorch 族所需的运行时单独打包，内容为该族模型的依赖闭包，由构建脚本用 `uv export` 生成。
+PyTorch 族所需的运行时单独打包，内容由构建脚本用 `uv export --no-dev --prune torch --prune torchaudio --prune funasr` 从 `uv.lock` 生成，与包内依赖集同源。
 
 - 存放：`%LOCALAPPDATA%\FrameQ\runtime\pytorch\<版本号>\`。
 - 触发：用户在设置页选中 `iic/SenseVoiceSmall` 且本机缺少该组件时，界面提示需要下载，用户确认后开始。
@@ -50,23 +51,26 @@ PyTorch 族所需的运行时单独打包，内容为该族模型的依赖闭包
 - 版本：组件内写入清单文件，记录 `uv.lock` 的解析指纹。指纹与当前 worker 不一致时按缺失处理，重新下载。
 - 失败：下载或校验失败时不改动已有文件，界面提供重试，不消耗 AI 额度。
 
+Linux 专属的 `nvidia-*`、`cuda-*`、`triton` 会被同一个 `--prune` 一并剪掉，不需要单独处理。macOS Intel 上的 `sympy` 与 `mpmath` 会被收窄成仅 mac-x64 生效，Windows 上等同于移除。
+
 ## Result Experience
 
 - 新装用户完成第一次转写时，默认走 ONNX，提示下载 `iic/SenseVoiceSmall-onnx` 与 `speech_fsmn_vad_zh-cn-16k-common-onnx`，与现有模型下载流程一致。
 - 已装用户升级后，默认模型变为 ONNX。此前显式选择过 PyTorch 族的用户，升级后落到 ONNX，并在设置页给一次说明，写明原因与恢复方式。
 - 设置页模型列表仍是两项。PyTorch 族在缺少运行时组件时，条目旁标注需要下载组件，选择时先走组件下载。
-- 字节码不再随包分发。首次任务会比升级前慢若干秒，之后恢复正常。
+- 安装器体积随包内容下降，安装耗时与写入量同步下降，安全软件可拦截的窗口随之缩短。
 
 ## Validation Rules
 
 - 同一段音频分别走 ONNX 与 PyTorch，逐句比对转写结果。允许标点与断句差异，不允许内容缺失或串句。差异清单随发布记录留存。
 - 干净机器上，未下载 PyTorch 组件时选中 PyTorch 族，不得崩溃，不得写入残缺文件，不得消耗额度。
 - 组件指纹与 `uv.lock` 不一致时必须判定为缺失，不得复用旧目录。
-- 移除字节码后，所有入口模块仍能从源码导入；安装目录不可写时只损失首启速度，不得报错。
+- 外置之后，ONNX 路径用到的 `funasr_onnx`、`librosa`、`onnxruntime`、`modelscope` 必须仍能从包内直接导入。
+- 度量口径固定为「排除 `__pycache__` 与 `*.pyc`」，否则会被本地 dev 生成的字节码污染，量出虚高的数。
 
 ## Acceptance Criteria
 
-- `app/src-tauri/resources/python` 文件数 ≤ 17,000，体积 ≤ 400 MB，安装器体积随之下降。
+- `app/src-tauri/resources/python` 文件数 ≤ 18,000，体积 ≤ 550 MB（实测预期 17,454 个文件、529 MB）。
 - 干净机器完成一次 YouTube 链接转写与一次本地音频转写，两者都使用默认 ONNX 模型。
 - 设置页两个模型都能选中；PyTorch 族在组件缺失时给出下载入口，下载完成后能完成一次转写。
 - 升级安装保留原有设置与历史，默认模型变化有一次性说明。
@@ -74,6 +78,7 @@ PyTorch 族所需的运行时单独打包，内容为该族模型的依赖闭包
 
 ## Risks
 
-- 移除字节码会让首次任务变慢，具体秒数需要在目标机实测后写进发布说明。
-- PyTorch 组件体积约 570 MB，下载体验与模型下载同级，断点续传与校验必须复用现有下载器的行为。
+- 收益比最初预估的小。最初按未排除字节码的量算成 687 MB，实际可外置 421 MB，包内从 950 MB 降到约 529 MB，降幅 44%。安装器体积的下降幅度需要打包后实测，不能沿用旧估算。
+- PyTorch 组件体积约 421 MB，下载体验与模型下载同级，断点续传与校验必须复用现有下载器的行为。
 - ONNX 与 PyTorch 的输出差异若超出容忍度，默认模型不能切换，本规格需要重新评估。
+- `funasr` 被外置后，PyTorch 版 VAD `speech_fsmn_vad_zh-cn-16k-common-pytorch` 也随之外置；若 ONNX VAD 在某段音频上表现异常，回退路径会变长。
