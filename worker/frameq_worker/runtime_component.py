@@ -17,6 +17,7 @@ from typing import Any
 
 COMPONENT_DIR_ENV = "FRAMEQ_PYTORCH_RUNTIME_DIR"
 BUNDLED_MANIFEST_ENV = "FRAMEQ_BUNDLED_RUNTIME_MANIFEST"
+RESOURCE_DIR_ENV = "FRAMEQ_RESOURCE_DIR"
 BUNDLED_MANIFEST_NAME = "runtime-manifest.json"
 COMPONENT_MANIFEST_NAME = "runtime-manifest.json"
 COMPONENT_SITE_PACKAGES_NAME = "site-packages"
@@ -39,12 +40,22 @@ def locate_bundled_manifest(
     project_root: Path,
     environ: dict[str, str] | None = None,
 ) -> Path | None:
-    """定位包内 manifest。返回 None 表示这份运行时未裁剪，组件门禁不生效。"""
+    """定位包内 manifest。返回 None 表示这份运行时未裁剪，组件门禁不生效。
+
+    查找顺序：显式环境变量覆盖、安装包资源目录（生产里 worker 进程的 cwd
+    是 user_data_dir，资源目录靠 ``FRAMEQ_RESOURCE_DIR`` 传入）、项目根
+    （本地 dev）。都不存在视为未裁剪。
+    """
     env = environ if environ is not None else {}
     override = (env.get(BUNDLED_MANIFEST_ENV) or "").strip()
     if override:
         candidate = Path(override)
         return candidate if candidate.is_file() else None
+    resource_dir = (env.get(RESOURCE_DIR_ENV) or "").strip()
+    if resource_dir:
+        candidate = Path(resource_dir) / BUNDLED_MANIFEST_NAME
+        if candidate.is_file():
+            return candidate
     candidate = Path(project_root) / BUNDLED_MANIFEST_NAME
     return candidate if candidate.is_file() else None
 
