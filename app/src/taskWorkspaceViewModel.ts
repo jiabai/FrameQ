@@ -294,6 +294,10 @@ export function createTaskWorkspaceViewModel(
           transcriptReady,
           workflow.artifacts.audio,
         ),
+        locateTranscript: artifactAction(
+          transcriptReady,
+          workflow.artifacts.transcript_txt,
+        ),
       },
       transcriptSource: transcriptSource(workflow),
       error: !transcriptReady && workflow.error?.stage !== "insights_generating"

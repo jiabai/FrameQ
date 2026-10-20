@@ -370,6 +370,7 @@ describe("task domain workspaces", () => {
     expect(markup).toContain('class="local-artifact-toolbar"');
     expect(markup).toContain("定位视频");
     expect(markup).toContain("定位音频");
+    expect(markup).toContain("定位文字稿");
     expect(markup).toContain('class="transcript-review-panel"');
     expect(markup).toContain("第一段正式文字稿。");
     expect(markup).toContain('class="transcript-action-bar"');
@@ -441,6 +442,7 @@ describe("task domain workspaces", () => {
 
     expect(markup).not.toContain("定位视频");
     expect(markup).toContain("定位音频");
+    expect(markup).toContain("定位文字稿");
     expect(markup).toContain("来源：本地 ASR");
   });
 

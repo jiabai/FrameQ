@@ -57,7 +57,7 @@ Supported video link
 | --- | --- |
 | Local-first processing | Videos, audio, transcripts, model caches, and local history stay on the user's machine by default. |
 | Clear workflow states | The UI shows video extraction, transcription, insight generation, completion, partial completion, or failure. |
-| Result entry points | Completed tasks expose video, audio, transcript, summary, transcript-dissection, insight-topic, and generated-draft cards. Video and audio cards locate files directly. |
+| Result entry points | Completed tasks expose video, audio, transcript, summary, transcript-dissection, insight-topic, and generated-draft cards. Video, audio, and transcript entries locate their saved files directly; locating the transcript is blocked while edits are unsaved. |
 | Two-stage AI generation | Download, audio extraction, and transcription run first. Summary, transcript dissection, mindmap, insight topics, and draft generation require a separate confirmation and quota check. |
 | Recoverable results | If AI generation fails, the transcript remains available and the user can retry only the AI step. |
 | Auditable project structure | Product specs, architecture notes, design rules, security boundaries, execution plans, and validation scripts are tracked in the repository. |
@@ -105,7 +105,7 @@ Supported video link
 | YouTube public single videos | `youtube.com/watch?v=...`, `youtu.be/...`, and `youtube.com/shorts/...`; `watch?v=...&list=...` is processed as one video with playlist context ignored |
 | Transcript output | Plain text and Markdown |
 | AI output | Summary Markdown, Mermaid mindmap, insight JSON, insight Markdown, a transcript-dissection report in both JSON and Markdown, and a generated draft in Markdown |
-| Video and audio viewing | Locate generated files in the system file manager |
+| Video, audio, and transcript viewing | Locate generated files in the system file manager |
 
 > [!NOTE]
 > Platform links may still fail if they are expired, private, region-blocked, login-gated, CAPTCHA-gated, age-restricted, member-only, DRM-protected, or otherwise unavailable to the local worker. FrameQ does not provide platform login, browser-cookie import, proxy setup, stream picking, batch queues, or a download center.

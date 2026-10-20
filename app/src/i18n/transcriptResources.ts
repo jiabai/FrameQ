@@ -10,6 +10,7 @@ export const transcriptResources = {
       artifactActions: "本地文件操作",
       locateVideo: "定位视频",
       locateAudio: "定位音频",
+      locateTranscript: "定位文字稿",
       empty: "文字稿生成后可在这里回听、校对和保存。",
       status: {
         processing: "处理中",
@@ -82,6 +83,7 @@ export const transcriptResources = {
       artifactActions: "本機檔案操作",
       locateVideo: "在檔案管理器中顯示影片",
       locateAudio: "在檔案管理器中顯示音訊",
+      locateTranscript: "在檔案管理器中顯示文字稿",
       empty: "逐字稿產生後可在這裡回聽、校對與儲存。",
       status: {
         processing: "處理中",
@@ -154,6 +156,7 @@ export const transcriptResources = {
       artifactActions: "Local file actions",
       locateVideo: "Show Video in Folder",
       locateAudio: "Show Audio in Folder",
+      locateTranscript: "Show Transcript in Folder",
       empty: "When the transcript is ready, you can listen, review, and save it here.",
       status: {
         processing: "Processing",

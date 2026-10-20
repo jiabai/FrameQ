@@ -184,6 +184,7 @@ describe("task workspace view model", () => {
     expect(model.local.artifactActions).toEqual({
       locateVideo: { visible: false, enabled: false },
       locateAudio: { visible: true, enabled: true },
+      locateTranscript: { visible: true, enabled: true },
     });
   });
 
@@ -204,6 +205,7 @@ describe("task workspace view model", () => {
     expect(model.local.artifactActions).toEqual({
       locateVideo: { visible: false, enabled: false },
       locateAudio: { visible: true, enabled: true },
+      locateTranscript: { visible: true, enabled: true },
     });
     expect(model.local.transcriptSource).toEqual({
       kind: "subtitle",

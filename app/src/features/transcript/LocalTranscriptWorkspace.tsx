@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, FileAudio, Film, LoaderCircle, X } from "lucide-react";
+import { CheckCircle2, Circle, FileAudio, FileText, Film, LoaderCircle, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
@@ -109,7 +109,8 @@ export function LocalTranscriptWorkspace({
             model.readOnly ? t("review.readOnlyDuringAi") : null
           }
           artifactToolbar={model.artifactActions.locateVideo.visible ||
-            model.artifactActions.locateAudio.visible ? (
+            model.artifactActions.locateAudio.visible ||
+            model.artifactActions.locateTranscript.visible ? (
             <div
               className="local-artifact-toolbar"
               aria-label={t("workspace.artifactActions")}
@@ -134,6 +135,17 @@ export function LocalTranscriptWorkspace({
                 >
                   <FileAudio size={16} />
                   <span>{t("workspace.locateAudio")}</span>
+                </button>
+              ) : null}
+              {model.artifactActions.locateTranscript.visible ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void controller.exportTranscript()}
+                  disabled={!model.artifactActions.locateTranscript.enabled}
+                >
+                  <FileText size={16} />
+                  <span>{t("workspace.locateTranscript")}</span>
                 </button>
               ) : null}
             </div>
