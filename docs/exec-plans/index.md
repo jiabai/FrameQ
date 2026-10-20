@@ -68,7 +68,7 @@ Exec plans capture task-specific implementation intent, progress, and recovery c
 
 9. **Validation and Acceptance**
 
-   列出可重复运行的命令（如 `npm --prefix server test`、`cargo test --manifest-path app/src-tauri/Cargo.toml`、`uv run pytest worker\tests`、`python scripts/validate_agents_docs.py --level WARN`）以及一条人工回归步骤。
+   列出可重复运行的命令（如 `npm --prefix server test`、`cargo test --manifest-path app/src-tauri/Cargo.toml`、`uv run pytest worker/tests`、`uv run python scripts/validate_agents_docs.py --level WARN`）以及一条人工回归步骤。
 
 ## Lifecycle
 

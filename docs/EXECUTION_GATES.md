@@ -9,7 +9,7 @@
 ## Hard Gates
 
 - 受影响代码路径、文档事实来源或方案来源已 inspect。
-- 文档结构验证通过：`python scripts/validate_agents_docs.py --level ERROR`。
+- 文档结构验证通过：`uv run python scripts/validate_agents_docs.py --level ERROR`。
 - touched active ExecPlan 的 Progress、Decision Log 和验证记录已更新。
 - 架构、安全、流程、运行时 contract 或导出行为变化已同步到 durable docs。
 - 涉及 worker 的改动必须至少运行 focused Python 测试或等价命令。
