@@ -57,8 +57,8 @@ Supported video link
 | --- | --- |
 | Local-first processing | Videos, audio, transcripts, model caches, and local history stay on the user's machine by default. |
 | Clear workflow states | The UI shows video extraction, transcription, insight generation, completion, partial completion, or failure. |
-| Five result entry points | Completed tasks expose video, audio, transcript, summary, and insight-topic cards. Video and audio cards locate files directly. |
-| Two-stage AI generation | Download, audio extraction, and transcription run first. Summary, mindmap, and insight topics require a separate confirmation and quota check. |
+| Result entry points | Completed tasks expose video, audio, transcript, summary, transcript-dissection, and insight-topic cards. Video and audio cards locate files directly. |
+| Two-stage AI generation | Download, audio extraction, and transcription run first. Summary, transcript dissection, mindmap, and insight topics require a separate confirmation and quota check. |
 | Recoverable results | If AI generation fails, the transcript remains available and the user can retry only the AI step. |
 | Auditable project structure | Product specs, architecture notes, design rules, security boundaries, execution plans, and validation scripts are tracked in the repository. |
 
@@ -67,6 +67,7 @@ Supported video link
 - Tauri + React + TypeScript desktop client.
 - Python worker managed by `uv`.
 - Public/authorized video download through `yt-dlp`, with focused fallback paths for Douyin, Xiaohongshu, and ordinary Bilibili videos.
+- Xiaohongshu platform-subtitle reuse: when a public note carries one validated Chinese or English subtitle track, the worker writes it as the transcript and skips local ASR; a missing or rejected track falls back to the unchanged local ASR path.
 - Media validation with `ffprobe`.
 - Audio extraction with `ffmpeg`.
 - Selectable local ASR models (SenseVoiceSmall default) with on-demand, resumable download into app-local data; PyTorch and ONNX runtimes supported.
@@ -86,6 +87,8 @@ Supported video link
   - `outputs/tasks/<task_id>/ai/mindmap.mmd`
   - `outputs/tasks/<task_id>/ai/insights.json`
   - `outputs/tasks/<task_id>/ai/insights.md`
+  - `outputs/tasks/<task_id>/ai/dissection.json`
+  - `outputs/tasks/<task_id>/ai/dissection.md`
   - app-local `cache/tasks/<task_id>/` for temporary downloads and scratch files
 
 ## Supported Inputs and Outputs
@@ -94,11 +97,11 @@ Supported video link
 | --- | --- |
 | Input workflow | One pasted public or user-authorized video source; FrameQ is transcription-first, not a general downloader |
 | Douyin public videos | Long links, short links, share text, `/note/{id}`, `/share/slides/{id}`, `modal_id`, and `aweme_id` inputs when they resolve to a playable public video |
-| Xiaohongshu public video notes | Share text, direct note IDs, full `xiaohongshu.com/explore/{note_id}` links, `xhslink.com` short links, and `www.xhslink.com` short links |
+| Xiaohongshu public video notes | Share text, direct note IDs, full `xiaohongshu.com/explore/{note_id}` links, `xhslink.com` short links, and `www.xhslink.com` short links. A validated platform subtitle track is reused when present; otherwise the note goes through local ASR |
 | Bilibili ordinary public videos | BV links, av links, selected `?p=N` parts, and safe `b23.tv` short links that resolve to ordinary `/video/` pages |
 | YouTube public single videos | `youtube.com/watch?v=...`, `youtu.be/...`, and `youtube.com/shorts/...`; `watch?v=...&list=...` is processed as one video with playlist context ignored |
 | Transcript output | Plain text and Markdown |
-| AI output | Summary Markdown, Mermaid mindmap, insight JSON, and insight Markdown |
+| AI output | Summary Markdown, Mermaid mindmap, insight JSON, insight Markdown, and a transcript-dissection report in both JSON and Markdown |
 | Video and audio viewing | Locate generated files in the system file manager |
 
 > [!NOTE]
