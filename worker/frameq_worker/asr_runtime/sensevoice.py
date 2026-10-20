@@ -91,7 +91,14 @@ class SenseVoiceTranscriber:
     ) -> Any:
         from funasr import AutoModel
 
-        return AutoModel(model=model, trust_remote_code=trust_remote_code, **model_kwargs)
+        # 本地优先：AutoModel 默认会联网检查 funasr 更新，离线机器上白白多一次
+        # 网络往返，显式关掉。
+        return AutoModel(
+            model=model,
+            trust_remote_code=trust_remote_code,
+            disable_update=True,
+            **model_kwargs,
+        )
 
 
 def _sensevoice_language(language: str) -> str:
