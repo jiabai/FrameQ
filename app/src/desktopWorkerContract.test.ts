@@ -445,6 +445,7 @@ describe("desktop/worker contract", () => {
       "insights",
       "transcript",
       "dissection",
+      "draft",
       "error",
     ]);
     expect(task.properties.status.enum).toEqual([
@@ -465,6 +466,7 @@ describe("desktop/worker contract", () => {
       "preference_snapshot",
       "dissection",
       "dissection_md",
+      "draft",
     ]);
     expect(task.properties.artifacts.additionalProperties).toBe(false);
     expect(Object.keys(task.properties.insights.items.properties)).toEqual([
@@ -501,6 +503,7 @@ describe("desktop/worker contract", () => {
         summary: "",
         insights: [],
         transcript: null,
+        draft: "",
         error: null,
       };
     });
@@ -557,6 +560,7 @@ describe("desktop/worker contract", () => {
         summary: "",
         insights: [],
         transcript: null,
+        draft: "",
         error: null,
       };
     });

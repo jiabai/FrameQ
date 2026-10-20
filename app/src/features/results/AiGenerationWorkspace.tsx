@@ -1,4 +1,4 @@
-import { AlertTriangle, Lightbulb, ListChecks, LoaderCircle, ScanText, X } from "lucide-react";
+import { AlertTriangle, FileText, Lightbulb, ListChecks, LoaderCircle, ScanText, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
@@ -16,6 +16,7 @@ type AiGenerationWorkspaceProps = {
   onSummaryAction: () => void;
   onInsightsAction: () => void;
   onDissectionAction?: () => void;
+  onDraftAction: () => void;
   onViewTarget: (target: InsightRetryTarget) => void;
   onCancel: () => void;
 };
@@ -27,6 +28,7 @@ export function AiGenerationWorkspace({
   onSummaryAction,
   onInsightsAction,
   onDissectionAction = () => undefined,
+  onDraftAction,
   onViewTarget,
   onCancel,
 }: AiGenerationWorkspaceProps) {
@@ -123,6 +125,18 @@ export function AiGenerationWorkspace({
           onAction={onInsightsAction}
           onView={() => onViewTarget("insights")}
         />
+        <AiTargetCard
+          target={model.draft}
+          locale={locale}
+          title={t("target.draft.title")}
+          description={t("target.draft.description")}
+          creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
+          blocked={Boolean(blocker)}
+          icon={<FileText size={18} aria-hidden="true" />}
+          actionLabel={t("action.chooseSeedAndGenerate")}
+          onAction={onDraftAction}
+          onView={() => onViewTarget("draft")}
+        />
       </div>
 
       {model.cancellation.visible ? (
@@ -154,6 +168,7 @@ type AiTargetCardProps = {
   stale?: boolean;
   retainedResult?: boolean;
   icon: React.ReactNode;
+  actionLabel?: string;
   onAction: () => void;
   onView: () => void;
 };
@@ -168,6 +183,7 @@ function AiTargetCard({
   stale = false,
   retainedResult = false,
   icon,
+  actionLabel,
   onAction,
   onView,
 }: AiTargetCardProps) {
@@ -175,13 +191,15 @@ function AiTargetCard({
   const active = target.status === "generating" || target.status === "cancelling";
   const ready = target.status === "ready";
   const failed = target.status === "failed";
+  const locked = target.status === "locked";
   const viewable = ready || retainedResult;
-  const disabled = target.status === "locked" || active || blocked;
-  const actionLabel = failed
+  const disabled = locked || active || blocked;
+  const defaultActionLabel = failed
     ? t("action.retry")
     : target.target === "insights"
       ? t("action.chooseAndConfirm")
       : t("action.confirm");
+  const label = actionLabel ?? defaultActionLabel;
   const timeoutGuidance = renderTimeoutGuidance(target.errorCode, locale);
 
   return (
@@ -214,6 +232,9 @@ function AiTargetCard({
           </motion.p>
         ) : null}
       </AnimatePresence>
+      {locked && target.lockedHint ? (
+        <p className="ai-target-locked-hint">{renderUiMessage(locale, target.lockedHint)}</p>
+      ) : null}
       <small>{creditsSummary}</small>
       <div className="ai-target-actions">
         {active ? (
@@ -226,7 +247,7 @@ function AiTargetCard({
         ) : null}
         {!active && !ready ? (
           <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={disabled}>
-            {actionLabel}
+            {label}
           </button>
         ) : null}
       </div>

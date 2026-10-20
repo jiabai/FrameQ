@@ -23,6 +23,10 @@ LLM_CHECKOUT_URL_ENV = "FRAMEQ_LLM_CHECKOUT_URL"
 LLM_SESSION_TOKEN_ENV = "FRAMEQ_LLM_SESSION_TOKEN"
 LLM_CHECKOUT_REQUEST_ID_ENV = "FRAMEQ_LLM_CHECKOUT_REQUEST_ID"
 
+ANYSEARCH_SOURCE_ENV = "FRAMEQ_ANYSEARCH_SOURCE"
+ANYSEARCH_CHECKOUT_URL_ENV = "FRAMEQ_ANYSEARCH_CHECKOUT_URL"
+ANYSEARCH_SESSION_TOKEN_ENV = "FRAMEQ_ANYSEARCH_SESSION_TOKEN"
+
 Transport = Callable[[Request, float], bytes]
 
 
@@ -209,6 +213,119 @@ def parse_managed_checkout_response(raw_response: bytes) -> dict[str, str | int]
         "api_key": api_key,
         "timeout_seconds": timeout_seconds,
     }
+
+
+# --------------------------------------------------------------------------- #
+# 成稿 checkout（阶段 2）：复用既有机制（parse / transport / error-code 大本营）
+# --------------------------------------------------------------------------- #
+
+
+def checkout_llm_config_once(
+    env: Mapping[str, str], transport: Transport | None = None
+) -> dict[str, str | int]:
+    checkout_url = env.get(LLM_CHECKOUT_URL_ENV, "").strip()
+    session_token = env.get(LLM_SESSION_TOKEN_ENV, "").strip()
+    request_id = env.get(LLM_CHECKOUT_REQUEST_ID_ENV, "").strip()
+    if not checkout_url or not session_token or not request_id:
+        raise RuntimeError(
+            "FRAMEQ_LLM_SOURCE=server 但缺少 FRAMEQ_LLM_CHECKOUT_URL / "
+            "_SESSION_TOKEN / _CHECKOUT_REQUEST_ID 之一，无法 checkout 成稿 LLM 凭证。",
+        )
+
+    payload = {"request_id": request_id}
+    request = Request(
+        url=checkout_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {session_token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        raw_response = (transport or urlopen_transport)(
+            request,
+            parse_timeout(env.get(LLM_TIMEOUT_ENV)),
+        )
+    except urllib.error.HTTPError as exc:
+        raise _managed_checkout_http_error(exc) from exc
+    except TimeoutError as exc:
+        raise InsightGenerationError(
+            "INSIGHTFLOW_LLM_CHECKOUT_TIMEOUT",
+            "FrameQ LLM checkout timed out. Please retry later.",
+        ) from exc
+    except (urllib.error.URLError, OSError) as exc:
+        raise InsightGenerationError(
+            "INSIGHTFLOW_LLM_CHECKOUT_FAILED",
+            "FrameQ LLM checkout failed before a usable response was returned.",
+        ) from exc
+
+    return parse_managed_checkout_response(raw_response)
+
+
+def parse_anysearch_checkout_response(raw_response: bytes) -> dict[str, str]:
+    """解析 anysearch checkout 响应 ``{mcp_url, api_key?}``（shape 与 LLM checkout
+    不同，独立解析）。
+
+    ``api_key`` 缺 / null → 返回值**不含**该键（匿名访问）。调用方据此决定是否设
+    ``ANYSEARCH_API_KEY``。
+    """
+    try:
+        payload = json.loads(raw_response.decode("utf-8"))
+        mcp_url = str(payload["mcp_url"]).strip()
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("anysearch checkout 未返回可用配置（缺少 mcp_url）。") from exc
+    if not mcp_url:
+        raise RuntimeError("anysearch checkout 未返回可用配置（mcp_url 为空）。")
+
+    result: dict[str, str] = {"mcp_url": mcp_url}
+    api_key = payload.get("api_key")
+    if isinstance(api_key, str) and api_key.strip():
+        result["api_key"] = api_key.strip()
+    return result
+
+
+def checkout_anysearch_config_once(
+    env: Mapping[str, str], transport: Transport | None = None
+) -> dict[str, str]:
+    checkout_url = env.get(ANYSEARCH_CHECKOUT_URL_ENV, "").strip()
+    session_token = env.get(ANYSEARCH_SESSION_TOKEN_ENV, "").strip()
+    if not checkout_url or not session_token:
+        raise RuntimeError(
+            "FRAMEQ_ANYSEARCH_SOURCE=server 但缺少 FRAMEQ_ANYSEARCH_CHECKOUT_URL / "
+            "_SESSION_TOKEN 之一，无法 checkout anysearch 凭证。",
+        )
+
+    request = Request(
+        url=checkout_url,
+        data=b"{}",
+        headers={
+            "Authorization": f"Bearer {session_token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        raw_response = (transport or urlopen_transport)(request, DEFAULT_LLM_TIMEOUT_SECONDS)
+    except urllib.error.HTTPError as exc:
+        raise _anysearch_checkout_http_error(exc) from exc
+    except TimeoutError as exc:
+        raise RuntimeError("anysearch checkout 超时，请稍后重试。") from exc
+    except (urllib.error.URLError, OSError) as exc:
+        raise RuntimeError("anysearch checkout 请求失败，未返回可用响应。") from exc
+
+    return parse_anysearch_checkout_response(raw_response)
+
+
+def _anysearch_checkout_http_error(error: urllib.error.HTTPError) -> RuntimeError:
+    """anysearch checkout HTTP 错误翻译：``_extract_error_code`` 抠 code、raise 中性
+    ``RuntimeError``。"""
+    code = _extract_error_code(error)
+    if error.code == 401:
+        return RuntimeError("anysearch checkout 需要登录（鉴权失败，401）。")
+    if code == "ANYSEARCH_CONFIG_MISSING":
+        return RuntimeError("服务端未配置 anysearch（FRAMEQ_ANYSEARCH_MCP_URL 缺失）。")
+    return RuntimeError(f"anysearch checkout 失败，HTTP {error.code}。")
 
 
 def _managed_checkout_http_error(error: urllib.error.HTTPError) -> InsightGenerationError:

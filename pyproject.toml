@@ -39,6 +39,7 @@ dependencies = [
     # Pin mac-x64 below 49 to use the self-contained universal2 wheel instead.
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "yt-dlp>=2026.6.9",
+    "agent-runtime",
 ]
 
 [project.optional-dependencies]
@@ -53,3 +54,6 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["worker"]
 testpaths = ["worker/tests"]
+
+[tool.uv.sources]
+agent-runtime = { git = "https://github.com/ArMiku/agent-runtime-template.git", tag = "0.1.1" }

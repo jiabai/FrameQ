@@ -27,6 +27,8 @@ export type AiTargetViewModel = {
   target: InsightRetryTarget;
   status: AiTargetStatus;
   errorCode: string | null;
+  /** Optional explanation shown when a target is quietly locked (draft seed rules). */
+  lockedHint?: UiMessage;
 };
 
 const LOCAL_PROGRESS_STEPS: Array<Pick<ProgressStep, "id">> = [
@@ -127,7 +129,41 @@ function aiTargetStatus(
       ? Boolean(workflow.summary || workflow.artifacts.summary)
       : target === "insights"
         ? Boolean(workflow.insights.length || workflow.artifacts.insights || workflow.artifacts.insights_md)
-        : Boolean(workflow.dissection || workflow.artifacts.dissection);
+        : target === "draft"
+          ? Boolean(workflow.draft || workflow.artifacts.draft)
+          : Boolean(workflow.dissection || workflow.artifacts.dissection);
+
+  if (target === "draft") {
+    // The draft card needs a selectable seed insight. It is quietly locked
+    // until (a) insights are ready AND (b) the user has selected exactly one
+    // seed (workflow.draftSeedInsightId). When locked it must NOT expose an LLM
+    // entry or consume quota. This does NOT infer the draft target from status
+    // copy — it is an availability projection from artifact + selection state.
+    const insightsReady = Boolean(
+      workflow.insights.length || workflow.artifacts.insights || workflow.artifacts.insights_md,
+    );
+    const seedSelected = workflow.draftSeedInsightId !== null;
+    if (ready) {
+      return { target, status: "ready", errorCode: null };
+    }
+    if (!insightsReady) {
+      return {
+        target,
+        status: "locked",
+        errorCode: null,
+        lockedHint: uiMessage("synthesis.target.draft.hint.needInsights"),
+      };
+    }
+    if (!seedSelected) {
+      return {
+        target,
+        status: "locked",
+        errorCode: null,
+        lockedHint: uiMessage("synthesis.target.draft.hint.selectSeed"),
+      };
+    }
+    return { target, status: "available", errorCode: null };
+  }
 
   return { target, status: ready ? "ready" : "available", errorCode: null };
 }
@@ -196,6 +232,7 @@ export function createTaskWorkspaceViewModel(
   const summary = aiTargetStatus(workflow, "summary", transcriptReady);
   const insights = aiTargetStatus(workflow, "insights", transcriptReady);
   const dissection = aiTargetStatus(workflow, "dissection", transcriptReady);
+  const draft = aiTargetStatus(workflow, "draft", transcriptReady);
   const owner = cancellationOwner(workflow);
   const aiPhase: AiWorkspacePhase = !transcriptReady
     ? "waiting_transcript"
@@ -276,6 +313,7 @@ export function createTaskWorkspaceViewModel(
       dissection,
       dissectionAvailable: workflow.dissection !== null,
       dissectionStale: workflow.dissectionStale,
+      draft,
     },
   };
 }

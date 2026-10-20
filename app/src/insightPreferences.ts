@@ -158,6 +158,51 @@ export const INSIGHT_PREFERENCE_FIELDS: Record<PreferenceField, FieldConfig> = {
   ...GENERATION_FIELD_CONFIGS,
 };
 
+// --- Draft platform selection ----------------------------------------------
+// 9 stable English ids shared with the worker's DRAFT_PLATFORM_IDS. Display
+// labels live in the synthesis i18n resources under `draftPlatform.<id>` (the
+// worker's _DRAFT_PLATFORM_LABELS collapses the short-video group to a single
+// form label for the prompt; those form labels are NOT selector labels).
+export type DraftPlatformId =
+  | "wechat_official_account"
+  | "xiaohongshu"
+  | "wechat_channels"
+  | "douyin"
+  | "tiktok"
+  | "twitter"
+  | "bilibili"
+  | "youtube"
+  | "other";
+
+export const DRAFT_PLATFORMS: readonly DraftPlatformId[] = [
+  "wechat_official_account",
+  "xiaohongshu",
+  "wechat_channels",
+  "douyin",
+  "tiktok",
+  "twitter",
+  "bilibili",
+  "youtube",
+  "other",
+];
+
+export const DRAFT_PLATFORM_IDS: ReadonlySet<DraftPlatformId> = new Set(
+  DRAFT_PLATFORMS,
+);
+
+// Preselect only when the profile has exactly one platform AND that id is
+// in the 9-id draft vocabulary (identity mapping — id unchanged). 0 / ≥2 /
+// single-unmappable (podcast / course_community / internal_sharing) ⇒ "other".
+export function deriveDefaultDraftPlatform(
+  profilePlatforms: readonly string[] | string[] | null | undefined,
+): DraftPlatformId {
+  if (!profilePlatforms || profilePlatforms.length !== 1) {
+    return "other";
+  }
+  const onlyPlatform = profilePlatforms[0] as DraftPlatformId;
+  return DRAFT_PLATFORM_IDS.has(onlyPlatform) ? onlyPlatform : "other";
+}
+
 export function validateInspirationProfile(value: unknown): InspirationProfile | null {
   if (!isRecord(value)) {
     return null;

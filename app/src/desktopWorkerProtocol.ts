@@ -15,10 +15,16 @@ export const WORKER_PROGRESS_STAGES = [
 ] as const;
 
 // `cancelling` is a desktop supervisor/UI state, not a Python worker progress wire stage.
+// `draft_generating` is an ERROR-only stage: draft generation reuses the
+// insights_generating PROGRESS phase, but a draft failure is reported with
+// error.stage = "draft_generating". It is never a live progress phase, so
+// isProcessingStage / cancellation logic (which use an allow-list) treat it
+// as a terminal state.
 export const WORKFLOW_STAGES = [
   "waiting_input",
   "cancelling",
   ...WORKER_PROGRESS_STAGES.slice(1),
+  "draft_generating",
 ] as const;
 
 export const ASR_MODEL_DOWNLOAD_WIRE_STATUSES = [
@@ -176,18 +182,32 @@ export type RetryInsightsInput =
       target: "summary";
       outputLanguage: SupportedLocale;
       preferenceSnapshot?: never;
+      insightId?: never;
+      platform?: never;
     }
   | {
       taskId: string;
       target: "insights";
       outputLanguage: SupportedLocale;
       preferenceSnapshot?: PreferenceSnapshot;
+      insightId?: never;
+      platform?: never;
     }
   | {
       taskId: string;
       target: "dissection";
       outputLanguage: SupportedLocale;
       preferenceSnapshot?: never;
+      insightId?: never;
+      platform?: never;
+    }
+  | {
+      taskId: string;
+      target: "draft";
+      outputLanguage: SupportedLocale;
+      preferenceSnapshot?: never;
+      insightId: number;
+      platform: string;
     };
 
 export type RetryInsightsWireRequest =
@@ -206,6 +226,13 @@ export type RetryInsightsWireRequest =
       task_id: string;
       target: "dissection";
       output_language: SupportedLocale;
+    }
+  | {
+      task_id: string;
+      target: "draft";
+      output_language: SupportedLocale;
+      insight_id: number;
+      platform: string;
     };
 
 export type RetryInsightsParseResult =
@@ -475,13 +502,19 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
     !isRecord(payload) ||
     !hasExactFields(
       payload,
-      ["taskId", "target", "outputLanguage"],
+      [
+        "taskId",
+        "target",
+        "outputLanguage",
+        ...(payload.target === "draft" ? (["insightId", "platform"] as const) : []),
+      ],
       ["preferenceSnapshot"],
     ) ||
     taskId === null ||
     (payload.target !== "summary" &&
       payload.target !== "insights" &&
-      payload.target !== "dissection") ||
+      payload.target !== "dissection" &&
+      payload.target !== "draft") ||
     !isSupportedLocale(payload.outputLanguage)
   ) {
     return { kind: "invalid", taskId };
@@ -502,6 +535,28 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
         task_id: taskId,
         target: payload.target,
         output_language: payload.outputLanguage,
+      },
+    };
+  }
+
+  if (payload.target === "draft") {
+    if (
+      typeof payload.insightId !== "number" ||
+      !Number.isSafeInteger(payload.insightId) ||
+      payload.insightId < 0 ||
+      typeof payload.platform !== "string" ||
+      payload.platform.trim().length === 0
+    ) {
+      return { kind: "invalid", taskId };
+    }
+    return {
+      kind: "valid",
+      request: {
+        task_id: taskId,
+        target: "draft",
+        output_language: payload.outputLanguage,
+        insight_id: payload.insightId,
+        platform: payload.platform,
       },
     };
   }

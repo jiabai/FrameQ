@@ -8,6 +8,7 @@ mod atomic_files;
 mod deep_link;
 mod diagnostic_export;
 mod diagnostics;
+mod draft_detail;
 mod history;
 mod history_deletion;
 mod insight_preferences;
@@ -115,6 +116,8 @@ pub fn run() {
             history_deletion::delete_history_task,
             transcript_detail::load_transcript_detail,
             transcript_detail::save_transcript_edit,
+            draft_detail::load_draft_detail,
+            draft_detail::save_draft_edit,
             updates::get_update_preferences,
             updates::save_update_preferences,
             updates::get_update_delivery,

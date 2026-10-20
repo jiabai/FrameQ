@@ -88,6 +88,7 @@ def test_process_result_serializes_task_artifacts_text_and_insights() -> None:
         },
         "dissection": None,
         "error": None,
+        "draft": "",
     }
 
 
@@ -123,3 +124,7 @@ def test_process_result_exposes_nullable_dissection_field() -> None:
 
     assert "dissection" in serialized
     assert serialized["dissection"] is None
+
+
+def test_job_stage_has_draft_generating_member() -> None:
+    assert JobStage.DRAFT_GENERATING.value == "draft_generating"

@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { ActivationCodeService } from "./activation.js";
 import { AdminAuthService } from "./adminAuth.js";
+import { AnysearchConfigService } from "./anysearchConfig.js";
 import { AuthService } from "./auth.js";
 import { BillingService, type NativePaymentResult } from "./billing.js";
 import { EntitlementAdjustmentService } from "./entitlementAdjustment.js";
@@ -107,6 +108,11 @@ export function buildServer(dependencies: ServerDependencies) {
     now,
     encryptionKey: dependencies.llmConfigEncryptionKey,
   });
+  const anysearchConfig = new AnysearchConfigService({
+    store: dependencies.store,
+    now,
+    encryptionKey: dependencies.llmConfigEncryptionKey ?? process.env.FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY,
+  });
   const billing = new BillingService({
     store: dependencies.store,
     now,
@@ -147,6 +153,7 @@ export function buildServer(dependencies: ServerDependencies) {
     adminAuth,
     activationCodes,
     llmConfig,
+    anysearchConfig,
     entitlementAdjustments,
     secureCookies: dependencies.secureCookies ?? false,
     now,
@@ -171,7 +178,12 @@ export function buildServer(dependencies: ServerDependencies) {
     llmConfig,
     now,
   });
-  registerDesktopLlmRoutes(app, { store: dependencies.store, llmConfig, now });
+  registerDesktopLlmRoutes(app, {
+    store: dependencies.store,
+    llmConfig,
+    anysearchConfig,
+    now,
+  });
   registerDesktopUpdateRoutes(app, { releaseManifest });
   registerBillingRoutes(app, {
     store: dependencies.store,

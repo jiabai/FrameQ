@@ -30,6 +30,7 @@ function renderDetails() {
     transcript: null,
     dissection: null,
     dissection_source_status: null,
+    draft: "",
     error: null,
   });
   const controller = {

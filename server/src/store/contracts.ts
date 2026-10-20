@@ -107,6 +107,15 @@ export type LlmConfigRecord = {
   updatedAt: Date;
 };
 
+export type AnysearchConfigRecord = {
+  id: string;
+  mcpUrl: string;
+  encryptedApiKey: string;
+  apiKeyLast4: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type LlmUsageEventRecord = {
   id: string;
   userId: string;
@@ -333,6 +342,11 @@ export type Store = {
     input: Omit<LlmConfigRecord, "id" | "createdAt" | "updatedAt">,
     now: Date,
   ): Promise<LlmConfigRecord>;
+  getAnysearchConfig(): Promise<AnysearchConfigRecord | null>;
+  upsertAnysearchConfig(
+    input: Omit<AnysearchConfigRecord, "id" | "createdAt" | "updatedAt">,
+    now: Date,
+  ): Promise<AnysearchConfigRecord>;
   createActivationCode(
     input: Omit<ActivationCodeRecord, "id">,
   ): Promise<ActivationCodeRecord>;

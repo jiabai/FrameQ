@@ -15,6 +15,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import "./App.css";
+import type { DraftPlatformId } from "./insightPreferences";
 import {
   getExportPath,
   isProcessingStage,
@@ -40,6 +41,9 @@ import { useTranscriptDissectionController } from "./features/dissection/useTran
 import { useDiagnosticExport } from "./features/diagnostics/useDiagnosticExport";
 import { AiGenerationWorkspace } from "./features/results/AiGenerationWorkspace";
 import { AiResultDetailSheet } from "./features/results/AiResultDetailSheet";
+import { DraftConfirmationSheet } from "./features/results/DraftConfirmationSheet";
+import { DraftResultSheet } from "./features/results/DraftResultSheet";
+import { handleRegenerateDraft } from "./features/results/regenerateDraft";
 import { TaskStatusBanner } from "./features/results/TaskStatusBanner";
 import { SettingsSheet } from "./features/settings/SettingsSheet";
 import { useSettingsController } from "./features/settings/useSettingsController";
@@ -116,6 +120,11 @@ function App() {
   const [animateNewTaskEntry, setAnimateNewTaskEntry] = useState(false);
   const diagnosticExportController = useDiagnosticExport();
   const settingsController = useSettingsController(diagnosticExportController);
+  // Draft confirmation + draft viewer sheet state. The
+  // confirmation sheet is opened by the draft card's generate action; the
+  // viewer is opened by the draft card's view action (`onViewTarget("draft")`).
+  const [draftConfirmOpen, setDraftConfirmOpen] = useState(false);
+  const [draftResultOpen, setDraftResultOpen] = useState(false);
   const { settingsOpen, closeSettings, openSettings } = settingsController;
   const closeDetailForTaskRef = useRef<() => void>(() => {});
   const resetInsightGenerationUiRef = useRef<() => void>(() => {});
@@ -166,9 +175,11 @@ function App() {
     setLocalMediaSelection,
     removeLocalMediaSelection,
     applyTranscriptSave,
+    applyDraftSave,
     completeHistoryTaskDeletion,
     restoreHistoryItem,
     retryInsightGeneration,
+    setDraftSeedInsightId,
     startNewTaskFromToolbar,
     submitTask,
   } = useTaskProcessingController({
@@ -277,6 +288,55 @@ function App() {
     transcriptDetailController.locateTranscriptByteRange(chunk.startByte, chunk.endByte);
   }, [closeDetail, transcriptDetailController, workflow.dissection, workflow.dissectionStale]);
   resetInsightGenerationUiRef.current = resetInsightGenerationUi;
+
+  // Confirm draft generation — calls the draft retry path with the
+  // selected seed insight id and the user-selected target platform. Cancel
+  // (closeSheet) does NOT call the worker, so it costs no quota.
+  // retryInsightGeneration handles the account/quota gate (opens the account
+  // panel if blocked) and the insights_generating progress phase. The draft
+  // viewer opens once the result arrives.
+  const confirmDraftGeneration = useCallback(
+    (platform: DraftPlatformId) => {
+      setDraftConfirmOpen(false);
+      void retryInsightGeneration(
+        "draft",
+        resolvedLocale,
+        null,
+        account,
+        openAccountPanel,
+        undefined,
+        workflow.draftSeedInsightId ?? undefined,
+        platform,
+      );
+    },
+    [
+      account,
+      openAccountPanel,
+      resolvedLocale,
+      retryInsightGeneration,
+      workflow.draftSeedInsightId,
+    ],
+  );
+
+  // Regenerate draft — routes back to the first-generation confirmation path.
+  // If the user has edited the draft, a browser confirm warns about discarding
+  // edits. On cancel the function is a no-op (no quota consumed, sheets
+  // unchanged). On confirm (or when not dirty), closes the result sheet, writes
+  // the seed, and opens DraftConfirmationSheet.
+  const regenerateDraft = useCallback(
+    (seedInsightId: number | null) => {
+      handleRegenerateDraft(
+        workflow.draftEdited,
+        seedInsightId,
+        setDraftResultOpen,
+        setDraftConfirmOpen,
+        setDraftSeedInsightId,
+        tSynthesis("draftResult.regenerateConfirm"),
+      );
+    },
+    [tSynthesis, workflow.draftEdited],
+  );
+
   const handleHistoryItemSelected = useCallback(
     (item: HistoryItem) => {
       restoreHistoryItem(item);
@@ -344,6 +404,16 @@ function App() {
         return;
       }
 
+      if (draftConfirmOpen) {
+        setDraftConfirmOpen(false);
+        return;
+      }
+
+      if (draftResultOpen) {
+        setDraftResultOpen(false);
+        return;
+      }
+
       if (insightPreferenceFlow) {
         closeInsightPreferenceFlow();
         return;
@@ -368,6 +438,8 @@ function App() {
     closeHistory,
     summaryConfirmOpen,
     closeSummaryConfirmation,
+    draftConfirmOpen,
+    draftResultOpen,
     insightPreferenceFlow,
     closeInsightPreferenceFlow,
     settingsOpen,
@@ -576,9 +648,23 @@ function App() {
                   onSummaryAction={openSummaryConfirmation}
                   onInsightsAction={() => void openInsightPreferenceFlow()}
                   onDissectionAction={dissectionController.openConfirmation}
+                  onDraftAction={() => {
+                    // Open the draft confirmation sheet (does NOT start
+                    // generation — that only happens on confirm, so cancel
+                    // costs no quota).
+                    setActionNotice(null);
+                    setDraftConfirmOpen(true);
+                  }}
                   onViewTarget={(target) => {
                     setActionNotice(null);
-                    openDetailTab(target);
+                    // Draft has its own viewer (separate from the shared
+                    // summary/insights detail tab). Summary and insights still
+                    // route through the shared AI detail sheet.
+                    if (target === "draft") {
+                      setDraftResultOpen(true);
+                    } else {
+                      openDetailTab(target);
+                    }
                   }}
                   onCancel={() => void cancelCurrentProcessing()}
                 />
@@ -721,6 +807,26 @@ function App() {
         onOpenDirectionEditor={openDirectionEditorFromDetail}
         onOpenDissectionConfirmation={dissectionController.openConfirmation}
         onLocateDissectionChunks={locateDissectionChunks}
+        onSelectDraftSeed={(insightId) => setDraftSeedInsightId(insightId)}
+        onClearDraftSeed={() => setDraftSeedInsightId(null)}
+      />
+
+      <DraftConfirmationSheet
+        open={draftConfirmOpen}
+        workflow={workflow}
+        busy={isProcessingStage(workflow.stage)}
+        quotaRemaining={account.llmQuotaRemaining}
+        transcriptPath={currentTranscriptPath}
+        onConfirm={confirmDraftGeneration}
+        onCancel={() => setDraftConfirmOpen(false)}
+      />
+
+      <DraftResultSheet
+        open={draftResultOpen}
+        workflow={workflow}
+        onSaved={applyDraftSave}
+        onRegenerate={regenerateDraft}
+        onClose={() => setDraftResultOpen(false)}
       />
 
       <HistorySheet

@@ -2,6 +2,7 @@ import type {
   ActivationCodeRecord,
   AdminEntitlementAdjustmentRecord,
   AdminSessionRecord,
+  AnysearchConfigRecord,
   AuthRateLimitRecord,
   DesktopLoginTicketRecord,
   EmailOtpRecord,
@@ -30,6 +31,7 @@ export type MemoryState = {
   webhookEvents: WebhookEventRecord[];
   authRateLimits: AuthRateLimitRecord[];
   userSessions: UserSessionRecord[];
+  anysearchConfig: AnysearchConfigRecord | null;
 };
 
 export class MemoryAtomicCoordinator {
@@ -62,6 +64,7 @@ export class MemoryAtomicCoordinator {
       webhookEvents: this.#state.webhookEvents,
       authRateLimits: this.#state.authRateLimits,
       userSessions: this.#state.userSessions,
+      anysearchConfig: this.#state.anysearchConfig,
     });
     try {
       return await operation();
@@ -80,6 +83,7 @@ export class MemoryAtomicCoordinator {
       this.#state.webhookEvents = snapshot.webhookEvents;
       this.#state.authRateLimits = snapshot.authRateLimits;
       this.#state.userSessions = snapshot.userSessions;
+      this.#state.anysearchConfig = snapshot.anysearchConfig;
       throw error;
     } finally {
       release();

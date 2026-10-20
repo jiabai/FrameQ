@@ -35,7 +35,8 @@ export type TaskArtifactKey =
   | "insights_md"
   | "preference_snapshot"
   | "dissection"
-  | "dissection_md";
+  | "dissection_md"
+  | "draft";
 
 export type TaskArtifacts = Partial<Record<TaskArtifactKey, string>>;
 
@@ -178,6 +179,7 @@ export type WorkerResult = {
   transcript: TranscriptMetadata | null;
   dissection: TranscriptDissection | null;
   dissection_source_status: "current" | "stale" | null;
+  draft: string;
   error: WorkerErrorResult | null;
 };
 
@@ -187,7 +189,24 @@ export type WorkerErrorResult = {
   stage: WorkflowStage;
 };
 
-export type InsightRetryTarget = "summary" | "insights" | "dissection";
+export type InsightRetryTarget = "summary" | "insights" | "dissection" | "draft";
+
+/**
+ * The worker stages that represent an AI-target generation failure. Draft
+ * generation reuses the `insights_generating` progress phase but reports
+ * failures with `error.stage = "draft_generating"`. Any of these stages
+ * on a retry result means the active AI target failed — attribution is done by
+ * target identity (the `target` arg passed to finishInsightRetry), never by
+ * inferring the target from the stage copy.
+ */
+const AI_FAILURE_STAGES: ReadonlySet<WorkflowStage> = new Set([
+  "insights_generating",
+  "draft_generating",
+]);
+
+function isAiTargetFailure(error: WorkerErrorResult | null): error is WorkerErrorResult {
+  return Boolean(error && AI_FAILURE_STAGES.has(error.stage));
+}
 
 export type ToolbarNewTaskButtonState = {
   disabled: boolean;
@@ -197,7 +216,10 @@ export type ToolbarNewTaskButtonState = {
 
 export type WorkflowState = {
   stage: WorkflowStage;
-  cancellingFromStage: Exclude<WorkflowStage, "waiting_input" | "cancelling" | "completed" | "partial_completed" | "failed"> | null;
+  // cancellingFromStage is one of the live processing phases the user can
+  // cancel. draft_generating is an error-only stage, never a live phase,
+  // so it is excluded — the draft progress phase is insights_generating.
+  cancellingFromStage: Exclude<WorkflowStage, "waiting_input" | "cancelling" | "draft_generating" | "completed" | "partial_completed" | "failed"> | null;
   activeAiTarget: InsightRetryTarget | null;
   aiErrorTarget: InsightRetryTarget | null;
   aiTargetErrors: Partial<Record<InsightRetryTarget, WorkerErrorResult>>;
@@ -215,6 +237,17 @@ export type WorkflowState = {
   transcript: TranscriptMetadata | null;
   dissection: TranscriptDissection | null;
   dissectionStale: boolean;
+  draft: string;
+  // True when the user has manually edited the draft in the result editor.
+  // Reset to false when draft regeneration succeeds (new baseline).
+  draftEdited: boolean;
+  // The id of the Insight the user picked as the single draft seed.
+  // In-session selection state; cleared on insights regen (the insight ids
+  // change) and on workflow reset. The on-disk manifest mirror
+  // (draft_seed_insight_id) is written by the worker on draft generation
+  // (Task 3); cross-session restore into this field is a Task 7 follow-up
+  // (the history detail payload does not yet carry it).
+  draftSeedInsightId: number | null;
   error: WorkerErrorResult | null;
 };
 export function createInitialWorkflow(): WorkflowState {
@@ -238,6 +271,9 @@ export function createInitialWorkflow(): WorkflowState {
     transcript: null,
     dissection: null,
     dissectionStale: false,
+    draft: "",
+    draftEdited: false,
+    draftSeedInsightId: null,
     error: null,
   };
 }
@@ -270,6 +306,9 @@ export function startProcessing(
     artifacts: {},
     dissection: null,
     dissectionStale: false,
+    draft: "",
+    draftEdited: false,
+    draftSeedInsightId: null,
     error: null,
   };
 }
@@ -289,7 +328,9 @@ export function startInsightRetry(state: WorkflowState, target: InsightRetryTarg
       messageCode:
         target === "summary"
           ? "insights.summary.generating"
-          : "insights.topics.generating",
+          : target === "draft"
+            ? "insights.draft.generating"
+            : "insights.topics.generating",
       args: {},
     },
     progressPercent: 88,
@@ -410,14 +451,18 @@ export function summarizeWorkerResult(
     transcript: result.transcript ?? null,
     dissection: result.dissection,
     dissectionStale: result.dissection_source_status === "stale",
+    draft: result.draft ?? "",
     error: result.error,
-    aiErrorTarget:
-      result.error?.stage === "insights_generating" ? failedAiTarget : null,
+    aiErrorTarget: isAiTargetFailure(result.error) ? failedAiTarget : null,
     aiTargetErrors:
-      result.error?.stage === "insights_generating" && failedAiTarget
+      isAiTargetFailure(result.error) && failedAiTarget
         ? { [failedAiTarget]: result.error }
         : {},
   };
+}
+
+export function editDraft(state: WorkflowState, markdown: string): WorkflowState {
+  return { ...state, draft: markdown, draftEdited: true };
 }
 
 export function finishInsightRetry(
@@ -427,16 +472,21 @@ export function finishInsightRetry(
 ): WorkflowState {
   const next = summarizeWorkerResult(result);
   const aiTargetErrors = { ...state.aiTargetErrors };
-  if (result.error?.stage === "insights_generating") {
+  if (isAiTargetFailure(result.error)) {
     aiTargetErrors[target] = result.error;
   } else {
     delete aiTargetErrors[target];
   }
+  // Regenerating insights replaces the insight list, so the previously
+  // selected seed id is no longer valid — clear it. Summary and draft regen do
+  // not change the insight ids, so their seed selection is preserved.
+  const draftSeedInsightId =
+    target === "insights" ? null : state.draftSeedInsightId;
   return {
     ...next,
     composerSource: state.composerSource,
     taskSource: state.taskSource,
-    aiErrorTarget: result.error?.stage === "insights_generating" ? target : null,
+    aiErrorTarget: isAiTargetFailure(result.error) ? target : null,
     aiTargetErrors,
     dissection:
       target === "dissection" && result.error && result.dissection === null
@@ -450,6 +500,11 @@ export function finishInsightRetry(
             ? false
             : next.dissectionStale
         : state.dissectionStale,
+    draftSeedInsightId,
+    draftEdited:
+      target === "draft" && !isAiTargetFailure(result.error)
+        ? false
+        : state.draftEdited,
   };
 }
 

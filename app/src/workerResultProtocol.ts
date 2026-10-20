@@ -10,6 +10,7 @@ export const TASK_RESULT_FIELDS = [
   "insights",
   "transcript",
   "dissection",
+  "draft",
   "error",
 ] as const;
 
@@ -28,6 +29,7 @@ export const TASK_ARTIFACT_KEYS = [
   "preference_snapshot",
   "dissection",
   "dissection_md",
+  "draft",
 ] as const;
 
 export const TASK_INSIGHT_FIELDS = [
@@ -50,6 +52,9 @@ const TASK_ERROR_STAGES = [
   "video_extracting",
   "video_transcribing",
   "insights_generating",
+  // Error-only stage for draft generation failures; draft progress reuses
+  // insights_generating so it never appears as a live progress phase.
+  "draft_generating",
   "completed",
   "partial_completed",
   "failed",
@@ -181,6 +186,9 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     transcript,
     dissection,
     dissection_source_status: dissectionSourceStatus,
+    // Draft markdown is required on the wire (null allowed) but the frontend
+    // model normalizes it to "" for "no draft".
+    draft: typeof object.draft === "string" ? object.draft : "",
     error,
   };
 }

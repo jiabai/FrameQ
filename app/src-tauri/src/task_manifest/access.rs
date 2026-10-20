@@ -173,6 +173,10 @@ impl SupportedTask {
         &self.manifest.text_preview
     }
 
+    pub(crate) fn draft_seed_insight_id(&self) -> Option<i64> {
+        self.manifest.draft_seed_insight_id
+    }
+
     pub(crate) fn insights_count(&self) -> usize {
         self.manifest.insights_count
     }

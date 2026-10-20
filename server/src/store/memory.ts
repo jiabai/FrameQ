@@ -2,6 +2,7 @@ import type {
   ActivationCodeRecord,
   AdminEntitlementAdjustmentRecord,
   AdminSessionRecord,
+  AnysearchConfigRecord,
   AuthRateLimitRecord,
   DesktopLoginTicketRecord,
   EmailOtpRecord,
@@ -16,6 +17,7 @@ import type {
   WebhookEventRecord,
 } from "./contracts.js";
 import { MemoryAtomicCoordinator } from "./memory/atomic.js";
+import * as anysearchConfigOperations from "./memory/anysearchConfig.js";
 import * as authOperations from "./memory/auth.js";
 import * as billingOperations from "./memory/billing.js";
 import * as entitlementOperations from "./memory/entitlements.js";
@@ -31,6 +33,7 @@ export class MemoryStore implements Store {
   orders: OrderRecord[] = [];
   entitlements: EntitlementRecord[] = [];
   llmConfig: LlmConfigRecord | null = null;
+  anysearchConfig: AnysearchConfigRecord | null = null;
   llmUsageEvents: LlmUsageEventRecord[] = [];
   activationCodes: ActivationCodeRecord[] = [];
   adminSessions: AdminSessionRecord[] = [];
@@ -208,6 +211,17 @@ export class MemoryStore implements Store {
     now: Date,
   ): ReturnType<Store["upsertLlmConfig"]> {
     return llmConfigOperations.upsertLlmConfig(this.llmConfigContext(), input, now);
+  }
+
+  async getAnysearchConfig(): ReturnType<Store["getAnysearchConfig"]> {
+    return anysearchConfigOperations.getAnysearchConfig(this.llmConfigContext());
+  }
+
+  async upsertAnysearchConfig(
+    input: Parameters<Store["upsertAnysearchConfig"]>[0],
+    now: Date,
+  ): ReturnType<Store["upsertAnysearchConfig"]> {
+    return anysearchConfigOperations.upsertAnysearchConfig(this.llmConfigContext(), input, now);
   }
 
   async createActivationCode(input: Parameters<Store["createActivationCode"]>[0]): ReturnType<Store["createActivationCode"]> {

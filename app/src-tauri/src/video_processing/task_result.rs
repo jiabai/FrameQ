@@ -115,6 +115,7 @@ fn worker_failure_result(
         "insights": [],
         "transcript": null,
         "dissection": null,
+        "draft": "",
         "error": {
             "code": code,
             "message": message,

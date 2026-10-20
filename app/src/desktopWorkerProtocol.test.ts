@@ -253,6 +253,7 @@ describe("desktop worker protocol runtime", () => {
       "completed",
       "partial_completed",
       "failed",
+      "draft_generating",
     ]);
     expect(ASR_MODEL_DOWNLOAD_WIRE_STATUSES).toEqual([
       "started",

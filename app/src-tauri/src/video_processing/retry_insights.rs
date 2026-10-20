@@ -19,6 +19,8 @@ enum RetryInsightsTarget {
     Insights,
     #[serde(rename = "dissection")]
     Dissection,
+    #[serde(rename = "draft")]
+    Draft,
 }
 
 impl RetryInsightsTarget {
@@ -27,6 +29,7 @@ impl RetryInsightsTarget {
             Self::Summary => "summary",
             Self::Insights => "insights",
             Self::Dissection => "dissection",
+            Self::Draft => "draft",
         }
     }
 }
@@ -130,6 +133,16 @@ struct RetryInsightsRequest {
     output_language: OutputLanguage,
     #[serde(skip_serializing_if = "Option::is_none")]
     preference_snapshot: Option<PreferenceSnapshot>,
+    // Present only for target="draft" (identifies which insight to expand into a
+    // draft). Omitted on the wire for summary/insights/dissection so those
+    // requests stay byte-identical to the pre-draft worker contract.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    insight_id: Option<i64>,
+    // User-selected draft platform id; present only for target="draft". Omitted
+    // on the wire for other targets (same skip pattern as insight_id). The
+    // worker validates the platform id against its closed vocabulary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,6 +152,8 @@ struct RetryInsightsWireRequest {
     target: RetryInsightsTarget,
     output_language: OutputLanguage,
     preference_snapshot: Option<PreferenceSnapshot>,
+    insight_id: Option<i64>,
+    platform: Option<String>,
 }
 
 fn parse_retry_insights_request(
@@ -164,11 +179,33 @@ fn parse_retry_insights_request(
     if wire.target != RetryInsightsTarget::Insights && wire.preference_snapshot.is_some() {
         return Err(INVALID_RETRY_PAYLOAD.to_string());
     }
+    let (insight_id, platform) = match wire.target {
+        RetryInsightsTarget::Draft => {
+            let Some(insight_id) = wire.insight_id else {
+                return Err(INVALID_RETRY_PAYLOAD.to_string());
+            };
+            let Some(platform) = wire.platform.as_deref().map(str::trim) else {
+                return Err(INVALID_RETRY_PAYLOAD.to_string());
+            };
+            if platform.is_empty() {
+                return Err(INVALID_RETRY_PAYLOAD.to_string());
+            }
+            (Some(insight_id), Some(platform.to_string()))
+        }
+        _ => {
+            if wire.insight_id.is_some() || wire.platform.is_some() {
+                return Err(INVALID_RETRY_PAYLOAD.to_string());
+            }
+            (None, None)
+        }
+    };
     Ok(RetryInsightsRequest {
         task_id: wire.task_id,
         target: wire.target,
         output_language: wire.output_language,
         preference_snapshot: wire.preference_snapshot,
+        insight_id,
+        platform,
     })
 }
 
@@ -385,10 +422,7 @@ mod tests {
             ]
         );
         let serialized_text = serialized.to_string();
-        for forbidden in [
-            "defaultStyles",
-            "defaultAvoid",
-        ] {
+        for forbidden in ["defaultStyles", "defaultAvoid"] {
             assert!(!serialized_text.contains(forbidden));
         }
     }
@@ -434,7 +468,6 @@ mod tests {
 
             assert_eq!(error, INVALID_RETRY_PAYLOAD);
         }
-
     }
 
     #[test]

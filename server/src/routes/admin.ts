@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ActivationCodeService } from "../activation.js";
 import { adminSessionMaxAgeSeconds, type AdminAuthService } from "../adminAuth.js";
+import type { AnysearchConfigService } from "../anysearchConfig.js";
 import { renderAdminLoginPage, renderAdminPage } from "../adminPage.js";
 import { detectLocale, extractQueryLang } from "../i18n.js";
 import type { EntitlementAdjustmentService } from "../entitlementAdjustment.js";
@@ -38,6 +39,12 @@ const adminLlmConfigSchema = z.object({
   timeout_seconds: z.number().int().min(1).max(600),
 });
 
+const adminAnysearchConfigSchema = z.object({
+  mcp_url: z.string().min(1).max(2048),
+  api_key: z.string().max(4096).optional(),
+  clear_api_key: z.boolean().optional(),
+});
+
 const adminEntitlementAdjustmentSchema = z
   .object({
     extend_days: z.number().int().min(1).max(365).optional(),
@@ -60,6 +67,7 @@ type AdminRouteDependencies = {
   adminAuth: AdminAuthService;
   activationCodes: ActivationCodeService;
   llmConfig: LlmConfigService;
+  anysearchConfig: AnysearchConfigService;
   entitlementAdjustments: EntitlementAdjustmentService;
   secureCookies: boolean;
   now: () => Date;
@@ -163,6 +171,7 @@ export function registerAdminRoutes(
     }
     const csrfToken = cookies.get("frameq_admin_csrf") ?? "";
     const publicLlmConfig = await dependencies.llmConfig.getPublicConfig();
+    const publicAnysearchConfig = await dependencies.anysearchConfig.getPublicConfig();
     const users = await dependencies.store.listUsers();
     const entitlements = new Map(
       await Promise.all(
@@ -181,6 +190,7 @@ export function registerAdminRoutes(
       users,
       entitlements,
       llmConfig: publicLlmConfig,
+      anysearchConfig: publicAnysearchConfig,
       activationCodes: codes,
       entitlementAdjustments,
       locale: detectLocale({
@@ -252,6 +262,37 @@ export function registerAdminRoutes(
     }
   });
 
+  app.post("/admin/api/anysearch-config", async (request, reply) => {
+    const cookies = parseCookies(request.headers.cookie);
+    const session = await dependencies.adminAuth.authenticate(
+      cookies.get("frameq_admin_session") ?? null,
+    );
+    if (!session) {
+      return reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
+    }
+    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
+    if (!dependencies.adminAuth.validateCsrf(session, csrfToken)) {
+      return reply.code(403).send({ error: "CSRF_INVALID" });
+    }
+    const parsed = adminAnysearchConfigSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "INVALID_REQUEST" });
+    }
+    try {
+      const saved = await dependencies.anysearchConfig.saveConfig({
+        mcpUrl: parsed.data.mcp_url,
+        apiKey: parsed.data.api_key,
+        clearApiKey: parsed.data.clear_api_key,
+      });
+      return publicAnysearchConfigResponse(saved);
+    } catch (error) {
+      const message = publicError(error);
+      return message
+        ? reply.code(400).send({ error: message })
+        : reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
+    }
+  });
+
   app.post("/admin/api/users/:userId/entitlement-adjustments", async (request, reply) => {
     const cookies = parseCookies(request.headers.cookie);
     const session = await dependencies.adminAuth.authenticate(
@@ -314,6 +355,21 @@ function publicLlmConfigResponse(config: {
     base_url: config.baseUrl,
     model: config.model,
     timeout_seconds: config.timeoutSeconds,
+    has_api_key: config.hasApiKey,
+    api_key_last4: config.apiKeyLast4,
+    updated_at: config.updatedAt?.toISOString() ?? null,
+  };
+}
+
+function publicAnysearchConfigResponse(config: {
+  mcpUrl: string;
+  hasApiKey: boolean;
+  apiKeyLast4: string;
+  updatedAt: Date | null;
+}) {
+  return {
+    ok: true,
+    mcp_url: config.mcpUrl,
     has_api_key: config.hasApiKey,
     api_key_last4: config.apiKeyLast4,
     updated_at: config.updatedAt?.toISOString() ?? null,

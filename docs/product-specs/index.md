@@ -12,6 +12,7 @@
 - `2026-07-10-server-entitlement-transaction-safety.md` — Atomic, retry-safe payment settlement, activation-code redemption, and administrator entitlement compensation.
 - `2026-08-03-web-user-dashboard.md` — Browser-side per-user Web dashboard at `/dashboard` with email-OTP cookie-session login that lands on the dashboard, reusing the `desktop_login` OTP purpose and the Admin Web session model.
 - `2026-08-04-server-page-i18n.md` — Per-page language switcher on `/login`, `/dashboard`, `/admin/login`, and `/admin` supporting `zh-CN` (default), `en`, and `zh-TW` via the `server/src/i18n.ts` module.
+- `2026-07-15-server-managed-anysearch-config.md` — Server-managed anysearch MCP URL + optional key on Admin Web as an encrypted singleton, replacing `server/.env`; checkout contract unchanged.
 
 ## Desktop Runtime, Packaging & Distribution
 
@@ -59,6 +60,8 @@
 
 - `2026-07-06-personalized-insight-preferences.md` — Six-field local Inspiration Profile v2 plus per-run six-step generation preferences.
 - `2026-07-12-generate-draft-from-inspiration.md` — Turn a single user-selected `Insight` into a new draft, with strict single-seed, quota, and local-first privacy boundaries.
+- `2026-07-15-draft-platform-selection.md` — Delta on `生成文字稿`: user-visible, editable 9-option target platform on the confirmation page (defaulted from the inspiration profile), replacing `suitable_use` as the platform source with a new platform→form mapping (视频号/抖音/Tiktok/X→抖音).
+- `2026-07-15-draft-result-editor.md` — Delta on `生成文字稿` 结果视图: 只读预览升级为左右分栏可编辑器（左 textarea + 右 MarkdownContent 预览），编辑本地落盘 `ai/draft.md`，复制/下载基于编辑器当前文本，重新生成重走首次确认页（与第一次逻辑一致）、编辑过二次确认。
 - `2026-07-31-transcript-dissection.md` — Independent `文字稿解剖` AI target for traceable structural review of a saved transcript.
 
 ## Motion UI
