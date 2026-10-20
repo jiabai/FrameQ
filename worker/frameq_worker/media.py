@@ -264,7 +264,7 @@ def download_video(
             failure_message = result.stderr or result.stdout
         if is_youtube_video and _structured_error_code(
             classify_youtube_download_failure(result).stderr,
-        ) == "YOUTUBE_DOWNLOAD_FAILED":
+        ) in ("YOUTUBE_DOWNLOAD_FAILED", "YOUTUBE_STREAM_FORBIDDEN"):
             result = runner(download_command)
             if result.returncode == 0:
                 return result
@@ -465,6 +465,14 @@ def classify_youtube_download_failure(result: CommandResult) -> CommandResult:
     elif any(
         marker in normalized
         for marker in (
+            "http error 429",
+            "too many requests",
+        )
+    ):
+        code = "YOUTUBE_RATE_LIMITED"
+    elif any(
+        marker in normalized
+        for marker in (
             "sign in",
             "login",
             "logged in",
@@ -501,6 +509,14 @@ def classify_youtube_download_failure(result: CommandResult) -> CommandResult:
         )
     ):
         code = "YOUTUBE_PRIVATE_OR_UNAVAILABLE"
+    elif any(
+        marker in normalized
+        for marker in (
+            "http error 403",
+            "403: forbidden",
+        )
+    ):
+        code = "YOUTUBE_STREAM_FORBIDDEN"
     else:
         code = "YOUTUBE_DOWNLOAD_FAILED"
 

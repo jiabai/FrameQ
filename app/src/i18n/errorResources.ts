@@ -22,6 +22,8 @@ export const errorResources = {
         ageRestricted: "该 YouTube 视频存在年龄、会员或访问限制；请改用公开视频。",
         privateOrUnavailable: "该 YouTube 视频不可公开访问、已删除或为私有内容。",
         noPlayableStream: "YouTube 暂未返回可下载的媒体流，请稍后重试。",
+        rateLimited: "YouTube 暂时限制了请求频率，请稍后重试。",
+        streamForbidden: "YouTube 拒绝了本次媒体流请求，常见原因是链接已过期或访问受限；请稍后重试或改用其他公开视频。",
         downloadFailed: "YouTube 公开视频下载失败，请检查网络后重试。",
       },
       bilibili: {
@@ -114,6 +116,8 @@ export const errorResources = {
         ageRestricted: "此 YouTube 影片有年齡、會員或存取限制；請改用公開影片。",
         privateOrUnavailable: "此 YouTube 影片無法公開存取、已刪除或為私人內容。",
         noPlayableStream: "YouTube 暫未回傳可下載的媒體串流，請稍後重試。",
+        rateLimited: "YouTube 暫時限制了請求頻率，請稍後重試。",
+        streamForbidden: "YouTube 拒絕了本次媒體串流請求，常見原因是連結已過期或存取受限；請稍後重試或改用其他公開影片。",
         downloadFailed: "YouTube 公開影片下載失敗，請檢查網路後重試。",
       },
       bilibili: {
@@ -206,6 +210,8 @@ export const errorResources = {
         ageRestricted: "This YouTube video has an age, membership, or access restriction. Use a public video.",
         privateOrUnavailable: "This YouTube video is private, deleted, or otherwise unavailable publicly.",
         noPlayableStream: "YouTube did not provide a downloadable media stream. Try again later.",
+        rateLimited: "YouTube is temporarily rate limiting requests. Try again later.",
+        streamForbidden: "YouTube rejected the media stream request. The link may have expired or access may be restricted. Try again later or use a different public video.",
         downloadFailed: "The public YouTube video could not be downloaded. Check your connection and try again.",
       },
       bilibili: {

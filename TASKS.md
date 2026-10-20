@@ -2,6 +2,13 @@
 
 ## Completed Worker Work
 
+- [x] 拆分 YouTube 403 与 429 失败原因（2026-10-20）: ✅ 已完成。`classify_youtube_download_failure`
+  新增两条分支，429 归入 `YOUTUBE_RATE_LIMITED`，无其他线索的 403 归入
+  `YOUTUBE_STREAM_FORBIDDEN`。两个原因码在 worker、TypeScript 原因码集合、消息映射与三语文案
+  同步登记。单次重试覆盖通用码与禁止码，限流码立即返回，因为立即重试会加深限流。两条顺序保护
+  用例锁住判定优先级：带 cookie 建议的 429 仍归限流，带登录标记的风控 403 仍归登录要求。
+  ExecPlan：`docs/exec-plans/completed/2026-10-20-youtube-rejection-reason-codes-plan.md`。
+
 - [x] 增加小红书平台字幕优先转写（2026-08-25）— ✅ 从公开 note 的 `mediaV2.video.subtitles`
   选择一条安全的 `source`/中文/英文平台 SRT；fallback 与成功 `yt-dlp` 两条路径均 best-effort
   下载到 task cache，命中时复用现有 transcript pipeline 并跳过 ASR，缺失/异常时回退原 ASR。

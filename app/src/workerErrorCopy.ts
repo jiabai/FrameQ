@@ -62,6 +62,8 @@ export const VIDEO_DOWNLOAD_REASON_MESSAGE_CODES = {
   YOUTUBE_AGE_RESTRICTED: "video.youtube.ageRestricted",
   YOUTUBE_PRIVATE_OR_UNAVAILABLE: "video.youtube.privateOrUnavailable",
   YOUTUBE_NO_PLAYABLE_STREAM: "video.youtube.noPlayableStream",
+  YOUTUBE_RATE_LIMITED: "video.youtube.rateLimited",
+  YOUTUBE_STREAM_FORBIDDEN: "video.youtube.streamForbidden",
   YOUTUBE_DOWNLOAD_FAILED: "video.youtube.downloadFailed",
   BILIBILI_DRM_PROTECTED: "video.bilibili.drmProtected",
   BILIBILI_FFMPEG_MERGE_FAILED: "video.bilibili.mergeFailed",

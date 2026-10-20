@@ -361,6 +361,22 @@ def test_classify_youtube_download_failure_maps_common_ytdlp_errors() -> None:
             "No video formats found. Requested format is not available.",
             "YOUTUBE_NO_PLAYABLE_STREAM:",
         ),
+        (
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+            "YOUTUBE_STREAM_FORBIDDEN:",
+        ),
+        (
+            "ERROR: HTTP Error 429: Too Many Requests",
+            "YOUTUBE_RATE_LIMITED:",
+        ),
+        (
+            "ERROR: HTTP Error 429: Too Many Requests. Use --cookies.",
+            "YOUTUBE_RATE_LIMITED:",
+        ),
+        (
+            "Sign in to confirm you are not a bot. HTTP Error 403: Forbidden",
+            "YOUTUBE_LOGIN_REQUIRED:",
+        ),
         ("ERROR: extractor failed.", "YOUTUBE_DOWNLOAD_FAILED:"),
     ]
 

@@ -83,6 +83,8 @@ describe("worker error presentation", () => {
     ["YOUTUBE_AGE_RESTRICTED", "video.youtube.ageRestricted"],
     ["YOUTUBE_PRIVATE_OR_UNAVAILABLE", "video.youtube.privateOrUnavailable"],
     ["YOUTUBE_NO_PLAYABLE_STREAM", "video.youtube.noPlayableStream"],
+    ["YOUTUBE_RATE_LIMITED", "video.youtube.rateLimited"],
+    ["YOUTUBE_STREAM_FORBIDDEN", "video.youtube.streamForbidden"],
     ["BILIBILI_DRM_PROTECTED", "video.bilibili.drmProtected"],
     ["BILIBILI_FFMPEG_MERGE_FAILED", "video.bilibili.mergeFailed"],
     ["XHS_IMAGE_ONLY", "video.xiaohongshu.imageOnly"],
