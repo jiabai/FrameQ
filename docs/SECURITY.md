@@ -242,7 +242,7 @@
 - `frameq_worker.asr` remains the only supported production import surface. The private
   `asr_runtime/` owners cannot import the root, CLI, pipeline, worker service, task store, LLM, or
   InsightFlow layers, and production callers cannot bypass the stable root.
-- Qwen and SenseVoice SDK imports remain inside their default loaders; optional `numpy` and
+- SenseVoice SDK imports remain inside their default loaders; optional `numpy` and
   `funasr` VAD utilities remain inside the VAD path. Importing ASR contracts or registry functions
   does not load a provider SDK, initialize a model, download weights, or make a network request.
 - `registry.py` alone owns `MODELSCOPE_CACHE` mutation. `sensevoice.py` alone owns provider/VAD/WAV

@@ -129,7 +129,7 @@ describe("settings client", () => {
       calls.push({ command, args });
       return {
         output_dir: "D:\\FrameQ\\outputs",
-        asr_model: "Qwen/Qwen3-ASR-0.6B",
+        asr_model: "iic/SenseVoiceSmall-onnx",
         supported_asr_models: ["iic/SenseVoiceSmall"],
         config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
       };
@@ -138,7 +138,7 @@ describe("settings client", () => {
     const config = await saveLlmConfig(
       {
         outputDir: "D:\\FrameQ\\outputs",
-        asrModel: "Qwen/Qwen3-ASR-0.6B",
+        asrModel: "iic/SenseVoiceSmall-onnx",
       },
       runner,
     );
@@ -149,7 +149,7 @@ describe("settings client", () => {
         args: {
           config: {
             output_dir: "D:\\FrameQ\\outputs",
-            asr_model: "Qwen/Qwen3-ASR-0.6B",
+            asr_model: "iic/SenseVoiceSmall-onnx",
           },
         },
       },

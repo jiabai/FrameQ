@@ -162,7 +162,7 @@
 
 - 支持粘贴单个抖音视频 URL 并触发处理。
 - 下载并校验公开视频，输出标准 MP4 文件。
-- 提取 16 kHz 单声道 WAV 音频并调用本地 ASR 模型转写中文语音；默认模型为 `iic/SenseVoiceSmall`，并支持选择 Qwen3-ASR。
+- 提取 16 kHz 单声道 WAV 音频并调用本地 ASR 模型转写中文语音；默认模型为 `iic/SenseVoiceSmall`，并支持选择 `iic/SenseVoiceSmall-onnx`。
 - 在文字稿完成后，由用户分别确认生成要点总结和启发灵感；要点总结会同时写入隐藏的 Mermaid 思维导图本地文件。
 - 在桌面 UI 中展示本地处理进度、任务状态横幅、两个领域工作区、复制和导出入口。
 - 同一 taskId 下，左侧本地工作区提供视频/音频定位与文字稿校对，右侧 AI 工作区提供要点总结和启发灵感两个独立 target；Mermaid mindmap 作为 summary 的本地附属文件保存，不提供独立生成入口。
@@ -189,12 +189,12 @@
 - 用户完成主流程后，可以先查看或定位视频、音频和文字稿，再通过对应卡片分别启动要点总结或启发灵感生成。
 - 用户可以打开历史任务列表，查看过去处理过的 URL、完成状态、时间和结果路径，并重新打开文字稿、要点总结或灵感详情。
 - 用户可以在设置中修改结果输出目录；修改后只影响新任务，旧历史仍指向旧文件路径。
-- 用户可以在设置中选择后续任务使用的 ASR 模型：`Qwen/Qwen3-ASR-0.6B` 或 `iic/SenseVoiceSmall`。
+- 用户可以在设置中选择后续任务使用的 ASR 模型：`iic/SenseVoiceSmall` 或 `iic/SenseVoiceSmall-onnx`。
 
 ## 约束
 
 - 技术栈固定为 Tauri + React + TypeScript + Python ASR Worker。
-- 默认 ASR 模型为 `iic/SenseVoiceSmall`；可选 ASR 模型包括 `Qwen/Qwen3-ASR-0.6B`。
+- 默认 ASR 模型为 `iic/SenseVoiceSmall`；可选 ASR 模型为 `iic/SenseVoiceSmall-onnx`。
 - 下载、转码和 ASR 默认本地处理。
 - 云端 LLM 使用前必须明确提示文字稿会发送到对应服务。
 - InsightFlow LLM 配置由 FrameQ server 托管；worker 不得读取项目根 `.env` 或 app-local `.env` 中的旧 `FRAMEQ_LLM_*` 字段作为 LLM 配置。

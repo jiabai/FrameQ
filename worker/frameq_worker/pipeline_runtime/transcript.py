@@ -5,7 +5,6 @@ from pathlib import Path
 from frameq_worker.asr import (
     DEFAULT_ASR_MODEL,
     ASRError,
-    QwenAsrTranscriber,
     Transcriber,
     build_asr_transcriber,
     resolve_model_cache_dir,
@@ -45,7 +44,7 @@ def run_asr_transcript_step(
     model: str = DEFAULT_ASR_MODEL,
     source_identity: SourceIdentity | None = None,
 ) -> ProcessResult:
-    asr = transcriber or QwenAsrTranscriber(model_name=model)
+    asr = transcriber or build_asr_transcriber(model_name=model)
 
     try:
         artifacts = transcribe_and_write(
@@ -254,9 +253,8 @@ def _subtitle_language_args(language: object) -> dict[str, str]:
 
 
 def _asr_model_args(model: object) -> dict[str, str] | None:
-    # The release desktop currently exposes and bundles only SenseVoice. The Qwen
-    # adapter remains a hidden dev/future path, so it deliberately uses generic
-    # progress instead of expanding the release progress-model allowlist.
+    # The release desktop exposes only the two SenseVoice variants, so the
+    # progress-model allowlist stays closed unless a new model joins the registry.
     normalized = normalize_model_arg(model)
     return {"model": normalized} if normalized is not None else None
 

@@ -47,9 +47,6 @@ dependencies = [
     "mcp>=1.8.0,<2",
 ]
 
-[project.optional-dependencies]
-qwen = ["qwen-asr>=0.0.6"]
-
 [dependency-groups]
 dev = [
   "pytest>=8.0",

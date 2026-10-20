@@ -2,8 +2,6 @@ from frameq_worker.asr_runtime.artifacts import transcribe_and_write as transcri
 from frameq_worker.asr_runtime.artifacts import (
     write_transcript_files as write_transcript_files,
 )
-from frameq_worker.asr_runtime.qwen import QWEN_ASR_MODEL as QWEN_ASR_MODEL
-from frameq_worker.asr_runtime.qwen import QwenAsrTranscriber as QwenAsrTranscriber
 from frameq_worker.asr_runtime.registry import DEFAULT_ASR_MODEL as DEFAULT_ASR_MODEL
 from frameq_worker.asr_runtime.registry import (
     DEFAULT_MODEL_CACHE_ENV as DEFAULT_MODEL_CACHE_ENV,
@@ -13,9 +11,6 @@ from frameq_worker.asr_runtime.registry import SUPPORTED_ASR_MODELS as SUPPORTED
 from frameq_worker.asr_runtime.registry import asr_model_display_name as asr_model_display_name
 from frameq_worker.asr_runtime.registry import asr_model_family as asr_model_family
 from frameq_worker.asr_runtime.registry import build_asr_transcriber as build_asr_transcriber
-from frameq_worker.asr_runtime.registry import (
-    build_qwen_asr_transcriber as build_qwen_asr_transcriber,
-)
 from frameq_worker.asr_runtime.registry import (
     build_sensevoice_onnx_transcriber as build_sensevoice_onnx_transcriber,
 )

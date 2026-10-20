@@ -76,7 +76,7 @@ function createLlmConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
   return {
     outputDir: "D:/FrameQ/outputs",
     asrModel: "iic/SenseVoiceSmall",
-    supportedAsrModels: ["iic/SenseVoiceSmall", "Qwen/Qwen3-ASR-0.6B"],
+    supportedAsrModels: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
     configPath: "D:/FrameQ/app-data/frameq-settings.json",
     ...overrides,
   };
@@ -296,8 +296,8 @@ describe("useSettingsController", () => {
   test("saves draft settings and refreshes saved config metadata", async () => {
     const savedConfig = createLlmConfig({
       outputDir: "D:/FrameQ/new-output",
-      asrModel: "Qwen/Qwen3-ASR-0.6B",
-      supportedAsrModels: ["Qwen/Qwen3-ASR-0.6B"],
+      asrModel: "iic/SenseVoiceSmall-onnx",
+      supportedAsrModels: ["iic/SenseVoiceSmall-onnx"],
       configPath: "D:/FrameQ/app-data/new-settings.json",
     });
     mocks.saveLlmConfig.mockResolvedValueOnce(savedConfig);

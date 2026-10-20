@@ -27,8 +27,8 @@ FrameQ 的 MVP 已能在开发环境中运行，但普通用户安装后不能�
 ## User-visible Requirements
 
 - 用户不需要安装 Python、uv、ffmpeg、yt-dlp 或手动配置 PATH。
-- 默认 ASR 模型固定为 SenseVoice Small；首版 release UI 不展示未验证的 Qwen 选项。
-- 首版普通用户 release 的默认 Python runtime 只安装 SenseVoice 路径所需依赖；`qwen-asr` 作为开发可选 extra 保留，不随默认安装包打入。
+- 默认 ASR 模型固定为 SenseVoice Small；可选模型收敛为 SenseVoice Small 的 ONNX 变体。
+- 首版普通用户 release 的默认 Python runtime 只安装 SenseVoice 路径所需依赖；Qwen 适配器已于 2026-10-20 从 worker 中移除，不再作为开发 extra 保留。
 - 构建脚本必须裁剪 Python debug/cache/test/header 等非运行期文件，Windows NSIS 包体积必须保持在 NSIS 可打包边界内。
 - 构建安装包时不要求 SenseVoice Small 模型目录；`resources/models` 不进入普通用户安装包。
 - 首启检测 app-local data 模型缓存；缺少模型时展示下载引导。官方源顺序固定为先尝试 ModelScope（`iic/SenseVoiceSmall`），下载失败或达到有界超时后自动切换到 Hugging Face（`FunAudioLLM/SenseVoiceSmall`）。

@@ -70,8 +70,7 @@ Supported video link
 - Xiaohongshu platform-subtitle reuse: when a public note carries one validated Chinese or English subtitle track, the worker writes it as the transcript and skips local ASR; a missing or rejected track falls back to the unchanged local ASR path.
 - Media validation with `ffprobe`.
 - Audio extraction with `ffmpeg`.
-- Selectable local ASR models (SenseVoiceSmall default) with on-demand, resumable download into app-local data; PyTorch and ONNX runtimes supported.
-- Optional Qwen ASR adapter remains available for development, but ordinary release builds do not install `qwen-asr` by default.
+- Selectable local ASR models (SenseVoiceSmall default, SenseVoiceSmall-ONNX optional) with on-demand, resumable download into app-local data; PyTorch and ONNX runtimes supported.
 - Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
 - Transcript dissection (`文字稿解剖`) AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure and bounded per-run quota.
 - Draft generation (`生成文字稿`) AI target that turns one selected insight into a platform-style draft through server-managed anysearch retrieval and a platform skill. The transcript, video, audio, and source URL never enter the draft prompt, and the result is written to `ai/draft.md` with the pre-edit copy kept under `ai/original/`.

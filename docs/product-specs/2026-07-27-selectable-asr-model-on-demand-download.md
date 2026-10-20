@@ -23,6 +23,10 @@ The selected ID is restricted to this closed list. The ONNX option must not use 
 third-party mirror, an auto-exported model, or a fallback to another source. Model weights, LLM
 keys, cloud LLM models, and user-private configuration remain outside the installer.
 
+Qwen3-ASR was never part of this closed list. Its worker adapter, the `qwen` optional dependency,
+and the settings entry were removed on 2026-10-20; the release desktop no longer ships or resolves
+that path.
+
 ## Submission and Download Flow
 
 1. The user submits a URL or a selected local-media source. FrameQ validates the source and the

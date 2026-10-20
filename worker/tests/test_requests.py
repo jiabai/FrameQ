@@ -105,7 +105,7 @@ def test_local_media_request_parses_exact_v4_execution_input_without_repr_path()
         {"source_extension": "mp3"},
         {"source_extension": "WMV"},
         {"source_extension": 42},
-        {"asr_model": "Qwen/Qwen3-ASR-0.6B"},
+        {"asr_model": "vendor/not-supported"},
         {"selection_token": "review-secret-selection-token"},
     ],
 )
@@ -183,7 +183,7 @@ def test_process_request_accepts_onnx_desktop_model_snapshot() -> None:
         {"contract_version": 2},
         {"contract_version": "3"},
         {"url": "   "},
-        {"asr_model": "Qwen/Qwen3-ASR-0.6B"},
+        {"asr_model": "vendor/not-supported"},
         {"language": "Chinese"},
         {"output_formats": ["txt", "md"]},
         {"insightflow_mode": "embedded"},

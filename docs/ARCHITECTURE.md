@@ -302,11 +302,11 @@
   writers only from `frameq_worker.asr`; the root re-exports the actual private objects rather than
   wrappers or duplicate classes.
 - The private `asr_runtime/` package separates five owners: `types.py` owns shared contracts,
-  `qwen.py` owns the lazy Qwen adapter, `sensevoice.py` owns SenseVoice normalization/VAD/WAV
-  behavior, `registry.py` owns model selection and cache mutation, and `artifacts.py` owns official
+  `sensevoice.py` owns SenseVoice normalization/VAD/WAV behavior, `sensevoice_onnx.py` owns the ONNX
+  adapter, `registry.py` owns model selection and cache mutation, and `artifacts.py` owns official
   transcript output. The package initializer is empty.
 - Provider modules never import the registry, and no private module imports the stable root or
-  application orchestration. `qwen_asr`, `funasr`, and `numpy` remain lazy; importing the stable
+  application orchestration. `funasr`, `funasr_onnx`, and `numpy` remain lazy; importing the stable
   root does not load a provider SDK or initialize a model.
 - SenseVoice VAD remains best-effort and falls back to the existing full-audio call. At this
   structural checkpoint provider failures, model order/defaults, source-identity
@@ -1107,7 +1107,7 @@ graph LR
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
 - `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
 - `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
-- `worker/frameq_worker/asr.py`：稳定 ASR 导入入口；实现按 failure boundary 位于私有 `asr_runtime/` 的 types、registry、Qwen、SenseVoice/VAD 和 artifact owners。
+- `worker/frameq_worker/asr.py`：稳定 ASR 导入入口；实现按 failure boundary 位于私有 `asr_runtime/` 的 types、registry、SenseVoice/VAD、ONNX 和 artifact owners。
 - `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
 - `worker/frameq_worker/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
 - `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client；桌面灵感生成通过 server-managed checkout env 创建 client，默认使用 `temperature=0.7`。

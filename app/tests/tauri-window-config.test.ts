@@ -391,11 +391,13 @@ describe("Tauri desktop window configuration", () => {
     expect(script).not.toContain("MODEL_VERSION.txt");
   });
 
-  test("installer release runtime does not install Qwen ASR by default", () => {
+  test("installer release runtime keeps the Qwen adapter out of the manifest", () => {
     const manifest = readFileSync(workerManifestPath, "utf8");
     const projectDependencies = manifest.match(/dependencies = \[([\s\S]*?)\]\s*\n/)?.[1] ?? "";
 
-    expect(projectDependencies).not.toContain("qwen-asr");
+    expect(projectDependencies).not.toContain("qwen");
+    expect(manifest).not.toContain("qwen-asr");
+    expect(manifest).not.toContain("[project.optional-dependencies]");
     expect(projectDependencies).toContain("numpy<2");
     expect(projectDependencies).toContain("torch==2.2.2");
     expect(projectDependencies).toContain("torch>=2.10.0");
@@ -407,8 +409,6 @@ describe("Tauri desktop window configuration", () => {
     expect(projectDependencies).toContain("llvmlite==0.45.1");
     expect(projectDependencies).toContain("numba==0.62.1");
     expect(projectDependencies).toContain("cryptography<49");
-    expect(manifest).toContain("[project.optional-dependencies]");
-    expect(manifest).toContain('qwen = ["qwen-asr>=0.0.6"]');
   });
 
   test("installer forces llvmlite to install from a prebuilt wheel", () => {

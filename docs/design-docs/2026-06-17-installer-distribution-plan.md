@@ -1,7 +1,7 @@
 # FrameQ 一键安装对外发布方案
 
 > [!WARNING]
-> 历史草案，已被后续轻量安装包方案取代，不再作为 release 发布依据。当前 release 口径：默认 ASR 模型为 `iic/SenseVoiceSmall`，模型由首启引导下载到 app-local data；Qwen/Qwen3-ASR 仅保留为开发或未来可选适配；安装包不得内置 ASR 权重、LLM key、云端 LLM 模型或用户私有配置。
+> 历史草案，已被后续轻量安装包方案取代，不再作为 release 发布依据。当前 release 口径：默认 ASR 模型为 `iic/SenseVoiceSmall`，模型由首启引导下载到 app-local data；可选模型为 `iic/SenseVoiceSmall-onnx`，Qwen 适配器已于 2026-10-20 移除；安装包不得内置 ASR 权重、LLM key、云端 LLM 模型或用户私有配置。
 
 | 字段 | 值 |
 |------|---|

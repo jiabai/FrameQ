@@ -9,13 +9,11 @@ from frameq_worker.asr import (
     ASRDependencyError,
     ASRRuntimeError,
     ASRUnsupportedModelError,
-    QwenAsrTranscriber,
     SenseVoiceOnnxTranscriber,
     SenseVoiceTranscriber,
     Transcript,
     TranscriptSegment,
     build_asr_transcriber,
-    build_qwen_asr_transcriber,
     resolve_asr_model_name,
     resolve_model_cache_dir,
     supported_asr_model_names,
@@ -38,7 +36,7 @@ def test_write_transcript_files_creates_non_empty_txt_and_markdown(tmp_path: Pat
         output_stem="7524373044106677544",
         metadata=TranscriptMetadata(
             source="asr",
-            engine="Qwen/Qwen3-ASR-0.6B",
+            engine="iic/SenseVoiceSmall",
             source_identity=identify_source(
                 "https://www.douyin.com/video/7524373044106677544",
             ),
@@ -51,7 +49,7 @@ def test_write_transcript_files_creates_non_empty_txt_and_markdown(tmp_path: Pat
     )
     markdown = artifacts.md_path.read_text(encoding="utf-8")
     assert "# 视频文字稿" in markdown
-    assert "Qwen/Qwen3-ASR-0.6B" in markdown
+    assert "iic/SenseVoiceSmall" in markdown
     assert "这里是从视频语音中识别出的完整文字内容。" in markdown
     assert artifacts.txt_path.stat().st_size > 0
     assert artifacts.md_path.stat().st_size > 0
@@ -306,38 +304,6 @@ def test_transcript_failed_first_commit_leaves_no_authoritative_files(
     assert not (output_dir / "segments.json").exists()
 
 
-def test_qwen_asr_transcriber_uses_injected_model_factory() -> None:
-    class FakeResult:
-        text = "模型返回的文字稿"
-
-    class FakeModel:
-        def transcribe(self, audio: str, language: str) -> list[FakeResult]:
-            assert audio == "cache/demo.wav"
-            assert language == "Chinese"
-            return [FakeResult()]
-
-    received_kwargs: dict[str, object] = {}
-
-    def fake_factory(**kwargs: object) -> FakeModel:
-        received_kwargs.update(kwargs)
-        return FakeModel()
-
-    transcriber = QwenAsrTranscriber(
-        model_factory=fake_factory,
-        max_new_tokens=4096,
-        max_inference_batch_size=4,
-    )
-
-    transcript = transcriber.transcribe(Path("cache/demo.wav"))
-
-    assert transcript == Transcript(text="模型返回的文字稿", language="Chinese")
-    assert received_kwargs == {
-        "model_name": "Qwen/Qwen3-ASR-0.6B",
-        "max_inference_batch_size": 4,
-        "max_new_tokens": 4096,
-    }
-
-
 def test_resolve_model_cache_dir_defaults_to_project_models(tmp_path: Path) -> None:
     cache_dir = resolve_model_cache_dir(project_root=tmp_path, environ={})
 
@@ -353,25 +319,10 @@ def test_resolve_model_cache_dir_uses_explicit_env_path(tmp_path: Path) -> None:
     assert cache_dir == tmp_path / "custom-model-cache"
 
 
-def test_build_qwen_asr_transcriber_creates_cache_dir_and_passes_it(
-    tmp_path: Path,
-) -> None:
-    cache_dir = tmp_path / "models"
-
-    transcriber = build_qwen_asr_transcriber(
-        model_name="Qwen/Qwen3-ASR-0.6B",
-        cache_dir=cache_dir,
-    )
-
-    assert cache_dir.is_dir()
-    assert transcriber.model_kwargs["cache_dir"] == cache_dir.as_posix()
-
-
-def test_supported_asr_models_include_qwen_and_available_sensevoice_models() -> None:
+def test_supported_asr_models_cover_the_two_sensevoice_variants() -> None:
     assert supported_asr_model_names() == [
         "iic/SenseVoiceSmall",
         "iic/SenseVoiceSmall-onnx",
-        "Qwen/Qwen3-ASR-0.6B",
     ]
 
 
@@ -575,21 +526,6 @@ def test_sensevoice_vad_failure_falls_back_to_full_audio_generate() -> None:
     assert model.generate_calls == 1
 
 
-def test_qwen_provider_failure_keeps_runtime_error_contract() -> None:
-    class FailingModel:
-        def transcribe(self, audio: str, language: str) -> object:
-            raise RuntimeError("qwen provider unavailable")
-
-    transcriber = QwenAsrTranscriber(model_factory=lambda **kwargs: FailingModel())
-
-    with pytest.raises(ASRRuntimeError) as error:
-        transcriber.transcribe(Path("cache/demo.wav"))
-
-    assert error.value.code == "ASR_RUNTIME_ERROR"
-    assert str(error.value) == "qwen provider unavailable"
-    assert isinstance(error.value.__cause__, RuntimeError)
-
-
 def test_sensevoice_provider_failure_keeps_runtime_error_contract() -> None:
     class FailingModel:
         def generate(self, **kwargs: object) -> object:
@@ -603,18 +539,6 @@ def test_sensevoice_provider_failure_keeps_runtime_error_contract() -> None:
     assert error.value.code == "ASR_RUNTIME_ERROR"
     assert str(error.value) == "sensevoice provider unavailable"
     assert isinstance(error.value.__cause__, ValueError)
-
-
-def test_qwen_asr_transcriber_reports_missing_dependency() -> None:
-    def missing_factory(**kwargs: object) -> object:
-        raise ModuleNotFoundError("No module named 'qwen_asr'")
-
-    transcriber = QwenAsrTranscriber(model_factory=missing_factory)
-
-    with pytest.raises(ASRDependencyError) as error:
-        transcriber.transcribe(Path("cache/demo.wav"))
-
-    assert error.value.code == "ASR_DEPENDENCY_MISSING"
 
 
 def test_sensevoice_transcriber_reports_missing_transitive_dependency() -> None:
@@ -631,19 +555,3 @@ def test_sensevoice_transcriber_reports_missing_transitive_dependency() -> None:
         "Missing ASR runtime dependency: torchaudio. "
         "Install project dependencies with `uv sync` before running SenseVoice ASR."
     )
-
-
-def test_qwen_asr_transcriber_rejects_empty_text() -> None:
-    class EmptyResult:
-        text = " "
-
-    class EmptyModel:
-        def transcribe(self, audio: str, language: str) -> list[EmptyResult]:
-            return [EmptyResult()]
-
-    transcriber = QwenAsrTranscriber(model_factory=lambda **kwargs: EmptyModel())
-
-    with pytest.raises(ASRRuntimeError) as error:
-        transcriber.transcribe(Path("cache/demo.wav"))
-
-    assert error.value.code == "ASR_EMPTY_TRANSCRIPT"

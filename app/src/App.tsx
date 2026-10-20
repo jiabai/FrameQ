@@ -61,7 +61,6 @@ import { renderUiMessage, uiMessage, type UiMessage } from "./i18n/uiMessage";
 import { UI_MOTION_TRANSITION } from "./uiMotion";
 
 const asrModelLabels: Record<string, string> = {
-  "Qwen/Qwen3-ASR-0.6B": "Qwen3-ASR 0.6B",
   "iic/SenseVoiceSmall": "SenseVoice Small",
   "iic/SenseVoiceSmall-onnx": "SenseVoiceSmall-ONNX (≈ 230 MB)",
 };

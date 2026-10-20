@@ -20,7 +20,7 @@
 | funasr | 834 | 8 MB |
 | 字节码 `*.pyc` | 11,188 | 122 MB |
 
-torch 这一整套只服务 PyTorch 族的两个模型（`iic/SenseVoiceSmall` 与 `Qwen/Qwen3-ASR-0.6B`），而默认模型恰好是 PyTorch 版，于是它变成必需项。字节码是 pip 安装时顺手编译出来的产物，属于安装期的一次性成本。
+torch 这一整套只服务 PyTorch 族的 `iic/SenseVoiceSmall`，而默认模型恰好是 PyTorch 版，于是它变成必需项。字节码是 pip 安装时顺手编译出来的产物，属于安装期的一次性成本。
 
 两项合计可以移出 20,259 个文件与 687 MB。
 
@@ -31,7 +31,7 @@ torch 这一整套只服务 PyTorch 族的两个模型（`iic/SenseVoiceSmall` �
 - 安装包不再分发 `*.pyc`，由 Python 在目标机首次导入时就地生成。
 - 安装后 `resources/python` 的文件数降到 17,000 以内，体积降到 400 MB 以内。
 
-三个模型仍然可选，功能不减。
+两个 SenseVoice 模型仍然可选，功能不减。
 
 ## Non-goals
 
@@ -45,18 +45,16 @@ torch 这一整套只服务 PyTorch 族的两个模型（`iic/SenseVoiceSmall` �
 PyTorch 族所需的运行时单独打包，内容为该族模型的依赖闭包，由构建脚本用 `uv export` 生成。
 
 - 存放：`%LOCALAPPDATA%\FrameQ\runtime\pytorch\<版本号>\`。
-- 触发：用户在设置页选中 `iic/SenseVoiceSmall` 或 `Qwen/Qwen3-ASR-0.6B` 且本机缺少该组件时，界面提示需要下载，用户确认后开始。
+- 触发：用户在设置页选中 `iic/SenseVoiceSmall` 且本机缺少该组件时，界面提示需要下载，用户确认后开始。
 - 注入：worker 仅在选中 PyTorch 族时把该目录加入 `PYTHONPATH`，ONNX 路径不受影响。
 - 版本：组件内写入清单文件，记录 `uv.lock` 的解析指纹。指纹与当前 worker 不一致时按缺失处理，重新下载。
 - 失败：下载或校验失败时不改动已有文件，界面提供重试，不消耗 AI 额度。
-
-`Qwen3-ASR` 额外需要 `qwen-asr`，它今天不在捆绑运行时里，一并放进该组件。
 
 ## Result Experience
 
 - 新装用户完成第一次转写时，默认走 ONNX，提示下载 `iic/SenseVoiceSmall-onnx` 与 `speech_fsmn_vad_zh-cn-16k-common-onnx`，与现有模型下载流程一致。
 - 已装用户升级后，默认模型变为 ONNX。此前显式选择过 PyTorch 族的用户，升级后落到 ONNX，并在设置页给一次说明，写明原因与恢复方式。
-- 设置页模型列表仍是三项。PyTorch 族在缺少运行时组件时，条目旁标注需要下载组件，选择时先走组件下载。
+- 设置页模型列表仍是两项。PyTorch 族在缺少运行时组件时，条目旁标注需要下载组件，选择时先走组件下载。
 - 字节码不再随包分发。首次任务会比升级前慢若干秒，之后恢复正常。
 
 ## Validation Rules
@@ -70,7 +68,7 @@ PyTorch 族所需的运行时单独打包，内容为该族模型的依赖闭包
 
 - `app/src-tauri/resources/python` 文件数 ≤ 17,000，体积 ≤ 400 MB，安装器体积随之下降。
 - 干净机器完成一次 YouTube 链接转写与一次本地音频转写，两者都使用默认 ONNX 模型。
-- 设置页三个模型都能选中；PyTorch 族在组件缺失时给出下载入口，下载完成后能完成一次转写。
+- 设置页两个模型都能选中；PyTorch 族在组件缺失时给出下载入口，下载完成后能完成一次转写。
 - 升级安装保留原有设置与历史，默认模型变化有一次性说明。
 - 同一段音频的两种执行结果差异在发布记录中列出，且经过人工确认。
 

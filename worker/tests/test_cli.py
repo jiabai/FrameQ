@@ -949,7 +949,7 @@ def test_run_worker_once_uses_explicit_asr_model_instead_of_user_data_env(
     user_data_dir.mkdir()
     create_valid_asr_cache(tmp_path / "models")
     (user_data_dir / ".env").write_text(
-        "FRAMEQ_ASR_MODEL=Qwen/Qwen3-ASR-0.6B\n",
+        "FRAMEQ_ASR_MODEL=vendor/not-supported\n",
         encoding="utf-8",
     )
 
@@ -984,7 +984,7 @@ def test_worker_request_rejects_model_outside_release_contract(
     result = run_worker_once(
         process_request_json(
             "https://www.douyin.com/video/7524373044106677544",
-            asr_model="Qwen/Qwen3-ASR-0.6B",
+            asr_model="vendor/not-supported",
         ),
         project_root=tmp_path,
         command_runner=runner,

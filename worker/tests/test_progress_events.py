@@ -496,7 +496,7 @@ def test_language_args_are_normalized_or_safely_dropped(
             "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
             "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
         ),
-        ("Qwen/Qwen3-ASR-0.6B", None),
+        ("vendor/not-supported", None),
         ("review-secret", None),
         (None, None),
     ],
