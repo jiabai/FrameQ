@@ -56,6 +56,7 @@
 - `2026-07-12-history-task-permanent-deletion.md` — Explicit irreversible deletion of one supported History vNext task and its playback cache.
 - `2026-07-12-desktop-density-history-toolbar-polish.md` — Intrinsic History height, clearer secondary typography, and a quieter grouped desktop toolbar.
 - `2026-07-12-task-workspace-visual-hierarchy.md` — Restrained hierarchy cleanup for local transcript and AI workspaces without changing product, privacy, or workflow boundaries.
+- `2026-10-20-transcript-locate-action.md`：结果工作区工具栏增加「定位文字稿」，与视频、音频并列；有未保存编辑时拦截定位，提示先保存。
 
 ## AI Insight
 
@@ -64,6 +65,7 @@
 - `2026-07-15-draft-platform-selection.md` — Delta on `生成文字稿`: user-visible, editable 9-option target platform on the confirmation page (defaulted from the inspiration profile), replacing `suitable_use` as the platform source with a new platform→form mapping (视频号/抖音/Tiktok/X→抖音).
 - `2026-07-15-draft-result-editor.md` — Delta on `生成文字稿` 结果视图: 只读预览升级为左右分栏可编辑器（左 textarea + 右 MarkdownContent 预览），编辑本地落盘 `ai/draft.md`，复制/下载基于编辑器当前文本，重新生成重走首次确认页（与第一次逻辑一致）、编辑过二次确认；分屏布局与下载按钮已由 `2026-10-20-draft-result-view-modes.md` 取代，保存与重新生成条款继续有效。
 - `2026-10-20-draft-result-view-modes.md` — Delta on `生成文字稿` 结果视图: 渲染优先（打开即读渲染后的 markdown），「编辑模式」显式进入 textarea，「渲染模式」返回；移除下载按钮，新增全屏切换。
+- `2026-10-20-ai-detail-sheet-fullscreen.md`：三个 AI 详情 tab 共用全屏切换，关闭弹层时退出全屏，常规尺寸仍按内容收缩。
 - `2026-07-31-transcript-dissection.md` — Independent `文字稿解剖` AI target for traceable structural review of a saved transcript.
 
 ## Motion UI
