@@ -1,5 +1,28 @@
 # FrameQ Architecture
 
+## 2026-10-10 Draft generation target and server-managed anysearch boundary
+
+- `AI整理` exposes four peer target cards: `要点总结`, `文字稿解剖`, `启发灵感`, and
+  `生成文字稿`. Draft generation reuses the `retry_insights` command with `target="draft"`, so no
+  new Tauri command and no new FrameQ server interface exist for it.
+- Draft generation runs an agent rather than a single completion. Server-managed anysearch
+  retrieval supplies factual grounding, a platform skill supplies the voice, and the agent delivers
+  through the `submit_draft` contract. The transcript, video, audio, and source URL never enter the
+  draft prompt. Retrieved web context may re-enter the model, which preserves the "no full
+  transcript upload" boundary while relaxing the retrieval boundary.
+- Anysearch configuration is encrypted and stored on the server, and `AnysearchConfigService` is its
+  only reader and writer. The Admin view returns `mcpUrl`, `hasApiKey`, `apiKeyLast4`, and
+  `updatedAt`. The plaintext key leaves the server only through the authenticated
+  `POST /api/desktop/anysearch/checkout` route, and the worker consumes it as `ANYSEARCH_MCP_URL`
+  and `ANYSEARCH_API_KEY` for that run.
+- The draft is an independent artifact at `ai/draft.md`. The first manual edit backs up the
+  generated baseline to `ai/original/draft.md`, and regenerating the draft deletes that stale
+  backup so the next edit starts from the new baseline. The manifest records `draft_path`,
+  `has_draft`, and `draft_seed_insight_id` without embedding draft text.
+- Quota stays flat per confirmation attempt: one checkout charges one credit regardless of outcome,
+  a retry mints a fresh request identifier and charges again, and entering the confirmation panel
+  or cancelling charges nothing.
+
 ## 2026-08-25 Xiaohongshu platform-subtitle-first boundary
 
 - The existing single-link worker flow now interprets the verified public Xiaohongshu
@@ -118,8 +141,9 @@
   `dissection` / `dissection_md` artifact keys. The independently versioned URL and local-media
   request envelopes remain v3 and v4; neither processing path can auto-run cloud AI.
 - React owns the explicit confirmation and frozen call-plan preview, target-scoped lifecycle,
-  structured report presentation, and conservative stale state after transcript save. While
-  `draft` remains unimplemented, dissection is the third visible AI target.
+  structured report presentation, and conservative stale state after transcript save. At this
+  date `draft` was not yet implemented, so dissection was the third visible AI target; the
+  2026-10-10 boundary above records the current four-target arrangement.
 - Python owns one validated official-transcript snapshot, deterministic Unicode-code-point chunks
   with UTF-8 byte provenance, the versioned four-chunks-per-map plus reduce/optional-repair plan,
   strict report validation, and atomic `ai/dissection.json` + `ai/dissection.md` publication through

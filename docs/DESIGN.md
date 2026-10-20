@@ -165,7 +165,7 @@
 - During `视频转译中`, worker progress copy may say `正在检测平台字幕`, `已检测到字幕，跳过 ASR`, or `未检测到字幕，开始 ASR` while staying inside the existing transcription stage.
 - The `完整文字稿` detail view may show a compact source line such as `来源：平台字幕（zh-Hans）` or `来源：本地 ASR`. It should not claim whether the subtitle was manual, automatic, or translated.
 - Video and audio entries still locate local files; the transcript entry opens the readable transcript;
-  AI整理 shows summary, dissection, and insights. Dissection is second while draft is unimplemented.
+  AI整理 shows summary, dissection, insights, and draft.
 
 ## 2026-07-03 Transcript Audio Review UX
 

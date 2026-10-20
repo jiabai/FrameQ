@@ -57,8 +57,8 @@ Supported video link
 | --- | --- |
 | Local-first processing | Videos, audio, transcripts, model caches, and local history stay on the user's machine by default. |
 | Clear workflow states | The UI shows video extraction, transcription, insight generation, completion, partial completion, or failure. |
-| Result entry points | Completed tasks expose video, audio, transcript, summary, transcript-dissection, and insight-topic cards. Video and audio cards locate files directly. |
-| Two-stage AI generation | Download, audio extraction, and transcription run first. Summary, transcript dissection, mindmap, and insight topics require a separate confirmation and quota check. |
+| Result entry points | Completed tasks expose video, audio, transcript, summary, transcript-dissection, insight-topic, and generated-draft cards. Video and audio cards locate files directly. |
+| Two-stage AI generation | Download, audio extraction, and transcription run first. Summary, transcript dissection, mindmap, insight topics, and draft generation require a separate confirmation and quota check. |
 | Recoverable results | If AI generation fails, the transcript remains available and the user can retry only the AI step. |
 | Auditable project structure | Product specs, architecture notes, design rules, security boundaries, execution plans, and validation scripts are tracked in the repository. |
 
@@ -74,6 +74,7 @@ Supported video link
 - Optional Qwen ASR adapter remains available for development, but ordinary release builds do not install `qwen-asr` by default.
 - Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
 - Transcript dissection (`文字稿解剖`) AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure and bounded per-run quota.
+- Draft generation (`生成文字稿`) AI target that turns one selected insight into a platform-style draft through server-managed anysearch retrieval and a platform skill. The transcript, video, audio, and source URL never enter the draft prompt, and the result is written to `ai/draft.md` with the pre-edit copy kept under `ai/original/`.
 - Server-managed account, activation-code monthly pass entitlement, self-service activation-email requests for inactive or expired desktop accounts, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
 - Browser-side per-user Web dashboard (`/dashboard`) with email-OTP login, plus per-page `zh-CN` / `en` / `zh-TW` switching on the `/login`, `/dashboard`, `/admin/login`, and `/admin` pages.
 - User-initiated, local-only desktop diagnostic export of the most recent seven days from the failure UI and Settings.
@@ -89,6 +90,8 @@ Supported video link
   - `outputs/tasks/<task_id>/ai/insights.md`
   - `outputs/tasks/<task_id>/ai/dissection.json`
   - `outputs/tasks/<task_id>/ai/dissection.md`
+  - `outputs/tasks/<task_id>/ai/draft.md`
+  - `outputs/tasks/<task_id>/ai/original/draft.md`
   - app-local `cache/tasks/<task_id>/` for temporary downloads and scratch files
 
 ## Supported Inputs and Outputs
@@ -101,7 +104,7 @@ Supported video link
 | Bilibili ordinary public videos | BV links, av links, selected `?p=N` parts, and safe `b23.tv` short links that resolve to ordinary `/video/` pages |
 | YouTube public single videos | `youtube.com/watch?v=...`, `youtu.be/...`, and `youtube.com/shorts/...`; `watch?v=...&list=...` is processed as one video with playlist context ignored |
 | Transcript output | Plain text and Markdown |
-| AI output | Summary Markdown, Mermaid mindmap, insight JSON, insight Markdown, and a transcript-dissection report in both JSON and Markdown |
+| AI output | Summary Markdown, Mermaid mindmap, insight JSON, insight Markdown, a transcript-dissection report in both JSON and Markdown, and a generated draft in Markdown |
 | Video and audio viewing | Locate generated files in the system file manager |
 
 > [!NOTE]
