@@ -1,0 +1,93 @@
+# PyTorch 运行时外置实现计划
+
+> 本文件是活文档。Progress、Surprises & Discoveries、Decision Log、Outcomes & Retrospective 随执行持续更新。
+
+**Goal:** 把 PyTorch 族运行时（funasr、torch、torchaudio、transformers 及其闭包，合计 7,562 个文件、421 MB）从安装包移出，改为用户选中 `iic/SenseVoiceSmall` 时按需下载的独立组件，并把默认模型切到 `iic/SenseVoiceSmall-onnx`。
+
+**Architecture:** 构建脚本用 `uv export --prune` 从同一份 `uv.lock` 切出两份依赖集，分别装进包内运行时与 PyTorch 组件压缩包。组件托管在 GitHub Releases 资产上，沿用现有模型下载器的断点续传与校验行为。worker 在选中 PyTorch 族时校验组件指纹并把组件的 `site-packages` 前置进 `sys.path`，缺失时返回结构化错误码。前端在设置页给组件缺失的模型加标注与下载入口。
+
+**Tech Stack:** Node（`scripts/build-installer.mjs`）、GitHub Actions、Python 3/pytest/Ruff、TypeScript/React/Vitest/i18next、Rust/Tauri 2。
+
+---
+
+## Purpose / Big Picture
+
+首次安装失败报告暴露了安装期写入量过大的问题：包内 Python 运行时 25,016 个文件、950 MB，其中 PyTorch 族占 421 MB，只服务两个 SenseVoice 模型里的一个。规格 `docs/product-specs/2026-10-20-lightweight-installer-runtime-trim.md` 已确认三件事：字节码早已不进包、可外置 421 MB、ONNX 与 PyTorch 的输出差异在容忍度内（Comparison Record）。本计划把外置落地：包内降到约 17,454 文件、529 MB，PyTorch 用户多一次约 421 MB 的组件下载。
+
+## Progress
+
+- [ ] Stage 1：worker 组件契约（检测、指纹、`sys.path` 注入、缺失错误码）+ 单测
+- [ ] Stage 2：构建脚本双依赖集与组件打包，本地 `--skip-tauri-build` 验证
+- [ ] Stage 3：组件托管与下载（URL、进度、断点续传、校验）+ 设置页入口
+- [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
+
+## Surprises & Discoveries
+
+（执行中记录）
+
+## Decision Log
+
+- **组件托管用 GitHub Releases 资产**：桌面端发布本就经 GitHub Releases，单资产上限 2 GB 足够，CI 只需在现有 workflow 追加一个上传步骤。备选的 ModelScope「模型仓库」需要按模型语义组织内容，语义不合。Stage 3 动工前向用户确认。
+- **剪枝集合固定为 `--prune torch --prune torchaudio --prune funasr`**：`funasr-onnx` 经 `librosa` 拉起的 `scikit-learn`、`numba`、`llvmlite`、`scipy` 留在包内，那是 ONNX 路径自身所需。
+- **组件内部布局统一为 `site-packages/`**：不沿用各平台 python-build-standalone 的原生布局（mac 嵌在 `lib/python3.x` 下），构建脚本把两侧都归一化，worker 注入逻辑只认一个路径。
+- **指纹对指纹**：构建脚本在包内与组件内各写一份 `runtime-manifest.json`，记录 `uv.lock` 的解析指纹。worker 比对两份指纹，不一致按缺失处理，避免引入运行期无法获得的 `uv.lock`。
+
+## Outcomes & Retrospective
+
+（完成后填写）
+
+## Context and Orientation
+
+现状：`scripts/build-installer.mjs` 用 `uv export --no-dev` 生成 requirements，装进 `app/src-tauri/resources/python`，随后 `pruneBundledPythonRuntime` 清字节码；CI（`desktop-release.yml`）三平台各跑一次 `--skip-tauri-build` 再 `tauri build`。模型下载在 `worker/frameq_worker/model_download.py`，含 ModelScope 下载、校验、进度事件与断点续传。ASR 选择在 `worker/frameq_worker/asr_runtime/registry.py`，真实管线入口是 `pipeline_runtime/transcript.py` 的 `run_asr_transcript_stage`：解析 `FRAMEQ_MODEL_DIR` 得到模型缓存，校验后调用 `factory(request.asr_model, model_cache_dir)`。ONNX 模型目录布局为 `<cache>/onnx/models/iic/<名>`。
+
+本计划的组件不是模型：模型（权重）走现有模型下载流程不变，组件是依赖闭包，二者目录、生命周期、指纹都独立。
+
+## File and Interface Map
+
+| 路径 | 动作 | 说明 |
+| --- | --- | --- |
+| `worker/frameq_worker/asr_runtime/runtime_component.py` | 新增 | 组件检测、指纹比对、`sys.path` 注入 |
+| `worker/frameq_worker/pipeline_runtime/transcript.py` | 修改 | 选中 PyTorch 族时先走组件检查 |
+| `worker/tests/test_runtime_component.py` | 新增 | 契约单测 |
+| `scripts/build-installer.mjs` | 修改 | 双依赖集、组件打包、双 manifest |
+| `.github/workflows/desktop-release.yml` | 修改 | 上传组件资产 |
+| `worker/frameq_worker/model_download.py` | 修改 | 组件下载入口（复用既有下载器行为） |
+| `app/src/settingsClient*` 与设置页组件 | 修改 | 模型条目标注与下载入口 |
+| `worker/frameq_worker/asr_runtime/registry.py` | 修改 | `DEFAULT_ASR_MODEL` 切 ONNX（Stage 4） |
+
+## Plan of Work
+
+### Stage 1：worker 组件契约
+
+- [ ] 新增 `runtime_component.py`：`resolve_component_dir(app_data_root)`、`read_manifest(dir)`、`fingerprints_match(component, bundled)`、`install_sys_path(dir)`（按平台归一化取 `site-packages`，幂等前置、去重）
+- [ ] `transcript.py` 的 `run_asr_transcript_stage` 在 `asr_model_family == "sensevoice"` 时先查组件，缺失或指纹不符返回 `ASR_RUNTIME_COMPONENT_MISSING` 结构化结果，错误文案区分「未下载」与「版本不匹配需重新下载」
+- [ ] 单测覆盖：组件齐全、缺失、指纹不符、重复注入幂等
+- [ ] 门禁：`uv run pytest worker/tests` 全绿、`uv run ruff check worker`
+
+### Stage 2：构建脚本双依赖集
+
+- [ ] `build-installer.mjs`：包内 requirements 加 `--prune torch --prune torchaudio --prune funasr`；新增组件构建，把 torch 闭包装进独立 `site-packages/`，产出压缩包与 `runtime-manifest.json`
+- [ ] 包内同样写入 `runtime-manifest.json`，两份指纹来自同一次 `uv lock` 解析
+- [ ] 本地 `node scripts/build-installer.mjs --target windows-x64 --skip-tauri-build` 验证：包内文件数与体积达标，组件压缩包可解压且 `import funasr` 可用
+- [ ] CI 上传组件资产（Stage 3 前置）
+
+### Stage 3：组件下载与设置页入口
+
+- [ ] `model_download.py` 新增组件下载：GitHub Releases 资产 URL、断点续传、SHA 校验、解压到 `%LOCALAPPDATA%\FrameQ\runtime\pytorch\<版本号>`、进度事件复用现有通道
+- [ ] 前端：设置页 PyTorch 条目标注「需要下载组件」，选中时先触发组件下载，复用模型下载的进度与失败重试 UI
+- [ ] 门禁：app lint、app test、worker 全量、`--level WARN` 文档治理
+
+### Stage 4：默认模型与发布收尾
+
+- [ ] `registry.py` 的 `DEFAULT_ASR_MODEL` 切 `iic/SenseVoiceSmall-onnx`
+- [ ] 升级用户的一次性说明（设置页），说明默认变化原因与恢复方式
+- [ ] README、ARCHITECTURE、SECURITY、产品规格同步；tech-debt 条目更新
+- [ ] 发布前在真实长视频上重跑 Comparison Record 流程一次
+
+## Validation and Acceptance
+
+- 包内 `resources/python` ≤ 18,000 文件、≤ 550 MB（排除 `__pycache__` 与 `*.pyc` 度量）
+- 干净机器：未下载组件时选中 PyTorch 得到结构化提示，不崩溃、不写残缺文件；下载完成后完成一次转写
+- 默认 ONNX：干净机器完成一次 YouTube 转写与一次本地音频转写
+- 组件指纹不匹配时判定为缺失，不复用旧目录
+- 全量门禁与 `docs/EXECUTION_GATES.md` 一致
