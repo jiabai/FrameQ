@@ -17,6 +17,7 @@
 ## Desktop Runtime, Packaging & Distribution
 
 - `2026-10-20-windows-installer-security-software-warning.md`：Windows installer detects 360 Total Security, 火绒, and Tencent PC Manager before writing files and shows one Chinese message with the trust-list and install-location guidance; silent and passive installs skip the message.
+- `2026-10-20-lightweight-installer-runtime-trim.md`：默认模型切到 ONNX 变体，PyTorch 运行时改为按需下载的组件，安装包不再分发字节码；目标是把安装阶段写入量从 36,588 个文件、1,081 MB 降到 17,000 个文件、400 MB 以内。
 - `2026-09-19-v0.3.8-desktop-release.md` — v0.3.8 desktop release scope and acceptance; bundled `yt-dlp` upgrade 2026.7.4 -> 2026.8.19 to restore YouTube media-stream downloads for already-installed users, plus a read-only current-version line in Settings.
 - `2026-09-19-v0.3.7-desktop-release.md` — v0.3.7 desktop release scope and acceptance; bounded Douyin share-page retry and the neutralized activation-panel title.
 - `2026-09-05-v0.3.6-desktop-release.md` — v0.3.6 desktop release scope and acceptance.
