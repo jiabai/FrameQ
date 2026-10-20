@@ -40,6 +40,11 @@ dependencies = [
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "yt-dlp>=2026.6.9",
     "agent-runtime",
+    # agent-runtime 0.1.1 imports ``mcp.client.streamable_http.streamablehttp_client``
+    # inside a try/except that only logs on failure, so mcp 2.x (which renamed it to
+    # ``streamable_http_client``) turns into a NameError at MCP connect time instead of
+    # an import error. Keep mcp on 1.x until agent-runtime ships a 2.x-compatible tag.
+    "mcp>=1.8.0,<2",
 ]
 
 [project.optional-dependencies]
