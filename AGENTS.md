@@ -39,8 +39,10 @@ FrameQ 是本地优先的桌面应用：粘贴公开或已授权的视频链接�
 安装依赖：
 
 - `uv sync --dev`
-- `npm --prefix app install`
-- `npm --prefix server install`
+- `(cd app && npm install)`
+- `(cd server && npm install)`
+
+`npm --prefix <dir> install` 在 npm 10 下会失败，`install` 子命令不读取 prefix 配置。`npm --prefix <dir> run <script>` 与 `npm --prefix <dir> test` 不受影响。
 
 Worker（Python）：
 

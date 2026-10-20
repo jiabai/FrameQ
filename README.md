@@ -142,8 +142,8 @@ Install development dependencies:
 
 ```powershell
 uv sync --dev
-npm --prefix app install
-npm --prefix server install
+Push-Location app; npm install; Pop-Location
+Push-Location server; npm install; Pop-Location
 ```
 
 Run focused checks:
