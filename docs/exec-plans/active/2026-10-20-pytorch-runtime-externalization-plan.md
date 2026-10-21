@@ -25,6 +25,10 @@
   - [x] 设置页入口（2026-10-21）：模型准备面板底部加「下载 PyTorch 运行时组件」按钮（`guide.runtimeComponent`），走 `settingsClient.downloadRuntimeComponent` → hook `startRuntimeComponentDownload` → Tauri 命令；成功/失败复用面板既有通知位，三语文案齐备。未做「按状态显示/隐藏」：组件是否必需只有构建期 manifest 知道，前端暂不探测，按需点击（worker 侧幂等短路）。
   - 说明：包内 manifest 改放 `resources/python/runtime-manifest.json`。原方案放在 `resources/runtime-manifest.json` 并登记进 tauri 资源清单，但该文件是构建产物，dev 下不存在会让 `cargo build` 直接失败；放进 `resources/python/` 后由既有通配覆盖，仓库也不会出现每次构建都变脏的跟踪文件。
 - [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
+  - [x] 默认切 ONNX（`0439934`）：顺带修掉两处「拿默认值拼集合/当分支判据」的静默塌缩 bug（`requests.py` 的 `DESKTOP_ASR_MODELS`、`model_download.py` 的校验与覆盖分支）
+  - [ ] 升级说明 UI（一次性提示）
+  - [ ] README / ARCHITECTURE / 规格状态同步
+  - [ ] 发布前在真实长视频上重跑 Comparison Record
 
 Stage 4 开工评估（2026-10-21，已回滚，仓库保持绿）：把 `DEFAULT_ASR_MODEL` 指向 `SENSEVOICE_SMALL_ONNX_MODEL` 后 worker 全量出现 **18 个失败，跨 5 个文件**，全部是夹具默认按 PyTorch 路径构造所致，需要逐个判断「该测试是否本就该显式指定模型」：
 
