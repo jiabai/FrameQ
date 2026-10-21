@@ -396,7 +396,7 @@ mod tests {
         asr_model_available, asr_model_display_dir, cancelled_model_download_event,
         diagnostic_model_snapshot_for, map_model_download_run_result, DiagnosticCacheStatus,
         ModelDownloadRunResult, SupportedDiagnosticModel, DEFAULT_ASR_MODEL,
-        SENSEVOICE_SMALL_ONNX_MODEL,
+        SENSEVOICE_SMALL_MODEL, SENSEVOICE_SMALL_ONNX_MODEL,
     };
     use crate::settings::supported_asr_models;
     use crate::worker_runtime::{
@@ -427,7 +427,7 @@ mod tests {
         };
 
         assert_eq!(
-            asr_model_display_dir(&paths, DEFAULT_ASR_MODEL),
+            asr_model_display_dir(&paths, SENSEVOICE_SMALL_MODEL),
             paths
                 .user_data_dir
                 .join("models")
@@ -563,7 +563,7 @@ mod tests {
         let model_root = paths.user_data_dir.join("models");
         fs::create_dir_all(&model_root).expect("create user model dir");
 
-        assert!(!asr_model_available(&paths, DEFAULT_ASR_MODEL));
+        assert!(!asr_model_available(&paths, SENSEVOICE_SMALL_MODEL));
 
         fs::write(
             model_root.join("MODEL_VERSION.txt"),
@@ -571,7 +571,7 @@ mod tests {
         )
         .expect("write model marker");
 
-        assert!(!asr_model_available(&paths, DEFAULT_ASR_MODEL));
+        assert!(!asr_model_available(&paths, SENSEVOICE_SMALL_MODEL));
 
         let sensevoice_dir = model_root
             .join("models")
@@ -587,7 +587,7 @@ mod tests {
             .expect("write sensevoice model");
         fs::write(vad_dir.join("model.pt"), b"PK\x03\x04vad").expect("write vad model");
 
-        assert!(asr_model_available(&paths, DEFAULT_ASR_MODEL));
+        assert!(asr_model_available(&paths, SENSEVOICE_SMALL_MODEL));
     }
 
     #[test]
@@ -598,7 +598,7 @@ mod tests {
             user_data_dir: root.join("app-data"),
         };
 
-        let missing = diagnostic_model_snapshot_for(&paths, DEFAULT_ASR_MODEL);
+        let missing = diagnostic_model_snapshot_for(&paths, SENSEVOICE_SMALL_MODEL);
         assert_eq!(missing.model, SupportedDiagnosticModel::SenseVoiceSmall);
         assert_eq!(missing.cache_status, DiagnosticCacheStatus::Missing);
 
@@ -610,14 +610,14 @@ mod tests {
         )
         .expect("marker");
         assert_eq!(
-            diagnostic_model_snapshot_for(&paths, DEFAULT_ASR_MODEL).cache_status,
+            diagnostic_model_snapshot_for(&paths, SENSEVOICE_SMALL_MODEL).cache_status,
             DiagnosticCacheStatus::Invalid
         );
 
         let serialized =
-            serde_json::to_value(diagnostic_model_snapshot_for(&paths, DEFAULT_ASR_MODEL))
+            serde_json::to_value(diagnostic_model_snapshot_for(&paths, SENSEVOICE_SMALL_MODEL))
                 .expect("serialize snapshot");
-        assert_eq!(serialized["model"], DEFAULT_ASR_MODEL);
+        assert_eq!(serialized["model"], SENSEVOICE_SMALL_MODEL);
         assert_eq!(serialized["cache_status"], "invalid");
         let rendered = serialized.to_string();
         assert!(!rendered.contains(root.to_string_lossy().as_ref()));
@@ -710,7 +710,7 @@ mod tests {
             .expect("write sensevoice model");
         fs::write(vad_dir.join("model.pt"), b"PK\x03\x04vad").expect("write vad model");
 
-        assert!(asr_model_available(&paths, DEFAULT_ASR_MODEL));
+        assert!(asr_model_available(&paths, SENSEVOICE_SMALL_MODEL));
     }
 
     #[test]
@@ -727,7 +727,7 @@ mod tests {
         )
         .expect("write model marker");
 
-        assert!(!asr_model_available(&paths, DEFAULT_ASR_MODEL));
+        assert!(!asr_model_available(&paths, SENSEVOICE_SMALL_MODEL));
     }
 
     #[test]
