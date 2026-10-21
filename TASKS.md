@@ -18,6 +18,18 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.4.0 desktop release (2026-10-21) — ✅ Tag target `d89c5ef`
+  tagged `v0.4.0`; installer runtime externalized (bundled Python runtime 16,810 files / 502 MB after
+  trimming, PyTorch runtime moved to an on-demand 140 MB component), default model switched to
+  `iic/SenseVoiceSmall-onnx`, model sheet gained the component download entry. Three-platform release
+  run `39622626442` green after three retags; assets include `FrameQ_0.4.0_x64-setup.exe` (210 MB),
+  `FrameQ_0.4.0_x64.dmg` (348 MB), `FrameQ_0.4.0_aarch64.dmg` (300 MB) and three
+  `frameq-pytorch-runtime-*.zip` (117 to 184 MB). updater signature matched `latest.json` and the
+  download URL answered 206. Gates: Worker 1013/2 skipped, frontend 851/851, Rust lib 328 passed with
+  six known environment failures. Residual risks: macOS Intel acceptance workflow not run; macOS builds
+  are ad-hoc signed; mac build inputs now come from osxexperts and python-build-standalone. Release
+  notes: `docs/releases/v0.4.0.md`.
+
 - [x] Prepare and publish FrameQ v0.3.8 desktop release (2026-09-19) — ✅ Tag target `fc83df9`
   committed to `main` and tagged `v0.3.8` (`909c232` yt-dlp fix, `3711aeb` version display,
   `e5c16c4` release prep, `fc83df9` docs correction); local release gates passed (Worker 858/2
