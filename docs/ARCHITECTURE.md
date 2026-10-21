@@ -965,8 +965,10 @@
 
 - Desktop startup reads local settings and descriptor-private readiness only; it must not start a
   model download. The installer contains no ASR weights.
-- `iic/SenseVoiceSmall` remains the default PyTorch compatibility path. The additional
-  `iic/SenseVoiceSmall-onnx` descriptor uses a separate ONNX cache and only official ModelScope
+- `iic/SenseVoiceSmall-onnx` is the default model: its runtime ships in the installer, so a fresh
+  install transcribes without downloading the PyTorch component. `iic/SenseVoiceSmall` remains the
+  PyTorch compatibility path and requires the on-demand runtime component. The ONNX descriptor uses
+  a separate ONNX cache and only official ModelScope
   SenseVoiceSmall-ONNX plus ONNX VAD sources.
 - Source/account validation precedes model validation and task creation. The validated
   `asr_model` is frozen into the existing request and task metadata; a missing selection starts

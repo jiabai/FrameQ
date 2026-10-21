@@ -6,6 +6,7 @@ export const asrModelResources = {
       title: "正在为本任务准备模型",
       close: "关闭本任务的模型准备",
       privacy: "ASR 在本机运行。此任务所选的模型将保存到本机缓存；准备完成后可离线转写。",
+      defaultModelNotice: "默认模型已改为 ONNX 版，安装包内置运行时，无需额外下载。需要 PyTorch 版精度时切换到 SenseVoice Small，并下载运行时组件。",
       status: {
         ready: "已就绪",
         missing: "需要下载",
@@ -56,6 +57,7 @@ export const asrModelResources = {
       title: "正在為本任務準備模型",
       close: "關閉本任務的模型準備",
       privacy: "ASR 在本機執行。此任務所選的模型將儲存到本機快取；準備完成後即可離線轉寫。",
+      defaultModelNotice: "預設模型已改為 ONNX 版，安裝包內建執行階段，無需額外下載。需要 PyTorch 版精度時切換到 SenseVoice Small，並下載執行階段元件。",
       status: {
         ready: "已就緒",
         missing: "需要下載",
@@ -106,6 +108,7 @@ export const asrModelResources = {
       title: "Preparing Model for This Task",
       close: "Close task model preparation",
       privacy: "ASR runs locally. The model selected for this task is saved in the local cache; after it is prepared, transcription works offline.",
+      defaultModelNotice: "The default model is now the ONNX build, whose runtime ships with the installer. For PyTorch-level accuracy, switch to SenseVoice Small and download the runtime component.",
       status: {
         ready: "Ready",
         missing: "Download Required",

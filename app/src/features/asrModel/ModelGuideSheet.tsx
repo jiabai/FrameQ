@@ -108,6 +108,9 @@ export function ModelGuideSheet({
             <ShieldCheck size={16} />
             <span>{t("guide.privacy")}</span>
           </p>
+          <p className="action-notice inline-notice" role="note">
+            {t("guide.defaultModelNotice")}
+          </p>
           <div className="model-status-card">
             <div>
               <span

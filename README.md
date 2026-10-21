@@ -70,7 +70,7 @@ Supported video link
 - Xiaohongshu platform-subtitle reuse: when a public note carries one validated Chinese or English subtitle track, the worker writes it as the transcript and skips local ASR; a missing or rejected track falls back to the unchanged local ASR path.
 - Media validation with `ffprobe`.
 - Audio extraction with `ffmpeg`.
-- Selectable local ASR models (SenseVoiceSmall default, SenseVoiceSmall-ONNX optional) with on-demand, resumable download into app-local data; PyTorch and ONNX runtimes supported.
+- Selectable local ASR models (SenseVoiceSmall-ONNX default, SenseVoiceSmall optional) with on-demand, resumable download into app-local data. The ONNX runtime ships in the installer; the PyTorch runtime is a separate 140 MB component downloaded on demand.
 - Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
 - Transcript dissection (`文字稿解剖`) AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure and bounded per-run quota.
 - Draft generation (`生成文字稿`) AI target that turns one selected insight into a platform-style draft through server-managed anysearch retrieval and a platform skill. The transcript, video, audio, and source URL never enter the draft prompt, and the result is written to `ai/draft.md` with the pre-edit copy kept under `ai/original/`.
@@ -177,7 +177,7 @@ app/src-tauri/target/release/app.exe
 
 ## Desktop Release Runtime
 
-Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. Release builds expose SenseVoice Small as the ASR model for ordinary users, and the model cache is downloaded on first run into app-local data.
+Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. Release builds default to SenseVoiceSmall-ONNX, whose runtime ships in the installer; the model cache is downloaded on first run into app-local data. Selecting the PyTorch SenseVoice Small model additionally requires the runtime component, offered from the model sheet.
 
 Build unsigned internal installer resources and package:
 
