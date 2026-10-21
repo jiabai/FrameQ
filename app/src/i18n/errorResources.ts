@@ -58,6 +58,10 @@ export const errorResources = {
       emptyTranscript: "本地 ASR 未识别到可用文字，请确认音频内容后重试。",
       runtimeFailed: "本地 ASR 运行失败，请稍后重试。",
       modelUnsupported: "当前 ASR 模型不受支持，请选择受支持的模型。",
+      runtimeComponentMissing: "PyTorch 运行时组件尚未下载，请先在设置中下载组件。",
+      runtimeComponentStale: "已下载的 PyTorch 运行时组件与本版本不匹配，请重新下载。",
+      runtimeComponentDownloadFailed: "PyTorch 运行时组件下载失败，请检查网络后重试。",
+      runtimeComponentInvalid: "下载的 PyTorch 运行时组件内容无效，请重试。",
     },
     source: { identityUnavailable: "无法确认视频来源，请重新复制公开链接。" },
     task: {
@@ -152,6 +156,10 @@ export const errorResources = {
       emptyTranscript: "本機 ASR 未辨識到可用文字，請確認音訊內容後重試。",
       runtimeFailed: "本機 ASR 執行失敗，請稍後重試。",
       modelUnsupported: "目前不支援此 ASR 模型，請選擇受支援的模型。",
+      runtimeComponentMissing: "PyTorch 執行階段元件尚未下載，請先在設定中下載元件。",
+      runtimeComponentStale: "已下載的 PyTorch 執行階段元件與本版本不相符，請重新下載。",
+      runtimeComponentDownloadFailed: "PyTorch 執行階段元件下載失敗，請檢查網路後重試。",
+      runtimeComponentInvalid: "下載的 PyTorch 執行階段元件內容無效，請重試。",
     },
     source: { identityUnavailable: "無法確認影片來源，請重新複製公開連結。" },
     task: {
@@ -246,6 +254,13 @@ export const errorResources = {
       emptyTranscript: "Local ASR did not recognize usable text. Check the audio and try again.",
       runtimeFailed: "Local ASR failed. Try again later.",
       modelUnsupported: "This ASR model is unsupported. Choose a supported model.",
+      runtimeComponentMissing:
+        "The PyTorch runtime component has not been downloaded yet. Download it in Settings.",
+      runtimeComponentStale:
+        "The downloaded PyTorch runtime component does not match this app version. Download it again.",
+      runtimeComponentDownloadFailed:
+        "The PyTorch runtime component download failed. Check your network and try again.",
+      runtimeComponentInvalid: "The downloaded PyTorch runtime component was invalid. Try again.",
     },
     source: { identityUnavailable: "FrameQ could not confirm the video source. Copy the public link again." },
     task: {

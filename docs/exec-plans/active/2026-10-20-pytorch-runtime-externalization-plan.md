@@ -19,11 +19,16 @@
 - [x] Stage 1：worker 组件契约（检测、指纹、`sys.path` 注入、缺失错误码）+ 单测（2026-10-20 完成，`2887fd8`）
 - [x] Stage 2：构建脚本双依赖集与组件打包，本地 `--skip-tauri-build` 等价验证通过（2026-10-21，提交待填）
 - [ ] Stage 3：组件托管与下载（URL、进度、断点续传、校验）+ 设置页入口
+  - [x] worker 侧下载链路（2026-10-21，提交待填）：`runtime_component_download.py`（下载器层）+ `worker_application/runtime_component_download.py`（env 驱动的服务入口）+ CLI `--download-runtime-component`；四个进度码登记进封闭注册表、共享契约 JSON 与 TS 协议镜像；`_download_url_to_file` 加 `downloading_message_code` 参数供两条通道复用
+  - [x] Rust 侧（2026-10-21，提交待填）：`RuntimeComponentDownloadJob` 与 `build_runtime_component_download_command_spec`；`download_runtime_component` 命令（按 `v<版本>` 与平台拼 GitHub Releases 资产地址，版本取 `CARGO_PKG_VERSION`）；常规 worker 命令注入 `FRAMEQ_PYTORCH_RUNTIME_DIR` 供 ASR 门禁解析；复用模型下载 lane 与结果协议（不新增 `WorkerOperation`，避免诊断与结果协议四处匹配）
+  - [x] 错误码文案映射（2026-10-21）：`ASR_RUNTIME_COMPONENT_MISSING`、`ASR_RUNTIME_COMPONENT_STALE`、`RUNTIME_COMPONENT_DOWNLOAD_FAILED`、`RUNTIME_COMPONENT_INVALID` 三语文案与映射测试
+  - [ ] 设置页：PyTorch 条目标注组件需求与下载入口（调用 `download_runtime_component`）
+  - 说明：包内 manifest 改放 `resources/python/runtime-manifest.json`。原方案放在 `resources/runtime-manifest.json` 并登记进 tauri 资源清单，但该文件是构建产物，dev 下不存在会让 `cargo build` 直接失败；放进 `resources/python/` 后由既有通配覆盖，仓库也不会出现每次构建都变脏的跟踪文件。
 - [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
 
 Stage 1 落地记录：模块放顶层 `worker/frameq_worker/runtime_component.py`（组件门禁属运行时供给，与 `model_download.py` 平级，不进 `asr_runtime/` 以免破坏封闭的模块树清单）；门禁抽成 `transcript.py` 的纯函数 `evaluate_pytorch_component_gate` 便于单测；包内 manifest 缺失时门禁不生效，dev 与旧版安装不受影响；新增错误码 `ASR_RUNTIME_COMPONENT_MISSING` 与 `ASR_RUNTIME_COMPONENT_STALE`，前端 `WORKER_ERROR_MESSAGE_CODES` 映射与文案留到 Stage 3 与下载入口一起做。
 
-Stage 2 落地记录：torch 族改走 `pyproject.toml` 的 `[project.optional-dependencies] pytorch`（比 `--prune` 干净，uv 原生支持两侧导出），构建脚本对包内与组件各写一份 `runtime-manifest.json`（`uv.lock` 的 SHA-256 指纹），组件按 METADATA 名与 RECORD 文件清单剪掉与包内重叠的发行版（88 个），打成 `frameq-pytorch-runtime-<target>.zip`，CI 三个平台各自 `gh release upload`。本地等价验证（独立解释器 + 真实构建函数，`build/verify-component.mjs`）：包内 site-packages **16,810 文件 / 502 MB**（验收线 ≤18,000 / ≤550 达标），包内 `import funasr` 失败且 ONNX 冒烟通过，组件 zip **140 MB**（原 421 MB），组件内 `import funasr, torch, torchaudio` 通过，指纹一致。本机验证靠 `CODEBUDDY_SAFE_DELETE_ENABLED=0` 与 npmmirror 镜像绕开两个本机坑，CI 不涉及。`tauri.conf.json` 资源清单加了 `resources/runtime-manifest.json`；mac 冒烟步骤加了 manifest 存在性检查。
+Stage 2 落地记录：torch 族改走 `pyproject.toml` 的 `[project.optional-dependencies] pytorch`（比 `--prune` 干净，uv 原生支持两侧导出），构建脚本对包内与组件各写一份 `runtime-manifest.json`（`uv.lock` 的 SHA-256 指纹），组件按 METADATA 名与 RECORD 文件清单剪掉与包内重叠的发行版（88 个），打成 `frameq-pytorch-runtime-<target>.zip`，CI 三个平台各自 `gh release upload`。本地等价验证（独立解释器 + 真实构建函数，`build/verify-component.mjs`）：包内 site-packages **16,810 文件 / 502 MB**（验收线 ≤18,000 / ≤550 达标），包内 `import funasr` 失败且 ONNX 冒烟通过，组件 zip **140 MB**（原 421 MB），组件内 `import funasr, torch, torchaudio` 通过，指纹一致。本机验证靠 `CODEBUDDY_SAFE_DELETE_ENABLED=0` 与 npmmirror 镜像绕开两个本机坑，CI 不涉及。包内 manifest 落在 `resources/python/runtime-manifest.json`（产物目录本身被 `resources/python/**/*` 通配进包，避免仓库里出现每次构建都会变脏的跟踪文件）；mac 冒烟步骤加了 manifest 存在性检查。
 
 ## Surprises & Discoveries
 
