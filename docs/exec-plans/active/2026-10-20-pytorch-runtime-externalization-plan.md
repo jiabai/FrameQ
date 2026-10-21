@@ -26,6 +26,17 @@
   - 说明：包内 manifest 改放 `resources/python/runtime-manifest.json`。原方案放在 `resources/runtime-manifest.json` 并登记进 tauri 资源清单，但该文件是构建产物，dev 下不存在会让 `cargo build` 直接失败；放进 `resources/python/` 后由既有通配覆盖，仓库也不会出现每次构建都变脏的跟踪文件。
 - [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
 
+Stage 4 开工评估（2026-10-21，已回滚，仓库保持绿）：把 `DEFAULT_ASR_MODEL` 指向 `SENSEVOICE_SMALL_ONNX_MODEL` 后 worker 全量出现 **18 个失败，跨 5 个文件**，全部是夹具默认按 PyTorch 路径构造所致，需要逐个判断「该测试是否本就该显式指定模型」：
+
+- `test_cli.py` 4 项：`uses_configured_output_and_cache_roots`、`uses_download_stdout_inside_task_cache_dir`、`reports_missing_downloaded_asr_model_after_audio_extraction`、`uses_explicit_asr_model_instead_of_user_data_env`
+- `test_model_download.py` 2 项：`terminal_success_omits_local_model_directory`、`terminal_uses_allowlisted_onnx_model_and_ignores_pytorch_overrides`
+- `test_requests.py` 2 项：local media v4 与 process v3 的精确输入解析夹具
+- `test_contract.py` 1 项：`worker_constants_match_desktop_contract`（契约 JSON 里默认模型常量）
+- `test_task_artifacts.py` 2 项（参数化的持久化失败映射，间接依赖默认模型）
+- 其余为同类夹具连带
+
+结论：这不是一行改动，是一次带迁移面的切换。应先完成前三条（升级说明 UI 与文档），再单独一轮处理夹具与契约，最后重跑 Comparison Record。
+
 Stage 1 落地记录：模块放顶层 `worker/frameq_worker/runtime_component.py`（组件门禁属运行时供给，与 `model_download.py` 平级，不进 `asr_runtime/` 以免破坏封闭的模块树清单）；门禁抽成 `transcript.py` 的纯函数 `evaluate_pytorch_component_gate` 便于单测；包内 manifest 缺失时门禁不生效，dev 与旧版安装不受影响；新增错误码 `ASR_RUNTIME_COMPONENT_MISSING` 与 `ASR_RUNTIME_COMPONENT_STALE`，前端 `WORKER_ERROR_MESSAGE_CODES` 映射与文案留到 Stage 3 与下载入口一起做。
 
 Stage 2 落地记录：torch 族改走 `pyproject.toml` 的 `[project.optional-dependencies] pytorch`（比 `--prune` 干净，uv 原生支持两侧导出），构建脚本对包内与组件各写一份 `runtime-manifest.json`（`uv.lock` 的 SHA-256 指纹），组件按 METADATA 名与 RECORD 文件清单剪掉与包内重叠的发行版（88 个），打成 `frameq-pytorch-runtime-<target>.zip`，CI 三个平台各自 `gh release upload`。本地等价验证（独立解释器 + 真实构建函数，`build/verify-component.mjs`）：包内 site-packages **16,810 文件 / 502 MB**（验收线 ≤18,000 / ≤550 达标），包内 `import funasr` 失败且 ONNX 冒烟通过，组件 zip **140 MB**（原 421 MB），组件内 `import funasr, torch, torchaudio` 通过，指纹一致。本机验证靠 `CODEBUDDY_SAFE_DELETE_ENABLED=0` 与 npmmirror 镜像绕开两个本机坑，CI 不涉及。包内 manifest 落在 `resources/python/runtime-manifest.json`（产物目录本身被 `resources/python/**/*` 通配进包，避免仓库里出现每次构建都会变脏的跟踪文件）；mac 冒烟步骤加了 manifest 存在性检查。
