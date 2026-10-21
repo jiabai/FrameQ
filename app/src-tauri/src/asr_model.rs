@@ -22,13 +22,15 @@ use std::sync::{Arc, RwLock};
 use tauri::{AppHandle, Emitter, State, Window};
 
 const MODEL_VERSION_FILE_NAME: &str = "MODEL_VERSION.txt";
-pub(crate) const DEFAULT_ASR_MODEL: &str = "iic/SenseVoiceSmall";
+pub(crate) const SENSEVOICE_SMALL_MODEL: &str = "iic/SenseVoiceSmall";
 pub(crate) const SENSEVOICE_SMALL_ONNX_MODEL: &str = "iic/SenseVoiceSmall-onnx";
+/// 默认模型是 ONNX：它的运行时随安装包分发，首装即可用。
+pub(crate) const DEFAULT_ASR_MODEL: &str = SENSEVOICE_SMALL_ONNX_MODEL;
 const SENSEVOICE_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch";
 const SENSEVOICE_ONNX_VAD_MODEL: &str = "iic/speech_fsmn_vad_zh-cn-16k-common-onnx";
 const ONNX_CACHE_DIR_NAME: &str = "onnx";
 const SENSEVOICE_BPE_FILE_NAME: &str = "chn_jpn_yue_eng_ko_spectok.bpe.model";
-pub(crate) const SUPPORTED_ASR_MODELS: &[&str] = &[DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL];
+pub(crate) const SUPPORTED_ASR_MODELS: &[&str] = &[SENSEVOICE_SMALL_MODEL, SENSEVOICE_SMALL_ONNX_MODEL];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub(crate) enum SupportedDiagnosticModel {
@@ -41,7 +43,7 @@ pub(crate) enum SupportedDiagnosticModel {
 impl SupportedDiagnosticModel {
     fn from_id(value: &str) -> Option<Self> {
         match value {
-            DEFAULT_ASR_MODEL => Some(Self::SenseVoiceSmall),
+            SENSEVOICE_SMALL_MODEL => Some(Self::SenseVoiceSmall),
             SENSEVOICE_SMALL_ONNX_MODEL => Some(Self::SenseVoiceSmallOnnx),
             _ => None,
         }
@@ -49,7 +51,7 @@ impl SupportedDiagnosticModel {
 
     fn id(self) -> &'static str {
         match self {
-            Self::SenseVoiceSmall => DEFAULT_ASR_MODEL,
+            Self::SenseVoiceSmall => SENSEVOICE_SMALL_MODEL,
             Self::SenseVoiceSmallOnnx => SENSEVOICE_SMALL_ONNX_MODEL,
         }
     }
@@ -180,8 +182,8 @@ fn model_marker_exists(model_dir: &Path, asr_model: &str) -> bool {
         && required_model_files_exist(model_dir, asr_model)
         && fs::read_to_string(marker)
             .map(|content| match asr_model {
-                DEFAULT_ASR_MODEL => {
-                    content.contains(DEFAULT_ASR_MODEL) && content.contains(SENSEVOICE_VAD_MODEL)
+                SENSEVOICE_SMALL_MODEL => {
+                    content.contains(SENSEVOICE_SMALL_MODEL) && content.contains(SENSEVOICE_VAD_MODEL)
                 }
                 SENSEVOICE_SMALL_ONNX_MODEL => {
                     content.contains(SENSEVOICE_SMALL_ONNX_MODEL)
@@ -194,7 +196,7 @@ fn model_marker_exists(model_dir: &Path, asr_model: &str) -> bool {
 
 fn required_model_files_exist(model_dir: &Path, asr_model: &str) -> bool {
     match asr_model {
-        DEFAULT_ASR_MODEL => [model_dir.to_path_buf(), model_dir.join("models")]
+        SENSEVOICE_SMALL_MODEL => [model_dir.to_path_buf(), model_dir.join("models")]
             .iter()
             .any(|model_root| {
                 let sensevoice_model = model_root
@@ -295,7 +297,7 @@ fn download_asr_model_blocking(
     }
 
     let config_values = parse_dotenv_values(&env_path(&paths))?;
-    let job = if asr_model == DEFAULT_ASR_MODEL {
+    let job = if asr_model == SENSEVOICE_SMALL_MODEL {
         AsrModelDownloadJob::new(
             asr_model.clone(),
             configured_env_value(&config_values, ASR_MODEL_DOWNLOAD_URL_ENV),
