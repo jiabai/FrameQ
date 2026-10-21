@@ -217,6 +217,18 @@ export async function downloadAsrModel(
   return result;
 }
 
+export async function downloadRuntimeComponent(
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<AsrModelDownloadResult> {
+  const result = parseAsrModelDownloadResult(
+    await runner("download_runtime_component", {}),
+  );
+  if (!result) {
+    throw new Error("INVALID_RUNTIME_COMPONENT_DOWNLOAD_RESPONSE");
+  }
+  return result;
+}
+
 export async function cancelAsrModelDownload(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<CancelAsrModelDownloadResult> {

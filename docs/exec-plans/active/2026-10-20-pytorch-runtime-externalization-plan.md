@@ -22,7 +22,7 @@
   - [x] worker 侧下载链路（2026-10-21，提交待填）：`runtime_component_download.py`（下载器层）+ `worker_application/runtime_component_download.py`（env 驱动的服务入口）+ CLI `--download-runtime-component`；四个进度码登记进封闭注册表、共享契约 JSON 与 TS 协议镜像；`_download_url_to_file` 加 `downloading_message_code` 参数供两条通道复用
   - [x] Rust 侧（2026-10-21，提交待填）：`RuntimeComponentDownloadJob` 与 `build_runtime_component_download_command_spec`；`download_runtime_component` 命令（按 `v<版本>` 与平台拼 GitHub Releases 资产地址，版本取 `CARGO_PKG_VERSION`）；常规 worker 命令注入 `FRAMEQ_PYTORCH_RUNTIME_DIR` 供 ASR 门禁解析；复用模型下载 lane 与结果协议（不新增 `WorkerOperation`，避免诊断与结果协议四处匹配）
   - [x] 错误码文案映射（2026-10-21）：`ASR_RUNTIME_COMPONENT_MISSING`、`ASR_RUNTIME_COMPONENT_STALE`、`RUNTIME_COMPONENT_DOWNLOAD_FAILED`、`RUNTIME_COMPONENT_INVALID` 三语文案与映射测试
-  - [ ] 设置页：PyTorch 条目标注组件需求与下载入口（调用 `download_runtime_component`）
+  - [x] 设置页入口（2026-10-21）：模型准备面板底部加「下载 PyTorch 运行时组件」按钮（`guide.runtimeComponent`），走 `settingsClient.downloadRuntimeComponent` → hook `startRuntimeComponentDownload` → Tauri 命令；成功/失败复用面板既有通知位，三语文案齐备。未做「按状态显示/隐藏」：组件是否必需只有构建期 manifest 知道，前端暂不探测，按需点击（worker 侧幂等短路）。
   - 说明：包内 manifest 改放 `resources/python/runtime-manifest.json`。原方案放在 `resources/runtime-manifest.json` 并登记进 tauri 资源清单，但该文件是构建产物，dev 下不存在会让 `cargo build` 直接失败；放进 `resources/python/` 后由既有通配覆盖，仓库也不会出现每次构建都变脏的跟踪文件。
 - [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
 

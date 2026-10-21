@@ -32,6 +32,8 @@ type ModelGuideSheetProps = {
   onClose: () => void;
   onStartDownload: () => void;
   onCancelDownload: () => void;
+  onDownloadRuntimeComponent: () => void;
+  runtimeComponentDownloading: boolean;
 };
 
 export function ModelGuideSheet({
@@ -46,6 +48,8 @@ export function ModelGuideSheet({
   onClose,
   onStartDownload,
   onCancelDownload,
+  onDownloadRuntimeComponent,
+  runtimeComponentDownloading,
 }: ModelGuideSheetProps) {
   const { t } = useTranslation("asrModel");
   const { resolvedLocale } = useLocale();
@@ -204,6 +208,20 @@ export function ModelGuideSheet({
               </span>
             </button>
           ) : null}
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onDownloadRuntimeComponent}
+            disabled={runtimeComponentDownloading || modelDownloadActive}
+            aria-busy={runtimeComponentDownloading}
+          >
+            <Download size={16} />
+            <span>
+              {runtimeComponentDownloading
+                ? t("guide.runtimeComponentDownloading")
+                : t("guide.runtimeComponent")}
+            </span>
+          </button>
           {modelDownloadActive ? (
             <button
               type="button"

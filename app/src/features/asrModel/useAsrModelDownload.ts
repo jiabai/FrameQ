@@ -9,6 +9,7 @@ import {
   cancelAsrModelDownload,
   getAsrModelStatus,
   downloadAsrModel,
+  downloadRuntimeComponent as downloadRuntimeComponentCommand,
   getLlmConfig,
   type AsrModelDownloadProgress,
   type AsrModelStatusResponseView,
@@ -67,6 +68,7 @@ export function useAsrModelDownload() {
   });
   const [modelDownloadNotice, setModelDownloadNotice] = useState<UiMessage | null>(null);
   const [modelDownloadStalled, setModelDownloadStalled] = useState(false);
+  const [runtimeComponentDownloading, setRuntimeComponentDownloading] = useState(false);
   const modelDownloadOperationIdRef = useRef(0);
   const modelDownloadPhaseRef = useRef<"running" | "cancelling" | "finished">("finished");
   const modelDownloadCancellationIntentOperationIdRef = useRef<number | null>(null);
@@ -413,6 +415,31 @@ export function useAsrModelDownload() {
     }
   }
 
+  // Separate PyTorch runtime download: the Rust command returns early when the
+  // installed component already matches the bundled fingerprint.
+  const startRuntimeComponentDownload = useCallback(async () => {
+    setRuntimeComponentDownloading((active) => {
+      if (active) {
+        return active;
+      }
+      return true;
+    });
+    try {
+      const result = await downloadRuntimeComponentCommand();
+      setModelDownloadNotice(
+        uiMessage(
+          result.status === "completed"
+            ? "asrModel.notice.runtimeComponentReady"
+            : "asrModel.notice.runtimeComponentFailed",
+        ),
+      );
+    } catch {
+      setModelDownloadNotice(uiMessage("asrModel.notice.runtimeComponentFailed"));
+    } finally {
+      setRuntimeComponentDownloading(false);
+    }
+  }, []);
+
   const openModelGuide = useCallback((notice?: UiMessage) => {
     setModelGuideOpen(true);
     if (notice !== undefined) {
@@ -431,6 +458,8 @@ export function useAsrModelDownload() {
     modelDownloadActive,
     refreshAsrModelStatus,
     startAsrModelDownload,
+    startRuntimeComponentDownload,
+    runtimeComponentDownloading,
     ensureAsrModelReady,
     cancelCurrentAsrModelDownload,
   };

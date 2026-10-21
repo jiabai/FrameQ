@@ -137,6 +137,8 @@ function App() {
     modelDownloadActive,
     refreshAsrModelStatus,
     startAsrModelDownload,
+    startRuntimeComponentDownload,
+    runtimeComponentDownloading,
     ensureAsrModelReady,
     cancelCurrentAsrModelDownload,
   } = useAsrModelDownload();
@@ -702,6 +704,8 @@ function App() {
         onClose={() => setModelGuideOpen(false)}
         onStartDownload={startAsrModelDownload}
         onCancelDownload={cancelCurrentAsrModelDownload}
+        onDownloadRuntimeComponent={startRuntimeComponentDownload}
+        runtimeComponentDownloading={runtimeComponentDownloading}
       />
 
       <AnimatedSheet

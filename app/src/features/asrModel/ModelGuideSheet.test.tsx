@@ -126,6 +126,8 @@ async function renderModelGuide(
         onClose={vi.fn()}
         onStartDownload={vi.fn()}
         onCancelDownload={vi.fn()}
+        onDownloadRuntimeComponent={vi.fn()}
+        runtimeComponentDownloading={false}
       />
     </LocaleProvider>,
   );

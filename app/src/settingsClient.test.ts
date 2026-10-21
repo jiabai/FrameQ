@@ -4,6 +4,7 @@ import {
   cancelAsrModelDownload,
   clearAudioReviewCache,
   downloadAsrModel,
+  downloadRuntimeComponent,
   getAudioReviewCacheUsage,
   getAsrModelStatus,
   getUiPreferences,
@@ -15,6 +16,22 @@ import {
 import { IpcProtocolError } from "./tauriIpcProtocol";
 
 describe("settings client", () => {
+  test("starts the PyTorch runtime component download through Tauri", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return { started: true, status: "completed" };
+    };
+
+    await expect(downloadRuntimeComponent(runner)).resolves.toEqual({
+      started: true,
+      status: "completed",
+    });
+    expect(calls).toEqual([
+      { command: "download_runtime_component", args: {} },
+    ]);
+  });
+
   test("loads selected ASR model status from Tauri", async () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: SettingsCommandRunner = async (command, args) => {
