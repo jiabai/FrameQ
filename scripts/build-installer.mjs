@@ -664,7 +664,7 @@ export async function buildPytorchRuntimeComponent({
 }) {
   const componentStaging = join(buildRoot, "pytorch-component");
   const componentSitePackages = join(componentStaging, COMPONENT_SITE_PACKAGES_NAME);
-  run(commandName("uv"), ["export", "--no-dev", "--format", "requirements-txt", "--extra", "pytorch", "--output-file", join(buildRoot, "requirements-pytorch.txt")], "Export PyTorch component requirements");
+  run(commandName("uv"), ["export", "--no-dev", "--no-hashes", "--format", "requirements-txt", "--extra", "pytorch", "--output-file", join(buildRoot, "requirements-pytorch.txt")], "Export PyTorch component requirements");
   run(commandName("uv"), ["pip", "install", "--python", pythonExe, "--target", componentSitePackages, "-r", join(buildRoot, "requirements-pytorch.txt")], "Install PyTorch component dependencies");
   const removedDistributions = await harvestComponentSitePackages(componentSitePackages, bundledSitePackages);
   await writeFile(join(componentStaging, BUNDLED_MANIFEST_NAME), runtimeManifestPayload(fingerprint, "pytorch-component", target));
@@ -765,7 +765,7 @@ async function main(argv = process.argv.slice(2)) {
 
   const pythonExe = await findPythonExecutable(pythonRoot);
   const requirementsPath = join(buildRoot, "requirements.txt");
-  run(commandName("uv"), ["export", "--no-dev", "--format", "requirements-txt", "--output-file", requirementsPath], "Export Python requirements");
+  run(commandName("uv"), ["export", "--no-dev", "--no-hashes", "--format", "requirements-txt", "--output-file", requirementsPath], "Export Python requirements");
   run(pythonExe, ["-m", "ensurepip", "--upgrade"], "Install bundled Python pip");
   run(pythonExe, ["-m", "pip", "install", "--upgrade", "pip"], "Upgrade bundled Python pip");
   // Force wheels for packages that leak Homebrew libraries when source-built on
