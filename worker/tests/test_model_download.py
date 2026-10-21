@@ -107,6 +107,7 @@ def test_model_download_terminal_success_omits_local_model_directory(
     result = worker_service.run_asr_model_download_once(
         project_root=tmp_path,
         environ={"FRAMEQ_MODEL_DIR": secret_dir.as_posix()},
+        asr_model=SENSEVOICE_MODEL_ID,
     )
 
     assert result == {
@@ -291,6 +292,7 @@ def test_model_download_refines_archive_invalid_phase_without_message_inspection
     worker_service.run_asr_model_download_once(
         project_root=tmp_path,
         environ={"FRAMEQ_ASR_MODEL_DOWNLOAD_URL": "https://private.example/model.zip"},
+        asr_model=SENSEVOICE_MODEL_ID,
         diagnostic_callback=diagnostics.append,
     )
 

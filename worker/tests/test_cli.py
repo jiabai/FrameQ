@@ -35,10 +35,12 @@ from frameq_worker.worker_service import (
 DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall"
 
 
+# 默认切到 ONNX 后，这些 CLI 管线用例显式钉住 PyTorch 模型：它们的夹具只准备了
+# PyTorch 的模型目录布局，验证的是 stdout/cache 路由而非默认模型选择。
 def process_request_json(
     url: str,
     *,
-    asr_model: str = DEFAULT_ASR_MODEL,
+    asr_model: str = "iic/SenseVoiceSmall",
 ) -> str:
     return json.dumps(
         {

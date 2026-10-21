@@ -21,7 +21,8 @@ from frameq_worker.asr_runtime.types import (
     Transcriber,
 )
 
-DEFAULT_ASR_MODEL = SENSEVOICE_SMALL_MODEL
+# 外置 PyTorch 运行时后默认走 ONNX：首装即用，不需要额外下载组件。
+DEFAULT_ASR_MODEL = SENSEVOICE_SMALL_ONNX_MODEL
 DEFAULT_MODEL_CACHE_ENV = "FRAMEQ_MODEL_DIR"
 MODELSCOPE_CACHE_ENV = "MODELSCOPE_CACHE"
 

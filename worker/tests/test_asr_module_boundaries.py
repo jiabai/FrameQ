@@ -232,7 +232,7 @@ def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
         == sensevoice.SENSEVOICE_VAD_MAX_SEGMENT_TIME_MS
         == 30000
     )
-    assert public.DEFAULT_ASR_MODEL == registry.DEFAULT_ASR_MODEL == "iic/SenseVoiceSmall"
+    assert public.DEFAULT_ASR_MODEL == registry.DEFAULT_ASR_MODEL == "iic/SenseVoiceSmall-onnx"
     assert public.DEFAULT_MODEL_CACHE_ENV == registry.DEFAULT_MODEL_CACHE_ENV == "FRAMEQ_MODEL_DIR"
     assert public.MODELSCOPE_CACHE_ENV == registry.MODELSCOPE_CACHE_ENV == "MODELSCOPE_CACHE"
     assert public.supported_asr_model_names() == [

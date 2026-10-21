@@ -1043,7 +1043,7 @@
     }
   },
   "asr": {
-    "defaultModel": "iic/SenseVoiceSmall"
+    "defaultModel": "iic/SenseVoiceSmall-onnx"
   },
   "processVideo": {
     "serverManagedLlmCheckout": false,

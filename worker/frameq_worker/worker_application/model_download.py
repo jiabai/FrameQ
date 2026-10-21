@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from frameq_worker.asr import DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL
+from frameq_worker.asr import (
+    DEFAULT_ASR_MODEL,
+    SENSEVOICE_SMALL_MODEL,
+    SENSEVOICE_SMALL_ONNX_MODEL,
+)
 from frameq_worker.config import load_project_env
 from frameq_worker.desktop_contract import (
     MODEL_DIR_ENV,
@@ -47,7 +51,8 @@ def run_asr_model_download_once(
     asr_model: str = DEFAULT_ASR_MODEL,
     diagnostic_callback: DiagnosticCallback | None = None,
 ) -> dict[str, object]:
-    if asr_model not in {DEFAULT_ASR_MODEL, SENSEVOICE_SMALL_ONNX_MODEL}:
+    # 用显式常量而不是 DEFAULT_ASR_MODEL：默认切到 ONNX 后集合会塌缩成单元素。
+    if asr_model not in {SENSEVOICE_SMALL_MODEL, SENSEVOICE_SMALL_ONNX_MODEL}:
         return {
             "status": "failed",
             "code": "ASR_MODEL_UNSUPPORTED",
@@ -71,7 +76,8 @@ def run_asr_model_download_once(
         "model_name": asr_model,
         "progress_callback": track_progress,
     }
-    if asr_model == DEFAULT_ASR_MODEL:
+    # 只有 PyTorch 族接受自定义下载地址；ONNX 固定官方源。
+    if asr_model == SENSEVOICE_SMALL_MODEL:
         download_options.update(
             download_url=optional_env(runtime_env, MODEL_DOWNLOAD_URL_ENV),
             expected_sha256=optional_env(runtime_env, MODEL_DOWNLOAD_SHA256_ENV),

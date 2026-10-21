@@ -67,7 +67,10 @@ def run_runtime_component_download_once(
         return {
             "status": "failed",
             "code": RUNTIME_COMPONENT_INVALID,
-            "message": "This installation does not ship a runtime manifest; the component is not needed.",
+            "message": (
+                "This installation does not ship a runtime manifest; "
+                "the component is not needed."
+            ),
         }
 
     # 已就绪就不重复下载（组件 140 MB 起来，没必要每次点都重下）。

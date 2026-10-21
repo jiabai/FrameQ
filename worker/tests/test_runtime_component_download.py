@@ -11,7 +11,6 @@ from functools import partial
 from pathlib import Path
 
 import pytest
-
 from frameq_worker.runtime_component import (
     COMPONENT_MANIFEST_NAME,
     COMPONENT_SITE_PACKAGES_NAME,
@@ -31,7 +30,12 @@ from frameq_worker.worker_application.runtime_component_download import (
 )
 
 
-def _make_component_zip(zip_path: Path, fingerprint: str | None, *, with_site_packages: bool = True) -> str:
+def _make_component_zip(
+    zip_path: Path,
+    fingerprint: str | None,
+    *,
+    with_site_packages: bool = True,
+) -> str:
     """构造一个最小的组件 zip，返回其内容的 SHA-256。"""
     import hashlib
 
