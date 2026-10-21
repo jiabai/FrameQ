@@ -28,7 +28,7 @@
   - [x] 默认切 ONNX（`0439934`）：顺带修掉两处「拿默认值拼集合/当分支判据」的静默塌缩 bug（`requests.py` 的 `DESKTOP_ASR_MODELS`、`model_download.py` 的校验与覆盖分支）
   - [ ] 升级说明 UI（一次性提示）
   - [ ] README / ARCHITECTURE / 规格状态同步
-  - [ ] 发布前在真实长视频上重跑 Comparison Record
+  - [x] 发布前在真实长视频上重跑 Comparison Record（2026-10-21）：10 分 16 秒访谈视频，归一化相似度 0.90，覆盖到底、无内容缺失，最大差异块经时间戳核对为分段粒度造成的对齐假象；记录写进规格的对比记录小节
 
 Stage 4 开工评估（2026-10-21，已回滚，仓库保持绿）：把 `DEFAULT_ASR_MODEL` 指向 `SENSEVOICE_SMALL_ONNX_MODEL` 后 worker 全量出现 **18 个失败，跨 5 个文件**，全部是夹具默认按 PyTorch 路径构造所致，需要逐个判断「该测试是否本就该显式指定模型」：
 
