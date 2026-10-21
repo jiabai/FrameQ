@@ -1,4 +1,5 @@
 use super::command::{build_worker_command_spec, WorkerInvocation};
+use std::path::{Path, PathBuf};
 use super::runner::{
     ProgressRoute, WorkerLane, WorkerOperation, WorkerRunError, WorkerRunOutcome, WorkerRunRequest,
 };
@@ -53,8 +54,41 @@ impl AsrModelDownloadJob {
     }
 }
 
-pub(crate) enum WorkerJob {
-    ProcessVideo {
+/// PyTorch 运行时组件下载任务。与模型下载共用下载 lane 与结果协议：
+/// 两者都是「下载并落位」，串行执行反而更省带宽。
+pub(crate) struct RuntimeComponentDownloadJob {
+    component_dir: PathBuf,
+    download_url: String,
+    download_sha256: Option<String>,
+}
+
+impl RuntimeComponentDownloadJob {
+    pub(crate) fn new(
+        component_dir: PathBuf,
+        download_url: String,
+        download_sha256: Option<String>,
+    ) -> Self {
+        Self {
+            component_dir,
+            download_url,
+            download_sha256,
+        }
+    }
+
+    pub(super) fn component_dir(&self) -> &Path {
+        &self.component_dir
+    }
+
+    pub(super) fn download_url(&self) -> &str {
+        &self.download_url
+    }
+
+    pub(super) fn download_sha256(&self) -> Option<&str> {
+        self.download_sha256.as_deref()
+    }
+}
+
+pub(crate) enum WorkerJob {    ProcessVideo {
         payload: String,
         progress: ProgressRoute,
     },

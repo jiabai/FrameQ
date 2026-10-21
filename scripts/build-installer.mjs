@@ -786,8 +786,10 @@ async function main(argv = process.argv.slice(2)) {
     env: { PYTHONDONTWRITEBYTECODE: "1", PYTHONPATH: workerRoot },
   });
   const lockFingerprint = computeLockFingerprint();
+  // 包内 manifest 放进 resources/python（本身是产物目录，已被 tauri 的
+  // `resources/python/**/*` 打进去），避免仓库里出现一个每次构建都会变脏的文件。
   await writeFile(
-    join(resourcesRoot, BUNDLED_MANIFEST_NAME),
+    join(pythonRoot, BUNDLED_MANIFEST_NAME),
     runtimeManifestPayload(lockFingerprint, "bundled", options.target),
   );
   const [bundledSitePackages] = await findSitePackagesDirectories(pythonRoot);

@@ -339,12 +339,12 @@ fn validate_asr_model(asr_model: String) -> Result<String, String> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-enum ModelDownloadRunResult {
+pub(crate) enum ModelDownloadRunResult {
     Completed,
     Cancelled,
 }
 
-fn map_model_download_run_result(
+pub(crate) fn map_model_download_run_result(
     result: Result<WorkerRunOutcome, WorkerRunError>,
 ) -> Result<ModelDownloadRunResult, String> {
     match result {

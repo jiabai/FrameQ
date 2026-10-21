@@ -343,7 +343,7 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain(
       'import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print(\'bundled runtime import OK\')',
     );
-    expect(workflow).toContain('test -f "$RES/runtime-manifest.json"');
+    expect(workflow).toContain('test -f "$RES/python/runtime-manifest.json"');
   });
 
   test("desktop release workflow does not mutate signed macOS app bundles during smoke tests", () => {

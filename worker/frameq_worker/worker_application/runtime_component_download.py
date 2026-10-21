@@ -70,6 +70,14 @@ def run_runtime_component_download_once(
             "message": "This installation does not ship a runtime manifest; the component is not needed.",
         }
 
+    # 已就绪就不重复下载（组件 140 MB 起来，没必要每次点都重下）。
+    if evaluate_component(component_dir, bundled_fingerprint) == RUNTIME_COMPONENT_READY:
+        return {
+            "status": "completed",
+            "component_dir": str(component_dir),
+            "already_installed": True,
+        }
+
     try:
         installed = download_pytorch_runtime_component(
             component_dir=component_dir,

@@ -16,6 +16,7 @@ mod local_media;
 mod local_media_contract;
 mod progress_event;
 mod runtime;
+mod runtime_component;
 mod settings;
 mod task_manifest;
 mod transcript_detail;
@@ -33,7 +34,8 @@ pub(crate) use runtime::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
     resolve_runtime_paths, RuntimePaths, ALLOW_REAL_ASR_ENV, AUDIO_REVIEW_CACHE_DIR_NAME,
     CACHE_DIR_ENV, CACHE_DIR_NAME, DESKTOP_LOG_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV,
-    OUTPUT_DIR_ENV, RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,
+    OUTPUT_DIR_ENV, PYTORCH_RUNTIME_DIR_ENV, PYTORCH_RUNTIME_SHA256_ENV, PYTORCH_RUNTIME_URL_ENV,
+    RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,
 };
 
 pub(crate) use diagnostics::{append_desktop_log, summarize_worker_result_for_log};
@@ -123,6 +125,7 @@ pub fn run() {
             updates::get_update_delivery,
             asr_model::get_asr_model_status,
             asr_model::download_asr_model,
+            runtime_component::download_runtime_component,
             asr_model::cancel_asr_model_download,
             diagnostic_export::export_diagnostics,
             account::begin_auth_flow,

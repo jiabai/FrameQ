@@ -53,7 +53,7 @@ def test_locate_bundled_manifest_prefers_project_root_and_env(tmp_path: Path) ->
 
 
 def test_locate_bundled_manifest_falls_back_to_resource_dir(tmp_path: Path) -> None:
-    resource_manifest = _write_manifest(tmp_path / "resources", "fp-1")
+    resource_manifest = _write_manifest(tmp_path / "resources" / "python", "fp-1")
     environ = {"FRAMEQ_RESOURCE_DIR": str(tmp_path / "resources")}
     assert locate_bundled_manifest(tmp_path / "user-data", environ) == resource_manifest
     # 资源目录里没有时回退项目根（dev 形态）

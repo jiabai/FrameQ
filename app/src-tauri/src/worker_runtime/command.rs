@@ -1,4 +1,4 @@
-use super::facade::AsrModelDownloadJob;
+use super::facade::{AsrModelDownloadJob, RuntimeComponentDownloadJob};
 use crate::account;
 use crate::settings::{
     legacy_local_llm_env_removals, ANYSEARCH_CHECKOUT_URL_ENV, ANYSEARCH_SESSION_TOKEN_ENV,
@@ -10,7 +10,8 @@ use crate::task_manifest;
 use crate::{
     bundled_python_path, path_to_env_string, prepend_to_path, RuntimePaths, ALLOW_REAL_ASR_ENV,
     CACHE_DIR_ENV, CACHE_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV, OUTPUT_DIR_ENV,
-    RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,
+    PYTORCH_RUNTIME_DIR_ENV, PYTORCH_RUNTIME_SHA256_ENV, PYTORCH_RUNTIME_URL_ENV, RESOURCE_DIR_ENV,
+    USER_DATA_DIR_ENV,
 };
 #[cfg(test)]
 use std::collections::HashMap;
@@ -142,6 +143,55 @@ pub(super) fn build_asr_model_download_command_spec(
     })
 }
 
+pub(super) fn build_runtime_component_download_command_spec(
+    paths: &RuntimePaths,
+    job: &RuntimeComponentDownloadJob,
+) -> Result<WorkerCommandSpec, String> {
+    let path_value = prepend_to_path(&paths.resource_dir.join("bin"))?;
+    let mut env = vec![
+        (
+            "PYTHONPATH".to_string(),
+            path_to_env_string(paths.resource_dir.join("worker")),
+        ),
+        ("PYTHONUTF8".to_string(), "1".to_string()),
+        ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
+        ("PATH".to_string(), path_value),
+        (
+            MODEL_DIR_ENV.to_string(),
+            path_to_env_string(paths.user_data_dir.join("models")),
+        ),
+        (
+            RESOURCE_DIR_ENV.to_string(),
+            path_to_env_string(&paths.resource_dir),
+        ),
+        (
+            USER_DATA_DIR_ENV.to_string(),
+            path_to_env_string(&paths.user_data_dir),
+        ),
+        (
+            PYTORCH_RUNTIME_DIR_ENV.to_string(),
+            path_to_env_string(job.component_dir()),
+        ),
+        (PYTORCH_RUNTIME_URL_ENV.to_string(), job.download_url().to_string()),
+    ];
+    if let Some(sha256) = job.download_sha256() {
+        env.push((PYTORCH_RUNTIME_SHA256_ENV.to_string(), sha256.to_string()));
+    }
+
+    Ok(WorkerCommandSpec {
+        program: bundled_python_path(&paths.resource_dir),
+        args: vec![
+            "-m".to_string(),
+            "frameq_worker".to_string(),
+            "--download-runtime-component".to_string(),
+        ],
+        stdin_payload: None,
+        env,
+        env_remove: legacy_local_llm_env_removals(),
+        current_dir: paths.user_data_dir.clone(),
+    })
+}
+
 pub(super) fn build_worker_command_spec(
     paths: &RuntimePaths,
     invocation: WorkerInvocation,
@@ -198,6 +248,13 @@ pub(super) fn build_worker_command_spec(
             USER_DATA_DIR_ENV.to_string(),
             path_to_env_string(&paths.user_data_dir),
         ),
+        (
+            PYTORCH_RUNTIME_DIR_ENV.to_string(),
+            path_to_env_string(crate::runtime_component::component_dir(
+                &paths.user_data_dir,
+                env!("CARGO_PKG_VERSION"),
+            )),
+        ),
         (ALLOW_REAL_ASR_ENV.to_string(), "1".to_string()),
         (MODELSCOPE_OFFLINE_ENV.to_string(), "1".to_string()),
     ];
@@ -247,11 +304,11 @@ fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> b
 #[cfg(test)]
 mod tests {
     use super::{
-        build_asr_model_download_command_spec, build_worker_command_spec, WorkerCommandSpec,
-        WorkerInvocation,
+        build_asr_model_download_command_spec, build_runtime_component_download_command_spec,
+        build_worker_command_spec, WorkerCommandSpec, WorkerInvocation,
     };
     use crate::account::ServerManagedLlmInvocation;
-    use crate::worker_runtime::facade::AsrModelDownloadJob;
+    use crate::worker_runtime::facade::{AsrModelDownloadJob, RuntimeComponentDownloadJob};
     use crate::{bundled_python_path, path_to_env_string, RuntimePaths};
     use std::path::PathBuf;
 
@@ -334,6 +391,45 @@ mod tests {
             env.get("FRAMEQ_SENSEVOICE_REVISION"),
             Some(&"revision-1".to_string())
         );
+        assert_removes_legacy_local_llm_env(&spec);
+    }
+
+    #[test]
+    fn runtime_component_download_spec_carries_the_component_environment() {
+        let paths = command_test_paths();
+        let job = RuntimeComponentDownloadJob::new(
+            paths.user_data_dir.join("runtime").join("pytorch").join("0.3.9"),
+            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/frameq-pytorch-runtime-windows-x64.zip".to_string(),
+            Some("deadbeef".to_string()),
+        );
+
+        let spec = build_runtime_component_download_command_spec(&paths, &job)
+            .expect("prepare runtime component download command");
+        let env = spec.env_map();
+
+        assert_eq!(
+            spec.args,
+            vec![
+                "-m".to_string(),
+                "frameq_worker".to_string(),
+                "--download-runtime-component".to_string()
+            ]
+        );
+        assert_eq!(spec.stdin_payload, None);
+        assert_eq!(
+            env.get("FRAMEQ_PYTORCH_RUNTIME_URL"),
+            Some(&"https://github.com/jiabai/FrameQ/releases/download/v0.3.9/frameq-pytorch-runtime-windows-x64.zip".to_string())
+        );
+        assert_eq!(
+            env.get("FRAMEQ_PYTORCH_RUNTIME_SHA256"),
+            Some(&"deadbeef".to_string())
+        );
+        assert!(env
+            .get("FRAMEQ_PYTORCH_RUNTIME_DIR")
+            .is_some_and(|value| value.ends_with("runtime/pytorch/0.3.9") || value.ends_with("runtime\\pytorch\\0.3.9")));
+        for key in ["PYTHONPATH", "FRAMEQ_RESOURCE_DIR", "FRAMEQ_USER_DATA_DIR", "FRAMEQ_MODEL_DIR"] {
+            assert!(env.contains_key(key), "missing fixed key {key}");
+        }
         assert_removes_legacy_local_llm_env(&spec);
     }
 

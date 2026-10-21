@@ -53,9 +53,13 @@ def locate_bundled_manifest(
         return candidate if candidate.is_file() else None
     resource_dir = (env.get(RESOURCE_DIR_ENV) or "").strip()
     if resource_dir:
-        candidate = Path(resource_dir) / BUNDLED_MANIFEST_NAME
-        if candidate.is_file():
-            return candidate
+        # 构建脚本把 manifest 写在 resources/python/ 下，根目录位置保留兼容。
+        for candidate in (
+            Path(resource_dir) / "python" / BUNDLED_MANIFEST_NAME,
+            Path(resource_dir) / BUNDLED_MANIFEST_NAME,
+        ):
+            if candidate.is_file():
+                return candidate
     candidate = Path(project_root) / BUNDLED_MANIFEST_NAME
     return candidate if candidate.is_file() else None
 

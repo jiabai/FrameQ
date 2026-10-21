@@ -4,8 +4,8 @@ mod result_protocol;
 mod runner;
 mod supervisor;
 
-use command::build_asr_model_download_command_spec;
-pub(crate) use facade::{AsrModelDownloadJob, TaskWorkerFacade, WorkerJob};
+use command::{build_asr_model_download_command_spec, build_runtime_component_download_command_spec};
+pub(crate) use facade::{AsrModelDownloadJob, RuntimeComponentDownloadJob, TaskWorkerFacade, WorkerJob};
 #[cfg(test)]
 pub(crate) use result_protocol::SourceIdentityFailure;
 pub(crate) use result_protocol::{
@@ -59,6 +59,20 @@ impl ProcessSupervisors {
         self.asr_model_download.cancel()
     }
 
+    pub(crate) fn run_runtime_component_download(
+        &self,
+        paths: &RuntimePaths,
+        job: RuntimeComponentDownloadJob,
+        window: Window,
+    ) -> Result<Result<WorkerRunOutcome, WorkerRunError>, String> {
+        let request = prepare_runtime_component_download_request(
+            paths,
+            job,
+            ProgressRoute::asr_model_download(window),
+        )?;
+        Ok(self.asr_model_download.run(paths, request))
+    }
+
     #[cfg(test)]
     pub(crate) fn activate_task_for_test(&self, pid: u32) -> u64 {
         self.task.activate_for_test(pid)
@@ -78,6 +92,18 @@ fn prepare_asr_model_download_request(
     Ok(WorkerRunRequest {
         operation: WorkerOperation::DownloadAsrModel,
         command: build_asr_model_download_command_spec(paths, &job)?,
+        progress,
+    })
+}
+
+fn prepare_runtime_component_download_request(
+    paths: &RuntimePaths,
+    job: RuntimeComponentDownloadJob,
+    progress: ProgressRoute,
+) -> Result<WorkerRunRequest, String> {
+    Ok(WorkerRunRequest {
+        operation: WorkerOperation::DownloadAsrModel,
+        command: build_runtime_component_download_command_spec(paths, &job)?,
         progress,
     })
 }

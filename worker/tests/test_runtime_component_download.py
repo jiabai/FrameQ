@@ -212,6 +212,23 @@ def test_service_wrapper_end_to_end(tmp_path: Path, component_archive_server) ->
     assert evaluate_component(Path(str(result["component_dir"])), "fp-1") == "ready"
 
 
+def test_already_installed_component_skips_the_download(tmp_path: Path) -> None:
+    manifest = tmp_path / "runtime-manifest.json"
+    manifest.write_text(json.dumps({"lock_fingerprint": "fp-1"}), encoding="utf-8")
+    component_dir = tmp_path / "runtime" / "pytorch" / "0.3.9"
+    (component_dir / COMPONENT_SITE_PACKAGES_NAME).mkdir(parents=True)
+    (component_dir / COMPONENT_MANIFEST_NAME).write_text(
+        json.dumps({"lock_fingerprint": "fp-1"}), encoding="utf-8"
+    )
+    environ = {
+        COMPONENT_DIR_ENV: str(component_dir),
+        COMPONENT_URL_ENV: "http://127.0.0.1:1/unreachable.zip",
+    }
+    result = run_runtime_component_download_once(project_root=tmp_path, environ=environ)
+    assert result["status"] == "completed"
+    assert result["already_installed"] is True
+
+
 def test_missing_bundled_manifest_means_component_not_needed(tmp_path: Path) -> None:
     environ = {
         COMPONENT_DIR_ENV: str(tmp_path / "runtime" / "pytorch" / "0.3.9"),
