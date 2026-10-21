@@ -18,7 +18,7 @@
 
 - [x] Stage 1：worker 组件契约（检测、指纹、`sys.path` 注入、缺失错误码）+ 单测（2026-10-20 完成，`2887fd8`）
 - [x] Stage 2：构建脚本双依赖集与组件打包，本地 `--skip-tauri-build` 等价验证通过（2026-10-21，提交待填）
-- [ ] Stage 3：组件托管与下载（URL、进度、断点续传、校验）+ 设置页入口
+- [x] Stage 3：组件托管与下载（URL、进度、断点续传、校验）+ 设置页入口（2026-10-21 完成，`c6855c5` / `a1bc22d` / `c26dd0d` / `28e2b84`）
   - [x] worker 侧下载链路（2026-10-21，提交待填）：`runtime_component_download.py`（下载器层）+ `worker_application/runtime_component_download.py`（env 驱动的服务入口）+ CLI `--download-runtime-component`；四个进度码登记进封闭注册表、共享契约 JSON 与 TS 协议镜像；`_download_url_to_file` 加 `downloading_message_code` 参数供两条通道复用
   - [x] Rust 侧（2026-10-21，提交待填）：`RuntimeComponentDownloadJob` 与 `build_runtime_component_download_command_spec`；`download_runtime_component` 命令（按 `v<版本>` 与平台拼 GitHub Releases 资产地址，版本取 `CARGO_PKG_VERSION`）；常规 worker 命令注入 `FRAMEQ_PYTORCH_RUNTIME_DIR` 供 ASR 门禁解析；复用模型下载 lane 与结果协议（不新增 `WorkerOperation`，避免诊断与结果协议四处匹配）
   - [x] 错误码文案映射（2026-10-21）：`ASR_RUNTIME_COMPONENT_MISSING`、`ASR_RUNTIME_COMPONENT_STALE`、`RUNTIME_COMPONENT_DOWNLOAD_FAILED`、`RUNTIME_COMPONENT_INVALID` 三语文案与映射测试
