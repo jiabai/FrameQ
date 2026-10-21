@@ -9,6 +9,9 @@ from frameq_worker.worker_application.local_media import (
 from frameq_worker.worker_application.model_download import (
     run_asr_model_download_once as run_asr_model_download_once,
 )
+from frameq_worker.worker_application.runtime_component_download import (
+    run_runtime_component_download_once as run_runtime_component_download_once,
+)
 from frameq_worker.worker_application.source_identity import (
     resolve_source_identity_once as resolve_source_identity_once,
 )
@@ -22,4 +25,5 @@ __all__ = [
     "resolve_source_identity_once",
     "retry_insights_once",
     "run_asr_model_download_once",
+    "run_runtime_component_download_once",
 ]

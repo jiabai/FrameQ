@@ -623,6 +623,7 @@ def _download_url_to_file(
     urlopen: Callable[..., object] = urllib.request.urlopen,
     max_bytes: int = MAX_MODEL_ARCHIVE_BYTES,
     attempts: int = 3,
+    downloading_message_code: str = "model.archive.downloading",
 ) -> None:
     """Stream a URL to a file with a per-op timeout, size cap, retries, and progress.
 
@@ -658,7 +659,7 @@ def _download_url_to_file(
                             progress = min(75, 20 + int(55 * downloaded / total))
                             _emit(
                                 progress_callback,
-                                "model.archive.downloading",
+                                downloading_message_code,
                                 "downloading",
                                 progress,
                             )

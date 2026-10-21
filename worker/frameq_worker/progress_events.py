@@ -111,6 +111,12 @@ MODEL_PROGRESS_REGISTRY: dict[str, ModelProgressSpec] = {
     "model.archive.downloading": ModelProgressSpec("downloading", "forbidden"),
     "model.file.downloading": ModelProgressSpec("downloading", "required"),
     "model.file.completed": ModelProgressSpec("downloading", "required"),
+    # PyTorch 运行时组件下载（runtime_component_download.py），与模型下载共用
+    # 同一条进度通道但生命周期独立，不带 message_args。
+    "runtime.component.preparing": ModelProgressSpec("started", "forbidden"),
+    "runtime.component.downloading": ModelProgressSpec("downloading", "forbidden"),
+    "runtime.component.extracting": ModelProgressSpec("extracting", "forbidden"),
+    "runtime.component.completed": ModelProgressSpec("completed", "forbidden"),
 }
 
 

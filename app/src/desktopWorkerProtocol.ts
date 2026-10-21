@@ -129,6 +129,26 @@ export const ASR_MODEL_DOWNLOAD_MESSAGE_CODE_RULES = {
     current_file: "required",
     allowedArgs: [],
   },
+  "runtime.component.preparing": {
+    status: "started",
+    current_file: "forbidden",
+    allowedArgs: [],
+  },
+  "runtime.component.downloading": {
+    status: "downloading",
+    current_file: "forbidden",
+    allowedArgs: [],
+  },
+  "runtime.component.extracting": {
+    status: "extracting",
+    current_file: "forbidden",
+    allowedArgs: [],
+  },
+  "runtime.component.completed": {
+    status: "completed",
+    current_file: "forbidden",
+    allowedArgs: [],
+  },
 } as const satisfies Record<
   string,
   {

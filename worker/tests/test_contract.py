@@ -834,6 +834,10 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
         "model.archive.downloading",
         "model.file.downloading",
         "model.file.completed",
+        "runtime.component.preparing",
+        "runtime.component.downloading",
+        "runtime.component.extracting",
+        "runtime.component.completed",
     ]
 
     allowed_args = set(progress_contract["messageArgs"].get("properties", {}))
@@ -895,6 +899,26 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
         "model.file.completed": {
             "status": "downloading",
             "current_file": "required",
+            "allowedArgs": [],
+        },
+        "runtime.component.preparing": {
+            "status": "started",
+            "current_file": "forbidden",
+            "allowedArgs": [],
+        },
+        "runtime.component.downloading": {
+            "status": "downloading",
+            "current_file": "forbidden",
+            "allowedArgs": [],
+        },
+        "runtime.component.extracting": {
+            "status": "extracting",
+            "current_file": "forbidden",
+            "allowedArgs": [],
+        },
+        "runtime.component.completed": {
+            "status": "completed",
+            "current_file": "forbidden",
             "allowedArgs": [],
         },
     }

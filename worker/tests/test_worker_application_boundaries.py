@@ -7,6 +7,7 @@ from pathlib import Path
 import frameq_worker.worker_application.insight_retry as insight_retry
 import frameq_worker.worker_application.local_media as local_media
 import frameq_worker.worker_application.model_download as model_download
+import frameq_worker.worker_application.runtime_component_download as runtime_component_download
 import frameq_worker.worker_application.source_identity as source_identity
 import frameq_worker.worker_application.url_processing as url_processing
 import frameq_worker.worker_service as worker_service
@@ -24,6 +25,7 @@ EXPECTED_PRIVATE_FILES = {
     "insight_retry.py",
     "local_media.py",
     "model_download.py",
+    "runtime_component_download.py",
     "source_identity.py",
     "url_processing.py",
 }
@@ -33,11 +35,13 @@ EXPECTED_FACADE_SYMBOLS = [
     "resolve_source_identity_once",
     "retry_insights_once",
     "run_asr_model_download_once",
+    "run_runtime_component_download_once",
 ]
 HANDLER_MODULES = {
     "frameq_worker.worker_application.insight_retry",
     "frameq_worker.worker_application.local_media",
     "frameq_worker.worker_application.model_download",
+    "frameq_worker.worker_application.runtime_component_download",
     "frameq_worker.worker_application.source_identity",
     "frameq_worker.worker_application.url_processing",
 }
@@ -160,6 +164,19 @@ def test_insight_retry_helpers_require_task_paths() -> None:
 def test_model_download_handler_owns_the_model_download_use_case() -> None:
     assert "run_asr_model_download_once" in _top_level_owned_names(
         PRIVATE_ROOT / "model_download.py"
+    )
+
+
+def test_runtime_component_handler_owns_the_component_use_case() -> None:
+    assert "run_runtime_component_download_once" in _top_level_owned_names(
+        PRIVATE_ROOT / "runtime_component_download.py"
+    )
+
+
+def test_worker_service_reexports_runtime_component_handler_object() -> None:
+    assert (
+        worker_service.run_runtime_component_download_once
+        is runtime_component_download.run_runtime_component_download_once
     )
 
 

@@ -147,6 +147,14 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Download the release ASR model cache into FRAMEQ_MODEL_DIR.",
     )
+    request_group.add_argument(
+        "--download-runtime-component",
+        action="store_true",
+        help=(
+            "Download the PyTorch runtime component into FRAMEQ_PYTORCH_RUNTIME_DIR "
+            "and validate it against the bundled runtime manifest."
+        ),
+    )
     parser.add_argument(
         "--asr-model",
         help="Allowlisted ASR model ID required with --download-asr-model.",
@@ -191,6 +199,13 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
                 asr_model=args.asr_model,
                 progress_callback=print_model_download_event,
                 diagnostic_callback=print_diagnostic_event,
+            )
+        )
+    elif args.download_runtime_component:
+        result = run_worker_business(
+            lambda: worker_service_module.run_runtime_component_download_once(
+                project_root=Path.cwd(),
+                progress_callback=print_model_download_event,
             )
         )
     elif args.process_local_media_stdin:

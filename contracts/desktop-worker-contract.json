@@ -441,6 +441,26 @@
           "status": "downloading",
           "current_file": "required",
           "allowedArgs": []
+        },
+        "runtime.component.preparing": {
+          "status": "started",
+          "current_file": "forbidden",
+          "allowedArgs": []
+        },
+        "runtime.component.downloading": {
+          "status": "downloading",
+          "current_file": "forbidden",
+          "allowedArgs": []
+        },
+        "runtime.component.extracting": {
+          "status": "extracting",
+          "current_file": "forbidden",
+          "allowedArgs": []
+        },
+        "runtime.component.completed": {
+          "status": "completed",
+          "current_file": "forbidden",
+          "allowedArgs": []
         }
       }
     }

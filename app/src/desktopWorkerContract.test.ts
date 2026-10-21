@@ -872,6 +872,10 @@ describe("desktop/worker contract", () => {
       "model.archive.downloading",
       "model.file.downloading",
       "model.file.completed",
+      "runtime.component.preparing",
+      "runtime.component.downloading",
+      "runtime.component.extracting",
+      "runtime.component.completed",
     ]);
 
     const definitions = [
@@ -938,6 +942,26 @@ describe("desktop/worker contract", () => {
       "model.file.completed": {
         status: "downloading",
         current_file: "required",
+        allowedArgs: [],
+      },
+      "runtime.component.preparing": {
+        status: "started",
+        current_file: "forbidden",
+        allowedArgs: [],
+      },
+      "runtime.component.downloading": {
+        status: "downloading",
+        current_file: "forbidden",
+        allowedArgs: [],
+      },
+      "runtime.component.extracting": {
+        status: "extracting",
+        current_file: "forbidden",
+        allowedArgs: [],
+      },
+      "runtime.component.completed": {
+        status: "completed",
+        current_file: "forbidden",
         allowedArgs: [],
       },
     });
