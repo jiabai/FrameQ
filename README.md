@@ -175,6 +175,15 @@ The built executable is written to:
 app/src-tauri/target/release/app.exe
 ```
 
+The desktop app keeps its local state in `%LOCALAPPDATA%\com.frameq.desktop` (`~/Library/Application Support/com.frameq.desktop` on macOS). When you want a recovery point before a dev run:
+
+```powershell
+npm --prefix app run tauri:dev:safe    # snapshot first, then start the dev app
+npm --prefix app run snapshot:appdata  # snapshot only
+```
+
+Snapshots go to `build/appdata-snapshot/<timestamp>/` and the five most recent are kept. Only `.env`, `ui-preferences.json`, `auth/`, and the JSON records under `outputs/` are copied; model caches, the WebView profile, and media files are excluded.
+
 ## Desktop Release Runtime
 
 Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. Release builds default to SenseVoiceSmall-ONNX, whose runtime ships in the installer; the model cache is downloaded on first run into app-local data. Selecting the PyTorch SenseVoice Small model additionally requires the runtime component, offered from the model sheet.

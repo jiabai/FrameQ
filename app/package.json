@@ -10,7 +10,9 @@
     "test": "vitest run --no-file-parallelism",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev:fresh-worker": "node ../scripts/tauri-dev-fresh-worker.mjs"
+    "snapshot:appdata": "node ../scripts/snapshot-appdata.mjs",
+    "tauri:dev:fresh-worker": "node ../scripts/tauri-dev-fresh-worker.mjs",
+    "tauri:dev:safe": "node ../scripts/snapshot-appdata.mjs && node ../scripts/tauri-dev-fresh-worker.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
