@@ -27,6 +27,7 @@ pub(crate) const ANYSEARCH_CHECKOUT_URL_ENV: &str = "FRAMEQ_ANYSEARCH_CHECKOUT_U
 pub(crate) const ANYSEARCH_SESSION_TOKEN_ENV: &str = "FRAMEQ_ANYSEARCH_SESSION_TOKEN";
 pub(crate) const ASR_MODEL_ENV: &str = "FRAMEQ_ASR_MODEL";
 pub(crate) const SETTINGS_SCHEMA_VERSION_ENV: &str = "FRAMEQ_SETTINGS_SCHEMA_VERSION";
+pub(crate) const ASR_MODEL_MIGRATION_ENV: &str = "FRAMEQ_ASR_MODEL_MIGRATION";
 pub(crate) const ASR_MODEL_DOWNLOAD_URL_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_URL";
 pub(crate) const ASR_MODEL_DOWNLOAD_SHA256_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256";
 pub(crate) const MODELSCOPE_ENDPOINT_ENV: &str = "FRAMEQ_MODELSCOPE_ENDPOINT";
@@ -40,6 +41,7 @@ const LEGACY_LOCAL_LLM_ENV_KEYS: [&str; 5] = [
     LLM_TIMEOUT_ENV,
 ];
 const SETTINGS_SCHEMA_VERSION: &str = "2";
+const ASR_MODEL_MIGRATION_MARKER: &str = "1";
 const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# FrameQ desktop local settings.\n\
 # This file lives in app-local data and is read by the desktop client/worker.\n\
 # Insight LLM configuration is managed by the FrameQ server Admin Web.\n\
@@ -75,6 +77,7 @@ pub(crate) struct LlmConfigView {
     pub(crate) asr_model: String,
     pub(crate) supported_asr_models: Vec<String>,
     pub(crate) config_path: String,
+    pub(crate) asr_model_migrated: bool,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -102,6 +105,26 @@ pub(crate) fn save_llm_config(
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     save_llm_config_for_paths(&paths, diagnostic_state.inner(), config)
+}
+
+#[tauri::command]
+pub(crate) fn dismiss_asr_model_migration(
+    app: AppHandle,
+    diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
+) -> Result<LlmConfigView, String> {
+    let paths = resolve_runtime_paths(&app)?;
+    ensure_runtime_dirs(&paths)?;
+    dismiss_asr_model_migration_for_paths(&paths, diagnostic_state.inner())
+}
+
+fn dismiss_asr_model_migration_for_paths(
+    paths: &RuntimePaths,
+    diagnostic_state: &DiagnosticModelState,
+) -> Result<LlmConfigView, String> {
+    let path = env_path(paths);
+    ensure_app_settings_dotenv(&path)?;
+    write_dotenv_updates_removing(&path, &[], &[ASR_MODEL_MIGRATION_ENV])?;
+    load_llm_config_for_paths(paths, diagnostic_state)
 }
 
 fn load_llm_config_for_paths(
@@ -153,6 +176,8 @@ pub(crate) fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, St
         asr_model: resolve_asr_model_value(values.get(ASR_MODEL_ENV).cloned())?,
         supported_asr_models: supported_asr_models(),
         config_path: path_to_env_string(path),
+        asr_model_migrated: values.get(ASR_MODEL_MIGRATION_ENV).map(String::as_str)
+            == Some(ASR_MODEL_MIGRATION_MARKER),
     })
 }
 
@@ -179,6 +204,7 @@ pub(crate) fn save_llm_config_to_file(
             LLM_API_KEY_ENV,
             LLM_MODEL_ENV,
             LLM_TIMEOUT_ENV,
+            ASR_MODEL_MIGRATION_ENV,
         ],
     )?;
     load_llm_config_from_file(path)
@@ -344,6 +370,9 @@ fn ensure_app_settings_dotenv(path: &Path) -> Result<(), String> {
 /// template default at the time. Schema 2 moves those users to the ONNX model
 /// that ships with a working runtime. The version marker keeps an explicit
 /// PyTorch selection made after the upgrade from being overwritten again.
+///
+/// Only a file that still held the old PyTorch default gets the migration
+/// marker, so the settings sheet can explain the change once.
 fn migrate_settings_schema(path: &Path) -> Result<(), String> {
     let values = parse_dotenv_values(path)?;
     if values.get(SETTINGS_SCHEMA_VERSION_ENV).map(String::as_str) == Some(SETTINGS_SCHEMA_VERSION)
@@ -351,17 +380,22 @@ fn migrate_settings_schema(path: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    write_dotenv_updates_removing(
-        path,
-        &[
-            (ASR_MODEL_ENV, crate::DEFAULT_ASR_MODEL.to_string()),
-            (
-                SETTINGS_SCHEMA_VERSION_ENV,
-                SETTINGS_SCHEMA_VERSION.to_string(),
-            ),
-        ],
-        &[],
-    )
+    let previous_model = values.get(ASR_MODEL_ENV).map(String::as_str);
+    let mut updates = vec![
+        (ASR_MODEL_ENV, crate::DEFAULT_ASR_MODEL.to_string()),
+        (
+            SETTINGS_SCHEMA_VERSION_ENV,
+            SETTINGS_SCHEMA_VERSION.to_string(),
+        ),
+    ];
+    if previous_model == Some(crate::asr_model::SENSEVOICE_SMALL_MODEL) {
+        updates.push((
+            ASR_MODEL_MIGRATION_ENV,
+            ASR_MODEL_MIGRATION_MARKER.to_string(),
+        ));
+    }
+
+    write_dotenv_updates_removing(path, &updates, &[])
 }
 
 fn write_dotenv_updates_removing(
@@ -452,7 +486,8 @@ fn sanitize_optional_env_value(value: String, label: &str) -> Result<String, Str
 mod tests {
     use super::{
         audio_review_cache_usage_from_cache, clear_audio_review_cache_from_cache,
-        load_llm_config_for_paths, save_llm_config_for_paths, LlmConfigInput,
+        dismiss_asr_model_migration_for_paths, load_llm_config_for_paths,
+        save_llm_config_for_paths, LlmConfigInput,
     };
     use crate::asr_model::{DiagnosticCacheStatus, DiagnosticModelState, SupportedDiagnosticModel};
     use crate::RuntimePaths;
@@ -579,8 +614,10 @@ mod tests {
         let migrated_file = fs::read_to_string(&env).expect("read migrated settings");
 
         assert_eq!(migrated.asr_model, "iic/SenseVoiceSmall-onnx");
+        assert!(migrated.asr_model_migrated);
         assert!(migrated_file.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
         assert!(migrated_file.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
+        assert!(migrated_file.contains("FRAMEQ_ASR_MODEL_MIGRATION=1"));
 
         let restored = save_llm_config_for_paths(
             &paths,
@@ -594,7 +631,56 @@ mod tests {
         let reloaded = load_llm_config_for_paths(&paths, &state).expect("reload settings");
 
         assert_eq!(restored.asr_model, "iic/SenseVoiceSmall");
+        assert!(!restored.asr_model_migrated);
         assert_eq!(reloaded.asr_model, "iic/SenseVoiceSmall");
+        assert!(!reloaded.asr_model_migrated);
+    }
+
+    #[test]
+    fn legacy_onnx_settings_migrate_without_raising_the_notice() {
+        let app_root = temp_dir("legacy_onnx_settings_no_notice");
+        let paths = RuntimePaths {
+            resource_dir: app_root.join("resources"),
+            user_data_dir: app_root.join("app-data"),
+        };
+        fs::create_dir_all(&paths.user_data_dir).expect("app data");
+        let env = paths.user_data_dir.join(".env");
+        fs::write(&env, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\n").expect("legacy settings");
+
+        let migrated = load_llm_config_for_paths(&paths, &DiagnosticModelState::default())
+            .expect("migrate settings");
+        let migrated_file = fs::read_to_string(&env).expect("read migrated settings");
+
+        assert_eq!(migrated.asr_model, "iic/SenseVoiceSmall-onnx");
+        assert!(!migrated.asr_model_migrated);
+        assert!(!migrated_file.contains("FRAMEQ_ASR_MODEL_MIGRATION"));
+        assert!(migrated_file.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
+    }
+
+    #[test]
+    fn dismissing_the_migration_notice_clears_the_marker_only() {
+        let app_root = temp_dir("dismiss_migration_notice");
+        let paths = RuntimePaths {
+            resource_dir: app_root.join("resources"),
+            user_data_dir: app_root.join("app-data"),
+        };
+        fs::create_dir_all(&paths.user_data_dir).expect("app data");
+        let env = paths.user_data_dir.join(".env");
+        fs::write(&env, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n").expect("legacy settings");
+        let state = DiagnosticModelState::default();
+
+        let migrated = load_llm_config_for_paths(&paths, &state).expect("migrate settings");
+        assert!(migrated.asr_model_migrated);
+
+        let dismissed =
+            dismiss_asr_model_migration_for_paths(&paths, &state).expect("dismiss notice");
+        let dismissed_file = fs::read_to_string(&env).expect("read dismissed settings");
+
+        assert!(!dismissed.asr_model_migrated);
+        assert_eq!(dismissed.asr_model, "iic/SenseVoiceSmall-onnx");
+        assert!(!dismissed_file.contains("FRAMEQ_ASR_MODEL_MIGRATION"));
+        assert!(dismissed_file.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(dismissed_file.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
     }
 
     fn temp_dir(test_name: &str) -> PathBuf {

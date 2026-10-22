@@ -20,6 +20,7 @@ type HookHarness = {
 const mocks = vi.hoisted(() => ({
   clearAudioReviewCache: vi.fn<() => Promise<AudioReviewCacheUsage>>(),
   clearInspirationProfile: vi.fn<() => Promise<InsightPreferenceState>>(),
+  dismissAsrModelMigration: vi.fn<() => Promise<LlmConfig>>(),
   getAudioReviewCacheUsage: vi.fn<() => Promise<AudioReviewCacheUsage>>(),
   getInsightPreferences: vi.fn<() => Promise<InsightPreferenceState>>(),
   getLlmConfig: vi.fn<() => Promise<LlmConfig>>(),
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../settingsClient", () => ({
   clearAudioReviewCache: mocks.clearAudioReviewCache,
+  dismissAsrModelMigration: mocks.dismissAsrModelMigration,
   getAudioReviewCacheUsage: mocks.getAudioReviewCacheUsage,
   getLlmConfig: mocks.getLlmConfig,
   saveLlmConfig: mocks.saveLlmConfig,
@@ -78,6 +80,7 @@ function createLlmConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
     asrModel: "iic/SenseVoiceSmall",
     supportedAsrModels: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
     configPath: "D:/FrameQ/app-data/frameq-settings.json",
+    asrModelMigrated: false,
     ...overrides,
   };
 }
@@ -218,6 +221,51 @@ describe("useSettingsController", () => {
     expect(controller.audioReviewCacheUsage).toEqual(audioCacheUsage);
     expect(controller.settingsInsightPreferences).toEqual(insightPreferences);
     expect(controller.settingsNotice).toEqual({ messageCode: "settings.notice.loadedAll" });
+  });
+
+  test("surfaces the one-time model migration notice and clears it on dismiss", async () => {
+    mockSettingsLoad({
+      config: createLlmConfig({
+        asrModel: "iic/SenseVoiceSmall-onnx",
+        asrModelMigrated: true,
+      }),
+    });
+    mocks.dismissAsrModelMigration.mockResolvedValueOnce(
+      createLlmConfig({ asrModel: "iic/SenseVoiceSmall-onnx", asrModelMigrated: false }),
+    );
+    const { render } = await createController();
+
+    let controller = render();
+    await controller.openSettings();
+    controller = render();
+    expect(controller.settingsAsrModelMigrated).toBe(true);
+
+    await controller.dismissAsrModelMigrationNotice();
+    controller = render();
+    expect(mocks.dismissAsrModelMigration).toHaveBeenCalledTimes(1);
+    expect(controller.settingsAsrModelMigrated).toBe(false);
+  });
+
+  test("keeps the migration notice visible when dismissing fails", async () => {
+    mockSettingsLoad({
+      config: createLlmConfig({
+        asrModel: "iic/SenseVoiceSmall-onnx",
+        asrModelMigrated: true,
+      }),
+    });
+    mocks.dismissAsrModelMigration.mockRejectedValueOnce(new Error("disk unavailable"));
+    const { render } = await createController();
+
+    let controller = render();
+    await controller.openSettings();
+    controller = render();
+
+    await controller.dismissAsrModelMigrationNotice();
+    controller = render();
+    expect(controller.settingsAsrModelMigrated).toBe(true);
+    expect(controller.settingsNotice).toEqual({
+      messageCode: "settings.notice.migrationDismissFailed",
+    });
   });
 
   test("keeps base settings available when insight preferences fail to load", async () => {

@@ -20,6 +20,11 @@ export const settingsFeatureResources = {
       outputDirectory: "输出目录",
       outputPlaceholder: "留空使用 outputs/",
       defaultModelPath: "app-local data/models",
+      migrationNotice: {
+        title: "默认模型已改为 ONNX 版",
+        body: "安装包不再包含 PyTorch 运行环境，上一版的默认模型已无法直接使用，本机配置已切换到 SenseVoiceSmall-ONNX。需要 PyTorch 版时，先在模型准备面板下载运行时组件，再在这里切换。",
+        dismiss: "知道了",
+      },
     },
     storage: {
       heading: "存储与缓存",
@@ -54,6 +59,7 @@ export const settingsFeatureResources = {
       configPathUnavailable: "配置文件路径尚未读取，请稍后再试。",
       configLocated: "已在文件管理器中定位本机配置文件。",
       configLocateFailed: "无法定位配置文件，请检查文件是否仍然存在。",
+      migrationDismissFailed: "关闭提示失败，请稍后重试。",
       profileCleared: "已清空灵感档案；下次生成启发灵感时会重新询问。",
       profileClearFailed: "无法清空灵感档案，请稍后重试。",
     },
@@ -79,6 +85,11 @@ export const settingsFeatureResources = {
       outputDirectory: "輸出目錄",
       outputPlaceholder: "留空以使用 outputs/",
       defaultModelPath: "app-local data/models",
+      migrationNotice: {
+        title: "預設模型已改為 ONNX 版",
+        body: "安裝包不再包含 PyTorch 執行環境，上一版的預設模型已無法直接使用，本機設定已切換到 SenseVoiceSmall-ONNX。需要 PyTorch 版時，先在模型準備面板下載執行環境元件，再在這裡切換。",
+        dismiss: "知道了",
+      },
     },
     storage: {
       heading: "儲存空間與快取",
@@ -113,6 +124,7 @@ export const settingsFeatureResources = {
       configPathUnavailable: "尚未讀取設定檔路徑，請稍後再試。",
       configLocated: "已在檔案總管中顯示本機設定檔。",
       configLocateFailed: "無法顯示設定檔，請檢查檔案是否仍然存在。",
+      migrationDismissFailed: "關閉提示失敗，請稍後重試。",
       profileCleared: "已清空靈感檔案；下次產生靈感啟發時會再次詢問。",
       profileClearFailed: "無法清空靈感檔案，請稍後再試。",
     },
@@ -138,6 +150,11 @@ export const settingsFeatureResources = {
       outputDirectory: "Output directory",
       outputPlaceholder: "Leave empty to use outputs/",
       defaultModelPath: "app-local data/models",
+      migrationNotice: {
+        title: "The default model is now the ONNX build",
+        body: "The installer no longer ships the PyTorch runtime, so the previous default model cannot run as installed. This machine now uses SenseVoiceSmall-ONNX. To switch back, download the runtime component in the model panel first, then change the model here.",
+        dismiss: "Got it",
+      },
     },
     storage: {
       heading: "Storage and Cache",
@@ -172,6 +189,7 @@ export const settingsFeatureResources = {
       configPathUnavailable: "The configuration file path has not loaded yet. Try again shortly.",
       configLocated: "The local configuration file is shown in the file manager.",
       configLocateFailed: "The configuration file could not be shown. Check that it still exists.",
+      migrationDismissFailed: "Could not dismiss the notice. Try again later.",
       profileCleared: "The Inspiration Profile is cleared. FrameQ will ask again before the next Inspiration generation.",
       profileClearFailed: "The Inspiration Profile could not be cleared. Try again later.",
     },

@@ -4,6 +4,7 @@ import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
 import {
   clearAudioReviewCache,
+  dismissAsrModelMigration,
   getAudioReviewCacheUsage,
   getLlmConfig,
   saveLlmConfig,
@@ -32,6 +33,7 @@ export function useSettingsController(
   });
   const [settingsSupportedAsrModels, setSettingsSupportedAsrModels] = useState(defaultAsrModels);
   const [settingsConfigPath, setSettingsConfigPath] = useState("");
+  const [settingsAsrModelMigrated, setSettingsAsrModelMigrated] = useState(false);
   const [audioReviewCacheUsage, setAudioReviewCacheUsage] =
     useState<AudioReviewCacheUsage | null>(null);
   const [settingsInsightPreferences, setSettingsInsightPreferences] =
@@ -61,6 +63,7 @@ export function useSettingsController(
         config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
       );
       setSettingsConfigPath(config.configPath);
+      setSettingsAsrModelMigrated(config.asrModelMigrated);
       setAudioReviewCacheUsage(audioCacheUsage);
       setSettingsInsightPreferences(insightPreferences);
       setSettingsNotice(
@@ -98,6 +101,7 @@ export function useSettingsController(
           config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
         );
         setSettingsConfigPath(config.configPath);
+        setSettingsAsrModelMigrated(config.asrModelMigrated);
         setSettingsNotice(uiMessage("settings.notice.saved"));
       } catch {
         setSettingsNotice(uiMessage("settings.notice.saveFailed"));
@@ -107,6 +111,16 @@ export function useSettingsController(
     },
     [settingsDraft],
   );
+
+  const dismissAsrModelMigrationNotice = useCallback(async () => {
+    setSettingsAsrModelMigrated(false);
+    try {
+      await dismissAsrModelMigration();
+    } catch {
+      setSettingsAsrModelMigrated(true);
+      setSettingsNotice(uiMessage("settings.notice.migrationDismissFailed"));
+    }
+  }, []);
 
   const updateSettingsDraft = useCallback((field: keyof LlmConfigDraft, value: string) => {
     setSettingsDraft((current) => ({ ...current, [field]: value }));
@@ -161,6 +175,7 @@ export function useSettingsController(
     settingsDraft,
     settingsSupportedAsrModels,
     settingsConfigPath,
+    settingsAsrModelMigrated,
     audioReviewCacheUsage,
     settingsInsightPreferences,
     settingsNotice,
@@ -170,6 +185,7 @@ export function useSettingsController(
     openSettings,
     loadSettings,
     submitSettings,
+    dismissAsrModelMigrationNotice,
     setSettingsCategory,
     updateSettingsDraft,
     clearAudioReviewCacheFromSettings,

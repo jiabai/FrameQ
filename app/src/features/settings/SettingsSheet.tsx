@@ -191,6 +191,7 @@ export function SettingsSheet({
     settingsDraft,
     settingsSupportedAsrModels,
     settingsConfigPath,
+    settingsAsrModelMigrated,
     audioReviewCacheUsage,
     settingsInsightPreferences,
     settingsNotice,
@@ -201,6 +202,7 @@ export function SettingsSheet({
     settingsSaving,
     closeSettings,
     submitSettings,
+    dismissAsrModelMigrationNotice,
     setSettingsCategory,
     updateSettingsDraft,
     clearAudioReviewCacheFromSettings,
@@ -264,6 +266,21 @@ export function SettingsSheet({
                       <h3>{tSettings("basic.heading")}</h3>
                       <p>{tSettings("basic.description")}</p>
                     </div>
+                    {settingsAsrModelMigrated ? (
+                      <div className="model-migration-notice" role="status">
+                        <div className="model-migration-notice-body">
+                          <strong>{tSettings("basic.migrationNotice.title")}</strong>
+                          <p>{tSettings("basic.migrationNotice.body")}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void dismissAsrModelMigrationNotice()}
+                        >
+                          {tSettings("basic.migrationNotice.dismiss")}
+                        </button>
+                      </div>
+                    ) : null}
                     <label className="field-row">
                       <span>{tSettings("basic.asrModel")}</span>
                       <select

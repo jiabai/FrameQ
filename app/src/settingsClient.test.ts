@@ -3,6 +3,7 @@ import {
   ASR_MODEL_DOWNLOAD_PROGRESS_EVENT,
   cancelAsrModelDownload,
   clearAudioReviewCache,
+  dismissAsrModelMigration,
   downloadAsrModel,
   downloadRuntimeComponent,
   getAudioReviewCacheUsage,
@@ -126,6 +127,7 @@ describe("settings client", () => {
         asr_model: "iic/SenseVoiceSmall",
         supported_asr_models: ["iic/SenseVoiceSmall"],
         config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+        asr_model_migrated: true,
       };
     };
 
@@ -137,6 +139,7 @@ describe("settings client", () => {
       asrModel: "iic/SenseVoiceSmall",
       supportedAsrModels: ["iic/SenseVoiceSmall"],
       configPath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+      asrModelMigrated: true,
     });
   });
 
@@ -149,6 +152,7 @@ describe("settings client", () => {
         asr_model: "iic/SenseVoiceSmall-onnx",
         supported_asr_models: ["iic/SenseVoiceSmall"],
         config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+        asr_model_migrated: false,
       };
     };
 
@@ -175,6 +179,25 @@ describe("settings client", () => {
       outputDir: "D:\\FrameQ\\outputs",
       configPath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
     });
+  });
+
+  test("dismisses the model migration notice through Tauri", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return {
+        output_dir: "",
+        asr_model: "iic/SenseVoiceSmall-onnx",
+        supported_asr_models: [],
+        config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+        asr_model_migrated: false,
+      };
+    };
+
+    const config = await dismissAsrModelMigration(runner);
+
+    expect(calls).toEqual([{ command: "dismiss_asr_model_migration", args: {} }]);
+    expect(config.asrModelMigrated).toBe(false);
   });
 
   test("loads and clears audio review cache usage through Tauri", async () => {
@@ -215,6 +238,7 @@ describe("settings client", () => {
         asr_model: "iic/SenseVoiceSmall",
         supported_asr_models: ["iic/SenseVoiceSmall", 42],
         config_path: "C:\\Users\\private\\FrameQ\\.env",
+        asr_model_migrated: false,
       })),
     ).rejects.toEqual(
       new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
@@ -227,6 +251,7 @@ describe("settings client", () => {
           asr_model: "iic/SenseVoiceSmall",
           supported_asr_models: [],
           config_path: "C:\\Users\\private\\FrameQ\\.env",
+          asr_model_migrated: false,
           unexpected: true,
         }),
       ),

@@ -29,6 +29,7 @@ export type LlmConfig = {
   asrModel: string;
   supportedAsrModels: string[];
   configPath: string;
+  asrModelMigrated: boolean;
 };
 
 export type LlmConfigDraft = {
@@ -69,6 +70,7 @@ export type LlmConfigResponse = {
   asr_model: string;
   supported_asr_models: string[];
   config_path: string;
+  asr_model_migrated: boolean;
 };
 
 export type AudioReviewCacheUsage = {
@@ -165,6 +167,14 @@ export async function saveLlmConfig(
   );
 }
 
+export async function dismissAsrModelMigration(
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<LlmConfig> {
+  return mapLlmConfigResponse(
+    parseLlmConfigResponse(await runner("dismiss_asr_model_migration", {})),
+  );
+}
+
 export async function getAudioReviewCacheUsage(
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<AudioReviewCacheUsage> {
@@ -245,6 +255,7 @@ function mapLlmConfigResponse(response: LlmConfigResponse): LlmConfig {
     asrModel: response.asr_model,
     supportedAsrModels: response.supported_asr_models,
     configPath: response.config_path,
+    asrModelMigrated: response.asr_model_migrated,
   };
 }
 
@@ -256,6 +267,7 @@ function parseLlmConfigResponse(value: unknown): LlmConfigResponse {
       "asr_model",
       "supported_asr_models",
       "config_path",
+      "asr_model_migrated",
     ],
     [],
     SETTINGS_IPC_RESPONSE_INVALID,
@@ -268,7 +280,8 @@ function parseLlmConfigResponse(value: unknown): LlmConfigResponse {
     typeof response.output_dir !== "string" ||
     typeof response.asr_model !== "string" ||
     !supportedAsrModels.every((model) => typeof model === "string") ||
-    typeof response.config_path !== "string"
+    typeof response.config_path !== "string" ||
+    typeof response.asr_model_migrated !== "boolean"
   ) {
     throwInvalidSettingsResponse();
   }
@@ -277,6 +290,7 @@ function parseLlmConfigResponse(value: unknown): LlmConfigResponse {
     asr_model: response.asr_model,
     supported_asr_models: supportedAsrModels,
     config_path: response.config_path,
+    asr_model_migrated: response.asr_model_migrated,
   };
 }
 

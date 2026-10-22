@@ -104,6 +104,7 @@ pub fn run() {
             video_processing::cancel_process,
             settings::get_llm_config,
             settings::save_llm_config,
+            settings::dismiss_asr_model_migration,
             settings::get_audio_review_cache_usage,
             settings::clear_audio_review_cache,
             ui_preferences::get_ui_preferences,

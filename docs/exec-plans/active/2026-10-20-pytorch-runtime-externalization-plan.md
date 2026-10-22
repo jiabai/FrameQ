@@ -27,7 +27,7 @@
 - [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
   - [x] 默认切 ONNX（`0439934`）：顺带修掉两处「拿默认值拼集合/当分支判据」的静默塌缩 bug（`requests.py` 的 `DESKTOP_ASR_MODELS`、`model_download.py` 的校验与覆盖分支）
 - [x] 默认模型在持久化入口保持一致（2026-10-22）：`.env` 初始化模板改为 `iic/SenseVoiceSmall-onnx`；本地设置文件新增 `FRAMEQ_SETTINGS_SCHEMA_VERSION=2`，读取配置时按版本执行一次性迁移，把旧模板写入的 PyTorch 模型切到 ONNX，保存配置时同步写版本号，用户之后显式选择 PyTorch 保持不变；前端默认常量、请求默认参数与设置页默认顺序同步为 ONNX
-  - [ ] 升级说明 UI（一次性提示）
+  - [x] 升级说明 UI（2026-10-22）：迁移时若旧值仍是 PyTorch 模板默认值，就在本地设置里写入 `FRAMEQ_ASR_MODEL_MIGRATION=1`；`get_llm_config` 返回 `asr_model_migrated`，设置页据此显示一次性提示，说明原因与切回方式。用户点「知道了」调用 `dismiss_asr_model_migration` 只清标记，不动草稿；保存配置也会清掉标记。旧值本来就是 ONNX 的配置不产生标记
   - [ ] README / ARCHITECTURE / 规格状态同步
   - [x] 发布前在真实长视频上重跑 Comparison Record（2026-10-21）：10 分 16 秒访谈视频，归一化相似度 0.90，覆盖到底、无内容缺失，最大差异块经时间戳核对为分段粒度造成的对齐假象；记录写进规格的对比记录小节
 
@@ -105,7 +105,7 @@ Stage 2 落地记录：torch 族改走 `pyproject.toml` 的 `[project.optional-d
 ### Stage 4：默认模型与发布收尾
 
 - [ ] `registry.py` 的 `DEFAULT_ASR_MODEL` 切 `iic/SenseVoiceSmall-onnx`
-- [ ] 升级用户的一次性说明（设置页），说明默认变化原因与恢复方式
+- [x] 升级用户的一次性说明（设置页），说明默认变化原因与恢复方式（2026-10-22）：迁移标记由 `settings.rs` 写入，`SettingsSheet.tsx` 渲染提示条，三种语言文案齐备，「知道了」只清标记
 - [ ] README、ARCHITECTURE、SECURITY、产品规格同步；tech-debt 条目更新
 - [ ] 发布前在真实长视频上重跑 Comparison Record 流程一次
 

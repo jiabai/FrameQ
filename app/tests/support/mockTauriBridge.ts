@@ -133,6 +133,7 @@ const defaultResponses: Record<string, unknown> = {
     asr_model: "iic/SenseVoiceSmall",
     supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
     config_path: "C:/FrameQ/frameq-settings.json",
+    asr_model_migrated: false,
   },
   get_audio_review_cache_usage: {
     size_bytes: 1_572_864,

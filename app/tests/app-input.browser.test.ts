@@ -228,6 +228,7 @@ describe("App browser input interactions", () => {
           asr_model: "iic/SenseVoiceSmall",
           supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
           config_path: "C:/FrameQ/.env",
+          asr_model_migrated: false,
         },
         get_asr_model_status: {
           user_data_dir: "C:/FrameQ",
@@ -642,7 +643,8 @@ describe("App browser input interactions", () => {
                     output_dir: "C:/FrameQ/outputs",
                     asr_model: "iic/SenseVoiceSmall",
                     supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
-                    config_path: "C:/FrameQ/.env"
+                    config_path: "C:/FrameQ/.env",
+                    asr_model_migrated: false
                   };
                 }
                 if (command === "get_asr_model_status") {
@@ -797,7 +799,8 @@ describe("App browser input interactions", () => {
                     output_dir: "C:/FrameQ/outputs",
                     asr_model: "iic/SenseVoiceSmall",
                     supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
-                    config_path: "C:/FrameQ/.env"
+                    config_path: "C:/FrameQ/.env",
+                    asr_model_migrated: false
                   };
                 }
                 if (command === "get_asr_model_status") {
@@ -1191,7 +1194,8 @@ describe("App desktop sheet structure", () => {
                     output_dir: "D:/FrameQ/outputs",
                     asr_model: "iic/SenseVoiceSmall",
                     supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
-                    config_path: "C:/Users/demo/AppData/Local/FrameQ/.env"
+                    config_path: "C:/Users/demo/AppData/Local/FrameQ/.env",
+                    asr_model_migrated: false
                   };
                 }
                 if (command === "get_audio_review_cache_usage") {

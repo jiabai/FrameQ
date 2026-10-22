@@ -2033,6 +2033,39 @@ h3 {
   box-shadow: 0 0 0 3px var(--focus);
 }
 
+.model-migration-notice {
+  align-items: flex-start;
+  background: rgba(255, 248, 230, 0.9);
+  border: 1px solid rgba(182, 106, 0, 0.28);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.model-migration-notice-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.model-migration-notice-body strong {
+  color: var(--warning);
+  font-size: 0.9rem;
+}
+
+.model-migration-notice-body p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.model-migration-notice .secondary-button {
+  flex-shrink: 0;
+}
+
 .model-status-card,
 .model-settings-row {
   background: var(--surface-raised);
