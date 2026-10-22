@@ -36,10 +36,18 @@
   https://github.com/jiabai/FrameQ/releases/tag/v0.4.1. Release notes:
   `docs/releases/v0.4.1.md`. Residual risks: `macos-intel-acceptance.yml` is
   `workflow_dispatch`-only and did not run; both macOS builds are ad-hoc signed without
-  notarization; the curl 206 check could not run because this machine's proxy rejects
-  GitHub download URLs, asset readability was confirmed through the gh API and
-  `gh release download`; the migration cannot distinguish a template-written PyTorch value
+  notarization; this machine's proxy rejects GitHub download URLs, so the installer URL was
+  range-checked from the deployment server instead and answered 206, and the gh API reported
+  every asset as `uploaded`; the migration cannot distinguish a template-written PyTorch value
   from an explicit user choice.
+
+- [x] Deploy the v0.4.1 marketing site (2026-10-22) — ✅ `site/dist` synced to
+  `ubuntu@frameq.8xf.pro:/home/ubuntu/FrameQ/site` through a temporary directory and an atomic
+  directory swap; the previous tree is kept at
+  `/home/ubuntu/FrameQ/site.bak.20261022T092543Z`. Live checks from the server: `/`,
+  `/download/` and `/privacy/` answer 200, the download page carries `0.4.1` 21 times and no
+  stale asset URL, `/video/frameq-demo.mp4` answers 200 with `accept-ranges: bytes`, and the
+  Windows installer URL answers 206.
 
 - [x] Prepare and publish FrameQ v0.4.0 desktop release (2026-10-21) — ✅ Tag target `d89c5ef`
   tagged `v0.4.0`; installer runtime externalized (bundled Python runtime 16,810 files / 502 MB after
