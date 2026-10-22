@@ -26,6 +26,7 @@ pub(crate) const ANYSEARCH_SOURCE_ENV: &str = "FRAMEQ_ANYSEARCH_SOURCE";
 pub(crate) const ANYSEARCH_CHECKOUT_URL_ENV: &str = "FRAMEQ_ANYSEARCH_CHECKOUT_URL";
 pub(crate) const ANYSEARCH_SESSION_TOKEN_ENV: &str = "FRAMEQ_ANYSEARCH_SESSION_TOKEN";
 pub(crate) const ASR_MODEL_ENV: &str = "FRAMEQ_ASR_MODEL";
+pub(crate) const SETTINGS_SCHEMA_VERSION_ENV: &str = "FRAMEQ_SETTINGS_SCHEMA_VERSION";
 pub(crate) const ASR_MODEL_DOWNLOAD_URL_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_URL";
 pub(crate) const ASR_MODEL_DOWNLOAD_SHA256_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256";
 pub(crate) const MODELSCOPE_ENDPOINT_ENV: &str = "FRAMEQ_MODELSCOPE_ENDPOINT";
@@ -38,6 +39,7 @@ const LEGACY_LOCAL_LLM_ENV_KEYS: [&str; 5] = [
     LLM_MODEL_ENV,
     LLM_TIMEOUT_ENV,
 ];
+const SETTINGS_SCHEMA_VERSION: &str = "2";
 const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# FrameQ desktop local settings.\n\
 # This file lives in app-local data and is read by the desktop client/worker.\n\
 # Insight LLM configuration is managed by the FrameQ server Admin Web.\n\
@@ -48,13 +50,16 @@ const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# FrameQ desktop local settings.\n\
 FRAMEQ_OUTPUT_DIR=\n\
 \n\
 # Local ASR model for new transcription tasks.\n\
-FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n\
+FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\n\
 \n\
 # Optional release ASR model download overrides.\n\
 # FRAMEQ_ASR_MODEL_DOWNLOAD_URL=\n\
 # FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256=\n\
 # FRAMEQ_MODELSCOPE_ENDPOINT=\n\
-# FRAMEQ_SENSEVOICE_REVISION=master\n";
+# FRAMEQ_SENSEVOICE_REVISION=master\n\
+\n\
+# Settings schema version used for one-time migrations. Leave it as is.\n\
+FRAMEQ_SETTINGS_SCHEMA_VERSION=2\n";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LlmConfigInput {
@@ -138,6 +143,7 @@ pub(crate) fn clear_audio_review_cache(
 
 pub(crate) fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
     ensure_app_settings_dotenv(path)?;
+    migrate_settings_schema(path)?;
     let values = parse_dotenv_values(path)?;
     Ok(LlmConfigView {
         output_dir: values
@@ -162,6 +168,10 @@ pub(crate) fn save_llm_config_to_file(
         &[
             (crate::OUTPUT_DIR_ENV, output_dir),
             (ASR_MODEL_ENV, asr_model),
+            (
+                SETTINGS_SCHEMA_VERSION_ENV,
+                SETTINGS_SCHEMA_VERSION.to_string(),
+            ),
         ],
         &[
             LLM_PROVIDER_ENV,
@@ -328,6 +338,30 @@ fn ensure_app_settings_dotenv(path: &Path) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     fs::write(path, APP_SETTINGS_DOTENV_TEMPLATE).map_err(|error| error.to_string())
+}
+
+/// Settings written before schema 2 carry `iic/SenseVoiceSmall`, which was the
+/// template default at the time. Schema 2 moves those users to the ONNX model
+/// that ships with a working runtime. The version marker keeps an explicit
+/// PyTorch selection made after the upgrade from being overwritten again.
+fn migrate_settings_schema(path: &Path) -> Result<(), String> {
+    let values = parse_dotenv_values(path)?;
+    if values.get(SETTINGS_SCHEMA_VERSION_ENV).map(String::as_str) == Some(SETTINGS_SCHEMA_VERSION)
+    {
+        return Ok(());
+    }
+
+    write_dotenv_updates_removing(
+        path,
+        &[
+            (ASR_MODEL_ENV, crate::DEFAULT_ASR_MODEL.to_string()),
+            (
+                SETTINGS_SCHEMA_VERSION_ENV,
+                SETTINGS_SCHEMA_VERSION.to_string(),
+            ),
+        ],
+        &[],
+    )
 }
 
 fn write_dotenv_updates_removing(
@@ -509,6 +543,58 @@ mod tests {
             serde_json::to_string(&state.snapshot()).expect("serialize"),
             "{\"model\":\"iic/SenseVoiceSmall\",\"cache_status\":\"missing\"}"
         );
+    }
+
+    #[test]
+    fn settings_template_defaults_to_the_onnx_model() {
+        let app_root = temp_dir("settings_template_defaults_to_onnx");
+        let paths = RuntimePaths {
+            resource_dir: app_root.join("resources"),
+            user_data_dir: app_root.join("app-data"),
+        };
+        fs::create_dir_all(&paths.user_data_dir).expect("app data");
+
+        let loaded = load_llm_config_for_paths(&paths, &DiagnosticModelState::default())
+            .expect("load settings");
+        let saved = fs::read_to_string(paths.user_data_dir.join(".env")).expect("read settings");
+
+        assert_eq!(loaded.asr_model, "iic/SenseVoiceSmall-onnx");
+        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(saved.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
+    }
+
+    #[test]
+    fn legacy_settings_switch_to_onnx_once_and_keep_a_later_explicit_choice() {
+        let app_root = temp_dir("legacy_settings_switch_to_onnx");
+        let paths = RuntimePaths {
+            resource_dir: app_root.join("resources"),
+            user_data_dir: app_root.join("app-data"),
+        };
+        fs::create_dir_all(&paths.user_data_dir).expect("app data");
+        let env = paths.user_data_dir.join(".env");
+        fs::write(&env, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n").expect("legacy settings");
+        let state = DiagnosticModelState::default();
+
+        let migrated = load_llm_config_for_paths(&paths, &state).expect("migrate settings");
+        let migrated_file = fs::read_to_string(&env).expect("read migrated settings");
+
+        assert_eq!(migrated.asr_model, "iic/SenseVoiceSmall-onnx");
+        assert!(migrated_file.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(migrated_file.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
+
+        let restored = save_llm_config_for_paths(
+            &paths,
+            &state,
+            LlmConfigInput {
+                output_dir: String::new(),
+                asr_model: "iic/SenseVoiceSmall".to_string(),
+            },
+        )
+        .expect("save explicit choice");
+        let reloaded = load_llm_config_for_paths(&paths, &state).expect("reload settings");
+
+        assert_eq!(restored.asr_model, "iic/SenseVoiceSmall");
+        assert_eq!(reloaded.asr_model, "iic/SenseVoiceSmall");
     }
 
     fn temp_dir(test_name: &str) -> PathBuf {

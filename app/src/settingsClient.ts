@@ -186,11 +186,11 @@ export async function clearAudioReviewCache(
 }
 
 export async function getAsrModelStatus(
-  asrModelOrRunner: string | SettingsCommandRunner = "iic/SenseVoiceSmall",
+  asrModelOrRunner: string | SettingsCommandRunner = "iic/SenseVoiceSmall-onnx",
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<AsrModelStatusResponseView> {
   const asrModel =
-    typeof asrModelOrRunner === "string" ? asrModelOrRunner : "iic/SenseVoiceSmall";
+    typeof asrModelOrRunner === "string" ? asrModelOrRunner : "iic/SenseVoiceSmall-onnx";
   const resolvedRunner =
     typeof asrModelOrRunner === "function" ? asrModelOrRunner : runner;
   return mapAsrModelStatusResponse(
@@ -201,11 +201,11 @@ export async function getAsrModelStatus(
 }
 
 export async function downloadAsrModel(
-  asrModelOrRunner: string | SettingsCommandRunner = "iic/SenseVoiceSmall",
+  asrModelOrRunner: string | SettingsCommandRunner = "iic/SenseVoiceSmall-onnx",
   runner: SettingsCommandRunner = defaultSettingsRunner,
 ): Promise<AsrModelDownloadResult> {
   const asrModel =
-    typeof asrModelOrRunner === "string" ? asrModelOrRunner : "iic/SenseVoiceSmall";
+    typeof asrModelOrRunner === "string" ? asrModelOrRunner : "iic/SenseVoiceSmall-onnx";
   const resolvedRunner =
     typeof asrModelOrRunner === "function" ? asrModelOrRunner : runner;
   const result = parseAsrModelDownloadResult(

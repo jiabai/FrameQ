@@ -35,7 +35,7 @@ export async function clearLocalMediaSelection(
 ): Promise<boolean> {
   const parsed = parseProcessLocalMediaRequest({
     selectionToken,
-    asrModel: "iic/SenseVoiceSmall",
+    asrModel: "iic/SenseVoiceSmall-onnx",
   });
   if (parsed.kind === "invalid") {
     throw new Error(parsed.errorCode);

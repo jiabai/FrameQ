@@ -199,7 +199,7 @@ describe("useAsrModelDownload cancellation", () => {
     expect(hook.modelDownloadProgress.wireStatus).toBeNull();
     expect(hook.modelDownloadProgress.message).toEqual({
       messageCode: "model.download.preparing",
-      args: { model: "iic/SenseVoiceSmall" },
+      args: { model: "iic/SenseVoiceSmall-onnx" },
     });
 
     await hook.cancelCurrentAsrModelDownload();
@@ -209,7 +209,7 @@ describe("useAsrModelDownload cancellation", () => {
     expect(hook.modelDownloadProgress.phase).toBe("running");
     expect(hook.modelDownloadProgress.message).toEqual({
       messageCode: "model.download.preparing",
-      args: { model: "iic/SenseVoiceSmall" },
+      args: { model: "iic/SenseVoiceSmall-onnx" },
     });
     expect(hook.modelDownloadNotice).toEqual({
       messageCode: "asrModel.notice.cancelFailed",
@@ -306,7 +306,7 @@ describe("useAsrModelDownload cancellation", () => {
         }),
     );
     getAsrModelStatusMock.mockResolvedValue({
-      asrModel: "iic/SenseVoiceSmall",
+      asrModel: "iic/SenseVoiceSmall-onnx",
       asrModelDir: "safe-model-dir",
       asrModelAvailable: true,
       asrModelSource: "modelscope",
@@ -322,7 +322,7 @@ describe("useAsrModelDownload cancellation", () => {
         status: "completed",
         progress: 100,
         message_code: "model.download.completed",
-        message_args: { model: "iic/SenseVoiceSmall" },
+        message_args: { model: "iic/SenseVoiceSmall-onnx" },
       },
     });
     hook = render();
@@ -331,7 +331,7 @@ describe("useAsrModelDownload cancellation", () => {
       wireStatus: "completed",
       message: {
         messageCode: "model.download.completed",
-        args: { model: "iic/SenseVoiceSmall" },
+        args: { model: "iic/SenseVoiceSmall-onnx" },
       },
       progress: 100,
     });
@@ -340,13 +340,13 @@ describe("useAsrModelDownload cancellation", () => {
     await expect(download).resolves.toBe(true);
     hook = render();
 
-    expect(getAsrModelStatusMock).toHaveBeenCalledWith("iic/SenseVoiceSmall");
+    expect(getAsrModelStatusMock).toHaveBeenCalledWith("iic/SenseVoiceSmall-onnx");
     expect(hook.modelDownloadProgress).toEqual({
       phase: "completed",
       wireStatus: "completed",
       message: {
         messageCode: "model.download.completed",
-        args: { model: "iic/SenseVoiceSmall" },
+        args: { model: "iic/SenseVoiceSmall-onnx" },
       },
       progress: 100,
     });

@@ -511,7 +511,7 @@ describe("desktop/worker contract", () => {
     expect(calls[0]?.args).toEqual({
       request: {
         url: "https://www.douyin.com/video/7524373044106677544",
-        asrModel: "iic/SenseVoiceSmall",
+        asrModel: "iic/SenseVoiceSmall-onnx",
       },
     });
     expect(contract.processVideo).toEqual({

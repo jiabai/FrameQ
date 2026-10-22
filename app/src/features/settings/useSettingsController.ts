@@ -19,7 +19,7 @@ import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExp
 
 export type SettingsCategory = "basic" | "inspiration" | "storage" | "updates" | "advanced";
 
-const defaultAsrModels = ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"];
+const defaultAsrModels = ["iic/SenseVoiceSmall-onnx", "iic/SenseVoiceSmall"];
 
 export function useSettingsController(
   diagnosticExportController: DiagnosticExportController,
@@ -28,7 +28,7 @@ export function useSettingsController(
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("basic");
   const [settingsDraft, setSettingsDraft] = useState<LlmConfigDraft>({
     outputDir: "",
-    asrModel: "iic/SenseVoiceSmall",
+    asrModel: "iic/SenseVoiceSmall-onnx",
   });
   const [settingsSupportedAsrModels, setSettingsSupportedAsrModels] = useState(defaultAsrModels);
   const [settingsConfigPath, setSettingsConfigPath] = useState("");

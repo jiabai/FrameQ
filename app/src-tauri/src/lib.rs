@@ -247,6 +247,7 @@ mod tests {
                 "FRAMEQ_LLM_TIMEOUT_SECONDS=42",
                 "FRAMEQ_OUTPUT_DIR=D:/FrameQ/results",
                 "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall",
+                "FRAMEQ_SETTINGS_SCHEMA_VERSION=2",
             ]
             .join("\n"),
         )
@@ -270,10 +271,11 @@ mod tests {
         let saved = fs::read_to_string(&env_path).expect("read created env");
 
         assert_eq!(config.config_path, path_to_env_string(&env_path));
-        assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
+        assert_eq!(config.asr_model, "iic/SenseVoiceSmall-onnx");
         assert!(saved.contains("FrameQ desktop local settings"));
         assert!(saved.contains("FRAMEQ_OUTPUT_DIR="));
-        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
+        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(saved.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
         assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
     }
 

@@ -72,14 +72,14 @@ export async function processVideo(
   url: string,
   asrModelOrRunner:
     | ProcessVideoIpcRequest["asrModel"]
-    | WorkerCommandRunner = "iic/SenseVoiceSmall",
+    | WorkerCommandRunner = "iic/SenseVoiceSmall-onnx",
   runnerOrOnProgress?: WorkerCommandRunner | WorkerProgressHandler,
   onProgressOrListener?: WorkerProgressHandler | WorkerProgressListener,
   progressListenerOrRecorder?: WorkerProgressListener | ProgressDiagnosticRecorder,
   recordInvalidProgress?: ProgressDiagnosticRecorder,
 ): Promise<WorkerResult> {
   const legacyInvocation = typeof asrModelOrRunner === "function";
-  const asrModel = legacyInvocation ? "iic/SenseVoiceSmall" : asrModelOrRunner;
+  const asrModel = legacyInvocation ? "iic/SenseVoiceSmall-onnx" : asrModelOrRunner;
   const resolvedRunner = legacyInvocation
     ? asrModelOrRunner
     : (runnerOrOnProgress as WorkerCommandRunner | undefined) ?? defaultWorkerRunner;

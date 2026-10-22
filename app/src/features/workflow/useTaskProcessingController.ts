@@ -260,7 +260,7 @@ export function useTaskProcessingController({
       }
       const asrModel = ensureAsrModelReady
         ? await ensureAsrModelReady()
-        : "iic/SenseVoiceSmall";
+        : "iic/SenseVoiceSmall-onnx";
       if (!asrModel) {
         return;
       }

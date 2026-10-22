@@ -51,7 +51,7 @@ describe("settings client", () => {
     expect(calls).toEqual([
       {
         command: "get_asr_model_status",
-        args: { asrModel: "iic/SenseVoiceSmall" },
+        args: { asrModel: "iic/SenseVoiceSmall-onnx" },
       },
     ]);
     expect(status).toEqual({
@@ -86,7 +86,7 @@ describe("settings client", () => {
     expect(calls).toEqual([
       {
         command: "download_asr_model",
-        args: { asrModel: "iic/SenseVoiceSmall" },
+        args: { asrModel: "iic/SenseVoiceSmall-onnx" },
       },
       { command: "cancel_asr_model_download", args: {} },
     ]);

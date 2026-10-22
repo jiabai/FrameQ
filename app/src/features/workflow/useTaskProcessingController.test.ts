@@ -658,7 +658,7 @@ describe("useTaskProcessingController closed local-media source", () => {
     expect(processLocalMediaMock).toHaveBeenCalledWith(
       {
         selectionToken: LOCAL_SELECTION.selectionToken,
-        asrModel: "iic/SenseVoiceSmall",
+        asrModel: "iic/SenseVoiceSmall-onnx",
       },
       undefined,
       expect.any(Function),

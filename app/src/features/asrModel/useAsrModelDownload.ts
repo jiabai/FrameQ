@@ -16,12 +16,13 @@ import {
 } from "../../settingsClient";
 import type { AsrModelStatus } from "./types";
 
-const DEFAULT_ASR_MODEL = "iic/SenseVoiceSmall" as const;
+const PYTORCH_ASR_MODEL = "iic/SenseVoiceSmall" as const;
 const ONNX_ASR_MODEL = "iic/SenseVoiceSmall-onnx" as const;
-type SelectableAsrModel = typeof DEFAULT_ASR_MODEL | typeof ONNX_ASR_MODEL;
+type SelectableAsrModel = typeof PYTORCH_ASR_MODEL | typeof ONNX_ASR_MODEL;
+const DEFAULT_ASR_MODEL: SelectableAsrModel = ONNX_ASR_MODEL;
 
 function progressModel(model: string): SelectableAsrModel {
-  return model === ONNX_ASR_MODEL ? ONNX_ASR_MODEL : DEFAULT_ASR_MODEL;
+  return model === ONNX_ASR_MODEL ? ONNX_ASR_MODEL : PYTORCH_ASR_MODEL;
 }
 
 function hasTauriRuntime(): boolean {

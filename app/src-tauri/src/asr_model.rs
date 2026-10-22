@@ -395,8 +395,8 @@ mod tests {
     use super::{
         asr_model_available, asr_model_display_dir, cancelled_model_download_event,
         diagnostic_model_snapshot_for, map_model_download_run_result, DiagnosticCacheStatus,
-        ModelDownloadRunResult, SupportedDiagnosticModel, DEFAULT_ASR_MODEL,
-        SENSEVOICE_SMALL_MODEL, SENSEVOICE_SMALL_ONNX_MODEL,
+        ModelDownloadRunResult, SupportedDiagnosticModel, SENSEVOICE_SMALL_MODEL,
+        SENSEVOICE_SMALL_ONNX_MODEL,
     };
     use crate::settings::supported_asr_models;
     use crate::worker_runtime::{

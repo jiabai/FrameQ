@@ -145,7 +145,7 @@ describe("worker client", () => {
         args: {
           request: {
             url: "https://www.douyin.com/video/7524373044106677544",
-            asrModel: "iic/SenseVoiceSmall",
+            asrModel: "iic/SenseVoiceSmall-onnx",
           },
         },
       },
