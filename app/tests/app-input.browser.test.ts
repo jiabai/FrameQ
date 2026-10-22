@@ -3296,10 +3296,17 @@ function findFreePort(): Promise<number> {
   });
 }
 
+// Every CDP evaluate costs a round trip, so a 100 ms sleep was really a
+// 100 ms sleep plus IPC latency, and a React update that landed late in the
+// window was missed. Poll tighter and give the whole wait more headroom: the
+// budget only has to cover the slowest legitimate render, not the average.
+const RUNTIME_POLL_INTERVAL_MS = 20;
+const DEFAULT_RUNTIME_WAIT_MS = 8_000;
+
 async function waitForRuntimeCondition(
   page: Awaited<ReturnType<typeof connectToCdp>>,
   expression: string,
-  timeoutMs = 5_000,
+  timeoutMs = DEFAULT_RUNTIME_WAIT_MS,
 ) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -3310,7 +3317,7 @@ async function waitForRuntimeCondition(
     if (result.result.value) {
       return;
     }
-    await delay(100);
+    await delay(RUNTIME_POLL_INTERVAL_MS);
   }
   throw new Error(`Runtime condition did not become true: ${expression}`);
 }
