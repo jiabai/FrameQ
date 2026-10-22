@@ -8,6 +8,8 @@
 
 **Tech Stack:** Node（`scripts/build-installer.mjs`）、GitHub Actions、Python 3/pytest/Ruff、TypeScript/React/Vitest/i18next、Rust/Tauri 2。
 
+**实现状态（2026-10-22）**：Stage 1 至 Stage 3 的清单项已随 v0.4.0 与 v0.4.1 发布，代码在位，包括 `worker/frameq_worker/runtime_component.py`、`pipeline_runtime/transcript.py` 的 `ASR_RUNTIME_COMPONENT_MISSING`、`build-installer.mjs` 的 `--prune` 组件构建，以及设置页的组件下载入口。清单里的函数名是当时的任务分解写法，实际实现以代码为准（例如 `read_manifest_fingerprint(path)` 取代了 `read_manifest(dir)`，`resolve_component_dir(environ)` 取代了 `resolve_component_dir(app_data_root)`）。下面的 checkbox 保留为历史分解记录，未逐条回填。Stage 4 与文档同步已完成，2026-10-22 勾选。
+
 ---
 
 ## Purpose / Big Picture
@@ -24,11 +26,11 @@
   - [x] 错误码文案映射（2026-10-21）：`ASR_RUNTIME_COMPONENT_MISSING`、`ASR_RUNTIME_COMPONENT_STALE`、`RUNTIME_COMPONENT_DOWNLOAD_FAILED`、`RUNTIME_COMPONENT_INVALID` 三语文案与映射测试
   - [x] 设置页入口（2026-10-21）：模型准备面板底部加「下载 PyTorch 运行时组件」按钮（`guide.runtimeComponent`），走 `settingsClient.downloadRuntimeComponent` → hook `startRuntimeComponentDownload` → Tauri 命令；成功/失败复用面板既有通知位，三语文案齐备。未做「按状态显示/隐藏」：组件是否必需只有构建期 manifest 知道，前端暂不探测，按需点击（worker 侧幂等短路）。
   - 说明：包内 manifest 改放 `resources/python/runtime-manifest.json`。原方案放在 `resources/runtime-manifest.json` 并登记进 tauri 资源清单，但该文件是构建产物，dev 下不存在会让 `cargo build` 直接失败；放进 `resources/python/` 后由既有通配覆盖，仓库也不会出现每次构建都变脏的跟踪文件。
-- [ ] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
+- [x] Stage 4：默认模型切 ONNX、升级说明 UI、文档与发布收尾
   - [x] 默认切 ONNX（`0439934`）：顺带修掉两处「拿默认值拼集合/当分支判据」的静默塌缩 bug（`requests.py` 的 `DESKTOP_ASR_MODELS`、`model_download.py` 的校验与覆盖分支）
 - [x] 默认模型在持久化入口保持一致（2026-10-22）：`.env` 初始化模板改为 `iic/SenseVoiceSmall-onnx`；本地设置文件新增 `FRAMEQ_SETTINGS_SCHEMA_VERSION=2`，读取配置时按版本执行一次性迁移，把旧模板写入的 PyTorch 模型切到 ONNX，保存配置时同步写版本号，用户之后显式选择 PyTorch 保持不变；前端默认常量、请求默认参数与设置页默认顺序同步为 ONNX
   - [x] 升级说明 UI（2026-10-22）：迁移时若旧值仍是 PyTorch 模板默认值，就在本地设置里写入 `FRAMEQ_ASR_MODEL_MIGRATION=1`；`get_llm_config` 返回 `asr_model_migrated`，设置页据此显示一次性提示，说明原因与切回方式。用户点「知道了」调用 `dismiss_asr_model_migration` 只清标记，不动草稿；保存配置也会清掉标记。旧值本来就是 ONNX 的配置不产生标记
-  - [ ] README / ARCHITECTURE / 规格状态同步
+  - [x] README / ARCHITECTURE / 规格状态同步（2026-10-22）：README 写明首次下载 ONNX 模型与升级一次性迁移；ARCHITECTURE 新增「Settings Schema Migration and Migration Notice」一段；SECURITY 补 `FRAMEQ_ASR_MODEL_MIGRATION` 的边界说明。规格文件没有状态字段，正文第 59 行已含升级说明要求，与实现一致
   - [x] 发布前在真实长视频上重跑 Comparison Record（2026-10-21）：10 分 16 秒访谈视频，归一化相似度 0.90，覆盖到底、无内容缺失，最大差异块经时间戳核对为分段粒度造成的对齐假象；记录写进规格的对比记录小节
 
 Stage 4 开工评估（2026-10-21，已回滚，仓库保持绿）：把 `DEFAULT_ASR_MODEL` 指向 `SENSEVOICE_SMALL_ONNX_MODEL` 后 worker 全量出现 **18 个失败，跨 5 个文件**，全部是夹具默认按 PyTorch 路径构造所致，需要逐个判断「该测试是否本就该显式指定模型」：
@@ -104,10 +106,10 @@ Stage 2 落地记录：torch 族改走 `pyproject.toml` 的 `[project.optional-d
 
 ### Stage 4：默认模型与发布收尾
 
-- [ ] `registry.py` 的 `DEFAULT_ASR_MODEL` 切 `iic/SenseVoiceSmall-onnx`
+- [x] `registry.py` 的 `DEFAULT_ASR_MODEL` 切 `iic/SenseVoiceSmall-onnx`（`0439934`）
 - [x] 升级用户的一次性说明（设置页），说明默认变化原因与恢复方式（2026-10-22）：迁移标记由 `settings.rs` 写入，`SettingsSheet.tsx` 渲染提示条，三种语言文案齐备，「知道了」只清标记
-- [ ] README、ARCHITECTURE、SECURITY、产品规格同步；tech-debt 条目更新
-- [ ] 发布前在真实长视频上重跑 Comparison Record 流程一次
+- [x] README、ARCHITECTURE、SECURITY、产品规格同步；tech-debt 条目更新（2026-10-22）：三份文档已补迁移说明与配置键边界；本次未新增或关闭 tech-debt 条目
+- [x] 发布前在真实长视频上重跑 Comparison Record 流程一次（2026-10-21，结果见上）
 
 ## Validation and Acceptance
 

@@ -980,6 +980,21 @@
   owns official-source acquisition, cache validation, and direct local runtime loading. The ONNX
   runtime uses `funasr_onnx` directly; it does not use `funasr.AutoModel` or auto-export.
 
+## 2026-10-22 Settings Schema Migration and Migration Notice
+
+- Local settings carry `FRAMEQ_SETTINGS_SCHEMA_VERSION`. The first read of a file without the
+  current version rewrites `FRAMEQ_ASR_MODEL` to the ONNX default and stamps the version, so the
+  rewrite happens once. A later explicit PyTorch selection is preserved because the version
+  already matches.
+- When the rewritten value was still the old PyTorch template default, the migration also writes
+  `FRAMEQ_ASR_MODEL_MIGRATION=1`. A file that already held the ONNX model gets no marker, so the
+  notice only appears for users whose selection actually changed.
+- `get_llm_config` returns `asr_model_migrated` from that marker. The settings sheet renders a
+  one-time notice explaining why the default changed and how to switch back; it does not block
+  the form.
+- `dismiss_asr_model_migration` deletes only the marker, so dismissing never writes an unsaved
+  draft. Saving the settings through `save_llm_config` also clears it.
+
 ## 2026-06-21 Account and Billing Boundary
 
 - `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, administrator-issued activation-code monthly passes, entitlement status, Admin Web, and server-managed LLM checkout.
