@@ -126,9 +126,7 @@ def test_write_http_stream_atomically_appends_valid_range_part(
     assert not part_path.exists()
 
 
-def test_write_http_stream_atomically_rejects_stalled_download(
-    tmp_path: Path,
-) -> None:
+def test_write_http_stream_atomically_rejects_stalled_download(tmp_path: Path) -> None:
     destination = tmp_path / "video.mp4"
     destination.write_bytes(b"existing")
     response = HttpResponse(
@@ -150,4 +148,70 @@ def test_write_http_stream_atomically_rejects_stalled_download(
 
     assert exc_info.value.code == "DOWNLOAD_STALLED"
     assert destination.read_bytes() == b"existing"
+    part_path = tmp_path / "video.mp4.part"
+    assert part_path.exists()
+    assert part_path.read_bytes() == b""
+
+
+def test_write_http_stream_atomically_rejects_incomplete_stream(tmp_path: Path) -> None:
+    destination = tmp_path / "video.mp4"
+    response = HttpResponse(
+        status=200,
+        headers={"Content-Type": "video/mp4", "Content-Length": "10"},
+        body=b"",
+        url="https://cdn.example/video.mp4",
+    )
+
+    with pytest.raises(SafeDownloadError) as exc_info:
+        write_http_stream_atomically(
+            response,
+            [b"stream"],
+            destination,
+        )
+
+    assert exc_info.value.code == "DOWNLOAD_INCOMPLETE"
+    assert not destination.exists()
+    assert (tmp_path / "video.mp4.part").read_bytes() == b"stream"
+
+
+def test_write_http_stream_atomically_accepts_undeclared_complete_stream(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "video.mp4"
+    response = HttpResponse(
+        status=200,
+        headers={"Content-Type": "video/mp4"},
+        body=b"",
+        url="https://cdn.example/video.mp4",
+    )
+
+    written = write_http_stream_atomically(
+        response,
+        [b"chunked", b" media"],
+        destination,
+    )
+
+    assert written == 13
+    assert destination.read_bytes() == b"chunked media"
+
+
+def test_write_http_stream_atomically_deletes_part_on_validation_failure(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "video.mp4"
+    response = HttpResponse(
+        status=200,
+        headers={"Content-Type": "text/html", "Content-Length": "5"},
+        body=b"",
+        url="https://cdn.example/video.mp4",
+    )
+
+    with pytest.raises(SafeDownloadError) as exc_info:
+        write_http_stream_atomically(
+            response,
+            [b"data"],
+            destination,
+        )
+
+    assert exc_info.value.code == "DOWNLOAD_CONTENT_TYPE_INVALID"
     assert not (tmp_path / "video.mp4.part").exists()

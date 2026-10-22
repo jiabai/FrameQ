@@ -18,6 +18,9 @@ from frameq_worker.douyin.transport import (
     DOUYIN_MOBILE_USER_AGENT as DOUYIN_MOBILE_USER_AGENT,
 )
 from frameq_worker.douyin.transport import (
+    DOUYIN_STREAM_SOCKET_TIMEOUT_SECONDS as DOUYIN_STREAM_SOCKET_TIMEOUT_SECONDS,
+)
+from frameq_worker.douyin.transport import (
     UrllibDouyinHttpClient,
     download_ordered_candidates,
     public_headers,
@@ -38,6 +41,9 @@ SHARE_PAGE_RETRYABLE_ERROR_CODES = frozenset(
         "DOUYIN_SHARE_PAGE_UNAVAILABLE",
     }
 )
+# 字节进度的事件间隔：足够密集以反映下载仍在推进，又不至于淹没进度通道。
+STREAM_PROGRESS_EMIT_INTERVAL_BYTES = 8 * 1024 * 1024
+STREAM_PROGRESS_MAX_STEP = 3
 
 
 def download_first_available_candidate(
@@ -45,7 +51,7 @@ def download_first_available_candidate(
     candidates: list[DouyinStreamCandidate],
     output_dir: Path,
     http_client: UrllibDouyinHttpClient,
-    timeout_seconds: float = 30.0,
+    timeout_seconds: float = DOUYIN_STREAM_SOCKET_TIMEOUT_SECONDS,
     progress_callback: object | None = None,
 ) -> Path:
     sorted_candidates = select_stream_candidates(candidates)
@@ -60,7 +66,34 @@ def download_first_available_candidate(
             failed_index,
             total,
         ),
+        on_progress=_stream_progress_emitter(progress_callback),
     )
+
+
+def _stream_progress_emitter(
+    progress_callback: object | None,
+) -> Callable[[int, int], None] | None:
+    if not callable(progress_callback):
+        return None
+    state = {"last_emitted_bytes": 0, "last_step": 0}
+
+    def on_progress(downloaded_bytes: int, total_bytes: int) -> None:
+        if total_bytes <= 0:
+            return
+        if (
+            downloaded_bytes - state["last_emitted_bytes"]
+            < STREAM_PROGRESS_EMIT_INTERVAL_BYTES
+        ):
+            return
+        state["last_emitted_bytes"] = downloaded_bytes
+        ratio = min(1.0, downloaded_bytes / total_bytes)
+        step = min(STREAM_PROGRESS_MAX_STEP, int(ratio * (STREAM_PROGRESS_MAX_STEP + 1)))
+        if step <= state["last_step"]:
+            return
+        state["last_step"] = step
+        _emit_progress(progress_callback, "douyin.video.saving", 30 + step)
+
+    return on_progress
 
 
 def resolve_share_page_item(

@@ -9,6 +9,7 @@ from frameq_worker.douyin_fallback import (
     DouyinFallbackError,
     DouyinStreamCandidate,
     HttpResponse,
+    _stream_progress_emitter,
     build_play_url,
     build_share_page_url,
     collect_stream_candidates,
@@ -19,6 +20,7 @@ from frameq_worker.douyin_fallback import (
     resolve_aweme_id_from_input,
     select_stream_candidates,
 )
+from frameq_worker.download_reliability import SafeDownloadError
 
 ROOT_COMPATIBILITY_SURFACE = {
     "DOUYIN_MOBILE_USER_AGENT",
@@ -39,10 +41,22 @@ ROOT_COMPATIBILITY_SURFACE = {
 }
 
 
+class FakeStalledDownload(SafeDownloadError):
+    def __init__(self, code: str, part_bytes: bytes = b"") -> None:
+        super().__init__(code, f"fake {code}")
+        self.part_bytes = part_bytes
+
+
 class FakeHttpClient:
-    def __init__(self, responses: dict[str, list[HttpResponse | Exception]]) -> None:
-        self.responses = {url: list(items) for url, items in responses.items()}
+    def __init__(
+        self,
+        responses: dict[str, list[HttpResponse | Exception]] | None = None,
+        downloads: dict[str, list[bytes | Exception]] | None = None,
+    ) -> None:
+        self.responses = {url: list(items) for url, items in (responses or {}).items()}
+        self.downloads = {url: list(items) for url, items in (downloads or {}).items()}
         self.calls: list[tuple[str, dict[str, str]]] = []
+        self.download_calls: list[tuple[str, int]] = []
 
     def get(
         self,
@@ -58,6 +72,54 @@ class FakeHttpClient:
         if isinstance(item, Exception):
             raise item
         return item
+
+    def download_to_path(
+        self,
+        url: str,
+        destination: Path,
+        *,
+        headers: dict[str, str] | None = None,
+        timeout_seconds: float = 15.0,
+        no_progress_timeout_seconds: float = 60.0,
+        resume_from_bytes: int = 0,
+        total_bytes: int | None = None,
+        on_progress: object | None = None,
+    ) -> int:
+        self.download_calls.append((url, resume_from_bytes))
+        items = self.downloads.get(url)
+        if not items:
+            raise AssertionError(f"Unexpected download URL: {url}")
+        item = items.pop(0)
+        part_path = destination.with_name(f"{destination.name}.part")
+        if isinstance(item, FakeStalledDownload):
+            if item.part_bytes:
+                part_path.write_bytes(item.part_bytes)
+            else:
+                part_path.unlink(missing_ok=True)
+            raise item
+        if isinstance(item, Exception):
+            part_path.unlink(missing_ok=True)
+            raise item
+        payload = bytes(item)
+        if resume_from_bytes > 0:
+            if not part_path.is_file() or part_path.stat().st_size != resume_from_bytes:
+                raise SafeDownloadError(
+                    "DOWNLOAD_RESUME_INVALID",
+                    "fake resume offset does not match the partial file",
+                )
+            with part_path.open("ab") as partial:
+                partial.write(payload[resume_from_bytes:])
+        else:
+            part_path.unlink(missing_ok=True)
+            part_path.write_bytes(payload)
+        part_path.replace(destination)
+        if callable(on_progress):
+            emitted = resume_from_bytes
+            chunk_size = 4 * 1024 * 1024
+            while emitted < len(payload):
+                emitted = min(len(payload), emitted + chunk_size)
+                on_progress(emitted, total_bytes if total_bytes is not None else emitted)
+        return len(payload)
 
 
 DEGRADED_SHARE_PAGE_HTML = """
@@ -89,16 +151,12 @@ def degraded_share_page_responses() -> list[HttpResponse]:
     ]
 
 
-def successful_playback_responses(video_uri: str) -> dict[str, list[HttpResponse | Exception]]:
-    responses: dict[str, list[HttpResponse | Exception]] = {
-        "https://cdn.example/video.mp4": [
-            HttpResponse(
-                200,
-                {"Content-Type": "video/mp4"},
-                b"video",
-                "https://cdn.example/video.mp4",
-            )
-        ]
+def successful_playback_responses(
+    video_uri: str,
+) -> tuple[dict[str, list[HttpResponse | Exception]], dict[str, list[bytes | Exception]]]:
+    responses: dict[str, list[HttpResponse | Exception]] = {}
+    downloads: dict[str, list[bytes | Exception]] = {
+        "https://cdn.example/video.mp4": [b"video"]
     }
     for quality in PLAY_QUALITIES:
         play_url = build_play_url(video_uri, quality)
@@ -116,7 +174,7 @@ def successful_playback_responses(video_uri: str) -> dict[str, list[HttpResponse
             ]
         else:
             responses[play_url] = [HttpResponse(404, {}, b"", play_url)]
-    return responses
+    return responses, downloads
 
 
 def test_root_exposes_the_repository_observed_compatibility_surface() -> None:
@@ -336,16 +394,9 @@ def test_download_first_available_candidate_retries_next_stream_on_failure(
     first = DouyinStreamCandidate("1080p", "https://cdn.example/1080.mp4", 5000)
     second = DouyinStreamCandidate("720p", "https://cdn.example/720.mp4", 3000)
     client = FakeHttpClient(
-        {
+        downloads={
             first.url: [TimeoutError("timed out")],
-            second.url: [
-                HttpResponse(
-                    status=200,
-                    headers={"Content-Type": "video/mp4"},
-                    body=b"mp4 bytes",
-                    url=second.url,
-                )
-            ],
+            second.url: [b"mp4 bytes"],
         }
     )
     events: list[dict[str, object]] = []
@@ -360,7 +411,7 @@ def test_download_first_available_candidate_retries_next_stream_on_failure(
 
     assert path == tmp_path / "7653372612151692594.mp4"
     assert path.read_bytes() == b"mp4 bytes"
-    assert [call[0] for call in client.calls] == [first.url, second.url]
+    assert [call[0] for call in client.download_calls] == [first.url, second.url]
     assert {
         "stage": "video_extracting",
         "progress": 30,
@@ -369,7 +420,7 @@ def test_download_first_available_candidate_retries_next_stream_on_failure(
     } in events
 
 
-def test_download_first_available_candidate_removes_probe_range_header(
+def test_download_first_available_candidate_forwards_candidate_headers_unchanged(
     tmp_path: Path,
 ) -> None:
     candidate = DouyinStreamCandidate(
@@ -379,16 +430,7 @@ def test_download_first_available_candidate_removes_probe_range_header(
         headers={"Range": "bytes=0-1", "X-Test": "preserved"},
     )
     client = FakeHttpClient(
-        {
-            candidate.url: [
-                HttpResponse(
-                    status=200,
-                    headers={"Content-Type": "video/mp4"},
-                    body=b"complete media",
-                    url=candidate.url,
-                )
-            ]
-        }
+        downloads={candidate.url: [b"complete media"]}
     )
 
     result = download_first_available_candidate(
@@ -399,7 +441,7 @@ def test_download_first_available_candidate_removes_probe_range_header(
     )
 
     assert result.read_bytes() == b"complete media"
-    assert client.calls == [(candidate.url, {"X-Test": "preserved"})]
+    assert client.download_calls == [(candidate.url, 0)]
 
 
 def test_download_first_available_candidate_preserves_completed_output_when_all_fail(
@@ -419,15 +461,10 @@ def test_download_first_available_candidate_preserves_completed_output_when_all_
         3000,
     )
     client = FakeHttpClient(
-        {
+        downloads={
             request_failure.url: [TimeoutError("timed out")],
             invalid_response.url: [
-                HttpResponse(
-                    status=200,
-                    headers={"Content-Type": "video/mp4"},
-                    body=b"",
-                    url=invalid_response.url,
-                )
+                SafeDownloadError("DOWNLOAD_EMPTY_BODY", "fake empty body")
             ],
         }
     )
@@ -456,6 +493,77 @@ def test_download_first_available_candidate_preserves_completed_output_when_all_
     ]
 
 
+def test_download_first_available_candidate_resumes_a_stalled_candidate_once(
+    tmp_path: Path,
+) -> None:
+    candidate = DouyinStreamCandidate(
+        "1080p",
+        "https://cdn.example/1080.mp4",
+        len(b"full media payload"),
+    )
+    client = FakeHttpClient(
+        downloads={
+            candidate.url: [
+                FakeStalledDownload("DOWNLOAD_STALLED", part_bytes=b"full med"),
+                b"full media payload",
+            ]
+        }
+    )
+
+    path = download_first_available_candidate(
+        aweme_id="7653372612151692594",
+        candidates=[candidate],
+        output_dir=tmp_path,
+        http_client=client,
+    )
+
+    assert path.read_bytes() == b"full media payload"
+    assert client.download_calls == [
+        (candidate.url, 0),
+        (candidate.url, len(b"full med")),
+    ]
+    assert not (tmp_path / "7653372612151692594.mp4.part").exists()
+
+
+def test_download_first_available_candidate_switches_after_the_resume_retry_stalls(
+    tmp_path: Path,
+) -> None:
+    first = DouyinStreamCandidate("1080p", "https://cdn.example/1080.mp4", 5000)
+    second = DouyinStreamCandidate("720p", "https://cdn.example/720.mp4", 3000)
+    client = FakeHttpClient(
+        downloads={
+            first.url: [
+                FakeStalledDownload("DOWNLOAD_STALLED", part_bytes=b"abc"),
+                FakeStalledDownload("DOWNLOAD_STALLED", part_bytes=b"abcdef"),
+            ],
+            second.url: [b"second candidate media"],
+        }
+    )
+    events: list[dict[str, object]] = []
+
+    path = download_first_available_candidate(
+        aweme_id="7653372612151692594",
+        candidates=[first, second],
+        output_dir=tmp_path,
+        http_client=client,
+        progress_callback=events.append,
+    )
+
+    assert path.read_bytes() == b"second candidate media"
+    assert client.download_calls == [
+        (first.url, 0),
+        (first.url, 3),
+        (second.url, 0),
+    ]
+    assert not (tmp_path / "7653372612151692594.mp4.part").exists()
+    assert {
+        "stage": "video_extracting",
+        "progress": 30,
+        "message_code": "douyin.stream.retrying",
+        "message_args": {"attempt": 2, "total": 2},
+    } in events
+
+
 @pytest.mark.parametrize("with_callback", [False, True])
 def test_retry_progress_never_interrupts_more_than_100_real_candidates(
     tmp_path: Path,
@@ -470,16 +578,9 @@ def test_retry_progress_never_interrupts_more_than_100_real_candidates(
         for index in range(101)
     ]
     client = FakeHttpClient(
-        {
+        downloads={
             candidates[0].url: [TimeoutError("timed out")],
-            candidates[1].url: [
-                HttpResponse(
-                    status=200,
-                    headers={"Content-Type": "video/mp4"},
-                    body=b"second candidate",
-                    url=candidates[1].url,
-                )
-            ],
+            candidates[1].url: [b"second candidate"],
         }
     )
     events: list[dict[str, object]] = []
@@ -493,18 +594,90 @@ def test_retry_progress_never_interrupts_more_than_100_real_candidates(
     )
 
     assert path.read_bytes() == b"second candidate"
-    assert [call[0] for call in client.calls] == [candidates[0].url, candidates[1].url]
+    assert [call[0] for call in client.download_calls] == [
+        candidates[0].url,
+        candidates[1].url,
+    ]
     assert events == []
+
+
+def test_stream_progress_emitter_maps_byte_steps_onto_in_stage_progress() -> None:
+    events: list[dict[str, object]] = []
+    emitter = _stream_progress_emitter(events.append)
+    assert emitter is not None
+
+    megabyte = 1024 * 1024
+    emitter(0, 24 * megabyte)
+    emitter(4 * megabyte, 24 * megabyte)
+    emitter(8 * megabyte, 24 * megabyte)
+    emitter(9 * megabyte, 24 * megabyte)
+    emitter(16 * megabyte, 24 * megabyte)
+    emitter(24 * megabyte, 24 * megabyte)
+
+    assert [event["progress"] for event in events] == [31, 32, 33]
+    assert all(event["message_code"] == "douyin.video.saving" for event in events)
+
+
+def test_stream_progress_emitter_is_absent_without_a_callback() -> None:
+    assert _stream_progress_emitter(None) is None
+
+
+def test_download_douyin_video_emits_byte_progress_for_a_large_stream(
+    tmp_path: Path,
+) -> None:
+    aweme_id = "7653372612151692594"
+    video_uri = "v0200fg10000demo"
+    megabyte = 1024 * 1024
+    total_bytes = 24 * megabyte
+    large_payload = b"x" * total_bytes
+    share_url = build_share_page_url(aweme_id)
+    responses = {
+        share_url: [html_response(share_page_html(aweme_id, video_uri))],
+        build_play_url(video_uri, "1080p"): [
+            HttpResponse(
+                status=206,
+                headers={
+                    "Content-Type": "video/mp4",
+                    "Content-Range": f"bytes 0-1/{total_bytes}",
+                },
+                body=b"ok",
+                url="https://cdn.example/video.mp4",
+            )
+        ],
+        **{
+            build_play_url(video_uri, quality): [
+                HttpResponse(404, {}, b"", build_play_url(video_uri, quality))
+            ]
+            for quality in PLAY_QUALITIES
+            if quality != "1080p"
+        },
+    }
+    client = FakeHttpClient(
+        responses=responses,
+        downloads={"https://cdn.example/video.mp4": [large_payload]},
+    )
+    events: list[dict[str, object]] = []
+
+    result = download_douyin_video(
+        f"https://www.douyin.com/video/{aweme_id}",
+        output_dir=tmp_path,
+        http_client=client,
+        progress_callback=events.append,
+    )
+
+    assert result.read_bytes() == large_payload
+    progress_values = [event["progress"] for event in events]
+    assert progress_values == [22, 26, 30, 31, 32, 33]
 
 
 def test_download_douyin_video_emits_closed_structured_progress(tmp_path: Path) -> None:
     aweme_id = "7653372612151692594"
     video_uri = "v0200fg10000demo"
-    responses = successful_playback_responses(video_uri)
+    responses, downloads = successful_playback_responses(video_uri)
     responses[build_share_page_url(aweme_id)] = [
         html_response(share_page_html(aweme_id, video_uri))
     ]
-    client = FakeHttpClient(responses)
+    client = FakeHttpClient(responses=responses, downloads=downloads)
     events: list[dict[str, object]] = []
 
     result = download_douyin_video(
@@ -536,7 +709,9 @@ def test_download_douyin_video_emits_closed_structured_progress(tmp_path: Path) 
     assert [url for url, _headers in client.calls] == [
         build_share_page_url(aweme_id),
         *(build_play_url(video_uri, quality) for quality in PLAY_QUALITIES),
-        "https://cdn.example/video.mp4",
+    ]
+    assert [url for url, _resume in client.download_calls] == [
+        "https://cdn.example/video.mp4"
     ]
 
 
@@ -546,12 +721,12 @@ def test_share_page_retry_recovers_from_a_degraded_page_after_a_random_delay(
     aweme_id = "7653372612151692594"
     video_uri = "v0200fg10000demo"
     share_url = build_share_page_url(aweme_id)
-    responses = successful_playback_responses(video_uri)
+    responses, downloads = successful_playback_responses(video_uri)
     responses[share_url] = [
         html_response(DEGRADED_SHARE_PAGE_HTML),
         html_response(share_page_html(aweme_id, video_uri)),
     ]
-    client = FakeHttpClient(responses)
+    client = FakeHttpClient(responses=responses, downloads=downloads)
     events: list[dict[str, object]] = []
     delays: list[float] = []
     events_emitted_before_waiting: list[int] = []

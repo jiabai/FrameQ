@@ -6,6 +6,17 @@
 > strict History vNext specification; older schema compatibility statements below are historical and
 > do not authorize runtime migration or loading of unsupported tasks.
 
+## 2026-10-22 Douyin Stream Download Stall Protection
+
+- The Douyin fallback stream download must never appear as a frozen task. A user who submits a Douyin share link sees continuous progress feedback during the media download instead of a static percentage, and the download step either finishes, switches to the next candidate stream, or fails with the existing `DOUYIN_STREAM_DOWNLOAD_FAILED` taxonomy within a bounded time.
+- The fallback download writes media to disk incrementally. The worker must not accumulate the whole media file in memory before writing: each candidate download streams response chunks to a `.part` file and promotes it atomically on completion, matching the Xiaohongshu and Bilibili download behavior.
+- A download that receives no new bytes for 60 seconds is treated as stalled. The worker abandons the stalled transfer, retries the same candidate once from the received byte offset, and falls back to the next candidate stream if the resume attempt also stalls. The 60-second no-progress budget and the per-read socket timeout are worker-internal details and are not user configuration.
+- The Douyin CDN supports byte-range requests. When a partial `.part` file exists for the current candidate and is strictly smaller than the declared stream size, the retry resumes with a `Range` header instead of restarting from zero. A candidate whose partial file cannot be resumed cleanly restarts from zero once before moving to the next candidate.
+- When a response declares its total size and the transfer ends before that size is reached, the download is treated as incomplete: the partial file is kept for the resume retry, and the worker does not promote a truncated file as the final video artifact.
+- Byte-range resume only applies within one candidate stream. Moving to a different candidate discards any partial file from the previous candidate.
+- The stream download emits the existing closed progress message code `douyin.video.saving` with an increasing in-stage progress value while bytes arrive, so the processing UI advances during the download without introducing new message codes or message arguments.
+- The download must not change privacy or authorization behavior. It requests the same public stream URLs with the same public request headers, and no stream content, cookie, credential, or raw source URL enters diagnostics, telemetry, or task persistence.
+
 ## 2026-09-16 Douyin Share Page Retry
 
 - The Douyin public share page intermittently serves a slimmed-down document that has no `videoInfoRes`. FrameQ should treat that variant as a transient server-side behavior instead of failing the task on the first response.

@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from http.cookiejar import CookieJar
 from pathlib import Path
 
 from frameq_worker.douyin.types import (
     DouyinFallbackError,
-    DouyinHttpClient,
     DouyinStreamCandidate,
     HttpResponse,
 )
 from frameq_worker.download_reliability import (
+    RESUMABLE_DOWNLOAD_ERROR_CODES,
     SafeDownloadError,
-    write_http_response_atomically,
+    write_http_stream_atomically,
 )
 
 DOUYIN_MOBILE_USER_AGENT = (
@@ -22,7 +22,12 @@ DOUYIN_MOBILE_USER_AGENT = (
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
 )
 
+DOUYIN_DOWNLOAD_CHUNK_BYTES = 256 * 1024
+DOUYIN_NO_PROGRESS_TIMEOUT_SECONDS = 60.0
+DOUYIN_STREAM_SOCKET_TIMEOUT_SECONDS = 15.0
+
 CandidateFailed = Callable[[int, int], None]
+DownloadProgress = Callable[[int, int], None]
 
 
 class UrllibDouyinHttpClient:
@@ -60,6 +65,55 @@ class UrllibDouyinHttpClient:
                 "Douyin public share page request failed.",
             ) from exc
 
+    def download_to_path(
+        self,
+        url: str,
+        destination: Path,
+        *,
+        headers: Mapping[str, str] | None = None,
+        timeout_seconds: float = DOUYIN_STREAM_SOCKET_TIMEOUT_SECONDS,
+        no_progress_timeout_seconds: float = DOUYIN_NO_PROGRESS_TIMEOUT_SECONDS,
+        resume_from_bytes: int = 0,
+        total_bytes: int | None = None,
+        on_progress: DownloadProgress | None = None,
+    ) -> int:
+        request_headers = dict(headers or {})
+        if resume_from_bytes > 0:
+            request_headers["Range"] = f"bytes={resume_from_bytes}-"
+        request = urllib.request.Request(url, headers=request_headers, method="GET")
+        try:
+            with self._opener.open(request, timeout=timeout_seconds) as response:
+                return write_http_stream_atomically(
+                    HttpResponse(
+                        status=response.status,
+                        headers=dict(response.headers.items()),
+                        body=b"",
+                        url=response.geturl(),
+                    ),
+                    _response_chunks(response, resume_from_bytes, total_bytes, on_progress),
+                    destination,
+                    no_progress_timeout_seconds=no_progress_timeout_seconds,
+                    resume_from_bytes=resume_from_bytes,
+                )
+        except urllib.error.HTTPError as exc:
+            return write_http_stream_atomically(
+                HttpResponse(
+                    status=exc.code,
+                    headers=dict(exc.headers.items()),
+                    body=b"",
+                    url=exc.geturl(),
+                ),
+                _response_chunks(exc, resume_from_bytes, total_bytes, on_progress),
+                destination,
+                no_progress_timeout_seconds=no_progress_timeout_seconds,
+                resume_from_bytes=resume_from_bytes,
+            )
+        except urllib.error.URLError as exc:
+            raise DouyinFallbackError(
+                "DOUYIN_STREAM_DOWNLOAD_FAILED",
+                "Douyin media stream request failed.",
+            ) from exc
+
 
 def public_headers(extra: Mapping[str, str] | None = None) -> dict[str, str]:
     headers = {
@@ -76,37 +130,47 @@ def download_ordered_candidates(
     aweme_id: str,
     candidates: Sequence[DouyinStreamCandidate],
     output_dir: Path,
-    http_client: DouyinHttpClient,
-    timeout_seconds: float = 30.0,
+    http_client: UrllibDouyinHttpClient,
+    timeout_seconds: float = DOUYIN_STREAM_SOCKET_TIMEOUT_SECONDS,
     on_candidate_failed: CandidateFailed | None = None,
+    on_progress: DownloadProgress | None = None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{aweme_id}.mp4"
+    part_path = output_path.with_name(f"{output_path.name}.part")
     last_error: Exception | None = None
     total = len(candidates)
 
     for index, candidate in enumerate(candidates):
-        try:
-            response = http_client.get(
-                candidate.url,
-                headers=_without_range_header(candidate.headers),
-                timeout_seconds=timeout_seconds,
-            )
-        except Exception as exc:  # noqa: BLE001 - try next public stream candidate
-            last_error = exc
-            if on_candidate_failed is not None and index < total - 1:
-                on_candidate_failed(index, total)
-            continue
-
-        try:
-            write_http_response_atomically(response, output_path)
-        except SafeDownloadError as exc:
-            last_error = exc
-            if on_candidate_failed is not None and index < total - 1:
-                on_candidate_failed(index, total)
-            continue
-
-        return output_path
+        failed = False
+        # 每个候选最多两次尝试：第一次原始下载，第二次利用留下的部分文件续传。
+        for attempt in (1, 2):
+            try:
+                http_client.download_to_path(
+                    candidate.url,
+                    output_path,
+                    headers=candidate.headers,
+                    timeout_seconds=timeout_seconds,
+                    no_progress_timeout_seconds=DOUYIN_NO_PROGRESS_TIMEOUT_SECONDS,
+                    resume_from_bytes=_resumable_part_size(part_path, candidate.size_bytes),
+                    total_bytes=candidate.size_bytes,
+                    on_progress=on_progress,
+                )
+                return output_path
+            except SafeDownloadError as exc:
+                last_error = exc
+                if attempt == 1 and exc.code in RESUMABLE_DOWNLOAD_ERROR_CODES:
+                    continue
+                part_path.unlink(missing_ok=True)
+                failed = True
+                break
+            except Exception as exc:  # noqa: BLE001 - 传输层异常直接换下一个候选
+                last_error = exc
+                part_path.unlink(missing_ok=True)
+                failed = True
+                break
+        if failed and on_candidate_failed is not None and index < total - 1:
+            on_candidate_failed(index, total)
 
     raise DouyinFallbackError(
         "DOUYIN_STREAM_DOWNLOAD_FAILED",
@@ -114,5 +178,30 @@ def download_ordered_candidates(
     ) from last_error
 
 
-def _without_range_header(headers: Mapping[str, str]) -> dict[str, str]:
-    return {key: value for key, value in headers.items() if key.lower() != "range"}
+def _response_chunks(
+    response: object,
+    resume_from_bytes: int,
+    total_bytes: int | None,
+    on_progress: DownloadProgress | None,
+) -> Iterator[bytes]:
+    emitted = resume_from_bytes
+    while True:
+        chunk = response.read(DOUYIN_DOWNLOAD_CHUNK_BYTES)
+        if not chunk:
+            return
+        emitted += len(chunk)
+        if on_progress is not None:
+            on_progress(emitted, total_bytes if total_bytes is not None else emitted)
+        yield chunk
+
+
+def _resumable_part_size(part_path: Path, declared_total: int) -> int:
+    try:
+        size = part_path.stat().st_size if part_path.is_file() else 0
+    except OSError:
+        return 0
+    if size <= 0 or size >= declared_total:
+        if size > 0:
+            part_path.unlink(missing_ok=True)
+        return 0
+    return size

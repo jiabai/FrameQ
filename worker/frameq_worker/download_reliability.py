@@ -10,6 +10,10 @@ from typing import Protocol
 CONTENT_RANGE_PATTERN = re.compile(r"^bytes\s+(\d+)-(\d+)/(\d+|\*)\s*$", re.IGNORECASE)
 CONTENT_RANGE_TOTAL_PATTERN = re.compile(r"/(\d+)\s*$")
 VIDEO_CONTENT_TYPES = ("video/", "application/octet-stream")
+# 断流与提前结束都会留下有效的部分字节，供同一路径的续传重试复用。
+RESUMABLE_DOWNLOAD_ERROR_CODES = frozenset(
+    {"DOWNLOAD_STALLED", "DOWNLOAD_INCOMPLETE"}
+)
 
 
 class SafeDownloadError(RuntimeError):
@@ -103,7 +107,17 @@ def write_http_stream_atomically(
                 last_progress_at = now
         if written <= resume_from_bytes:
             raise SafeDownloadError("DOWNLOAD_EMPTY_BODY", "Download response body is empty.")
+        declared_size = _declared_size(response.headers)
+        if declared_size is not None and written != declared_size:
+            raise SafeDownloadError(
+                "DOWNLOAD_INCOMPLETE",
+                "Download response ended before the declared size.",
+            )
         os.replace(part_path, destination)
+    except SafeDownloadError as exc:
+        if exc.code not in RESUMABLE_DOWNLOAD_ERROR_CODES:
+            part_path.unlink(missing_ok=True)
+        raise
     except Exception:
         part_path.unlink(missing_ok=True)
         raise
