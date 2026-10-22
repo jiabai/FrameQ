@@ -755,9 +755,12 @@
   A non-zero return code blocks the release. The upgrade must not ship on the strength of the lock
   diff alone.
 
-- [ ] Decide how the `yt-dlp` drift check runs on a schedule (2026-10-22) — ✅ The script is in place
-  and exits `1` on drift, nothing invokes it yet. Either add a scheduled CI job or a local routine,
-  then record the choice in `docs/exec-plans/tech-debt-tracker.md`.
+- [x] Decide how the `yt-dlp` drift check runs on a schedule (2026-10-22) — ✅ A local weekly
+  automation named `yt-dlp 版本漂移检查` runs every Monday at 09:00 in this workspace and reports
+  exit code 0, 1, or 2 with the upgrade and verification steps attached. A local routine was chosen
+  over a CI job because the pin only matters right before a release and the check needs no secrets.
+  The script and its exit-code contract live in the repository; the schedule itself is per-machine
+  and must be recreated if this workstation is replaced.
 
 ## 已完成
 
