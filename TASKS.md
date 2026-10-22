@@ -736,7 +736,28 @@
 
 ## 待办
 
-（无待办任务）
+- [ ] Prove the `yt-dlp` 2026.10.21 upgrade with a real YouTube download (2026-10-22) — ✅ Lock
+  upgraded and the drift check reports current; the download is the only open part. The lock moved
+  from `2026.8.19` to `2026.10.21` after `scripts/check-yt-dlp-drift.mjs` reported drift, but this
+  machine's proxy answers `502` for YouTube, so no behavioural evidence exists yet. Before the next
+  desktop release, run one real download through the packaged worker path and record the result:
+
+  ```bash
+  PYTHONPATH=worker uv run python -c "
+  from pathlib import Path
+  from frameq_worker.media import download_video
+  result = download_video('https://www.youtube.com/watch?v=jNQXAC9IVRw', Path('build/ytdlp-smoke'))
+  print(result.returncode)
+  print((result.stdout or result.stderr)[:400])
+  "
+  ```
+
+  A non-zero return code blocks the release. The upgrade must not ship on the strength of the lock
+  diff alone.
+
+- [ ] Decide how the `yt-dlp` drift check runs on a schedule (2026-10-22) — ✅ The script is in place
+  and exits `1` on drift, nothing invokes it yet. Either add a scheduled CI job or a local routine,
+  then record the choice in `docs/exec-plans/tech-debt-tracker.md`.
 
 ## 已完成
 
