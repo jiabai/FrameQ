@@ -18,6 +18,29 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.4.1 desktop release (2026-10-22) — ✅ Tag target `219d716`
+  tagged `v0.4.1`; fixes the settings template that kept fresh installs on
+  `iic/SenseVoiceSmall` after the PyTorch runtime had been externalized, adds a
+  schema-versioned one-time migration that moves existing settings to
+  `iic/SenseVoiceSmall-onnx` while preserving a later explicit PyTorch choice, aligns
+  `.env.example` with the installer template, and binds the vite dev server to 127.0.0.1 so
+  the webview can load. Three-platform release run `39740146660` green on all jobs. Assets
+  match v0.4.0 after normalizing the version: `FrameQ_0.4.1_x64-setup.exe` (210,808,182
+  bytes), `FrameQ_0.4.1_x64.dmg` (348,107,096), `FrameQ_0.4.1_aarch64.dmg` (300,694,422),
+  three `frameq-pytorch-runtime-*.zip`, and `latest.json`; every asset reports `uploaded`
+  and the Windows updater signature matched the uploaded `.sig` byte for byte. Gates:
+  frontend 83 files / 851 tests, Worker 1013 passed with two known symlink environment
+  failures, Rust lib 330 passed with four known symlink failures plus two load-sensitive
+  watchdog cases that pass when rerun alone, version consistency, ruff and docs governance
+  clean. Published 2026-10-22 16:23 +08:00:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.4.1. Release notes:
+  `docs/releases/v0.4.1.md`. Residual risks: `macos-intel-acceptance.yml` is
+  `workflow_dispatch`-only and did not run; both macOS builds are ad-hoc signed without
+  notarization; the curl 206 check could not run because this machine's proxy rejects
+  GitHub download URLs, asset readability was confirmed through the gh API and
+  `gh release download`; the migration cannot distinguish a template-written PyTorch value
+  from an explicit user choice.
+
 - [x] Prepare and publish FrameQ v0.4.0 desktop release (2026-10-21) — ✅ Tag target `d89c5ef`
   tagged `v0.4.0`; installer runtime externalized (bundled Python runtime 16,810 files / 502 MB after
   trimming, PyTorch runtime moved to an on-demand 140 MB component), default model switched to
