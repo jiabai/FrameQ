@@ -41,6 +41,14 @@
   directory, which is a harness difference rather than a product failure; `yt-dlp` still runs
   without an external timeout and is tracked as debt.
 
+- [x] Deploy the v0.4.2 marketing site (2026-10-23) — ✅ `site/dist` synced to
+  `ubuntu@frameq.8xf.pro:/home/ubuntu/FrameQ/site` through a temporary directory and an atomic
+  directory swap; the previous tree is kept at
+  `/home/ubuntu/FrameQ/site.bak.20261023T005949Z`. Live checks from the server: `/`,
+  `/download/` and `/privacy/` answer 200, the download page carries `0.4.2` 21 times with zero
+  `0.4.1` asset URLs and three links pointing at the v0.4.2 GitHub assets, and
+  `/video/frameq-demo.mp4` answers 206 with `accept-ranges: bytes`.
+
 - [x] Prepare and publish FrameQ v0.4.1 desktop release (2026-10-22) — ✅ Tag target `219d716`
   tagged `v0.4.1`; fixes the settings template that kept fresh installs on
   `iic/SenseVoiceSmall` after the PyTorch runtime had been externalized, adds a
