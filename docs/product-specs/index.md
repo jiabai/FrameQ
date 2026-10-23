@@ -58,6 +58,7 @@
 - `2026-07-12-desktop-density-history-toolbar-polish.md` — Intrinsic History height, clearer secondary typography, and a quieter grouped desktop toolbar.
 - `2026-07-12-task-workspace-visual-hierarchy.md` — Restrained hierarchy cleanup for local transcript and AI workspaces without changing product, privacy, or workflow boundaries.
 - `2026-10-20-transcript-locate-action.md`：结果工作区工具栏增加「定位文字稿」，与视频、音频并列；有未保存编辑时拦截定位，提示先保存。
+- `2026-10-23-transcript-copy-action.md`：结果工作区工具栏在「定位文字稿」右侧增加「复制文字稿」，复制磁盘上 `transcript.txt` 的内容，不受未保存编辑影响。
 
 ## AI Insight
 

@@ -185,6 +185,7 @@ describe("task workspace view model", () => {
       locateVideo: { visible: false, enabled: false },
       locateAudio: { visible: true, enabled: true },
       locateTranscript: { visible: true, enabled: true },
+      copyTranscript: { visible: true, enabled: true },
     });
   });
 
@@ -206,6 +207,7 @@ describe("task workspace view model", () => {
       locateVideo: { visible: false, enabled: false },
       locateAudio: { visible: true, enabled: true },
       locateTranscript: { visible: true, enabled: true },
+      copyTranscript: { visible: true, enabled: true },
     });
     expect(model.local.transcriptSource).toEqual({
       kind: "subtitle",

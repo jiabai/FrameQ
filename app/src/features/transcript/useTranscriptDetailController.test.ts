@@ -234,6 +234,7 @@ describe("useTranscriptDetailController segment editing", () => {
       "closeDetail",
       "copyDetail",
       "copyTranscript",
+      "copyTranscriptFile",
       "currentTranscriptPath",
       "detailTab",
       "detailText",
@@ -605,6 +606,47 @@ describe("useTranscriptDetailController segment editing", () => {
 
     expect(setActionNotice).toHaveBeenLastCalledWith({
       messageCode: "transcript.notice.transcriptCopyFailed",
+    });
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
+    expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");
+  });
+
+  test("copies the saved transcript file while the draft holds unsaved edits", async () => {
+    const { render, setActionNotice } = await createController();
+    let controller = render();
+    controller.updateFullTranscriptDraft("Unsaved transcript draft");
+    controller = render();
+    mocks.clipboardWriteText.mockClear();
+    setActionNotice.mockClear();
+
+    await controller.copyTranscriptFile();
+
+    expect(mocks.clipboardWriteText).toHaveBeenCalledWith("第一段原稿。");
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.copied",
+    });
+    expect(controller.transcriptDirty).toBe(true);
+  });
+
+  test("reports the unreadable transcript file instead of copying the draft", async () => {
+    mocks.loadTranscriptDetail.mockRejectedValueOnce(
+      new Error("read secret at C:/private/transcript.txt"),
+    );
+    const { render, setActionNotice } = await createController({
+      waitForInitialLoad: false,
+    });
+    await vi.waitFor(() =>
+      expect(setActionNotice).toHaveBeenCalledWith({
+        messageCode: "transcript.notice.detailLoadFallback",
+      }),
+    );
+    setActionNotice.mockClear();
+
+    await render().copyTranscriptFile();
+
+    expect(mocks.clipboardWriteText).not.toHaveBeenCalled();
+    expect(setActionNotice).toHaveBeenLastCalledWith({
+      messageCode: "transcript.notice.transcriptFileCopyFailed",
     });
     expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("secret");
     expect(JSON.stringify(setActionNotice.mock.calls)).not.toContain("C:/private");

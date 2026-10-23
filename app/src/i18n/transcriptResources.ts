@@ -11,6 +11,7 @@ export const transcriptResources = {
       locateVideo: "定位视频",
       locateAudio: "定位音频",
       locateTranscript: "定位文字稿",
+      copyTranscript: "复制文字稿",
       empty: "文字稿生成后可在这里回听、校对和保存。",
       status: {
         processing: "处理中",
@@ -64,6 +65,7 @@ export const transcriptResources = {
       noTranscriptExport: "暂无可导出的文字稿文件。",
       transcriptLocated: "已在文件管理器中定位文字稿文件。",
       transcriptLocateFailed: "无法定位文字稿文件，请检查文件是否仍然存在。",
+      transcriptFileCopyFailed: "无法复制文字稿文件，请检查文件是否仍然存在后重试。",
       audioUnavailable: "当前任务没有可播放的本地音频，只能编辑文字稿。",
       audioAutoplayFailed: "音频无法自动播放，请点击回听工具条继续。",
       audioPlaybackFailed: "音频无法播放，请确认本地音频文件仍然存在。",
@@ -84,6 +86,7 @@ export const transcriptResources = {
       locateVideo: "在檔案管理器中顯示影片",
       locateAudio: "在檔案管理器中顯示音訊",
       locateTranscript: "在檔案管理器中顯示文字稿",
+      copyTranscript: "複製逐字稿",
       empty: "逐字稿產生後可在這裡回聽、校對與儲存。",
       status: {
         processing: "處理中",
@@ -137,6 +140,7 @@ export const transcriptResources = {
       noTranscriptExport: "沒有可匯出的逐字稿檔案。",
       transcriptLocated: "已在檔案管理器中顯示逐字稿檔案。",
       transcriptLocateFailed: "無法顯示逐字稿檔案，請檢查檔案是否仍然存在。",
+      transcriptFileCopyFailed: "無法複製逐字稿檔案，請檢查檔案是否仍然存在後重試。",
       audioUnavailable: "目前工作沒有可播放的本機音訊，只能編輯逐字稿。",
       audioAutoplayFailed: "音訊無法自動播放，請點選回聽工具列繼續。",
       audioPlaybackFailed: "音訊無法播放，請確認本機音訊檔案仍然存在。",
@@ -157,6 +161,7 @@ export const transcriptResources = {
       locateVideo: "Show Video in Folder",
       locateAudio: "Show Audio in Folder",
       locateTranscript: "Show Transcript in Folder",
+      copyTranscript: "Copy Transcript",
       empty: "When the transcript is ready, you can listen, review, and save it here.",
       status: {
         processing: "Processing",
@@ -210,6 +215,7 @@ export const transcriptResources = {
       noTranscriptExport: "There is no transcript file to export.",
       transcriptLocated: "The transcript file is shown in the file manager.",
       transcriptLocateFailed: "The transcript file could not be shown. Check that it still exists.",
+      transcriptFileCopyFailed: "The transcript file could not be copied. Check that it still exists and try again.",
       audioUnavailable: "This task has no local audio for playback. You can still edit the transcript.",
       audioAutoplayFailed: "Audio could not start automatically. Use the audio review controls to continue.",
       audioPlaybackFailed: "Audio could not play. Confirm that the local audio file still exists.",

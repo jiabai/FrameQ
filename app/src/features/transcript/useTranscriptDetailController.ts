@@ -38,6 +38,7 @@ export function useTranscriptDetailController({
     locale,
     transcriptDraft: transcriptDocument.transcriptDraft,
     transcriptDirty: transcriptDocument.transcriptDirty,
+    savedTranscriptText: transcriptDocument.transcriptDetail?.text ?? null,
     setActionNotice,
   });
   const reviewTaskId =
@@ -95,6 +96,7 @@ export function useTranscriptDetailController({
     hasTranscriptSegments: transcriptReview.hasTranscriptSegments,
     copyDetail: artifactDetail.copyDetail,
     copyTranscript: artifactDetail.copyTranscript,
+    copyTranscriptFile: artifactDetail.copyTranscriptFile,
     exportDetail: artifactDetail.exportDetail,
     exportTranscript: artifactDetail.exportTranscript,
     saveTranscriptDraft,

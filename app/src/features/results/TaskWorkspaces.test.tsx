@@ -141,6 +141,7 @@ function transcriptController(): TranscriptDetailController {
     hasTranscriptSegments: true,
     copyDetail: vi.fn(),
     copyTranscript: vi.fn(),
+    copyTranscriptFile: vi.fn(),
     exportDetail: vi.fn(),
     exportTranscript: vi.fn(),
     saveTranscriptDraft: vi.fn(),
@@ -346,6 +347,27 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("视频提取中");
   });
 
+  test("hides transcript file actions until a saved transcript exists", () => {
+    const workflow = startProcessing(createInitialWorkflow(), {
+      kind: "local_file",
+      displayName: "Interview.mp3",
+      mediaKind: "audio",
+    });
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={transcriptController()}
+        actionNotice={null}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).not.toContain("定位文字稿");
+    expect(markup).not.toContain("复制文字稿");
+  });
+
   test("keeps the idle task banner static", () => {
     const model = createTaskWorkspaceViewModel(createInitialWorkflow(), aiAccount());
     const markup = renderToStaticMarkup(<TaskStatusBanner model={model.banner} />);
@@ -371,6 +393,9 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("定位视频");
     expect(markup).toContain("定位音频");
     expect(markup).toContain("定位文字稿");
+    expect(markup.indexOf("定位文字稿")).toBeLessThan(
+      markup.indexOf("复制文字稿"),
+    );
     expect(markup).toContain('class="transcript-review-panel"');
     expect(markup).toContain("第一段正式文字稿。");
     expect(markup).toContain('class="transcript-action-bar"');
@@ -443,6 +468,7 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("定位视频");
     expect(markup).toContain("定位音频");
     expect(markup).toContain("定位文字稿");
+    expect(markup).toContain("复制文字稿");
     expect(markup).toContain("来源：本地 ASR");
   });
 

@@ -1,4 +1,13 @@
-import { CheckCircle2, Circle, FileAudio, FileText, Film, LoaderCircle, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  Copy,
+  FileAudio,
+  FileText,
+  Film,
+  LoaderCircle,
+  X,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
@@ -110,7 +119,8 @@ export function LocalTranscriptWorkspace({
           }
           artifactToolbar={model.artifactActions.locateVideo.visible ||
             model.artifactActions.locateAudio.visible ||
-            model.artifactActions.locateTranscript.visible ? (
+            model.artifactActions.locateTranscript.visible ||
+            model.artifactActions.copyTranscript.visible ? (
             <div
               className="local-artifact-toolbar"
               aria-label={t("workspace.artifactActions")}
@@ -146,6 +156,20 @@ export function LocalTranscriptWorkspace({
                 >
                   <FileText size={16} />
                   <span>{t("workspace.locateTranscript")}</span>
+                </button>
+              ) : null}
+              {model.artifactActions.copyTranscript.visible ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void controller.copyTranscriptFile()}
+                  disabled={
+                    !model.artifactActions.copyTranscript.enabled ||
+                    controller.transcriptLoading
+                  }
+                >
+                  <Copy size={16} />
+                  <span>{t("workspace.copyTranscript")}</span>
                 </button>
               ) : null}
             </div>

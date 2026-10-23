@@ -20,6 +20,7 @@ type UseArtifactDetailControllerOptions = {
   locale: SupportedLocale;
   transcriptDraft: string;
   transcriptDirty: boolean;
+  savedTranscriptText: string | null;
   setActionNotice: Dispatch<SetStateAction<UiMessage | null>>;
 };
 
@@ -28,6 +29,7 @@ export function useArtifactDetailController({
   locale,
   transcriptDraft,
   transcriptDirty,
+  savedTranscriptText,
   setActionNotice,
 }: UseArtifactDetailControllerOptions) {
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
@@ -83,6 +85,23 @@ export function useArtifactDetailController({
     }
   }, [setActionNotice, transcriptDraft]);
 
+  const copyTranscriptFile = useCallback(async () => {
+    if (savedTranscriptText === null) {
+      setActionNotice(uiMessage("transcript.notice.transcriptFileCopyFailed"));
+      return;
+    }
+    if (!savedTranscriptText) {
+      setActionNotice(uiMessage("transcript.notice.nothingToCopy"));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(savedTranscriptText);
+      setActionNotice(uiMessage("transcript.notice.copied"));
+    } catch {
+      setActionNotice(uiMessage("transcript.notice.transcriptCopyFailed"));
+    }
+  }, [savedTranscriptText, setActionNotice]);
+
   const exportDetail = useCallback(async () => {
     if (!detailTab) {
       return;
@@ -132,6 +151,7 @@ export function useArtifactDetailController({
     currentTranscriptPath,
     copyDetail,
     copyTranscript,
+    copyTranscriptFile,
     exportDetail,
     exportTranscript,
   };
