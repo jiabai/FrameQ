@@ -18,6 +18,29 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.4.2 desktop release (2026-10-23) — ✅ Tag target `950377c`
+  tagged `v0.4.2`; fixes the Douyin fallback stream download that could present as a frozen
+  task: media now streams to disk instead of buffering the whole response, a candidate is
+  abandoned after 60 seconds without new bytes, resumed once from the received byte offset
+  through the CDN's byte-range support before switching, and rejected when the transfer ends
+  before its declared size; received bytes drive the existing in-stage progress so the
+  processing UI advances during the download. Three-platform release run `39814037035` green on
+  all jobs. Assets match v0.4.1 after normalizing the version: `FrameQ_0.4.2_x64-setup.exe`
+  (210,833,014 bytes), `FrameQ_0.4.2_x64.dmg` (348,053,113), `FrameQ_0.4.2_aarch64.dmg`
+  (300,615,702), three `frameq-pytorch-runtime-*.zip`, and `latest.json`; every asset reports
+  `uploaded` and both Windows updater signatures matched the uploaded `.sig` byte for byte.
+  Gates: Worker 1021 passed with two skips, Rust 338 passed with no failures, packaging smoke
+  plus a real Douyin download through the packaged runtime (75,395,272 bytes, byte-identical to
+  the source video), version consistency, ruff and docs governance clean. Published 2026-10-23
+  01:18 +08:00: https://github.com/jiabai/FrameQ/releases/tag/v0.4.2. Release notes:
+  `docs/releases/v0.4.2.md`. Residual risks: `macos-intel-acceptance.yml` is
+  `workflow_dispatch`-only and did not run; both macOS builds are ad-hoc signed without
+  notarization; this machine's proxy rejects GitHub download URLs, so the release URLs were
+  range-checked from the deployment server instead and answered 206; the packaged-runtime
+  acceptance stopped at `ASR_MODEL_NOT_READY` because the harness does not configure the model
+  directory, which is a harness difference rather than a product failure; `yt-dlp` still runs
+  without an external timeout and is tracked as debt.
+
 - [x] Prepare and publish FrameQ v0.4.1 desktop release (2026-10-22) — ✅ Tag target `219d716`
   tagged `v0.4.1`; fixes the settings template that kept fresh installs on
   `iic/SenseVoiceSmall` after the PyTorch runtime had been externalized, adds a

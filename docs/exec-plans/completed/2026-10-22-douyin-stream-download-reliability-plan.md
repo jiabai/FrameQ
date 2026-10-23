@@ -110,5 +110,17 @@ video in 4.7 seconds and emitted the expected event sequence
 (`douyin.page.resolving` 22, `douyin.stream.probing` 26, `douyin.video.saving` 30, then the
 byte-driven 31, 32, 33 steps).
 
-The desktop release path needs a real Douyin download through a packaged build before the next
-release; that acceptance step stays in the release checklist.
+The packaged-runtime acceptance ran against `app/src-tauri/target/release/resources` after
+installing the `uv.lock` dependency set into the bundled interpreter (`yt-dlp 2026.10.21`,
+`onnxruntime 1.28.0`). The worker produced a 75,395,272-byte `media/video.mp4`, byte-identical
+to the source video, and reached `ASR_MODEL_NOT_READY` at `video_transcribing` only because the
+harness does not configure a model directory; the download, stream validation, and audio
+extraction stages all passed.
+
+Shipped in v0.4.2 (https://github.com/jiabai/FrameQ/releases/tag/v0.4.2, tag target `950377c`,
+Desktop Release run `39814037035` green on all three platform jobs).
+
+Residual risk: the 60-second no-progress budget, the one-resume-per-candidate policy, and the
+8 MB progress interval are reasoned defaults rather than field-calibrated values. The packaged
+interpreter inside `app/src-tauri/resources/python` still carries stale dependencies until the
+installer build reinstalls them, which is why the acceptance had to install the lock set first.
