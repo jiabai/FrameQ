@@ -18,28 +18,32 @@
 
 ## Active UI Work
 
-- [x] Prepare and publish FrameQ v0.4.2 desktop release (2026-10-23) — ✅ Tag target `950377c`
-  tagged `v0.4.2`; fixes the Douyin fallback stream download that could present as a frozen
-  task: media now streams to disk instead of buffering the whole response, a candidate is
-  abandoned after 60 seconds without new bytes, resumed once from the received byte offset
-  through the CDN's byte-range support before switching, and rejected when the transfer ends
-  before its declared size; received bytes drive the existing in-stage progress so the
-  processing UI advances during the download. Three-platform release run `39814037035` green on
-  all jobs. Assets match v0.4.1 after normalizing the version: `FrameQ_0.4.2_x64-setup.exe`
-  (210,833,014 bytes), `FrameQ_0.4.2_x64.dmg` (348,053,113), `FrameQ_0.4.2_aarch64.dmg`
-  (300,615,702), three `frameq-pytorch-runtime-*.zip`, and `latest.json`; every asset reports
-  `uploaded` and both Windows updater signatures matched the uploaded `.sig` byte for byte.
-  Gates: Worker 1021 passed with two skips, Rust 338 passed with no failures, packaging smoke
-  plus a real Douyin download through the packaged runtime (75,395,272 bytes, byte-identical to
-  the source video), version consistency, ruff and docs governance clean. Published 2026-10-23
-  01:18 +08:00: https://github.com/jiabai/FrameQ/releases/tag/v0.4.2. Release notes:
+- [x] Prepare and publish FrameQ v0.4.2 desktop release (2026-10-23) — ✅ Tag target `41d2bd1`
+  tagged `v0.4.2`, rebuilt the same day after the first release (tag target `950377c`, run
+  `39814037035`) so the installer also carries the transcript file copy action. Ship set: the
+  Douyin fallback download no longer presents as a frozen task (media streams to disk, a
+  candidate is abandoned after 60 seconds without new bytes, resumed once from the received
+  byte offset through the CDN's byte-range support before switching, truncated transfers are
+  rejected, and received bytes drive the existing in-stage progress), plus a results-toolbar
+  action that copies the saved `transcript.txt` body independent of unsaved editor edits.
+  Three-platform release run `39904496623` green on all jobs. Assets match v0.4.1 after
+  normalizing the version: `FrameQ_0.4.2_x64-setup.exe` (210,829,825 bytes),
+  `FrameQ_0.4.2_x64.dmg` (348,094,090), `FrameQ_0.4.2_aarch64.dmg` (300,592,634), three
+  `frameq-pytorch-runtime-*.zip`, and `latest.json`; every asset reports `uploaded` and both
+  Windows updater signatures matched the uploaded `.sig` byte for byte. Gates: Worker 1021
+  passed with two skips, frontend 83 files / 857 tests, app lint and production build, Rust 338
+  passed with no failures (unchanged by this rebuild), packaging smoke plus a real Douyin
+  download through the packaged runtime (75,395,272 bytes, byte-identical to the source video),
+  version consistency, ruff and docs governance clean. Published 2026-10-23 14:01 +08:00:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.4.2. Release notes:
   `docs/releases/v0.4.2.md`. Residual risks: `macos-intel-acceptance.yml` is
   `workflow_dispatch`-only and did not run; both macOS builds are ad-hoc signed without
   notarization; this machine's proxy rejects GitHub download URLs, so the release URLs were
   range-checked from the deployment server instead and answered 206; the packaged-runtime
   acceptance stopped at `ASR_MODEL_NOT_READY` because the harness does not configure the model
   directory, which is a harness difference rather than a product failure; `yt-dlp` still runs
-  without an external timeout and is tracked as debt.
+  without an external timeout and is tracked as debt; reusing the v0.4.2 version number means
+  anyone who installed the first build will not receive the copy action through the updater.
 
 - [x] Deploy the v0.4.2 marketing site (2026-10-23) — ✅ `site/dist` synced to
   `ubuntu@frameq.8xf.pro:/home/ubuntu/FrameQ/site` through a temporary directory and an atomic

@@ -117,8 +117,10 @@ to the source video, and reached `ASR_MODEL_NOT_READY` at `video_transcribing` o
 harness does not configure a model directory; the download, stream validation, and audio
 extraction stages all passed.
 
-Shipped in v0.4.2 (https://github.com/jiabai/FrameQ/releases/tag/v0.4.2, tag target `950377c`,
-Desktop Release run `39814037035` green on all three platform jobs).
+Shipped in v0.4.2 (https://github.com/jiabai/FrameQ/releases/tag/v0.4.2, tag target `41d2bd1`,
+Desktop Release run `39904496623` green on all three platform jobs). The v0.4.2 tag was rebuilt
+on 2026-10-23 to carry the transcript file copy action alongside this fix; the earlier tag
+target `950377c` and run `39814037035` were retired with the original release.
 
 Residual risk: the 60-second no-progress budget, the one-resume-per-candidate policy, and the
 8 MB progress interval are reasoned defaults rather than field-calibrated values. The packaged
