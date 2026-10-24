@@ -54,6 +54,7 @@ design-system/banners/*
 
 # Skill runtime caches
 .hallmark/
+.archify/
 
 # Local cargo config (environment-specific tuning)
 app/src-tauri/.cargo/
