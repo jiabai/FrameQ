@@ -60,9 +60,11 @@
 - `2026-10-20-transcript-locate-action.md`：结果工作区工具栏增加「定位文字稿」，与视频、音频并列；有未保存编辑时拦截定位，提示先保存。
 - `2026-10-23-transcript-copy-action.md`：结果工作区工具栏在「定位文字稿」右侧增加「复制文字稿」，复制磁盘上 `transcript.txt` 的内容，不受未保存编辑影响。
 - `2026-10-24-transcript-polish-action.md`：工具栏按钮在无整理稿时为「整理文字稿」，经 retry_insights `transcript` target 分段调用 LLM 修正 ASR 原稿并落盘独立的 `polished.txt`；成功后按钮变回「复制文字稿」并优先复制整理稿，原稿不动。
+- `2026-10-24-summary-agent-runtime.md`：要点总结改经 agent_runtime 顺序交付 Mermaid 脑图与 Markdown 总结，保留既有产物、前端契约和每次实际 LLM 调用一次 checkout 的计费规则。
 
 ## AI Insight
 
+- `2026-10-25-intelligent-extraction-agent-runtime.md` — 三个智能提炼目标统一使用 agent_runtime，保留产物与隐私契约，删除旧生成目录。
 - `2026-07-06-personalized-insight-preferences.md` — Six-field local Inspiration Profile v2 plus per-run six-step generation preferences.
 - `2026-07-12-generate-draft-from-inspiration.md` — Turn a single user-selected `Insight` into a new draft, with strict single-seed, quota, and local-first privacy boundaries.
 - `2026-07-15-draft-platform-selection.md` — Delta on `生成文字稿`: user-visible, editable 9-option target platform on the confirmation page (defaulted from the inspiration profile), replacing `suitable_use` as the platform source with a new platform→form mapping (视频号/抖音/Tiktok/X→抖音).

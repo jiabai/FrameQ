@@ -254,7 +254,6 @@ def test_handlers_have_no_sibling_or_application_back_edges() -> None:
 def test_production_dependency_factories_have_one_defaults_owner() -> None:
     expected_factory_imports = {
         "frameq_worker.asr": "build_asr_transcriber",
-        "frameq_worker.llm": "build_insight_client_from_env",
         "frameq_worker.platform_source_resolvers": ("build_default_source_resolver"),
     }
     owners: dict[str, list[str]] = {}

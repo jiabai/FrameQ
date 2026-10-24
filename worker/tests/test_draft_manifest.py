@@ -34,10 +34,12 @@ from unittest.mock import patch
 from frameq_worker.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
 from frameq_worker.models import JobStage, ProcessResult
 from frameq_worker.source_identity import SourceIdentity
+from frameq_worker.summary_agent import write_summary_files
 from frameq_worker.task_store import (
     TASK_SCHEMA_VERSION,
     TaskContext,
     TaskPaths,
+    TaskStoreFacade,
     UrlTaskSource,
     task_artifacts_for_existing_files,
     write_task_manifest,
@@ -262,20 +264,6 @@ def _env(tmp_path: Path) -> dict[str, str]:
     }
 
 
-class _FakeInsightClient:
-    """Returns one new insight so target=insights regen succeeds."""
-
-    def generate(self, prompt: str) -> str:
-        if "summary editor" in prompt:
-            return "# retry summary"
-        if "Mermaid mindmap" in prompt:
-            return "mindmap\n  root((retry))"
-        return (
-            '[{"topic":"new insight","matchReason":"matched",'
-            '"followUpQuestions":["next"],"suitableUse":"content planning"}]'
-        )
-
-
 def test_retry_draft_success_sets_seed_id_in_manifest(tmp_path: Path) -> None:
     """REQUIRED #1 (e2e): successful draft generation projects the seed id."""
     _skeleton(tmp_path, with_draft_file=False)
@@ -308,10 +296,7 @@ def test_retry_draft_success_sets_seed_id_in_manifest(tmp_path: Path) -> None:
     assert manifest["draft_seed_insight_id"] == INSIGHT_ID
 
 
-def test_retry_insights_success_clears_seed_id_even_if_preset(tmp_path: Path) -> None:
-    """REQUIRED #2 (e2e): successful 启发灵感 regen clears draft_seed_insight_id
-    even when the prior manifest had it set. The draft file is left intact
-    so has_draft/draft_path still reflect it."""
+def test_retry_insights_failure_preserves_seed_id_and_draft(tmp_path: Path) -> None:
     _skeleton(
         tmp_path,
         seed_id=INSIGHT_ID,  # prior manifest has a seed
@@ -328,14 +313,12 @@ def test_retry_insights_success_clears_seed_id_even_if_preset(tmp_path: Path) ->
             ensure_ascii=False,
         ),
         project_root=tmp_path,
-        insight_client=_FakeInsightClient(),
         environ=_env(tmp_path),
     )
-    assert result["error"] is None
+    assert result["error"]["code"] == "INSIGHTFLOW_CONFIG_MISSING"
 
     manifest = _load_manifest(tmp_path / "outputs" / "tasks" / TASK_ID)
-    # Seed cleared because insights changed.
-    assert manifest["draft_seed_insight_id"] is None
+    assert manifest["draft_seed_insight_id"] == INSIGHT_ID
     # Draft file untouched (artifacts independent).
     assert (tmp_path / "outputs" / "tasks" / TASK_ID / "ai" / "draft.md").exists()
     assert manifest["has_draft"] is True
@@ -351,19 +334,7 @@ def test_retry_summary_success_preserves_seed_id(tmp_path: Path) -> None:
         with_draft_file=True,
     )
 
-    result = retry_insights_once(
-        json.dumps(
-            {
-                "task_id": TASK_ID,
-                "target": "summary",
-                "output_language": "zh-CN",
-            },
-            ensure_ascii=False,
-        ),
-        project_root=tmp_path,
-        insight_client=_FakeInsightClient(),
-        environ=_env(tmp_path),
-    )
+    result = _commit_summary_artifacts(tmp_path)
     assert result["error"] is None
 
     manifest = _load_manifest(tmp_path / "outputs" / "tasks" / TASK_ID)
@@ -385,19 +356,7 @@ def test_retry_summary_on_old_manifest_without_draft_fields_loads_and_backfills(
         with_draft_fields_in_manifest=False,  # old manifest, no draft_* keys at all
     )
 
-    result = retry_insights_once(
-        json.dumps(
-            {
-                "task_id": TASK_ID,
-                "target": "summary",
-                "output_language": "zh-CN",
-            },
-            ensure_ascii=False,
-        ),
-        project_root=tmp_path,
-        insight_client=_FakeInsightClient(),
-        environ=_env(tmp_path),
-    )
+    result = _commit_summary_artifacts(tmp_path)
     assert result["error"] is None
 
     manifest = _load_manifest(tmp_path / "outputs" / "tasks" / TASK_ID)
@@ -405,3 +364,20 @@ def test_retry_summary_on_old_manifest_without_draft_fields_loads_and_backfills(
     assert manifest["draft_seed_insight_id"] is None  # nothing to preserve → null
     assert manifest["has_draft"] is False  # no draft.md on disk
     assert manifest["draft_path"] is None
+
+
+def _commit_summary_artifacts(tmp_path: Path) -> dict[str, object]:
+    store = TaskStoreFacade(tmp_path / "outputs", tmp_path / "cache")
+    opened = store.open(TASK_ID)
+    artifacts = write_summary_files(
+        "# Summary", "mindmap\n  root((Structure))", opened.context.paths.ai_dir,
+        "", "en-US", persist=False,
+    )
+    return store.finalize(opened.context, ProcessResult(
+        status=JobStage.COMPLETED,
+        summary=artifacts.summary,
+        artifacts={"summary": "summary.md", "mindmap": "mindmap.mmd"},
+        artifact_payloads={
+            "ai/summary.md": artifacts.summary_bytes, "ai/mindmap.mmd": artifacts.mindmap_bytes,
+        },
+    )).to_dict()

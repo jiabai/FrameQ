@@ -8,15 +8,15 @@ describe("transcript dissection preview", () => {
       taskTitle: "Interview.mov",
       transcript: "🙂".repeat(2001),
       outputLanguage: "zh-TW",
-      quotaRemaining: 3,
+      quotaRemaining: 6,
     });
 
     expect(preview).toMatchObject({
       taskTitle: "Interview.mov",
       characterCount: 2001,
       chunkCount: 2,
-      minimumCalls: 2,
-      maximumCalls: 3,
+      minimumCalls: 1,
+      maximumCalls: 6,
       outputLanguage: "zh-TW",
       canConfirm: true,
     });
@@ -27,7 +27,7 @@ describe("transcript dissection preview", () => {
       taskTitle: "task",
       transcript: "x".repeat(2001),
       outputLanguage: "en-US",
-      quotaRemaining: 2,
+      quotaRemaining: 5,
     }).canConfirm).toBe(false);
   });
 });

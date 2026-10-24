@@ -145,7 +145,7 @@ class RetryInsightsRequest:
     # insight_id is the seed Insight id; required (non-null) when target == "draft".
     insight_id: int | None = None
     # platform：用户在确认页选择的 draft 目标平台 id（9-id 词表之一）。
-    # target == "draft" 时必填且须 ∈ DRAFT_PLATFORM_IDS（见 insightflow.prompt）；
+    # target == "draft" 时必填且须 ∈ DRAFT_PLATFORM_IDS（见 ai_prompts）；
     # 其余 target 不携带（出现即非法）。请求级字段，不持久化、不进 manifest、不回写档案。
     platform: str | None = None
 

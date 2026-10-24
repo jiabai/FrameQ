@@ -12,39 +12,26 @@ from frameq_worker.desktop_contract import (
     OUTPUT_DIR_ENV,
     PROCESS_VIDEO_CONTRACT_VERSION,
 )
-from frameq_worker.insightflow import InsightGenerationError
+from frameq_worker.dissection_report import (
+    build_dissection_artifacts,
+    parse_dissection_report,
+)
 from frameq_worker.media import CommandResult
-from frameq_worker.models import ProcessRequest
+from frameq_worker.models import Insight, JobStage, ProcessRequest, ProcessResult
 from frameq_worker.pipeline import run_worker_pipeline
-from frameq_worker.task_store import TaskPaths
+from frameq_worker.requests import parse_preference_snapshot
+from frameq_worker.summary_agent import write_summary_files
+from frameq_worker.task_store import TaskPaths, TaskStoreFacade
+from frameq_worker.topic_agent import write_insight_files
+from frameq_worker.transcript_chunks import MarkdownSplitter
 from frameq_worker.worker_application import url_processing
+from frameq_worker.worker_application.insight_retry import merge_existing_ai_artifacts
 from frameq_worker.worker_service import retry_insights_once
 
 
 class FakeTranscriber:
     def transcribe(self, audio_path: Path, language: str = "Chinese") -> Transcript:
         return Transcript(text="task transcript", language=language)
-
-
-class FakeInsightClient:
-    def __init__(self) -> None:
-        self.prompts: list[str] = []
-
-    def generate(self, prompt: str) -> str:
-        self.prompts.append(prompt)
-        if "organize logical mindmaps" in prompt:
-            return "mindmap\n  root((retry))"
-        if "You are a summary editor" in prompt:
-            return "# summary\n\nretry summary"
-        if "question_count" in prompt:
-            return (
-                '[{"title":"topic","summary":"user edited official transcript",'
-                '"excerpt":"user edited official transcript","question_count":1}]'
-            )
-        return (
-            '[{"topic":"retry question","matchReason":"matched",'
-            '"followUpQuestions":["next"],"suitableUse":"content planning"}]'
-        )
 
 
 def _video_probe_payload() -> str:
@@ -66,7 +53,7 @@ def test_task_paths_expose_only_fixed_dissection_destinations(tmp_path: Path) ->
     assert paths.dissection_markdown == paths.task_dir / "ai" / "dissection.md"
 
 
-def test_retry_dissection_atomically_publishes_json_markdown_and_manifest(
+def test_dissection_finalization_publishes_json_markdown_and_manifest(
     tmp_path: Path,
 ) -> None:
     output_root = tmp_path / "outputs"
@@ -106,61 +93,58 @@ def test_retry_dissection_atomically_publishes_json_markdown_and_manifest(
         encoding="utf-8",
     )
 
-    class FakeDissectionClient:
-        def __init__(self) -> None:
-            self.responses = [
-                json.dumps({"observations": ["saved transcript"]}),
-                json.dumps(
-                    {
-                        "overallNarrative": {
-                            "openingHook": None,
-                            "structureType": "statement",
-                            "turningPoint": None,
-                            "closingType": None,
-                        },
-                        "segments": [
-                            {
-                                "id": 1,
-                                "title": "Statement",
-                                "sourceChunkIds": [1],
-                                "coreClaim": "saved transcript",
-                                "supportingPoints": [],
-                                "rhetoricalDevices": [],
-                                "rhythmNote": "Brief",
-                                "reusablePattern": "Direct statement",
-                                "riskFlags": [],
-                            }
-                        ],
-                        "highlights": ["saved transcript"],
-                        "reusableTemplate": {
-                            "name": "Direct",
-                            "skeleton": ["State", "Explain", "Close"],
-                        },
-                        "audienceFit": [],
-                        "strengths": ["Direct"],
-                        "weaknesses": ["Brief"],
-                    }
-                ),
-            ]
-
-        def generate(self, _prompt: str) -> str:
-            return self.responses.pop(0)
-
-    result = retry_insights_once(
-        json.dumps(
-            {
-                "task_id": task_id,
-                "target": "dissection",
-                "output_language": "en-US",
-            }
-        ),
-        project_root=tmp_path,
-        insight_client=FakeDissectionClient(),
-        environ={
-            OUTPUT_DIR_ENV: output_root.as_posix(),
-            CACHE_DIR_ENV: cache_root.as_posix(),
+    transcript = (transcript_dir / "transcript.txt").read_bytes().decode("utf-8")
+    report = parse_dissection_report(
+        {
+            "overallNarrative": {
+                "openingHook": None,
+                "structureType": "statement",
+                "turningPoint": None,
+                "closingType": None,
+            },
+            "segments": [
+                {
+                    "id": 1,
+                    "title": "Statement",
+                    "sourceChunkIds": [1],
+                    "coreClaim": "saved transcript",
+                    "supportingPoints": [],
+                    "rhetoricalDevices": [],
+                    "rhythmNote": "Brief",
+                    "reusablePattern": "Direct statement",
+                    "riskFlags": [],
+                }
+            ],
+            "highlights": ["saved transcript"],
+            "reusableTemplate": {
+                "name": "Direct",
+                "skeleton": ["State", "Explain", "Close"],
+            },
+            "audienceFit": [],
+            "strengths": ["Direct"],
+            "weaknesses": ["Brief"],
         },
+        transcript=transcript,
+        chunks=MarkdownSplitter().split(transcript),
+        source_language=None,
     )
+    artifacts = build_dissection_artifacts(
+        report, output_dir=task_dir / "ai", output_language="en-US"
+    )
+    store = TaskStoreFacade(output_root, cache_root)
+    context = store.open(task_id).context
+    result = store.finalize(
+        context,
+        ProcessResult(
+            status=JobStage.COMPLETED,
+            text=transcript.strip(),
+            dissection=report.to_dict(),
+            artifact_payloads={
+                "ai/dissection.json": artifacts.json_bytes,
+                "ai/dissection.md": artifacts.markdown_bytes,
+            },
+        ),
+    ).to_dict()
 
     assert result["status"] == "completed"
     assert result["dissection"]["schemaVersion"] == 1
@@ -176,13 +160,6 @@ def test_retry_dissection_atomically_publishes_json_markdown_and_manifest(
     previous_markdown = (task_dir / "ai" / "dissection.md").read_bytes()
     previous_mapping = dict(manifest["artifacts"])
 
-    class FailingClient:
-        def generate(self, _prompt: str) -> str:
-            raise InsightGenerationError(
-                "INSIGHTFLOW_LLM_REQUEST_FAILED",
-                "safe failure",
-            )
-
     failed = retry_insights_once(
         json.dumps(
             {
@@ -192,7 +169,6 @@ def test_retry_dissection_atomically_publishes_json_markdown_and_manifest(
             }
         ),
         project_root=tmp_path,
-        insight_client=FailingClient(),
         environ={
             OUTPUT_DIR_ENV: output_root.as_posix(),
             CACHE_DIR_ENV: cache_root.as_posix(),
@@ -691,7 +667,9 @@ def test_xiaohongshu_platform_subtitle_miss_falls_back_to_asr(
     assert not list((cache_root / "tasks" / str(result["task_id"]) / "download").glob("*.srt"))
 
 
-def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path: Path) -> None:
+def test_insights_finalization_updates_same_task_and_saves_local_preferences(
+    tmp_path: Path,
+) -> None:
     output_root = tmp_path / "outputs"
     cache_root = tmp_path / "cache"
     task_id = "20260705-153012-douyin-7524373044106677544"
@@ -742,24 +720,29 @@ def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path
         encoding="utf-8",
     )
 
-    insight_client = FakeInsightClient()
-    result = retry_insights_once(
-        json.dumps(
-            {
-                "task_id": task_id,
-                "target": "insights",
-                "output_language": "en-US",
-                "preference_snapshot": valid_preference_snapshot(),
-            },
-            ensure_ascii=False,
-        ),
-        project_root=tmp_path,
-        insight_client=insight_client,
-        environ={
-            OUTPUT_DIR_ENV: output_root.as_posix(),
-            CACHE_DIR_ENV: cache_root.as_posix(),
-        },
+    store = TaskStoreFacade(output_root, cache_root)
+    context = store.open(task_id).context
+    snapshot = parse_preference_snapshot(valid_preference_snapshot())
+    store.save_preference_snapshot(context, snapshot)
+    insights = [Insight(1, "retry question", "matched", ("next",), "content planning", 1)]
+    artifacts = write_insight_files(
+        insights, task_dir / "ai", "", "en-US", persist=False
     )
+    assert not artifacts.json_path.exists()
+    assert not artifacts.md_path.exists()
+    result = store.finalize(
+        context,
+        ProcessResult(
+            status=JobStage.COMPLETED,
+            text="user edited official transcript",
+            insights=insights,
+            artifact_payloads={
+                "ai/insights.json": artifacts.json_bytes,
+                "ai/insights.md": artifacts.md_bytes,
+            },
+        ),
+        draft_seed_insight_id=None,
+    ).to_dict()
 
     assert result["status"] == "completed"
     assert result["task_id"] == task_id
@@ -776,12 +759,8 @@ def test_retry_insights_target_uses_task_manifest_and_updates_same_task(tmp_path
     assert preference_snapshot["generationPreferences"]["goal"] == "content_creation"
     assert preference_snapshot["profileSkipped"] is True
     assert "output_language" not in preference_snapshot
-    assert insight_client.prompts
-    for prompt in insight_client.prompts:
-        assert "user edited official transcript" in prompt
-        assert "stale markdown transcript" not in prompt
-        assert "review-secret" not in prompt
-        assert "xsec_token" not in prompt
+    assert "review-secret" not in artifacts.json_bytes.decode("utf-8")
+    assert "xsec_token" not in artifacts.md_bytes.decode("utf-8")
 
     manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "completed"
@@ -822,7 +801,6 @@ def test_retry_quarantined_task_never_returns_sensitive_task_id(tmp_path: Path) 
             }
         ),
         project_root=tmp_path,
-        insight_client=None,
         environ={OUTPUT_DIR_ENV: output_root.as_posix()},
     )
 
@@ -835,7 +813,6 @@ def test_retry_quarantined_task_never_returns_sensitive_task_id(tmp_path: Path) 
 
 def test_retry_rejects_linked_transcript_before_reading_or_persisting_target(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output_root = tmp_path / "outputs"
     cache_root = tmp_path / "cache"
@@ -843,7 +820,12 @@ def test_retry_rejects_linked_transcript_before_reading_or_persisting_target(
     task_dir = output_root / "tasks" / task_id
     transcript_path = task_dir / "transcript" / "transcript.txt"
     transcript_path.parent.mkdir(parents=True)
-    transcript_path.write_text("linked target review-secret\n", encoding="utf-8")
+    linked_target = tmp_path / "private-transcript.txt"
+    linked_target.write_text("linked target review-secret\n", encoding="utf-8")
+    try:
+        transcript_path.symlink_to(linked_target)
+    except OSError:
+        pytest.skip("Creating symlinks requires operating system support.")
     manifest_path = task_dir / "frameq-task.json"
     manifest_path.write_text(
         json.dumps(
@@ -872,13 +854,6 @@ def test_retry_rejects_linked_transcript_before_reading_or_persisting_target(
         ),
         encoding="utf-8",
     )
-    real_is_symlink = Path.is_symlink
-
-    def simulated_link(path: Path) -> bool:
-        return path == transcript_path or real_is_symlink(path)
-
-    monkeypatch.setattr(Path, "is_symlink", simulated_link)
-
     result = retry_insights_once(
         json.dumps(
             {
@@ -888,7 +863,6 @@ def test_retry_rejects_linked_transcript_before_reading_or_persisting_target(
             }
         ),
         project_root=tmp_path,
-        insight_client=FakeInsightClient(),
         environ={
             OUTPUT_DIR_ENV: output_root.as_posix(),
             CACHE_DIR_ENV: cache_root.as_posix(),
@@ -902,7 +876,7 @@ def test_retry_rejects_linked_transcript_before_reading_or_persisting_target(
     assert "review-secret" not in persisted_manifest
 
 
-def test_retry_summary_target_preserves_existing_insights_count(tmp_path: Path) -> None:
+def test_summary_finalization_preserves_existing_insights_count(tmp_path: Path) -> None:
     output_root = tmp_path / "outputs"
     cache_root = tmp_path / "cache"
     task_id = "20260705-153012-douyin-7524373044106677544"
@@ -972,22 +946,29 @@ def test_retry_summary_target_preserves_existing_insights_count(tmp_path: Path) 
         encoding="utf-8",
     )
 
-    result = retry_insights_once(
-        json.dumps(
-            {
-                "task_id": task_id,
-                "target": "summary",
-                "output_language": "en-US",
-            },
-            ensure_ascii=False,
-        ),
-        project_root=tmp_path,
-        insight_client=FakeInsightClient(),
-        environ={
-            OUTPUT_DIR_ENV: output_root.as_posix(),
-            CACHE_DIR_ENV: cache_root.as_posix(),
-        },
+    store = TaskStoreFacade(output_root, cache_root)
+    context = store.open(task_id).context
+    artifacts = write_summary_files(
+        "# summary\n\nKey findings", "mindmap\n  root((Findings))\n",
+        ai_dir, "", "en-US", persist=False,
     )
+    assert not artifacts.summary_path.exists()
+    assert not artifacts.mindmap_path.exists()
+    result = store.finalize(
+        context,
+        merge_existing_ai_artifacts(
+            context.paths,
+            ProcessResult(
+                status=JobStage.COMPLETED,
+                text="saved transcript",
+                summary=artifacts.summary,
+                artifact_payloads={
+                    "ai/summary.md": artifacts.summary_bytes,
+                    "ai/mindmap.mmd": artifacts.mindmap_bytes,
+                },
+            ),
+        ),
+    ).to_dict()
 
     assert result["status"] == "completed"
     assert result["summary"].startswith("# summary")
@@ -1004,7 +985,7 @@ def test_retry_summary_target_preserves_existing_insights_count(tmp_path: Path) 
     assert "output_language" not in manifest
 
 
-def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> None:
+def test_insights_finalization_preserves_existing_summary(tmp_path: Path) -> None:
     output_root = tmp_path / "outputs"
     cache_root = tmp_path / "cache"
     task_id = "20260705-153012-douyin-7524373044106677544"
@@ -1056,23 +1037,30 @@ def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    result = retry_insights_once(
-        json.dumps(
-            {
-                "task_id": task_id,
-                "target": "insights",
-                "output_language": "zh-TW",
-                "preference_snapshot": valid_preference_snapshot(),
-            },
-            ensure_ascii=False,
-        ),
-        project_root=tmp_path,
-        insight_client=FakeInsightClient(),
-        environ={
-            OUTPUT_DIR_ENV: output_root.as_posix(),
-            CACHE_DIR_ENV: cache_root.as_posix(),
-        },
+    store = TaskStoreFacade(output_root, cache_root)
+    context = store.open(task_id).context
+    snapshot = parse_preference_snapshot(valid_preference_snapshot())
+    store.save_preference_snapshot(context, snapshot)
+    insights = [Insight(1, "retry question", "matched", ("next",), "content planning", 1)]
+    artifacts = write_insight_files(
+        insights, ai_dir, "", "zh-TW", persist=False,
     )
+    result = store.finalize(
+        context,
+        merge_existing_ai_artifacts(
+            context.paths,
+            ProcessResult(
+                status=JobStage.COMPLETED,
+                text="saved transcript",
+                insights=insights,
+                artifact_payloads={
+                    "ai/insights.json": artifacts.json_bytes,
+                    "ai/insights.md": artifacts.md_bytes,
+                },
+            ),
+        ),
+        draft_seed_insight_id=None,
+    ).to_dict()
 
     assert result["status"] == "completed"
     assert result["summary"] == "# existing summary"
@@ -1089,9 +1077,8 @@ def test_retry_insights_target_preserves_existing_summary(tmp_path: Path) -> Non
     assert "output_language" not in manifest
 
 
-def test_retry_storage_failure_preserves_previous_target_and_does_not_repeat_llm(
+def test_finalization_rejects_invalid_payload_and_preserves_previous_artifacts(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output_root = tmp_path / "outputs"
     cache_root = tmp_path / "cache"
@@ -1147,38 +1134,21 @@ def test_retry_storage_failure_preserves_previous_target_and_does_not_repeat_llm
         encoding="utf-8",
     )
     previous_manifest = manifest_path.read_bytes()
-    original_install = task_transaction.install_staged_file
-    failed = False
-
-    def fail_mindmap_once(staging: Path, destination: Path) -> None:
-        nonlocal failed
-        if destination == mindmap_path and not failed:
-            failed = True
-            raise AtomicFileCommitError()
-        original_install(staging, destination)
-
-    monkeypatch.setattr(task_transaction, "install_staged_file", fail_mindmap_once)
-    client = FakeInsightClient()
-
-    result = retry_insights_once(
-        json.dumps(
-            {
-                "task_id": task_id,
-                "target": "summary",
-                "output_language": "en-US",
-            }
-        ),
-        project_root=tmp_path,
-        insight_client=client,
-        environ={
-            OUTPUT_DIR_ENV: output_root.as_posix(),
-            CACHE_DIR_ENV: cache_root.as_posix(),
-        },
-    )
-
-    assert result["status"] == "partial_completed"
-    assert result["error"]["code"] == "TASK_ARTIFACT_COMMIT_FAILED"
-    assert len(client.prompts) == 2
+    store = TaskStoreFacade(output_root, cache_root)
+    context = store.open(task_id).context
+    with pytest.raises(task_transaction.TaskArtifactCommitError):
+        store.finalize(
+            context,
+            ProcessResult(
+                status=JobStage.COMPLETED,
+                text="saved transcript",
+                summary="# Updated summary",
+                artifact_payloads={
+                    "ai/summary.md": b"# Updated summary\n",
+                    "ai/../mindmap.mmd": b"mindmap\n  root((Updated))\n",
+                },
+            ),
+        )
     assert summary_path.read_bytes() == b"# Previous summary\n"
     assert mindmap_path.read_bytes() == b"mindmap\n  root((Previous))\n"
     assert manifest_path.read_bytes() == previous_manifest

@@ -1,5 +1,43 @@
 # FrameQ Architecture
 
+## 2026-10-25 Intelligent extraction agent boundary
+
+- 「要点总结」 (`summary`), 「启发灵感」 (`insights`) and 「文字稿解剖」 (`dissection`) each
+  run an `agent_runtime.ToolLoopAgentRunner` through the existing `retry_insights` command. The
+  shared desktop-worker contract keeps their target, result and artifact shapes. Dissection's
+  versioned budget uses at most 16 source chunks and one through six actual LLM calls.
+- `summary_agent.py` owns summary delivery and normalization. The agent delivers a Mermaid
+  mindmap through `submit_mindmap`; acceptance replaces that tool with `submit_summary` and
+  appends the summary task. A valid summary finishes the run directly. Its artifacts remain
+  `ai/summary.md` and `ai/mindmap.mmd`.
+- `topic_agent.py` owns inspiration delivery and exports. The agent reviews numbered transcript
+  chunks together with the permitted preference snapshot and submits the complete list through
+  `submit_insights`. JSON Schema and semantic validation enforce one through twelve distinct
+  topics, match reasons, one through three follow-up questions, suitable uses, and legal source
+  chunk references. Its artifacts remain `ai/insights.json` and `ai/insights.md`.
+- `dissection_agent.py` owns report delivery through `submit_dissection`. The report parser and
+  Markdown projection live in `dissection_report.py`; they enforce closed nested objects, source
+  chunk references, verbatim transcript highlights, collection limits, and worker-owned UTF-8
+  provenance. Its artifacts remain `ai/dissection.json` and `ai/dissection.md`.
+- Each agent accepts complete artifacts only through its delivery tools. Invalid deliveries return
+  safe validation feedback, and completion hooks require delivery before accepting a plain reply.
+  The caller drives bounded runner steps directly, with a six-call maximum and direct completion
+  on valid delivery. Provider failures fail the run; supplier clients disable implicit retries.
+- `ai_runtime.py` owns the shared provider and per-call checkout. Each actual supplier call uses a
+  unique `<base>-<target>-call-NNNN` request identifier, constructs and closes that call's supplier
+  provider, and consumes one AI Credit. Checkout-specific failures retain the existing
+  `INSIGHTFLOW_*` error codes; other provider failures map to `INSIGHTFLOW_LLM_REQUEST_FAILED`.
+  User retries mint a fresh request identifier.
+- `ai_prompts.py` owns prompt text, `transcript_chunks.py` owns deterministic source splitting,
+  `insight_errors.py` owns shared generation errors, and `ai_artifacts.py` owns shared artifact
+  payload commits. The task retry application keeps `TaskStoreFacade.finalize()` as the owner of
+  complete artifact/manifest transactions and preservation of previous successful results.
+- The three extraction agents expose only their delivery tools. Official transcript content,
+  generation instructions and this run's agent context enter supplier requests; preferences enter
+  only inspiration. Video, audio, source URLs, other task files, retrieval, skills and external
+  execution stay outside these three agents. FrameQ server receives only account and checkout
+  metadata.
+
 ## 2026-10-24 Transcript polish target boundary
 
 - 「整理文字稿」 reuses the `retry_insights` command with `target="transcript"`, raising the global
@@ -149,9 +187,8 @@
   with integer-only `attempt` / `total` arguments. URL and local-media request envelopes remain
   independently versioned v3/v4, and task terminal/artifact schemas remain unchanged.
 - Python passes the existing validated progress callback through the retry application and emits
-  one content-free event after cancellation checking and immediately before each real transcript-
-  dissection map/reduce/optional-repair supplier call. The deterministic call-plan maximum is the
-  displayed total; no timer heartbeat or post-call success claim is emitted.
+  one content-free event immediately before each transcript-dissection agent LLM call. The agent
+  budget is the displayed total; no timer heartbeat or post-call success claim is emitted.
 - Rust keeps timeout ownership in `worker_runtime`. `RetryInsights` now uses a 30-minute idle and
   90-minute absolute deadline; only contract-valid progress refreshes idle, while absolute time,
   structured-result precedence, cancellation, process-tree cleanup, Credits, and artifact
@@ -173,9 +210,9 @@
   date `draft` was not yet implemented, so dissection was the third visible AI target; the
   2026-10-10 boundary above records the current four-target arrangement.
 - Python owns one validated official-transcript snapshot, deterministic Unicode-code-point chunks
-  with UTF-8 byte provenance, the versioned four-chunks-per-map plus reduce/optional-repair plan,
-  strict report validation, and atomic `ai/dissection.json` + `ai/dissection.md` publication through
-  `TaskStoreFacade.finalize()`. A run can attempt at most six supplier calls.
+  with UTF-8 byte provenance, the bounded agent delivery loop, strict report validation, and atomic
+  `ai/dissection.json` + `ai/dissection.md` publication through `TaskStoreFacade.finalize()`. Up to
+  sixteen source chunks are supported, and a run can attempt at most six supplier calls.
 - Rust remains the task/path authority. It closes v5 terminal decoding, validates the two fixed
   artifacts and source transcript/range hashes, restores current or stale reports from History,
   and never confuses splitter chunk IDs with ASR segment IDs.
@@ -471,7 +508,7 @@
   sources must return no subtitle candidate.
 - `MediaPreparationError` carries a stable code, sanitized message, and workflow stage. The pipeline
   maps it into a result and owns `TaskStoreFacade.finalize`; the facade does not write manifests.
-- ASR, transcript artifact writing, InsightFlow/AI, History, cache policy, and task persistence stay
+- ASR, transcript artifact writing, AI generation, History, cache policy, and task persistence stay
   outside this facade. Existing URL progress, artifacts, results, task schema, and contract v3 are
   unchanged.
 
@@ -486,7 +523,7 @@
   official-transcript validation/read plus target-scoped AI generation, and `orchestration.py` owns
   URL source/task/media/transcript/finalization composition.
 - Dependency direction is closed: transcript may depend on shared policy; URL orchestration may
-  depend on shared and transcript; process orchestration cannot import AI/InsightFlow/output-language
+  depend on shared and transcript; process orchestration cannot import AI/output-language
   policy; and AI generation cannot import ASR, media preparation, source resolution, or task
   persistence. `cli.py` and `worker_service.py` retain their existing stable-root imports.
 - `TaskStoreFacade` remains the task lifecycle/persistence boundary and `MediaPreparationFacade`
@@ -618,8 +655,8 @@
 - `contracts/desktop-worker-contract.json` v2 declares a closed `retry_insights` request schema and
   no old-call default. TypeScript, Rust, and Python runtime boundaries must still implement and test
   rejection of missing, invalid, target-incompatible, or additional fields before closeout.
-- Final summary/insights confirmation must freeze the actual resolved UI locale for that request.
-  Summary text, Mermaid labels, topic planning, and Insight user-visible fields must receive fixed
+- Final AI confirmation must freeze the actual resolved UI locale for that request.
+  Summary text, Mermaid labels, dissection reports and Insight user-visible fields receive fixed
   enum-derived language semantics. Existing ASR language, subtitles, transcripts, artifacts,
   History, caches, and task manifests must remain unchanged.
 - Worker and model-download producers must emit only contract-registered `domain.action.state` codes
@@ -826,7 +863,10 @@
 - Canonical URLs are reconstructed from allowlisted stable platform identifiers: Xiaohongshu note ID, Bilibili BV/av ID plus non-default `p`, YouTube video ID, or Douyin video/work ID. Userinfo, fragments, and non-allowlisted query fields never cross the canonicalization boundary.
 - Supported short links are resolved in the worker, then canonicalized from the resolved stable ID. The original short link remains only the current download input. A failed resolution cannot promote the raw URL to persistent identity.
 - Task creation, transcript writing, and manifest writing accept only a worker-validated `SourceIdentity`. Cache matching and history defensively validate the persisted identity but do not regenerate platform canonical URLs in Tauri. A desktop preflight identity is cache-only advisory data and is never injected into the full worker request.
-- `transcript/transcript.txt` under the same task root as `ai/` is the official AI input artifact. Summary, Mermaid mindmap, topic planning, per-topic insights, and retries validate that exact path before reading its plain text body; `transcript.md`, alternate same-named files, and linked/reparse-point targets must not be used as prompt sources.
+- `transcript/transcript.txt` under the same task root as `ai/` is the official AI input artifact.
+  Summary, inspiration, dissection and transcript polish validate that exact path before reading
+  its plain text body; `transcript.md`, alternate same-named files and linked/reparse-point targets
+  must not be used as prompt sources.
 - Unsupported legacy task directories are physically retained but excluded from every product read. FrameQ does not migrate, redact, repair, rename, index, or delete them; users may manage backups or deletion outside the product.
 
 ## 2026-07-09 Account Processing and AI Gate Boundary
@@ -844,7 +884,9 @@
 
 ## 2026-07-08 Split Summary and Inspiration Generation Boundary
 
-- `retry_insights` now receives an explicit target: `summary` or `insights` (later extended by `draft` and `transcript` polish). The command still reuses the saved official transcript and the owning task manifest; it must not re-download media or rerun ASR.
+- `retry_insights` receives an explicit target: `summary`, `insights`, `dissection`, `draft` or
+  `transcript` polish. The command reuses the saved official transcript and owning task manifest;
+  it must not re-download media or rerun ASR.
 - The `summary` target generates only `ai/summary.md` and hidden `ai/mindmap.mmd`. It must not accept, read, write, or prompt with the personalized preference snapshot.
 - The `insights` target generates only `ai/insights.json` and `ai/insights.md`. It may persist `ai/preference-snapshot.json` and may include that snapshot only in insight-topic prompts.
 - Retrying either target must merge existing AI artifacts from the same task directory before writing `frameq-task.json`, so generating one output cannot clear the other output or reset `insights_count`.
@@ -857,9 +899,15 @@
 - If the user skips profile setup, Tauri persists a local skipped marker such as `profileSkipped: true` without profile fields. This marker suppresses repeated first-use prompts but must not create an implicit default persona.
 - The per-run preference snapshot is passed to `retry_insights` only when the target is `insights`, together with the saved official transcript reference. It may be recorded in the local task manifest as user-visible context for already-generated inspiration artifacts.
 - The worker treats profile and generation preferences as structured prompt context for insight-topic generation only. Summary and Mermaid mindmap generation continue to use the generic AI整理 prompts and must not read the personalized preference snapshot. The worker must not infer hidden preferences from unrelated history.
-- For insight-topic generation, the worker should preserve LLM context budget by using transcript chunks, summaries, or candidate excerpts plus a compact structured preference JSON. It should not concatenate a full long transcript and verbose preference prose into a single prompt.
+- Inspiration generation supplies deterministic numbered transcript chunks and compact structured
+  preference JSON to the agent. The agent reviews the full supplied source and submits a complete
+  list with source references through its delivery tool.
 - FrameQ server continues to own only account, entitlement, quota, and LLM checkout. It must not receive or store inspiration profiles, generation preferences, transcripts, generated insights, or local task manifests.
-- Quota is counted per cloud LLM API call attempt: `1 quota use = 1 supplier chat-completion/API call attempt`. Summary generation, Mermaid mindmap generation, topic planning, and insight-topic generation may each consume separate quota uses only when their target is confirmed. Re-running via `换个方向` starts a new confirmed `insights` target attempt and consumes quota again according to its actual LLM calls. Failed, timed-out, unparsable, or partially failed calls remain consumed once attempted.
+- Quota is counted per cloud LLM API call attempt: `1 quota use = 1 supplier chat-completion/API call
+  attempt`. Summary, inspiration and dissection agents consume separate quota uses for each actual
+  call after their target is confirmed. Re-running via `换个方向` starts a fresh confirmed
+  `insights` attempt. Failed, timed-out, invalid or partially failed calls remain consumed once
+  checkout succeeds.
 - The LLM supplier may receive transcript snippets only after the user confirms the corresponding AI target. The selected preference snapshot may be sent only with the insight-topic generation request, not with summary or Mermaid mindmap requests.
 
 ## 2026-07-05 Desktop Diagnostics Boundary
@@ -1034,34 +1082,38 @@
 - Each activation grants 20 cloud LLM API-call uses. The desktop worker authorizes quota through server-managed checkout before each supplier chat-completion/API call, then calls the LLM supplier directly with the returned config for that call.
 - Admin Web access is limited to the configured administrator email and uses short-lived HttpOnly cookie sessions.
 - The account service never receives video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents. It may store and return the dedicated FrameQ client LLM key.
-- The existing local worker pipeline remains the only place where video extraction, ASR, and InsightFlow execution happen.
-
-<!-- 由 vibe-coding-launcher 生成。当前描述的是 MVP 目标架构；代码落地后必须同步更新。 -->
+- The local worker remains the execution owner for video extraction, ASR and AI generation.
 
 ## 概述
 
-FrameQ 是一个桌面客户端：用户输入抖音视频 URL 后，本地 worker 下载视频、校验媒体、提取音频、调用 ASR 转文字，并使用内置 InsightFlow 能力生成启发灵感。
+FrameQ 是本地优先的桌面客户端：本地 worker 处理公开视频或已授权视频链接、本地媒体、
+媒体校验、音频提取与 ASR。正式文字稿完成后，用户可独立确认要点总结、文字稿解剖与
+启发灵感，由 `agent_runtime` 生成对应本地 AI 产物。
 
 ## 代码地图
 
-计划中的主要模块如下：
+主要模块如下：
 
 | 模块 | 责任 | 状态 |
 |------|------|------|
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
 | `app/src-tauri/src/worker_runtime/` | Rust worker 命令构造、单一受监督运行器、实例安全取消、progress 校验路由和进程树终止 | `WorkerLane::run` 已统一 process-video、AI retry、source preflight 与 ASR model download；低层生命周期 API 对应用模块不可见 |
 | `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认选中 SenseVoice Small，缺失模型仅在已验证任务提交时按选择下载 |
-| `worker/frameq_worker/insightflow/` | 从参考实现复制并裁剪后的灵感生成模块 | 已初始化 splitter、prompt、JSON parser、generator；先用 LLM 做话题分段规划，再逐话题生成问题；planner 失败时 fallback 到直接生成 |
+| `worker/frameq_worker/summary_agent.py`、`topic_agent.py`、`dissection_agent.py` | 三个智能提炼 agent 的工具、验收与有界运行 | 共享 `agent_runtime`，通过交付工具提交完整产物，每次实际调用独立 checkout |
+| `worker/frameq_worker/ai_runtime.py`、`ai_prompts.py`、`transcript_chunks.py` | 托管 provider、提示词与确定性文字稿分段 | 供应商调用最多执行一次，分段记录 UTF-8 偏移和 SHA-256 |
+| `worker/frameq_worker/dissection_report.py`、`ai_artifacts.py`、`insight_errors.py` | 解剖报告、产物提交与生成错误 | 保留闭合 schema、完整导出、任务事务与错误协议 |
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
 | app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...`; legacy top-level `iic/...` is migrated/cleaned best-effort |
 | app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的 `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `frameq-task.json` | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
 | app-local data `cache/` | 每任务下载缓存、中间拼接、调试日志和临时产物 | 运行时生成；由 `FRAMEQ_CACHE_DIR` 指向 |
 | app-local data `updates.json` | 桌面更新偏好，不含用户内容或签名私钥 | 记录检查时间、稍后提醒时间和跳过版本 |
-| app-local data `.env` | 本机非 LLM 运行配置，不提交仓库；设置页可定位该文件，缺失时自动创建注释模板 | 支持输出目录、ASR 模型选择和模型下载覆盖；InsightFlow LLM 配置由 server 管理，不从 dotenv 读取 |
+| app-local data `.env` | 本机非 LLM 运行配置，不提交仓库；设置页可定位该文件，缺失时自动创建注释模板 | 支持输出目录、ASR 模型选择和模型下载覆盖；LLM 配置由 server 管理，不从 dotenv 读取 |
 
 ## 模块关系
 
-下面这张图描述一次任务在代码中的真实调用链：`app/src` 触发 Tauri command，Tauri 通过 IPC 调用 `worker/frameq_worker` 的 facade，facade 按阶段调度 `media` / `asr` / `insightflow` / 平台 fallback 模块，写入 app-local data 的 `outputs/`、`cache/`、`models/`。`server/` 不在主流程调用链上，仅在 `retry_insights` 二次确认时通过 server-managed LLM checkout env 注入 LLM 配置。节点旁的 `<br/>` 标注是该模块最先要打开的 2-3 个关键文件，方便顺着图找到入口。
+`app/src` 通过 Tauri command 调用受监督 worker。主流程调度媒体、ASR 与平台 fallback，
+写入 app-local data 的 `outputs/`、`cache/`、`models/`。用户确认 `retry_insights` 后，
+worker 使用托管 checkout 环境调用相应 AI agent；server 只处理账号与额度元数据。
 
 ```mermaid
 graph LR
@@ -1074,8 +1126,9 @@ graph LR
   subgraph "worker/frameq_worker/"
     W1["cli.py · pipeline.py<br/>pipeline_runtime/<br/>models.py"]
     W2["media.py<br/>asr.py · asr_runtime/<br/>model_download.py"]
-    W3["insightflow/<br/>splitter · prompt<br/>generator · json parser"]
-    W4["llm.py<br/>config.py"]
+    W3["summary_agent · topic_agent<br/>dissection_agent<br/>agent_runtime"]
+    W4["ai_runtime · ai_prompts<br/>transcript_chunks<br/>llm · config"]
+    W5["dissection_report<br/>ai_artifacts<br/>TaskStoreFacade.finalize"]
   end
 
   subgraph "平台 fallback"
@@ -1092,7 +1145,7 @@ graph LR
 
   subgraph "外部 / 独立服务"
     S1["server/ (Fastify + SQLite)<br/>账户 · 激活码 · 配额"]
-    S2["LLM supplier<br/>server-managed checkout"]
+    S2["LLM supplier<br/>OpenAI-compatible API"]
   end
 
   A1 -->|Tauri invoke| A2
@@ -1107,10 +1160,12 @@ graph LR
   W2 -->|yt-dlp · ffprobe · ffmpeg| D1
   W2 -->|下载缓存 · 临时产物| D2
   W2 -->|ASR 加载| D3
-  W3 -->|总结 · mindmap · 灵感| D1
+  W3 --> W4
+  W3 --> W5
+  W5 -->|总结 · mindmap · 灵感 · 解剖| D1
   W4 -.->|仅 retry_insights 阶段| S1
-  S1 -->|注入 LLM env| S2
-  S2 -.->|OpenAI-compatible 调用| W3
+  S1 -->|逐调用配置与额度授权| W4
+  W4 -->|文字稿与本轮生成上下文| S2
   A2 -->|读取历史 / 写盘路径| D1
 ```
 
@@ -1125,7 +1180,9 @@ graph LR
 - 改 Rust worker 生命周期顺序：从 `app/src-tauri/src/worker_runtime/runner.rs` 进入；按职责修改私有 `runner/process_io.rs`、`watchdog.rs`、`progress.rs` 或 `terminal.rs`，进程树信号仍只改 `supervisor.rs`，固定 invocation/env 仍只改 `command.rs`；应用命令只保留领域映射。
 - 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
 - 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `asr_runtime/` → `model_download.py` → `app-local data models/`。
-- 改灵感 / 总结 / mindmap：`worker/frameq_worker/insightflow/` → `llm.py`。
+- 改灵感 / 总结 / mindmap / 解剖：从 `pipeline_runtime/insights.py` 进入相应
+  `summary_agent.py`、`topic_agent.py` 或 `dissection_agent.py`；共享提示词、分段与调用分别
+  在 `ai_prompts.py`、`transcript_chunks.py`、`ai_runtime.py`，checkout 协议在 `llm.py`。
 - 改账户、激活码、配额或 LLM checkout：`server/`。
 
 
@@ -1156,11 +1213,20 @@ graph LR
 - `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
 - `worker/frameq_worker/runtime_component.py`：PyTorch 运行时组件的检测、指纹比对与 `sys.path` 注入；包内 manifest 缺失时门禁不生效，保持未裁剪运行时的原有行为。
 - `worker/frameq_worker/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
-- `worker/frameq_worker/llm.py`：OpenAI-compatible InsightFlow LLM client；桌面灵感生成通过 server-managed checkout env 创建 client，默认使用 `temperature=0.7`。
+- `worker/frameq_worker/llm.py`：托管 LLM checkout 的 HTTP 协议、配置校验、超时和逐调用请求标识。
+- `worker/frameq_worker/ai_runtime.py`：智能提炼共享 provider，逐次 checkout、供应商单次调用、
+  target 请求标识与专用错误映射。
+- `worker/frameq_worker/ai_prompts.py`：智能提炼和成稿提示词、偏好序列化与平台词表。
+- `worker/frameq_worker/transcript_chunks.py`：确定性文字稿分段、UTF-8 字节范围和片段 SHA-256。
 - `worker/frameq_worker/pipeline.py`：稳定 pipeline 导入入口；`pipeline_runtime/shared.py`、
   `transcript.py`、`insights.py`、`orchestration.py` 分别拥有共享 policy、字幕/ASR、AI target
   和 URL task orchestration。
-- `worker/frameq_worker/insightflow/`：内置 InsightFlow 灵感与总结生成模块，运行期不依赖外部参考仓库；对完整 ASR 文字稿优先生成 Mermaid mindmap 和要点总结，同时保留 topic planner 生成启发问题，最终去重并限制总数。
+- `worker/frameq_worker/summary_agent.py`：脑图与总结的顺序工具交付、规范化和产物构造。
+- `worker/frameq_worker/topic_agent.py`：完整灵感工具交付、JSON Schema 和重复主题校验、产物导出。
+- `worker/frameq_worker/dissection_agent.py`：文字稿解剖的有界 agent 循环、工具校验反馈与进度。
+- `worker/frameq_worker/dissection_report.py`：解剖闭合模型、来源校验、UTF-8 溯源与 Markdown 导出。
+- `worker/frameq_worker/ai_artifacts.py`：AI 产物 payload 的原子提交适配。
+- `worker/frameq_worker/insight_errors.py`：智能提炼共享生成错误与现有错误码。
 
 ## 架构不变量
 
@@ -1171,8 +1237,15 @@ graph LR
   直接 spawn、wait、finish、发送 OS 信号或转发未验证 progress。
 - UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
-- `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和私有 process orchestration 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary`、`insights`、`draft` 或 `transcript` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用；`draft` 目标以单条 Insight + 任务局部偏好快照为种子，经 agent（anysearch 联网检索 + skills + planning + submit_draft）生成草稿，写入 `ai/draft.md`，不送 transcript 片段；`transcript` 目标分段修正 ASR 文字稿，写入独立的 `transcript/polished.txt`，不改动原稿。
-- 外部参考仓库只允许作为开发来源，禁止成为运行期依赖；运行期必须依赖本仓库 `worker/frameq_worker/insightflow/` 内置代码。
+- `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿。`retry_insights` 在用户
+  二次确认后按 `summary`、`insights`、`dissection`、`draft` 或 `transcript` 独立运行，
+  是本地 AI 生成、server-managed checkout 与额度消费的唯一 worker 命令。
+- `summary`、`insights`、`dissection` 使用各自 agent 交付工具，并逐次计费；`draft` 使用
+  单条 Insight 与任务局部偏好，经 anysearch、skills、planning 和 `submit_draft` 生成
+  `ai/draft.md`；`transcript` 目标分段整理原稿，生成 `transcript/polished.txt`。后两者
+  沿用各自的一次确认计费契约。
+- worker 运行期使用 `frameq_worker` 内的 AI 模块及 `agent_runtime` 依赖，不跨目录导入
+  外部参考项目或本仓库 server 代码。
 - 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `cache/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。
 - 灵感失败不得阻断文字稿结果，客户端进入 `部分完成` 状态。

@@ -12,10 +12,10 @@ from agent_runtime.provider.sources.openai_source import ProviderOpenAIOfficial
 from frameq_worker.atomic_files import atomic_write_text
 from frameq_worker.desktop_contract import ProgressCallback
 from frameq_worker.draft_agent import build_llm_provider, resolve_draft_credentials
-from frameq_worker.insightflow.splitter import MarkdownSplitter
 from frameq_worker.models import JobStage, ProcessResult, WorkerError
 from frameq_worker.progress_events import build_worker_progress_event
 from frameq_worker.task_store import TaskContext
+from frameq_worker.transcript_chunks import MarkdownSplitter
 
 POLISH_CHUNK_CHARS = 2000
 POLISH_MAX_CHUNKS = 24

@@ -4,7 +4,7 @@
 
 ## Purpose
 
-本文件定义 FrameQ 的默认协作流程。目标是让桌面客户端、Python worker、模型管理和 InsightFlow 内置逻辑的改动先有可审查意图，再进入实现。
+本文件定义 FrameQ 的默认协作流程。目标是让桌面客户端、Python worker、模型管理和 agent_runtime 智能提炼的改动先有可审查意图，再进入实现。
 
 ## Mandatory Rule
 
@@ -36,7 +36,7 @@
 
 ## Lightweight Path
 
-轻量任务可以直接实现，但仍需 inspect、最小验证、必要文档同步和最终验证说明。轻量任务不得改变下载/ASR/InsightFlow 的用户可见流程或安全边界。
+轻量任务可以直接实现，但仍需 inspect、最小验证、必要文档同步和最终验证说明。轻量任务不得改变下载、ASR 或智能提炼的用户可见流程或安全边界。
 
 ## File Placement
 

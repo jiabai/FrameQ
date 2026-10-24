@@ -6,12 +6,12 @@ from unittest.mock import patch
 
 import pytest
 from frameq_worker import draft_agent
+from frameq_worker.ai_prompts import build_draft_from_inspiration_prompt
 from frameq_worker.draft_agent import (
     _RETRIEVAL_FALLBACK_PHRASE,
     _build_system_prompt,
     _build_user_prompt,
 )
-from frameq_worker.insightflow.prompt import build_draft_from_inspiration_prompt
 from frameq_worker.models import (
     GenerationPreferences,
     Insight,

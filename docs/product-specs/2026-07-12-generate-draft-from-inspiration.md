@@ -98,7 +98,7 @@
 
 ## Prompt Strategy
 
-worker 新增 `build_draft_from_inspiration_prompt(seed: Insight, preference_snapshot: PreferenceSnapshot | None, output_language, summary: str | None = None) -> str`（位于 `worker/frameq_worker/insightflow/prompt.py`），构造草稿**种子 prompt** 供 agent 消费（agent 叠加 anysearch 联网检索 + skills + planning + submit_draft 交付契约成稿），并遵守以下规则：
+worker 的 `build_draft_from_inspiration_prompt(seed: Insight, preference_snapshot: PreferenceSnapshot | None, output_language, summary: str | None = None) -> str`（位于 `worker/frameq_worker/ai_prompts.py`），构造草稿**种子 prompt** 供 agent 消费（agent 叠加 anysearch 联网检索 + skills + planning + submit_draft 交付契约成稿），并遵守以下规则：
 
 - **输出语言**：`output_language` 必须复用共享的 `zh-CN | zh-TW | en-US` 闭集，使用固定
   enum 派生的语言指令覆盖标题、正文和所有用户可见生成内容；不得把任意 UI 字符串直接拼为指令。

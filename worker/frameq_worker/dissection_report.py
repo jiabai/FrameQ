@@ -4,26 +4,10 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
 from frameq_worker.atomic_files import platform_text_bytes
-from frameq_worker.desktop_contract import ProgressCallback
-from frameq_worker.insightflow.prompt import (
-    build_dissection_map_prompt,
-    build_dissection_reduce_prompt,
-    build_dissection_repair_prompt,
-)
-from frameq_worker.insightflow.splitter import MarkdownChunk, MarkdownSplitter
-from frameq_worker.insightflow.utils import extract_json_from_llm_output
 from frameq_worker.output_language import OutputLanguage
-from frameq_worker.progress_events import build_worker_progress_event
-
-DISSECTION_CALL_PLAN_VERSION = 1
-CHUNKS_PER_MAP_CALL = 4
-REDUCE_CALLS = 1
-MAX_REPAIR_CALLS = 1
-MAX_TOTAL_CALLS = 6
-MAX_CHUNKS = (MAX_TOTAL_CALLS - REDUCE_CALLS - MAX_REPAIR_CALLS) * CHUNKS_PER_MAP_CALL
+from frameq_worker.transcript_chunks import MarkdownChunk, MarkdownSplitter
 
 
 class DissectionGenerationError(RuntimeError):
@@ -32,25 +16,11 @@ class DissectionGenerationError(RuntimeError):
         code: str,
         message: str,
         *,
-        repair_category: str | None = None,
+        validation_category: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
-        self.repair_category = repair_category
-
-
-@dataclass(frozen=True)
-class DissectionCallPlan:
-    version: int
-    map_batches: tuple[tuple[int, ...], ...]
-    reduce_calls: int
-    max_repair_calls: int
-    minimum_calls: int
-    maximum_calls: int
-
-
-class DissectionClient(Protocol):
-    def generate(self, prompt: str) -> str: ...
+        self.validation_category = validation_category
 
 
 @dataclass(frozen=True)
@@ -168,34 +138,6 @@ class DissectionArtifacts:
     markdown_bytes: bytes
 
 
-def build_dissection_call_plan(chunk_count: int) -> DissectionCallPlan:
-    if chunk_count < 1:
-        raise DissectionGenerationError(
-            "DISSECTION_EMPTY_TRANSCRIPT",
-            "The saved transcript is empty.",
-        )
-    if chunk_count > MAX_CHUNKS:
-        raise DissectionGenerationError(
-            "DISSECTION_TRANSCRIPT_TOO_LARGE",
-            "The saved transcript exceeds the bounded dissection call plan.",
-        )
-
-    chunk_ids = tuple(range(1, chunk_count + 1))
-    map_batches = tuple(
-        chunk_ids[index : index + CHUNKS_PER_MAP_CALL]
-        for index in range(0, chunk_count, CHUNKS_PER_MAP_CALL)
-    )
-    minimum_calls = len(map_batches) + REDUCE_CALLS
-    return DissectionCallPlan(
-        version=DISSECTION_CALL_PLAN_VERSION,
-        map_batches=map_batches,
-        reduce_calls=REDUCE_CALLS,
-        max_repair_calls=MAX_REPAIR_CALLS,
-        minimum_calls=minimum_calls,
-        maximum_calls=minimum_calls + MAX_REPAIR_CALLS,
-    )
-
-
 def parse_dissection_report(
     payload: object,
     *,
@@ -209,7 +151,7 @@ def parse_dissection_report(
         raise DissectionGenerationError(
             "DISSECTION_INVALID_RESULT",
             "The dissection response did not match the required structure.",
-            repair_category=_repair_category(exc),
+            validation_category=_validation_category(exc),
         ) from exc
 
     return TranscriptDissection(
@@ -283,78 +225,6 @@ def parse_persisted_dissection(
             "DISSECTION_INVALID_RESULT",
             "The saved dissection artifact is invalid.",
         ) from exc
-
-
-def generate_transcript_dissection(
-    transcript: str,
-    *,
-    client: DissectionClient,
-    output_language: OutputLanguage,
-    source_language: str | None,
-    cancel_check=lambda: False,
-    progress_callback: ProgressCallback | None = None,
-) -> TranscriptDissection:
-    chunks = MarkdownSplitter().split(transcript)
-    plan = build_dissection_call_plan(len(chunks))
-    by_id = {chunk.id: chunk for chunk in chunks}
-    map_results: list[dict[str, object]] = []
-    attempt = 0
-    for batch in plan.map_batches:
-        attempt += 1
-        parsed = _generate_json(
-            client,
-            build_dissection_map_prompt([by_id[chunk_id] for chunk_id in batch], output_language),
-            cancel_check,
-            progress_callback=progress_callback,
-            attempt=attempt,
-            total=plan.maximum_calls,
-        )
-        if not isinstance(parsed, dict):
-            raise DissectionGenerationError(
-                "DISSECTION_INVALID_RESULT",
-                "The dissection response did not match the required structure.",
-            )
-        map_results.append(parsed)
-
-    attempt += 1
-    candidate = _generate_json(
-        client,
-        build_dissection_reduce_prompt(map_results, output_language),
-        cancel_check,
-        progress_callback=progress_callback,
-        attempt=attempt,
-        total=plan.maximum_calls,
-    )
-    try:
-        return parse_dissection_report(
-            candidate,
-            transcript=transcript,
-            chunks=chunks,
-            source_language=source_language,
-        )
-    except DissectionGenerationError as validation_error:
-        attempt += 1
-        repaired = _generate_json(
-            client,
-            build_dissection_repair_prompt(
-                candidate,
-                output_language,
-                valid_chunk_ids=tuple(sorted(by_id)),
-                validation_category=(
-                    validation_error.repair_category or "schema_shape"
-                ),
-            ),
-            cancel_check,
-            progress_callback=progress_callback,
-            attempt=attempt,
-            total=plan.maximum_calls,
-        )
-        return parse_dissection_report(
-            repaired,
-            transcript=transcript,
-            chunks=chunks,
-            source_language=source_language,
-        )
 
 
 def build_dissection_artifacts(
@@ -560,38 +430,6 @@ def _append_markdown_list(
         )
 
 
-def _generate_json(
-    client: DissectionClient,
-    prompt: str,
-    cancel_check,
-    *,
-    progress_callback: ProgressCallback | None = None,
-    attempt: int | None = None,
-    total: int | None = None,
-) -> object:
-    if cancel_check():
-        raise DissectionGenerationError("DISSECTION_CANCELLED", "Dissection was cancelled.")
-    if progress_callback is not None and attempt is not None and total is not None:
-        progress_callback(
-            build_worker_progress_event(
-                "ai.generation.running",
-                stage="insights_generating",
-                progress=70 + ((attempt - 1) * 20 // total),
-                message_args={"attempt": attempt, "total": total},
-            )
-        )
-    response = client.generate(prompt)
-    if cancel_check():
-        raise DissectionGenerationError("DISSECTION_CANCELLED", "Dissection was cancelled.")
-    parsed = extract_json_from_llm_output(response)
-    if parsed is None:
-        raise DissectionGenerationError(
-            "DISSECTION_INVALID_RESULT",
-            "The dissection response did not match the required structure.",
-        )
-    return parsed
-
-
 def _parse_semantic_report(
     payload: object,
     transcript: str,
@@ -731,7 +569,7 @@ def _integer_list(value: object) -> list[int]:
     return values
 
 
-def _repair_category(exc: KeyError | TypeError | ValueError) -> str:
+def _validation_category(exc: KeyError | TypeError | ValueError) -> str:
     if isinstance(exc, (KeyError, TypeError)):
         return "schema_shape"
     return {

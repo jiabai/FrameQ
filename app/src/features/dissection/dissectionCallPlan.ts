@@ -1,11 +1,9 @@
 const MAX_CHUNK_CHARACTERS = 2000;
-const CHUNKS_PER_MAP_CALL = 4;
-const REDUCE_CALLS = 1;
-const MAX_REPAIR_CALLS = 1;
 const MAX_TOTAL_CALLS = 6;
+const MAX_CHUNKS = 16;
 
 export type DissectionCallPlan = {
-  version: 1;
+  version: 2;
   chunkCount: number;
   minimumCalls: number;
   maximumCalls: number;
@@ -14,15 +12,12 @@ export type DissectionCallPlan = {
 
 export function buildDissectionCallPlan(transcript: string): DissectionCallPlan {
   const chunkCount = transcript.trim() ? countChunks(transcript) : 0;
-  const mapCalls = Math.ceil(chunkCount / CHUNKS_PER_MAP_CALL);
-  const minimumCalls = mapCalls + REDUCE_CALLS;
-  const maximumCalls = minimumCalls + MAX_REPAIR_CALLS;
   return {
-    version: 1,
+    version: 2,
     chunkCount,
-    minimumCalls,
-    maximumCalls,
-    eligible: chunkCount > 0 && maximumCalls <= MAX_TOTAL_CALLS,
+    minimumCalls: 1,
+    maximumCalls: MAX_TOTAL_CALLS,
+    eligible: chunkCount > 0 && chunkCount <= MAX_CHUNKS,
   };
 }
 

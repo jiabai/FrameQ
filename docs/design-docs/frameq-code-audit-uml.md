@@ -312,7 +312,10 @@ flowchart LR
     SourceResolution["source_resolution.py<br/>application resolver"]
     SourceIdentityCore["source_identity.py<br/>pure identity policy"]
     ASR["asr.py · asr_runtime/<br/>model_download.py · SenseVoice"]
-    InsightFlow["llm.py + insightflow/<br/>summary · mindmap · inspirations"]
+    SummaryAgent["summary_agent.py<br/>mindmap · summary delivery"]
+    TopicAgent["topic_agent.py<br/>inspiration delivery"]
+    DissectionAgent["dissection_agent.py<br/>validated report delivery"]
+    AiRuntime["ai_runtime.py + llm.py<br/>agent provider · per-call checkout"]
     PyStorage["task_store.py<br/>manifest and artifacts"]
     PyModels["models.py · requests.py"]
   end
@@ -375,8 +378,12 @@ flowchart LR
   PipelineOrchestration --> PipelineShared
   PipelineTranscript --> PipelineShared
   PipelineTranscript --> ASR
-  PipelineInsights --> InsightFlow
-  WorkerHandlers --> InsightFlow
+  PipelineInsights --> SummaryAgent
+  PipelineInsights --> TopicAgent
+  PipelineInsights --> DissectionAgent
+  SummaryAgent --> AiRuntime
+  TopicAgent --> AiRuntime
+  DissectionAgent --> AiRuntime
   PipelineOrchestration --> PyStorage
   MediaPreparation --> Media
   MediaPreparation --> Subtitles
@@ -394,15 +401,15 @@ flowchart LR
   CLI -.->|"validated progress over stderr"| WorkerRuntime
   WorkerRuntime -.->|"Tauri progress event"| Clients
   Commands -->|"account and entitlement HTTP"| Fastify
-  WorkerRuntime -.->|"session + checkout URL in child env"| InsightFlow
-  InsightFlow -->|"per-call checkout"| Fastify
+  WorkerRuntime -.->|"session + checkout URL in child env"| AiRuntime
+  AiRuntime -->|"per-call checkout"| Fastify
   ServerRuntime --> Fastify
   ServerRuntime --> SQLite
   Fastify --> ServerRoutes
   ServerRoutes --> Services
   Services --> Store
   Store --> SQLite
-  InsightFlow -->|"supplier request after checkout"| LLM
+  AiRuntime -->|"supplier request after checkout"| LLM
   Clients -.->|"updater metadata/artifacts"| GitHub
 ```
 
@@ -1257,7 +1264,7 @@ Python worker 主要由函数、dataclass 和 Protocol 组成，并不是传统�
 
 **怎么读：** 从 `CLI -> WorkerService -> private application handlers` 看稳定调用入口，再沿
 `PipelineOrchestration`、`PipelineTranscript` 和 `PipelineInsights` 三个私有行为 owner 展开。
-MediaPreparationFacade、Transcriber、InsightFlow 和 TaskStoreFacade 仍是各自低层边界；Protocol
+MediaPreparationFacade、Transcriber、三个提炼 agent 和 TaskStoreFacade 仍是各自低层边界；Protocol
 的虚线实现关系表示已有可替换边界。
 
 ```mermaid
@@ -1308,7 +1315,6 @@ classDiagram
     <<production composition owner>>
     +defaultSourceResolver()
     +defaultTranscriber()
-    +defaultInsightClient()
     +realAsrEnabled()
   }
 
@@ -1512,26 +1518,54 @@ classDiagram
     +transcribe(audioPath)
   }
 
-  class InsightClient {
-    <<protocol>>
-    +generate(prompt)
-  }
-
-  class OpenAICompatibleInsightClient {
-    +generate(prompt)
-  }
-
-  class ServerManagedInsightClient {
-    +checkoutPerCall()
-    +generate(prompt)
-  }
-
-  class InsightFlow {
-    <<domain service>>
-    +generateSummaryFromMarkdown()
-    +generateInsightsFromMarkdown()
+  class SummaryAgent {
+    <<agent_runtime tool loop>>
+    +generateSummaryViaAgentRuntime()
+    +submitMindmap()
+    +submitSummary()
     +writeSummaryFiles()
+  }
+
+  class TopicAgent {
+    <<agent_runtime tool loop>>
+    +generateInsightsViaAgentRuntime()
+    +submitInsights()
     +writeInsightFiles()
+  }
+
+  class DissectionAgent {
+    <<agent_runtime tool loop>>
+    +generateDissectionViaAgentRuntime()
+    +submitDissection()
+  }
+
+  class AiRuntime {
+    <<provider composition>>
+    +buildInsightProvider()
+    +insightTargetEnv()
+    +agentError()
+  }
+
+  class Provider {
+    <<agent_runtime provider>>
+    +textChat()
+    +terminate()
+  }
+
+  class SingleCallInsightProvider {
+    +textChat()
+    +disableAutomaticRetries()
+  }
+
+  class ServerManagedInsightProvider {
+    +checkoutPerCall()
+    +textChat()
+  }
+
+  class LlmCheckout {
+    <<checkout transport and parsing>>
+    +checkoutLlmConfigOnce()
+    +derivePerCallRequestId()
   }
 
   class TaskStoreFacade {
@@ -1563,8 +1597,6 @@ classDiagram
   SourceIdentityHandler --> ApplicationDefaults
   InsightRetryHandler --> RequestsParser
   InsightRetryHandler --> TaskStoreFacade
-  InsightRetryHandler --> ServerManagedInsightClient
-  InsightRetryHandler --> ApplicationDefaults
   ModelDownloadHandler --> ApplicationDefaults
   ApplicationDefaults --> PlatformSourceResolvers
   RequestsParser --> ProcessRequest
@@ -1591,7 +1623,9 @@ classDiagram
   PipelineOrchestration --> SourceResolutionModule
   PipelineTranscript --> PipelineShared
   PipelineTranscript --> Transcriber
-  PipelineInsights --> InsightFlow
+  PipelineInsights --> SummaryAgent
+  PipelineInsights --> TopicAgent
+  PipelineInsights --> DissectionAgent
   UrlMediaSource *-- SourceRequest
   LocalMediaSource *-- ProcessLocalMediaRequest
   MediaPreparationFacade --> UrlMediaSource
@@ -1615,9 +1649,14 @@ classDiagram
   MediaModule --> PlatformFallbacks
   Transcriber <|.. SenseVoiceTranscriber
   Transcriber <|.. QwenAsrTranscriber
-  InsightClient <|.. OpenAICompatibleInsightClient
-  InsightClient <|.. ServerManagedInsightClient
-  InsightFlow --> InsightClient
+  SummaryAgent --> AiRuntime
+  TopicAgent --> AiRuntime
+  DissectionAgent --> AiRuntime
+  AiRuntime --> Provider
+  Provider <|-- SingleCallInsightProvider
+  Provider <|-- ServerManagedInsightProvider
+  ServerManagedInsightProvider --> LlmCheckout
+  ServerManagedInsightProvider --> SingleCallInsightProvider
   TaskStoreFacade --> OpenedTask
   TaskStoreFacade --> TaskContext
   TaskStoreFacade --> ProcessResult
@@ -1629,8 +1668,8 @@ classDiagram
    progress/result、固定分发并选择退出码；它不再组合 resolver 或重导出测试兼容符号。
 2. `worker_service.py` 以 direct import 提供五类用例：URL 处理、本地媒体处理、source
    identity 预检、AI retry 和模型下载。对应私有 handler 独立拥有用例组合，
-   `worker_application/defaults.py` 统一拥有生产 resolver、transcriber、Insight client 和
-   real-ASR 默认值。
+   `worker_application/defaults.py` 统一拥有生产 resolver、transcriber 和 real-ASR 默认值。
+   三个提炼 agent 通过 `ai_runtime.py` 创建本次生成的 provider。
 3. `pipeline.py` 只保留稳定 direct re-export。`pipeline_runtime/orchestration.py` 负责完整
    URL/本地任务的阶段顺序并创建闭集 `UrlMediaSource | LocalMediaSource`、消费
    `PreparedMedia`；`transcript.py` 负责 subtitle/ASR，`insights.py` 负责 AI target。process
@@ -1674,7 +1713,7 @@ optional-field bag。
   transcript 校验和 AI target，`orchestration.py` 拥有 URL task/media/transcript/finalization
   顺序。
 - `media_preparation.py` 依赖 `media.py`、`subtitles.py` 和 `TaskContext` 的任务内路径，但不导入
-  `TaskStoreFacade`、ASR 或 InsightFlow，也不写 manifest 或完成任务。
+  `TaskStoreFacade`、ASR 或提炼 agent，也不写 manifest 或完成任务。
 - `models.py -> source_identity.py` 是当前核心 import 链，终点是纯 identity policy，不再加载平台基础设施。
 - `worker_service.py` 只 direct-import 五个私有 handler；只有私有
   `pipeline_runtime/orchestration.py` 依赖 `SourceRequestResolver` callable，生产实现由
@@ -1688,7 +1727,8 @@ optional-field bag。
   facade 也不吸收 ASR、AI 或 task persistence 所有权；
   `test_pipeline_module_boundaries.py` 另外锁定 root identity、exact private tree 与 process/AI
   dependency isolation。
-- `InsightClient` 和 `Transcriber` 已经形成 protocol seam，可作为其他模块拆分时的参考，而不是要求所有函数都类化。
+- 三个提炼 agent 使用 `agent_runtime.Provider` 与工具交付接口；ASR 使用 `Transcriber` 协议，
+  各自的输入、结果校验和持久化职责独立。
 - worker 中保留 `QwenAsrTranscriber` 实现，但当前桌面 `SUPPORTED_ASR_MODELS` allowlist 只开放 SenseVoice；审计时应区分“代码存在”与“发行路径可达”。
 
 ## 6. Server Service 与 Store
@@ -2101,7 +2141,8 @@ sequenceDiagram
 
 **这张图回答什么：** 为什么转写完成后不会自动调用 LLM，用户确认一次 summary/insights 后，语言、偏好、账户 session、额度和供应商调用怎样连接。
 
-**怎么读：** 前半段是桌面确认和 strict request，后半段是 worker 的每次 LLM 调用。注意 `loop Every supplier API-call attempt`：一次“启发生成”可能包含 topic planning 和多个问题生成调用，因此 checkout/额度不是每个按钮固定只发生一次。
+**怎么读：** 前半段是桌面确认和 strict request，后半段是三个提炼 agent 的工具循环。
+每次供应商请求独立 checkout，交付工具校验失败时由同一个 agent 修正并再次提交。
 
 ```mermaid
 sequenceDiagram
@@ -2113,13 +2154,14 @@ sequenceDiagram
   participant Account as account.rs
   participant Runtime as TaskWorkerFacade / WorkerLane
   participant Worker as worker_service.py
-  participant Insight as insightflow / llm.py
+  participant Insight as summary / topic / dissection agent
+  participant Managed as ai_runtime.py / llm.py
   participant Server as Fastify account service
   participant Store as Store / PrismaStore
   participant Supplier as LLM supplier
   participant Disk as task transcript and ai artifacts
 
-  User->>InsightUI: confirm summary or inspirations
+  User->>InsightUI: confirm summary, inspirations or dissection
   InsightUI->>InsightUI: freeze resolved output language
   opt Inspirations target
     InsightUI->>InsightUI: build confirmed preference snapshot
@@ -2143,22 +2185,27 @@ sequenceDiagram
   Worker->>Insight: run_insight_generation_step(target)
 
   loop Every supplier API-call attempt
-    Insight->>Server: checkout(session, derived requestId)
+    Insight->>Managed: request next agent turn
+    Managed->>Server: checkout(session, target-scoped derived requestId)
     Server->>Store: validate session, entitlement and consume quota idempotently
     Server->>Store: read encrypted managed LLM config
     Store-->>Server: entitlement and config
-    Server-->>Insight: one-call supplier configuration
-    Insight->>Supplier: OpenAI-compatible completion
-    Supplier-->>Insight: generated content or provider error
+    Server-->>Managed: one-call supplier configuration
+    Managed->>Supplier: OpenAI-compatible tool completion
+    Supplier-->>Managed: tool call or provider error
+    Managed-->>Insight: agent response with fixed error mapping
+    Insight->>Insight: validate delivery or request correction
   end
 
   alt Summary target
-    Insight->>Disk: write summary.md and mindmap.mmd
+    Insight-->>Worker: accepted summary.md and mindmap.mmd payloads
   else Inspirations target
-    Insight->>Disk: write insights.json and insights.md
+    Insight-->>Worker: accepted insights.json and insights.md payloads
+  else Dissection target
+    Insight-->>Worker: accepted dissection.json and dissection.md payloads
   end
 
-  Worker->>Disk: merge existing AI artifacts and update manifest
+  Worker->>Disk: atomically commit accepted payloads and merged manifest
   Worker-->>Runtime: completed or partial_completed result
   Runtime->>Runtime: observe exit and finish matching instanceId
   Runtime-->>Tauri: typed structured/cancelled/failure outcome
@@ -2174,21 +2221,26 @@ sequenceDiagram
 |----------|----------------------|
 | 可在没有 LLM 配置和 AI 额度时运行 | 需要有效账户权益、server-managed LLM 配置和剩余额度 |
 | 输入是视频 URL，可能下载媒体并运行 ASR | 输入是同一任务已经保存的官方 `transcript/transcript.txt` |
-| 主要产物是 video/audio/transcript | 只写 summary/mindmap 或 insights artifacts |
+| 主要产物是 video/audio/transcript | 写入当前目标的 summary/mindmap、insights 或 dissection 产物 |
 | progress 主要来自下载、媒体和 ASR | progress/失败属于当前 AI target，不应遮住可用文字稿 |
 
 ### 为什么 checkout 位于循环内部
 
-FrameQ 的额度按实际供应商 API-call attempt 计算，而不是按用户点击次数粗略计算。`ServerManagedInsightClient` 为每次调用派生 request ID，向 server checkout；server 在事务边界内校验 session、权益和额度，并利用 request ID 保证重放时的幂等语义。把 checkout 移到整个按钮操作之外，会改变额度和失败恢复行为。
+`ServerManagedInsightProvider` 为每次实际供应商请求派生 request ID，向 server checkout；
+server 在事务边界内校验 session、权益和额度，并利用 request ID 保证重放时的幂等语义。
+`SingleCallInsightProvider` 关闭 SDK 自动重试与供应商恢复调用，保证每次 checkout 对应一次
+供应商请求。请求种子包含目标名称，summary、insights、dissection 的调用标识相互独立。
 
-### Summary 与 Inspirations 为什么分开
+### 三个提炼目标的职责
 
 - `summary` 只生成 `summary.md` 和隐藏的 `mindmap.mmd`，不接受 preference snapshot。
 - `insights` 生成 `insights.json`/`insights.md`，可以使用本次确认的个性化偏好快照。
-- retry 会合并同一任务已有的另一类 AI artifact，生成 summary 不能清空 insights，反之亦然。
-- 任一 AI target 失败时，已有本地文字稿仍可用，因此通常映射为 `partial_completed`，不是把整个任务视为失败。
+- `dissection` 生成 `dissection.json`/`dissection.md`，只使用正式文字稿，并校验来源片段与引文。
+- retry 会合并同一任务已有的其他 AI 产物；当前目标交付失败时，既有产物继续保留。
+- 任一 AI target 失败时，已有本地文字稿仍可用，返回 `partial_completed`。
 
-该流程中没有视频重新下载或 ASR 重跑。任何拆分建议都必须保持 official `transcript/transcript.txt` 输入、每次供应商调用的 checkout/quota 语义，以及 summary 与 inspirations 的 artifact 隔离。
+该流程直接使用 official `transcript/transcript.txt`，保持每次供应商调用的 checkout/quota
+语义，以及三个目标各自产物的独立性。
 
 ## 9. 桌面任务状态图
 
@@ -2403,8 +2455,9 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Download reliability | `worker/frameq_worker/download_reliability.py` |
 | ASR | stable root `worker/frameq_worker/asr.py`; private owners under `asr_runtime/`; model lifecycle in `model_download.py` |
 | Subtitle discovery and parsing | `worker/frameq_worker/subtitles.py` |
-| AI client | `worker/frameq_worker/llm.py` |
-| Embedded InsightFlow | `worker/frameq_worker/insightflow/` |
+| Shared agent providers and billing | `worker/frameq_worker/ai_runtime.py`, `llm.py` |
+| Summary, inspiration and dissection agents | `worker/frameq_worker/summary_agent.py`, `topic_agent.py`, `dissection_agent.py` |
+| AI prompts, source chunks, validation and commit helpers | `worker/frameq_worker/ai_prompts.py`, `transcript_chunks.py`, `dissection_report.py`, `ai_artifacts.py` |
 | Progress contract | `worker/frameq_worker/progress_events.py`, `desktop_contract.py` |
 
 ### Fastify Server

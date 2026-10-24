@@ -7,12 +7,11 @@ from pathlib import Path
 from frameq_worker.atomic_files import AtomicFileCommitError
 from frameq_worker.config import load_project_env
 from frameq_worker.desktop_contract import ProgressCallback
-from frameq_worker.draft_agent import run_draft
-from frameq_worker.insightflow import InsightClient
-from frameq_worker.insightflow.dissection import (
+from frameq_worker.dissection_report import (
     DissectionGenerationError,
     parse_persisted_dissection,
 )
+from frameq_worker.draft_agent import run_draft
 from frameq_worker.models import (
     Insight,
     JobStage,
@@ -32,24 +31,21 @@ from frameq_worker.requests import (
     parse_preference_snapshot,
     parse_retry_insights_request,
 )
+from frameq_worker.summary_agent import SummaryRunner
 from frameq_worker.task_store import DRAFT_SEED_UNSET, TaskContext, TaskPaths, TaskStoreFacade
 from frameq_worker.task_transaction import (
     TaskArtifactCommitError,
     TaskArtifactRecoveryError,
 )
 from frameq_worker.transcript_polish import run_transcript_polish_step
-from frameq_worker.worker_application import defaults
-
-InsightClientFactory = Callable[[dict[str, str]], InsightClient | None]
 
 
 def retry_insights_once(
     request_json: str,
     project_root: Path | None = None,
-    insight_client: InsightClient | None = None,
-    insight_client_factory: InsightClientFactory | None = None,
     environ: dict[str, str] | None = None,
     progress_callback: ProgressCallback | None = None,
+    summary_runner: SummaryRunner | None = None,
 ) -> dict[str, object]:
     try:
         payload = json.loads(request_json)
@@ -74,9 +70,6 @@ def retry_insights_once(
 
     root = project_root or Path.cwd()
     runtime_env = load_project_env(root, environ)
-    configured_insight_client = insight_client or (
-        insight_client_factory or defaults.build_insight_client_from_env
-    )(runtime_env)
     output_dir = resolve_output_dir(root, runtime_env)
     cache_dir = resolve_cache_dir(root, runtime_env)
     task_store = TaskStoreFacade(output_root=output_dir, cache_root=cache_dir)
@@ -168,13 +161,14 @@ def retry_insights_once(
         transcript_txt_path=task_context.paths.transcript_txt_path,
         output_dir=task_context.paths.ai_dir,
         output_stem="",
-        client=configured_insight_client,
         transcript=opened_task.transcript,
         preference_snapshot=request.preference_snapshot,
         target=request.target,
         output_language=request.output_language,
         persist=False,
         progress_callback=progress_callback,
+        runtime_env=runtime_env,
+        summary_runner=summary_runner,
     )
 
     merged_result = merge_existing_ai_artifacts(task_context.paths, insight_result)
@@ -182,7 +176,9 @@ def retry_insights_once(
     # is now invalid — clear it. target=summary/dissection leaves insights
     # untouched, so the seed is preserved (finalize defaults to DRAFT_SEED_UNSET
     # which serialize_task_manifest carries forward from the prior manifest).
-    draft_seed = None if request.target == "insights" else DRAFT_SEED_UNSET
+    draft_seed = (
+        None if request.target == "insights" and insight_result.insights else DRAFT_SEED_UNSET
+    )
     try:
         return task_store.finalize(
             task_context,

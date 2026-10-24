@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
+from frameq_worker.ai_runtime import insight_target_env
 from frameq_worker.desktop_contract import ProgressCallback
-from frameq_worker.insightflow import (
-    InsightClient,
-    InsightGenerationError,
-    generate_insights_from_markdown,
-    generate_summary_from_markdown,
-)
-from frameq_worker.insightflow.dissection import DissectionGenerationError
+from frameq_worker.dissection_report import DissectionGenerationError
+from frameq_worker.insight_errors import InsightGenerationError
 from frameq_worker.models import (
     InsightGenerationTarget,
     JobStage,
@@ -21,19 +18,29 @@ from frameq_worker.models import (
 )
 from frameq_worker.output_language import OutputLanguage
 from frameq_worker.pipeline_runtime.dissection import run_dissection_generation
+from frameq_worker.summary_agent import (
+    SummaryRunner,
+    generate_summary_via_agent_runtime,
+    write_summary_files,
+)
+from frameq_worker.topic_agent import (
+    generate_insights_via_agent_runtime,
+    write_insight_files,
+)
 
 
 def run_insight_generation_step(
     transcript_txt_path: Path,
     output_dir: Path,
     output_stem: str,
-    client: InsightClient | None,
     output_language: OutputLanguage,
     transcript: TranscriptMetadata | None = None,
     preference_snapshot: PreferenceSnapshot | None = None,
     target: InsightGenerationTarget = "all",
     persist: bool = True,
     progress_callback: ProgressCallback | None = None,
+    runtime_env: Mapping[str, str] | None = None,
+    summary_runner: SummaryRunner | None = None,
 ) -> ProcessResult:
     is_junction = getattr(os.path, "isjunction", lambda _path: False)
     expected_transcript_path = output_dir.parent / "transcript" / "transcript.txt"
@@ -89,18 +96,6 @@ def run_insight_generation_step(
             ),
         )
 
-    if client is None:
-        return ProcessResult(
-            status=JobStage.PARTIAL_COMPLETED,
-            text=transcript_body,
-            transcript=transcript,
-            error=WorkerError(
-                code="INSIGHTFLOW_CONFIG_MISSING",
-                message="InsightFlow LLM client is not configured.",
-                stage=JobStage.INSIGHTS_GENERATING,
-            ),
-        )
-
     summary_artifacts = None
     insight_artifacts = None
     dissection_artifacts = None
@@ -108,11 +103,22 @@ def run_insight_generation_step(
 
     if target in {"all", "summary"}:
         try:
-            summary_artifacts = generate_summary_from_markdown(
-                markdown=transcript_body,
+            if summary_runner is None and runtime_env is None:
+                raise InsightGenerationError(
+                    "INSIGHTFLOW_CONFIG_MISSING",
+                    "Summary agent LLM client is not configured.",
+                )
+            runner = summary_runner or generate_summary_via_agent_runtime
+            summary, mindmap = runner(
+                transcript_body,
+                insight_target_env(runtime_env or {}, "summary"),
+                output_language,
+            )
+            summary_artifacts = write_summary_files(
+                summary=summary,
+                mindmap=mindmap,
                 output_dir=output_dir,
                 output_stem=output_stem,
-                client=client,
                 output_language=output_language,
                 persist=persist,
             )
@@ -121,13 +127,17 @@ def run_insight_generation_step(
 
     if target in {"all", "insights"}:
         try:
-            insight_artifacts = generate_insights_from_markdown(
-                markdown=transcript_body,
+            insights = generate_insights_via_agent_runtime(
+                transcript_body,
+                insight_target_env(runtime_env or {}, "insights"),
+                output_language,
+                preference_snapshot=preference_snapshot,
+            )
+            insight_artifacts = write_insight_files(
+                insights,
                 output_dir=output_dir,
                 output_stem=output_stem,
-                client=client,
                 output_language=output_language,
-                preference_snapshot=preference_snapshot,
                 persist=persist,
             )
         except InsightGenerationError as exc:
@@ -139,7 +149,7 @@ def run_insight_generation_step(
             dissection_artifacts = run_dissection_generation(
                 official_transcript_body,
                 output_dir=output_dir,
-                client=client,
+                runtime_env=insight_target_env(runtime_env or {}, "dissection"),
                 output_language=output_language,
                 source_language=transcript.language if transcript else None,
                 progress_callback=progress_callback,

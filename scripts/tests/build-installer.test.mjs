@@ -92,7 +92,7 @@ test("installer build installs and imports the bundled ONNX runtime before Tauri
   assert.match(manifest, /"onnxruntime>=1\.17\.0"/);
   assert.match(
     buildScript,
-    /\["export", "--no-dev", "--format", "requirements-txt", "--output-file", requirementsPath\]/,
+    /\["export", "--no-dev", "--no-hashes", "--format", "requirements-txt", "--output-file", requirementsPath\]/,
   );
   assert.match(
     buildScript,
@@ -100,7 +100,7 @@ test("installer build installs and imports the bundled ONNX runtime before Tauri
   );
   assert.match(
     buildScript,
-    /import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
+    /import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
   );
   assert.ok(
     buildScript.indexOf("Python runtime smoke test") < buildScript.indexOf("Build Tauri installer"),
@@ -120,9 +120,16 @@ test("installer bundles the version-9 diagnostic worker module without private a
     /copyDirectoryContents\(join\(repoRoot, "worker", "frameq_worker"\), join\(destination, "frameq_worker"\)\)/,
   );
   assert.equal(
-    existsSync(join(repoRoot, "worker", "frameq_worker", "insightflow", "dissection.py")),
+    existsSync(join(repoRoot, "worker", "frameq_worker", "dissection_agent.py")),
     true,
   );
+  for (const module of [
+    "summary_agent.py", "topic_agent.py", "ai_runtime.py", "ai_prompts.py",
+    "transcript_chunks.py", "dissection_report.py", "ai_artifacts.py",
+  ]) {
+    assert.equal(existsSync(join(repoRoot, "worker", "frameq_worker", module)), true);
+  }
+  assert.equal(existsSync(join(repoRoot, "worker", "frameq_worker", "insightflow")), false);
   assert.equal(
     existsSync(join(repoRoot, "worker", "frameq_worker", "pipeline_runtime", "dissection.py")),
     true,

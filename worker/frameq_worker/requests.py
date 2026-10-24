@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from frameq_worker.ai_prompts import DRAFT_PLATFORM_IDS
 from frameq_worker.asr import (
     SENSEVOICE_SMALL_MODEL,
     SENSEVOICE_SMALL_ONNX_MODEL,
@@ -13,7 +14,6 @@ from frameq_worker.desktop_contract import (
     PROCESS_VIDEO_CONTRACT_VERSION,
     VIDEO_EXTENSIONS,
 )
-from frameq_worker.insightflow.prompt import DRAFT_PLATFORM_IDS
 from frameq_worker.models import (
     GenerationPreferences,
     InspirationProfile,

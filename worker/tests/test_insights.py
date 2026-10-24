@@ -1,43 +1,23 @@
-import importlib
-import inspect
+from __future__ import annotations
+
+import hashlib
 import json
 import multiprocessing
 import queue
 from pathlib import Path
 
 import pytest
-from frameq_worker.insightflow import (
-    Insight,
-    InsightGenerationError,
-    MarkdownSplitter,
-    generate_insights_from_markdown,
-    generate_summary_from_markdown,
-    write_insight_files,
-    write_summary_files,
+from frameq_worker.ai_prompts import (
+    build_insights_agent_prompt,
+    build_mindmap_prompt,
+    build_summary_prompt,
+    format_preference_snapshot_for_prompt,
 )
-from frameq_worker.insightflow import prompt as prompt_module
-from frameq_worker.insightflow.prompt import build_question_prompt
+from frameq_worker.insight_errors import InsightGenerationError
+from frameq_worker.models import Insight
 from frameq_worker.requests import parse_preference_snapshot
-
-
-class FakeInsightClient:
-    def __init__(self, responses: list[str] | None = None) -> None:
-        self.prompts: list[str] = []
-        self.responses = responses or [
-            json.dumps(
-                [
-                    "企业级 AI 落地时，什么能力才是真正的价值分水岭？",
-                    "为什么流程编排可能比单点模型能力更关键？",
-                ],
-                ensure_ascii=False,
-            )
-        ]
-
-    def generate(self, prompt: str) -> str:
-        self.prompts.append(prompt)
-        if len(self.prompts) <= len(self.responses):
-            return self.responses[len(self.prompts) - 1]
-        return self.responses[-1]
+from frameq_worker.topic_agent import validate_insights_delivery, write_insight_files
+from frameq_worker.transcript_chunks import MarkdownSplitter
 
 
 def preference_snapshot():
@@ -91,565 +71,133 @@ def test_markdown_splitter_preserves_heading_context() -> None:
     chunks = MarkdownSplitter(max_length=80).split(
         "# 总标题\n\n第一段内容。\n\n## 子标题\n\n第二段内容。" * 4
     )
-
     assert chunks
     assert chunks[0].content
     assert chunks[0].summary
 
 
 def test_markdown_splitter_advances_past_sentence_separator() -> None:
-    markdown = "# Transcript\n\n" + ("a" * 40) + "\u3002" + ("b" * 180)
-    ctx = multiprocessing.get_context("spawn")
-    result_queue = ctx.Queue()
-    process = ctx.Process(
-        target=_split_markdown_worker,
-        args=(markdown, 80, result_queue),
-    )
-
+    markdown = "# Transcript\n\n" + ("a" * 40) + "。" + ("b" * 180)
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue()
+    process = context.Process(target=_split_markdown_worker, args=(markdown, 80, result_queue))
     process.start()
-    process.join(2)
+    process.join(4)
     if process.is_alive():
         process.terminate()
         process.join(2)
         raise AssertionError("MarkdownSplitter did not advance past the separator.")
-
     assert process.exitcode == 0
     try:
-        chunk_lengths = result_queue.get_nowait()
+        lengths = result_queue.get_nowait()
     except queue.Empty as exc:
         raise AssertionError("MarkdownSplitter produced no result.") from exc
-    assert len(chunk_lengths) > 1
-    assert all(length > 0 for length in chunk_lengths)
+    assert len(lengths) > 1
+    assert all(length > 0 for length in lengths)
 
 
-def test_generate_insights_from_markdown_writes_json_and_markdown(tmp_path: Path) -> None:
-    transcript = "# 视频文字稿\n\n这里是企业 AI 落地与流程编排相关的完整文字稿。"
-    client = FakeInsightClient(
-        responses=[
-            json.dumps(
-                [
-                    {
-                        "id": 1,
-                        "title": "企业 AI 落地",
-                        "summary": "讨论企业 AI 落地与流程编排的关系。",
-                        "excerpt": "这里是企业 AI 落地与流程编排相关的完整文字稿。",
-                        "question_count": 2,
-                    }
-                ],
-                ensure_ascii=False,
-            ),
-            json.dumps(
-                [
-                    {
-                        "topic": "企业级 AI 落地时，什么能力才是真正的价值分水岭？",
-                        "matchReason": "文字稿讨论企业 AI 落地与流程编排的关系。",
-                        "followUpQuestions": ["企业如何判断 AI 是否真正进入业务流程？"],
-                        "suitableUse": "内容选题",
-                    },
-                    {
-                        "topic": "为什么流程编排可能比单点模型能力更关键？",
-                        "matchReason": "文字稿强调流程编排比单点模型能力更接近业务价值。",
-                        "followUpQuestions": ["流程编排会如何改变 AI 项目的验收标准？"],
-                        "suitableUse": "复盘拆解",
-                    },
-                ],
-                ensure_ascii=False,
-            ),
-        ]
+def test_splitter_source_chunks_preserve_exact_utf8_provenance() -> None:
+    source = "# 中文主题\n\n流程编排需要清晰的责任边界。\n\n" * 8
+    encoded = source.encode("utf-8")
+    chunks = MarkdownSplitter(max_length=60).split(source)
+
+    assert "".join(chunk.content for chunk in chunks) == source
+    assert [chunk.id for chunk in chunks] == list(range(1, len(chunks) + 1))
+    for chunk in chunks:
+        data = encoded[chunk.start_byte:chunk.end_byte]
+        assert data.decode("utf-8") == chunk.content
+        assert hashlib.sha256(data).hexdigest() == chunk.sha256
+
+
+@pytest.mark.parametrize("max_length", [0, -1])
+def test_splitter_rejects_unusable_chunk_lengths(max_length: int) -> None:
+    assert MarkdownSplitter(max_length=max_length).split("transcript") == []
+
+
+def test_insights_prompt_carries_compact_preference_context() -> None:
+    snapshot = preference_snapshot()
+    prompt = build_insights_agent_prompt(
+        MarkdownSplitter().split("流程编排需要清晰的责任边界。"), "zh-CN", snapshot
     )
+    compact = format_preference_snapshot_for_prompt(snapshot)
 
-    artifacts = generate_insights_from_markdown(
-        markdown=transcript,
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        client=client,
-        output_language="zh-CN",
-    )
+    assert compact in prompt
+    payload = json.loads(compact)
+    assert payload["profile"]["role"] == "content_creator"
+    assert payload["generationPreferences"]["scenario"] == "short_video"
+    assert payload["labelSnapshot"]["profile"][0]["label"] == "我的角色"
+    assert "Transcript evidence wins over all preferences" in prompt
+    assert "current scenario" in prompt
+    assert "Do not invent a role, audience, fact, or outcome" in prompt
 
-    assert [insight.topic for insight in artifacts.insights] == [
-        "企业级 AI 落地时，什么能力才是真正的价值分水岭？",
-        "为什么流程编排可能比单点模型能力更关键？",
+
+def test_insights_prompt_omits_absent_preferences() -> None:
+    prompt = build_insights_agent_prompt(MarkdownSplitter().split("Workflow ownership"), "en-US")
+
+    assert "Personalization snapshot" not in prompt
+    assert "profileSkipped" not in prompt
+
+
+def test_summary_prompts_exclude_inspiration_preferences() -> None:
+    source = "Workflow ownership"
+    prompts = [
+        build_mindmap_prompt(source, "en-US"),
+        build_summary_prompt(source, "mindmap\n  root((Ownership))", "en-US"),
     ]
-    assert artifacts.json_path.exists()
-    assert artifacts.md_path.exists()
-    assert json.loads(artifacts.json_path.read_text(encoding="utf-8")) == {
-        "schemaVersion": 1,
-        "insights": [
-            {
-                "id": 1,
-                "topic": "企业级 AI 落地时，什么能力才是真正的价值分水岭？",
-                "matchReason": "文字稿讨论企业 AI 落地与流程编排的关系。",
-                "followUpQuestions": ["企业如何判断 AI 是否真正进入业务流程？"],
-                "suitableUse": "内容选题",
-                "sourceChunkId": 1,
-            },
-            {
-                "id": 2,
-                "topic": "为什么流程编排可能比单点模型能力更关键？",
-                "matchReason": "文字稿强调流程编排比单点模型能力更接近业务价值。",
-                "followUpQuestions": ["流程编排会如何改变 AI 项目的验收标准？"],
-                "suitableUse": "复盘拆解",
-                "sourceChunkId": 1,
-            },
-        ],
-    }
-    assert "启发灵感" in artifacts.md_path.read_text(encoding="utf-8")
-    assert "匹配理由" in artifacts.md_path.read_text(encoding="utf-8")
-    assert "启发问题" in artifacts.md_path.read_text(encoding="utf-8")
-    assert "适合用途" in artifacts.md_path.read_text(encoding="utf-8")
-    assert "topic-segment planner" in client.prompts[0]
-    assert "reflective reading partner and topic curator" in client.prompts[1]
-    assert "natural, and easy to understand" in client.prompts[1]
-    assert "Keep one main thought per question" in client.prompts[1]
+    assert all("generationPreferences" not in prompt for prompt in prompts)
+    assert all("Personalization snapshot" not in prompt for prompt in prompts)
 
 
-def test_build_topic_plan_prompt_requests_structured_topic_plan() -> None:
-    assert hasattr(prompt_module, "build_topic_plan_prompt")
-    prompt = prompt_module.build_topic_plan_prompt(
-        "这是一段没有分段的 ASR 文字稿。",
-        output_language="zh-CN",
-    )
-
-    assert "topic-segment planner" in prompt
-    assert "semantic topic segments suitable for later inspiration" in prompt
-    assert "Ignore greetings, repetition, filler" in prompt
-    assert '"title"' in prompt
-    assert '"summary"' in prompt
-    assert '"excerpt"' in prompt
-    assert '"question_count"' in prompt
-
-
-def test_generate_insights_uses_topic_planner_before_question_generation(
-    tmp_path: Path,
-) -> None:
-    client = FakeInsightClient(
-        responses=[
-            json.dumps(
-                [
-                    {
-                        "id": 1,
-                        "title": "组织流程",
-                        "summary": "企业 AI 落地需要流程编排。",
-                        "excerpt": "企业 AI 落地时，流程编排比单点能力更关键。",
-                        "question_count": 2,
-                    },
-                    {
-                        "id": 2,
-                        "title": "上下文能力",
-                        "summary": "上下文能力影响 Agent 可用性。",
-                        "excerpt": "上下文能力决定 Agent 能否理解任务背景。",
-                        "question_count": 1,
-                    },
-                ],
-                ensure_ascii=False,
-            ),
-            json.dumps(
-                [
-                    "为什么流程编排可能比单点模型能力更关键？",
-                    "企业应该如何判断 AI 是否真正进入业务流程？",
-                ],
-                ensure_ascii=False,
-            ),
-            json.dumps(["上下文能力为什么会影响 Agent 的可用性？"], ensure_ascii=False),
-        ]
-    )
-
-    artifacts = generate_insights_from_markdown(
-        markdown=(
-            "企业 AI 落地时，流程编排比单点能力更关键。"
-            "上下文能力决定 Agent 能否理解任务背景。"
-        ),
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        client=client,
-        output_language="zh-CN",
-    )
-
-    assert len(client.prompts) == 3
-    assert "topic-segment planner" in client.prompts[0]
-    assert "组织流程" in client.prompts[1]
-    assert "Generate at least 2 high-quality questions" in client.prompts[1]
-    assert "上下文能力" in client.prompts[2]
-    assert [insight.source_chunk_id for insight in artifacts.insights] == [1, 1, 2]
-    assert [insight.topic for insight in artifacts.insights] == [
-        "为什么流程编排可能比单点模型能力更关键？",
-        "企业应该如何判断 AI 是否真正进入业务流程？",
-        "上下文能力为什么会影响 Agent 的可用性？",
-    ]
-
-
-def test_build_question_prompt_accepts_additional_constraints() -> None:
-    prompt = build_question_prompt(
-        "这里是一段待处理文本。",
-        number=1,
-        output_language="zh-CN",
-        global_prompt="只关注商业决策。",
-        question_prompt="避免技术细节题。",
-    )
-
-    assert "## Additional global constraints" in prompt
-    assert "只关注商业决策。" in prompt
-    assert "## Additional constraints for this request" in prompt
-    assert "避免技术细节题。" in prompt
-
-
-def test_build_question_prompt_includes_compact_preference_context() -> None:
-    prompt = build_question_prompt(
-        "这里是一段待处理文本。",
-        number=1,
-        output_language="zh-CN",
-        preference_snapshot=preference_snapshot(),
-    )
-
-    assert "## Personalization snapshot" in prompt
-    assert "Use this JSON only to generate inspiration" in prompt
-    assert "content_creation" in prompt
-    assert "内容创作" in prompt
-    assert "profileSkipped" in prompt
-    assert (
-        '"topic": "为什么流程编排可能比单点模型能力更关键？"'
-        in prompt
-    )
-    assert '"topic": "启发话题点"' not in prompt
-    assert "Prefer `generationPreferences`" not in prompt
-    assert "Treat `profile.platforms` as background context" in prompt
-    assert "follow the current scenario" in prompt
-    assert "Transcript evidence wins over all preferences." in prompt
-
-
-def test_topic_plan_prompt_uses_narrow_current_scenario_precedence() -> None:
-    prompt = prompt_module.build_topic_plan_prompt(
-        "这是一段用于生成灵感的文字稿。",
-        output_language="zh-CN",
-        preference_snapshot=preference_snapshot(),
-    )
-
-    assert "Prefer `generationPreferences`" not in prompt
-    assert "Treat `profile.platforms` as background context" in prompt
-    assert "follow the current scenario" in prompt
-    assert "Transcript evidence wins over all preferences." in prompt
-
-
-def test_non_inspiration_prompt_builders_remain_unpersonalized() -> None:
-    builders = (
-        prompt_module.build_mindmap_prompt,
-        prompt_module.build_summary_prompt,
-        prompt_module.build_dissection_map_prompt,
-        prompt_module.build_dissection_reduce_prompt,
-        prompt_module.build_dissection_repair_prompt,
-    )
-
-    for builder in builders:
-        assert "preference_snapshot" not in inspect.signature(builder).parameters
-
-
-def test_prompt_snapshot_contains_only_generation_scoped_expression_preferences() -> None:
-    serialized = prompt_module.format_preference_snapshot_for_prompt(
-        preference_snapshot()
-    )
-
-    assert '"styles":["grounded"]' in serialized
-    assert '"avoid":["clickbait"]' in serialized
-    assert "defaultStyles" not in serialized
-    assert "defaultAvoid" not in serialized
-
-
-def test_generate_insights_applies_preferences_to_planner_and_question_prompts(
-    tmp_path: Path,
-) -> None:
-    client = FakeInsightClient(
-        responses=[
-            json.dumps(
-                [
-                    {
-                        "title": "内容创作",
-                        "summary": "适合做短视频选题。",
-                        "excerpt": "这段文字讨论内容创作。",
-                        "question_count": 1,
-                    }
-                ],
-                ensure_ascii=False,
-            ),
-            json.dumps(
-                [
-                    {
-                        "topic": "这段内容可以如何拆成短视频选题？",
-                        "matchReason": "符合内容创作目标。",
-                        "followUpQuestions": ["怎样开头更适合粉丝读者？"],
-                        "suitableUse": "短视频选题",
-                    }
-                ],
-                ensure_ascii=False,
-            ),
-        ]
-    )
-
-    generate_insights_from_markdown(
-        markdown="# 文字稿\n\n这段文字讨论内容创作。",
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        client=client,
-        output_language="zh-CN",
-        preference_snapshot=preference_snapshot(),
-    )
-
-    assert "content_creation" in client.prompts[0]
-    assert "内容创作" in client.prompts[0]
-    assert "content_creation" in client.prompts[1]
-    assert "内容创作" in client.prompts[1]
-
-
-def test_planner_fallback_uses_one_question_per_thousand_chars(
-    tmp_path: Path,
-) -> None:
-    class SingleLargeChunkSplitter:
-        def split(self, markdown: str):
-            from frameq_worker.insightflow import MarkdownChunk
-
-            return [
-                MarkdownChunk(id=1, summary="large", content="内容" * 1300),
-            ]
-
-    client = FakeInsightClient(
-        responses=[
-            "not json",
-            json.dumps(["为什么流程编排可能比单点模型能力更关键？"], ensure_ascii=False),
-        ]
-    )
-
-    generate_insights_from_markdown(
-        markdown="ignored",
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        client=client,
-        output_language="zh-CN",
-        splitter=SingleLargeChunkSplitter(),
-    )
-
-    assert "topic-segment planner" in client.prompts[0]
-    assert "Generate at least 2 high-quality questions" in client.prompts[1]
-
-
-def test_topic_planner_failure_falls_back_to_direct_generation(tmp_path: Path) -> None:
-    client = FakeInsightClient(
-        responses=[
-            "planner failed",
-            json.dumps(["为什么重试应该保留已有文字稿？"], ensure_ascii=False),
-        ]
-    )
-
-    artifacts = generate_insights_from_markdown(
-        markdown="# 视频文字稿\n\n这是一段用于重试的话题文字稿。",
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        client=client,
-        output_language="zh-CN",
-    )
-
-    assert len(client.prompts) == 2
-    assert "topic-segment planner" in client.prompts[0]
-    assert "reflective reading partner and topic curator" in client.prompts[1]
-    assert [insight.topic for insight in artifacts.insights] == [
-        "为什么重试应该保留已有文字稿？"
-    ]
-    assert artifacts.insights[0].suitable_use == "灵感延展"
-
-
-def test_topic_planner_caps_total_question_count(tmp_path: Path) -> None:
-    topic_plan = [
+def test_insight_submission_preserves_all_required_structured_fields() -> None:
+    payload = [
         {
-            "id": index,
-            "title": f"话题 {index}",
-            "summary": f"第 {index} 个话题摘要。",
-            "excerpt": f"第 {index} 个话题原文片段。",
-            "question_count": 3,
+            "topic": "团队应该怎样分配流程责任？",
+            "matchReason": "原文强调责任归属。",
+            "followUpQuestions": ["哪些节点需要明确负责人？", "怎样发现责任缺口？"],
+            "suitableUse": "团队分享",
+            "sourceChunkId": 12,
         }
-        for index in range(1, 7)
     ]
-    question_responses = [
-        json.dumps(
-            [f"话题 {topic_index} 的问题 {question_index}？" for question_index in range(1, 4)],
-            ensure_ascii=False,
-        )
-        for topic_index in range(1, 7)
-    ]
-    client = FakeInsightClient(
-        responses=[json.dumps(topic_plan, ensure_ascii=False), *question_responses]
-    )
+    insights = validate_insights_delivery(payload, (12,))
 
-    artifacts = generate_insights_from_markdown(
-        markdown="这是一段用于测试总量上限的文字稿。",
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        client=client,
-        output_language="zh-CN",
-    )
-
-    assert len(artifacts.insights) == 12
-    assert len(client.prompts) == 5
-    assert "话题 4" in client.prompts[-1]
+    assert insights[0].to_dict() == {"id": 1, **payload[0]}
 
 
 def test_write_insight_files_rejects_empty_insights(tmp_path: Path) -> None:
-    try:
-        write_insight_files(
-            [],
-            output_dir=tmp_path / "outputs",
-            output_stem="demo",
-            output_language="zh-CN",
-        )
-    except InsightGenerationError as error:
-        assert error.code == "INSIGHTFLOW_EMPTY_RESULT"
-    else:
-        raise AssertionError("Expected InsightGenerationError")
+    with pytest.raises(InsightGenerationError) as captured:
+        write_insight_files([], tmp_path / "outputs", "demo", "zh-CN")
+    assert captured.value.code == "INSIGHTFLOW_EMPTY_RESULT"
+    assert not (tmp_path / "outputs").exists()
 
 
 def test_write_insight_files_serializes_existing_insights(tmp_path: Path) -> None:
-    artifacts = write_insight_files(
-        [
-            Insight(
-                id=1,
-                topic="为什么流程编排可能比单点模型能力更关键？",
-                match_reason="文字稿强调流程编排。",
-                follow_up_questions=("团队应该先改哪条流程？",),
-                suitable_use="团队分享",
-                source_chunk_id=12,
-            )
-        ],
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        output_language="zh-CN",
+    insight = Insight(
+        id=1,
+        topic="为什么流程编排可能比单点模型能力更关键？",
+        match_reason="文字稿强调流程编排。",
+        follow_up_questions=("团队应该先改哪条流程？",),
+        suitable_use="团队分享",
+        source_chunk_id=12,
     )
+    artifacts = write_insight_files([insight], tmp_path / "outputs", "demo", "zh-CN")
 
-    assert json.loads(artifacts.json_path.read_text(encoding="utf-8"))["schemaVersion"] == 1
-    assert "## 灵感 1" in artifacts.md_path.read_text(encoding="utf-8")
-
-
-def test_generate_summary_from_markdown_writes_summary_and_mermaid_mindmap(
-    tmp_path: Path,
-) -> None:
-    client = FakeInsightClient(
-        responses=[
-            "```mermaid\nmindmap\n  root((企业 AI 落地))\n    流程编排\n    上下文能力\n```",
-            (
-                "# 要点总结\n\n## 总览\n企业 AI 落地需要把流程编排和上下文能力结合起来。"
-                "\n\n## 关键要点\n- 流程编排决定 AI 能否进入业务现场。"
-            ),
-        ]
-    )
-
-    artifacts = generate_summary_from_markdown(
-        markdown="# 视频文字稿\n\n企业 AI 落地时，流程编排和上下文能力都很关键。",
-        output_dir=tmp_path / "outputs",
-        output_stem="demo",
-        client=client,
-        output_language="zh-CN",
-    )
-
-    assert artifacts.summary.startswith("# 要点总结")
-    assert artifacts.mindmap.startswith("mindmap\n")
-    assert artifacts.summary_path == tmp_path / "outputs" / "demo_summary.md"
-    assert artifacts.mindmap_path == tmp_path / "outputs" / "demo_mindmap.mmd"
-    assert artifacts.summary_path.read_text(encoding="utf-8") == artifacts.summary
-    assert artifacts.mindmap_path.read_text(encoding="utf-8") == artifacts.mindmap
-    assert "organize logical mindmaps" in client.prompts[0]
-    assert "Mermaid mindmap" in client.prompts[0]
-    assert "Create a Key Summary from the source Transcript" in client.prompts[1]
+    assert json.loads(artifacts.json_path.read_text(encoding="utf-8")) == {
+        "schemaVersion": 1,
+        "insights": [insight.to_dict()],
+    }
+    markdown = artifacts.md_path.read_text(encoding="utf-8")
+    assert "## 灵感 1" in markdown
+    assert "来源片段: 12" in markdown
+    assert "### 匹配理由\n文字稿强调流程编排。" in markdown
 
 
-def test_write_summary_files_rejects_empty_outputs(tmp_path: Path) -> None:
-    try:
-        write_summary_files(
-            summary=" ",
-            mindmap="mindmap\n  root((主题))",
-            output_dir=tmp_path / "outputs",
-            output_stem="demo",
-            output_language="zh-CN",
-        )
-    except InsightGenerationError as error:
-        assert error.code == "INSIGHTFLOW_EMPTY_SUMMARY"
-    else:
-        raise AssertionError("Expected InsightGenerationError")
-
-
-def test_summary_replace_failure_preserves_complete_previous_revision(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+def test_insight_file_transaction_replaces_complete_revision(tmp_path: Path) -> None:
     output_dir = tmp_path / "task" / "ai"
-    output_dir.mkdir(parents=True)
-    summary_path = output_dir / "summary.md"
-    mindmap_path = output_dir / "mindmap.mmd"
-    summary_path.write_bytes(b"# Previous summary\n")
-    mindmap_path.write_bytes(b"mindmap\n  root((Previous))\n")
-    original_replace = atomic_files.os.replace
-    failed = False
+    first = Insight(1, "First topic", "Source context", ("First follow-up?",), "Review", 1)
+    second = Insight(1, "Second topic", "New source context", ("Second follow-up?",), "Review", 2)
+    write_insight_files([first], output_dir, "", "en-US")
+    artifacts = write_insight_files([second], output_dir, "", "en-US")
 
-    def fail_second_replace(source: Path, destination: Path) -> None:
-        nonlocal failed
-        if destination == mindmap_path and not failed:
-            failed = True
-            raise OSError("D:/private/customer/mindmap.mmd is locked")
-        original_replace(source, destination)
-
-    monkeypatch.setattr(atomic_files.os, "replace", fail_second_replace)
-
-    with pytest.raises(atomic_files.AtomicFileCommitError):
-        write_summary_files(
-            summary="# Next summary\n",
-            mindmap="mindmap\n  root((Next))\n",
-            output_dir=output_dir,
-            output_stem="",
-            output_language="en-US",
-        )
-
-    assert summary_path.read_bytes() == b"# Previous summary\n"
-    assert mindmap_path.read_bytes() == b"mindmap\n  root((Previous))\n"
-
-
-def test_insight_failed_first_commit_leaves_no_authoritative_files(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    atomic_files = importlib.import_module("frameq_worker.atomic_files")
-    output_dir = tmp_path / "task" / "ai"
-    monkeypatch.setattr(
-        atomic_files.os,
-        "replace",
-        lambda _source, _destination: (_ for _ in ()).throw(OSError("full disk")),
-    )
-
-    with pytest.raises(atomic_files.AtomicFileCommitError):
-        write_insight_files(
-            [
-                Insight(
-                    id=1,
-                    topic="Atomic persistence",
-                    match_reason="Release reliability",
-                    follow_up_questions=("How is recovery tested?",),
-                    suitable_use="Release review",
-                    source_chunk_id=1,
-                )
-            ],
-            output_dir=output_dir,
-            output_stem="",
-            output_language="en-US",
-        )
-
-    assert not (output_dir / "insights.json").exists()
-    assert not (output_dir / "insights.md").exists()
-
-
-
-def test_write_summary_files_rejects_invalid_mindmap(tmp_path: Path) -> None:
-    with pytest.raises(InsightGenerationError) as captured:
-        write_summary_files(
-            summary="# Key Summary",
-            mindmap="graph TD\n  A-->B",
-            output_dir=tmp_path / "outputs",
-            output_stem="demo",
-            output_language="en-US",
-        )
-
-    assert captured.value.code == "INSIGHTFLOW_INVALID_MINDMAP"
+    assert json.loads(artifacts.json_path.read_bytes())["insights"] == [second.to_dict()]
+    assert "Second topic" in artifacts.md_path.read_text(encoding="utf-8")
+    assert "First topic" not in artifacts.md_path.read_text(encoding="utf-8")

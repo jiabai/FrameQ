@@ -162,7 +162,19 @@ def test_media_facade_excludes_asr_ai_and_task_persistence() -> None:
     }
 
     assert "frameq_worker.asr" not in imported_modules
-    assert "frameq_worker.insightflow" not in imported_modules
+    assert imported_modules.isdisjoint(
+        {
+            "frameq_worker.ai_artifacts",
+            "frameq_worker.ai_prompts",
+            "frameq_worker.ai_runtime",
+            "frameq_worker.dissection_agent",
+            "frameq_worker.dissection_report",
+            "frameq_worker.insight_errors",
+            "frameq_worker.summary_agent",
+            "frameq_worker.topic_agent",
+            "frameq_worker.transcript_chunks",
+        }
+    )
     assert task_store_imports == {"TaskContext"}
     assert "TaskStoreFacade" not in source
     assert ".finalize(" not in source

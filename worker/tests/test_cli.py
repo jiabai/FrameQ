@@ -25,7 +25,6 @@ from frameq_worker.desktop_contract import (
 )
 from frameq_worker.diagnostic_events import DiagnosticEvent
 from frameq_worker.media import CommandResult
-from frameq_worker.worker_application import defaults as worker_defaults
 from frameq_worker.worker_service import (
     resolve_source_identity_once,
     run_local_media_once,
@@ -118,23 +117,6 @@ class FakeMediaRunner:
 class FakeTranscriber:
     def transcribe(self, audio_path: Path, language: str = "Chinese") -> Transcript:
         return Transcript(text="desktop transcript", language=language)
-
-
-class FakeInsightClient:
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def generate(self, prompt: str) -> str:
-        self.calls += 1
-        if self.calls == 1:
-            return "mindmap\n  root((desktop))"
-        if self.calls == 2:
-            return "# summary\n\ndesktop summary"
-        if self.calls == 3:
-            return (
-                '[{"title":"desktop","summary":"summary","excerpt":"excerpt","question_count":1}]'
-            )
-        return '["desktop question"]'
 
 
 def create_valid_asr_cache(root: Path) -> None:
@@ -742,18 +724,8 @@ def test_run_worker_once_returns_model_not_ready_with_task_manifest(tmp_path: Pa
 
 def test_run_worker_once_defaults_to_transcript_only_with_injected_transcriber(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[dict[str, object]] = []
-
-    def fail_if_ai_client_is_built(_env: dict[str, str]) -> object:
-        raise AssertionError("process_video must not construct an AI client")
-
-    monkeypatch.setattr(
-        worker_defaults,
-        "build_insight_client_from_env",
-        fail_if_ai_client_is_built,
-    )
     result = run_worker_once(
         process_request_json("https://www.douyin.com/video/7524373044106677544"),
         project_root=tmp_path,

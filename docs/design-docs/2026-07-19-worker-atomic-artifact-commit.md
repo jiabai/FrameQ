@@ -104,8 +104,8 @@ replacement where the platform permits.
 The following production owners must use the primitive rather than direct final-path writes:
 
 - Python `asr_runtime/artifacts.py`: transcript TXT, Markdown, and optional segments JSON;
-- Python `insightflow/summary.py`: summary Markdown and Mermaid;
-- Python `insightflow/generator.py`: insights JSON and Markdown;
+- Python `summary_agent.py`: summary Markdown and Mermaid;
+- Python `topic_agent.py`: insights JSON and Markdown;
 - Python `task_store.py`: manifest and preference snapshot, retaining current behavior;
 - Rust `task_manifest/storage.rs`: `frameq-task.json`;
 - Rust `transcript_detail/edit_storage.rs` and `segments.rs`: edited transcript files, one-time

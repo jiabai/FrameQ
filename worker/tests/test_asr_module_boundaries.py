@@ -292,18 +292,27 @@ def test_production_callers_do_not_import_private_asr_modules() -> None:
 
 def test_private_asr_modules_have_no_root_or_application_back_edges() -> None:
     forbidden_modules = {
+        "frameq_worker.ai_artifacts",
+        "frameq_worker.ai_prompts",
+        "frameq_worker.ai_runtime",
         "frameq_worker.asr",
         "frameq_worker.cli",
+        "frameq_worker.dissection_agent",
+        "frameq_worker.dissection_report",
+        "frameq_worker.insight_errors",
         "frameq_worker.llm",
         "frameq_worker.media",
         "frameq_worker.pipeline",
+        "frameq_worker.summary_agent",
         "frameq_worker.task_store",
+        "frameq_worker.topic_agent",
+        "frameq_worker.transcript_chunks",
         "frameq_worker.worker_service",
     }
     violations: list[str] = []
     for path in PRIVATE_ASR_ROOT.glob("*.py"):
         for module in _imported_modules(path):
-            if module in forbidden_modules or module.startswith("frameq_worker.insightflow"):
+            if module in forbidden_modules:
                 violations.append(f"{path.name}: {module}")
 
     assert violations == []

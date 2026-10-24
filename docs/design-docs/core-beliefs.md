@@ -16,7 +16,7 @@
 
 ## 3. Runtime independence
 
-InsightFlow 参考仓库只能作为开发来源。FrameQ 运行期必须依赖本项目内置代码（`worker/frameq_worker/insightflow/`），而不是依赖外部仓库或本机路径。
+FrameQ 的智能提炼由 `worker/frameq_worker/` 内的三个 agent 通过 agent_runtime 执行。提示词、分段、结果校验与原子保存由本项目维护，外部参考仓库只作为开发来源。
 
 ## 4. Recoverable partial success
 

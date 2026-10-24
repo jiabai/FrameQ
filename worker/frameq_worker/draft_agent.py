@@ -19,7 +19,7 @@ from agent_runtime.provider.entities import ProviderRequest
 from agent_runtime.provider.sources.openai_source import ProviderOpenAIOfficial
 from agent_runtime.tools.func_tool_manager import FunctionToolManager
 
-from frameq_worker.insightflow.prompt import (
+from frameq_worker.ai_prompts import (
     _platform_label_for_draft_platform,
     build_draft_from_inspiration_prompt,
 )

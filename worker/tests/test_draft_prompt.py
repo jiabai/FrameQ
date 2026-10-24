@@ -13,7 +13,7 @@ Covers the Prompt Strategy field mapping:
 from __future__ import annotations
 
 import pytest
-from frameq_worker.insightflow.prompt import (
+from frameq_worker.ai_prompts import (
     DRAFT_PLATFORM_IDS,
     _platform_label_for_draft_platform,
     build_draft_from_inspiration_prompt,

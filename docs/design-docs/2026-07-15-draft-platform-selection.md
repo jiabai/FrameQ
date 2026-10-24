@@ -10,8 +10,8 @@
 
 `生成文字稿`（父规格）落地后，稿子的「目标平台」由 `Insight.suitable_use`（灵感生成时 LLM 产出的中文字符串）静默决定：
 
-- `worker/frameq_worker/insightflow/prompt.py:274` 的 `_SUITABLE_USE_PLATFORM_LABELS`：`{"公众号":"微信公众号","抖音":"抖音","小红书":"小红书","视频号":"视频号"}`，未知值原样透传。
-- 两处消费：`prompt.py:306`（user prompt 的「目标平台」行）、`draft_agent.py:164`（system prompt 的「目标平台」行）。
+- `worker/frameq_worker/ai_prompts.py` 的 `_platform_label_for_draft_platform` 维护目标平台文体映射。
+- user prompt 与 `draft_agent.py` 的 system prompt 共用映射结果。
 
 问题：
 
@@ -75,7 +75,7 @@ else:
 
 ## 6. 平台→文体映射（worker）
 
-新增 `_platform_label_for_draft_platform(platform_id) -> str`（位于 `insightflow/prompt.py`），取代 `_platform_label_for_suitable_use`：
+`_platform_label_for_draft_platform(platform_id) -> str` 位于 `ai_prompts.py`：
 
 ```python
 _DRAFT_PLATFORM_LABELS = {
@@ -97,7 +97,7 @@ _DRAFT_PLATFORM_LABELS = {
 
 ### 7.1 worker
 
-- `insightflow/prompt.py`：
+- `ai_prompts.py`：
   - 新增 `_DRAFT_PLATFORM_LABELS` + `_platform_label_for_draft_platform(platform)`。
   - `build_draft_from_inspiration_prompt(seed, preference_snapshot, summary, platform)` 增参 `platform: str`；「目标平台」行改用 `_platform_label_for_draft_platform(platform)`，不再读 `seed.suitable_use`。
   - 保留或移除 `_platform_label_for_suitable_use`：成稿链路不再用；若别处无引用则删除，避免误导。

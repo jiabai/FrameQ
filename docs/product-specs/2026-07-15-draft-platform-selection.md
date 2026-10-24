@@ -6,7 +6,7 @@
 
 ## Background
 
-父规格落地后，`生成文字稿` 的「目标平台」是由 `Insight.suitable_use`（生成灵感时 LLM 产出的中文字符串，词表约为 公众号 / 抖音 / 小红书 / 视频号）在 worker 侧静默决定的：`worker/frameq_worker/insightflow/prompt.py` 的 `_SUITABLE_USE_PLATFORM_LABELS` 把它映射成 prompt 里的「目标平台：XX」，`draft_agent.py` 的 system prompt 同样消费它。**用户在确认页看不到、也改不了平台**，且 `suitable_use` 的词表与用户在灵感档案里配置的 `platforms`（`douyin / xiaohongshu / wechat_channels / bilibili / wechat_official_account / podcast / course_community / internal_sharing`）是两套互不对齐的词表。
+`生成文字稿` 的目标平台来自用户在确认页的选择，`worker/frameq_worker/ai_prompts.py` 与 `draft_agent.py` 使用同一平台映射生成指令。`Insight.suitable_use` 继续用于灵感展示，灵感档案的 `platforms` 用于推导确认页的默认选项。
 
 本次优化把「目标平台」变成**用户在 `生成文字稿` 确认页可见、可改的单选项**，并重做平台→文体映射：
 

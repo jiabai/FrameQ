@@ -7,7 +7,7 @@ from urllib.request import Request
 
 import pytest
 from frameq_worker.draft_agent import resolve_draft_credentials
-from frameq_worker.insightflow import InsightGenerationError
+from frameq_worker.insight_errors import InsightGenerationError
 from frameq_worker.llm import (
     checkout_anysearch_config_once,
     checkout_llm_config_once,
@@ -254,8 +254,7 @@ def test_checkout_llm_config_once_uses_request_id_verbatim_no_per_call_suffix() 
         "timeout_seconds": 33,
     }
     body = json.loads(recorded[0].data.decode("utf-8"))  # type: ignore[union-attr]
-    # request_id verbatim——无 -call-NNNN 后缀（区别于
-    # ServerManagedInsightClient.derive_per_call_request_id）。
+    # checkout 保留调用方传入的 request_id。
     assert body == {"request_id": "draft-seed-12345"}
 
 

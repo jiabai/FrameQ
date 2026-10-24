@@ -39,10 +39,9 @@ EXPECTED_SIGNATURES = {
     "retry_insights_once": (
         "request_json",
         "project_root",
-        "insight_client",
-        "insight_client_factory",
         "environ",
         "progress_callback",
+        "summary_runner",
     ),
     "run_asr_model_download_once": (
         "project_root",
