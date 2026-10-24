@@ -141,6 +141,28 @@ export function useTranscriptDocumentController({
     return range !== null;
   }, [transcriptDraft]);
 
+  const refreshPolishedTranscript = useCallback(async () => {
+    if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
+      return;
+    }
+    const expectedTaskId = workflow.taskId;
+    try {
+      const detail = await loadTranscriptDetail(expectedTaskId);
+      if (currentTaskIdRef.current !== expectedTaskId) {
+        return;
+      }
+      // Only the polished field is updated: polishing must not reset an
+      // unsaved editor draft.
+      setTranscriptDetail((current) =>
+        current
+          ? { ...current, polished_text: detail.polished_text }
+          : current,
+      );
+    } catch {
+      // Keep the current state on read failure; the polish button stays as-is.
+    }
+  }, [workflow.artifacts.transcript_txt, workflow.taskId]);
+
   const saveTranscriptDocument = useCallback(
     async (completeSuccessfulSave: CompleteSuccessfulSave) => {
       if (
@@ -204,6 +226,7 @@ export function useTranscriptDocumentController({
     transcriptLoading,
     transcriptSaving,
     locatedTranscriptRange,
+    refreshPolishedTranscript,
     saveTranscriptDocument,
     updateTranscriptSegmentDraft,
     updateFullTranscriptDraft,

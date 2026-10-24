@@ -39,6 +39,8 @@ export function useTranscriptDetailController({
     transcriptDraft: transcriptDocument.transcriptDraft,
     transcriptDirty: transcriptDocument.transcriptDirty,
     savedTranscriptText: transcriptDocument.transcriptDetail?.text ?? null,
+    polishedTranscriptText:
+      transcriptDocument.transcriptDetail?.polished_text ?? null,
     setActionNotice,
   });
   const reviewTaskId =
@@ -77,6 +79,7 @@ export function useTranscriptDetailController({
     transcriptLoading: transcriptDocument.transcriptLoading,
     transcriptSaving: transcriptDocument.transcriptSaving,
     locatedTranscriptRange: transcriptDocument.locatedTranscriptRange,
+    refreshPolishedTranscript: transcriptDocument.refreshPolishedTranscript,
     activeTranscriptSegmentId:
       transcriptReview.activeTranscriptSegmentId,
     editingTranscriptSegmentId:

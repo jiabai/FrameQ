@@ -43,6 +43,7 @@ pub(crate) struct TranscriptDetailView {
     audio_path: Option<String>,
     audio_asset_path: Option<String>,
     has_original_backup: bool,
+    polished_text: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -102,6 +103,7 @@ pub(crate) fn load_transcript_detail_from_roots(
     let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
     let transcript = edit_storage::load_transcript(&task)?;
     let segments = segments::read_segments_sidecar(&task)?;
+    let polished_text = edit_storage::load_polished_transcript(&task, &transcript.text);
     let audio_paths =
         audio_playback::load_audio_paths(&task, direct_audio_root, playback_cache_root)?;
     let (audio_path, audio_asset_path) = audio_paths
@@ -115,6 +117,7 @@ pub(crate) fn load_transcript_detail_from_roots(
         audio_path,
         audio_asset_path,
         has_original_backup: transcript.has_original_backup,
+        polished_text,
     })
 }
 

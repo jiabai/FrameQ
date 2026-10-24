@@ -49,6 +49,7 @@ import { SettingsSheet } from "./features/settings/SettingsSheet";
 import { useSettingsController } from "./features/settings/useSettingsController";
 import { LocalTranscriptWorkspace } from "./features/transcript/LocalTranscriptWorkspace";
 import { useTranscriptDetailController } from "./features/transcript/useTranscriptDetailController";
+import { useTranscriptPolishController } from "./features/transcript/useTranscriptPolishController";
 import { useWindowChromeController } from "./features/window/useWindowChromeController";
 import { AnimatedSheet } from "./features/modal/AnimatedSheet";
 import { TaskComposer } from "./features/workflow/TaskComposer";
@@ -238,6 +239,15 @@ function App() {
     () => createTaskWorkspaceViewModel(workflow, account),
     [account, workflow],
   );
+  const transcriptPolish = useTranscriptPolishController({
+    workflow,
+    outputLanguage: resolvedLocale,
+    account,
+    openAccountPanel,
+    aiBlockerMessage: accountAiBlockerMessage,
+    setActionNotice,
+    refreshPolishedTranscript: transcriptDetailController.refreshPolishedTranscript,
+  });
   const {
     aiActionNotice,
     summaryConfirmOpen,
@@ -639,6 +649,8 @@ function App() {
                   model={taskWorkspaceModel.local}
                   controller={transcriptDetailController}
                   actionNotice={aiActionNotice ? null : actionNotice}
+                  polishingTranscript={transcriptPolish.polishingTranscript}
+                  onPolishTranscript={() => void transcriptPolish.polishTranscript()}
                   onLocateArtifact={(artifact) => void locateArtifact(artifact)}
                   onCancel={() => void cancelCurrentProcessing()}
                 />

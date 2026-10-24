@@ -138,6 +138,7 @@ function detailResponse(
     audio_path: `D:/FrameQ/outputs/tasks/${taskId}/media/audio.wav`,
     audio_asset_path: `D:/FrameQ/cache/audio-review/${taskId}.wav`,
     has_original_backup: false,
+    polished_text: null,
   };
 }
 
@@ -253,6 +254,7 @@ describe("useTranscriptDetailController segment editing", () => {
       "openDetailTab",
       "playTranscriptSegment",
       "prepareTranscriptForTaskDeletion",
+      "refreshPolishedTranscript",
       "saveTranscriptDraft",
       "scrubTranscriptAudio",
       "toggleTranscriptAudio",

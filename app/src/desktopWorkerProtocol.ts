@@ -228,6 +228,14 @@ export type RetryInsightsInput =
       preferenceSnapshot?: never;
       insightId: number;
       platform: string;
+    }
+  | {
+      taskId: string;
+      target: "transcript";
+      outputLanguage: SupportedLocale;
+      preferenceSnapshot?: never;
+      insightId?: never;
+      platform?: never;
     };
 
 export type RetryInsightsWireRequest =
@@ -253,6 +261,11 @@ export type RetryInsightsWireRequest =
       output_language: SupportedLocale;
       insight_id: number;
       platform: string;
+    }
+  | {
+      task_id: string;
+      target: "transcript";
+      output_language: SupportedLocale;
     };
 
 export type RetryInsightsParseResult =
@@ -534,7 +547,8 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
     (payload.target !== "summary" &&
       payload.target !== "insights" &&
       payload.target !== "dissection" &&
-      payload.target !== "draft") ||
+      payload.target !== "draft" &&
+      payload.target !== "transcript") ||
     !isSupportedLocale(payload.outputLanguage)
   ) {
     return { kind: "invalid", taskId };
@@ -548,7 +562,11 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
     return { kind: "invalid", taskId };
   }
 
-  if (payload.target === "summary" || payload.target === "dissection") {
+  if (
+    payload.target === "summary" ||
+    payload.target === "dissection" ||
+    payload.target === "transcript"
+  ) {
     return {
       kind: "valid",
       request: {

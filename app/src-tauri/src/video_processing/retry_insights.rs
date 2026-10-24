@@ -21,6 +21,8 @@ enum RetryInsightsTarget {
     Dissection,
     #[serde(rename = "draft")]
     Draft,
+    #[serde(rename = "transcript")]
+    Transcript,
 }
 
 impl RetryInsightsTarget {
@@ -30,6 +32,7 @@ impl RetryInsightsTarget {
             Self::Insights => "insights",
             Self::Dissection => "dissection",
             Self::Draft => "draft",
+            Self::Transcript => "transcript",
         }
     }
 }
@@ -591,6 +594,25 @@ mod tests {
             let error = parse_retry_insights_request(payload).expect_err("reject retry request");
             assert_eq!(error, INVALID_RETRY_PAYLOAD);
         }
+    }
+
+    #[test]
+    fn retry_transcript_request_uses_only_common_fields() {
+        let request = parse_retry_insights_request(serde_json::json!({
+            "task_id": "20260705-153012-douyin-demo",
+            "target": "transcript",
+            "output_language": "zh-CN"
+        }))
+        .expect("valid transcript request");
+
+        assert_eq!(
+            serde_json::to_value(request).expect("serialize transcript request"),
+            serde_json::json!({
+                "task_id": "20260705-153012-douyin-demo",
+                "target": "transcript",
+                "output_language": "zh-CN"
+            })
+        );
     }
 
     #[test]

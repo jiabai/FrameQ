@@ -174,6 +174,8 @@ describe("task domain workspaces", () => {
           model={model.local}
           controller={transcriptController()}
           actionNotice={null}
+          polishingTranscript={false}
+          onPolishTranscript={vi.fn()}
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
         />
@@ -220,6 +222,8 @@ describe("task domain workspaces", () => {
           model={processingModel.local}
           controller={transcriptController()}
           actionNotice={null}
+          polishingTranscript={false}
+          onPolishTranscript={vi.fn()}
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
         />
@@ -257,6 +261,8 @@ describe("task domain workspaces", () => {
         model={failedModel.local}
         controller={transcriptController()}
           actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -290,6 +296,8 @@ describe("task domain workspaces", () => {
         model={extractingModel.local}
         controller={transcriptController()}
         actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -313,6 +321,8 @@ describe("task domain workspaces", () => {
         model={transcribingModel.local}
         controller={transcriptController()}
         actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -338,6 +348,8 @@ describe("task domain workspaces", () => {
         model={model.local}
         controller={transcriptController()}
         actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -359,6 +371,8 @@ describe("task domain workspaces", () => {
         model={model.local}
         controller={transcriptController()}
         actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -383,6 +397,8 @@ describe("task domain workspaces", () => {
         model={model.local}
         controller={transcriptController()}
           actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -393,8 +409,10 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("定位视频");
     expect(markup).toContain("定位音频");
     expect(markup).toContain("定位文字稿");
+    expect(markup).toContain("整理文字稿");
+    expect(markup).not.toContain("复制文字稿");
     expect(markup.indexOf("定位文字稿")).toBeLessThan(
-      markup.indexOf("复制文字稿"),
+      markup.indexOf("整理文字稿"),
     );
     expect(markup).toContain('class="transcript-review-panel"');
     expect(markup).toContain("第一段正式文字稿。");
@@ -424,6 +442,8 @@ describe("task domain workspaces", () => {
         model={model.local}
         controller={controller}
         actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -460,6 +480,8 @@ describe("task domain workspaces", () => {
         model={model.local}
         controller={transcriptController()}
         actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -468,8 +490,88 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("定位视频");
     expect(markup).toContain("定位音频");
     expect(markup).toContain("定位文字稿");
-    expect(markup).toContain("复制文字稿");
+    expect(markup).toContain("整理文字稿");
     expect(markup).toContain("来源：本地 ASR");
+  });
+
+  test("local workspace swaps the polish button for copy once a polished transcript exists", () => {
+    const workflow = summarizeWorkerResult({
+      status: "completed",
+      task_id: "polished-task",
+      task_dir: "D:/FrameQ/outputs/tasks/polished-task",
+      artifacts: {
+        audio: "media/audio.wav",
+        transcript_txt: "transcript/transcript.txt",
+        transcript_md: "transcript/transcript.md",
+      },
+      text: "音频文件文字稿。",
+      summary: "",
+      insights: [],
+      transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
+      dissection: null,
+      dissection_source_status: null,
+      draft: "",
+      error: null,
+    });
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const polishedController: TranscriptDetailController = {
+      ...transcriptController(),
+      transcriptDetail: {
+        ...transcriptController().transcriptDetail!,
+        polished_text: "整理后的音频文件文字稿。",
+      },
+    };
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={polishedController}
+        actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("复制文字稿");
+    expect(markup).not.toContain("整理文字稿");
+  });
+
+  test("local workspace marks the polish button busy while polishing", () => {
+    const workflow = summarizeWorkerResult({
+      status: "completed",
+      task_id: "polishing-task",
+      task_dir: "D:/FrameQ/outputs/tasks/polishing-task",
+      artifacts: {
+        audio: "media/audio.wav",
+        transcript_txt: "transcript/transcript.txt",
+        transcript_md: "transcript/transcript.md",
+      },
+      text: "音频文件文字稿。",
+      summary: "",
+      insights: [],
+      transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
+      dissection: null,
+      dissection_source_status: null,
+      draft: "",
+      error: null,
+    });
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={transcriptController()}
+        actionNotice={null}
+        polishingTranscript={true}
+        onPolishTranscript={vi.fn()}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("整理中");
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain('disabled=""');
   });
 
   test("AI workspace has independent summary, inspiration, and dissection targets without a mindmap target", () => {
@@ -644,6 +746,8 @@ describe("task domain workspaces", () => {
         model={model.local}
         controller={transcriptController()}
           actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -703,6 +807,8 @@ describe("task domain workspaces", () => {
           model={model.local}
           controller={transcriptController()}
           actionNotice={null}
+          polishingTranscript={false}
+          onPolishTranscript={vi.fn()}
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
         />,
@@ -747,6 +853,8 @@ describe("task domain workspaces", () => {
         model={model.local}
         controller={transcriptController()}
           actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
         onLocateArtifact={vi.fn()}
         onCancel={vi.fn()}
       />,

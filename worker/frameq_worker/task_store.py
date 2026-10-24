@@ -116,6 +116,14 @@ class TaskPaths:
         return self.transcript_dir / "segments.json"
 
     @property
+    def transcript_polished_txt_path(self) -> Path:
+        return self.transcript_dir / "polished.txt"
+
+    @property
+    def transcript_polished_meta_path(self) -> Path:
+        return self.transcript_dir / "polished.meta.json"
+
+    @property
     def summary_path(self) -> Path:
         return self.ai_dir / "summary.md"
 

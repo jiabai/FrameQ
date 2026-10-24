@@ -21,6 +21,8 @@ type UseArtifactDetailControllerOptions = {
   transcriptDraft: string;
   transcriptDirty: boolean;
   savedTranscriptText: string | null;
+  /** LLM-polished transcript; when non-null, "Copy Transcript" copies it instead of the ASR original. */
+  polishedTranscriptText: string | null;
   setActionNotice: Dispatch<SetStateAction<UiMessage | null>>;
 };
 
@@ -30,6 +32,7 @@ export function useArtifactDetailController({
   transcriptDraft,
   transcriptDirty,
   savedTranscriptText,
+  polishedTranscriptText,
   setActionNotice,
 }: UseArtifactDetailControllerOptions) {
   const [detailTab, setDetailTab] = useState<DetailTab | null>(null);
@@ -86,6 +89,19 @@ export function useArtifactDetailController({
   }, [setActionNotice, transcriptDraft]);
 
   const copyTranscriptFile = useCallback(async () => {
+    if (polishedTranscriptText !== null) {
+      if (!polishedTranscriptText) {
+        setActionNotice(uiMessage("transcript.notice.nothingToCopy"));
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(polishedTranscriptText);
+        setActionNotice(uiMessage("transcript.notice.copied"));
+      } catch {
+        setActionNotice(uiMessage("transcript.notice.transcriptCopyFailed"));
+      }
+      return;
+    }
     if (savedTranscriptText === null) {
       setActionNotice(uiMessage("transcript.notice.transcriptFileCopyFailed"));
       return;
@@ -100,7 +116,7 @@ export function useArtifactDetailController({
     } catch {
       setActionNotice(uiMessage("transcript.notice.transcriptCopyFailed"));
     }
-  }, [savedTranscriptText, setActionNotice]);
+  }, [polishedTranscriptText, savedTranscriptText, setActionNotice]);
 
   const exportDetail = useCallback(async () => {
     if (!detailTab) {

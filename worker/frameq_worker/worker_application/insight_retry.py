@@ -37,6 +37,7 @@ from frameq_worker.task_transaction import (
     TaskArtifactCommitError,
     TaskArtifactRecoveryError,
 )
+from frameq_worker.transcript_polish import run_transcript_polish_step
 from frameq_worker.worker_application import defaults
 
 InsightClientFactory = Callable[[dict[str, str]], InsightClient | None]
@@ -148,6 +149,21 @@ def retry_insights_once(
                 transcript=opened_task.transcript,
             ).to_dict()
 
+    if request.target == "transcript":
+        # 整理文字稿：读已保存的正式稿，产出 transcript/polished.txt，原稿不动。
+        polish_result = run_transcript_polish_step(
+            task_context=task_context,
+            runtime_env=runtime_env,
+            progress_callback=progress_callback,
+        )
+        merged_polish_result = merge_existing_ai_artifacts(task_context.paths, polish_result)
+        return _finalize_retry_result(
+            task_store=task_store,
+            task_context=task_context,
+            merged_result=merged_polish_result,
+            transcript=opened_task.transcript,
+        )
+
     insight_result = run_insight_generation_step(
         transcript_txt_path=task_context.paths.transcript_txt_path,
         output_dir=task_context.paths.ai_dir,
@@ -208,6 +224,35 @@ def merge_existing_ai_artifacts(
         artifact_payloads=result.artifact_payloads,
         draft=result.draft,
     )
+
+
+def _finalize_retry_result(
+    *,
+    task_store: TaskStoreFacade,
+    task_context: TaskContext,
+    merged_result: ProcessResult,
+    transcript: TranscriptMetadata | None,
+) -> dict[str, object]:
+    try:
+        return task_store.finalize(
+            task_context,
+            merged_result,
+            draft_seed_insight_id=DRAFT_SEED_UNSET,
+        ).to_dict()
+    except TaskArtifactRecoveryError:
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_RECOVERY_FAILED",
+            message="Task artifacts could not be recovered safely.",
+            text=merged_result.text,
+            transcript=transcript,
+        ).to_dict()
+    except (AtomicFileCommitError, TaskArtifactCommitError):
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_COMMIT_FAILED",
+            message="Task artifacts could not be stored safely.",
+            text=merged_result.text,
+            transcript=transcript,
+        ).to_dict()
 
 
 def run_draft_generation_step(

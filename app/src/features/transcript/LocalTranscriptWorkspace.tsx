@@ -6,6 +6,7 @@ import {
   FileText,
   Film,
   LoaderCircle,
+  Sparkles,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -24,7 +25,9 @@ type LocalTranscriptWorkspaceProps = {
   model: TaskWorkspaceViewModel["local"];
   controller: TranscriptDetailController;
   actionNotice: UiMessage | null;
+  polishingTranscript: boolean;
   onLocateArtifact: (artifact: Extract<TaskArtifactKey, "video" | "audio">) => void;
+  onPolishTranscript: () => void;
   onCancel: () => void;
 };
 
@@ -32,7 +35,9 @@ export function LocalTranscriptWorkspace({
   model,
   controller,
   actionNotice,
+  polishingTranscript,
   onLocateArtifact,
+  onPolishTranscript,
   onCancel,
 }: LocalTranscriptWorkspaceProps) {
   const { t, i18n } = useTranslation("transcript");
@@ -40,6 +45,8 @@ export function LocalTranscriptWorkspace({
     ? i18n.resolvedLanguage
     : "en-US";
   const renderedActionNotice = renderUiMessage(locale, actionNotice);
+  const polishedTranscriptText =
+    controller.transcriptDetail?.polished_text ?? null;
 
   return (
     <section
@@ -113,7 +120,7 @@ export function LocalTranscriptWorkspace({
         <TranscriptReviewPanel
           transcriptSource={model.transcriptSource}
           controller={controller}
-          editingDisabled={!model.canEdit}
+          editingDisabled={!model.canEdit || polishingTranscript}
           readOnlyReason={
             model.readOnly ? t("review.readOnlyDuringAi") : null
           }
@@ -159,18 +166,43 @@ export function LocalTranscriptWorkspace({
                 </button>
               ) : null}
               {model.artifactActions.copyTranscript.visible ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void controller.copyTranscriptFile()}
-                  disabled={
-                    !model.artifactActions.copyTranscript.enabled ||
-                    controller.transcriptLoading
-                  }
-                >
-                  <Copy size={16} />
-                  <span>{t("workspace.copyTranscript")}</span>
-                </button>
+                polishedTranscriptText === null ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={onPolishTranscript}
+                    aria-busy={polishingTranscript}
+                    disabled={
+                      !model.artifactActions.copyTranscript.enabled ||
+                      controller.transcriptLoading ||
+                      polishingTranscript
+                    }
+                  >
+                    {polishingTranscript ? (
+                      <LoaderCircle size={16} className="spin" aria-hidden="true" />
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
+                    <span>
+                      {polishingTranscript
+                        ? t("workspace.polishingTranscript")
+                        : t("workspace.polishTranscript")}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void controller.copyTranscriptFile()}
+                    disabled={
+                      !model.artifactActions.copyTranscript.enabled ||
+                      controller.transcriptLoading
+                    }
+                  >
+                    <Copy size={16} />
+                    <span>{t("workspace.copyTranscript")}</span>
+                  </button>
+                )
               ) : null}
             </div>
           ) : undefined}

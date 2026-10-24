@@ -1,14 +1,59 @@
 use super::{segments, TranscriptSegmentView};
 use crate::task_manifest;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 const TRANSCRIPT_SECTION_MARKER: &str = "## Transcript";
+const POLISHED_SOURCE_KEY: &str = "sourceTranscriptSha256";
 
 pub(super) struct LoadedTranscript {
     pub(super) text: String,
     pub(super) has_original_backup: bool,
+}
+
+/// 读取 LLM 整理稿（``transcript/polished.txt``）。
+///
+/// 整理稿是独立副本，桌面端只在它仍对得上当前正式稿时才提供：meta 里的
+/// ``sourceTranscriptSha256`` 与正式稿摘要不一致（用户改过原稿）或 meta 缺失时，
+/// 一律视作没有整理稿。
+pub(super) fn load_polished_transcript(
+    task: &task_manifest::SupportedTask,
+    official_text: &str,
+) -> Option<String> {
+    let polished_path = task.task_dir().join("transcript").join("polished.txt");
+    if reject_linked_artifact_target(&polished_path).is_err() || !polished_path.is_file() {
+        return None;
+    }
+    let meta_path = task.task_dir().join("transcript").join("polished.meta.json");
+    if reject_linked_artifact_target(&meta_path).is_err() {
+        return None;
+    }
+    let expected = transcript_sha256(official_text);
+    let recorded = read_polished_source_sha256(&meta_path)?;
+    if recorded != expected {
+        return None;
+    }
+    let text = fs::read_to_string(&polished_path).ok()?.trim().to_string();
+    if text.is_empty() {
+        return None;
+    }
+    Some(text)
+}
+
+fn read_polished_source_sha256(meta_path: &Path) -> Option<String> {
+    let raw = fs::read_to_string(meta_path).ok()?;
+    let payload: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let value = payload.get(POLISHED_SOURCE_KEY)?.as_str()?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+fn transcript_sha256(text: &str) -> String {
+    format!("{:x}", Sha256::digest(text.as_bytes()))
 }
 
 pub(super) struct SavedTranscript {

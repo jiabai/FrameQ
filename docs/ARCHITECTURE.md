@@ -1,5 +1,31 @@
 # FrameQ Architecture
 
+## 2026-10-24 Transcript polish target boundary
+
+- 「整理文字稿」 reuses the `retry_insights` command with `target="transcript"`, raising the global
+  desktop-worker contract to v9. No new Tauri command and no new FrameQ server interface exist for
+  transcript polishing.
+- The worker step lives in `worker/frameq_worker/transcript_polish.py` and is dispatched by the
+  `retry_insights_once` transcript branch. It reads only the exact-path-validated, non-link official
+  `transcript/transcript.txt`, splits it into ~2000-char sentence-boundary chunks (at most 24 chunks,
+  200 chars of preceding text as join context), and corrects each chunk via the same
+  `agent_runtime` `ProviderOpenAIOfficial` construction as draft generation. One polish run performs
+  exactly one server-managed LLM checkout (one AI Credit) regardless of chunk count.
+- The polished result is a separate artifact at `transcript/polished.txt` plus
+  `transcript/polished.meta.json` (schema v1, carrying `sourceTranscriptSha256`), written with
+  atomic replacement. The ASR original `transcript.txt`, `segments.json`, and the manifest
+  `text`/`text_preview` fields are never modified, and the polished files are intentionally not
+  registered in the task-transaction artifact whitelist.
+- `load_transcript_detail` returns `polished_text: Option<String>`: the polished body is exposed
+  only when `polished.txt` exists, is a regular non-link file, and its meta `sourceTranscriptSha256`
+  still matches the current `transcript.txt`. A stale or mismatched polish is treated as absent, so
+  editing the official transcript returns the UI button to the polish affordance.
+- The frontend keeps `"transcript"` out of the AI-workspace `InsightRetryTarget` union: polishing is
+  a local-workspace toolbar action, reuses the `insights_generating` stage and `activeAiTarget`-free
+  progress, and fails with `POLISH_*` error codes that map to `transcript.*` error copy. The toolbar
+  button is dual-state: 「整理文字稿」 before a valid polish exists, 「复制文字稿」 (copying the
+  polished body) afterwards.
+
 ## 2026-10-10 Draft generation target and server-managed anysearch boundary
 
 - `AI整理` exposes four peer target cards: `要点总结`, `文字稿解剖`, `启发灵感`, and
@@ -70,7 +96,7 @@
 
 ## 2026-08-10 Desktop diagnostic export boundary
 
-- The global desktop-worker contract is v8. `FRAMEQ_DIAGNOSTIC ` is a separate, strict stderr
+- The global desktop-worker contract is v9. `FRAMEQ_DIAGNOSTIC ` is a separate, strict stderr
   channel for one message-free, closed diagnostic event on terminal ASR model-download failure.
   The Rust worker runner is its only consumer: diagnostic records never enter `ProgressRoute`,
   never refresh the idle watchdog, never become UI progress, and never alter stdout terminal
@@ -816,7 +842,7 @@
 
 ## 2026-07-08 Split Summary and Inspiration Generation Boundary
 
-- `retry_insights` now receives an explicit target: `summary` or `insights`. The command still reuses the saved official transcript and the owning task manifest; it must not re-download media or rerun ASR.
+- `retry_insights` now receives an explicit target: `summary` or `insights` (later extended by `draft` and `transcript` polish). The command still reuses the saved official transcript and the owning task manifest; it must not re-download media or rerun ASR.
 - The `summary` target generates only `ai/summary.md` and hidden `ai/mindmap.mmd`. It must not accept, read, write, or prompt with the personalized preference snapshot.
 - The `insights` target generates only `ai/insights.json` and `ai/insights.md`. It may persist `ai/preference-snapshot.json` and may include that snapshot only in insight-topic prompts.
 - Retrying either target must merge existing AI artifacts from the same task directory before writing `frameq-task.json`, so generating one output cannot clear the other output or reset `insights_count`.
@@ -1143,7 +1169,7 @@ graph LR
   直接 spawn、wait、finish、发送 OS 信号或转发未验证 progress。
 - UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
-- `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和私有 process orchestration 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary`、`insights` 或 `draft` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用；`draft` 目标以单条 Insight + 任务局部偏好快照为种子，经 agent（anysearch 联网检索 + skills + planning + submit_draft）生成草稿，写入 `ai/draft.md`，不送 transcript 片段。
+- `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿，其请求模型和私有 process orchestration 中不存在 AI 开关或自动 AI 分支；`retry_insights` 在用户二次确认后按 `summary`、`insights`、`draft` 或 `transcript` 目标单独运行，并且是唯一可以构造 AI client、进入 AI generation、需要 server-managed LLM checkout 和消耗额度的本地 worker 调用；`draft` 目标以单条 Insight + 任务局部偏好快照为种子，经 agent（anysearch 联网检索 + skills + planning + submit_draft）生成草稿，写入 `ai/draft.md`，不送 transcript 片段；`transcript` 目标分段修正 ASR 文字稿，写入独立的 `transcript/polished.txt`，不改动原稿。
 - 外部参考仓库只允许作为开发来源，禁止成为运行期依赖；运行期必须依赖本仓库 `worker/frameq_worker/insightflow/` 内置代码。
 - 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `cache/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
 - 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。

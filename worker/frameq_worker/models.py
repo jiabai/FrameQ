@@ -8,7 +8,7 @@ from typing import Literal
 from frameq_worker.output_language import OutputLanguage
 from frameq_worker.source_identity import SourceIdentity
 
-RetryInsightTarget = Literal["summary", "insights", "dissection", "draft"]
+RetryInsightTarget = Literal["summary", "insights", "dissection", "draft", "transcript"]
 InsightGenerationTarget = Literal["all", "summary", "insights", "dissection"]
 LocalMediaKind = Literal["video", "audio"]
 

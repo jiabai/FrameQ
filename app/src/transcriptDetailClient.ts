@@ -26,6 +26,8 @@ export type TranscriptDetailResponse = {
   audio_path: string | null;
   audio_asset_path: string | null;
   has_original_backup: boolean;
+  /** LLM-polished transcript; null when absent or stale. */
+  polished_text: string | null;
 };
 
 export type SaveTranscriptEditResponse = {
@@ -91,14 +93,20 @@ function parseTranscriptDetailResponse(
       "audio_asset_path",
       "has_original_backup",
     ],
-    [],
+    ["polished_text"],
     TRANSCRIPT_IPC_RESPONSE_INVALID,
   );
+  const hasPolishedText = Object.prototype.hasOwnProperty.call(
+    response,
+    "polished_text",
+  );
+  const polishedText = hasPolishedText ? response.polished_text : null;
   if (
     response.task_id !== expectedTaskId ||
     typeof response.text !== "string" ||
     !isNullableString(response.audio_path) ||
     !isNullableString(response.audio_asset_path) ||
+    !isNullableString(polishedText) ||
     typeof response.has_original_backup !== "boolean"
   ) {
     throwInvalidTranscriptResponse();
@@ -113,6 +121,7 @@ function parseTranscriptDetailResponse(
     audio_path: response.audio_path,
     audio_asset_path: response.audio_asset_path,
     has_original_backup: response.has_original_backup,
+    polished_text: polishedText,
   };
 }
 

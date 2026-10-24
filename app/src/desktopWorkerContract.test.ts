@@ -184,10 +184,10 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict desktop contract v8 while preserving request versions", () => {
+  test("uses strict desktop contract v9 while preserving request versions", () => {
     const contract = loadContract();
 
-    expect(contract.contractVersion).toBe(8);
+    expect(contract.contractVersion).toBe(9);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.events.workerDiagnosticPrefix).toBe("FRAMEQ_DIAGNOSTIC ");
@@ -210,7 +210,7 @@ describe("desktop/worker contract", () => {
     };
     visit(contract);
 
-    expect(contract.contractVersion).toBe(8);
+    expect(contract.contractVersion).toBe(9);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);

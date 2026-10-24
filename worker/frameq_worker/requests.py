@@ -296,7 +296,7 @@ def _parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
         raise ValueError
 
     target = payload.get("target")
-    if target not in {"summary", "insights", "dissection", "draft"}:
+    if target not in {"summary", "insights", "dissection", "draft", "transcript"}:
         raise ValueError
 
     output_language = payload.get("output_language")

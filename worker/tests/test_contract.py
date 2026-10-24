@@ -26,10 +26,10 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v8_while_request_versions_stay_fixed() -> None:
+def test_contract_version_is_strictly_v9_while_request_versions_stay_fixed() -> None:
     contract = load_contract()
 
-    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 8
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 9
     assert LOCAL_MEDIA_CONTRACT_VERSION == 4
     assert PROCESS_VIDEO_CONTRACT_VERSION == 3
     assert contract["localMedia"]["workerRequest"]["properties"]["contract_version"] == {

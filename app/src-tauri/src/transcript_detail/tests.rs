@@ -7,6 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// sha256("original text")，用于构造「整理稿仍然对得上当前正式稿」的场景。
+const POLISHED_SOURCE_SHA256: &str =
+    "b61e285b0ad77c1cbe7654c9b8a029e4a2effc33ca7164185bff1beb4b71156d";
+
 #[test]
 fn load_detail_reads_text_segments_audio_and_backup_status() {
     let output_root = temp_dir("load_detail_task");
@@ -735,6 +739,117 @@ fn save_detail_mid_commit_failure_restores_complete_previous_revision() {
 }
 
 #[test]
+fn load_detail_returns_none_when_no_polished_transcript_exists() {
+    let output_root = temp_dir("load_detail_polished_absent");
+    let task_id = "20260705-153012-douyin-7645505408425004329";
+    let task_dir = create_task(&output_root, task_id);
+    fs::write(
+        task_dir.join("transcript").join("transcript.txt"),
+        "original text\n",
+    )
+    .expect("write transcript");
+    write_manifest(&task_dir, task_id, false);
+
+    let detail = load_transcript_detail_from_output_root(
+        &output_root,
+        LoadTranscriptDetailRequest {
+            task_id: task_id.to_string(),
+        },
+    )
+    .expect("load detail");
+
+    assert_eq!(detail.polished_text, None);
+}
+
+#[test]
+fn load_detail_returns_polished_transcript_while_the_official_body_is_unchanged() {
+    let output_root = temp_dir("load_detail_polished_current");
+    let task_id = "20260705-153012-douyin-7645505408425004329";
+    let task_dir = create_task(&output_root, task_id);
+    fs::write(
+        task_dir.join("transcript").join("transcript.txt"),
+        "original text\n",
+    )
+    .expect("write transcript");
+    fs::write(
+        task_dir.join("transcript").join("polished.txt"),
+        "polished text\n",
+    )
+    .expect("write polished transcript");
+    write_polished_meta(&task_dir, POLISHED_SOURCE_SHA256);
+    write_manifest(&task_dir, task_id, false);
+
+    let detail = load_transcript_detail_from_output_root(
+        &output_root,
+        LoadTranscriptDetailRequest {
+            task_id: task_id.to_string(),
+        },
+    )
+    .expect("load detail");
+
+    assert_eq!(detail.text, "original text");
+    assert_eq!(detail.polished_text, Some("polished text".to_string()));
+}
+
+#[test]
+fn load_detail_hides_polished_transcript_when_the_official_body_changed() {
+    let output_root = temp_dir("load_detail_polished_stale");
+    let task_id = "20260705-153012-douyin-7645505408425004329";
+    let task_dir = create_task(&output_root, task_id);
+    fs::write(
+        task_dir.join("transcript").join("transcript.txt"),
+        "edited text\n",
+    )
+    .expect("write transcript");
+    fs::write(
+        task_dir.join("transcript").join("polished.txt"),
+        "polished text\n",
+    )
+    .expect("write polished transcript");
+    // meta 记录的是旧原稿的摘要，用户改过稿后整理稿必须判为过期。
+    write_polished_meta(&task_dir, "0000000000000000000000000000000000000000000000000000000000000000");
+    write_manifest(&task_dir, task_id, false);
+
+    let detail = load_transcript_detail_from_output_root(
+        &output_root,
+        LoadTranscriptDetailRequest {
+            task_id: task_id.to_string(),
+        },
+    )
+    .expect("load detail");
+
+    assert_eq!(detail.polished_text, None);
+}
+
+#[test]
+fn load_detail_hides_polished_transcript_without_a_readable_meta_file() {
+    let output_root = temp_dir("load_detail_polished_meta_missing");
+    let task_id = "20260705-153012-douyin-7645505408425004329";
+    let task_dir = create_task(&output_root, task_id);
+    fs::write(
+        task_dir.join("transcript").join("transcript.txt"),
+        "original text\n",
+    )
+    .expect("write transcript");
+    fs::write(
+        task_dir.join("transcript").join("polished.txt"),
+        "polished text\n",
+    )
+    .expect("write polished transcript");
+    write_manifest(&task_dir, task_id, false);
+
+    let detail = load_transcript_detail_from_output_root(
+        &output_root,
+        LoadTranscriptDetailRequest {
+            task_id: task_id.to_string(),
+        },
+    )
+    .expect("load detail");
+
+    assert_eq!(detail.polished_text, None);
+}
+
+#[test]
 fn transcript_detail_module_boundary_matches_approved_owners() {
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let module_root = source_root.join("transcript_detail");
@@ -838,6 +953,16 @@ fn write_manifest(task_dir: &Path, task_id: &str, include_segments: bool) {
         ),
     )
     .expect("write manifest");
+}
+
+fn write_polished_meta(task_dir: &Path, source_transcript_sha256: &str) {
+    fs::write(
+        task_dir.join("transcript").join("polished.meta.json"),
+        format!(
+            r#"{{"schemaVersion":1,"sourceTranscriptSha256":"{source_transcript_sha256}"}}"#
+        ),
+    )
+    .expect("write polished meta");
 }
 
 fn temp_dir(name: &str) -> PathBuf {

@@ -73,6 +73,11 @@ export const errorResources = {
     transcript: {
       pathInvalid: "文字稿路径无效，请重新处理该任务。",
       notFound: "未找到文字稿文件，请重新运行主流程。",
+      polishEmpty: "文字稿为空，暂时无法整理。",
+      polishTooLong: "文字稿过长，暂时无法整理。请拆分为较短的视频后重试。",
+      polishFailed: "整理文字稿失败，请稍后重试。",
+      polishEmptyResult: "云端 LLM 未返回可用的整理结果。",
+      polishWriteFailed: "无法安全保存整理后的文字稿，请检查磁盘空间和权限后重试。",
     },
     insight: {
       quotaUnavailable: "AI Credits 不足，请补充余额后重试。",
@@ -171,6 +176,11 @@ export const errorResources = {
     transcript: {
       pathInvalid: "逐字稿路徑無效，請重新處理此工作。",
       notFound: "找不到逐字稿檔案，請重新執行主要流程。",
+      polishEmpty: "逐字稿為空，暫時無法整理。",
+      polishTooLong: "逐字稿過長，暫時無法整理。請改為較短的影片後重試。",
+      polishFailed: "整理逐字稿失敗，請稍後重試。",
+      polishEmptyResult: "雲端 LLM 未回傳可用的整理結果。",
+      polishWriteFailed: "無法安全儲存整理後的逐字稿，請檢查磁碟空間和權限後重試。",
     },
     insight: {
       quotaUnavailable: "AI Credits 不足，請補充餘額後重試。",
@@ -272,6 +282,11 @@ export const errorResources = {
     transcript: {
       pathInvalid: "The transcript path is invalid. Process the task again.",
       notFound: "The transcript file could not be found. Run the main workflow again.",
+      polishEmpty: "The transcript is empty, so it cannot be polished.",
+      polishTooLong: "The transcript is too long to polish. Try a shorter video.",
+      polishFailed: "Transcript polishing failed. Try again later.",
+      polishEmptyResult: "The cloud LLM did not return a usable polished transcript.",
+      polishWriteFailed: "The polished transcript could not be saved safely. Check disk space and permissions, then try again.",
     },
     insight: {
       quotaUnavailable: "There are not enough AI Credits. Add more credits and try again.",
