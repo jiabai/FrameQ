@@ -244,6 +244,16 @@ def test_single_empty_chunk_falls_back_to_the_original_body() -> None:
     assert polished == "原样句子。\n原样句子。"
 
 
+def test_polish_system_prompt_keeps_moderate_bounds() -> None:
+    from frameq_worker.transcript_polish import POLISH_SYSTEM_PROMPT
+
+    # 中度整理：既要求删除口头语与分段，也必须锁住不改事实、不换实词。
+    assert "口头语" in POLISH_SYSTEM_PROMPT
+    assert "自然段落" in POLISH_SYSTEM_PROMPT
+    assert "不得改变原意" in POLISH_SYSTEM_PROMPT
+    assert "不润色" in POLISH_SYSTEM_PROMPT
+
+
 def test_chunk_transcript_and_prompt_carry_preceding_tail() -> None:
     body = "第一句内容。" * 600
     chunks = chunk_transcript(body, max_chars=1000)

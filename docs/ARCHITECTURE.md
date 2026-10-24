@@ -8,8 +8,10 @@
 - The worker step lives in `worker/frameq_worker/transcript_polish.py` and is dispatched by the
   `retry_insights_once` transcript branch. It reads only the exact-path-validated, non-link official
   `transcript/transcript.txt`, splits it into ~2000-char sentence-boundary chunks (at most 24 chunks,
-  200 chars of preceding text as join context), and corrects each chunk via the same
-  `agent_runtime` `ProviderOpenAIOfficial` construction as draft generation. One polish run performs
+  200 chars of preceding text as join context), and moderately polishes each chunk via the same
+  `agent_runtime` `ProviderOpenAIOfficial` construction as draft generation: fix ASR errors, drop
+  filler words and meaningless repeats, re-paragraph by meaning, while never altering facts,
+  wording of content-bearing terms, or tone. One polish run performs
   exactly one server-managed LLM checkout (one AI Credit) regardless of chunk count.
 - The polished result is a separate artifact at `transcript/polished.txt` plus
   `transcript/polished.meta.json` (schema v1, carrying `sourceTranscriptSha256`), written with
