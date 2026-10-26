@@ -121,6 +121,6 @@ scope without improving the immediate video-lane boundary.
 ## References
 
 - `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
-- `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 - `app/src-tauri/src/worker_runtime/`
 - `app/src-tauri/src/video_processing.rs`

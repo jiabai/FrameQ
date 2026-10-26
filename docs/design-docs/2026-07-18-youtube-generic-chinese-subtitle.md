@@ -49,6 +49,6 @@ track and avoids duplicate downloads or translated-caption ambiguity.
 ## References
 
 - `docs/product-specs/2026-06-16-douyin-video-transcription-client.md`
-- `docs/exec-plans/active/2026-07-18-youtube-generic-chinese-subtitle-plan.md`
+- `docs/exec-plans/completed/2026-07-18-youtube-generic-chinese-subtitle-plan.md`
 - `worker/frameq_worker/media.py`
 - `worker/frameq_worker/subtitles.py`

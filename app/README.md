@@ -7,7 +7,7 @@ Start with the project-level [README](../README.md) for product scope, release d
 ## Common Commands
 
 ```powershell
-npm --prefix app install
+(cd app && npm install)
 npm --prefix app test
 npm --prefix app run build
 npm --prefix app run tauri -- build --no-bundle

@@ -2,7 +2,7 @@
 
 - Date: 2026-07-19
 - Status: Accepted and implemented for the current URL source
-- Related plan: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- Related plan: `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 
 ## Context
 

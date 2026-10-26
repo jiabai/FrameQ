@@ -338,4 +338,4 @@ changed.
   Review Boundary”
 - `docs/SECURITY.md` sections “Task Access Facade Enforcement” and “Transcript Audio Review Local
   File Boundary”
-- `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`

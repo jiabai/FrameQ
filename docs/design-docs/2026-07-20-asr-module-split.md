@@ -4,6 +4,11 @@
 
 **Status:** Implemented and accepted on 2026-07-21
 
+**Superseded portion:** The Qwen ASR adapter (`asr_runtime/qwen.py`, `QwenAsrTranscriber`,
+`build_qwen_asr_transcriber`, `QWEN_ASR_MODEL`, lazy `qwen_asr` import) was removed on 2026-10-20.
+All references to Qwen in this document are historical record only; the current ASR registry
+contains SenseVoice Small (PyTorch) and SenseVoiceSmall-ONNX.
+
 **Baseline:** `0157e81`
 
 ## Context

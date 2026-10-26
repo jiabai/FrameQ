@@ -2,9 +2,9 @@
 
 ## Status
 
-2026-07-15 完成需求盘问并锁定决策，待实现。是 `2026-07-12-generate-draft-from-inspiration` 的增量优化，只动「平台来源 + 平台→文体映射」这一条链路。
+2026-07-15 完成需求盘问并锁定决策，已实现（执行计划归档于 `docs/exec-plans/completed/2026-07-15-draft-platform-selection-plan.md`）。是 `2026-07-12-generate-draft-from-inspiration` 的增量优化，只动「平台来源 + 平台→文体映射」这一条链路。
 
-相关文档：执行计划 [`2026-07-15-draft-platform-selection-plan.md`](../exec-plans/active/2026-07-15-draft-platform-selection-plan.md)、产品规格 [`2026-07-15-draft-platform-selection.md`](../product-specs/2026-07-15-draft-platform-selection.md)。
+相关文档：执行计划 [`2026-07-15-draft-platform-selection-plan.md`](../exec-plans/completed/2026-07-15-draft-platform-selection-plan.md)、产品规格 [`2026-07-15-draft-platform-selection.md`](../product-specs/2026-07-15-draft-platform-selection.md)。
 
 ## 1. 背景
 

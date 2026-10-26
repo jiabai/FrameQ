@@ -265,6 +265,6 @@ settings, manifests, worker resources, or frontend state require repair.
 - `docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - `docs/design-docs/2026-07-19-closed-worker-terminal-results.md`
 - `docs/design-docs/2026-07-18-process-video-request-contract-v3.md`
-- `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 - `app/src-tauri/src/video_processing.rs`
 - `app/src-tauri/src/worker_runtime/`

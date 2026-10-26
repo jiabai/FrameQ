@@ -19,7 +19,7 @@
 FrameQ is a desktop application that keeps video processing local by default. Paste a supported public or authorized video link, and FrameQ coordinates the local worker to download the video, extract audio, transcribe speech with SenseVoice Small, and export useful files. Summary and insight generation are separate, confirmed steps that use the server-managed LLM checkout and quota flow.
 
 > [!NOTE]
-> Latest stable release: **v0.3.8** (Windows x64, macOS Intel, macOS Apple Silicon). See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
+> Latest stable release: **v0.4.2** (Windows x64, macOS Intel, macOS Apple Silicon). See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
 
 ```text
 Supported video link
@@ -71,7 +71,7 @@ Supported video link
 - Media validation with `ffprobe`.
 - Audio extraction with `ffmpeg`.
 - Selectable local ASR models (SenseVoiceSmall-ONNX default, SenseVoiceSmall optional) with on-demand, resumable download into app-local data. The ONNX runtime ships in the installer; the PyTorch runtime is a separate 140 MB component downloaded on demand.
-- Embedded, trimmed InsightFlow module for summary, Mermaid mindmap, and topic-question generation.
+- agent_runtime-based intelligent extraction: `summary_agent`, `topic_agent`, `dissection_agent`, and `draft_agent` produce the summary, insight topics, transcript dissection, and draft artifacts.
 - Transcript dissection (`文字稿解剖`) AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure and bounded per-run quota.
 - Draft generation (`生成文字稿`) AI target that turns one selected insight into a platform-style draft through server-managed anysearch retrieval and a platform skill. The transcript, video, audio, and source URL never enter the draft prompt, and the result is written to `ai/draft.md` with the pre-edit copy kept under `ai/original/`.
 - Server-managed account, activation-code monthly pass entitlement, self-service activation-email requests for inactive or expired desktop accounts, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
@@ -131,12 +131,12 @@ flowchart LR
   App --> Confirm["Insight Confirmation"]
   Confirm --> Checkout["LLM Checkout"]
   Checkout --> Server
-  Checkout --> Insight["Embedded InsightFlow"]
+  Checkout --> Insight["Intelligent Extraction Agents"]
   Insight --> LLM["OpenAI-compatible LLM"]
   Insight --> Files
 ```
 
-Runtime boundary: the app must not import code from outside this repository's `server/`. Required InsightFlow behavior lives inside `worker/frameq_worker/insightflow/`.
+Runtime boundary: the app must not import code from outside this repository's `server/`. Intelligent extraction agents (`summary_agent`, `topic_agent`, `dissection_agent`, `draft_agent`) live inside `worker/frameq_worker/`.
 
 ## Quick Start
 
@@ -365,7 +365,7 @@ or rolling back a deployed SQLite database.
 
 ## Worker Smoke Test
 
-Retry InsightFlow generation from an existing transcript without rerunning download or ASR:
+Retry intelligent extraction from an existing transcript without rerunning download or ASR:
 
 ```powershell
 $env:PYTHONPATH = "$PWD\worker"
@@ -398,8 +398,7 @@ Tauri passes the JSON argument directly. For manual shell smoke tests, stdin scr
 | --- | --- |
 | `app/` | Tauri + React + TypeScript desktop client |
 | `server/` | TypeScript Fastify account, activation-code monthly pass entitlement, self-service activation email, and LLM-checkout service |
-| `worker/` | Python worker for download, media validation, audio extraction, ASR, and InsightFlow |
-| `worker/frameq_worker/insightflow/` | Embedded InsightFlow topic generation module |
+| `worker/` | Python worker for download, media validation, audio extraction, ASR, and intelligent extraction |
 | `deploy/` | Server deployment runbook plus Nginx and systemd reference configs |
 | `outputs/` | Task-owned videos, transcripts, summaries, mindmaps, insight files, and task manifests |
 | app-local `cache/` | Temporary downloads, scratch files, and rebuildable task cache |

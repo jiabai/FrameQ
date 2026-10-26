@@ -2,7 +2,7 @@
 
 - Date: 2026-07-19
 - Status: Phase 1 and release-hardening Phase 2 implemented; Phase 2 landed in `61d489a`
-- Related plan: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- Related plan: `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 - Release-hardening plan:
   `docs/exec-plans/completed/2026-07-22-atomic-persistence-hardening-plan.md`
 

@@ -61,7 +61,7 @@ note = lookup_note(state, parsed.note_id)
 raw_media_v2 = note["video"].get("mediaV2")
 media_v2 = json.loads(raw_media_v2)
 subtitle_groups = media_v2["video"]["subtitles"]
-track = select_subtitle_track(subtitle_groups, requested_language=None)
+track = select_preferred_subtitle_track(subtitle_groups, requested_language=None)
 
 subtitle = client.get(
     track.url,
@@ -76,7 +76,7 @@ write_subtitle_atomically(subtitle.body, output_path)
 
 ## 5. 字幕选择策略
 
-`select_subtitle_track` 必须返回确定性的单条轨道，避免同语言的 `source` 和 `zh-CN` 同时落地后
+`select_preferred_subtitle_track` 必须返回确定性的单条轨道，避免同语言的 `source` 和 `zh-CN` 同时落地后
 由文件名排序产生隐式选择：
 
 1. 用户明确指定语言时，只接受对应语言轨道；`source` 轨道按其 `track.language` 判断，不把

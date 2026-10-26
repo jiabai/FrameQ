@@ -16,8 +16,8 @@ connection.
 
 | Stored model ID | User label | Runtime | Download policy |
 |---|---|---|---|
-| `iic/SenseVoiceSmall` | SenseVoiceSmall | Existing PyTorch path | Default and backward-compatible. Its existing source compatibility remains unchanged. |
-| `iic/SenseVoiceSmall-onnx` | SenseVoiceSmall-ONNX (~230 MiB) | ONNX | Download only from official ModelScope `iic/SenseVoiceSmall-onnx` and the official ModelScope ONNX VAD. |
+| `iic/SenseVoiceSmall` | SenseVoiceSmall | Existing PyTorch path | Optional. Requires the separately downloaded PyTorch runtime component; its existing source compatibility remains unchanged. |
+| `iic/SenseVoiceSmall-onnx` | SenseVoiceSmall-ONNX (~230 MiB) | ONNX | Default. Download only from official ModelScope `iic/SenseVoiceSmall-onnx` and the official ModelScope ONNX VAD. |
 
 The selected ID is restricted to this closed list. The ONNX option must not use Hugging Face, a
 third-party mirror, an auto-exported model, or a fallback to another source. Model weights, LLM
@@ -55,7 +55,7 @@ start a second install or submit a task with another model.
 - Settings show the two selectable models and their local status (for example, installed or not
   installed). Settings do not offer a manual Download action.
 - For the selected model, Settings labels its storage location with that ASR model's concrete
-  runtime directory, not the shared model-cache root. For the default PyTorch model this is the
+  runtime directory, not the shared model-cache root. For the PyTorch model this is the
   `models/iic/SenseVoiceSmall` leaf under the PyTorch cache; for the ONNX model this is the
   `models/iic/SenseVoiceSmall-onnx` leaf under the ONNX cache.
 - The displayed ASR directory is informational. Readiness checks continue to validate the complete
@@ -91,8 +91,9 @@ start a second install or submit a task with another model.
 
 - A clean install opens without network activity for model acquisition and without ASR weights in
   the installer.
-- `iic/SenseVoiceSmall` remains the default selection and existing cached PyTorch behavior remains
-  compatible.
+- `iic/SenseVoiceSmall-onnx` is the default selection. `iic/SenseVoiceSmall` remains selectable
+  and existing cached PyTorch behavior remains compatible, but requires the PyTorch runtime
+  component when selected.
 - `iic/SenseVoiceSmall-onnx` is labeled `SenseVoiceSmall-ONNX (~230 MiB)` and is obtainable only
   from its official ModelScope ASR and ONNX-VAD sources.
 - Installed selections proceed to a normal URL or local-media task; missing selections install

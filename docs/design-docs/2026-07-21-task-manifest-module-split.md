@@ -410,4 +410,4 @@ residual risk for this source-level internal refactor.
 - `docs/ARCHITECTURE.md`, section `2026-07-18 Task access facade boundary`
 - `docs/SECURITY.md`, sections `Task Access Facade Enforcement` and
   `Unsupported Legacy Task Isolation Boundary`
-- `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`

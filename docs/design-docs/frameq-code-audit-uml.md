@@ -117,7 +117,7 @@ FrameQ 是一个本地优先的桌面应用：用户在 React 界面提交视频
 | 桌面原生层 | `app/src-tauri/src/`，Tauri + Rust |
 | 本地 worker | `worker/frameq_worker/`，Python |
 | 账户服务 | `server/src/`，Fastify + TypeScript |
-| 跨进程契约 | `contracts/desktop-worker-contract.json`，全局版本 v4；现行 URL process request 仍为 v3 |
+| 跨进程契约 | `contracts/desktop-worker-contract.json`，全局版本 v9；现行 URL process request 仍为 v3 |
 
 该提交是本轮审计的已提交基线，已经包含 task access facade、typed worker job facade、
 前端 task workspace 展示门面、Python media preparation facade、Rust task-result adapter，
@@ -886,7 +886,7 @@ model，再构造不可变的 `ProcessVideoWorkerRequest { contract_version, url
 `ProcessRequest(url, asr_model)`。`language`、`output_formats` 和 `insightflow_mode` 已删除，不能
 再作为兼容默认值或环境覆盖恢复。
 
-全局 desktop-worker contract 现已升级为 v4，但上面的 `process_video` 请求仍严格保留 v3。
+全局 desktop-worker contract 现已升级为 v9，但上面的 `process_video` 请求仍严格保留 v3。
 新增的 local-media 边界是独立闭集：TypeScript 只定义 UUID token 与安全展示元数据；Rust
 定义 token-only IPC 与路径只进入 worker stdin 的序列化器；Python 定义严格六字段解析器和
 隐藏路径/文件名 repr 的领域请求。2026-07-23 的 post-baseline 实现已经把 picker、
@@ -2372,7 +2372,7 @@ stateDiagram-v2
 | `auth.ts` / `adminAuth.ts` / `prismaStore.ts` | **认证/额度并发窗口已解决**：service 只调用 purpose-specific semantic Store operations；OTP attempt/consume/artifact、ticket/session 和 quota/event 分别在一个事务内提交，dispatch limit 持久化，冲突仅做有界本地重试 | 生产配置、可信代理、日志、health、shutdown、preflight/restore 和 Server CI 定义也已本地实现；仍需 hosted Linux signal/CI、获批 SMTP/staging/异地 restore 与 combined release evidence，不得把未运行证据写成通过 |
 | `store.ts` / `prismaStore.ts` | 历史 1,054 / 1,117 行热点已收口为 2 / 269 行稳定 roots；contracts/Memory root 为 305/346 行，两棵私有 owner 树最大文件 399/391 行，完整证据见上方“已解决审计项” | 后续修改应进入对应 auth/billing/entitlements/LLM config owner，并保持一个 Store 实例、完整语义事务、Memory/Prisma parity、独立客户端并发门禁、consumer capability 和 protected schema/migration 门禁；不要新增 public repository、Unit of Work 或 generic transaction callback |
 | Settings `LlmConfig` 命名 | TS/Rust 的 `LlmConfig`、`get_llm_config`、`save_llm_config` 当前只承载 output directory 与 ASR model，本地 LLM credentials 已被移除 | 是否应做兼容 command 迁移并改名为 desktop/runtime settings，以降低错误心智模型？ |
-| 跨语言 DTO | TS/Rust/Python 仍手写镜像；全局 contract v4 已约束 process-video v3、local-media v4、progress/AI request 的核心字段，但 result、manifest 与部分 view DTO 仍由语言本地测试对齐 | 哪些 schema 值得 codegen；哪些应保持语言本地并通过 fixture/contract test 对齐？ |
+| 跨语言 DTO | TS/Rust/Python 仍手写镜像；全局 contract v9 已约束 process-video v3、local-media v4、progress/AI request 的核心字段，但 result、manifest 与部分 view DTO 仍由语言本地测试对齐 | 哪些 schema 值得 codegen；哪些应保持语言本地并通过 fixture/contract test 对齐？ |
 
 ## 源码索引
 

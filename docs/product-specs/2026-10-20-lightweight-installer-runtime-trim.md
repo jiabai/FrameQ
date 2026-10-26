@@ -23,7 +23,7 @@
 
 **字节码不在这张表里，也不在包里。** `scripts/build-installer.mjs` 已经在两处清掉它：`pruneBundledPythonRuntime`（`*.pyc`、`*.pyo`、`__pycache__`）与冒烟测试之后的 `removePythonCaches`。本机目录下那 11,526 个 `.pyc` 是本地跑 dev 时 Python 重新生成的，不是包内容，也不进 CI 产物。
 
-torch 这一整套只服务 PyTorch 族的 `iic/SenseVoiceSmall`，而默认模型恰好是 PyTorch 版，于是它变成必需项。用 `uv export --prune torch --prune torchaudio --prune funasr` 可以从同一份 `uv.lock` 切出「不含 PyTorch 族」的依赖集，实测可外置 7,562 个文件、421 MB。
+torch 这一整套只服务 PyTorch 族的 `iic/SenseVoiceSmall`，而默认模型恰好是 PyTorch 版，于是它变成必需项。用 `uv export --no-dev --extra pytorch` 从同一份 `uv.lock` 切出 PyTorch 族的依赖集，安装到独立目录后再按发行版名剔除与包内重叠的部分，实测可外置 7,562 个文件、421 MB。
 
 ## Goals
 
@@ -43,7 +43,7 @@ torch 这一整套只服务 PyTorch 族的 `iic/SenseVoiceSmall`，而默认模�
 
 ## Runtime Component
 
-PyTorch 族所需的运行时单独打包，内容由构建脚本用 `uv export --no-dev --prune torch --prune torchaudio --prune funasr` 从 `uv.lock` 生成，与包内依赖集同源。
+PyTorch 族所需的运行时单独打包，内容由构建脚本用 `uv export --no-dev --no-hashes --extra pytorch` 从 `uv.lock` 生成并安装到组件目录，再按发行版名剔除与包内已有的重叠部分（`harvestComponentSitePackages`），与包内依赖集同源。
 
 - 存放：`%LOCALAPPDATA%\FrameQ\runtime\pytorch\<版本号>\`。
 - 触发：用户在设置页选中 `iic/SenseVoiceSmall` 且本机缺少该组件时，界面提示需要下载，用户确认后开始。
@@ -51,7 +51,7 @@ PyTorch 族所需的运行时单独打包，内容由构建脚本用 `uv export 
 - 版本：组件内写入清单文件，记录 `uv.lock` 的解析指纹。指纹与当前 worker 不一致时按缺失处理，重新下载。
 - 失败：下载或校验失败时不改动已有文件，界面提供重试，不消耗 AI 额度。
 
-Linux 专属的 `nvidia-*`、`cuda-*`、`triton` 会被同一个 `--prune` 一并剪掉，不需要单独处理。macOS Intel 上的 `sympy` 与 `mpmath` 会被收窄成仅 mac-x64 生效，Windows 上等同于移除。
+Linux 专属的 `nvidia-*`、`cuda-*`、`triton` 随 PyTorch 组件一同打包（它们是 torch 的依赖，不在包内），由 `harvestComponentSitePackages` 保留在组件中；不需要单独处理。macOS Intel 上的 `sympy` 与 `mpmath` 会被收窄成仅 mac-x64 生效，Windows 上等同于移除。
 
 ## Result Experience
 

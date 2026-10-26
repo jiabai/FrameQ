@@ -75,7 +75,7 @@
 
 - `1 次额度` 表示 1 次 draft 生成**尝试**，不是 1 次 LLM API 调用。draft 采用 one-checkout 结构：一次确认生成只向 server 发起 1 次 LLM checkout，server 在 checkout 当场 `consumeLlmQuota`（`llmQuotaUsed += 1`，`prismaStore.ts:260` / checkout 端点 `server.ts:439`），**不论该次生成最终成功或失败**。
 - 失败、超时、空结果或 seed 失效**不返还**额度：server 无 refund / success-gating 路径，`consumeLlmQuota` 当场扣、无回滚。
-- 每次确认生成（含重试）各计 1 次：tauri 每次 `retry_insights_blocking` 生成新 `request_id`（`account.rs:314` `format!("llm-{}", Uuid::new_v4())`），不命中 server 的 `(userId, requestId)` 幂等，故重试另计。
+- 每次确认生成（含重试）各计 1 次：tauri 每次 `retry_insights` 生成新 `request_id`（`account.rs:376` `format!("llm-{}", Uuid::new_v4().simple())`），不命中 server 的 `(userId, requestId)` 幂等，故重试另计。
 - 仅进入确认页或点击 `取消` 不消耗额度（不发起 checkout）；账户或额度预检未通过时草稿生成不开始，也不消耗额度。
 - anysearch 联网检索调用**不计入**用户额度（`anysearch/checkout` 不调 `consumeLlmQuota`）；server/LLM 供应商侧成本随 agent 轮数增长（`max_turns` 默认 40），由 FrameQ 承担，靠 `FRAMEQ_DRAFT_MAX_TURNS` env 收紧。
 - 草稿生成不隐式扣除 `要点总结` / `启发灵感` / Mermaid mindmap 的额度。

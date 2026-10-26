@@ -2,11 +2,11 @@
 
 ## Status
 
-2026-07-15 完成需求盘问（五问五答）与代码验证（Path A），决策锁定，待实现。
+2026-07-15 完成需求盘问（五问五答）与代码验证（Path A），决策锁定，已实现（执行计划归档于 `docs/exec-plans/completed/2026-07-15-draft-result-editor-plan.md`）。
 
 是父规格 [`2026-07-12-generate-draft-from-inspiration`](../product-specs/2026-07-12-generate-draft-from-inspiration.md) 的增量：把 `生成文字稿` 结果从**只读预览**改造为**左右分栏可编辑器 + 本地落盘 + 可重新生成**。与 [`2026-07-15-draft-platform-selection`](./2026-07-15-draft-platform-selection.md) 是兄弟增量——本方案不动平台链路，平台仍按那份设计的「请求态」处理。
 
-相关文档：执行计划 [`2026-07-15-draft-result-editor-plan.md`](../exec-plans/active/2026-07-15-draft-result-editor-plan.md)、产品规格 [`2026-07-15-draft-result-editor.md`](../product-specs/2026-07-15-draft-result-editor.md)。
+相关文档：执行计划 [`2026-07-15-draft-result-editor-plan.md`](../exec-plans/completed/2026-07-15-draft-result-editor-plan.md)、产品规格 [`2026-07-15-draft-result-editor.md`](../product-specs/2026-07-15-draft-result-editor.md)。
 
 ## 1. 背景
 

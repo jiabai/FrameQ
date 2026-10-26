@@ -2,7 +2,7 @@
 
 - Date: 2026-07-21
 - Status: Implemented, verified, and accepted by the user on 2026-07-22
-- Related active plan: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
+- Related plan: `docs/exec-plans/completed/2026-07-16-local-media-file-import-plan.md`
 - Scope: behavior-neutral Python worker refactor
 
 ## Context

@@ -277,7 +277,7 @@
 ## 2026-07-23 Frontend transcript controller ownership boundary
 
 - `app/src/features/transcript/useTranscriptDetailController.ts` remains the only production
-  transcript-controller import shared by `App.tsx` and presentation components. It is a 126-line
+  transcript-controller import shared by `App.tsx` and presentation components. It is a slim
   facade that composes private owners and preserves the existing 41-key flat return surface and
   `ReturnType` alias.
 - `useArtifactDetailController.ts` owns result-detail tab state, locale-aware copy text, clipboard,
@@ -362,7 +362,7 @@
 
 ## 2026-07-20 ASR application module boundary
 
-- `worker/frameq_worker/asr.py` is now a 52-line stable compatibility surface. Production callers
+- `worker/frameq_worker/asr.py` is now a slim stable compatibility surface. Production callers
   continue importing errors, transcript DTOs, adapters, registry/cache functions, and artifact
   writers only from `frameq_worker.asr`; the root re-exports the actual private objects rather than
   wrappers or duplicate classes.
@@ -424,7 +424,7 @@
 
 ## 2026-07-20 Video-processing application module boundary
 
-- `video_processing.rs` is now a 68-line Tauri adapter/module root. It retains the three stable
+- `video_processing.rs` is now a slim Tauri adapter/module root. It retains the three stable
   command entry points, cancellation, and narrowly shared trusted desktop task-result DTO support;
   the process and retry commands delegate immediately to focused child modules.
 - `video_processing/url_processing.rs` owns strict process-video IPC/worker DTOs, contract-v3 ASR
@@ -514,7 +514,7 @@
 
 ## 2026-07-21 Worker pipeline private-owner boundary
 
-- `worker/frameq_worker/pipeline.py` is now a 39-line stable compatibility surface containing only
+- `worker/frameq_worker/pipeline.py` is now a slim stable compatibility surface containing only
   explicit direct re-exports. Production callers continue importing pipeline-owned symbols only
   from `frameq_worker.pipeline`; the root owns no processing behavior and preserves the exact
   private function/class objects rather than wrappers or duplicate definitions.
@@ -537,11 +537,11 @@
 
 ## 2026-07-24 Implemented Python worker application-facade boundary
 
-- `worker_service.py` is now a 25-line sole stable Python application facade with exactly five
+- `worker_service.py` is now a slim sole stable Python application facade with exactly five
   direct-import entries: URL processing, local-media processing, source identity, AI retry, and
   ASR model download. The private empty-initializer `worker_application/` package gives each use
   case one handler and gives production dependency defaults one separate owner.
-- `cli.py` is now a 176-line process adapter limited to fixed mode parsing, bounded stdin,
+- `cli.py` is now a slim process adapter limited to fixed mode parsing, bounded stdin,
   validated progress/result rendering, facade dispatch, and process exit status. It exposes no
   compatibility `__all__`, broad forwarding wrapper, or production dependency factory.
 - Platform-aware URL/source-identity behavior is preserved. The production resolver, transcriber,
@@ -561,7 +561,7 @@
 ## 2026-07-18 Task access facade boundary
 
 - Rust raw task-manifest parsing, privacy predicates, relative-path resolution, canonical artifact
-  validation, and manifest writes are private to the `task_manifest` module tree. The 26-line
+  validation, and manifest writes are private to the `task_manifest` module tree. The slim
   `task_manifest.rs` root is the only crate-visible import surface; its private `source_identity`,
   `schema`, `storage`, and `access` children own canonical source policy, pure DTO/projection policy,
   filesystem/path effects, and validated capability orchestration respectively.
@@ -965,7 +965,7 @@
 
 - Bilibili fallback remains worker-owned and ordinary-public-video-only. UI and Tauri submit a source string and receive the existing worker result shape; they do not call Bilibili APIs, select DASH streams, import cookies, or manage downloads.
 - The frontend may accept ordinary Bilibili BV/av video URLs and safe `b23.tv` short links, but all platform interpretation happens inside the Python worker.
-- `worker/frameq_worker/bilibili_fallback.py` is the 137-line stable compatibility/application adapter and the only Bilibili import path used by production modules outside the private package. It owns default dependency construction, page/output composition, final MP4 replacement, cleanup sequencing, and the five `bilibili.*` progress events.
+- `worker/frameq_worker/bilibili_fallback.py` is the slim stable compatibility/application adapter and the only Bilibili import path used by production modules outside the private package. It owns default dependency construction, page/output composition, final MP4 replacement, cleanup sequencing, and the five `bilibili.*` progress events.
 - Private `worker/frameq_worker/bilibili/` modules separate shared identities (`types.py`), input/short-link policy (`source.py`), public API/DASH policy (`playback.py`), bounded HTTP/resumable streaming (`transport.py`), and candidate/FFmpeg effects (`artifacts.py`). Private children do not import the root adapter or task/application/ASR/AI layers; no new facade class or generic multi-platform downloader framework exists.
 - `yt-dlp` stays the first attempt. Bilibili fallback runs only after a Bilibili-related failure and only for public or user-authorized ordinary videos.
 - The fallback parses BV/av IDs, resolves safe `b23.tv` links, selects one part from `?p=N` or the first part, fetches `x/web-interface/view` and `x/player/playurl`, chooses one video stream plus one audio stream, downloads `.m4s` files safely, and merges them to MP4 with the existing bundled FFmpeg. Stable root re-exports preserve the repository-observed type and function identities.
@@ -975,7 +975,7 @@
 
 - Xiaohongshu fallback remains worker-owned and video-only. UI and Tauri submit a source string and receive the existing worker result shape; they do not parse Xiaohongshu HTML, select streams, import cookies, or manage downloads.
 - The frontend may accept Xiaohongshu share text, full note URLs, and short links, but all platform interpretation happens inside the Python worker.
-- `worker/frameq_worker/xiaohongshu_fallback.py` is the 169-line stable compatibility/application adapter and the only Xiaohongshu import path used by production modules outside the private package. It owns default dependency composition, the complete fallback sequence, output naming, nested candidate/backup attempts, and all three `xiaohongshu.*` progress events.
+- `worker/frameq_worker/xiaohongshu_fallback.py` is the slim stable compatibility/application adapter and the only Xiaohongshu import path used by production modules outside the private package. It owns default dependency composition, the complete fallback sequence, output naming, nested candidate/backup attempts, and all three `xiaohongshu.*` progress events.
 - Private `worker/frameq_worker/xiaohongshu/` modules separate shared identities (`types.py`), source/short-link policy (`source.py`), bounded page-state interpretation (`page.py`), deterministic stream ranking (`streams.py`), and CookieJar/urllib/safe-download effects (`transport.py`). Private children do not import the root adapter or task/application/ASR/AI layers; no facade class or generic multi-platform fallback framework exists.
 - The worker ports only the required EasyDownload Xiaohongshu parser/client/downloader ideas into these Python boundaries and shared download helpers; it does not call or bundle the Go/Wails EasyDownload runtime. Stable root re-exports preserve repository-observed type, client, source-builder, and test-seam identities.
 - `yt-dlp` stays the first attempt. Xiaohongshu fallback runs only after a Xiaohongshu-related failure and only for public or user-authorized video notes.
