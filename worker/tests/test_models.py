@@ -100,8 +100,8 @@ def test_partial_result_keeps_task_artifacts_and_structured_error() -> None:
         artifacts={"transcript_txt": "transcript/transcript.txt"},
         text="finished transcript",
         error=WorkerError(
-            code="INSIGHTFLOW_CONFIG_MISSING",
-            message="InsightFlow LLM configuration is missing.",
+            code="AI_CONFIG_MISSING",
+            message="AI LLM configuration is missing.",
             stage=JobStage.INSIGHTS_GENERATING,
         ),
     )
@@ -113,8 +113,8 @@ def test_partial_result_keeps_task_artifacts_and_structured_error() -> None:
     assert serialized["artifacts"] == {"transcript_txt": "transcript/transcript.txt"}
     assert serialized["text"] == "finished transcript"
     assert serialized["error"] == {
-        "code": "INSIGHTFLOW_CONFIG_MISSING",
-        "message": "InsightFlow LLM configuration is missing.",
+        "code": "AI_CONFIG_MISSING",
+        "message": "AI LLM configuration is missing.",
         "stage": "insights_generating",
     }
 

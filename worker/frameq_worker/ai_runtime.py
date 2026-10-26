@@ -27,16 +27,16 @@ class StrictInsightRunner(ToolLoopAgentRunner):
 
 
 _CHECKOUT_ERROR_MESSAGES = {
-    "INSIGHTFLOW_LLM_AUTH_REQUIRED": "FrameQ login is required to use the managed LLM.",
-    "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE": (
+    "AI_LLM_AUTH_REQUIRED": "FrameQ login is required to use the managed LLM.",
+    "AI_LLM_QUOTA_UNAVAILABLE": (
         "No cloud LLM API-call uses are available for this account."
     ),
-    "INSIGHTFLOW_LLM_CONFIG_MISSING": "FrameQ managed LLM is not configured.",
-    "INSIGHTFLOW_LLM_CHECKOUT_TIMEOUT": "FrameQ LLM checkout timed out. Please retry later.",
-    "INSIGHTFLOW_LLM_CHECKOUT_FAILED": (
+    "AI_LLM_CONFIG_MISSING": "FrameQ managed LLM is not configured.",
+    "AI_LLM_CHECKOUT_TIMEOUT": "FrameQ LLM checkout timed out. Please retry later.",
+    "AI_LLM_CHECKOUT_FAILED": (
         "FrameQ LLM checkout failed before a usable response was returned."
     ),
-    "INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE": (
+    "AI_LLM_CHECKOUT_INVALID_RESPONSE": (
         "FrameQ LLM checkout did not return usable configuration."
     ),
 }
@@ -59,11 +59,11 @@ def _max_output_tokens(env: Mapping[str, str]) -> int | None:
         value = int(raw_value)
     except ValueError:
         raise InsightGenerationError(
-            "INSIGHTFLOW_CONFIG_MISSING", "Insight agent output token budget is invalid."
+            "AI_CONFIG_MISSING", "Insight agent output token budget is invalid."
         ) from None
     if value < 1:
         raise InsightGenerationError(
-            "INSIGHTFLOW_CONFIG_MISSING", "Insight agent output token budget is invalid."
+            "AI_CONFIG_MISSING", "Insight agent output token budget is invalid."
         )
     return value
 
@@ -148,7 +148,7 @@ def build_insight_provider(env: Mapping[str, str]) -> Provider:
         required = (LLM_CHECKOUT_URL_ENV, LLM_SESSION_TOKEN_ENV, LLM_CHECKOUT_REQUEST_ID_ENV)
         if any(not env.get(name, "").strip() for name in required):
             raise InsightGenerationError(
-                "INSIGHTFLOW_CONFIG_MISSING", "Insight agent LLM is not configured."
+                "AI_CONFIG_MISSING", "Insight agent LLM is not configured."
             )
         return ServerManagedInsightProvider(env)
     if (
@@ -158,7 +158,7 @@ def build_insight_provider(env: Mapping[str, str]) -> Provider:
         not in {"openai", "openai_compatible"}
     ):
         raise InsightGenerationError(
-            "INSIGHTFLOW_CONFIG_MISSING", "Insight agent LLM is not configured."
+            "AI_CONFIG_MISSING", "Insight agent LLM is not configured."
         )
     return _build_single_call_provider(env)
 
@@ -168,5 +168,5 @@ def agent_error(response: LLMResponse | None, label: str) -> InsightGenerationEr
     if detail in _CHECKOUT_ERROR_MESSAGES:
         return InsightGenerationError(detail, _CHECKOUT_ERROR_MESSAGES[detail])
     return InsightGenerationError(
-        "INSIGHTFLOW_LLM_REQUEST_FAILED", f"{label} agent LLM request failed."
+        "AI_LLM_REQUEST_FAILED", f"{label} agent LLM request failed."
     )

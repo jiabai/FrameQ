@@ -53,21 +53,21 @@ describe("worker error presentation", () => {
   });
 
   test.each([
-    ["INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE", "insight.quotaUnavailable"],
-    ["INSIGHTFLOW_LLM_AUTH_REQUIRED", "insight.authRequired"],
-    ["INSIGHTFLOW_CONFIG_MISSING", "insight.configMissing"],
-    ["INSIGHTFLOW_LLM_CONFIG_MISSING", "insight.configMissing"],
-    ["INSIGHTFLOW_LLM_CHECKOUT_FAILED", "insight.checkoutFailed"],
-    ["INSIGHTFLOW_LLM_CHECKOUT_TIMEOUT", "insight.checkoutFailed"],
-    ["INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE", "insight.checkoutFailed"],
-    ["INSIGHTFLOW_LLM_REQUEST_TIMEOUT", "insight.requestTimeout"],
-    ["INSIGHTFLOW_LLM_REQUEST_FAILED", "insight.requestFailed"],
-    ["INSIGHTFLOW_LLM_CONTENT_BLOCKED", "insight.contentBlocked"],
-    ["INSIGHTFLOW_LLM_INVALID_RESPONSE", "insight.invalidResponse"],
-    ["INSIGHTFLOW_EMPTY_RESULT", "insight.emptyResult"],
-    ["INSIGHTFLOW_EMPTY_SUMMARY", "insight.emptySummary"],
-    ["INSIGHTFLOW_INVALID_MINDMAP", "insight.invalidMindmap"],
-    ["INSIGHTFLOW_EMPTY_TRANSCRIPT", "insight.emptyTranscript"],
+    ["AI_LLM_QUOTA_UNAVAILABLE", "insight.quotaUnavailable"],
+    ["AI_LLM_AUTH_REQUIRED", "insight.authRequired"],
+    ["AI_CONFIG_MISSING", "insight.configMissing"],
+    ["AI_LLM_CONFIG_MISSING", "insight.configMissing"],
+    ["AI_LLM_CHECKOUT_FAILED", "insight.checkoutFailed"],
+    ["AI_LLM_CHECKOUT_TIMEOUT", "insight.checkoutFailed"],
+    ["AI_LLM_CHECKOUT_INVALID_RESPONSE", "insight.checkoutFailed"],
+    ["AI_LLM_REQUEST_TIMEOUT", "insight.requestTimeout"],
+    ["AI_LLM_REQUEST_FAILED", "insight.requestFailed"],
+    ["AI_LLM_CONTENT_BLOCKED", "insight.contentBlocked"],
+    ["AI_LLM_INVALID_RESPONSE", "insight.invalidResponse"],
+    ["AI_EMPTY_RESULT", "insight.emptyResult"],
+    ["AI_EMPTY_SUMMARY", "insight.emptySummary"],
+    ["AI_INVALID_MINDMAP", "insight.invalidMindmap"],
+    ["AI_EMPTY_TRANSCRIPT", "insight.emptyTranscript"],
     ["WORKER_PROCESS_FAILED", "worker.processFailed"],
     ["TAURI_COMMAND_FAILED", "worker.processFailed"],
   ])("maps known AI error code %s to %s", (code, messageCode) => {
@@ -162,7 +162,7 @@ describe("worker error presentation", () => {
     ];
     const presentation = presentWorkerError(
       workerError(
-        "INSIGHTFLOW_LLM_REQUEST_FAILED",
+        "AI_LLM_REQUEST_FAILED",
         [
           `HTTP 401 ${secrets[0]} ${secrets[1]} ${secrets[2]}`,
           `Cookie=${secrets[3]} API key=${secrets[4]}`,
@@ -176,7 +176,7 @@ describe("worker error presentation", () => {
     expect(presentation).toEqual({
       messageCode: "errors.insight.requestFailed",
       technicalDetails: {
-        errorCode: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+        errorCode: "AI_LLM_REQUEST_FAILED",
         stageCode: "insights_generating",
         httpStatus: 401,
       },

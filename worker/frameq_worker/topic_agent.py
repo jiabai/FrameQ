@@ -80,7 +80,7 @@ def validate_insights_delivery(
     if error is not None:
         location = ".".join(str(part) for part in error.absolute_path) or "insights"
         raise InsightGenerationError(
-            "INSIGHTFLOW_INVALID_RESULT",
+            "AI_INVALID_RESULT",
             f"Invalid insight delivery at {location}: {error.validator} requirement failed.",
         )
 
@@ -91,7 +91,7 @@ def validate_insights_delivery(
         key = topic.casefold()
         if key in seen:
             raise InsightGenerationError(
-                "INSIGHTFLOW_INVALID_RESULT", "Insight topics must be unique."
+                "AI_INVALID_RESULT", "Insight topics must be unique."
             )
         seen.add(key)
         insights.append(
@@ -202,7 +202,7 @@ async def _generate_insights(
         raise agent_error(response, "Inspiration")
     if not delivery.insights:
         raise InsightGenerationError(
-            "INSIGHTFLOW_EMPTY_RESULT", "Inspiration agent did not deliver a valid insight list."
+            "AI_EMPTY_RESULT", "Inspiration agent did not deliver a valid insight list."
         )
     return delivery.insights
 
@@ -217,7 +217,7 @@ def generate_insights_via_agent_runtime(
     max_turns: int = INSIGHTS_AGENT_MAX_TURNS,
 ) -> list[Insight]:
     if not markdown.strip():
-        raise InsightGenerationError("INSIGHTFLOW_EMPTY_TRANSCRIPT", "Transcript is empty.")
+        raise InsightGenerationError("AI_EMPTY_TRANSCRIPT", "Transcript is empty.")
     if type(max_turns) is not int or not 1 <= max_turns <= INSIGHTS_AGENT_MAX_TURNS:
         raise ValueError("Inspiration max_turns must be an integer from 1 through 6.")
     output_language_semantics(output_language)
@@ -245,7 +245,7 @@ def write_insight_files(
     persist: bool = True,
 ) -> InsightArtifacts:
     if not insights:
-        raise InsightGenerationError("INSIGHTFLOW_EMPTY_RESULT", "No inspiration was delivered.")
+        raise InsightGenerationError("AI_EMPTY_RESULT", "No inspiration was delivered.")
     prefix = f"{output_stem}_" if output_stem else ""
     json_path = output_dir / f"{prefix}insights.json"
     md_path = output_dir / f"{prefix}insights.md"

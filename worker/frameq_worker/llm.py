@@ -46,13 +46,13 @@ def parse_managed_checkout_response(raw_response: bytes) -> dict[str, str | int]
         timeout_seconds = int(payload.get("timeout_seconds", DEFAULT_LLM_TIMEOUT_SECONDS))
     except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise InsightGenerationError(
-            "INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE",
+            "AI_LLM_CHECKOUT_INVALID_RESPONSE",
             "FrameQ LLM checkout did not return usable configuration.",
         ) from exc
 
     if provider not in {"openai", "openai_compatible"} or not base_url or not model or not api_key:
         raise InsightGenerationError(
-            "INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE",
+            "AI_LLM_CHECKOUT_INVALID_RESPONSE",
             "FrameQ LLM checkout did not return usable configuration.",
         )
     return {
@@ -95,12 +95,12 @@ def checkout_llm_config_once(
         raise _managed_checkout_http_error(exc) from exc
     except TimeoutError as exc:
         raise InsightGenerationError(
-            "INSIGHTFLOW_LLM_CHECKOUT_TIMEOUT",
+            "AI_LLM_CHECKOUT_TIMEOUT",
             "FrameQ LLM checkout timed out. Please retry later.",
         ) from exc
     except (urllib.error.URLError, OSError) as exc:
         raise InsightGenerationError(
-            "INSIGHTFLOW_LLM_CHECKOUT_FAILED",
+            "AI_LLM_CHECKOUT_FAILED",
             "FrameQ LLM checkout failed before a usable response was returned.",
         ) from exc
 
@@ -176,21 +176,21 @@ def _managed_checkout_http_error(error: urllib.error.HTTPError) -> InsightGenera
     detail = _extract_error_code(error)
     if error.code == 401:
         return InsightGenerationError(
-            "INSIGHTFLOW_LLM_AUTH_REQUIRED",
+            "AI_LLM_AUTH_REQUIRED",
             "FrameQ login is required to use the managed LLM.",
         )
     if error.code == 403:
         return InsightGenerationError(
-            "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE",
+            "AI_LLM_QUOTA_UNAVAILABLE",
             "No cloud LLM API-call uses are available for this account.",
         )
     if detail == "LLM_CONFIG_MISSING":
         return InsightGenerationError(
-            "INSIGHTFLOW_LLM_CONFIG_MISSING",
+            "AI_LLM_CONFIG_MISSING",
             "FrameQ managed LLM is not configured.",
         )
     return InsightGenerationError(
-        "INSIGHTFLOW_LLM_CHECKOUT_FAILED",
+        "AI_LLM_CHECKOUT_FAILED",
         f"FrameQ LLM checkout failed with HTTP {error.code}.",
     )
 

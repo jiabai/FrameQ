@@ -241,7 +241,7 @@
 
 - `frameq_worker.asr` remains the only supported production import surface. The private
   `asr_runtime/` owners cannot import the root, CLI, pipeline, worker service, task store, LLM, or
-  InsightFlow layers, and production callers cannot bypass the stable root.
+  AI extraction layers, and production callers cannot bypass the stable root.
 - SenseVoice SDK imports remain inside their default loaders; optional `numpy` and
   `funasr` VAD utilities remain inside the VAD path. Importing ASR contracts or registry functions
   does not load a provider SDK, initialize a model, download weights, or make a network request.
@@ -634,7 +634,7 @@
   `MediaPreparationFacade` and return only `PreparedMedia` or a typed sanitized failure.
 - `MediaPreparationFacade` may receive a validated `TaskContext` for bounded task-owned paths, but
   it must not import `TaskStoreFacade`, finalize a result, write a task manifest, invoke ASR, or enter
-  InsightFlow/AI.
+  any AI extraction path.
 - The current facade accepts the closed `UrlMediaSource | LocalMediaSource` union. The local variant
   landed together with contract v4 and its real CLI consumer, and keeps the complete local path out
   of media-tool argv, progress, results, errors, logs, manifests, transcripts, prompts, and UI state.
@@ -647,7 +647,7 @@
 - `frameq_worker.pipeline` is the sole production import surface for pipeline-owned symbols. Modules
   outside the private `pipeline_runtime/` tree must not import its children directly, and private
   children must not import the stable root, CLI, or worker service.
-- URL process orchestration owns no InsightFlow, LLM, output-language, or retry dependency. The AI
+- URL process orchestration owns no AI extraction, LLM, output-language, or retry dependency. The AI
   owner owns no ASR, media, source-resolution, or task-persistence dependency; it must validate the
   exact official `transcript.txt` path and all link/junction constraints before reading or invoking
   a prompt.
@@ -860,7 +860,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 
 - LLM API Key、代理地址和云端配置不得硬编码到桌面端或 worker；管理员在 server Admin Web 中配置，server 负责加密保存。
 - LLM 配置不得从 app-local data `.env` 或项目根 `.env` 读取；真实 `.env` 被 `.gitignore` 忽略，仓库只保留不含 LLM key 的 `.env.example` 和安装包 `.env.template` 占位模板。
-- 旧本地 InsightFlow LLM 键名 `FRAMEQ_LLM_PROVIDER`、`FRAMEQ_LLM_BASE_URL`、`FRAMEQ_LLM_API_KEY`、`FRAMEQ_LLM_MODEL` 和 `FRAMEQ_LLM_TIMEOUT_SECONDS` 必须被 dotenv 加载链路忽略。
+- 旧本地 LLM 键名 `FRAMEQ_LLM_PROVIDER`、`FRAMEQ_LLM_BASE_URL`、`FRAMEQ_LLM_API_KEY`、`FRAMEQ_LLM_MODEL` 和 `FRAMEQ_LLM_TIMEOUT_SECONDS` 必须被 dotenv 加载链路忽略。
 - 输出目录键名为 `FRAMEQ_OUTPUT_DIR`，不得用于写入网络路径凭据或敏感 token。
 - 日志不得输出完整密钥、cookies 或敏感请求头。
 

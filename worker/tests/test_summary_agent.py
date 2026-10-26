@@ -129,13 +129,13 @@ def test_summary_agent_rejects_output_language_before_provider_configuration() -
 def test_provider_configuration_fails_before_network(env) -> None:
     with pytest.raises(InsightGenerationError, match="not configured") as error:
         build_insight_provider(env)
-    assert error.value.code == "INSIGHTFLOW_CONFIG_MISSING"
+    assert error.value.code == "AI_CONFIG_MISSING"
 
 
 @pytest.mark.parametrize("code", [
-    "INSIGHTFLOW_LLM_AUTH_REQUIRED", "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE",
-    "INSIGHTFLOW_LLM_CONFIG_MISSING", "INSIGHTFLOW_LLM_CHECKOUT_TIMEOUT",
-    "INSIGHTFLOW_LLM_CHECKOUT_FAILED", "INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE",
+    "AI_LLM_AUTH_REQUIRED", "AI_LLM_QUOTA_UNAVAILABLE",
+    "AI_LLM_CONFIG_MISSING", "AI_LLM_CHECKOUT_TIMEOUT",
+    "AI_LLM_CHECKOUT_FAILED", "AI_LLM_CHECKOUT_INVALID_RESPONSE",
 ])
 def test_agent_error_preserves_checkout_code(code) -> None:
     assert agent_error(LLMResponse(role="err", completion_text=code), "Summary").code == code
@@ -143,7 +143,7 @@ def test_agent_error_preserves_checkout_code(code) -> None:
 
 def test_agent_error_does_not_echo_provider_secrets() -> None:
     error = agent_error(LLMResponse(role="err", completion_text="token=private"), "Summary")
-    assert error.code == "INSIGHTFLOW_LLM_REQUEST_FAILED"
+    assert error.code == "AI_LLM_REQUEST_FAILED"
     assert "private" not in str(error)
 
 
@@ -166,8 +166,8 @@ def test_summary_payloads_remain_unwritten_until_transaction(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("summary,mindmap,code", [
-    (" ", "mindmap\n  root((Structure))", "INSIGHTFLOW_EMPTY_SUMMARY"),
-    ("Body", "graph TD", "INSIGHTFLOW_INVALID_MINDMAP"),
+    (" ", "mindmap\n  root((Structure))", "AI_EMPTY_SUMMARY"),
+    ("Body", "graph TD", "AI_INVALID_MINDMAP"),
 ])
 def test_invalid_summary_artifacts_preserve_existing_files(tmp_path, summary, mindmap, code):
     path = tmp_path / "summary.md"

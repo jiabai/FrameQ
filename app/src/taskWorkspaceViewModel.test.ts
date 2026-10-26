@@ -311,7 +311,7 @@ describe("task workspace view model", () => {
           mindmap: "ai/mindmap.mmd",
         },
         error: {
-          code: "INSIGHTFLOW_EMPTY_RESULT",
+          code: "AI_EMPTY_RESULT",
           message: "No insights returned.",
           stage: "insights_generating",
         },
@@ -326,7 +326,7 @@ describe("task workspace view model", () => {
     expect(model.local.error).toBeNull();
     expect(model.ai.summary.status).toBe("ready");
     expect(model.ai.insights.status).toBe("failed");
-    expect(model.ai.insights.errorCode).toBe("INSIGHTFLOW_EMPTY_RESULT");
+    expect(model.ai.insights.errorCode).toBe("AI_EMPTY_RESULT");
   });
 
   test("summary and inspiration retain independent failure states across retries", () => {
@@ -336,7 +336,7 @@ describe("task workspace view model", () => {
       transcriptResult({
         status: "partial_completed",
         error: {
-          code: "INSIGHTFLOW_EMPTY_SUMMARY",
+          code: "AI_EMPTY_SUMMARY",
           message: "No summary returned.",
           stage: "insights_generating",
         },
@@ -348,7 +348,7 @@ describe("task workspace view model", () => {
       transcriptResult({
         status: "partial_completed",
         error: {
-          code: "INSIGHTFLOW_EMPTY_RESULT",
+          code: "AI_EMPTY_RESULT",
           message: "No insights returned.",
           stage: "insights_generating",
         },
@@ -359,9 +359,9 @@ describe("task workspace view model", () => {
     const model = createTaskWorkspaceViewModel(bothFailed, entitledAccount());
 
     expect(model.ai.summary.status).toBe("failed");
-    expect(model.ai.summary.errorCode).toBe("INSIGHTFLOW_EMPTY_SUMMARY");
+    expect(model.ai.summary.errorCode).toBe("AI_EMPTY_SUMMARY");
     expect(model.ai.insights.status).toBe("failed");
-    expect(model.ai.insights.errorCode).toBe("INSIGHTFLOW_EMPTY_RESULT");
+    expect(model.ai.insights.errorCode).toBe("AI_EMPTY_RESULT");
   });
 
   test("AI availability distinguishes service unavailability from exhausted quota", () => {

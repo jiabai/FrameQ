@@ -333,7 +333,7 @@ describe("history client", () => {
         mindmap: "ai/mindmap.mmd",
       },
       error: {
-        code: "INSIGHTFLOW_CONFIG_MISSING",
+        code: "AI_CONFIG_MISSING",
         message: "LLM configuration is missing.",
         stage: "insights_generating",
       },
@@ -371,7 +371,7 @@ describe("history client", () => {
       dissection_source_status: null,
       draft: "",
       error: {
-        code: "INSIGHTFLOW_CONFIG_MISSING",
+        code: "AI_CONFIG_MISSING",
         message: "LLM configuration is missing.",
         stage: "insights_generating",
       },

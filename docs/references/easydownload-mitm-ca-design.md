@@ -57,7 +57,7 @@ The CA key and certificate are written as two PEM files in a private directory:
 - `CertExists()` returns true only if both files are present and readable.
 - Source: [`cert.go` `NewCertManager` / `EnsureCertDir` / `CertExists` / `GenerateCACert`](file:///d:/Github/FrameQ/lib-external/EasyDownload/internal/proxy/cert.go#L11-L17) and [lines around the file writes](file:///d:/Github/FrameQ/lib-external/EasyDownload/internal/proxy/cert.go#L103-L141).
 
-FrameQ-relevance beyond MITM: the PEM layout is identical to what `cryptography` and `pyOpenSSL` produce. If FrameQ ever stores a self-generated CA for a non-MITM purpose (e.g., signing a local mTLS pair for a self-hosted InsightFlow service), this layout is a reasonable starting point. The key handling must still be tightened (0o600 on the key, parent dir 0o700, never written to a network share).
+FrameQ-relevance beyond MITM: the PEM layout is identical to what `cryptography` and `pyOpenSSL` produce. If FrameQ ever stores a self-generated CA for a non-MITM purpose (e.g., signing a local mTLS pair for a self-hosted AI service), this layout is a reasonable starting point. The key handling must still be tightened (0o600 on the key, parent dir 0o700, never written to a network share).
 
 ## 3. Windows CA 安装
 
@@ -171,7 +171,7 @@ These are pointers, not a recommendation to implement. The product boundary in [
 ## Security and Compliance Boundaries
 
 - The FrameQ product path must not add a CA to the OS trust store, must not set a system-wide proxy, and must not request admin elevation. See [docs/SECURITY.md 2026-06-26 Public Link Fallback Safety Boundary](../../SECURITY.md) and [docs/references/easydownload-transcription-migration.md](file:///d:/Github/FrameQ/docs/references/easydownload-transcription-migration.md) (Do not migrate list).
-- Even if a future use case is justified (for example, FrameQ hosting a self-signed mTLS service for an on-device InsightFlow replica), the CA must be **per-user scoped** and never installed into `LocalMachine\ROOT`, `/Library/Keychains/System.keychain`, or the system-wide `/etc/ssl/certs` family. The MITM pattern is not the only pattern that touches CA libraries; per-user or per-app trust is materially safer.
+- Even if a future use case is justified (for example, FrameQ hosting a self-signed mTLS service for an on-device AI component), the CA must be **per-user scoped** and never installed into `LocalMachine\ROOT`, `/Library/Keychains/System.keychain`, or the system-wide `/etc/ssl/certs` family. The MITM pattern is not the only pattern that touches CA libraries; per-user or per-app trust is materially safer.
 - The MITM proxy itself ([`server.go`](file:///d:/Github/FrameQ/lib-external/EasyDownload/internal/proxy/server.go) using `goproxy`) is out of scope. The FrameQ worker must not include or wrap a general-purpose CONNECT-decrypting proxy.
 - Logs and history must never include the CA private key, the public CA certificate, system trust store paths, or admin elevation prompts. This extends the existing [docs/SECURITY.md](../SECURITY.md) "Logs and history" rules.
 - Distribution impact: a public installer that asks the user to install a system CA will be flagged by Windows SmartScreen, common EDR products, and some app store review pipelines. The FrameQ installer plan in [docs/design-docs/2026-06-17-installer-distribution-plan.md](../design-docs/2026-06-17-installer-distribution-plan.md) currently assumes no such prompt; reintroducing one would invalidate the installer trust model.

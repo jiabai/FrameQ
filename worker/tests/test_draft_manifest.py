@@ -315,7 +315,7 @@ def test_retry_insights_failure_preserves_seed_id_and_draft(tmp_path: Path) -> N
         project_root=tmp_path,
         environ=_env(tmp_path),
     )
-    assert result["error"]["code"] == "INSIGHTFLOW_CONFIG_MISSING"
+    assert result["error"]["code"] == "AI_CONFIG_MISSING"
 
     manifest = _load_manifest(tmp_path / "outputs" / "tasks" / TASK_ID)
     assert manifest["draft_seed_insight_id"] == INSIGHT_ID

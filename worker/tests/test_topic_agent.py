@@ -63,7 +63,7 @@ def test_insight_delivery_rejects_invalid_complete_payload(payload: object) -> N
     with pytest.raises(InsightGenerationError) as captured:
         validate_insights_delivery(payload, (1, 2))
 
-    assert captured.value.code == "INSIGHTFLOW_INVALID_RESULT"
+    assert captured.value.code == "AI_INVALID_RESULT"
 
 
 def test_insight_tool_accepts_complete_payload_and_finishes() -> None:
@@ -141,7 +141,7 @@ def test_topic_agent_rejects_empty_transcript_before_provider_configuration() ->
     with pytest.raises(InsightGenerationError) as captured:
         generate_insights_via_agent_runtime("  ", {}, "en-US")
 
-    assert captured.value.code == "INSIGHTFLOW_EMPTY_TRANSCRIPT"
+    assert captured.value.code == "AI_EMPTY_TRANSCRIPT"
 
 
 @pytest.mark.parametrize("max_turns", [-1, 0, 7, True, 1.0, "2"])

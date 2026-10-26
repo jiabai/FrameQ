@@ -166,7 +166,7 @@ def test_insight_submission_preserves_all_required_structured_fields() -> None:
 def test_write_insight_files_rejects_empty_insights(tmp_path: Path) -> None:
     with pytest.raises(InsightGenerationError) as captured:
         write_insight_files([], tmp_path / "outputs", "demo", "zh-CN")
-    assert captured.value.code == "INSIGHTFLOW_EMPTY_RESULT"
+    assert captured.value.code == "AI_EMPTY_RESULT"
     assert not (tmp_path / "outputs").exists()
 
 

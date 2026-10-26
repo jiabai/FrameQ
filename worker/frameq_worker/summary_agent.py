@@ -47,12 +47,12 @@ def write_summary_files(
     normalized_mindmap = normalize_mermaid_mindmap(mindmap)
     if not normalized_summary:
         raise InsightGenerationError(
-            "INSIGHTFLOW_EMPTY_SUMMARY",
+            "AI_EMPTY_SUMMARY",
             "Summary agent returned an empty summary.",
         )
     if not normalized_mindmap:
         raise InsightGenerationError(
-            "INSIGHTFLOW_INVALID_MINDMAP",
+            "AI_INVALID_MINDMAP",
             "Summary agent returned an invalid Mermaid mindmap.",
         )
 
@@ -302,12 +302,12 @@ async def _generate_summary(
         raise agent_error(final_response, "Summary")
     if not delivery.mindmap:
         raise InsightGenerationError(
-            "INSIGHTFLOW_INVALID_MINDMAP",
+            "AI_INVALID_MINDMAP",
             "Summary agent did not deliver a valid Mermaid mindmap.",
         )
     if not delivery.summary:
         raise InsightGenerationError(
-            "INSIGHTFLOW_EMPTY_SUMMARY",
+            "AI_EMPTY_SUMMARY",
             "Summary agent did not deliver a summary.",
         )
     return delivery.summary, delivery.mindmap
@@ -322,7 +322,7 @@ def generate_summary_via_agent_runtime(
     max_turns: int = SUMMARY_AGENT_MAX_TURNS,
 ) -> tuple[str, str]:
     if not markdown.strip():
-        raise InsightGenerationError("INSIGHTFLOW_EMPTY_TRANSCRIPT", "Transcript is empty.")
+        raise InsightGenerationError("AI_EMPTY_TRANSCRIPT", "Transcript is empty.")
     if type(max_turns) is not int or not 1 <= max_turns <= SUMMARY_AGENT_MAX_TURNS:
         raise ValueError("Summary max_turns must be an integer from 1 through 6.")
     output_language_semantics(output_language)

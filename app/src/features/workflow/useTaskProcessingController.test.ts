@@ -974,7 +974,7 @@ describe("useTaskProcessingController history restore", () => {
         summary: "",
         insights: [],
         error: {
-          code: "INSIGHTFLOW_EMPTY_SUMMARY",
+          code: "AI_EMPTY_SUMMARY",
           message: "No summary returned.",
           stage: "insights_generating",
         },

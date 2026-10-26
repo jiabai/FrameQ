@@ -2351,7 +2351,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         status: "partial_completed",
         dissection: null,
         error: {
-          code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+          code: "AI_LLM_REQUEST_FAILED",
           message: "safe failure",
           stage: "insights_generating",
         },
@@ -2444,7 +2444,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
         dissection: null,
         draft: null,
         error: {
-          code: "INSIGHTFLOW_EMPTY_SUMMARY",
+          code: "AI_EMPTY_SUMMARY",
           message: "No summary returned.",
           stage: "insights_generating",
         },
@@ -2465,7 +2465,7 @@ describe("App controller-owned lifecycle UI smoke", () => {
       expect(state).toMatchObject({
         localReady: true,
         localError: false,
-        aiError: "生成失败。错误码：INSIGHTFLOW_EMPTY_SUMMARY",
+        aiError: "生成失败。错误码：AI_EMPTY_SUMMARY",
         insightsFailed: false,
       });
     } finally {

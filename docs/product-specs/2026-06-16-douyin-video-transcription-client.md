@@ -187,7 +187,7 @@
 - 不绕过平台访问限制或风控。
 - MVP 不要求字幕 `srt`、批量 URL、OCR 或完整模型管理中心。
 - MVP 不把大模型权重打包进安装包。
-- MVP 不依赖外部仓库作为运行期 import 路径（灵感能力内置到 `worker/frameq_worker/insightflow/`）。
+- MVP 不依赖外部仓库作为运行期 import 路径（智能提炼能力内置在 worker 中，由 agent_runtime 与 worker 自有的提示词、分段器、产物提交模块提供）。
 
 ## 使用场景
 
@@ -195,7 +195,7 @@
 - 用户阅读完整文字稿，并复制到笔记或文档中继续编辑。
 - 用户打开要点总结，获得基于文字稿原文和 Mermaid 思维导图整理出的层次化 Markdown 摘要。
 - 用户打开启发灵感，获得可用于讨论、选题或复盘的开放式问题。
-- InsightFlow 配置缺失时，用户仍能得到文字稿，并稍后分别重试要点总结或启发灵感。
+- 智能提炼 LLM 配置缺失时，用户仍能得到文字稿，并稍后分别重试要点总结或启发灵感。
 - AI 整理使用由管理员在 FrameQ server 端统一配置的 OpenAI-compatible LLM；桌面 UI 不再提供 LLM API Key、base URL、model 或 timeout 输入。
 - 用户完成主流程后，可以先查看或定位视频、音频和文字稿，再通过对应卡片分别启动要点总结或启发灵感生成。
 - 用户可以打开历史任务列表，查看过去处理过的 URL、完成状态、时间和结果路径，并重新打开文字稿、要点总结或灵感详情。
@@ -208,8 +208,8 @@
 - 默认 ASR 模型为 `iic/SenseVoiceSmall`；可选 ASR 模型为 `iic/SenseVoiceSmall-onnx`。
 - 下载、转码和 ASR 默认本地处理。
 - 云端 LLM 使用前必须明确提示文字稿会发送到对应服务。
-- InsightFlow LLM 配置由 FrameQ server 托管；worker 不得读取项目根 `.env` 或 app-local `.env` 中的旧 `FRAMEQ_LLM_*` 字段作为 LLM 配置。
-- 启发灵感生成应优先让 LLM 对完整 ASR 文字稿做“话题分段规划”，输出话题标题、摘要、原文片段和 `question_count`；随后按每个话题段生成问题。planner 最多保留 8 个话题段、每段 1-3 个问题、最终灵感总数最多 12 个；planner 失败或返回空结果时，fallback 到直接按文本片段生成问题，fallback 默认按约 1000 字生成 1 个问题。OpenAI-compatible LLM 默认 `temperature` 为 `0.7`。
+- 智能提炼 LLM 配置由 FrameQ server 托管；worker 不得读取项目根 `.env` 或 app-local `.env` 中的旧 `FRAMEQ_LLM_*` 字段作为 LLM 配置。
+- 启发灵感通过 agent_runtime 运行单个 agent，读取全部编号文字稿分段与本次偏好快照，经 `submit_insights` 交付工具一次性提交 1 至 12 个互不重复的灵感；每条灵感包含主题、匹配理由、1 至 3 个追问、适用场景与合法原文分段引用。交付不通过校验时，工具反馈说明原因，agent 在六次实际 LLM 调用上限内修改后重新交付。
 - 结果输出目录配置可由桌面 UI 写入 app-local data `.env`，键名为 `FRAMEQ_OUTPUT_DIR`；为空时默认使用 app-local data `outputs/`。
 - ASR 模型配置可由桌面 UI 写入 app-local data `.env`，键名为 `FRAMEQ_ASR_MODEL`；为空时默认使用 `iic/SenseVoiceSmall`。
 - UI 读取配置时不得展示或要求输入 LLM API Key；只能展示服务端 LLM 是否已由管理员配置就绪。
@@ -230,15 +230,15 @@
 - Douyin share page fallback 解析出多个候选流时，默认下载体积最大的可用 MP4；若该流下载或媒体校验失败，应自动降级尝试下一候选流，并在所有候选失败后返回结构化 `VIDEO_DOWNLOAD_FAILED`。
 - 音频提取后，当前 task 目录的 `media/audio.wav` 中存在 16 kHz 单声道 WAV；临时下载和中间文件保留在 app-local `cache/tasks/<task_id>/`。
 - ASR 成功后，当前 task 目录的 `transcript/` 中存在 `transcript.txt`、`transcript.md`，有合法时间轴时存在 `segments.json`。
-- `transcript.md` 的 Source URL 和 `frameq-task.json.source_url` 只能是 canonical URL；要点总结、mindmap、topic planner、insights 和 retry 只读取用户保存后的 `transcript.txt` 正文。
+- `transcript.md` 的 Source URL 和 `frameq-task.json.source_url` 只能是 canonical URL；要点总结、mindmap、insights 和 retry 只读取用户保存后的 `transcript.txt` 正文。
 - 主流程完成后，左侧本地工作区显示视频/音频操作和可校对文字稿，右侧 AI 工作区显示要点总结与启发灵感两个独立 target；Mermaid mindmap 保存为本地 `.mmd` 附属文件且没有独立云端生成入口。
 - 主流程完成后，要点总结、启发灵感入口显示待生成状态；点击 `要点总结` 后打开轻量确认面板，只生成 `summary.md` 和隐藏的 `mindmap.mmd`；点击 `启发灵感` 后进入灵感偏好流程，只生成 `insights.json` 和 `insights.md`。
 - AI 生成开始后才使用 server-managed LLM checkout；主流程不得携带 checkout env 或消耗额度。额度按云端 LLM API 调用尝试计费，1 次额度对应 1 次 chat-completion/API 调用尝试；要点总结和启发灵感各自按实际调用次数扣除。
 - 用户在 UI 设置中保存 ASR 模型后，后续完整处理请求应使用保存后的 ASR 模型；历史记录和 transcript markdown 中应保留任务实际使用的模型名。
 - 当两个独立生成动作都成功后，当前 task 目录的 `ai/` 中存在 `summary.md`、`mindmap.mmd`、`insights.json` 和 `insights.md`；任一动作成功不得删除或清空另一项已有产物。
-- 灵感生成应先请求 LLM 规划话题段，并在逐话题生成问题时包含“读完就知道可以从哪个角度思考”“问题长度尽量控制在一行可读范围内”等表达优化约束。
-- planner JSON 无法解析或没有有效话题段时，worker 应自动回退到直接问题生成策略，不因 planner 失败丢失可用文字稿结果。
-- InsightFlow 失败时，UI 展示 `部分完成`，保留文字稿和已经成功生成的 AI 产物，并在对应卡片提供重试入口。
+- 灵感生成指令应要求问题开放、具体、可讨论、自然易懂，每条问题只保留一个主要观点，避免嵌套从句与抽象名词堆砌，并在提交前去重并消除整表重叠。
+- agent 在六次实际调用上限内未交付、交付空列表或交付始终无法通过校验时，worker 返回结构化错误并保留文字稿与已有 AI 产物，用户可在对应卡片重试。
+- 智能提炼失败时，UI 展示 `部分完成`，保留文字稿和已经成功生成的 AI 产物，并在对应卡片提供重试入口。
 - 在 `部分完成` 状态点击要点总结或灵感重试时，仅重新运行对应目标，不重新下载视频或重新执行 ASR。
 - 要点总结或灵感待生成/失败时，点击对应入口都应进入各自确认流程；确认后仅运行该目标，不重新下载视频、提取音频或重新转写。
 - app-local data `.env` 只承载本机 ASR、输出目录和模型下载覆盖；灵感生成不得从 dotenv 读取 LLM key 或 model。
@@ -291,8 +291,8 @@
 ## 2026-06-22 Insight Failure Reason Visibility
 
 - When insight generation fails after transcript completion, the result workspace should keep video, audio, and transcript entries visible while also showing the structured insight failure code, stage, and actionable recovery copy.
-- The client should translate common `INSIGHTFLOW_*`, checkout, quota, timeout, empty-result, and worker-process failures into user-facing Chinese guidance, preserving a short original error summary when useful for troubleshooting.
-- If an OpenAI-compatible provider rejects the transcript because of content safety or risk-control policy, FrameQ should classify it as `INSIGHTFLOW_LLM_CONTENT_BLOCKED` and explain that the cloud LLM refused the request rather than hiding it behind a generic request failure.
+- The client should translate common `AI_*`, checkout, quota, timeout, empty-result, and worker-process failures into user-facing Chinese guidance, preserving a short original error summary when useful for troubleshooting.
+- If an OpenAI-compatible provider rejects the transcript because of content safety or risk-control policy, FrameQ should classify it as `AI_LLM_CONTENT_BLOCKED` and explain that the cloud LLM refused the request rather than hiding it behind a generic request failure.
 
 ## 2026-06-23 Insight Retry Task Manifest Sync
 

@@ -122,7 +122,7 @@ describe("workflow state model", () => {
       status: "partial_completed",
       dissection: null,
       error: {
-        code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+        code: "AI_LLM_REQUEST_FAILED",
         message: "safe failure",
         stage: "insights_generating",
       },
@@ -132,7 +132,7 @@ describe("workflow state model", () => {
 
     expect(next.dissection).toEqual(previous.dissection);
     expect(next.dissectionStale).toBe(true);
-    expect(next.aiTargetErrors.dissection?.code).toBe("INSIGHTFLOW_LLM_REQUEST_FAILED");
+    expect(next.aiTargetErrors.dissection?.code).toBe("AI_LLM_REQUEST_FAILED");
   });
 
   test("propagates stale dissection_source_status from a cached worker result", () => {
@@ -327,14 +327,14 @@ describe("workflow state model", () => {
         mindmap: DEFAULT_ARTIFACTS.mindmap,
       },
       error: {
-        code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+        code: "AI_LLM_REQUEST_FAILED",
         message: "LLM request failed with HTTP 400.",
         stage: "insights_generating",
       },
     }));
 
     expect(getVisibleWorkflowError(state)).toEqual({
-      code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+      code: "AI_LLM_REQUEST_FAILED",
       message: "LLM request failed with HTTP 400.",
       stage: "insights_generating",
     });
@@ -487,8 +487,8 @@ describe("workflow state model", () => {
         mindmap: DEFAULT_ARTIFACTS.mindmap,
       },
       error: {
-        code: "INSIGHTFLOW_CONFIG_MISSING",
-        message: "InsightFlow LLM client is not configured.",
+        code: "AI_CONFIG_MISSING",
+        message: "AI LLM client is not configured.",
         stage: "insights_generating",
       },
     }));
@@ -750,7 +750,7 @@ describe("workflow state model", () => {
         status: "partial_completed",
         insights: [],
         error: {
-          code: "INSIGHTFLOW_EMPTY_RESULT",
+          code: "AI_EMPTY_RESULT",
           message: "No insights returned.",
           stage: "insights_generating",
         },
@@ -759,7 +759,7 @@ describe("workflow state model", () => {
     );
 
     expect(state.aiErrorTarget).toBe("insights");
-    expect(state.aiTargetErrors.insights?.code).toBe("INSIGHTFLOW_EMPTY_RESULT");
+    expect(state.aiTargetErrors.insights?.code).toBe("AI_EMPTY_RESULT");
     expect(state.aiTargetErrors.draft).toBeUndefined();
   });
 

@@ -26,7 +26,7 @@
 - `ai_runtime.py` owns the shared provider and per-call checkout. Each actual supplier call uses a
   unique `<base>-<target>-call-NNNN` request identifier, constructs and closes that call's supplier
   provider, and consumes one AI Credit. Checkout-specific failures retain the existing
-  `INSIGHTFLOW_*` error codes; other provider failures map to `INSIGHTFLOW_LLM_REQUEST_FAILED`.
+  `AI_*` error codes; other provider failures map to `AI_LLM_REQUEST_FAILED`.
   User retries mint a fresh request identifier.
 - `ai_prompts.py` owns prompt text, `transcript_chunks.py` owns deterministic source splitting,
   `insight_errors.py` owns shared generation errors, and `ai_artifacts.py` owns shared artifact

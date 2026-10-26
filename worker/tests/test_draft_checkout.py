@@ -206,7 +206,7 @@ def test_resolve_propagates_llm_checkout_exception() -> None:
 
     with pytest.raises(InsightGenerationError) as exc_info:
         resolve_draft_credentials(env, transport)
-    assert exc_info.value.code == "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE"
+    assert exc_info.value.code == "AI_LLM_QUOTA_UNAVAILABLE"
 
 
 def test_resolve_propagates_anysearch_checkout_error_as_neutral_runtime_error() -> None:

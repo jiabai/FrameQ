@@ -372,7 +372,7 @@ def test_insight_generation_requires_configuration_without_writing_artifacts(
 
     assert result["status"] == "partial_completed"
     assert result["text"] == "transcript text"
-    assert result["error"]["code"] == "INSIGHTFLOW_CONFIG_MISSING"
+    assert result["error"]["code"] == "AI_CONFIG_MISSING"
     assert result["artifacts"] == {}
     assert not (tmp_path / "task" / "ai").exists()
 
@@ -459,7 +459,7 @@ def test_insight_generation_rejects_empty_transcript_before_configuration(
 
     assert result["status"] == "partial_completed"
     assert result["error"]["code"] == (
-        "DISSECTION_EMPTY_TRANSCRIPT" if target == "dissection" else "INSIGHTFLOW_EMPTY_TRANSCRIPT"
+        "DISSECTION_EMPTY_TRANSCRIPT" if target == "dissection" else "AI_EMPTY_TRANSCRIPT"
     )
     assert result["artifacts"] == {}
 
@@ -486,5 +486,5 @@ def test_failed_insight_generation_preserves_previously_saved_artifacts(
 
     assert result["status"] == "partial_completed"
     assert result["text"] == "transcript text"
-    assert result["error"]["code"] == "INSIGHTFLOW_CONFIG_MISSING"
+    assert result["error"]["code"] == "AI_CONFIG_MISSING"
     assert summary_path.read_bytes() == previous_summary

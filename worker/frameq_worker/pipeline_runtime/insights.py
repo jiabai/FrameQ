@@ -89,7 +89,7 @@ def run_insight_generation_step(
                 code=(
                     "DISSECTION_EMPTY_TRANSCRIPT"
                     if target == "dissection"
-                    else "INSIGHTFLOW_EMPTY_TRANSCRIPT"
+                    else "AI_EMPTY_TRANSCRIPT"
                 ),
                 message="Official transcript text is empty.",
                 stage=JobStage.INSIGHTS_GENERATING,
@@ -105,7 +105,7 @@ def run_insight_generation_step(
         try:
             if summary_runner is None and runtime_env is None:
                 raise InsightGenerationError(
-                    "INSIGHTFLOW_CONFIG_MISSING",
+                    "AI_CONFIG_MISSING",
                     "Summary agent LLM client is not configured.",
                 )
             runner = summary_runner or generate_summary_via_agent_runtime

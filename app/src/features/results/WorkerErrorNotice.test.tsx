@@ -12,7 +12,7 @@ describe("WorkerErrorNotice", () => {
       <WorkerErrorNotice
         locale="zh-TW"
         error={{
-          code: "INSIGHTFLOW_LLM_REQUEST_FAILED",
+          code: "AI_LLM_REQUEST_FAILED",
           message: `HTTP 503 ${secret} C:\\private\\prompt.txt`,
           stage: "insights_generating",
         }}
@@ -21,7 +21,7 @@ describe("WorkerErrorNotice", () => {
 
     expect(markup).toContain("雲端 LLM 請求失敗");
     expect(markup).toContain("技術詳細資料");
-    expect(markup).toContain("INSIGHTFLOW_LLM_REQUEST_FAILED");
+    expect(markup).toContain("AI_LLM_REQUEST_FAILED");
     expect(markup).toContain("503");
     expect(markup).not.toContain("open=\"");
     expect(markup).not.toContain(secret);

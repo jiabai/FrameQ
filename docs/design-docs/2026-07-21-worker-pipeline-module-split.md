@@ -188,7 +188,7 @@ The physical move preserves the following policies exactly:
 | Transcription raises `ASRError` | Preserve the ASR code/message at `video_transcribing` and finalize the task |
 | AI transcript path is not the exact official path or crosses a link/junction boundary | Return `partial_completed` with `TRANSCRIPT_TEXT_PATH_INVALID`, empty text, and no prompt call |
 | Official transcript cannot be read as UTF-8 | Return `partial_completed` with `TRANSCRIPT_TEXT_NOT_FOUND`, empty text, and no prompt call |
-| AI client is absent | Return `partial_completed` with `INSIGHTFLOW_CONFIG_MISSING` while preserving the transcript body |
+| AI client is absent | Return `partial_completed` with `AI_CONFIG_MISSING` while preserving the transcript body |
 | One AI target sub-operation fails | Preserve successful target artifacts and return the first current `InsightGenerationError` as `partial_completed` |
 
 The transcript owner emits the same existing events in the same order and conditions:

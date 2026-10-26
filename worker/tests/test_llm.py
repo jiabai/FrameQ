@@ -76,16 +76,16 @@ def test_managed_checkout_response_rejects_unusable_configuration(raw: bytes) ->
     with pytest.raises(InsightGenerationError) as captured:
         parse_managed_checkout_response(raw)
 
-    assert captured.value.code == "INSIGHTFLOW_LLM_CHECKOUT_INVALID_RESPONSE"
+    assert captured.value.code == "AI_LLM_CHECKOUT_INVALID_RESPONSE"
 
 
 @pytest.mark.parametrize(
     ("status", "body", "expected_code"),
     [
-        (401, {}, "INSIGHTFLOW_LLM_AUTH_REQUIRED"),
-        (403, {}, "INSIGHTFLOW_LLM_QUOTA_UNAVAILABLE"),
-        (503, {"error": "LLM_CONFIG_MISSING"}, "INSIGHTFLOW_LLM_CONFIG_MISSING"),
-        (500, {}, "INSIGHTFLOW_LLM_CHECKOUT_FAILED"),
+        (401, {}, "AI_LLM_AUTH_REQUIRED"),
+        (403, {}, "AI_LLM_QUOTA_UNAVAILABLE"),
+        (503, {"error": "LLM_CONFIG_MISSING"}, "AI_LLM_CONFIG_MISSING"),
+        (500, {}, "AI_LLM_CHECKOUT_FAILED"),
     ],
 )
 def test_checkout_http_error_maps_to_existing_contract(
@@ -202,7 +202,7 @@ def test_provider_rejects_missing_configuration_before_constructing_client(
     with pytest.raises(InsightGenerationError) as captured:
         build_insight_provider(environment)
 
-    assert captured.value.code == "INSIGHTFLOW_CONFIG_MISSING"
+    assert captured.value.code == "AI_CONFIG_MISSING"
 
 
 def test_managed_provider_construction_requires_no_checkout_request() -> None:
@@ -247,4 +247,4 @@ def test_managed_token_budget_is_validated_before_checkout(value: str) -> None:
             "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "operation-1",
             "FRAMEQ_LLM_MAX_TOKENS": value,
         })
-    assert error.value.code == "INSIGHTFLOW_CONFIG_MISSING"
+    assert error.value.code == "AI_CONFIG_MISSING"
