@@ -196,6 +196,12 @@
   traversal, duplicates, unknown schema/state/fields, unsupported destinations, and missing required
   rollback material. An invalid journal fails closed and must not touch a path outside its supported
   task root.
+- The worker (Python) writes the task journal and the desktop (Rust) recovers it, so both languages
+  must accept exactly the same closed destination set. `contracts/task-artifact-transaction-v1.json`
+  is the single source for that set, and each language asserts set equality against it in its own
+  test suite. A destination known to only one side makes the other side reject the whole journal:
+  that still fails closed, but it also makes the desktop drop a task the worker wrote legitimately,
+  so the set must never be edited in one language alone.
 - Internal staging, rollback, and journal files are never manifest artifacts, History entries,
   locate-file targets, cache authority, log attachments, or AI input. Original transcript backups
   remain a separate user-facing recovery feature.

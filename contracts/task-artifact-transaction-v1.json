@@ -48,7 +48,36 @@
     "ai/summary.md",
     "ai/mindmap.mmd",
     "ai/insights.json",
-    "ai/insights.md"
+    "ai/insights.md",
+    "ai/dissection.json",
+    "ai/dissection.md",
+    "ai/draft.md",
+    "ai/original/draft.md"
+  ],
+  "internalParents": [
+    ".",
+    "ai",
+    "ai/original",
+    "transcript",
+    "transcript/original"
+  ],
+  "artifactKeysByDestination": {
+    "transcript/transcript.txt": "transcript_txt",
+    "transcript/transcript.md": "transcript_md",
+    "transcript/segments.json": "segments",
+    "ai/summary.md": "summary",
+    "ai/mindmap.mmd": "mindmap",
+    "ai/insights.json": "insights",
+    "ai/insights.md": "insights_md",
+    "ai/dissection.json": "dissection",
+    "ai/dissection.md": "dissection_md",
+    "ai/draft.md": "draft"
+  },
+  "nonArtifactDestinations": [
+    "frameq-task.json",
+    "transcript/original/transcript.txt",
+    "transcript/original/transcript.md",
+    "ai/original/draft.md"
   ],
   "internalPath": {
     "fileNameTemplate": ".frameq-artifact-{transaction_id}-{entry_index}.{kind}",

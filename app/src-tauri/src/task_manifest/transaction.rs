@@ -15,7 +15,10 @@ const MAX_ENTRIES: usize = 8;
 const MAX_JOURNAL_BYTES: u64 = 64 * 1024;
 const COMMIT_ERROR: &str = "Task artifacts could not be stored safely.";
 const RECOVERY_ERROR: &str = "Task artifacts could not be recovered safely.";
-const ALLOWED_DESTINATIONS: [&str; 12] = [
+// The worker writes this journal; the desktop reads and recovers it. Both sides
+// must accept exactly the same closed destination set, so this mirrors
+// `contracts/task-artifact-transaction-v1.json` verbatim.
+const ALLOWED_DESTINATIONS: [&str; 14] = [
     "frameq-task.json",
     "transcript/transcript.txt",
     "transcript/transcript.md",
@@ -26,9 +29,20 @@ const ALLOWED_DESTINATIONS: [&str; 12] = [
     "ai/mindmap.mmd",
     "ai/insights.json",
     "ai/insights.md",
+    "ai/dissection.json",
+    "ai/dissection.md",
     "ai/draft.md",
     "ai/original/draft.md",
 ];
+const INTERNAL_PARENTS: [&str; 5] = [".", "ai", "ai/original", "transcript", "transcript/original"];
+
+pub(crate) fn allowed_destinations_for_test() -> [&'static str; 14] {
+    ALLOWED_DESTINATIONS
+}
+
+pub(crate) fn internal_parents_for_test() -> [&'static str; 5] {
+    INTERNAL_PARENTS
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RecoveryOutcome {
@@ -389,8 +403,8 @@ fn cleanup_paths_best_effort(paths: &[PathBuf]) {
 }
 
 fn cleanup_closed_orphans_best_effort(task_dir: &Path) {
-    for relative in ["", "transcript", "transcript/original", "ai"] {
-        let directory = if relative.is_empty() {
+    for relative in INTERNAL_PARENTS {
+        let directory = if relative == "." {
             task_dir.to_path_buf()
         } else {
             task_dir.join(relative)

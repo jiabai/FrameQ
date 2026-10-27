@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -32,26 +33,42 @@ _ORPHAN_NAME_PATTERN = re.compile(
 _JOURNAL_STAGING_NAME_PATTERN = re.compile(
     r"^\.frameq-artifact-transaction\.[0-9a-f]{32}\.part\.json$"
 )
-_ALLOWED_DESTINATIONS = (
-    "frameq-task.json",
-    "transcript/transcript.txt",
-    "transcript/transcript.md",
-    "transcript/segments.json",
+
+# Single source of truth for the closed destination set. Every destination the
+# journal may carry is either an artifact recorded in the task manifest (and so
+# owns a manifest key) or a non-artifact file: the manifest itself plus the
+# pre-edit copies kept for the user. The worker and the desktop both gate
+# journal recovery on this set, and they read each other's journals, so the two
+# languages must agree exactly — the shared contract file is the reference.
+ARTIFACT_KEY_BY_RELATIVE_PATH: Mapping[str, str] = MappingProxyType(
+    {
+        "transcript/transcript.txt": "transcript_txt",
+        "transcript/transcript.md": "transcript_md",
+        "transcript/segments.json": "segments",
+        "ai/summary.md": "summary",
+        "ai/mindmap.mmd": "mindmap",
+        "ai/insights.json": "insights",
+        "ai/insights.md": "insights_md",
+        "ai/dissection.json": "dissection",
+        "ai/dissection.md": "dissection_md",
+        "ai/draft.md": "draft",
+    }
+)
+_NON_ARTIFACT_DESTINATIONS = (
+    _MANIFEST_DESTINATION,
     "transcript/original/transcript.txt",
     "transcript/original/transcript.md",
-    "ai/summary.md",
-    "ai/mindmap.mmd",
-    "ai/insights.json",
-    "ai/insights.md",
-    "ai/dissection.json",
-    "ai/dissection.md",
+    "ai/original/draft.md",
 )
+_ALLOWED_DESTINATIONS = (*ARTIFACT_KEY_BY_RELATIVE_PATH, *_NON_ARTIFACT_DESTINATIONS)
 _ALLOWED_DESTINATION_SET = frozenset(_ALLOWED_DESTINATIONS)
 _INTERNAL_PARENTS = (
     PurePosixPath("."),
-    PurePosixPath("transcript"),
-    PurePosixPath("transcript/original"),
-    PurePosixPath("ai"),
+    *sorted(
+        {PurePosixPath(destination).parent for destination in _ALLOWED_DESTINATIONS}
+        - {PurePosixPath(".")},
+        key=PurePosixPath.as_posix,
+    ),
 )
 
 

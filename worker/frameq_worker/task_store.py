@@ -27,6 +27,7 @@ from frameq_worker.source_identity import (
     source_identity_from_manifest,
 )
 from frameq_worker.task_transaction import (
+    ARTIFACT_KEY_BY_RELATIVE_PATH,
     TaskArtifactCommitError,
     commit_task_artifacts,
     recover_task_artifacts,
@@ -603,26 +604,13 @@ def _is_link_or_junction(path: Path) -> bool:
     return path.is_symlink() or bool(is_junction(path))
 
 
-_ARTIFACT_KEY_BY_RELATIVE_PATH = {
-    "transcript/transcript.txt": "transcript_txt",
-    "transcript/transcript.md": "transcript_md",
-    "transcript/segments.json": "segments",
-    "ai/summary.md": "summary",
-    "ai/mindmap.mmd": "mindmap",
-    "ai/insights.json": "insights",
-    "ai/insights.md": "insights_md",
-    "ai/dissection.json": "dissection",
-    "ai/dissection.md": "dissection_md",
-}
-
-
 def _artifacts_after_payloads(
     context: TaskContext,
     payloads: Mapping[str, bytes | None],
 ) -> dict[str, str]:
     artifacts = task_artifacts_for_existing_files(context.paths, context.source)
     for relative_path, content in payloads.items():
-        artifact_key = _ARTIFACT_KEY_BY_RELATIVE_PATH.get(relative_path)
+        artifact_key = ARTIFACT_KEY_BY_RELATIVE_PATH.get(relative_path)
         if artifact_key is None:
             raise TaskArtifactCommitError() from None
         if content is None:

@@ -123,6 +123,25 @@ def test_interrupted_dissection_bundle_restores_previous_complete_revision(
         assert (task_dir / relative).read_bytes() == content
 
 
+def test_commit_accepts_draft_destinations(tmp_path: Path) -> None:
+    task_dir = _task_dir(tmp_path)
+
+    commit_task_artifacts(
+        task_dir,
+        {
+            "ai/draft.md": b"# draft\n",
+            "ai/original/draft.md": b"# draft before edit\n",
+            "frameq-task.json": b'{"artifacts":{"draft":"ai/draft.md"}}\n',
+        },
+    )
+
+    assert (task_dir / "ai" / "draft.md").read_bytes() == b"# draft\n"
+    assert (task_dir / "ai" / "original" / "draft.md").read_bytes() == (
+        b"# draft before edit\n"
+    )
+    assert _transaction_internal_files(task_dir) == []
+
+
 def test_precommit_crash_recovers_complete_previous_revision_idempotently(
     tmp_path: Path,
 ) -> None:
@@ -340,6 +359,37 @@ def test_contract_fixtures_match_python_parser() -> None:
     for fixture in contract["invalidFixtures"]:
         with pytest.raises(ValueError):
             task_transaction._parse_journal_payload(fixture["journal"])
+
+
+def test_closed_destinations_match_shared_contract() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    contract = json.loads(
+        (repository_root / "contracts" / "task-artifact-transaction-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert sorted(task_transaction._ALLOWED_DESTINATIONS) == sorted(
+        contract["allowedDestinations"]
+    )
+    assert sorted(task_transaction._NON_ARTIFACT_DESTINATIONS) == sorted(
+        contract["nonArtifactDestinations"]
+    )
+    assert dict(task_transaction.ARTIFACT_KEY_BY_RELATIVE_PATH) == (
+        contract["artifactKeysByDestination"]
+    )
+    assert sorted(
+        parent.as_posix() for parent in task_transaction._INTERNAL_PARENTS
+    ) == sorted(contract["internalParents"])
+
+
+def test_store_manifest_keys_come_from_the_transaction_owner() -> None:
+    from frameq_worker import task_store
+
+    assert (
+        task_store.ARTIFACT_KEY_BY_RELATIVE_PATH
+        is task_transaction.ARTIFACT_KEY_BY_RELATIVE_PATH
+    )
 
 
 def test_recovery_removes_closed_orphan_journal_staging(tmp_path: Path) -> None:

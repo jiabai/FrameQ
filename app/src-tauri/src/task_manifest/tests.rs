@@ -3,12 +3,14 @@ use super::{
     schema::{TaskManifest, TaskManifestError},
     storage::validate_task_artifact_path,
     transaction::{
-        recover_task_artifacts, validate_journal_value_for_test, RecoveryOutcome, JOURNAL_FILE_NAME,
+        allowed_destinations_for_test, internal_parents_for_test, recover_task_artifacts,
+        validate_journal_value_for_test, RecoveryOutcome, JOURNAL_FILE_NAME,
     },
     SourceIdentity, SupportedTask, TaskArtifact, TaskSourceSummary,
 };
 use crate::local_media_contract::LocalMediaKind;
 use serde_json::json;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -31,6 +33,76 @@ fn transaction_contract_fixtures_match_rust_parser() {
     {
         assert!(validate_journal_value_for_test(fixture["journal"].clone()).is_err());
     }
+}
+
+#[test]
+fn transaction_closed_destinations_match_shared_contract() {
+    let contract: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../contracts/task-artifact-transaction-v1.json"
+    ))
+    .expect("parse transaction contract");
+    let strings = |key: &str| -> BTreeSet<String> {
+        contract[key]
+            .as_array()
+            .unwrap_or_else(|| panic!("{key} array"))
+            .iter()
+            .map(|value| value.as_str().expect("string entry").to_string())
+            .collect()
+    };
+    let rust_allowed = allowed_destinations_for_test()
+        .iter()
+        .map(|value| value.to_string())
+        .collect::<BTreeSet<_>>();
+    let rust_parents = internal_parents_for_test()
+        .iter()
+        .map(|value| value.to_string())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(rust_allowed, strings("allowedDestinations"));
+    assert_eq!(rust_parents, strings("internalParents"));
+}
+
+#[test]
+fn prepared_dissection_journal_written_by_the_worker_is_recovered() {
+    let task_dir = temp_dir("worker-dissection-journal-recovery");
+    let ai_dir = task_dir.join("ai");
+    fs::create_dir_all(&ai_dir).expect("create ai dir");
+    let transaction_id = "cccccccccccccccccccccccccccccccc";
+    // The worker commits the dissection pair through its own transaction; the
+    // desktop must recognise those destinations or it fails to recover the
+    // journal and silently drops the task from history.
+    fs::write(
+        task_dir.join(JOURNAL_FILE_NAME),
+        serde_json::to_vec_pretty(&json!({
+            "schema_version": 1,
+            "transaction_id": transaction_id,
+            "state": "prepared",
+            "entries": [
+                {
+                    "destination": "ai/dissection.json",
+                    "staging": format!("ai/.frameq-artifact-{transaction_id}-0.staging"),
+                    "rollback": null,
+                    "existed_before": false
+                },
+                {
+                    "destination": "ai/dissection.md",
+                    "staging": format!("ai/.frameq-artifact-{transaction_id}-1.staging"),
+                    "rollback": null,
+                    "existed_before": false
+                }
+            ]
+        }))
+        .expect("encode journal"),
+    )
+    .expect("write journal");
+
+    assert_eq!(
+        recover_task_artifacts(&task_dir).expect("recover worker dissection journal"),
+        RecoveryOutcome::RolledBack
+    );
+    assert!(!ai_dir.join("dissection.json").exists());
+    assert!(!ai_dir.join("dissection.md").exists());
+    assert!(!task_dir.join(JOURNAL_FILE_NAME).exists());
 }
 
 #[test]
