@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { SaveDraftEditResponse } from "../../draftDetailClient";
@@ -130,6 +131,55 @@ describe("DraftResultSheet", () => {
     await waitFor(() => expect(preview.textContent).toContain("从磁盘加载的内容"));
 
     expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  // ---- 1b. Reopening reloads from disk ----
+
+  test("closing and reopening the same task reloads from disk", async () => {
+    function ReopenHost() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(false)}>
+            close-sheet
+          </button>
+          <button type="button" onClick={() => setOpen(true)}>
+            open-sheet
+          </button>
+          <DraftResultSheet
+            open={open}
+            workflow={completedWorkflow()}
+            onSaved={vi.fn()}
+            onRegenerate={vi.fn()}
+            onClose={vi.fn()}
+          />
+        </>
+      );
+    }
+
+    render(
+      <LocaleProvider
+        initialOutcome={{
+          preference: "zh-CN",
+          resolvedLocale: "zh-CN",
+          persistedAnchor: "zh-CN",
+          notice: null,
+        }}
+      >
+        <ReopenHost />
+      </LocaleProvider>,
+    );
+
+    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "close-sheet" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "open-sheet" }));
+    });
+
+    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledTimes(2));
   });
 
   // ---- 2. Load failure fallback ----

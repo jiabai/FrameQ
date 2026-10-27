@@ -11,6 +11,7 @@ import type { AsrModelDownloadProgress } from "../../settingsClient";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
 import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 import type { AsrModelStatus } from "./types";
+import { asrModelLabel } from "./asrModelLabels";
 
 const DEFAULT_MODEL_DIRECTORY = "app-local data/models";
 const TERMINAL_FAILURE_NOTICE_CODES = new Set([
@@ -24,7 +25,6 @@ type ModelGuideSheetProps = {
   open: boolean;
   modelDownloadActive: boolean;
   asrModelStatus: AsrModelStatus;
-  asrModelLabels: Record<string, string>;
   modelDownloadProgress: AsrModelDownloadProgress;
   modelDownloadNotice: UiMessage | null;
   modelDownloadStalled: boolean;
@@ -40,7 +40,6 @@ export function ModelGuideSheet({
   open,
   modelDownloadActive,
   asrModelStatus,
-  asrModelLabels,
   modelDownloadProgress,
   modelDownloadNotice,
   modelDownloadStalled,
@@ -121,7 +120,7 @@ export function ModelGuideSheet({
                   : t("guide.status.missing")}
               </span>
               <strong>
-                {asrModelLabels[asrModelStatus.model] ?? asrModelStatus.model}
+                {asrModelLabel(asrModelStatus.model)}
               </strong>
               <small>{t("guide.sourceLabel", { source })}</small>
               <small>

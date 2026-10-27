@@ -59,7 +59,6 @@ export function DraftResultSheet({
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState<UiMessage | null>(null);
   const [detailSeedId, setDetailSeedId] = useState<number | null>(null);
-  const loadTaskIdRef = useRef<string | null>(null);
   const draftFallbackRef = useRef(workflow.draft);
 
   // Keep the fallback ref in sync without re-running the load effect below.
@@ -79,11 +78,9 @@ export function DraftResultSheet({
       return;
     }
 
-    if (loadTaskIdRef.current === workflow.taskId) {
-      return;
-    }
-    loadTaskIdRef.current = workflow.taskId;
-
+    // The effect keys on [open, workflow.taskId], so a reopen or a task
+    // switch always reloads from disk while re-renders leave the buffer
+    // (and any unsaved edits) untouched.
     let cancelled = false;
     setLoading(true);
     setBuffer(draftFallbackRef.current);

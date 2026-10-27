@@ -24,11 +24,11 @@ import {
 import type { SettingsCategory, SettingsController } from "./useSettingsController";
 import { LanguagePreferenceField } from "./LanguagePreferenceField";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
+import { asrModelLabel } from "../asrModel/asrModelLabels";
 
 type SettingsSheetProps = {
   controller: SettingsController;
   asrModelStatus: AsrModelStatus;
-  asrModelLabels: Record<string, string>;
   modelDownloadActive: boolean;
   updateState: UpdateState;
   updateBusy: boolean;
@@ -133,7 +133,6 @@ function settingsGenerationPreferenceLines(
 export function SettingsSheet({
   controller,
   asrModelStatus,
-  asrModelLabels,
   modelDownloadActive,
   updateState,
   updateBusy,
@@ -294,7 +293,7 @@ export function SettingsSheet({
                       >
                         {settingsSupportedAsrModels.map((model) => (
                           <option value={model} key={model}>
-                            {asrModelLabels[model] ?? model}
+                            {asrModelLabel(model)}
                           </option>
                         ))}
                       </select>

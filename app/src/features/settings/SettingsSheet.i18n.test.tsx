@@ -123,7 +123,6 @@ function renderSettings(
         available: true,
         modelDir: "D:/FrameQ/models/SenseVoiceSmall",
       } as never}
-      asrModelLabels={{ "iic/SenseVoiceSmall": "SenseVoice Small" }}
       modelDownloadActive={false}
       updateState={options.updateState ?? createInitialUpdateState()}
       updateBusy={false}

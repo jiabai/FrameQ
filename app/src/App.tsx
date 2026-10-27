@@ -61,11 +61,6 @@ import { getAiCreditsCostHint } from "./aiCreditsCopy";
 import { renderUiMessage, uiMessage, type UiMessage } from "./i18n/uiMessage";
 import { UI_MOTION_TRANSITION } from "./uiMotion";
 
-const asrModelLabels: Record<string, string> = {
-  "iic/SenseVoiceSmall": "SenseVoice Small",
-  "iic/SenseVoiceSmall-onnx": "SenseVoiceSmall-ONNX (≈ 230 MB)",
-};
-
 function formatProgressPercent(value: number): string {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
@@ -712,7 +707,6 @@ function App() {
         open={modelGuideOpen}
         modelDownloadActive={modelDownloadActive}
         asrModelStatus={asrModelStatus}
-        asrModelLabels={asrModelLabels}
         modelDownloadProgress={modelDownloadProgress}
         modelDownloadNotice={modelDownloadNotice}
         modelDownloadStalled={modelDownloadStalled}
@@ -860,7 +854,6 @@ function App() {
         locale={resolvedLocale}
         controller={settingsController}
         asrModelStatus={asrModelStatus}
-        asrModelLabels={asrModelLabels}
         modelDownloadActive={modelDownloadActive}
         updateState={updateState}
         updateBusy={updateBusy}

@@ -110,7 +110,6 @@ async function renderModelGuide(
           available: false,
           source: "modelscope",
         }}
-        asrModelLabels={{ "iic/SenseVoiceSmall": "SenseVoice Small" }}
         modelDownloadProgress={{
           ...progress,
           phase: options.modelDownloadPhase ?? progress.phase,
