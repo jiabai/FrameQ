@@ -129,7 +129,6 @@ function renderSettings(
       updateInstallBlocked={false}
       inAppUpdates
       currentVersion={options.currentVersion ?? "0.3.7"}
-      formatProgressPercent={(value) => `${value}%`}
       onOpenProfileEditorFromSettings={vi.fn()}
       onCheckForUpdates={vi.fn()}
       onInstallUpdate={vi.fn()}

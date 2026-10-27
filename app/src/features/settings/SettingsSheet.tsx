@@ -13,7 +13,7 @@ import type { AsrModelStatus } from "../asrModel/types";
 import type { UpdateState } from "../../updateState";
 import type { InsightPreferenceState } from "../../insightPreferencesClient";
 import type { SupportedLocale } from "../../i18n/locale";
-import { formatBytes, selectPluralCategory } from "../../i18n/formatters";
+import { clampPercent, formatBytes, formatProgressPercent, selectPluralCategory } from "../../i18n/formatters";
 import { renderUiMessage } from "../../i18n/uiMessage";
 import {
   getPreferenceCopy,
@@ -36,7 +36,6 @@ type SettingsSheetProps = {
   updateInstallBlocked: boolean;
   inAppUpdates: boolean;
   currentVersion: string;
-  formatProgressPercent: (value: number) => string;
   onAsrModelSelection?: (model: string) => void;
   onOpenProfileEditorFromSettings: () => void | Promise<void>;
   onCheckForUpdates: (options?: { silent?: boolean; isCancelled?: () => boolean }) => void | Promise<void>;
@@ -140,7 +139,6 @@ export function SettingsSheet({
   updateInstallBlocked,
   inAppUpdates,
   currentVersion,
-  formatProgressPercent,
   onAsrModelSelection,
   onOpenProfileEditorFromSettings,
   onCheckForUpdates,
@@ -212,7 +210,7 @@ export function SettingsSheet({
   const renderedSettingsNotice = renderUiMessage(locale, settingsNotice);
   const renderedDiagnosticExportNotice = renderUiMessage(locale, diagnosticExportNotice);
   const renderedUpdateMessage = renderUiMessage(locale, updateState.message);
-  const updateProgress = Math.max(0, Math.min(100, updateState.progress));
+  const updateProgress = clampPercent(updateState.progress);
 
   return (
     <AnimatedSheet

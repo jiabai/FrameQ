@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 
 const appCss = readFileSync(new URL("./App.css", import.meta.url), "utf-8");
 const appTsx = readFileSync(new URL("./App.tsx", import.meta.url), "utf-8");
+const appToolbarTsx = readFileSync(
+  new URL("./features/window/AppToolbar.tsx", import.meta.url),
+  "utf-8",
+);
 const localTranscriptWorkspaceTsx = readFileSync(
   new URL("./features/transcript/LocalTranscriptWorkspace.tsx", import.meta.url),
   "utf-8",
@@ -213,10 +217,10 @@ describe("App result workspace layout styles", () => {
       ".toolbar-tool-group .icon-button:focus-visible",
     ]);
 
-    expect(appTsx).toMatch(
-      /className="toolbar-tool-group"[\s\S]*?aria-label=\{tCommon\("toolbar\.history"\)\}[\s\S]*?aria-label=\{tCommon\("toolbar\.settings"\)\}[\s\S]*?aria-label=\{toolbarNewTaskAriaLabel\}/,
+    expect(appToolbarTsx).toMatch(
+      /className="toolbar-tool-group"[\s\S]*?aria-label=\{t\("toolbar\.history"\)\}[\s\S]*?aria-label=\{t\("toolbar\.settings"\)\}[\s\S]*?aria-label=\{newTask\.ariaLabel\}/,
     );
-    expect(appTsx).toContain("<span>{accountChipLabel}</span>");
+    expect(appToolbarTsx).toContain("<span>{accountChipLabel}</span>");
     expect(accountRule).toContain("min-width: 0;");
     expect(accountRule).toContain("min-height: 32px;");
     expect(accountRule).toContain("padding: 0 9px;");

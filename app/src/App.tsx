@@ -1,17 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import {
-  Download,
-  History as HistoryIcon,
-  ListChecks,
-  LoaderCircle,
-  RotateCcw,
-  Settings,
-  ShieldCheck,
-  UserRound,
-  X,
-} from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import "./App.css";
@@ -34,7 +22,6 @@ import { useAsrModelDownload } from "./features/asrModel/useAsrModelDownload";
 import { HistorySheet } from "./features/history/HistorySheet";
 import { useHistoryController } from "./features/history/useHistoryController";
 import { InsightPreferenceFlow } from "./features/insightPreferences/InsightPreferenceFlow";
-import { OutputLanguageField } from "./features/insightPreferences/OutputLanguageField";
 import { useInsightGenerationController } from "./features/insightPreferences/useInsightGenerationController";
 import { TranscriptDissectionConfirmationSheet } from "./features/dissection/TranscriptDissectionConfirmationSheet";
 import { useTranscriptDissectionController } from "./features/dissection/useTranscriptDissectionController";
@@ -43,6 +30,7 @@ import { AiGenerationWorkspace } from "./features/results/AiGenerationWorkspace"
 import { AiResultDetailSheet } from "./features/results/AiResultDetailSheet";
 import { DraftConfirmationSheet } from "./features/results/DraftConfirmationSheet";
 import { DraftResultSheet } from "./features/results/DraftResultSheet";
+import { SummaryConfirmationSheet } from "./features/results/SummaryConfirmationSheet";
 import { handleRegenerateDraft } from "./features/results/regenerateDraft";
 import { TaskStatusBanner } from "./features/results/TaskStatusBanner";
 import { SettingsSheet } from "./features/settings/SettingsSheet";
@@ -50,22 +38,18 @@ import { useSettingsController } from "./features/settings/useSettingsController
 import { LocalTranscriptWorkspace } from "./features/transcript/LocalTranscriptWorkspace";
 import { useTranscriptDetailController } from "./features/transcript/useTranscriptDetailController";
 import { useTranscriptPolishController } from "./features/transcript/useTranscriptPolishController";
-import { useWindowChromeController } from "./features/window/useWindowChromeController";
-import { AnimatedSheet } from "./features/modal/AnimatedSheet";
+import { AppToolbar } from "./features/window/AppToolbar";
 import { TaskComposer } from "./features/workflow/TaskComposer";
 import { useTaskProcessingController } from "./features/workflow/useTaskProcessingController";
 import { useAppUpdateController } from "./features/updates/useAppUpdateController";
 import { useUiLocale } from "./i18n/LocaleProvider";
-import { countTextUnits, formatNumber, formatWordCount } from "./i18n/formatters";
-import { getAiCreditsCostHint } from "./aiCreditsCopy";
+import { formatProgressPercent } from "./i18n/formatters";
 import { renderUiMessage, uiMessage, type UiMessage } from "./i18n/uiMessage";
 import { UI_MOTION_TRANSITION } from "./uiMotion";
+import { revealPath } from "./features/common/revealPath";
+import { useEscapeKey } from "./features/common/useEscapeKey";
 
-function formatProgressPercent(value: number): string {
-  return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
-}
-
-function accountProcessBlockerMessage(account: AccountStatus): UiMessage {
+function accountBaseBlocker(account: AccountStatus): UiMessage | null {
   if (!account.authenticated) {
     return uiMessage("account.notice.signInRequired");
   }
@@ -74,20 +58,24 @@ function accountProcessBlockerMessage(account: AccountStatus): UiMessage {
     return uiMessage("account.notice.activationRequiredForAction");
   }
 
-  return uiMessage(
-    account.serverError
-      ? "account.notice.accountUnavailable"
-      : "account.notice.processingUnavailable",
+  return null;
+}
+
+function accountProcessBlockerMessage(account: AccountStatus): UiMessage {
+  return (
+    accountBaseBlocker(account) ??
+    uiMessage(
+      account.serverError
+        ? "account.notice.accountUnavailable"
+        : "account.notice.processingUnavailable",
+    )
   );
 }
 
 function accountAiBlockerMessage(account: AccountStatus): UiMessage {
-  if (!account.authenticated) {
-    return uiMessage("account.notice.signInRequired");
-  }
-
-  if (account.entitlementStatus !== "active") {
-    return uiMessage("account.notice.activationRequiredForAction");
+  const baseBlocker = accountBaseBlocker(account);
+  if (baseBlocker) {
+    return baseBlocker;
   }
 
   if (!account.llmConfigured) {
@@ -370,12 +358,6 @@ function App() {
     : uiMessage("history.disabled.deletionWhileProcessing");
   const { historyOpen, closeHistory, openHistory } = historyController;
   const {
-    handleToolbarMouseDown,
-    closeWindow,
-    minimizeWindow,
-    toggleMaximizeWindow,
-  } = useWindowChromeController();
-  const {
     updateState,
     updateBusy,
     updateInstallBlocked,
@@ -393,69 +375,15 @@ function App() {
     modelDownloadActive,
   });
 
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      if (detailTab) {
-        closeDetail();
-        return;
-      }
-
-      if (historyOpen) {
-        closeHistory();
-        return;
-      }
-
-      if (summaryConfirmOpen) {
-        closeSummaryConfirmation();
-        return;
-      }
-
-      if (draftConfirmOpen) {
-        setDraftConfirmOpen(false);
-        return;
-      }
-
-      if (draftResultOpen) {
-        setDraftResultOpen(false);
-        return;
-      }
-
-      if (insightPreferenceFlow) {
-        closeInsightPreferenceFlow();
-        return;
-      }
-
-      if (settingsOpen) {
-        closeSettings();
-        return;
-      }
-
-      if (modelGuideOpen && !modelDownloadActive) {
-        setModelGuideOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [
-    detailTab,
-    closeDetail,
-    historyOpen,
-    closeHistory,
-    summaryConfirmOpen,
-    closeSummaryConfirmation,
-    draftConfirmOpen,
-    draftResultOpen,
-    insightPreferenceFlow,
-    closeInsightPreferenceFlow,
-    settingsOpen,
-    closeSettings,
-    modelGuideOpen,
-    modelDownloadActive,
+  useEscapeKey([
+    [Boolean(detailTab), closeDetail],
+    [historyOpen, closeHistory],
+    [summaryConfirmOpen, closeSummaryConfirmation],
+    [draftConfirmOpen, () => setDraftConfirmOpen(false)],
+    [draftResultOpen, () => setDraftResultOpen(false)],
+    [Boolean(insightPreferenceFlow), closeInsightPreferenceFlow],
+    [settingsOpen, closeSettings],
+    [modelGuideOpen && !modelDownloadActive, () => setModelGuideOpen(false)],
   ]);
 
   useEffect(() => {
@@ -496,12 +424,13 @@ function App() {
       return;
     }
 
-    try {
-      await revealItemInDir(artifactPath);
-      setActionNotice(uiMessage("transcript.notice.exportLocated"));
-    } catch {
-      setActionNotice(uiMessage("transcript.notice.exportLocateFailed"));
-    }
+    setActionNotice(
+      uiMessage(
+        (await revealPath(artifactPath))
+          ? "transcript.notice.exportLocated"
+          : "transcript.notice.exportLocateFailed",
+      ),
+    );
   }
 
   const activeStageBody = tWorkflow(`stage.${workflow.stage}.body`);
@@ -515,10 +444,6 @@ function App() {
           : updateState.availableVersion
             ? tUpdates("toolbar.version", { version: updateState.availableVersion })
             : tUpdates("toolbar.available");
-  const confirmationTranscriptUnitCount = useMemo(
-    () => countTextUnits(workflow.text, resolvedLocale),
-    [resolvedLocale, workflow.text],
-  );
   const toolbarNewTaskAriaLabel = renderUiMessage(
     resolvedLocale,
     toolbarNewTaskButtonState.ariaLabel,
@@ -539,77 +464,27 @@ function App() {
   return (
     <main className="app-shell">
       <section className="desktop-window" aria-label={tCommon("window.ariaLabel")}>
-        <header className="app-toolbar topbar" data-tauri-drag-region="" onMouseDown={handleToolbarMouseDown}>
-          <div className="traffic-lights" role="group" aria-label={tCommon("window.controls")}>
-            <button
-              className="traffic-light close"
-              type="button"
-              aria-label={tCommon("window.close")}
-              onClick={closeWindow}
-            />
-            <button
-              className="traffic-light minimize"
-              type="button"
-              aria-label={tCommon("window.minimize")}
-              onClick={minimizeWindow}
-            />
-            <button
-              className="traffic-light zoom"
-              type="button"
-              aria-label={tCommon("window.maximize")}
-              onClick={toggleMaximizeWindow}
-            />
-          </div>
-
-          <div className="toolbar-title" data-tauri-drag-region="">
-            <span className="app-mark" data-tauri-drag-region="">{tCommon("appMark")}</span>
-            <div data-tauri-drag-region="">
-              <h1 data-tauri-drag-region="">{tCommon("productName")}</h1>
-            </div>
-          </div>
-
-          <div className="topbar-actions toolbar-actions">
-            <button
-              className={`account-chip ${canProcessWithAccount(account) ? "active" : ""}`}
-              type="button"
-              onClick={() => openAccountPanel()}
-              aria-label={tCommon("toolbar.account")}
-            >
-              <UserRound size={15} />
-              <span>{accountChipLabel}</span>
-            </button>
-            {updateToolbarVisible ? (
-              <button
-                className={`update-chip ${updateState.status}`}
-                type="button"
-                onClick={installUpdate}
-                aria-label={tCommon("toolbar.update")}
-                disabled={updateBusy}
-              >
-                {updateSpinnerVisible ? <LoaderCircle size={15} /> : <Download size={15} />}
-                <span>{updateToolbarText}</span>
-              </button>
-            ) : null}
-            <div className="toolbar-tool-group" role="group" aria-label={tCommon("toolbar.taskTools")}>
-              <button className="icon-button" type="button" onClick={openHistory} aria-label={tCommon("toolbar.history")}>
-                <HistoryIcon size={17} />
-              </button>
-              <button className="icon-button" type="button" onClick={openSettings} aria-label={tCommon("toolbar.settings")}>
-                <Settings size={17} />
-              </button>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={handleNewTaskFromToolbar}
-                aria-label={toolbarNewTaskAriaLabel}
-                title={toolbarNewTaskTitle}
-                disabled={toolbarNewTaskButtonState.disabled}
-              >
-                <RotateCcw size={17} />
-              </button>
-            </div>
-          </div>
-        </header>
+        <AppToolbar
+          accountChipLabel={accountChipLabel}
+          accountActive={canProcessWithAccount(account)}
+          update={{
+            visible: updateToolbarVisible,
+            status: updateState.status,
+            text: updateToolbarText,
+            busy: updateBusy,
+            spinnerVisible: updateSpinnerVisible,
+          }}
+          newTask={{
+            disabled: toolbarNewTaskButtonState.disabled,
+            ariaLabel: toolbarNewTaskAriaLabel,
+            title: toolbarNewTaskTitle,
+          }}
+          onOpenAccount={() => openAccountPanel()}
+          onInstallUpdate={installUpdate}
+          onOpenHistory={openHistory}
+          onOpenSettings={openSettings}
+          onNewTask={handleNewTaskFromToolbar}
+        />
 
         <section
           className={`workspace ${workflow.stage === "waiting_input" ? "waiting-layout" : "active-layout"}`}
@@ -718,79 +593,16 @@ function App() {
         runtimeComponentDownloading={runtimeComponentDownloading}
       />
 
-      <AnimatedSheet
+      <SummaryConfirmationSheet
         open={summaryConfirmOpen}
-        ariaLabel={tSynthesis("confirmation.ariaLabel")}
-        className="preference-flow-sheet"
-        onBackdropClick={closeSummaryConfirmation}
-      >
-            <header className="modal-header sheet-header">
-              <div>
-                <p className="section-label">{tSynthesis("confirmation.sectionLabel")}</p>
-                <h2>{tSynthesis("confirmation.title")}</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={closeSummaryConfirmation}
-                aria-label={tSynthesis("confirmation.closeAria")}
-              >
-                <X size={18} />
-              </button>
-            </header>
-            <div className="preference-flow-content">
-              <p className="settings-warning privacy-callout">
-                <ShieldCheck size={16} />
-                <span>{tSynthesis("confirmation.privacy")}</span>
-              </p>
-              <div className="confirm-summary preference-confirm-grid">
-                <div>
-                  <span className="account-status-label">{tSynthesis("confirmation.currentTranscript")}</span>
-                  <strong>
-                    {confirmationTranscriptUnitCount > 0
-                      ? formatWordCount(
-                          confirmationTranscriptUnitCount,
-                          resolvedLocale,
-                        )
-                      : tSynthesis("confirmation.waitingTranscript")}
-                  </strong>
-                  <small>{currentTranscriptPath || tSynthesis("confirmation.transcriptUnavailable")}</small>
-                </div>
-                <div>
-                  <span className="account-status-label">{tSynthesis("confirmation.creditsLabel")}</span>
-                  <strong>
-                    {tSynthesis("confirmation.creditsBalance", {
-                      formattedCount: formatNumber(account.llmQuotaRemaining, resolvedLocale),
-                    })}
-                  </strong>
-                  <small>{getAiCreditsCostHint(resolvedLocale)}</small>
-                </div>
-                <OutputLanguageField
-                  locale={resolvedLocale}
-                  outputLanguage={resolvedLocale}
-                />
-              </div>
-              <div className="settings-actions sheet-footer">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={closeSummaryConfirmation}
-                  disabled={isProcessingStage(workflow.stage)}
-                >
-                  <span>{tSynthesis("confirmation.cancel")}</span>
-                </button>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={confirmSummaryGeneration}
-                  disabled={isProcessingStage(workflow.stage)}
-                >
-                  <ListChecks size={16} />
-                  <span>{tSynthesis("confirmation.confirm")}</span>
-                </button>
-              </div>
-            </div>
-      </AnimatedSheet>
+        locale={resolvedLocale}
+        transcriptText={workflow.text}
+        transcriptPath={currentTranscriptPath}
+        quotaRemaining={account.llmQuotaRemaining}
+        busy={isProcessingStage(workflow.stage)}
+        onConfirm={confirmSummaryGeneration}
+        onCancel={closeSummaryConfirmation}
+      />
 
       <InsightPreferenceFlow
         flow={insightPreferenceFlow}
@@ -860,7 +672,6 @@ function App() {
         updateInstallBlocked={updateInstallBlocked}
         inAppUpdates={inAppUpdates}
         currentVersion={currentVersion}
-        formatProgressPercent={formatProgressPercent}
         onAsrModelSelection={(model) => {
           void refreshAsrModelStatus(model).catch(() => undefined);
         }}

@@ -7,13 +7,14 @@ const MODAL_SOURCES = [
   ["./AnimatedSheet.tsx", 1],
 ] as const;
 
+// App itself only composes these sheets, so it is not listed here.
 const ANIMATED_SHEET_SOURCES = [
-  "../../App.tsx",
   "../account/AccountSheet.tsx",
   "../asrModel/ModelGuideSheet.tsx",
   "../history/HistorySheet.tsx",
   "../insightPreferences/InsightPreferenceFlow.tsx",
   "../results/AiResultDetailSheet.tsx",
+  "../results/SummaryConfirmationSheet.tsx",
   "../settings/SettingsSheet.tsx",
   "../dissection/TranscriptDissectionConfirmationSheet.tsx",
 ] as const;

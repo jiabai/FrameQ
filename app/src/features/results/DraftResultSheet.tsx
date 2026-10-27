@@ -16,7 +16,6 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import type { WorkflowState } from "../../workflowState";
 import type { TaskArtifacts } from "../../workflow";
@@ -29,6 +28,7 @@ import { useUiLocale } from "../../i18n/LocaleProvider";
 import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { MarkdownContent } from "./MarkdownContent";
 import { StatusLine } from "../common/StatusLine";
+import { revealPath } from "../common/revealPath";
 
 type DraftResultSheetProps = {
   open: boolean;
@@ -178,12 +178,11 @@ export function DraftResultSheet({
       setNotice(uiMessage("synthesis.draftResult.exportMissing"));
       return;
     }
-    try {
-      await revealItemInDir(draftPath);
-      setNotice(uiMessage("synthesis.draftResult.exported"));
-    } catch {
-      setNotice(uiMessage("synthesis.draftResult.exportFailed", { path: draftPath }));
-    }
+    setNotice(
+      (await revealPath(draftPath))
+        ? uiMessage("synthesis.draftResult.exported")
+        : uiMessage("synthesis.draftResult.exportFailed", { path: draftPath }),
+    );
   }, [dirty, workflow]);
 
   // ---- Render ----

@@ -50,6 +50,14 @@ export function formatPercent(
   }).format(value);
 }
 
+export function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+export function formatProgressPercent(value: number): string {
+  return `${clampPercent(value)}%`;
+}
+
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
 export function formatBytes(value: number, locale: SupportedLocale): string {
