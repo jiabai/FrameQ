@@ -144,13 +144,17 @@ export function TranscriptReviewPanel({
   const locatedSourceText = locatedTranscriptRange
     ? transcriptDraft.slice(locatedTranscriptRange.start, locatedTranscriptRange.end)
     : "";
-  const locatedSegmentId = useMemo(
-    () => transcriptSegments.find((segment) =>
+  // An empty needle would match every segment (`text.includes("")` is always
+  // true), so an absent or zero-width range must not resolve to a segment.
+  const locatedSegmentId = useMemo(() => {
+    if (!locatedSourceText) {
+      return null;
+    }
+    return transcriptSegments.find((segment) =>
       locatedSourceText.includes(segment.text.trim()) ||
-      segment.text.includes(locatedSourceText.slice(0, 24))
-    )?.id ?? null,
-    [locatedSourceText, transcriptSegments],
-  );
+      segment.text.includes(locatedSourceText.slice(0, 24)),
+    )?.id ?? null;
+  }, [locatedSourceText, transcriptSegments]);
   useEffect(() => {
     if (!locatedTranscriptRange) {
       return;
