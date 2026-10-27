@@ -206,7 +206,9 @@ function App() {
     prepareTranscriptForTaskDeletion,
     transcriptSaving,
   } = transcriptDetailController;
-  closeDetailForTaskRef.current = closeDetail;
+  useEffect(() => {
+    closeDetailForTaskRef.current = closeDetail;
+  }, [closeDetail]);
   const {
     account,
     accountOpen,
@@ -298,7 +300,9 @@ function App() {
     closeDetail();
     transcriptDetailController.locateTranscriptByteRange(chunk.startByte, chunk.endByte);
   }, [closeDetail, transcriptDetailController, workflow.dissection, workflow.dissectionStale]);
-  resetInsightGenerationUiRef.current = resetInsightGenerationUi;
+  useEffect(() => {
+    resetInsightGenerationUiRef.current = resetInsightGenerationUi;
+  }, [resetInsightGenerationUi]);
 
   // Confirm draft generation — calls the draft retry path with the
   // selected seed insight id and the user-selected target platform. Cancel

@@ -62,8 +62,10 @@ export function DraftResultSheet({
   const loadTaskIdRef = useRef<string | null>(null);
   const draftFallbackRef = useRef(workflow.draft);
 
-  // Keep the fallback ref in sync without triggering effect reruns.
-  draftFallbackRef.current = workflow.draft;
+  // Keep the fallback ref in sync without re-running the load effect below.
+  useEffect(() => {
+    draftFallbackRef.current = workflow.draft;
+  }, [workflow.draft]);
 
   // ---- Open: load from disk ----
 
