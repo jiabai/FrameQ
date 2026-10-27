@@ -25,9 +25,10 @@ import {
   saveDraftEdit,
 } from "../../draftDetailClient";
 import { getTaskArtifactPath } from "../../workflow";
-import { useLocale } from "../../i18n/LocaleProvider";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { MarkdownContent } from "./MarkdownContent";
+import { StatusLine } from "../common/StatusLine";
 
 type DraftResultSheetProps = {
   open: boolean;
@@ -50,7 +51,7 @@ export function DraftResultSheet({
   onRegenerate,
 }: DraftResultSheetProps) {
   const { t } = useTranslation("synthesis");
-  const { resolvedLocale } = useLocale();
+  const resolvedLocale = useUiLocale();
   const [buffer, setBuffer] = useState("");
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -280,7 +281,7 @@ export function DraftResultSheet({
           </div>
         </div>
 
-        {renderedNotice ? <p className="action-notice">{renderedNotice}</p> : null}
+        {renderedNotice ? <StatusLine>{renderedNotice}</StatusLine> : null}
 
         {editing ? (
           <div className="modal-content draft-editor-pane">

@@ -4,12 +4,13 @@ import { useTranslation } from "react-i18next";
 
 import type { HistoryListItem } from "../../historyClient";
 import { formatDateTime, formatNumber } from "../../i18n/formatters";
-import { useLocale } from "../../i18n/LocaleProvider";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import type { SupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { UI_MOTION_LAYOUT_TRANSITION } from "../../uiMotion";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { useModalFocus } from "../modal/useModalFocus";
+import { StatusLine } from "../common/StatusLine";
 import type { HistoryController } from "./useHistoryController";
 
 const historyStatusKeys: Record<
@@ -65,7 +66,7 @@ export function HistorySheet({
     confirmHistoryItemDeletion,
   } = controller;
   const { t } = useTranslation("history");
-  const { resolvedLocale } = useLocale();
+  const resolvedLocale = useUiLocale();
   const historyDeleteModalRef = useModalFocus<HTMLElement>(
     Boolean(historyDeleteCandidate),
   );
@@ -112,31 +113,17 @@ export function HistorySheet({
             <X size={18} />
           </button>
         </header>
-        {renderedNotice ? (
-          <p className="action-notice" role="status" aria-live="polite">
-            {renderedNotice}
-          </p>
-        ) : null}
+        {renderedNotice ? <StatusLine>{renderedNotice}</StatusLine> : null}
         {selectionDisabled ? (
-          <p
-            id="history-selection-disabled-reason"
-            className="action-notice"
-            role="status"
-            aria-live="polite"
-          >
+          <StatusLine id="history-selection-disabled-reason">
             {renderedSelectionDisabledReason}
-          </p>
+          </StatusLine>
         ) : null}
         {deletionDisabled &&
         (!selectionDisabled || !disabledReasonsAreEqual) ? (
-          <p
-            id="history-deletion-disabled-reason"
-            className="action-notice"
-            role="status"
-            aria-live="polite"
-          >
+          <StatusLine id="history-deletion-disabled-reason">
             {renderedDeletionDisabledReason}
-          </p>
+          </StatusLine>
         ) : null}
         <div className="history-list">
           <AnimatePresence initial={false} mode="popLayout">

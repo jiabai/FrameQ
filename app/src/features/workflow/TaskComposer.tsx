@@ -10,7 +10,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatBytes } from "../../i18n/formatters";
-import { useLocale } from "../../i18n/LocaleProvider";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import { selectLocalMedia } from "../../localMediaClient";
 import type { LocalMediaSelectionView } from "../../localMediaContract";
 import type { TaskComposerSource, TaskSubmission } from "../../workflow";
@@ -35,7 +35,7 @@ export function TaskComposer({
   onSubmit,
 }: TaskComposerProps) {
   const { t } = useTranslation("workflow");
-  const { resolvedLocale } = useLocale();
+  const resolvedLocale = useUiLocale();
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [pickerBusy, setPickerBusy] = useState(false);
   const [removing, setRemoving] = useState(false);

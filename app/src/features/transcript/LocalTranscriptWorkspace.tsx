@@ -12,12 +12,13 @@ import {
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
-import { isSupportedLocale } from "../../i18n/locale";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { TaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import { UI_MOTION_LAYOUT_TRANSITION } from "../../uiMotion";
 import type { TaskArtifactKey } from "../../workflow";
 import { TranscriptReviewPanel } from "./TranscriptReviewPanel";
+import { StatusLine } from "../common/StatusLine";
 import type { TranscriptDetailController } from "./useTranscriptDetailController";
 import { WorkerErrorNotice } from "../results/WorkerErrorNotice";
 
@@ -40,10 +41,8 @@ export function LocalTranscriptWorkspace({
   onPolishTranscript,
   onCancel,
 }: LocalTranscriptWorkspaceProps) {
-  const { t, i18n } = useTranslation("transcript");
-  const locale = isSupportedLocale(i18n.resolvedLanguage)
-    ? i18n.resolvedLanguage
-    : "en-US";
+  const { t } = useTranslation("transcript");
+  const locale = useUiLocale();
   const renderedActionNotice = renderUiMessage(locale, actionNotice);
   const polishedTranscriptText =
     controller.transcriptDetail?.polished_text ?? null;
@@ -111,9 +110,7 @@ export function LocalTranscriptWorkspace({
       ) : null}
 
       {renderedActionNotice ? (
-        <p className="action-notice" role="status" aria-live="polite">
-          {renderedActionNotice}
-        </p>
+        <StatusLine>{renderedActionNotice}</StatusLine>
       ) : null}
 
       {model.canReview ? (

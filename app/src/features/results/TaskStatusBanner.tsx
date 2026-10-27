@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
 import { renderUiMessage } from "../../i18n/uiMessage";
-import { isSupportedLocale } from "../../i18n/locale";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import { renderWorkerProgressMessage } from "../../i18n/progressMessages";
 import type { TaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import { UI_MOTION_TRANSITION } from "../../uiMotion";
@@ -13,10 +13,8 @@ type TaskStatusBannerProps = {
 };
 
 export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
-  const { t, i18n } = useTranslation("workflow");
-  const locale = isSupportedLocale(i18n.resolvedLanguage)
-    ? i18n.resolvedLanguage
-    : "en-US";
+  const { t } = useTranslation("workflow");
+  const locale = useUiLocale();
   const message = model.progressMessage
     ? renderWorkerProgressMessage(locale, model.stage, model.progressMessage)
     : renderUiMessage(locale, model.message);

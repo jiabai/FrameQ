@@ -1,9 +1,12 @@
 import { ShieldCheck, Sparkles, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useEffect, useState } from "react";
 
+import { formatNumber } from "../../i18n/formatters";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import { getOutputLanguageName } from "../../i18n/preferencePresentation";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
+import { StatusLine } from "../common/StatusLine";
+import { useLastDefined } from "../common/useLastDefined";
 import type { DissectionPreview } from "./useTranscriptDissectionController";
 
 type Props = {
@@ -17,19 +20,13 @@ export function TranscriptDissectionConfirmationSheet({
   onCancel,
   onConfirm,
 }: Props) {
-  const { t, i18n } = useTranslation("synthesis");
-  const [lastPreview, setLastPreview] = useState<DissectionPreview | null>(preview);
-  useEffect(() => {
-    if (preview) {
-      setLastPreview(preview);
-    }
-  }, [preview]);
-  const renderPreview = preview ?? lastPreview;
+  const { t } = useTranslation("synthesis");
+  const locale = useUiLocale();
+  const renderPreview = useLastDefined<DissectionPreview | null>(preview, null);
   if (!renderPreview) {
     return null;
   }
 
-  const number = new Intl.NumberFormat(i18n.resolvedLanguage ?? "en-US");
   const blockReason = !renderPreview.eligible
     ? t("dissection.confirmation.tooLong")
     : !renderPreview.canConfirm
@@ -59,21 +56,21 @@ export function TranscriptDissectionConfirmationSheet({
           </p>
           <dl className="dissection-preview-grid">
             <div><dt>{t("dissection.confirmation.task")}</dt><dd>{renderPreview.taskTitle}</dd></div>
-            <div><dt>{t("dissection.confirmation.characters")}</dt><dd>{number.format(renderPreview.characterCount)}</dd></div>
-            <div><dt>{t("dissection.confirmation.chunks")}</dt><dd>{number.format(renderPreview.chunkCount)}</dd></div>
+            <div><dt>{t("dissection.confirmation.characters")}</dt><dd>{formatNumber(renderPreview.characterCount, locale)}</dd></div>
+            <div><dt>{t("dissection.confirmation.chunks")}</dt><dd>{formatNumber(renderPreview.chunkCount, locale)}</dd></div>
             <div><dt>{t("dissection.confirmation.language")}</dt><dd>{getOutputLanguageName(renderPreview.outputLanguage, renderPreview.outputLanguage)}</dd></div>
             <div>
               <dt>{t("dissection.confirmation.calls")}</dt>
               <dd>{t("dissection.confirmation.callRange", {
-                minimum: number.format(renderPreview.minimumCalls),
-                maximum: number.format(renderPreview.maximumCalls),
-                hardMaximum: number.format(renderPreview.hardMaximumCalls),
+                minimum: formatNumber(renderPreview.minimumCalls, locale),
+                maximum: formatNumber(renderPreview.maximumCalls, locale),
+                hardMaximum: formatNumber(renderPreview.hardMaximumCalls, locale),
               })}</dd>
             </div>
-            <div><dt>{t("dissection.confirmation.quota")}</dt><dd>{number.format(renderPreview.quotaRemaining)}</dd></div>
+            <div><dt>{t("dissection.confirmation.quota")}</dt><dd>{formatNumber(renderPreview.quotaRemaining, locale)}</dd></div>
           </dl>
           <p className="dissection-credit-disclosure">{t("dissection.confirmation.creditDisclosure")}</p>
-          {blockReason ? <p className="ai-availability-blocker" role="status">{blockReason}</p> : null}
+          {blockReason ? <StatusLine className="ai-availability-blocker">{blockReason}</StatusLine> : null}
           <div className="settings-actions sheet-footer">
             <button type="button" className="secondary-button" onClick={onCancel}>{t("dissection.confirmation.cancel")}</button>
             <button type="button" className="primary-button" onClick={() => void onConfirm()} disabled={!renderPreview.canConfirm}>

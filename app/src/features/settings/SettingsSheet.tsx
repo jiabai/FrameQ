@@ -25,6 +25,7 @@ import type { SettingsCategory, SettingsController } from "./useSettingsControll
 import { LanguagePreferenceField } from "./LanguagePreferenceField";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { asrModelLabel } from "../asrModel/asrModelLabels";
+import { StatusLine } from "../common/StatusLine";
 
 type SettingsSheetProps = {
   controller: SettingsController;
@@ -563,22 +564,18 @@ export function SettingsSheet({
                       </span>
                     </button>
                     {renderedDiagnosticExportNotice ? (
-                      <p className="action-notice inline-notice" role="status" aria-live="polite">
+                      <StatusLine className="action-notice inline-notice">
                         {renderedDiagnosticExportNotice}
-                      </p>
+                      </StatusLine>
                     ) : null}
                   </div>
                 </section>
               ) : null}
 
               {renderedSettingsNotice ? (
-                <p
-                  className="action-notice inline-notice"
-                  role="status"
-                  aria-live="polite"
-                >
+                <StatusLine className="action-notice inline-notice">
                   {renderedSettingsNotice}
-                </p>
+                </StatusLine>
               ) : null}
             </div>
           </div>

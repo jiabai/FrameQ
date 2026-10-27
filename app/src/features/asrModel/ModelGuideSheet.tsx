@@ -4,11 +4,12 @@ import { useTranslation } from "react-i18next";
 
 import { formatPercent } from "../../i18n/formatters";
 import { UI_MOTION_TRANSITION } from "../../uiMotion";
-import { useLocale } from "../../i18n/LocaleProvider";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import { renderAsrModelDownloadMessage } from "../../i18n/progressMessages";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { AsrModelDownloadProgress } from "../../settingsClient";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
+import { StatusLine } from "../common/StatusLine";
 import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 import type { AsrModelStatus } from "./types";
 import { asrModelLabel } from "./asrModelLabels";
@@ -51,7 +52,7 @@ export function ModelGuideSheet({
   runtimeComponentDownloading,
 }: ModelGuideSheetProps) {
   const { t } = useTranslation("asrModel");
-  const { resolvedLocale } = useLocale();
+  const resolvedLocale = useUiLocale();
   const progressMessage = renderAsrModelDownloadMessage(
     resolvedLocale,
     modelDownloadProgress,
@@ -161,14 +162,10 @@ export function ModelGuideSheet({
             ) : null}
           </div>
           {noticeText ? (
-            <p className="action-notice inline-notice" role="status" aria-live="polite">
-              {noticeText}
-            </p>
+            <StatusLine className="action-notice inline-notice">{noticeText}</StatusLine>
           ) : null}
           {!noticeText && modelDownloadStalled ? (
-            <p className="action-notice inline-notice" role="status" aria-live="polite">
-              {t("guide.stalled")}
-            </p>
+            <StatusLine className="action-notice inline-notice">{t("guide.stalled")}</StatusLine>
           ) : null}
           {canExportDiagnostics ? (
             <div className="model-guide-diagnostics privacy-callout">
@@ -180,9 +177,9 @@ export function ModelGuideSheet({
             </div>
           ) : null}
           {canExportDiagnostics && diagnosticNoticeText ? (
-            <p className="action-notice inline-notice" role="status" aria-live="polite">
+            <StatusLine className="action-notice inline-notice">
               {diagnosticNoticeText}
-            </p>
+            </StatusLine>
           ) : null}
         </div>
         <div className="settings-actions sheet-footer">

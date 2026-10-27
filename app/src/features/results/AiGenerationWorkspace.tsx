@@ -4,10 +4,13 @@ import { useTranslation } from "react-i18next";
 
 import type { TaskWorkspaceViewModel, AiTargetViewModel } from "../../taskWorkspaceViewModel";
 import type { InsightRetryTarget } from "../../workflow";
-import { isSupportedLocale, type SupportedLocale } from "../../i18n/locale";
+import { useUiLocale } from "../../i18n/LocaleProvider";
+import { formatNumber } from "../../i18n/formatters";
+import type { SupportedLocale } from "../../i18n/locale";
 import { renderWorkerProgressMessage } from "../../i18n/progressMessages";
 import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { UI_MOTION_LAYOUT_TRANSITION, UI_MOTION_TRANSITION } from "../../uiMotion";
+import { StatusLine } from "../common/StatusLine";
 
 type AiGenerationWorkspaceProps = {
   model: TaskWorkspaceViewModel["ai"];
@@ -32,10 +35,8 @@ export function AiGenerationWorkspace({
   onViewTarget,
   onCancel,
 }: AiGenerationWorkspaceProps) {
-  const { t, i18n } = useTranslation("synthesis");
-  const locale = isSupportedLocale(i18n.resolvedLanguage)
-    ? i18n.resolvedLanguage
-    : "en-US";
+  const { t } = useTranslation("synthesis");
+  const locale = useUiLocale();
   const renderedNotice = renderUiMessage(locale, notice);
   const renderedProgress = model.progressMessage
     ? renderWorkerProgressMessage(
@@ -50,9 +51,7 @@ export function AiGenerationWorkspace({
       : model.availability === "unavailable"
         ? t("workspace.unavailable")
         : null;
-  const formattedQuota = new Intl.NumberFormat(i18n.resolvedLanguage ?? "en-US").format(
-    quotaRemaining,
-  );
+  const formattedQuota = formatNumber(quotaRemaining, locale);
 
   return (
     <section
@@ -73,20 +72,16 @@ export function AiGenerationWorkspace({
 
       <p className="ai-privacy-copy">{t("workspace.privacy")}</p>
       {renderedProgress ? (
-        <p className="ai-progress-message" role="status" aria-live="polite">
-          {renderedProgress}
-        </p>
+        <StatusLine className="ai-progress-message">{renderedProgress}</StatusLine>
       ) : null}
       {blocker ? (
-        <p className="ai-availability-blocker" role="status">
+        <StatusLine className="ai-availability-blocker">
           <AlertTriangle size={16} aria-hidden="true" />
           <span>{blocker}</span>
-        </p>
+        </StatusLine>
       ) : null}
       {renderedNotice ? (
-        <p className="ai-workspace-notice" role="status" aria-live="polite">
-          {renderedNotice}
-        </p>
+        <StatusLine className="ai-workspace-notice">{renderedNotice}</StatusLine>
       ) : null}
 
       <div className="ai-target-list">

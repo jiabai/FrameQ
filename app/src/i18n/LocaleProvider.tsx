@@ -8,12 +8,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { I18nextProvider } from "react-i18next";
+import { I18nextProvider, useTranslation } from "react-i18next";
 import { getUiPreferences, saveUiPreferences } from "../settingsClient";
 import { frameqI18n } from "./i18n";
 import { LanguagePreferenceQueue } from "./languagePreferenceQueue";
 import { renderUiMessage, uiMessage, type UiMessage } from "./uiMessage";
 import {
+  isSupportedLocale,
   navigatorLanguageSource,
   observeSystemLocale,
   resolveLanguagePreference,
@@ -138,4 +139,20 @@ export function useLocale(): LocaleContextValue {
     throw new Error("useLocale must be used inside LocaleProvider");
   }
   return context;
+}
+
+/**
+ * The locale a component renders with. Falls back to the i18next instance
+ * outside LocaleProvider, so components stay renderable in SSR-style tests
+ * and in the Vite preview.
+ */
+export function useUiLocale(): SupportedLocale {
+  const context = useContext(LocaleContext);
+  const { i18n } = useTranslation();
+  if (context) {
+    return context.resolvedLocale;
+  }
+  return isSupportedLocale(i18n.resolvedLanguage)
+    ? i18n.resolvedLanguage
+    : "en-US";
 }

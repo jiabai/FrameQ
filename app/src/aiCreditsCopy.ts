@@ -1,9 +1,6 @@
 import type { SupportedLocale } from "./i18n/locale";
+import { formatNumber } from "./i18n/formatters";
 import { resources } from "./i18n/resources";
-
-function formatNumber(value: number, locale: SupportedLocale): string {
-  return new Intl.NumberFormat(locale).format(value);
-}
 
 function creditsCopy(locale: SupportedLocale) {
   return resources[locale].synthesis.credits;

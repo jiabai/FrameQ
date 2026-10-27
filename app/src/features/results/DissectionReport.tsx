@@ -2,6 +2,7 @@ import { LocateFixed } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { TranscriptDissection } from "../../workflow";
+import { StatusLine } from "../common/StatusLine";
 
 type Props = {
   report: TranscriptDissection;
@@ -15,7 +16,11 @@ export function DissectionReport({ report, stale, sourceLocationDisabled = false
   const narrative = report.overallNarrative;
   return (
     <div className="dissection-report">
-      {stale ? <p className="dissection-stale-banner" role="status">{t("dissection.report.stale")}</p> : null}
+      {stale ? (
+        <StatusLine className="dissection-stale-banner">
+          {t("dissection.report.stale")}
+        </StatusLine>
+      ) : null}
       <section className="dissection-overview">
         <h3>{t("dissection.report.narrative")}</h3>
         <dl>

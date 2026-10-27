@@ -8,7 +8,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   INSIGHT_PREFERENCE_FIELDS,
   type GenerationPreferenceField,
@@ -16,7 +16,7 @@ import {
   type InspirationProfile,
 } from "../../insightPreferences";
 import type { SupportedLocale } from "../../i18n/locale";
-import { countTextUnits, formatWordCount } from "../../i18n/formatters";
+import { countTextUnits, formatNumber, formatWordCount } from "../../i18n/formatters";
 import {
   getPreferenceCopy,
   getPreferenceFieldPresentation,
@@ -37,6 +37,7 @@ import {
 import { InspirationProfileForm } from "./InspirationProfileForm";
 import { OutputLanguageField } from "./OutputLanguageField";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
+import { useLastDefined } from "../common/useLastDefined";
 
 type InsightPreferenceFlowProps = {
   flow: InsightPreferenceFlowState | null;
@@ -67,13 +68,7 @@ export function InsightPreferenceFlow({
   onConfirm,
   onCancel,
 }: InsightPreferenceFlowProps) {
-  const [lastFlow, setLastFlow] = useState<InsightPreferenceFlowState | null>(flow);
-  useEffect(() => {
-    if (flow) {
-      setLastFlow(flow);
-    }
-  }, [flow]);
-  const renderFlow = flow ?? lastFlow;
+  const renderFlow = useLastDefined<InsightPreferenceFlowState | null>(flow, null);
   if (!renderFlow) {
     return null;
   }
@@ -383,7 +378,7 @@ function ConfirmationStep({
           <span className="account-status-label">{copy.creditsLabel}</span>
           <strong>
             {interpolatePreferenceCopy(copy.creditsBalance, {
-              count: new Intl.NumberFormat(locale).format(accountQuotaRemaining),
+              count: formatNumber(accountQuotaRemaining, locale),
             })}
           </strong>
           <small>{copy.quotaDisclosure}</small>

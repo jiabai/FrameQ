@@ -20,7 +20,7 @@ import {
   type AccountStatus,
 } from "../../accountState";
 import { formatDateTime } from "../../i18n/formatters";
-import { useLocale } from "../../i18n/LocaleProvider";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import type { SupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
@@ -135,7 +135,7 @@ function normalizeRetryAt(retryAt: string | null): string | null {
 export function useAccountController({
   onSignedOut,
 }: UseAccountControllerOptions) {
-  const { resolvedLocale } = useLocale();
+  const resolvedLocale = useUiLocale();
   const [account, setAccount] = useState<AccountStatus>(createGuestAccountStatus);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountNotice, setAccountNotice] = useState<AccountNotice>(null);

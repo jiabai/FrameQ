@@ -55,8 +55,8 @@ import { AnimatedSheet } from "./features/modal/AnimatedSheet";
 import { TaskComposer } from "./features/workflow/TaskComposer";
 import { useTaskProcessingController } from "./features/workflow/useTaskProcessingController";
 import { useAppUpdateController } from "./features/updates/useAppUpdateController";
-import { useLocale } from "./i18n/LocaleProvider";
-import { countTextUnits, formatWordCount } from "./i18n/formatters";
+import { useUiLocale } from "./i18n/LocaleProvider";
+import { countTextUnits, formatNumber, formatWordCount } from "./i18n/formatters";
 import { getAiCreditsCostHint } from "./aiCreditsCopy";
 import { renderUiMessage, uiMessage, type UiMessage } from "./i18n/uiMessage";
 import { UI_MOTION_TRANSITION } from "./uiMotion";
@@ -106,7 +106,7 @@ function accountAiBlockerMessage(account: AccountStatus): UiMessage {
 }
 
 function App() {
-  const { resolvedLocale } = useLocale();
+  const resolvedLocale = useUiLocale();
   const { t: tCommon } = useTranslation("common");
   const { t: tWorkflow } = useTranslation("workflow");
   const { t: tUpdates } = useTranslation("updates");
@@ -760,7 +760,7 @@ function App() {
                   <span className="account-status-label">{tSynthesis("confirmation.creditsLabel")}</span>
                   <strong>
                     {tSynthesis("confirmation.creditsBalance", {
-                      formattedCount: new Intl.NumberFormat(resolvedLocale).format(account.llmQuotaRemaining),
+                      formattedCount: formatNumber(account.llmQuotaRemaining, resolvedLocale),
                     })}
                   </strong>
                   <small>{getAiCreditsCostHint(resolvedLocale)}</small>

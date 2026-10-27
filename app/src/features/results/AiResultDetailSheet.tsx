@@ -1,14 +1,16 @@
 import { Copy, Download, Maximize2, Minimize2, RotateCcw, Sprout, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { isSupportedLocale } from "../../i18n/locale";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import type { WorkflowState } from "../../workflow";
 import type { TranscriptDetailController } from "../transcript/useTranscriptDetailController";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { MarkdownContent } from "./MarkdownContent";
 import { DissectionReport } from "./DissectionReport";
+import { useLastDefined } from "../common/useLastDefined";
+import { StatusLine } from "../common/StatusLine";
 
 type AiResultDetailSheetProps = {
   actionNotice: UiMessage | null;
@@ -33,21 +35,14 @@ export function AiResultDetailSheet({
   onSelectDraftSeed,
   onClearDraftSeed,
 }: AiResultDetailSheetProps) {
-  const { t, i18n } = useTranslation("synthesis");
-  const locale = isSupportedLocale(i18n.resolvedLanguage)
-    ? i18n.resolvedLanguage
-    : "en-US";
+  const { t } = useTranslation("synthesis");
+  const locale = useUiLocale();
   const renderedActionNotice = renderUiMessage(locale, actionNotice);
   const { detailTab, closeDetail, copyDetail, exportDetail, exportPath } = controller;
   const detailOpen =
     detailTab === "summary" || detailTab === "insights" || detailTab === "dissection";
-  const [lastDetailTab, setLastDetailTab] = useState<"summary" | "insights" | "dissection">("summary");
   const [expanded, setExpanded] = useState(false);
-  useEffect(() => {
-    if (detailOpen) {
-      setLastDetailTab(detailTab);
-    }
-  }, [detailOpen, detailTab]);
+  const contentTab = useLastDefined(detailTab, "summary");
   // The sheet stays mounted through its closing animation, so the expanded
   // flag has to be cleared explicitly rather than by unmount.
   useEffect(() => {
@@ -55,17 +50,16 @@ export function AiResultDetailSheet({
       setExpanded(false);
     }
   }, [detailOpen]);
-  const contentTab = detailOpen ? detailTab : lastDetailTab;
 
   const title = contentTab === "summary"
     ? t("detail.summaryTitle")
     : contentTab === "insights"
       ? t("detail.insightsTitle")
       : t("dissection.card.title");
-  const questionList = new Intl.ListFormat(i18n.resolvedLanguage ?? "en-US", {
-    style: "long",
-    type: "conjunction",
-  });
+  const questionList = useMemo(
+    () => new Intl.ListFormat(locale, { style: "long", type: "conjunction" }),
+    [locale],
+  );
   const seedId = workflow.draftSeedInsightId;
   return (
     <AnimatedSheet
@@ -131,9 +125,7 @@ export function AiResultDetailSheet({
           </div>
         </div>
         {renderedActionNotice ? (
-          <p className="action-notice" role="status" aria-live="polite">
-            {renderedActionNotice}
-          </p>
+          <StatusLine>{renderedActionNotice}</StatusLine>
         ) : null}
         <div className="modal-content">
           {contentTab === "summary" ? (

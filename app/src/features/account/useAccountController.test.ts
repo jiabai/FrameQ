@@ -62,6 +62,7 @@ vi.mock("../../i18n/LocaleProvider", () => ({
     resolvedLocale: currentLocale,
     setLanguagePreference: vi.fn(),
   }),
+  useUiLocale: () => currentLocale,
 }));
 
 function createHookHarness(): HookHarness {

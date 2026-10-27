@@ -7,10 +7,11 @@ import {
   type AccountStatus,
 } from "../../accountState";
 import { formatDateTime, formatNumber } from "../../i18n/formatters";
-import { useLocale } from "../../i18n/LocaleProvider";
+import { useUiLocale } from "../../i18n/LocaleProvider";
 import type { SupportedLocale } from "../../i18n/locale";
 import { renderUiMessage } from "../../i18n/uiMessage";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
+import { StatusLine } from "../common/StatusLine";
 import type {
   AccountNotice,
   ActivationCodeRequestState,
@@ -50,7 +51,7 @@ export function AccountSheet({
   onStartLogin,
 }: AccountSheetProps) {
   const { t } = useTranslation("account");
-  const { resolvedLocale } = useLocale();
+  const resolvedLocale = useUiLocale();
   const renderedNotice = renderUiMessage(resolvedLocale, accountNotice);
   const quotaResetDate = formatAccountTimestamp(
     account.llmQuotaResetsAt,
@@ -168,13 +169,7 @@ export function AccountSheet({
           ) : null}
 
           {renderedNotice ? (
-            <p
-              className="action-notice inline-notice"
-              role="status"
-              aria-live="polite"
-            >
-              {renderedNotice}
-            </p>
+            <StatusLine className="action-notice inline-notice">{renderedNotice}</StatusLine>
           ) : null}
         </div>
         <div className="settings-actions sheet-footer">
