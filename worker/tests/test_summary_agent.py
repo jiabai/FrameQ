@@ -133,6 +133,7 @@ def test_provider_configuration_fails_before_network(env) -> None:
 
 
 @pytest.mark.parametrize("code", [
+    "AI_CONFIG_MISSING",
     "AI_LLM_AUTH_REQUIRED", "AI_LLM_QUOTA_UNAVAILABLE",
     "AI_LLM_CONFIG_MISSING", "AI_LLM_CHECKOUT_TIMEOUT",
     "AI_LLM_CHECKOUT_FAILED", "AI_LLM_CHECKOUT_INVALID_RESPONSE",

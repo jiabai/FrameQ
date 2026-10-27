@@ -27,6 +27,7 @@ class StrictInsightRunner(ToolLoopAgentRunner):
 
 
 _CHECKOUT_ERROR_MESSAGES = {
+    "AI_CONFIG_MISSING": "Insight agent LLM is not configured.",
     "AI_LLM_AUTH_REQUIRED": "FrameQ login is required to use the managed LLM.",
     "AI_LLM_QUOTA_UNAVAILABLE": (
         "No cloud LLM API-call uses are available for this account."

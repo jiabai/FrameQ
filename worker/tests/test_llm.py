@@ -108,8 +108,9 @@ def test_checkout_http_error_maps_to_existing_contract(
 
 
 def test_checkout_rejects_missing_configuration_before_network_request() -> None:
-    with pytest.raises(RuntimeError, match="FRAMEQ_LLM_CHECKOUT_URL"):
+    with pytest.raises(InsightGenerationError) as captured:
         checkout_llm_config_once({})
+    assert captured.value.code == "AI_CONFIG_MISSING"
 
 
 def test_request_id_tracks_each_call_and_stays_within_limit() -> None:
@@ -218,6 +219,18 @@ def test_managed_provider_construction_requires_no_checkout_request() -> None:
     assert provider.get_current_key() == ""
     assert provider.get_keys() == []
     asyncio.run(provider.terminate())
+
+
+def test_managed_provider_missing_checkout_env_degrades_to_error_response() -> None:
+    # 回归：checkout 缺 env 曾抛裸 RuntimeError，会穿透 text_chat 里
+    # except InsightGenerationError 逃逸出 provider；现在必须转为 err 响应。
+    # 直接构造 provider 以绕过 build_insight_provider 的同款前置守卫。
+    provider = ServerManagedInsightProvider({"FRAMEQ_LLM_SOURCE": "server"})
+
+    response = asyncio.run(provider.text_chat(messages=[]))
+
+    assert response.role == "err"
+    assert response.completion_text == "AI_CONFIG_MISSING"
 
 
 @pytest.mark.parametrize("seed", ["operation-12345678", "x" * 200])

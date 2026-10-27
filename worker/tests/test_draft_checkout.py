@@ -261,8 +261,9 @@ def test_checkout_llm_config_once_uses_request_id_verbatim_no_per_call_suffix() 
 def test_checkout_llm_config_once_missing_env_raises() -> None:
     transport = _make_transport(llm_response=LLM_CHECKOUT_RESPONSE)
     # 缺 session token / request_id（server 模式必需 env）。
-    with pytest.raises(RuntimeError):
+    with pytest.raises(InsightGenerationError) as captured:
         checkout_llm_config_once({"FRAMEQ_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL}, transport)
+    assert captured.value.code == "AI_CONFIG_MISSING"
 
 
 def test_checkout_anysearch_config_once_returns_mcp_url_and_key() -> None:

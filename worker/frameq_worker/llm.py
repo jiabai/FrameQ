@@ -71,9 +71,11 @@ def checkout_llm_config_once(
     session_token = env.get(LLM_SESSION_TOKEN_ENV, "").strip()
     request_id = env.get(LLM_CHECKOUT_REQUEST_ID_ENV, "").strip()
     if not checkout_url or not session_token or not request_id:
-        raise RuntimeError(
-            "FRAMEQ_LLM_SOURCE=server 但缺少 FRAMEQ_LLM_CHECKOUT_URL / "
-            "_SESSION_TOKEN / _CHECKOUT_REQUEST_ID 之一，无法 checkout 成稿 LLM 凭证。",
+        # 必须是 InsightGenerationError：ai_runtime.text_chat / pipeline 的
+        # except 只认这个类型，裸 RuntimeError 会穿透 provider 逃逸。
+        raise InsightGenerationError(
+            "AI_CONFIG_MISSING",
+            "Insight agent LLM is not configured.",
         )
 
     payload = {"request_id": request_id}
