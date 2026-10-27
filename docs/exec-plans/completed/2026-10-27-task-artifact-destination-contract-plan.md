@@ -121,6 +121,18 @@ tables, and a one-sided edit fails three independent test suites.
   `app/src-tauri/src/task_manifest/transaction.rs:392`, missing `ai/original`, while the Python
   equivalent missed the same directory. Neither language's orphan cleanup would have reached
   staging files under `ai/original/` once draft commits through the transaction.
+- Evidence: `transcript/original/transcript.txt` and `transcript/original/transcript.md` **are
+  live destinations** and must not be pruned. The transcript editor writes them:
+  `app/src-tauri/src/transcript_detail/edit_storage.rs:194,207` pass them to
+  `create_original_backups`, and `transcript_detail.rs` surfaces the result as
+  `has_original_backup`. An earlier pass concluded they were dead because a `grep ... | head -15`
+  over `app/src-tauri/src` was truncated before reaching `transcript_detail/`, and because the
+  writer lives on the Rust side while the search that produced the conclusion was scoped to
+  `worker/`. The deletion was executed and reverted on 2026-10-27 when
+  `transcript_detail::tests::save_detail_creates_original_backup_once_and_updates_manifest` and
+  `save_detail_preserves_markdown_prefix_and_existing_empty_segments_declaration` failed with
+  `Task artifacts could not be stored safely.` — the new equality guards caught it within one
+  `cargo test`, which is exactly what they are for.
 - Evidence: the root-relative parent had three representations — `PurePosixPath(".")` in Python,
   `""` in Rust, and `"."` in the contract. Unifying on `"."` touched a Rust branch
   (`relative.is_empty()` became `relative == "."`), which is the only behavioural edit in the
@@ -195,10 +207,7 @@ transaction, and a one-sided destination edit breaks three test suites.
 Residual risk: `scripts/tests/*.test.mjs` is not wired into CI (`.github/workflows/` never
 references it and there is no root `package.json`); the guard is only run by hand, which is the
 same gap that let this drift survive. The two watchdog timing tests still fail intermittently
-under parallel `cargo test`. `transcript/original/transcript.txt` and
-`transcript/original/transcript.md` remain allowlisted with no writer anywhere in the tree —
-they were left in place rather than removed, since pruning an allowlist entry is a separate
-behaviour change. Draft generation still writes directly through
+under parallel `cargo test`. Draft generation still writes directly through
 `worker/frameq_worker/worker_application/insight_retry.py:333` instead of the transaction; that
 path's precondition is now in place but the move itself is still outstanding.
 
