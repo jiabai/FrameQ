@@ -88,7 +88,9 @@ export function LocaleProvider({
   );
 
   const applyPreferenceRef = useRef(applyPreference);
-  applyPreferenceRef.current = applyPreference;
+  useEffect(() => {
+    applyPreferenceRef.current = applyPreference;
+  }, [applyPreference]);
   const queueRef = useRef<LanguagePreferenceQueue | null>(null);
   if (!queueRef.current) {
     queueRef.current = new LanguagePreferenceQueue({

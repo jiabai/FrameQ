@@ -69,7 +69,7 @@ export function InsightPreferenceFlow({
   onConfirm,
   onCancel,
 }: InsightPreferenceFlowProps) {
-  const renderFlow = useLastDefined<InsightPreferenceFlowState | null>(flow, null);
+  const renderFlow = useLastDefined(flow, null);
   if (!renderFlow) {
     return null;
   }

@@ -22,7 +22,7 @@ export function TranscriptDissectionConfirmationSheet({
 }: Props) {
   const { t } = useTranslation("synthesis");
   const locale = useUiLocale();
-  const renderPreview = useLastDefined<DissectionPreview | null>(preview, null);
+  const renderPreview = useLastDefined(preview, null);
   if (!renderPreview) {
     return null;
   }

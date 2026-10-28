@@ -54,7 +54,9 @@ export function AnimatedSheet({
   const [present, setPresent] = useState(open);
   const [exitComplete, setExitComplete] = useState(!open);
   const openRef = useRef(open);
-  openRef.current = open;
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
   const sheetModalRef = useModalFocus<HTMLElement>(present);
 
   useEffect(() => {
