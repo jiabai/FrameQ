@@ -14,6 +14,7 @@ const ANIMATED_SHEET_SOURCES = [
   "../history/HistorySheet.tsx",
   "../insightPreferences/InsightPreferenceFlow.tsx",
   "../results/AiResultDetailSheet.tsx",
+  "../results/DraftResultSheet.tsx",
   "../results/SummaryConfirmationSheet.tsx",
   "../settings/SettingsSheet.tsx",
   "../dissection/TranscriptDissectionConfirmationSheet.tsx",
