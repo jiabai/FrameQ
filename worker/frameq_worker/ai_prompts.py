@@ -62,13 +62,23 @@ def build_dissection_agent_prompt(
     valid_chunk_ids = [chunk.id for chunk in chunks]
     return f"""# Transcript dissection
 {semantics.prompt_instruction}
+Exception: `highlights` are verbatim source quotations, so they keep the transcript's original
+language, script, punctuation, and spacing. Never translate, transliterate, or convert a quotation
+into the output language; the output-language rule governs every other user-visible value.
 Act as a senior content editor performing text-only structural analysis. Analyze only the supplied
 transcript chunks. Do not infer visual, audio, speaking-rate, editing, or conversion performance.
 
 ## Analysis dimensions
-- Identify meaningful topic segments and boundaries, not arbitrary sentence groups.
+- Identify meaningful topic segments and boundaries, not arbitrary sentence groups. Produce 1
+  through 8 segments, merging adjacent passages that carry one claim instead of splitting by
+  sentence, paragraph break, or chunk boundary.
 - For every segment, state its core claim, supporting points, rhetorical devices and their effect,
-  textual information rhythm, a transferable writing pattern, and cautious risk flags.
+  textual information rhythm, a transferable writing pattern, and cautious risk flags. Keep every
+  segment inside the report budget: `title` at most 24 characters, `coreClaim` at most 100,
+  2 through 4 `supportingPoints` of at most 60 characters each, 1 through 3 `rhetoricalDevices` of
+  at most 80 characters each, `rhythmNote` at most 100, `reusablePattern` at most 200, and 0 through
+  3 `riskFlags` of at most 90 characters each. These limits keep the whole report inside one
+  response budget; a report that overruns it is truncated before delivery.
 - Treat risk flags only as claims that may need verification or judgments that may be controversial;
   never present them as completed fact-checks.
 - Make reusable patterns actionable for writing transfer, but do not copy source wording as a
@@ -308,15 +318,16 @@ You are a summary editor. Create a Key Summary from the source Transcript and Me
 _DRAFT_PLATFORM_LABELS: dict[str, str] = {
     "wechat_official_account": "微信公众号",
     "xiaohongshu": "小红书",
-    # 短视频系（视频号 / 抖音 / Tiktok / X）统一走「抖音」文体。
+    # 短视频系（视频号 / 抖音 / Tiktok）统一走「抖音」文体。
     "wechat_channels": "抖音",
     "douyin": "抖音",
     "tiktok": "抖音",
-    "twitter": "抖音",
 }
 
 # 透传分支：取显示名原样写进 prompt「目标平台：{显示名}」，不挂特定文体（兜底）。
+# X(Twitter) 是短文本平台而非短视频，按显示名透传；若沿用「抖音」会写出短视频口播稿。
 _DRAFT_PLATFORM_PASSTHROUGH_LABELS: dict[str, str] = {
+    "twitter": "X(Twitter)",
     "bilibili": "B站",
     "youtube": "Youtube",
     "other": "其他",
@@ -331,8 +342,9 @@ DRAFT_PLATFORM_IDS: frozenset[str] = frozenset(
 def _platform_label_for_draft_platform(platform_id: str) -> str:
     """Map a user-selected draft platform id to the prompt「目标平台」form label.
 
-    短视频系合并到「抖音」；公众号→微信公众号；小红书→小红书；bilibili/youtube/other
-    取透传显示名。词表外的 id（校验上游已拦）原样透传，绝不臆造平台文体。
+    短视频系合并到「抖音」；公众号→微信公众号；小红书→小红书；X(Twitter)、
+    bilibili/youtube/other 取透传显示名。词表外的 id（校验上游已拦）原样透传，
+    绝不臆造平台文体。
     """
     if platform_id in _DRAFT_PLATFORM_LABELS:
         return _DRAFT_PLATFORM_LABELS[platform_id]

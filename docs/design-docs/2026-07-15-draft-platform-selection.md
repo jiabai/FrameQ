@@ -84,14 +84,15 @@ _DRAFT_PLATFORM_LABELS = {
     "wechat_channels": "抖音",
     "douyin": "抖音",
     "tiktok": "抖音",
-    "twitter": "抖音",
-    # bilibili / youtube / other → 透传显示名（兜底）
+    # twitter / bilibili / youtube / other → 透传显示名（兜底）
 }
 ```
 
-兜底：未命中的 id 取其显示名（`bilibili`→「B站」、`youtube`→「Youtube」、`other`→「其他」）原样写进 prompt 的「目标平台：{label}」行，不挂 skill、走 LLM 通用文体（对齐父规格 R3 的「其余取值走通用兜底」）。
+兜底：未命中的 id 取其显示名（`twitter`→「X(Twitter)」、`bilibili`→「B站」、`youtube`→「Youtube」、`other`→「其他」）原样写进 prompt 的「目标平台：{label}」行，不挂 skill、走 LLM 通用文体（对齐父规格 R3 的「其余取值走通用兜底」）。
 
-> `twitter`(X) 归抖音组：产品定位为视频文案，X 在本场景按短视频脚本处理（盘问第 4 刀，用户确认）。`wechat_channels`(视频号) 从原「视频号」改为「抖音」：合并进短视频文体，视频号不再单独成风格。
+> `wechat_channels`(视频号) 从原「视频号」改为「抖音」：合并进短视频文体，视频号不再单独成风格。
+>
+> **2026-10-28 变更**：`twitter`(X) 从抖音组移入透传组，渲染为「X(Twitter)」。原决策（2026-07-15，盘问第 4 刀，用户确认）按「本场景以视频文案为主」把 X 也按短视频脚本处理，但 X 实际是短文本平台，选中它产出的是口播稿而非推文。改回透传后不再臆造平台文体。
 
 ## 7. 改动点（代码级）
 

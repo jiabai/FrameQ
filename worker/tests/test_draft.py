@@ -35,7 +35,7 @@ def test_task_paths_draft_path_points_at_ai_draft_md(tmp_path: Path) -> None:
         ("wechat_channels", "抖音"),
         ("douyin", "抖音"),
         ("tiktok", "抖音"),
-        ("twitter", "抖音"),
+        ("twitter", "X(Twitter)"),
         ("bilibili", "B站"),
         ("youtube", "Youtube"),
         ("other", "其他"),

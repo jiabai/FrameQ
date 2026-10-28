@@ -137,8 +137,8 @@ def test_prompt_omits_source_chunk_annotation_when_absent() -> None:
         ("wechat_channels", "抖音"),
         ("douyin", "抖音"),
         ("tiktok", "抖音"),
-        ("twitter", "抖音"),
-        # passthrough display names (fallback).
+        # passthrough display names (fallback); X is a short-text platform, not short video.
+        ("twitter", "X(Twitter)"),
         ("bilibili", "B站"),
         ("youtube", "Youtube"),
         ("other", "其他"),
@@ -253,8 +253,8 @@ def test_draft_platform_ids_is_the_nine_id_vocabulary() -> None:
         ("wechat_channels", "抖音"),
         ("douyin", "抖音"),
         ("tiktok", "抖音"),
-        ("twitter", "抖音"),
-        # passthrough display names (no dedicated form label).
+        # passthrough display names (no dedicated form label); X is not short video.
+        ("twitter", "X(Twitter)"),
         ("bilibili", "B站"),
         ("youtube", "Youtube"),
         ("other", "其他"),

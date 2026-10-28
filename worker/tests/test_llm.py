@@ -9,8 +9,10 @@ from urllib.error import HTTPError
 
 import pytest
 from frameq_worker.ai_runtime import (
+    DEFAULT_MAX_OUTPUT_TOKENS,
     ServerManagedInsightProvider,
     SingleCallInsightProvider,
+    _build_single_call_provider,
     build_insight_provider,
     insight_target_env,
 )
@@ -163,6 +165,25 @@ def test_local_provider_disables_http_retries_and_keeps_generation_configuration
         assert str(provider.client.base_url) == "https://llm.example/v1/"
         assert provider.provider_config["model"] == "configuration-only-model"
         assert provider.provider_config["custom_extra_body"] == {"max_tokens": 4096}
+    finally:
+        asyncio.run(provider.terminate())
+
+
+@pytest.mark.parametrize("build", [build_insight_provider, _build_single_call_provider])
+def test_unset_output_budget_falls_back_to_shared_ceiling(build) -> None:
+    # 回归：不设 FRAMEQ_LLM_MAX_TOKENS 时曾退化为服务商默认上限（DeepSeek 系常为
+    # 4096），长篇解剖报告会被截成半截 JSON，校验失败后重试并再次扣 AI Credit。
+    provider = build(
+        {
+            "FRAMEQ_LLM_API_KEY": "configuration-only-key",
+            "FRAMEQ_LLM_MODEL": "configuration-only-model",
+        }
+    )
+    try:
+        assert provider.provider_config["custom_extra_body"] == {
+            "max_tokens": 8192
+        }
+        assert DEFAULT_MAX_OUTPUT_TOKENS == 8192
     finally:
         asyncio.run(provider.terminate())
 

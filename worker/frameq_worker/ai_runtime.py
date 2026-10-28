@@ -52,10 +52,19 @@ class SingleCallInsightProvider(ProviderOpenAIOfficial):
         raise error
 
 
-def _max_output_tokens(env: Mapping[str, str]) -> int | None:
+# 三个 agent（要点总结、启发灵感、文字稿解剖）共用的输出预算默认值。
+# 解剖报告按「每段约 940 字符 × 10 段 + 非段落约 1800 字符」估算约 11.2k 字符、
+# 约 7.3k token，8192 是整份报告还能装下的临界值。此前不设，等于退化为服务商
+# 默认上限（DeepSeek 系常为 4096），长文字稿的报告会被截断成半截 JSON，工具校验
+# 必然失败并触发重试；每次重试都重新 checkout 扣一个 AI Credit，用户却拿不到产物。
+# 单次模型能写多少仍以服务商上限为准，管理员可用 FRAMEQ_LLM_MAX_TOKENS 覆盖。
+DEFAULT_MAX_OUTPUT_TOKENS = 8192
+
+
+def _max_output_tokens(env: Mapping[str, str]) -> int:
     raw_value = env.get("FRAMEQ_LLM_MAX_TOKENS", "").strip()
     if not raw_value:
-        return None
+        return DEFAULT_MAX_OUTPUT_TOKENS
     try:
         value = int(raw_value)
     except ValueError:
@@ -79,8 +88,7 @@ def _build_single_call_provider(env: Mapping[str, str]) -> SingleCallInsightProv
         "timeout": parse_timeout(env.get("FRAMEQ_LLM_TIMEOUT_SECONDS")),
     }
     max_tokens = _max_output_tokens(env)
-    if max_tokens is not None:
-        config["custom_extra_body"] = {"max_tokens": max_tokens}
+    config["custom_extra_body"] = {"max_tokens": max_tokens}
     return SingleCallInsightProvider(config)
 
 
@@ -144,6 +152,7 @@ class ServerManagedInsightProvider(Provider):
 
 
 def build_insight_provider(env: Mapping[str, str]) -> Provider:
+    # 先校验 FRAMEQ_LLM_MAX_TOKENS：非法值在任何 checkout 之前失败，不扣额度。
     _max_output_tokens(env)
     if env.get(LLM_SOURCE_ENV, "").strip().lower() == "server":
         required = (LLM_CHECKOUT_URL_ENV, LLM_SESSION_TOKEN_ENV, LLM_CHECKOUT_REQUEST_ID_ENV)
