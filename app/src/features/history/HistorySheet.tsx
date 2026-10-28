@@ -72,9 +72,19 @@ export function HistorySheet({
     resolvedLocale,
     deletionDisabledReason,
   );
-  // Both reasons are plain message codes with no interpolation args.
+  // Both reasons are plain message codes with no interpolation args. When they
+  // match, one line covers both buttons and is the one the delete button names.
   const disabledReasonsAreEqual =
     selectionDisabledReason.messageCode === deletionDisabledReason.messageCode;
+  const disabledReasonLines = [
+    ...(selectionDisabled
+      ? [{ id: "history-selection-disabled-reason", text: renderedSelectionDisabledReason }]
+      : []),
+    ...(deletionDisabled && (!selectionDisabled || !disabledReasonsAreEqual)
+      ? [{ id: "history-deletion-disabled-reason", text: renderedDeletionDisabledReason }]
+      : []),
+  ];
+  const deletionReasonId = disabledReasonLines[disabledReasonLines.length - 1]?.id;
 
   return (
     <AnimatedSheet
@@ -106,17 +116,11 @@ export function HistorySheet({
           </button>
         </header>
         {renderedNotice ? <StatusLine>{renderedNotice}</StatusLine> : null}
-        {selectionDisabled ? (
-          <StatusLine id="history-selection-disabled-reason">
-            {renderedSelectionDisabledReason}
+        {disabledReasonLines.map((reason) => (
+          <StatusLine id={reason.id} key={reason.id}>
+            {reason.text}
           </StatusLine>
-        ) : null}
-        {deletionDisabled &&
-        (!selectionDisabled || !disabledReasonsAreEqual) ? (
-          <StatusLine id="history-deletion-disabled-reason">
-            {renderedDeletionDisabledReason}
-          </StatusLine>
-        ) : null}
+        ))}
         <div className="history-list">
           <AnimatePresence initial={false} mode="popLayout">
             {historyItems.map((item) => (
@@ -216,13 +220,7 @@ export function HistorySheet({
                       : item.source.displayName),
                 })}
                 title={t("item.deleteTitle")}
-                aria-describedby={
-                  deletionDisabled
-                    ? selectionDisabled && disabledReasonsAreEqual
-                      ? "history-selection-disabled-reason"
-                      : "history-deletion-disabled-reason"
-                    : undefined
-                }
+                aria-describedby={deletionDisabled ? deletionReasonId : undefined}
               >
                 <Trash2 size={16} />
               </button>

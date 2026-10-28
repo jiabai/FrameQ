@@ -111,7 +111,3 @@ export function countTextUnits(text: string, locale: SupportedLocale): number {
 
   return text.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)?.length ?? 0;
 }
-
-export function formatTextUnitCount(text: string, locale: SupportedLocale): string {
-  return formatWordCount(countTextUnits(text, locale), locale);
-}

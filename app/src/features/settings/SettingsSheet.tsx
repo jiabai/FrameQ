@@ -142,18 +142,14 @@ export function SettingsSheet({
   const { t: tUpdates } = useTranslation("updates");
   const { t: tCommon } = useTranslation("common");
   const preferenceCopy = getPreferenceCopy(locale).settings;
-  const localizedSettingsNavItems: Array<{
-    id: SettingsCategory;
-    label: string;
-    description: string;
-  }> = [
+  const localizedSettingsNavItems: Array<{ id: SettingsCategory; label: string; description: string }> = [
     {
       id: "basic",
       label: tSettings("navigation.basic.label"),
       description: tSettings("navigation.basic.description"),
     },
     {
-      id: "inspiration" as const,
+      id: "inspiration",
       label: preferenceCopy.navLabel,
       description: preferenceCopy.navDescription,
     },
@@ -446,7 +442,7 @@ export function SettingsSheet({
                             style={{ width: `${updateProgress}%` }}
                           />
                         </div>
-                        <small>{formatProgressPercent(updateProgress)}</small>
+                        <small>{formatProgressPercent(updateState.progress)}</small>
                       </div>
                     ) : null}
                   </div>

@@ -54,13 +54,6 @@ export type LocaleProviderProps = {
   persistence?: LocalePersistence;
 };
 
-function getNoticeText(
-  notice: UiMessage,
-  locale: SupportedLocale,
-): string {
-  return renderUiMessage(locale, notice);
-}
-
 export function LocaleProvider({
   children,
   initialOutcome,
@@ -126,7 +119,7 @@ export function LocaleProvider({
       <LocaleContext.Provider value={value}>
         {notice ? (
           <div className="locale-recovery-notice" role="status" aria-live="polite">
-            {getNoticeText(notice, resolvedLocale)}
+            {renderUiMessage(resolvedLocale, notice)}
           </div>
         ) : null}
         {children}

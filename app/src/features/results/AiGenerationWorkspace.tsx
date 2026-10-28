@@ -12,6 +12,23 @@ import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage
 import { UI_MOTION_LAYOUT_TRANSITION, UI_MOTION_TRANSITION } from "../../uiMotion";
 import { StatusLine } from "../common/StatusLine";
 
+const AI_TARGET_ICONS: Record<InsightRetryTarget, React.ReactNode> = {
+  summary: <ListChecks size={18} aria-hidden="true" />,
+  dissection: <ScanText size={18} aria-hidden="true" />,
+  insights: <Lightbulb size={18} aria-hidden="true" />,
+  draft: <FileText size={18} aria-hidden="true" />,
+};
+
+type AiTargetCardSeed = {
+  target: AiTargetViewModel;
+  title: string;
+  description: string;
+  onAction: () => void;
+  stale?: boolean;
+  retainedResult?: boolean;
+  actionLabel?: string;
+};
+
 type AiGenerationWorkspaceProps = {
   model: TaskWorkspaceViewModel["ai"];
   quotaRemaining: number;
@@ -85,62 +102,43 @@ export function AiGenerationWorkspace({
       ) : null}
 
       <div className="ai-target-list">
-        {(
-          [
-            {
-              target: model.summary,
-              title: t("target.summary.title"),
-              description: t("target.summary.description"),
-              icon: <ListChecks size={18} aria-hidden="true" />,
-              onAction: onSummaryAction,
-              viewTarget: "summary",
-            },
-            {
-              target: model.dissection,
-              title: t("dissection.card.title"),
-              description: t("dissection.card.description"),
-              icon: <ScanText size={18} aria-hidden="true" />,
-              onAction: onDissectionAction,
-              viewTarget: "dissection",
-              stale: model.dissectionStale,
-              retainedResult: model.dissectionAvailable,
-            },
-            {
-              target: model.insights,
-              title: t("target.insights.title"),
-              description: t("target.insights.description"),
-              icon: <Lightbulb size={18} aria-hidden="true" />,
-              onAction: onInsightsAction,
-              viewTarget: "insights",
-            },
-            {
-              target: model.draft,
-              title: t("target.draft.title"),
-              description: t("target.draft.description"),
-              icon: <FileText size={18} aria-hidden="true" />,
-              onAction: onDraftAction,
-              viewTarget: "draft",
-              actionLabel: t("action.chooseSeedAndGenerate"),
-            },
-          ] satisfies Array<{
-            target: AiTargetViewModel;
-            title: string;
-            description: string;
-            icon: React.ReactNode;
-            onAction: () => void;
-            viewTarget: InsightRetryTarget;
-            stale?: boolean;
-            retainedResult?: boolean;
-            actionLabel?: string;
-          }>
-        ).map(({ viewTarget, ...card }) => (
+        {([
+          {
+            target: model.summary,
+            title: t("target.summary.title"),
+            description: t("target.summary.description"),
+            onAction: onSummaryAction,
+          },
+          {
+            target: model.dissection,
+            title: t("dissection.card.title"),
+            description: t("dissection.card.description"),
+            onAction: onDissectionAction,
+            stale: model.dissectionStale,
+            retainedResult: model.dissectionAvailable,
+          },
+          {
+            target: model.insights,
+            title: t("target.insights.title"),
+            description: t("target.insights.description"),
+            onAction: onInsightsAction,
+          },
+          {
+            target: model.draft,
+            title: t("target.draft.title"),
+            description: t("target.draft.description"),
+            onAction: onDraftAction,
+            actionLabel: t("action.chooseSeedAndGenerate"),
+          },
+        ] satisfies Array<AiTargetCardSeed>).map((card) => (
           <AiTargetCard
             key={card.target.target}
             {...card}
+            icon={AI_TARGET_ICONS[card.target.target]}
             locale={locale}
             creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
             blocked={Boolean(blocker)}
-            onView={() => onViewTarget(viewTarget)}
+            onView={() => onViewTarget(card.target.target)}
           />
         ))}
       </div>

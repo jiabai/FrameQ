@@ -64,7 +64,7 @@ export function LocalTranscriptWorkspace({
         </div>
         {model.phase !== "ready" ? (
           <span className={`workspace-status-badge ${model.phase}`}>
-            {t(localStatusKey(model.phase))}
+            {t(`workspace.status.${model.phase}`)}
           </span>
         ) : null}
       </header>
@@ -237,12 +237,6 @@ function ArtifactButton({
       <span>{label}</span>
     </button>
   );
-}
-
-function localStatusKey(
-  phase: TaskWorkspaceViewModel["local"]["phase"],
-): `workspace.status.${TaskWorkspaceViewModel["local"]["phase"]}` {
-  return `workspace.status.${phase}`;
 }
 
 function localProgressStepKey(

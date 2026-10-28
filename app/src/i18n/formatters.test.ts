@@ -6,7 +6,6 @@ import {
   formatNumber,
   formatPercent,
   formatWordCount,
-  formatTextUnitCount,
   selectPluralCategory,
 } from "./formatters";
 
@@ -53,15 +52,10 @@ describe("locale-aware formatters", () => {
 
   test("counts real English words instead of UTF-16 characters", () => {
     expect(countTextUnits("hello world", "en-US")).toBe(2);
-    expect(formatTextUnitCount("hello world", "en-US")).toBe("2 words");
-    expect(formatTextUnitCount("hello", "en-US")).toBe("1 word");
-    expect(formatTextUnitCount("hello world", "en-US")).not.toBe("11 words");
   });
 
   test("counts non-whitespace Unicode characters for Chinese text", () => {
     expect(countTextUnits("你 好\n世界", "zh-CN")).toBe(4);
-    expect(formatTextUnitCount("你 好\n世界", "zh-CN")).toBe("4 字");
-    expect(formatTextUnitCount("測 試", "zh-TW")).toBe("2 字");
   });
 
   test("exposes the actual locale plural category for other counted copy", () => {

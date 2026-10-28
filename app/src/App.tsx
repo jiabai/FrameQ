@@ -434,16 +434,14 @@ function App() {
   }
 
   const activeStageBody = tWorkflow(`stage.${workflow.stage}.body`);
-  const updateToolbarText =
-    updateState.status === "ready_to_restart"
-      ? tUpdates("toolbar.restart")
-      : updateState.status === "downloading"
-        ? formatProgressPercent(updateState.progress)
-        : updateState.status === "installing"
-          ? tUpdates("toolbar.installing")
-          : updateState.availableVersion
-            ? tUpdates("toolbar.version", { version: updateState.availableVersion })
-            : tUpdates("toolbar.available");
+  const updateToolbarText = (() => {
+    if (updateState.status === "ready_to_restart") return tUpdates("toolbar.restart");
+    if (updateState.status === "downloading") return formatProgressPercent(updateState.progress);
+    if (updateState.status === "installing") return tUpdates("toolbar.installing");
+    return updateState.availableVersion
+      ? tUpdates("toolbar.version", { version: updateState.availableVersion })
+      : tUpdates("toolbar.available");
+  })();
   const toolbarNewTaskAriaLabel = renderUiMessage(
     resolvedLocale,
     toolbarNewTaskButtonState.ariaLabel,
@@ -632,7 +630,7 @@ function App() {
         onOpenDirectionEditor={openDirectionEditorFromDetail}
         onOpenDissectionConfirmation={dissectionController.openConfirmation}
         onLocateDissectionChunks={locateDissectionChunks}
-        onSelectDraftSeed={(insightId) => setDraftSeedInsightId(insightId)}
+        onSelectDraftSeed={setDraftSeedInsightId}
         onClearDraftSeed={() => setDraftSeedInsightId(null)}
       />
 
