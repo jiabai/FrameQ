@@ -812,11 +812,20 @@
      正是 worker 期望的组合，没有退化到低画质或纯音频。
   5. 产物里没有字幕文件不是回归：`--list-subs` 显示该视频既无手动字幕也无自动字幕。
 
-  遗留 caveat（不阻断发版，但值得记一笔）：本机没有 `deno`，yt-dlp 只找到 node/bun，
-  而它默认禁用远程组件下载，所以日志里有 `n challenge solving failed: Some formats may be
-  missing`。本次视频不受影响（720p 正常下载），但受 PO token 保护的视频可能受影响。
-  安装包内置 `deno.exe`（`scripts/build-installer.mjs:335`），生产环境应走 `[jsc:deno]`；
-  若仍报该警告，需要给 `build_ytdlp_command` 补 `--remote-components ejs:github`。
+  上面第 2 条是在「本机 PATH 里没有 deno」的条件下跑的，日志里有
+  `n challenge solving failed: Some formats may be missing`（yt-dlp 只找到 node/bun，
+  且默认禁用远程组件下载）。**这条 caveat 已消除**：把仓库里打包好的
+  `app/src-tauri/resources/bin/`（内含 `deno.exe` 2.9.1）前置进 PATH —— 与 Rust
+  `worker_runtime/command.rs` 里 `prepend_to_path` 的生产行为等价 —— 重跑后：
+
+  - `download_video()` 同样 `returncode: 0`，产物 168,978,532 字节；
+  - **stderr 里 WARNING/ERROR 一行都没有**，`n challenge` 警告消失；
+  - worker 传的 4 个 `--js-runtimes`（deno/node/quickjs/bun）里 deno 优先生效，
+    输出仍然稳定命中 `398+140`。
+
+  结论：生产环境自带 deno，不需要给 `build_ytdlp_command` 补 `--remote-components`。
+  本地复验外部下载类问题时，**先把 `app/src-tauri/resources/bin` 前置进 PATH**，
+  否则会看到只在本机出现的假警告。
 
 - [x] Decide how the `yt-dlp` drift check runs on a schedule (2026-10-22) — ✅ A local weekly
   automation named `yt-dlp 版本漂移检查` runs every Monday at 09:00 in this workspace and reports
