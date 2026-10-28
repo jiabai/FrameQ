@@ -471,8 +471,11 @@ describe("App result workspace layout styles", () => {
     const basicNoticeRule = getRuleBody([".settings-basic-note"]);
 
     expect(settingsSheetTsx.match(/className="settings-basic-note"/g)).toHaveLength(1);
+    // The notice lives inside the basic render helper, and that helper is the
+    // only thing the basic branch calls, so it cannot leak into other tabs.
+    expect(settingsSheetTsx).toMatch(/settingsCategory === "basic" \? renderBasicSection\(\)/);
     expect(settingsSheetTsx).toMatch(
-      /settingsCategory === "basic"[\s\S]*?className="settings-basic-note"[\s\S]*?id="settings-basic"/,
+      /function renderBasicSection\(\)[\s\S]*?className="settings-basic-note"[\s\S]*?id="settings-basic"/,
     );
     expect(settingsSheetTsx).toContain('tSettings("basic.privacy")');
     expect(settingsSheetTsx).not.toContain(

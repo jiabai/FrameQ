@@ -203,6 +203,334 @@ export function SettingsSheet({
     locale,
   );
 
+  // The five categories share no markup, so they stay as named render helpers
+  // in this file rather than becoming five prop-plumbing components.
+  function renderBasicSection() {
+    return (
+      <>
+        <LanguagePreferenceField />
+        <p className="settings-basic-note">
+          <ShieldCheck size={15} />
+          <span>{tSettings("basic.privacy")}</span>
+        </p>
+        <section id="settings-basic" className="sheet-form-section">
+          <div className="form-section-heading">
+            <h3>{tSettings("basic.heading")}</h3>
+            <p>{tSettings("basic.description")}</p>
+          </div>
+          {settingsAsrModelMigrated ? (
+            <div className="model-migration-notice" role="status">
+              <div className="model-migration-notice-body">
+                <strong>{tSettings("basic.migrationNotice.title")}</strong>
+                <p>{tSettings("basic.migrationNotice.body")}</p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void dismissAsrModelMigrationNotice()}
+              >
+                {tSettings("basic.migrationNotice.dismiss")}
+              </button>
+            </div>
+          ) : null}
+          <label className="field-row">
+            <span>{tSettings("basic.asrModel")}</span>
+            <select
+              value={settingsDraft.asrModel}
+              onChange={(event) => {
+                const model = event.currentTarget.value;
+                updateSettingsDraft("asrModel", model);
+                onAsrModelSelection?.(model);
+              }}
+              disabled={settingsLoading || settingsSaving || modelDownloadActive}
+            >
+              {settingsSupportedAsrModels.map((model) => (
+                <option value={model} key={model}>
+                  {asrModelLabel(model)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="model-settings-row">
+            <div>
+              <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
+                {asrModelStatus.available
+                  ? tSettings("basic.modelReady")
+                  : tSettings("basic.modelMissing")}
+              </span>
+              <small>{asrModelStatus.modelDir || tSettings("basic.defaultModelPath")}</small>
+            </div>
+          </div>
+          <label className="field-row">
+            <span>{tSettings("basic.outputDirectory")}</span>
+            <input
+              value={settingsDraft.outputDir}
+              onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
+              placeholder={tSettings("basic.outputPlaceholder")}
+              disabled={settingsLoading || settingsSaving}
+            />
+          </label>
+        </section>
+      </>
+    );
+  }
+
+  function renderInspirationSection() {
+    return (
+      <section id="settings-inspiration" className="sheet-form-section inspiration-settings-section">
+        <div className="form-section-heading">
+          <h3>{preferenceCopy.heading}</h3>
+          <p>{preferenceCopy.description}</p>
+        </div>
+        <div className="settings-status-card inspiration-profile-card">
+          <div>
+            <span className={`model-status-badge ${profilePresentation.tone}`}>
+              {profilePresentation.label}
+            </span>
+            <strong>{preferenceCopy.profileCardTitle}</strong>
+            <div className="settings-summary-list">
+              {profilePresentation.lines.map((line, index) => (
+                <span key={`${line}-${index}`}>{line}</span>
+              ))}
+            </div>
+          </div>
+          <div className="inspiration-settings-actions">
+            <button
+              type="button"
+              className="secondary-button profile-edit-button"
+              onClick={() => void onOpenProfileEditorFromSettings()}
+              disabled={settingsLoading || settingsSaving}
+            >
+              <UserRound size={15} />
+              <span>{preferenceCopy.editProfile}</span>
+            </button>
+            <button
+              type="button"
+              className="secondary-button profile-clear-button"
+              onClick={() => void clearProfileFromSettings()}
+              disabled={settingsLoading || settingsSaving}
+            >
+              <X size={15} />
+              <span>{preferenceCopy.clearProfile}</span>
+            </button>
+          </div>
+        </div>
+        <div className="settings-status-card quiet">
+          <div>
+            <strong>{preferenceCopy.defaultGenerationTitle}</strong>
+            <div className="settings-summary-list">
+              {settingsGenerationPreferenceLines(
+                settingsInsightPreferences,
+                settingsLoading,
+                locale,
+              ).map((line, index) => (
+                <span key={`${line}-${index}`}>{line}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderStorageSection() {
+    return (
+      <section id="settings-storage" className="sheet-form-section audio-cache-settings-section">
+        <div className="form-section-heading">
+          <h3>{tSettings("storage.heading")}</h3>
+          <p>{tSettings("storage.description")}</p>
+        </div>
+        <div className="config-file-row audio-cache-row">
+          <code title={audioReviewCacheUsage?.cachePath ?? ""}>
+            {tSettings("storage.audioCache", {
+              size: formatBytes(audioReviewCacheUsage?.sizeBytes ?? 0, locale),
+            })}
+          </code>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void clearAudioReviewCacheFromSettings()}
+            disabled={settingsLoading || settingsSaving || !audioReviewCacheUsage}
+          >
+            <Trash2 size={15} />
+            <span>{tSettings("storage.clear")}</span>
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  function renderUpdatesSection() {
+    return (
+      <section id="settings-updates" className="sheet-form-section update-settings-section">
+        <div className="form-section-heading">
+          <h3>{tUpdates("section.heading")}</h3>
+          <p>{tUpdates("section.description")}</p>
+        </div>
+        <div className={`update-status-card ${updateState.status}`}>
+          <div>
+            <span className={`model-status-badge ${updateState.status === "failed" ? "missing" : "ready"}`}>
+              {inAppUpdates
+                ? tUpdates(`status.${updateState.status}`)
+                : tUpdates("section.manualStatus")}
+            </span>
+            {currentVersion ? (
+              <small data-current-version={currentVersion}>
+                {tUpdates("section.currentVersion", { version: currentVersion })}
+              </small>
+            ) : null}
+            <strong>
+              {updateState.availableVersion
+                ? tUpdates("section.versionLabel", { version: updateState.availableVersion })
+                : tUpdates("section.stableVersion")}
+            </strong>
+            <small>
+              {inAppUpdates
+                ? renderedUpdateMessage || tUpdates("section.defaultMessage")
+                : tUpdates("section.manualMessage")}
+            </small>
+            {updateState.notes ? <small>{updateState.notes}</small> : null}
+            {updateInstallBlocked && updateState.status === "available" ? (
+              <small>{tUpdates("section.installBlocked")}</small>
+            ) : null}
+          </div>
+          {updateState.status === "downloading" || updateState.status === "installing" ? (
+            <div
+              className="update-progress"
+              role="progressbar"
+              aria-label={tUpdates("section.downloadProgressAria")}
+              aria-valuenow={updateProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div className="progress-track">
+                <span
+                  className="progress-fill video_transcribing"
+                  style={{ width: `${updateProgress}%` }}
+                />
+              </div>
+              <small>{formatProgressPercent(updateState.progress)}</small>
+            </div>
+          ) : null}
+        </div>
+        <div className="update-actions">
+          {inAppUpdates ? (
+            <>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void onCheckForUpdates({ silent: false })}
+                disabled={updateBusy}
+              >
+                <RotateCcw size={15} />
+                <span>
+                  {updateState.status === "checking"
+                    ? tUpdates("action.checking")
+                    : tUpdates("action.check")}
+                </span>
+              </button>
+              {updateState.status === "ready_to_restart" ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void onRestartForUpdate()}
+                >
+                  <RotateCcw size={15} />
+                  <span>{tUpdates("action.restart")}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void onInstallUpdate()}
+                  disabled={
+                    updateBusy ||
+                    updateInstallBlocked ||
+                    !INSTALLABLE_UPDATE_STATUSES.has(updateState.status)
+                  }
+                >
+                  <Download size={15} />
+                  <span>{tUpdates("action.install")}</span>
+                </button>
+              )}
+              {INSTALLABLE_UPDATE_STATUSES.has(updateState.status) ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void onPostponeUpdateReminder()}
+                  disabled={updateBusy}
+                >
+                  <span>{tUpdates("action.postpone")}</span>
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => void onOpenReleases()}
+            >
+              <Download size={15} />
+              <span>{tUpdates("action.releases")}</span>
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  function renderAdvancedSection() {
+    return (
+      <section id="settings-advanced" className="sheet-form-section settings-config-file-section">
+        <div className="form-section-heading">
+          <h3>{tSettings("advanced.heading")}</h3>
+          <p>{tSettings("advanced.description")}</p>
+        </div>
+        <div className="config-file-row">
+          <code title={settingsConfigPath}>
+            {settingsConfigPath || tSettings("advanced.pathPending")}
+          </code>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void locateSettingsConfigFile()}
+            disabled={settingsLoading || !settingsConfigPath}
+          >
+            <FolderOpen size={15} />
+            <span>{tSettings("advanced.locate")}</span>
+          </button>
+        </div>
+        <div className="settings-status-card diagnostics-export-card">
+          <div>
+            <span className="section-label">{tSettings("advanced.diagnostics.eyebrow")}</span>
+            <strong>{tSettings("advanced.diagnostics.heading")}</strong>
+            <p>{tSettings("advanced.diagnostics.description")}</p>
+            <small>{tSettings("advanced.diagnostics.privacy")}</small>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void exportDiagnostics()}
+            disabled={diagnosticExportBusy}
+            aria-busy={diagnosticExportBusy}
+          >
+            <Download size={15} />
+            <span>
+              {diagnosticExportBusy
+                ? tSettings("advanced.diagnostics.exporting")
+                : tSettings("advanced.diagnostics.action")}
+            </span>
+          </button>
+          {renderedDiagnosticExportNotice ? (
+            <StatusLine className="action-notice inline-notice">
+              {renderedDiagnosticExportNotice}
+            </StatusLine>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <AnimatedSheet
       open={settingsOpen}
@@ -243,316 +571,11 @@ export function SettingsSheet({
             </nav>
 
             <div className="settings-sections">
-              {settingsCategory === "basic" ? (
-                <>
-                  <LanguagePreferenceField />
-                  <p className="settings-basic-note">
-                    <ShieldCheck size={15} />
-                    <span>{tSettings("basic.privacy")}</span>
-                  </p>
-                  <section id="settings-basic" className="sheet-form-section">
-                    <div className="form-section-heading">
-                      <h3>{tSettings("basic.heading")}</h3>
-                      <p>{tSettings("basic.description")}</p>
-                    </div>
-                    {settingsAsrModelMigrated ? (
-                      <div className="model-migration-notice" role="status">
-                        <div className="model-migration-notice-body">
-                          <strong>{tSettings("basic.migrationNotice.title")}</strong>
-                          <p>{tSettings("basic.migrationNotice.body")}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => void dismissAsrModelMigrationNotice()}
-                        >
-                          {tSettings("basic.migrationNotice.dismiss")}
-                        </button>
-                      </div>
-                    ) : null}
-                    <label className="field-row">
-                      <span>{tSettings("basic.asrModel")}</span>
-                      <select
-                        value={settingsDraft.asrModel}
-                        onChange={(event) => {
-                          const model = event.currentTarget.value;
-                          updateSettingsDraft("asrModel", model);
-                          onAsrModelSelection?.(model);
-                        }}
-                        disabled={settingsLoading || settingsSaving || modelDownloadActive}
-                      >
-                        {settingsSupportedAsrModels.map((model) => (
-                          <option value={model} key={model}>
-                            {asrModelLabel(model)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="model-settings-row">
-                      <div>
-                        <span className={`model-status-badge ${asrModelStatus.available ? "ready" : "missing"}`}>
-                          {asrModelStatus.available
-                            ? tSettings("basic.modelReady")
-                            : tSettings("basic.modelMissing")}
-                        </span>
-                        <small>
-                          {asrModelStatus.modelDir || tSettings("basic.defaultModelPath")}
-                        </small>
-                      </div>
-                    </div>
-                    <label className="field-row">
-                      <span>{tSettings("basic.outputDirectory")}</span>
-                      <input
-                        value={settingsDraft.outputDir}
-                        onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
-                        placeholder={tSettings("basic.outputPlaceholder")}
-                        disabled={settingsLoading || settingsSaving}
-                      />
-                    </label>
-                  </section>
-                </>
-              ) : null}
-
-              {settingsCategory === "inspiration" ? (
-                <section id="settings-inspiration" className="sheet-form-section inspiration-settings-section">
-                  <div className="form-section-heading">
-                    <h3>{preferenceCopy.heading}</h3>
-                    <p>{preferenceCopy.description}</p>
-                  </div>
-                  <div className="settings-status-card inspiration-profile-card">
-                    <div>
-                      <span className={`model-status-badge ${profilePresentation.tone}`}>
-                        {profilePresentation.label}
-                      </span>
-                      <strong>{preferenceCopy.profileCardTitle}</strong>
-                      <div className="settings-summary-list">
-                        {profilePresentation.lines.map((line, index) => (
-                          <span key={`${line}-${index}`}>{line}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="inspiration-settings-actions">
-                      <button
-                        type="button"
-                        className="secondary-button profile-edit-button"
-                        onClick={() => void onOpenProfileEditorFromSettings()}
-                        disabled={settingsLoading || settingsSaving}
-                      >
-                        <UserRound size={15} />
-                        <span>{preferenceCopy.editProfile}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button profile-clear-button"
-                        onClick={() => void clearProfileFromSettings()}
-                        disabled={settingsLoading || settingsSaving}
-                      >
-                        <X size={15} />
-                        <span>{preferenceCopy.clearProfile}</span>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="settings-status-card quiet">
-                    <div>
-                      <strong>{preferenceCopy.defaultGenerationTitle}</strong>
-                      <div className="settings-summary-list">
-                        {settingsGenerationPreferenceLines(
-                          settingsInsightPreferences,
-                          settingsLoading,
-                          locale,
-                        ).map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
-              {settingsCategory === "storage" ? (
-                <section id="settings-storage" className="sheet-form-section audio-cache-settings-section">
-                  <div className="form-section-heading">
-                    <h3>{tSettings("storage.heading")}</h3>
-                    <p>{tSettings("storage.description")}</p>
-                  </div>
-                  <div className="config-file-row audio-cache-row">
-                    <code title={audioReviewCacheUsage?.cachePath ?? ""}>
-                      {tSettings("storage.audioCache", {
-                        size: formatBytes(audioReviewCacheUsage?.sizeBytes ?? 0, locale),
-                      })}
-                    </code>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => void clearAudioReviewCacheFromSettings()}
-                      disabled={settingsLoading || settingsSaving || !audioReviewCacheUsage}
-                    >
-                      <Trash2 size={15} />
-                      <span>{tSettings("storage.clear")}</span>
-                    </button>
-                  </div>
-                </section>
-              ) : null}
-
-              {settingsCategory === "updates" ? (
-                <section id="settings-updates" className="sheet-form-section update-settings-section">
-                  <div className="form-section-heading">
-                    <h3>{tUpdates("section.heading")}</h3>
-                    <p>{tUpdates("section.description")}</p>
-                  </div>
-                  <div className={`update-status-card ${updateState.status}`}>
-                    <div>
-                      <span className={`model-status-badge ${updateState.status === "failed" ? "missing" : "ready"}`}>
-                        {inAppUpdates
-                          ? tUpdates(`status.${updateState.status}`)
-                          : tUpdates("section.manualStatus")}
-                      </span>
-                      {currentVersion ? (
-                        <small data-current-version={currentVersion}>
-                          {tUpdates("section.currentVersion", { version: currentVersion })}
-                        </small>
-                      ) : null}
-                      <strong>
-                        {updateState.availableVersion
-                          ? tUpdates("section.versionLabel", {
-                              version: updateState.availableVersion,
-                            })
-                          : tUpdates("section.stableVersion")}
-                      </strong>
-                      <small>
-                        {inAppUpdates
-                          ? renderedUpdateMessage || tUpdates("section.defaultMessage")
-                          : tUpdates("section.manualMessage")}
-                      </small>
-                      {updateState.notes ? <small>{updateState.notes}</small> : null}
-                      {updateInstallBlocked && updateState.status === "available" ? (
-                        <small>{tUpdates("section.installBlocked")}</small>
-                      ) : null}
-                    </div>
-                    {updateState.status === "downloading" || updateState.status === "installing" ? (
-                      <div
-                        className="update-progress"
-                        role="progressbar"
-                        aria-label={tUpdates("section.downloadProgressAria")}
-                        aria-valuenow={updateProgress}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                      >
-                        <div className="progress-track">
-                          <span
-                            className="progress-fill video_transcribing"
-                            style={{ width: `${updateProgress}%` }}
-                          />
-                        </div>
-                        <small>{formatProgressPercent(updateState.progress)}</small>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="update-actions">
-                    {inAppUpdates ? (
-                      <>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => void onCheckForUpdates({ silent: false })}
-                          disabled={updateBusy}
-                        >
-                          <RotateCcw size={15} />
-                          <span>
-                            {updateState.status === "checking"
-                              ? tUpdates("action.checking")
-                              : tUpdates("action.check")}
-                          </span>
-                        </button>
-                        {updateState.status === "ready_to_restart" ? (
-                          <button type="button" className="primary-button" onClick={() => void onRestartForUpdate()}>
-                            <RotateCcw size={15} />
-                            <span>{tUpdates("action.restart")}</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="primary-button"
-                            onClick={() => void onInstallUpdate()}
-                            disabled={
-                              updateBusy ||
-                              updateInstallBlocked ||
-                              !INSTALLABLE_UPDATE_STATUSES.has(updateState.status)
-                            }
-                          >
-                            <Download size={15} />
-                            <span>{tUpdates("action.install")}</span>
-                          </button>
-                        )}
-                        {INSTALLABLE_UPDATE_STATUSES.has(updateState.status) ? (
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            onClick={() => void onPostponeUpdateReminder()}
-                            disabled={updateBusy}
-                          >
-                            <span>{tUpdates("action.postpone")}</span>
-                          </button>
-                        ) : null}
-                      </>
-                    ) : (
-                      <button type="button" className="primary-button" onClick={() => void onOpenReleases()}>
-                        <Download size={15} />
-                        <span>{tUpdates("action.releases")}</span>
-                      </button>
-                    )}
-                  </div>
-                </section>
-              ) : null}
-
-              {settingsCategory === "advanced" ? (
-                <section id="settings-advanced" className="sheet-form-section settings-config-file-section">
-                  <div className="form-section-heading">
-                    <h3>{tSettings("advanced.heading")}</h3>
-                    <p>{tSettings("advanced.description")}</p>
-                  </div>
-                  <div className="config-file-row">
-                    <code title={settingsConfigPath}>
-                      {settingsConfigPath || tSettings("advanced.pathPending")}
-                    </code>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => void locateSettingsConfigFile()}
-                      disabled={settingsLoading || !settingsConfigPath}
-                    >
-                      <FolderOpen size={15} />
-                      <span>{tSettings("advanced.locate")}</span>
-                    </button>
-                  </div>
-                  <div className="settings-status-card diagnostics-export-card">
-                    <div>
-                      <span className="section-label">{tSettings("advanced.diagnostics.eyebrow")}</span>
-                      <strong>{tSettings("advanced.diagnostics.heading")}</strong>
-                      <p>{tSettings("advanced.diagnostics.description")}</p>
-                      <small>{tSettings("advanced.diagnostics.privacy")}</small>
-                    </div>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => void exportDiagnostics()}
-                      disabled={diagnosticExportBusy}
-                      aria-busy={diagnosticExportBusy}
-                    >
-                      <Download size={15} />
-                      <span>
-                        {diagnosticExportBusy
-                          ? tSettings("advanced.diagnostics.exporting")
-                          : tSettings("advanced.diagnostics.action")}
-                      </span>
-                    </button>
-                    {renderedDiagnosticExportNotice ? (
-                      <StatusLine className="action-notice inline-notice">
-                        {renderedDiagnosticExportNotice}
-                      </StatusLine>
-                    ) : null}
-                  </div>
-                </section>
-              ) : null}
-
+              {settingsCategory === "basic" ? renderBasicSection() : null}
+              {settingsCategory === "inspiration" ? renderInspirationSection() : null}
+              {settingsCategory === "storage" ? renderStorageSection() : null}
+              {settingsCategory === "updates" ? renderUpdatesSection() : null}
+              {settingsCategory === "advanced" ? renderAdvancedSection() : null}
               {renderedSettingsNotice ? (
                 <StatusLine className="action-notice inline-notice">
                   {renderedSettingsNotice}
