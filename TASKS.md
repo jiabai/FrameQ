@@ -790,6 +790,16 @@
   A non-zero return code blocks the release. The upgrade must not ship on the strength of the lock
   diff alone.
 
+  2026-10-28 第二次尝试，仍然阻塞在网络层，不是 yt-dlp 的问题。证据三条：
+  1. 运行期版本已确认是锁里的 `2026.10.21`（`uv run python -c "import yt_dlp; print(yt_dlp.version.__version__)"`）。
+  2. 走代理（`HTTPS_PROXY=127.0.0.1:51825`）时 yt-dlp 三次重试全部 `Tunnel connection failed: 502 Bad Gateway`；
+     绕过代理直连（`--noproxy '*'`）时 `www.youtube.com` 返回 `000`，而同一条直连路径访问 `example.com` 返回 `200`，
+     说明机器本身有直连出口，只有 YouTube 被拦。
+  3. 本机 DNS（网关 `192.168.31.1`）把 `www.youtube.com` 解析到 `2001::1` 和 `174.132.167.252`，均非 YouTube 地址。
+  按上面的命令跑 worker 路径，结果是 `CommandExecutionError: YOUTUBE_DOWNLOAD_FAILED`，
+  与抽取器回归报的是同一个通用码，所以这条冒烟在这个网络环境下无法区分「网络被墙」和「yt-dlp 挂了」。
+  下一次需要在能访问 YouTube 的网络上重跑。
+
 - [x] Decide how the `yt-dlp` drift check runs on a schedule (2026-10-22) — ✅ A local weekly
   automation named `yt-dlp 版本漂移检查` runs every Monday at 09:00 in this workspace and reports
   exit code 0, 1, or 2 with the upgrade and verification steps attached. A local routine was chosen
