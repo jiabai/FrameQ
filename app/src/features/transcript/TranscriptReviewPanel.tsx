@@ -17,7 +17,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { clampAudioTime, formatAudioClock } from "../../audioReviewBarState";
-import { formatNumber, formatPercent } from "../../i18n/formatters";
+import { formatPercent } from "../../i18n/formatters";
 import { resolveSystemLocale } from "../../i18n/locale";
 import type { TranscriptSourceViewModel } from "../../taskWorkspaceViewModel";
 import type { TranscriptSegment } from "../../transcriptDetailClient";
@@ -79,13 +79,8 @@ type TranscriptReviewPanelProps = {
   artifactToolbar?: ReactNode;
 };
 
-function formatSegmentTime(startMs: number, locale: ReturnType<typeof resolveSystemLocale>): string {
-  const totalSeconds = Math.max(0, Math.floor(startMs / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${formatNumber(minutes, locale)}:${formatNumber(seconds, locale, {
-    minimumIntegerDigits: 2,
-  })}`;
+function formatSegmentTime(startMs: number): string {
+  return formatAudioClock(Math.max(0, startMs / 1000));
 }
 
 export function TranscriptReviewPanel({
@@ -275,7 +270,7 @@ export function TranscriptReviewPanel({
                     }
                   >
                     <Play size={14} />
-                    <span>{formatSegmentTime(segment.start_ms, locale)}</span>
+                    <span>{formatSegmentTime(segment.start_ms)}</span>
                   </button>
                   <button
                     ref={(element) => {

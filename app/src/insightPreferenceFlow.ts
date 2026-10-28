@@ -27,7 +27,7 @@ export type InsightPreferenceFlowState = {
   canAdvance: boolean;
 };
 
-const GENERATION_STEPS: GenerationPreferenceField[] = [
+export const GENERATION_STEPS: GenerationPreferenceField[] = [
   "goal",
   "scenario",
   "angles",

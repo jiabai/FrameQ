@@ -28,6 +28,7 @@ import {
   advanceGenerationStep,
   backGenerationStep,
   cancelProfileSetupInFlow,
+  GENERATION_STEPS,
   selectGenerationOption,
   startGenerationPreferenceEditing,
   startProfileSetupInFlow,
@@ -276,7 +277,7 @@ function GenerationStep({
         <span>
           {interpolatePreferenceCopy(copy.stepProgress, {
             current: flow.currentStepIndex + 1,
-            total: 6,
+            total: GENERATION_STEPS.length,
           })}
         </span>
         <h3>{presentation.label}</h3>

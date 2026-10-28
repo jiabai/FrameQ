@@ -63,6 +63,10 @@ function renderSheet(tab: DetailTab | null) {
         controller={detailController(tab)}
         workflow={detailWorkflow()}
         onOpenDirectionEditor={vi.fn()}
+        onOpenDissectionConfirmation={vi.fn()}
+        onLocateDissectionChunks={vi.fn()}
+        onSelectDraftSeed={vi.fn()}
+        onClearDraftSeed={vi.fn()}
       />
     </LocaleProvider>,
   );
@@ -119,6 +123,10 @@ describe("AiResultDetailSheet full screen", () => {
           controller={detailController(null)}
           workflow={detailWorkflow()}
           onOpenDirectionEditor={vi.fn()}
+        onOpenDissectionConfirmation={vi.fn()}
+        onLocateDissectionChunks={vi.fn()}
+        onSelectDraftSeed={vi.fn()}
+        onClearDraftSeed={vi.fn()}
         />
       </LocaleProvider>,
     );

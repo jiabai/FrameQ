@@ -46,66 +46,56 @@ type SettingsSheetProps = {
   locale: SupportedLocale;
 };
 
-function settingsProfileStatusLabel(
+type SettingsProfilePresentation = {
+  label: string;
+  tone: "ready" | "missing";
+  lines: string[];
+};
+
+const INSTALLABLE_UPDATE_STATUSES = new Set(["available", "postponed"]);
+
+function settingsProfilePresentation(
   state: InsightPreferenceState | null,
   loading: boolean,
   locale: SupportedLocale,
-): string {
+): SettingsProfilePresentation {
   const copy = getPreferenceCopy(locale).settings;
+
   if (!state) {
-    return loading ? copy.statusReading : copy.statusUnavailable;
+    return {
+      label: loading ? copy.statusReading : copy.statusUnavailable,
+      tone: "missing",
+      lines: [loading ? copy.summaryLoading : copy.summaryUnavailable],
+    };
   }
 
-  if (state.profileStatus === "valid") {
-    return copy.statusReady;
+  if (state.profileStatus === "invalid") {
+    return { label: copy.statusResetRequired, tone: "missing", lines: [copy.profileResetRequired] };
   }
 
   if (state.profileStatus === "skipped") {
-    return copy.statusSkipped;
-  }
-
-  if (state.profileStatus === "invalid") {
-    return copy.statusResetRequired;
-  }
-
-  return copy.statusNotSet;
-}
-
-function settingsProfileStatusTone(state: InsightPreferenceState | null): "ready" | "missing" {
-  return state?.profileStatus === "valid" ? "ready" : "missing";
-}
-
-function settingsProfileSummaryLines(
-  state: InsightPreferenceState | null,
-  loading: boolean,
-  locale: SupportedLocale,
-): string[] {
-  const copy = getPreferenceCopy(locale).settings;
-  if (!state) {
-    return [loading ? copy.summaryLoading : copy.summaryUnavailable];
-  }
-
-  if (state.profileStatus === "invalid") {
-    return [copy.profileResetRequired];
+    return { label: copy.statusSkipped, tone: "missing", lines: [copy.profileNotSet] };
   }
 
   if (state.profileStatus === "valid") {
     const summary = summarizeInspirationProfile(state.profile, locale);
-    if (summary.length > 3) {
-      const remainingCount = summary.length - 3;
-      const remainingTemplate =
-        selectPluralCategory(remainingCount, locale) === "one"
-          ? copy.moreItems_one
-          : copy.moreItems_other;
-      return [
-        ...summary.slice(0, 3),
-        interpolatePreferenceCopy(remainingTemplate, { count: remainingCount }),
-      ];
-    }
-    return summary;
+    const remainingCount = summary.length - 3;
+    const lines =
+      summary.length > 3
+        ? [
+            ...summary.slice(0, 3),
+            interpolatePreferenceCopy(
+              selectPluralCategory(remainingCount, locale) === "one"
+                ? copy.moreItems_one
+                : copy.moreItems_other,
+              { count: remainingCount },
+            ),
+          ]
+        : summary;
+    return { label: copy.statusReady, tone: "ready", lines };
   }
 
-  return [copy.profileNotSet];
+  return { label: copy.statusNotSet, tone: "missing", lines: [copy.profileNotSet] };
 }
 
 function settingsGenerationPreferenceLines(
@@ -211,6 +201,11 @@ export function SettingsSheet({
   const renderedDiagnosticExportNotice = renderUiMessage(locale, diagnosticExportNotice);
   const renderedUpdateMessage = renderUiMessage(locale, updateState.message);
   const updateProgress = clampPercent(updateState.progress);
+  const profilePresentation = settingsProfilePresentation(
+    settingsInsightPreferences,
+    settingsLoading,
+    locale,
+  );
 
   return (
     <AnimatedSheet
@@ -330,20 +325,12 @@ export function SettingsSheet({
                   </div>
                   <div className="settings-status-card inspiration-profile-card">
                     <div>
-                      <span className={`model-status-badge ${settingsProfileStatusTone(settingsInsightPreferences)}`}>
-                        {settingsProfileStatusLabel(
-                          settingsInsightPreferences,
-                          settingsLoading,
-                          locale,
-                        )}
+                      <span className={`model-status-badge ${profilePresentation.tone}`}>
+                        {profilePresentation.label}
                       </span>
                       <strong>{preferenceCopy.profileCardTitle}</strong>
                       <div className="settings-summary-list">
-                        {settingsProfileSummaryLines(
-                          settingsInsightPreferences,
-                          settingsLoading,
-                          locale,
-                        ).map((line, index) => (
+                        {profilePresentation.lines.map((line, index) => (
                           <span key={`${line}-${index}`}>{line}</span>
                         ))}
                       </div>
@@ -492,14 +479,14 @@ export function SettingsSheet({
                             disabled={
                               updateBusy ||
                               updateInstallBlocked ||
-                              !["available", "postponed"].includes(updateState.status)
+                              !INSTALLABLE_UPDATE_STATUSES.has(updateState.status)
                             }
                           >
                             <Download size={15} />
                             <span>{tUpdates("action.install")}</span>
                           </button>
                         )}
-                        {["available", "postponed"].includes(updateState.status) ? (
+                        {INSTALLABLE_UPDATE_STATUSES.has(updateState.status) ? (
                           <button
                             type="button"
                             className="secondary-button"

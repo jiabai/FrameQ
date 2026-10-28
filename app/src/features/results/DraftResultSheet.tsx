@@ -28,6 +28,7 @@ import { useUiLocale } from "../../i18n/LocaleProvider";
 import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { MarkdownContent } from "./MarkdownContent";
 import { StatusLine } from "../common/StatusLine";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { revealPath } from "../common/revealPath";
 
 type DraftResultSheetProps = {
@@ -187,21 +188,15 @@ export function DraftResultSheet({
 
   // ---- Render ----
 
-  if (!open) {
-    return null;
-  }
-
   const renderedNotice = renderUiMessage(resolvedLocale, notice);
 
   return (
-    <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={onClose}>
-      <section
-        className={`sheet-panel detail-modal ai-result-detail-sheet draft-result-sheet${expanded ? " is-expanded" : ""}`}
-        aria-label={t("draftResult.ariaLabel")}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <AnimatedSheet
+      open={open}
+      ariaLabel={t("draftResult.ariaLabel")}
+      className={`ai-result-detail-sheet draft-result-sheet${expanded ? " is-expanded" : ""}`}
+      onBackdropClick={onClose}
+    >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{t("draftResult.sectionLabel")}</p>
@@ -297,7 +292,6 @@ export function DraftResultSheet({
             <MarkdownContent markdown={buffer} emptyText={t("draftResult.empty")} />
           </div>
         )}
-      </section>
-    </div>
+    </AnimatedSheet>
   );
 }

@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useUiLocale } from "../../i18n/LocaleProvider";
@@ -129,76 +130,62 @@ export function LocalTranscriptWorkspace({
               className="local-artifact-toolbar"
               aria-label={t("workspace.artifactActions")}
             >
-              {model.artifactActions.locateVideo.visible ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => onLocateArtifact("video")}
-                  disabled={!model.artifactActions.locateVideo.enabled}
-                >
-                  <Film size={16} />
-                  <span>{t("workspace.locateVideo")}</span>
-                </button>
-              ) : null}
-              {model.artifactActions.locateAudio.visible ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => onLocateArtifact("audio")}
-                  disabled={!model.artifactActions.locateAudio.enabled}
-                >
-                  <FileAudio size={16} />
-                  <span>{t("workspace.locateAudio")}</span>
-                </button>
-              ) : null}
-              {model.artifactActions.locateTranscript.visible ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void controller.exportTranscript()}
-                  disabled={!model.artifactActions.locateTranscript.enabled}
-                >
-                  <FileText size={16} />
-                  <span>{t("workspace.locateTranscript")}</span>
-                </button>
-              ) : null}
+              <ArtifactButton
+                icon={<Film size={16} />}
+                label={t("workspace.locateVideo")}
+                visible={model.artifactActions.locateVideo.visible}
+                enabled={model.artifactActions.locateVideo.enabled}
+                onClick={() => onLocateArtifact("video")}
+              />
+              <ArtifactButton
+                icon={<FileAudio size={16} />}
+                label={t("workspace.locateAudio")}
+                visible={model.artifactActions.locateAudio.visible}
+                enabled={model.artifactActions.locateAudio.enabled}
+                onClick={() => onLocateArtifact("audio")}
+              />
+              <ArtifactButton
+                icon={<FileText size={16} />}
+                label={t("workspace.locateTranscript")}
+                visible={model.artifactActions.locateTranscript.visible}
+                enabled={model.artifactActions.locateTranscript.enabled}
+                onClick={() => void controller.exportTranscript()}
+              />
               {model.artifactActions.copyTranscript.visible ? (
                 polishedTranscriptText === null ? (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={onPolishTranscript}
-                    aria-busy={polishingTranscript}
-                    disabled={
-                      !model.artifactActions.copyTranscript.enabled ||
-                      controller.transcriptLoading ||
+                  <ArtifactButton
+                    icon={
+                      polishingTranscript ? (
+                        <LoaderCircle size={16} className="spin" aria-hidden="true" />
+                      ) : (
+                        <Sparkles size={16} />
+                      )
+                    }
+                    label={
                       polishingTranscript
-                    }
-                  >
-                    {polishingTranscript ? (
-                      <LoaderCircle size={16} className="spin" aria-hidden="true" />
-                    ) : (
-                      <Sparkles size={16} />
-                    )}
-                    <span>
-                      {polishingTranscript
                         ? t("workspace.polishingTranscript")
-                        : t("workspace.polishTranscript")}
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => void controller.copyTranscriptFile()}
-                    disabled={
-                      !model.artifactActions.copyTranscript.enabled ||
-                      controller.transcriptLoading
+                        : t("workspace.polishTranscript")
                     }
-                  >
-                    <Copy size={16} />
-                    <span>{t("workspace.copyTranscript")}</span>
-                  </button>
+                    visible
+                    ariaBusy={polishingTranscript}
+                    enabled={
+                      model.artifactActions.copyTranscript.enabled &&
+                      !controller.transcriptLoading &&
+                      !polishingTranscript
+                    }
+                    onClick={onPolishTranscript}
+                  />
+                ) : (
+                  <ArtifactButton
+                    icon={<Copy size={16} />}
+                    label={t("workspace.copyTranscript")}
+                    visible
+                    enabled={
+                      model.artifactActions.copyTranscript.enabled &&
+                      !controller.transcriptLoading
+                    }
+                    onClick={() => void controller.copyTranscriptFile()}
+                  />
                 )
               ) : null}
             </div>
@@ -219,23 +206,43 @@ export function LocalTranscriptWorkspace({
   );
 }
 
+function ArtifactButton({
+  icon,
+  label,
+  visible,
+  enabled,
+  ariaBusy = false,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  visible: boolean;
+  enabled: boolean;
+  ariaBusy?: boolean;
+  onClick: () => void;
+}) {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <button
+      type="button"
+      className="secondary-button"
+      onClick={onClick}
+      disabled={!enabled}
+      aria-busy={ariaBusy}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
 function localStatusKey(
   phase: TaskWorkspaceViewModel["local"]["phase"],
-):
-  | "workspace.status.processing"
-  | "workspace.status.ready"
-  | "workspace.status.failed"
-  | "workspace.status.waiting" {
-  switch (phase) {
-    case "processing":
-      return "workspace.status.processing";
-    case "ready":
-      return "workspace.status.ready";
-    case "failed":
-      return "workspace.status.failed";
-    default:
-      return "workspace.status.waiting";
-  }
+): `workspace.status.${TaskWorkspaceViewModel["local"]["phase"]}` {
+  return `workspace.status.${phase}`;
 }
 
 function localProgressStepKey(

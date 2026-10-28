@@ -17,12 +17,12 @@ type AiResultDetailSheetProps = {
   controller: TranscriptDetailController;
   workflow: WorkflowState;
   onOpenDirectionEditor: () => void | Promise<void>;
-  onOpenDissectionConfirmation?: () => void;
-  onLocateDissectionChunks?: (chunkIds: number[]) => void;
+  onOpenDissectionConfirmation: () => void;
+  onLocateDissectionChunks: (chunkIds: number[]) => void;
   // Select/clear the single draft seed insight. The selected id lives on
   // workflow.draftSeedInsightId; these callbacks mutate it via the controller.
-  onSelectDraftSeed?: (insightId: number) => void;
-  onClearDraftSeed?: () => void;
+  onSelectDraftSeed: (insightId: number) => void;
+  onClearDraftSeed: () => void;
 };
 
 export function AiResultDetailSheet({
@@ -30,8 +30,8 @@ export function AiResultDetailSheet({
   controller,
   workflow,
   onOpenDirectionEditor,
-  onOpenDissectionConfirmation = () => undefined,
-  onLocateDissectionChunks = () => undefined,
+  onOpenDissectionConfirmation,
+  onLocateDissectionChunks,
   onSelectDraftSeed,
   onClearDraftSeed,
 }: AiResultDetailSheetProps) {
@@ -163,34 +163,32 @@ export function AiResultDetailSheet({
                       </div>
                       <div><dt>{t("detail.suitableUse")}</dt><dd>{insight.suitableUse}</dd></div>
                     </dl>
-                    {onSelectDraftSeed && onClearDraftSeed ? (
-                      <div className="insight-detail-seed-action">
-                        {selected ? (
-                          <>
-                            <p className="draft-seed-summary">
-                              <Sprout size={15} aria-hidden="true" />
-                              <span>{t("detail.draftSeedSelected")}</span>
-                            </p>
-                            <button
-                              type="button"
-                              className="secondary-button compact-button"
-                              onClick={() => onClearDraftSeed()}
-                            >
-                              {t("detail.clearDraftSeed")}
-                            </button>
-                          </>
-                        ) : (
+                    <div className="insight-detail-seed-action">
+                      {selected ? (
+                        <>
+                          <p className="draft-seed-summary">
+                            <Sprout size={15} aria-hidden="true" />
+                            <span>{t("detail.draftSeedSelected")}</span>
+                          </p>
                           <button
                             type="button"
                             className="secondary-button compact-button"
-                            onClick={() => onSelectDraftSeed(insight.id)}
+                            onClick={() => onClearDraftSeed()}
                           >
-                            <Sprout size={15} aria-hidden="true" />
-                            <span>{t("detail.selectDraftSeed")}</span>
+                            {t("detail.clearDraftSeed")}
                           </button>
-                        )}
-                      </div>
-                    ) : null}
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="secondary-button compact-button"
+                          onClick={() => onSelectDraftSeed(insight.id)}
+                        >
+                          <Sprout size={15} aria-hidden="true" />
+                          <span>{t("detail.selectDraftSeed")}</span>
+                        </button>
+                      )}
+                    </div>
                   </li>
                 );
               })}

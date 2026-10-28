@@ -48,6 +48,10 @@ function renderDetails() {
       controller={controller}
       workflow={workflow}
       onOpenDirectionEditor={vi.fn()}
+      onOpenDissectionConfirmation={vi.fn()}
+      onLocateDissectionChunks={vi.fn()}
+      onSelectDraftSeed={vi.fn()}
+      onClearDraftSeed={vi.fn()}
     />,
   );
 }

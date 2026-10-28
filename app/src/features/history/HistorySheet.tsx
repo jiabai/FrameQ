@@ -30,13 +30,6 @@ type HistorySheetProps = {
   deletionDisabledReason: UiMessage;
 };
 
-function areUiMessagesEqual(left: UiMessage, right: UiMessage): boolean {
-  return (
-    left.messageCode === right.messageCode &&
-    JSON.stringify(left.args ?? {}) === JSON.stringify(right.args ?? {})
-  );
-}
-
 function formatHistoryTimestamp(
   value: string,
   locale: SupportedLocale,
@@ -79,10 +72,9 @@ export function HistorySheet({
     resolvedLocale,
     deletionDisabledReason,
   );
-  const disabledReasonsAreEqual = areUiMessagesEqual(
-    selectionDisabledReason,
-    deletionDisabledReason,
-  );
+  // Both reasons are plain message codes with no interpolation args.
+  const disabledReasonsAreEqual =
+    selectionDisabledReason.messageCode === deletionDisabledReason.messageCode;
 
   return (
     <AnimatedSheet
