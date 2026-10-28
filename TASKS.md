@@ -771,10 +771,9 @@
 
 ## 待办
 
-- [ ] Prove the `yt-dlp` 2026.10.21 upgrade with a real YouTube download (2026-10-22) — ✅ Lock
-  upgraded and the drift check reports current; the download is the only open part. The lock moved
-  from `2026.8.19` to `2026.10.21` after `scripts/check-yt-dlp-drift.mjs` reported drift, but this
-  machine's proxy answers `502` for YouTube, so no behavioural evidence exists yet. Before the next
+- [x] Prove the `yt-dlp` 2026.10.21 upgrade with a real YouTube download (2026-10-22) — ✅ Verified
+  2026-10-28 with a real download through the packaged worker path. The lock had moved from
+  `2026.8.19` to `2026.10.21` after `scripts/check-yt-dlp-drift.mjs` reported drift; before the next
   desktop release, run one real download through the packaged worker path and record the result:
 
   ```bash
@@ -798,7 +797,26 @@
   3. 本机 DNS（网关 `192.168.31.1`）把 `www.youtube.com` 解析到 `2001::1` 和 `174.132.167.252`，均非 YouTube 地址。
   按上面的命令跑 worker 路径，结果是 `CommandExecutionError: YOUTUBE_DOWNLOAD_FAILED`，
   与抽取器回归报的是同一个通用码，所以这条冒烟在这个网络环境下无法区分「网络被墙」和「yt-dlp 挂了」。
-  下一次需要在能访问 YouTube 的网络上重跑。
+
+  2026-10-28 第三次尝试，**通过**。前两次失败的原因是走错了代理：bash 环境里的
+  `HTTPS_PROXY` 被覆盖成 `127.0.0.1:51825`（WorkBuddy 内置代理，对 YouTube 返 502），
+  而 Windows 系统代理是 `127.0.0.1:7890`（`HKCU:\...\Internet Settings` 的 `ProxyServer`）。
+  显式指定 `HTTPS_PROXY=http://127.0.0.1:7890` 后 YouTube 返回 200，下载链路随即打通。
+
+  证据（`https://www.youtube.com/watch?v=uhd9Lgw_gGI`，34 分 23 秒）：
+  1. 运行期 `yt-dlp 2026.10.21`，与 `uv.lock` 一致。
+  2. `download_video()` 走完 worker 的完整命令（720p 格式选择器 + 合并 mp4 + 字幕参数）
+     返回 `returncode: 0`，耗时 39 秒，产物 `uhd9Lgw_gGI.mp4` 168,978,515 字节。
+  3. `ffprobe` 确认文件有效：1280x720 av1 视频 + aac 音频，duration 2063.35 秒。
+  4. 格式选择器命中 `bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]` → `398+140`，
+     正是 worker 期望的组合，没有退化到低画质或纯音频。
+  5. 产物里没有字幕文件不是回归：`--list-subs` 显示该视频既无手动字幕也无自动字幕。
+
+  遗留 caveat（不阻断发版，但值得记一笔）：本机没有 `deno`，yt-dlp 只找到 node/bun，
+  而它默认禁用远程组件下载，所以日志里有 `n challenge solving failed: Some formats may be
+  missing`。本次视频不受影响（720p 正常下载），但受 PO token 保护的视频可能受影响。
+  安装包内置 `deno.exe`（`scripts/build-installer.mjs:335`），生产环境应走 `[jsc:deno]`；
+  若仍报该警告，需要给 `build_ytdlp_command` 补 `--remote-components ejs:github`。
 
 - [x] Decide how the `yt-dlp` drift check runs on a schedule (2026-10-22) — ✅ A local weekly
   automation named `yt-dlp 版本漂移检查` runs every Monday at 09:00 in this workspace and reports
