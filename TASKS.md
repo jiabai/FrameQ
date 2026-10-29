@@ -18,6 +18,34 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.4.3 desktop release (2026-10-30) — ✅ Tag target `e80c8bd`
+  tagged `v0.4.3`. Ship set: a results-toolbar transcript polish action (`retry_insights` gains a
+  `transcript` target; the worker chunks the official transcript through one server-managed
+  checkout and writes `transcript/polished.txt` plus a SHA-256 meta file, the original
+  `transcript.txt` is untouched, the button switches between "整理文字稿" and "复制文字稿", and the
+  polished copy is invalidated when the original is edited), the worker/desktop task-artifact
+  destination set aligned on the single contract so a discarded recovery journal no longer makes a
+  task vanish from history, the first transcript segment no longer auto-highlights, drafts reload
+  from disk on reopen, LLM configuration errors reported inside the insight error type, and a
+  bounded extraction output with the X entry dropped from the short-video form. Three-platform
+  release run `40924535944` green on all jobs. Assets match v0.4.2 after normalizing the version:
+  `FrameQ_0.4.3_x64-setup.exe` (210,866,292 bytes), `FrameQ_0.4.3_x64.dmg` (348,013,630),
+  `FrameQ_0.4.3_aarch64.dmg` (300,579,777), three `frameq-pytorch-runtime-*.zip`, and
+  `latest.json`; every asset reports `uploaded`, and both Windows updater signatures in
+  `latest.json` matched the uploaded `.sig` byte for byte (416 bytes each, fetched through the API
+  channel). Gates: Worker 1162 passed / 3 skipped, frontend 86 files / 866 tests, app lint and
+  production build, Rust 354 passed including every watchdog and task-recovery case, server 401
+  passed / 1 skipped, scripts 52, version consistency (`check-release-version.mjs 0.4.3`), ruff
+  and docs governance clean. Published 2026-10-30 02:28 +08:00:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.4.3. Release notes:
+  `docs/releases/v0.4.3.md`. Residual risks: `macos-intel-acceptance.yml` is
+  `workflow_dispatch`-only and did not run; both macOS builds are ad-hoc signed without
+  notarization; the polish → copy → restart-recovery three-state flow is covered only by automated
+  tests and was not hand-run in a real installer; the diagnostic ZIP export still lacks macOS
+  native save-dialog evidence; `yt-dlp` still runs without an external timeout and is tracked as
+  debt; release asset URLs were not range-checked because this machine's proxy rejects GitHub
+  download URLs, so the manifest and signature were verified through the API channel instead.
+
 - [x] Prepare and publish FrameQ v0.4.2 desktop release (2026-10-23) — ✅ Tag target `41d2bd1`
   tagged `v0.4.2`, rebuilt the same day after the first release (tag target `950377c`, run
   `39814037035`) so the installer also carries the transcript file copy action. Ship set: the

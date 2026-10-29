@@ -1,6 +1,6 @@
 # 2026-10-24 Transcript Polish Execution Plan
 
-Status: implementation and automated gates complete; native release smoke (real installer run) pending, tracked by the normal release process.
+Status: shipped in v0.4.3; native release smoke (real installer run, 整理→复制→重启恢复三态流转) still pending.
 
 ## Scope
 
@@ -18,4 +18,9 @@ Status: implementation and automated gates complete; native release smoke (real 
 
 ## Outstanding
 
-- 真实安装包冒烟（整理→复制→重启恢复三态流转）；随下次发版（参考 `topics/release-process.md`，6 处版本文件 bump 由发版流程统一处理）。
+- 真实安装包冒烟（整理→复制→重启恢复三态流转）。v0.4.3 发布时仍未在真实安装包里手工走一遍，已在 release notes 与 `TASKS.md` 台账中登记为残余风险。
+
+## Outcomes & Retrospective
+
+- 随 v0.4.3 发布（tag target `e80c8bd`）。发版门禁：worker 1162 passed / 3 skipped，Rust 354，前端 86 文件 866 项，server 401 passed / 1 skipped，scripts 52 项，ruff / lint / build / 文档治理全绿。
+- 6 处版本文件 bump 与 `site/src/consts.ts` 的 `LATEST_VERSION` 同步由发版流程统一处理（参考 `topics/release-process.md`）。
