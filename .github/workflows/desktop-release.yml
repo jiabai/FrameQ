@@ -115,7 +115,7 @@ jobs:
   macos-x64-dmg-artifact:
     name: macOS Intel DMG artifact
     needs: windows-updater-artifacts
-    if: ${{ (github.event_name == 'push' || inputs.build_macos_x64) && (needs.windows-updater-artifacts.result == 'success' || needs.windows-updater-artifacts.result == 'skipped') }}
+    if: ${{ !cancelled() && (github.event_name == 'push' || inputs.build_macos_x64) && (needs.windows-updater-artifacts.result == 'success' || needs.windows-updater-artifacts.result == 'skipped') }}
     runs-on: macos-15-intel
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -182,7 +182,7 @@ jobs:
   macos-arm64-dmg-artifact:
     name: macOS Apple Silicon DMG artifact
     needs: windows-updater-artifacts
-    if: ${{ (github.event_name == 'push' || inputs.build_macos_arm64) && (needs.windows-updater-artifacts.result == 'success' || needs.windows-updater-artifacts.result == 'skipped') }}
+    if: ${{ !cancelled() && (github.event_name == 'push' || inputs.build_macos_arm64) && (needs.windows-updater-artifacts.result == 'success' || needs.windows-updater-artifacts.result == 'skipped') }}
     runs-on: macos-15
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}

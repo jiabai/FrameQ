@@ -36,7 +36,9 @@ async function createFakeDenoArchive(binaryName) {
   await writeFile(binary, "#!/usr/bin/env sh\nprintf 'deno fake\\n'\n");
   await chmod(binary, 0o755);
 
-  const result = spawnSync("tar", ["-cf", archive, "-C", source, binaryName], {
+  // 相对归档路径同时兼容 Git Bash 的 GNU tar 与系统自带的 bsdtar。
+  const result = spawnSync("tar", ["-cf", "deno.tar", "-C", "source", binaryName], {
+    cwd: root,
     stdio: "pipe",
     windowsHide: true,
   });
@@ -167,6 +169,10 @@ test("copyDenoFromArchive extracts Deno into resources bin", async () => {
 
     const copied = join(destination, "deno");
     assert.equal(existsSync(copied), true);
+    assert.deepEqual(
+      readFileSync(copied),
+      readFileSync(join(root, "source", "deno")),
+    );
     if (process.platform !== "win32") {
       const mode = (await stat(copied)).mode;
       assert.notEqual(mode & 0o111, 0);
