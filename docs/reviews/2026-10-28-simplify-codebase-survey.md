@@ -2,11 +2,11 @@
 
 | 项目 | 值 |
 | --- | --- |
-| 授权模式 | Survey；S1、S2、S3、S5、S6、S7、S8、S9、S10、S11、S12、S13 已授权处理 |
+| 授权模式 | Survey；S1 至 S13 已授权处理 |
 | 覆盖范围 | Broad，五个审计域 |
 | 审计代码基线 | `main` @ `948d7cd441a42ffbfebeee2afe82418ae8d70491` |
 | 使用工具 | `simplify-codebase`（安装在 `~/.workbuddy/skills/simplify-codebase`） |
-| 处理状态 | S1、S2、S3、S5、S6、S7、S8、S9、S10、S11、S12、S13 本地处理完成，S4 保持候选；5 条保留反例。S2、S9、S10、S11 的生产部署与托管 CI，以及 S12 的托管 CI 待执行 |
+| 处理状态 | S1 至 S13 本地处理完成；5 条保留反例。用户已确认 Windows symlink 权限问题解决，本次工具执行环境的实际覆盖见验证记录，macOS 尚未复核；S2、S9、S10、S11 的生产部署与托管 CI，以及 S12 的托管 CI 待执行 |
 | 验证 | 已执行定向测试、完整前端与服务端测试、构建、数据库与文档校验，结果见“验证记录”；完整实施门禁尚未执行 |
 
 本文件记录审计候选、代码证据和验证范围。实施需获得相应授权，并按 `WORKFLOW.md` 更新相关规格与执行计划。
@@ -41,7 +41,7 @@
 | S1 | 已完成：worker stdin 失败结果统一序列化 | `worker/frameq_worker/cli.py:59-73` | task 失败结果复用 `ProcessResult.to_dict()`，保留正确错误码 | 定向回归通过 |
 | S2 | 本地已完成：服务端更新清单与路由移除 | `server/src/server.ts`、`index.ts`、`runtimeConfig.ts` | 桌面通过 GitHub 更新，账号服务按当前路由表提供能力 | 本地门禁通过；生产部署与托管 CI 待执行 |
 | S3 | 已完成：edit-session 测试使用正式事务提交 | `task_manifest/access.rs`、`storage.rs`、`tests.rs` | manifest 编码后与关联产物统一提交 | 定向回归通过 |
-| S4 | 链接与重解析点判定 6 份实现 | `atomic_files.rs`、`local_media.rs`、`draft_detail.rs`、`task_manifest/storage.rs` | 安全谓词无跨文件一致性测试 | 高 |
+| S4 | 本地已完成：共用链接判定、产物目标检查与备份路径 | `atomic_files.rs`、`task_manifest/storage.rs`、`file_safety_tests.rs` | 各入口共用规则，保留文件类型、路径边界及备份布局 | Windows 普通路径和 junction 通过；工具执行环境覆盖见记录，macOS 待验证 |
 | S5 | 已完成：九项事务规则与两端行为自动核对 | `test_task_transaction_contract_rules.py`、`transaction/contract_tests.rs` | 原生校验、实际文件恢复与逐项差异检查 | 定向回归通过 |
 | S6 | 已完成：任务产物键共用一份清单 | `task_manifest/schema.rs:9`、`worker_runtime/result_protocol.rs:2` | manifest 与 Worker 结果校验共用定义并核对契约 | 定向回归通过 |
 | S7 | 已完成：移除前端七个闲置函数 | `workflowState.ts`、`updateState.ts`、`aiCreditsCopy.ts`、`taskArtifacts.ts` | 正式流程通过控制器、界面模型及面板执行；专用测试同步清理 | 完整前端回归通过 |
@@ -82,19 +82,16 @@
 - Verification：`cargo test --offline --manifest-path app/src-tauri/Cargo.toml task_manifest:: -- --test-threads=1` 共 31 项通过；app lint 与原子写入边界脚本检查通过；三个变更 Rust 文件的 rustfmt 检查通过。
 - Scope：生产任务编辑流程沿用现有事务入口，结果文件路径、格式与用户可见行为保持现有契约。全库检查的结果和平台限制见验证记录。
 
-### S4 链接与重解析点判定 6 份实现
+### S4 本地已完成：共用文件安全检查与原始备份路径
 
-- Candidate：`is_link_or_reparse_point`（6 份函数体，4 个文件）、`reject_linked_artifact_target`（2 份）、`original_backup_path`（2 份）。
-- Locus：`atomic_files.rs:181,186`（两个平台变体）、`local_media.rs:236,241`（两个平台变体）、`draft_detail.rs:150,167,183`、`transcript_detail/edit_storage.rs:215,249`、`task_manifest/storage.rs:187`。
-- Topology：`task_manifest/tests.rs:929` 已把 `storage.rs` 写成 owner；其余三处是平行实现。
-- Burden：一个安全谓词有 6 份函数体，两个 helper 各 2 份。四份实现今天语义相同，但各自独立演化。
-- Reachability：全部 runtime。`atomic_files` 用于删除与替换前校验；`local_media` 用于选源；`draft_detail` 与 `edit_storage` 用于拒绝链接目标；`storage.rs` 那份额外被 `history_deletion.rs` 与 `transaction.rs` 使用。
-- Rationale：它们用于拒绝链接或重解析点，避免选源、产物访问、替换与删除越过各自的路径边界。任一份漏掉 Windows reparse-point 判定，都可能削弱对应入口的保护。现有模块分别有链接安全测试，例如 `local_media.rs:438`、`draft_detail.rs:437`、`transcript_detail/tests.rs:285`；未发现对同一组样本比较四份实现的统一一致性测试。
-- Cut：保留一份定义。`atomic_files` 已是最低层且无业务依赖，适合承载谓词；`task_manifest` 通过现有依赖引用。`reject_linked_artifact_target` 与 `original_backup_path` 各留一份；后者表达原文件所在目录下 `original/` 子目录的备份布局，同时服务文字稿与 draft。
-- Consequence：无用户可见变化。需要同步 `task_manifest/tests.rs:929` 的 owner 断言字符串。
-- Confidence / risk：高。`task_manifest/transaction.rs:1` 已依赖 `atomic_files`，共用谓词可以沿用这一方向；需要保持平台分支、可见性与各调用入口的校验行为。
-- Proof：新增跨入口一致性测试，对同一组真实文件、普通目录、symlink 和 Windows junction 分别验证：合法普通路径可以使用，链接及重解析点被拒绝。保留各入口原有的文件类型与路径边界要求。
-- Net effect：删除 5 份谓词与 2 份 helper 复制，安全语义回到单点可改。
+- Implementation：`atomic_files::is_link_or_reparse_point` 是唯一的元数据判定 owner，保留 Windows 与非 Windows 两个平台版本。`task_manifest/storage` 引用并重新导出该谓词，同时维护唯一的 `reject_linked_artifact_target` 与 `original_backup_path`。
+- Callers：本地选源直接引用 atomic_files；历史删除、任务事务等入口沿用任务模块的稳定导出。文字稿与成稿编辑通过任务根模块引用两个 helper，私有模块依赖方向保持原有结构。
+- Behavior：选源继续检查全部祖先、普通非空文件和支持扩展名；原子操作、任务目录与 manifest 保留各自类型和路径限制。共用目标检查继续检查目标及直接父目录，错误消息、缺失路径处理和调用顺序保持原有内容。原始备份仍位于原文件所在目录下的 `original/`，覆盖 transcript 与 ai/draft 两种布局。
+- Regression：新增 `file_safety_tests.rs`，对正式选源、原子写入/删除、任务访问和两种编辑入口使用真实样本。普通路径矩阵验证合法文件接受、目录不能充当正文、首次备份在后续保存中保持原文；junction 矩阵验证链接父目录、链接任务根与链接产物目录拒绝，外部正文和 manifest 不变。另包含文件、目录和断开目标的 symlink 矩阵。
+- Ownership：现有任务模块守卫先因缺少共享导出失败，提取后通过；守卫同时禁止调用模块重新定义这些规则和 helper。
+- Verification：提交前 Windows 完整 Rust 套件 354 项通过，0 失败、0 忽略，耗时 6.12 秒，main 与 doc-tests 成功。Node 脚本 51 项、Python 脚本 1 项、app lint、变更 Rust 文件 rustfmt 与文档治理通过。
+- Platform：用户已确认 Windows symlink 权限问题解决。提交前本次工具执行上下文仍在创建 symlink 时返回 `1314`，三项矩阵主体未执行；普通路径与 Windows junction 的三个矩阵实际通过。macOS 尚未运行。日志为 `build/s4-commit-link-tests.log` 与 `build/s4-commit-rust-full.log`。
+- Plan：`docs/exec-plans/completed/2026-10-29-shared-file-safety-plan.md`。
 
 ### S5 已完成：九项事务规则与两端行为自动核对
 
@@ -103,7 +100,7 @@
 - Behavior：核对事务标识的长度、字符和拒绝边界，条目数量上下界及越界拒绝；遍历允许目标、索引边界和 staging/rollback 两种文件，比较内部名称与父目录；分别验证 null 与缺失字段；检查 manifest 的生产排序和 journal 读取顺序；通过真实文件验证 prepared 恢复旧内容、committed 保留新内容及内部文件清理。
 - Drift verification：两端分别在内存中逐项改变九项声明，确认每项差异都会触发检查失败。磁盘上的契约保持原有内容。
 - Verification：Python 新增 10 项测试与既有事务测试共 28 项通过；Rust 任务模块共 33 项通过，其中包含新增的规则核对与九项差异检测；Node 契约和原子写入守卫共 3 项通过；app lint、Python ruff 和变更 Rust 文件格式检查通过。
-- Scope：改动为测试覆盖、Rust 的 `#[cfg(test)]` 模块声明与常量排版，运行时事务规则和产物格式保持现有契约。全量测试限制沿用验证记录中的范围。
+- Scope：改动为测试覆盖、Rust 的 `#[cfg(test)]` 模块声明与常量排版，运行时事务规则和产物格式保持现有契约。Windows 全量 Rust 验证已通过，平台范围见验证记录。
 
 ### S6 已完成：任务产物键共用一份清单
 
@@ -111,7 +108,7 @@
 - Boundary：沿用 `worker_runtime → task_manifest` 的依赖方向，schema 子模块保持私有；支持的 13 个键、路径限制和结果协议保持现有契约。
 - Regression：`rust_registry_matches_the_canonical_terminal_contract` 核对清单与 `contracts/desktop-worker-contract.json` 的完整键集合，并检查没有重复键；`contract_artifact_fields_are_supported_by_manifest_validation` 遍历契约中的每个字段，验证安全路径被接受、未知字段被拒绝。
 - Verification：Rust 任务模块 34 项与结果协议 10 项通过；Node 契约和原子写入守卫 3 项通过；app lint 与四个变更 Rust 文件的 rustfmt 检查通过。
-- Scope：本次为共用定义的内部重构，产物格式、用户可见行为与跨语言契约版本保持原有内容。未重跑全量 Rust 测试，既有进程监督测试限制见验证记录。
+- Scope：本次为共用定义的内部重构，产物格式、用户可见行为与跨语言契约版本保持原有内容。Windows 全量 Rust 验证已通过，平台范围见验证记录。
 
 ### S7 已完成：移除前端七个闲置函数
 
@@ -194,15 +191,16 @@
 
 | 检查 | 结果与范围 |
 | --- | --- |
+| S4 提交前检查（2026-10-29） | 完整 Rust 354 项通过，耗时 6.12 秒，原有取消、超时和完整进程树清理用例继续通过；新增普通路径、类型/备份、Windows junction 矩阵实际通过。用户确认 symlink 权限问题已解决；本次工具执行上下文仍返回 `1314`，三项 symlink 矩阵主体未执行。Node 脚本 51 项、Python 脚本 1 项、app lint 和变更 Rust 文件格式检查通过。日志位于 `build/s4-commit-link-tests.log`、`build/s4-commit-rust-full.log`；macOS 待验证。 |
 | 提交前复核（2026-10-29） | Worker 与 Python 脚本定向检查共 133 项通过；Node 脚本 51 项通过；前端 86 个文件、866 项通过，lint 与生产构建通过；server 39 个文件、401 项通过、1 项跳过，TypeScript build 通过。隔离数据库完成八条迁移、migration status、current preflight、独立副本 restore smoke，源库与副本 SHA-256 一致。Worker ruff、脚本 CI 配置、文档治理和变更格式检查通过；托管 CI 与生产部署待执行。 |
-| 提交前 Rust 复核（2026-10-29） | `task_manifest::` 34 项、`worker_runtime::result_protocol::` 10 项全部通过。完整 348 项测试运行中记录 341 项通过、4 项进程取消/watchdog 测试失败，另有 3 项运行超过 60 秒未结束，随后终止该次测试进程树；全量结果未通过。失败模块未在本次修改，原因尚未确定；日志位于忽略目录 `build/commit-rust-full.log`，定向日志为 `build/commit-rust-task-manifest.log` 与 `build/commit-rust-result-protocol.log`。 |
+| Windows Rust 全量验证（2026-10-29） | `cargo test --manifest-path app/src-tauri/Cargo.toml`：348 项全部通过，0 失败、0 忽略，耗时 6.30 秒；main 与 doc-tests 均成功。测试在允许终止自身子进程树的执行环境中运行，临时文件位于 `build/rust-process-validation-tmp`，完整日志为 `build/rust-process-validation-full.log`。取消、空闲与绝对超时、阻塞 stdin、完整子进程树清理和第二任务启动均通过原有真实用例；macOS 尚未重新验证。 |
 | S12 脚本门禁 | `node --test scripts/tests/*.test.mjs` 51 项全部通过；`python -m pytest scripts/tests` 1 项通过，缓存与临时文件位于 `build/`。文档治理、diff 检查通过；新增 workflow 的托管运行待执行。 |
 | S13 官网脚本清理 | 三条页面的 Astro 静态构建、`astro sync` 与 `tsc --noEmit` 通过；删除前后及再次构建的 20 份发布文件 SHA-256 一致，初次基线的额外内容缓存独立记录。四个脚本均已删除，当前源码无导入或初始化引用；未进行生产部署。 |
 | 前端定向测试 | 审计时 `workflow.test.ts`、`updateState.test.ts`、`aiCreditsCopy.test.ts`、`taskWorkspaceViewModel.test.ts` 共 65 项通过；S1 另运行 `workerErrorCopy.test.ts` 67 项通过。完整前端回归与构建见 S7 记录。 |
-| Rust 定向契约测试 | `transaction_contract_fixtures_match_rust_parser` 1 项通过；S1 运行 `worker_runtime::result_protocol::tests` 共 10 项通过，其中包含 `rust_registry_matches_the_canonical_terminal_contract`。编译存在既有 dead-code 与 incremental lock 清理警告，未运行完整 Rust 测试。 |
+| Rust 定向契约测试 | `transaction_contract_fixtures_match_rust_parser` 1 项通过；S1 运行 `worker_runtime::result_protocol::tests` 共 10 项通过，其中包含 `rust_registry_matches_the_canonical_terminal_contract`。Windows 全量验证现已通过；编译仍有两个既有测试辅助函数的 dead-code 警告。 |
 | SQLite 删除列检查 | 审计阶段使用本机 Node v24.5.0、SQLite 3.50.3，在内存数据库验证原生列删除。正式 Prisma 迁移、数据保留与恢复证据见 S11。 |
 | 文档治理 | `python scripts/validate_agents_docs.py --level ERROR`：0 错误、0 警告。 |
-| S3 任务保存检查 | 任务模块 31 项通过；app lint、原子写入边界脚本及三个变更 Rust 文件的 rustfmt 检查通过。全库 rustfmt 检查发现未修改文件中的既有格式差异。全量 Rust 检查出现进程取消用例失败并停在持续进度测试，已终止该次运行；单独运行 `blocked_stdin_delivery_remains_cancellable` 同样失败，返回 `RequestDeliveryFailed`。该进程监督模块未在本次修改，失败原因尚未确定。 |
+| S3 任务保存检查 | 任务模块 31 项通过；app lint、原子写入边界脚本及三个变更 Rust 文件的 rustfmt 检查通过。Windows 全量 Rust 验证现已通过；全库 rustfmt 检查仍有未修改文件中的既有格式差异。 |
 | S5 契约规则检查 | Python 事务与规则测试 28 项、Rust 任务模块 33 项、Node 契约和原子写入守卫 3 项通过；两端各自验证九项声明在内存中逐项改变时均被检测。app lint、Python ruff 与变更 Rust 文件格式检查通过；未重跑全量测试。 |
 | S6 产物键共用检查 | Rust 任务模块 34 项、结果协议 10 项、Node 契约和原子写入守卫 3 项通过；app lint 与四个变更 Rust 文件格式检查通过。清单仅在 schema 中定义一处，两类生产校验引用同一定义；未重跑全量测试。 |
 | S7 前端闲置函数清理 | 变更前相关三个测试文件 43 项通过；清理后完整前端测试 86 个文件、866 项全部通过。app lint、生产构建、文档治理和变更检查通过；源码中七个函数名无残留。Vite 提示现有构建产物超过 500 kB，未执行桌面壳层交互或安装包构建。 |
@@ -212,8 +210,9 @@
 | S11 权益状态移除 | 期限边界、迁移和部署定向检查 19 项通过；完整 server 401 passed、1 skipped，build 与 Prisma client 生成通过。八条迁移、migration status、schema diff、preflight、备份 SHA-256 和隔离 restore smoke 通过；升级测试保留数据和全部约束，并验证新代码拒绝旧结构及迁移前备份恢复。文档治理与 diff 检查通过；生产迁移、配套部署与托管 CI 待执行。 |
 | S2 服务端与运维检查 | server 321 passed、1 skipped；build 通过。`build/` 独立空 SQLite 文件完成 7 条迁移、migration status、preflight 与独立副本 restore smoke。未部署生产服务，托管 CI 待执行。 |
 | Python 执行环境 | 使用本机 CPython 3.12.13，通过 `site.addsitedir` 初始化现有 `.venv` 依赖运行测试。S1 的两个文件共 37 项、S5 的事务与规则测试共 28 项通过；S8 的全量结果见对应记录。独立导入用例仅设置 Worker 的 `PYTHONPATH`，子进程未加载依赖目录。测试工作目录与缓存位于忽略目录 `build/`；未修改 Python 环境配置。 |
+| Windows Rust 执行环境 | 受限执行环境中的 `taskkill` 对本次创建的子进程返回 `Access denied`。相同阻塞 stdin 取消用例在该环境运行 30.72 秒后返回 `RequestDeliveryFailed`；取得进程操作权限后，原用例 0.24 秒通过。该权限限制同时解释有限子进程自然退出后的四项断言失败和无限输出子进程造成的三项停滞。处理方式为在具备真实进程终止权限的环境运行完整套件；运行时代码、测试用例、超时值和断言均保持原有内容。 |
 
-未完成：全量 Rust 测试与全库 rustfmt 检查，具体限制见提交前 Rust 复核和 S3 检查记录；Worker 独立导入用例的本机环境失败见 S8 检查记录。提交前 Worker 仅重跑定向检查，未重跑完整套件。未执行：真实下载、LLM 调用、桌面交互、生产部署及托管 CI。
+验证范围：本次工具运行未覆盖三项 symlink 矩阵主体；全库 rustfmt 检查仍有既有格式差异，Worker 独立导入用例的本机环境结果见 S8 检查记录。提交前 Worker 仅重跑定向检查，未重跑完整套件。未执行：macOS 原生 Rust 复核、真实下载、LLM 调用、桌面交互、生产部署及托管 CI。
 
 ## 下一步
 

@@ -26,7 +26,7 @@ pub(crate) use source_identity::SourceIdentity;
 #[allow(unused_imports)]
 pub(crate) use storage::{
     configured_output_root, configured_output_root_from_project, is_link_or_reparse_point,
-    path_to_frontend_string,
+    original_backup_path, path_to_frontend_string, reject_linked_artifact_target,
 };
 pub(crate) use transaction::{commit_task_artifacts, TaskArtifactMutation};
 

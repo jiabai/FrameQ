@@ -1,9 +1,9 @@
 use super::{segments, TranscriptSegmentView};
-use crate::task_manifest;
+use crate::task_manifest::{self, original_backup_path, reject_linked_artifact_target};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const TRANSCRIPT_SECTION_MARKER: &str = "## Transcript";
 const POLISHED_SOURCE_KEY: &str = "sourceTranscriptSha256";
@@ -26,7 +26,10 @@ pub(super) fn load_polished_transcript(
     if reject_linked_artifact_target(&polished_path).is_err() || !polished_path.is_file() {
         return None;
     }
-    let meta_path = task.task_dir().join("transcript").join("polished.meta.json");
+    let meta_path = task
+        .task_dir()
+        .join("transcript")
+        .join("polished.meta.json");
     if reject_linked_artifact_target(&meta_path).is_err() {
         return None;
     }
@@ -212,14 +215,6 @@ fn create_original_backups(
     Ok(())
 }
 
-fn original_backup_path(path: &Path) -> PathBuf {
-    let file_name = path.file_name().unwrap_or_default();
-    path.parent()
-        .unwrap_or_else(|| Path::new(""))
-        .join("original")
-        .join(file_name)
-}
-
 fn format_transcript_markdown(existing_markdown: Option<&str>, text: &str) -> String {
     if let Some(existing_markdown) = existing_markdown {
         if let Some((prefix, _)) = existing_markdown.split_once(TRANSCRIPT_SECTION_MARKER) {
@@ -244,20 +239,4 @@ fn validate_transcript_md(task_dir: &Path, path: &Path) -> Result<(), String> {
     } else {
         Err("Task markdown transcript must be transcript/transcript.md.".to_string())
     }
-}
-
-fn reject_linked_artifact_target(path: &Path) -> Result<(), String> {
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        if task_manifest::is_link_or_reparse_point(&metadata) {
-            return Err("Task artifact cannot be a link or reparse point.".to_string());
-        }
-    }
-    if let Some(parent) = path.parent() {
-        if let Ok(metadata) = fs::symlink_metadata(parent) {
-            if task_manifest::is_link_or_reparse_point(&metadata) {
-                return Err("Task artifact parent cannot be a link or reparse point.".to_string());
-            }
-        }
-    }
-    Ok(())
 }

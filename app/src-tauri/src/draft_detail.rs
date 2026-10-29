@@ -1,8 +1,9 @@
+use crate::task_manifest::{original_backup_path, reject_linked_artifact_target};
 use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri::AppHandle;
 
 const DRAFT_ARTIFACT_RELATIVE_PATH: &str = "ai/draft.md";
@@ -145,47 +146,6 @@ pub(crate) fn save_draft_edit_to_output_root(
         artifacts: edit.declared_artifacts(),
         has_original_backup: true,
     })
-}
-
-fn is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink() || is_windows_reparse_point(metadata)
-}
-
-#[cfg(windows)]
-fn is_windows_reparse_point(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-fn is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
-    false
-}
-
-fn reject_linked_artifact_target(path: &Path) -> Result<(), String> {
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        if is_link_or_reparse_point(&metadata) {
-            return Err("Task artifact cannot be a link or reparse point.".to_string());
-        }
-    }
-    if let Some(parent) = path.parent() {
-        if let Ok(metadata) = fs::symlink_metadata(parent) {
-            if is_link_or_reparse_point(&metadata) {
-                return Err("Task artifact parent cannot be a link or reparse point.".to_string());
-            }
-        }
-    }
-    Ok(())
-}
-
-fn original_backup_path(path: &Path) -> PathBuf {
-    let file_name = path.file_name().unwrap_or_default();
-    path.parent()
-        .unwrap_or_else(|| Path::new(""))
-        .join("original")
-        .join(file_name)
 }
 
 #[cfg(test)]

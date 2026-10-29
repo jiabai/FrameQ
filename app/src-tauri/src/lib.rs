@@ -28,6 +28,8 @@ mod window_chrome;
 mod worker_runtime;
 
 #[cfg(test)]
+mod file_safety_tests;
+#[cfg(test)]
 mod local_media_contract_tests;
 
 pub(crate) use runtime::{

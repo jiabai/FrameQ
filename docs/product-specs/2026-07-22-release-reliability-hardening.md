@@ -62,6 +62,10 @@ rehearsed forward/restore path.
   does not silently migrate or reinterpret unsupported legacy tasks.
 - One-time user transcript backups remain independent recovery artifacts and must not be confused
   with internal transaction rollback files.
+- Desktop source selection, atomic file operations and task-artifact access share the same link and
+  Windows reparse-point predicate. Each entry retains its own file-type and containment checks.
+  Transcript and draft edits share target-link validation and store original backups in the source
+  file's sibling `original/` directory; existing error messages and journal commits remain unchanged.
 - Recovery is automatic on the next supported task open/edit/scan or worker task access. If safe
   recovery cannot be completed, the task fails closed with a stable non-echoing code and leaves
   source media and previous recovery material untouched.

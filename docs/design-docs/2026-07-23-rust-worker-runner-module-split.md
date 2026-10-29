@@ -366,10 +366,21 @@ Focused Rust tests run after each owner extraction. Cross-layer App/Worker/build
 by the ExecPlan if dependency or packaging inspection shows they are required; they may not replace
 the complete Rust suite.
 
-The Windows implementation environment can validate real blocked-stdin and process-tree behavior
-only when process permissions allow `taskkill`. Existing macOS process-group tests and hosted
-workflow evidence remain authoritative until the unchanged portable fixture is run again on an
-available supported Unix host. A missing host is recorded as unverified, never inferred as passed.
+Windows native tests require permission to terminate their own descendant processes through
+`taskkill /PID <pid> /T /F`. A restricted executor can deny this operation even for a child that the
+test just started. In that environment, finite child processes end naturally and cancellation or
+timeout assertions fail; infinite-output children keep the test waiting. Run the same suite in an
+approved execution context with the required process permissions, preserving the real fixtures,
+deadlines and process-tree cleanup assertions.
+
+On 2026-10-29, the unchanged blocked-stdin cancellation case passed in 0.24 seconds with process
+termination permission. The complete Rust suite then passed all 348 tests in 6.30 seconds, including
+the cancellation, idle/absolute timeout, blocked-stdin and parent/descendant cleanup cases. The
+command was `cargo test --manifest-path app/src-tauri/Cargo.toml`, with temporary files under
+`build/rust-process-validation-tmp`; its full log is `build/rust-process-validation-full.log`.
+
+This local result covers Windows. macOS process-group behavior requires a supported macOS host or
+the existing hosted workflow; this run provides no new macOS evidence.
 
 ## Implementation Evidence
 

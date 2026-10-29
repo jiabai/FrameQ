@@ -32,6 +32,9 @@
   操作还必须有 validated-progress idle deadline。超时必须终止并 reap 匹配的完整进程树。
 - watchdog 必须覆盖正常完成、静默、进度后停滞、持续进度仍触发绝对超时、阻塞 stdin、
   structured-result/cancel/timeout race、stale instance 和第二任务启动。
+- Windows 原生取消与 watchdog 测试必须允许 `taskkill /PID <pid> /T /F` 终止测试创建的
+  子进程树。执行环境返回 `Access denied` 时，需取得该进程操作权限后重新运行完整 Rust
+  测试，并记录执行环境；保留真实子进程、原有超时和清理断言。
 - 超时不得自动重试 LLM 或增加 AI Credits 调用；持久化恢复不得暴露内部 staging/journal/
   rollback 文件或触碰 task root 外路径。
 - 可用的 Windows/macOS 环境必须分别记录原子替换/恢复和 watchdog parent-child 清理证据；

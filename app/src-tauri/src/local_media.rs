@@ -1,3 +1,4 @@
+use crate::atomic_files::is_link_or_reparse_point;
 use crate::local_media_contract::{
     LocalMediaKind, LocalMediaSelectionView, AUDIO_EXTENSIONS, INVALID_LOCAL_MEDIA_SELECTION_CODE,
     VIDEO_EXTENSIONS,
@@ -230,20 +231,6 @@ fn reject_linked_components(path: &Path) -> Result<(), &'static str> {
         }
     }
     Ok(())
-}
-
-#[cfg(not(windows))]
-fn is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
-}
-
-#[cfg(windows)]
-fn is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-    metadata.file_type().is_symlink()
-        || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
 #[tauri::command]

@@ -577,6 +577,10 @@
   transcript mutation is restricted to `TaskEditSession`.
 - `TaskEditSession::encoded_manifest()` 生成保留未知字段与末尾换行的 manifest 字节；调用方将这些
   字节和关联产物交给 `commit_task_artifacts()`，由任务 journal 统一提交。
+- `atomic_files::is_link_or_reparse_point` 统一识别 symlink 与 Windows reparse point；本地选源
+  直接引用，任务模块通过 storage 和根模块引用。各入口保留自身的文件类型与路径边界检查。
+  `storage` 共用产物目标/直接父目录的链接检查，以及原文件父目录下 `original/` 备份路径计算；
+  文字稿与成稿编辑通过任务根模块使用这两个 helper。
 - `schema.rs` 定义唯一的 `TASK_ARTIFACT_KEYS`，经 `task_manifest` 根模块导出，供 manifest 路径
   校验与 Worker 结果校验共用；契约测试核对完整键集合、唯一性和 manifest 对各字段的支持。
 - 事务契约的标识格式、条目数量、内部路径、可空字段及提交顺序，由

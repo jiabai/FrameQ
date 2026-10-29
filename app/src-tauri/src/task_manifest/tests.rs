@@ -926,7 +926,30 @@ fn task_manifest_module_boundary_matches_approved_private_owners() {
     assert!(schema.contains("pub(crate) fn parse_insights_payload"));
     assert!(storage.contains("fn load_task_manifest"));
     assert!(storage.contains("pub(crate) fn configured_output_root"));
-    assert!(storage.contains("pub(crate) fn is_link_or_reparse_point"));
+    assert!(storage.contains("pub(crate) use crate::atomic_files::is_link_or_reparse_point;"));
+    assert!(!storage.contains("fn is_link_or_reparse_point"));
+    assert!(storage.contains("pub(crate) fn reject_linked_artifact_target"));
+    assert!(storage.contains("pub(crate) fn original_backup_path"));
+    let atomic_files = fs::read_to_string(src.join("atomic_files.rs")).expect("read atomic owner");
+    assert!(atomic_files.contains("pub(crate) fn is_link_or_reparse_point"));
+    for relative in [
+        "local_media.rs",
+        "draft_detail.rs",
+        "transcript_detail/edit_storage.rs",
+    ] {
+        let caller = fs::read_to_string(src.join(relative)).expect("read safety caller");
+        for duplicate in [
+            "fn is_link_or_reparse_point",
+            "fn is_windows_reparse_point",
+            "fn reject_linked_artifact_target",
+            "fn original_backup_path",
+        ] {
+            assert!(
+                !caller.contains(duplicate),
+                "{relative} duplicates {duplicate}"
+            );
+        }
+    }
     assert!(access.contains("pub(crate) struct SupportedTask"));
     assert!(access.contains("pub(crate) struct TaskEditSession"));
     assert!(coordinator.contains("pub(crate) struct TaskLease"));

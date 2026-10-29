@@ -2,6 +2,7 @@ use super::{
     schema::{has_forbidden_component, validate_relative_artifact_path, TaskManifest},
     TASKS_DIR_NAME, TASK_MANIFEST_FILE_NAME,
 };
+pub(crate) use crate::atomic_files::is_link_or_reparse_point;
 use crate::{path_to_env_string, settings, RuntimePaths, OUTPUT_DIR_ENV};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -184,19 +185,26 @@ fn validate_storage_entry(path: &Path, expect_directory: bool, label: &str) -> R
     Ok(())
 }
 
-pub(crate) fn is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink() || is_windows_reparse_point(metadata)
+pub(crate) fn reject_linked_artifact_target(path: &Path) -> Result<(), String> {
+    if let Ok(metadata) = fs::symlink_metadata(path) {
+        if is_link_or_reparse_point(&metadata) {
+            return Err("Task artifact cannot be a link or reparse point.".to_string());
+        }
+    }
+    if let Some(parent) = path.parent() {
+        if let Ok(metadata) = fs::symlink_metadata(parent) {
+            if is_link_or_reparse_point(&metadata) {
+                return Err("Task artifact parent cannot be a link or reparse point.".to_string());
+            }
+        }
+    }
+    Ok(())
 }
 
-#[cfg(windows)]
-fn is_windows_reparse_point(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-fn is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
-    false
+pub(crate) fn original_backup_path(path: &Path) -> PathBuf {
+    let file_name = path.file_name().unwrap_or_default();
+    path.parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join("original")
+        .join(file_name)
 }

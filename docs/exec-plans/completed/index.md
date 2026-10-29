@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-10-29-shared-file-safety-plan.md` | 统一桌面链接/重解析点判定及任务目标检查、原始备份路径；保留各入口边界。Windows Rust 354 项、脚本 52 项、app lint 与格式/文档检查通过；普通路径和 junction 矩阵实际运行，工具执行环境覆盖见计划记录，macOS 待验证。 |
 | `2026-10-27-task-artifact-destination-contract-plan.md` | 收敛任务落盘的封闭目标集：契约、worker(Python)、桌面端(Rust) 原本是 6 份手写副本且已漂移（Rust 独有 `ai/draft.md`/`ai/original/draft.md`，Python 独有 `ai/dissection.json`/`ai/dissection.md`）。worker 崩溃留下 journal 时，桌面端 `recover_task_artifacts` 会因不认识 dissection 而拒绝整份日志，`scan` 把它计入 `ignored_count`，**任务从历史里静默消失**。契约补到 14 条并成为唯一来源，Python 侧改为派生、Rust 侧镜像，三端各自原生测试断言集合相等，mjs 守卫从单向子串包含改为双向等值。门禁：worker 1127、Rust 345、app 859、契约守卫 2/2。Residual risk: `scripts/tests/*.test.mjs` 未接入 CI（漂移能存活的根因）；两条 watchdog 时序测试并行跑偶发失败；`transcript/original/*` 两条白名单条目无写入方；draft 仍走直写未进事务。 |
 | `2026-10-25-intelligent-extraction-agent-runtime-plan.md` | 三个智能提炼目标统一 agent_runtime，工具交付、六次实际调用上限、逐次 checkout、原文溯源与原子提交；真实 LLM 三个目标和预算失败路径验证通过。 |
 | `2026-10-24-summary-agent-runtime-plan.md` | 要点总结通过 agent 顺序交付脑图和总结，正常两次调用；公共运行器、provider 和完整验收纳入智能提炼统一实现。 |

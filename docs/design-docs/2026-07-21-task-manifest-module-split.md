@@ -71,7 +71,8 @@ The root path currently exposes these crate-visible items and must continue to d
 - capability types: `SupportedTask`, `TaskScan`, and `TaskEditSession`;
 - parsing: `parse_insight_view` and `parse_insights_payload`;
 - root/path helpers: `configured_output_root`, `configured_output_root_from_project`,
-  `path_to_frontend_string`, and `is_link_or_reparse_point`; and
+  `path_to_frontend_string`, `is_link_or_reparse_point`, `reject_linked_artifact_target`, and
+  `original_backup_path`; and
 - all currently crate-visible methods on those types.
 
 Call sites in `history.rs`, `history_deletion.rs`, `transcript_detail/`, `video_processing/`, and
@@ -152,7 +153,7 @@ pub(crate) use schema::{
 pub(crate) use source_identity::SourceIdentity;
 pub(crate) use storage::{
     configured_output_root, configured_output_root_from_project, is_link_or_reparse_point,
-    path_to_frontend_string,
+    original_backup_path, path_to_frontend_string, reject_linked_artifact_target,
 };
 ```
 
@@ -175,6 +176,15 @@ or `pub(super)`.
 Pure relative artifact-string validation belongs to `schema.rs`, while filesystem resolution and
 canonical containment belong to `storage.rs`. This avoids a schema/storage import cycle: storage
 depends on schema policy, never the reverse.
+
+`atomic_files` owns the shared metadata predicate for symlinks and Windows reparse points;
+`storage` re-exports it through the stable task root for existing task consumers. Local-media
+selection imports it directly. Each caller keeps its own file-type and containment requirements.
+`storage` also owns `reject_linked_artifact_target` (target and immediate parent, with existing
+missing-path behavior) and `original_backup_path` (source parent / `original` / source filename).
+Both are root-re-exported for transcript and draft editing; callers continue to validate full task
+containment and use task-journal commits. The module guard prevents caller-local copies of these
+shared functions.
 
 Manifest path validation and `worker_runtime/result_protocol.rs` use the same `TASK_ARTIFACT_KEYS`.
 The result protocol imports it through the root; no private child becomes an application entry point.
