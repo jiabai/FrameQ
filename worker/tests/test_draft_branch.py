@@ -277,9 +277,10 @@ def test_draft_branch_seed_not_in_insights_json_fails_without_running_draft(
     # insights.json has id=5; request asks for a non-existent id=999.
     _write_task_skeleton(tmp_path, insight_id=INSIGHT_ID)
 
-    with patch("frameq_worker.worker_application.insight_retry.run_draft") as mock_run, patch(
-        "frameq_worker.draft_agent.resolve_draft_credentials"
-    ) as mock_creds:
+    with (
+        patch("frameq_worker.worker_application.insight_retry.run_draft") as mock_run,
+        patch("frameq_worker.draft_agent.resolve_draft_credentials") as mock_creds,
+    ):
         result = retry_insights_once(
             _draft_request(insight_id=999),
             project_root=tmp_path,
@@ -355,23 +356,58 @@ def test_draft_branch_missing_preference_snapshot_degrades_to_none(tmp_path: Pat
 # --------------------------------------------------------------------------- #
 
 
-def test_draft_branch_run_draft_exception_wraps_as_generation_failed(tmp_path: Path) -> None:
-    _write_task_skeleton(tmp_path)
-
-    def boom(insight, preference_snapshot, summary, platform, env, **_kwargs):
-        raise RuntimeError("missing FRAMEQ_LLM_API_KEY")
-
-    with patch("frameq_worker.worker_application.insight_retry.run_draft", side_effect=boom):
-        result = retry_insights_once(
-            _draft_request(),
-            project_root=tmp_path,
-            environ=_env(tmp_path),
+@pytest.mark.parametrize("invalid_checkout", [False, True], ids=["missing-config", "invalid-url"])
+@pytest.mark.parametrize("existing_draft", [False, True], ids=["new-draft", "existing-draft"])
+def test_draft_branch_run_draft_exception_wraps_as_generation_failed(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    invalid_checkout: bool,
+    existing_draft: bool,
+) -> None:
+    _write_task_skeleton(tmp_path, with_summary=True)
+    if existing_draft:
+        _draft_path(tmp_path).write_text("# 已有成稿\n\n保留正文", encoding="utf-8")
+        original = _original_draft_path(tmp_path)
+        original.parent.mkdir(parents=True, exist_ok=True)
+        original.write_text("# 原始备份", encoding="utf-8")
+    protected = {
+        path: path.read_bytes()
+        for path in _task_dir(tmp_path).rglob("*")
+        if path.is_file() and path.name != "frameq-task.json"
+    }
+    runtime_env = _env(tmp_path)
+    if invalid_checkout:
+        # 无协议的地址会在 Request 构造时产生真实异常，不发起网络请求。
+        runtime_env.update(
+            FRAMEQ_LLM_SOURCE="server",
+            FRAMEQ_LLM_CHECKOUT_URL="s8-private-checkout-canary",
+            FRAMEQ_LLM_SESSION_TOKEN="s8-session-canary",
+            FRAMEQ_LLM_CHECKOUT_REQUEST_ID="s8-request-canary",
         )
 
-    assert result["error"]["code"] == "DRAFT_GENERATION_FAILED"
-    assert result["error"]["stage"] == "draft_generating"
-    assert "missing FRAMEQ_LLM_API_KEY" in result["error"]["message"]
-    assert not _draft_path(tmp_path).exists()
+    result = retry_insights_once(
+        _draft_request(),
+        project_root=tmp_path,
+        environ=runtime_env,
+    )
+    captured = capsys.readouterr()
+
+    assert result["status"] == "partial_completed"
+    assert result["error"] == {
+        "code": "DRAFT_GENERATION_FAILED",
+        "message": "Draft generation failed.",
+        "stage": "draft_generating",
+    }
+    assert captured.out == ""
+    assert captured.err == ""
+    manifest = json.loads((_task_dir(tmp_path) / "frameq-task.json").read_text(encoding="utf-8"))
+    assert manifest["error"] == result["error"]
+    for path, content in protected.items():
+        assert path.read_bytes() == content
+    for marker in ("s8-private-checkout-canary", "s8-session-canary", "s8-request-canary"):
+        assert marker not in json.dumps(result)
+        assert marker not in json.dumps(manifest)
+    assert _draft_path(tmp_path).exists() is existing_draft
     assert result["draft"] == ""
 
 
@@ -425,9 +461,7 @@ def test_draft_branch_success_deletes_stale_original_backup(tmp_path: Path) -> N
     original_path.write_text("# 旧稿备份\n\n旧内容", encoding="utf-8")
     assert original_path.exists()  # sanity check
 
-    def fake_run_draft(
-        insight, preference_snapshot, summary, platform, env, **_kwargs
-    ):
+    def fake_run_draft(insight, preference_snapshot, summary, platform, env, **_kwargs):
         return "# 新生成稿\n\n新内容"
 
     with patch(
@@ -461,9 +495,7 @@ def test_draft_branch_success_no_original_is_ok(tmp_path: Path) -> None:
     original_path = _original_draft_path(tmp_path)
     assert not original_path.exists()  # no backup to begin with
 
-    def fake_run_draft(
-        insight, preference_snapshot, summary, platform, env, **_kwargs
-    ):
+    def fake_run_draft(insight, preference_snapshot, summary, platform, env, **_kwargs):
         return "# 新生成稿\n\n新内容"
 
     with patch(

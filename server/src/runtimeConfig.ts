@@ -35,7 +35,6 @@ export type RuntimeConfig = Readonly<{
   trustLoopbackProxy: true;
   wechatPayEnabled: boolean;
   wechat: WechatConfig | null;
-  releaseManifestPath: string | undefined;
 }>;
 
 export class RuntimeConfigurationError extends Error {
@@ -138,7 +137,6 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
     trustLoopbackProxy: true,
     wechatPayEnabled,
     wechat,
-    releaseManifestPath: clean(env.FRAMEQ_RELEASE_MANIFEST_PATH) || undefined,
   };
   return Object.freeze(config);
 }

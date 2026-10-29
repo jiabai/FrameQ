@@ -297,29 +297,10 @@ def run_draft_generation_step(
             runtime_env,
             output_language=request.output_language,
         )
-    except Exception as exc:  # noqa: BLE001 - wraps LLM / MCP / agent-loop failures.
-        import sys as _sys
-        import traceback as _tb
-
-        _stack = [exc]
-        _leaves = []
-        while _stack:
-            _e = _stack.pop()
-            if hasattr(_e, "exceptions"):
-                _stack.extend(_e.exceptions)
-            else:
-                _leaves.append(_e)
-        for _i, _lf in enumerate(_leaves):
-            _sys.stderr.write(f"===DRAFT_LEAF[{_i}] {type(_lf).__name__}: {_lf}===\n")
-            for _fr in _tb.extract_tb(_lf.__traceback__)[-4:]:
-                _sys.stderr.write(
-                    f"  {_fr.filename}:{_fr.lineno} in {_fr.name}  ||  {_fr.line or ''}\n"
-                )
-        _sys.stderr.write("===DRAFT_DEBUG top===\n")
-        _tb.print_exception(type(exc), exc, exc.__traceback__)
+    except Exception:  # noqa: BLE001 - 保留失败分类，不回显 LLM / MCP / agent 异常原文。
         return _draft_step_failed(
             code="DRAFT_GENERATION_FAILED",
-            message=str(exc),
+            message="Draft generation failed.",
         )
 
     if not draft_text or not draft_text.strip():
@@ -428,11 +409,7 @@ def read_existing_insights(paths: TaskPaths) -> list[Insight]:
             )
             suitable_use = str(raw["suitableUse"]).strip()
             raw_source_chunk_id = raw.get("sourceChunkId")
-            source_chunk_id = (
-                int(raw_source_chunk_id)
-                if raw_source_chunk_id is not None
-                else None
-            )
+            source_chunk_id = int(raw_source_chunk_id) if raw_source_chunk_id is not None else None
         except (KeyError, TypeError, ValueError):
             return []
         if not topic or not match_reason or not follow_up_questions or not suitable_use:

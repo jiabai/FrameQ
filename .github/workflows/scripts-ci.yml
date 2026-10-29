@@ -1,0 +1,65 @@
+name: Script CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scripts-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  script-gate:
+    name: Script tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      TMPDIR: ${{ github.workspace }}/build/script-test-tmp
+      TEMP: ${{ github.workspace }}/build/script-test-tmp
+      TMP: ${{ github.workspace }}/build/script-test-tmp
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Prepare test directory
+        run: mkdir -p build/script-test-tmp
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Run Node script tests
+        run: node --test scripts/tests/*.test.mjs
+
+      - name: Run Python script tests
+        run: >-
+          uv run --isolated --no-project --python 3.12 --with pytest==9.1.0
+          python -m pytest scripts/tests
+          --basetemp build/scripts-pytest -o cache_dir=build/scripts-pytest-cache
+
+      - name: Validate project documents
+        run: uv run --isolated --no-project --python 3.12 python scripts/validate_agents_docs.py --level ERROR

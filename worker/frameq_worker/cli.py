@@ -18,6 +18,7 @@ from frameq_worker.diagnostic_events import (
     classify_model_download_exception,
     render_diagnostic_event,
 )
+from frameq_worker.models import JobStage, ProcessResult, WorkerError
 from frameq_worker.progress_events import (
     validate_model_progress_event,
     validate_worker_progress_event,
@@ -61,22 +62,15 @@ def stdin_failure_result(mode: str) -> dict[str, object]:
             "status": "failed",
             "error": {"code": "WORKER_STDIN_INVALID"},
         }
-    stage = "insights_generating" if mode == "retry_insights" else "waiting_input"
-    return {
-        "status": "failed",
-        "task_id": None,
-        "task_dir": None,
-        "artifacts": {},
-        "text": "",
-        "summary": "",
-        "insights": [],
-        "transcript": None,
-        "error": {
-            "code": "WORKER_STDIN_INVALID",
-            "message": "Worker request stdin was invalid.",
-            "stage": stage,
-        },
-    }
+    stage = JobStage.INSIGHTS_GENERATING if mode == "retry_insights" else JobStage.WAITING_INPUT
+    return ProcessResult(
+        status=JobStage.FAILED,
+        error=WorkerError(
+            code="WORKER_STDIN_INVALID",
+            message="Worker request stdin was invalid.",
+            stage=stage,
+        ),
+    ).to_dict()
 
 
 def render_result_json(result: dict[str, object]) -> str:

@@ -1,15 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
-  cancelProcessing,
   canSubmitUrl,
   confirmProcessingCancellation,
   finishInsightRetry,
   createInitialWorkflow,
   getDetailText,
   getExportPath,
-  getTranscriptSourceLabel,
   getToolbarNewTaskButtonState,
-  getVisibleWorkflowError,
   isProcessingStage,
   mergeProgressEvent,
   normalizeSubmitUrl,
@@ -306,39 +303,6 @@ describe("workflow state model", () => {
       language: "zh-Hans",
       engine: null,
     });
-    expect(getTranscriptSourceLabel(state)).toEqual({
-      messageCode: "transcript.review.source.subtitleWithLanguage",
-      args: { language: "zh-Hans" },
-    });
-  });
-
-  test("partial insight failure exposes a visible workflow error", () => {
-    const state = summarizeWorkerResult(workerResult({
-      status: "partial_completed",
-      text: "已经完成的文字稿",
-      summary: "# 要点总结\n\n## 总览\n已生成总结。",
-      insights: [],
-      artifacts: {
-        video: DEFAULT_ARTIFACTS.video,
-        audio: DEFAULT_ARTIFACTS.audio,
-        transcript_txt: DEFAULT_ARTIFACTS.transcript_txt,
-        transcript_md: DEFAULT_ARTIFACTS.transcript_md,
-        summary: DEFAULT_ARTIFACTS.summary,
-        mindmap: DEFAULT_ARTIFACTS.mindmap,
-      },
-      error: {
-        code: "AI_LLM_REQUEST_FAILED",
-        message: "LLM request failed with HTTP 400.",
-        stage: "insights_generating",
-      },
-    }));
-
-    expect(getVisibleWorkflowError(state)).toEqual({
-      code: "AI_LLM_REQUEST_FAILED",
-      message: "LLM request failed with HTTP 400.",
-      stage: "insights_generating",
-    });
-    expect(getVisibleWorkflowError(createInitialWorkflow())).toBeNull();
   });
 
   test("cancel controls are only shown for active processing stages", () => {
@@ -514,30 +478,6 @@ describe("workflow state model", () => {
     expect(retrying.error).toBeNull();
   });
 
-  test("cancels active URL processing and returns to one URL composer branch", () => {
-    const state = startProcessing(
-      {
-        ...createInitialWorkflow(),
-        composerSource: {
-          kind: "url",
-          urlDraft: URL_SOURCE.url,
-        },
-      },
-      URL_SOURCE,
-    );
-
-    const cancelled = cancelProcessing(state);
-
-    expect(cancelled.stage).toBe("waiting_input");
-    expect(cancelled.composerSource).toEqual({
-      kind: "url",
-      urlDraft: URL_SOURCE.url,
-    });
-    expect(cancelled.taskSource).toBeNull();
-    expect(cancelled.statusMessage).toBeNull();
-    expect(cancelled.error).toBeNull();
-  });
-
   test("keeps the workflow active while cancellation is pending and restores it when signalling fails", () => {
     const running = startProcessing(createInitialWorkflow(), URL_SOURCE);
 
@@ -564,15 +504,20 @@ describe("workflow state model", () => {
   test("returns to input only after cancellation is confirmed", () => {
     const cancelling = requestProcessingCancellation(
       startProcessing(
-        createInitialWorkflow(),
+        {
+          ...createInitialWorkflow(),
+          composerSource: { kind: "url", urlDraft: URL_SOURCE.url },
+        },
         URL_SOURCE,
       ),
     );
 
     const cancelled = confirmProcessingCancellation(cancelling);
     expect(cancelled.stage).toBe("waiting_input");
-    expect(cancelled.composerSource).toEqual({ kind: "url", urlDraft: "" });
+    expect(cancelled.composerSource).toEqual({ kind: "url", urlDraft: URL_SOURCE.url });
     expect(cancelled.taskSource).toBeNull();
+    expect(cancelled.statusMessage).toBeNull();
+    expect(cancelled.error).toBeNull();
   });
 
   test("keeps the completed task and prior report when redissection cancellation is confirmed", () => {

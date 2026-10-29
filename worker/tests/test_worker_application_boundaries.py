@@ -215,6 +215,7 @@ def test_cli_is_only_the_process_adapter() -> None:
         "frameq_worker",
         "frameq_worker.desktop_contract",
         "frameq_worker.diagnostic_events",
+        "frameq_worker.models",
         "frameq_worker.progress_events",
         "io",
         "json",

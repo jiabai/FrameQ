@@ -229,14 +229,12 @@ async function extendMonthlyPass(
   const entitlement = await tx.entitlement.upsert({
     where: { userId },
     update: {
-      status: "active",
       expiresAt: new Date(base.getTime() + passDays * 24 * 60 * 60 * 1000),
       updatedAt: now,
     },
     create: {
       id: randomUUID(),
       userId,
-      status: "active",
       expiresAt: new Date(base.getTime() + passDays * 24 * 60 * 60 * 1000),
       llmQuotaLimit: 0,
       llmQuotaUsed: 0,

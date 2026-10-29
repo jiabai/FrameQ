@@ -36,7 +36,6 @@ function buildPage(input: {
       {
         id: `ent-${user.id}`,
         userId: user.id,
-        status: "active",
         expiresAt: new Date("2026-09-01T08:00:00.000Z"),
         llmQuotaLimit: 100,
         llmQuotaUsed: 20,

@@ -123,6 +123,10 @@
   IP policies before challenge creation. A process-local map or client-supplied forwarding header is
   not authoritative. Fastify may trust forwarded addresses only from the documented loopback Nginx
   peer; `trustProxy: true` is forbidden.
+- A rejected dispatch reports the latest release time among every window already blocking that
+  request. Conditional reservations remain inside the caller's Store transaction; rejection rolls
+  back all counters and related writes. Successful reservations from this attempt are not counted
+  as pre-existing blockers. Requests arriving later may consume newly available capacity.
 - Desktop ticket consumption and hashed session insertion commit or roll back together. Raw ticket,
   desktop session, administrator session, and CSRF values remain service/response-only values and
   never enter database or Store return fields in plaintext.
@@ -130,6 +134,11 @@
   `(userId, requestId)` event in one transaction. Same-request replay consumes once; distinct
   concurrent requests cannot exceed remaining quota; an event-write failure rolls back the
   increment. Bounded database conflict retry never calls the LLM supplier.
+- Entitlement validity depends only on `expiresAt > now`; an entitlement is expired at equality.
+  Expiry and quota accounting remain persisted, while public status is derived. Migration
+  `202610290001_remove_entitlement_status` removes only the redundant entitlement column, retaining
+  IDs, expiry, quota values, the user relationship, uniqueness and quota constraints. Startup and
+  current preflight reject the old schema; recovery restores a matched database/code/config set.
 - The migration adds closed-purpose/attempt/quota checks and rejects invalid historical accounting
   state rather than clamping it. Outstanding legacy OTPs are invalidated instead of assigned a
   guessed purpose. Production migration requires preflight, backup, integrity/restore rehearsal,
@@ -167,7 +176,8 @@
 - Authentication, ticket/session exchange, payment settlement, activation redemption, AI Credit
   checkout, and administrator entitlement adjustment keep every required read, conditional write,
   idempotency/audit record, and final read inside one semantic transaction owner.
-- `prismaStore/concurrency.ts` is the sole owner of authentication rate-limit reservation SQL,
+- `prismaStore/rateLimits.ts` owns conditional authentication rate-limit reservations and collects
+  all blocking release times before rejecting the transaction. `prismaStore/concurrency.ts` owns
   recognized Prisma/SQLite conflict classification, the fixed three-attempt retry bound, and
   `attempt * 5` backoff. Retry never surrounds an SMTP, payment-provider, or LLM supplier call.
 - Private persistence modules add no logging or public error surface. Raw OTP/session/ticket/CSRF/
@@ -230,6 +240,11 @@
   login wire behavior, including its duplicate administrator-session `Set-Cookie` header; changing
   that compatibility detail requires a separate behavior/security change and provider/client
   validation.
+- The five authenticated administrator mutations share the private `authenticateAdminMutation`
+  helper in `admin.ts`: authenticate the session first, then validate the session-bound CSRF header,
+  then enter payload validation and mutation. Rejection returns the existing 401/403 response with
+  no writes or cookie clearing. Logout uses the authenticated token to revoke only that session;
+  entitlement adjustment derives its administrator identity from the authenticated session.
 - The root Fastify instance still captures exact JSON bytes before parsing. Only
   `server/src/routes/billing.ts` consumes `rawBody` for WeChat signature verification, and neither
   the parser nor the route adds logging, persistence, or response echo of the raw payload.
@@ -595,6 +610,9 @@
   exact fields. Historical task-local v1 snapshots remain immutable local evidence and must never
   update schema v2 global state.
 - Logs, diagnostics, UI errors, server requests, and quota checkout metadata must not include full inspiration profiles, full generation preferences, complete prompts, transcripts, or generated insight content.
+- 成稿生成不打印工具参数、工具返回内容、模型回复片段或完整异常转储。`DRAFT_GENERATION_FAILED`
+  使用固定安全消息 `Draft generation failed.`；原始异常不进入返回结果或 task manifest。
+  hook 警告仅包含内部层名与固定事件名，MCP 清理警告仅使用固定消息。
 - The account service must not add API fields for storing profiles, generation preferences, transcripts, insight topics, or local task manifest contents.
 - Users must be able to clear the local inspiration profile. Clearing it affects future generation only and must not delete existing local task artifacts.
 

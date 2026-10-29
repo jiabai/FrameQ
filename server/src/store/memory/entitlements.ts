@@ -39,7 +39,6 @@ export async function upsertEntitlement(
 ): ReturnType<Store["upsertEntitlement"]> {
   const existing = await context.getEntitlement(userId);
   if (existing) {
-    existing.status = expiresAt > now ? "active" : "inactive";
     existing.expiresAt = expiresAt;
     if (quota.llmQuotaLimit !== undefined) {
       existing.llmQuotaLimit = quota.llmQuotaLimit;
@@ -53,7 +52,6 @@ export async function upsertEntitlement(
   const entitlement: EntitlementRecord = {
     id: randomUUID(),
     userId,
-    status: expiresAt > now ? "active" : "inactive",
     expiresAt,
     llmQuotaLimit: quota.llmQuotaLimit ?? 0,
     llmQuotaUsed: quota.llmQuotaUsed ?? 0,

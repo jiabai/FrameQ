@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from collections.abc import Mapping
 from pathlib import Path
@@ -33,6 +32,7 @@ from frameq_worker.output_language import OutputLanguage
 
 # FRAMEQ_DRAFT_MAX_TURNS 缺省值；核心层不读 env，只收 max_turns 形参。
 _DEFAULT_MAX_TURNS = 40
+
 
 def build_llm_provider(env: Mapping[str, str]) -> ProviderOpenAIOfficial:
     api_key = env.get("FRAMEQ_LLM_API_KEY", "").strip()
@@ -163,9 +163,7 @@ def _build_system_prompt(platform: str, summary: str | None = None) -> str:
     """目标平台来自用户在确认页选择的 platform id；映射见 prompt 模块。"""
     platform_label = _platform_label_for_draft_platform(platform)
     return (
-        _SYSTEM_PROMPT_HEAD
-        + f"目标平台：{platform_label}。\n"
-        + _build_planning_guidance(summary)
+        _SYSTEM_PROMPT_HEAD + f"目标平台：{platform_label}。\n" + _build_planning_guidance(summary)
     )
 
 
@@ -221,46 +219,10 @@ def _build_submit_draft_tool(sink: DraftSink) -> FunctionTool:
     )
 
 
-def _one_line(text: str) -> str:
-    """Collapse whitespace for compact trace output."""
-    return " ".join(text.split())
-
-
-def _json_compact(value: object) -> str:
-    try:
-        s = json.dumps(value, ensure_ascii=False)
-    except TypeError:
-        s = str(value)
-    return s if len(s) <= 200 else s[:200] + "…"
-
-
-def _trace_step(resp) -> None:
-    try:
-        chain = resp.data["chain"]
-    except Exception:  # noqa: BLE001 - 某些响应类型无 chain，跳过即可
-        return
-    if resp.type == "tool_call" and getattr(chain, "chain", None):
-        data = chain.chain[0].data or {}
-        print(f"[draft]     ▶ {data.get('name', '?')}({_json_compact(data.get('args', {}))})")
-    elif resp.type == "tool_call_result" and getattr(chain, "chain", None):
-        data = chain.chain[0].data or {}
-        result = _one_line(str(data.get("result", "")))
-        print(f"[draft]       ↳ result: {result[:200]}{'…' if len(result) > 200 else ''}")
-    elif resp.type == "llm_result":
-        text = chain.get_plain_text() or ""
-        is_reasoning = getattr(chain, "type", None) == "reasoning"
-        kind = "reasoning" if is_reasoning else "answer"
-        snippet = _one_line(text)[:200]
-        print(f"[draft]     ✎ [{kind}] {snippet}{'…' if len(_one_line(text)) > 200 else ''}")
-    elif resp.type == "err":
-        print(f"[draft]     ✗ err: {_one_line(chain.get_plain_text() or '')[:200]}")
-
-
 async def generate_draft(
     *,
     provider: ProviderOpenAIOfficial,
     tools: ToolSet,
-    manager: FunctionToolManager,
     agent_hooks: BaseAgentRunHooks,
     max_turns: int,
     insight: Insight,
@@ -273,12 +235,6 @@ async def generate_draft(
 ) -> str:
     if session_id is None:
         session_id = uuid4().hex
-
-    servers = list(manager.mcp_server_runtime_view)
-    print(
-        f"[draft] session={session_id} mcp_servers={servers} "
-        f"planning_hook={type(agent_hooks).__name__} tools={sorted(tools.names())}",
-    )
 
     request_obj = ProviderRequest(
         prompt=_build_user_prompt(
@@ -309,18 +265,11 @@ async def generate_draft(
         streaming=False,
     )
 
-    # 一次性闭环：消费每步事件打印 spike 可观测性轨迹。
-    async for resp in runner.step_until_done(max_step=max_turns):
-        _trace_step(resp)
+    # 消费事件以驱动工具执行，正文只从 submit_draft 的接收槽取得。
+    async for _ in runner.step_until_done(max_step=max_turns):
+        pass
 
-    chosen = draft_sink.value
-    submit_draft_hit = bool(chosen)
-    print(f"[draft] done: submit_draft_hit={submit_draft_hit} chosen_len={len(chosen)}")
-    if not submit_draft_hit:
-        # 未命中 submit_draft 契约 → 返回空串，由编排层（retry_insights draft 分支）
-        # 判 DRAFT_EMPTY_RESULT。
-        print("[draft] warning: submit_draft not called → empty result → DRAFT_EMPTY_RESULT")
-    return chosen
+    return draft_sink.value
 
 
 _PLANNING_OFF_VALUES = ("0", "false", "False", "")
@@ -375,8 +324,8 @@ class _CompositeHooks(BaseAgentRunHooks):
     （planning 开）或 no-op ``BaseAgentRunHooks``（``FRAMEQ_DRAFT_PLANNING=0``）。
 
     转发**全部**六个事件（非只转 ``on_llm_request``），避免日后 inner hook 用到别的事件
-    （如 ``on_tool_end``）时复合层静默漏转。每层调用都包 try/except，单层异常落 ``[draft]``
-    日志、不中断主循环；``on_before_complete`` 的两层投票合并为 AND（任一否决即否决），
+    （如 ``on_tool_end``）时复合层静默漏转。每层调用都包 try/except，单层异常只记录层名与
+    固定事件名、不中断主循环；``on_before_complete`` 的两层投票合并为 AND（任一否决即否决），
     抛异常的层按 ``BaseAgentRunHooks`` 默认放行，以免异常把循环卡死。
     """
 
@@ -388,11 +337,8 @@ class _CompositeHooks(BaseAgentRunHooks):
         for label, layer in (("skills", self._skills), ("inner", self._inner)):
             try:
                 await getattr(layer, method)(run_context, *args)
-            except Exception as exc:  # noqa: BLE001 - 单层失败不得中断主循环
-                print(
-                    f"[draft] composite hook {method} ({label}) error: "
-                    f"{type(exc).__name__}: {exc}"
-                )
+            except Exception:  # noqa: BLE001 - 单层失败不得中断主循环
+                print(f"[draft] hook failed: layer={label} event={method}")
 
     async def on_agent_begin(self, run_context) -> None:
         await self._dispatch_void("on_agent_begin", run_context)
@@ -413,11 +359,8 @@ class _CompositeHooks(BaseAgentRunHooks):
         async def _vote(label: str, layer: BaseAgentRunHooks) -> bool:
             try:
                 return bool(await layer.on_before_complete(run_context, llm_response))
-            except Exception as exc:  # noqa: BLE001 - 抛异常的层按默认放行，避免卡死循环
-                print(
-                    f"[draft] composite hook on_before_complete ({label}) error: "
-                    f"{type(exc).__name__}: {exc}"
-                )
+            except Exception:  # noqa: BLE001 - 异常层按默认放行，避免循环停滞
+                print(f"[draft] hook failed: layer={label} event=on_before_complete")
                 return True
 
         skills_allow = await _vote("skills", self._skills)
@@ -435,7 +378,6 @@ async def _run_async(
 ) -> str:
     planning_on = _planning_enabled(env)
     max_turns = _resolve_max_turns(env)
-    print(f"[draft] planning={planning_on} max_turns={max_turns}")
 
     merged_env = resolve_draft_credentials(env)
     provider = build_llm_provider(merged_env)
@@ -463,7 +405,6 @@ async def _run_async(
         return await generate_draft(
             provider=provider,
             tools=tools,
-            manager=manager,
             agent_hooks=hooks,
             max_turns=max_turns,
             insight=insight,
@@ -476,8 +417,8 @@ async def _run_async(
     finally:
         try:
             await manager.disable_mcp_server()
-        except (Exception, asyncio.CancelledError) as exc:  # noqa: BLE001
-            print(f"[draft] MCP cleanup warning (non-fatal): {type(exc).__name__}: {exc}")
+        except (Exception, asyncio.CancelledError):  # noqa: BLE001
+            print("[draft] MCP cleanup failed.")
 
 
 def run_draft(

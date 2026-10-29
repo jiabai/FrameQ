@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
-const SAFE_ARTIFACT_KEYS: [&str; 13] = [
+pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
     "video",
     "audio",
     "transcript_txt",
@@ -396,7 +396,7 @@ pub(super) fn validate_relative_artifact_path(
     raw_path: &str,
     field: &str,
 ) -> Result<PathBuf, String> {
-    if !SAFE_ARTIFACT_KEYS.contains(&field) {
+    if !TASK_ARTIFACT_KEYS.contains(&field) {
         return Err("Task manifest contains an unsupported artifact field.".to_string());
     }
     let fixed_dissection_path = match field {

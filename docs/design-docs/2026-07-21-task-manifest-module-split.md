@@ -12,7 +12,7 @@ reasons to change:
 
 - canonical `SourceIdentity` validation and sensitive-query rejection;
 - raw schema-v3 manifest DTOs, safe error/source/artifact projections, and Insight JSON parsing;
-- configured output-root resolution, manifest enumeration/read/write, task-ID validation,
+- configured output-root resolution, manifest enumeration/read/encoding, task-ID validation,
   relative artifact policy, canonical containment, and link/reparse checks;
 - the non-bypassable `SupportedTask` / `TaskScan` / `TaskEditSession` capability boundary; and
 - broad characterization for source privacy, scan isolation, safe errors, artifact access, and
@@ -45,7 +45,7 @@ The split must:
   tree;
 - preserve schema version 3, source privacy migration version 2, canonical URL rules, supported
   platform/stable-ID rules, safe artifact keys, unknown-field round trips, safe error projection,
-  JSON formatting, final newline, and direct Rust manifest-write behavior;
+  JSON formatting, final newline, and task-journal commit behavior;
 - preserve scan isolation: one corrupt, unsupported, mismatched, linked, or racing entry does not
   hide other supported tasks, while failure to enumerate the configured task root remains a whole
   operation error;
@@ -64,8 +64,8 @@ The split must:
 
 The root path currently exposes these crate-visible items and must continue to do so:
 
-- constants: `TASK_MANIFEST_FILE_NAME`, `TASKS_DIR_NAME`, `TASK_SCHEMA_VERSION`, and
-  `SOURCE_PRIVACY_MIGRATION_VERSION`;
+- constants: `TASK_MANIFEST_FILE_NAME`, `TASKS_DIR_NAME`, `TASK_SCHEMA_VERSION`,
+  `SOURCE_PRIVACY_MIGRATION_VERSION`, and the schema-owned `TASK_ARTIFACT_KEYS`;
 - contracts/projections: `TaskArtifact`, `SourceIdentity`, `TranscriptMetadata`, `InsightView`, and
   `SafeTaskError`;
 - capability types: `SupportedTask`, `TaskScan`, and `TaskEditSession`;
@@ -147,7 +147,7 @@ pub(crate) const SOURCE_PRIVACY_MIGRATION_VERSION: u64 = 2;
 pub(crate) use access::{SupportedTask, TaskEditSession, TaskScan};
 pub(crate) use schema::{
     parse_insight_view, parse_insights_payload, InsightView, SafeTaskError, TaskArtifact,
-    TranscriptMetadata,
+    TranscriptMetadata, TASK_ARTIFACT_KEYS,
 };
 pub(crate) use source_identity::SourceIdentity;
 pub(crate) use storage::{
@@ -165,16 +165,21 @@ or `pub(super)`.
 
 | Module | Owns | Must not own |
 |---|---|---|
-| `task_manifest.rs` | private child declarations, four existing invariant constants, exact stable re-exports, test module declaration | raw DTOs, filesystem calls, URL parsing, supported-task logic, wrapper types |
+| `task_manifest.rs` | private child declarations, four existing invariant constants, stable re-exports including `TASK_ARTIFACT_KEYS`, test module declaration | raw DTOs, filesystem calls, URL parsing, supported-task logic, wrapper types |
 | `source_identity.rs` | `SourceIdentity`, version/length bounds, platform/stable-ID rules, canonical URL/query matching, sensitive name/value rejection, equality key | filesystem, settings, manifest parsing, artifact paths, task access, logging/network effects |
-| `schema.rs` | `TaskArtifact`, raw `TaskManifest`/error DTOs, safe projections, transcript/Insight views, Insight parsing, pure relative-artifact allowlist/path policy, unknown-field preservation | filesystem I/O, canonicalization, settings, task enumeration, caller orchestration |
-| `storage.rs` | configured output root, frontend path projection, task directory/manifest enumeration and direct read/write, task-ID validation, declared artifact resolution, canonical containment, parent preparation, storage-entry and link/reparse checks | source URL policy, History/UI DTOs, supported-task policy, transcript/AI semantics, network/logging |
-| `access.rs` | `SupportedTask`, `TaskScan`, `TaskEditSession`, support gating, safe task projections, validated artifact reads, tolerant Insight reads, restricted in-memory mutation and save composition | settings, arbitrary root discovery, caller-specific History/transcript/delete behavior, raw path inputs from frontend, local-media union |
+| `schema.rs` | `TaskArtifact`, shared `TASK_ARTIFACT_KEYS`, raw `TaskManifest`/error DTOs, safe projections, transcript/Insight views, Insight parsing, pure relative-artifact allowlist/path policy, unknown-field preservation | filesystem I/O, canonicalization, settings, task enumeration, caller orchestration |
+| `storage.rs` | configured output root, frontend path projection, task directory/manifest enumeration, reads and encoding, task-ID validation, declared artifact resolution, canonical containment, parent preparation, storage-entry and link/reparse checks | source URL policy, History/UI DTOs, supported-task policy, transcript/AI semantics, network/logging |
+| `access.rs` | `SupportedTask`, `TaskScan`, `TaskEditSession`, support gating, safe task projections, validated artifact reads, tolerant Insight reads, restricted in-memory mutation and manifest encoding | settings, arbitrary root discovery, caller-specific History/transcript/delete behavior, raw path inputs from frontend, local-media union |
 | `tests.rs` | existing characterization fixtures/assertions, new edit-session characterization, RED/GREEN ownership/dependency gate | production helpers, alternate policy, feature behavior |
 
 Pure relative artifact-string validation belongs to `schema.rs`, while filesystem resolution and
 canonical containment belong to `storage.rs`. This avoids a schema/storage import cycle: storage
 depends on schema policy, never the reverse.
+
+Manifest path validation and `worker_runtime/result_protocol.rs` use the same `TASK_ARTIFACT_KEYS`.
+The result protocol imports it through the root; no private child becomes an application entry point.
+The canonical desktop-worker contract test compares the complete key set and checks for duplicates,
+and a manifest test verifies that every contract artifact field has an accepted safe relative path.
 
 ## Dependency Direction
 
@@ -229,8 +234,10 @@ in the reverse direction.
    directory into `TaskEditSession`.
 2. The session accepts only `TaskArtifact` plus safe relative paths, validates existing paths or
    parents through storage, and mutates the private in-memory DTO.
-3. `save()` uses the current pretty JSON plus final newline and direct manifest write. It does not
-   add atomic replacement, rollback, retries, locks, or a second task open.
+3. `encoded_manifest()` produces pretty JSON plus a final newline, preserving unknown top-level
+   fields through the existing flattened map.
+4. The caller submits these bytes with related artifacts through `commit_task_artifacts()`. The
+   task journal owns staging, manifest-last installation, recovery and cleanup.
 
 ## Behavior and Failure Matrix
 
@@ -365,7 +372,7 @@ the last green boundary and return the difference to design review.
 ### Neutral
 
 - Total Rust line count may remain similar or increase slightly.
-- The existing facade/capability model, direct Rust manifest write behavior, and active local-media
+- The existing facade/capability model, task-journal commit behavior, and active local-media
   feature scope remain unchanged.
 
 ## Implementation Result

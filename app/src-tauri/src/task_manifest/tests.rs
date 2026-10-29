@@ -1,12 +1,12 @@
 use super::{
-    parse_insight_view,
+    commit_task_artifacts, parse_insight_view,
     schema::{TaskManifest, TaskManifestError},
     storage::validate_task_artifact_path,
     transaction::{
         allowed_destinations_for_test, internal_parents_for_test, recover_task_artifacts,
         validate_journal_value_for_test, RecoveryOutcome, JOURNAL_FILE_NAME,
     },
-    SourceIdentity, SupportedTask, TaskArtifact, TaskSourceSummary,
+    SourceIdentity, SupportedTask, TaskArtifact, TaskArtifactMutation, TaskSourceSummary,
 };
 use crate::local_media_contract::LocalMediaKind;
 use serde_json::json;
@@ -14,6 +14,33 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[test]
+fn contract_artifact_fields_are_supported_by_manifest_validation() {
+    let contract: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../contracts/desktop-worker-contract.json"
+    ))
+    .expect("parse desktop worker contract");
+    let artifacts = contract["terminalResults"]["schemas"]["task"]["properties"]["artifacts"]
+        ["properties"]
+        .as_object()
+        .expect("artifact properties");
+
+    for field in artifacts.keys() {
+        let path = match field.as_str() {
+            "dissection" => "ai/dissection.json",
+            "dissection_md" => "ai/dissection.md",
+            _ => "artifacts/result.txt",
+        };
+        super::schema::validate_relative_artifact_path(path, field)
+            .unwrap_or_else(|error| panic!("contract artifact {field} was rejected: {error}"));
+    }
+    assert!(super::schema::validate_relative_artifact_path(
+        "artifacts/result.txt",
+        "unsupported_artifact"
+    )
+    .is_err());
+}
 
 #[test]
 fn transaction_contract_fixtures_match_rust_parser() {
@@ -604,7 +631,17 @@ fn edit_session_preserves_unknown_fields_and_rejects_unsafe_paths_without_echo()
     edit.set_artifact(TaskArtifact::TranscriptMd, "transcript/transcript.md")
         .expect("set safe artifact");
     edit.set_text_preview("updated preview".to_string());
-    edit.save().expect("save edit session");
+    commit_task_artifacts(
+        &task_dir,
+        vec![
+            TaskArtifactMutation::replace(
+                "transcript/transcript.md",
+                b"updated markdown\n".to_vec(),
+            ),
+            TaskArtifactMutation::manifest(edit.encoded_manifest().expect("encode edit session")),
+        ],
+    )
+    .expect("commit edit session");
 
     let bytes = fs::read(&manifest_path).expect("read saved manifest");
     assert!(bytes.ends_with(b"\n"));
@@ -615,6 +652,12 @@ fn edit_session_preserves_unknown_fields_and_rejects_unsafe_paths_without_echo()
         "transcript/transcript.md"
     );
     assert_eq!(saved["text_preview"], "updated preview");
+    assert_eq!(
+        fs::read_to_string(task_dir.join("transcript/transcript.md"))
+            .expect("read committed markdown"),
+        "updated markdown\n"
+    );
+    assert!(!task_dir.join(JOURNAL_FILE_NAME).exists());
 }
 
 #[test]

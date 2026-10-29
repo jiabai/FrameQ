@@ -106,7 +106,17 @@ Production schema changes use reviewed Prisma migrations only. The deployment sc
 202608240002_auth_rate_limit_self_service_purpose
 202608240003_self_service_active_unique
 202610100001_anysearch_config
+202610290001_remove_entitlement_status
 ```
+
+`202610290001_remove_entitlement_status` removes the redundant entitlement status column. Validity
+continues to use `expiresAt > now`, including expiry at equality; public response fields remain
+unchanged. For an existing database, stop the service, check it with the previously deployed code,
+and verify the matched code/database/config backup before installing this version. Generate its
+Prisma client, apply the reviewed migration chain, then pass the updated current preflight and
+isolated restore smoke before starting the service. The new startup checks and current preflight
+reject the old entitlement structure. Recovery restores the backup taken before this migration
+together with its matching code and configuration.
 
 For a fresh database, create an empty local file with restrictive permissions, deploy all reviewed
 migrations, then run database preflight and migration status:
@@ -145,7 +155,8 @@ which fails as soon as one of them issues a `CREATE TABLE` for a table that alre
 You can tell the two cases apart with the preflight itself. On a database that is already past the
 baseline, `--mode baseline` fails with `UNEXPECTED_BASELINE_SCHEMA` (baseline mode requires
 `EmailOtp` to *not* have a `purpose` column) and `--mode current` fails with
-`MIGRATION_HISTORY_INCOMPATIBLE`.
+`DATABASE_SCHEMA_INCOMPATIBLE` while the old entitlement column remains, or
+`MIGRATION_HISTORY_INCOMPATIBLE` when the current structure lacks the reviewed migration history.
 
 Before choosing a path, prove which migrations the existing schema already equals. Build a scratch
 database from the migration files and compare its schema to the live one; if they match, every one of

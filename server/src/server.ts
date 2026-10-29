@@ -18,7 +18,6 @@ import { registerBillingRoutes } from "./routes/billing.js";
 import { registerDesktopAccountRoutes } from "./routes/desktopAccount.js";
 import { registerDesktopAuthRoutes } from "./routes/desktopAuth.js";
 import { registerDesktopLlmRoutes } from "./routes/desktopLlm.js";
-import { registerDesktopUpdateRoutes } from "./routes/desktopUpdates.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerUserAuthRoutes } from "./routes/userAuth.js";
@@ -27,7 +26,6 @@ import {
   type ActivationCodeEmailSender,
 } from "./selfServiceActivation.js";
 import type { Store } from "./store.js";
-import { loadDesktopReleaseManifest, type DesktopReleaseManifest } from "./updates.js";
 import { createWechatNotificationParser, type WechatNotificationParser } from "./wechat.js";
 import { UserAuthService } from "./userAuth.js";
 
@@ -46,8 +44,6 @@ export type ServerDependencies = {
   adminEmail?: string;
   wechatPayEnabled?: boolean;
   llmConfigEncryptionKey?: string;
-  releaseManifest?: DesktopReleaseManifest | null;
-  releaseManifestPath?: string;
   observability?: ObservabilityConfig;
   trustLoopbackProxy?: boolean;
   readiness?: ReadinessController;
@@ -125,11 +121,6 @@ export function buildServer(dependencies: ServerDependencies) {
   const parseWechatNotification =
     dependencies.parseWechatNotification ?? createWechatNotificationParser(null);
   const wechatPayEnabled = dependencies.wechatPayEnabled ?? false;
-  const releaseManifest =
-    dependencies.releaseManifest ??
-    loadDesktopReleaseManifest(
-      dependencies.releaseManifestPath,
-    );
 
   app.removeContentTypeParser("application/json");
   app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
@@ -184,7 +175,6 @@ export function buildServer(dependencies: ServerDependencies) {
     anysearchConfig,
     now,
   });
-  registerDesktopUpdateRoutes(app, { releaseManifest });
   registerBillingRoutes(app, {
     store: dependencies.store,
     billing,

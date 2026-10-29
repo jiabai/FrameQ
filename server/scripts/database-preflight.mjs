@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 const requiredMigrations = [
   "202607220001_baseline",
   "202607220002_auth_quota_hardening",
+  "202610290001_remove_entitlement_status",
 ];
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const prismaRoot = join(serverRoot, "prisma");
@@ -74,8 +75,10 @@ export function runDatabasePreflight({ databasePath, mode = "current", readOnly 
     requireColumns(database, "Entitlement", [
       "id",
       "userId",
+      "expiresAt",
       "llmQuotaLimit",
       "llmQuotaUsed",
+      "updatedAt",
     ]);
     const invalidQuota = database
       .prepare(
@@ -94,6 +97,9 @@ export function runDatabasePreflight({ databasePath, mode = "current", readOnly 
       }
       checks.push("baseline_schema");
     } else {
+      if (tableColumns(database, "Entitlement").has("status")) {
+        throw new OperationalCheckError("DATABASE_SCHEMA_INCOMPATIBLE");
+      }
       requireColumns(database, "EmailOtp", ["id", "purpose", "email", "state", "attempts"]);
       requireColumns(database, "AuthRateLimit", [
         "id",

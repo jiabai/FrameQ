@@ -93,7 +93,6 @@ model Order {
 model Entitlement {
   id            String   @id
   userId        String
-  status        String
   expiresAt     DateTime
   llmQuotaLimit Int      @default(0)
   llmQuotaUsed  Int      @default(0)

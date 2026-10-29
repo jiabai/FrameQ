@@ -136,7 +136,7 @@ async function createDesktopSession(
 }
 
 describe("desktop account routes", () => {
-  test("registers the complete stable HTTP route table", () => {
+  test("registers the complete stable HTTP route table", async () => {
     const app = buildServer({
       store: new MemoryStore(),
       sendOtp: async () => {},
@@ -165,7 +165,6 @@ describe("desktop account routes", () => {
       ["POST", "/api/desktop/logout"],
       ["POST", "/api/desktop/activation-codes/redeem"],
       ["POST", "/api/desktop/llm/checkouts"],
-      ["GET", "/api/desktop/updates/:target/:arch/:currentVersion"],
       ["POST", "/api/desktop/billing/wechat-native"],
       ["GET", "/api/desktop/billing/orders/:orderId"],
       ["POST", "/api/wechat/notify"],
@@ -179,6 +178,13 @@ describe("desktop account routes", () => {
     for (const [method, url] of routes) {
       expect(app.hasRoute({ method, url }), `${method} ${url}`).toBe(true);
     }
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/desktop/updates/windows/x86_64/0.1.0?channel=stable",
+    });
+    await app.close();
+    expect(response.statusCode).toBe(404);
   });
 
   test("serves the desktop email login page", async () => {

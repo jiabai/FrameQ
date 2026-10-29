@@ -38,7 +38,6 @@ export async function upsertEntitlement(
   const entitlement = await prisma.entitlement.upsert({
     where: { userId },
     update: {
-      status: expiresAt > now ? "active" : "inactive",
       expiresAt,
       ...quotaUpdate,
       updatedAt: now,
@@ -46,7 +45,6 @@ export async function upsertEntitlement(
     create: {
       id: randomUUID(),
       userId,
-      status: expiresAt > now ? "active" : "inactive",
       expiresAt,
       llmQuotaLimit: quota.llmQuotaLimit ?? 0,
       llmQuotaUsed: quota.llmQuotaUsed ?? 0,
@@ -212,7 +210,6 @@ export async function redeemActivationCodeAndGrantEntitlement(
         const entitlement = await tx.entitlement.upsert({
           where: { userId: session.userId },
           update: {
-            status: "active",
             expiresAt: new Date(input.now.getTime() + code.entitlementDays * 24 * 60 * 60 * 1000),
             llmQuotaLimit: 20,
             llmQuotaUsed: 0,
@@ -221,7 +218,6 @@ export async function redeemActivationCodeAndGrantEntitlement(
           create: {
             id: randomUUID(),
             userId: session.userId,
-            status: "active",
             expiresAt: new Date(input.now.getTime() + code.entitlementDays * 24 * 60 * 60 * 1000),
             llmQuotaLimit: 20,
             llmQuotaUsed: 0,
@@ -263,7 +259,6 @@ export async function redeemActivationCodeAndGrantEntitlement(
       const entitlement = await tx.entitlement.upsert({
         where: { userId: session.userId },
         update: {
-          status: "active",
           expiresAt: new Date(base.getTime() + code.entitlementDays * 24 * 60 * 60 * 1000),
           llmQuotaLimit:
             active && existing
@@ -275,7 +270,6 @@ export async function redeemActivationCodeAndGrantEntitlement(
         create: {
           id: randomUUID(),
           userId: session.userId,
-          status: "active",
           expiresAt: new Date(base.getTime() + code.entitlementDays * 24 * 60 * 60 * 1000),
           llmQuotaLimit: input.llmQuotaPerActivation,
           llmQuotaUsed: 0,
@@ -343,7 +337,6 @@ export async function applyEntitlementAdjustmentWithAudit(
     const entitlement = await tx.entitlement.upsert({
       where: { userId: input.userId },
       update: {
-        status: afterExpiresAt > input.now ? "active" : "inactive",
         expiresAt: afterExpiresAt,
         llmQuotaLimit: beforeLlmQuotaLimit + (input.quotaAdd ?? 0),
         llmQuotaUsed: beforeLlmQuotaUsed,
@@ -352,7 +345,6 @@ export async function applyEntitlementAdjustmentWithAudit(
       create: {
         id: randomUUID(),
         userId: input.userId,
-        status: afterExpiresAt > input.now ? "active" : "inactive",
         expiresAt: afterExpiresAt,
         llmQuotaLimit: beforeLlmQuotaLimit + (input.quotaAdd ?? 0),
         llmQuotaUsed: beforeLlmQuotaUsed,

@@ -2467,7 +2467,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Process entry and lifecycle | `server/src/index.ts`, `bootstrap.ts`, `database.ts`, `email.ts`, `env.ts` |
 | Runtime config / observability / readiness | `server/src/runtimeConfig.ts`, `observability.ts`, `readiness.ts` |
 | Fastify HTTP composition root | `server/src/server.ts` |
-| Capability HTTP adapters | `server/src/routes/health.ts`, `admin.ts`, `desktopAuth.ts`, `desktopAccount.ts`, `desktopLlm.ts`, `desktopUpdates.ts`, `billing.ts`, `authSchemas.ts`, `shared.ts` |
+| Capability HTTP adapters | `server/src/routes/health.ts`, `admin.ts`, `desktopAuth.ts`, `desktopAccount.ts`, `desktopLlm.ts`, `billing.ts`, `authSchemas.ts`, `shared.ts` |
 | Auth services | `server/src/auth.ts`, `adminAuth.ts` |
 | Entitlement capabilities | `server/src/activation.ts`, `billing.ts`, `entitlementAdjustment.ts` |
 | Managed LLM config | `server/src/llmConfig.ts` |
@@ -2475,7 +2475,6 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Production store | `server/src/prismaStore.ts`, `server/src/prismaStore/*.ts` |
 | Admin presentation | `server/src/adminPage.ts`, `loginPage.ts` |
 | Payment adapter | `server/src/wechat.ts` |
-| Desktop update manifest | `server/src/updates.ts` |
 
 ## LLM 审计使用方式
 

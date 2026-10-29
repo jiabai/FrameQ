@@ -173,6 +173,7 @@ server/src/
   prismaStore.ts
   prismaStore/
     concurrency.ts
+    rateLimits.ts
     auth.ts
     billing.ts
     entitlements.ts
@@ -259,7 +260,8 @@ a private implementation path.
 | `store/memory/entitlements.ts` | entitlement CRUD, quota event, activation redemption, administrator adjustment/audit | payment webhook matching, authentication |
 | `store/memory/llmConfig.ts` | singleton LLM config read/upsert | key encryption, HTTP mapping, quota |
 | `prismaStore.ts` | actual exported adapter class, constructor, stable method delegation, Prisma client type boundary | transaction bodies, retry classification, SQL |
-| `prismaStore/concurrency.ts` | rate-limit reservation SQL, classified bounded conflict retry, Prisma error predicates | business outcomes, routes/services, supplier retry |
+| `prismaStore/concurrency.ts` | classified bounded conflict retry, Prisma error predicates | rate-limit reservation SQL, business outcomes, routes/services, supplier retry |
+| `prismaStore/rateLimits.ts` | conditional rate-limit reservation SQL, aggregation of all rejected release times, `RateLimitExceededError` | transaction commit, routes/services, supplier retry |
 | `prismaStore/auth.ts` | user/OTP/ticket/session operations and complete auth transactions | billing, entitlement/accounting |
 | `prismaStore/billing.ts` | order/webhook operations and complete paid-order settlement transaction | activation, administrator adjustment |
 | `prismaStore/entitlements.ts` | entitlement/quota/activation/administrator operations and their complete transactions | payment webhook matching, authentication |
@@ -314,6 +316,7 @@ flowchart TD
   PrismaEntitlements --> PrismaSdk
   PrismaConfig --> PrismaSdk
   PrismaAuth --> Concurrency["prismaStore/concurrency.ts"]
+  PrismaAuth --> RateLimits["prismaStore/rateLimits.ts"]
   PrismaEntitlements --> Concurrency
   MemoryRoot --> Atomic["store/memory/atomic.ts"]
   MemoryRoot --> MemoryAuth["store/memory/auth.ts"]
@@ -463,7 +466,8 @@ only because the private files do not yet exist. The completed gate proves:
 - only the existing infrastructure owner `database.ts`, `prismaStore.ts`, and its private Prisma
   tree import `@prisma/client`; `database.ts` remains limited to client lifecycle/readiness and does
   not own Store transactions;
-- only `prismaStore/concurrency.ts` owns retry/error/rate-limit SQL helpers;
+- only `prismaStore/concurrency.ts` owns retry/error classification helpers, and only
+  `prismaStore/rateLimits.ts` owns conditional rate-limit reservation SQL;
 - every semantic transaction is implemented by exactly one approved backend owner;
 - no service or route outside the `server.ts` composition root accepts the full Store when its
   approved narrow port is sufficient;

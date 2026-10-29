@@ -10,6 +10,11 @@
 
 - 受影响代码路径、文档事实来源或方案来源已 inspect。
 - 文档结构验证通过：`uv run python scripts/validate_agents_docs.py --level ERROR`。
+- 涉及脚本、workflow、契约、脚本读取的源码或发布版本来源时，必须通过
+  `node --test scripts/tests/*.test.mjs` 与 `python -m pytest scripts/tests`。
+  `.github/workflows/scripts-ci.yml` 在 main 推送、pull request 和手动触发时分别于 Windows、
+  macOS 执行这两类测试和文档治理。测试依赖需先在 `app/` 执行 `npm ci`，Python 环境需有
+  pytest；CI 使用独立 Python 环境安装 pytest。托管结果需在提交后核实。
 - touched active ExecPlan 的 Progress、Decision Log 和验证记录已更新。
 - 架构、安全、流程、运行时 contract 或导出行为变化已同步到 durable docs。
 - 涉及 worker 的改动必须至少运行 focused Python 测试或等价命令。

@@ -99,3 +99,11 @@ bounded worker stdin. Invalid-request messages must not contain the URL, model c
 payload, parser details, credentials, or local paths. A contract mismatch fails before source
 resolution, download, cache mutation, or task creation. The user can retry after installing a
 synchronized desktop build; there is no compatibility fallback to the retired payload.
+
+Worker stdin 为空、包含无效 UTF-8、无效 JSON、非对象 JSON 或超过 1 MiB 时，必须在任务执行前返回
+`WORKER_STDIN_INVALID`，消息固定为 `Worker request stdin was invalid.`，退出码为 1。
+`process_video`、`process_local_media` 与 `retry_insights` 的失败结果统一通过
+`ProcessResult.to_dict()` 生成完整 task 结果，包含 `dissection: null` 和 `draft: ""`。
+前两种操作的错误阶段为 `waiting_input`，`retry_insights` 为 `insights_generating`。
+`resolve_source_identity` 使用独立的封闭 source 失败结果，仅包含 `status` 和 `error.code`。
+这些拒绝路径均不得回显原始输入、创建任务或触发下载与 AI 调用。

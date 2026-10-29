@@ -34,7 +34,13 @@ const ALLOWED_DESTINATIONS: [&str; 14] = [
     "ai/draft.md",
     "ai/original/draft.md",
 ];
-const INTERNAL_PARENTS: [&str; 5] = [".", "ai", "ai/original", "transcript", "transcript/original"];
+const INTERNAL_PARENTS: [&str; 5] = [
+    ".",
+    "ai",
+    "ai/original",
+    "transcript",
+    "transcript/original",
+];
 
 pub(crate) fn allowed_destinations_for_test() -> [&'static str; 14] {
     ALLOWED_DESTINATIONS
@@ -565,3 +571,6 @@ pub(super) fn validate_journal_value_for_test(value: serde_json::Value) -> Resul
         serde_json::from_value(value).map_err(|_| RECOVERY_ERROR.to_string())?;
     validate_journal(&journal).map_err(|_| RECOVERY_ERROR.to_string())
 }
+
+#[cfg(test)]
+mod contract_tests;

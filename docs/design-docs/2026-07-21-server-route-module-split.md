@@ -15,7 +15,7 @@ The long file is not evidence that FrameQ needs another facade class. `buildServ
 stable facade and composition root used by production startup and all route-level tests. The
 maintenance problem is that unrelated HTTP capabilities and failure policies share one source
 file. For example, changing an administrator cookie helper currently competes in the same module
-with desktop LLM secret checkout, public update lookup, and the WeChat raw-signature path.
+with desktop LLM secret checkout and the WeChat raw-signature path.
 
 The Store transaction boundary is already correct and must not be weakened during this split.
 Payment settlement, activation redemption, and administrator entitlement adjustment remain
@@ -25,7 +25,7 @@ move HTTP policy into services, or introduce new persistence calls.
 
 This is a structural refactor. It fixes no user-visible defect and must not change route paths,
 methods, schemas, status codes, response bodies, headers, cookies, authentication, quota
-accounting, update selection, payment gating, raw webhook verification, error text, service
+accounting, payment gating, raw webhook verification, error text, service
 lifetime, Store semantics, logging, or network behavior.
 
 ## Requirements
@@ -35,12 +35,12 @@ The split must:
 - preserve `ServerDependencies` and `buildServer(dependencies)` as the only external server
   composition contract;
 - keep `server/src/index.ts` importing and invoking only the stable `server.ts` root;
-- keep Fastify construction, all service construction, environment/default resolution, release
-  manifest loading, and the global exact-raw-body JSON parser in `server.ts`;
+- keep Fastify construction, all service construction, environment/default resolution,
+  and the global exact-raw-body JSON parser in `server.ts`;
 - register routes through synchronous capability functions with explicit, narrow dependency
   records;
-- separate administrator, desktop authentication, desktop account, desktop LLM checkout, desktop
-  update, and billing/webhook HTTP adapters;
+- separate administrator, desktop authentication, desktop account, desktop LLM checkout,
+  and billing/webhook HTTP adapters;
 - keep administrator cookie parsing/writing, CSRF header handling, and administrator response
   mapping inside the administrator capability;
 - keep desktop bearer authentication and the shared quota/error helpers in one small route-support
@@ -82,8 +82,8 @@ unreferenced. No other opportunistic cleanup belongs in this change.
 
 ### 1. Keep `server.ts` intact and add headings
 
-This has the smallest diff, but administrator security changes, desktop account changes, public
-update changes, and webhook changes would continue to collide in the same file. Comments do not
+This has the smallest diff, but administrator security changes, desktop account changes,
+and webhook changes would continue to collide in the same file. Comments do not
 create dependency or ownership boundaries.
 
 **Decision:** Rejected.
@@ -141,7 +141,6 @@ The target production files are:
 | `server/src/routes/desktopAuth.ts` | Public login page, desktop OTP start/verify, ticket exchange, and desktop logout |
 | `server/src/routes/desktopAccount.ts` | Authenticated account projection and activation-code redemption |
 | `server/src/routes/desktopLlm.ts` | Authenticated server-managed LLM checkout and quota response |
-| `server/src/routes/desktopUpdates.ts` | Public desktop update lookup and 204/no-update mapping |
 | `server/src/routes/billing.ts` | Disabled gate, authenticated native-order routes, order ownership, exact-raw-body webhook parsing, and settlement mapping |
 
 `routes/` is private by convention and by dependency gates. Production startup and external tests
@@ -164,8 +163,6 @@ export type ServerDependencies = {
   adminEmail?: string;
   wechatPayEnabled?: boolean;
   llmConfigEncryptionKey?: string;
-  releaseManifest?: DesktopReleaseManifest | null;
-  releaseManifestPath?: string;
   now?: () => Date;
 };
 
@@ -222,7 +219,6 @@ start the server.
 | `desktopAuth.ts` | `POST /api/desktop/logout` |
 | `desktopAccount.ts` | `POST /api/desktop/activation-codes/redeem` |
 | `desktopLlm.ts` | `POST /api/desktop/llm/checkouts` |
-| `desktopUpdates.ts` | `GET /api/desktop/updates/:target/:arch/:currentVersion` |
 | `billing.ts` | `POST /api/desktop/billing/wechat-native` |
 | `billing.ts` | `GET /api/desktop/billing/orders/:orderId` |
 | `billing.ts` | `POST /api/wechat/notify` |
@@ -237,7 +233,6 @@ start the server.
 | Desktop OTP/session | Input schemas, ticket/session fields, expiry serialization, remote IP use, and current error mapping remain unchanged |
 | Desktop account/redeem | Bearer token hashing, 401/400 mapping, capability fields, quota calculation, and account refresh after redemption remain unchanged |
 | LLM checkout | Authentication precedes validation/config/quota; request id policy, idempotent quota consumption, secret response fields, and 400/403 mapping remain unchanged |
-| Desktop update | Release manifest resolves once at server construction; lookup inputs and 204 empty-body behavior remain unchanged |
 | WeChat disabled gate | All three routes return 404 `WECHAT_PAY_DISABLED` before authentication or parsing when disabled |
 | Billing ownership | An authenticated user cannot read another user's order; missing/foreign orders remain 404 |
 | WeChat webhook | Custom JSON parser retains the exact submitted bytes; only the billing route forwards them to the signature parser; fallback JSON serialization remains unchanged |
@@ -254,7 +249,6 @@ flowchart TD
   Root --> Auth["routes/desktopAuth.ts"]
   Root --> Account["routes/desktopAccount.ts"]
   Root --> Llm["routes/desktopLlm.ts"]
-  Root --> Updates["routes/desktopUpdates.ts"]
   Root --> Billing["routes/billing.ts"]
   Admin --> Schemas["routes/authSchemas.ts"]
   Auth --> Schemas
@@ -289,6 +283,11 @@ the default Fastify factory and constructs services. Only `billing.ts` accesses 
   settlement, redemption, and adjustment are still owned below the route layer.
 - Administrator session and CSRF cookies remain distinct. The CSRF cookie is readable by the
   administrator page; the session cookie remains `HttpOnly`.
+- `admin.ts` privately owns `authenticateAdminMutation`, shared by logout, activation creation,
+  LLM configuration, Anysearch configuration, and entitlement adjustment. It preserves session
+  authentication before CSRF validation and both checks before payload validation or writes.
+  Logout keeps the authenticated token for revocation and the existing cookie-clearing sequence;
+  adjustment audit records use the authenticated session's email.
 - WeChat Pay remains disabled unless the already-resolved flag is exactly enabled. This refactor
   must not imply provider readiness.
 - No request, response, secret, OTP, cookie, bearer token, API key, raw webhook body, or provider
@@ -325,7 +324,7 @@ also pass.
 3. Extract desktop authentication and account routes; keep their existing focused tests green.
 4. Extract administrator and desktop LLM routes; keep admin, quota, and transaction-safety suites
    green.
-5. Extract update and billing routes, retaining the root raw-body parser; reduce `server.ts` to
+5. Extract billing routes, retaining the root raw-body parser; reduce `server.ts` to
    composition and turn the ownership suite fully green.
 6. Run complete regression/scope gates, update durable architecture/security/audit evidence with
    measured results, and archive the ExecPlan.
@@ -338,11 +337,11 @@ design review rather than adapting the contract inside this refactor.
 
 - `server.ts` is now a 112-line composition root with exactly the two stable exports
   `ServerDependencies` and `buildServer()`. It still owns Fastify, six service instances, runtime
-  defaults, release-manifest resolution, the global exact-raw-body JSON parser, and registrar
+  defaults, the global exact-raw-body JSON parser, and registrar
   composition.
 - The private route tree contains `admin.ts` (330 lines), `authSchemas.ts` (12), `billing.ts` (95),
   `desktopAccount.ts` (115), `desktopAuth.ts` (88), `desktopLlm.ts` (60),
-  `desktopUpdates.ts` (34), and `shared.ts` (30). No registrar imports another feature registrar,
+  and `shared.ts` (30). No registrar imports another feature registrar,
   Prisma/startup infrastructure, or a Fastify plugin.
 - Behavior characterization locked all 20 method/path pairs, exact webhook raw bytes, and the
   administrator cookie/CSRF wire sequence. The boundary suite first failed 4/6 against the old

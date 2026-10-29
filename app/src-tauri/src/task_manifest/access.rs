@@ -9,7 +9,7 @@ use super::{
     storage::{
         artifact_path, encode_task_manifest, ensure_artifact_parent, list_task_manifest_paths,
         load_task_manifest, path_to_frontend_string, read_task_manifest_path,
-        required_artifact_path, task_dir_for, validate_task_artifact_path, write_task_manifest,
+        required_artifact_path, task_dir_for, validate_task_artifact_path,
     },
     transaction::recover_task_artifacts,
 };
@@ -347,11 +347,6 @@ impl TaskEditSession {
 
     pub(crate) fn declared_artifacts(&self) -> HashMap<String, String> {
         self.manifest.safe_artifacts()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn save(&self) -> Result<(), String> {
-        write_task_manifest(&self.task_dir, &self.manifest)
     }
 
     pub(crate) fn encoded_manifest(&self) -> Result<Vec<u8>, String> {

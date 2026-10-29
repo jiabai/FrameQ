@@ -88,7 +88,6 @@ export type OrderRecord = {
 export type EntitlementRecord = {
   id: string;
   userId: string;
-  status: "active" | "inactive";
   expiresAt: Date;
   llmQuotaLimit: number;
   llmQuotaUsed: number;

@@ -14,7 +14,6 @@ const featureRouteFiles = [
   "desktopAccount.ts",
   "desktopAuth.ts",
   "desktopLlm.ts",
-  "desktopUpdates.ts",
   "health.ts",
   "userAuth.ts",
 ] as const;
@@ -60,7 +59,6 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
     "POST /api/desktop/llm/checkouts",
     "POST /api/desktop/anysearch/checkout",
   ],
-  "desktopUpdates.ts": ["GET /api/desktop/updates/:target/:arch/:currentVersion"],
   "health.ts": ["GET /health/live", "GET /health/ready"],
   "userAuth.ts": [
     "POST /user/auth/email/start",

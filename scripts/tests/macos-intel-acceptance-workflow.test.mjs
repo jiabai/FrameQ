@@ -58,7 +58,7 @@ test("builds one manual internal Intel macOS artifact with native tests and read
   assert.match(workflow, /lipo -archs "\$BIN"/);
   assert.match(
     workflow,
-    /import funasr, funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
+    /import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
   );
   assert.match(workflow, /bundled deno OK/);
   assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$APP"/);

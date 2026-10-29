@@ -141,6 +141,9 @@ worker 的 `build_draft_from_inspiration_prompt(seed: Insight, preference_snapsh
 - `生成文字稿` 不得在 `启发灵感` 未生成、生成失败或 `draft_seed_insight_id` 为空时发起任何 worker 调用。
 - target=draft 请求中前端不携带 `preference_snapshot`；worker 从 `ai/preference-snapshot.json` 读取，缺失则按无个性化降级，不伪造画像。
 - draft 失败的 `WorkerError.stage` 用 `JobStage.DRAFT_GENERATING`，使错误归因到 draft target 而非 insights。
+- 成稿生成默认不打印工具参数、工具返回内容、模型回复片段或完整异常转储；异常返回保留
+  `DRAFT_GENERATION_FAILED` 与 `draft_generating`，消息固定为 `Draft generation failed.`。
+  工具交付、空结果检查及已有产物的失败保护保持有效；hook 与 MCP 清理警告只包含固定事件信息。
 
 ## Acceptance Criteria
 

@@ -41,6 +41,7 @@ FrameQ 是本地优先的桌面应用：粘贴公开或已授权的视频链接�
 - 前端检查：`npm --prefix app test`、`npm --prefix app run lint`、`npm --prefix app run build`
 - 服务端检查：`npm --prefix server test`、`npm --prefix server run build`
 - Rust 检查：`cargo test --manifest-path app/src-tauri/Cargo.toml`
+- 脚本检查：`node --test scripts/tests/*.test.mjs`、`python -m pytest scripts/tests`
 - 文档治理：`uv run python scripts/validate_agents_docs.py --level ERROR`、`uv run python scripts/validate_agents_docs.py --level WARN`
 - 打包冒烟：`npm --prefix app run tauri -- build --no-bundle`
 

@@ -1,5 +1,5 @@
 use super::runner::WorkerOperation;
-use crate::task_manifest;
+use crate::task_manifest::{self, TASK_ARTIFACT_KEYS};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
@@ -26,21 +26,6 @@ pub(crate) const TASK_RESULT_FIELDS: &[&str] = &[
 ];
 #[cfg(test)]
 pub(crate) const TASK_RESULT_OPTIONAL_FIELDS: &[&str] = &["dissection_source_status"];
-pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
-    "video",
-    "audio",
-    "transcript_txt",
-    "transcript_md",
-    "segments",
-    "summary",
-    "mindmap",
-    "insights",
-    "insights_md",
-    "preference_snapshot",
-    "dissection",
-    "dissection_md",
-    "draft",
-];
 #[cfg(test)]
 pub(crate) const TASK_INSIGHT_FIELDS: &[&str] = &[
     "id",
@@ -935,6 +920,7 @@ mod tests {
             contract_artifacts,
             TASK_ARTIFACT_KEYS.iter().copied().collect::<BTreeSet<_>>()
         );
+        assert_eq!(TASK_ARTIFACT_KEYS.len(), contract_artifacts.len());
         let contract_insights = terminal["schemas"]["task"]["properties"]["insights"]["items"]
             ["properties"]
             .as_object()

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ActivationCodeService } from "../activation.js";
 import { adminSessionMaxAgeSeconds, type AdminAuthService } from "../adminAuth.js";
@@ -73,6 +73,25 @@ type AdminRouteDependencies = {
   now: () => Date;
 };
 
+async function authenticateAdminMutation(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  adminAuth: AdminAuthService,
+) {
+  const sessionToken = parseCookies(request.headers.cookie).get("frameq_admin_session") ?? null;
+  const session = await adminAuth.authenticate(sessionToken);
+  if (!session || !sessionToken) {
+    reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
+    return null;
+  }
+  const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
+  if (!adminAuth.validateCsrf(session, csrfToken)) {
+    reply.code(403).send({ error: "CSRF_INVALID" });
+    return null;
+  }
+  return { session, sessionToken };
+}
+
 export function registerAdminRoutes(
   app: FastifyInstance,
   dependencies: AdminRouteDependencies,
@@ -145,17 +164,11 @@ export function registerAdminRoutes(
   });
 
   app.post("/admin/auth/logout", async (request, reply) => {
-    const cookies = parseCookies(request.headers.cookie);
-    const sessionToken = cookies.get("frameq_admin_session") ?? null;
-    const session = await dependencies.adminAuth.authenticate(sessionToken);
-    if (!session || !sessionToken) {
-      return reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
+    const authenticated = await authenticateAdminMutation(request, reply, dependencies.adminAuth);
+    if (!authenticated) {
+      return reply;
     }
-    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
-    if (!dependencies.adminAuth.validateCsrf(session, csrfToken)) {
-      return reply.code(403).send({ error: "CSRF_INVALID" });
-    }
-    await dependencies.store.revokeAdminSession(sha256(sessionToken), dependencies.now());
+    await dependencies.store.revokeAdminSession(sha256(authenticated.sessionToken), dependencies.now());
     clearCookie(reply, "frameq_admin_session", true, dependencies.secureCookies);
     clearCookie(reply, "frameq_admin_csrf", false, dependencies.secureCookies);
     return { ok: true, redirect_url: "/admin/login" };
@@ -202,16 +215,9 @@ export function registerAdminRoutes(
   });
 
   app.post("/admin/api/activation-codes", async (request, reply) => {
-    const cookies = parseCookies(request.headers.cookie);
-    const session = await dependencies.adminAuth.authenticate(
-      cookies.get("frameq_admin_session") ?? null,
-    );
-    if (!session) {
-      return reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
-    }
-    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
-    if (!dependencies.adminAuth.validateCsrf(session, csrfToken)) {
-      return reply.code(403).send({ error: "CSRF_INVALID" });
+    const authenticated = await authenticateAdminMutation(request, reply, dependencies.adminAuth);
+    if (!authenticated) {
+      return reply;
     }
     const parsed = adminActivationCreateSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -230,16 +236,9 @@ export function registerAdminRoutes(
   });
 
   app.post("/admin/api/llm-config", async (request, reply) => {
-    const cookies = parseCookies(request.headers.cookie);
-    const session = await dependencies.adminAuth.authenticate(
-      cookies.get("frameq_admin_session") ?? null,
-    );
-    if (!session) {
-      return reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
-    }
-    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
-    if (!dependencies.adminAuth.validateCsrf(session, csrfToken)) {
-      return reply.code(403).send({ error: "CSRF_INVALID" });
+    const authenticated = await authenticateAdminMutation(request, reply, dependencies.adminAuth);
+    if (!authenticated) {
+      return reply;
     }
     const parsed = adminLlmConfigSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -263,16 +262,9 @@ export function registerAdminRoutes(
   });
 
   app.post("/admin/api/anysearch-config", async (request, reply) => {
-    const cookies = parseCookies(request.headers.cookie);
-    const session = await dependencies.adminAuth.authenticate(
-      cookies.get("frameq_admin_session") ?? null,
-    );
-    if (!session) {
-      return reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
-    }
-    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
-    if (!dependencies.adminAuth.validateCsrf(session, csrfToken)) {
-      return reply.code(403).send({ error: "CSRF_INVALID" });
+    const authenticated = await authenticateAdminMutation(request, reply, dependencies.adminAuth);
+    if (!authenticated) {
+      return reply;
     }
     const parsed = adminAnysearchConfigSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -294,16 +286,9 @@ export function registerAdminRoutes(
   });
 
   app.post("/admin/api/users/:userId/entitlement-adjustments", async (request, reply) => {
-    const cookies = parseCookies(request.headers.cookie);
-    const session = await dependencies.adminAuth.authenticate(
-      cookies.get("frameq_admin_session") ?? null,
-    );
-    if (!session) {
-      return reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
-    }
-    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
-    if (!dependencies.adminAuth.validateCsrf(session, csrfToken)) {
-      return reply.code(403).send({ error: "CSRF_INVALID" });
+    const authenticated = await authenticateAdminMutation(request, reply, dependencies.adminAuth);
+    if (!authenticated) {
+      return reply;
     }
     const params = request.params as { userId?: string };
     const userId = params.userId ?? "";
@@ -312,7 +297,7 @@ export function registerAdminRoutes(
       return reply.code(400).send({ error: "INVALID_REQUEST" });
     }
     const applied = await dependencies.entitlementAdjustments.apply({
-      adminEmail: session.email,
+      adminEmail: authenticated.session.email,
       userId,
       reason: parsed.data.reason,
       note: parsed.data.note,

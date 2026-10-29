@@ -23,8 +23,15 @@ export async function reserveEmailDispatchRateLimits(
   reservations: EmailDispatchRateLimitReservation[],
   now: Date,
 ): Promise<void> {
+  let latestBlockedAt: Date | null = null;
   for (const reservation of reservations) {
-    await reserveEmailDispatchRateLimit(tx, reservation, now);
+    const blockedAt = await reserveEmailDispatchRateLimit(tx, reservation, now);
+    if (blockedAt !== null && (latestBlockedAt === null || blockedAt > latestBlockedAt)) {
+      latestBlockedAt = blockedAt;
+    }
+  }
+  if (latestBlockedAt !== null) {
+    throw new RateLimitExceededError(latestBlockedAt);
   }
 }
 
@@ -32,7 +39,7 @@ async function reserveEmailDispatchRateLimit(
   tx: Prisma.TransactionClient,
   reservation: EmailDispatchRateLimitReservation,
   now: Date,
-): Promise<void> {
+): Promise<Date | null> {
   const nextAllowedAt = new Date(
     reservation.windowStart.getTime() + reservation.windowSeconds * 1000,
   );
@@ -63,10 +70,10 @@ async function reserveEmailDispatchRateLimit(
     RETURNING "nextAllowedAt"
   `);
   if (rows.length > 0) {
-    return;
+    return null;
   }
   const existing = await tx.authRateLimit.findUnique({
     where: { keyHash: reservation.key },
   });
-  throw new RateLimitExceededError(existing?.nextAllowedAt ?? nextAllowedAt);
+  return existing?.nextAllowedAt ?? nextAllowedAt;
 }

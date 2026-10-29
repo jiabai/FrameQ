@@ -14,7 +14,7 @@ Apply the Oil Find reference system that the user reviewed and approved to the e
 
 ## Surprises & Discoveries
 
-Evidence: `site/src/layouts/BaseLayout.astro` currently loads ripple, parallax, tilt, and cursor-glow effects. These are incompatible with the approved reference and will be disconnected, while their source files remain available.
+Evidence: `site/src/layouts/BaseLayout.astro` uses shared CSS and native controls for the approved interaction feedback. The three routes follow the Native Surface motion rules in `site/DESIGN.md`.
 
 Evidence: The reference's white text on #2f7cf6 measures approximately 3.94:1. Small filled controls will use #1f66d6 (approximately 5.34:1), while #2f7cf6 remains the highlight and large-CTA color.
 

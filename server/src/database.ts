@@ -43,9 +43,15 @@ export function createDatabaseReadinessChecks(prisma: PrismaClient) {
       await prisma.$queryRawUnsafe(
         'SELECT "purpose", "scope", "keyHash" FROM "AuthRateLimit" LIMIT 0',
       );
-      await prisma.$queryRawUnsafe(
-        'SELECT "llmQuotaLimit", "llmQuotaUsed" FROM "Entitlement" LIMIT 0',
+      const entitlementColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        'PRAGMA table_info("Entitlement")',
       );
+      const columns = new Set(entitlementColumns.map((column) => column.name));
+      if (columns.has("status") || ![
+        "id", "userId", "expiresAt", "llmQuotaLimit", "llmQuotaUsed", "updatedAt",
+      ].every((column) => columns.has(column))) {
+        throw new Error("DATABASE_SCHEMA_INCOMPATIBLE");
+      }
       await prisma.$queryRawUnsafe(
         'SELECT "requestId" FROM "LlmUsageEvent" LIMIT 0',
       );

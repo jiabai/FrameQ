@@ -29,7 +29,6 @@ async function main(): Promise<void> {
       selfServiceActivationEnabled: runtimeConfig.selfServiceActivationEnabled,
       wechatPayEnabled: runtimeConfig.wechatPayEnabled,
       llmConfigEncryptionKey: runtimeConfig.llmConfigEncryptionKey,
-      releaseManifestPath: runtimeConfig.releaseManifestPath,
       observability: createObservabilityConfig(runtimeConfig.environment === "production"),
       trustLoopbackProxy: runtimeConfig.trustLoopbackProxy,
       readiness,

@@ -1,15 +1,19 @@
-import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, test } from "vitest";
+import { createDatabaseReadinessChecks } from "../src/database.js";
 
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const schemaPath = join(serverRoot, "prisma", "schema.prisma");
 const baselinePath = join(serverRoot, "prisma", "migrations", "202607220001_baseline", "migration.sql");
 const prismaCliPath = join(serverRoot, "node_modules", "prisma", "build", "index.js");
+const entitlementMigration = "202610290001_remove_entitlement_status";
 const directories: string[] = [];
 
 afterEach(() => {
@@ -109,7 +113,7 @@ describe("reviewed Prisma migration chain", () => {
     const { databasePath } = temporaryDatabase();
     new DatabaseSync(databasePath).close();
 
-    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("7 migrations");
+    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("8 migrations");
     expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("No pending migrations");
     expect(runPrisma(databasePath, ["migrate", "status"])).toContain(
       "Database schema is up to date",
@@ -119,6 +123,10 @@ describe("reviewed Prisma migration chain", () => {
     try {
       const integrity = database.prepare("PRAGMA integrity_check").get() as { integrity_check: string };
       expect(integrity.integrity_check).toBe("ok");
+      const entitlementColumns = database.prepare('PRAGMA table_info("Entitlement")').all() as Array<{ name: string }>;
+      expect(entitlementColumns.map((column) => column.name)).toEqual([
+        "id", "userId", "expiresAt", "llmQuotaLimit", "llmQuotaUsed", "updatedAt",
+      ]);
       const otpColumns = database.prepare('PRAGMA table_info("EmailOtp")').all() as Array<{ name: string }>;
       expect(otpColumns.map((column) => column.name)).toContain("purpose");
       const activationColumns = database.prepare('PRAGMA table_info("ActivationCode")').all() as Array<{ name: string }>;
@@ -146,6 +154,7 @@ describe("reviewed Prisma migration chain", () => {
         { migration_name: "202608240002_auth_rate_limit_self_service_purpose" },
         { migration_name: "202608240003_self_service_active_unique" },
         { migration_name: "202610100001_anysearch_config" },
+        { migration_name: entitlementMigration },
       ]);
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -273,6 +282,108 @@ describe("reviewed Prisma migration chain", () => {
       restored.close();
     }
   }, 30_000);
+
+  test("removes only entitlement status from the previous schema and preserves recovery and constraints", async () => {
+    const { directory, databasePath } = temporaryDatabase();
+    const migrationsRoot = join(serverRoot, "prisma", "migrations");
+    const previousMigrations = readdirSync(migrationsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name < entitlementMigration)
+      .map((entry) => entry.name)
+      .sort();
+    const previous = new DatabaseSync(databasePath);
+    const timestamp = Date.parse("2026-10-29T08:00:00.000Z");
+    const selectEntitlements = 'SELECT "id", "userId", "expiresAt", "llmQuotaLimit", "llmQuotaUsed", "updatedAt" FROM "Entitlement" ORDER BY "id"';
+    let before;
+    let indexes;
+    let foreignKeys;
+    try {
+      for (const migration of previousMigrations) {
+        previous.exec(readFileSync(join(migrationsRoot, migration, "migration.sql"), "utf8"));
+      }
+      for (const [index, status] of ["inactive", "active", "legacy-status"].entries()) {
+        previous.prepare('INSERT INTO "User" ("id", "email", "createdAt", "updatedAt") VALUES (?, ?, ?, ?)')
+          .run(`expiry-user-${index}`, `expiry-${index}@example.com`, timestamp, timestamp);
+        previous.prepare('INSERT INTO "Entitlement" ("id", "userId", "status", "expiresAt", "llmQuotaLimit", "llmQuotaUsed", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(`expiry-${index}`, `expiry-user-${index}`, status, timestamp + (1 - index) * 86_400_000, 20 + index, index, timestamp);
+      }
+      before = previous.prepare(selectEntitlements).all();
+      indexes = previous.prepare('PRAGMA index_list("Entitlement")').all();
+      foreignKeys = previous.prepare('PRAGMA foreign_key_list("Entitlement")').all();
+    } finally {
+      previous.close();
+    }
+    for (const migration of previousMigrations) {
+      runPrisma(databasePath, ["migrate", "resolve", "--applied", migration]);
+    }
+    const oldClient = new PrismaClient({ datasources: { db: { url: databaseUrl(databasePath) } } });
+    try {
+      await expect(createDatabaseReadinessChecks(oldClient).verifySchema()).rejects.toThrow("DATABASE_SCHEMA_INCOMPATIBLE");
+    } finally {
+      await oldClient.$disconnect();
+    }
+    const oldPreflight = spawnSync(process.execPath, [
+      join(serverRoot, "scripts", "database-preflight.mjs"),
+      "--database", databasePath, "--mode", "current",
+    ], { cwd: serverRoot, encoding: "utf8" });
+    expect(oldPreflight.status).toBe(1);
+    expect(oldPreflight.stderr).toContain('"error_code":"DATABASE_SCHEMA_INCOMPATIBLE"');
+    const backupPath = join(directory, "before-status-removal.sqlite");
+    copyFileSync(databasePath, backupPath);
+    const backupHash = createHash("sha256").update(readFileSync(backupPath)).digest("hex");
+    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain(entitlementMigration);
+    expect(runPrisma(databasePath, ["migrate", "status"])).toContain("Database schema is up to date");
+    const current = new DatabaseSync(databasePath);
+    try {
+      current.exec("PRAGMA foreign_keys=ON");
+      const columns = current.prepare('PRAGMA table_info("Entitlement")').all() as Array<{ name: string }>;
+      expect(columns.map((column) => column.name)).not.toContain("status");
+      expect(current.prepare(selectEntitlements).all()).toEqual(before);
+      expect(current.prepare('PRAGMA index_list("Entitlement")').all()).toEqual(indexes);
+      expect(current.prepare('PRAGMA foreign_key_list("Entitlement")').all()).toEqual(foreignKeys);
+      for (const update of ['"llmQuotaLimit" = -1', '"llmQuotaUsed" = -1', '"llmQuotaUsed" = 999']) {
+        expect(() => current.prepare(`UPDATE "Entitlement" SET ${update} WHERE "id" = ?`).run("expiry-0")).toThrow();
+      }
+      const insert = current.prepare('INSERT INTO "Entitlement" ("id", "userId", "expiresAt", "llmQuotaLimit", "llmQuotaUsed", "updatedAt") VALUES (?, ?, ?, ?, ?, ?)');
+      expect(() => insert.run("duplicate-user", "expiry-user-0", timestamp, 0, 0, timestamp)).toThrow();
+      expect(() => insert.run("orphan", "missing-user", timestamp, 0, 0, timestamp)).toThrow();
+      expect(current.prepare(selectEntitlements).all()).toEqual(before);
+      expect(current.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+      expect(current.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      current.close();
+    }
+    const client = new PrismaClient({ datasources: { db: { url: databaseUrl(databasePath) } } });
+    try {
+      await expect(createDatabaseReadinessChecks(client).verifySchema()).resolves.toBeUndefined();
+      const records = await client.entitlement.findMany();
+      expect(records).toHaveLength(3);
+      for (const record of records) {
+        expect(record).not.toHaveProperty("status");
+      }
+    } finally {
+      await client.$disconnect();
+    }
+    const migratedRestorePath = join(directory, "migrated-restore.sqlite");
+    copyFileSync(databasePath, migratedRestorePath);
+    const restoredCheck = execFileSync(process.execPath, [
+      join(serverRoot, "scripts", "restore-smoke.mjs"), "--database", migratedRestorePath,
+    ], { cwd: serverRoot, stdio: "pipe" });
+    expect(JSON.parse(restoredCheck.toString("utf8"))).toMatchObject({ status: "ok" });
+    expect(createHash("sha256").update(readFileSync(backupPath)).digest("hex")).toBe(backupHash);
+    const rollbackPath = join(directory, "pre-migration-restored.sqlite");
+    copyFileSync(backupPath, rollbackPath);
+    const rollback = new DatabaseSync(rollbackPath);
+    try {
+      expect(rollback.prepare(selectEntitlements).all()).toEqual(before);
+      expect(rollback.prepare('SELECT "status" FROM "Entitlement" ORDER BY "id"').all()).toEqual([
+        { status: "inactive" }, { status: "active" }, { status: "legacy-status" },
+      ]);
+      expect(rollback.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+      expect(rollback.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      rollback.close();
+    }
+  }, 60_000);
 
   test("rejects invalid historical quota instead of clamping accounting state", () => {
     const { databasePath } = temporaryDatabase();

@@ -182,18 +182,6 @@ export function isUpdateInstallBlocked(input: {
   return input.processingActive || input.modelDownloadActive;
 }
 
-export function shouldShowToolbarUpdateReminder(state: UpdateState, nowMs = Date.now()): boolean {
-  if (state.status === "available" || state.status === "ready_to_restart") {
-    return true;
-  }
-
-  if (state.status === "postponed") {
-    return Boolean(state.postponedUntil && nowMs >= state.postponedUntil);
-  }
-
-  return state.status === "downloading" || state.status === "installing";
-}
-
 function normalizeByteCount(value: number | undefined): number {
   return Number.isFinite(value) && value && value > 0 ? value : 0;
 }

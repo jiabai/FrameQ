@@ -96,6 +96,11 @@ rehearsed forward/restore path.
 - OTP dispatch limits are database-backed and atomically enforce bounded email and trusted-client-IP
   policies across overlapping requests and process restarts. An in-memory map or reverse-proxy
   header alone is not a correctness boundary.
+- A denied dispatch reports the latest release time among all windows already blocking that request.
+  All conditional reservations remain in the same Store transaction; rejection rolls back every
+  counter and related OTP/account write. Counts reserved by this attempt must not be reclassified as
+  pre-existing blockers. Memory and Prisma implementations must return the same result for the same
+  window state and request time.
 - One semantic Store transaction records an OTP attempt, consumes a matching challenge, and creates
   the resulting desktop ticket or administrator session. One challenge creates at most one artifact
   and never exceeds five attempts.
@@ -104,6 +109,11 @@ rehearsed forward/restore path.
 - One AI Credit checkout uses a database conditional entitlement update plus the existing unique
   `(userId, requestId)` usage event in the same transaction. Distinct concurrent requests cannot
   exceed remaining quota; a repeated request ID consumes at most once.
+- Entitlement validity is derived from `expiresAt > now`; equality is expired. The database and
+  internal Store record persist expiry and quota accounting without an entitlement status field.
+  The existing public `entitlement_status` response remains derived from expiry. A forward migration
+  removes the redundant column while preserving IDs, expiry, quota values, constraints and indexes;
+  startup and preflight reject the unmigrated entitlement schema.
 - Only recognized SQLite/Prisma transaction conflicts receive a small bounded local retry. Retry
   does not send SMTP, call an LLM supplier, or spend another external Credit; unknown failures fail
   immediately with a fixed non-echoing response.

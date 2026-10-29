@@ -86,10 +86,6 @@ export function getExportPath(tab: ExportTarget, state: WorkflowState): string |
   return getTaskArtifactPath(state, "insights_md") ?? getTaskArtifactPath(state, "insights");
 }
 
-export function hasArtifact(state: WorkflowState, key: TaskArtifactKey): boolean {
-  return Boolean(state.taskDir && state.artifacts[key]);
-}
-
 export function getTaskArtifactPath(
   state: WorkflowState,
   key: TaskArtifactKey,

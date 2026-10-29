@@ -20,7 +20,7 @@ pub(crate) use dissection::{DissectionSourceStatus, DissectionView};
 #[allow(unused_imports)]
 pub(crate) use schema::{
     parse_insight_view, parse_insights_payload, InsightView, SafeTaskError, TaskArtifact,
-    TaskSourceSummary, TranscriptMetadata,
+    TaskSourceSummary, TranscriptMetadata, TASK_ARTIFACT_KEYS,
 };
 pub(crate) use source_identity::SourceIdentity;
 #[allow(unused_imports)]

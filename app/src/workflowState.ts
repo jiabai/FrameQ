@@ -338,10 +338,6 @@ export function startInsightRetry(state: WorkflowState, target: InsightRetryTarg
   };
 }
 
-export function cancelProcessing(state: WorkflowState): WorkflowState {
-  return confirmProcessingCancellation(state);
-}
-
 export function requestProcessingCancellation(state: WorkflowState): WorkflowState {
   const cancellingFromStage = state.stage;
   if (
@@ -424,14 +420,6 @@ export function getToolbarNewTaskButtonState(stage: WorkflowStage): ToolbarNewTa
     title: uiMessage("workflow.toolbar.newTask"),
   };
 }
-export function getVisibleWorkflowError(state: WorkflowState): WorkerErrorResult | null {
-  if (!state.error) {
-    return null;
-  }
-
-  return state.stage === "failed" || state.stage === "partial_completed" ? state.error : null;
-}
-
 export function summarizeWorkerResult(
   result: WorkerResult,
   failedAiTarget: InsightRetryTarget | null = null,
@@ -506,20 +494,6 @@ export function finishInsightRetry(
         ? false
         : state.draftEdited,
   };
-}
-
-export function getTranscriptSourceLabel(state: WorkflowState): UiMessage | null {
-  if (!state.transcript) {
-    return null;
-  }
-  if (state.transcript.source === "subtitle") {
-    return state.transcript.language
-      ? uiMessage("transcript.review.source.subtitleWithLanguage", {
-          language: state.transcript.language,
-        })
-      : uiMessage("transcript.review.source.subtitle");
-  }
-  return uiMessage("transcript.review.source.asr");
 }
 
 export function mergeProgressEvent(

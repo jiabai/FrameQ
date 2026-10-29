@@ -26,6 +26,8 @@ FrameQ already ships as a lightweight desktop installer with bundled runtime res
 
 - Updates use Tauri updater signed artifacts.
 - GitHub Releases hosts the public static `latest.json` updater metadata for published stable releases.
+- FrameQ account server keeps its account, activation, entitlement and AI checkout responsibilities.
+  Desktop updater metadata and signatures are distributed through the GitHub Releases endpoint.
 - `latest.json` must be published as UTF-8 without BOM so Tauri updater can decode it as JSON.
 - Release metadata contains version, publication date, platform-specific artifact URL, signature, and release notes.
 - Large installer/update artifacts are served from GitHub Release assets; SQLite does not store package binaries.
@@ -35,7 +37,7 @@ FrameQ already ships as a lightweight desktop installer with bundled runtime res
 
 - No independent worker hot-update package in v1.
 - No downgrade support.
-- No beta/canary channel in v1, though the server API may reserve a `channel` query parameter.
+- No beta/canary channel in v1.
 - No forced update gate in v1.
 
 ## Acceptance Criteria
@@ -44,6 +46,9 @@ FrameQ already ships as a lightweight desktop installer with bundled runtime res
 - The one-click updater feature is accepted for v1 based on automated tests, updater manifest/artifact generation, Tauri signature-verification configuration, and the fallback ability to distribute a fresh installer directly.
 - An old installed build can detect a newer published GitHub Release, download it, install it, and relaunch when the user's network can reliably access GitHub Releases.
 - Current-version clients receive no update from Tauri updater when `latest.json` does not describe a newer version.
+- Requests to `/api/desktop/updates/:target/:arch/:currentVersion` receive the account server's
+  standard 404 response. Supported account and checkout routes remain available through the
+  existing `/api/desktop/` Nginx proxy.
 - Invalid release metadata, missing signatures, and platform mismatches are not published to clients.
 - Existing ASR model cache, outputs, history, local settings, and desktop session survive the upgrade.
 - Offline or server-failing checks show a recoverable error only when manually triggered and do not block local transcription.

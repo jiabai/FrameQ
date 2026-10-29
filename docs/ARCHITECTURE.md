@@ -1,5 +1,10 @@
 # FrameQ Architecture
 
+## Desktop update distribution
+
+- 桌面更新使用 Tauri updater 与 GitHub Releases 的签名更新清单；账号服务负责账号、激活、权益和 AI checkout。
+- 服务端 HTTP 能力由 `server/src/routes/` 的显式注册表维护；未注册的更新路径返回标准 404。
+
 ## 2026-10-25 Intelligent extraction agent boundary
 
 - 「要点总结」 (`summary`), 「启发灵感」 (`insights`) and 「文字稿解剖」 (`dissection`) each
@@ -570,6 +575,14 @@
 - `SupportedTask` is a validated capability, not another persisted DTO. Application callers use a
   closed `TaskArtifact` enum and receive safe projections or validated task-local capabilities;
   transcript mutation is restricted to `TaskEditSession`.
+- `TaskEditSession::encoded_manifest()` 生成保留未知字段与末尾换行的 manifest 字节；调用方将这些
+  字节和关联产物交给 `commit_task_artifacts()`，由任务 journal 统一提交。
+- `schema.rs` 定义唯一的 `TASK_ARTIFACT_KEYS`，经 `task_manifest` 根模块导出，供 manifest 路径
+  校验与 Worker 结果校验共用；契约测试核对完整键集合、唯一性和 manifest 对各字段的支持。
+- 事务契约的标识格式、条目数量、内部路径、可空字段及提交顺序，由
+  `worker/tests/test_task_transaction_contract_rules.py` 和 Rust
+  `task_manifest/transaction/contract_tests.rs` 直接读取契约并核对原生实现；两端使用真实文件
+  验证 prepared/committed 恢复行为，并分别验证九项声明的独立差异能够被检测。
 - A scan isolates corrupt, unsupported, or racing individual task entries while preserving failure
   for an unreadable configured task root. This keeps History and cache fail-closed without allowing
   one damaged task to hide valid tasks.
@@ -835,8 +848,10 @@
   snapshots/restores the complete mutable adapter state; capability-local locks or partial
   snapshots are forbidden.
 - Private Prisma owners separate authentication, billing, entitlement/accounting, and LLM
-  configuration. `prismaStore/concurrency.ts` alone owns authentication rate-limit reservation
-  SQL, recognized conflict/error classification, the fixed three-attempt bound, and
+  configuration. `prismaStore/rateLimits.ts` owns conditional rate-limit reservations and returns
+  the latest release time across blocked windows, with the caller's transaction rolling back all
+  rejected reservations. `prismaStore/concurrency.ts` owns recognized conflict/error classification,
+  the fixed three-attempt bound, and
   `attempt * 5` backoff.
 - Each of the eight cross-record semantic operations has exactly one Memory owner and one Prisma
   owner. A transaction client may be used only inside the private Prisma tree and never crosses
@@ -848,6 +863,11 @@
 
 ## 2026-07-10 Server Entitlement Transaction Boundary
 
+- Entitlement validity is derived from `expiresAt > now`; equality is expired. The persisted model
+  and `EntitlementRecord` contain expiry and quota accounting without a status field. The public
+  `entitlement_status` projection remains derived from expiry. Migration
+  `202610290001_remove_entitlement_status` preserves the remaining data and database constraints;
+  startup checks and current preflight reject the unmigrated entitlement schema.
 - `Store` is the only persistence boundary for payment settlement, activation-code redemption, and administrator entitlement compensation. Its semantic methods return the final entitlement and, for compensation, its audit record; no caller coordinates those writes itself.
 - `PrismaStore` owns one interactive `this.prisma.$transaction(...)` per semantic operation. The transaction callback is not exposed to services or Fastify routes and contains all validation reads, conditional state transitions, entitlement writes, webhook/audit writes, and final reads.
 - `BillingService`, `ActivationCodeService`, and the entitlement-adjustment use case own policy invocation and compatible error mapping. Fastify routes own only authentication, CSRF, request parsing, and HTTP mapping.
