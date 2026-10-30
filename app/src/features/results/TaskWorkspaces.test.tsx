@@ -804,12 +804,12 @@ describe("task domain workspaces", () => {
   });
 
   test.each([
-    ["zh-CN", "本地文字稿工作区", "文字稿校对", "播放音频", "编辑此片段", "复制", "导出", "保存"],
-    ["zh-TW", "本機逐字稿工作區", "逐字稿校對", "播放音訊", "編輯此片段", "複製", "匯出", "儲存"],
-    ["en-US", "Local Transcript workspace", "Transcript Review", "Play audio", "Edit this segment", "Copy", "Export", "Save"],
+    ["zh-CN", "本地文字稿工作区", "文字稿校对", "播放音频", "编辑此片段", "复制", "定位文字稿", "保存"],
+    ["zh-TW", "本機逐字稿工作區", "逐字稿校對", "播放音訊", "編輯此片段", "複製", "在檔案管理器中顯示文字稿", "儲存"],
+    ["en-US", "Local Transcript workspace", "Transcript Review", "Play audio", "Edit this segment", "Copy", "Show Transcript in Folder", "Save"],
   ] as const)(
     "localizes transcript controls and audio accessibility copy in %s",
-    async (locale, workspaceLabel, title, playAudio, editSegment, copy, exportLabel, save) => {
+    async (locale, workspaceLabel, title, playAudio, editSegment, copy, locateTranscript, save) => {
       await initializeI18n(locale as SupportedLocale);
       const workflow = readyWorkflow();
       const model = createTaskWorkspaceViewModel(workflow, aiAccount());
@@ -830,7 +830,7 @@ describe("task domain workspaces", () => {
       expect(markup).toContain(`aria-label="${playAudio}"`);
       expect(markup).toContain(`aria-label="${editSegment}"`);
       expect(markup).toContain(`>${copy}</span>`);
-      expect(markup).toContain(`>${exportLabel}</span>`);
+      expect(markup).toContain(`>${locateTranscript}</span>`);
       expect(markup).toContain(`>${save}</span>`);
       expect(markup).toContain("第一段正式文字稿。");
 

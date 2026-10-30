@@ -18,6 +18,18 @@
 
 ## Active UI Work
 
+- [x] Remove the duplicated export action from the transcript review footer (2026-10-30) — ✅ Reported
+  from the v0.4.3 result screen: the review footer「导出」and the artifact toolbar「定位文字稿」both
+  called `exportTranscript`, which only runs `revealItemInDir` on the same `transcript.txt`, so two
+  buttons in one panel did exactly the same thing, and「导出」promised a saved copy that never
+  happened. The footer now keeps only「复制」and「保存」, locating stays in the toolbar trio (video /
+  audio / transcript), and the unused `review.export` key is gone from all three locales. Validation:
+  a new panel case asserts the action bar exposes exactly two buttons, the workspace localization
+  case now asserts the toolbar locate label per locale, frontend 86 files / 868 tests, lint and
+  i18n literal checks, docs governance all pass. Docs: the originating spec
+  `2026-10-20-transcript-locate-action.md` carries the revision note and `DESIGN.md` states that the
+  transcript panel has no export entry. Not yet in a desktop release.
+
 - [x] Fix the polish button that stayed on「复制文字稿」after saving an edited original (2026-10-30) — ✅
   Reported from the v0.4.3 real-installer smoke: editing the official transcript and saving
   left the toolbar on「复制文字稿」until the task was reopened, so a click in that window copied the

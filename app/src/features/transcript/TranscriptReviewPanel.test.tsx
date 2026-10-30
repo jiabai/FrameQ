@@ -103,3 +103,20 @@ describe("transcript review panel dissection source highlighting", () => {
     expect(markup.match(/dissection-source/g)).toHaveLength(1);
   });
 });
+
+describe("transcript review panel action bar", () => {
+  beforeAll(async () => {
+    await initializeI18n("zh-CN");
+  });
+
+  test("keeps only copy and save so locating the transcript file is not duplicated", () => {
+    const markup = renderPanel(null);
+    const footer = markup.match(
+      /<footer class="transcript-action-bar">[\s\S]*?<\/footer>/,
+    );
+    expect(footer).not.toBeNull();
+
+    const footerButtonCount = [...(footer?.[0] ?? "").matchAll(/<button/g)].length;
+    expect(footerButtonCount).toBe(2);
+  });
+});

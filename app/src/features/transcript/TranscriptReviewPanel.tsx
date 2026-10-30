@@ -1,7 +1,6 @@
 import {
   CheckCircle2,
   Copy,
-  Download,
   LoaderCircle,
   Pause,
   Pencil,
@@ -114,7 +113,6 @@ export function TranscriptReviewPanel({
     transcriptAudioScrubberMax,
     transcriptAudioScrubberStyle,
     copyTranscript,
-    exportTranscript,
     saveTranscriptDraft,
     playTranscriptSegment,
     handleTranscriptAudioMetadata,
@@ -359,15 +357,6 @@ export function TranscriptReviewPanel({
         >
           <Copy size={16} />
           <span>{t("review.copy")}</span>
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={exportTranscript}
-          disabled={!controller.currentTranscriptPath}
-        >
-          <Download size={16} />
-          <span>{t("review.export")}</span>
         </button>
         <button
           type="button"
