@@ -804,9 +804,9 @@ describe("task domain workspaces", () => {
   });
 
   test.each([
-    ["zh-CN", "本地文字稿工作区", "文字稿校对", "播放音频", "编辑此片段", "复制", "定位文字稿", "保存"],
-    ["zh-TW", "本機逐字稿工作區", "逐字稿校對", "播放音訊", "編輯此片段", "複製", "在檔案管理器中顯示文字稿", "儲存"],
-    ["en-US", "Local Transcript workspace", "Transcript Review", "Play audio", "Edit this segment", "Copy", "Show Transcript in Folder", "Save"],
+    ["zh-CN", "本地文字稿工作区", "文字稿校对", "播放音频", "编辑此片段", "复制当前内容", "定位文字稿", "保存"],
+    ["zh-TW", "本機逐字稿工作區", "逐字稿校對", "播放音訊", "編輯此片段", "複製目前內容", "在檔案管理器中顯示文字稿", "儲存"],
+    ["en-US", "Local Transcript workspace", "Transcript Review", "Play audio", "Edit this segment", "Copy Current Text", "Show Transcript in Folder", "Save"],
   ] as const)(
     "localizes transcript controls and audio accessibility copy in %s",
     async (locale, workspaceLabel, title, playAudio, editSegment, copy, locateTranscript, save) => {

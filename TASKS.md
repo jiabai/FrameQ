@@ -22,8 +22,10 @@
   from the v0.4.3 result screen: the review footer「导出」and the artifact toolbar「定位文字稿」both
   called `exportTranscript`, which only runs `revealItemInDir` on the same `transcript.txt`, so two
   buttons in one panel did exactly the same thing, and「导出」promised a saved copy that never
-  happened. The footer now keeps only「复制」and「保存」, locating stays in the toolbar trio (video /
-  audio / transcript), and the unused `review.export` key is gone from all three locales. Validation:
+  happened. The footer now keeps only「复制当前内容」and「保存」, locating stays in the toolbar trio
+  (video / audio / transcript), and the unused `review.export` key is gone from all three locales.
+  The bottom copy button was renamed from「复制」to「复制当前内容」(zh-TW「複製目前內容」, en
+  `Copy Current Text`) so it no longer reads like the toolbar's「复制文字稿」. Validation:
   a new panel case asserts the action bar exposes exactly two buttons, the workspace localization
   case now asserts the toolbar locate label per locale, frontend 86 files / 868 tests, lint and
   i18n literal checks, docs governance all pass. Docs: the originating spec
