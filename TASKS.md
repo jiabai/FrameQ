@@ -18,8 +18,8 @@
 
 ## Active UI Work
 
-- [x] Fix the polish button that stayed on「复制文字稿」after saving an edited original (2026-10-30)
-  — ✅ Reported from the v0.4.3 real-installer smoke: editing the official transcript and saving
+- [x] Fix the polish button that stayed on「复制文字稿」after saving an edited original (2026-10-30) — ✅
+  Reported from the v0.4.3 real-installer smoke: editing the official transcript and saving
   left the toolbar on「复制文字稿」until the task was reopened, so a click in that window copied the
   pre-edit polished body. `saveTranscriptDocument` updated only `text` and `has_original_backup` and
   never re-read `polished_text`. The save path now awaits the existing
