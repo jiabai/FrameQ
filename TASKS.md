@@ -43,8 +43,10 @@
   notarization; the polish → copy → restart-recovery three-state flow is covered only by automated
   tests and was not hand-run in a real installer; the diagnostic ZIP export still lacks macOS
   native save-dialog evidence; `yt-dlp` still runs without an external timeout and is tracked as
-  debt; release asset URLs were not range-checked because this machine's proxy rejects GitHub
-  download URLs, so the manifest and signature were verified through the API channel instead.
+  debt; release asset URLs cannot be range-checked from this machine because its proxy rejects
+  GitHub download URLs, so the manifest and signature were verified through the API channel, and
+  the same URLs answered `206` to a `range: 0-0` request issued from the deployment server during
+  the marketing-site rollout.
 
 - [x] Prepare and publish FrameQ v0.4.2 desktop release (2026-10-23) — ✅ Tag target `41d2bd1`
   tagged `v0.4.2`, rebuilt the same day after the first release (tag target `950377c`, run
@@ -72,6 +74,18 @@
   directory, which is a harness difference rather than a product failure; `yt-dlp` still runs
   without an external timeout and is tracked as debt; reusing the v0.4.2 version number means
   anyone who installed the first build will not receive the copy action through the updater.
+
+- [x] Deploy the v0.4.3 marketing site (2026-10-30) — ✅ `site/dist` synced in place over SFTP to
+  `ubuntu@49.234.56.225:/home/ubuntu/FrameQ/site` with `site/scripts/deploy-sftp.py`; a sha256 dry
+  run before the upload reported 3 changed files (`index.html`, `download/index.html`,
+  `privacy/index.html`) and 0 deletes. The previous tree is kept at
+  `/home/ubuntu/FrameQ/backups/webroot-20261030-083341.tar.gz` (5.2 MB). The deploy script gained
+  an `FQ_SSH_KEY` path so it authenticates with a private key as well as a password. Verification:
+  a second dry run reported 16 unchanged / 0 upload / 0 delete; all three live pages are byte
+  identical to `site/dist` by SHA-256; the live pages carry zero `0.4.2` occurrences and the
+  download page exposes the three v0.4.3 asset links; every release asset and `latest.json`
+  answered `206` to a `range: 0-0` request issued from the server, which also closes the
+  "release URLs were not range-checked" residual risk recorded for the desktop release above.
 
 - [x] Deploy the v0.4.2 marketing site (2026-10-23) — ✅ `site/dist` synced to
   `ubuntu@frameq.8xf.pro:/home/ubuntu/FrameQ/site` through a temporary directory and an atomic
