@@ -589,6 +589,26 @@ describe("useTranscriptDetailController segment editing", () => {
     );
   });
 
+  test("re-reads the polished transcript after a save so an edited original invalidates it", async () => {
+    mocks.loadTranscriptDetail
+      .mockResolvedValueOnce({
+        ...detailResponse(),
+        polished_text: "整理后的原稿。",
+      })
+      .mockResolvedValueOnce({ ...detailResponse(), polished_text: null });
+    const { render } = await createController();
+    let controller = render();
+    expect(controller.transcriptDetail?.polished_text).toBe("整理后的原稿。");
+
+    controller.updateFullTranscriptDraft("第一段原稿，补一个标点。");
+    controller = render();
+    await controller.saveTranscriptDraft();
+    controller = render();
+
+    expect(mocks.loadTranscriptDetail).toHaveBeenCalledTimes(2);
+    expect(controller.transcriptDetail?.polished_text).toBeNull();
+  });
+
   test("copies the unsaved transcript draft and reports clipboard failure safely", async () => {
     const { render, setActionNotice } = await createController();
     let controller = render();

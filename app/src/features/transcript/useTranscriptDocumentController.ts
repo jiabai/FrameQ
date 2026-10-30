@@ -199,6 +199,10 @@ export function useTranscriptDocumentController({
             : current,
         );
         applyTranscriptSave(expectedTaskId, saved);
+        // Saving the official transcript changes its hash, so the polished copy is
+        // stale from this moment. Re-read the detail now so the toolbar returns to
+        // the polish affordance instead of copying the pre-edit polished body.
+        await refreshPolishedTranscript();
         setActionNotice(uiMessage("transcript.notice.saved"));
         await completeSuccessfulSave();
       } catch {
@@ -209,6 +213,7 @@ export function useTranscriptDocumentController({
     },
     [
       applyTranscriptSave,
+      refreshPolishedTranscript,
       setActionNotice,
       transcriptDraft,
       transcriptSaving,

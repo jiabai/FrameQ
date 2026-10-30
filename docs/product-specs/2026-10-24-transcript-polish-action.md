@@ -35,7 +35,7 @@ ASR 转写受口音、专有名词、同音字影响，正式稿里常有识别�
 - 分段修正：约 2000 字按句界切段，段间携带上一段末尾约 200 字衔接上下文；超过 24 段报 `POLISH_TRANSCRIPT_TOO_LONG`，不发起调用。
 - LLM 凭据复用成稿链路：整次整理只做一次 server-managed checkout（消耗一次 AI Credits），分段调用不再单独计费；LLM 空返回报 `POLISH_LLM_EMPTY_RESULT`，异常报 `POLISH_FAILED`。
 - 产物以原子替换写入 `transcript/polished.txt`，并在 `transcript/polished.meta.json`（schema v1）记录原稿 SHA-256；写盘失败报 `POLISH_ARTIFACT_WRITE_FAILED`。
-- `load_transcript_detail` 仅在 `polished.txt` 存在、为普通文件、且 meta 里的原稿摘要与当前 `transcript.txt` 匹配时返回 `polished_text`；原稿被编辑后整理稿视为过期，按钮回到「整理文字稿」。
+- `load_transcript_detail` 仅在 `polished.txt` 存在、为普通文件、且 meta 里的原稿摘要与当前 `transcript.txt` 匹配时返回 `polished_text`；原稿被编辑后整理稿视为过期，按钮回到「整理文字稿」。正式稿保存成功后客户端立即重新读取详情并重判，按钮在同一次保存内完成切换，不需要重开任务。
 - 整理期间不重置编辑器草稿；成功后只更新整理稿字段。
 
 ## Acceptance Criteria
@@ -44,5 +44,5 @@ ASR 转写受口音、专有名词、同音字影响，正式稿里常有识别�
 - 登录且有额度时点击「整理文字稿」：进入忙碌态，`polished.txt` 生成后按钮变为「复制文字稿」，此时点击剪贴板得到整理稿正文，且 `transcript.txt` 字节不变。
 - 未登录时点击：打开账号面板，不产生 `polished.txt`。
 - 超长文字稿点击：出现「文字稿过长」失败提示，不消耗额度。
-- 整理成功后编辑原稿并保存：按钮回到「整理文字稿」。
+- 整理成功后编辑原稿并保存：保存完成后按钮立即回到「整理文字稿」，无需重开任务或重启应用。
 - 重启应用并恢复同一任务：按钮仍为「复制文字稿」，复制内容为整理稿。

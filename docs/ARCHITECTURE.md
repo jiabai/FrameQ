@@ -64,7 +64,9 @@
 - `load_transcript_detail` returns `polished_text: Option<String>`: the polished body is exposed
   only when `polished.txt` exists, is a regular non-link file, and its meta `sourceTranscriptSha256`
   still matches the current `transcript.txt`. A stale or mismatched polish is treated as absent, so
-  editing the official transcript returns the UI button to the polish affordance.
+  saving an edit to the official transcript returns the UI button to the polish affordance inside
+  that same save: the document controller re-reads the detail after `save_transcript_edit` succeeds
+  and refreshes only the `polished_text` field, leaving any unsaved editor draft intact.
 - The frontend keeps `"transcript"` out of the AI-workspace `InsightRetryTarget` union: polishing is
   a local-workspace toolbar action, reuses the `insights_generating` stage and `activeAiTarget`-free
   progress, and fails with `POLISH_*` error codes that map to `transcript.*` error copy. The toolbar
