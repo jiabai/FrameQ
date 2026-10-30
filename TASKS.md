@@ -38,8 +38,11 @@
   passed / 1 skipped, scripts 52, version consistency (`check-release-version.mjs 0.4.3`), ruff
   and docs governance clean. Published 2026-10-30 02:28 +08:00:
   https://github.com/jiabai/FrameQ/releases/tag/v0.4.3. Release notes:
-  `docs/releases/v0.4.3.md`. Residual risks: `macos-intel-acceptance.yml` is
-  `workflow_dispatch`-only and did not run; both macOS builds are ad-hoc signed without
+  `docs/releases/v0.4.3.md`. The `macos-intel-acceptance.yml` workflow is
+  `workflow_dispatch`-only, so it did not run on the tag; it was dispatched manually on
+  `953af94` afterwards and passed all 14 steps (artifact `frameq-macos-intel-6-953af9418be5`,
+  339,497,834 bytes), and that commit differs from the tag target `e80c8bd` only in `TASKS.md`
+  and `docs/`. Residual risks: both macOS builds are ad-hoc signed without
   notarization; the polish → copy → restart-recovery three-state flow is covered only by automated
   tests and was not hand-run in a real installer; the diagnostic ZIP export still lacks macOS
   native save-dialog evidence; `yt-dlp` still runs without an external timeout and is tracked as
