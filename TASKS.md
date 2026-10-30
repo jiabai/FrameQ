@@ -28,9 +28,9 @@
   asserts the second `loadTranscriptDetail` call and `polished_text` turning null inside the same
   save; frontend 86 files / 867 tests, lint and i18n literal checks, and docs governance all pass.
   Product spec, `ARCHITECTURE.md`, and `DESIGN.md` now state that the switch happens inside that
-  save. Not yet in a desktop release.
+  save. Shipped by re-tagging `v0.4.3` (see the release entry below).
 
-- [x] Prepare and publish FrameQ v0.4.3 desktop release (2026-10-30) — ✅ Tag target `e80c8bd`
+- [x] Prepare and publish FrameQ v0.4.3 desktop release (2026-10-30) — ✅ Tag target `a8b8907`
   tagged `v0.4.3`. Ship set: a results-toolbar transcript polish action (`retry_insights` gains a
   `transcript` target; the worker chunks the official transcript through one server-managed
   checkout and writes `transcript/polished.txt` plus a SHA-256 meta file, the original
@@ -39,29 +39,36 @@
   destination set aligned on the single contract so a discarded recovery journal no longer makes a
   task vanish from history, the first transcript segment no longer auto-highlights, drafts reload
   from disk on reopen, LLM configuration errors reported inside the insight error type, and a
-  bounded extraction output with the X entry dropped from the short-video form. Three-platform
-  release run `40924535944` green on all jobs. Assets match v0.4.2 after normalizing the version:
-  `FrameQ_0.4.3_x64-setup.exe` (210,866,292 bytes), `FrameQ_0.4.3_x64.dmg` (348,013,630),
-  `FrameQ_0.4.3_aarch64.dmg` (300,579,777), three `frameq-pytorch-runtime-*.zip`, and
+  bounded extraction output with the X entry dropped from the short-video form, plus the polish
+  button fix described above. First tag target `e80c8bd` built in run `40924535944` (all jobs
+  green); after the real-installer smoke surfaced the polish-button defect the tag and release were
+  deleted and `v0.4.3` was re-tagged at `a8b8907`, rebuilt in run `40989202026` (all jobs green).
+  Assets match v0.4.2 after normalizing the version:
+  `FrameQ_0.4.3_x64-setup.exe` (210,791,734 bytes), `FrameQ_0.4.3_x64.dmg` (348,061,958),
+  `FrameQ_0.4.3_aarch64.dmg` (300,595,679), three `frameq-pytorch-runtime-*.zip`, and
   `latest.json`; every asset reports `uploaded`, and both Windows updater signatures in
   `latest.json` matched the uploaded `.sig` byte for byte (416 bytes each, fetched through the API
-  channel). Gates: Worker 1162 passed / 3 skipped, frontend 86 files / 866 tests, app lint and
-  production build, Rust 354 passed including every watchdog and task-recovery case, server 401
-  passed / 1 skipped, scripts 52, version consistency (`check-release-version.mjs 0.4.3`), ruff
-  and docs governance clean. Published 2026-10-30 02:28 +08:00:
+  channel). Gates: Worker 1162 passed / 3 skipped, frontend 86 files / 867 tests (866 on the first
+  tag target), app lint and production build, Rust 354 passed including every watchdog and
+  task-recovery case, server 401 passed / 1 skipped, scripts 52, version consistency
+  (`check-release-version.mjs 0.4.3`), ruff and docs governance clean. Published 2026-10-30
+  02:28 +08:00 (re-tagged build 10:40 +08:00):
   https://github.com/jiabai/FrameQ/releases/tag/v0.4.3. Release notes:
   `docs/releases/v0.4.3.md`. The `macos-intel-acceptance.yml` workflow is
   `workflow_dispatch`-only, so it did not run on the tag; it was dispatched manually on
   `953af94` afterwards and passed all 14 steps (artifact `frameq-macos-intel-6-953af9418be5`,
-  339,497,834 bytes), and that commit differs from the tag target `e80c8bd` only in `TASKS.md`
-  and `docs/`. Residual risks: both macOS builds are ad-hoc signed without
-  notarization; the polish → copy → restart-recovery three-state flow is covered only by automated
-  tests and was not hand-run in a real installer; the diagnostic ZIP export still lacks macOS
-  native save-dialog evidence; `yt-dlp` still runs without an external timeout and is tracked as
-  debt; release asset URLs cannot be range-checked from this machine because its proxy rejects
-  GitHub download URLs, so the manifest and signature were verified through the API channel, and
-  the same URLs answered `206` to a `range: 0-0` request issued from the deployment server during
-  the marketing-site rollout.
+  339,497,834 bytes). `953af94` differs from the final tag target `a8b8907` only in the polish
+  button fix and its tests/docs, so both builds were checked against the same packaging code.
+  Residual risks: both macOS builds are ad-hoc signed without notarization; the diagnostic ZIP
+  export still lacks macOS native save-dialog evidence; `yt-dlp` still runs without an external
+  timeout and is tracked as debt; release asset URLs cannot be range-checked from this machine
+  because its proxy rejects GitHub download URLs, so the manifest and signature were verified
+  through the API channel, and the same URLs answered `206` to a `range: 0-0` request issued from
+  the deployment server during the marketing-site rollout; reusing the `v0.4.3` version number
+  means anyone who installed the `e80c8bd` build keeps the polish-button defect until they
+  reinstall manually, because the updater does not offer the same version. The polish → copy →
+  restart-recovery three-state flow was hand-run in a real installer on the `e80c8bd` build (that
+  is where the defect was found); the fixed build carries automated coverage only.
 
 - [x] Prepare and publish FrameQ v0.4.2 desktop release (2026-10-23) — ✅ Tag target `41d2bd1`
   tagged `v0.4.2`, rebuilt the same day after the first release (tag target `950377c`, run
@@ -100,7 +107,12 @@
   identical to `site/dist` by SHA-256; the live pages carry zero `0.4.2` occurrences and the
   download page exposes the three v0.4.3 asset links; every release asset and `latest.json`
   answered `206` to a `range: 0-0` request issued from the server, which also closes the
-  "release URLs were not range-checked" residual risk recorded for the desktop release above.
+  "release URLs were not range-checked" residual risk recorded for the desktop release above. The
+  re-tagged build needed one more sync: after rebuilding with the polish-button note, a dry run
+  reported a single changed file (`download/index.html`) and 0 deletes, the upload applied it with
+  15 skipped, a second dry run reported 16 unchanged / 0 / 0, the live page is byte identical to
+  `site/dist` by SHA-256, and the page carries the fix entry with zero `0.4.2` occurrences. The
+  pre-deploy tree is kept at `/home/ubuntu/FrameQ/backups/webroot-20261030-104143.tar.gz` (5.2 MB).
 
 - [x] Deploy the v0.4.2 marketing site (2026-10-23) — ✅ `site/dist` synced to
   `ubuntu@frameq.8xf.pro:/home/ubuntu/FrameQ/site` through a temporary directory and an atomic
