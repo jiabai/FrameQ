@@ -25,7 +25,7 @@ pub(crate) const TASK_RESULT_FIELDS: &[&str] = &[
     "error",
 ];
 #[cfg(test)]
-pub(crate) const TASK_RESULT_OPTIONAL_FIELDS: &[&str] = &["dissection_source_status"];
+pub(crate) const TASK_RESULT_OPTIONAL_FIELDS: &[&str] = &["dissection_source_status", "note_title", "task_created"];
 #[cfg(test)]
 pub(crate) const TASK_INSIGHT_FIELDS: &[&str] = &[
     "id",
@@ -84,6 +84,7 @@ pub(crate) enum TaskErrorStage {
     VideoExtracting,
     VideoTranscribing,
     InsightsGenerating,
+    TitleGenerating,
     // Error-only stage for draft generation failures; draft progress reuses
     // InsightsGenerating so it never appears as a live progress phase.
     DraftGenerating,
@@ -222,6 +223,10 @@ pub(crate) struct TaskTerminalResult {
     pub(crate) dissection: Option<TaskDissection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) dissection_source_status: Option<task_manifest::DissectionSourceStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) note_title: Option<task_manifest::NoteTitle>,
+    #[serde(default)]
+    pub(crate) task_created: bool,
     // Draft article markdown produced by target="draft" agent runs; empty string
     // when the task has no draft (and for older worker output without the field).
     #[serde(default)]
@@ -259,11 +264,23 @@ pub(crate) enum ModelDownloadTerminalResult {
     Failed { code: String, message: String },
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct StorageValidationTerminalResult {
+    pub(crate) schema_version: u8,
+    pub(crate) ready_models: Vec<String>,
+    pub(crate) component_state: String,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub(crate) component_fingerprint: Option<String>,
+    pub(crate) component_imported: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ValidatedWorkerResult {
     Task(TaskTerminalResult),
     SourceIdentity(SourceIdentityTerminalResult),
     ModelDownload(ModelDownloadTerminalResult),
+    StorageValidation(StorageValidationTerminalResult),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -287,7 +304,10 @@ pub(crate) fn parse_terminal_result(
         WorkerOperation::ProcessVideo
         | WorkerOperation::ProcessLocalMedia
         | WorkerOperation::RetryInsights => {
-            let result = serde_json::from_str(line).map_err(|_| TerminalResultError::Invalid)?;
+            let result: TaskTerminalResult = serde_json::from_str(line).map_err(|_| TerminalResultError::Invalid)?;
+            if operation == WorkerOperation::RetryInsights && result.task_created {
+                return Err(TerminalResultError::Invalid);
+            }
             validate_task_result(result).map(ValidatedWorkerResult::Task)
         }
         WorkerOperation::ResolveSourceIdentity => {
@@ -295,6 +315,22 @@ pub(crate) fn parse_terminal_result(
         }
         WorkerOperation::DownloadAsrModel => {
             parse_model_download_result(line).map(ValidatedWorkerResult::ModelDownload)
+        }
+        WorkerOperation::StorageValidation => {
+            let value: StorageValidationTerminalResult = serde_json::from_str(line)
+                .map_err(|_| TerminalResultError::Invalid)?;
+            if value.schema_version != 1
+                || value.ready_models.len() > 2
+                || value.ready_models.iter().any(|model| !crate::SUPPORTED_ASR_MODELS.contains(&model.as_str()))
+                || value.ready_models.iter().collect::<std::collections::HashSet<_>>().len() != value.ready_models.len()
+                || !["ready", "missing", "stale", "ungated"].contains(&value.component_state.as_str())
+                || value.component_fingerprint.as_ref().is_some_and(|v| v.trim().is_empty() || v.len() > 256)
+                || value.component_state == "ready" && value.component_fingerprint.is_none()
+                || value.component_imported && value.component_state != "ready"
+            {
+                return Err(TerminalResultError::Invalid);
+            }
+            Ok(ValidatedWorkerResult::StorageValidation(value))
         }
     }
 }
@@ -330,10 +366,38 @@ fn validate_task_result(
         && insights_are_safe
         && error_is_safe
         && dissection_is_safe
+        && result.note_title.as_ref().is_none_or(task_manifest::NoteTitle::is_valid)
     {
         Ok(result)
     } else {
         Err(TerminalResultError::Invalid)
+    }
+}
+
+#[cfg(test)]
+mod storage_validation_tests {
+    use super::*;
+
+    #[test]
+    fn storage_probe_requires_its_own_closed_result_family() {
+        let result = serde_json::json!({
+            "schema_version": 1, "ready_models": [], "component_state": "missing",
+            "component_fingerprint": null, "component_imported": false,
+        });
+        let bytes = serde_json::to_vec(&result).unwrap();
+        assert!(matches!(parse_terminal_result(WorkerOperation::StorageValidation, &bytes),
+            Ok(ValidatedWorkerResult::StorageValidation(_))));
+        assert!(parse_terminal_result(WorkerOperation::DownloadAsrModel, &bytes).is_err());
+        for (key, value) in [
+            ("extra", serde_json::json!(true)),
+            ("schema_version", serde_json::json!(2)),
+            ("ready_models", serde_json::json!(["other-model"])),
+            ("component_imported", serde_json::json!(true)),
+        ] {
+            let mut changed = result.clone(); changed[key] = value;
+            assert!(parse_terminal_result(WorkerOperation::StorageValidation,
+                &serde_json::to_vec(&changed).unwrap()).is_err());
+        }
     }
 }
 

@@ -2,6 +2,7 @@ use super::{
     source_identity::SourceIdentity, SOURCE_PRIVACY_MIGRATION_VERSION, TASK_SCHEMA_VERSION,
 };
 use crate::local_media_contract::{extension_matches_kind, is_safe_display_name, LocalMediaKind};
+use super::NoteTitle;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -156,6 +157,13 @@ where
     LocalSourceManifest::deserialize(deserializer).map(Some)
 }
 
+fn deserialize_present_note_title<'de, D>(deserializer: D) -> Result<Option<NoteTitle>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    NoteTitle::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RequiredSourceIdentity {
     Missing,
@@ -243,6 +251,8 @@ pub(super) struct TaskManifest {
     pub(super) error: Option<TaskManifestError>,
     #[serde(default)]
     pub(super) text_preview: String,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_present_note_title")]
+    pub(super) note_title: Option<NoteTitle>,
     #[serde(default)]
     pub(super) draft_seed_insight_id: Option<i64>,
     #[serde(default)]

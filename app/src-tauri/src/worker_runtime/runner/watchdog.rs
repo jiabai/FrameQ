@@ -43,6 +43,10 @@ impl WorkerOperation {
                 idle_timeout: None,
                 absolute_timeout: Duration::from_secs(3 * 60),
             },
+            Self::StorageValidation => WatchdogPolicy {
+                idle_timeout: None,
+                absolute_timeout: Duration::from_secs(3 * 60),
+            },
             Self::DownloadAsrModel => WatchdogPolicy {
                 idle_timeout: Some(Duration::from_secs(10 * 60)),
                 absolute_timeout: Duration::from_secs(4 * 60 * 60),

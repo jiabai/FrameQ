@@ -148,7 +148,7 @@ describe("worker result protocol", () => {
     const value = validTask();
     const parsed = parseWorkerResult(value);
 
-    expect(parsed).toEqual(value);
+    expect(parsed).toEqual({ ...value, note_title: null, task_created: false });
     expect(parsed).not.toBe(value);
     expect(parsed?.artifacts).not.toBe(value.artifacts);
     expect(parsed?.insights).not.toBe(value.insights);

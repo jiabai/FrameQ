@@ -11,7 +11,7 @@ const workflowPath = resolve(
 );
 const deletionSourcePath = resolve(
   repositoryRoot,
-  "app/src-tauri/src/history_deletion.rs",
+  "app/src-tauri/src/history_deletion/tests.rs",
 );
 
 test("builds one manual internal Intel macOS artifact with native tests and read-only permissions", async () => {
@@ -93,7 +93,7 @@ test("builds one manual internal Intel macOS artifact with native tests and read
 test("the hosted Cargo suite contains real deletion and macOS link fixtures", async () => {
   const source = await readFile(deletionSourcePath, "utf8");
 
-  assert.match(source, /fn deletes_only_the_supported_task_and_its_playback_cache\(\)/);
+  assert.match(source, /fn complete_delete_removes_only_selected_note_both_caches_and_exact_memberships\(\)/);
   assert.match(source, /fn rejects_linked_tasks_root_before_removal\(\)/);
   assert.match(source, /fn rejects_linked_playback_cache_root_before_task_removal\(\)/);
   assert.match(

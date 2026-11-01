@@ -76,6 +76,7 @@ fn process_local_media_blocking(
     selection_state: Arc<LocalMediaSelectionState>,
     request: Value,
 ) -> Result<TaskTerminalResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let prepared = match resolve_local_media_worker_request(selection_state.as_ref(), request) {
@@ -86,7 +87,7 @@ fn process_local_media_blocking(
         }
     };
 
-    let result = map_task_worker_result(
+    let mut result = map_task_worker_result(
         process_state
             .task_worker(&paths)
             .execute(WorkerJob::process_local_media(
@@ -95,6 +96,8 @@ fn process_local_media_blocking(
             ))?,
         TaskCommandContext::ProcessLocalMedia,
     )?;
+    result.task_created = result.status.as_str() != "failed" && result.task_id.is_some()
+        && result.artifacts.contains_key("transcript_txt");
     if should_clear_selection_after_result(&result) {
         let _ = selection_state.clear(&prepared.selection_token);
     }

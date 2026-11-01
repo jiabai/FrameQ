@@ -162,6 +162,13 @@ export function useTranscriptDocumentController({
       // Keep the current state on read failure; the polish button stays as-is.
     }
   }, [workflow.artifacts.transcript_txt, workflow.taskId]);
+  const discardTranscriptDraft = useCallback(() => {
+    if (transcriptSaving) return;
+    setTranscriptDraft(transcriptDetail?.text ?? workflow.text);
+    setTranscriptSegments(transcriptDetail?.segments ?? []);
+    setTranscriptDirty(false);
+    setLocatedTranscriptRange(null);
+  }, [transcriptDetail, transcriptSaving, workflow.text]);
 
   const saveTranscriptDocument = useCallback(
     async (completeSuccessfulSave: CompleteSuccessfulSave) => {
@@ -194,6 +201,7 @@ export function useTranscriptDocumentController({
             ? {
                 ...current,
                 text: saved.text,
+                segments: transcriptSegments,
                 has_original_backup: saved.has_original_backup,
               }
             : current,
@@ -233,6 +241,7 @@ export function useTranscriptDocumentController({
     locatedTranscriptRange,
     refreshPolishedTranscript,
     saveTranscriptDocument,
+    discardTranscriptDraft,
     updateTranscriptSegmentDraft,
     updateFullTranscriptDraft,
     locateTranscriptByteRange,

@@ -17,6 +17,7 @@ fn spawn_failure_is_typed_and_never_activates_the_lane() {
     let request = WorkerRunRequest {
         operation: WorkerOperation::ResolveSourceIdentity,
         command: WorkerCommandSpec {
+            clear_env: false,
             program: paths.user_data_dir.join("missing-worker-executable"),
             args: Vec::new(),
             stdin_payload: None,

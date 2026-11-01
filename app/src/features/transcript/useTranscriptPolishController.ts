@@ -8,7 +8,7 @@ import {
 import { canGenerateAiWithAccount, type AccountStatus } from "../../accountState";
 import type { SupportedLocale } from "../../i18n/locale";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
-import type { WorkflowState } from "../../workflow";
+import { isProcessingStage, type WorkflowState } from "../../workflow";
 import type { RetryInsightsInput } from "../../workerClient";
 import { retryInsights } from "../../workerClient";
 
@@ -56,6 +56,7 @@ export function useTranscriptPolishController({
     if (
       !workflow.taskId ||
       !workflow.artifacts.transcript_txt ||
+      isProcessingStage(workflow.stage) ||
       polishingTranscript
     ) {
       return;
@@ -104,6 +105,7 @@ export function useTranscriptPolishController({
     setActionNotice,
     workflow.artifacts.transcript_txt,
     workflow.taskId,
+    workflow.stage,
   ]);
 
   return { polishingTranscript, polishTranscript };

@@ -255,9 +255,14 @@ mod typed_job_policy_tests {
     }
 
     fn runtime_paths() -> RuntimePaths {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../build/data-storage-acceptance")
+            .join(format!("worker-job-policy-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("user-data")).expect("create worker policy fixture");
+        let root = root.canonicalize().expect("resolve worker policy fixture");
         RuntimePaths {
-            resource_dir: PathBuf::from("frameq-test").join("resources"),
-            user_data_dir: PathBuf::from("frameq-test").join("user-data"),
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("user-data"),
         }
     }
 

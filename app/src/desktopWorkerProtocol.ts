@@ -9,6 +9,7 @@ export const WORKER_PROGRESS_STAGES = [
   "video_extracting",
   "video_transcribing",
   "insights_generating",
+  "title_generating",
   "completed",
   "partial_completed",
   "failed",
@@ -58,6 +59,8 @@ export const WORKER_MESSAGE_CODE_RULES = {
   "asr.transcribe.starting": { allowedArgs: [] },
   "asr.transcribe.running": { allowedArgs: [] },
   "ai.generation.running": { allowedArgs: ["attempt", "total"] },
+  "title.generation.running": { allowedArgs: [] },
+  "title.generation.completed": { allowedArgs: [] },
   "douyin.page.resolving": { allowedArgs: [] },
   "douyin.page.retrying": { allowedArgs: ["attempt", "total"] },
   "douyin.stream.probing": { allowedArgs: [] },
@@ -199,7 +202,7 @@ export type ProtocolParseResult<T> =
 export type RetryInsightsInput =
   | {
       taskId: string;
-      target: "summary";
+      target: "summary" | "title";
       outputLanguage: SupportedLocale;
       preferenceSnapshot?: never;
       insightId?: never;
@@ -241,7 +244,7 @@ export type RetryInsightsInput =
 export type RetryInsightsWireRequest =
   | {
       task_id: string;
-      target: "summary";
+      target: "summary" | "title";
       output_language: SupportedLocale;
     }
   | {
@@ -548,6 +551,7 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
       payload.target !== "insights" &&
       payload.target !== "dissection" &&
       payload.target !== "draft" &&
+      payload.target !== "title" &&
       payload.target !== "transcript") ||
     !isSupportedLocale(payload.outputLanguage)
   ) {
@@ -564,6 +568,7 @@ export function parseRetryInsightsInput(payload: unknown): RetryInsightsParseRes
 
   if (
     payload.target === "summary" ||
+    payload.target === "title" ||
     payload.target === "dissection" ||
     payload.target === "transcript"
   ) {

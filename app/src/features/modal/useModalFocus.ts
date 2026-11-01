@@ -20,12 +20,8 @@ type ModalEntry = {
   restoreTarget: HTMLElement | null;
 };
 
-type InertRecord = {
-  element: HTMLElement;
-  wasInert: boolean;
-};
-
 const modalStack: ModalEntry[] = [];
+const inertOwners = new Map<HTMLElement, { wasInert: boolean; count: number }>();
 
 function isFocusable(element: HTMLElement): boolean {
   return (
@@ -42,7 +38,7 @@ function getFocusableElements(dialog: HTMLElement): HTMLElement[] {
   );
 }
 
-function setBackgroundInert(dialog: HTMLElement): InertRecord[] {
+function setBackgroundInert(dialog: HTMLElement): HTMLElement[] {
   const layer = dialog.parentElement;
   const parent = layer?.parentElement;
   if (!layer || !parent) {
@@ -53,15 +49,23 @@ function setBackgroundInert(dialog: HTMLElement): InertRecord[] {
     if (!(sibling instanceof HTMLElement) || sibling === layer) {
       return [];
     }
-    const record = { element: sibling, wasInert: sibling.inert };
-    sibling.inert = true;
-    return [record];
+    const record = inertOwners.get(sibling) ?? { wasInert: sibling.hasAttribute("inert"), count: 0 };
+    record.count += 1;
+    inertOwners.set(sibling, record);
+    sibling.setAttribute("inert", "");
+    return [sibling];
   });
 }
 
-function restoreBackground(records: readonly InertRecord[]): void {
-  for (const { element, wasInert } of records) {
-    element.inert = wasInert;
+function restoreBackground(elements: readonly HTMLElement[]): void {
+  for (const element of elements) {
+    const record = inertOwners.get(element);
+    if (!record) throw new Error("Modal inert ownership is missing");
+    record.count -= 1;
+    if (record.count === 0) {
+      element.toggleAttribute("inert", record.wasInert);
+      inertOwners.delete(element);
+    }
   }
 }
 
@@ -78,7 +82,8 @@ function firstInitialFocus(dialog: HTMLElement): HTMLElement | null {
 function resolveRestoreTarget(entry: ModalEntry): HTMLElement | null {
   let current: ModalEntry | null = entry;
   while (current) {
-    if (current.restoreTarget?.isConnected) {
+    if (current.restoreTarget?.isConnected &&
+        !current.restoreTarget.closest("[inert], [data-motion-state='closing']")) {
       return current.restoreTarget;
     }
     current = current.parent;

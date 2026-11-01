@@ -30,6 +30,9 @@ pub(crate) struct HistoryListItemView {
     pub(crate) artifacts: HashMap<String, String>,
     pub(crate) error: Option<HistoryListErrorView>,
     pub(crate) text_preview: String,
+    pub(crate) note_title: Option<task_manifest::NoteTitle>,
+    pub(crate) note_metadata: Option<task_manifest::NoteMetadataView>,
+    pub(crate) note_metadata_error: Option<String>,
     pub(crate) insights_count: usize,
 }
 
@@ -53,26 +56,36 @@ pub(crate) struct HistoryDetailView {
     pub(crate) insights: Vec<task_manifest::InsightView>,
     pub(crate) dissection: Option<crate::worker_runtime::TaskDissection>,
     pub(crate) dissection_source_status: Option<task_manifest::DissectionSourceStatus>,
+    pub(crate) note_title: Option<task_manifest::NoteTitle>,
+    pub(crate) note_metadata: Option<task_manifest::NoteMetadataView>,
+    pub(crate) note_metadata_error: Option<String>,
 }
 
 #[tauri::command]
 pub(crate) fn get_history(app: AppHandle) -> Result<Vec<HistoryListItemView>, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
     let started = Instant::now();
     let (items, ignored) = load_history_with_stats(&output_root)?;
+    let mut available_items = Vec::with_capacity(items.len());
+    for item in items {
+        if !crate::history_deletion::deletion_is_accepted(&paths, &item.task_id)? {
+            available_items.push(item);
+        }
+    }
     let _ = append_desktop_log(
         &paths,
         "history.list",
         &format!(
             "supported_count={} ignored_count={} elapsed_ms={}",
-            items.len(),
+            available_items.len(),
             ignored,
             started.elapsed().as_millis()
         ),
     );
-    Ok(items)
+    Ok(available_items)
 }
 
 #[tauri::command]
@@ -80,8 +93,10 @@ pub(crate) fn get_history_detail(
     app: AppHandle,
     request: HistoryDetailRequest,
 ) -> Result<HistoryDetailView, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
+    crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
     let started = Instant::now();
     let result = load_history_detail_from_output_root(&output_root, request);
@@ -127,20 +142,45 @@ fn history_item_from_supported_task(
     task: task_manifest::SupportedTask,
 ) -> HistoryListItemView {
     let task_id = task.task_id().to_string();
+    let title_error = note_title_error(&task);
+    let (note_metadata, note_metadata_error) = note_metadata_projection(&task);
     HistoryListItemView {
         task_id: task_id.clone(),
         id: task_id,
         created_at: task.created_at().to_string(),
         source: task.source(),
-        status: task.status().to_string(),
+        status: if title_error.is_some() { "partial_completed".to_string() } else { task.status().to_string() },
         task_dir: task.task_dir_frontend_string(),
         output_dir: task_manifest::path_to_frontend_string(output_root),
         artifacts: task.declared_artifacts(),
-        error: task
-            .safe_error()
-            .map(|error| HistoryListErrorView { code: error.code }),
+        error: title_error.map(|error| HistoryListErrorView { code: error.code })
+            .or_else(|| task.safe_error().map(|error| HistoryListErrorView { code: error.code })),
         text_preview: task.text_preview().to_string(),
+        note_title: task.note_title(),
+        note_metadata,
+        note_metadata_error,
         insights_count: task.insights_count(),
+    }
+}
+
+fn note_title_error(task: &task_manifest::SupportedTask) -> Option<HistoryErrorView> {
+    let title = task.note_title()?;
+    if title.status == task_manifest::NoteTitleStatus::Completed {
+        return None;
+    }
+    Some(HistoryErrorView {
+        code: title.error_code.unwrap_or_else(|| "TITLE_GENERATION_INTERRUPTED".to_string()),
+        message: "Note title generation did not complete.".to_string(),
+        stage: "title_generating".to_string(),
+    })
+}
+
+pub(crate) fn note_metadata_projection(
+    task: &task_manifest::SupportedTask,
+) -> (Option<task_manifest::NoteMetadataView>, Option<String>) {
+    match task.note_metadata() {
+        Ok(metadata) => (Some(metadata), None),
+        Err(error) => (None, Some(error.code().to_string())),
     }
 }
 
@@ -164,23 +204,28 @@ pub(crate) fn load_history_detail_from_output_root(
         .unwrap_or_default();
     let insights = task.read_insights()?;
     let dissection = task.read_dissection()?;
+    let title_error = note_title_error(&task);
+    let (note_metadata, note_metadata_error) = note_metadata_projection(&task);
     Ok(HistoryDetailView {
         task_id: task.task_id().to_string(),
         source: task.source(),
-        status: task.status().to_string(),
+        status: if title_error.is_some() { "partial_completed".to_string() } else { task.status().to_string() },
         task_dir: task.task_dir_frontend_string(),
         artifacts: task.declared_artifacts(),
-        error: task.safe_error().map(|error| HistoryErrorView {
+        error: title_error.or_else(|| task.safe_error().map(|error| HistoryErrorView {
             code: error.code,
             message: error.message,
             stage: error.stage,
-        }),
+        })),
         text,
         summary,
         transcript: task.transcript_metadata(),
         insights,
         dissection: dissection.as_ref().map(|view| view.report.clone()),
         dissection_source_status: dissection.map(|view| view.source_status),
+        note_title: task.note_title(),
+        note_metadata,
+        note_metadata_error,
     })
 }
 

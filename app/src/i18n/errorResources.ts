@@ -13,6 +13,14 @@ export const errorResources = {
       tools: "相关工具",
     },
     request: { invalid: "请求格式无效，请返回上一页后重试。" },
+    noteTitle: {
+      generationFailed: "标题生成失败。文字稿已保留，请稍后重试。",
+      outputInvalid: "生成的标题格式无效。文字稿已保留，可以重试生成标题。",
+      saveFailed: "标题未能安全保存。文字稿与之前的标题已保留，请检查存储空间后重试。",
+      interrupted: "上次标题生成未完成。文字稿已保留，可以重试。",
+      transcriptUnavailable: "无法读取已保存的文字稿，请检查本地文件后重试生成标题。",
+      stateInvalid: "笔记标题的本地记录无法验证，请重新打开笔记后重试。",
+    },
     video: {
       downloadFailed: "视频下载失败，请确认链接可公开访问后重试。",
       outputMissing: "视频下载完成后未找到可用文件，请重新处理。",
@@ -116,6 +124,14 @@ export const errorResources = {
       tools: "相關工具",
     },
     request: { invalid: "請求格式無效，請返回上一頁後重試。" },
+    noteTitle: {
+      generationFailed: "標題產生失敗。逐字稿已保留，請稍後再試。",
+      outputInvalid: "產生的標題格式無效。逐字稿已保留，可以重新產生標題。",
+      saveFailed: "標題未能安全儲存。逐字稿與先前的標題已保留，請檢查儲存空間後重試。",
+      interrupted: "上次標題產生未完成。逐字稿已保留，可以重試。",
+      transcriptUnavailable: "無法讀取已儲存的逐字稿，請檢查本機檔案後重新產生標題。",
+      stateInvalid: "筆記標題的本機記錄無法驗證，請重新開啟筆記後重試。",
+    },
     video: {
       downloadFailed: "影片下載失敗，請確認連結可公開存取後重試。",
       outputMissing: "影片下載完成後找不到可用檔案，請重新處理。",
@@ -219,6 +235,14 @@ export const errorResources = {
       tools: "Related tools",
     },
     request: { invalid: "The request was invalid. Go back and try again." },
+    noteTitle: {
+      generationFailed: "Title generation failed. Your transcript is preserved. Try again later.",
+      outputInvalid: "The generated title has an invalid format. Your transcript is preserved. You can retry.",
+      saveFailed: "The title could not be saved safely. Your transcript and previous title are preserved. Check storage space and retry.",
+      interrupted: "The previous title attempt did not finish. Your transcript is preserved. You can retry.",
+      transcriptUnavailable: "The saved transcript could not be read. Check the local file and retry title generation.",
+      stateInvalid: "The saved note-title state could not be verified. Reopen the note and try again.",
+    },
     video: {
       downloadFailed: "The video could not be downloaded. Confirm that the link is public and try again.",
       outputMissing: "No usable file was found after the download. Process the video again.",

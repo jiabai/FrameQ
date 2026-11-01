@@ -29,10 +29,12 @@ pub(super) fn spawn_worker_process(
         args,
         stdin_payload,
         env,
+        clear_env,
         env_remove,
         current_dir,
     } = spec;
     let mut command = Command::new(program);
+    if clear_env { command.env_clear(); }
     hide_child_console_window(&mut command);
     configure_child_process_group(&mut command);
     for key in env_remove {

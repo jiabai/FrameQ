@@ -3,8 +3,28 @@ import { readFileSync } from "node:fs";
 
 const appCss = readFileSync(new URL("./App.css", import.meta.url), "utf-8");
 const appTsx = readFileSync(new URL("./App.tsx", import.meta.url), "utf-8");
-const appToolbarTsx = readFileSync(
-  new URL("./features/window/AppToolbar.tsx", import.meta.url),
+const shellCss = readFileSync(
+  new URL("./features/shell/shell.css", import.meta.url),
+  "utf-8",
+);
+const sidebarCss = readFileSync(
+  new URL("./features/shell/sidebar.css", import.meta.url),
+  "utf-8",
+);
+const composerCss = readFileSync(
+  new URL("./features/workflow/composer.css", import.meta.url),
+  "utf-8",
+);
+const shellToolbarTsx = readFileSync(
+  new URL("./features/shell/ShellToolbar.tsx", import.meta.url),
+  "utf-8",
+);
+const desktopSidebarTsx = readFileSync(
+  new URL("./features/shell/DesktopSidebar.tsx", import.meta.url),
+  "utf-8",
+);
+const taskComposerTsx = readFileSync(
+  new URL("./features/workflow/TaskComposer.tsx", import.meta.url),
   "utf-8",
 );
 const localTranscriptWorkspaceTsx = readFileSync(
@@ -36,11 +56,11 @@ const browserSmokeSource = readFileSync(
   "utf-8",
 );
 
-function getRuleBody(selectors: string[]): string {
+function getRuleBody(selectors: string[], stylesheet = appCss): string {
   const selectorPattern = selectors
     .map((selector) => selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("\\s*,\\s*");
-  const match = appCss.match(new RegExp(`${selectorPattern}\\s*\\{(?<body>[\\s\\S]*?)\\}`));
+  const match = stylesheet.match(new RegExp(`${selectorPattern}\\s*\\{(?<body>[\\s\\S]*?)\\}`));
   return match?.groups?.body ?? "";
 }
 
@@ -70,7 +90,8 @@ describe("App result workspace layout styles", () => {
     expect(activeWorkspaceRule).toContain("flex-direction: column;");
     expect(activeWorkspaceRule).toContain("align-items: stretch;");
     expect(taskLayoutRule).toContain("display: grid;");
-    expect(taskLayoutRule).toContain("minmax(0, 1.62fr) minmax(360px, 1fr)");
+    expect(taskLayoutRule).toContain("grid-template-columns: var(--workspace-columns);");
+    expect(getRuleBody([".task-workspace-surface"])).toContain("minmax(0, 1fr) minmax(0, var(--workspace-ai-size))");
   });
 
   test("does not retain selectors from the deleted generic result workspace", () => {
@@ -100,14 +121,15 @@ describe("App result workspace layout styles", () => {
     const panelRule = getRuleBody([".task-domain-workspace"]);
 
     expect(rootRule).toContain("--shadow-panel");
-    expect(panelRule).toContain("background: var(--surface-raised);");
-    expect(panelRule).toContain("border: 1px solid var(--border);");
-    expect(panelRule).toContain("box-shadow: var(--shadow-panel-quiet);");
+    expect(panelRule).toContain("background: transparent;");
+    expect(panelRule).toContain("border: 0;");
+    expect(panelRule).toContain("border-radius: 0;");
+    expect(panelRule).toContain("box-shadow: none;");
     expect(panelRule).not.toContain("gradient");
     expect(panelRule).not.toContain("backdrop-filter");
   });
 
-  test("uses clearer secondary typography and a 24-16-12 active workspace rhythm", () => {
+  test("uses scoped workspace typography and the selected spacing", () => {
     const rootRule = getRuleBody([":root"]);
     const h1Rule = getRuleBody(["h1"]);
     const h2Rule = getRuleBody(["h2"]);
@@ -130,18 +152,21 @@ describe("App result workspace layout styles", () => {
     expect(h2Rule).toContain("font-weight: 700;");
     expect(h3Rule).toContain("font-weight: 650;");
     expect(labelRule).toContain("font-weight: 700;");
-    expect(activeWorkspaceRule).toContain("gap: var(--space-6);");
-    expect(taskLayoutRule).toContain("gap: var(--space-4);");
-    expect(domainRule).toContain("gap: var(--space-3);");
-    expect(transcriptPanelRule).toContain("gap: var(--space-3);");
-    expect(historyListRule).toContain("gap: var(--space-3);");
-    expect(historyItemSelectRule).toContain("gap: var(--space-3);");
+    expect(getRuleBody([".sidebar-layout .workspace.shell-content.active-layout"], shellCss)).toContain("gap: 0;");
+    expect(activeWorkspaceRule).toContain("display: flex;");
+    expect(taskLayoutRule).toContain("gap: 0;");
+    expect(domainRule).toContain("gap: 0;");
+    expect(domainRule).toContain("padding: 0;");
+    expect(transcriptPanelRule).toContain("gap: 0;");
+    expect(historyListRule).toContain("gap: 0;");
+    expect(historyItemSelectRule).toContain("gap: 8px;");
     expect(historyMainRule).toContain("gap: 8px;");
-    expect(localWorkspaceRule).toContain("height: min(760px, calc(100vh - 188px));");
-    expect(localWorkspaceRule).toContain("min-height: 520px;");
+    expect(localWorkspaceRule).toContain("height: auto;");
+    expect(localWorkspaceRule).toContain("min-height: 0;");
+    expect(localWorkspaceRule).toContain("padding: 16px 24px 0;");
   });
 
-  test("groups transcript segments and AI targets inside quiet list boundaries", () => {
+  test("separates flat transcript segments and AI targets with horizontal rules", () => {
     const segmentListRule = getRuleBody([".transcript-segments"]);
     const segmentRule = getRuleBody([".transcript-segment"]);
     const segmentDividerRule = getRuleBody([".transcript-segment + .transcript-segment"]);
@@ -154,21 +179,21 @@ describe("App result workspace layout styles", () => {
     ]);
     const failedTargetRule = getRuleBody([".ai-target-card.failed"]);
 
-    expect(segmentListRule).toContain("border: 1px solid var(--border);");
-    expect(segmentListRule).toContain("overflow: hidden;");
+    expect(segmentListRule).toContain("border: 0;");
+    expect(segmentListRule).toContain("overflow: visible;");
     expect(segmentListRule).toContain("gap: 0;");
     expect(segmentRule).toContain("background: transparent;");
     expect(segmentRule).toContain("border: 0;");
     expect(segmentRule).toContain("border-radius: 0;");
-    expect(segmentDividerRule).toContain("border-top: 1px solid var(--border);");
+    expect(segmentDividerRule).toContain("border-top: 1px solid #eceeeb;");
 
-    expect(targetListRule).toContain("border: 1px solid var(--border);");
-    expect(targetListRule).toContain("overflow: hidden;");
+    expect(targetListRule).toContain("border: 0;");
+    expect(targetListRule).toContain("overflow: visible;");
     expect(targetListRule).toContain("gap: 0;");
     expect(targetRule).toContain("background: transparent;");
     expect(targetRule).toContain("border: 0;");
     expect(targetRule).toContain("border-radius: 0;");
-    expect(targetDividerRule).toContain("border-top: 1px solid var(--border);");
+    expect(targetDividerRule).toContain("border-top: 1px solid #eceeeb;");
     expect(activeTargetRule).toContain("background: #f7fbff;");
     expect(activeTargetRule).not.toContain("border-color");
     expect(failedTargetRule).toContain("background: #fff8f7;");
@@ -180,26 +205,42 @@ describe("App result workspace layout styles", () => {
     const actionFeedbackRule = getRuleBody([
       ".ai-target-action:not(:disabled):hover",
       ".ai-target-action:focus-visible",
+      ".ai-target-actions .secondary-button:not(:disabled):hover",
+      ".ai-cancel-button:not(:disabled):hover",
     ]);
 
-    expect(actionRule).toContain("background: #eef6ff;");
+    expect(actionRule).toContain("background: transparent;");
     expect(actionRule).toContain("box-shadow: none;");
-    expect(actionRule).toContain("color: #075c9f;");
-    expect(actionFeedbackRule).toContain("border-color: #8cc8ff;");
+    expect(actionRule).toContain("color: #2570b3;");
+    expect(actionFeedbackRule).toContain("background: #f1f7fe;");
   });
 
-  test("keeps account status and cancel controls in the desktop toolbar system", () => {
-    const activeAccountRule = getRuleBody([".account-chip.active"]);
-    const activeAccountIconRule = getRuleBody([".account-chip.active svg"]);
+  test("anchors account details beneath the independently scrolling sidebar history", () => {
+    const sidebarRule = getRuleBody([".desktop-sidebar"], sidebarCss);
+    const historyRule = getRuleBody([".shell-sidebar-history"], sidebarCss);
+    const accountRule = getRuleBody([".shell-sidebar-account"], sidebarCss);
+    const detailsRule = getRuleBody([".shell-account-details"], sidebarCss);
+
+    expect(appTsx).toContain("<DesktopSidebar");
+    expect(appTsx).toContain("account={account}");
+    expect(sidebarRule).toContain("display: flex;");
+    expect(sidebarRule).toContain("flex-direction: column;");
+    expect(sidebarRule).toContain("height: 100%;");
+    expect(historyRule).toContain("flex: 1;");
+    expect(historyRule).toContain("min-height: 0;");
+    expect(historyRule).toContain("overflow-y: auto;");
+    expect(accountRule).toContain("margin-top: auto;");
+    expect(accountRule).toContain("flex: 0 0 auto;");
+    expect(detailsRule).toContain("min-width: 0;");
+    expect(detailsRule).toContain("flex-direction: column;");
+    expect(desktopSidebarTsx).toContain("<strong>{displayName}</strong>");
+    expect(desktopSidebarTsx).toContain('email ?? t("account.guestDescription")');
+  });
+
+  test("keeps task cancellation actions visually distinct", () => {
     const dangerButtonRule = getRuleBody([".danger-soft"]);
     const dangerHoverRule = getRuleBody([".danger-soft:hover"]);
 
-    expect(activeAccountRule).toContain(
-      "background: rgba(255, 255, 255, 0.62);",
-    );
-    expect(activeAccountRule).toContain("border-color: var(--border);");
-    expect(activeAccountRule).toContain("color: #34363b;");
-    expect(activeAccountIconRule).toContain("color: var(--success);");
     expect(dangerButtonRule).toContain(
       "background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 241, 245, 0.9));",
     );
@@ -208,31 +249,78 @@ describe("App result workspace layout styles", () => {
     expect(dangerHoverRule).toContain("background: #fff7f5;");
   });
 
-  test("groups persistent toolbar utilities and keeps the labelled account chip compact", () => {
-    const accountRule = getRuleBody([".account-chip"]);
-    const toolGroupRule = getRuleBody([".toolbar-tool-group"]);
-    const groupedIconRule = getRuleBody([".toolbar-tool-group .icon-button"]);
-    const groupedIconFeedbackRule = getRuleBody([
-      ".toolbar-tool-group .icon-button:hover",
-      ".toolbar-tool-group .icon-button:focus-visible",
-    ]);
+  test("keeps navigation and utilities reachable in a quiet compact toolbar", () => {
+    const toolbarRule = getRuleBody([".app-toolbar.shell-toolbar"], shellCss);
+    const buttonRule = getRuleBody([".shell-toolbar-button"], shellCss);
+    const utilitiesRule = getRuleBody([".shell-toolbar-utilities"], shellCss);
+    const titleRule = getRuleBody([".shell-toolbar-title"], shellCss);
 
-    expect(appToolbarTsx).toMatch(
-      /className="toolbar-tool-group"[\s\S]*?aria-label=\{t\("toolbar\.history"\)\}[\s\S]*?aria-label=\{t\("toolbar\.settings"\)\}[\s\S]*?aria-label=\{newTask\.ariaLabel\}/,
-    );
-    expect(appToolbarTsx).toContain("<span>{accountChipLabel}</span>");
-    expect(accountRule).toContain("min-width: 0;");
-    expect(accountRule).toContain("min-height: 32px;");
-    expect(accountRule).toContain("padding: 0 9px;");
-    expect(accountRule).toContain("box-shadow: none;");
-    expect(toolGroupRule).toContain("gap: 2px;");
-    expect(toolGroupRule).toContain("padding: 2px;");
-    expect(groupedIconRule).toContain("height: 32px;");
-    expect(groupedIconRule).toContain("min-height: 32px;");
-    expect(groupedIconRule).toContain("width: 32px;");
-    expect(groupedIconRule).toContain("box-shadow: none;");
-    expect(groupedIconRule).toContain("border-color: transparent;");
-    expect(groupedIconFeedbackRule).toContain("background: rgba(255, 255, 255, 0.82);");
+    expect(appTsx).toContain("<ShellToolbar");
+    expect(shellToolbarTsx).toContain("onClick={onToggleSidebar}");
+    expect(shellToolbarTsx).toContain("aria-expanded={!collapsed}");
+    expect(shellToolbarTsx).toContain('aria-controls="frameq-sidebar"');
+    expect(shellToolbarTsx).toContain("onClick={onBack} disabled={!canBack}");
+    expect(shellToolbarTsx).toContain("onClick={onForward} disabled={!canForward}");
+    expect(shellToolbarTsx).toContain("onClick={onInstallUpdate}");
+    expect(toolbarRule).toContain("grid-column: 2;");
+    expect(toolbarRule).toContain("display: flex;");
+    expect(toolbarRule).toContain("background: transparent;");
+    expect(toolbarRule).toContain("box-shadow: none;");
+    expect(buttonRule).toContain("width: 32px;");
+    expect(buttonRule).toContain("min-height: 32px;");
+    expect(utilitiesRule).toContain("margin-left: auto;");
+    expect(titleRule).toContain("min-width: 0;");
+    expect(titleRule).toContain("text-overflow: ellipsis;");
+  });
+
+  test("preserves the Home proportions, borderless artwork, and reversible sidebar", () => {
+    const windowRule = getRuleBody([".desktop-window.sidebar-layout"], shellCss);
+    const collapsedRule = getRuleBody([".desktop-window.sidebar-layout.is-sidebar-collapsed"], shellCss);
+    const contentRule = getRuleBody([".sidebar-layout .workspace.shell-content"], shellCss);
+    const columnRule = getRuleBody([".sidebar-layout .workspace.waiting-layout .workflow-column"], shellCss);
+    const greetingRule = getRuleBody([".shell-home-greeting"], shellCss);
+
+    expect(windowRule).toContain("grid-template-columns: var(--sidebar-width) minmax(0, 1fr);");
+    expect(collapsedRule).toContain("--sidebar-width: 66px;");
+    expect(contentRule).toContain("min-height: 0;");
+    expect(contentRule).toContain("min-width: 0;");
+    expect(contentRule).toContain("overflow: auto;");
+    expect(contentRule).toContain("border-radius: 27px;");
+    expect(columnRule).toContain("max-width: 972px;");
+    expect(columnRule).toContain("width: 100%;");
+    expect(greetingRule).toContain("font-family: Georgia,");
+    for (const selector of [".shell-sidebar-region .shell-sidebar-mark", ".shell-greeting-mark"]) {
+      const markRule = getRuleBody([selector], shellCss);
+      expect(markRule).toContain("border: 0;");
+      expect(markRule).toContain("border-radius: 0;");
+      expect(markRule).toContain("background: transparent;");
+      expect(markRule).toContain("box-shadow: none;");
+    }
+    expect(shellCss).toMatch(/@media \(max-width: 900px\)[\s\S]*?\.desktop-window.sidebar-layout.is-sidebar-collapsed\s*\{[\s\S]*?--sidebar-width: 66px;/);
+  });
+
+  test("owns the compact composer surface and selection styles in its feature stylesheet", () => {
+    const surfaceRule = getRuleBody([".media-composer-surface"], composerCss);
+    const expandedRule = getRuleBody([".media-composer.is-expanded .media-composer-surface"], composerCss);
+    const toolbarRule = getRuleBody([".media-composer-toolbar"], composerCss);
+    const selectionRule = getRuleBody([".media-composer .local-media-chip"], composerCss);
+    const removeRule = getRuleBody([".media-composer .local-media-remove"], composerCss);
+
+    expect(taskComposerTsx).toContain('import "./composer.css";');
+    expect(surfaceRule).toContain("height: 156px;");
+    expect(surfaceRule).toContain("border-radius: 16px;");
+    expect(surfaceRule).toContain("flex-direction: column;");
+    expect(surfaceRule).not.toContain("gradient");
+    expect(expandedRule).toContain("height: min(400px, 60vh);");
+    expect(toolbarRule).toContain("display: flex;");
+    expect(selectionRule).toContain("grid-template-columns: auto minmax(0, 1fr) 32px;");
+    expect(selectionRule).toContain("min-width: 0;");
+    expect(removeRule).toContain("width: 32px;");
+    for (const selector of [".command-panel", ".input-pane", ".task-composer-row", ".attachment-control", ".attachment-trigger", ".attachment-menu", ".local-media-chip", ".local-media-remove", ".status-line"]) {
+      expect(appCss).not.toContain(selector);
+    }
+    expect(getRuleBody([".settings-form input", ".settings-form select", ".search-box input"])).toContain("border: 1px solid var(--border-strong);");
+    expect(getRuleBody([".settings-form input:focus", ".settings-form select:focus", ".search-box:focus-within"])).toContain("box-shadow: 0 0 0 3px var(--focus);");
   });
 
   test("uses facade cancellation state for the processing cancel action", () => {
@@ -250,8 +338,8 @@ describe("App result workspace layout styles", () => {
   });
 
   test("keeps history task replacement inside the workflow controller", () => {
-    expect(appTsx).toContain("restoreHistoryItem(item);");
-    expect(appTsx).toContain("selectionDisabled={!canRestoreHistory}");
+    expect(appTsx).toMatch(/!shellCanNavigateRef\.current\s*\|\|\s*!restoreHistoryItem\(item\)/);
+    expect(appTsx).toContain("selectionDisabled={!canNavigate}");
     expect(appTsx).not.toContain("setWorkflow({");
   });
 
@@ -295,8 +383,8 @@ describe("App result workspace layout styles", () => {
     expect(deleteRule).toContain("padding: 0;");
     expect(deleteFeedbackRule).toContain("background: #fff3f1;");
     expect(confirmRule).toContain("max-width: 440px;");
-    expect(dangerRule).toContain("min-height: 40px;");
-    expect(dangerRule).toContain("padding: 0 14px;");
+    expect(dangerRule).toContain("min-height: 32px;");
+    expect(dangerRule).toContain("padding: 5px 11px;");
     expect(mainRule).toContain("display: flex;");
     expect(mainRule).toContain("flex-direction: column;");
     expect(titleRule).toContain("-webkit-line-clamp: 2;");
@@ -352,13 +440,15 @@ describe("App result workspace layout styles", () => {
     );
     expect(transcriptReviewPanelTsx).toContain("transcriptAudioScrubberStyle");
     expect(transcriptReviewSessionTs).toContain("--audio-progress");
-    expect(barRule).toContain("grid-template-columns: 48px minmax(0, 1fr) max-content;");
+    expect(barRule).toContain("grid-template-columns: 32px minmax(0, 1fr) max-content;");
     expect(barRule).toContain("align-items: center;");
-    expect(barRule).toContain("column-gap: 16px;");
+    expect(barRule).toContain("column-gap: 14px;");
     expect(barRule).toContain("min-height: 72px;");
-    expect(barRule).toContain("padding: 12px 16px;");
-    expect(playButtonRule).toContain("height: 48px;");
-    expect(playButtonRule).toContain("width: 48px;");
+    expect(barRule).toContain("padding: 22px 0 18px;");
+    expect(barRule).toContain("border: 0;");
+    expect(barRule).toContain("box-shadow: none;");
+    expect(playButtonRule).toContain("height: 32px;");
+    expect(playButtonRule).toContain("width: 32px;");
     expect(playButtonRule).not.toContain("transform");
     expect(scrubberRule).toContain("display: block;");
     expect(scrubberRule).toContain("min-width: 0;");
@@ -368,18 +458,18 @@ describe("App result workspace layout styles", () => {
     expect(clockRule).toContain("font-variant-numeric: tabular-nums;");
     expect(clockRule).toContain("line-height: 1;");
     expect(clockRule).not.toContain("min-width: 126px;");
-    expect(clockRule).toContain("font-weight: 760;");
+    expect(clockRule).toContain("font-size: 12px;");
+    expect(clockRule).toContain("font-weight: 500;");
     expect(scrubberRule).toContain("appearance: none;");
-    expect(webkitTrackRule).toContain("#2388f2");
-    expect(webkitTrackRule).toContain("#2fc66d");
-    expect(webkitTrackRule).toContain("height: 8px;");
-    expect(webkitThumbRule).toContain("background: transparent;");
-    expect(webkitThumbRule).toContain("height: 18px;");
-    expect(webkitThumbRule).toContain("width: 18px;");
-    expect(webkitThumbRule).not.toMatch(/margin(?:-top)?:\s*-/);
+    expect(webkitTrackRule).toContain("#3785ca");
+    expect(webkitTrackRule).toContain("height: 4px;");
+    expect(webkitThumbRule).toContain("background: #3785ca;");
+    expect(webkitThumbRule).toContain("height: 12px;");
+    expect(webkitThumbRule).toContain("width: 12px;");
+    expect(webkitThumbRule).toContain("margin-top: -4px;");
   });
 
-  test("uses a dedicated accessible 32px transcript segment edit control", () => {
+  test("keeps the compact transcript edit control available on hover and keyboard focus", () => {
     const editRule = getRuleBody([".transcript-segment-edit"]);
     const editFeedbackRule = getRuleBody([
       ".transcript-segment-edit:not(:disabled):hover",
@@ -391,23 +481,28 @@ describe("App result workspace layout styles", () => {
     );
     expect(transcriptReviewPanelTsx).toContain('aria-label={t("review.editSegment")}');
     expect(transcriptReviewPanelTsx).toContain('title={t("review.edit")}');
-    expect(editRule).toContain("height: 32px;");
-    expect(editRule).toContain("min-height: 32px;");
-    expect(editRule).toContain("width: 32px;");
-    expect(editRule).toContain("min-width: 32px;");
+    expect(editRule).toContain("height: 24px;");
+    expect(editRule).toContain("min-height: 24px;");
+    expect(editRule).toContain("width: 24px;");
+    expect(editRule).toContain("min-width: 24px;");
+    expect(editRule).toContain("opacity: 0;");
     expect(editRule).toContain("padding: 0;");
     expect(editRule).toContain("align-items: center;");
     expect(editRule).toContain("justify-content: center;");
-    expect(editFeedbackRule).toContain("background: #eef7ff;");
-    expect(editFeedbackRule).toContain("border-color: #b8dcff;");
+    expect(editFeedbackRule).toContain("background: #e7eddf;");
+    expect(getRuleBody([
+      ".transcript-segment:hover .transcript-segment-edit",
+      ".transcript-segment:focus-within .transcript-segment-edit",
+      ".transcript-segment.editing .transcript-segment-edit",
+    ])).toContain("opacity: 1;");
   });
 
   test("keeps playback, editing, and keyboard focus visually distinct", () => {
     const activeRule = getRuleBody([".transcript-segment.active"]);
     const editingRule = getRuleBody([".transcript-segment.editing"]);
 
-    expect(activeRule).toContain("background: #eef6ff;");
-    expect(activeRule).toContain("box-shadow: inset 2px 0 0 var(--primary);");
+    expect(activeRule).toContain("background: #f1f7fd;");
+    expect(activeRule).toContain("box-shadow: inset 2px 0 0 #83b4e6;");
     expect(activeRule).not.toContain("0 0 0 3px");
     expect(editingRule).toContain("background: #fff;");
     expect(editingRule).toContain("box-shadow: none;");
@@ -438,33 +533,33 @@ describe("App result workspace layout styles", () => {
     expect(settingsSheetTsx).toContain("profile-clear-button");
     expect(settingsSheetTsx).toContain('settingsCategory === "inspiration"');
     expect(settingsModalRule).toContain("max-width: 800px;");
-    expect(layoutRule).toContain("grid-template-columns: 176px minmax(0, 1fr);");
+    expect(layoutRule).toContain("grid-template-columns: 160px minmax(0, 1fr);");
     expect(navRule).toContain("border-right: 1px solid var(--border);");
     expect(navItemRule).toContain("box-shadow: none;");
     expect(navItemRule).toContain("display: flex;");
     expect(navItemRule).toContain("flex-direction: column;");
-    expect(navItemRule).toContain("height: 64px;");
+    expect(navItemRule).toContain("min-height: 44px;");
     expect(navItemRule).toContain("justify-content: center;");
-    expect(navItemRule).toContain("padding: 0 14px;");
+    expect(navItemRule).toContain("padding: 8px 10px;");
     expect(navItemRule).toContain("align-items: flex-start;");
-    expect(selectedNavItemRule).toContain("background: rgba(255, 255, 255, 0.86);");
+    expect(selectedNavItemRule).toContain("background: #fff;");
     expect(sectionsRule).toContain("overflow: auto;");
-    expect(privacyCalloutRule).toContain("background: rgba(248, 249, 252, 0.78);");
+    expect(privacyCalloutRule).not.toContain("background:");
     expect(privacyCalloutRule).toContain("color: var(--text-muted);");
-    expect(statusCardRule).toContain("box-shadow: none;");
-    expect(summaryListRule).toContain("flex-wrap: wrap;");
+    expect(statusCardRule).toContain("border-bottom: 1px solid var(--border);");
+    expect(summaryListRule).toContain("display: grid;");
     expect(inspirationActionsRule).toContain("align-items: center;");
     expect(inspirationActionsRule).toContain("justify-content: flex-start;");
     expect(profileEditButtonRule).toContain("width: auto;");
-    expect(profileEditButtonRule).toContain("min-height: 36px;");
+    expect(profileEditButtonRule).toContain("min-height: 32px;");
     expect(inspirationActionsRule).toContain("display: flex;");
-    expect(inspirationActionsRule).toContain("flex-wrap: nowrap;");
+    expect(inspirationActionsRule).toContain("flex-wrap: wrap;");
     expect(profileClearButtonRule).toContain(
-      "background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 241, 245, 0.9));",
+      "background: transparent;",
     );
     expect(profileClearButtonRule).toContain("border-color: var(--border);");
     expect(profileClearButtonRule).toContain("color: #34363b;");
-    expect(profileClearButtonRule).toContain("min-height: 36px;");
+    expect(profileClearButtonRule).toContain("min-height: 32px;");
   });
 
   test("scopes the compact local settings notice to the basic category", () => {

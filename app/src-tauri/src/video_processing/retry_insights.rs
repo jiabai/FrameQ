@@ -11,6 +11,10 @@ use tauri::{AppHandle, State, Window};
 
 const INVALID_RETRY_PAYLOAD: &str = "INVALID_RETRY_PAYLOAD";
 
+#[cfg(test)]
+#[path = "note_title_tests.rs"]
+mod note_title_tests;
+
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 enum RetryInsightsTarget {
     #[serde(rename = "summary")]
@@ -23,6 +27,8 @@ enum RetryInsightsTarget {
     Draft,
     #[serde(rename = "transcript")]
     Transcript,
+    #[serde(rename = "title")]
+    Title,
 }
 
 impl RetryInsightsTarget {
@@ -33,6 +39,7 @@ impl RetryInsightsTarget {
             Self::Dissection => "dissection",
             Self::Draft => "draft",
             Self::Transcript => "transcript",
+            Self::Title => "title",
         }
     }
 }
@@ -162,6 +169,13 @@ struct RetryInsightsWireRequest {
 fn parse_retry_insights_request(
     payload: serde_json::Value,
 ) -> Result<RetryInsightsRequest, String> {
+    if payload.get("target").and_then(serde_json::Value::as_str) == Some("title")
+        && payload.as_object().is_none_or(|object| {
+            object.len() != 3 || object.keys().any(|key| !["task_id", "target", "output_language"].contains(&key.as_str()))
+        })
+    {
+        return Err(INVALID_RETRY_PAYLOAD.to_string());
+    }
     if payload
         .as_object()
         .and_then(|object| object.get("preference_snapshot"))
@@ -232,10 +246,15 @@ fn retry_insights_blocking(
     process_state: Arc<ProcessSupervisors>,
     request: RetryInsightsRequest,
 ) -> Result<TaskTerminalResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
+    crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    let task_lease = task_manifest::acquire_task_mutation(&output_root, &request.task_id)?;
+    if request.target == RetryInsightsTarget::Title {
+        return retry_note_title(window, &paths, &output_root, process_state, request);
+    }
+    let task_lease = open_retry_task(&paths, &output_root, &request.task_id)?;
     let request_json = serde_json::to_string(&request)
         .map_err(|_| "Failed to encode worker request.".to_string())?;
     let _ = append_desktop_log(
@@ -268,6 +287,227 @@ fn retry_insights_blocking(
         &retry_result_log_detail(&request, &parsed),
     );
     Ok(parsed)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NoteTitleCancellationRequest {
+    task_id: String,
+    output_language: OutputLanguage,
+    #[serde(deserialize_with = "deserialize_expected_note_title")]
+    expected_note_title: Option<task_manifest::NoteTitle>,
+}
+
+fn deserialize_expected_note_title<'de, D>(deserializer: D) -> Result<Option<task_manifest::NoteTitle>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<task_manifest::NoteTitle>::deserialize(deserializer)
+}
+
+pub(super) async fn run_record_note_title_cancellation(
+    app: AppHandle,
+    request: serde_json::Value,
+) -> Result<TaskTerminalResult, String> {
+    let request: NoteTitleCancellationRequest = serde_json::from_value(request)
+        .map_err(|_| "INVALID_TITLE_CANCELLATION_REQUEST".to_string())?;
+    run_blocking_worker_command(move || {
+        let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+        let paths = resolve_runtime_paths(&app)?;
+        record_note_title_cancellation_from_paths(&paths, request)
+    }).await
+}
+
+fn open_retry_task(
+    paths: &crate::RuntimePaths,
+    output_root: &std::path::Path,
+    task_id: &str,
+) -> Result<task_manifest::SupportedTask, String> {
+    crate::history_deletion::guard_pending_task(paths, task_id)?;
+    let task = task_manifest::SupportedTask::open(output_root, task_id)?;
+    crate::history_deletion::guard_pending_task(paths, task_id)?;
+    Ok(task)
+}
+
+fn record_note_title_cancellation_from_paths(
+    paths: &crate::RuntimePaths,
+    request: NoteTitleCancellationRequest,
+) -> Result<TaskTerminalResult, String> {
+    let output_root = task_manifest::configured_output_root(paths)?;
+    let task = open_retry_task(paths, &output_root, &request.task_id)?;
+    record_note_title_cancellation_to_task(task, request)
+}
+
+#[cfg(test)]
+fn record_note_title_cancellation_from_root(
+    output_root: &std::path::Path,
+    request: NoteTitleCancellationRequest,
+) -> Result<TaskTerminalResult, String> {
+    let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
+    record_note_title_cancellation_to_task(task, request)
+}
+
+fn record_note_title_cancellation_to_task(
+    mut task: task_manifest::SupportedTask,
+    request: NoteTitleCancellationRequest,
+) -> Result<TaskTerminalResult, String> {
+    task.read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| "TITLE_TRANSCRIPT_REQUIRED".to_string())?;
+    if task.note_title() == request.expected_note_title {
+        let title = task_manifest::NoteTitle {
+            text: task.note_title().and_then(|title| title.text),
+            status: task_manifest::NoteTitleStatus::Cancelled,
+            output_language: request.output_language.as_str().to_string(),
+            error_code: Some("WORKER_CANCELLED".to_string()),
+        };
+        task.save_note_title(title).map_err(|_| "TITLE_SAVE_FAILED".to_string())?;
+    }
+    note_title_result_from_task(&task)
+}
+
+fn note_title_result_from_task(task: &task_manifest::SupportedTask) -> Result<TaskTerminalResult, String> {
+    let title = task.note_title();
+    let error = if let Some(title) = title.as_ref().filter(|title| title.status != task_manifest::NoteTitleStatus::Completed) {
+        Some(serde_json::json!({
+            "code": title.error_code.as_deref().unwrap_or("TITLE_GENERATION_INTERRUPTED"),
+            "message": "Note title generation did not complete.",
+            "stage": "title_generating"
+        }))
+    } else {
+        task.safe_error().map(|error| serde_json::json!({"code":error.code,"message":error.message,"stage":error.stage}))
+    };
+    let dissection = task.read_dissection()?;
+    TaskTerminalResult::from_value(serde_json::json!({
+        "status": if title.as_ref().is_some_and(|title| title.status != task_manifest::NoteTitleStatus::Completed) { "partial_completed" } else { task.status() },
+        "task_id": task.task_id(),
+        "task_dir": task.task_dir_frontend_string(),
+        "artifacts": task.declared_artifacts(),
+        "text": task.read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?.unwrap_or_default(),
+        "summary": task.read_text_artifact(task_manifest::TaskArtifact::Summary)?.unwrap_or_default(),
+        "insights": task.read_insights()?,
+        "transcript": task.transcript_metadata(),
+        "dissection": dissection.as_ref().map(|view| &view.report),
+        "dissection_source_status": dissection.map(|view| view.source_status),
+        "draft": task.read_text_artifact(task_manifest::TaskArtifact::Draft)?.unwrap_or_default(),
+        "note_title": title,
+        "task_created": false,
+        "error": error
+    })).map_err(|_| "TITLE_STATE_INVALID".to_string())
+}
+
+fn retry_note_title(
+    window: Window,
+    paths: &crate::RuntimePaths,
+    output_root: &std::path::Path,
+    process_state: Arc<ProcessSupervisors>,
+    request: RetryInsightsRequest,
+) -> Result<TaskTerminalResult, String> {
+    let task = open_retry_task(paths, output_root, &request.task_id)?;
+    let transcript = task
+        .read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| "TITLE_TRANSCRIPT_REQUIRED".to_string())?;
+    let request_json =
+        serde_json::to_string(&request).map_err(|_| "Invalid title request.".to_string())?;
+    let result = match process_state
+        .task_worker(paths)
+        .execute(WorkerJob::retry_insights(request_json, window))
+    {
+        Ok(outcome) => map_task_worker_result(outcome, TaskCommandContext::RetryInsights),
+        Err(_) => Err("TITLE_GENERATION_FAILED".to_string()),
+    };
+    finish_note_title_attempt(
+        task,
+        output_root,
+        request.output_language.as_str(),
+        transcript,
+        result,
+    )
+}
+
+fn finish_note_title_attempt(
+    task: task_manifest::SupportedTask,
+    output_root: &std::path::Path,
+    output_language: &str,
+    transcript: String,
+    result: Result<TaskTerminalResult, String>,
+) -> Result<TaskTerminalResult, String> {
+    let mut committed = task.reload(output_root)?;
+    let candidate = result.ok();
+    let same_task = candidate
+        .as_ref()
+        .is_some_and(|result| result.task_id.as_deref() == Some(task.task_id()));
+    let published = candidate.as_ref().filter(|result| {
+        same_task
+            && result.status.as_str() == "completed"
+            && result.error.is_none()
+            && result.note_title.as_ref().is_some_and(|title| {
+                title.status == task_manifest::NoteTitleStatus::Completed
+                    && title.output_language == output_language
+                    && Some(title) == committed.note_title().as_ref()
+            })
+    });
+    if let Some(result) = published {
+        let mut result = result.clone();
+        result.task_created = false;
+        result.task_dir = Some(committed.task_dir_frontend_string());
+        result.artifacts = committed.declared_artifacts();
+        result.text = transcript;
+        return Ok(result);
+    }
+    let code = if let Some(result) = candidate.as_ref() {
+        if result.task_id.is_some() && !same_task {
+            "WORKER_PROTOCOL_VIOLATION".to_string()
+        } else {
+            result
+                .error
+                .as_ref()
+                .map(|error| error.code.clone())
+                .unwrap_or_else(|| "TITLE_OUTPUT_INVALID".to_string())
+        }
+    } else {
+        "TITLE_GENERATION_FAILED".to_string()
+    };
+    let title = task_manifest::NoteTitle {
+        text: committed.note_title().and_then(|title| title.text),
+        status: if code == "WORKER_CANCELLED" {
+            task_manifest::NoteTitleStatus::Cancelled
+        } else {
+            task_manifest::NoteTitleStatus::Failed
+        },
+        output_language: output_language.to_string(),
+        error_code: Some(code.clone()),
+    };
+    let saved = committed.save_note_title(title.clone()).is_ok();
+    let code = if saved {
+        code
+    } else {
+        "TITLE_SAVE_FAILED".to_string()
+    };
+    let mut result = super::closed_task_result(serde_json::json!({
+        "status": "partial_completed",
+        "task_id": task.task_id(),
+        "task_dir": committed.task_dir_frontend_string(),
+        "artifacts": committed.declared_artifacts(),
+        "text": transcript,
+        "summary": committed.read_text_artifact(task_manifest::TaskArtifact::Summary)?.unwrap_or_default(),
+        "insights": committed.read_insights()?,
+        "transcript": committed.transcript_metadata(),
+        "dissection": null,
+        "draft": "",
+        "error": {
+            "code": code,
+            "message": "Note title generation did not complete.",
+            "stage": "title_generating"
+        }
+    }));
+    result.note_title = if saved {
+        Some(title)
+    } else {
+        task.note_title()
+    };
+    Ok(result)
 }
 
 fn retry_diagnostic_detail(

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
 use crate::{
-    atomic_files::atomic_write, ensure_runtime_dirs, path_to_env_string, resolve_runtime_paths,
+    atomic_files::atomic_write, ensure_config_dirs, path_to_env_string, resolve_fixed_paths,
     RuntimePaths,
 };
 
@@ -77,8 +77,8 @@ impl Default for InsightPreferencesFile {
 pub(crate) fn get_insight_preferences(
     app: AppHandle,
 ) -> Result<InsightPreferenceStateView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     load_insight_preferences_from_file(&insight_preferences_path(&paths))
 }
 
@@ -87,8 +87,9 @@ pub(crate) fn save_inspiration_profile(
     app: AppHandle,
     profile: InspirationProfile,
 ) -> Result<InsightPreferenceStateView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     save_inspiration_profile_to_file(&insight_preferences_path(&paths), profile)
 }
 
@@ -96,8 +97,9 @@ pub(crate) fn save_inspiration_profile(
 pub(crate) fn skip_inspiration_profile(
     app: AppHandle,
 ) -> Result<InsightPreferenceStateView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     skip_inspiration_profile_to_file(&insight_preferences_path(&paths))
 }
 
@@ -105,8 +107,9 @@ pub(crate) fn skip_inspiration_profile(
 pub(crate) fn clear_inspiration_profile(
     app: AppHandle,
 ) -> Result<InsightPreferenceStateView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     clear_inspiration_profile_to_file(&insight_preferences_path(&paths))
 }
 
@@ -115,8 +118,9 @@ pub(crate) fn save_default_generation_preferences(
     app: AppHandle,
     preferences: GenerationPreferences,
 ) -> Result<InsightPreferenceStateView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     save_default_generation_preferences_to_file(&insight_preferences_path(&paths), preferences)
 }
 

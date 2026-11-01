@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import { WORKER_PROGRESS_STAGES } from "./desktopWorkerProtocol";
+import { parseNoteTitleMetadata, type NoteTitleMetadata } from "./noteTitle";
+import { parseNoteMetadataProjection, type NoteMetadataProjection } from "./noteMetadata";
 import type { Insight } from "./insightPreferences";
 import {
   IpcProtocolError,
@@ -29,7 +31,8 @@ export type HistoryErrorResponse = {
   stage: WorkflowStage;
 };
 
-export type HistoryItemResponse = {
+export type HistoryItemResponse = Partial<NoteMetadataProjection> & {
+  note_title?: NoteTitleMetadata | null;
   task_id: string;
   id: string;
   created_at: string;
@@ -43,7 +46,8 @@ export type HistoryItemResponse = {
   insights_count: number;
 };
 
-export type HistoryDetailResponse = {
+export type HistoryDetailResponse = Partial<NoteMetadataProjection> & {
+  note_title?: NoteTitleMetadata | null;
   task_id: string;
   source: TaskSourceSummary;
   status: WorkerResult["status"];
@@ -58,7 +62,8 @@ export type HistoryDetailResponse = {
   dissection_source_status: "current" | "stale" | null;
 };
 
-export type HistoryListItem = {
+export type HistoryListItem = Partial<NoteMetadataProjection> & {
+  noteTitle?: NoteTitleMetadata | null;
   taskId: string;
   id: string;
   createdAt: string;
@@ -74,15 +79,22 @@ export type HistoryListItem = {
 
 type HistoryDeleteResponse = {
   task_id: string;
-  deleted: boolean;
+  status: "completed" | "cleanup_pending";
+  error_code: string | null;
 };
 
 export type HistoryDeleteResult = {
   taskId: string;
-  deleted: true;
+  status: "completed" | "cleanup_pending";
+  errorCode: string | null;
 };
 
-export type HistoryItem = {
+export type HistoryCleanupResult = {
+  taskId: string | null; status: "idle" | "completed" | "cleanup_pending"; errorCode: string | null;
+};
+
+export type HistoryItem = Partial<NoteMetadataProjection> & {
+  noteTitle?: NoteTitleMetadata | null;
   taskId: string;
   source: TaskSourceSummary;
   status: WorkerResult["status"];
@@ -144,10 +156,22 @@ export async function deleteHistoryTask(
     }),
     taskId,
   );
-  return { taskId: response.task_id, deleted: true };
+  return { taskId: response.task_id, status: response.status, errorCode: response.error_code };
 }
 
-function parseHistoryListResponse(value: unknown): HistoryItemResponse[] {
+export async function resumeNoteDeletionCleanup(runner: HistoryCommandRunner = defaultHistoryRunner): Promise<HistoryCleanupResult> {
+  return parseHistoryCleanupResponse(await runner("resume_note_deletion_cleanup", {}));
+}
+
+export function parseHistoryCleanupResponse(value: unknown): HistoryCleanupResult {
+  const data = readIpcDataObject(value, ["task_id", "status", "error_code"], [], HISTORY_IPC_RESPONSE_INVALID);
+  if (data.status === "idle" && data.task_id === null && data.error_code === null) return { taskId: null, status: "idle", errorCode: null };
+  if (typeof data.task_id !== "string") throwInvalidHistoryResponse();
+  const result = parseHistoryDeleteResponse(data, data.task_id);
+  return { taskId: result.task_id, status: result.status, errorCode: result.error_code };
+}
+
+export function parseHistoryListResponse(value: unknown): HistoryItemResponse[] {
   return readIpcDataArray(value, HISTORY_IPC_RESPONSE_INVALID).map(
     parseHistoryListItemResponse,
   );
@@ -169,7 +193,7 @@ function parseHistoryListItemResponse(value: unknown): HistoryItemResponse {
       "text_preview",
       "insights_count",
     ],
-    [],
+    ["note_title", "note_metadata", "note_metadata_error"],
     HISTORY_IPC_RESPONSE_INVALID,
   );
   const status = parseHistoryStatus(response.status);
@@ -198,10 +222,12 @@ function parseHistoryListItemResponse(value: unknown): HistoryItemResponse {
     error,
     text_preview: response.text_preview,
     insights_count: response.insights_count,
+    note_title: Object.prototype.hasOwnProperty.call(response, "note_title") ? parseNoteTitleMetadata(response.note_title) : null,
+    ...parseNoteMetadataProjection(response),
   };
 }
 
-function parseHistoryDetailResponse(
+export function parseHistoryDetailResponse(
   value: unknown,
   expectedTaskId: string,
 ): HistoryDetailResponse {
@@ -221,7 +247,7 @@ function parseHistoryDetailResponse(
       "dissection",
       "dissection_source_status",
     ],
-    [],
+    ["note_title", "note_metadata", "note_metadata_error"],
     HISTORY_IPC_RESPONSE_INVALID,
   );
   const status = parseHistoryStatus(response.status);
@@ -254,23 +280,28 @@ function parseHistoryDetailResponse(
     insights: parseHistoryInsights(response.insights),
     dissection,
     dissection_source_status: response.dissection_source_status,
+    note_title: Object.prototype.hasOwnProperty.call(response, "note_title") ? parseNoteTitleMetadata(response.note_title) : null,
+    ...parseNoteMetadataProjection(response),
   };
 }
 
-function parseHistoryDeleteResponse(
+export function parseHistoryDeleteResponse(
   value: unknown,
   expectedTaskId: string,
 ): HistoryDeleteResponse {
   const response = readIpcDataObject(
     value,
-    ["task_id", "deleted"],
+    ["task_id", "status", "error_code"],
     [],
     HISTORY_IPC_RESPONSE_INVALID,
   );
-  if (response.task_id !== expectedTaskId || response.deleted !== true) {
+  if (response.task_id !== expectedTaskId || !/^[A-Za-z0-9_-]{1,240}$/.test(expectedTaskId) ||
+    (response.status !== "completed" && response.status !== "cleanup_pending") ||
+    (response.status === "completed" ? response.error_code !== null :
+      typeof response.error_code !== "string" || !SAFE_ERROR_CODE.test(response.error_code))) {
     throwInvalidHistoryResponse();
   }
-  return { task_id: expectedTaskId, deleted: true };
+  return { task_id: expectedTaskId, status: response.status, error_code: response.error_code as string | null };
 }
 
 function parseHistorySource(value: unknown): TaskSourceSummary {
@@ -479,6 +510,8 @@ export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
     // draft-body restoration from history is a follow-up (Task 6/7).
     draft: "",
     error: item.error,
+    note_title: item.noteTitle ?? null,
+    task_created: false,
   };
 }
 
@@ -495,6 +528,9 @@ function mapHistoryItemResponse(response: HistoryItemResponse): HistoryListItem 
     error: response.error ? { code: response.error.code } : null,
     textPreview: response.text_preview,
     insightsCount: response.insights_count,
+    noteTitle: response.note_title ?? null,
+    noteMetadata: response.noteMetadata ?? null,
+    noteMetadataError: response.noteMetadataError ?? null,
   };
 }
 
@@ -512,5 +548,8 @@ function mapHistoryDetailResponse(response: HistoryDetailResponse): HistoryItem 
     insights: response.insights,
     dissection: response.dissection,
     dissectionStale: response.dissection_source_status === "stale",
+    noteTitle: response.note_title ?? null,
+    noteMetadata: response.noteMetadata ?? null,
+    noteMetadataError: response.noteMetadataError ?? null,
   };
 }

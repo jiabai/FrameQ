@@ -6,14 +6,16 @@ type StateUpdater<T> = T | ((current: T) => T);
 
 type HookHarness = {
   resetRender: () => void;
+  unmount: () => void;
   useCallback: <T extends (...args: never[]) => unknown>(callback: T) => T;
+  useEffect: (effect: () => void | (() => void), dependencies: unknown[]) => void;
   useRef: <T>(initialValue: T) => { current: T };
   useState: <T>(initialValue: T | (() => T)) => [T, (next: StateUpdater<T>) => void];
 };
 
 const getHistoryMock = vi.fn<() => Promise<HistoryListItem[]>>();
 const getHistoryDetailMock = vi.fn<(taskId: string) => Promise<HistoryItem>>();
-const deleteHistoryTaskMock = vi.fn<(taskId: string) => Promise<{ taskId: string; deleted: true }>>();
+const deleteHistoryTaskMock = vi.fn<(taskId: string) => Promise<{ taskId: string; status: "completed"; errorCode: null }>>();
 
 vi.mock("../../historyClient", () => ({
   deleteHistoryTask: deleteHistoryTaskMock,
@@ -23,13 +25,28 @@ vi.mock("../../historyClient", () => ({
 
 function createHookHarness(): HookHarness {
   const states: unknown[] = [];
+  const cleanups: Array<() => void> = [];
   let cursor = 0;
 
   return {
     resetRender: () => {
       cursor = 0;
     },
+    unmount: () => {
+      cleanups.forEach((cleanup) => cleanup());
+    },
     useCallback: (callback) => callback,
+    useEffect: (effect) => {
+      const stateIndex = cursor;
+      cursor += 1;
+      if (states.length <= stateIndex) {
+        states[stateIndex] = true;
+        const cleanup = effect();
+        if (cleanup) {
+          cleanups.push(cleanup);
+        }
+      }
+    },
     useRef: <T,>(initialValue: T) => {
       const stateIndex = cursor;
       cursor += 1;
@@ -96,6 +113,7 @@ async function createController(
   onHistoryItemSelected = vi.fn(),
 ): Promise<{
   render: () => HistoryController;
+  unmount: () => void;
   onHistoryItemSelected: typeof onHistoryItemSelected;
   onHistoryItemDeleted: ReturnType<typeof vi.fn>;
   onPrepareHistoryItemDeletion: ReturnType<typeof vi.fn>;
@@ -103,6 +121,7 @@ async function createController(
   const harness = createHookHarness();
   vi.doMock("react", () => ({
     useCallback: harness.useCallback,
+    useEffect: harness.useEffect,
     useRef: harness.useRef,
     useState: harness.useState,
   }));
@@ -111,6 +130,7 @@ async function createController(
   const onPrepareHistoryItemDeletion = vi.fn();
 
   return {
+    unmount: harness.unmount,
     render: () => {
       harness.resetRender();
       return useHistoryController({
@@ -156,6 +176,133 @@ describe("useHistoryController", () => {
     expect(controller.historyLoading).toBe(false);
     expect(controller.historyItems).toEqual([item]);
     expect(controller.historyNotice).toBeNull();
+  });
+
+  test("refreshes sidebar history without opening the sheet or clearing verified records", async () => {
+    const previous = createHistoryItem();
+    const next = createHistoryItem({ taskId: "next", id: "next" });
+    let resolveRefresh!: (items: HistoryListItem[]) => void;
+    getHistoryMock.mockResolvedValueOnce([previous]).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveRefresh = resolve; }),
+    );
+    const { render } = await createController();
+    await render().refreshHistory();
+    let controller = render();
+    expect(controller.historyOpen).toBe(false);
+    const refresh = controller.refreshHistory();
+    controller = render();
+    expect(controller.historyItems).toEqual([previous]);
+    expect(controller.historyLoading).toBe(true);
+    expect(controller.historyOpen).toBe(false);
+    resolveRefresh([next]);
+    await refresh;
+    controller = render();
+    expect(controller.historyItems).toEqual([next]);
+    expect(controller.historyLoading).toBe(false);
+    expect(controller.historyOpen).toBe(false);
+  });
+
+  test("preserves verified history and exposes failure when a background refresh fails", async () => {
+    const item = createHistoryItem();
+    getHistoryMock.mockResolvedValueOnce([item]).mockRejectedValueOnce(new Error("private failure"));
+    const { render } = await createController();
+    await render().refreshHistory();
+    await render().refreshHistory();
+    const controller = render();
+    expect(controller.historyItems).toEqual([item]);
+    expect(controller.historyOpen).toBe(false);
+    expect(controller.historyLoading).toBe(false);
+    expect(controller.historyNotice).toEqual({ messageCode: "history.notice.loadFailed" });
+  });
+
+  test("ignores an older refresh after a newer refresh has completed", async () => {
+    let resolveFirst!: (items: HistoryListItem[]) => void;
+    getHistoryMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveFirst = resolve; }),
+    ).mockResolvedValueOnce([]);
+    const { render } = await createController();
+    const first = render().refreshHistory();
+    await render().refreshHistory();
+    resolveFirst([createHistoryItem()]);
+    await first;
+    const controller = render();
+    expect(controller.historyItems).toEqual([]);
+    expect(controller.historyNotice).toEqual({ messageCode: "history.notice.empty" });
+  });
+
+  test("keeps a detail request active when sidebar refresh is requested", async () => {
+    let resolveDetail!: (item: HistoryItem) => void;
+    getHistoryDetailMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveDetail = resolve; }),
+    );
+    const { render, onHistoryItemSelected } = await createController();
+    const detail = render().openHistoryItem(createHistoryItem());
+    await render().refreshHistory();
+    expect(getHistoryMock).not.toHaveBeenCalled();
+    expect(render().historyLoading).toBe(true);
+    resolveDetail(createHistoryDetail());
+    await detail;
+    expect(onHistoryItemSelected).toHaveBeenCalledOnce();
+  });
+
+  test("skips background refresh during deletion and cannot restore deleted records", async () => {
+    const item = createHistoryItem();
+    let resolveRefresh!: (items: HistoryListItem[]) => void;
+    let resolveDelete!: (result: { taskId: string; status: "completed"; errorCode: null }) => void;
+    getHistoryMock.mockResolvedValueOnce([item]).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveRefresh = resolve; }),
+    );
+    deleteHistoryTaskMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveDelete = resolve; }),
+    );
+    const { render } = await createController();
+    await render().refreshHistory();
+    const staleRefresh = render().refreshHistory();
+    render().requestHistoryItemDeletion(item);
+    const deletion = render().confirmHistoryItemDeletion();
+    await render().refreshHistory();
+    expect(getHistoryMock).toHaveBeenCalledTimes(2);
+    resolveDelete({ taskId: item.taskId, status: "completed", errorCode: null });
+    await deletion;
+    resolveRefresh([item]);
+    await staleRefresh;
+    expect(render().historyItems).toEqual([]);
+    expect(render().historyLoading).toBe(false);
+  });
+
+  test("ignores detail and list completion after the controller unmounts", async () => {
+    let resolveList!: (items: HistoryListItem[]) => void;
+    let resolveDetail!: (item: HistoryItem) => void;
+    getHistoryMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveList = resolve; }),
+    );
+    getHistoryDetailMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveDetail = resolve; }),
+    );
+    const { render, unmount, onHistoryItemSelected } = await createController();
+    const list = render().refreshHistory();
+    const detail = render().openHistoryItem(createHistoryItem());
+    unmount();
+    resolveList([createHistoryItem()]);
+    resolveDetail(createHistoryDetail());
+    await Promise.all([list, detail]);
+    expect(onHistoryItemSelected).not.toHaveBeenCalled();
+    expect(render().historyItems).toEqual([]);
+  });
+
+  test("does not deliver a deletion callback after the controller unmounts", async () => {
+    const item = createHistoryItem();
+    let resolveDelete!: (result: { taskId: string; status: "completed"; errorCode: null }) => void;
+    deleteHistoryTaskMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveDelete = resolve; }),
+    );
+    const { render, unmount, onHistoryItemDeleted } = await createController();
+    render().requestHistoryItemDeletion(item);
+    const deletion = render().confirmHistoryItemDeletion();
+    unmount();
+    resolveDelete({ taskId: item.taskId, status: "completed", errorCode: null });
+    await deletion;
+    expect(onHistoryItemDeleted).not.toHaveBeenCalled();
   });
 
   test("shows an empty notice when history has no items", async () => {
@@ -290,7 +437,7 @@ describe("useHistoryController", () => {
   test("removes a task only after confirmed deletion succeeds", async () => {
     const item = createHistoryItem();
     getHistoryMock.mockResolvedValueOnce([item]);
-    deleteHistoryTaskMock.mockResolvedValueOnce({ taskId: item.taskId, deleted: true });
+    deleteHistoryTaskMock.mockResolvedValueOnce({ taskId: item.taskId, status: "completed", errorCode: null });
     const {
       render,
       onHistoryItemDeleted,
@@ -377,7 +524,7 @@ describe("useHistoryController", () => {
 
   test("claims one deletion request and invalidates an older detail response", async () => {
     const item = createHistoryItem();
-    let resolveDelete!: (value: { taskId: string; deleted: true }) => void;
+    let resolveDelete!: (value: { taskId: string; status: "completed"; errorCode: null }) => void;
     let resolveDetail!: (value: HistoryItem) => void;
     deleteHistoryTaskMock.mockImplementationOnce(
       () => new Promise((resolve) => { resolveDelete = resolve; }),
@@ -395,7 +542,7 @@ describe("useHistoryController", () => {
     const secondDelete = controller.confirmHistoryItemDeletion();
 
     expect(deleteHistoryTaskMock).toHaveBeenCalledTimes(1);
-    resolveDelete({ taskId: item.taskId, deleted: true });
+    resolveDelete({ taskId: item.taskId, status: "completed", errorCode: null });
     await Promise.all([firstDelete, secondDelete]);
     resolveDetail(createHistoryDetail(item.taskId));
     await detail;

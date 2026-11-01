@@ -1,4 +1,4 @@
-import { Clock3, FileText, FolderOpen, Trash2, TriangleAlert, X } from "lucide-react";
+import { Clock3, FileText, FolderOpen, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
@@ -9,8 +9,9 @@ import type { SupportedLocale } from "../../i18n/locale";
 import { renderUiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { UI_MOTION_LAYOUT_TRANSITION } from "../../uiMotion";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
-import { useModalFocus } from "../modal/useModalFocus";
+import { HistoryDeleteConfirmation } from "./HistoryDeleteConfirmation";
 import { StatusLine } from "../common/StatusLine";
+import { getHistoryTitle } from "../shell/shellNavigation";
 import type { HistoryController } from "./useHistoryController";
 
 const historyStatusKeys: Record<
@@ -38,6 +39,11 @@ function formatHistoryTimestamp(
   return Number.isNaN(date.getTime()) ? value : formatDateTime(date, locale);
 }
 
+function historyTitle(item: HistoryListItem): string {
+  return item.noteMetadata?.displayTitle || item.noteTitle?.text ? getHistoryTitle(item) : item.textPreview ||
+    (item.source.kind === "url" ? item.source.url : item.source.displayName);
+}
+
 export function HistorySheet({
   controller,
   selectionDisabled,
@@ -56,13 +62,9 @@ export function HistorySheet({
     openHistoryItem,
     requestHistoryItemDeletion,
     cancelHistoryItemDeletion,
-    confirmHistoryItemDeletion,
   } = controller;
   const { t } = useTranslation("history");
   const resolvedLocale = useUiLocale();
-  const historyDeleteModalRef = useModalFocus<HTMLElement>(
-    Boolean(historyDeleteCandidate),
-  );
   const renderedNotice = renderUiMessage(resolvedLocale, historyNotice);
   const renderedSelectionDisabledReason = renderUiMessage(
     resolvedLocale,
@@ -87,6 +89,7 @@ export function HistorySheet({
   const deletionReasonId = disabledReasonLines[disabledReasonLines.length - 1]?.id;
 
   return (
+    <>
     <AnimatedSheet
       open={historyOpen}
       ariaLabel={t("sheet.ariaLabel")}
@@ -148,19 +151,11 @@ export function HistorySheet({
                   <span className="history-title-row">
                     <strong
                       className={`history-title ${
-                        item.textPreview ? "history-title-preview" : "history-title-url"
+                        item.noteMetadata?.displayTitle || item.noteTitle?.text || item.textPreview ? "history-title-preview" : "history-title-url"
                       }`}
-                      title={
-                        item.textPreview ||
-                        (item.source.kind === "url"
-                          ? item.source.url
-                          : item.source.displayName)
-                      }
+                      title={historyTitle(item)}
                     >
-                      {item.textPreview ||
-                        (item.source.kind === "url"
-                          ? item.source.url
-                          : item.source.displayName)}
+                      {historyTitle(item)}
                     </strong>
                     {item.source.kind === "local_file" ? (
                       <span className="history-source-kind">
@@ -213,11 +208,7 @@ export function HistorySheet({
                 onClick={() => requestHistoryItemDeletion(item)}
                 disabled={deletionDisabled || historyDeleting}
                 aria-label={t("item.deleteAriaLabel", {
-                  title:
-                    item.textPreview ||
-                    (item.source.kind === "url"
-                      ? item.source.url
-                      : item.source.displayName),
+                  title: historyTitle(item),
                 })}
                 title={t("item.deleteTitle")}
                 aria-describedby={deletionDisabled ? deletionReasonId : undefined}
@@ -234,47 +225,8 @@ export function HistorySheet({
             </div>
           ) : null}
         </div>
-        {historyDeleteCandidate ? (
-          <div
-            className="history-delete-confirm-backdrop"
-            role="presentation"
-            onClick={historyDeleting ? undefined : cancelHistoryItemDeletion}
-          >
-            <section
-              ref={historyDeleteModalRef}
-              className="history-delete-confirm"
-              role="alertdialog"
-              aria-modal="true"
-              aria-label={t("confirm.ariaLabel")}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <TriangleAlert size={22} />
-              <div>
-                <h3>{t("confirm.title")}</h3>
-                <p>{t("confirm.body")}</p>
-              </div>
-              <div className="history-delete-confirm-actions">
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={cancelHistoryItemDeletion}
-                  disabled={historyDeleting}
-                  autoFocus
-                >
-                  {t("confirm.cancel")}
-                </button>
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => void confirmHistoryItemDeletion()}
-                  disabled={historyDeleting}
-                >
-                  {historyDeleting ? t("confirm.deleting") : t("confirm.delete")}
-                </button>
-              </div>
-            </section>
-          </div>
-        ) : null}
     </AnimatedSheet>
+    <HistoryDeleteConfirmation controller={controller} disabled={deletionDisabled} disabledReason={renderedDeletionDisabledReason} />
+    </>
   );
 }

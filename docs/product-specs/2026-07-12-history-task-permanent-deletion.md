@@ -50,9 +50,10 @@ visible and playback remains paused.
 ## Desktop Command Boundary
 
 The frontend sends only a strict task ID to `delete_history_task`. It must not send a directory,
-artifact path, output root, URL, manifest, PID, or deletion command. Rust resolves the configured
-output root and derives all deletion paths from trusted runtime configuration plus the validated
-task ID.
+artifact path, output root, URL, manifest, PID, or deletion command. Rust acquires the global data
+permit, resolves one current storage snapshot and derives all deletion paths from that snapshot
+plus the validated task ID. Unavailable storage or migration exclusivity rejects the operation;
+accepted deletion recovery completes before a migration inventory is prepared.
 
 The command performs these operations in order:
 
@@ -61,7 +62,7 @@ The command performs these operations in order:
 3. Prove that the target is exactly `<output-root>/tasks/<task-id>` and is neither the output root
    nor the tasks root.
 4. Reject symlink, junction, reparse-point, or otherwise linked storage before mutation.
-5. Validate and remove only `<app-local-cache>/.frameq-audio-review/<task-id>` when present.
+5. Validate and remove only `<current-data-root>/cache/.frameq-audio-review/<task-id>` when present.
 6. Recursively remove the validated task directory.
 7. Return only the safe task ID and a completed result after the task directory no longer exists.
 

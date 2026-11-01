@@ -50,7 +50,7 @@ type InsightPreferenceFlowProps = {
   outputLanguage: SupportedLocale;
   onFlowChange: (flow: InsightPreferenceFlowState) => void;
   onSkipProfile: () => void;
-  onSaveProfile: (profile: InspirationProfile) => void;
+  onSaveProfile: (profile: InspirationProfile) => void | Promise<void>;
   onConfirm: (preferences: GenerationPreferences) => void;
   onCancel: () => void;
 };
@@ -179,19 +179,21 @@ function ProfileIntro({
 }) {
   const copy = getPreferenceCopy(locale).flow;
   return (
-    <div className="preference-flow-content">
-      <div className="preference-panel">
-        <UserRound size={20} />
-        <div>
-          <strong>{resetRequired ? copy.introResetTitle : copy.introTitle}</strong>
-          <p>
-            {resetRequired
-              ? copy.introResetDescription
-              : copy.introDescription}
-          </p>
+    <>
+      <div className="preference-flow-content sheet-body">
+        <div className="preference-panel">
+          <UserRound size={20} />
+          <div>
+            <strong>{resetRequired ? copy.introResetTitle : copy.introTitle}</strong>
+            <p>
+              {resetRequired
+                ? copy.introResetDescription
+                : copy.introDescription}
+            </p>
+          </div>
         </div>
       </div>
-      <div className="settings-actions sheet-footer">
+      <footer className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onSkip} disabled={busy}>
           <span>{busy ? copy.processing : copy.skip}</span>
         </button>
@@ -199,8 +201,8 @@ function ProfileIntro({
           <UserRound size={16} />
           <span>{copy.startSetup}</span>
         </button>
-      </div>
-    </div>
+      </footer>
+    </>
   );
 }
 
@@ -221,20 +223,22 @@ function DefaultSummary({
 }) {
   const copy = getPreferenceCopy(locale).flow;
   return (
-    <div className="preference-flow-content">
-      <SummaryGroup
-        title={copy.profileGroupTitle}
-        lines={summarizeInspirationProfile(flow.profile, locale)}
-      />
-      <SummaryGroup
-        title={copy.defaultGenerationGroupTitle}
-        lines={
-          flow.defaultGenerationPreferences
-            ? summarizeGenerationPreferences(flow.defaultGenerationPreferences, locale)
-            : []
-        }
-      />
-      <div className="settings-actions sheet-footer">
+    <>
+      <div className="preference-flow-content sheet-body">
+        <SummaryGroup
+          title={copy.profileGroupTitle}
+          lines={summarizeInspirationProfile(flow.profile, locale)}
+        />
+        <SummaryGroup
+          title={copy.defaultGenerationGroupTitle}
+          lines={
+            flow.defaultGenerationPreferences
+              ? summarizeGenerationPreferences(flow.defaultGenerationPreferences, locale)
+              : []
+          }
+        />
+      </div>
+      <footer className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onEditProfile} disabled={busy}>
           <UserRound size={16} />
           <span>{copy.editProfile}</span>
@@ -247,8 +251,8 @@ function DefaultSummary({
           <ChevronRight size={16} />
           <span>{copy.generateDirectly}</span>
         </button>
-      </div>
-    </div>
+      </footer>
+    </>
   );
 }
 
@@ -272,42 +276,44 @@ function GenerationStep({
   const isFinalStep = flow.currentStep === "avoid";
 
   return (
-    <div className="preference-flow-content">
-      <div className="preference-step-header">
-        <span>
-          {interpolatePreferenceCopy(copy.stepProgress, {
-            current: flow.currentStepIndex + 1,
-            total: GENERATION_STEPS.length,
+    <>
+      <div className="preference-flow-content sheet-body">
+        <div className="preference-step-header">
+          <span>
+            {interpolatePreferenceCopy(copy.stepProgress, {
+              current: flow.currentStepIndex + 1,
+              total: GENERATION_STEPS.length,
+            })}
+          </span>
+          <h3>{presentation.label}</h3>
+        </div>
+        <div className="preference-options large">
+          {presentation.options.map((option) => {
+            const selected = selectedValues.includes(option.id);
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={`preference-option ${selected ? "selected" : ""}`}
+                disabled={busy || (!selected && maxReached)}
+                onClick={() =>
+                  onFlowChange(
+                    selectGenerationOption(
+                      flow,
+                      flow.currentStep as GenerationPreferenceField,
+                      option.id,
+                    ),
+                  )
+                }
+              >
+                {selected ? <CheckCircle2 size={14} /> : null}
+                <span>{option.label}</span>
+              </button>
+            );
           })}
-        </span>
-        <h3>{presentation.label}</h3>
+        </div>
       </div>
-      <div className="preference-options large">
-        {presentation.options.map((option) => {
-          const selected = selectedValues.includes(option.id);
-          return (
-            <button
-              key={option.id}
-              type="button"
-              className={`preference-option ${selected ? "selected" : ""}`}
-              disabled={busy || (!selected && maxReached)}
-              onClick={() =>
-                onFlowChange(
-                  selectGenerationOption(
-                    flow,
-                    flow.currentStep as GenerationPreferenceField,
-                    option.id,
-                  ),
-                )
-              }
-            >
-              {selected ? <CheckCircle2 size={14} /> : null}
-              <span>{option.label}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="settings-actions sheet-footer">
+      <footer className="settings-actions sheet-footer">
         <button
           type="button"
           className="secondary-button"
@@ -326,8 +332,8 @@ function GenerationStep({
           <ChevronRight size={16} />
           <span>{isFinalStep ? copy.completeSelection : copy.next}</span>
         </button>
-      </div>
-    </div>
+      </footer>
+    </>
   );
 }
 
@@ -360,42 +366,50 @@ function ConfirmationStep({
     [locale, transcriptText],
   );
   return (
-    <div className="preference-flow-content">
-      <p className="settings-warning privacy-callout">
-        <ShieldCheck size={16} />
-        <span>{copy.privacyInsights}</span>
-      </p>
-      <div className="confirm-summary preference-confirm-grid">
-        <div>
-          <span className="account-status-label">{copy.currentTranscript}</span>
-          <strong>
-            {transcriptUnitCount > 0
-              ? formatWordCount(transcriptUnitCount, locale)
-              : copy.waitingTranscript}
-          </strong>
-          <small>{transcriptPath || copy.transcriptUnavailable}</small>
-        </div>
-        <div>
-          <span className="account-status-label">{copy.creditsLabel}</span>
-          <strong>
-            {interpolatePreferenceCopy(copy.creditsBalance, {
-              count: formatNumber(accountQuotaRemaining, locale),
-            })}
-          </strong>
-          <small>{copy.quotaDisclosure}</small>
-        </div>
-        <OutputLanguageField locale={locale} outputLanguage={outputLanguage} />
+    <>
+      <div className="preference-flow-content sheet-body">
+        <p className="settings-warning privacy-callout">
+          <ShieldCheck size={16} />
+          <span>{copy.privacyInsights}</span>
+        </p>
+        <dl className="sheet-facts">
+          <div className="sheet-fact">
+            <dt>{copy.currentTranscript}</dt>
+            <dd>
+              <strong>
+                {transcriptUnitCount > 0
+                  ? formatWordCount(transcriptUnitCount, locale)
+                  : copy.waitingTranscript}
+              </strong>
+              <small className={transcriptPath ? "sheet-path" : undefined} title={transcriptPath || undefined}>
+                {transcriptPath || copy.transcriptUnavailable}
+              </small>
+            </dd>
+          </div>
+          <div className="sheet-fact">
+            <dt>{copy.creditsLabel}</dt>
+            <dd>
+              <strong>
+                {interpolatePreferenceCopy(copy.creditsBalance, {
+                  count: formatNumber(accountQuotaRemaining, locale),
+                })}
+              </strong>
+              <small>{copy.quotaDisclosure}</small>
+            </dd>
+          </div>
+          <OutputLanguageField locale={locale} outputLanguage={outputLanguage} />
+        </dl>
+        <SummaryGroup
+          title={copy.currentGenerationGroupTitle}
+          lines={summarizeGenerationPreferences(flow.generationPreferences, locale)}
+        />
+        <SummaryGroup
+          title={copy.longTermContextGroupTitle}
+          lines={summarizeInspirationProfile(flow.profile, locale)}
+          quiet
+        />
       </div>
-      <SummaryGroup
-        title={copy.currentGenerationGroupTitle}
-        lines={summarizeGenerationPreferences(flow.generationPreferences, locale)}
-      />
-      <SummaryGroup
-        title={copy.longTermContextGroupTitle}
-        lines={summarizeInspirationProfile(flow.profile, locale)}
-        quiet
-      />
-      <div className="settings-actions sheet-footer">
+      <footer className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
           <span>{copy.cancel}</span>
         </button>
@@ -407,8 +421,8 @@ function ConfirmationStep({
           <Lightbulb size={16} />
           <span>{busy ? copy.starting : copy.confirm}</span>
         </button>
-      </div>
-    </div>
+      </footer>
+    </>
   );
 }
 

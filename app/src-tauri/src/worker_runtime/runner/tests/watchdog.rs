@@ -46,6 +46,13 @@ fn worker_operations_own_exact_closed_production_watchdog_policies() {
             },
         ),
         (
+            WorkerOperation::StorageValidation,
+            WatchdogPolicy {
+                idle_timeout: None,
+                absolute_timeout: Duration::from_secs(3 * 60),
+            },
+        ),
+        (
             WorkerOperation::DownloadAsrModel,
             WatchdogPolicy {
                 idle_timeout: Some(Duration::from_secs(10 * 60)),

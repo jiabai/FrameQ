@@ -4,7 +4,7 @@ mod segments;
 #[cfg(test)]
 mod tests;
 
-use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest, CACHE_DIR_NAME};
+use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -59,15 +59,11 @@ pub(crate) fn load_transcript_detail(
     app: AppHandle,
     request: LoadTranscriptDetailRequest,
 ) -> Result<TranscriptDetailView, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
+    crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     ensure_runtime_dirs(&paths)?;
-    let output_root = task_manifest::configured_output_root(&paths)?;
-    load_transcript_detail_from_roots(
-        &output_root,
-        &paths.user_data_dir.join("outputs"),
-        &paths.user_data_dir.join(CACHE_DIR_NAME),
-        request,
-    )
+    load_transcript_detail_from_paths(&paths, request)
 }
 
 #[tauri::command]
@@ -75,10 +71,38 @@ pub(crate) fn save_transcript_edit(
     app: AppHandle,
     request: SaveTranscriptEditRequest,
 ) -> Result<SaveTranscriptEditResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
+    crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     ensure_runtime_dirs(&paths)?;
+    save_transcript_edit_from_paths(&paths, request)
+}
+
+pub(crate) fn save_transcript_edit_from_paths(
+    paths: &crate::RuntimePaths,
+    request: SaveTranscriptEditRequest,
+) -> Result<SaveTranscriptEditResult, String> {
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
-    save_transcript_edit_to_output_root(&output_root, request)
+    let task = task_manifest::SupportedTask::open(&output_root, &request.task_id)?;
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
+    save_transcript_edit_to_task(task, request)
+}
+
+pub(crate) fn load_transcript_detail_from_paths(
+    paths: &crate::RuntimePaths,
+    request: LoadTranscriptDetailRequest,
+) -> Result<TranscriptDetailView, String> {
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
+    let output_root = task_manifest::configured_output_root(paths)?;
+    let task = task_manifest::SupportedTask::open(&output_root, &request.task_id)?;
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
+    load_transcript_detail_from_task(
+        task,
+        &paths.output_root()?,
+        &paths.cache_root()?,
+        request,
+    )
 }
 
 #[cfg(test)]
@@ -94,6 +118,7 @@ pub(crate) fn load_transcript_detail_from_output_root(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn load_transcript_detail_from_roots(
     output_root: &Path,
     direct_audio_root: &Path,
@@ -101,6 +126,15 @@ pub(crate) fn load_transcript_detail_from_roots(
     request: LoadTranscriptDetailRequest,
 ) -> Result<TranscriptDetailView, String> {
     let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
+    load_transcript_detail_from_task(task, direct_audio_root, playback_cache_root, request)
+}
+
+fn load_transcript_detail_from_task(
+    task: task_manifest::SupportedTask,
+    direct_audio_root: &Path,
+    playback_cache_root: &Path,
+    request: LoadTranscriptDetailRequest,
+) -> Result<TranscriptDetailView, String> {
     let transcript = edit_storage::load_transcript(&task)?;
     let segments = segments::read_segments_sidecar(&task)?;
     let polished_text = edit_storage::load_polished_transcript(&task, &transcript.text);
@@ -121,11 +155,19 @@ pub(crate) fn load_transcript_detail_from_roots(
     })
 }
 
+#[cfg(test)]
 pub(crate) fn save_transcript_edit_to_output_root(
     output_root: &Path,
     request: SaveTranscriptEditRequest,
 ) -> Result<SaveTranscriptEditResult, String> {
     let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
+    save_transcript_edit_to_task(task, request)
+}
+
+fn save_transcript_edit_to_task(
+    task: task_manifest::SupportedTask,
+    request: SaveTranscriptEditRequest,
+) -> Result<SaveTranscriptEditResult, String> {
     let saved = edit_storage::save_transcript(task, &request.text, &request.segments)?;
 
     Ok(SaveTranscriptEditResult {

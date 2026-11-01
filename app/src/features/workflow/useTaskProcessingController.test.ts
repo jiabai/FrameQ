@@ -87,6 +87,10 @@ function requireResolver<T>(resolver: ((value: T) => void) | null): (value: T) =
   return resolver;
 }
 
+function unexpectedAccountPanel(): never {
+  throw new Error("Unexpected account panel action.");
+}
+
 const TEST_DISSECTION: NonNullable<WorkerResult["dissection"]> = {
   schemaVersion: 1,
   sourceTranscriptSha256: "a".repeat(64),
@@ -236,7 +240,7 @@ describe("useTaskProcessingController cancellation", () => {
     controller = render();
 
     expect(cancelProcessMock).toHaveBeenCalledTimes(1);
-    expect(onResetTaskUi).not.toHaveBeenCalled();
+    expect(onResetTaskUi).toHaveBeenCalledTimes(1);
     expect(controller.workflow.stage).toBe("video_extracting");
     expect(controller.workflow.statusMessage).toEqual({
       messageCode: "workflow.cancellation.failed",
@@ -296,7 +300,7 @@ describe("useTaskProcessingController cancellation", () => {
     await controller.cancelCurrentProcessing();
     controller = render();
     expect(controller.workflow.stage).toBe("cancelling");
-    expect(onResetTaskUi).not.toHaveBeenCalled();
+    expect(onResetTaskUi).toHaveBeenCalledTimes(1);
 
     requireResolver<{
       status: "failed";
@@ -323,10 +327,10 @@ describe("useTaskProcessingController cancellation", () => {
         stage: "video_extracting",
       },
     });
-    await processing;
+    expect(await processing).toBeUndefined();
     controller = render();
 
-    expect(onResetTaskUi).toHaveBeenCalledTimes(1);
+    expect(onResetTaskUi).toHaveBeenCalledTimes(2);
     expect(controller.workflow.stage).toBe("waiting_input");
   });
 
@@ -580,6 +584,131 @@ describe("useTaskProcessingController closed local-media source", () => {
     retryInsightsMock.mockReset();
     clearLocalMediaSelectionMock.mockReset();
     clearLocalMediaSelectionMock.mockResolvedValue(true);
+  });
+
+  test.each(["completed", "partial_completed", "failed"] as const)(
+    "edits the Home composer while preserving a %s task and its saved results",
+    async (status) => {
+      const history = createHistoryItem({ status });
+      const { render, onResetTaskUi } = await createController();
+      render().restoreHistoryItem(history);
+      onResetTaskUi.mockClear();
+      let controller = render();
+      const saved = controller.workflow;
+      controller.updateUrlDraft(SUBMITTED_URL);
+      controller = render();
+      expect(controller.workflow).toEqual({
+        ...saved,
+        composerSource: { kind: "url", urlDraft: SUBMITTED_URL },
+      });
+      controller.setLocalMediaSelection(LOCAL_SELECTION);
+      controller = render();
+      expect(controller.workflow).toEqual({
+        ...saved,
+        composerSource: { kind: "local_media", selection: LOCAL_SELECTION, retainedUrlDraft: SUBMITTED_URL },
+      });
+      expect(onResetTaskUi).not.toHaveBeenCalled();
+    },
+  );
+
+  test("keeps completed results during model preparation and starts exactly one new task", async () => {
+    let resolveModel: ((value: "iic/SenseVoiceSmall-onnx" | null) => void) | null = null;
+    let resolveWorker: ((value: WorkerResult) => void) | null = null;
+    let modelPreparationCount = 0;
+    const { render, onResetTaskUi } = await createController({
+      ensureAsrModelReady: () => {
+        modelPreparationCount += 1;
+        return new Promise((resolve) => { resolveModel = resolve; });
+      },
+    });
+    processVideoMock.mockImplementationOnce(
+      () => new Promise<WorkerResult>((resolve) => { resolveWorker = resolve; }),
+    );
+    render().restoreHistoryItem(createHistoryItem());
+    render().updateUrlDraft(SUBMITTED_URL);
+    let controller = render();
+    const saved = controller.workflow;
+    onResetTaskUi.mockClear();
+    const started = controller.submitTask(URL_SUBMISSION, createBrowserPreviewAccountStatus(), unexpectedAccountPanel);
+    await controller.submitTask(URL_SUBMISSION, createBrowserPreviewAccountStatus(), unexpectedAccountPanel);
+    controller = render();
+    expect(controller.workflow).toBe(saved);
+    expect(controller.canSubmit).toBe(false);
+    expect(modelPreparationCount).toBe(1);
+    expect(processVideoMock).not.toHaveBeenCalled();
+    expect(onResetTaskUi).not.toHaveBeenCalled();
+    requireResolver(resolveModel)("iic/SenseVoiceSmall-onnx");
+    await vi.waitFor(() => expect(processVideoMock).toHaveBeenCalledTimes(1));
+    controller = render();
+    expect(controller.workflow.stage).toBe("video_extracting");
+    expect(onResetTaskUi).toHaveBeenCalledTimes(1);
+    const localResult = createWorkerResult();
+    requireResolver(resolveWorker)(localResult);
+    expect(await started).toBe(localResult);
+    expect(render().workflow.taskId).toBe("active-task");
+  });
+
+  test("retains the completed task when model preparation stops without a ready model", async () => {
+    const { render, onResetTaskUi } = await createController({ ensureAsrModelReady: async () => null });
+    render().restoreHistoryItem(createHistoryItem());
+    render().updateUrlDraft(SUBMITTED_URL);
+    const saved = render().workflow;
+    onResetTaskUi.mockClear();
+    await render().submitTask(URL_SUBMISSION, createBrowserPreviewAccountStatus(), unexpectedAccountPanel);
+    expect(render().workflow).toBe(saved);
+    expect(render().canSubmit).toBe(true);
+    expect(onResetTaskUi).not.toHaveBeenCalled();
+    expect(processVideoMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects edits and repeat submissions while the worker is active", async () => {
+    let resolveWorker: ((value: WorkerResult) => void) | null = null;
+    processVideoMock.mockImplementationOnce(
+      () => new Promise<WorkerResult>((resolve) => { resolveWorker = resolve; }),
+    );
+    const { render } = await createController();
+    render().updateUrlDraft(SUBMITTED_URL);
+    const started = render().submitTask(URL_SUBMISSION, createBrowserPreviewAccountStatus(), unexpectedAccountPanel);
+    let controller = render();
+    const active = controller.workflow;
+    controller.updateUrlDraft("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    controller.setLocalMediaSelection(LOCAL_SELECTION);
+    await controller.submitTask(URL_SUBMISSION, createBrowserPreviewAccountStatus(), unexpectedAccountPanel);
+    controller = render();
+    expect(controller.workflow).toBe(active);
+    expect(controller.canSubmit).toBe(false);
+    expect(processVideoMock).toHaveBeenCalledTimes(1);
+    requireResolver(resolveWorker)(createWorkerResult());
+    await started;
+  });
+
+  test("rejects submission while a model is downloading without clearing the completed task", async () => {
+    const { render, onResetTaskUi } = await createController({ modelDownloadActive: true });
+    render().restoreHistoryItem(createHistoryItem({ source: { kind: "url", url: SUBMITTED_URL } }));
+    const saved = render().workflow;
+    onResetTaskUi.mockClear();
+    await render().submitTask(URL_SUBMISSION, createBrowserPreviewAccountStatus(), unexpectedAccountPanel);
+    expect(render().workflow).toBe(saved);
+    expect(onResetTaskUi).not.toHaveBeenCalled();
+    expect(processVideoMock).not.toHaveBeenCalled();
+  });
+
+  test("keeps saved results when the account cannot start another task", async () => {
+    const { render, onResetTaskUi } = await createController();
+    render().restoreHistoryItem(createHistoryItem());
+    render().updateUrlDraft(SUBMITTED_URL);
+    const saved = render().workflow;
+    let accountPanelCount = 0;
+    onResetTaskUi.mockClear();
+    await render().submitTask(
+      URL_SUBMISSION,
+      { ...createBrowserPreviewAccountStatus(), canProcess: false },
+      () => { accountPanelCount += 1; },
+    );
+    expect(accountPanelCount).toBe(1);
+    expect(render().workflow).toBe(saved);
+    expect(onResetTaskUi).not.toHaveBeenCalled();
+    expect(processVideoMock).not.toHaveBeenCalled();
   });
 
   test("keeps the original input when preparing the selected model is cancelled or fails", async () => {
@@ -1158,7 +1287,7 @@ describe("useTaskProcessingController history restore", () => {
     expect(controller.completeHistoryTaskDeletion("active-task")).toBe(false);
     controller = render();
     expect(controller.workflow.stage).toBe("video_extracting");
-    expect(onResetTaskUi).not.toHaveBeenCalled();
+    expect(onResetTaskUi).toHaveBeenCalledTimes(1);
   });
 
   test("ignores late progress and a terminal result from an invalidated operation after restoring history", async () => {
@@ -1199,7 +1328,7 @@ describe("useTaskProcessingController history restore", () => {
       progress: 80,
     });
     requireResolver<WorkerResult>(resolveWorker)(createWorkerResult());
-    await oldProcessing;
+    expect(await oldProcessing).toBeUndefined();
     controller = render();
 
     expect(controller.workflow.taskId).toBe(history.taskId);
@@ -1282,6 +1411,19 @@ describe("useTaskProcessingController draft target wiring", () => {
     cancelProcessMock.mockReset();
     processVideoMock.mockReset();
     retryInsightsMock.mockReset();
+  });
+
+  test("applies a saved draft only to the task that initiated its save", async () => {
+    const { render } = await createController();
+    render().restoreHistoryItem(createHistoryItem({ taskId: "first-task" }));
+    render().restoreHistoryItem(createHistoryItem({ taskId: "second-task" }));
+    const current = render().workflow;
+    render().applyDraftSave("# First draft", { draft: "first/draft.md" }, "first-task");
+    expect(render().workflow).toBe(current);
+    render().applyDraftSave("# Second draft", { draft: "ai/draft.md" }, "second-task");
+    expect(render().workflow.taskId).toBe("second-task");
+    expect(render().workflow.draft).toBe("# Second draft");
+    expect(render().workflow.artifacts.draft).toBe("ai/draft.md");
   });
 
   test("rejects a draft request without the platform and forwards insight_id + platform otherwise", async () => {

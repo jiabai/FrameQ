@@ -1,7 +1,7 @@
 use crate::asr_model::{DiagnosticModelSnapshot, DiagnosticModelState};
 use crate::atomic_files::atomic_write;
 use crate::diagnostics::assemble_diagnostic_zip;
-use crate::{resolve_runtime_paths, RuntimePaths};
+use crate::{resolve_fixed_paths, RuntimePaths};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -119,7 +119,7 @@ pub(crate) async fn export_diagnostics(app: AppHandle) -> DiagnosticExportResult
 }
 
 fn assemble_for_app(app: &AppHandle, snapshot: DiagnosticModelSnapshot) -> Result<Vec<u8>, ()> {
-    let paths: RuntimePaths = resolve_runtime_paths(app).map_err(|_| ())?;
+    let paths: RuntimePaths = resolve_fixed_paths(app).map_err(|_| ())?;
     assemble_for_paths(&paths, snapshot)
 }
 

@@ -8,6 +8,7 @@ import {
   type ProfileField,
 } from "../../insightPreferences";
 import type { SupportedLocale } from "../../i18n/locale";
+import { useStorageEditor } from "../dataStorage/useDataStorageController";
 import {
   getPreferenceCopy,
   getPreferenceFieldPresentation,
@@ -19,7 +20,7 @@ type InspirationProfileFormProps = {
   initialProfile: InspirationProfile | null;
   busy: boolean;
   onCancel: () => void;
-  onSave: (profile: InspirationProfile) => void;
+  onSave: (profile: InspirationProfile) => void | Promise<void>;
 };
 
 const EMPTY_PROFILE: InspirationProfile = {
@@ -41,6 +42,9 @@ export function InspirationProfileForm({
   const copy = getPreferenceCopy(locale).flow;
   const [draft, setDraft] = useState<InspirationProfile>(initialProfile ?? EMPTY_PROFILE);
   const validProfile = validateInspirationProfile(draft);
+  useStorageEditor({ id: "profile", dirty: JSON.stringify(draft) !== JSON.stringify(initialProfile ?? EMPTY_PROFILE), saving: busy,
+    save: validProfile ? async () => { if (!busy) await onSave(validProfile); } : undefined,
+    discard: () => { if (!busy) setDraft(initialProfile ?? EMPTY_PROFILE); } });
 
   function selectSingle(field: ProfileField, id: string) {
     setDraft((current) => ({
@@ -72,53 +76,55 @@ export function InspirationProfileForm({
   }
 
   return (
-    <div className="preference-form">
-      <div className="preference-form-grid">
-        {PROFILE_FIELD_ORDER.map((field) => {
-          const config = INSIGHT_PREFERENCE_FIELDS[field];
-          const presentation = getPreferenceFieldPresentation(locale, field);
-          const rawValue = draft[field];
-          const selectedValues = Array.isArray(rawValue) ? rawValue : [rawValue];
-          const maxReached = Array.isArray(rawValue) && rawValue.length >= config.max;
+    <>
+      <div className="preference-form sheet-body">
+        <div className="preference-form-grid">
+          {PROFILE_FIELD_ORDER.map((field) => {
+            const config = INSIGHT_PREFERENCE_FIELDS[field];
+            const presentation = getPreferenceFieldPresentation(locale, field);
+            const rawValue = draft[field];
+            const selectedValues = Array.isArray(rawValue) ? rawValue : [rawValue];
+            const maxReached = Array.isArray(rawValue) && rawValue.length >= config.max;
 
-          return (
-            <section className="preference-field" key={field}>
-              <div className="preference-field-header">
-                <span>{presentation.label}</span>
-                {config.mode === "multi" ? (
-                  <small>
-                    {interpolatePreferenceCopy(copy.maxSelections, { count: config.max })}
-                  </small>
-                ) : null}
-              </div>
-              <div className="preference-options">
-                {presentation.options.map((option) => {
-                  const selected = selectedValues.includes(option.id);
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={`preference-option ${selected ? "selected" : ""}`}
-                      disabled={busy || (!selected && maxReached)}
-                      onClick={() => {
-                        if (config.mode === "single") {
-                          selectSingle(field, option.id);
-                        } else {
-                          toggleMulti(field, option.id, config.max);
-                        }
-                      }}
-                    >
-                      {selected ? <CheckCircle2 size={14} /> : null}
-                      <span>{option.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+            return (
+              <section className="preference-field" key={field}>
+                <div className="preference-field-header">
+                  <span>{presentation.label}</span>
+                  {config.mode === "multi" ? (
+                    <small>
+                      {interpolatePreferenceCopy(copy.maxSelections, { count: config.max })}
+                    </small>
+                  ) : null}
+                </div>
+                <div className="preference-options">
+                  {presentation.options.map((option) => {
+                    const selected = selectedValues.includes(option.id);
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`preference-option ${selected ? "selected" : ""}`}
+                        disabled={busy || (!selected && maxReached)}
+                        onClick={() => {
+                          if (config.mode === "single") {
+                            selectSingle(field, option.id);
+                          } else {
+                            toggleMulti(field, option.id, config.max);
+                          }
+                        }}
+                      >
+                        {selected ? <CheckCircle2 size={14} /> : null}
+                        <span>{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       </div>
-      <div className="settings-actions sheet-footer">
+      <footer className="settings-actions sheet-footer">
         <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
           <X size={16} />
           <span>{copy.cancel}</span>
@@ -136,7 +142,7 @@ export function InspirationProfileForm({
           <CheckCircle2 size={16} />
           <span>{busy ? copy.saving : copy.saveProfile}</span>
         </button>
-      </div>
-    </div>
+      </footer>
+    </>
   );
 }

@@ -59,7 +59,7 @@ describe("history client", () => {
     const calls: Array<{ command: string; args: unknown }> = [];
     const runner: HistoryCommandRunner = async (command, args) => {
       calls.push({ command, args });
-      return { task_id: "task-safe-1", deleted: true };
+      return { task_id: "task-safe-1", status: "completed", error_code: null };
     };
 
     const result = await deleteHistoryTask("task-safe-1", runner);
@@ -70,7 +70,7 @@ describe("history client", () => {
         args: { request: { task_id: "task-safe-1" } },
       },
     ]);
-    expect(result).toEqual({ taskId: "task-safe-1", deleted: true });
+    expect(result).toEqual({ taskId: "task-safe-1", status: "completed", errorCode: null });
   });
 
   test("loads task history from Tauri and maps result fields", async () => {
@@ -111,6 +111,8 @@ describe("history client", () => {
     expect(history).toEqual([
       {
         taskId: "task-1",
+        noteMetadata: null,
+        noteMetadataError: null,
         id: "task-1",
         createdAt: "2026-06-17T10:00:00Z",
         source: {
@@ -132,6 +134,7 @@ describe("history client", () => {
         error: null,
         textPreview: "这是一段转写预览",
         insightsCount: 2,
+        noteTitle: null,
       },
     ]);
   });
@@ -351,6 +354,8 @@ describe("history client", () => {
 
     expect(result).toEqual({
       status: "partial_completed",
+      note_title: null,
+      task_created: false,
       task_id: "task-2",
       task_dir: "D:\\FrameQ\\outputs\\tasks\\task-2",
       artifacts: {

@@ -30,6 +30,8 @@ WORKER_SPECS = {
         70,
         {"attempt": 1, "total": 3},
     ),
+    "title.generation.running": ("title_generating", 5, {}),
+    "title.generation.completed": ("title_generating", 100, {}),
     "douyin.page.resolving": ("video_extracting", 22, {}),
     "douyin.page.retrying": (
         "video_extracting",
@@ -151,6 +153,7 @@ def test_shared_contract_declares_integer_progress_and_retry_relationship() -> N
                 "video_extracting",
                 "video_transcribing",
                 "insights_generating",
+                "title_generating",
                 "completed",
                 "partial_completed",
                 "failed",

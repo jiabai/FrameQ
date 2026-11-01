@@ -5,10 +5,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
+from frameq_worker.note_title_metadata import NoteTitleMetadata
 from frameq_worker.output_language import OutputLanguage
 from frameq_worker.source_identity import SourceIdentity
 
-RetryInsightTarget = Literal["summary", "insights", "dissection", "draft", "transcript"]
+RetryInsightTarget = Literal["summary", "insights", "dissection", "draft", "transcript", "title"]
 InsightGenerationTarget = Literal["all", "summary", "insights", "dissection"]
 LocalMediaKind = Literal["video", "audio"]
 
@@ -18,6 +19,7 @@ class JobStage(StrEnum):
     VIDEO_EXTRACTING = "video_extracting"
     VIDEO_TRANSCRIBING = "video_transcribing"
     INSIGHTS_GENERATING = "insights_generating"
+    TITLE_GENERATING = "title_generating"
     DRAFT_GENERATING = "draft_generating"
     COMPLETED = "completed"
     PARTIAL_COMPLETED = "partial_completed"
@@ -217,9 +219,11 @@ class ProcessResult:
     error: WorkerError | None = None
     artifact_payloads: dict[str, bytes | None] = field(default_factory=dict, repr=False)
     draft: str = ""
+    note_title: NoteTitleMetadata | None = None
+    task_created: bool = False
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload = {
             "status": self.status.value,
             "task_id": self.task_id,
             "task_dir": self.task_dir,
@@ -232,3 +236,8 @@ class ProcessResult:
             "error": self.error.to_dict() if self.error else None,
             "draft": self.draft,
         }
+        if self.note_title is not None:
+            payload["note_title"] = self.note_title.to_dict()
+        if self.task_created:
+            payload["task_created"] = True
+        return payload

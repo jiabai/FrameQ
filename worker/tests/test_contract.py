@@ -26,10 +26,10 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v9_while_request_versions_stay_fixed() -> None:
+def test_contract_version_is_strictly_v10_while_request_versions_stay_fixed() -> None:
     contract = load_contract()
 
-    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 9
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 10
     assert LOCAL_MEDIA_CONTRACT_VERSION == 4
     assert PROCESS_VIDEO_CONTRACT_VERSION == 3
     assert contract["localMedia"]["workerRequest"]["properties"]["contract_version"] == {
@@ -386,7 +386,8 @@ def test_worker_result_keys_match_desktop_contract() -> None:
 
     result_keys = set(ProcessResult(status=JobStage.COMPLETED).to_dict().keys())
 
-    assert result_keys == set(contract["workerResultKeys"])
+    assert set(contract["workerResultKeys"]) <= result_keys
+    assert result_keys <= set(contract["terminalResults"]["schemas"]["task"]["properties"])
 
 
 def test_worker_result_contract_includes_task_artifacts() -> None:
@@ -493,6 +494,13 @@ def test_retry_insights_request_schema_is_closed_and_machine_readable() -> None:
             {
                 "if": {"required": ["preference_snapshot"]},
                 "then": {"properties": {"target": {"const": "insights"}}},
+            },
+            {
+                "if": {
+                    "properties": {"target": {"const": "title"}},
+                    "required": ["target"],
+                },
+                "then": {"maxProperties": 3},
             }
         ],
     }
@@ -688,6 +696,7 @@ def test_progress_events_use_structured_codes_and_safe_args() -> None:
                 "video_extracting",
                 "video_transcribing",
                 "insights_generating",
+                "title_generating",
                 "completed",
                 "partial_completed",
                 "failed",
@@ -808,6 +817,8 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
         "asr.transcribe.starting",
         "asr.transcribe.running",
         "ai.generation.running",
+        "title.generation.running",
+        "title.generation.completed",
         "douyin.page.resolving",
         "douyin.page.retrying",
         "douyin.stream.probing",

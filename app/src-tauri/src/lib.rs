@@ -5,12 +5,17 @@ use tauri_plugin_deep_link::DeepLinkExt;
 mod account;
 mod asr_model;
 mod atomic_files;
+mod data_storage;
+mod data_storage_validation;
+mod safe_filesystem;
+mod collections;
 mod deep_link;
 mod diagnostic_export;
 mod diagnostics;
 mod draft_detail;
 mod history;
 mod history_deletion;
+mod note_actions;
 mod insight_preferences;
 mod local_media;
 mod local_media_contract;
@@ -34,8 +39,8 @@ mod local_media_contract_tests;
 
 pub(crate) use runtime::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
-    resolve_runtime_paths, RuntimePaths, ALLOW_REAL_ASR_ENV, AUDIO_REVIEW_CACHE_DIR_NAME,
-    CACHE_DIR_ENV, CACHE_DIR_NAME, DESKTOP_LOG_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV,
+    resolve_runtime_paths, resolve_fixed_paths, ensure_config_dirs, RuntimePaths, ALLOW_REAL_ASR_ENV, AUDIO_REVIEW_CACHE_DIR_NAME,
+    CACHE_DIR_ENV, DESKTOP_LOG_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV,
     OUTPUT_DIR_ENV, PYTORCH_RUNTIME_DIR_ENV, PYTORCH_RUNTIME_SHA256_ENV, PYTORCH_RUNTIME_URL_ENV,
     RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,
 };
@@ -56,7 +61,7 @@ pub(crate) use history_deletion::HistoryDeletionState;
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 #[cfg(test)]
-pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 9;
+pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 10;
 pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "FRAMEQ_DIAGNOSTIC ";
 
 #[cfg(any(windows, target_os = "linux"))]
@@ -85,9 +90,9 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            data_storage::initialize(app.handle())?;
             #[cfg(any(windows, target_os = "linux"))]
             if register_deep_links_on_startup() {
                 if let Err(error) = app.deep_link().register_all() {
@@ -96,13 +101,34 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if data_storage::request_window_close(window.app_handle(), window.label()) {
+                    api.prevent_close();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
+            data_storage::get_data_storage_state,
+            data_storage::select_data_storage_directory,
+            data_storage::prepare_data_storage_migration,
+            data_storage::get_pending_data_storage_preview,
+            data_storage::confirm_data_storage_migration,
+            data_storage::cancel_data_storage_migration,
+            data_storage::resume_data_storage_migration,
+            data_storage::recheck_data_storage,
+            data_storage::relink_data_storage,
+            data_storage::prepare_old_storage_cleanup,
+            data_storage::confirm_old_storage_cleanup,
+            data_storage::restart_for_data_storage,
+            data_storage::restart_application,
             local_media::select_local_media,
             local_media::clear_local_media_selection,
             video_processing::process_video,
             video_processing::process_local_media,
             video_processing::retry_insights,
+            video_processing::record_note_title_cancellation,
             video_processing::cancel_process,
             settings::get_llm_config,
             settings::save_llm_config,
@@ -118,7 +144,17 @@ pub fn run() {
             insight_preferences::save_default_generation_preferences,
             history::get_history,
             history::get_history_detail,
+            note_actions::set_note_pinned,
+            note_actions::rename_note,
+            note_actions::get_note_info,
+            note_actions::open_note_source,
+            collections::get_collections,
+            collections::create_collection,
+            collections::rename_collection,
+            collections::delete_collection,
+            collections::set_collection_task_membership,
             history_deletion::delete_history_task,
+            history_deletion::resume_note_deletion_cleanup,
             transcript_detail::load_transcript_detail,
             transcript_detail::save_transcript_edit,
             draft_detail::load_draft_detail,
@@ -146,8 +182,13 @@ pub fn run() {
             window_chrome::get_window_position,
             window_chrome::set_window_position
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                if data_storage::request_exit(app) { api.prevent_exit(); }
+            }
+        });
 }
 
 #[cfg(test)]
@@ -283,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn save_llm_config_updates_local_settings_and_removes_old_llm_values() {
+    fn save_asr_config_preserves_output_and_removes_old_llm_values() {
         let env_path = temp_env_path("save_llm_config_updates_local_settings");
         fs::write(
             &env_path,
@@ -295,6 +336,7 @@ mod tests {
                 "FRAMEQ_LLM_MODEL=old-model",
                 "FRAMEQ_LLM_TIMEOUT_SECONDS=44",
                 "OTHER_SETTING=keep-me",
+                "FRAMEQ_OUTPUT_DIR=D:/FrameQ/custom-results",
             ]
             .join("\n"),
         )
@@ -303,7 +345,6 @@ mod tests {
         let config = save_llm_config_to_file(
             &env_path,
             LlmConfigInput {
-                output_dir: "D:/FrameQ/custom-results".to_string(),
                 asr_model: "iic/SenseVoiceSmall".to_string(),
             },
         )
@@ -324,22 +365,21 @@ mod tests {
     }
 
     #[test]
-    fn save_llm_config_allows_output_dir_without_llm_credentials() {
-        let env_path = temp_env_path("save_llm_config_allows_output_dir_only");
+    fn save_asr_config_keeps_default_output_without_llm_credentials() {
+        let env_path = temp_env_path("save_asr_config_keeps_default_output");
 
         let config = save_llm_config_to_file(
             &env_path,
             LlmConfigInput {
-                output_dir: "D:/FrameQ/results-only".to_string(),
                 asr_model: "iic/SenseVoiceSmall".to_string(),
             },
         )
-        .expect("save output directory");
+        .expect("save ASR configuration");
         let saved = fs::read_to_string(&env_path).expect("read saved env");
 
-        assert_eq!(config.output_dir, "D:/FrameQ/results-only");
+        assert!(config.output_dir.is_empty());
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
-        assert!(saved.contains("FRAMEQ_OUTPUT_DIR=D:/FrameQ/results-only"));
+        assert!(saved.contains("FRAMEQ_OUTPUT_DIR="));
         assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("FrameQ desktop local settings"));
         assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));

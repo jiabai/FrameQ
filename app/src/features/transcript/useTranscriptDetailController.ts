@@ -103,6 +103,7 @@ export function useTranscriptDetailController({
     exportDetail: artifactDetail.exportDetail,
     exportTranscript: artifactDetail.exportTranscript,
     saveTranscriptDraft,
+    discardTranscriptDraft: transcriptDocument.discardTranscriptDraft,
     playTranscriptSegment: transcriptReview.playTranscriptSegment,
     handleTranscriptAudioMetadata:
       transcriptReview.handleTranscriptAudioMetadata,

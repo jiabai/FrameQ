@@ -1,0 +1,338 @@
+.sheet-backdrop {
+  align-items: center;
+  background: rgba(32, 36, 32, 0.24);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 100;
+}
+
+.sheet-panel,
+.history-delete-confirm {
+  --text: #303231;
+  --text-muted: #73786f;
+  --text-soft: #858b80;
+  --border: #e5e7e2;
+  --border-strong: #d6dbd0;
+  --primary: #1976ce;
+  --surface-raised: #fff;
+  --surface-subtle: #f7f8f5;
+  --shadow-control: none;
+  --shadow-control-hover: none;
+  --shadow-panel-quiet: none;
+  background: #fff;
+  border: 1px solid #e0e3dd;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #2028201f, 0 2px 8px #2028200a;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 0;
+  min-width: 0;
+}
+
+:where(.sheet-panel) {
+  display: flex;
+  flex-direction: column;
+  max-height: min(720px, calc(100dvh - 32px));
+  max-width: 880px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.sheet-panel :is(h2, h3, p, dl, dt, dd, label) {
+  min-width: 0;
+}
+
+.sheet-panel :is(h2, h3, h4, p, dt, dd, small) {
+  overflow-wrap: anywhere;
+}
+
+.sheet-panel :is(button, input, select, textarea),
+.history-delete-confirm button {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.sheet-panel :is(h3, strong) {
+  font-weight: 600;
+}
+
+.sheet-panel h3 {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.sheet-panel :is(small, .section-label, .account-status-label) {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.sheet-header,
+.note-action-header {
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+
+.sheet-header > div {
+  min-width: 0;
+}
+
+.sheet-header h2,
+.note-action-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sheet-header .section-label {
+  color: var(--text-soft);
+  font-weight: 400;
+  margin: 0 0 2px;
+}
+
+.sheet-body {
+  align-content: start;
+  display: grid;
+  flex: 1 1 auto;
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px 20px;
+  scrollbar-width: thin;
+}
+
+.settings-actions,
+.sheet-footer {
+  align-items: center;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px;
+}
+
+.sheet-panel :is(.primary-button, .secondary-button, .danger-button, :where(.tool-actions button), .note-action-button),
+.history-delete-confirm :is(.secondary-button, .danger-button) {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--text);
+  gap: 6px;
+  font-weight: 500;
+  line-height: 20px;
+  min-height: 32px;
+  min-width: 0;
+  padding: 5px 11px;
+  white-space: normal;
+  width: auto;
+}
+
+.sheet-panel :is(.primary-button, .note-action-primary) {
+  background: #1976ce;
+  border-color: #1976ce;
+  color: #fff;
+}
+
+.sheet-panel :is(.secondary-button, :where(.tool-actions button), .note-action-button):not(:disabled):hover {
+  background: #f4f6f1;
+  border-color: #cbd2c4;
+  box-shadow: none;
+}
+
+.sheet-panel :is(.primary-button, .note-action-primary):not(:disabled):hover {
+  background: #1265b7;
+  border-color: #1265b7;
+  color: #fff;
+}
+
+.sheet-panel .danger-soft {
+  color: #b42318;
+}
+
+.sheet-panel .danger-soft:not(:disabled):hover {
+  background: #fff4f2;
+}
+
+.sheet-panel .icon-button,
+.sheet-panel .note-action-close {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--text-muted);
+  flex: 0 0 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 6px;
+  width: 30px;
+}
+
+.sheet-panel :is(.icon-button, .note-action-close):not(:disabled):hover {
+  background: #eff2eb;
+  box-shadow: none;
+}
+
+.sheet-panel :is(button, input, textarea, select):focus-visible,
+.history-delete-confirm button:focus-visible {
+  outline: 2px solid #78ade0;
+  outline-offset: 2px;
+}
+
+.sheet-panel :is(input, select, textarea):not(:where([type='checkbox'], [type='radio'], [type='range'], .draft-textarea)) {
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 34px;
+  min-width: 0;
+  padding: 6px 10px;
+}
+
+.sheet-panel :is(input, select, textarea):focus {
+  border-color: #78ade0;
+  box-shadow: none;
+}
+
+.sheet-panel .action-notice {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.sheet-panel .progress-summary.compact {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+}
+
+.sheet-panel .progress-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sheet-panel .progress-fill {
+  background: #3785ca;
+  box-shadow: none;
+}
+
+.sheet-facts {
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+}
+
+.sheet-facts > div {
+  align-items: start;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 8px 20px;
+  grid-template-columns: minmax(100px, 136px) minmax(0, 1fr);
+  min-width: 0;
+  padding: 12px 0;
+}
+
+.sheet-body > .sheet-facts:last-child > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sheet-facts dt {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.sheet-facts dd {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sheet-facts strong {
+  font-size: 14px;
+}
+
+.sheet-facts small {
+  color: var(--text-muted);
+}
+
+.sheet-path {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirm-dialog {
+  max-width: 440px;
+}
+
+.confirm-dialog-content {
+  overflow-wrap: anywhere;
+}
+
+.sheet-panel .danger-button,
+.history-delete-confirm .danger-button {
+  background: #c7352c;
+  border-color: #b72f27;
+  color: #fff;
+}
+
+.sheet-panel .danger-button:not(:disabled):hover,
+.history-delete-confirm .danger-button:not(:disabled):hover {
+  background: #ae2e27;
+}
+
+@media (max-width: 720px) {
+  .sheet-backdrop {
+    padding: 12px;
+  }
+
+  :where(.sheet-panel) {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .sheet-header,
+  .note-action-header {
+    padding: 12px 16px;
+  }
+
+  .sheet-body {
+    padding: 16px;
+  }
+
+  .sheet-footer {
+    padding: 12px 16px;
+  }
+
+  .sheet-facts > div {
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

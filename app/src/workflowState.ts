@@ -1,4 +1,8 @@
 import type { Insight } from "./insightPreferences";
+import type { NoteTitleMetadata } from "./noteTitle";
+import type { NoteMetadata } from "./noteMetadata";
+import type { SupportedLocale } from "./i18n/locale";
+export type { NoteTitleMetadata } from "./noteTitle";
 import { uiMessage, type UiMessage } from "./i18n/uiMessage";
 import type {
   ProgressMessageDescriptor,
@@ -181,6 +185,8 @@ export type WorkerResult = {
   dissection_source_status: "current" | "stale" | null;
   draft: string;
   error: WorkerErrorResult | null;
+  note_title?: NoteTitleMetadata | null;
+  task_created?: boolean;
 };
 
 export type WorkerErrorResult = {
@@ -248,6 +254,8 @@ export type WorkflowState = {
   // (Task 3); cross-session restore into this field is a Task 7 follow-up
   // (the history detail payload does not yet carry it).
   draftSeedInsightId: number | null;
+  noteTitle: NoteTitleMetadata | null;
+  noteMetadata: NoteMetadata | null;
   error: WorkerErrorResult | null;
 };
 export function createInitialWorkflow(): WorkflowState {
@@ -274,6 +282,8 @@ export function createInitialWorkflow(): WorkflowState {
     draft: "",
     draftEdited: false,
     draftSeedInsightId: null,
+    noteTitle: null,
+    noteMetadata: null,
     error: null,
   };
 }
@@ -309,6 +319,8 @@ export function startProcessing(
     draft: "",
     draftEdited: false,
     draftSeedInsightId: null,
+    noteTitle: null,
+    noteMetadata: null,
     error: null,
   };
 }
@@ -338,11 +350,77 @@ export function startInsightRetry(state: WorkflowState, target: InsightRetryTarg
   };
 }
 
+export function startNoteTitleGeneration(state: WorkflowState, outputLanguage: SupportedLocale): WorkflowState {
+  if (!state.taskId || !state.artifacts.transcript_txt) return state;
+  return {
+    ...state,
+    stage: "title_generating",
+    cancellingFromStage: null,
+    activeAiTarget: null,
+    noteTitle: { text: state.noteTitle?.text ?? null, status: "generating", output_language: outputLanguage, error_code: null },
+    statusMessage: uiMessage("workflow.noteTitle.generating"),
+    progressMessage: { messageCode: "title.generation.running", args: {} },
+    progressPercent: 95,
+    error: null,
+  };
+}
+
+export function finishNoteTitleGeneration(state: WorkflowState, result: WorkerResult): WorkflowState {
+  if (!state.taskId || (result.task_id !== null && result.task_id !== state.taskId)) return state;
+  const localeMismatch = result.error === null && result.note_title?.status === "completed" &&
+    state.noteTitle !== null && result.note_title.output_language !== state.noteTitle.output_language;
+  const error: WorkerErrorResult | null = localeMismatch
+    ? { code: "WORKER_PROTOCOL_VIOLATION", message: "", stage: "title_generating" }
+    : result.error;
+  const acceptedTitle = localeMismatch ? null : result.note_title;
+  const returnedTitle = acceptedTitle ? {
+    ...acceptedTitle,
+    text: acceptedTitle.text ?? state.noteTitle?.text ?? null,
+  } : (state.noteTitle ? {
+    ...state.noteTitle,
+    status: error?.code === "WORKER_CANCELLED" ? "cancelled" as const : "failed" as const,
+    error_code: error?.code ?? "TITLE_GENERATION_FAILED",
+  } : null);
+  const noteTitle = returnedTitle && error
+    ? {
+      ...returnedTitle,
+      status: error.code === "WORKER_CANCELLED" ? "cancelled" as const : "failed" as const,
+      output_language: state.noteTitle?.output_language ?? returnedTitle.output_language,
+      error_code: error.code,
+    }
+    : returnedTitle;
+  return {
+    ...state,
+    stage: noteTitle?.status === "completed" ? result.status : "partial_completed",
+    cancellingFromStage: null,
+    noteTitle,
+    statusMessage: null,
+    progressMessage: null,
+    progressPercent: 100,
+    error,
+  };
+}
+
+export function cancelNoteTitleGeneration(state: WorkflowState): WorkflowState {
+  if (!state.taskId || !state.noteTitle) return state;
+  return {
+    ...state,
+    stage: "partial_completed",
+    cancellingFromStage: null,
+    noteTitle: { ...state.noteTitle, status: "cancelled", error_code: "WORKER_CANCELLED" },
+    statusMessage: null,
+    progressMessage: null,
+    progressPercent: 100,
+    error: { code: "WORKER_CANCELLED", message: "", stage: "title_generating" },
+  };
+}
+
 export function requestProcessingCancellation(state: WorkflowState): WorkflowState {
   const cancellingFromStage = state.stage;
   if (
     cancellingFromStage !== "video_extracting" &&
     cancellingFromStage !== "video_transcribing" &&
+    cancellingFromStage !== "title_generating" &&
     cancellingFromStage !== "insights_generating"
   ) {
     return state;
@@ -372,6 +450,9 @@ export function restoreProcessingAfterCancellationFailure(
 }
 
 export function confirmProcessingCancellation(state: WorkflowState): WorkflowState {
+  if ((state.cancellingFromStage === "title_generating" || state.stage === "title_generating") && state.taskId) {
+    return cancelNoteTitleGeneration(state);
+  }
   if (
     state.cancellingFromStage === "insights_generating" &&
     state.activeAiTarget !== null &&
@@ -400,6 +481,7 @@ export function isProcessingStage(stage: WorkflowStage): boolean {
   return (
     stage === "video_extracting" ||
     stage === "video_transcribing" ||
+    stage === "title_generating" ||
     stage === "insights_generating" ||
     stage === "cancelling"
   );
@@ -424,9 +506,10 @@ export function summarizeWorkerResult(
   result: WorkerResult,
   failedAiTarget: InsightRetryTarget | null = null,
 ): WorkflowState {
+  const noteTitle = result.note_title ?? null;
   return {
     ...createInitialWorkflow(),
-    stage: result.status,
+    stage: noteTitle && noteTitle.status !== "completed" ? "partial_completed" : result.status,
     statusMessage: null,
     progressMessage: null,
     progressPercent: result.status === "failed" ? 35 : 100,
@@ -440,6 +523,7 @@ export function summarizeWorkerResult(
     dissection: result.dissection,
     dissectionStale: result.dissection_source_status === "stale",
     draft: result.draft ?? "",
+    noteTitle,
     error: result.error,
     aiErrorTarget: isAiTargetFailure(result.error) ? failedAiTarget : null,
     aiTargetErrors:
@@ -470,8 +554,12 @@ export function finishInsightRetry(
   // not change the insight ids, so their seed selection is preserved.
   const draftSeedInsightId =
     target === "insights" ? null : state.draftSeedInsightId;
+  const noteTitle = result.note_title ?? state.noteTitle;
   return {
     ...next,
+    noteTitle,
+    noteMetadata: state.noteMetadata,
+    stage: noteTitle && noteTitle.status !== "completed" ? "partial_completed" : next.stage,
     composerSource: state.composerSource,
     taskSource: state.taskSource,
     aiErrorTarget: isAiTargetFailure(result.error) ? target : null,

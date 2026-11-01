@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 const MODAL_SOURCES = [
-  ["../history/HistorySheet.tsx", 1],
+  ["../history/HistoryDeleteConfirmation.tsx", 1],
   ["./AnimatedSheet.tsx", 1],
 ] as const;
 
@@ -12,10 +12,13 @@ const ANIMATED_SHEET_SOURCES = [
   "../account/AccountSheet.tsx",
   "../asrModel/ModelGuideSheet.tsx",
   "../history/HistorySheet.tsx",
+  "../notes/NoteActionSheet.tsx",
   "../insightPreferences/InsightPreferenceFlow.tsx",
   "../results/AiResultDetailSheet.tsx",
   "../results/DraftResultSheet.tsx",
   "../results/SummaryConfirmationSheet.tsx",
+  "../results/DraftConfirmationSheet.tsx",
+  "./ConfirmDialog.tsx",
   "../settings/SettingsSheet.tsx",
   "../dissection/TranscriptDissectionConfirmationSheet.tsx",
 ] as const;

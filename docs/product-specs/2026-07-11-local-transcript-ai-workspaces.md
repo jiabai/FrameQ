@@ -7,7 +7,7 @@ experience is divided into two domain workspaces:
 
 - `LocalTranscriptWorkspace` owns local download/transcode/ASR progress, video and audio
   file actions, audio review, transcript correction, save, copy, and export.
-- `AiGenerationWorkspace` owns AI availability, quota and privacy explanations, separate
+- `AiGenerationWorkspace` owns AI availability and quota explanations, separate
   summary and inspiration targets, confirmation, target-local progress, errors, retry, and
   result viewing.
 
@@ -35,33 +35,57 @@ or ProcessSupervisor internals.
 
 ## Layout and Visual Hierarchy
 
-- A submitted task shows one full-width task-status banner above the workspaces. Once the
-  local transcript is usable, the banner says that video, audio, and transcript are saved
-  locally and must not imply media upload.
-- At viewport widths of at least 1100 px, the workspaces align at the top in an approximate
-  62/38 split. The AI workspace has a minimum readable width of about 360 px.
-- Below 1100 px, they stack in the fixed order local transcript then AI generation. The
-  transcript editor and AI confirmation content must not be compressed horizontally.
-- Both workspaces use the same restrained panel level: existing raised surface, border,
-  quiet shadow, and large radius tokens. They use 16 px internal padding, 12 px internal
-  rhythm, 20-22 px headings, 14-16 px body copy, and controls at least 40 px high.
+- A submitted task shows necessary processing, cancellation, and failure feedback above the
+  workspaces. The local-completion success banner is not rendered and reserves no layout
+  space, including when reopening a completed history note. Transcript review and AI generation
+  move up naturally. Title-generation recovery, partial-completion errors, and AI target
+  progress/retry feedback remain available in their existing regions. Rendering this state
+  never starts processing or an LLM call.
+- The user approved the local webpage at `http://127.0.0.1:4181/` on 2026-10-31. Its source
+  under ignored `build/ui-workspace-preview/` is the selected visual reference; demonstration
+  data, localStorage, dialogs, and account placeholders are not production behavior.
+- The final approved webpage uses one white workspace with a shared 54px title row. The left
+  title is the real note display title, using the existing user-title/generated-title/history
+  priority. The right title is AI Synthesis. Remove duplicate inner workspace titles.
+- Header and body share two grid tracks with a flexible local pane and an AI pane whose initial
+  width is `clamp(280px, 38%, 620px)`, bounded by both panes' responsive minimum widths.
+  Manual sizing replaces the initial AI width with the user's preferred proportion.
+  A fine vertical divider separates the columns; neither
+  column has a surrounding rounded card. Keep zero column gap, left insets 16px 24px 0 and
+  right insets 20px 24px; narrow insets use 16px. Narrow windows retain the two-column layout.
+  The existing sidebar and branding are preserved.
+- Use 14px semibold shared titles, 14px transcript text and AI feature names; 13px
+  descriptions; and 12px timestamps, status, privacy, quota, and supporting copy. Transcript
+  body line-height is 1.85. Dimensions use CSS pixels and follow system display scaling.
+- Player, segment list, AI list, and feature icons have no nested content-frame border,
+  background tile, or shadow. Thin separators and whitespace distinguish internal regions.
+  Compact actions use 32px minimum height with visible keyboard focus.
 - No gradient background, glass layer stack, decorative animation, ornamental 3D, or new
   visual-effects dependency is introduced. Motion is limited to hover, progress, and state
   transitions and respects reduced motion.
 
 ## Local Transcript Workspace
 
-- The title is `文字稿校对` or `本地转录`, and the region has an accessible label.
+- The local region retains its localized accessible label. Its visible title appears once
+  as the real note title in the shared row, with local save/processing state inside the region.
 - Local processing progress contains only download/media preparation and transcription.
   AI generation is not presented as a third local step.
 - The compact audio review bar precedes the video/audio file action row. Long paths are
   truncated and retain an accessible full label or title.
+- Local status displays loading, saving, and unsaved changes when needed. A normally saved
+  transcript omits the entire status row and its reserved space. The audio player has no
+  surrounding card. Segment edit buttons appear
+  on hover or keyboard focus and stay visible while editing. The existing controllers own all
+  playback, file location, transcript mutation, save, copy, and export actions.
 - `TranscriptReviewPanel` is extracted from the existing transcript detail implementation
   and rendered directly in the local workspace. Existing segment playback, direct editing,
   save, path validation, original backup, and stale-save protection are reused rather than
   copied.
-- Transcript content scrolls inside its own bounded region. Edit/save/copy/export actions
-  remain in a stable footer. Video and audio are compact file actions, not large result cards.
+- Transcript content scrolls inside its bounded region and the edit/save/copy/export footer
+  stays accessible. At an inner scroll boundary, vertical wheel input continues to an available
+  ancestor scroll region. Segment whitespace, body text, and time controls must allow native
+  wheel input. Short/narrow layouts may shrink the transcript scroll region and provide local
+  column overflow so notices and actions remain reachable. Video/audio stay compact actions.
 - During AI generation, playback, scrolling, and local file location remain available, but
   transcript editing and save are disabled with the explanation `AI 正在使用已保存版本`.
 - A usable transcript remains fully available in `partial_completed`; an AI failure is not
@@ -69,12 +93,44 @@ or ProcessSupervisor internals.
 
 ## AI Generation Workspace
 
-- The title is `智能提炼`, with the persistent explanation `确认后仅发送文字稿片段，视频和音频不会上传`.
+- A fixed 30px panel-icon button sits at right:16px/top:12px of the shared title row,
+  separate from native window controls. PanelRightClose hides the AI column and title;
+  PanelRightOpen restores them. Local content fills the released width and the button's
+  coordinates remain unchanged. Labels are localized Show/Hide AI Synthesis, with
+  `aria-expanded` and `aria-controls` linked to the actual AI region.
+- Keep both child workspaces mounted while hidden. Immediately apply `inert` and `aria-hidden`
+  to AI content and its title, move AI focus to the toggle when necessary, and keep local edit,
+  playback, active generation, results, and quota unchanged. Hiding is a view action only.
+- Both header/body grids animate their second track to zero over 220ms using
+  `cubic-bezier(.22,.61,.36,1)`. The AI title/content fade over 150ms and translate 10px to the
+  right over 220ms, with delayed visibility hiding. Reverse from the current animated position
+  on rapid input; use no timer-driven unmount or resetting transition state.
+- `prefers-reduced-motion: reduce` switches immediately, including toggle/icon color feedback.
+
+- The divider is adjustable through a transparent 12px hit area with a horizontal resize cursor.
+  Pointer dragging adjusts both title/body columns immediately, without transition lag. Each
+  pane normally keeps at least 280px; below 560px total available width both use half, resizing
+  is disabled, and the preferred proportion is retained for wider layouts.
+- A vertical keyboard separator exposes the actual local-pane width percentage and bounds.
+  Left/Right move the boundary 10px; Home minimizes the local pane and End maximizes it.
+  Pointer capture ends on release, cancellation, lost capture, blur, resize, or hiding AI.
+  Escape during dragging restores its initial proportion. Other endings retain the last width.
+- Collapsing hides the separator and AI pane; reopening restores the last preferred proportion
+  within current bounds. The ratio stays local to the mounted workspace and writes no preference.
+
+- The `智能提炼` title appears once in the shared row. The region keeps its accessible label.
+  Its top content starts with balance and per-call charging guidance, without a persistent
+  privacy paragraph or its spacing. Generation confirmation retains privacy, authorization,
+  and billing disclosures in all three interface languages.
 - Before a usable saved transcript exists, the workspace is quiet and says it is waiting
   for the transcript. Local processing controls remain in the local workspace.
-- Summary and inspirations are two compact, independent target cards. Each shows target
-  status, availability/Credits blocker, actual-call Credits explanation, and its own confirm,
-  retry, progress, error, and view action.
+- Summary and inspiration remain independent targets, each retaining its own status,
+  availability blocker, confirmation, retry, progress, error, and result-view action.
+- The four current feature rows (summary, dissection, inspiration, and draft) use plain icons,
+  a shared name/status line, short descriptions, and compact real actions. Privacy and the
+  real account balance appear once above the list; per-call charging and confirmation remain
+  explicit. Target errors, retained results, stale-result guidance, quota blockers, and
+  cancellation remain available. No rendering/layout change initiates an LLM call.
 - Summary is labelled `要点总结（同时生成思维导图文件）`. Summary still generates
   summary plus the hidden/local Mermaid file. There is no independent mindmap target or
   cloud-generation button.
@@ -130,8 +186,9 @@ or ProcessSupervisor internals.
 - Workflow/view-model tests prove local completion unlocks AI, local progress excludes AI,
   the active target is typed, summary has no snapshot, and inspiration preserves its
   snapshot contract.
-- Component and browser tests cover desktop columns, narrow stacking, the local-completion
-  banner, AI unavailable/quota exhausted states, both confirmation flows, AI-time transcript
+- Component and browser tests cover shared desktop/narrow columns, collapse state and animation,
+  fixed toggle coordinates, mounted-state preservation, hidden accessibility, absence of the local-completion
+  banner without layout space, AI unavailable/quota exhausted states, both confirmation flows, AI-time transcript
   read-only behavior, target-local errors, and cancellation placement/semantics.
 - History tests prove both workspaces share one restored task and stale operation/save
   callbacks cannot overwrite it.

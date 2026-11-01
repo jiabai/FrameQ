@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::AppHandle;
 
-use crate::resolve_runtime_paths;
+use crate::resolve_fixed_paths;
 
 pub(crate) const UI_PREFERENCES_FILE_NAME: &str = "ui-preferences.json";
 pub(crate) const UI_PREFERENCES_READ_FAILED: &str = "UI_PREFERENCES_READ_FAILED";
@@ -49,7 +49,7 @@ struct UiPreferencesFile {
 
 #[tauri::command]
 pub(crate) fn get_ui_preferences(app: AppHandle) -> Result<UiPreferencesView, String> {
-    let paths = resolve_runtime_paths(&app).map_err(|_| UI_PREFERENCES_READ_FAILED.to_string())?;
+    let paths = resolve_fixed_paths(&app).map_err(|_| UI_PREFERENCES_READ_FAILED.to_string())?;
     load_ui_preferences_from_file(&paths.user_data_dir.join(UI_PREFERENCES_FILE_NAME))
 }
 
@@ -58,7 +58,7 @@ pub(crate) fn save_ui_preferences(
     app: AppHandle,
     preferences: SaveUiPreferencesInput,
 ) -> Result<UiPreferencesView, String> {
-    let paths = resolve_runtime_paths(&app).map_err(|_| UI_PREFERENCES_WRITE_FAILED.to_string())?;
+    let paths = resolve_fixed_paths(&app).map_err(|_| UI_PREFERENCES_WRITE_FAILED.to_string())?;
     save_ui_preferences_to_file(
         &paths.user_data_dir.join(UI_PREFERENCES_FILE_NAME),
         preferences,

@@ -159,7 +159,6 @@ export async function saveLlmConfig(
     parseLlmConfigResponse(
       await runner("save_llm_config", {
         config: {
-          output_dir: draft.outputDir,
           asr_model: draft.asrModel,
         },
       }),

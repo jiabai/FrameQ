@@ -1,5 +1,116 @@
 # FrameQ Architecture
 
+## Data storage authority and recovery
+
+- The system app-local directory is the fixed configuration root. It owns `.env`, authentication,
+  UI/update/Inspiration preferences, application logs, and the bounded `data-storage.json` control
+  record with its process lock. The separately resolved data root owns `outputs/`, `cache/`,
+  `models/`, `runtime/`, and `collections.json`. Bundled Python, worker and media tools retain their
+  installation resource root.
+- `data_storage.rs` owns native commands, directory-selection tokens, media authorization and
+  controlled close/restart. Its private engine owns physical directory identity, inventory,
+  copying, publication, cancellation, recovery and receipt-based old-copy cleanup. One immutable
+  location snapshot supplies every operation's output, cache, model and component paths.
+- Legacy mode preserves the effective `.env` then process-environment output setting and the
+  default output root. Managed mode derives all data paths from the committed root. Ordinary
+  settings saves update the ASR model only; they do not write `FRAMEQ_OUTPUT_DIR` or initialize
+  bulk-data directories. Migration inventories effective legacy output plus default remnants and
+  the full application data trees, including physically preserved unsupported task directories.
+- Ordinary data commands retain a global permit through their complete native operation, including both
+  supervised worker lanes, implicit transaction/deletion recovery, playback preparation and cache
+  cleanup. React first pauses new actions and resolves busy/dirty owners while process → title →
+  automatic Collection membership and save → refresh promises finish. Rust then drains permits
+  and holds exclusive access for migration or old-copy cleanup.
+- Prepared inventory and its one-use confirmation token bind source/target identities, generation
+  and SHA-256 inventory. Copies and source rechecks complete before target publication and atomic
+  control replacement. Errors retain the durable phase; precommit cancellation releases the old
+  library and persists identifiable partial copies for explicit continuation.
+- Target probes and metadata temporaries have durable operation ownership, physical identity and
+  expected-content records. Uncertain interrupted material remains referenced; re-preparation uses
+  a new operation and confirmation. Sources changed after cancellation likewise require a new
+  inventory and preview. Same-physical-root relocation keeps original inventory evidence and
+  resolves sources through explicit identity-bound mappings, including interrupted publication.
+- A committed location stays paused until controlled restart. New-process validation checks the
+  current physical library, task/Collection data and inventory. The formal supervised worker runs
+  a read-only offline storage probe: existing model readiness and component fingerprint/import
+  results are compared with the pre-migration baseline. Missing, stale or previously unavailable
+  components retain their status without downloads, ASR, generation or checkout. Successful
+  validation ends the pending migration; cleanup receipts alone do not block normal use.
+- `StorageBootstrap` follows locale initialization and precedes `App`. It subscribes before reading
+  storage state and mounts data views only after native Ready. Invalid/offline storage and a browser
+  without a native bridge show the actual unavailable boundary. Online recovery retains dirty
+  sessions, blocks data actions and pauses playback; absolute artifact paths reload after restart.
+- Native asset authorization covers only verified output `tasks/` and playback-cache subtrees.
+  Unavailable/recovery/restart states revoke previous roots. Reauthorizing a revoked root requires
+  controlled restart. `close_window`, `restart_application` and `restart_for_data_storage` consult
+  the native storage state. The process plugin is not registered. Normal/update relaunch uses
+  `restart_application`; storage restart uses `restart_for_data_storage`. Their atomic preparation
+  pauses new permits and releases the configuration process lock before `request_restart`, allowing
+  the successor process to recover the same authoritative record.
+- Native control snapshots permit atomic replacement while a reader holds the prior snapshot.
+  An initially invalid control can be explicitly reloaded from an existing repaired record;
+  deleting the record does not initialize an empty replacement library. Existing valid control
+  authority is never replaced by arbitrary external edits during normal rechecking.
+- Cleanup compares receipt-listed old files against the current active library and their original
+  physical identities and hashes. Different, external or unlisted files and source roots remain.
+  The current library stays authoritative across repeated migrations and interrupted cleanup.
+
+## 2026-10-31 Local note actions
+
+- `frameq-note-metadata.json` belongs to its verified task directory and stores versioned pinned
+  state and the optional manual display title. TaskEditSession retains TaskLease, reads current
+  settings for each field update, and publishes through atomic replacement. Malformed settings
+  remain untouched and produce a separate error projection while the note stays readable.
+- History exposes settings independently from generated titles. React preserves manual metadata
+  through task restoration, cached results, title cancellation, and AI regeneration. Every title
+  consumer uses manual title, generated title, then the existing transcript/source label.
+- Sidebar rows have independent open and menu controls. One portal menu and the task-bound note
+  controller coordinate pinning, naming, Collection membership, canonical source actions, and real
+  information. Pinned entries are a separate projection; ordinary Notes retains every saved note.
+- Source commands accept a task ID and revalidate its stored SourceIdentity. No menu action starts
+  transcription, a supplier call, or account checkout. Internal settings are excluded from artifacts.
+- Permanent deletion records a bounded native intent, moves the verified task into same-volume
+  staging, and then cleans associated caches and freshly read Collection memberships. Results
+  distinguish completed cleanup from accepted deletion with cleanup pending. Startup and explicit
+  retry continue only matching directory identities; unrelated or replacement notes remain protected.
+
+## 2026-10-31 Automatic note titles
+
+- `process_video` and local-media processing persist the authoritative transcript first. Rust marks
+  only genuinely new saved tasks with `task_created=true`; cached URL reuse and history reads never
+  acquire title-generation authority. React captures the submission locale and keeps one operation
+  claim across transcription and the following `retry_insights` request with `target="title"`.
+- `worker/frameq_worker/note_title.py` samples the beginning, middle, and end of the saved transcript
+  within 12,000 Unicode characters and calls the existing configured provider once. Supplier retries,
+  repair calls, and tool-loop turns are disabled. A closed JSON title response is validated before storage.
+- Contract v10 adds `title_generating`, the title retry target, optional `note_title` result metadata,
+  and the native-owned creation flag. Optional schema-v3 manifest metadata has the closed fields
+  `text`, `status`, `output_language`, and `error_code`. Legacy absence is valid; present malformed
+  metadata is rejected. Completed titles are trimmed single-line text of at most 60 Unicode characters.
+- Title state publishes through the existing manifest journal while preserving other manifest fields,
+  transcript/media/result bytes, task identity, and Collection membership. History projects unfinished,
+  failed, or cancelled title state as a partial result with an explicit title retry.
+- Rust retains the task mutation lease and supervised timeout/cancellation boundary. The no-checkout
+  `record_note_title_cancellation` IPC command uses a closed expected-metadata snapshot to atomically
+  record cancellation before worker admission; a changed snapshot returns current committed state.
+- Sidebar, Notes, Collection, Artifacts, history management, task toolbar, and dissection confirmation
+  use the persisted title. An unrelated save preserves it. Refresh, restart, transcript edits, and
+  cached URL reuse never start another supplier call. Each explicit retry creates its own checkout.
+
+## 2026-10-30 Desktop shell and local navigation
+
+- `app/src/features/shell/` owns the sidebar, Home greeting, library projections, native toolbar,
+  responsive styling, and pure page/task navigation history. `App.tsx` composes these views with
+  the existing workflow, account, settings, transcript, and AI controllers.
+- Shell navigation stores page and task ID together. Completed-task Home editing changes only
+  composer source state; actual submission retains the prior result until account/model checks
+  succeed. Processing and unsaved edits guard task switches; deleted task visits are removed.
+- `useHistoryController.refreshHistory()` reads the existing Rust-owned history boundary without
+  opening a sheet. Generation counters protect list/detail/delete races and unmounts. Artifacts
+  projects only user-facing declared artifacts and restores the owning task before result actions.
+- Draft-save results include the expected task ID before updating frontend state. The shell does
+  not add worker commands, server payloads, cloud storage, or new media source contracts.
+
 ## Desktop update distribution
 
 - 桌面更新使用 Tauri updater 与 GitHub Releases 的签名更新清单；账号服务负责账号、激活、权益和 AI checkout。
@@ -718,11 +829,32 @@
   the operation. Recursive permanent deletion is explicitly non-transactional; failure keeps a
   truthful current workflow and reloads disk-derived History without promising rollback.
 
+## 2026-11-01 Shared Client Sheet Boundary
+
+- `AnimatedSheet` owns the common open/closing/hidden lifecycle and `useModalFocus`; optional
+  dialog/alertdialog semantics and description IDs allow `ConfirmDialog` to share that lifecycle.
+  `features/modal/sheets.css` scopes presentation to modal surfaces, preserving the main shell.
+- Header/body/footer are distinct regions. Confirmation facts and existing safe paths change
+  layout only; frozen language, quota/privacy disclosures, selections and operations stay with
+  the existing flow/controller owners. Draft platform preselection remains a read-only request.
+- `useModalFocus` tracks background inert ownership across layers. The last active owner restores
+  the original attribute, allowing earlier sheets to finish closing before the top sheet. Focus
+  restoration skips inert/closing targets; no layer can restore another layer's background early.
+- `DraftResultSheet` owns unsaved close candidates, and `useDraftRegeneration` owns regeneration
+  candidates for both an unsaved local buffer and persisted edited draft. Candidates bind task
+  identity and saving/open state; cancellation preserves current content. Regeneration acceptance
+  only routes to the existing final confirmation, whose controller still owns provider admission.
+
 ## 2026-07-11 Local Transcript and AI Workspace Boundary
 
 - One workflow task remains the only identity and artifact aggregate, but the desktop UI
-  projects it into `LocalTranscriptWorkspace` and `AiGenerationWorkspace`. App composes the
-  workspaces; `useTaskProcessingController` remains the sole task-identity owner.
+  projects it into `LocalTranscriptWorkspace` and `AiGenerationWorkspace`. App passes its
+  real note title and these elements into `TaskWorkspaceLayout`, which owns only transient
+  AI-pane visibility and the preferred split proportion. Responsive CSS clamps widths, and the
+  component measures React layout/viewport changes for separator ARIA and pointer ownership.
+  Both slots remain mounted while hidden; inert/aria-hidden and CSS
+  transitions do not affect editing, playback, generation, results, or controller ownership.
+  `useTaskProcessingController` remains the sole task-identity owner.
 - A typed `activeAiTarget` identifies `summary`, `insights`, or no active AI request. Local
   progress is projected only from download/media/transcription stages. AI progress, errors,
   availability, quota, and cancellation placement are projected into the target-specific AI
@@ -941,7 +1073,7 @@
 - The Tauri desktop layer owns app-local diagnostic logs at `logs/frameq-desktop.log`.
 - Worker lifecycle diagnostics are emitted only by `WorkerLane::run` from a closed operation mapping. They record fixed operation kind, supervisor-owned PID, safe exit/status markers, and structured safe summaries; they never include raw args, stdin, environment values, full executable/current-directory paths, source/local-media paths, URLs, credentials, transcripts, prompts, preference prose, generated bodies, or raw stderr.
 - Application diagnostics may retain task id, structured error code, validated retry target/output locale, cache outcomes, and sanitized short messages, but they do not reconstruct process lifecycle logs.
-- Worker task diagnostics remain under app-local `cache/tasks/<task_id>/` when task-specific temporary evidence is needed; desktop logs are global support evidence, not user artifacts.
+- Worker task diagnostics remain under the active data root's `cache/tasks/<task_id>/` when task-specific temporary evidence is needed; application logs remain in the fixed configuration root.
 - YouTube extraction may explicitly enable local JavaScript runtimes supported by `yt-dlp` (`deno`, `node`, `quickjs`, `bun`) but must still run as a worker-owned public-link download policy.
 - Release packages bundle Deno in `resources/bin` so clean Windows and macOS machines have a local JavaScript runtime available for `yt-dlp` YouTube player evaluation.
 
@@ -949,11 +1081,11 @@
 
 - A processing run is now a first-class task. The worker creates `<output_root>/tasks/<task_id>/frameq-task.json` and writes all final user artifacts under that same task directory.
 - Final artifacts use stable names inside task folders: `media/video.mp4`, `media/audio.wav`, `transcript/transcript.txt`, `transcript/transcript.md`, `transcript/segments.json`, `ai/summary.md`, `ai/mindmap.mmd`, `ai/insights.json`, and `ai/insights.md`.
-- App-local `cache/tasks/<task_id>/` owns temporary downloads, partial files, media merge scratch space, and diagnostics. It is not the user-facing artifact contract.
-- `frameq-task.json` is the source of truth for desktop history and artifact lookup. Any app-local cache index is rebuildable, not the authority.
+- The active data root's `cache/tasks/<task_id>/` owns temporary downloads, partial files, media merge scratch space, and diagnostics. It is not the user-facing artifact contract.
+- `frameq-task.json` is the source of truth for desktop history and artifact lookup. Any cache index is rebuildable, not the authority.
 - Tauri may satisfy a repeated canonical source identity from an existing completed or partial-completed task manifest when the transcript artifact still exists. Exact canonical URLs can hit before Python launch; variants and short links may invoke the worker's lightweight identity preflight, but a hit returns before download/transcode/ASR and unusable or broken old tasks are skipped.
 - Tauri commands should resolve artifacts from `task_id` and manifest-relative paths only. They must not accept arbitrary transcript/audio/result paths for normal task operations.
-- The old flat-output/history contract is intentionally retired for new builds. Legacy flat outputs and legacy app-local history records do not need migration or compatibility behavior.
+- Legacy flat outputs and unsupported manifests do not become trusted task authorities. Location migration preserves application-owned legacy bytes without converting them into current tasks; ambiguous shared-root contents block migration.
 
 ## 2026-07-05 Subtitle-First Transcript Source Boundary
 
@@ -973,8 +1105,8 @@
 - `app/src-tauri/src/transcript_detail.rs` is the only crate-visible transcript-detail command and composition root. It opens one validated `SupportedTask` per operation, then delegates audio playback/cache preparation to private `audio_playback`, tolerant segment decoding and strict encoding to private `segments`, and official transcript load/edit persistence to private `edit_storage`.
 - Transcript-detail children accept validated task capabilities rather than output roots, task IDs, or raw manifests. `edit_storage` is the only child that converts a task into `TaskEditSession`; none of the children resolve Tauri runtime roots or parse/write `frameq-task.json` directly.
 - Tauri must not expose arbitrary file playback or arbitrary text-file write commands. Frontend audio playback may only use paths returned by the validated detail command.
-- When a configured output root is outside app-local data, Tauri may create a rebuildable playback cache under app-local `cache/.frameq-audio-review/<task_id>/` from the validated manifest audio artifact. The frontend should play `audio_asset_path`; `audio_path` remains the original task artifact path.
-- Settings UI owns manual playback-cache management: it queries Tauri for `.frameq-audio-review` size and calls a clear command. Tauri must delete only that canonical app-local playback cache, never `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/` artifacts.
+- Tauri resolves direct audio authorization and rebuildable playback copies from the same active location snapshot. Copies, when required, live under `<data_root>/cache/.frameq-audio-review/<task_id>/`. The frontend plays `audio_asset_path`; `audio_path` remains the original validated task artifact.
+- The existing Settings cache category queries and clears only the active `.frameq-audio-review` subtree under a data permit. Task artifacts, other caches, models and fixed configuration remain protected.
 - The frontend owns the native audio element, current segment selection, playback-following highlight, edit pause/resume behavior, dirty state, copy-from-draft behavior, and save feedback.
 - Later AI整理 must read the saved official transcript, not an unsaved frontend draft.
 
@@ -1045,20 +1177,20 @@
 - The desktop updater endpoint is `https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1`; release automation uploads `latest.json`, the NSIS installer, and signed updater bundles to the published GitHub Release.
 - Python worker code upgrades together with the desktop application bundle; v1 does not support independent worker hot updates from app-local data.
 - App-local data `updates.json` stores only update preferences such as `lastCheckedAt`, `postponedUntil`, and `skippedVersion`.
-- App-local `models/`, `outputs/`, `cache/`, `auth/session.json`, and `.env` are preserved across app updates.
+- Updates preserve the active data root and fixed configuration root, including migrated models/components, task data, caches, authentication and local settings. Installation and restart wait for active data work; migration waits for update completion and an installed update's restart.
 - Live old-version-to-new-version testing through GitHub Releases is waived for v1 because mainland China access to GitHub is too slow to test reliably. The updater architecture remains in place, but direct fresh-installer distribution is the accepted fallback for users whose network cannot reach GitHub Releases.
 
 ## 2026-06-23 Runtime Configuration Boundary
 
 - Desktop worker runtime configuration no longer reads repository-root `.env` files such as `D:/Github/FrameQ/.env`.
-- App-local data `.env` remains the local desktop settings file for output directory, ASR model selection, and model download overrides.
+- Fixed-root `.env` stores ASR model selection and model-download overrides. Its existing output key is read for legacy compatibility; settings saves retain that key unchanged, and committed managed storage takes precedence.
 - The desktop settings panel returns and displays the app-local data `.env` path, can locate it in the file manager, and creates a commented template if the file is missing.
 - Legacy local `FRAMEQ_LLM_PROVIDER`, `FRAMEQ_LLM_BASE_URL`, `FRAMEQ_LLM_API_KEY`, `FRAMEQ_LLM_MODEL`, and `FRAMEQ_LLM_TIMEOUT_SECONDS` dotenv values are ignored.
 - Insight topic generation receives LLM runtime material only through server-managed checkout environment variables injected by Tauri for the insight-generation worker invocation.
 
 ## 2026-06-23 ASR Model Cache Layout Boundary
 
-- `FRAMEQ_MODEL_DIR` is the app-local ModelScope cache root, not the directory that directly contains `iic/SenseVoiceSmall`.
+- Desktop `FRAMEQ_MODEL_DIR` points to the active data root's `models/` ModelScope cache root, not the directory that directly contains `iic/SenseVoiceSmall`.
 - The canonical release ASR layout is `<FRAMEQ_MODEL_DIR>/models/iic/SenseVoiceSmall` plus `<FRAMEQ_MODEL_DIR>/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch`.
 - Worker startup keeps legacy top-level `iic/...` readable for upgrade compatibility, but normalizes it to the canonical layout before real ASR loading.
 - Automatic cleanup is limited to FrameQ's known SenseVoice/VAD legacy directories and stale `._____temp` folders without `model.pt`.
@@ -1129,23 +1261,25 @@ FrameQ 是本地优先的桌面客户端：本地 worker 处理公开视频或�
 | `worker/frameq_worker/ai_runtime.py`、`ai_prompts.py`、`transcript_chunks.py` | 托管 provider、提示词与确定性文字稿分段 | 供应商调用最多执行一次，分段记录 UTF-8 偏移和 SHA-256 |
 | `worker/frameq_worker/dissection_report.py`、`ai_artifacts.py`、`insight_errors.py` | 解剖报告、产物提交与生成错误 | 保留闭合 schema、完整导出、任务事务与错误协议 |
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
-| app-local data `models/` | 用户本机可写模型缓存；由 `FRAMEQ_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...`; legacy top-level `iic/...` is migrated/cleaned best-effort |
-| app-local data `outputs/` 或 `FRAMEQ_OUTPUT_DIR` | 用户可直接使用的 `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `frameq-task.json` | 运行时生成；输出目录可由设置面板保存到 app-local data `.env` |
-| app-local data `cache/` | 每任务下载缓存、中间拼接、调试日志和临时产物 | 运行时生成；由 `FRAMEQ_CACHE_DIR` 指向 |
-| app-local data `updates.json` | 桌面更新偏好，不含用户内容或签名私钥 | 记录检查时间、稍后提醒时间和跳过版本 |
-| app-local data `.env` | 本机非 LLM 运行配置，不提交仓库；设置页可定位该文件，缺失时自动创建注释模板 | 支持输出目录、ASR 模型选择和模型下载覆盖；LLM 配置由 server 管理，不从 dotenv 读取 |
+| `app/src-tauri/src/data_storage.rs`、`data_storage/`、`safe_filesystem.rs` | 数据许可、位置权威、身份与完整性、复制提交、恢复及旧副本清理 | 固定控制根与可迁移数据根分离；前端只提交原生选择和确认令牌 |
+| 数据根 `models/` | 用户本机可写模型缓存；桌面由 `FRAMEQ_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...` |
+| 数据根 `outputs/`；Legacy 模式下的有效旧输出根 | `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `frameq-task.json` | 由位置快照派生，设置中的明确迁移流程改变有效位置 |
+| 数据根 `cache/`、`runtime/`、`collections.json` | 任务与播放缓存、按需运行组件、合集及成员 | 随任务和模型一同迁移；缓存分类保留播放缓存清理 |
+| 固定配置根 `updates.json` | 桌面更新偏好，不含用户内容或签名私钥 | 记录检查时间、稍后提醒时间和跳过版本 |
+| 固定配置根 `.env` | 本机非 LLM 配置；设置页可定位，缺失时创建注释模板 | 普通保存只写 ASR 选择，保留旧输出键；托管 LLM 配置不从 dotenv 读取 |
+| 固定配置根 `data-storage.json`、`.data-storage.lock` | 位置、迁移阶段、物理身份及有界恢复引用 | 原子切换位置；完整库存与清理凭据保存在数据根的应用元数据区 |
 
 ## 模块关系
 
 `app/src` 通过 Tauri command 调用受监督 worker。主流程调度媒体、ASR 与平台 fallback，
-写入 app-local data 的 `outputs/`、`cache/`、`models/`。用户确认 `retry_insights` 后，
+按同一位置快照写入数据根的 `outputs/`、`cache/`、`models/`，固定配置与日志保持原位。用户确认 `retry_insights` 后，
 worker 使用托管 checkout 环境调用相应 AI agent；server 只处理账号与额度元数据。
 
 ```mermaid
 graph LR
   subgraph "app/ (Tauri + React + TS)"
-    A1["app/src/<br/>workflow.ts<br/>settingsClient.ts<br/>historyClient.ts"]
-    A2["app/src-tauri/src/<br/>lib.rs · video_processing.rs<br/>asr_model.rs · settings/history"]
+    A1["app/src/<br/>StorageBootstrap · workflow<br/>dataStorageClient · settings/history"]
+    A2["app/src-tauri/src/<br/>data_storage · lib.rs<br/>video_processing · settings/history"]
     A3["worker_runtime/<br/>command.rs · runner.rs + runner/*<br/>supervisor.rs"]
   end
 
@@ -1163,10 +1297,15 @@ graph LR
     F3["bilibili_fallback.py"]
   end
 
-  subgraph "app-local data (本机可写)"
+  subgraph "当前数据根 (本机可迁移)"
     D1["outputs/tasks/&lt;task_id&gt;/<br/>frameq-task.json<br/>media · transcript · ai"]
     D2["cache/tasks/&lt;task_id&gt;/<br/>下载缓存 · 临时产物"]
     D3["models/<br/>ASR 缓存<br/>iic/SenseVoiceSmall"]
+    D4["runtime/ · collections.json<br/>运行组件 · 合集"]
+  end
+
+  subgraph "固定配置根 (系统 app-local)"
+    C1["data-storage.json · process lock<br/>auth · .env · preferences · logs"]
   end
 
   subgraph "外部 / 独立服务"
@@ -1193,6 +1332,8 @@ graph LR
   S1 -->|逐调用配置与额度授权| W4
   W4 -->|文字稿与本轮生成上下文| S2
   A2 -->|读取历史 / 写盘路径| D1
+  A2 -->|位置许可 / 组件与合集| D4
+  A2 -->|配置 / 控制记录| C1
 ```
 
 阅读路径：
@@ -1205,7 +1346,8 @@ graph LR
   组合或直接导入私有 child。
 - 改 Rust worker 生命周期顺序：从 `app/src-tauri/src/worker_runtime/runner.rs` 进入；按职责修改私有 `runner/process_io.rs`、`watchdog.rs`、`progress.rs` 或 `terminal.rs`，进程树信号仍只改 `supervisor.rs`，固定 invocation/env 仍只改 `command.rs`；应用命令只保留领域映射。
 - 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
-- 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `asr_runtime/` → `model_download.py` → `app-local data models/`。
+- 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `asr_runtime/` → `model_download.py` → 当前数据根 `models/`。
+- 改数据位置、迁移或访问许可：`dataStorageClient.ts` / `features/dataStorage/` → `data_storage.rs` → 私有 engine 与 `safe_filesystem.rs`；正式模型/组件核验由 `data_storage_validation.rs` 和受监督只读 worker 负责。
 - 改灵感 / 总结 / mindmap / 解剖：从 `pipeline_runtime/insights.py` 进入相应
   `summary_agent.py`、`topic_agent.py` 或 `dissection_agent.py`；共享提示词、分段与调用分别
   在 `ai_prompts.py`、`transcript_chunks.py`、`ai_runtime.py`，checkout 协议在 `llm.py`。
@@ -1227,9 +1369,10 @@ graph LR
 - `ruff.toml`：Python worker 初始 lint 约束。
 - `pyproject.toml`：Python worker 项目元数据和 `uv` 依赖入口（初始化后维护）。
 - `app/src/workflow.ts`：前端工作流状态模型。
-- `app/src/settingsClient.ts`：前端本机设置读写 client（Tauri invoke 包装），包含 ASR、输出目录和 app-local `.env` 路径。
+- `app/src/settingsClient.ts`：ASR 设置与固定 `.env` 路径；旧输出字段只读兼容，普通保存不写目录。
+- `app/src/dataStorageClient.ts`、`dataStorageProtocol.ts`、`features/dataStorage/`：严格位置 DTO、启动恢复、设置行、迁移进度和未保存会话保护。
 - `app/src/historyClient.ts`：前端历史记录读取 client（Tauri invoke 包装）。
-- `app/src-tauri/src/worker_runtime/command.rs`：固定 worker invocation、受限 stdin payload 与 app-local 环境构造。
+- `app/src-tauri/src/worker_runtime/command.rs`：固定 worker invocation、受限 stdin payload 与配置根/当前数据快照环境构造。
 - `app/src-tauri/src/worker_runtime/runner.rs`：所有 Rust-owned Python 子进程唯一的生命周期编排；私有 `runner/process_io.rs`、`watchdog.rs`、`progress.rs`、`terminal.rs` 分别拥有底层实现，不构成新的应用入口。
 - `app/src-tauri/src/worker_runtime/supervisor.rs`：每 lane 的实例状态、取消 claim/rollback 与 Windows/macOS 进程树终止。
 - `worker/frameq_worker/models.py`：worker request/result/error schema。
@@ -1261,7 +1404,7 @@ graph LR
   `AsrModelDownloadJob` 以及语义 cancel/activity query 管理 FrameQ worker；
   `WorkerLane::run`、`WorkerRunRequest` 和 `WorkerCommandSpec` 都是 runtime 内部能力。应用层不得
   直接 spawn、wait、finish、发送 OS 信号或转发未验证 progress。
-- UI 可以通过 Tauri command 读取/保存 ASR 与输出目录配置；LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
+- UI 通过 Tauri command 保存 ASR；数据位置通过原生目录令牌、库存确认和重启验证改变。LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。
 - worker 通过结构化 JSON 返回状态、路径、文本、灵感和错误码。
 - `process_video` 主流程只负责视频下载、音频提取和 ASR 文字稿。`retry_insights` 在用户
   二次确认后按 `summary`、`insights`、`dissection`、`draft` 或 `transcript` 独立运行，
@@ -1272,8 +1415,8 @@ graph LR
   沿用各自的一次确认计费契约。
 - worker 运行期使用 `frameq_worker` 内的 AI 模块及 `agent_runtime` 依赖，不跨目录导入
   外部参考项目或本仓库 server 代码。
-- 对外分发态的用户可见输出默认写入 app-local data `outputs/tasks/<task_id>/`，也可通过 `FRAMEQ_OUTPUT_DIR` 写入自定义任务目录根；中间文件写入 app-local data `cache/tasks/<task_id>/`；模型缓存写入 app-local data `models/`。
-- 历史记录只索引本地结果和状态，不参与 worker 核心处理决策；旧历史路径不随输出目录配置变化而迁移。
+- 对外分发态的最终产物、缓存、模型、运行组件与合集均从当前数据位置派生；Legacy 保留有效旧输出解释，Managed 采用统一数据根。每个 worker 命令的输出、缓存、模型、组件路径来自同一快照，配置根与 cwd 保持固定。
+- 历史记录从当前有效输出根的受支持任务 manifest 读取。位置迁移按完整应用库存保留 task ID、相对产物路径、合集成员与原件；重启后重新生成绝对路径。
 - 灵感失败不得阻断文字稿结果，客户端进入 `部分完成` 状态。
 
 ## 层级边界

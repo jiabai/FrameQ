@@ -5,8 +5,8 @@ import os
 import re
 import secrets
 import unicodedata
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,6 +20,7 @@ from frameq_worker.models import (
     ProcessResult,
     TranscriptMetadata,
 )
+from frameq_worker.note_title_metadata import NoteTitleMetadata, parse_note_title_metadata
 from frameq_worker.source_identity import (
     SOURCE_PRIVACY_MIGRATION_VERSION,
     SourceIdentity,
@@ -210,6 +211,7 @@ class TaskContext:
 class OpenedTask:
     context: TaskContext
     transcript: TranscriptMetadata | None
+    note_title: NoteTitleMetadata | None = None
 
 
 @dataclass(frozen=True)
@@ -261,6 +263,7 @@ class TaskStoreFacade:
         return OpenedTask(
             context=context,
             transcript=transcript_metadata_from_manifest(manifest),
+            note_title=note_title_from_manifest(manifest),
         )
 
     def finalize(
@@ -271,6 +274,9 @@ class TaskStoreFacade:
         draft_seed_insight_id: int | None | object = DRAFT_SEED_UNSET,
     ) -> ProcessResult:
         recover_task_artifacts(context.paths.task_dir)
+        if result.note_title is None and context.paths.manifest_path.exists():
+            prior = load_task_manifest(self.output_root, context.task_id)
+            result = replace(result, note_title=note_title_from_manifest(prior))
         artifact_payloads = result.artifact_payloads
         artifacts = (
             _artifacts_after_payloads(context, artifact_payloads)
@@ -301,6 +307,48 @@ class TaskStoreFacade:
                 draft_seed_insight_id=draft_seed_insight_id,
             )
         return task_result
+
+    def read_note_title_transcript(self, context: TaskContext) -> str:
+        manifest = load_task_manifest(self.output_root, context.task_id)
+        current = task_context_from_loaded_manifest(
+            self.output_root, self.cache_root, context.task_id, manifest,
+        )
+        if current != context or manifest.get("task_id") != context.task_id:
+            raise ValueError("Task identity changed.")
+        if (
+            not isinstance(manifest.get("artifacts"), dict)
+            or manifest["artifacts"].get("transcript_txt") != "transcript/transcript.txt"
+        ):
+            raise ValueError("An authoritative saved transcript is required.")
+        path = context.paths.transcript_txt_path
+        if (
+            _is_link_or_junction(path.parent)
+            or not _is_committed_regular_file(path)
+            or path.stat().st_nlink != 1
+        ):
+            raise ValueError("Authoritative transcript storage is invalid.")
+        body = path.read_text(encoding="utf-8")
+        if not body.strip():
+            raise ValueError("The authoritative transcript is empty.")
+        return body
+
+    def save_note_title(
+        self, context: TaskContext, metadata: NoteTitleMetadata,
+        *, _fault_hook: Callable[[str], None] | None = None,
+    ) -> None:
+        manifest = load_task_manifest(self.output_root, context.task_id)
+        self.read_note_title_transcript(context)
+        manifest["note_title"] = parse_note_title_metadata(metadata.to_dict()).to_dict()
+        manifest["updated_at"] = (
+            datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+        )
+        commit_task_artifacts(
+            context.paths.task_dir, {
+                TASK_MANIFEST_FILE_NAME: (
+                    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+                ).encode("utf-8"),
+            }, _fault_hook=_fault_hook,
+        )
 
     def save_preference_snapshot(
         self,
@@ -436,6 +484,8 @@ def result_with_task(
         error=result.error,
         artifact_payloads=result.artifact_payloads,
         draft=result.draft,
+        note_title=result.note_title,
+        task_created=result.task_created,
     )
 
 
@@ -516,6 +566,13 @@ def serialize_task_manifest(
         "has_draft": draft_exists,
         "draft_seed_insight_id": prior_seed,
     }
+    title = result.note_title
+    if title is None and context.paths.manifest_path.exists():
+        title = note_title_from_manifest(
+            load_task_manifest(context.paths.output_root, context.task_id),
+        )
+    if title is not None:
+        payload["note_title"] = title.to_dict()
     return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
@@ -566,9 +623,14 @@ def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
         raise ValueError("Task is unavailable in the current history format.")
     try:
         _task_source_from_manifest(manifest)
+        note_title_from_manifest(manifest)
     except ValueError:
         raise ValueError("Task is unavailable in the current history format.") from None
     return manifest
+
+
+def note_title_from_manifest(manifest: Mapping[str, object]) -> NoteTitleMetadata | None:
+    return parse_note_title_metadata(manifest["note_title"]) if "note_title" in manifest else None
 
 
 def _validated_task_manifest_path(output_root: Path, task_id: str) -> Path:

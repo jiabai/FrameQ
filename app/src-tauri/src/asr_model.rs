@@ -102,7 +102,10 @@ fn diagnostic_model_snapshot_for(paths: &RuntimePaths, asr_model: &str) -> Diagn
     let Some(model) = SupportedDiagnosticModel::from_id(asr_model) else {
         return DiagnosticModelSnapshot::default();
     };
-    let marker = asr_model_cache_dir(paths, model.id()).join(MODEL_VERSION_FILE_NAME);
+    let Ok(cache_dir) = asr_model_cache_dir(paths, model.id()) else {
+        return DiagnosticModelSnapshot { model, cache_status: DiagnosticCacheStatus::Unknown };
+    };
+    let marker = cache_dir.join(MODEL_VERSION_FILE_NAME);
     let cache_status = match marker.try_exists() {
         Ok(false) => DiagnosticCacheStatus::Missing,
         Ok(true) if asr_model_available(paths, model.id()) => DiagnosticCacheStatus::Ready,
@@ -139,30 +142,31 @@ pub(crate) struct AsrModelDownloadResult {
     status: String,
 }
 
-fn asr_model_cache_dir(paths: &RuntimePaths, asr_model: &str) -> PathBuf {
-    let root = paths.user_data_dir.join("models");
-    if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
+fn asr_model_cache_dir(paths: &RuntimePaths, asr_model: &str) -> Result<PathBuf, String> {
+    let root = paths.models_root()?;
+    Ok(if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
         root.join(ONNX_CACHE_DIR_NAME)
     } else {
         root
-    }
+    })
 }
 
-fn asr_model_display_dir(paths: &RuntimePaths, asr_model: &str) -> PathBuf {
+fn asr_model_display_dir(paths: &RuntimePaths, asr_model: &str) -> Result<PathBuf, String> {
     let model_name = if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
         "SenseVoiceSmall-onnx"
     } else {
         "SenseVoiceSmall"
     };
-    asr_model_cache_dir(paths, asr_model)
+    Ok(asr_model_cache_dir(paths, asr_model)?
         .join("models")
         .join("iic")
-        .join(model_name)
+        .join(model_name))
 }
 
 fn asr_model_available(paths: &RuntimePaths, asr_model: &str) -> bool {
     SUPPORTED_ASR_MODELS.contains(&asr_model)
-        && model_marker_exists(&asr_model_cache_dir(paths, asr_model), asr_model)
+        && asr_model_cache_dir(paths, asr_model)
+            .is_ok_and(|root| model_marker_exists(&root, asr_model))
 }
 
 fn plausible_torch_model(path: &Path) -> bool {
@@ -234,6 +238,7 @@ pub(crate) fn get_asr_model_status(
     diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
     asr_model: String,
 ) -> Result<AsrModelStatusView, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let asr_model = validate_asr_model(asr_model)?;
@@ -243,8 +248,8 @@ pub(crate) fn get_asr_model_status(
     let available = snapshot.cache_status == DiagnosticCacheStatus::Ready;
     Ok(AsrModelStatusView {
         user_data_dir: path_to_env_string(&paths.user_data_dir),
-        default_output_dir: path_to_env_string(paths.user_data_dir.join("outputs")),
-        asr_model_dir: path_to_env_string(asr_model_display_dir(&paths, &asr_model)),
+        default_output_dir: path_to_env_string(paths.output_root()?),
+        asr_model_dir: path_to_env_string(asr_model_display_dir(&paths, &asr_model)?),
         asr_model_available: available,
         asr_model_source: if asr_model == SENSEVOICE_SMALL_ONNX_MODEL {
             "modelscope".to_string()
@@ -284,6 +289,7 @@ fn download_asr_model_blocking(
     diagnostic_state: Arc<DiagnosticModelState>,
     asr_model: String,
 ) -> Result<AsrModelDownloadResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let asr_model = validate_asr_model(asr_model)?;
@@ -423,11 +429,11 @@ mod tests {
     fn asr_model_display_directory_points_to_selected_runtime_leaf() {
         let paths = RuntimePaths {
             resource_dir: PathBuf::from("resources"),
-            user_data_dir: PathBuf::from("app-data"),
+            user_data_dir: temp_dir("display_directory"),
         };
 
         assert_eq!(
-            asr_model_display_dir(&paths, SENSEVOICE_SMALL_MODEL),
+            asr_model_display_dir(&paths, SENSEVOICE_SMALL_MODEL).expect("model directory"),
             paths
                 .user_data_dir
                 .join("models")
@@ -436,7 +442,7 @@ mod tests {
                 .join("SenseVoiceSmall")
         );
         assert_eq!(
-            asr_model_display_dir(&paths, SENSEVOICE_SMALL_ONNX_MODEL),
+            asr_model_display_dir(&paths, SENSEVOICE_SMALL_ONNX_MODEL).expect("model directory"),
             paths
                 .user_data_dir
                 .join("models")
@@ -597,7 +603,7 @@ mod tests {
             resource_dir: root.join("resources"),
             user_data_dir: root.join("app-data"),
         };
-
+        fs::create_dir_all(&paths.user_data_dir).expect("fixed configuration root");
         let missing = diagnostic_model_snapshot_for(&paths, SENSEVOICE_SMALL_MODEL);
         assert_eq!(missing.model, SupportedDiagnosticModel::SenseVoiceSmall);
         assert_eq!(missing.cache_status, DiagnosticCacheStatus::Missing);
@@ -782,8 +788,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../build/data-storage-acceptance")
+            .join(format!("asr-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
-        dir
+        dir.canonicalize().expect("resolve test dir")
     }
 }

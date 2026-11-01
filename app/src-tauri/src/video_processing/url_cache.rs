@@ -3,6 +3,7 @@ use crate::task_manifest;
 use crate::worker_runtime::TaskTerminalResult;
 use std::path::Path;
 
+#[cfg(test)]
 pub(super) fn cached_process_result_for_url(
     output_root: &Path,
     requested_source_url: &str,
@@ -13,15 +14,34 @@ pub(super) fn cached_process_result_for_url(
         return Ok(None);
     }
 
-    cached_process_result(output_root, Some(requested_source_url), None, asr_model)
+    cached_process_result(output_root, Some(requested_source_url), None, asr_model, None)
 }
 
+#[cfg(test)]
 pub(super) fn cached_process_result_for_identity(
     output_root: &Path,
     requested_identity: &task_manifest::SourceIdentity,
     asr_model: &str,
 ) -> Result<Option<TaskTerminalResult>, String> {
-    cached_process_result(output_root, None, Some(requested_identity), asr_model)
+    cached_process_result(output_root, None, Some(requested_identity), asr_model, None)
+}
+
+pub(super) fn cached_process_result_for_url_from_paths(
+    paths: &crate::RuntimePaths,
+    output_root: &Path,
+    source_url: &str,
+    asr_model: &str,
+) -> Result<Option<TaskTerminalResult>, String> {
+    cached_process_result(output_root, Some(source_url.trim()), None, asr_model, Some(paths))
+}
+
+pub(super) fn cached_process_result_for_identity_from_paths(
+    paths: &crate::RuntimePaths,
+    output_root: &Path,
+    identity: &task_manifest::SourceIdentity,
+    asr_model: &str,
+) -> Result<Option<TaskTerminalResult>, String> {
+    cached_process_result(output_root, None, Some(identity), asr_model, Some(paths))
 }
 
 fn cached_process_result(
@@ -29,11 +49,19 @@ fn cached_process_result(
     requested_source_url: Option<&str>,
     requested_identity: Option<&task_manifest::SourceIdentity>,
     asr_model: &str,
+    paths: Option<&crate::RuntimePaths>,
 ) -> Result<Option<TaskTerminalResult>, String> {
     let mut newest_cached: Option<(String, TaskTerminalResult)> = None;
     for task in task_manifest::SupportedTask::scan(output_root)?.into_tasks() {
         if !reusable_task_matches(&task, requested_source_url, requested_identity, asr_model) {
             continue;
+        }
+        if let Some(paths) = paths {
+            match crate::history_deletion::guard_pending_task(paths, task.task_id()) {
+                Ok(()) => {}
+                Err(error) if error == "HISTORY_DELETE_CLEANUP_PENDING" => continue,
+                Err(error) => return Err(error),
+            }
         }
         let Some((created_at, cached)) = cached_process_result_from_task(task)? else {
             continue;
@@ -120,9 +148,11 @@ fn cached_process_result_from_task(
         dissection_source_status,
         error,
     });
-    let Ok(result) = TaskTerminalResult::from_value(value) else {
+    let Ok(mut result) = TaskTerminalResult::from_value(value) else {
         return Ok(None);
     };
+    result.note_title = task.note_title();
+    result.task_created = false;
     Ok(Some((created_at, result)))
 }
 
@@ -136,6 +166,28 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const ASR_MODEL: &str = "iic/SenseVoiceSmall";
+
+    #[cfg(windows)]
+    #[test]
+    fn pending_deletion_cannot_reuse_a_same_name_replacement_by_url_or_identity() {
+        let fixture = crate::note_actions::tests::Fixture::new();
+        let source_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        assert!(cached_process_result_for_url(&fixture.output_root, source_url, ASR_MODEL)
+            .unwrap().is_some());
+        let paths = fixture.pending_replacement_paths();
+        assert!(super::cached_process_result_for_url_from_paths(
+            &paths, &fixture.output_root, source_url, ASR_MODEL,
+        ).unwrap().is_none());
+        let identity = SourceIdentity {
+            version:1, platform:"youtube".into(), stable_id:"dQw4w9WgXcQ".into(),
+            effective_part:None, canonical_url:source_url.into(),
+        };
+        assert!(super::cached_process_result_for_identity_from_paths(
+            &paths, &fixture.output_root, &identity, ASR_MODEL,
+        ).unwrap().is_none());
+        assert_eq!(fs::read_to_string(fixture.task_dir.join("transcript/transcript.txt")).unwrap(),
+            "Replacement transcript");
+    }
 
     fn task_value(result: &TaskTerminalResult) -> serde_json::Value {
         serde_json::to_value(result).expect("serialize closed task result")

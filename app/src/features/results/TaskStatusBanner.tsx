@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, LoaderCircle } from "lucide-react";
+import { AlertTriangle, CircleDashed, LoaderCircle } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
@@ -15,6 +15,8 @@ type TaskStatusBannerProps = {
 export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
   const { t } = useTranslation("workflow");
   const locale = useUiLocale();
+  if (model.kind === "local_complete") return null;
+
   const message = model.progressMessage
     ? renderWorkerProgressMessage(locale, model.stage, model.progressMessage)
     : renderUiMessage(locale, model.message);
@@ -37,9 +39,7 @@ export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
           transition={UI_MOTION_TRANSITION}
           aria-hidden="true"
         >
-          {model.kind === "local_complete" ? (
-            <CheckCircle2 size={20} />
-          ) : model.kind === "local_failed" ? (
+          {model.kind === "local_failed" ? (
             <AlertTriangle size={20} />
           ) : model.kind === "local_processing" ? (
             <LoaderCircle size={20} className="spin" />
@@ -56,7 +56,7 @@ export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
           exit={{ opacity: 0, y: -3 }}
           transition={UI_MOTION_TRANSITION}
         >
-          <strong>{t(bannerTitleKey(model.kind))}</strong>
+          <strong>{t(model.stage === "title_generating" ? "stage.title_generating.title" : bannerTitleKey(model.kind))}</strong>
           <span>{message}</span>
         </motion.div>
       </AnimatePresence>
@@ -65,15 +65,12 @@ export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
 }
 
 function bannerTitleKey(
-  kind: TaskWorkspaceViewModel["banner"]["kind"],
+  kind: Exclude<TaskWorkspaceViewModel["banner"]["kind"], "local_complete">,
 ):
-  | "banner.localCompleteTitle"
   | "banner.localFailedTitle"
   | "banner.localProcessingTitle"
   | "banner.idleTitle" {
   switch (kind) {
-    case "local_complete":
-      return "banner.localCompleteTitle";
     case "local_failed":
       return "banner.localFailedTitle";
     case "local_processing":

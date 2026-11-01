@@ -1,5 +1,134 @@
 # FrameQ Design Guidelines
 
+## Data storage settings and recovery
+
+- Settings → Basic contains one `数据存储位置 / 資料儲存位置 / Data storage location`
+  row: title and current effective path on the left, `更改 / Change` on the right. Use 14px
+  controls, 12/13px path assistance, the shared neutral sheet styles and a full-path tooltip.
+  Long paths truncate within the row and wrap safely in details. The existing Cache category
+  retains playback-cache management.
+- Change opens the native folder picker and never submits Save configuration. Ordinary configuration
+  saving manages the ASR model. Selecting a folder alone changes no active location; explicit
+  migration confirmation follows the reviewed source/target inventory and space requirements.
+- Preparing pauses new data actions and playback while already-started processing, title generation,
+  automatic Collection membership, downloads and save/refresh work finish. Each dirty transcript,
+  draft, name, Collection, setting or Inspiration Profile session supplies its own real Save and
+  Discard actions. Discard needs confirmation; Cancel retains the buffer and exits preparation.
+- The migration sheet uses the shared fixed header, scrollable body and reachable footer. Show actual
+  source/target paths, scope, file/byte counts, required/available space, original-copy retention and
+  restart requirement. Copying, integrity verification, publication and startup validation show
+  genuine native progress; phase and closed errors remain separate.
+- Precommit stages expose cancellation. Publication and committed states pause data access through
+  restart verification. Interrupted Prepared operations reopen a real confirmation preview;
+  resumable cancelled copies require explicit continuation and source revalidation. A recovered
+  legacy-source ambiguity opens a native location picker without guessing the source directory.
+- An installed app update completes its restart before a migration begins. Updates, normal close
+  and storage restart follow native storage protection. The UI explains waiting, required restart,
+  recovery and actual failure without marking an unfinished operation complete.
+- Installed-update restart remains required after a failed relaunch. Ordinary close waits for the
+  complete processing/title/Collection and save/refresh chains. Transcript inputs stay disabled
+  during their real save, including when migration preparation has been cancelled.
+- Normal/update relaunch calls guarded `restart_application`; storage completion uses its guarded
+  storage restart command. Native preparation pauses new data work and releases the configuration
+  process lock before restart. The process plugin is not registered.
+- Locale initializes before the storage gate. Startup mounts notes, Collections and task views only
+  after native Ready. Offline, invalid or replaced storage shows recovery with Check again and
+  Locate existing data actions. A browser without the native bridge explains local storage
+  unavailability and does not display an empty task library.
+- Verified migration restores ordinary library use independently of old-copy cleanup. The optional
+  cleanup action shows an exact confirmation; changed or unverified files remain and their retained
+  count is visible. Source roots, external originals and fixed configuration remain protected.
+- All storage labels, errors, status and accessibility text have Simplified Chinese, Traditional
+  Chinese and US English resources. Focus remains in the active sheet; nested discard confirmation
+  restores focus. Headers and footer controls remain accessible while the body scrolls at the
+  existing desktop viewport sizes.
+
+## Sidebar note actions
+
+- Each note row has sibling open and ellipsis controls. The menu contains pin/unpin, rename,
+  add to Collection, copy source, open source, note information, and red permanent deletion.
+  Use a 224px white panel with 12px corners, a fine gray border and soft shadow. Match the sidebar's
+  14px navigation text, use plain 16px outlined icons, 34px rows, and uniformly left-aligned labels. Separators
+  divide pinning, name/Collection management, source actions, information, and deletion. The menu stays within
+  the viewport and closes when its anchor disappears, scrolls, or becomes hidden.
+  Dimensions use logical CSS pixels; verify the complete menu in the native window at the active
+  Windows display scale. Raster-reference pixel dimensions do not determine CSS text size.
+- Pinned is an independently collapsible group before Notes. Pinning preserves the ordinary
+  Notes entry; unpinning removes only the pinned projection. Both use creation time ordering.
+- Manual names are trimmed, single-line, at most 60 Unicode characters, and take priority across
+  every note surface. Saving or cancelling a name remains available while its own draft is dirty;
+  unrelated navigation and mutations respect ongoing edits, processing, and storage operations.
+- Collection checkboxes show committed local membership and serialize writes. Information displays
+  verified stored fields only. Local imports and unavailable canonical sources disable source actions.
+- Permanent deletion shares one confirmation host across history and sidebar. It names the note,
+  describes associated files, focuses Cancel, and rechecks availability and editing guards. Accepted
+  deletion removes note visits; incomplete physical cleanup keeps an explicit retry notice.
+
+## Note titles
+
+- Before a new note is submitted, the composer explains that a transcript sample will go to the
+  cloud LLM after transcription and each title attempt costs one additional AI Credit. File selection
+  alone starts no generation. The disclosure is connected to the input and submit control for accessibility.
+- Title generation follows local transcript persistence as a visible cancellable phase. The saved
+  transcript remains readable; competing AI-generation actions are disabled until that phase finishes.
+- Failed, cancelled, or interrupted title generation keeps the note available and shows a title-specific
+  retry action with the cloud/cost disclosure. The request retains its captured output language.
+- Saved titles are consistent in sidebar history, Notes, Collection, Artifacts, history management,
+  the task toolbar, and dissection confirmation. Transcript previews remain separate. Titleless legacy
+  notes keep their existing labels, and opening a view performs no title generation.
+
+## Sidebar and Home
+
+- Use the neutral gray persistent sidebar and toolbar with one almost-white rounded content surface.
+  Keep Home, Notes, Collection, and Artifacts in that order. Simplified Chinese uses `主页`, `笔记`,
+  `合集`, and `作品`; Traditional Chinese uses `主頁`, `筆記`, `合集`, and `作品`;
+  English uses `Home`, `Notes`, `Collection`, and `Artifacts`.
+- Home uses a local-time serif greeting, the actual account name derived from the email, and one
+  156px-high media composer. The existing FrameQ blue artwork is a standalone transparent SVG with
+  its outer whitespace cropped; never surround it with an icon tile, border, or shadow.
+- Center the Home greeting and composer as one group within the content surface, with symmetric
+  vertical padding and safe alignment so tall content remains reachable by scrolling. The composer
+  input, file selection, recording labels, and supported-source guidance share a 15px font size.
+- The file selection action uses the 18px outlined Upload icon with an upward arrow above an open tray.
+- The sidebar owns the scrollable local Collection and Notes groups and bottom-fixed account menu.
+  Notes and Artifacts use verified local history projections; Artifacts opens the owning task for existing
+  result actions. Settings and account remain reachable through the bottom account menu.
+- Home navigation preserves completed task results. Its composer can edit a separate source draft
+  within the current workflow; the next explicit submission replaces the task only after account
+  and model checks succeed. Back and forward preserve task and Collection identity and skip
+  unavailable task visits while retaining the current workflow.
+- Processing, cancellation, model preparation, transcript polishing/saving, and unsaved transcript
+  edits protect task switching. A draft save carries its originating task ID; closing an unsaved
+  draft requires an explicit discard decision.
+- At narrow widths, collapse the sidebar to an icon rail. The task workspace switches to one column
+  according to its available content width. Every action remains reachable at 720x640.
+- Recording remains visibly unavailable. Supported inputs are the existing video links and local
+  video/audio files. Document/image ingestion, drag/drop, clipboard files, and a new file-size limit
+  are outside this change.
+
+## Local Collection and Notes
+
+- Collection metadata is owned by Rust and stored atomically in the current data root's `collections.json`.
+  Names and membership remain local; the account service and AI do not receive them.
+- The outer Collection manager owns creation, rename, and deletion. A row has an open action and
+  sibling rename/delete controls. Deletion confirmation states that all notes and their media,
+  transcripts, and generated files remain on the device.
+- A Collection detail view shows its saved notes. Its header action is `新建笔记 / New note`, and
+  its membership action below the note list or empty state is `添加笔记到合集 / Add notes to Collection`.
+  Rename and delete controls belong to the outer manager.
+- A note can belong to more than one Collection. Sidebar counts and detail lists project membership
+  against verified local history; unavailable references never manufacture note records.
+- Names are trimmed, non-empty, limited to 80 Unicode characters, and checked for control characters
+  and case-insensitive duplicates. User-supplied names and note content remain unchanged by locale selection.
+- New note opens the media composer with the originating Collection as a pending destination.
+  Membership is added after a real local transcript is saved. Account/model gating, failure, and
+  cancellation retain their existing behavior. A failed membership update keeps the saved note and
+  offers an explicit retry; creating a note does not automatically generate AI results.
+- Loading, mutation, error, and empty states remain distinct. Frontend membership changes follow
+  committed native responses; async responses cannot replace a newer view or update an unmounted controller.
+- Collection mutations and unsaved name edits protect navigation. Native acceptance records and
+  remaining checks are maintained in [design-qa.md](../design-qa.md).
+
 ## Reliability Failure and Recovery UX
 
 - A worker timeout or persistence-recovery failure must leave the current busy state and present one
@@ -24,14 +153,14 @@
 
 ## Local Media Input and Source-Aware Workspace
 
-- Keep one input composer. Add a keyboard-accessible `+` control at the left that opens a one-item
-  local video/audio menu and then the native single-file dialog. Cancelling the dialog changes no
+- Keep one input composer. Its keyboard-accessible file action opens the native single-file
+  video/audio dialog directly. Cancelling the dialog changes no
   state and displays no error; choosing a file does not start processing or consume AI Credits.
 - A selected file appears as a removable chip with media-kind icon, safe basename, localized size,
   and accessible remove action. Its presence makes the retained URL draft inactive; removal restores
   that draft. A replacement file replaces the chip, and locale changes clear neither source.
-- The existing confirmation action and account gate start the active URL or local source. Menu,
-  dismissal, chip removal, busy/disabled state, focus restoration, and Escape behavior must work by
+- The existing confirmation action and account gate start the active URL or local source. Dialog
+  dismissal, chip removal, busy/disabled state, focus restoration, and composer Escape behavior work by
   keyboard and remain reachable at `720x640` in all three locales.
 - Local progress is source-aware without inventing a second workflow. Video presents validation,
   copy, audio extraction/normalization, and transcription; audio presents validation, normalization,
@@ -68,33 +197,68 @@
   are dropped without changing visible state; structurally valid unknown codes use the matching
   stage/status generic fallback. Both paths record only a safe code and never render worker prose.
 - At `720x640`, English expansion must wrap and scroll without horizontal overflow, clipped actions,
-  or unreachable keyboard focus. Locale changes must not clear URL, output/ASR settings, transcript
+  or unreachable keyboard focus. Locale changes must not clear URL, ASR settings, storage confirmation, transcript
   edits, preference flows, current tasks, or existing AI results.
 - `FrameQ`, `AI Credits`, ASR, LLM, Mermaid, model names, platform brands, paths, emails, user content,
   subtitles, transcripts, and historical AI results are not translated.
 
 ## Local Transcript and AI Workspaces
 
-- After submission, use one full-width task-status banner followed by two domain workspaces.
-  At 1100 px and wider, local transcript review occupies about 62% and AI generation about
-  38% with a 360 px minimum AI width; below 1100 px they stack local-first.
-- Both regions use `--surface-raised`, `--border`, `--shadow-panel-quiet`, and
-  `--radius-lg`, with equal top alignment; the saved local transcript remains the primary work
-  surface and optional AI stays visually quieter. Use 16 px padding, 12 px gaps,
-  20-22 px headings, 14-16 px body text, and controls at least 40 px high.
+- After submission, place necessary processing, cancellation, and failure feedback before two
+  domain workspaces. Omit the local-completion success banner entirely, including on restored
+  history notes, so it reserves no space. Keep title and AI target progress/recovery feedback.
+  The approved local webpage in `build/ui-workspace-preview/` supplies the visual parameters.
+  One white workspace has a shared 54px title row and a thin vertical divider. Header and body
+  share zero-gap tracks with a flexible local pane and initial AI width `clamp(280px,38%,620px)`,
+  bounded by both panes' responsive minima and replaced by the preferred ratio after sizing. Narrow windows
+  keep the columns. Preserve the existing sidebar and brand artwork.
+- Both columns have no surrounding border, corner radius, or shadow. Left padding is
+  16px 24px 0, right padding is 20px 24px, with 16px horizontal narrow insets. Player, segment
+  list, feature list, and icons use whitespace and horizontal separators with no content frame.
+- Use explicit CSS-pixel typography: shared note/AI titles 14px semibold; transcript text and AI
+  feature names 14px; descriptions 13px; timestamps, state and supporting copy 12px.
+  Transcript body line-height is 1.85. Actions are compact with at least 32px height, and
+  segment edit controls are 24px with hover/focus visibility. Preserve visible keyboard focus.
 - The local workspace places a compact audio bar first, a compact video/audio file-action
   row second, a bounded scrolling transcript segment review in the body, and a stable
   edit/save/copy/export footer. Media and transcript are not three large cards.
-- Transcript segments share one quiet list boundary and adjacent dividers; they are not separate
-  rounded cards. Playback uses a pale row background with an inset left accent, editing uses a
+- Vertical wheel input over transcript whitespace, text, or time controls scrolls the available
+  owner. The transcript scrolls internally first and chains to available column overflow at
+  its upper/lower boundary. Allow its minimum height to shrink in short windows so fixed
+  controls and required notices remain reachable. Preserve textarea scrolling, focus, and playback.
+- Transcript segments use adjacent dividers. Playback uses a pale row background with an inset left accent, editing uses a
   contained white editor, and the external focus halo is reserved for keyboard focus.
-- The AI workspace uses a quiet availability/privacy header and one grouped list containing three
-  semantic target rows: `要点总结（同时生成思维导图文件）`, `文字稿解剖`, and `启发灵感`. Each owns its status,
-  quota copy, confirm/retry/view actions, progress, and error without another independent card
-  border or radius.
-- Workspace headings use the current locale and remain the only visible workspace titles. The task banner owns ready
-  completion, so ready local and optional AI workspace badges are omitted; processing, failure,
-  waiting, generating, and every target-level lifecycle state remain visible.
+- The local state row displays loading/saving/dirty state when needed and is absent for a
+  normally saved transcript, including its container/spacing. Source metadata remains
+  available. Player, lightweight file toolbar, and copy/save footer stay accessible in two columns.
+- The AI workspace begins with actual balance and per-call charging guidance once, above
+  four rows: summary, dissection, inspiration, and draft. Each retains its real status,
+  confirm/retry/view actions, progress, errors, stale-result and seed guidance. Icons have no
+  surrounding tile; names and states share a row. Existing confirmation and billing semantics apply.
+- The workspace omits the persistent privacy paragraph and its top spacing. Privacy disclosures
+  remain in generation confirmations with existing authorization and billing behavior.
+- The shared left title uses the real note title and existing manual/generated/history priority.
+  The shared right title uses the localized AI Synthesis name; inner workspace titles are omitted.
+- A fixed 30px PanelRightClose/Open button at the title row's right edge controls AI visibility,
+  with localized show/hide labels, aria-expanded/controls, and focus recovery. The title and full
+  AI pane keep their mounted state but become inert/aria-hidden while collapsed. Hiding never
+  cancels or starts processing, writes a preference, or changes results/edits/playback.
+- Both grids interpolate the second track to zero over 220ms; AI title/content fade over
+  150ms and move 10px right over 220ms with delayed visibility hiding. The button stays fixed.
+  Fast reversal continues from the current animation position. Reduced motion disables all
+  pane and its toggle/icon transitions and switches immediately.
+- The thin body divider has a transparent 12px pointer target with col-resize feedback. Dragging
+  and keyboard sizing update both grids immediately. Both panes normally retain 280px; with
+  less than 560px available they share the width equally and resizing is disabled. A local
+  preferred proportion survives narrow/wide changes and whole-pane hiding/showing.
+- The vertical separator controls the local pane and exposes its actual width percentage and
+  bounds. ArrowLeft/Right move the boundary 10px; Home/End select local minimum/maximum.
+  Pointer capture ends on release/cancel/lost capture, blur, resizing, and pane hiding. Escape
+  during dragging restores the starting proportion. Other endings retain the last legal width.
+- Workspace copy uses the current locale.
+  Ready local and optional AI workspace badges are omitted; processing, failure,
+  waiting, generating, and target-level lifecycle state stay available in their regions.
+  Collapsing the AI region hides its presentation while retaining these states and operations.
 - Pending and retry AI target actions use a quiet scoped secondary-blue treatment. The final
   confirmation-sheet submit remains the primary action.
 - AI generation leaves the local workspace readable and playable while disabling transcript
@@ -105,12 +269,40 @@
   copy/export/`重新解剖`, and locates cited text only when Rust
   verified the current transcript and UTF-8 source ranges. Saving an edit keeps the former report
   visible as stale and disables location; a failed rerun also keeps that report available.
-- The completion banner says video, audio, and transcript are saved locally. AI copy says
-  confirmation sends transcript fragments only and never implies video/audio upload.
+- AI copy says confirmation sends transcript fragments only and never implies video/audio upload.
 - Do not use gradient backgrounds, glass stacks, decorative motion, equal-height filler,
   or a global loading card. Colors express state only: restrained success/local file colors,
   existing primary blue for AI actions, and restrained danger for errors. Respect reduced
   motion.
+
+## Shared Client Surfaces
+
+- Client confirmation, preference, result, draft, settings, account, model, history, and note
+  sheets share `features/modal/sheets.css`. Use white surfaces, neutral 1px borders, 12px
+  corners and one restrained shadow. Backdrops use a neutral tint without blur or gradients.
+- Body text, actions, and form controls use 14px; sheet titles use 16px/600; section headings
+  use 14px/600; descriptions use 13px and supporting text 12px. Preserve system font/scaling.
+- Header, scrolling body, and footer are independent flex children. Content shrinks naturally;
+  controls remain reachable in short windows. Standard insets are 20px horizontal/16px vertical,
+  narrowing to 16px horizontally; buttons are at least 32px high with 30px icon controls.
+- Facts, account/quota information, settings states, preferences, history, inspirations and
+  dissection sections use labels, values, whitespace and dividers. Retain real option-group,
+  table, code, editor and selected/disabled boundaries without nested decorative frames.
+- Draw each region boundary once. Terminal facts, groups and list items omit trailing
+  dividers and extra bottom padding/margins before the footer or panel edge. Preserve dividers
+  between real content sections and rows, including account rows that become stacked in narrow
+  windows. Multi-column groups omit the whole final row's trailing edges.
+- Existing legal paths use `.sheet-path` for one-line ellipsis with the full original accessible
+  text. Privacy, authorization, billing, error and progress explanations remain fully wrapping.
+- Primary actions use solid blue, discard/deletion use explicit danger colors, and keyboard
+  focus remains visible. Disclosure content and all business gates retain their ownership.
+- Draft generation confirmation uses the shared AnimatedSheet/focus lifecycle. Draft close and
+  regeneration use application confirmation sheets; cancel preserves the buffer/dirty state,
+  saving blocks destructive routing, and stale task candidates cannot affect another note.
+- Modal background inert state is shared by active owners, including overlapping exit/entry
+  animations. Escape and focus return through the active layer without enabling its background.
+- AI/draft fullscreens preserve data and editor modes. Long Markdown tables/code scroll inside
+  their own boundaries; toolbar actions wrap in narrow windows and keep stable sizing.
 
 ## Desktop Density, History, and Toolbar
 
@@ -122,9 +314,9 @@
 - History sheets use intrinsic height for short lists and the shared sheet max-height for long
   lists. Only `.history-list` scrolls when content exceeds the available height; tests must not
   assign a fixed sheet height to manufacture layout evidence.
-- The labelled account chip remains a separate compact status control. Persistent History,
-  Settings, and New Task icon buttons share one quiet toolbar utility group with equal control
-  sizes; the temporary update action remains separate.
+- The account control is fixed at the sidebar bottom. Notes exposes saved local notes, its section plus
+  starts a new note, and Settings remains in the bottom account menu. The temporary update
+  action remains separate from persistent navigation.
 - Short transcript content does not change the local workspace height strategy and must not be
   padded with decorative or equal-height filler.
 - A History row with deletion support is a neutral card container containing sibling restore and
@@ -182,7 +374,7 @@
 - Old tasks without segment timing should show a full-text editor and audio player when possible, with click-to-seek affordances hidden or disabled.
 - If audio is unavailable, show a quiet local-file status while preserving text editing and save actions.
 - Copy should use the current draft text. Export/location should use the saved official transcript and, when unsaved changes exist, prompt the user to save first.
-- Settings should describe audio playback copies as a rebuildable app-local cache and keep them separate from user-visible task output folders.
+- Settings describes audio playback copies as a rebuildable cache in the current data location. Its Cache category clears only that playback subtree and retains original task files; changing data location migrates it with other application data.
 
 ## 2026-06-29 YouTube Download UX
 
@@ -213,7 +405,7 @@
 - Desktop settings must not expose insight LLM provider, base URL, API key, model, or timeout; those fields are administrator-managed.
 - Desktop settings should expose the app-local `.env` path for non-LLM local settings and provide a locate-file action.
 - Desktop settings should include an `应用更新` section with manual check, low-noise status copy, progress, `一键升级`, `稍后提醒`, and `重启完成更新` actions.
-- Update installation must be disabled while worker processing or ASR model download is active, with copy explaining that the current task should finish first.
+- Update installation waits for worker processing, model/component downloads and storage maintenance. Storage preparation waits for an already-running update and requires an installed update's restart before migration.
 - The account sheet shows email login, activation-code monthly pass redemption, monthly pass expiry, and remaining LLM API-call uses in a stable layout.
 - Successful activation-code redemption opens or extends the monthly pass and returns the user to the existing processing workflow without changing the local-first worker UI stages.
 - WeChat purchase is paused because of WeChat approval requirements, so the desktop UI must not show a WeChat purchase entry by default.
@@ -239,12 +431,12 @@ UI 必须围绕以下状态组织：
 
 | 状态 | 展示原则 |
 |------|----------|
-| `等待输入` | 首页内容区只显示 `粘贴视频链接` 输入卡，包含 URL 输入、主按钮和简短等待文案；不显示结果工作区 |
+| `等待输入` | Home 内容区显示问候语与紧凑媒体输入区域，提供链接输入、选择文件、展开和明确提交操作；显示已有合集来源时保留新笔记的目标合集 |
 | `正在取消` | 保留当前任务、URL、阶段进度和结果区，取消按钮显示“正在取消”并禁用；等待 worker 或模型下载给出真实终态 |
 | `视频提取中` | 隐藏输入区，展示下载、校验和音频提取进度 |
 | `视频转译中` | 展示 ASR 进度、当前 ASR 模型识别文案，以及模型缓存/加载状态 |
 | `AI 整理中` | 左侧继续展示可阅读、可回听但不可编辑的已保存文字稿；右侧对应 AI target 显示生成中 |
-| `文字稿完成` | 展示本地保存横幅、左侧文字稿校对工作区和右侧智能提炼工作区 |
+| `文字稿完成` | 直接展示文字稿校对工作区和智能提炼工作区；保留需要处理的错误与恢复提示 |
 | `部分完成` | 保留文字稿和已成功生成的 AI 产物，要点总结/灵感卡片展示失败态和重试入口 |
 | `失败` | 展示结构化错误原因、重试入口和可修改 URL 路径 |
 
@@ -263,12 +455,12 @@ UI 必须围绕以下状态组织：
 - 任一 AI target 待生成或失败时，点击卡片先打开各自确认流程；`要点总结` 确认后只生成总结和隐藏 Mermaid mindmap，`启发灵感` 确认后只生成灵感，`文字稿解剖` 确认后只生成结构化解剖报告。它们都不重新下载视频、重新提取音频或重新转写。Mermaid 文本只写入本地文件，不在 UI 中展示或渲染。
 - 取消任务只在处理中显示；点击后先显示“正在取消”并保留当前任务和 operation ID，直到 worker 或模型下载确认取消后才返回输入态并保留刚提交的 URL。
 - 取消信号发送失败时必须恢复可观察的原处理态并显示简明错误；自然完成或失败与取消竞争时，真实终态优先显示，不能被“正在取消”覆盖。
-- 顶部工具区提供设置入口；设置面板用于管理本机 ASR、输出目录和 app-local `.env` 配置文件位置，AI 结果 LLM 由服务端管理员配置。
+- 左下账号菜单提供设置入口；设置面板管理本机 ASR、数据存储位置和固定 `.env` 配置文件位置，AI 结果 LLM 由服务端管理员配置。
 - 顶部工具区提供历史入口；历史面板展示最近任务列表，支持查看可用结果和定位输出文件。
-- 设置面板字段包含 ASR 模型、结果输出目录和本机配置文件路径；release UI 显示 SenseVoiceSmall 与 SenseVoiceSmall-ONNX 的安装状态，但不提供独立下载入口。缺失模型在用户提交已验证任务时显示下载进度，成功后自动继续原任务。
+- 设置基础页包含 ASR 模型、数据存储位置和本机配置文件路径；release UI 显示 SenseVoiceSmall 与 SenseVoiceSmall-ONNX 的安装状态，但不提供独立下载入口。缺失模型在用户提交已验证任务时显示下载进度，成功后自动继续原任务。
 - 设置面板必须提示：这里只管理本机配置；AI 整理确认面板负责提示文字稿片段会发送到管理员配置的云端 LLM 服务。
 - 设置面板和历史面板内容必须在弹窗内部独立滚动，不能因字段或记录过多而被裁切。
-- 输出目录为空时 UI 应展示默认 `outputs/`；保存自定义目录后应显示已保存路径，并说明只影响新任务。
+- 数据存储位置显示原生返回的当前有效根；必要时补充旧输出来源。更改经过预检、明确确认、复制核对、原子保存和重启验证，完整保留已有资料与任务身份。普通「保存配置」不写入目录。
 
 ## Visual Direction
 
@@ -276,23 +468,23 @@ UI 必须围绕以下状态组织：
 - 避免装饰性 hero、卡片堆叠、纯氛围图和大面积单色渐变。
 - 固定格式控件应设置稳定尺寸，避免状态文案导致布局跳动。
 
-## macOS Desktop UI Direction
+## Desktop Window and Workspace Direction
 
-- 应用外层采用桌面窗口框架：紧凑 toolbar、窗口内容区、任务状态区和结果工作区，而不是网页式居中卡片。
+- 应用外层采用浅灰侧边栏、紧凑 toolbar 和近白色圆角内容区；任务状态与结果显示在内容区中。
 - Tauri 主窗口应使用自定义 chrome：禁用原生 decorations，由应用内 toolbar 承担窗口标题栏视觉，并设置可拖拽区域。
-- 自定义 chrome 不能只是装饰：toolbar 空白区域必须能触发 Tauri 窗口拖拽，左上角红/黄/绿 controls 必须分别接入关闭、最小化和最大化/还原窗口动作。
+- toolbar 空白区域必须能触发 Tauri 窗口拖拽，窗口控制按钮分别接入关闭、最小化和最大化/还原窗口动作。
 - 自定义 chrome 所需的 Tauri v2 capability 必须显式授予最小窗口权限：`core:window:allow-start-dragging`、`core:window:allow-close`、`core:window:allow-minimize` 和 `core:window:allow-toggle-maximize`。
 - Windows/WebView2 下拖动应包含手动 fallback：按下 toolbar 时记录窗口和鼠标屏幕坐标，移动时通过本项目 Rust command 设置窗口位置，避免 `start_dragging` IPC 时机不稳定导致无法拖动。
-- toolbar 左侧显示 FrameQ 与当前任务语境，右侧使用图标按钮承载历史、设置和新任务；当前阶段只在 task monitor 内表达，避免 toolbar 或结果区标题重复显示状态 badge。
-- 等待输入态使用 command panel：URL 输入是首要焦点，主按钮保持 `确认`，辅助文案保持安静。
-- 首页 `粘贴视频链接` 卡片不展示额外状态 badge；隐私、本地处理和云端 LLM 提示应放在设置面板或任务过程文案中。
+- toolbar 左侧提供侧边栏收起、返回和前进按钮及当前页面名称，右侧提供更新与窗口控制；设置入口位于侧边栏底部的账号菜单。
+- 等待输入态使用 156px 高的媒体输入区域，底部提供选择文件、当前不可用的录制语音与展开操作；有效输入可通过带有 `确认` 无障碍名称的箭头按钮明确提交。
+- Home 保留衬线问候语和独立蓝色品牌符号；隐私、本地处理和云端 LLM 提示放在设置面板或任务过程文案中。
 - 首页输入框不展示单独的 `视频 URL` 可见 label；使用 placeholder 和无障碍名称表达输入含义。
-- 结果工作区只在用户提交 URL 后出现；等待输入态不能提前显示空结果卡或结果占位区。
-- 等待输入态的单张输入卡应与桌面窗口比例协调，在默认桌面窗口宽度下使用宽松表单宽度，而不是窄小网页表单。
-- 处理态和完成态采用上下排列：task monitor 在上，结果工作区在下；避免两个大卡片左右并排导致内容被横向割裂。
+- 提交链接或本地媒体、恢复已有本地笔记后，显示对应任务的实际结果；等待输入时保留清晰的媒体输入区域。
+- 媒体输入区域最大宽度为 972px；720x640 窗口使用 66px 侧边栏图标区域，内容与全部操作保持可访问。
+- 处理态将必要状态反馈放在结果工作区上方；完成态直接展示结果工作区。
 - 处理态使用 task monitor：阶段 timeline、百分比、worker 事件文案和取消按钮必须在同一信息层级内可扫描。
-- 完成态使用全宽状态横幅与 62/38 双工作区：左侧是紧凑媒体操作、可滚动文字稿和固定校对操作栏，右侧是三个独立 AI target 卡片；低于 1100 px 时按本地工作区、AI 工作区顺序纵向堆叠。
-- 设置面板使用 macOS sheet 质感：分组表单、本地隐私提示、内部滚动和底部固定操作区。
+- 完成态使用同一个工作区和细竖线分栏，共享标题行显示真实笔记标题、智能提炼及固定的收起按钮。窄窗口保持左右分栏；收起后左栏占满宽度，智能提炼保持挂载和业务状态，约 220 毫秒平滑收起并支持快速反向切换。共享标题、正文与功能名 14px，功能说明 13px，时间与辅助信息 12px。成功完成提示不渲染元素，也不占用布局空间；处理中、取消中、失败和部分完成的必要反馈继续显示。
+- 设置面板沿用主界面的白色平面分区、细线、紧凑表单、本地隐私提示、内部滚动和独立底部操作区。
 - 历史面板使用紧凑列表：状态 badge、摘要、时间、输出目录和结果数量/错误码必须可快速扫描。
 - 历史卡片主标题必须区分文字稿预览与来源 URL fallback，最多显示两行；卡片按内容自然高度排列，单行标题不得为视觉等高预留第二行空白。截断内容仍需通过原生可访问文本和 `title` 保留完整值。
 - 历史卡片元信息在宽布局固定为“时间 / 可省略输出目录 / 结果数量或错误码”三列；窄布局将输出目录移到第二行，状态和结果项不得因长路径或长标题溢出、重叠或漂移。

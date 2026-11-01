@@ -10,7 +10,7 @@ pub(crate) use facade::{AsrModelDownloadJob, RuntimeComponentDownloadJob, TaskWo
 pub(crate) use result_protocol::SourceIdentityFailure;
 pub(crate) use result_protocol::{
     validate_task_dissection, ModelDownloadTerminalResult, SourceIdentityTerminalResult,
-    TaskDissection, TaskTerminalResult, ValidatedWorkerResult, WORKER_PROTOCOL_MESSAGE,
+    StorageValidationTerminalResult, TaskDissection, TaskTerminalResult, ValidatedWorkerResult, WORKER_PROTOCOL_MESSAGE,
     WORKER_PROTOCOL_VIOLATION,
 };
 #[cfg(test)]
@@ -29,6 +29,33 @@ pub(crate) struct ProcessSupervisors {
 }
 
 impl ProcessSupervisors {
+    pub(crate) fn run_storage_validation(
+        &self,
+        paths: &RuntimePaths,
+        data: &crate::data_storage::DataPaths,
+        import_component: bool,
+    ) -> Result<StorageValidationTerminalResult, String> {
+        self.run_storage_validation_for_component(paths, data, import_component, env!("CARGO_PKG_VERSION"))
+    }
+
+    pub(crate) fn run_storage_validation_for_component(
+        &self,
+        paths: &RuntimePaths,
+        data: &crate::data_storage::DataPaths,
+        import_component: bool,
+        component_version: &str,
+    ) -> Result<StorageValidationTerminalResult, String> {
+        let request = WorkerRunRequest {
+            operation: WorkerOperation::StorageValidation,
+            command: command::build_storage_validation_for_component(paths, data, import_component, component_version)?,
+            progress: ProgressRoute::None,
+        };
+        match self.task.run(paths, request).map_err(|_| "StorageValidationFailed".to_string())? {
+            WorkerRunOutcome::Structured(ValidatedWorkerResult::StorageValidation(value)) => Ok(value),
+            _ => Err("StorageValidationFailed".to_string()),
+        }
+    }
+
     pub(crate) fn task_worker<'a>(&'a self, paths: &'a RuntimePaths) -> TaskWorkerFacade<'a> {
         TaskWorkerFacade::new(paths, &self.task)
     }
@@ -141,9 +168,14 @@ mod tests {
 
     #[test]
     fn asr_model_download_job_derives_selected_model_command_and_model_root() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../build/data-storage-acceptance")
+            .join(format!("worker-model-job-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("user-data")).expect("create model job fixture");
+        let root = root.canonicalize().expect("resolve model job fixture");
         let paths = RuntimePaths {
-            resource_dir: PathBuf::from("frameq-test").join("resources"),
-            user_data_dir: PathBuf::from("frameq-test").join("user-data"),
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("user-data"),
         };
         let job = AsrModelDownloadJob::new(
             "iic/SenseVoiceSmall-onnx".to_string(),
@@ -172,7 +204,7 @@ mod tests {
         assert_eq!(request.command.stdin_payload, None);
         assert_eq!(
             request.command.env_map().get("FRAMEQ_MODEL_DIR"),
-            Some(&"frameq-test/user-data/models".to_string())
+            Some(&crate::path_to_env_string(paths.user_data_dir.join("models")))
         );
     }
 

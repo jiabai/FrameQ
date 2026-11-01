@@ -27,7 +27,9 @@ tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-single-instance = { version = "2.4.2", features = ["deep-link"] }
 url = "2.5"
 uuid = { version = "1", features = ["v4"] }
+unicode-general-category = "1"
 sha2 = "0.10.9"
+fs4 = { version = "=1.1.0", default-features = false }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"

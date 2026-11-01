@@ -71,7 +71,7 @@ function hasSavedTranscript(workflow: WorkflowState): boolean {
 function isAiCancellation(workflow: WorkflowState): boolean {
   return (
     workflow.stage === "cancelling" &&
-    workflow.cancellingFromStage === "insights_generating"
+    (workflow.cancellingFromStage === "insights_generating" || workflow.cancellingFromStage === "title_generating")
   );
 }
 
@@ -171,7 +171,7 @@ function aiTargetStatus(
 function cancellationOwner(workflow: WorkflowState): WorkspaceCancellationOwner {
   const stage =
     workflow.stage === "cancelling" ? workflow.cancellingFromStage : workflow.stage;
-  if (stage === "insights_generating") {
+  if (stage === "insights_generating" || stage === "title_generating") {
     return "ai";
   }
   if (stage === "video_extracting" || stage === "video_transcribing") {
@@ -216,7 +216,9 @@ export function createTaskWorkspaceViewModel(
   account: AccountStatus,
 ) {
   const transcriptReady = hasSavedTranscript(workflow);
-  const aiActive = workflow.activeAiTarget !== null;
+  const titleActive = workflow.stage === "title_generating" ||
+    (workflow.stage === "cancelling" && workflow.cancellingFromStage === "title_generating");
+  const aiActive = workflow.activeAiTarget !== null || titleActive;
   const localProcessing =
     workflow.stage === "video_extracting" ||
     workflow.stage === "video_transcribing" ||
@@ -242,7 +244,11 @@ export function createTaskWorkspaceViewModel(
 
   return {
     banner: {
-      ...(transcriptReady
+      ...(titleActive ? {
+        kind: "local_processing" as const,
+        message: workflow.progressMessage === null ? workflow.statusMessage : null,
+        progressMessage: workflow.progressMessage,
+      } : transcriptReady
         ? {
             kind: "local_complete" as const,
             message: uiMessage(

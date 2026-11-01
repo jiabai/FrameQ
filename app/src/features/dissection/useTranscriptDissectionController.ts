@@ -71,9 +71,9 @@ export function useTranscriptDissectionController({
   retryInsightGeneration,
 }: UseTranscriptDissectionControllerOptions) {
   const [preview, setPreview] = useState<DissectionPreview | null>(null);
-  const taskTitle = workflow.taskSource?.kind === "local_file"
+  const taskTitle = workflow.noteMetadata?.displayTitle ?? workflow.noteTitle?.text ?? (workflow.taskSource?.kind === "local_file"
     ? workflow.taskSource.displayName
-    : workflow.taskId ?? "";
+    : workflow.taskId ?? "");
   useEffect(() => setPreview(null), [workflow.taskId]);
 
   const openConfirmation = useCallback(() => {

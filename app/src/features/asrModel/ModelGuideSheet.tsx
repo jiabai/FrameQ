@@ -69,6 +69,9 @@ export function ModelGuideSheet({
         ? t("source.modelScope")
         : asrModelStatus.source;
   const progressValue = Math.max(0, Math.min(100, modelDownloadProgress.progress));
+  const storageLabel = t("guide.storageLabel", {
+    modelDir: asrModelStatus.modelDir || DEFAULT_MODEL_DIRECTORY,
+  });
   const progressPercent = formatPercent(progressValue / 100, resolvedLocale);
   const canExportDiagnostics =
     !modelDownloadActive &&
@@ -124,11 +127,8 @@ export function ModelGuideSheet({
                 {asrModelLabel(asrModelStatus.model)}
               </strong>
               <small>{t("guide.sourceLabel", { source })}</small>
-              <small>
-                {t("guide.storageLabel", {
-                  modelDir:
-                    asrModelStatus.modelDir || DEFAULT_MODEL_DIRECTORY,
-                })}
+              <small className="sheet-path" title={storageLabel}>
+                {storageLabel}
               </small>
             </div>
           </div>
@@ -156,7 +156,7 @@ export function ModelGuideSheet({
               </div>
             </div>
             {modelDownloadProgress.currentFile ? (
-              <small className="model-current-file">
+              <small className="model-current-file sheet-path" title={modelDownloadProgress.currentFile}>
                 {modelDownloadProgress.currentFile}
               </small>
             ) : null}

@@ -1,4 +1,5 @@
 import { type MouseEvent, useCallback, useEffect, useRef } from "react";
+import { useDataStorage } from "../dataStorage/useDataStorageController";
 
 import {
   calculateDraggedWindowPosition,
@@ -15,6 +16,7 @@ import {
 type WindowChromeAction = () => Promise<void>;
 
 export function useWindowChromeController() {
+  const dataStorage = useDataStorage();
   const windowDragSessionRef = useRef<WindowDragSession | null>(null);
   const windowDragGenerationRef = useRef(0);
   const queuedWindowPositionRef = useRef<WindowPosition | null>(null);
@@ -122,7 +124,10 @@ export function useWindowChromeController() {
 
   return {
     handleToolbarMouseDown,
-    closeWindow: () => runWindowChromeAction(closeWindowCommand),
+    closeWindow: () => {
+      if (dataStorage) { dataStorage.requestWindowClose(); return; }
+      runWindowChromeAction(closeWindowCommand);
+    },
     minimizeWindow: () => runWindowChromeAction(minimizeWindowCommand),
     toggleMaximizeWindow: () => runWindowChromeAction(toggleMaximizeWindowCommand),
   };

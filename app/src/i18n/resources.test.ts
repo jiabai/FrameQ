@@ -42,6 +42,9 @@ describe("bundled localization resources", () => {
       "synthesis",
       "updates",
       "errors",
+      "shell",
+      "noteActions",
+      "dataStorage",
     ]);
     expect(Object.keys(resources).sort()).toEqual([...SUPPORTED_LOCALES].sort());
   });
@@ -86,6 +89,24 @@ describe("bundled localization resources", () => {
         }
       }
     }
+  });
+
+  test("provides compact transcript save-state labels in every locale", () => {
+    expect(resources["zh-CN"].transcript.workspace.saveState).toEqual({
+      loading: "读取中",
+      saving: "保存中",
+      unsaved: "有未保存修改",
+    });
+    expect(resources["zh-TW"].transcript.workspace.saveState).toEqual({
+      loading: "讀取中",
+      saving: "儲存中",
+      unsaved: "有未儲存的修改",
+    });
+    expect(resources["en-US"].transcript.workspace.saveState).toEqual({
+      loading: "Loading",
+      saving: "Saving",
+      unsaved: "Unsaved changes",
+    });
   });
 
   test("provides exact localized recovery guidance for model download timeouts", () => {

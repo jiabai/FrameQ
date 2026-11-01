@@ -12,6 +12,7 @@ import {
   createInitialWorkflow,
   editDraft,
   finishInsightRetry,
+  finishNoteTitleGeneration,
   getToolbarNewTaskButtonState,
   isProcessingStage,
   mergeProgressEvent,
@@ -20,6 +21,7 @@ import {
   restoreProcessingAfterCancellationFailure,
   startInsightRetry,
   startProcessing,
+  startNoteTitleGeneration,
   summarizeWorkerResult,
   type InsightRetryTarget,
   type TaskArtifacts,
@@ -32,11 +34,15 @@ import {
   processLocalMedia,
   processVideo,
   retryInsights,
+  recordNoteTitleCancellation,
   type RetryInsightsInput,
 } from "../../workerClient";
 import type { PreferenceSnapshot } from "../../insightPreferences";
 import type { SupportedLocale } from "../../i18n/locale";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
+import { bindNoteTitleResult, completedNoteResult, finishCancelledTitleAttempt, shouldGenerateNoteTitle } from "./noteTitleSubmission";
+import { getNoteInfo } from "../../noteActionsClient";
+import type { NoteMetadata } from "../../noteMetadata";
 
 type OpenAccountPanel = (notice?: UiMessage) => void;
 
@@ -63,6 +69,9 @@ type UseTaskProcessingControllerOptions = {
   modelDownloadActive?: boolean;
   processBlockerMessage: (account: AccountStatus) => UiMessage;
   aiBlockerMessage: (account: AccountStatus) => UiMessage;
+  outputLanguage?: SupportedLocale;
+  onTitleFinished?: () => void;
+  isActive?: () => boolean;
 };
 
 export function useTaskProcessingController({
@@ -72,12 +81,23 @@ export function useTaskProcessingController({
   modelDownloadActive = false,
   processBlockerMessage,
   aiBlockerMessage,
+  outputLanguage = "en-US",
+  onTitleFinished,
+  isActive = controllerIsActive,
 }: UseTaskProcessingControllerOptions) {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
+  const [submissionPending, setSubmissionPending] = useState(false);
+  const submissionClaimRef = useRef<object | null>(null);
+  const workflowRef = useRef(workflow);
+  workflowRef.current = workflow;
   const operationIdRef = useRef(0);
   const cancellationOperationIdRef = useRef<number | null>(null);
+  const titleFinishedRef = useRef(onTitleFinished);
+  titleFinishedRef.current = onTitleFinished;
 
   const canSubmit =
+    !submissionPending &&
+    !isProcessingStage(workflow.stage) &&
     !modelDownloadActive &&
     (workflow.composerSource.kind === "local_media" ||
       canSubmitUrl(workflow.composerSource.urlDraft));
@@ -86,7 +106,9 @@ export function useTaskProcessingController({
 
   const updateUrlDraft = useCallback((url: string) => {
     setWorkflow((current) =>
-      current.stage === "waiting_input" &&
+      !isProcessingStage(current.stage) &&
+      !modelDownloadActive &&
+      submissionClaimRef.current === null &&
       current.composerSource.kind === "url"
         ? {
             ...current,
@@ -97,12 +119,12 @@ export function useTaskProcessingController({
           }
         : current,
     );
-  }, []);
+  }, [modelDownloadActive]);
 
   const setLocalMediaSelection = useCallback(
     (selection: LocalMediaSelectionView) => {
       setWorkflow((current) => {
-        if (current.stage !== "waiting_input") {
+        if (isProcessingStage(current.stage) || modelDownloadActive || submissionClaimRef.current !== null) {
           return current;
         }
         const retainedUrlDraft =
@@ -119,7 +141,7 @@ export function useTaskProcessingController({
         };
       });
     },
-    [],
+    [modelDownloadActive],
   );
 
   const removeLocalMediaSelection = useCallback(async (): Promise<boolean> => {
@@ -176,16 +198,18 @@ export function useTaskProcessingController({
   );
 
   const applyDraftSave = useCallback(
-    (markdown: string, artifacts: TaskArtifacts) => {
-      setWorkflow((current) => ({
+    (markdown: string, artifacts: TaskArtifacts, expectedTaskId: string) => {
+      setWorkflow((current) => current.taskId !== expectedTaskId ? current : {
         ...editDraft(current, markdown),
         artifacts: { ...current.artifacts, ...artifacts },
-      }));
+      });
     },
     [],
   );
 
   const resetWorkflow = useCallback(() => {
+    submissionClaimRef.current = null;
+    setSubmissionPending(false);
     clearComposerSelectionBestEffort(workflow.composerSource);
     operationIdRef.current += 1;
     cancellationOperationIdRef.current = null;
@@ -209,6 +233,8 @@ export function useTaskProcessingController({
 
       operationIdRef.current += 1;
       cancellationOperationIdRef.current = null;
+      submissionClaimRef.current = null;
+      setSubmissionPending(false);
       clearComposerSelectionBestEffort(workflow.composerSource);
       onResetTaskUi();
       const composerSource: TaskComposerSource =
@@ -220,6 +246,7 @@ export function useTaskProcessingController({
         dissectionStale: item.dissectionStale,
         composerSource,
         taskSource: item.source,
+        noteMetadata: item.noteMetadata ?? null,
       });
       return true;
     },
@@ -247,10 +274,16 @@ export function useTaskProcessingController({
       account: AccountStatus,
       openAccountPanel: OpenAccountPanel,
     ) => {
-      const prepared = prepareTaskSubmission(
-        workflow.composerSource,
-        submission,
-      );
+      if (
+        !isActive() ||
+        modelDownloadActive ||
+        isProcessingStage(workflowRef.current.stage) ||
+        submissionClaimRef.current !== null
+      ) {
+        return;
+      }
+      const composerSource = workflowRef.current.composerSource;
+      const prepared = prepareTaskSubmission(composerSource, submission);
       if (!prepared) {
         return;
       }
@@ -258,93 +291,212 @@ export function useTaskProcessingController({
         openAccountPanel(processBlockerMessage(account));
         return;
       }
-      const asrModel = ensureAsrModelReady
-        ? await ensureAsrModelReady()
-        : "iic/SenseVoiceSmall-onnx";
-      if (!asrModel) {
-        return;
-      }
-      const operationId = operationIdRef.current + 1;
-      operationIdRef.current = operationId;
-      setWorkflow((current) =>
-        startProcessing(
-          prepared.submission.kind === "url"
-            ? {
-                ...current,
-                composerSource: {
-                  kind: "url",
-                  urlDraft: prepared.submission.url,
-                },
-              }
-            : current,
-          prepared.taskSource,
-        ),
-      );
-      const onProgress = (event: Parameters<typeof mergeProgressEvent>[1]) => {
-        if (operationIdRef.current === operationId) {
-          setWorkflow((current) => mergeProgressEvent(current, event));
+      const claim = {};
+      submissionClaimRef.current = claim;
+      setSubmissionPending(true);
+      const previousOperationId = operationIdRef.current;
+      try {
+        const asrModel = ensureAsrModelReady
+          ? await ensureAsrModelReady()
+          : "iic/SenseVoiceSmall-onnx";
+        if (
+          !isActive() ||
+          !asrModel ||
+          operationIdRef.current !== previousOperationId ||
+          submissionClaimRef.current !== claim
+        ) {
+          return;
         }
-      };
-      const result =
-        prepared.submission.kind === "url"
-          ? await processVideo(
-              prepared.submission.url,
-              asrModel,
-              undefined,
-              onProgress,
-            )
-          : await processLocalMedia(
-              {
-                selectionToken: prepared.submission.selectionToken,
-                asrModel,
-              },
-              undefined,
-              onProgress,
-            );
-      if (operationIdRef.current !== operationId) {
-        return;
-      }
-      cancellationOperationIdRef.current = null;
-      if (result.error?.code === "WORKER_CANCELLED") {
-        operationIdRef.current += 1;
+        const operationId = previousOperationId + 1;
+        operationIdRef.current = operationId;
         onResetTaskUi();
-        setWorkflow((current) => confirmProcessingCancellation(current));
-        return;
-      }
-      const localSelectionToken =
-        prepared.submission.kind === "local_media"
+        setWorkflow((current) =>
+          startProcessing(
+            {
+              ...current,
+              composerSource: prepared.submission.kind === "url"
+                ? { kind: "url", urlDraft: prepared.submission.url }
+                : composerSource,
+            },
+            prepared.taskSource,
+          ),
+        );
+        const onProgress = (event: Parameters<typeof mergeProgressEvent>[1]) => {
+          if (isActive() && operationIdRef.current === operationId) {
+            setWorkflow((current) => mergeProgressEvent(current, event));
+          }
+        };
+        const result =
+          prepared.submission.kind === "url"
+            ? await processVideo(
+                prepared.submission.url,
+                asrModel,
+                undefined,
+                onProgress,
+              )
+            : await processLocalMedia(
+                { selectionToken: prepared.submission.selectionToken, asrModel },
+                undefined,
+                onProgress,
+              );
+        if (operationIdRef.current !== operationId || !isActive()) {
+          if (shouldGenerateNoteTitle(result) && result.task_id) {
+            await recordNoteTitleCancellation({
+              taskId: result.task_id, outputLanguage, expectedNoteTitle: result.note_title ?? null,
+            });
+          }
+          return;
+        }
+        const cancellationRequested = cancellationOperationIdRef.current === operationId;
+        if (result.error?.code === "WORKER_CANCELLED") {
+          operationIdRef.current += 1;
+          onResetTaskUi();
+          setWorkflow((current) => confirmProcessingCancellation(current));
+          return;
+        }
+        const localSelectionToken = prepared.submission.kind === "local_media"
           ? prepared.submission.selectionToken
           : null;
-      setWorkflow((current) => {
+        const current = workflowRef.current;
         const releaseLocalSelection =
           localSelectionToken !== null &&
           (result.status !== "failed" ||
-            (result.error &&
-              LOCAL_MEDIA_RESELECTION_ERROR_CODES.has(result.error.code)));
-        const composerSource =
+            (result.error && LOCAL_MEDIA_RESELECTION_ERROR_CODES.has(result.error.code)));
+        const retainedSource =
           releaseLocalSelection &&
           current.composerSource.kind === "local_media" &&
-          current.composerSource.selection.selectionToken ===
-            localSelectionToken
-            ? {
-                kind: "url" as const,
-                urlDraft: current.composerSource.retainedUrlDraft,
-              }
+          current.composerSource.selection.selectionToken === localSelectionToken
+            ? { kind: "url" as const, urlDraft: current.composerSource.retainedUrlDraft }
             : current.composerSource;
-        return {
+        const transcribed = {
           ...summarizeWorkerResult(result),
-          composerSource,
+          composerSource: retainedSource,
           taskSource: current.taskSource ?? prepared.taskSource,
         };
-      });
+        workflowRef.current = transcribed;
+        setWorkflow(transcribed);
+        if (result.task_id && result.task_created === false) {
+          try {
+            const info = await getNoteInfo(result.task_id);
+            if (!isActive() || operationIdRef.current !== operationId) return;
+            transcribed.noteMetadata = info.noteMetadata;
+            if (info.noteMetadataError) transcribed.statusMessage = uiMessage("noteActions.notice.metadataLoadFailed");
+          } catch {
+            if (!isActive() || operationIdRef.current !== operationId) return;
+            transcribed.statusMessage = uiMessage("noteActions.notice.metadataLoadFailed");
+          }
+          setWorkflow({ ...transcribed });
+        }
+        if (!shouldGenerateNoteTitle(result) || !result.task_id) {
+          cancellationOperationIdRef.current = null;
+          return result;
+        }
+        const titling = startNoteTitleGeneration(transcribed, outputLanguage);
+        const titleTaskId = result.task_id;
+        workflowRef.current = titling;
+        setWorkflow(titling);
+        if (cancellationRequested) {
+          const cancellation = await recordNoteTitleCancellation({
+            taskId: result.task_id, outputLanguage, expectedNoteTitle: result.note_title ?? null,
+          });
+          if (operationIdRef.current !== operationId || !isActive()) return;
+          const cancelled = finishCancelledTitleAttempt(titling, cancellation);
+          workflowRef.current = cancelled;
+          setWorkflow(cancelled);
+          cancellationOperationIdRef.current = null;
+          return completedNoteResult(result, cancelled);
+        }
+        let cancelledBeforeStart = false;
+        const titled = await retryInsights(
+          { taskId: titleTaskId, target: "title", outputLanguage },
+          undefined,
+          onProgress,
+          undefined,
+          undefined,
+          () => isActive() && operationIdRef.current === operationId && cancellationOperationIdRef.current !== operationId,
+          () => {
+            cancelledBeforeStart = true;
+            return recordNoteTitleCancellation({ taskId: titleTaskId, outputLanguage, expectedNoteTitle: result.note_title ?? null });
+          },
+        );
+        if (operationIdRef.current !== operationId || !isActive()) return;
+        const completed = cancelledBeforeStart
+          ? finishCancelledTitleAttempt(workflowRef.current, titled)
+          : finishNoteTitleGeneration(workflowRef.current, bindNoteTitleResult(titled, titleTaskId));
+        workflowRef.current = completed;
+        setWorkflow(completed);
+        cancellationOperationIdRef.current = null;
+        titleFinishedRef.current?.();
+        return completedNoteResult(result, completed);
+      } finally {
+        if (submissionClaimRef.current === claim) {
+          submissionClaimRef.current = null;
+          setSubmissionPending(false);
+        }
+      }
     },
     [
       onResetTaskUi,
       processBlockerMessage,
       ensureAsrModelReady,
-      workflow.composerSource,
+      modelDownloadActive,
+      outputLanguage,
+      isActive,
     ],
   );
+
+  const retryNoteTitle = useCallback(async (
+    account: AccountStatus,
+    openAccountPanel: OpenAccountPanel,
+  ) => {
+    const current = workflowRef.current;
+    if (!isActive() || !current.taskId || !current.artifacts.transcript_txt ||
+      submissionClaimRef.current !== null || isProcessingStage(current.stage) || modelDownloadActive) return;
+    if (!canGenerateAiWithAccount(account)) {
+      openAccountPanel(aiBlockerMessage(account));
+      return;
+    }
+    const claim = {};
+    submissionClaimRef.current = claim;
+    setSubmissionPending(true);
+    const operationId = ++operationIdRef.current;
+    cancellationOperationIdRef.current = null;
+    const language = current.noteTitle?.output_language ?? outputLanguage;
+    const taskId = current.taskId;
+    const titling = startNoteTitleGeneration(current, language);
+    workflowRef.current = titling;
+    setWorkflow(titling);
+    let cancelledBeforeStart = false;
+    try {
+      const result = await retryInsights(
+        { taskId, target: "title", outputLanguage: language },
+        undefined,
+        (event) => {
+          if (isActive() && operationIdRef.current === operationId) setWorkflow((state) => mergeProgressEvent(state, event));
+        },
+        undefined,
+        undefined,
+        () => isActive() && operationIdRef.current === operationId && cancellationOperationIdRef.current !== operationId,
+        () => {
+          cancelledBeforeStart = true;
+          return recordNoteTitleCancellation({ taskId, outputLanguage: language, expectedNoteTitle: current.noteTitle });
+        },
+      );
+      if (operationIdRef.current !== operationId || !isActive()) return;
+      const completed = cancelledBeforeStart
+        ? finishCancelledTitleAttempt(workflowRef.current, result)
+        : finishNoteTitleGeneration(workflowRef.current, bindNoteTitleResult(result, taskId));
+      workflowRef.current = completed;
+      setWorkflow(completed);
+      cancellationOperationIdRef.current = null;
+      titleFinishedRef.current?.();
+    } finally {
+      if (submissionClaimRef.current === claim) {
+        submissionClaimRef.current = null;
+        setSubmissionPending(false);
+      }
+    }
+  }, [aiBlockerMessage, isActive, modelDownloadActive, outputLanguage]);
 
   const cancelCurrentProcessing = useCallback(async () => {
     const operationId = operationIdRef.current;
@@ -379,7 +531,9 @@ export function useTaskProcessingController({
       // target="draft"; absent for summary/insights (worker rejects it there).
       platform?: string,
     ) => {
-      if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
+      const current = workflowRef.current;
+      if (!isActive() || submissionClaimRef.current !== null || modelDownloadActive ||
+        isProcessingStage(current.stage) || !current.taskId || !current.artifacts.transcript_txt) {
         return;
       }
       if (!canGenerateAiWithAccount(account)) {
@@ -387,7 +541,7 @@ export function useTaskProcessingController({
         return;
       }
 
-      const taskId = workflow.taskId;
+      const taskId = current.taskId;
       // Draft requires the seed insight id and the user-selected platform;
       // confirmDraftGeneration always supplies both (the card is only
       // available once a seed is selected). Guard defensively anyway.
@@ -405,7 +559,9 @@ export function useTaskProcessingController({
       const operationId = operationIdRef.current + 1;
       operationIdRef.current = operationId;
       onRetryStarted();
-      setWorkflow((current) => startInsightRetry(current, target));
+      const retrying = startInsightRetry(current, target);
+      workflowRef.current = retrying;
+      setWorkflow(retrying);
 
       const onProgress = (event: Parameters<typeof mergeProgressEvent>[1]) => {
         if (operationIdRef.current === operationId) {
@@ -452,6 +608,8 @@ export function useTaskProcessingController({
     },
     [
       aiBlockerMessage,
+      isActive,
+      modelDownloadActive,
       onResetTaskUi,
       onRetryStarted,
       workflow.artifacts.transcript_txt,
@@ -464,8 +622,13 @@ export function useTaskProcessingController({
     setWorkflow((current) => ({ ...current, draftSeedInsightId: insightId }));
   }, []);
 
+  const applyNoteMetadata = useCallback((taskId: string, noteMetadata: NoteMetadata) => {
+    setWorkflow((current) => current.taskId === taskId ? { ...current, noteMetadata } : current);
+  }, []);
+
   return {
     workflow,
+    submissionPending,
     canSubmit,
     canRestoreHistory,
     historyRestoreUnavailableMessage: HISTORY_RESTORE_UNAVAILABLE_MESSAGE,
@@ -477,9 +640,11 @@ export function useTaskProcessingController({
     removeLocalMediaSelection,
     applyTranscriptSave,
     applyDraftSave,
+    applyNoteMetadata,
     completeHistoryTaskDeletion,
     restoreHistoryItem,
     retryInsightGeneration,
+    retryNoteTitle,
     setDraftSeedInsightId,
     startNewTaskFromToolbar,
     submitTask,
@@ -537,3 +702,5 @@ function clearComposerSelectionBestEffort(
     );
   }
 }
+
+function controllerIsActive(): boolean { return true; }

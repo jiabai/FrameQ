@@ -42,10 +42,12 @@ const INTERNAL_PARENTS: [&str; 5] = [
     "transcript/original",
 ];
 
+#[cfg(test)]
 pub(crate) fn allowed_destinations_for_test() -> [&'static str; 14] {
     ALLOWED_DESTINATIONS
 }
 
+#[cfg(test)]
 pub(crate) fn internal_parents_for_test() -> [&'static str; 5] {
     INTERNAL_PARENTS
 }

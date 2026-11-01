@@ -41,6 +41,7 @@ export function useSettingsController(
   const [settingsNotice, setSettingsNotice] = useState<UiMessage | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [savedAsrModel, setSavedAsrModel] = useState("iic/SenseVoiceSmall-onnx");
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -59,6 +60,7 @@ export function useSettingsController(
         outputDir: config.outputDir,
         asrModel: config.asrModel,
       });
+      setSavedAsrModel(config.asrModel);
       setSettingsSupportedAsrModels(
         config.supportedAsrModels.length > 0 ? config.supportedAsrModels : defaultAsrModels,
       );
@@ -85,9 +87,8 @@ export function useSettingsController(
     await loadSettings();
   }, [loadSettings]);
 
-  const submitSettings = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
+  const saveSettings = useCallback(
+    async () => {
       setSettingsSaving(true);
       setSettingsNotice(null);
       try {
@@ -102,15 +103,25 @@ export function useSettingsController(
         );
         setSettingsConfigPath(config.configPath);
         setSettingsAsrModelMigrated(config.asrModelMigrated);
+        setSavedAsrModel(config.asrModel);
         setSettingsNotice(uiMessage("settings.notice.saved"));
+        return true;
       } catch {
         setSettingsNotice(uiMessage("settings.notice.saveFailed"));
+        return false;
       } finally {
         setSettingsSaving(false);
       }
     },
     [settingsDraft],
   );
+  const submitSettings = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await saveSettings();
+  }, [saveSettings]);
+  const discardSettings = useCallback(() => {
+    if (!settingsSaving) setSettingsDraft(current => ({ ...current, asrModel: savedAsrModel }));
+  }, [savedAsrModel, settingsSaving]);
 
   const dismissAsrModelMigrationNotice = useCallback(async () => {
     setSettingsAsrModelMigrated(false);
@@ -181,6 +192,9 @@ export function useSettingsController(
     settingsNotice,
     settingsLoading,
     settingsSaving,
+    settingsDirty: settingsOpen && settingsDraft.asrModel !== savedAsrModel,
+    saveSettings,
+    discardSettings,
     closeSettings,
     openSettings,
     loadSettings,

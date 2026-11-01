@@ -11,10 +11,11 @@ use super::{
         load_task_manifest, path_to_frontend_string, read_task_manifest_path,
         required_artifact_path, task_dir_for, validate_task_artifact_path,
     },
-    transaction::recover_task_artifacts,
+    transaction::{recover_task_artifacts, JOURNAL_FILE_NAME},
 };
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -64,10 +65,21 @@ impl SupportedTask {
     }
 
     pub(crate) fn scan(output_root: &Path) -> Result<TaskScan, String> {
+        Self::scan_using(output_root, Self::from_manifest_path)
+    }
+
+    pub(crate) fn scan_read_only(output_root: &Path) -> Result<TaskScan, String> {
+        Self::scan_using(output_root, Self::from_manifest_path_read_only)
+    }
+
+    fn scan_using(
+        output_root: &Path,
+        read_candidate: fn(&Path, &Path) -> Result<ScanCandidate, String>,
+    ) -> Result<TaskScan, String> {
         let mut tasks = Vec::new();
         let mut ignored_count = 0;
         for manifest_path in list_task_manifest_paths(output_root)? {
-            match Self::from_manifest_path(output_root, &manifest_path) {
+            match read_candidate(output_root, &manifest_path) {
                 Ok(ScanCandidate::Ready(task)) => tasks.push(task),
                 Ok(ScanCandidate::Busy) => {}
                 Ok(ScanCandidate::Unsupported) => ignored_count += 1,
@@ -91,6 +103,32 @@ impl SupportedTask {
             return Ok(ScanCandidate::Busy);
         };
         recover_task_artifacts(task_dir)?;
+        Self::verified_manifest_snapshot(output_root, manifest_path, lease)
+    }
+
+    fn from_manifest_path_read_only(
+        output_root: &Path,
+        manifest_path: &Path,
+    ) -> Result<ScanCandidate, String> {
+        let task_dir = manifest_path
+            .parent()
+            .ok_or_else(|| "Task manifest has no parent directory.".to_string())?;
+        let Some(lease) = try_acquire_task(task_dir)? else {
+            return Ok(ScanCandidate::Busy);
+        };
+        match fs::symlink_metadata(task_dir.join(JOURNAL_FILE_NAME)) {
+            Ok(_) => return Ok(ScanCandidate::Unsupported),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(_) => return Err("Task transaction state is unavailable.".to_string()),
+        }
+        Self::verified_manifest_snapshot(output_root, manifest_path, lease)
+    }
+
+    fn verified_manifest_snapshot(
+        output_root: &Path,
+        manifest_path: &Path,
+        lease: Arc<TaskLease>,
+    ) -> Result<ScanCandidate, String> {
         let (manifest, task_dir) = read_task_manifest_path(manifest_path)?;
         let expected_task_dir = match task_dir_for(output_root, &manifest.task_id) {
             Ok(path) => path,
@@ -108,6 +146,10 @@ impl SupportedTask {
 
     pub(crate) fn task_id(&self) -> &str {
         &self.manifest.task_id
+    }
+
+    pub(crate) fn note_metadata(&self) -> Result<super::NoteMetadataView, super::NoteMetadataError> {
+        super::note_metadata::load(&self.task_dir, self.task_id())
     }
 
     pub(crate) fn created_at(&self) -> &str {
@@ -171,6 +213,37 @@ impl SupportedTask {
 
     pub(crate) fn text_preview(&self) -> &str {
         &self.manifest.text_preview
+    }
+
+    pub(crate) fn note_title(&self) -> Option<super::NoteTitle> {
+        self.manifest.note_title.clone()
+    }
+
+    pub(crate) fn reload(&self, output_root: &Path) -> Result<Self, String> {
+        recover_task_artifacts(&self.task_dir)?;
+        let (manifest, task_dir) = load_task_manifest(output_root, self.task_id())?;
+        if task_dir != self.task_dir || !manifest.source_privacy_ready() {
+            return Err("Task is unavailable in the current history format.".to_string());
+        }
+        Ok(Self {
+            manifest,
+            task_dir,
+            _lease: Arc::clone(&self._lease),
+        })
+    }
+
+    pub(crate) fn save_note_title(&mut self, title: super::NoteTitle) -> Result<(), String> {
+        if !title.is_valid() {
+            return Err("Invalid note title metadata.".to_string());
+        }
+        let mut manifest = self.manifest.clone();
+        manifest.note_title = Some(title);
+        super::commit_task_artifacts(
+            &self.task_dir,
+            vec![super::TaskArtifactMutation::manifest(encode_task_manifest(&manifest)?)],
+        )?;
+        self.manifest = manifest;
+        Ok(())
     }
 
     pub(crate) fn draft_seed_insight_id(&self) -> Option<i64> {
@@ -288,6 +361,46 @@ pub(crate) struct TaskEditSession {
 }
 
 impl TaskEditSession {
+    pub(crate) fn set_note_pinned(
+        &mut self,
+        pinned: bool,
+    ) -> Result<super::NoteMetadataView, super::NoteMetadataError> {
+        super::note_metadata::update(
+            &self.task_dir,
+            &self.manifest.task_id,
+            || self.verify_note_metadata_owner(),
+            |current| current.pinned = pinned,
+        )
+    }
+
+    pub(crate) fn set_note_display_title(
+        &mut self,
+        title: &str,
+    ) -> Result<super::NoteMetadataView, super::NoteMetadataError> {
+        let title = super::note_metadata::normalize_display_title(title)?;
+        super::note_metadata::update(
+            &self.task_dir,
+            &self.manifest.task_id,
+            || self.verify_note_metadata_owner(),
+            |current| current.display_title = Some(title),
+        )
+    }
+
+    fn verify_note_metadata_owner(&self) -> Result<(), super::NoteMetadataError> {
+        let (current, current_dir) = read_task_manifest_path(
+            &self.task_dir.join(super::TASK_MANIFEST_FILE_NAME),
+        )
+        .map_err(|_| super::NoteMetadataError::UnsafeStorage)?;
+        if current_dir != self.task_dir
+            || current.task_id != self.manifest.task_id
+            || current.created_at != self.manifest.created_at
+            || current.safe_source_summary() != self.manifest.safe_source_summary()
+        {
+            return Err(super::NoteMetadataError::UnsafeStorage);
+        }
+        Ok(())
+    }
+
     pub(crate) fn task_dir(&self) -> &Path {
         &self.task_dir
     }

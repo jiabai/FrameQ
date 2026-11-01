@@ -156,7 +156,7 @@ export function failUpdate(state: UpdateState, error: unknown): UpdateState {
   const message = error instanceof Error ? error.message : String(error);
   return {
     ...state,
-    status: "failed",
+    status: state.status === "ready_to_restart" ? "ready_to_restart" : "failed",
     message: uiMessage("updates.state.failed"),
     error: extractSafeTechnicalDetails({ message }),
   };

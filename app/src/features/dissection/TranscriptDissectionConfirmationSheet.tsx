@@ -39,46 +39,52 @@ export function TranscriptDissectionConfirmationSheet({
       ariaLabel={t("dissection.confirmation.ariaLabel")}
       className="dissection-confirmation-sheet"
       onBackdropClick={onCancel}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onCancel();
+      }}
     >
-        <header className="modal-header sheet-header">
-          <div>
-            <p className="section-label">{t("dissection.confirmation.sectionLabel")}</p>
-            <h2>{t("dissection.confirmation.title")}</h2>
-          </div>
-          <button className="icon-button" type="button" onClick={onCancel} aria-label={t("dissection.confirmation.closeAria")}>
-            <X size={18} />
-          </button>
-        </header>
-        <div className="preference-flow-content">
-          <p className="settings-warning privacy-callout">
-            <ShieldCheck size={16} />
-            <span>{t("dissection.confirmation.privacy")}</span>
-          </p>
-          <dl className="dissection-preview-grid">
-            <div><dt>{t("dissection.confirmation.task")}</dt><dd>{renderPreview.taskTitle}</dd></div>
-            <div><dt>{t("dissection.confirmation.characters")}</dt><dd>{formatNumber(renderPreview.characterCount, locale)}</dd></div>
-            <div><dt>{t("dissection.confirmation.chunks")}</dt><dd>{formatNumber(renderPreview.chunkCount, locale)}</dd></div>
-            <div><dt>{t("dissection.confirmation.language")}</dt><dd>{getOutputLanguageName(renderPreview.outputLanguage, renderPreview.outputLanguage)}</dd></div>
-            <div>
-              <dt>{t("dissection.confirmation.calls")}</dt>
-              <dd>{t("dissection.confirmation.callRange", {
-                minimum: formatNumber(renderPreview.minimumCalls, locale),
-                maximum: formatNumber(renderPreview.maximumCalls, locale),
-                hardMaximum: formatNumber(renderPreview.hardMaximumCalls, locale),
-              })}</dd>
-            </div>
-            <div><dt>{t("dissection.confirmation.quota")}</dt><dd>{formatNumber(renderPreview.quotaRemaining, locale)}</dd></div>
-          </dl>
-          <p className="dissection-credit-disclosure">{t("dissection.confirmation.creditDisclosure")}</p>
-          {blockReason ? <StatusLine className="ai-availability-blocker">{blockReason}</StatusLine> : null}
-          <div className="settings-actions sheet-footer">
-            <button type="button" className="secondary-button" onClick={onCancel}>{t("dissection.confirmation.cancel")}</button>
-            <button type="button" className="primary-button" onClick={() => void onConfirm()} disabled={!renderPreview.canConfirm}>
-              <Sparkles size={16} />
-              <span>{t("dissection.confirmation.confirm")}</span>
-            </button>
-          </div>
+      <header className="modal-header sheet-header">
+        <div>
+          <p className="section-label">{t("dissection.confirmation.sectionLabel")}</p>
+          <h2>{t("dissection.confirmation.title")}</h2>
         </div>
+        <button className="icon-button" type="button" onClick={onCancel} aria-label={t("dissection.confirmation.closeAria")}>
+          <X size={18} />
+        </button>
+      </header>
+      <div className="preference-flow-content sheet-body">
+        <p className="settings-warning privacy-callout">
+          <ShieldCheck size={16} />
+          <span>{t("dissection.confirmation.privacy")}</span>
+        </p>
+        <dl className="dissection-preview-grid sheet-facts">
+          <div><dt>{t("dissection.confirmation.task")}</dt><dd>{renderPreview.taskTitle}</dd></div>
+          <div><dt>{t("dissection.confirmation.characters")}</dt><dd>{formatNumber(renderPreview.characterCount, locale)}</dd></div>
+          <div><dt>{t("dissection.confirmation.chunks")}</dt><dd>{formatNumber(renderPreview.chunkCount, locale)}</dd></div>
+          <div><dt>{t("dissection.confirmation.language")}</dt><dd>{getOutputLanguageName(renderPreview.outputLanguage, renderPreview.outputLanguage)}</dd></div>
+          <div>
+            <dt>{t("dissection.confirmation.calls")}</dt>
+            <dd>{t("dissection.confirmation.callRange", {
+              minimum: formatNumber(renderPreview.minimumCalls, locale),
+              maximum: formatNumber(renderPreview.maximumCalls, locale),
+              hardMaximum: formatNumber(renderPreview.hardMaximumCalls, locale),
+            })}</dd>
+          </div>
+          <div><dt>{t("dissection.confirmation.quota")}</dt><dd>{formatNumber(renderPreview.quotaRemaining, locale)}</dd></div>
+        </dl>
+        <p className="dissection-credit-disclosure">{t("dissection.confirmation.creditDisclosure")}</p>
+        {blockReason ? <StatusLine className="ai-availability-blocker">{blockReason}</StatusLine> : null}
+      </div>
+      <footer className="settings-actions sheet-footer">
+        <button type="button" className="secondary-button" onClick={onCancel}>{t("dissection.confirmation.cancel")}</button>
+        <button type="button" className="primary-button" onClick={() => void onConfirm()} disabled={!renderPreview.canConfirm}>
+          <Sparkles size={16} />
+          <span>{t("dissection.confirmation.confirm")}</span>
+        </button>
+      </footer>
     </AnimatedSheet>
   );
 }

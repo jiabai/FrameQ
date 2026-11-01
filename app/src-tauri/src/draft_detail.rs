@@ -3,6 +3,7 @@ use crate::{ensure_runtime_dirs, resolve_runtime_paths, task_manifest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+#[cfg(test)]
 use std::path::Path;
 use tauri::AppHandle;
 
@@ -43,10 +44,11 @@ pub(crate) fn load_draft_detail(
     app: AppHandle,
     request: LoadDraftDetailRequest,
 ) -> Result<DraftDetailView, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
+    crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     ensure_runtime_dirs(&paths)?;
-    let output_root = task_manifest::configured_output_root(&paths)?;
-    load_draft_detail_from_output_root(&output_root, request)
+    load_draft_detail_from_paths(&paths, request)
 }
 
 #[tauri::command]
@@ -54,17 +56,48 @@ pub(crate) fn save_draft_edit(
     app: AppHandle,
     request: SaveDraftEditRequest,
 ) -> Result<SaveDraftEditResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
+    crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     ensure_runtime_dirs(&paths)?;
-    let output_root = task_manifest::configured_output_root(&paths)?;
-    save_draft_edit_to_output_root(&output_root, request)
+    save_draft_edit_from_paths(&paths, request)
 }
 
+pub(crate) fn load_draft_detail_from_paths(
+    paths: &crate::RuntimePaths,
+    request: LoadDraftDetailRequest,
+) -> Result<DraftDetailView, String> {
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
+    let output_root = task_manifest::configured_output_root(paths)?;
+    let task = task_manifest::SupportedTask::open(&output_root, &request.task_id)?;
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
+    load_draft_detail_from_task(task, request)
+}
+
+pub(crate) fn save_draft_edit_from_paths(
+    paths: &crate::RuntimePaths,
+    request: SaveDraftEditRequest,
+) -> Result<SaveDraftEditResult, String> {
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
+    let output_root = task_manifest::configured_output_root(&paths)?;
+    let task = task_manifest::SupportedTask::open(&output_root, &request.task_id)?;
+    crate::history_deletion::guard_pending_task(paths, &request.task_id)?;
+    save_draft_edit_to_task(task, request)
+}
+
+#[cfg(test)]
 pub(crate) fn load_draft_detail_from_output_root(
     output_root: &Path,
     request: LoadDraftDetailRequest,
 ) -> Result<DraftDetailView, String> {
     let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
+    load_draft_detail_from_task(task, request)
+}
+
+fn load_draft_detail_from_task(
+    task: task_manifest::SupportedTask,
+    request: LoadDraftDetailRequest,
+) -> Result<DraftDetailView, String> {
 
     // A draft can be declared in the manifest while its file is missing (for
     // example before the worker result lands); render an empty view instead
@@ -87,8 +120,17 @@ pub(crate) fn load_draft_detail_from_output_root(
     })
 }
 
+#[cfg(test)]
 pub(crate) fn save_draft_edit_to_output_root(
     output_root: &Path,
+    request: SaveDraftEditRequest,
+) -> Result<SaveDraftEditResult, String> {
+    let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
+    save_draft_edit_to_task(task, request)
+}
+
+fn save_draft_edit_to_task(
+    task: task_manifest::SupportedTask,
     request: SaveDraftEditRequest,
 ) -> Result<SaveDraftEditResult, String> {
     let text = request.markdown.trim();
@@ -96,7 +138,6 @@ pub(crate) fn save_draft_edit_to_output_root(
         return Err("Draft text cannot be empty.".to_string());
     }
 
-    let task = task_manifest::SupportedTask::open(output_root, &request.task_id)?;
     let mut edit = task.into_edit_session();
     let draft_path = edit.required_existing_artifact_path(task_manifest::TaskArtifact::Draft)?;
     reject_linked_artifact_target(&draft_path)?;

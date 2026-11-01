@@ -9,6 +9,7 @@ import {
 } from "../../insightPreferences";
 import { getInsightPreferences } from "../../insightPreferencesClient";
 import type { WorkflowState } from "../../workflow";
+import { AnimatedSheet } from "../modal/AnimatedSheet";
 
 type DraftConfirmationSheetProps = {
   open: boolean;
@@ -72,113 +73,142 @@ export function DraftConfirmationSheet({
     };
   }, [open]);
 
-  if (!open) {
-    return null;
-  }
-
   const seed = workflow.insights.find(
     (insight) => insight.id === workflow.draftSeedInsightId,
   );
 
+  function cancelOpenSheet() {
+    if (open) {
+      onCancel();
+    }
+  }
+
   return (
-    <div className="modal-backdrop sheet-backdrop" role="presentation" onClick={onCancel}>
-      <section
-        className="sheet-panel detail-modal preference-flow-sheet"
-        aria-label={t("draftConfirmation.ariaLabel")}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="modal-header sheet-header">
-          <div>
-            <p className="section-label">{t("draftConfirmation.sectionLabel")}</p>
-            <h2>{t("draftConfirmation.title")}</h2>
+    <AnimatedSheet
+      open={open}
+      ariaLabel={t("draftConfirmation.ariaLabel")}
+      className="preference-flow-sheet"
+      onBackdropClick={cancelOpenSheet}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        cancelOpenSheet();
+      }}
+    >
+      <header className="modal-header sheet-header">
+        <div>
+          <p className="section-label">{t("draftConfirmation.sectionLabel")}</p>
+          <h2>{t("draftConfirmation.title")}</h2>
+        </div>
+        <button
+          className="icon-button"
+          type="button"
+          onClick={cancelOpenSheet}
+          disabled={!open}
+          aria-label={t("draftConfirmation.closeAria")}
+        >
+          <X size={18} />
+        </button>
+      </header>
+      <div className="preference-flow-content sheet-body">
+        <p className="settings-warning privacy-callout">
+          <ShieldCheck size={16} />
+          <span>{t("draftConfirmation.privacy")}</span>
+        </p>
+        <section className="preference-summary-group">
+          <h3>{t("draftConfirmation.seedLabel")}</h3>
+          <div className="preference-summary-list">
+            {seed ? (
+              <span>
+                <Sprout size={15} aria-hidden="true" />
+                {t("draftConfirmation.seedEntry", { id: seed.id, topic: seed.topic })}
+              </span>
+            ) : (
+              <span>{t("draftConfirmation.noSeed")}</span>
+            )}
           </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onCancel}
-            aria-label={t("draftConfirmation.closeAria")}
+        </section>
+        <section className="preference-field">
+          <div className="preference-field-header">
+            <span>{t("draftConfirmation.platformLabel")}</span>
+          </div>
+          <div
+            className="preference-options"
+            role="radiogroup"
+            aria-label={t("draftConfirmation.platformLabel")}
           >
-            <X size={18} />
-          </button>
-        </header>
-        <div className="preference-flow-content">
-          <p className="settings-warning privacy-callout">
-            <ShieldCheck size={16} />
-            <span>{t("draftConfirmation.privacy")}</span>
-          </p>
-          <section className="preference-summary-group">
-            <h3>{t("draftConfirmation.seedLabel")}</h3>
-            <div className="preference-summary-list">
-              {seed ? (
-                <span>
-                  <Sprout size={15} aria-hidden="true" />
-                  {t("draftConfirmation.seedEntry", { id: seed.id, topic: seed.topic })}
-                </span>
-              ) : (
-                <span>{t("draftConfirmation.noSeed")}</span>
-              )}
-            </div>
-          </section>
-          <section className="preference-field">
-            <div className="preference-field-header">
-              <span>{t("draftConfirmation.platformLabel")}</span>
-            </div>
-            <div
-              className="preference-options"
-              role="radiogroup"
-              aria-label={t("draftConfirmation.platformLabel")}
-            >
-              {DRAFT_PLATFORMS.map((id) => {
-                const selected = id === selectedPlatform;
-                const label = t(`draftPlatform.${id}`);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    aria-label={label}
-                    className={`preference-option ${selected ? "selected" : ""}`}
-                    disabled={busy}
-                    onClick={() => setSelectedPlatform(id)}
-                  >
-                    {selected ? <CheckCircle2 size={14} /> : null}
-                    <span>{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-          <div className="confirm-summary preference-confirm-grid">
-            <div>
-              <span className="account-status-label">{t("draftConfirmation.quotaLabel")}</span>
+            {DRAFT_PLATFORMS.map((id) => {
+              const selected = id === selectedPlatform;
+              const label = t(`draftPlatform.${id}`);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={label}
+                  className={`preference-option ${selected ? "selected" : ""}`}
+                  disabled={!open || busy}
+                  onClick={() => {
+                    if (open && !busy) {
+                      setSelectedPlatform(id);
+                    }
+                  }}
+                >
+                  {selected ? <CheckCircle2 size={14} /> : null}
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+        <dl className="sheet-facts">
+          <div className="sheet-fact">
+            <dt>{t("draftConfirmation.quotaLabel")}</dt>
+            <dd>
               <strong>{t("draftConfirmation.quotaCost")}</strong>
               <small>{t("draftConfirmation.quotaHint")}</small>
-            </div>
-            <div>
-              <span className="account-status-label">{t("draftConfirmation.creditsLabel")}</span>
+            </dd>
+          </div>
+          <div className="sheet-fact">
+            <dt>{t("draftConfirmation.creditsLabel")}</dt>
+            <dd>
               <strong>{t("draftConfirmation.creditsBalance", { formattedCount: quotaRemaining })}</strong>
-              <small>{transcriptPath || t("draftConfirmation.transcriptUnavailable")}</small>
-            </div>
+              <small className={transcriptPath ? "sheet-path" : undefined} title={transcriptPath || undefined}>
+                {transcriptPath || t("draftConfirmation.transcriptUnavailable")}
+              </small>
+            </dd>
           </div>
-          <div className="settings-actions sheet-footer">
-            <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
-              <span>{t("draftConfirmation.cancel")}</span>
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => onConfirm(selectedPlatform)}
-              disabled={busy}
-            >
-              <FileText size={16} />
-              <span>{busy ? t("draftConfirmation.starting") : t("draftConfirmation.confirm")}</span>
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>
+        </dl>
+      </div>
+      <footer className="settings-actions sheet-footer">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => {
+            if (!busy) {
+              cancelOpenSheet();
+            }
+          }}
+          disabled={!open || busy}
+        >
+          <span>{t("draftConfirmation.cancel")}</span>
+        </button>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => {
+            if (open && !busy) {
+              onConfirm(selectedPlatform);
+            }
+          }}
+          disabled={!open || busy}
+        >
+          <FileText size={16} />
+          <span>{busy ? t("draftConfirmation.starting") : t("draftConfirmation.confirm")}</span>
+        </button>
+      </footer>
+    </AnimatedSheet>
   );
 }

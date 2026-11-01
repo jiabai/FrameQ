@@ -1,5 +1,105 @@
 # Security and Compliance
 
+## Data location, migration and recovery
+
+- The fixed system configuration root retains authentication, `.env`, preferences, application
+  logs, the bounded storage-control record and process lock. Migratable data includes only the
+  application-owned task, cache, model, runtime-component and Collection trees. External imported
+  originals, shared-root unrelated files and installation resources retain their locations.
+- Native folder selections produce purpose/window/generation/physical-identity-bound tokens.
+  Migration and cleanup accept native identifiers and one-use confirmation tokens; frontend paths
+  never authorize copying or deletion. Revalidate source/target identities, ancestors, no-follow
+  access, hard links and containment at mutation boundaries; reject nesting, aliases, unrelated
+  targets, conflicting task trees and ambiguous legacy ownership.
+- A global native data permit covers ordinary work on both worker lanes and every implicit data write, including
+  scan recovery, task transactions, accepted deletion cleanup and audio-cache preparation. Exclusive
+  migration/cleanup drains permits and refuses new ones. Frontend Preparing allows existing
+  process/title/Collection and save/refresh chains and explicit dirty-owner saves to finish before
+  requesting that exclusive phase.
+- Inventory records relative layout, type, length, identity, permissions and SHA-256. Streaming
+  copying, target verification, source rechecks and atomic fixed-control replacement determine
+  authority. Failure retains the actual durable phase; explicit precommit cancellation preserves
+  old authority and identifiable partial copies. Publication and postcommit validation cannot be
+  cancelled into an old writable library.
+- Windows pins destination ancestors and retains the partial-file handle through verification and
+  no-replace installation. Unix traversal and installation use no-follow directory descriptors and
+  relative filesystem operations. Interrupted probes with uncertain children are retained, and
+  metadata recovery checks recorded physical identity and expected byte content before mutation.
+- Startup gates task access on the fixed record, current physical library identity and generation.
+  Offline, replaced or invalid storage enters recovery without creating a default empty library.
+  Relinking accepts the same physical library with matching identity/generation, including a drive
+  letter change; copied markers and older clones do not establish authority.
+- First-restart validation uses the formal supervised worker's read-only offline probe and a
+  pre-migration readiness baseline. It validates existing model caches and, only for a previously
+  ready matching component version, performs real component imports from its verified package
+  directory. It creates no model/cache/component content, downloads nothing, runs no ASR or paid
+  generation, and preserves missing/stale/unavailable state. Its subprocess clears inherited
+  provider/session/proxy variables, uses fixed resource/configuration paths and the explicit data
+  snapshot, disables bytecode writes and sets offline flags. Opaque legacy bytes remain untrusted.
+- The cancellable preflight probe starts only after ordinary data permits have drained. Its scoped
+  cancellation monitor terminates the supervised validation process and joins before exclusivity
+  ends; it cannot cancel a previously running user task. Every subsequent probe checks cancellation.
+- Asset protocol permission is dynamic and limited to verified output `tasks/` and playback-cache
+  subtrees. Recovery/unavailable/restart states revoke previous roots. A revoked root requires
+  controlled restart before renewed playback access; neither whole drives nor the fixed credential
+  directory are authorized. The frontend pauses playback while data actions are frozen.
+- Window close and application/update restart use native guarded commands. The process plugin is
+  not registered and has no restart capability. `restart_application` and storage-specific restart
+  atomically pause new permits and release the configuration process lock before `request_restart`.
+  Precommit closure waits for safe cancellation; postcommit
+  restart preserves the authoritative record. Forced process termination is handled by durable
+  recovery, without an inferred success or automatic old-root fallback.
+- Old-copy cleanup rechecks the exact receipt-listed source identity/hash against the current
+  active library before deletion. Changed, missing-current-copy, external and unlisted files remain;
+  fixed configuration, shared source roots and the current active root cannot be recursively removed.
+  Cleanup receipts alone never block normal Ready access.
+- Cleanup holds the verified current-copy file handle through old-file verification and deletion;
+  Windows sharing prevents that current copy from being modified or removed during the operation.
+  A failed, stopped cleanup retains its receipt and releases ordinary library access.
+- Progress exposes closed operation/generation/phase/error fields and aggregate counts plus local
+  reviewed source/target paths. It never carries file contents, per-file private names, credentials,
+  model bytes, prompts or media. No migration path or content is uploaded to FrameQ services.
+
+## 2026-10-31 Local note settings and deletion
+
+- Native note actions accept closed task-ID requests and derive every storage path from verified
+  native roots. Manual names never determine filenames or task identity. Metadata files use fixed
+  paths, no-follow and directory identity checks, reject hard links, and retain the task mutation lease.
+  Corrupt existing settings are preserved and reported independently from readable note content.
+- User settings are internal local metadata, excluded from worker requests, account traffic,
+  exports, diagnostics, and artifact lists. Metadata and menu actions trigger no supplier calls.
+- Source copy obtains fresh verified task information; opening uses the native opener only after
+  canonical SourceIdentity validation. Sensitive query parameters, credentials, fragments, local
+  paths, and quarantined identities never become menu source destinations.
+- Confirmed deletion persists only bounded native-derived intent fields and directory identities.
+  Successful staging of the main task accepts deletion. Pre-acceptance failure preserves caches
+  and Collection data. Subsequent failure retains cleanup intent and reports cleanup_pending.
+- Recovery continues matching staged identities even after partial file removal, protects pending
+  task IDs, prunes only exact memberships under the Collection lock, and rejects linked/replaced
+  roots or directories and malformed journals. It never restores a deleted note or removes a
+  same-name replacement. Separate directory and JSON operations do not form one atomic transaction.
+
+## 2026-10-31 Note-title disclosure and integrity
+
+- Explicit new-note submission discloses automatic cloud title generation after local transcription
+  and one additional AI Credit per attempt. The request captures its output language. Existing notes,
+  startup, history refresh, and cached URL reuse do not silently trigger paid title generation.
+- Only a deterministic transcript-derived sample of at most 12,000 Unicode characters plus title
+  instructions goes directly to the configured supplier. Media, source URLs, paths, account details,
+  preferences, and other AI results are excluded from the title prompt. Transcript content is treated
+  as quoted evidence. FrameQ account-server requests contain only existing checkout/account metadata.
+- The one-call provider disables SDK and supplier retries. Invalid or over-limit output fails without
+  a repair call. User retries disclose the same cost and create a new checkout identifier. Quota,
+  configuration, supplier, cancellation, and storage failure preserve the saved transcript and any
+  last committed title; raw prompts, responses, exceptions, and title text are excluded from diagnostics.
+- Closed metadata validation rejects blank, untrimmed, multiline, control/format/surrogate content
+  and values exceeding 60 Unicode characters. The English generation result is limited to ten words.
+  Titles remain local metadata and never determine a path, task ID, artifact name, or Collection ID.
+- Native title admission verifies task identity and the saved authoritative transcript before checkout.
+  Task-owned atomic publication, exact output-language checks, stale-response checks, and expected-state
+  cancellation prevent another task or newer committed title from being overwritten. A pre-admission
+  cancellation records local state without starting a worker or performing checkout.
+
 ## 2026-08-25 Xiaohongshu platform subtitle privacy and download boundary
 
 - Only public or already-authorized Xiaohongshu links are in scope. The worker does not import
@@ -719,9 +819,10 @@
 - Tauri task commands must resolve `task_id` to a manifest under the configured output root and must verify every resolved artifact path remains inside that task directory.
 - Repeated URL task reuse may read only local manifests and manifest-relative artifacts under the configured output root. It must not trust failed tasks, missing artifacts, traversal paths, remote URLs, cookies, headers, or credentials.
 - Transcript review and save commands should receive `task_id`, not arbitrary transcript/audio paths. The audio player and text editor may access only manifest-declared artifacts for that task.
-- App-local `cache/tasks/<task_id>/` may store temporary or diagnostic files, but the UI should not expose it as a browseable artifact folder.
+- The active data root's `cache/tasks/<task_id>/` may store temporary or diagnostic files, but the UI should not expose it as a browseable artifact folder.
 - Legacy flat output files, old app-local history records, and non-current task manifests
-  are not trusted task authorities and have no compatibility reader.
+  are not trusted task authorities and have no compatibility reader. Data migration preserves
+  application-owned legacy bytes without trusting or executing them; ambiguous ownership blocks migration.
 
 ## 2026-07-05 Platform Subtitle Safety Boundary
 
@@ -742,10 +843,10 @@
 - Empty transcript saves, path traversal, non-transcript files, and unrelated local paths must fail recoverably.
 - Segment metadata is local-only review data. It must not be sent to FrameQ server unless a future product spec explicitly adds a server workflow.
 - The audio player should use Tauri-validated local paths only. Missing audio must degrade to text editing without attempting remote downloads or network lookups.
-- For custom output roots, Tauri may create a playback copy under app-local `cache/.frameq-audio-review/<task_id>/` only after validating the original manifest-declared audio artifact. This cache is not an authority and must be rebuildable from the original task artifact.
-- Manual playback-cache cleanup must not accept arbitrary paths. It must canonicalize the target, delete only app-local `cache/.frameq-audio-review`, and never delete `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/` artifacts, app-local `cache/tasks/`, `models/`, `auth/`, `.env`, logs, or update preferences.
+- Tauri may create playback copies under the active data root's `cache/.frameq-audio-review/<task_id>/` only after validating the original manifest-declared audio artifact. This cache is rebuildable and acquires the same native data permit as the task read.
+- Manual playback-cache cleanup accepts no arbitrary path and resolves only the active location snapshot's `.frameq-audio-review` subtree. It protects task artifacts, other caches, models, runtime components, Collections, authentication, `.env`, logs and preferences.
 - Playback-cache size reporting is local UI state only. It must not upload audio paths, source paths, transcripts, or cache metadata to FrameQ server.
-- The Tauri asset protocol may be enabled only for reviewed audio artifacts under app-local `outputs/tasks/<task_id>/` or Tauri-controlled playback copies under app-local `cache/.frameq-audio-review/<task_id>/`; it must not expose `auth/`, `models/`, `.env`, update preferences, task scratch files under `cache/tasks/`, or arbitrary user directories.
+- The Tauri asset protocol authorizes only the verified active output `tasks/` and playback-cache subtrees. Every returned audio path remains task-validated; fixed configuration, models, general task scratch files and arbitrary user directories are outside authorization. Unavailable storage revokes prior roots.
 
 ## 2026-06-29 YouTube Public Video Safety Boundary
 
@@ -822,7 +923,7 @@
 - The updater public key may be bundled in `tauri.conf.json`; the private signing key and signing password must never be committed, bundled, or stored on FrameQ server runtime hosts unless that host is the intended signing environment.
 - The public update endpoint returns only release metadata and artifact URLs; it must not require desktop authentication and must not return user data, account data, LLM keys, or ASR model credentials.
 - `updates.json` may store `lastCheckedAt`, `postponedUntil`, and `skippedVersion` only. It must not store downloaded installers, signatures, private keys, session tokens, video URLs, transcripts, or model cache paths beyond generic update preferences.
-- Updating the app must preserve app-local `models/`, `outputs/`, `cache/`, `auth/`, `.env`, and `updates.json`.
+- Updating the app preserves the active data root and fixed configuration root. Installation waits for worker/model/component operations and migration; restart uses `restart_application` and cannot bypass native storage protection through a process-plugin permission.
 - Waiving mainland China live updater testing does not relax the signature-verification requirement. It only means the GitHub Releases network path is not a v1 release blocker; unsigned or malformed updater artifacts must still be rejected by configuration and release checks.
 
 ## 2026-06-23 LLM Secret Boundary
@@ -831,12 +932,12 @@
 - Local dotenv files must not be treated as a supported place for `FRAMEQ_LLM_PROVIDER`, `FRAMEQ_LLM_BASE_URL`, `FRAMEQ_LLM_API_KEY`, `FRAMEQ_LLM_MODEL`, or `FRAMEQ_LLM_TIMEOUT_SECONDS`.
 - Tauri worker subprocesses remove legacy local LLM environment variables before launch.
 - Server-managed checkout environment variables remain allowed only for the insight-generation invocation.
-- App-local data `.env` remains limited to non-LLM local settings such as output directory, ASR model, and model download overrides.
+- Fixed-root `.env` retains non-LLM settings and legacy output compatibility. Ordinary saves write only the supported ASR selection and preserve existing output keys; managed data authority comes from the separate atomic storage-control record.
 
 ## 2026-06-23 ASR Model Cache Cleanup Boundary
 
 - Automatic ASR cache cleanup may only touch FrameQ's known SenseVoice Small and VAD model cache directories plus stale `._____temp` directories without `model.pt`.
-- Unknown model directories or user-created files under app-local `models/` must be preserved.
+- Unknown model directories or user-created files under the active data root's `models/` must be preserved.
 - Cleanup failures must not delete broader app-local data, block transcription, or hide the original ASR model availability state.
 
 ## Account and Billing Service
@@ -870,14 +971,14 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 ## Local Data
 
 - `outputs/tasks/<task_id>/` 存放用户最终产物和 `frameq-task.json`，默认不提交仓库。
-- 用户可通过 `FRAMEQ_OUTPUT_DIR` 将最终任务目录写入自定义本地目录；该目录内容不由仓库管理，用户需要自行保护其中的公开视频、音频、文字稿和灵感文件。
-- `cache/tasks/<task_id>/` 存放下载缓存、中间文件和调试产物，默认不提交仓库；它不得作为历史或正式产物真相源。
+- 用户通过设置中的数据存储位置迁移主要本机资料；Legacy 模式兼容已有 `FRAMEQ_OUTPUT_DIR`，Managed 模式采用受控数据根。迁移保留原件，清理需要明确确认。
+- 当前数据根的 `cache/tasks/<task_id>/` 存放下载缓存、中间文件和调试产物，默认不提交仓库；它不得作为历史或正式产物真相源。
 - 只有满足当前 schema v3、source-privacy marker 和 canonical SourceIdentity 契约的
   `frameq-task.json` 才是任务库索引和 artifact 真相源；旧版记录与目录仅物理留存，
-  不再被新版本读取、迁移或信任。
-- `models/` 存放模型权重缓存，默认不提交仓库。
+  不作为当前任务读取或信任。数据位置迁移按应用归属保留其原件，不改变信任等级。
+- 当前数据根的 `models/` 和 `runtime/` 存放模型与运行组件，默认不提交仓库。
 - `updates.json` 只存放更新检查偏好，默认不提交仓库；不得包含用户内容、账号 session、release signing private key 或下载包二进制。
-- 对外分发安装包不内置 ASR 模型权重；核心本地 ASR 模型只在用户提交已验证任务且所选模型缺失时下载。模型缓存、运行期可写缓存、输出、历史和 `.env` 必须写入 app-local data，不得写入安装目录。
+- 对外分发安装包不内置 ASR 模型权重；核心本地 ASR 模型只在用户提交已验证任务且所选模型缺失时下载。模型、运行组件、缓存、输出与合集写入当前数据根，`.env`、凭据、偏好和应用日志留在固定配置根；这些可写资料不进入安装目录。
 - 取消任务会终止当前 worker 进程树；已写入的 `outputs/`、`cache/` 和 `models/` 文件默认保留，不做自动清理。
 
 ## Secrets
@@ -885,7 +986,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 - LLM API Key、代理地址和云端配置不得硬编码到桌面端或 worker；管理员在 server Admin Web 中配置，server 负责加密保存。
 - LLM 配置不得从 app-local data `.env` 或项目根 `.env` 读取；真实 `.env` 被 `.gitignore` 忽略，仓库只保留不含 LLM key 的 `.env.example` 和安装包 `.env.template` 占位模板。
 - 旧本地 LLM 键名 `FRAMEQ_LLM_PROVIDER`、`FRAMEQ_LLM_BASE_URL`、`FRAMEQ_LLM_API_KEY`、`FRAMEQ_LLM_MODEL` 和 `FRAMEQ_LLM_TIMEOUT_SECONDS` 必须被 dotenv 加载链路忽略。
-- 输出目录键名为 `FRAMEQ_OUTPUT_DIR`，不得用于写入网络路径凭据或敏感 token。
+- 旧输出兼容键 `FRAMEQ_OUTPUT_DIR` 不得包含网络路径凭据或敏感 token；普通配置保存不能覆盖该键或改变已管理数据位置。
 - 日志不得输出完整密钥、cookies 或敏感请求头。
 
 ## External Services
@@ -899,7 +1000,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 - `FRAMEQ_ASR_MODEL_MIGRATION` 只是本地的一次性界面提示状态，用于说明迁移把默认模型切到了 ONNX。它不参与模型选择、源验证或下载决策，也不得被当作信任信号；清除它只影响设置页是否显示提示。
 - 要点总结、启发灵感与文字稿解剖分别通过 agent_runtime 使用管理员配置的云端 LLM；每次实际供应商请求先独立 checkout，SDK、provider 与运行器的隐式重试关闭。worker 将正式文字稿与本次工具反馈发送到 checkout 返回的地址，确认面板必须明确提示这一点。偏好快照只允许随启发灵感目标发送。三个目标只开放产物交付工具。
 - 桌面更新检查会访问 GitHub Releases 上的公开 `latest.json` updater manifest；该请求不上传本地文件、历史、模型缓存或账号 session。
-- UI 设置面板只管理本机 ASR 和输出目录；云端 LLM 是否就绪由账号状态展示，文字稿主流程不依赖 LLM。
+- UI 设置面板管理本机 ASR，并通过独立确认的迁移流程管理数据位置；云端 LLM 是否就绪由账号状态展示，文字稿主流程不依赖 LLM。
 - worker 对外部服务错误必须返回结构化错误码，不得吞掉失败。
 
 ## Validation

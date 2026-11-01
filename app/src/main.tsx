@@ -7,6 +7,7 @@ import { initializeI18n } from "./i18n/i18n";
 import { LocaleProvider } from "./i18n/LocaleProvider";
 import { navigatorLanguageSource, syncDocumentLocale } from "./i18n/locale";
 import { startLocalizedApplication } from "./i18n/startup";
+import { StorageBootstrap } from "./features/dataStorage/StorageBootstrap";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
@@ -25,7 +26,7 @@ void startLocalizedApplication({
       <React.StrictMode>
         <LocaleProvider initialOutcome={outcome}>
           <MotionConfig reducedMotion="user">
-            <App />
+            <StorageBootstrap><App /></StorageBootstrap>
           </MotionConfig>
         </LocaleProvider>
       </React.StrictMode>,

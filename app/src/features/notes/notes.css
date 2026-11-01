@@ -1,0 +1,234 @@
+.sheet-panel.detail-modal.note-action-sheet {
+  width: 100%;
+  max-width: 520px;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.note-action-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.note-action-content.sheet-body {
+  display: block;
+}
+
+.note-action-subtitle {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.note-action-description,
+.note-action-notice {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.note-action-notice[role="alert"] {
+  color: #a23e32;
+}
+
+.app-shell > .note-action-notice,
+.app-shell > .note-cleanup-notice {
+  position: fixed;
+  z-index: 45;
+  right: 24px;
+  bottom: 20px;
+  left: calc(clamp(248px, 16vw, 300px) + 20px);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - clamp(248px, 16vw, 300px) - 44px);
+  max-height: 120px;
+  overflow: auto;
+  padding: 11px 14px;
+  margin: 0 auto;
+  border: 1px solid #dcdcd5;
+  border-radius: 8px;
+  background: #f4f4ee;
+  color: #64645b;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.app-shell > .note-cleanup-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.note-cleanup-notice > span {
+  min-width: 0;
+}
+
+.note-cleanup-notice > button {
+  flex: 0 0 auto;
+  min-height: 31px;
+  padding: 6px 10px;
+  border: 1px solid #d7d7ce;
+  border-radius: 6px;
+  background: transparent;
+  color: #5b5b51;
+  font-size: 12px;
+}
+
+.app-shell > .note-cleanup-notice ~ .note-action-notice {
+  bottom: 152px;
+}
+
+.desktop-window.is-sidebar-collapsed ~ .note-action-notice,
+.desktop-window.is-sidebar-collapsed ~ .note-cleanup-notice {
+  left: 86px;
+  max-width: calc(100vw - 110px);
+}
+
+.note-action-button {
+  display: inline-flex;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.note-action-sheet button:disabled,
+.note-action-sheet input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.note-action-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.note-rename-form > label {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.note-rename-form > input {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.note-name-guidance {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 9px 0 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.note-name-guidance p {
+  margin: 0;
+}
+
+.note-name-guidance > span {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-action-content > :is(.note-action-description, .note-action-notice):last-child,
+.note-rename-form > :is(.note-name-guidance, .note-action-notice):last-child {
+  margin-bottom: 0;
+}
+
+.note-collection-options {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.note-collection-options label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 5px 0;
+  color: var(--text);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.note-collection-options > li + li label {
+  border-top: 1px solid var(--border);
+}
+
+.note-collection-options input {
+  flex: 0 0 auto;
+  accent-color: var(--primary);
+}
+
+.note-information-fields {
+  margin: 0;
+}
+
+.note-information-fields > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  padding: 11px 0;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.note-information-fields > div + div {
+  border-top: 1px solid var(--border);
+}
+
+.note-information-fields > div:first-child {
+  padding-top: 0;
+}
+
+.note-information-fields > div:last-child {
+  padding-bottom: 0;
+}
+
+.note-information-fields dt {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.note-information-fields dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.note-information-fields ul {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+@media (max-width: 760px) {
+  .app-shell > .note-cleanup-notice {
+    flex-wrap: wrap;
+    gap: 7px 12px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .desktop-window:not(.is-sidebar-collapsed) ~ .note-action-notice,
+  .desktop-window:not(.is-sidebar-collapsed) ~ .note-cleanup-notice {
+    left: 250px;
+    max-width: calc(100vw - 274px);
+  }
+}

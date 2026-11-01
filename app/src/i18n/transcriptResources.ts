@@ -21,6 +21,11 @@ export const transcriptResources = {
         failed: "处理失败",
         waiting: "等待开始",
       },
+      saveState: {
+        loading: "读取中",
+        saving: "保存中",
+        unsaved: "有未保存修改",
+      },
       progressSteps: {
         videoExtracting: "视频提取中",
         audioPreparing: "音频准备中",
@@ -101,6 +106,11 @@ export const transcriptResources = {
         failed: "處理失敗",
         waiting: "等待開始",
       },
+      saveState: {
+        loading: "讀取中",
+        saving: "儲存中",
+        unsaved: "有未儲存的修改",
+      },
       progressSteps: {
         videoExtracting: "正在擷取影片",
         audioPreparing: "正在準備音訊",
@@ -180,6 +190,11 @@ export const transcriptResources = {
         ready: "Local Processing Complete",
         failed: "Processing Failed",
         waiting: "Waiting to Start",
+      },
+      saveState: {
+        loading: "Loading",
+        saving: "Saving",
+        unsaved: "Unsaved changes",
       },
       progressSteps: {
         videoExtracting: "Extracting Video",

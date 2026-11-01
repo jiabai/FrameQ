@@ -47,6 +47,13 @@ export function LocalTranscriptWorkspace({
   const renderedActionNotice = renderUiMessage(locale, actionNotice);
   const polishedTranscriptText =
     controller.transcriptDetail?.polished_text ?? null;
+  const saveStateKey = controller.transcriptLoading
+    ? "workspace.saveState.loading"
+    : controller.transcriptSaving
+      ? "workspace.saveState.saving"
+      : controller.transcriptDirty
+        ? "workspace.saveState.unsaved"
+        : null;
 
   return (
     <section
@@ -54,20 +61,19 @@ export function LocalTranscriptWorkspace({
       aria-label={t("workspace.ariaLabel")}
       data-task-id={model.taskId ?? undefined}
     >
-      <header className="domain-workspace-header">
-        <div>
-          <h2>
-            {model.phase === "ready"
-              ? t("workspace.reviewTitle")
-              : t("workspace.transcriptionTitle")}
-          </h2>
+      {model.phase !== "ready" || saveStateKey ? (
+        <div className="domain-workspace-header local-workspace-state">
+          {model.phase === "ready" && saveStateKey ? (
+            <span className="local-transcript-save-state" aria-live="polite">
+              {t(saveStateKey)}
+            </span>
+          ) : (
+            <span className={`workspace-status-badge ${model.phase}`}>
+              {t(`workspace.status.${model.phase}`)}
+            </span>
+          )}
         </div>
-        {model.phase !== "ready" ? (
-          <span className={`workspace-status-badge ${model.phase}`}>
-            {t(`workspace.status.${model.phase}`)}
-          </span>
-        ) : null}
-      </header>
+      ) : null}
 
       {model.phase === "processing" ? (
         <div
@@ -118,7 +124,7 @@ export function LocalTranscriptWorkspace({
         <TranscriptReviewPanel
           transcriptSource={model.transcriptSource}
           controller={controller}
-          editingDisabled={!model.canEdit || polishingTranscript}
+          editingDisabled={!model.canEdit || polishingTranscript || controller.transcriptSaving}
           readOnlyReason={
             model.readOnly ? t("review.readOnlyDuringAi") : null
           }
@@ -170,6 +176,7 @@ export function LocalTranscriptWorkspace({
                     ariaBusy={polishingTranscript}
                     enabled={
                       model.artifactActions.copyTranscript.enabled &&
+                      !model.readOnly &&
                       !controller.transcriptLoading &&
                       !polishingTranscript
                     }

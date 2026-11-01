@@ -23,6 +23,7 @@ pub(super) fn fixture_request(
             ],
             stdin_payload,
             env: vec![(probe_env.to_string(), "1".to_string())],
+            clear_env: false,
             env_remove: Vec::new(),
             current_dir: std::env::current_dir().expect("resolve test directory"),
         },
@@ -58,6 +59,7 @@ pub(super) fn watchdog_fixture_request(
             args,
             stdin_payload,
             env: Vec::new(),
+            clear_env: false,
             env_remove: Vec::new(),
             current_dir: std::env::current_dir().expect("resolve test directory"),
         },
@@ -77,6 +79,7 @@ pub(super) fn watchdog_tree_fixture_request(pid_file: &Path) -> WorkerRunRequest
                 "FRAMEQ_TEST_CHILD_PID_FILE".to_string(),
                 pid_file.to_string_lossy().into_owned(),
             )],
+            clear_env: false,
             env_remove: Vec::new(),
             current_dir: std::env::current_dir().expect("resolve test directory"),
         },
@@ -192,6 +195,7 @@ pub(super) fn terminal_fixture_request(
     WorkerRunRequest {
         operation: WorkerOperation::ProcessVideo,
         command: WorkerCommandSpec {
+            clear_env: false,
             program,
             args,
             stdin_payload,
@@ -316,10 +320,11 @@ pub(super) fn test_paths(label: &str) -> RuntimePaths {
         .duration_since(UNIX_EPOCH)
         .expect("clock after epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!(
-        "frameq-worker-runner-{label}-{}-{nonce}",
-        std::process::id()
-    ));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../build/data-storage-acceptance")
+        .join(format!("frameq-worker-runner-{label}-{}-{nonce}", std::process::id()));
+    std::fs::create_dir_all(root.join("user-data")).expect("create worker runner fixture");
+    let root = root.canonicalize().expect("resolve worker runner fixture");
     RuntimePaths {
         resource_dir: root.join("resources"),
         user_data_dir: root.join("user-data"),

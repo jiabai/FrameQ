@@ -15,9 +15,11 @@ export function OutputLanguageField({
 }: OutputLanguageFieldProps) {
   const copy = getPreferenceCopy(locale).outputLanguage;
   return (
-    <div data-output-language={outputLanguage}>
-      <span className="account-status-label">{copy.label}</span>
-      <strong>{getOutputLanguageName(locale, outputLanguage)}</strong>
+    <div className="sheet-fact" data-output-language={outputLanguage}>
+      <dt>{copy.label}</dt>
+      <dd>
+        <strong>{getOutputLanguageName(locale, outputLanguage)}</strong>
+      </dd>
     </div>
   );
 }

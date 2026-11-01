@@ -1,5 +1,5 @@
 {
-  "contractVersion": 9,
+  "contractVersion": 10,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "FRAMEQ_PROGRESS ",
@@ -185,6 +185,7 @@
           "video_extracting",
           "video_transcribing",
           "insights_generating",
+          "title_generating",
           "completed",
           "partial_completed",
           "failed"
@@ -297,6 +298,12 @@
             "attempt",
             "total"
           ]
+        },
+        "title.generation.running": {
+          "allowedArgs": []
+        },
+        "title.generation.completed": {
+          "allowedArgs": []
         },
         "douyin.page.resolving": {
           "allowedArgs": []
@@ -517,6 +524,25 @@
               },
               {
                 "type": "null"
+              }
+            ]
+          },
+          "task_created": {
+            "type": "boolean"
+          },
+          "note_title": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["text", "status", "output_language", "error_code"],
+                "properties": {
+                  "text": { "oneOf": [{"type":"null"}, {"type":"string", "minLength":1, "maxLength":60}] },
+                  "status": { "type":"string", "enum":["generating", "completed", "failed", "cancelled"] },
+                  "output_language": { "type":"string", "enum":["zh-CN", "zh-TW", "en-US"] },
+                  "error_code": { "oneOf": [{"type":"null"}, {"type":"string", "pattern":"^[A-Z][A-Z0-9_]{0,63}$"}] }
+                },
+                "additionalProperties": false
               }
             ]
           },
@@ -875,6 +901,7 @@
                       "video_extracting",
                       "video_transcribing",
                       "insights_generating",
+                      "title_generating",
                       "completed",
                       "partial_completed",
                       "failed"
@@ -1349,7 +1376,8 @@
             "insights",
             "dissection",
             "draft",
-            "transcript"
+            "transcript",
+            "title"
           ]
         },
         "output_language": {
@@ -1701,9 +1729,33 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": { "target": { "const": "title" } },
+            "required": ["target"]
+          },
+          "then": { "maxProperties": 3 }
         }
       ]
     }
+  },
+  "noteTitleCancellation": {
+    "command": "record_note_title_cancellation",
+    "workerInvocation": false,
+    "checkout": false,
+    "request": {
+      "type": "object",
+      "required": ["task_id", "output_language", "expected_note_title"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "output_language": { "type": "string", "enum": ["zh-CN", "zh-TW", "en-US"] },
+        "expected_note_title": { "$ref": "#/terminalResults/schemas/task/properties/note_title" }
+      },
+      "additionalProperties": false
+    },
+    "result": { "$ref": "#/terminalResults/schemas/task" },
+    "mutation": "compare_saved_metadata_then_atomically_record_cancellation"
   },
   "sourceIdentity": {
     "preflightCommand": "resolve_source_json",

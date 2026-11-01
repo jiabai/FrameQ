@@ -56,44 +56,48 @@ export function SummaryConfirmationSheet({
           <X size={18} />
         </button>
       </header>
-      <div className="preference-flow-content">
+      <div className="preference-flow-content sheet-body">
         <p className="settings-warning privacy-callout">
           <ShieldCheck size={16} />
           <span>{t("confirmation.privacy")}</span>
         </p>
-        <div className="confirm-summary preference-confirm-grid">
-          <div>
-            <span className="account-status-label">
-              {t("confirmation.currentTranscript")}
-            </span>
-            <strong>
-              {unitCount > 0
-                ? formatWordCount(unitCount, locale)
-                : t("confirmation.waitingTranscript")}
-            </strong>
-            <small>{transcriptPath || t("confirmation.transcriptUnavailable")}</small>
+        <dl className="sheet-facts">
+          <div className="sheet-fact">
+            <dt>{t("confirmation.currentTranscript")}</dt>
+            <dd>
+              <strong>
+                {unitCount > 0
+                  ? formatWordCount(unitCount, locale)
+                  : t("confirmation.waitingTranscript")}
+              </strong>
+              <small className={transcriptPath ? "sheet-path" : undefined} title={transcriptPath || undefined}>
+                {transcriptPath || t("confirmation.transcriptUnavailable")}
+              </small>
+            </dd>
           </div>
-          <div>
-            <span className="account-status-label">{t("confirmation.creditsLabel")}</span>
-            <strong>
-              {t("confirmation.creditsBalance", {
-                formattedCount: formatNumber(quotaRemaining, locale),
-              })}
-            </strong>
-            <small>{getAiCreditsCostHint(locale)}</small>
+          <div className="sheet-fact">
+            <dt>{t("confirmation.creditsLabel")}</dt>
+            <dd>
+              <strong>
+                {t("confirmation.creditsBalance", {
+                  formattedCount: formatNumber(quotaRemaining, locale),
+                })}
+              </strong>
+              <small>{getAiCreditsCostHint(locale)}</small>
+            </dd>
           </div>
           <OutputLanguageField locale={locale} outputLanguage={locale} />
-        </div>
-        <div className="settings-actions sheet-footer">
-          <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
-            <span>{t("confirmation.cancel")}</span>
-          </button>
-          <button type="button" className="primary-button" onClick={onConfirm} disabled={busy}>
-            <ListChecks size={16} />
-            <span>{t("confirmation.confirm")}</span>
-          </button>
-        </div>
+        </dl>
       </div>
+      <footer className="settings-actions sheet-footer">
+        <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
+          <span>{t("confirmation.cancel")}</span>
+        </button>
+        <button type="button" className="primary-button" onClick={onConfirm} disabled={busy}>
+          <ListChecks size={16} />
+          <span>{t("confirmation.confirm")}</span>
+        </button>
+      </footer>
     </AnimatedSheet>
   );
 }

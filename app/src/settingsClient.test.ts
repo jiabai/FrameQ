@@ -169,7 +169,6 @@ describe("settings client", () => {
         command: "save_llm_config",
         args: {
           config: {
-            output_dir: "D:\\FrameQ\\outputs",
             asr_model: "iic/SenseVoiceSmall-onnx",
           },
         },

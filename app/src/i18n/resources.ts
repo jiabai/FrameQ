@@ -11,6 +11,9 @@ import { synthesisResources } from "./synthesisResources";
 import { transcriptResources } from "./transcriptResources";
 import { updatesResources } from "./updatesResources";
 import { workflowResources } from "./workflowResources";
+import { shellResources } from "./shellResources";
+import { noteActionsResources } from "./noteActionsResources";
+import { dataStorageResources } from "./dataStorageResources";
 
 export const RESOURCE_NAMESPACES = [
   "common",
@@ -27,6 +30,9 @@ export const RESOURCE_NAMESPACES = [
   "synthesis",
   "updates",
   "errors",
+  "shell",
+  "noteActions",
+  "dataStorage",
 ] as const;
 export type ResourceNamespace = (typeof RESOURCE_NAMESPACES)[number];
 type ResourceTree = { readonly [key: string]: string | ResourceTree };
@@ -75,6 +81,8 @@ export const resources = {
         asr_transcribe_starting: "正在启动本地语音识别。",
         asr_transcribe_running: "正在本地转写音频。",
         ai_generation_running: "正在生成 AI 结果。",
+        title_generation_running: "正在生成笔记标题。",
+        title_generation_completed: "笔记标题已保存。",
         douyin_page_resolving: "正在解析抖音分享页。",
         douyin_page_retrying: "正在重试解析抖音分享页。",
         douyin_stream_probing: "正在探测抖音视频流。",
@@ -106,6 +114,7 @@ export const resources = {
         cancelling: "正在取消当前任务。",
         video_extracting: "正在准备本地媒体文件。",
         video_transcribing: "正在本地转写音频。",
+        title_generating: "文字稿已保存，正在生成笔记标题。",
         insights_generating: "正在生成 AI 结果。",
         completed: "任务已完成。",
         partial_completed: "任务已部分完成。",
@@ -142,6 +151,9 @@ export const resources = {
     synthesis: { ...synthesisResources["zh-CN"], ...dissectionResources["zh-CN"] },
     updates: updatesResources["zh-CN"],
     errors: errorResources["zh-CN"],
+    shell: shellResources["zh-CN"],
+    noteActions: noteActionsResources["zh-CN"],
+    dataStorage: dataStorageResources["zh-CN"],
   },
   "zh-TW": {
     common: {
@@ -186,6 +198,8 @@ export const resources = {
         asr_transcribe_starting: "正在啟動本機語音辨識。",
         asr_transcribe_running: "正在本機轉寫音訊。",
         ai_generation_running: "正在產生 AI 結果。",
+        title_generation_running: "正在產生筆記標題。",
+        title_generation_completed: "筆記標題已儲存。",
         douyin_page_resolving: "正在解析抖音分享頁。",
         douyin_page_retrying: "正在重試解析抖音分享頁。",
         douyin_stream_probing: "正在探測抖音影片串流。",
@@ -217,6 +231,7 @@ export const resources = {
         cancelling: "正在取消目前工作。",
         video_extracting: "正在準備本機媒體檔案。",
         video_transcribing: "正在本機轉寫音訊。",
+        title_generating: "逐字稿已儲存，正在產生筆記標題。",
         insights_generating: "正在產生 AI 結果。",
         completed: "工作已完成。",
         partial_completed: "工作已部分完成。",
@@ -253,6 +268,9 @@ export const resources = {
     synthesis: { ...synthesisResources["zh-TW"], ...dissectionResources["zh-TW"] },
     updates: updatesResources["zh-TW"],
     errors: errorResources["zh-TW"],
+    shell: shellResources["zh-TW"],
+    noteActions: noteActionsResources["zh-TW"],
+    dataStorage: dataStorageResources["zh-TW"],
   },
   "en-US": {
     common: {
@@ -297,6 +315,8 @@ export const resources = {
         asr_transcribe_starting: "Starting local speech recognition.",
         asr_transcribe_running: "Transcribing audio locally.",
         ai_generation_running: "Generating AI results.",
+        title_generation_running: "Generating the note title.",
+        title_generation_completed: "Note title saved.",
         douyin_page_resolving: "Resolving the Douyin share page.",
         douyin_page_retrying: "Retrying the Douyin share page.",
         douyin_stream_probing: "Probing the Douyin video stream.",
@@ -328,6 +348,7 @@ export const resources = {
         cancelling: "Cancelling the current task.",
         video_extracting: "Preparing local media files.",
         video_transcribing: "Transcribing audio locally.",
+        title_generating: "Transcript saved. Generating the note title.",
         insights_generating: "Generating AI results.",
         completed: "The task is complete.",
         partial_completed: "The task is partially complete.",
@@ -364,5 +385,8 @@ export const resources = {
     synthesis: { ...synthesisResources["en-US"], ...dissectionResources["en-US"] },
     updates: updatesResources["en-US"],
     errors: errorResources["en-US"],
+    shell: shellResources["en-US"],
+    noteActions: noteActionsResources["en-US"],
+    dataStorage: dataStorageResources["en-US"],
   },
 } as const satisfies Record<SupportedLocale, Record<ResourceNamespace, ResourceTree>>;

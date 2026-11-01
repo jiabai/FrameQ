@@ -2,7 +2,7 @@
 //!
 //! 组件以 GitHub Releases 资产随桌面端一起发布：`v<版本>` 下按平台存放
 //! `frameq-pytorch-runtime-<target>.zip`。这里负责拼资产地址、组件目录
-//! （`<user_data>/runtime/pytorch/<版本>`），并复用模型下载 lane 跑 worker。
+//! （`<data_root>/runtime/pytorch/<版本>`），并复用模型下载通道运行 worker。
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -49,8 +49,8 @@ pub(crate) fn component_release_url(version: &str, target: &str) -> String {
     )
 }
 
-pub(crate) fn component_dir(user_data_dir: &Path, version: &str) -> PathBuf {
-    user_data_dir.join("runtime").join("pytorch").join(version)
+pub(crate) fn component_dir(data_root: &Path, version: &str) -> PathBuf {
+    data_root.join("runtime").join("pytorch").join(version)
 }
 
 #[tauri::command]
@@ -71,11 +71,12 @@ fn download_runtime_component_blocking(
     app: AppHandle,
     process_supervisors: Arc<ProcessSupervisors>,
 ) -> Result<RuntimeComponentDownloadResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let version = env!("CARGO_PKG_VERSION");
     let job = RuntimeComponentDownloadJob::new(
-        component_dir(&paths.user_data_dir, version),
+        component_dir(&paths.data_root()?, version),
         component_release_url(version, component_target()),
         None,
     );
@@ -109,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn component_dir_is_versioned_under_user_data() {
+    fn component_dir_is_versioned_under_data_root() {
         assert_eq!(
             component_dir(Path::new("/data/frameq"), "0.3.9"),
             PathBuf::from("/data/frameq").join("runtime").join("pytorch").join("0.3.9")

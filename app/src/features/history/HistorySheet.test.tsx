@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ComponentProps } from "react";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 
 import type { HistoryListItem } from "../../historyClient";
 import { formatDateTime } from "../../i18n/formatters";
@@ -42,15 +42,22 @@ function createHistoryController(
     historyLoading: false,
     historyDeleteCandidate: null,
     historyDeleting: false,
-    closeHistory: vi.fn(),
-    openHistory: vi.fn(),
-    openHistoryItem: vi.fn(),
-    requestHistoryItemDeletion: vi.fn(),
-    cancelHistoryItemDeletion: vi.fn(),
-    confirmHistoryItemDeletion: vi.fn(),
+    cleanupPending: false,
+    cleanupFailed: false,
+    resumeHistoryCleanup: async () => {},
+    applyCommittedNoteMetadata: unexpectedAction,
+    closeHistory: unexpectedAction,
+    openHistory: unexpectedAction,
+    refreshHistory: async () => {},
+    openHistoryItem: unexpectedAction,
+    requestHistoryItemDeletion: unexpectedAction,
+    cancelHistoryItemDeletion: unexpectedAction,
+    confirmHistoryItemDeletion: unexpectedAction,
     ...overrides,
   };
 }
+
+function unexpectedAction(): never { throw new Error("Unexpected user action"); }
 
 function renderHistorySheet(
   props: ComponentProps<typeof HistorySheet>,
@@ -75,6 +82,20 @@ beforeAll(async () => {
 });
 
 describe("HistorySheet selection accessibility", () => {
+  test.each<SupportedLocale>(["zh-CN", "zh-TW", "en-US"])("uses saved titles for heading and deletion description in %s", (locale) => {
+    const item = createHistoryItem({ noteTitle: {
+      text: "Persisted note title", status: "completed", output_language: "en-US", error_code: null,
+    } });
+    const markup = renderHistorySheet({
+      controller: createHistoryController([item]), selectionDisabled: false,
+      selectionDisabledReason: uiMessage("history.disabled.selectionWhileProcessing"),
+      deletionDisabled: false, deletionDisabledReason: uiMessage("history.disabled.deletionWhileProcessing"),
+    }, locale);
+    expect(markup).toContain('title="Persisted note title"');
+    expect(markup).toContain('>Persisted note title</strong>');
+    expect(markup).toMatch(/aria-label="[^"]*Persisted note title[^"]*"/);
+    expect(item.textPreview).toBe("history preview");
+  });
   test("renders active-workflow history rows as native disabled buttons with an explanation", () => {
     const markup = renderHistorySheet({
       controller: createHistoryController(),
@@ -188,10 +209,24 @@ describe("HistorySheet selection accessibility", () => {
       deletionDisabledReason: uiMessage("history.disabled.deletionWhileProcessing"),
     });
 
-    expect(markup).toContain('aria-label="确认永久删除历史任务"');
+    expect(markup).toContain('aria-label="确认永久删除笔记"');
     expect(markup).toContain("视频、音频、文字稿、AI 结果和播放缓存");
     expect(markup).toContain("无法恢复");
     expect(markup.indexOf(">取消<")).toBeLessThan(markup.indexOf(">永久删除<"));
+  });
+
+  test("hosts the same named confirmation when the history sheet is closed", () => {
+    const item = createHistoryItem({ noteMetadata: { pinned: true, displayTitle: "手动保存的名称" } });
+    const markup = renderHistorySheet({
+      controller: createHistoryController([item], { historyOpen: false, historyDeleteCandidate: item }),
+      selectionDisabled: false, selectionDisabledReason: uiMessage("history.disabled.selectionWhileProcessing"),
+      deletionDisabled: true, deletionDisabledReason: uiMessage("history.disabled.deletionWhileTranscriptSaving"),
+    });
+    expect(markup).toContain('role="alertdialog"');
+    expect(markup).toContain("手动保存的名称");
+    expect(markup).toContain('data-modal-initial-focus="true"');
+    expect(markup).toContain('aria-describedby="note-delete-disabled-reason"');
+    expect(markup).not.toContain('class="history-list"');
   });
 
   test("renders the feature terminology and dialog labels in every supported locale", async () => {

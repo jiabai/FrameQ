@@ -113,13 +113,13 @@ describe("Tauri desktop window configuration", () => {
     expect(config.bundle.resources).not.toContain("resources/models/**/*");
   });
 
-  test("allows reviewed audio artifacts to play through Tauri asset URLs", () => {
+  test("starts with no media access until the verified active library is authorized", () => {
     const config = JSON.parse(readFileSync(configPath, "utf8")) as TauriConfig;
     const manifest = readFileSync(cargoManifestPath, "utf8");
 
     expect(config.app.security?.assetProtocol).toEqual({
       enable: true,
-      scope: ["$APPLOCALDATA/outputs/**", "$APPLOCALDATA/cache/.frameq-audio-review/**"],
+      scope: [],
     });
     expect(manifest).toContain('tauri = { version = "2", features = ["protocol-asset"] }');
   });
@@ -149,14 +149,18 @@ describe("Tauri desktop window configuration", () => {
     expect(config.bundle.macOS?.hardenedRuntime).toBe(false);
   });
 
-  test("allows updater and process plugin commands from the main window", () => {
+  test("allows updater commands and keeps restart behind the application storage guard", () => {
     const capability = JSON.parse(readFileSync(capabilityPath, "utf8")) as {
       permissions: string[];
     };
 
     expect(capability.permissions).toEqual(
-      expect.arrayContaining(["updater:default", "process:default"]),
+      expect.arrayContaining(["updater:default"]),
     );
+    expect(capability.permissions).not.toContain("process:default");
+    const library = readFileSync(resolve(import.meta.dirname, "../src-tauri/src/lib.rs"), "utf8");
+    expect(library).toContain("data_storage::restart_application");
+    expect(library).not.toContain(".plugin(tauri_plugin_process::init())");
   });
 
   test("uses release-grade application metadata", () => {

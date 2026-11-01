@@ -26,6 +26,7 @@ import { LanguagePreferenceField } from "./LanguagePreferenceField";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { asrModelLabel } from "../asrModel/asrModelLabels";
 import { StatusLine } from "../common/StatusLine";
+import { DataStorageSetting } from "../dataStorage/DataStorageSetting";
 
 type SettingsSheetProps = {
   controller: SettingsController;
@@ -258,18 +259,10 @@ export function SettingsSheet({
                   ? tSettings("basic.modelReady")
                   : tSettings("basic.modelMissing")}
               </span>
-              <small>{asrModelStatus.modelDir || tSettings("basic.defaultModelPath")}</small>
+              <small className="sheet-path" title={asrModelStatus.modelDir || tSettings("basic.defaultModelPath")}>{asrModelStatus.modelDir || tSettings("basic.defaultModelPath")}</small>
             </div>
           </div>
-          <label className="field-row">
-            <span>{tSettings("basic.outputDirectory")}</span>
-            <input
-              value={settingsDraft.outputDir}
-              onChange={(event) => updateSettingsDraft("outputDir", event.currentTarget.value)}
-              placeholder={tSettings("basic.outputPlaceholder")}
-              disabled={settingsLoading || settingsSaving}
-            />
-          </label>
+          <DataStorageSetting />
         </section>
       </>
     );

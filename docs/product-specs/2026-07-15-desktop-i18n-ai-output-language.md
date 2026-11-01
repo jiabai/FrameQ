@@ -54,7 +54,7 @@ type UiPreferencesView = {
 
 ## Local Preference and Startup
 
-Tauri 在 app-local data 根目录管理独立的 `ui-preferences.json`：
+Tauri 在固定 app-local 配置根管理独立的 `ui-preferences.json`；更改数据存储位置不会迁移该偏好：
 
 ```json
 {
@@ -73,8 +73,8 @@ Tauri 在 app-local data 根目录管理独立的 `ui-preferences.json`：
 - Rust 只接受 `system` 与三个 `SupportedLocale`，不接受任意 BCP 47 字符串。
 
 窗口启动时先显示仅含 `FrameQ` 的中性 bootstrap shell。偏好在 1.5 秒内返回时，使用解析后的
-locale 初始化 i18next 后再挂载主 React UI；超时或失败时按 `en-US` 启动，忽略迟到响应，并显示
-非阻塞恢复提示。启动不能因为偏好 I/O 出现白屏或在迟到响应后突然二次切换。
+locale 初始化 i18next 后进入数据位置启动守卫，原生数据 Ready 后挂载主 React UI；超时或失败时按 `en-US` 启动，忽略迟到响应，并显示
+非阻塞语言恢复提示。数据离线或控制记录无效时，以已解析语言显示独立存储恢复界面，不创建空资料库。启动不能因为偏好 I/O 出现白屏或在迟到响应后突然二次切换。
 
 ## Settings Experience
 
@@ -92,8 +92,8 @@ English`。选择后：
 6. 显式 locale 不受后续系统语言变化影响；`system` 偏好响应可用的 `languagechange` 事件，
    其他环境在下次启动重新解析。
 
-切换语言不得提交、清空或重置正在编辑的 URL、ASR 模型、输出目录、文字稿草稿、偏好向导或
-当前任务。日期、数字、复数、字数与字节显示使用实际 locale 格式化。
+切换语言不得提交、清空或重置正在编辑的 URL、ASR 模型、数据迁移确认、文字稿草稿、偏好向导或
+当前任务。日期、数字、复数、字数与字节显示使用实际 locale 格式化；迁移进度和恢复说明同步切换。
 
 ## Terminology
 
@@ -115,7 +115,7 @@ English`。选择后：
 ## UI Resource and State Rules
 
 - 使用 `i18next + react-i18next`，三套 TypeScript 资源随安装包静态打包；运行时不请求远程词库。
-- 资源按 App、设置、账号、历史、模型下载、文字稿、AI 工作区、灵感偏好、更新、通知与错误等
+- 资源按 App、设置、数据存储、账号、历史、模型下载、文字稿、AI 工作区、灵感偏好、更新、通知与错误等
   功能 namespace 拆分，三种语言的 key、插值参数与复数键必须一致且非空。
 - 所有用户可见文本、`aria-label`、`title` 与 `placeholder` 从资源读取。
 - 状态层保存 `{ messageCode, args }` 或领域状态，不保存渲染完成的中文句子；切换语言后当前

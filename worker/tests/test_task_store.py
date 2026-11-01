@@ -246,8 +246,8 @@ def test_finalize_preserves_previous_manifest_when_atomic_replace_fails(
 ) -> None:
     atomic_files = importlib.import_module("frameq_worker.atomic_files")
     store, context = _create_store_context(tmp_path)
-    previous_manifest = '{"status":"previous"}\n'
-    context.paths.manifest_path.write_text(previous_manifest, encoding="utf-8")
+    store.finalize(context, ProcessResult(status=JobStage.COMPLETED))
+    previous_manifest = context.paths.manifest_path.read_text(encoding="utf-8")
 
     def fail_replace(_source: Path, destination: Path) -> None:
         assert destination == context.paths.manifest_path
@@ -311,8 +311,8 @@ def test_manifest_sync_failure_does_not_replace_previous_json(
 ) -> None:
     atomic_files = importlib.import_module("frameq_worker.atomic_files")
     store, context = _create_store_context(tmp_path)
-    previous_manifest = '{"status":"previous"}\n'
-    context.paths.manifest_path.write_text(previous_manifest, encoding="utf-8")
+    store.finalize(context, ProcessResult(status=JobStage.COMPLETED))
+    previous_manifest = context.paths.manifest_path.read_text(encoding="utf-8")
 
     def fail_sync(_descriptor: int) -> None:
         raise OSError("D:/private/output/frameq-task.json could not be synced")

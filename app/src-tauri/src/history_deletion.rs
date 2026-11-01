@@ -1,35 +1,39 @@
-use crate::{
-    append_desktop_log, ensure_runtime_dirs, resolve_runtime_paths, task_manifest,
-    ProcessSupervisors, CACHE_DIR_NAME,
-};
+mod intent;
+mod storage;
+
+use crate::{append_desktop_log, collections, resolve_runtime_paths, task_manifest,
+    ProcessSupervisors, RuntimePaths, AUDIO_REVIEW_CACHE_DIR_NAME};
+use intent::{Intent, Phase};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use tauri::{AppHandle, State};
+use uuid::Uuid;
+
+const PENDING: &str = "HISTORY_DELETE_CLEANUP_PENDING";
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub(crate) struct HistoryDeleteResult {
     pub(crate) task_id: String,
-    pub(crate) deleted: bool,
+    pub(crate) status: &'static str,
+    pub(crate) error_code: Option<&'static str>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct HistoryCleanupResult {
+    pub(crate) task_id: Option<String>,
+    pub(crate) status: &'static str,
+    pub(crate) error_code: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum HistoryDeleteError {
-    Busy,
-    Unavailable,
-    UnsafeStorage,
-    DeleteFailed,
-}
+pub(crate) enum HistoryDeleteError { Busy, Unavailable, UnsafeStorage, DeleteFailed }
 
 impl HistoryDeleteError {
     fn public_code(self) -> &'static str {
         match self {
-            Self::Busy => "HISTORY_DELETE_BUSY",
-            Self::Unavailable => "HISTORY_DELETE_UNAVAILABLE",
-            Self::UnsafeStorage => "HISTORY_DELETE_UNSAFE_STORAGE",
-            Self::DeleteFailed => "HISTORY_DELETE_FAILED",
+            Self::Busy => "HISTORY_DELETE_BUSY", Self::Unavailable => "HISTORY_DELETE_UNAVAILABLE",
+            Self::UnsafeStorage => "HISTORY_DELETE_UNSAFE_STORAGE", Self::DeleteFailed => "HISTORY_DELETE_FAILED",
         }
     }
 }
@@ -42,707 +46,268 @@ pub(crate) struct HistoryDeleteRequest {
 }
 
 #[derive(Default)]
-pub(crate) struct HistoryDeletionState {
-    lock: Mutex<()>,
-}
+pub(crate) struct HistoryDeletionState { lock: Mutex<()> }
 
-trait DirectoryRemover {
-    fn remove_dir_all(&self, path: &Path) -> Result<(), ()>;
-}
+struct Roots { output: PathBuf, cache: PathBuf, tasks: PathBuf }
 
-struct StdDirectoryRemover;
-
-impl DirectoryRemover for StdDirectoryRemover {
-    fn remove_dir_all(&self, path: &Path) -> Result<(), ()> {
-        fs::remove_dir_all(path).map_err(|_| ())
+impl Roots {
+    fn resolve(paths: &RuntimePaths) -> Result<Self, HistoryDeleteError> {
+        let output = task_manifest::configured_output_root(paths).map_err(|_| HistoryDeleteError::UnsafeStorage)?;
+        storage::validate_ancestors(&paths.user_data_dir)?;
+        storage::validate_ancestors(&output)?;
+        let output = output.canonicalize().map_err(|_| HistoryDeleteError::UnsafeStorage)?;
+        let cache = paths.cache_root().map_err(|_| HistoryDeleteError::UnsafeStorage)?;
+        storage::validate_ancestors(&cache)?;
+        let tasks = output.join(task_manifest::TASKS_DIR_NAME);
+        storage::validate_ancestors(&tasks)?;
+        Ok(Self { output, cache, tasks })
+    }
+    fn task(&self, job: &Intent) -> PathBuf { self.tasks.join(&job.task_id) }
+    fn task_stage(&self, job: &Intent) -> PathBuf { self.output.join(format!(".frameq-delete-{}", job.operation_id)) }
+    fn worker_root(&self) -> PathBuf { self.cache.join("tasks") }
+    fn review_root(&self) -> PathBuf { self.cache.join(AUDIO_REVIEW_CACHE_DIR_NAME) }
+    fn cache_stage(&self, job: &Intent, kind: &str) -> PathBuf {
+        self.cache.join(format!(".frameq-delete-{}-{kind}", job.operation_id))
+    }
+    fn validate(&self, paths: &RuntimePaths, job: &Intent) -> Result<(), HistoryDeleteError> {
+        storage::validate_ancestors(&paths.user_data_dir)?;
+        storage::validate_ancestors(&self.output)?;
+        storage::check_identity(&paths.user_data_dir, job.user_root)?;
+        storage::check_identity(&self.output, job.output_root)?;
+        storage::check_identity(&self.tasks, job.tasks_root)?;
+        if let Some(expected) = job.cache_root { storage::check_identity(&self.cache, expected)?; }
+        if let Some(expected) = job.worker_root { storage::check_identity(&self.worker_root(), expected)?; }
+        if let Some(expected) = job.review_root { storage::check_identity(&self.review_root(), expected)?; }
+        Ok(())
+    }
+    fn pin(&self, paths: &RuntimePaths, job: &Intent) -> Result<Vec<std::fs::File>, HistoryDeleteError> {
+        self.validate(paths, job)?;
+        let mut handles = Vec::new();
+        for (path, expected) in [(&paths.user_data_dir, job.user_root), (&self.output, job.output_root), (&self.tasks, job.tasks_root)] {
+            handles.push(storage::pin_directory(path, expected)?);
+        }
+        if let Some(expected) = job.cache_root { handles.push(storage::pin_directory(&self.cache, expected)?); }
+        if let Some(expected) = job.worker_root { handles.push(storage::pin_directory(&self.worker_root(), expected)?); }
+        if let Some(expected) = job.review_root { handles.push(storage::pin_directory(&self.review_root(), expected)?); }
+        Ok(handles)
     }
 }
 
-fn delete_history_task_from_roots<R: DirectoryRemover>(
-    output_root: &Path,
-    cache_root: &Path,
-    task_id: &str,
-    remover: &R,
-) -> Result<HistoryDeleteResult, HistoryDeleteError> {
-    let task = task_manifest::SupportedTask::open(output_root, task_id)
-        .map_err(|_| HistoryDeleteError::Unavailable)?;
-    let supported_task_id = task.task_id().to_string();
-    let task_dir = task.task_dir().to_path_buf();
-
-    validate_unlinked_directory(output_root)?;
-    validate_unlinked_directory(&output_root.join(task_manifest::TASKS_DIR_NAME))?;
-    let output_root = output_root
-        .canonicalize()
-        .map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-    let tasks_root = output_root
-        .join(task_manifest::TASKS_DIR_NAME)
-        .canonicalize()
-        .map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-    let task_dir = task_dir
-        .canonicalize()
-        .map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-    if task_dir.parent() != Some(tasks_root.as_path())
-        || task_dir == tasks_root
-        || task_dir == output_root
-    {
-        return Err(HistoryDeleteError::UnsafeStorage);
+pub(crate) fn guard_pending_task(paths: &RuntimePaths, task_id: &str) -> Result<(), String> {
+    match intent::read(paths).map_err(|error| error.public_code().to_string())? {
+        Some(job) if job.task_id == task_id.trim() => Err(PENDING.to_string()),
+        _ => Ok(()),
     }
-    validate_unlinked_tree(&task_dir)?;
+}
 
-    let task_cache = cache_root
-        .join(crate::AUDIO_REVIEW_CACHE_DIR_NAME)
-        .join(task_id.trim());
-    match fs::symlink_metadata(&task_cache) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err(HistoryDeleteError::UnsafeStorage),
-        Ok(metadata) => {
-            if task_manifest::is_link_or_reparse_point(&metadata) || !metadata.is_dir() {
-                return Err(HistoryDeleteError::UnsafeStorage);
-            }
-            validate_unlinked_directory(cache_root)?;
-            validate_unlinked_directory(&cache_root.join(crate::AUDIO_REVIEW_CACHE_DIR_NAME))?;
-            let cache_root = cache_root
-                .canonicalize()
-                .map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-            let task_cache = task_cache
-                .canonicalize()
-                .map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-            if !task_cache.starts_with(&cache_root) || task_cache == cache_root {
-                return Err(HistoryDeleteError::UnsafeStorage);
-            }
-            validate_unlinked_tree(&task_cache)?;
-            remover
-                .remove_dir_all(&task_cache)
-                .map_err(|_| HistoryDeleteError::DeleteFailed)?;
+pub(crate) fn deletion_is_accepted(paths: &RuntimePaths, task_id: &str) -> Result<bool, String> {
+    let inspect = || -> Result<bool, HistoryDeleteError> {
+        let Some(job) = intent::read(paths)? else { return Ok(false); };
+        if job.task_id != task_id.trim() { return Ok(false); }
+        if job.phase == Phase::Accepted { return Ok(true); }
+        let roots = Roots::resolve(paths)?;
+        roots.validate(paths, &job)?;
+        match storage::optional_identity(&roots.task_stage(&job))? {
+            Some(identity) if identity == job.task => Ok(true),
+            Some(_) => Err(HistoryDeleteError::UnsafeStorage),
+            None if storage::optional_identity(&roots.task(&job))? == Some(job.task) => Ok(false),
+            None => Err(HistoryDeleteError::UnsafeStorage),
+        }
+    };
+    inspect().map_err(|error| error.public_code().to_string())
+}
+
+fn prepare(paths: &RuntimePaths, roots: &Roots, task_id: &str) -> Result<(Intent, task_manifest::SupportedTask), HistoryDeleteError> {
+    if !intent::valid_task_id(task_id) { return Err(HistoryDeleteError::Unavailable); }
+    let task = task_manifest::SupportedTask::open(&roots.output, task_id)
+        .map_err(|error| if error == "Task is busy. Try again shortly." { HistoryDeleteError::Busy } else { HistoryDeleteError::Unavailable })?;
+    storage::validate_tree(task.task_dir())?;
+    let worker = roots.worker_root().join(task_id);
+    let review = roots.review_root().join(task_id);
+    let worker_cache = storage::optional_identity(&worker)?;
+    let review_cache = storage::optional_identity(&review)?;
+    if worker_cache.is_some() { storage::validate_ancestors(&roots.worker_root())?; storage::validate_tree(&worker)?; }
+    if review_cache.is_some() { storage::validate_ancestors(&roots.review_root())?; storage::validate_tree(&review)?; }
+    collections::validate_for_note_deletion(paths).map_err(|_| HistoryDeleteError::DeleteFailed)?;
+    let job = Intent { schema_version: 1, operation_id: Uuid::new_v4().hyphenated().to_string(),
+        task_id: task_id.to_string(), phase: Phase::Prepared,
+        user_root: storage::identity(&paths.user_data_dir)?, output_root: storage::identity(&roots.output)?,
+        tasks_root: storage::identity(&roots.tasks)?, task: storage::identity(task.task_dir())?,
+        cache_root: storage::optional_identity(&roots.cache)?,
+        worker_root: storage::optional_identity(&roots.worker_root())?,
+        review_root: storage::optional_identity(&roots.review_root())?, worker_cache, review_cache,
+    };
+    Ok((job, task))
+}
+
+fn pending(job: &Intent) -> HistoryDeleteResult {
+    HistoryDeleteResult { task_id: job.task_id.clone(), status: "cleanup_pending", error_code: Some(PENDING) }
+}
+
+fn stage_cache(source: &Path, target: &Path, expected: Option<storage::Identity>) -> Result<(), HistoryDeleteError> {
+    let Some(expected) = expected else { return Ok(()); };
+    if let Some(staged) = storage::optional_identity(target)? {
+        if staged != expected { return Err(HistoryDeleteError::UnsafeStorage); }
+        return Ok(());
+    }
+    match storage::optional_identity(source)? {
+        Some(actual) if actual == expected => {
+            storage::stage_directory(source, target, expected)?;
+            storage::check_identity(target, expected)
+        },
+        Some(_) => Err(HistoryDeleteError::UnsafeStorage),
+        None => Ok(()),
+    }
+}
+
+fn finish_cleanup(paths: &RuntimePaths, roots: &Roots, job: &Intent) -> Result<(), HistoryDeleteError> {
+    roots.validate(paths, job)?;
+    stage_cache(&roots.worker_root().join(&job.task_id), &roots.cache_stage(job, "worker"), job.worker_cache)?;
+    roots.validate(paths, job)?;
+    stage_cache(&roots.review_root().join(&job.task_id), &roots.cache_stage(job, "review"), job.review_cache)?;
+    roots.validate(paths, job)?;
+    collections::prune_deleted_note_memberships(paths, &job.task_id).map_err(|_| HistoryDeleteError::DeleteFailed)?;
+    for (path, expected) in [(roots.task_stage(job), Some(job.task)),
+        (roots.cache_stage(job, "worker"), job.worker_cache), (roots.cache_stage(job, "review"), job.review_cache)] {
+        roots.validate(paths, job)?;
+        if let Some(actual) = storage::optional_identity(&path)? {
+            if Some(actual) != expected { return Err(HistoryDeleteError::UnsafeStorage); }
+            storage::remove_staged(&path, actual)?;
         }
     }
-    remover
-        .remove_dir_all(&task_dir)
-        .map_err(|_| HistoryDeleteError::DeleteFailed)?;
-    if task_dir.exists() {
-        return Err(HistoryDeleteError::DeleteFailed);
-    }
-
-    Ok(HistoryDeleteResult {
-        task_id: supported_task_id,
-        deleted: true,
-    })
+    roots.validate(paths, job)?;
+    intent::clear(paths, job)
 }
 
-fn delete_history_task_with_state<R: DirectoryRemover>(
-    output_root: &Path,
-    cache_root: &Path,
-    task_id: &str,
-    process_supervisors: &ProcessSupervisors,
-    deletion_state: &HistoryDeletionState,
-    remover: &R,
-) -> Result<HistoryDeleteResult, HistoryDeleteError> {
-    let _guard = deletion_state
-        .lock
-        .try_lock()
-        .map_err(|_| HistoryDeleteError::Busy)?;
-    if process_supervisors.is_task_active() {
-        return Err(HistoryDeleteError::Busy);
+fn complete_accepted_move(paths: &RuntimePaths, roots: &Roots, mut job: Intent) -> HistoryDeleteResult {
+    job.phase = Phase::Accepted;
+    if intent::write(paths, &job).is_err()
+        || storage::check_identity(&roots.task_stage(&job), job.task).is_err()
+        || finish_cleanup(paths, roots, &job).is_err() {
+        return pending(&job);
     }
-    delete_history_task_from_roots(output_root, cache_root, task_id, remover)
+    HistoryDeleteResult { task_id: job.task_id, status: "completed", error_code: None }
+}
+
+fn delete_from_paths(
+    paths: &RuntimePaths, task_id: &str, supervisors: &ProcessSupervisors, state: &HistoryDeletionState,
+) -> Result<HistoryDeleteResult, HistoryDeleteError> {
+    let _guard = state.lock.try_lock().map_err(|_| HistoryDeleteError::Busy)?;
+    if supervisors.is_task_active() || intent::read(paths)?.is_some() { return Err(HistoryDeleteError::Busy); }
+    let roots = Roots::resolve(paths)?;
+    let (job, _task_lease) = prepare(paths, &roots, task_id)?;
+    let _root_handles = roots.pin(paths, &job)?;
+    intent::write(paths, &job)?;
+    roots.validate(paths, &job)?;
+    if storage::stage_directory(&roots.task(&job), &roots.task_stage(&job), job.task).is_err() {
+        if storage::optional_identity(&roots.task_stage(&job))? == Some(job.task) {
+            return Ok(pending(&job));
+        }
+        if storage::optional_identity(&roots.task_stage(&job))?.is_none()
+            && storage::optional_identity(&roots.task(&job))? == Some(job.task) {
+            intent::clear(paths, &job)?;
+            return Err(HistoryDeleteError::DeleteFailed);
+        }
+        return Err(HistoryDeleteError::UnsafeStorage);
+    }
+    Ok(complete_accepted_move(paths, &roots, job))
+}
+
+#[cfg(test)]
+pub(crate) fn delete_from_paths_for_test(
+    paths: &RuntimePaths, task_id: &str, supervisors: &ProcessSupervisors, state: &HistoryDeletionState,
+) -> Result<HistoryDeleteResult, HistoryDeleteError> {
+    delete_from_paths(paths, task_id, supervisors, state)
+}
+
+fn resume_from_paths(
+    paths: &RuntimePaths, supervisors: &ProcessSupervisors, state: &HistoryDeletionState,
+) -> Result<HistoryCleanupResult, HistoryDeleteError> {
+    let _guard = state.lock.try_lock().map_err(|_| HistoryDeleteError::Busy)?;
+    if supervisors.is_task_active() { return Err(HistoryDeleteError::Busy); }
+    let Some(mut job) = intent::read(paths)? else {
+        return Ok(HistoryCleanupResult { task_id: None, status: "idle", error_code: None });
+    };
+    let roots = match Roots::resolve(paths) {
+        Ok(roots) => roots,
+        Err(_) if job.phase == Phase::Prepared => return Err(HistoryDeleteError::UnsafeStorage),
+        Err(_) => return Ok(HistoryCleanupResult { task_id: Some(job.task_id), status: "cleanup_pending", error_code: Some(PENDING) }),
+    };
+    let _lease = task_manifest::acquire_task_mutation(&roots.output, &job.task_id).map_err(|_| HistoryDeleteError::Busy)?;
+    let _root_handles = match roots.pin(paths, &job) {
+        Ok(handles) => handles,
+        Err(_) if job.phase == Phase::Prepared => return Err(HistoryDeleteError::UnsafeStorage),
+        Err(_) => return Ok(HistoryCleanupResult { task_id: Some(job.task_id), status: "cleanup_pending", error_code: Some(PENDING) }),
+    };
+    let staged = match storage::optional_identity(&roots.task_stage(&job)) {
+        Ok(staged) => staged,
+        Err(_) if job.phase == Phase::Accepted => return Ok(HistoryCleanupResult {
+            task_id: Some(job.task_id), status: "cleanup_pending", error_code: Some(PENDING),
+        }),
+        Err(error) => return Err(error),
+    };
+    if job.phase == Phase::Prepared && staged.is_none() {
+        if storage::optional_identity(&roots.task(&job))? != Some(job.task) { return Err(HistoryDeleteError::UnsafeStorage); }
+        intent::clear(paths, &job)?;
+        return Ok(HistoryCleanupResult { task_id: None, status: "idle", error_code: None });
+    }
+    if staged.is_some_and(|actual| actual != job.task) {
+        if job.phase == Phase::Prepared { return Err(HistoryDeleteError::UnsafeStorage); }
+        return Ok(HistoryCleanupResult { task_id: Some(job.task_id), status: "cleanup_pending", error_code: Some(PENDING) });
+    }
+    if staged.is_none() {
+        match storage::optional_identity(&roots.task(&job)) {
+            Ok(Some(original)) if original == job.task => return Ok(HistoryCleanupResult {
+                task_id: Some(job.task_id), status: "cleanup_pending", error_code: Some(PENDING),
+            }),
+            Err(_) => return Ok(HistoryCleanupResult {
+                task_id: Some(job.task_id), status: "cleanup_pending", error_code: Some(PENDING),
+            }),
+            _ => {},
+        }
+    }
+    job.phase = Phase::Accepted;
+    let completed = intent::write(paths, &job).and_then(|_| finish_cleanup(paths, &roots, &job)).is_ok();
+    Ok(HistoryCleanupResult { task_id: Some(job.task_id),
+        status: if completed { "completed" } else { "cleanup_pending" },
+        error_code: if completed { None } else { Some(PENDING) } })
+}
+
+pub(crate) fn prepare_storage_migration_from_paths(
+    paths: &RuntimePaths,
+    supervisors: &ProcessSupervisors,
+    state: &HistoryDeletionState,
+) -> Result<(), String> {
+    let result = resume_from_paths(paths, supervisors, state)
+        .map_err(|error| error.public_code().to_string())?;
+    if result.status == "cleanup_pending" {
+        return Err(PENDING.to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn delete_history_task(
-    app: AppHandle,
-    process_supervisors: State<'_, Arc<ProcessSupervisors>>,
-    deletion_state: State<'_, Arc<HistoryDeletionState>>,
-    request: HistoryDeleteRequest,
+    app: AppHandle, process_supervisors: State<'_, Arc<ProcessSupervisors>>,
+    deletion_state: State<'_, Arc<HistoryDeletionState>>, request: HistoryDeleteRequest,
 ) -> Result<HistoryDeleteResult, String> {
-    let started = Instant::now();
-    let result = (|| {
-        let paths = resolve_runtime_paths(&app).map_err(|_| HistoryDeleteError::DeleteFailed)?;
-        ensure_runtime_dirs(&paths).map_err(|_| HistoryDeleteError::DeleteFailed)?;
-        let output_root = task_manifest::configured_output_root(&paths)
-            .map_err(|_| HistoryDeleteError::DeleteFailed)?;
-        let cache_root = paths.user_data_dir.join(CACHE_DIR_NAME);
-        delete_history_task_with_state(
-            &output_root,
-            &cache_root,
-            &request.task_id,
-            process_supervisors.inner(),
-            deletion_state.inner(),
-            &StdDirectoryRemover,
-        )
-    })();
-    if let Ok(paths) = resolve_runtime_paths(&app) {
-        let outcome = match &result {
-            Ok(_) => "completed",
-            Err(error) => error.public_code(),
-        };
-        let _ = append_desktop_log(
-            &paths,
-            "history.delete",
-            &format!(
-                "outcome={outcome} elapsed_ms={}",
-                started.elapsed().as_millis()
-            ),
-        );
-    }
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+    let paths = resolve_runtime_paths(&app).map_err(|_| "HISTORY_DELETE_FAILED".to_string())?;
+    let result = delete_from_paths(&paths, &request.task_id, process_supervisors.inner(), deletion_state.inner());
+    let outcome = match &result { Ok(value) => value.status, Err(error) => error.public_code() };
+    let _ = append_desktop_log(&paths, "history.delete", &format!("outcome={outcome}"));
     result.map_err(|error| error.public_code().to_string())
 }
 
-fn validate_unlinked_directory(path: &Path) -> Result<(), HistoryDeleteError> {
-    let metadata = fs::symlink_metadata(path).map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-    if task_manifest::is_link_or_reparse_point(&metadata) || !metadata.is_dir() {
-        return Err(HistoryDeleteError::UnsafeStorage);
-    }
-    Ok(())
+#[tauri::command]
+pub(crate) fn resume_note_deletion_cleanup(
+    app: AppHandle, process_supervisors: State<'_, Arc<ProcessSupervisors>>,
+    deletion_state: State<'_, Arc<HistoryDeletionState>>,
+) -> Result<HistoryCleanupResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+    let paths = resolve_runtime_paths(&app).map_err(|_| "HISTORY_DELETE_FAILED".to_string())?;
+    resume_from_paths(&paths, process_supervisors.inner(), deletion_state.inner())
+        .map_err(|error| error.public_code().to_string())
 }
 
-fn validate_unlinked_tree(path: &Path) -> Result<(), HistoryDeleteError> {
-    let metadata = fs::symlink_metadata(path).map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-    if task_manifest::is_link_or_reparse_point(&metadata) {
-        return Err(HistoryDeleteError::UnsafeStorage);
-    }
-    if !metadata.is_dir() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(path).map_err(|_| HistoryDeleteError::UnsafeStorage)? {
-        let entry = entry.map_err(|_| HistoryDeleteError::UnsafeStorage)?;
-        validate_unlinked_tree(&entry.path())?;
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        delete_history_task_from_roots, delete_history_task_with_state, DirectoryRemover,
-        HistoryDeleteError, HistoryDeleteRequest, HistoryDeletionState, StdDirectoryRemover,
-    };
-    use crate::ProcessSupervisors;
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use std::sync::Mutex;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn deletes_only_the_supported_task_and_its_playback_cache() {
-        let root = temp_dir("history-delete-safe-task");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let other_task_id = "20260712-120001-youtube-abcdefghijk";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let other_task_dir = write_supported_task(&output_root, other_task_id, "abcdefghijk");
-        fs::create_dir_all(task_dir.join("ai")).expect("create task ai dir");
-        fs::write(task_dir.join("ai/dissection.json"), b"{}").expect("write dissection json");
-        fs::write(task_dir.join("ai/dissection.md"), b"# report")
-            .expect("write dissection markdown");
-        let playback_root = cache_root.join(".frameq-audio-review");
-        let task_cache = playback_root.join(task_id);
-        let other_cache = playback_root.join(other_task_id);
-        fs::create_dir_all(&task_cache).expect("create task playback cache");
-        fs::create_dir_all(&other_cache).expect("create other playback cache");
-        fs::write(task_cache.join("audio.wav"), b"task-cache").expect("write task cache");
-        fs::write(other_cache.join("audio.wav"), b"other-cache").expect("write other cache");
-
-        let result = delete_history_task_from_roots(
-            &output_root,
-            &cache_root,
-            task_id,
-            &StdDirectoryRemover,
-        )
-        .expect("delete supported task");
-
-        assert_eq!(result.task_id, task_id);
-        assert!(result.deleted);
-        assert!(!task_dir.exists());
-        assert!(!task_cache.exists());
-        assert!(other_task_dir.exists());
-        assert!(other_cache.exists());
-        assert!(output_root.exists());
-        assert!(cache_root.exists());
-
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn rejects_unsupported_and_traversal_tasks_before_removal() {
-        let root = temp_dir("history-delete-rejects-unsupported");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let manifest_path = task_dir.join("frameq-task.json");
-        let manifest = fs::read_to_string(&manifest_path).expect("read manifest");
-        fs::write(
-            &manifest_path,
-            manifest.replace("\"schema_version\": 3", "\"schema_version\": 2"),
-        )
-        .expect("downgrade manifest");
-        let remover = RecordingRemover::default();
-
-        assert_eq!(
-            delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover,),
-            Err(HistoryDeleteError::Unavailable),
-        );
-        assert_eq!(
-            delete_history_task_from_roots(&output_root, &cache_root, "../outside", &remover,),
-            Err(HistoryDeleteError::Unavailable),
-        );
-        assert!(remover.paths().is_empty());
-        assert!(task_dir.exists());
-
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn rejects_linked_descendants_before_removal() {
-        let root = temp_dir("history-delete-rejects-linked-descendant");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let outside = root.join("outside.txt");
-        fs::write(&outside, b"must remain").expect("write outside file");
-        let linked = task_dir.join("media").join("outside-link");
-        if create_file_symlink(&outside, &linked).is_err() {
-            fs::remove_dir_all(root).expect("remove unsupported symlink test root");
-            return;
-        }
-        let remover = RecordingRemover::default();
-
-        let error = delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover)
-            .expect_err("linked task must be rejected");
-
-        assert_eq!(error, HistoryDeleteError::UnsafeStorage);
-        assert!(remover.paths().is_empty());
-        assert_eq!(
-            fs::read(&outside).expect("read outside file"),
-            b"must remain"
-        );
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn rejects_linked_tasks_root_before_removal() {
-        let root = temp_dir("history-delete-rejects-linked-tasks-root");
-        let output_root = root.join("outputs");
-        let external_output = root.join("external-output");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let external_task = write_supported_task(&external_output, task_id, "dQw4w9WgXcQ");
-        fs::create_dir_all(&output_root).expect("create configured output root");
-        create_dir_link(&external_output.join("tasks"), &output_root.join("tasks"))
-            .expect("create linked tasks root fixture");
-        let remover = RecordingRemover::default();
-
-        let error = delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover)
-            .expect_err("linked tasks root must be rejected");
-
-        assert_eq!(error, HistoryDeleteError::UnsafeStorage);
-        assert!(remover.paths().is_empty());
-        assert!(external_task.exists());
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn rejects_linked_playback_cache_root_before_task_removal() {
-        let root = temp_dir("history-delete-rejects-linked-playback-root");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let external_playback_root = root.join("external-playback");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let external_task_cache = external_playback_root.join(task_id);
-        fs::create_dir_all(&external_task_cache).expect("create external playback cache");
-        fs::write(external_task_cache.join("audio.wav"), b"must remain")
-            .expect("write external playback cache");
-        fs::create_dir_all(&cache_root).expect("create configured cache root");
-        create_dir_link(
-            &external_playback_root,
-            &cache_root.join(".frameq-audio-review"),
-        )
-        .expect("create linked playback root fixture");
-        let remover = RecordingRemover::default();
-
-        let error = delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover)
-            .expect_err("linked playback root must be rejected");
-
-        assert_eq!(error, HistoryDeleteError::UnsafeStorage);
-        assert!(remover.paths().is_empty());
-        assert!(task_dir.exists());
-        assert_eq!(
-            fs::read(external_task_cache.join("audio.wav")).expect("read external cache"),
-            b"must remain",
-        );
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn rejects_dangling_playback_cache_symlink_before_task_removal() {
-        let root = temp_dir("history-delete-rejects-dangling-cache-link");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let playback_root = cache_root.join(".frameq-audio-review");
-        fs::create_dir_all(&playback_root).expect("create playback root");
-        std::os::unix::fs::symlink(root.join("missing-target"), playback_root.join(task_id))
-            .expect("create dangling cache symlink");
-        let remover = RecordingRemover::default();
-
-        let error = delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover)
-            .expect_err("dangling cache link must be rejected");
-
-        assert_eq!(error, HistoryDeleteError::UnsafeStorage);
-        assert!(remover.paths().is_empty());
-        assert!(task_dir.exists());
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn rejects_windows_junction_descendants_before_removal() {
-        use std::process::{Command, Stdio};
-
-        let root = temp_dir("history-delete-rejects-junction");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let outside = root.join("outside-dir");
-        fs::create_dir_all(&outside).expect("create outside directory");
-        fs::write(outside.join("must-remain.txt"), b"must remain").expect("write outside file");
-        let junction = task_dir.join("media").join("outside-junction");
-        let status = Command::new("cmd.exe")
-            .args(["/D", "/C", "mklink", "/J"])
-            .arg(&junction)
-            .arg(&outside)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .expect("create junction fixture");
-        assert!(status.success(), "junction fixture must be available");
-        let remover = RecordingRemover::default();
-
-        let error = delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover)
-            .expect_err("junction task must be rejected");
-
-        assert_eq!(error, HistoryDeleteError::UnsafeStorage);
-        assert!(remover.paths().is_empty());
-        assert_eq!(
-            fs::read(outside.join("must-remain.txt")).expect("read outside file"),
-            b"must remain",
-        );
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn cache_failure_leaves_the_primary_task_untouched() {
-        let root = temp_dir("history-delete-cache-failure");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let task_cache = cache_root.join(".frameq-audio-review").join(task_id);
-        fs::create_dir_all(&task_cache).expect("create cache");
-        fs::write(task_cache.join("audio.wav"), b"cache").expect("write cache");
-        let remover = FailOnNthRemover::new(1);
-
-        let error = delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover)
-            .expect_err("cache removal must fail");
-
-        assert_eq!(error, HistoryDeleteError::DeleteFailed);
-        assert!(task_dir.join("media/video.mp4").exists());
-        assert!(task_cache.exists());
-        assert_eq!(remover.calls(), 1);
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn primary_failure_reports_failure_after_removing_rebuildable_cache() {
-        let root = temp_dir("history-delete-primary-failure");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let task_cache = cache_root.join(".frameq-audio-review").join(task_id);
-        fs::create_dir_all(&task_cache).expect("create cache");
-        fs::write(task_cache.join("audio.wav"), b"cache").expect("write cache");
-        let remover = FailOnNthRemover::new(2);
-
-        let error = delete_history_task_from_roots(&output_root, &cache_root, task_id, &remover)
-            .expect_err("primary removal must fail");
-
-        assert_eq!(error, HistoryDeleteError::DeleteFailed);
-        assert!(!task_cache.exists());
-        assert!(task_dir.exists());
-        assert_eq!(remover.calls(), 2);
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn locked_windows_artifact_returns_failure_without_claiming_deletion() {
-        use std::fs::OpenOptions;
-        use std::os::windows::fs::OpenOptionsExt;
-
-        let root = temp_dir("history-delete-locked-artifact");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let locked = OpenOptions::new()
-            .read(true)
-            .share_mode(0)
-            .open(task_dir.join("media/video.mp4"))
-            .expect("open artifact without delete sharing");
-
-        let error = delete_history_task_from_roots(
-            &output_root,
-            &cache_root,
-            task_id,
-            &StdDirectoryRemover,
-        )
-        .expect_err("locked artifact must fail deletion");
-
-        assert_eq!(error, HistoryDeleteError::DeleteFailed);
-        assert!(task_dir.exists());
-        drop(locked);
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn history_delete_request_rejects_paths_urls_and_unknown_fields() {
-        let valid = serde_json::from_value::<HistoryDeleteRequest>(serde_json::json!({
-            "task_id": "task-safe-1"
-        }))
-        .expect("valid task id request");
-        assert_eq!(valid.task_id, "task-safe-1");
-
-        for forbidden in ["task_dir", "output_dir", "url", "command"] {
-            let mut payload = serde_json::Map::from_iter([(
-                "task_id".to_string(),
-                serde_json::Value::String("task-safe-1".to_string()),
-            )]);
-            payload.insert(
-                forbidden.to_string(),
-                serde_json::Value::String("review-secret".to_string()),
-            );
-            let error =
-                serde_json::from_value::<HistoryDeleteRequest>(serde_json::Value::Object(payload))
-                    .expect_err("unknown field must fail");
-            assert!(!error.to_string().contains("review-secret"));
-        }
-    }
-
-    #[test]
-    fn history_delete_errors_map_to_fixed_public_codes() {
-        assert_eq!(
-            HistoryDeleteError::Busy.public_code(),
-            "HISTORY_DELETE_BUSY"
-        );
-        assert_eq!(
-            HistoryDeleteError::Unavailable.public_code(),
-            "HISTORY_DELETE_UNAVAILABLE"
-        );
-        assert_eq!(
-            HistoryDeleteError::UnsafeStorage.public_code(),
-            "HISTORY_DELETE_UNSAFE_STORAGE"
-        );
-        assert_eq!(
-            HistoryDeleteError::DeleteFailed.public_code(),
-            "HISTORY_DELETE_FAILED"
-        );
-    }
-
-    #[test]
-    fn active_worker_and_overlapping_deletion_reject_before_filesystem_mutation() {
-        let root = temp_dir("history-delete-busy");
-        let output_root = root.join("outputs");
-        let cache_root = root.join("cache");
-        let task_id = "20260712-120000-youtube-dQw4w9WgXcQ";
-        let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-        let remover = RecordingRemover::default();
-        let supervisors = ProcessSupervisors::default();
-        let deletion_state = HistoryDeletionState::default();
-        let worker_instance_id = supervisors.activate_task_for_test(1234);
-
-        assert_eq!(
-            delete_history_task_with_state(
-                &output_root,
-                &cache_root,
-                task_id,
-                &supervisors,
-                &deletion_state,
-                &remover,
-            ),
-            Err(HistoryDeleteError::Busy),
-        );
-        supervisors.finish_task_for_test(worker_instance_id);
-        let deletion_guard = deletion_state.lock.try_lock().expect("hold delete lock");
-        assert_eq!(
-            delete_history_task_with_state(
-                &output_root,
-                &cache_root,
-                task_id,
-                &supervisors,
-                &deletion_state,
-                &remover,
-            ),
-            Err(HistoryDeleteError::Busy),
-        );
-        drop(deletion_guard);
-
-        assert!(remover.paths().is_empty());
-        assert!(task_dir.exists());
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[derive(Default)]
-    struct RecordingRemover {
-        paths: Mutex<Vec<PathBuf>>,
-    }
-
-    impl RecordingRemover {
-        fn paths(&self) -> Vec<PathBuf> {
-            self.paths.lock().expect("recording lock").clone()
-        }
-    }
-
-    impl DirectoryRemover for RecordingRemover {
-        fn remove_dir_all(&self, path: &Path) -> Result<(), ()> {
-            self.paths
-                .lock()
-                .expect("recording lock")
-                .push(path.to_path_buf());
-            Ok(())
-        }
-    }
-
-    struct FailOnNthRemover {
-        fail_on: usize,
-        calls: Mutex<usize>,
-    }
-
-    impl FailOnNthRemover {
-        fn new(fail_on: usize) -> Self {
-            Self {
-                fail_on,
-                calls: Mutex::new(0),
-            }
-        }
-
-        fn calls(&self) -> usize {
-            *self.calls.lock().expect("failure lock")
-        }
-    }
-
-    impl DirectoryRemover for FailOnNthRemover {
-        fn remove_dir_all(&self, path: &Path) -> Result<(), ()> {
-            let mut calls = self.calls.lock().expect("failure lock");
-            *calls += 1;
-            if *calls == self.fail_on {
-                return Err(());
-            }
-            fs::remove_dir_all(path).map_err(|_| ())
-        }
-    }
-
-    fn write_supported_task(output_root: &Path, task_id: &str, video_id: &str) -> PathBuf {
-        let task_dir = output_root.join("tasks").join(task_id);
-        for relative in ["media", "transcript/original", "ai"] {
-            fs::create_dir_all(task_dir.join(relative)).expect("create task artifact directory");
-        }
-        for (relative, content) in [
-            ("media/video.mp4", "video"),
-            ("media/audio.wav", "audio"),
-            ("transcript/transcript.txt", "transcript"),
-            ("transcript/segments.json", "[]"),
-            ("transcript/original/transcript.txt", "original"),
-            ("ai/summary.md", "summary"),
-            ("ai/mindmap.mmd", "mindmap"),
-            ("ai/insights.json", "{\"schemaVersion\":1,\"insights\":[]}"),
-        ] {
-            fs::write(task_dir.join(relative), content).expect("write task artifact");
-        }
-        fs::write(
-            task_dir.join("frameq-task.json"),
-            format!(
-                r#"{{
-  "schema_version": 3,
-  "source_privacy_migration_version": 2,
-  "source_privacy_quarantined": false,
-  "task_id": "{task_id}",
-  "created_at": "2026-07-12T12:00:00Z",
-  "source_url": "https://www.youtube.com/watch?v={video_id}",
-  "source_identity": {{
-    "version": 1,
-    "platform": "youtube",
-    "stable_id": "{video_id}",
-    "effective_part": null,
-    "canonical_url": "https://www.youtube.com/watch?v={video_id}"
-  }},
-  "platform": "youtube",
-  "status": "completed",
-  "artifacts": {{
-    "video": "media/video.mp4",
-    "audio": "media/audio.wav",
-    "transcript_txt": "transcript/transcript.txt",
-    "segments": "transcript/segments.json",
-    "summary": "ai/summary.md",
-    "mindmap": "ai/mindmap.mmd",
-    "insights": "ai/insights.json"
-  }},
-  "error": null,
-  "text_preview": "safe transcript",
-  "insights_count": 0
-}}"#,
-            ),
-        )
-        .expect("write manifest");
-        task_dir
-    }
-
-    fn temp_dir(name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
-        fs::create_dir_all(&dir).expect("create temp root");
-        dir
-    }
-
-    #[cfg(windows)]
-    fn create_file_symlink(source: &Path, link: &Path) -> std::io::Result<()> {
-        std::os::windows::fs::symlink_file(source, link)
-    }
-
-    #[cfg(unix)]
-    fn create_file_symlink(source: &Path, link: &Path) -> std::io::Result<()> {
-        std::os::unix::fs::symlink(source, link)
-    }
-
-    #[cfg(windows)]
-    fn create_dir_link(source: &Path, link: &Path) -> std::io::Result<()> {
-        use std::process::{Command, Stdio};
-
-        let status = Command::new("cmd.exe")
-            .args(["/D", "/C", "mklink", "/J"])
-            .arg(link)
-            .arg(source)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(std::io::Error::other("junction fixture failed"))
-        }
-    }
-
-    #[cfg(unix)]
-    fn create_dir_link(source: &Path, link: &Path) -> std::io::Result<()> {
-        std::os::unix::fs::symlink(source, link)
-    }
-}
+#[cfg(test)] mod tests;

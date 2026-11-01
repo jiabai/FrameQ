@@ -17,6 +17,7 @@ import { LocalTranscriptWorkspace } from "../transcript/LocalTranscriptWorkspace
 import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
 import { AiResultDetailSheet } from "./AiResultDetailSheet";
 import { TaskStatusBanner } from "./TaskStatusBanner";
+import { TaskWorkspaceLayout } from "./TaskWorkspaceLayout";
 import { initializeI18n } from "../../i18n/i18n";
 import type { SupportedLocale } from "../../i18n/locale";
 
@@ -164,13 +165,13 @@ describe("task domain workspaces", () => {
     await initializeI18n("zh-CN");
   });
 
-  test("renders a local completion banner and two labelled workspaces for the same task", () => {
+  test("renders two labelled workspaces for the same completed task without a completion banner", () => {
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
     const markup = renderToStaticMarkup(
       <>
         <TaskStatusBanner model={model.banner} />
-        <LocalTranscriptWorkspace
+        <TaskWorkspaceLayout title={workflow.text} local={<LocalTranscriptWorkspace
           model={model.local}
           controller={transcriptController()}
           actionNotice={null}
@@ -178,8 +179,7 @@ describe("task domain workspaces", () => {
           onPolishTranscript={vi.fn()}
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
-        />
-        <AiGenerationWorkspace
+        />} ai={<AiGenerationWorkspace
           model={model.ai}
           quotaRemaining={8}
           onSummaryAction={vi.fn()}
@@ -188,27 +188,54 @@ describe("task domain workspaces", () => {
           onDraftAction={vi.fn()}
           onViewTarget={vi.fn()}
           onCancel={vi.fn()}
-        />
+        />} />
       </>,
     );
 
-    expect(markup).toContain('aria-label="任务状态"');
-    expect(markup).toContain('role="status"');
-    expect(markup).toContain('aria-live="polite"');
-    expect(markup).toContain('aria-atomic="true"');
-    expect(markup).toContain('data-motion="task-status"');
-    expect(markup).toContain("视频、音频和文字稿已保存在本机");
+    expect(markup).not.toContain('aria-label="任务状态"');
+    expect(markup).not.toContain('data-motion="task-status"');
+    expect(markup).not.toContain("视频、音频和文字稿已保存在本机");
     expect(markup).toContain('aria-label="本地文字稿工作区"');
     expect(markup).toContain('data-task-id="same-task"');
     expect(markup).toContain('aria-label="智能提炼工作区"');
     expect(markup.match(/data-task-id="same-task"/g)).toHaveLength(2);
-    expect(markup).toContain("文字稿校对");
+    expect(markup).toContain(workflow.text);
+    expect(markup).not.toContain(">文字稿校对</h2>");
+    expect(markup).not.toContain("local-workspace-state");
     expect(markup).toContain("智能提炼");
     expect(markup).not.toContain("Local transcript");
     expect(markup).not.toContain("Cloud AI");
     expect(markup).not.toContain(">本地完成</span>");
     expect(markup).not.toContain(">可选</span>");
     expect(markup.match(/class="ai-target-status"/g)).toHaveLength(4);
+  });
+
+  test.each([
+    { loading: true, saving: false, dirty: false, expected: "读取中" },
+    { loading: false, saving: true, dirty: true, expected: "保存中" },
+    { loading: false, saving: false, dirty: true, expected: "有未保存修改" },
+    { loading: false, saving: false, dirty: false, expected: null },
+  ])("shows actual transcript save state: $expected", ({ loading, saving, dirty, expected }) => {
+    const model = createTaskWorkspaceViewModel(readyWorkflow(), aiAccount());
+    const controller = transcriptController();
+    const unexpectedAction = () => { throw new Error("Rendering save state must not start an action"); };
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={{ ...controller, transcriptLoading: loading, transcriptSaving: saving, transcriptDirty: dirty }}
+        actionNotice={null}
+        polishingTranscript={false}
+        onPolishTranscript={unexpectedAction}
+        onLocateArtifact={unexpectedAction}
+        onCancel={unexpectedAction}
+      />,
+    );
+    if (expected) {
+      expect(markup).toContain(`class="local-transcript-save-state" aria-live="polite">${expected}</span>`);
+    } else {
+      expect(markup).not.toContain("local-workspace-state");
+      expect(markup).not.toContain("local-transcript-save-state");
+    }
   });
 
   test("keeps meaningful workspace statuses for active and constrained states", () => {
@@ -594,7 +621,7 @@ describe("task domain workspaces", () => {
     );
 
     expect(markup).toContain("智能提炼");
-    expect(markup).toContain("确认后仅发送文字稿片段，视频和音频不会上传");
+    expect(markup).not.toContain("ai-privacy-copy");
     expect(markup).toContain('data-ai-target="summary"');
     expect(markup.match(/data-motion="ai-target"/g)).toHaveLength(4);
     expect(markup).toContain("要点总结");
@@ -826,7 +853,7 @@ describe("task domain workspaces", () => {
       );
 
       expect(markup).toContain(`aria-label="${workspaceLabel}"`);
-      expect(markup).toContain(title);
+      expect(markup).not.toContain(`>${title}</h2>`);
       expect(markup).toContain(`aria-label="${playAudio}"`);
       expect(markup).toContain(`aria-label="${editSegment}"`);
       expect(markup).toContain(`>${copy}</span>`);

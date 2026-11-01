@@ -98,10 +98,18 @@ type DesktopWorkerContract = {
       };
       additionalProperties: boolean;
       allOf: Array<{
-        if: { required: string[] };
-        then: { properties: { target: { const: string } } };
+        if: { required: string[]; properties?: { target: { const: string } } };
+        then: { properties?: { target: { const: string } }; maxProperties?: number };
       }>;
     };
+  };
+  noteTitleCancellation: {
+    command: string;
+    workerInvocation: boolean;
+    checkout: boolean;
+    request: Record<string, unknown>;
+    result: Record<string, unknown>;
+    mutation: string;
   };
   progressEvents: {
     invalidEventPolicy: {
@@ -184,10 +192,10 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict desktop contract v9 while preserving request versions", () => {
+  test("uses strict desktop contract v10 while preserving request versions", () => {
     const contract = loadContract();
 
-    expect(contract.contractVersion).toBe(9);
+    expect(contract.contractVersion).toBe(10);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.events.workerDiagnosticPrefix).toBe("FRAMEQ_DIAGNOSTIC ");
@@ -210,7 +218,7 @@ describe("desktop/worker contract", () => {
     };
     visit(contract);
 
-    expect(contract.contractVersion).toBe(9);
+    expect(contract.contractVersion).toBe(10);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);
@@ -585,6 +593,10 @@ describe("desktop/worker contract", () => {
           if: { required: ["preference_snapshot"] },
           then: { properties: { target: { const: "insights" } } },
         },
+        {
+          if: { properties: { target: { const: "title" } }, required: ["target"] },
+          then: { maxProperties: 3 },
+        },
       ],
     });
 
@@ -655,6 +667,26 @@ describe("desktop/worker contract", () => {
     );
   });
 
+  test("declares a closed title cancellation command with metadata comparison and no paid invocation", () => {
+    expect(loadContract().noteTitleCancellation).toEqual({
+      command: "record_note_title_cancellation",
+      workerInvocation: false,
+      checkout: false,
+      request: {
+        type: "object",
+        required: ["task_id", "output_language", "expected_note_title"],
+        properties: {
+          task_id: { type: "string", minLength: 1 },
+          output_language: { type: "string", enum: ["zh-CN", "zh-TW", "en-US"] },
+          expected_note_title: { $ref: "#/terminalResults/schemas/task/properties/note_title" },
+        },
+        additionalProperties: false,
+      },
+      result: { $ref: "#/terminalResults/schemas/task" },
+      mutation: "compare_saved_metadata_then_atomically_record_cancellation",
+    });
+  });
+
   test("declares bounded transcript dissection artifacts and call plan", () => {
     const dissection = loadContract().dissectionResult;
 
@@ -710,6 +742,7 @@ describe("desktop/worker contract", () => {
           "video_extracting",
           "video_transcribing",
           "insights_generating",
+          "title_generating",
           "completed",
           "partial_completed",
           "failed",
@@ -846,6 +879,8 @@ describe("desktop/worker contract", () => {
       "asr.transcribe.starting",
       "asr.transcribe.running",
       "ai.generation.running",
+      "title.generation.running",
+      "title.generation.completed",
       "douyin.page.resolving",
       "douyin.page.retrying",
       "douyin.stream.probing",

@@ -8,8 +8,8 @@ use tauri::{AppHandle, State};
 use crate::asr_model::{refresh_diagnostic_model_state, DiagnosticModelState};
 
 use crate::{
-    ensure_runtime_dirs, path_to_env_string, resolve_runtime_paths, RuntimePaths,
-    AUDIO_REVIEW_CACHE_DIR_NAME, CACHE_DIR_NAME,
+    ensure_config_dirs, ensure_runtime_dirs, path_to_env_string, resolve_fixed_paths, resolve_runtime_paths, RuntimePaths,
+    AUDIO_REVIEW_CACHE_DIR_NAME,
 };
 
 pub(crate) const DOTENV_FILE_NAME: &str = ".env";
@@ -64,9 +64,8 @@ FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\n\
 FRAMEQ_SETTINGS_SCHEMA_VERSION=2\n";
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct LlmConfigInput {
-    #[serde(default)]
-    pub(crate) output_dir: String,
     #[serde(default)]
     pub(crate) asr_model: String,
 }
@@ -91,8 +90,8 @@ pub(crate) fn get_llm_config(
     app: AppHandle,
     diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
 ) -> Result<LlmConfigView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     load_llm_config_for_paths(&paths, diagnostic_state.inner())
 }
 
@@ -102,8 +101,9 @@ pub(crate) fn save_llm_config(
     diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
     config: LlmConfigInput,
 ) -> Result<LlmConfigView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     save_llm_config_for_paths(&paths, diagnostic_state.inner(), config)
 }
 
@@ -112,8 +112,8 @@ pub(crate) fn dismiss_asr_model_migration(
     app: AppHandle,
     diagnostic_state: State<'_, Arc<DiagnosticModelState>>,
 ) -> Result<LlmConfigView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     dismiss_asr_model_migration_for_paths(&paths, diagnostic_state.inner())
 }
 
@@ -150,18 +150,20 @@ fn save_llm_config_for_paths(
 pub(crate) fn get_audio_review_cache_usage(
     app: AppHandle,
 ) -> Result<AudioReviewCacheUsageView, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    audio_review_cache_usage_from_cache(&paths.user_data_dir.join(CACHE_DIR_NAME))
+    audio_review_cache_usage_from_cache(&paths.cache_root()?)
 }
 
 #[tauri::command]
 pub(crate) fn clear_audio_review_cache(
     app: AppHandle,
 ) -> Result<AudioReviewCacheUsageView, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
-    clear_audio_review_cache_from_cache(&paths.user_data_dir.join(CACHE_DIR_NAME))
+    clear_audio_review_cache_from_cache(&paths.cache_root()?)
 }
 
 pub(crate) fn load_llm_config_from_file(path: &Path) -> Result<LlmConfigView, String> {
@@ -186,12 +188,10 @@ pub(crate) fn save_llm_config_to_file(
     config: LlmConfigInput,
 ) -> Result<LlmConfigView, String> {
     ensure_app_settings_dotenv(path)?;
-    let output_dir = sanitize_optional_env_value(config.output_dir, crate::OUTPUT_DIR_ENV)?;
     let asr_model = resolve_asr_model_value(Some(config.asr_model))?;
     write_dotenv_updates_removing(
         path,
         &[
-            (crate::OUTPUT_DIR_ENV, output_dir),
             (ASR_MODEL_ENV, asr_model),
             (
                 SETTINGS_SCHEMA_VERSION_ENV,
@@ -474,14 +474,6 @@ fn strip_env_quotes(value: &str) -> &str {
     }
 }
 
-fn sanitize_optional_env_value(value: String, label: &str) -> Result<String, String> {
-    if value.contains('\n') || value.contains('\r') {
-        return Err(format!("{label} must be a single line."));
-    }
-
-    Ok(value.trim().to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -494,6 +486,32 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn settings_save_rejects_direct_output_directory_changes() {
+        let request = serde_json::json!({
+            "asr_model": "iic/SenseVoiceSmall-onnx",
+            "output_dir": "D:/unconfirmed-location",
+        });
+        assert!(serde_json::from_value::<LlmConfigInput>(request).is_err());
+    }
+
+    #[test]
+    fn saving_asr_keeps_the_legacy_output_setting_and_fixed_files() {
+        let root = temp_dir("preserve_legacy_output");
+        let path = root.join(".env");
+        fs::write(&path, "FRAMEQ_OUTPUT_DIR=D:/existing-notes\nFRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\nFRAMEQ_SETTINGS_SCHEMA_VERSION=2\n").expect("write existing settings");
+        fs::create_dir_all(root.join("auth")).expect("auth directory");
+        fs::write(root.join("auth/session.json"), b"existing-local-session").expect("session fixture");
+        let view = super::save_llm_config_to_file(&path, LlmConfigInput {
+            asr_model: "iic/SenseVoiceSmall".to_string(),
+        }).expect("save model preference");
+        assert_eq!(view.output_dir, "D:/existing-notes");
+        assert_eq!(view.asr_model, "iic/SenseVoiceSmall");
+        assert!(fs::read_to_string(&path).unwrap().contains("FRAMEQ_OUTPUT_DIR=D:/existing-notes"));
+        assert_eq!(fs::read(root.join("auth/session.json")).unwrap(), b"existing-local-session");
+        assert!(!root.join("outputs").exists());
+    }
 
     #[test]
     fn audio_review_cache_usage_and_clear_only_touch_playback_cache() {
@@ -560,7 +578,6 @@ mod tests {
             &paths,
             &state,
             LlmConfigInput {
-                output_dir: String::new(),
                 asr_model: "iic/SenseVoiceSmall".to_string(),
             },
         )
@@ -623,7 +640,6 @@ mod tests {
             &paths,
             &state,
             LlmConfigInput {
-                output_dir: String::new(),
                 asr_model: "iic/SenseVoiceSmall".to_string(),
             },
         )
@@ -688,8 +704,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../build/data-storage-acceptance")
+            .join(format!("settings-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create temp dir");
-        dir
+        dir.canonicalize().expect("resolve test dir")
     }
 }

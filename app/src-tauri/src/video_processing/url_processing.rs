@@ -48,6 +48,7 @@ fn process_video_blocking(
     process_state: Arc<ProcessSupervisors>,
     request: ProcessVideoIpcRequest,
 ) -> Result<TaskTerminalResult, String> {
+    let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
@@ -74,7 +75,9 @@ fn process_video_blocking(
         }
     };
     if let Some(cached) =
-        url_cache::cached_process_result_for_url(&output_root, &request.url, &request.asr_model)?
+        url_cache::cached_process_result_for_url_from_paths(
+            &paths, &output_root, &request.url, &request.asr_model,
+        )?
     {
         let _ = append_desktop_log(
             &paths,
@@ -94,7 +97,8 @@ fn process_video_blocking(
             }
         };
     if let Some(source_identity) = resolved_source_identity.as_ref() {
-        if let Some(cached) = url_cache::cached_process_result_for_identity(
+        if let Some(cached) = url_cache::cached_process_result_for_identity_from_paths(
+            &paths,
             &output_root,
             source_identity,
             &request.asr_model,
@@ -108,12 +112,15 @@ fn process_video_blocking(
         }
     }
     let request_json = serialize_process_video_request(&request)?;
-    map_task_worker_result(
+    let mut result = map_task_worker_result(
         process_state
             .task_worker(&paths)
             .execute(WorkerJob::process_video(request_json, window))?,
         TaskCommandContext::ProcessVideo,
-    )
+    )?;
+    result.task_created = result.status.as_str() != "failed" && result.task_id.is_some()
+        && result.artifacts.contains_key("transcript_txt");
+    Ok(result)
 }
 
 fn serialize_process_video_request(request: &ProcessVideoWorkerRequest) -> Result<String, String> {

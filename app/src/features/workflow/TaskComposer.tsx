@@ -1,12 +1,15 @@
 import {
+  ArrowUp,
   FileAudio,
   FileVideo,
   LoaderCircle,
-  Paperclip,
-  Play,
+  Maximize2,
+  Mic,
+  Minimize2,
+  Upload,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatBytes } from "../../i18n/formatters";
@@ -14,6 +17,7 @@ import { useUiLocale } from "../../i18n/LocaleProvider";
 import { selectLocalMedia } from "../../localMediaClient";
 import type { LocalMediaSelectionView } from "../../localMediaContract";
 import type { TaskComposerSource, TaskSubmission } from "../../workflow";
+import "./composer.css";
 
 type TaskComposerProps = {
   source: TaskComposerSource;
@@ -36,7 +40,7 @@ export function TaskComposer({
 }: TaskComposerProps) {
   const { t } = useTranslation("workflow");
   const resolvedLocale = useUiLocale();
-  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [pickerBusy, setPickerBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [localFeedbackKey, setLocalFeedbackKey] = useState<
@@ -44,41 +48,17 @@ export function TaskComposer({
     | "input.attachment.removeFailed"
     | null
   >(null);
-  const attachmentControlRef = useRef<HTMLDivElement>(null);
   const attachmentTriggerRef = useRef<HTMLButtonElement>(null);
-  const attachmentMenuItemRef = useRef<HTMLButtonElement>(null);
   const localMediaRemoveRef = useRef<HTMLButtonElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const expandTriggerRef = useRef<HTMLButtonElement>(null);
   const pendingFocusRef = useRef<"attachment" | "remove" | null>(null);
-
-  useEffect(() => {
-    if (!attachmentMenuOpen) {
-      return;
-    }
-
-    attachmentMenuItemRef.current?.focus();
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !attachmentControlRef.current?.contains(event.target)
-      ) {
-        setAttachmentMenuOpen(false);
-      }
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-      event.preventDefault();
-      setAttachmentMenuOpen(false);
-      attachmentTriggerRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [attachmentMenuOpen]);
+  const composerId = useId();
+  const surfaceId = `${composerId}-surface`;
+  const helperId = `${composerId}-helper`;
+  const recordingDescriptionId = `${composerId}-recording-description`;
+  const hasSource =
+    source.kind === "local_media" || source.urlDraft.trim().length > 0;
 
   useEffect(() => {
     if (pickerBusy || removing || !pendingFocusRef.current) {
@@ -96,7 +76,6 @@ export function TaskComposer({
   }, [pickerBusy, removing, source.kind]);
 
   async function pickLocalMedia() {
-    setAttachmentMenuOpen(false);
     setPickerBusy(true);
     setLocalFeedbackKey(null);
     try {
@@ -119,17 +98,29 @@ export function TaskComposer({
     setRemoving(true);
     setLocalFeedbackKey(null);
     const removed = await onRemoveLocalMedia();
-    setRemoving(false);
+    pendingFocusRef.current = removed ? "attachment" : "remove";
     if (!removed) {
       setLocalFeedbackKey("input.attachment.removeFailed");
-      pendingFocusRef.current = "remove";
-      return;
     }
-    pendingFocusRef.current = "attachment";
+    setRemoving(false);
+  }
+
+  function toggleExpanded() {
+    setExpanded(!expanded);
+    if (expanded) {
+      expandTriggerRef.current?.focus();
+    } else if (source.kind === "url") {
+      urlInputRef.current?.focus();
+    } else {
+      localMediaRemoveRef.current?.focus();
+    }
   }
 
   function submitCurrentSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canSubmit || pickerBusy || removing || !hasSource) {
+      return;
+    }
     if (source.kind === "url") {
       onSubmit({ kind: "url", url: source.urlDraft });
       return;
@@ -141,131 +132,157 @@ export function TaskComposer({
   }
 
   return (
-    <form className="command-panel input-pane" onSubmit={submitCurrentSource}>
-      <div className="panel-heading">
-        <div>
-          <p className="section-label">{t("input.sectionLabel")}</p>
-          <h2>{t("input.title")}</h2>
+    <form
+      className={`media-composer${expanded ? " is-expanded" : ""}`}
+      aria-label={t("input.title")}
+      onSubmit={submitCurrentSource}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && expanded) {
+          event.preventDefault();
+          event.stopPropagation();
+          setExpanded(false);
+          expandTriggerRef.current?.focus();
+        }
+      }}
+    >
+      <div className="media-composer-surface" id={surfaceId}>
+        <div className="media-composer-content">
+          {source.kind === "url" ? (
+            <input
+              ref={urlInputRef}
+              id="video-url"
+              aria-label={t("input.urlAria")}
+              aria-describedby={`${helperId} ${helperId}-title`}
+              value={source.urlDraft}
+              onChange={(event) => onUrlDraftChange(event.currentTarget.value)}
+              placeholder={t("input.placeholder")}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          ) : (
+            <div
+              className="local-media-chip"
+              data-media-kind={source.selection.mediaKind}
+              role="group"
+              aria-label={t("input.attachment.selectedAria")}
+              aria-describedby={`${helperId}-title`}
+            >
+              {source.selection.mediaKind === "video" ? (
+                <FileVideo size={20} aria-hidden="true" />
+              ) : (
+                <FileAudio size={20} aria-hidden="true" />
+              )}
+              <span className="local-media-chip-copy">
+                <strong title={source.selection.displayName}>
+                  {source.selection.displayName}
+                </strong>
+                <small>
+                  {t("input.attachment.details", {
+                    kind: t(`input.attachment.kind.${source.selection.mediaKind}`),
+                    size: formatBytes(source.selection.sizeBytes, resolvedLocale),
+                  })}
+                </small>
+              </span>
+              <button
+                ref={localMediaRemoveRef}
+                className="local-media-remove"
+                type="button"
+                aria-label={t("input.attachment.removeAria", {
+                  name: source.selection.displayName,
+                })}
+                disabled={removing || pickerBusy}
+                onClick={() => void removeLocalMedia()}
+              >
+                {removing ? (
+                  <LoaderCircle className="spin" size={16} aria-hidden="true" />
+                ) : (
+                  <X size={16} aria-hidden="true" />
+                )}
+              </button>
+            </div>
+          )}
         </div>
-      </div>
 
-      <div className="task-composer-row">
-        <div className="attachment-control" ref={attachmentControlRef}>
+        <div className="media-composer-toolbar">
           <button
             ref={attachmentTriggerRef}
-            className="attachment-trigger"
+            className="media-composer-tool media-composer-file"
             type="button"
             aria-label={t("input.attachment.openAria")}
-            aria-haspopup="menu"
-            aria-expanded={attachmentMenuOpen}
-            aria-controls={
-              attachmentMenuOpen ? "local-media-attachment-menu" : undefined
-            }
+            title={t("input.attachment.selectFile")}
             aria-busy={pickerBusy}
             disabled={pickerBusy || removing}
-            onClick={() => {
-              setLocalFeedbackKey(null);
-              setAttachmentMenuOpen((open) => !open);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown" && !attachmentMenuOpen) {
-                event.preventDefault();
-                setAttachmentMenuOpen(true);
-              }
-            }}
+            onClick={() => void pickLocalMedia()}
           >
             {pickerBusy ? (
               <LoaderCircle className="spin" size={18} aria-hidden="true" />
             ) : (
-              <Paperclip size={18} aria-hidden="true" />
+              <Upload size={18} aria-hidden="true" />
             )}
+            <span>{t("input.chooseFiles")}</span>
           </button>
-          {attachmentMenuOpen ? (
-            <div
-              id="local-media-attachment-menu"
-              className="attachment-menu"
-              role="menu"
-              aria-label={t("input.attachment.menuLabel")}
-            >
-              <button
-                ref={attachmentMenuItemRef}
-                className="attachment-menu-item"
-                type="button"
-                role="menuitem"
-                onClick={() => void pickLocalMedia()}
-              >
-                <FileVideo size={17} aria-hidden="true" />
-                <span>{t("input.attachment.selectFile")}</span>
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        {source.kind === "url" ? (
-          <input
-            id="video-url"
-            aria-label={t("input.urlAria")}
-            value={source.urlDraft}
-            onChange={(event) => onUrlDraftChange(event.currentTarget.value)}
-            placeholder={t("input.placeholder")}
-          />
-        ) : (
-          <div
-            className="local-media-chip"
-            data-media-kind={source.selection.mediaKind}
-            role="group"
-            aria-label={t("input.attachment.selectedAria")}
+          <span
+            className="media-composer-recording"
+            title={t("input.recordingUnavailable")}
           >
-            {source.selection.mediaKind === "video" ? (
-              <FileVideo size={20} aria-hidden="true" />
-            ) : (
-              <FileAudio size={20} aria-hidden="true" />
-            )}
-            <span className="local-media-chip-copy">
-              <strong title={source.selection.displayName}>
-                {source.selection.displayName}
-              </strong>
-              <small>
-                {t("input.attachment.details", {
-                  kind: t(`input.attachment.kind.${source.selection.mediaKind}`),
-                  size: formatBytes(source.selection.sizeBytes, resolvedLocale),
-                })}
-              </small>
-            </span>
             <button
-              ref={localMediaRemoveRef}
-              className="local-media-remove"
+              className="media-composer-tool"
               type="button"
-              aria-label={t("input.attachment.removeAria", {
-                name: source.selection.displayName,
-              })}
-              disabled={removing || pickerBusy}
-              onClick={() => void removeLocalMedia()}
+              disabled
+              title={t("input.recordingUnavailable")}
+              aria-describedby={recordingDescriptionId}
             >
-              {removing ? (
-                <LoaderCircle className="spin" size={16} aria-hidden="true" />
+              <Mic size={17} aria-hidden="true" />
+              <span>{t("input.recordVoice")}</span>
+            </button>
+          </span>
+          <span className="media-composer-sr-only" id={recordingDescriptionId}>
+            {t("input.recordingUnavailable")}
+          </span>
+          <div className="media-composer-actions">
+            {hasSource ? (
+              <button
+                className="media-composer-submit"
+                type="submit"
+                aria-label={t("input.confirm")}
+                aria-describedby={`${helperId}-title`}
+                title={t("input.confirm")}
+                disabled={!canSubmit || pickerBusy || removing}
+              >
+                <ArrowUp size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+            <button
+              ref={expandTriggerRef}
+              className="media-composer-tool media-composer-expand"
+              type="button"
+              aria-label={t(expanded ? "input.collapse" : "input.expand")}
+              title={t(expanded ? "input.collapse" : "input.expand")}
+              aria-expanded={expanded}
+              aria-controls={surfaceId}
+              onClick={toggleExpanded}
+            >
+              {expanded ? (
+                <Minimize2 size={17} aria-hidden="true" />
               ) : (
-                <X size={16} aria-hidden="true" />
+                <Maximize2 size={17} aria-hidden="true" />
               )}
             </button>
           </div>
-        )}
-
-        <button
-          className="primary-button"
-          type="submit"
-          disabled={!canSubmit || pickerBusy || removing}
-        >
-          <Play size={17} aria-hidden="true" />
-          <span>{t("input.confirm")}</span>
-        </button>
+        </div>
       </div>
       {localFeedbackKey ? (
         <p className="action-notice composer-notice" role="alert">
           {t(localFeedbackKey)}
         </p>
       ) : null}
-      <p className="status-line" aria-live="polite">
+      <p className="media-composer-helper" id={helperId}>
+        {t("input.supportedSources")}
+      </p>
+      <p className="media-composer-helper media-composer-title-disclosure" id={`${helperId}-title`}>
+        {t("noteTitle.disclosure")}
+      </p>
+      <p className="media-composer-status" aria-live="polite">
         {pickerBusy ? t("input.attachment.pickerBusy") : statusBody}
       </p>
     </form>

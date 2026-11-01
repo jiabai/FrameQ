@@ -5,7 +5,7 @@ use tauri::AppHandle;
 use url::Url;
 use uuid::Uuid;
 
-use crate::{ensure_runtime_dirs, resolve_runtime_paths, RuntimePaths};
+use crate::{ensure_config_dirs, resolve_fixed_paths, RuntimePaths};
 
 const ACCOUNT_SESSION_FILE_NAME: &str = "session.json";
 const ACCOUNT_PENDING_STATE_FILE_NAME: &str = "pending_auth_state.txt";
@@ -158,8 +158,8 @@ pub(crate) struct ServerManagedLlmInvocation {
 
 #[tauri::command]
 pub(crate) fn begin_auth_flow(app: AppHandle) -> Result<BeginAuthFlowResult, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     let state = generate_auth_state();
     fs::create_dir_all(account_auth_dir(&paths)).map_err(|error| error.to_string())?;
     fs::write(account_pending_state_path(&paths), &state).map_err(|error| error.to_string())?;
@@ -174,8 +174,8 @@ pub(crate) async fn complete_auth_flow(
     app: AppHandle,
     callback_url: String,
 ) -> Result<CompleteAuthFlowResult, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     let pending_state = fs::read_to_string(account_pending_state_path(&paths))
         .map_err(|_| "No pending login state was found.".to_string())?;
     let callback = parse_auth_callback_url(&callback_url, pending_state.trim())?;
@@ -195,8 +195,8 @@ pub(crate) async fn complete_auth_flow(
 
 #[tauri::command]
 pub(crate) async fn get_account_status(app: AppHandle) -> Result<AccountStatusView, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    ensure_runtime_dirs(&paths)?;
+    let paths = resolve_fixed_paths(&app)?;
+    ensure_config_dirs(&paths)?;
     let Some(session) = read_account_session(&account_session_path(&paths))? else {
         return Ok(guest_account_status());
     };
@@ -238,7 +238,7 @@ pub(crate) async fn get_account_status(app: AppHandle) -> Result<AccountStatusVi
 
 #[tauri::command]
 pub(crate) async fn logout_account(app: AppHandle) -> Result<(), String> {
-    let paths = resolve_runtime_paths(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
     if let Some(session) = read_account_session(&account_session_path(&paths))? {
         let _ = reqwest::Client::new()
             .post(format!("{}/api/desktop/logout", server_base_url()))
@@ -255,7 +255,7 @@ pub(crate) async fn redeem_activation_code(
     app: AppHandle,
     code: String,
 ) -> Result<AccountStatusView, String> {
-    let paths = resolve_runtime_paths(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
     let session = require_account_session(&paths)?;
     let response = reqwest::Client::new()
         .post(build_activation_redeem_url(&server_base_url()))
@@ -279,10 +279,10 @@ pub(crate) async fn request_activation_code(
     app: AppHandle,
     locale: String,
 ) -> Result<ActivationCodeRequestView, ActivationCodeRequestError> {
-    let paths = resolve_runtime_paths(&app).map_err(|_| {
+    let paths = resolve_fixed_paths(&app).map_err(|_| {
         ActivationCodeRequestError::new("INTERNAL_SERVER_ERROR", "Activation code request failed.")
     })?;
-    ensure_runtime_dirs(&paths).map_err(|_| {
+    ensure_config_dirs(&paths).map_err(|_| {
         ActivationCodeRequestError::new("INTERNAL_SERVER_ERROR", "Activation code request failed.")
     })?;
     let session = read_account_session(&account_session_path(&paths)).map_err(|_| {
@@ -299,7 +299,7 @@ pub(crate) async fn request_activation_code(
 
 #[tauri::command]
 pub(crate) async fn create_wechat_checkout(app: AppHandle) -> Result<WechatCheckoutView, String> {
-    let paths = resolve_runtime_paths(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
     let session = require_account_session(&paths)?;
     let response = reqwest::Client::new()
         .post(format!(
@@ -335,7 +335,7 @@ pub(crate) async fn get_checkout_status(
     app: AppHandle,
     order_id: String,
 ) -> Result<CheckoutStatusView, String> {
-    let paths = resolve_runtime_paths(&app)?;
+    let paths = resolve_fixed_paths(&app)?;
     let session = require_account_session(&paths)?;
     let response = reqwest::Client::new()
         .get(format!(

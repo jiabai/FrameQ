@@ -41,12 +41,12 @@
 
 ## 2026-07-05 Task-Owned Artifact Layout
 
-- Each new processing run should create one task-owned output directory under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`.
+- Each new processing run creates one task-owned output directory under the current native snapshot's `<output_root>/tasks/<task_id>/`. Managed storage uses `<data_root>/outputs/`; legacy storage retains its effective existing output setting.
 - FrameQ no longer treats flat `outputs/*.mp4`, `outputs/*_transcript.txt`, or legacy app-local history records as the product contract for new tasks.
 - The task directory should be the user-visible folder for final artifacts: media, transcript, transcript timing, AI summary, mindmap, insights, and `frameq-task.json`.
 - `frameq-task.json` is the task source of truth. It should record task identity, canonical source URL, platform, status, model, version metadata, relative artifact paths, error, preview, and insight count; the process-local download URL must never be serialized.
-- App-local `cache/tasks/<task_id>/` is reserved for temporary downloads, partial files, merge scratch space, and diagnostics. These files should not be mixed into the user-visible task output folder.
-- The desktop history panel becomes a task library built from task manifests. Old flat-output tasks and old `history.json` records are intentionally ignored by this redesign.
+- The current data root's `cache/tasks/<task_id>/` is reserved for temporary downloads, partial files, merge scratch space and diagnostics, separately from user-visible task output.
+- The desktop task library reads supported manifests. Unsupported task trees and old records retain their bytes during application-owned data migration without becoming trusted task authorities.
 - Transcript review, save, retry AI整理, copy, export, and locate actions should operate by `task_id` and manifest artifacts, not by arbitrary local transcript or audio paths.
 
 ## 2026-07-05 YouTube/Bilibili Subtitle-First Transcript Source
@@ -80,11 +80,12 @@
 
 ## 2026-07-07 External Output Audio Playback Cache
 
-- When `FRAMEQ_OUTPUT_DIR` points outside app-local data, transcript review may use a Tauri-controlled playback copy under `$APPLOCALDATA/cache/.frameq-audio-review/<task_id>/audio.<ext>`.
-- `audio_path` remains the original manifest-declared task audio under `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/`; `audio_asset_path` is the player-safe path used by the frontend audio element.
+- Transcript review resolves audio and any rebuildable playback copy from the same verified data-location snapshot. Playback copies live under `<data_root>/cache/.frameq-audio-review/<task_id>/audio.<ext>`.
+- `audio_path` remains the original manifest-declared task audio under `<output_root>/tasks/<task_id>/`; `audio_asset_path` is the validated player path. Native permission covers only verified output tasks and playback-cache subtrees and is revoked while storage is unavailable.
 - The playback cache is rebuildable. Clearing it must not delete original task artifacts, and the next transcript detail load should recreate the playback copy from the original source audio if that source still exists.
 - Settings should add manual cache management only: show `Audio playback cache: <size>` and provide a `Clear audio playback cache` action. Automatic age-based or LRU cleanup is deferred for the first management UI.
 - If the original source audio is missing after cache cleanup, transcript review should degrade to text editing with the existing local-audio-unavailable state.
+- Playback preparation and cleanup retain the global data permit. Data migration preserves the cache with task data; playback pauses during preparation and paths reload only after restart verification.
 
 ## 2026-06-29 YouTube Public Video Support
 
@@ -102,7 +103,7 @@
 
 - Insight topic generation LLM configuration is now managed by the FrameQ server Admin Web.
 - The desktop worker must not load `D:/Github/FrameQ/.env` or any repository-root `.env` as a runtime configuration source.
-- App-local data `.env` remains available for local output directory, ASR model selection, and model download overrides, but legacy local `FRAMEQ_LLM_*` dotenv keys must be ignored.
+- Fixed-root `.env` retains ASR selection, download overrides and existing legacy-output compatibility; legacy local `FRAMEQ_LLM_*` dotenv keys are ignored. Ordinary settings save writes only the supported ASR selection and preserves the old output value.
 - The settings panel should surface the app-local data `.env` path and allow the user to locate that file in the system file manager.
 - Opening or saving settings should create a commented app-local data `.env` template when the file does not exist, so advanced users can inspect supported local keys without relying on the repository-root `.env`.
 - Insight generation may only receive LLM runtime material through the server-managed checkout environment (`FRAMEQ_LLM_SOURCE=server`, checkout URL, session token, and request ID).
@@ -110,7 +111,7 @@
 
 ## 2026-06-23 ASR Model Cache Layout Boundary
 
-- `FRAMEQ_MODEL_DIR` points to the app-local ModelScope cache root; the canonical SenseVoice and VAD files live under `<FRAMEQ_MODEL_DIR>/models/iic/...`.
+- Desktop `FRAMEQ_MODEL_DIR` points to the current data root's `models/` ModelScope cache root; canonical SenseVoice and VAD files live under `<FRAMEQ_MODEL_DIR>/models/iic/...`.
 - ModelScope downloads and FunASR runtime loading must use the same canonical cache layout to avoid duplicate `iic/...` and `models/iic/...` model copies.
 - Existing legacy top-level `iic/SenseVoiceSmall` and `iic/speech_fsmn_vad_zh-cn-16k-common-pytorch` caches should be migrated or cleaned automatically only when the canonical cache is complete.
 - Unknown user or future model directories under top-level `iic/` must be preserved.
@@ -179,7 +180,7 @@
 - 同一 taskId 下，左侧本地工作区提供视频/音频定位与文字稿校对，右侧 AI 工作区提供要点总结和启发灵感两个独立 target；Mermaid mindmap 作为 summary 的本地附属文件保存，不提供独立生成入口。
 - 支持导出文字稿 `txt` / `md`、要点总结 `md`，以及灵感 `json` / `md`；Mermaid 思维导图仅保存为本地 `.mmd` 文件，不展示或渲染。
 - 记录已操作任务历史，允许用户从历史中查看任务状态、打开结果详情并定位已生成文件。
-- 允许用户在桌面设置中配置后续任务的结果输出目录。
+- 允许用户在设置基础页明确确认后迁移主要本机资料的数据存储位置。
 
 ## 非目标
 
@@ -199,7 +200,7 @@
 - AI 整理使用由管理员在 FrameQ server 端统一配置的 OpenAI-compatible LLM；桌面 UI 不再提供 LLM API Key、base URL、model 或 timeout 输入。
 - 用户完成主流程后，可以先查看或定位视频、音频和文字稿，再通过对应卡片分别启动要点总结或启发灵感生成。
 - 用户可以打开历史任务列表，查看过去处理过的 URL、完成状态、时间和结果路径，并重新打开文字稿、要点总结或灵感详情。
-- 用户可以在设置中修改结果输出目录；修改后只影响新任务，旧历史仍指向旧文件路径。
+- 用户可以在设置基础页更改数据存储位置；预检和明确确认后复制完整资料，原子保存位置，重启核验后从新根读取既有任务、合集、模型和组件。详细范围见 [数据存储位置规格](2026-11-01-data-storage-location.md)。
 - 用户可以在设置中选择后续任务使用的 ASR 模型：`iic/SenseVoiceSmall` 或 `iic/SenseVoiceSmall-onnx`。
 
 ## 约束
@@ -210,25 +211,25 @@
 - 云端 LLM 使用前必须明确提示文字稿会发送到对应服务。
 - 智能提炼 LLM 配置由 FrameQ server 托管；worker 不得读取项目根 `.env` 或 app-local `.env` 中的旧 `FRAMEQ_LLM_*` 字段作为 LLM 配置。
 - 启发灵感通过 agent_runtime 运行单个 agent，读取全部编号文字稿分段与本次偏好快照，经 `submit_insights` 交付工具一次性提交 1 至 12 个互不重复的灵感；每条灵感包含主题、匹配理由、1 至 3 个追问、适用场景与合法原文分段引用。交付不通过校验时，工具反馈说明原因，agent 在六次实际 LLM 调用上限内修改后重新交付。
-- 结果输出目录配置可由桌面 UI 写入 app-local data `.env`，键名为 `FRAMEQ_OUTPUT_DIR`；为空时默认使用 app-local data `outputs/`。
+- 数据位置由固定配置根的 `data-storage.json` 管理。Legacy 兼容 `.env`、进程环境与默认输出的既有优先级；Managed 从统一数据根派生输出、缓存、模型、组件及合集。普通 UI 保存不写 `FRAMEQ_OUTPUT_DIR`。
 - ASR 模型配置可由桌面 UI 写入 app-local data `.env`，键名为 `FRAMEQ_ASR_MODEL`；为空时默认使用 `iic/SenseVoiceSmall`。
 - UI 读取配置时不得展示或要求输入 LLM API Key；只能展示服务端 LLM 是否已由管理员配置就绪。
 - worker 必须返回结构化状态和错误码，UI 不解析命令行散文本作为业务结果。
 - 当前开发态不静默下载大模型权重；真实 ASR 推理需要显式设置 `FRAMEQ_ALLOW_REAL_ASR=1`。
-- 模型权重默认缓存到 app-local data `models/`，可通过 `FRAMEQ_MODEL_DIR` 覆盖；该目录是 ModelScope cache root，SenseVoice/FunASR 的实际文件位于其 `models/iic/...` 子树。下载/加载进度 UX 完成前，UI 必须给出可行动错误提示。
+- 桌面模型权重缓存到当前数据根 `models/`，worker 每次命令由同一位置快照接收 `FRAMEQ_MODEL_DIR`；独立 worker 保留其环境配置能力。该目录是 ModelScope cache root，SenseVoice/FunASR 文件位于其 `models/iic/...` 子树。下载与加载错误必须提供可行动说明。
 - SenseVoice 真实推理依赖 `funasr`；当依赖缺失、模型不可下载或模型 ID 不受支持时，worker 必须返回结构化 ASR 错误，不得让 UI 白屏或卡死。
 - SenseVoice 处理长音频时必须启用 `fsmn-vad` 切分和长音频合并参数，并在写入文字稿前移除 `<|...|>` 控制标签。
-- 历史任务库从 `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/frameq-task.json` 读取；新版本不再读取旧版 app-local history。
+- 历史任务库从当前位置快照的 `<output_root>/tasks/<task_id>/frameq-task.json` 读取；旧版记录不成为受信任任务，迁移保留属于应用的旧资料原件。
 - `frameq-task.json` 只记录任务元数据、canonical source URL、相对 artifact 路径、错误码、预览和计数，不得包含 download URL、`xsec_token`、LLM API key、cookies 或完整敏感请求头。
 
 ## 验收标准
 
 - 输入合法抖音 URL 后，UI 从输入态切换到处理态，并展示阶段进度。
 - 首页 `确认` 只启动下载视频、提取音频和 ASR 文字稿流程；`process_video` 契约不包含任何 AI 生成字段。
-- 下载成功后，`<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/media/video.mp4` 存在，`ffprobe` 可识别视频流和音频流。
+- 下载成功后，当前有效 `<output_root>/tasks/<task_id>/media/video.mp4` 存在，`ffprobe` 可识别视频流和音频流。
 - 当 `yt-dlp` 因 Douyin web detail 空响应、`Fresh cookies`、JSON 解析失败或同类公开链接解析问题失败时，worker 应尝试 Douyin share page fallback；fallback 成功时 UI 不进入失败态，后续流程与普通下载一致。
 - Douyin share page fallback 解析出多个候选流时，默认下载体积最大的可用 MP4；若该流下载或媒体校验失败，应自动降级尝试下一候选流，并在所有候选失败后返回结构化 `VIDEO_DOWNLOAD_FAILED`。
-- 音频提取后，当前 task 目录的 `media/audio.wav` 中存在 16 kHz 单声道 WAV；临时下载和中间文件保留在 app-local `cache/tasks/<task_id>/`。
+- 音频提取后，当前 task 目录的 `media/audio.wav` 中存在 16 kHz 单声道 WAV；临时下载和中间文件保留在当前数据根的 `cache/tasks/<task_id>/`。
 - ASR 成功后，当前 task 目录的 `transcript/` 中存在 `transcript.txt`、`transcript.md`，有合法时间轴时存在 `segments.json`。
 - `transcript.md` 的 Source URL 和 `frameq-task.json.source_url` 只能是 canonical URL；要点总结、mindmap、insights 和 retry 只读取用户保存后的 `transcript.txt` 正文。
 - 主流程完成后，左侧本地工作区显示视频/音频操作和可校对文字稿，右侧 AI 工作区显示要点总结与启发灵感两个独立 target；Mermaid mindmap 保存为本地 `.mmd` 附属文件且没有独立云端生成入口。
@@ -243,7 +244,7 @@
 - 要点总结或灵感待生成/失败时，点击对应入口都应进入各自确认流程；确认后仅运行该目标，不重新下载视频、提取音频或重新转写。
 - app-local data `.env` 只承载本机 ASR、输出目录和模型下载覆盖；灵感生成不得从 dotenv 读取 LLM key 或 model。
 - 管理员在 server 端保存 LLM base URL、API key、model 和 timeout 后，后续灵感生成应通过 server-managed checkout 使用该配置；主流程不携带 LLM checkout env。
-- 用户在 UI 设置中保存输出目录后，后续完整处理生成的视频、音频、文字稿、要点总结、Mermaid mindmap 和灵感文件应写入该目录下的 `tasks/<task_id>/`；临时下载和中间产物仍写入 app-local `cache/tasks/<task_id>/`。
+- 用户明确确认数据位置迁移并重启验证后，已有任务、合集、模型、运行组件及缓存可从新根读取；新任务产物写入 `<data_root>/outputs/tasks/<task_id>/`，中间产物写入同一根的 `cache/tasks/<task_id>/`。原件仅在用户确认清理且身份、散列与当前副本一致后删除。
 - 设置 UI 必须提示：这里只管理本机 ASR 和输出目录；要点总结和启发灵感确认流程必须提示文字稿片段会发送到管理员配置的云端 LLM 服务。
 - 历史入口应展示最近任务列表；每条历史至少包含 URL、状态、时间、输出目录、文字稿路径、要点总结路径、Mermaid mindmap 路径、灵感路径和错误码或摘要。
 - 当前安全历史任务的详情加载完成后，应恢复同一 taskId 的两个工作区；文字稿直接在左侧校对，AI 结果使用各自的轻量详情，导出按钮定位该任务记录的实际文件路径。

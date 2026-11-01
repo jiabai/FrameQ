@@ -3,14 +3,17 @@ use super::{
     TASKS_DIR_NAME, TASK_MANIFEST_FILE_NAME,
 };
 pub(crate) use crate::atomic_files::is_link_or_reparse_point;
-use crate::{path_to_env_string, settings, RuntimePaths, OUTPUT_DIR_ENV};
+use crate::{path_to_env_string, RuntimePaths};
+#[cfg(test)]
+use crate::{settings, OUTPUT_DIR_ENV};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn configured_output_root(paths: &RuntimePaths) -> Result<PathBuf, String> {
-    configured_output_root_from_project(&paths.user_data_dir)
+    paths.output_root()
 }
 
+#[cfg(test)]
 pub(crate) fn configured_output_root_from_project(project_root: &Path) -> Result<PathBuf, String> {
     let config_values =
         settings::parse_dotenv_values(&project_root.join(settings::DOTENV_FILE_NAME))?;

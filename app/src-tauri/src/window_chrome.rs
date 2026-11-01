@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{PhysicalPosition, Window};
+use tauri::{Manager, PhysicalPosition, Window};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct WindowPositionView {
@@ -14,7 +14,8 @@ pub(crate) fn start_window_drag(window: Window) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn close_window(window: Window) -> Result<(), String> {
-    window.close().map_err(|error| error.to_string())
+    crate::data_storage::prepare_window_destroy(window.app_handle(), window.label())?;
+    window.destroy().map_err(|error| error.to_string())
 }
 
 #[tauri::command]

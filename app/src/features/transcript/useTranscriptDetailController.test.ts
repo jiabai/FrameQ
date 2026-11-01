@@ -239,6 +239,7 @@ describe("useTranscriptDetailController segment editing", () => {
       "currentTranscriptPath",
       "detailTab",
       "detailText",
+      "discardTranscriptDraft",
       "editingTranscriptSegmentId",
       "endTranscriptSegmentEdit",
       "exportDetail",

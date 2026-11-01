@@ -12,8 +12,8 @@ pub(crate) const PYTORCH_RUNTIME_URL_ENV: &str = "FRAMEQ_PYTORCH_RUNTIME_URL";
 pub(crate) const PYTORCH_RUNTIME_SHA256_ENV: &str = "FRAMEQ_PYTORCH_RUNTIME_SHA256";
 pub(crate) const ALLOW_REAL_ASR_ENV: &str = "FRAMEQ_ALLOW_REAL_ASR";
 pub(crate) const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
-pub(crate) const CACHE_DIR_NAME: &str = "cache";
 pub(crate) const AUDIO_REVIEW_CACHE_DIR_NAME: &str = ".frameq-audio-review";
+#[cfg(test)]
 pub(crate) const LEGACY_TEMP_DIR_NAME: &str = "work";
 pub(crate) const DESKTOP_LOG_DIR_NAME: &str = "logs";
 #[allow(dead_code)] // Consumed by the Task 3 facade before Task 4 runner wiring lands.
@@ -26,6 +26,10 @@ pub(crate) struct RuntimePaths {
 }
 
 pub(crate) fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
+    resolve_fixed_paths(app)
+}
+
+pub(crate) fn resolve_fixed_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
     let raw_resource_dir = app
         .path()
         .resource_dir()
@@ -37,6 +41,37 @@ pub(crate) fn resolve_runtime_paths(app: &AppHandle) -> Result<RuntimePaths, Str
             .app_local_data_dir()
             .map_err(|error| error.to_string())?,
     })
+}
+
+impl RuntimePaths {
+    pub(crate) fn data_paths(&self) -> Result<crate::data_storage::DataPaths, String> {
+        crate::data_storage::paths_for_config(&self.user_data_dir)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn data_root(&self) -> Result<PathBuf, String> {
+        Ok(self.data_paths()?.data_root)
+    }
+
+    pub(crate) fn output_root(&self) -> Result<PathBuf, String> {
+        Ok(self.data_paths()?.output_root)
+    }
+
+    pub(crate) fn cache_root(&self) -> Result<PathBuf, String> {
+        Ok(self.data_paths()?.cache_root)
+    }
+
+    pub(crate) fn models_root(&self) -> Result<PathBuf, String> {
+        Ok(self.data_paths()?.models_root)
+    }
+
+    pub(crate) fn runtime_root(&self) -> Result<PathBuf, String> {
+        Ok(self.data_paths()?.runtime_root)
+    }
+
+    pub(crate) fn collections_path(&self) -> Result<PathBuf, String> {
+        Ok(self.data_paths()?.collections_path)
+    }
 }
 
 pub(crate) fn normalize_resource_dir(resource_dir: PathBuf) -> PathBuf {
@@ -59,38 +94,17 @@ fn resource_dir_has_runtime(resource_dir: &Path) -> bool {
 }
 
 pub(crate) fn ensure_runtime_dirs(paths: &RuntimePaths) -> Result<(), String> {
-    fs::create_dir_all(paths.user_data_dir.join("outputs")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(paths.user_data_dir.join(CACHE_DIR_NAME))
-        .map_err(|error| error.to_string())?;
-    fs::create_dir_all(paths.user_data_dir.join(DESKTOP_LOG_DIR_NAME))
-        .map_err(|error| error.to_string())?;
-    remove_legacy_app_local_temp_dir(paths)?;
-    fs::create_dir_all(paths.user_data_dir.join("models")).map_err(|error| error.to_string())
+    ensure_config_dirs(paths)?;
+    let data = paths.data_paths()?;
+    for root in [&data.output_root, &data.cache_root, &data.models_root, &data.runtime_root] {
+        fs::create_dir_all(root).map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
-fn remove_legacy_app_local_temp_dir(paths: &RuntimePaths) -> Result<(), String> {
-    let legacy_path = paths.user_data_dir.join(LEGACY_TEMP_DIR_NAME);
-    if !legacy_path.exists() {
-        return Ok(());
-    }
-
-    let user_data_dir = paths
-        .user_data_dir
-        .canonicalize()
-        .map_err(|error| error.to_string())?;
-    let canonical_legacy = legacy_path
-        .canonicalize()
-        .map_err(|error| error.to_string())?;
-    if canonical_legacy == user_data_dir || !canonical_legacy.starts_with(&user_data_dir) {
-        return Err("Refusing to remove legacy temporary directory outside app-local data".into());
-    }
-
-    let metadata = fs::symlink_metadata(&legacy_path).map_err(|error| error.to_string())?;
-    if metadata.is_dir() {
-        fs::remove_dir_all(&legacy_path).map_err(|error| error.to_string())
-    } else {
-        fs::remove_file(&legacy_path).map_err(|error| error.to_string())
-    }
+pub(crate) fn ensure_config_dirs(paths: &RuntimePaths) -> Result<(), String> {
+    fs::create_dir_all(paths.user_data_dir.join(DESKTOP_LOG_DIR_NAME))
+        .map_err(|error| error.to_string())
 }
 
 pub(crate) fn bundled_python_path(resource_dir: &Path) -> PathBuf {
@@ -116,12 +130,26 @@ pub(crate) fn path_to_env_string(path: impl AsRef<Path>) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        bundled_python_path, ensure_runtime_dirs, normalize_resource_dir, RuntimePaths,
+        bundled_python_path, ensure_config_dirs, ensure_runtime_dirs, normalize_resource_dir, RuntimePaths,
         LEGACY_TEMP_DIR_NAME,
     };
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn fixed_configuration_remains_available_when_storage_control_is_invalid() {
+        let root = temp_dir("fixed_configuration_without_data");
+        let paths = RuntimePaths { resource_dir: root.join("resources"), user_data_dir: root.join("config") };
+        fs::create_dir_all(&paths.user_data_dir).expect("config root");
+        fs::write(paths.user_data_dir.join("data-storage.json"), b"invalid storage control").expect("damaged control fixture");
+        ensure_config_dirs(&paths).expect("fixed config service");
+        assert!(paths.user_data_dir.join("logs").is_dir());
+        assert!(ensure_runtime_dirs(&paths).is_err());
+        for name in ["outputs", "cache", "models", "runtime"] {
+            assert!(!paths.user_data_dir.join(name).exists());
+        }
+    }
 
     #[test]
     fn ensure_runtime_dirs_creates_app_local_cache_dir() {
@@ -139,7 +167,7 @@ mod tests {
         assert!(paths.user_data_dir.join("outputs").is_dir());
         assert!(paths.user_data_dir.join("cache").is_dir());
         assert!(paths.user_data_dir.join("logs").is_dir());
-        assert!(!legacy_temp_dir.exists());
+        assert!(legacy_temp_dir.join("history.json").is_file());
     }
 
     #[test]
@@ -160,8 +188,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../build/data-storage-acceptance")
+            .join(format!("runtime-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
-        dir
+        dir.canonicalize().expect("resolve test dir")
     }
 }

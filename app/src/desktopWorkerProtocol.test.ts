@@ -250,6 +250,7 @@ describe("desktop worker protocol runtime", () => {
       "video_extracting",
       "video_transcribing",
       "insights_generating",
+      "title_generating",
       "completed",
       "partial_completed",
       "failed",

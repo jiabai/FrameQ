@@ -35,6 +35,7 @@ pub(crate) enum WorkerOperation {
     RetryInsights,
     ResolveSourceIdentity,
     DownloadAsrModel,
+    StorageValidation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -60,6 +61,7 @@ impl WorkerOperation {
             Self::RetryInsights => "retry_insights",
             Self::ResolveSourceIdentity => "resolve_source_identity",
             Self::DownloadAsrModel => "download_asr_model",
+            Self::StorageValidation => "storage_validation",
         }
     }
 

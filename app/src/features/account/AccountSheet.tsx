@@ -80,6 +80,12 @@ export function AccountSheet({
       ariaLabel={t("sheet.ariaLabel")}
       className="account-modal account-sheet"
       onBackdropClick={onClose}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (open) onClose();
+      }}
     >
         <header className="modal-header sheet-header">
           <div>

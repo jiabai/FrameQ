@@ -31,13 +31,18 @@ import {
 type UseAppUpdateControllerOptions = {
   processingActive: boolean;
   modelDownloadActive: boolean;
+  maintenanceActive?: boolean;
+  preparationActive?: boolean;
 };
 
 export function useAppUpdateController({
   processingActive,
   modelDownloadActive,
+  maintenanceActive = false,
+  preparationActive = false,
 }: UseAppUpdateControllerOptions) {
   const [updateState, setUpdateState] = useState(createInitialUpdateState);
+  const [installedAwaitingRestart, setInstalledAwaitingRestart] = useState(false);
   const [inAppUpdates, setInAppUpdates] = useState(true);
   const [deliveryLoaded, setDeliveryLoaded] = useState(false);
   const [currentVersion, setCurrentVersion] = useState("");
@@ -206,15 +211,17 @@ export function useAppUpdateController({
   }, [invalidateUpdateChecks]);
 
   const restartForUpdate = useCallback(async () => {
+    if (maintenanceActive) return;
     invalidateUpdateChecks();
     try {
       await relaunchApp();
     } catch (error) {
       setUpdateState((current) => failUpdate(current, error));
     }
-  }, [invalidateUpdateChecks]);
+  }, [invalidateUpdateChecks, maintenanceActive]);
 
   const installUpdate = useCallback(async () => {
+    if (maintenanceActive || preparationActive) return;
     if (updateState.status === "ready_to_restart") {
       await restartForUpdate();
       return;
@@ -250,12 +257,13 @@ export function useAppUpdateController({
       await installAppUpdate(update, (event) => {
         setUpdateState((current) => applyUpdateDownloadEvent(current, event));
       });
+      setInstalledAwaitingRestart(true);
       setUpdateState((current) => markUpdateReadyToRestart(current));
     } catch (error) {
       updateInstallActiveRef.current = false;
       setUpdateState((current) => failUpdate(current, error));
     }
-  }, [checkForUpdates, invalidateUpdateChecks, restartForUpdate, updateInstallBlocked, updateState.status]);
+  }, [checkForUpdates, invalidateUpdateChecks, restartForUpdate, updateInstallBlocked, updateState.status, maintenanceActive, preparationActive]);
 
   const postponeUpdateReminder = useCallback(() => {
     invalidateUpdateChecks();
@@ -269,6 +277,7 @@ export function useAppUpdateController({
 
   return {
     updateState,
+    installedAwaitingRestart,
     updateBusy,
     updateInstallBlocked,
     updateToolbarVisible,

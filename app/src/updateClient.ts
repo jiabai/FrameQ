@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   IpcProtocolError,
@@ -116,7 +115,12 @@ export async function installAppUpdate(
   });
 }
 
-export async function relaunchApp(runner: RelaunchRunner = relaunch): Promise<void> {
+const defaultRelaunchRunner: RelaunchRunner = async () => {
+  const result: unknown = await invoke("restart_application");
+  if (result !== null) throwInvalidUpdateResponse();
+};
+
+export async function relaunchApp(runner: RelaunchRunner = defaultRelaunchRunner): Promise<void> {
   await runner();
 }
 

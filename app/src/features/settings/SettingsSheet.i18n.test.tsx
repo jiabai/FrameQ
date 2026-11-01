@@ -159,9 +159,9 @@ async function clickRenderedButton(button: CapturedButton): Promise<void> {
 
 describe("settings localization", () => {
   test.each([
-    ["zh-CN", "应用设置", "基础", "模型与输出", "输出目录"],
-    ["zh-TW", "應用程式設定", "基本", "模型與輸出", "輸出目錄"],
-    ["en-US", "App Settings", "Basic", "Model and Output", "Output directory"],
+    ["zh-CN", "应用设置", "基础", "模型与数据", "数据存储位置"],
+    ["zh-TW", "應用程式設定", "基本", "模型與資料", "資料儲存位置"],
+    ["en-US", "App Settings", "Basic", "Model and Data", "Data storage location"],
   ] as const)("renders basic settings in %s", async (locale, title, nav, heading, output) => {
     await initializeI18n(locale as SupportedLocale);
     const markup = renderSettings(locale as SupportedLocale);
@@ -172,7 +172,8 @@ describe("settings localization", () => {
     expect(markup).toContain(`>${heading}</h3>`);
     expect(markup).toContain(`>${output}</span>`);
     expect(markup).toContain("SenseVoice Small");
-    expect(markup).toContain("D:/FrameQ/output");
+    expect(markup).toContain('class="data-storage-setting"');
+    expect(markup).not.toContain('value="D:/FrameQ/output"');
   });
 
   test.each([

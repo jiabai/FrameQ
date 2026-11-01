@@ -4,9 +4,11 @@ import { describe, expect, test, vi } from "vitest";
 import { createGuestAccountStatus } from "../../accountState";
 import { initializeI18n } from "../../i18n/i18n";
 import type { SupportedLocale } from "../../i18n/locale";
+import { synthesisResources } from "../../i18n/synthesisResources";
 import { createTaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import { summarizeWorkerResult } from "../../workflow";
 import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
+import { TaskWorkspaceLayout } from "./TaskWorkspaceLayout";
 
 function renderWorkspace() {
   const workflow = summarizeWorkerResult({
@@ -35,7 +37,7 @@ function renderWorkspace() {
     canGenerateAi: true,
   };
   return renderToStaticMarkup(
-    <AiGenerationWorkspace
+    <TaskWorkspaceLayout title={workflow.text} local={null} ai={<AiGenerationWorkspace
       model={createTaskWorkspaceViewModel(workflow, account).ai}
       quotaRemaining={8}
       onSummaryAction={vi.fn()}
@@ -44,7 +46,7 @@ function renderWorkspace() {
       onDraftAction={vi.fn()}
       onViewTarget={vi.fn()}
       onCancel={vi.fn()}
-    />,
+    />} />,
   );
 }
 
@@ -64,6 +66,9 @@ describe("AI Synthesis workspace localization", () => {
       expect(markup).toContain(insights);
       expect(markup).toContain(dissection);
       expect(markup).toContain(balance);
+      expect(markup.split(balance)).toHaveLength(2);
+      expect(markup.split(synthesisResources[locale].credits.costHint)).toHaveLength(2);
+      expect(markup).not.toContain("ai-privacy-copy");
       expect(markup).toContain("AI Credits");
       expect(markup).toContain("Mermaid");
     },

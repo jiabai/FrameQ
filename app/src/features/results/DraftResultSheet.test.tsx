@@ -221,7 +221,7 @@ describe("DraftResultSheet", () => {
     });
 
     await waitFor(() => expect(mocks.saveDraftEdit).toHaveBeenCalledWith("task-draft-1", "# 标题\n\n修改后的内容"));
-    expect(onSaved).toHaveBeenCalledWith("# 标题\n\n已保存内容", savedArtifacts);
+    expect(onSaved).toHaveBeenCalledWith("# 标题\n\n已保存内容", savedArtifacts, "task-draft-1");
     expect(document.querySelector(".action-notice")?.textContent).toContain("草稿已保存。");
 
     // After save, dirty should be cleared -- save is not called again without edits
@@ -384,7 +384,7 @@ describe("DraftResultSheet", () => {
     await act(async () => {
       fireEvent.click(regenButton);
     });
-    expect(onRegenerate).toHaveBeenCalledWith(42);
+    expect(onRegenerate).toHaveBeenCalledWith(42, false);
   });
 
   test("regenerate falls back to workflow.draftSeedInsightId when detail seed is null", async () => {
@@ -401,7 +401,7 @@ describe("DraftResultSheet", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /重新生成/ }));
     });
-    expect(onRegenerate).toHaveBeenCalledWith(99);
+    expect(onRegenerate).toHaveBeenCalledWith(99, false);
   });
 
   test("regenerate passes null when both detail and workflow seed are absent", async () => {
@@ -417,7 +417,7 @@ describe("DraftResultSheet", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /重新生成/ }));
     });
-    expect(onRegenerate).toHaveBeenCalledWith(null);
+    expect(onRegenerate).toHaveBeenCalledWith(null, false);
   });
 
   test("regenerate button disabled when buffer is empty", async () => {

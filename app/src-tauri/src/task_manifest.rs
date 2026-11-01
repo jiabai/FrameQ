@@ -1,6 +1,8 @@
 ﻿mod access;
 mod coordinator;
 mod dissection;
+mod note_metadata;
+mod note_title;
 mod schema;
 mod source_identity;
 mod storage;
@@ -17,6 +19,8 @@ pub(crate) const SOURCE_PRIVACY_MIGRATION_VERSION: u64 = 2;
 #[allow(unused_imports)]
 pub(crate) use access::{SupportedTask, TaskEditSession, TaskScan};
 pub(crate) use dissection::{DissectionSourceStatus, DissectionView};
+pub(crate) use note_metadata::{NoteMetadataError, NoteMetadataView};
+pub(crate) use note_title::{NoteTitle, NoteTitleStatus};
 #[allow(unused_imports)]
 pub(crate) use schema::{
     parse_insight_view, parse_insights_payload, InsightView, SafeTaskError, TaskArtifact,
@@ -24,11 +28,13 @@ pub(crate) use schema::{
 };
 pub(crate) use source_identity::SourceIdentity;
 #[allow(unused_imports)]
+#[cfg(test)]
+pub(crate) use storage::configured_output_root_from_project;
 pub(crate) use storage::{
-    configured_output_root, configured_output_root_from_project, is_link_or_reparse_point,
+    configured_output_root, is_link_or_reparse_point,
     original_backup_path, path_to_frontend_string, reject_linked_artifact_target,
 };
-pub(crate) use transaction::{commit_task_artifacts, TaskArtifactMutation};
+pub(crate) use transaction::{commit_task_artifacts, recover_task_artifacts, TaskArtifactMutation};
 
 pub(crate) fn acquire_task_mutation(
     output_root: &std::path::Path,

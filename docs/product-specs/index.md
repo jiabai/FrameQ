@@ -16,6 +16,8 @@
 
 ## Desktop Runtime, Packaging & Distribution
 
+- `2026-11-01-data-storage-location.md` — 基础设置的统一数据存储位置；任务/笔记/合集、模型、运行组件与缓存可恢复迁移，凭据/设置/日志固定保留，兼容旧输出目录与明确清理旧副本。
+
 - `2026-10-20-windows-installer-security-software-warning.md`：Windows installer detects 360 Total Security, 火绒, and Tencent PC Manager before writing files and shows one Chinese message with the trust-list and install-location guidance; silent and passive installs skip the message.
 - `2026-10-20-lightweight-installer-runtime-trim.md`：默认模型切到 ONNX 变体，PyTorch 运行时改为按需下载的组件，安装包不再分发字节码；目标是把安装阶段写入量从 36,588 个文件、1,081 MB 降到 17,000 个文件、400 MB 以内。
 - `2026-09-19-v0.3.8-desktop-release.md` — v0.3.8 desktop release scope and acceptance; bundled `yt-dlp` upgrade 2026.7.4 -> 2026.8.19 to restore YouTube media-stream downloads for already-installed users, plus a read-only current-version line in Settings.
@@ -50,6 +52,12 @@
 - `2026-08-25-xiaohongshu-platform-subtitle-first-transcript.md` — Reuse verified Xiaohongshu platform SRT subtitles before local ASR in the existing single-link transcription flow; missing or malformed subtitles fall back to ASR, with no standalone subtitle-download UI.
 
 ## History & Workspace
+
+- `2026-10-31-client-surface-unification.md` — 以当前主界面统一客户端确认、结果、草稿、设置、账号、模型、历史和笔记弹窗的平面样式，保留真实流程与保护边界。
+
+- `2026-10-31-sidebar-note-actions.md` — Seven sidebar note actions, independent Pinned section, manual display names, canonical source operations, and confirmed permanent deletion with durable cleanup.
+- `2026-10-31-llm-note-titles.md` — Automatic LLM note titles after saved transcription, submission-time cloud and one-Credit disclosure, and persistent local title metadata.
+- `2026-10-30-desktop-sidebar-home.md` — Approved sidebar and Home redesign, real local history/artifact navigation, compact media composer, and additional capability decisions.
 
 - `2026-07-10-history-task-restore-ownership.md` — Controller-owned history restoration that rejects active workflow switches and prevents stale operation overwrite.
 - `2026-07-11-history-vnext-strict-boundary.md` — Strict manifest-only history listing plus on-demand detail for current safe v3 tasks.

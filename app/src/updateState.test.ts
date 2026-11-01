@@ -87,6 +87,14 @@ describe("desktop update state", () => {
     );
   });
 
+  test("keeps an installed update awaiting restart when the storage guard rejects relaunch", () => {
+    const installed = markUpdateReadyToRestart(createInitialUpdateState());
+    const failed = failUpdate(installed, new Error("Busy"));
+    expect(failed.status).toBe("ready_to_restart");
+    expect(failed.progress).toBe(100);
+    expect(failed.message?.messageCode).toBe("updates.state.failed");
+  });
+
   test("can postpone update reminders without losing the available version", () => {
     const state = postponeUpdate(
       markUpdateAvailable(createInitialUpdateState(), { version: "0.2.0" }),

@@ -37,6 +37,8 @@ export function resolveAnimatedSheetPhase({
 type AnimatedSheetProps = {
   open: boolean;
   ariaLabel: string;
+  ariaDescribedBy?: string;
+  role?: "dialog" | "alertdialog";
   className: string;
   onBackdropClick: MouseEventHandler<HTMLDivElement>;
   onKeyDown?: KeyboardEventHandler<HTMLElement>;
@@ -46,6 +48,8 @@ type AnimatedSheetProps = {
 export function AnimatedSheet({
   open,
   ariaLabel,
+  ariaDescribedBy,
+  role = "dialog",
   className,
   onBackdropClick,
   onKeyDown,
@@ -96,7 +100,8 @@ export function AnimatedSheet({
         className={`sheet-panel detail-modal ${className}`}
         data-motion="sheet-panel"
         aria-label={ariaLabel}
-        role="dialog"
+        aria-describedby={ariaDescribedBy}
+        role={role}
         aria-modal="true"
         initial={{ opacity: 0, y: 8, scale: 0.99 }}
         animate={

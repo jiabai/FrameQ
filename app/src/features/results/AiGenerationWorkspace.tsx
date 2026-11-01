@@ -76,18 +76,20 @@ export function AiGenerationWorkspace({
       aria-label={t("workspace.ariaLabel")}
       data-task-id={model.taskId ?? undefined}
     >
-      <header className="domain-workspace-header">
-        <div>
-          <h2>{t("workspace.title")}</h2>
+      {model.activeTarget || model.phase === "waiting_transcript" ? (
+        <div className="domain-workspace-header ai-workspace-state">
+          {model.activeTarget ? (
+            <span className="workspace-status-badge active">{t("workspace.generating")}</span>
+          ) : (
+            <span className="workspace-status-badge">{t("workspace.waitingTranscript")}</span>
+          )}
         </div>
-        {model.activeTarget ? (
-          <span className="workspace-status-badge active">{t("workspace.generating")}</span>
-        ) : model.phase === "waiting_transcript" ? (
-          <span className="workspace-status-badge">{t("workspace.waitingTranscript")}</span>
-        ) : null}
-      </header>
+      ) : null}
 
-      <p className="ai-privacy-copy">{t("workspace.privacy")}</p>
+      <div className="ai-workspace-credits">
+        <p className="ai-credits-balance">{t("credits.balance", { formattedCount: formattedQuota })}</p>
+        <p className="ai-credits-cost">{t("credits.costHint")}</p>
+      </div>
       {renderedProgress ? (
         <StatusLine className="ai-progress-message">{renderedProgress}</StatusLine>
       ) : null}
@@ -136,8 +138,7 @@ export function AiGenerationWorkspace({
             {...card}
             icon={AI_TARGET_ICONS[card.target.target]}
             locale={locale}
-            creditsSummary={t("credits.summary", { formattedCount: formattedQuota })}
-            blocked={Boolean(blocker)}
+            blocked={Boolean(blocker) || model.phase === "generating"}
             onView={() => onViewTarget(card.target.target)}
           />
         ))}
@@ -167,7 +168,6 @@ type AiTargetCardProps = {
   locale: SupportedLocale;
   title: string;
   description: string;
-  creditsSummary: string;
   blocked: boolean;
   stale?: boolean;
   retainedResult?: boolean;
@@ -182,7 +182,6 @@ function AiTargetCard({
   locale,
   title,
   description,
-  creditsSummary,
   blocked,
   stale = false,
   retainedResult = false,
@@ -216,12 +215,10 @@ function AiTargetCard({
     >
       <div className="ai-target-heading">
         <span className="ai-target-icon">{icon}</span>
-        <div>
-          <h3>{title}</h3>
-          <p>{description}</p>
-        </div>
+        <h3>{title}</h3>
         <span className="ai-target-status">{t(`status.${target.status}`)}</span>
       </div>
+      <p className="ai-target-description">{description}</p>
       {stale ? <p className="dissection-card-stale">{t("dissection.card.stale")}</p> : null}
       <AnimatePresence initial={false}>
         {target.errorCode ? (
@@ -239,7 +236,6 @@ function AiTargetCard({
       {locked && target.lockedHint ? (
         <p className="ai-target-locked-hint">{renderUiMessage(locale, target.lockedHint)}</p>
       ) : null}
-      <small>{creditsSummary}</small>
       <div className="ai-target-actions">
         {active ? (
           <LoaderCircle size={17} className="spin" aria-label={t("status.generating")} />

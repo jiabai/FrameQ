@@ -1,4 +1,5 @@
 import type { WorkerResult } from "./workflow";
+import { parseNoteTitleMetadata } from "./noteTitle";
 
 export const TASK_RESULT_FIELDS = [
   "status",
@@ -14,7 +15,7 @@ export const TASK_RESULT_FIELDS = [
   "error",
 ] as const;
 
-const TASK_RESULT_OPTIONAL_FIELDS = ["dissection_source_status"] as const;
+export const TASK_RESULT_OPTIONAL_FIELDS = ["dissection_source_status", "note_title", "task_created"] as const;
 
 export const TASK_ARTIFACT_KEYS = [
   "video",
@@ -51,6 +52,7 @@ const TASK_ERROR_STAGES = [
   "waiting_input",
   "video_extracting",
   "video_transcribing",
+  "title_generating",
   "insights_generating",
   // Error-only stage for draft generation failures; draft progress reuses
   // insights_generating so it never appears as a live progress phase.
@@ -155,6 +157,7 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     object.dissection_source_status,
   );
   const error = parseTaskError(object.error);
+  const noteTitle = Object.prototype.hasOwnProperty.call(object, "note_title") ? parseNoteTitleMetadata(object.note_title) : null;
   if (
     taskId === undefined ||
     taskDir === undefined ||
@@ -165,13 +168,16 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     transcript === undefined ||
     dissection === undefined ||
     dissectionSourceStatus === undefined ||
-    error === undefined
+    error === undefined ||
+    (Object.prototype.hasOwnProperty.call(object, "task_created") && typeof object.task_created !== "boolean")
   ) {
     return null;
   }
   if (
     (object.status === "completed" && error !== null) ||
-    (object.status !== "completed" && error === null)
+    (object.status !== "completed" && error === null) ||
+    (object.task_created === true && (object.status === "failed" || !taskId?.trim() || !taskDir?.trim() || !artifacts.transcript_txt?.trim())) ||
+    (noteTitle !== null && (!taskId?.trim() || !taskDir?.trim() || !artifacts.transcript_txt?.trim()))
   ) {
     return null;
   }
@@ -190,6 +196,8 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     // model normalizes it to "" for "no draft".
     draft: typeof object.draft === "string" ? object.draft : "",
     error,
+    note_title: noteTitle,
+    task_created: object.task_created === true,
   };
 }
 

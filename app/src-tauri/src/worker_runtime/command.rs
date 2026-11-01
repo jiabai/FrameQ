@@ -9,7 +9,7 @@ use crate::settings::{
 use crate::task_manifest;
 use crate::{
     bundled_python_path, path_to_env_string, prepend_to_path, RuntimePaths, ALLOW_REAL_ASR_ENV,
-    CACHE_DIR_ENV, CACHE_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV, OUTPUT_DIR_ENV,
+    CACHE_DIR_ENV, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV, OUTPUT_DIR_ENV,
     PYTORCH_RUNTIME_DIR_ENV, PYTORCH_RUNTIME_SHA256_ENV, PYTORCH_RUNTIME_URL_ENV, RESOURCE_DIR_ENV,
     USER_DATA_DIR_ENV,
 };
@@ -18,6 +18,14 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 const MAX_WORKER_STDIN_PAYLOAD_BYTES: usize = 1024 * 1024;
+const STORAGE_SYSTEM_ENVIRONMENT: &[&str] = &[
+    "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR", "USERPROFILE",
+    "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "PROGRAMDATA", "PROGRAMFILES",
+    "PROGRAMFILES(X86)", "COMMONPROGRAMFILES", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
+    "PROCESSOR_IDENTIFIER", "OS", "HOME", "LANG", "TZ", "LC_ALL", "LC_CTYPE", "LC_MESSAGES",
+    "LC_NUMERIC", "LC_MONETARY", "LC_TIME", "LC_COLLATE", "LC_ADDRESS", "LC_IDENTIFICATION",
+    "LC_MEASUREMENT", "LC_NAME", "LC_PAPER", "LC_TELEPHONE",
+];
 
 #[derive(Clone)]
 pub(super) enum WorkerInvocation {
@@ -33,6 +41,7 @@ pub(in crate::worker_runtime) struct WorkerCommandSpec {
     pub(in crate::worker_runtime) args: Vec<String>,
     pub(in crate::worker_runtime) stdin_payload: Option<String>,
     pub(in crate::worker_runtime) env: Vec<(String, String)>,
+    pub(in crate::worker_runtime) clear_env: bool,
     pub(in crate::worker_runtime) env_remove: Vec<String>,
     pub(in crate::worker_runtime) current_dir: PathBuf,
 }
@@ -104,7 +113,7 @@ pub(super) fn build_asr_model_download_command_spec(
         ("PATH".to_string(), path_value),
         (
             MODEL_DIR_ENV.to_string(),
-            path_to_env_string(paths.user_data_dir.join("models")),
+            path_to_env_string(paths.models_root()?),
         ),
         (
             RESOURCE_DIR_ENV.to_string(),
@@ -138,9 +147,77 @@ pub(super) fn build_asr_model_download_command_spec(
         ],
         stdin_payload: None,
         env,
+        clear_env: false,
         env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),
     })
+}
+
+#[cfg(test)]
+pub(super) fn build_storage_validation_command_spec(
+    paths: &RuntimePaths,
+    data: &crate::data_storage::DataPaths,
+    import_component: bool,
+) -> Result<WorkerCommandSpec, String> {
+    build_storage_validation_for_component(paths, data, import_component, env!("CARGO_PKG_VERSION"))
+}
+
+pub(super) fn build_storage_validation_for_component(
+    paths: &RuntimePaths,
+    data: &crate::data_storage::DataPaths,
+    import_component: bool,
+    component_version: &str,
+) -> Result<WorkerCommandSpec, String> {
+    if component_version.is_empty() || component_version.len() > 80
+        || matches!(component_version, "." | "..")
+        || !component_version.chars().all(|value| value.is_ascii_alphanumeric() || matches!(value, '.' | '-' | '+'))
+    { return Err("StorageValidationFailed".into()); }
+    let mut args = vec!["-m".to_string(), "frameq_worker.storage_validation".to_string()];
+    if import_component { args.push("--import-component".to_string()); }
+    let mut env = STORAGE_SYSTEM_ENVIRONMENT.iter().filter_map(|key| {
+        std::env::var_os(key).map(|value| ((*key).to_string(), value.to_string_lossy().into_owned()))
+    }).collect::<Vec<_>>();
+    env.extend([
+        ("PYTHONPATH".into(), path_to_env_string(paths.resource_dir.join("worker"))),
+        ("PYTHONNOUSERSITE".into(), "1".into()),
+        ("PYTHONDONTWRITEBYTECODE".into(), "1".into()),
+        ("PYTHONUTF8".into(), "1".into()),
+        ("PYTHONIOENCODING".into(), "utf-8".into()),
+        ("PATH".into(), storage_validation_path(paths)?),
+        (OUTPUT_DIR_ENV.into(), path_to_env_string(&data.output_root)),
+        (CACHE_DIR_ENV.into(), path_to_env_string(&data.cache_root)),
+        (MODEL_DIR_ENV.into(), path_to_env_string(&data.models_root)),
+        (RESOURCE_DIR_ENV.into(), path_to_env_string(&paths.resource_dir)),
+        (USER_DATA_DIR_ENV.into(), path_to_env_string(&paths.user_data_dir)),
+        (PYTORCH_RUNTIME_DIR_ENV.into(), path_to_env_string(data.runtime_root.join("pytorch").join(component_version))),
+        (MODELSCOPE_OFFLINE_ENV.into(), "1".into()),
+        ("HF_HUB_OFFLINE".into(), "1".into()),
+        ("TRANSFORMERS_OFFLINE".into(), "1".into()),
+    ]);
+    Ok(WorkerCommandSpec {
+        program: bundled_python_path(&paths.resource_dir), args, stdin_payload: None,
+        env, clear_env: true, env_remove: Vec::new(), current_dir: paths.user_data_dir.clone(),
+    })
+}
+
+#[cfg(test)]
+fn storage_validation_needs_system_environment(key: &str) -> bool {
+    STORAGE_SYSTEM_ENVIRONMENT.contains(&key.to_ascii_uppercase().as_str())
+}
+
+fn storage_validation_path(paths: &RuntimePaths) -> Result<String, String> {
+    let mut search = vec![paths.resource_dir.join("bin")];
+    #[cfg(windows)]
+    {
+        let windows = std::env::var_os("SystemRoot").ok_or("StorageValidationFailed")?;
+        let windows = PathBuf::from(windows);
+        if !windows.is_absolute() { return Err("StorageValidationFailed".into()); }
+        search.extend([windows.join("System32"), windows]);
+    }
+    #[cfg(unix)]
+    search.extend(["/usr/bin", "/bin", "/usr/sbin", "/sbin"].into_iter().map(PathBuf::from));
+    std::env::join_paths(search).map(|value| value.to_string_lossy().into_owned())
+        .map_err(|_| "StorageValidationFailed".to_string())
 }
 
 pub(super) fn build_runtime_component_download_command_spec(
@@ -158,7 +235,7 @@ pub(super) fn build_runtime_component_download_command_spec(
         ("PATH".to_string(), path_value),
         (
             MODEL_DIR_ENV.to_string(),
-            path_to_env_string(paths.user_data_dir.join("models")),
+            path_to_env_string(paths.models_root()?),
         ),
         (
             RESOURCE_DIR_ENV.to_string(),
@@ -187,6 +264,7 @@ pub(super) fn build_runtime_component_download_command_spec(
         ],
         stdin_payload: None,
         env,
+        clear_env: false,
         env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),
     })
@@ -234,11 +312,11 @@ pub(super) fn build_worker_command_spec(
         (OUTPUT_DIR_ENV.to_string(), path_to_env_string(output_root)),
         (
             CACHE_DIR_ENV.to_string(),
-            path_to_env_string(paths.user_data_dir.join(CACHE_DIR_NAME)),
+            path_to_env_string(paths.cache_root()?),
         ),
         (
             MODEL_DIR_ENV.to_string(),
-            path_to_env_string(paths.user_data_dir.join("models")),
+            path_to_env_string(paths.models_root()?),
         ),
         (
             RESOURCE_DIR_ENV.to_string(),
@@ -250,10 +328,7 @@ pub(super) fn build_worker_command_spec(
         ),
         (
             PYTORCH_RUNTIME_DIR_ENV.to_string(),
-            path_to_env_string(crate::runtime_component::component_dir(
-                &paths.user_data_dir,
-                env!("CARGO_PKG_VERSION"),
-            )),
+            path_to_env_string(paths.runtime_root()?.join("pytorch").join(env!("CARGO_PKG_VERSION"))),
         ),
         (ALLOW_REAL_ASR_ENV.to_string(), "1".to_string()),
         (MODELSCOPE_OFFLINE_ENV.to_string(), "1".to_string()),
@@ -287,6 +362,7 @@ pub(super) fn build_worker_command_spec(
         args: [vec!["-m".to_string(), "frameq_worker".to_string()], args].concat(),
         stdin_payload,
         env,
+        clear_env: false,
         env_remove: legacy_local_llm_env_removals(),
         current_dir: paths.user_data_dir.clone(),
     })
@@ -305,7 +381,8 @@ fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> b
 mod tests {
     use super::{
         build_asr_model_download_command_spec, build_runtime_component_download_command_spec,
-        build_worker_command_spec, WorkerCommandSpec, WorkerInvocation,
+        build_storage_validation_command_spec, build_worker_command_spec,
+        storage_validation_needs_system_environment, WorkerCommandSpec, WorkerInvocation,
     };
     use crate::account::ServerManagedLlmInvocation;
     use crate::worker_runtime::facade::{AsrModelDownloadJob, RuntimeComponentDownloadJob};
@@ -313,9 +390,14 @@ mod tests {
     use std::path::PathBuf;
 
     fn command_test_paths() -> RuntimePaths {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../build/data-storage-acceptance")
+            .join(format!("worker-command-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("user-data")).expect("create command fixture");
+        let root = root.canonicalize().expect("resolve command fixture");
         RuntimePaths {
-            resource_dir: PathBuf::from("frameq-test").join("resources"),
-            user_data_dir: PathBuf::from("frameq-test").join("user-data"),
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("user-data"),
         }
     }
 
@@ -337,6 +419,89 @@ mod tests {
         ] {
             assert!(!spec.env_remove.iter().any(|value| value == key));
         }
+    }
+
+    #[test]
+    fn readonly_storage_probe_removes_provider_session_proxy_and_canary_environment() {
+        for key in ["FRAMEQ_STORAGE_VALIDATION_CANARY", "FRAMEQ_LLM_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "PYTHONHOME", "PYTHONPATH", "FRAMEQ_OUTPUT_DIR", "LC_API_KEY"] {
+            assert!(!storage_validation_needs_system_environment(key));
+        }
+        for key in ["SystemRoot", "WINDIR", "ComSpec", "TEMP", "TMP", "HOME", "USERPROFILE", "LANG", "LC_CTYPE"] {
+            assert!(storage_validation_needs_system_environment(key));
+        }
+        let paths = command_test_paths();
+        let probe = build_storage_validation_command_spec(&paths, &paths.data_paths().unwrap(), false).unwrap();
+        assert!(probe.clear_env);
+        assert!(!probe.env.iter().any(|(key, _)| key == "FRAMEQ_STORAGE_VALIDATION_CANARY"));
+        assert!(probe.env.iter().all(|(key, _)| !key.contains("SESSION") && !key.contains("API_KEY") && !key.contains("PROXY")));
+        assert_eq!(std::env::split_paths(probe.env_map().get("PATH").unwrap()).next(), Some(paths.resource_dir.join("bin")));
+    }
+
+    #[test]
+    #[ignore = "需要预构建的真实 Python 以及 FRAMEQ_STORAGE_VALIDATION_CANARY 环境变量"]
+    fn packaged_python_probe_does_not_inherit_the_environment_canary() {
+        use super::super::runner::{ProgressRoute, WorkerLane, WorkerOperation, WorkerRunOutcome, WorkerRunRequest};
+        use super::super::result_protocol::ValidatedWorkerResult;
+        assert!(std::env::var_os("FRAMEQ_STORAGE_VALIDATION_CANARY").is_some());
+        let mut paths = command_test_paths();
+        paths.resource_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").canonicalize().expect("built resources");
+        assert!(bundled_python_path(&paths.resource_dir).is_file());
+        let mut command = build_storage_validation_command_spec(&paths, &paths.data_paths().unwrap(), false).unwrap();
+        let source_worker = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../worker").canonicalize().expect("worker source");
+        command.env.retain(|(key, _)| key != "PYTHONPATH");
+        command.env.push(("PYTHONPATH".into(), path_to_env_string(source_worker)));
+        command.args = vec!["-c".into(), "import os,runpy,sys; assert 'FRAMEQ_STORAGE_VALIDATION_CANARY' not in os.environ; sys.argv=['storage_validation']; runpy.run_module('frameq_worker.storage_validation',run_name='__main__')".into()];
+        let outcome = WorkerLane::default().run(&paths, WorkerRunRequest {
+            operation: WorkerOperation::StorageValidation,
+            command,
+            progress: ProgressRoute::None,
+        }).expect("run supervised real Python probe");
+        let WorkerRunOutcome::Structured(ValidatedWorkerResult::StorageValidation(result)) = outcome else {
+            panic!("real storage probe did not produce its validated result");
+        };
+        assert!(result.ready_models.is_empty());
+        assert!(!result.component_imported);
+    }
+
+    #[test]
+    fn managed_library_paths_reach_all_worker_commands_and_keep_fixed_configuration() {
+        let paths = command_test_paths();
+        std::fs::create_dir_all(&paths.resource_dir).expect("create resources");
+        let target = paths.user_data_dir.parent().unwrap().join("moved-library");
+        std::fs::create_dir(&target).expect("create empty target");
+        let target = target.canonicalize().expect("resolve target");
+        std::fs::create_dir(paths.user_data_dir.join("cache")).expect("cache fixture");
+        std::fs::write(paths.user_data_dir.join("cache/preserved.bin"), b"source cache bytes").expect("cache content");
+        let manager = crate::data_storage::DataStorageManager::open(paths.user_data_dir.clone(), paths.resource_dir.clone()).expect("open legacy library");
+        let preview = manager.prepare(target.clone(), vec![], "test", 0).expect("prepare real migration");
+        manager.start(&preview.plan_token, "test", &mut |_| {}).expect("copy real files");
+        drop(manager);
+        let manager = crate::data_storage::DataStorageManager::open(paths.user_data_dir.clone(), paths.resource_dir.clone()).expect("reopen switched library");
+        manager.recheck().expect("validate copied library");
+        assert_eq!(std::fs::read(target.join("cache/preserved.bin")).unwrap(), b"source cache bytes");
+        assert_eq!(paths.output_root().unwrap(), target.join("outputs"));
+        assert_eq!(paths.collections_path().unwrap(), target.join("collections.json"));
+
+        let worker = build_worker_command_spec(&paths, WorkerInvocation::ProcessVideo("{}".into()), None).expect("worker command");
+        let model = build_asr_model_download_command_spec(&paths, &AsrModelDownloadJob::new("iic/SenseVoiceSmall-onnx".into(), None, None, None, None)).expect("model command");
+        let component_dir = target.join("runtime/pytorch").join(env!("CARGO_PKG_VERSION"));
+        let component = build_runtime_component_download_command_spec(&paths, &RuntimeComponentDownloadJob::new(component_dir.clone(), "https://example.com/runtime.tar.gz".into(), None)).expect("component command");
+        let probe = build_storage_validation_command_spec(&paths, &paths.data_paths().unwrap(), true).expect("readonly probe command");
+        for command in [&worker, &model, &component, &probe] {
+            assert_eq!(command.current_dir, paths.user_data_dir);
+            assert_eq!(command.env_map().get("FRAMEQ_USER_DATA_DIR"), Some(&path_to_env_string(&paths.user_data_dir)));
+            assert_eq!(command.env_map().get("FRAMEQ_MODEL_DIR"), Some(&path_to_env_string(target.join("models"))));
+            assert_eq!(command.env_map().get("FRAMEQ_RESOURCE_DIR"), Some(&path_to_env_string(&paths.resource_dir)));
+        }
+        for command in [&worker, &probe] {
+            assert_eq!(command.env_map().get("FRAMEQ_OUTPUT_DIR"), Some(&path_to_env_string(target.join("outputs"))));
+            assert_eq!(command.env_map().get("FRAMEQ_CACHE_DIR"), Some(&path_to_env_string(target.join("cache"))));
+            assert_eq!(command.env_map().get("FRAMEQ_PYTORCH_RUNTIME_DIR"), Some(&path_to_env_string(&component_dir)));
+        }
+        assert_eq!(probe.args, vec!["-m", "frameq_worker.storage_validation", "--import-component"]);
+        assert!(probe.stdin_payload.is_none());
+        assert_eq!(probe.env_map().get("PYTHONDONTWRITEBYTECODE"), Some(&"1".to_string()));
+        assert!(!probe.env.iter().any(|(key, _)| key.starts_with("FRAMEQ_LLM_") || key.starts_with("FRAMEQ_ANYSEARCH_")));
     }
 
     #[test]
@@ -369,11 +534,7 @@ mod tests {
         assert_eq!(spec.current_dir, paths.user_data_dir);
         assert_eq!(
             env.get("FRAMEQ_MODEL_DIR"),
-            Some(&path_to_env_string(
-                PathBuf::from("frameq-test")
-                    .join("user-data")
-                    .join("models")
-            ))
+            Some(&path_to_env_string(paths.user_data_dir.join("models")))
         );
         assert_eq!(
             env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_URL"),

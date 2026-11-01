@@ -139,6 +139,7 @@ fn terminal_matrix_is_closed_and_deterministic() {
 fn lifecycle_log_details_exclude_command_request_paths_and_worker_content() {
     let secret = "RUNNER_PRIVACY_SENTINEL";
     let spec = WorkerCommandSpec {
+        clear_env: false,
         program: PathBuf::from(format!("C:/private/{secret}/python.exe")),
         args: vec![format!("--prompt={secret}")],
         stdin_payload: Some(format!(r#"{{"transcript":"{secret}"}}"#)),

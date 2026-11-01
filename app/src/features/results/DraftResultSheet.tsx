@@ -29,15 +29,26 @@ import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage
 import { MarkdownContent } from "./MarkdownContent";
 import { StatusLine } from "../common/StatusLine";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
+import { ConfirmDialog } from "../modal/ConfirmDialog";
 import { revealPath } from "../common/revealPath";
+import { useStorageEditor } from "../dataStorage/useDataStorageController";
 
 type DraftResultSheetProps = {
   open: boolean;
   workflow: WorkflowState;
   onClose: () => void;
-  onSaved: (markdown: string, artifacts: TaskArtifacts) => void;
-  onRegenerate: (seedInsightId: number | null) => void;
+  onSaved: (markdown: string, artifacts: TaskArtifacts, expectedTaskId: string) => void;
+  onBusyChange?: (busy: boolean) => void;
+  onRegenerate: (seedInsightId: number | null, hasUnsavedChanges: boolean) => void;
 };
+
+export function canCloseDraftResult({ saving, dirty, discardAccepted }: {
+  saving: boolean;
+  dirty: boolean;
+  discardAccepted: boolean;
+}): boolean {
+  return !saving && (!dirty || discardAccepted);
+}
 
 /**
  * Self-contained draft result sheet: rendered Markdown by default, an explicit
@@ -50,10 +61,12 @@ export function DraftResultSheet({
   onClose,
   onSaved,
   onRegenerate,
+  onBusyChange,
 }: DraftResultSheetProps) {
   const { t } = useTranslation("synthesis");
   const resolvedLocale = useUiLocale();
   const [buffer, setBuffer] = useState("");
+  const savedBuffer = useRef("");
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -62,6 +75,49 @@ export function DraftResultSheet({
   const [notice, setNotice] = useState<UiMessage | null>(null);
   const [detailSeedId, setDetailSeedId] = useState<number | null>(null);
   const draftFallbackRef = useRef(workflow.draft);
+  const [discardCandidate, setDiscardCandidate] = useState<{ taskId: string | null } | null>(null);
+  const discardCandidateRef = useRef(discardCandidate);
+  const savingRef = useRef(false);
+  const currentTaskRef = useRef({ open, taskId: workflow.taskId });
+  currentTaskRef.current = { open, taskId: workflow.taskId };
+
+  const cancelDiscard = useCallback(() => {
+    discardCandidateRef.current = null;
+    setDiscardCandidate(null);
+  }, []);
+
+  useEffect(() => {
+    cancelDiscard();
+  }, [open, workflow.taskId, saving, cancelDiscard]);
+
+  useEffect(() => {
+    onBusyChange?.(saving);
+  }, [saving, onBusyChange]);
+
+  const handleClose = useCallback(() => {
+    if (!open || savingRef.current || discardCandidateRef.current) return;
+    if (dirty) {
+      const candidate = { taskId: workflow.taskId };
+      discardCandidateRef.current = candidate;
+      setDiscardCandidate(candidate);
+      return;
+    }
+    onClose();
+  }, [open, dirty, workflow.taskId, onClose]);
+
+  const confirmDiscard = useCallback(() => {
+    const current = currentTaskRef.current;
+    if (
+      !discardCandidate ||
+      discardCandidateRef.current !== discardCandidate ||
+      !current.open ||
+      current.taskId !== discardCandidate.taskId ||
+      !canCloseDraftResult({ saving: savingRef.current, dirty, discardAccepted: true })
+    ) return;
+    cancelDiscard();
+    setDirty(false);
+    onClose();
+  }, [discardCandidate, dirty, cancelDiscard, onClose]);
 
   // Keep the fallback ref in sync without re-running the load effect below.
   useEffect(() => {
@@ -86,8 +142,10 @@ export function DraftResultSheet({
     let cancelled = false;
     setLoading(true);
     setBuffer(draftFallbackRef.current);
+    savedBuffer.current = draftFallbackRef.current;
     setDirty(false);
     setNotice(null);
+    setDetailSeedId(null);
 
     const taskId = workflow.taskId;
 
@@ -96,6 +154,7 @@ export function DraftResultSheet({
         const detail = await loadDraftDetail(taskId);
         if (cancelled) return;
         setBuffer(detail.markdown);
+        savedBuffer.current = detail.markdown;
         setDetailSeedId(detail.draft_seed_insight_id);
       } catch (error) {
         if (cancelled) return;
@@ -131,26 +190,32 @@ export function DraftResultSheet({
   // ---- Save ----
 
   const handleSave = useCallback(async () => {
-    if (!workflow.taskId || saving) return;
+    if (!open || !workflow.taskId || savingRef.current || discardCandidateRef.current) return;
 
     const expectedTaskId = workflow.taskId;
+    savingRef.current = true;
     setSaving(true);
     try {
       const saved = await saveDraftEdit(expectedTaskId, buffer);
-      if (saved.task_id !== expectedTaskId) return;
+      if (saved.task_id !== expectedTaskId || currentTaskRef.current.taskId !== expectedTaskId) return;
       setDirty(false);
+      savedBuffer.current = saved.markdown;
       setNotice(uiMessage("synthesis.draftResult.saved"));
-      onSaved(saved.markdown, saved.artifacts);
+      onSaved(saved.markdown, saved.artifacts, expectedTaskId);
     } catch (error) {
+      if (currentTaskRef.current.taskId !== expectedTaskId) return;
       setNotice(
         uiMessage("synthesis.draftResult.saveFailed", {
           detail: error instanceof Error ? error.message : String(error),
         }),
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
-  }, [buffer, saving, workflow.taskId, onSaved]);
+  }, [buffer, open, workflow.taskId, onSaved]);
+  useStorageEditor({ id: "draft", dirty: open && dirty, saving, save: handleSave,
+    discard: () => { if (!savingRef.current) { setBuffer(savedBuffer.current); setDirty(false); } } });
 
   // ---- Copy ----
 
@@ -191,18 +256,25 @@ export function DraftResultSheet({
   const renderedNotice = renderUiMessage(resolvedLocale, notice);
 
   return (
-    <AnimatedSheet
-      open={open}
-      ariaLabel={t("draftResult.ariaLabel")}
-      className={`ai-result-detail-sheet draft-result-sheet${expanded ? " is-expanded" : ""}`}
-      onBackdropClick={onClose}
-    >
+    <>
+      <AnimatedSheet
+        open={open}
+        ariaLabel={t("draftResult.ariaLabel")}
+        className={`ai-result-detail-sheet draft-result-sheet${expanded ? " is-expanded" : ""}`}
+        onBackdropClick={handleClose}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          event.stopPropagation();
+          handleClose();
+        }}
+      >
         <header className="modal-header sheet-header">
           <div>
             <p className="section-label">{t("draftResult.sectionLabel")}</p>
             <h2>{t("draftResult.title")}</h2>
           </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label={t("draftResult.closeAria")}>
+          <button className="icon-button" type="button" onClick={handleClose} disabled={saving} aria-label={t("draftResult.closeAria")}>
             <X size={18} />
           </button>
         </header>
@@ -266,8 +338,11 @@ export function DraftResultSheet({
             </button>
             <button
               type="button"
-              onClick={() => onRegenerate(detailSeedId ?? workflow.draftSeedInsightId ?? null)}
-              disabled={!buffer.trim()}
+              onClick={() => {
+                if (!open || savingRef.current || discardCandidateRef.current) return;
+                onRegenerate(detailSeedId ?? workflow.draftSeedInsightId ?? null, dirty);
+              }}
+              disabled={saving || !buffer.trim()}
             >
               <RefreshCw size={16} />
               <span>{t("draftResult.regenerate")}</span>
@@ -282,6 +357,7 @@ export function DraftResultSheet({
             <textarea
               className="draft-textarea"
               value={buffer}
+              disabled={saving}
               onChange={handleBufferChange}
               placeholder={t("draftResult.empty")}
               aria-label={t("draftResult.editAria")}
@@ -292,6 +368,16 @@ export function DraftResultSheet({
             <MarkdownContent markdown={buffer} emptyText={t("draftResult.empty")} />
           </div>
         )}
-    </AnimatedSheet>
+      </AnimatedSheet>
+      <ConfirmDialog
+        open={open && !saving && discardCandidate !== null && discardCandidate.taskId === workflow.taskId}
+        title={t("draftResult.discardChangesTitle")}
+        message={t("draftResult.discardChangesConfirm")}
+        cancelLabel={t("draftResult.keepEditing")}
+        confirmLabel={t("draftResult.discardChanges")}
+        onCancel={cancelDiscard}
+        onConfirm={confirmDiscard}
+      />
+    </>
   );
 }

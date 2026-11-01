@@ -21,6 +21,7 @@ from frameq_worker.models import (
     TranscriptMetadata,
     WorkerError,
 )
+from frameq_worker.note_title import run_note_title_step
 from frameq_worker.pipeline import (
     resolve_cache_dir,
     resolve_output_dir,
@@ -32,7 +33,13 @@ from frameq_worker.requests import (
     parse_retry_insights_request,
 )
 from frameq_worker.summary_agent import SummaryRunner
-from frameq_worker.task_store import DRAFT_SEED_UNSET, TaskContext, TaskPaths, TaskStoreFacade
+from frameq_worker.task_store import (
+    DRAFT_SEED_UNSET,
+    TaskContext,
+    TaskPaths,
+    TaskStoreFacade,
+    result_with_task,
+)
 from frameq_worker.task_transaction import (
     TaskArtifactCommitError,
     TaskArtifactRecoveryError,
@@ -91,6 +98,13 @@ def retry_insights_once(
             ),
         ).to_dict()
     task_context = opened_task.context
+    if request.target == "title":
+        title_result = run_note_title_step(
+            store=task_store, context=task_context, runtime_env=runtime_env,
+            output_language=request.output_language, progress_callback=progress_callback,
+        )
+        merged_title_result = merge_existing_ai_artifacts(task_context.paths, title_result)
+        return result_with_task(merged_title_result, task_context).to_dict()
     if request.target == "insights" and request.preference_snapshot is not None:
         try:
             task_store.save_preference_snapshot(
@@ -219,6 +233,8 @@ def merge_existing_ai_artifacts(
         error=result.error,
         artifact_payloads=result.artifact_payloads,
         draft=result.draft,
+        note_title=result.note_title,
+        task_created=result.task_created,
     )
 
 

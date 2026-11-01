@@ -71,6 +71,14 @@ pub(crate) async fn retry_insights(
 }
 
 #[tauri::command]
+pub(crate) async fn record_note_title_cancellation(
+    app: AppHandle,
+    request: serde_json::Value,
+) -> Result<TaskTerminalResult, String> {
+    retry_insights::run_record_note_title_cancellation(app, request).await
+}
+
+#[tauri::command]
 pub(crate) fn cancel_process(
     process_state: State<'_, Arc<ProcessSupervisors>>,
 ) -> Result<CancelProcessResult, String> {
