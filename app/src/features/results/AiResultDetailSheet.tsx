@@ -36,6 +36,7 @@ export function AiResultDetailSheet({
   onClearDraftSeed,
 }: AiResultDetailSheetProps) {
   const { t } = useTranslation("synthesis");
+  const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   const renderedActionNotice = renderUiMessage(locale, actionNotice);
   const { detailTab, closeDetail, copyDetail, exportDetail, exportPath } = controller;
@@ -55,7 +56,7 @@ export function AiResultDetailSheet({
     ? t("detail.summaryTitle")
     : contentTab === "insights"
       ? t("detail.insightsTitle")
-      : t("dissection.card.title");
+      : workflow.taskSource?.kind === "web_page" ? webT("dissection.title") : t("dissection.card.title");
   const questionList = useMemo(
     () => new Intl.ListFormat(locale, { style: "long", type: "conjunction" }),
     [locale],

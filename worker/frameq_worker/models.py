@@ -8,6 +8,7 @@ from typing import Literal
 from frameq_worker.note_title_metadata import NoteTitleMetadata
 from frameq_worker.output_language import OutputLanguage
 from frameq_worker.source_identity import SourceIdentity
+from frameq_worker.web_page_contract import WebPageSource
 
 RetryInsightTarget = Literal["summary", "insights", "dissection", "draft", "transcript", "title"]
 InsightGenerationTarget = Literal["all", "summary", "insights", "dissection"]
@@ -18,6 +19,9 @@ class JobStage(StrEnum):
     WAITING_INPUT = "waiting_input"
     VIDEO_EXTRACTING = "video_extracting"
     VIDEO_TRANSCRIBING = "video_transcribing"
+    WEB_LOADING = "web_loading"
+    WEB_EXTRACTING = "web_extracting"
+    WEB_SAVING = "web_saving"
     INSIGHTS_GENERATING = "insights_generating"
     TITLE_GENERATING = "title_generating"
     DRAFT_GENERATING = "draft_generating"
@@ -221,6 +225,8 @@ class ProcessResult:
     draft: str = ""
     note_title: NoteTitleMetadata | None = None
     task_created: bool = False
+    source: WebPageSource | None = None
+    markdown: str = ""
 
     def to_dict(self) -> dict[str, object]:
         payload = {
@@ -240,4 +246,7 @@ class ProcessResult:
             payload["note_title"] = self.note_title.to_dict()
         if self.task_created:
             payload["task_created"] = True
+        if self.source is not None:
+            payload["source"] = self.source.to_dict()
+            payload["markdown"] = self.markdown
         return payload

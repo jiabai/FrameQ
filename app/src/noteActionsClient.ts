@@ -4,10 +4,11 @@ import { parseNoteMetadata, parseNoteMetadataProjection, type NoteMetadata, type
 import { isValidNoteTitleText, parseNoteTitleMetadata, type NoteTitleMetadata } from "./noteTitle";
 import { IpcProtocolError, readIpcDataArray, readIpcDataObject } from "./tauriIpcProtocol";
 import { parseTaskSourceSummary, type TaskArtifactKey, type TaskSourceSummary, type TranscriptMetadata, type WorkerResult } from "./workflow";
+import { parseWebPageSource } from "./webPageProtocol";
 
 const INVALID = "HISTORY_IPC_RESPONSE_INVALID";
 const defaultRunner: HistoryCommandRunner = (command, args) => invoke(command, args);
-const ARTIFACTS: readonly TaskArtifactKey[] = ["video", "audio", "transcript_txt", "transcript_md", "summary", "mindmap", "insights", "insights_md", "dissection", "dissection_md", "draft"];
+const ARTIFACTS: readonly TaskArtifactKey[] = ["video", "audio", "transcript_txt", "transcript_md", "article_txt", "article_md", "summary", "mindmap", "insights", "insights_md", "dissection", "dissection_md", "draft"];
 export type NoteMutation = { taskId: string; noteMetadata: NoteMetadata };
 export type NoteInfo = NoteMetadataProjection & {
   taskId: string; source: TaskSourceSummary; createdAt: string; status: WorkerResult["status"];
@@ -39,6 +40,7 @@ export async function renameNote(taskId: string, title: string, runner = default
 }
 
 export function safeNoteSource(source: TaskSourceSummary): string | null {
+  if (source.kind === "web_page") return parseWebPageSource(source)?.url ?? null;
   if (source.kind !== "url" || !URL.canParse(source.url)) return null;
   const url = new URL(source.url);
   if (source.url !== url.href || source.url.length > 2048 || /[%\p{Cc}\p{Cf}\p{Cs}]/u.test(source.url) || url.protocol !== "https:" || url.username || url.password || url.port || url.hash) return null;
@@ -53,7 +55,7 @@ export function safeNoteSource(source: TaskSourceSummary): string | null {
 
 export function parseNoteInfo(value: unknown, taskId: string): NoteInfo {
   const data = readIpcDataObject(value, ["task_id", "source", "created_at", "status", "note_title", "note_metadata", "note_metadata_error", "transcript", "artifact_types", "text_preview"], [], INVALID);
-  const sourceData = readIpcDataObject(data.source, ["kind"], ["url", "displayName", "mediaKind"], INVALID);
+  const sourceData = readIpcDataObject(data.source, ["kind"], ["url", "displayName", "mediaKind", "title", "extractedAt"], INVALID);
   const source = parseTaskSourceSummary(sourceData);
   if (data.task_id !== taskId || !source || typeof data.created_at !== "string" ||
     !["completed", "partial_completed", "failed"].includes(data.status as string) || typeof data.text_preview !== "string") throw new IpcProtocolError(INVALID);
@@ -68,6 +70,9 @@ export function parseNoteInfo(value: unknown, taskId: string): NoteInfo {
   }
   const artifactTypes = readIpcDataArray(data.artifact_types, INVALID);
   if (artifactTypes.some((key) => !ARTIFACTS.includes(key as TaskArtifactKey)) || new Set(artifactTypes).size !== artifactTypes.length) throw new IpcProtocolError(INVALID);
+  if (source.kind === "web_page" && (transcript !== null || data.note_title !== null ||
+    !artifactTypes.includes("article_txt") || !artifactTypes.includes("article_md") ||
+    artifactTypes.some((key) => ["video", "audio", "transcript_txt", "transcript_md"].includes(key as string)))) throw new IpcProtocolError(INVALID);
   return {
     taskId, source, createdAt: data.created_at, status: data.status as WorkerResult["status"],
     noteTitle: parseNoteTitleMetadata(data.note_title), ...parseNoteMetadataProjection(data), transcript,

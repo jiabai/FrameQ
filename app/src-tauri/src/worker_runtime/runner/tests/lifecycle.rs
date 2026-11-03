@@ -11,6 +11,40 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[test]
+fn reserved_lane_excludes_other_admissions_through_real_child_cancellation() {
+    let lane = Arc::new(WorkerLane::default());
+    let paths = test_paths("reserved-cancellation");
+    let request = || super::fixtures::watchdog_fixture_request(
+        WorkerOperation::ProcessWebPage, ProgressRoute::None,
+        super::fixtures::silent_fixture_script(), None,
+    );
+    let reservation = lane.reserve().unwrap();
+    assert!(lane.is_reserved());
+    assert!(!lane.is_active());
+    assert_eq!(lane.cancel().status, CancelProcessStatus::NotRunning);
+    assert_eq!(lane.run(&paths, request()).unwrap_err().kind, WorkerRunErrorKind::AlreadyRunning);
+    assert!(lane.reserve().is_err());
+    drop(reservation);
+    let worker_lane = Arc::clone(&lane);
+    let worker_paths = paths.clone();
+    let operation = std::thread::spawn(move || {
+        let _reservation = worker_lane.reserve().unwrap();
+        worker_lane.run_reserved(&worker_paths, super::fixtures::watchdog_fixture_request(
+            WorkerOperation::ProcessWebPage, ProgressRoute::None,
+            super::fixtures::silent_fixture_script(), None,
+        ))
+    });
+    wait_until_active(&lane);
+    assert!(lane.is_reserved());
+    assert_eq!(lane.run(&paths, request()).unwrap_err().kind, WorkerRunErrorKind::AlreadyRunning);
+    assert_eq!(lane.cancel().status, CancelProcessStatus::Cancelling);
+    assert_eq!(operation.join().unwrap().unwrap(), WorkerRunOutcome::Cancelled);
+    assert!(!lane.is_reserved());
+    assert!(!lane.is_active());
+    assert_eq!(lane.cancel().status, CancelProcessStatus::NotRunning);
+}
+
+#[test]
 fn spawn_failure_is_typed_and_never_activates_the_lane() {
     let lane = WorkerLane::default();
     let paths = test_paths("spawn-failure");
@@ -267,4 +301,74 @@ fn stdout_reader_panic_finishes_lane_and_returns_fixed_protocol_error() {
     assert_eq!(error.kind, WorkerRunErrorKind::ProtocolViolation);
     assert_eq!(error.detail, "Worker stdout reader failed.");
     assert!(!lane.is_active());
+}
+
+fn web_orphan_request(paths: &crate::RuntimePaths, mode: &str) -> WorkerRunRequest {
+    let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let resources = repository.join("app/src-tauri/resources");
+    let python = std::env::var_os("FRAMEQ_PROCESS_TEST_PYTHON").map(std::path::PathBuf::from)
+        .unwrap_or_else(|| crate::bundled_python_path(&resources));
+    assert!(python.is_absolute() && python.is_file(), "A real absolute Python executable is required");
+    let mut env = Vec::new();
+    for name in ["SYSTEMROOT", "WINDIR", "SYSTEMDRIVE"] {
+        if let Ok(value) = std::env::var(name) { env.push((name.into(), value)); }
+    }
+    WorkerRunRequest {
+        operation: WorkerOperation::ProcessWebPage,
+        command: WorkerCommandSpec {
+            program: python,
+            args: vec!["-I".into(), "-B".into(), repository.join("worker/tests/fixtures/web_worker_orphan.py").to_string_lossy().into_owned(), mode.into(), paths.user_data_dir.join("tree.json").to_string_lossy().into_owned()],
+            stdin_payload: Some("start".into()), env, clear_env: true, env_remove: Vec::new(),
+            current_dir: paths.user_data_dir.clone(),
+        },
+        progress: ProgressRoute::None,
+    }
+}
+
+fn assert_web_orphan_tree_gone(paths: &crate::RuntimePaths) {
+    let value: serde_json::Value = serde_json::from_slice(&std::fs::read(paths.user_data_dir.join("tree.json")).unwrap()).unwrap();
+    for field in ["root", "child"] {
+        super::fixtures::wait_until_fixture_process_is_gone(value[field].as_u64().unwrap() as u32);
+    }
+}
+
+#[test]
+fn web_root_crash_reaps_inherited_pipe_descendant_before_readers_join() {
+    let paths = test_paths("web-orphan-crash");
+    let lane = WorkerLane::default();
+    let started = Instant::now();
+    let outcome = lane.run(&paths, web_orphan_request(&paths, "crash")).unwrap();
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(matches!(outcome, WorkerRunOutcome::UnstructuredFailure(value) if value.exit_code == Some(7)));
+    assert_web_orphan_tree_gone(&paths);
+    assert!(!lane.is_active());
+    assert!(!lane.is_reserved());
+}
+
+#[test]
+fn web_root_success_without_protocol_still_reaps_inherited_pipe_descendant() {
+    let paths = test_paths("web-orphan-success");
+    let lane = WorkerLane::default();
+    let started = Instant::now();
+    let error = lane.run(&paths, web_orphan_request(&paths, "success")).unwrap_err();
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert_eq!(error.kind, WorkerRunErrorKind::ProtocolViolation);
+    assert_web_orphan_tree_gone(&paths);
+}
+
+#[test]
+fn web_cancellation_reaps_real_root_and_pipe_inheriting_descendant() {
+    let paths = test_paths("web-orphan-cancel");
+    let lane = Arc::new(WorkerLane::default());
+    let worker = Arc::clone(&lane); let running_paths = paths.clone();
+    let started = Instant::now();
+    let task = std::thread::spawn(move || worker.run(&running_paths, web_orphan_request(&running_paths, "wait")));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !paths.user_data_dir.join("tree.json").exists() {
+        assert!(Instant::now() < deadline); std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(lane.cancel().status, CancelProcessStatus::Cancelling);
+    assert_eq!(task.join().unwrap().unwrap(), WorkerRunOutcome::Cancelled);
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert_web_orphan_tree_gone(&paths);
 }

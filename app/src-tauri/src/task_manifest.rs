@@ -7,13 +7,18 @@ mod schema;
 mod source_identity;
 mod storage;
 mod transaction;
+mod web_source;
+mod source_text;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) mod web_tests;
 
 pub(crate) const TASK_MANIFEST_FILE_NAME: &str = "frameq-task.json";
 pub(crate) const TASKS_DIR_NAME: &str = "tasks";
 pub(crate) const TASK_SCHEMA_VERSION: u64 = 3;
+pub(crate) const WEB_TASK_SCHEMA_VERSION: u64 = 4;
 pub(crate) const SOURCE_PRIVACY_MIGRATION_VERSION: u64 = 2;
 
 #[allow(unused_imports)]
@@ -27,6 +32,10 @@ pub(crate) use schema::{
     TaskSourceSummary, TranscriptMetadata, TASK_ARTIFACT_KEYS,
 };
 pub(crate) use source_identity::SourceIdentity;
+pub(crate) use web_source::{canonical_web_url, validate_web_request_url, WebPageSource};
+pub(crate) use web_source::public_literal as is_public_web_address;
+pub(crate) use source_text::{SourceText, SourceTextKind};
+pub(crate) use schema::validate_relative_artifact_path as validate_artifact_relative_path;
 #[allow(unused_imports)]
 #[cfg(test)]
 pub(crate) use storage::configured_output_root_from_project;

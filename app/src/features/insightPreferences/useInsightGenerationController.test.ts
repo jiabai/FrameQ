@@ -112,6 +112,7 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
   const { dissection, dissectionStale, ...rest } = overrides;
   return {
     stage: "partial_completed",
+    markdown: "",
     cancellingFromStage: null,
     activeAiTarget: null,
     aiErrorTarget: null,

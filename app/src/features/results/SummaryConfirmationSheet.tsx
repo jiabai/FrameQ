@@ -9,6 +9,7 @@ import { OutputLanguageField } from "../insightPreferences/OutputLanguageField";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
 
 type SummaryConfirmationSheetProps = {
+  sourceKind?: "article" | "media";
   open: boolean;
   locale: SupportedLocale;
   transcriptText: string;
@@ -20,6 +21,7 @@ type SummaryConfirmationSheetProps = {
 };
 
 export function SummaryConfirmationSheet({
+  sourceKind = "media",
   open,
   locale,
   transcriptText,
@@ -30,6 +32,7 @@ export function SummaryConfirmationSheet({
   onCancel,
 }: SummaryConfirmationSheetProps) {
   const { t } = useTranslation("synthesis");
+  const { t: webT } = useTranslation("webPage");
   const unitCount = useMemo(
     () => countTextUnits(transcriptText, locale),
     [locale, transcriptText],
@@ -59,19 +62,19 @@ export function SummaryConfirmationSheet({
       <div className="preference-flow-content sheet-body">
         <p className="settings-warning privacy-callout">
           <ShieldCheck size={16} />
-          <span>{t("confirmation.privacy")}</span>
+          <span>{sourceKind === "article" ? webT("privacy") : t("confirmation.privacy")}</span>
         </p>
         <dl className="sheet-facts">
           <div className="sheet-fact">
-            <dt>{t("confirmation.currentTranscript")}</dt>
+            <dt>{sourceKind === "article" ? webT("currentText") : t("confirmation.currentTranscript")}</dt>
             <dd>
               <strong>
                 {unitCount > 0
                   ? formatWordCount(unitCount, locale)
-                  : t("confirmation.waitingTranscript")}
+                  : sourceKind === "article" ? webT("waiting") : t("confirmation.waitingTranscript")}
               </strong>
               <small className={transcriptPath ? "sheet-path" : undefined} title={transcriptPath || undefined}>
-                {transcriptPath || t("confirmation.transcriptUnavailable")}
+                {transcriptPath || (sourceKind === "article" ? webT("unavailable") : t("confirmation.transcriptUnavailable"))}
               </small>
             </dd>
           </div>

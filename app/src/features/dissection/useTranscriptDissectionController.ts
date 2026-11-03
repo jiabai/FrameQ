@@ -5,8 +5,10 @@ import type { SupportedLocale } from "../../i18n/locale";
 import type { UiMessage } from "../../i18n/uiMessage";
 import type { InsightRetryTarget, WorkflowState } from "../../workflow";
 import { buildDissectionCallPlan } from "./dissectionCallPlan";
+import { hasSourceText } from "../../webPageProtocol";
 
 export type DissectionPreview = {
+  sourceKind?: "media" | "article";
   taskTitle: string;
   characterCount: number;
   chunkCount: number;
@@ -71,21 +73,21 @@ export function useTranscriptDissectionController({
   retryInsightGeneration,
 }: UseTranscriptDissectionControllerOptions) {
   const [preview, setPreview] = useState<DissectionPreview | null>(null);
-  const taskTitle = workflow.noteMetadata?.displayTitle ?? workflow.noteTitle?.text ?? (workflow.taskSource?.kind === "local_file"
+  const taskTitle = workflow.noteMetadata?.displayTitle ?? (workflow.taskSource?.kind === "web_page" ? workflow.taskSource.title : workflow.noteTitle?.text) ?? (workflow.taskSource?.kind === "local_file"
     ? workflow.taskSource.displayName
     : workflow.taskId ?? "");
   useEffect(() => setPreview(null), [workflow.taskId]);
 
   const openConfirmation = useCallback(() => {
-    if (!workflow.taskId || !workflow.artifacts.transcript_txt || !workflow.text.trim()) {
+    if (!hasSourceText(workflow)) {
       return;
     }
-    setPreview(createDissectionPreview({
+    setPreview({ ...createDissectionPreview({
       taskTitle,
       transcript: workflow.text,
       outputLanguage,
       quotaRemaining: account.llmQuotaRemaining,
-    }));
+    }), sourceKind: workflow.taskSource?.kind === "web_page" ? "article" : "media" });
   }, [account.llmQuotaRemaining, outputLanguage, taskTitle, workflow]);
 
   const closeConfirmation = useCallback(() => setPreview(null), []);

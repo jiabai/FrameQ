@@ -152,6 +152,9 @@ jobs:
       - name: Build macOS Intel app bundle
         run: npm --prefix app run tauri -- build --bundles app --target x86_64-apple-darwin
 
+      - name: Test macOS native host protocol
+        run: node scripts/build-system-webview-host.mjs --test-protocol
+
       - name: Verify packaged runtime imports end to end
         run: |
           APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app"
@@ -218,6 +221,9 @@ jobs:
 
       - name: Build macOS Apple Silicon app bundle
         run: npm --prefix app run tauri -- build --bundles app --target aarch64-apple-darwin
+
+      - name: Test macOS native host protocol
+        run: node scripts/build-system-webview-host.mjs --test-protocol
 
       - name: Verify packaged runtime imports end to end
         run: |

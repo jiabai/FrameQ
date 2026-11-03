@@ -33,7 +33,7 @@ export function ShellToolbar({ collapsed, title, canBack, canForward, disabledRe
           <ChevronRight size={17} aria-hidden="true" />
         </button>
       </div>
-      <span className="shell-toolbar-title" data-tauri-drag-region="">{title}</span>
+      {title && <span className="shell-toolbar-title" data-tauri-drag-region="">{title}</span>}
       <div className="shell-toolbar-utilities">
         {update.visible ? (
           <button type="button" className="shell-toolbar-update" onClick={onInstallUpdate} disabled={update.busy} aria-label={commonT("toolbar.update")}>

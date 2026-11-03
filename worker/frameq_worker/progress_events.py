@@ -32,6 +32,9 @@ WORKER_PROGRESS_STAGES = frozenset(
         "waiting_input",
         "video_extracting",
         "video_transcribing",
+        "web_loading",
+        "web_extracting",
+        "web_saving",
         "insights_generating",
         "title_generating",
         "completed",
@@ -61,6 +64,9 @@ class ModelProgressSpec:
 
 
 WORKER_PROGRESS_REGISTRY: dict[str, WorkerProgressSpec] = {
+    "web.page.loading": WorkerProgressSpec(),
+    "web.page.extracting": WorkerProgressSpec(),
+    "web.page.saving": WorkerProgressSpec(),
     "video.download.preparing": WorkerProgressSpec(),
     "video.stream.validating": WorkerProgressSpec(),
     "local.media.validating": WorkerProgressSpec(),

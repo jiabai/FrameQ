@@ -41,7 +41,7 @@ function formatHistoryTimestamp(
 
 function historyTitle(item: HistoryListItem): string {
   return item.noteMetadata?.displayTitle || item.noteTitle?.text ? getHistoryTitle(item) : item.textPreview ||
-    (item.source.kind === "url" ? item.source.url : item.source.displayName);
+    (item.source.kind === "local_file" ? item.source.displayName : item.source.kind === "web_page" ? item.source.title : item.source.url);
 }
 
 export function HistorySheet({

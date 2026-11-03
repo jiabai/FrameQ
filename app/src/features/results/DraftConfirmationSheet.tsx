@@ -47,6 +47,7 @@ export function DraftConfirmationSheet({
   onCancel,
 }: DraftConfirmationSheetProps) {
   const { t } = useTranslation("synthesis");
+  const { t: webT } = useTranslation("webPage");
   const [selectedPlatform, setSelectedPlatform] = useState<DraftPlatformId>("other");
 
   // Derive the default platform READ-ONLY from the inspiration profile when the
@@ -176,7 +177,7 @@ export function DraftConfirmationSheet({
             <dd>
               <strong>{t("draftConfirmation.creditsBalance", { formattedCount: quotaRemaining })}</strong>
               <small className={transcriptPath ? "sheet-path" : undefined} title={transcriptPath || undefined}>
-                {transcriptPath || t("draftConfirmation.transcriptUnavailable")}
+                {transcriptPath || (workflow.taskSource?.kind === "web_page" ? webT("unavailable") : t("draftConfirmation.transcriptUnavailable"))}
               </small>
             </dd>
           </div>

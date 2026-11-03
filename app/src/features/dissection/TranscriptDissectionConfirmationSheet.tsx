@@ -21,6 +21,7 @@ export function TranscriptDissectionConfirmationSheet({
   onConfirm,
 }: Props) {
   const { t } = useTranslation("synthesis");
+  const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   const renderPreview = useLastDefined(preview, null);
   if (!renderPreview) {
@@ -28,7 +29,7 @@ export function TranscriptDissectionConfirmationSheet({
   }
 
   const blockReason = !renderPreview.eligible
-    ? t("dissection.confirmation.tooLong")
+    ? renderPreview.sourceKind === "article" ? webT("dissection.tooLong") : t("dissection.confirmation.tooLong")
     : !renderPreview.canConfirm
       ? t("dissection.confirmation.insufficientQuota")
       : null;
@@ -36,7 +37,7 @@ export function TranscriptDissectionConfirmationSheet({
   return (
     <AnimatedSheet
       open={preview !== null}
-      ariaLabel={t("dissection.confirmation.ariaLabel")}
+      ariaLabel={renderPreview.sourceKind === "article" ? webT("dissection.confirmation") : t("dissection.confirmation.ariaLabel")}
       className="dissection-confirmation-sheet"
       onBackdropClick={onCancel}
       onKeyDown={(event) => {
@@ -48,21 +49,21 @@ export function TranscriptDissectionConfirmationSheet({
     >
       <header className="modal-header sheet-header">
         <div>
-          <p className="section-label">{t("dissection.confirmation.sectionLabel")}</p>
-          <h2>{t("dissection.confirmation.title")}</h2>
+          <p className="section-label">{renderPreview.sourceKind === "article" ? webT("dissection.title") : t("dissection.confirmation.sectionLabel")}</p>
+          <h2>{renderPreview.sourceKind === "article" ? webT("dissection.confirmation") : t("dissection.confirmation.title")}</h2>
         </div>
-        <button className="icon-button" type="button" onClick={onCancel} aria-label={t("dissection.confirmation.closeAria")}>
+        <button className="icon-button" type="button" onClick={onCancel} aria-label={renderPreview.sourceKind === "article" ? webT("dissection.close") : t("dissection.confirmation.closeAria")}>
           <X size={18} />
         </button>
       </header>
       <div className="preference-flow-content sheet-body">
         <p className="settings-warning privacy-callout">
           <ShieldCheck size={16} />
-          <span>{t("dissection.confirmation.privacy")}</span>
+          <span>{renderPreview.sourceKind === "article" ? webT("privacy") : t("dissection.confirmation.privacy")}</span>
         </p>
         <dl className="dissection-preview-grid sheet-facts">
           <div><dt>{t("dissection.confirmation.task")}</dt><dd>{renderPreview.taskTitle}</dd></div>
-          <div><dt>{t("dissection.confirmation.characters")}</dt><dd>{formatNumber(renderPreview.characterCount, locale)}</dd></div>
+          <div><dt>{renderPreview.sourceKind === "article" ? webT("dissection.characters") : t("dissection.confirmation.characters")}</dt><dd>{formatNumber(renderPreview.characterCount, locale)}</dd></div>
           <div><dt>{t("dissection.confirmation.chunks")}</dt><dd>{formatNumber(renderPreview.chunkCount, locale)}</dd></div>
           <div><dt>{t("dissection.confirmation.language")}</dt><dd>{getOutputLanguageName(renderPreview.outputLanguage, renderPreview.outputLanguage)}</dd></div>
           <div>

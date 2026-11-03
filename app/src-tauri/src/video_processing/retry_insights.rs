@@ -251,10 +251,13 @@ fn retry_insights_blocking(
     crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;
+    let task_lease = open_retry_task(&paths, &output_root, &request.task_id)?;
+    validate_retry_source(&task_lease, request.target)?;
     if request.target == RetryInsightsTarget::Title {
+        drop(task_lease);
         return retry_note_title(window, &paths, &output_root, process_state, request);
     }
-    let task_lease = open_retry_task(&paths, &output_root, &request.task_id)?;
+    let source_before = task_lease.source();
     let request_json = serde_json::to_string(&request)
         .map_err(|_| "Failed to encode worker request.".to_string())?;
     let _ = append_desktop_log(
@@ -269,6 +272,12 @@ fn retry_insights_blocking(
         TaskCommandContext::RetryInsights,
     )?;
     drop(task_lease);
+    if parsed.task_id.is_some() {
+        let task = task_manifest::SupportedTask::open(&output_root, &request.task_id)?;
+        if task.source() != source_before || !parsed.validate_source_task(&task) {
+            return Err("WORKER_PROTOCOL_VIOLATION".to_string());
+        }
+    }
     if request.target == RetryInsightsTarget::Dissection && parsed.dissection.is_some() {
         let task = task_manifest::SupportedTask::open(&output_root, &request.task_id)
             .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
@@ -287,6 +296,14 @@ fn retry_insights_blocking(
         &retry_result_log_detail(&request, &parsed),
     );
     Ok(parsed)
+}
+
+fn validate_retry_source(task: &task_manifest::SupportedTask, target: RetryInsightsTarget) -> Result<(), String> {
+    if task.is_web_page() && matches!(target, RetryInsightsTarget::Title | RetryInsightsTarget::Transcript) {
+        return Err("WEB_RETRY_TARGET_UNSUPPORTED".to_string());
+    }
+    task.read_source_text()?;
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -351,6 +368,9 @@ fn record_note_title_cancellation_to_task(
     mut task: task_manifest::SupportedTask,
     request: NoteTitleCancellationRequest,
 ) -> Result<TaskTerminalResult, String> {
+    if task.is_web_page() {
+        return Err("WEB_RETRY_TARGET_UNSUPPORTED".to_string());
+    }
     task.read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?
         .filter(|text| !text.is_empty())
         .ok_or_else(|| "TITLE_TRANSCRIPT_REQUIRED".to_string())?;
@@ -404,6 +424,7 @@ fn retry_note_title(
     request: RetryInsightsRequest,
 ) -> Result<TaskTerminalResult, String> {
     let task = open_retry_task(paths, output_root, &request.task_id)?;
+    validate_retry_source(&task, RetryInsightsTarget::Title)?;
     let transcript = task
         .read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?
         .filter(|text| !text.is_empty())
@@ -563,6 +584,20 @@ fn safe_retry_error_code(code: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{parse_retry_insights_request, retry_result_log_detail, INVALID_RETRY_PAYLOAD};
+    #[test]
+    fn webpage_retry_reads_formal_source_and_rejects_media_targets() {
+        let root = crate::task_manifest::web_tests::output_root();
+        let dir = crate::task_manifest::web_tests::write_task(&root, "web-retry", &crate::task_manifest::web_tests::manifest("web-retry"));
+        let task = crate::task_manifest::SupportedTask::open(&root, "web-retry").unwrap();
+        for target in [super::RetryInsightsTarget::Title, super::RetryInsightsTarget::Transcript] {
+            assert_eq!(super::validate_retry_source(&task, target).unwrap_err(), "WEB_RETRY_TARGET_UNSUPPORTED");
+        }
+        for target in [super::RetryInsightsTarget::Summary, super::RetryInsightsTarget::Insights, super::RetryInsightsTarget::Dissection, super::RetryInsightsTarget::Draft] {
+            super::validate_retry_source(&task, target).unwrap();
+        }
+        std::fs::remove_file(dir.join("article/article.txt")).unwrap();
+        assert!(super::validate_retry_source(&task, super::RetryInsightsTarget::Summary).is_err());
+    }
     use crate::worker_runtime::TaskTerminalResult;
 
     #[test]

@@ -18,6 +18,7 @@ from frameq_worker.models import (
 )
 from frameq_worker.output_language import OutputLanguage
 from frameq_worker.pipeline_runtime.dissection import run_dissection_generation
+from frameq_worker.source_text import read_source_file, read_source_text
 from frameq_worker.summary_agent import (
     SummaryRunner,
     generate_summary_via_agent_runtime,
@@ -43,7 +44,20 @@ def run_insight_generation_step(
     summary_runner: SummaryRunner | None = None,
 ) -> ProcessResult:
     is_junction = getattr(os.path, "isjunction", lambda _path: False)
+    manifest_path = output_dir.parent / "frameq-task.json"
+    source_kind = "transcript"
     expected_transcript_path = output_dir.parent / "transcript" / "transcript.txt"
+    if manifest_path.exists():
+        try:
+            source = read_source_text(output_dir.parent.parent.parent, output_dir.parent.name)
+            expected_transcript_path = source.path
+            source_kind = source.kind
+        except (OSError, ValueError, UnicodeError):
+            return ProcessResult(status=JobStage.PARTIAL_COMPLETED, error=WorkerError(
+                code="SOURCE_TEXT_INVALID", message="Authoritative source text is unavailable.",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ))
+    runtime_env = {**(runtime_env or {}), "FRAMEQ_AI_SOURCE_KIND": source_kind}
     if (
         transcript_txt_path.absolute() != expected_transcript_path.absolute()
         or transcript_txt_path.is_symlink()
@@ -65,7 +79,10 @@ def run_insight_generation_step(
         )
 
     try:
-        official_transcript_bytes = transcript_txt_path.read_bytes()
+        official_transcript_bytes = read_source_file(
+            transcript_txt_path,
+            2 * 1024 * 1024 if source_kind == "article" else 32 * 1024 * 1024,
+        )
         official_transcript_body = official_transcript_bytes.decode("utf-8")
     except (OSError, UnicodeError):
         return ProcessResult(
@@ -153,6 +170,7 @@ def run_insight_generation_step(
                 output_language=output_language,
                 source_language=transcript.language if transcript else None,
                 progress_callback=progress_callback,
+                source_kind=source_kind,
             )
         except (DissectionGenerationError, InsightGenerationError) as exc:
             generation_error = InsightGenerationError(exc.code, str(exc))

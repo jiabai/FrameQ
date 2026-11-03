@@ -1,0 +1,35 @@
+FrameQ article extractor
+
+InsightFlow extraction helpers and Markdown configuration:
+Copyright (c) 2025 StandlX; MIT License.
+Source repository: https://github.com/jiabai/InsightFlow
+Reviewed local revision: a641ebb61f12b29333d459021e84ec7513f596a2.
+Sources: src/extension/immersive/readingSession.cjs:57-400,
+src/extension/hooks/useMarkdownConverter.ts, src/extension/lib/tagsToRemove.ts.
+FrameQ adaptations pass Document and URL explicitly, preserve structured text,
+use Readability for generic pages, sanitize with DOMPurify, restrict URLs,
+replace images with descriptions, support GFM tables and impose size limits.
+The extraction module's MIT notice is licenses/InsightFlow-MIT.txt.
+
+Site rules are a separate MPL-2.0 work:
+Copyright LESSLAB. Clearly Reader 3.0.4 config.websites, 59 rules.
+Official archive:
+https://addons.mozilla.org/firefox/downloads/file/4215717/clearly_reader-3.0.4.xpi
+SHA-256: 17631a64168da73d4f4817eb1a2ffb573547bd92b0d2cc6e006fdd2a554a2f2c
+Migrated through InsightFlow src/extension/extractor/siteRules.cjs.
+Changes: TypeScript data export; trailing whitespace removed from the WeChat
+content selector. Host/path matching is implemented in a separate MIT module.
+The exact MPL-covered source is shipped as source/siteRules.ts alongside the
+bundle. A full MPL-2.0 copy is shipped as licenses/MPL-2.0.txt. Recipients may
+use, modify and redistribute this source under MPL-2.0.
+
+Runtime dependencies (unmodified; bundled by esbuild):
+@mozilla/readability 0.6.0: Apache-2.0; Copyright (c) 2010 Arc90 Inc.
+dompurify 3.4.17: Apache-2.0 OR MPL-2.0; Cure53 and other contributors.
+turndown 7.2.0: MIT; Copyright (c) 2017 Dom Christie.
+turndown-plugin-gfm 1.0.2: MIT; Copyright (c) 2017 Dom Christie.
+ipaddr.js 2.3.0: MIT; Copyright (C) 2011-2017 whitequark.
+
+The build includes complete dependency license files in licenses/, exact
+versions and npm integrity values in extract-article.manifest.json, and the
+compiler's preserved legal comments in extract-article.js.LEGAL.txt.

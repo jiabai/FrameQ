@@ -153,7 +153,7 @@ async function runTaskCommand(
       });
     }
     return (
-      parseWorkerResult(await runner(command, { request })) ??
+      parseMediaResult(await runner(command, { request })) ??
       protocolViolationResult(null, "failed", "video_extracting")
     );
   } catch (error) {
@@ -165,6 +165,11 @@ async function runTaskCommand(
   } finally {
     await releaseWorkerProgress(unlisten, recordInvalidProgress);
   }
+}
+
+function parseMediaResult(value: unknown): WorkerResult | null {
+  const result = parseWorkerResult(value);
+  return result?.source?.kind === "web_page" ? null : result;
 }
 
 export async function retryInsights(

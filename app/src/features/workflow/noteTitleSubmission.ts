@@ -2,6 +2,7 @@ import { finishNoteTitleGeneration, type WorkerResult, type WorkflowState } from
 
 export function shouldGenerateNoteTitle(result: WorkerResult): boolean {
   return result.task_created === true &&
+    result.source?.kind !== "web_page" &&
     result.status !== "failed" &&
     Boolean(result.task_id && result.artifacts.transcript_txt) &&
     result.error?.code !== "WORKER_CANCELLED" &&

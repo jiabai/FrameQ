@@ -2,6 +2,10 @@
 
 ## Product Decision
 
+Task views omit the duplicate note title from the top navigation toolbar. The note title remains
+in the workspace heading. AI Synthesis starts collapsed; its heading button expands or hides it
+without changing task processing or saved content.
+
 A FrameQ task keeps one `taskId` and one local artifact set, but its completed-task
 experience is divided into two domain workspaces:
 
@@ -10,6 +14,10 @@ experience is divided into two domain workspaces:
 - `AiGenerationWorkspace` owns AI availability and quota explanations, separate
   summary and inspiration targets, confirmation, target-local progress, errors, retry, and
   result viewing.
+
+Webpage notes use `ArticleWorkspace` for their saved local TXT/Markdown and share the existing
+AI workspace. Their schema 4 source and component lifecycle are specified in
+`2026-11-01-web-page-notes.md`; media keeps this specification's transcript behavior.
 
 This is an information-architecture change, not a worker pipeline rewrite. It must not
 change server entitlement/quota behavior, SourceIdentity, stdin transport, task storage,
@@ -72,6 +80,9 @@ or ProcessSupervisor internals.
   AI generation is not presented as a third local step.
 - The compact audio review bar precedes the video/audio file action row. Long paths are
   truncated and retain an accessible full label or title.
+- File-location actions preserve Windows extended drive and UNC path semantics for default
+  and migrated storage, including long paths; failures disclose neither raw native errors nor
+  private paths and do not infer that a file is missing from a file-manager failure.
 - Local status displays loading, saving, and unsaved changes when needed. A normally saved
   transcript omits the entire status row and its reserved space. The audio player has no
   surrounding card. Segment edit buttons appear
@@ -172,10 +183,12 @@ or ProcessSupervisor internals.
 
 ## Privacy and Data Flow
 
-- Video, audio, raw source URL, complete transcript, task manifest, and local preference
+- Video, audio, raw source URL, complete transcript/article, task manifest, and local preference
   files are never sent to FrameQ server.
 - Only after explicit target confirmation may the worker send allowed chunks from the
-  saved official `transcript/transcript.txt` to the administrator-configured LLM supplier.
+  saved official source TXT to the administrator-configured LLM supplier. SourceText selects
+  `transcript/transcript.txt` for media or `article/article.txt` for webpage notes, with the
+  existing per-target splitting and checkout rules.
 - Inspiration may additionally send the confirmed compact preference snapshot. Summary
   and its mindmap must not receive that snapshot.
 - UI status, errors, accessibility labels, and screenshots must not expose raw or sensitive

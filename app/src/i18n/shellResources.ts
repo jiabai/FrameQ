@@ -134,6 +134,8 @@ export const shellResources = {
     },
     artifacts: {
       video: "视频",
+      article_txt: "网页正文 · TXT",
+      article_md: "网页正文 · Markdown",
       audio: "音频",
       transcript_txt: "文字稿 · TXT",
       transcript_md: "文字稿 · Markdown",
@@ -283,6 +285,8 @@ export const shellResources = {
     },
     artifacts: {
       video: "影片",
+      article_txt: "網頁正文 · TXT",
+      article_md: "網頁正文 · Markdown",
       audio: "音訊",
       transcript_txt: "文字稿 · TXT",
       transcript_md: "文字稿 · Markdown",
@@ -432,6 +436,8 @@ export const shellResources = {
     },
     artifacts: {
       video: "Video",
+      article_txt: "Web article · TXT",
+      article_md: "Web article · Markdown",
       audio: "Audio",
       transcript_txt: "Transcript · TXT",
       transcript_md: "Transcript · Markdown",

@@ -8,12 +8,29 @@ import { TaskWorkspaceLayout } from "./TaskWorkspaceLayout";
 
 afterEach(cleanup);
 
+test("starts with AI synthesis collapsed and allows opening it", async () => {
+  await initializeI18n("en-US");
+  render(workspace());
+  const toggle = screen.getByRole("button", { name: "Show AI Synthesis" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.queryByRole("button", { name: "AI action" })).toBeNull();
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByRole("button", { name: "AI action" })).toBeTruthy();
+});
+
 function workspace(title = "A saved note") {
   return <TaskWorkspaceLayout
     title={title}
     local={<textarea aria-label="Transcript draft" defaultValue="Saved transcript" />}
     ai={<><input aria-label="AI draft" defaultValue="Saved AI draft" /><button type="button">AI action</button></>}
   />;
+}
+
+function renderExpanded(title?: string) {
+  const view = render(workspace(title));
+  fireEvent.click(screen.getByRole("button", { name: "Show AI Synthesis" }));
+  return view;
 }
 
 test.each([
@@ -25,6 +42,8 @@ test.each([
   const { container } = render(workspace("User's saved note"));
   const title = screen.getByRole("heading", { level: 1, name: "User's saved note" });
   expect(title.title).toBe("User's saved note");
+  expect(screen.queryByRole("heading", { level: 2, name: heading })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: show }));
   expect(screen.getByRole("heading", { level: 2, name: heading })).toBeTruthy();
   const toggle = screen.getByRole("button", { name: hide });
   const pane = document.getElementById(toggle.getAttribute("aria-controls")!);
@@ -49,7 +68,7 @@ test.each([
 
 test("keeps both panes mounted and preserves drafts across hiding, showing, and title changes", async () => {
   await initializeI18n("en-US");
-  const view = render(workspace());
+  const view = renderExpanded();
   const transcript = screen.getByLabelText<HTMLTextAreaElement>("Transcript draft");
   const aiDraft = screen.getByLabelText<HTMLInputElement>("AI draft");
   fireEvent.change(transcript, { target: { value: "Unsaved transcript edit" } });
@@ -70,7 +89,7 @@ test("keeps both panes mounted and preserves drafts across hiding, showing, and 
 
 test("returns focus from the AI pane before hiding and preserves focus in the local pane", async () => {
   await initializeI18n("en-US");
-  const { container } = render(workspace());
+  const { container } = renderExpanded();
   const toggle = screen.getByRole("button", { name: "Hide AI Synthesis" });
   screen.getByRole("button", { name: "AI action" }).focus();
   fireEvent.click(toggle);
@@ -91,7 +110,7 @@ test("returns focus from the AI pane before hiding and preserves focus in the lo
 
 test("handles rapid batched reversals without a delayed transition state", async () => {
   await initializeI18n("en-US");
-  const { container } = render(workspace());
+  const { container } = renderExpanded();
   const toggle = screen.getByRole<HTMLButtonElement>("button", { name: "Hide AI Synthesis" });
   act(() => { toggle.click(); toggle.click(); toggle.click(); });
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -104,9 +123,9 @@ test("handles rapid batched reversals without a delayed transition state", async
 test("owns a unique controlled pane for each rendered workspace", async () => {
   await initializeI18n("en-US");
   render(<>{workspace("First note")}{workspace("Second note")}</>);
-  const controls = screen.getAllByRole("button", { name: "Hide AI Synthesis" });
+  const controls = screen.getAllByRole("button", { name: "Show AI Synthesis" });
   expect(controls[0].getAttribute("aria-controls")).not.toBe(controls[1].getAttribute("aria-controls"));
   fireEvent.click(controls[0]);
-  expect(controls[0].getAttribute("aria-expanded")).toBe("false");
-  expect(controls[1].getAttribute("aria-expanded")).toBe("true");
+  expect(controls[0].getAttribute("aria-expanded")).toBe("true");
+  expect(controls[1].getAttribute("aria-expanded")).toBe("false");
 });

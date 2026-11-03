@@ -1,5 +1,6 @@
 use super::command::{build_worker_command_spec, WorkerInvocation};
 use std::path::{Path, PathBuf};
+use std::sync::MutexGuard;
 use super::runner::{
     ProgressRoute, WorkerLane, WorkerOperation, WorkerRunError, WorkerRunOutcome, WorkerRunRequest,
 };
@@ -96,6 +97,10 @@ pub(crate) enum WorkerJob {    ProcessVideo {
         payload: String,
         progress: ProgressRoute,
     },
+    ProcessWebPage {
+        payload: String,
+        progress: ProgressRoute,
+    },
     ResolveSourceIdentity {
         payload: String,
     },
@@ -106,6 +111,12 @@ pub(crate) enum WorkerJob {    ProcessVideo {
 }
 
 impl WorkerJob {
+    pub(crate) fn save_web_page(
+        payload: String,
+        progress: ProgressRoute,
+    ) -> Self {
+        Self::ProcessWebPage { payload, progress }
+    }
     #[cfg(not(test))]
     pub(crate) fn process_video(payload: String, window: Window) -> Self {
         Self::ProcessVideo {
@@ -164,9 +175,26 @@ pub(crate) struct TaskWorkerFacade<'a> {
     lane: &'a WorkerLane,
 }
 
+pub(crate) struct ReservedTaskWorker<'a> {
+    facade: TaskWorkerFacade<'a>,
+    _admission: MutexGuard<'a, ()>,
+}
+
+impl ReservedTaskWorker<'_> {
+    pub(crate) fn execute(&self, job: WorkerJob) -> Result<Result<WorkerRunOutcome, WorkerRunError>, String> {
+        let request = self.facade.prepare_with(job, account::server_managed_llm_invocation)?;
+        Ok(self.facade.lane.run_reserved(self.facade.paths, request))
+    }
+}
+
 impl<'a> TaskWorkerFacade<'a> {
     pub(super) fn new(paths: &'a RuntimePaths, lane: &'a WorkerLane) -> Self {
         Self { paths, lane }
+    }
+
+    pub(crate) fn reserve(self) -> Result<ReservedTaskWorker<'a>, String> {
+        let admission = self.lane.reserve().map_err(|_| "WEB_ALREADY_RUNNING".to_string())?;
+        Ok(ReservedTaskWorker { facade: self, _admission: admission })
     }
 
     pub(crate) fn execute(
@@ -191,6 +219,12 @@ impl<'a> TaskWorkerFacade<'a> {
             WorkerJob::ProcessLocalMedia { payload, progress } => (
                 WorkerInvocation::ProcessLocalMedia(payload),
                 WorkerOperation::ProcessLocalMedia,
+                progress,
+                false,
+            ),
+            WorkerJob::ProcessWebPage { payload, progress } => (
+                WorkerInvocation::ProcessWebPage(payload),
+                WorkerOperation::ProcessWebPage,
                 progress,
                 false,
             ),

@@ -5,7 +5,9 @@ export type IpcProtocolErrorCode =
   | "SETTINGS_IPC_RESPONSE_INVALID"
   | "DATA_STORAGE_IPC_RESPONSE_INVALID"
   | "TRANSCRIPT_IPC_RESPONSE_INVALID"
-  | "UPDATE_IPC_RESPONSE_INVALID";
+  | "UPDATE_IPC_RESPONSE_INVALID"
+  | "WEB_PAGE_REQUEST_INVALID"
+  | "WEB_PAGE_PROTOCOL_INVALID";
 
 export class IpcProtocolError extends Error {
   readonly code: IpcProtocolErrorCode;

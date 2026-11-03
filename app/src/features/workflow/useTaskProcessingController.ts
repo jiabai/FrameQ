@@ -43,6 +43,9 @@ import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { bindNoteTitleResult, completedNoteResult, finishCancelledTitleAttempt, shouldGenerateNoteTitle } from "./noteTitleSubmission";
 import { getNoteInfo } from "../../noteActionsClient";
 import type { NoteMetadata } from "../../noteMetadata";
+import { normalizeWebPageInput, hasSourceText, closedWebOperationError } from "../../webPageProtocol";
+import { processWebPage, cancelWebPage, WebOperationCancelledError } from "../../webPageClient";
+import { IpcProtocolError } from "../../tauriIpcProtocol";
 
 type OpenAccountPanel = (notice?: UiMessage) => void;
 
@@ -72,6 +75,7 @@ type UseTaskProcessingControllerOptions = {
   outputLanguage?: SupportedLocale;
   onTitleFinished?: () => void;
   isActive?: () => boolean;
+  getLifetimeSignal?: () => AbortSignal;
 };
 
 export function useTaskProcessingController({
@@ -84,6 +88,7 @@ export function useTaskProcessingController({
   outputLanguage = "en-US",
   onTitleFinished,
   isActive = controllerIsActive,
+  getLifetimeSignal,
 }: UseTaskProcessingControllerOptions) {
   const [workflow, setWorkflow] = useState(createInitialWorkflow);
   const [submissionPending, setSubmissionPending] = useState(false);
@@ -91,6 +96,8 @@ export function useTaskProcessingController({
   const workflowRef = useRef(workflow);
   workflowRef.current = workflow;
   const operationIdRef = useRef(0);
+  const webOperationRef = useRef<string | null>(null);
+  const webAbortRef = useRef<AbortController | null>(null);
   const cancellationOperationIdRef = useRef<number | null>(null);
   const titleFinishedRef = useRef(onTitleFinished);
   titleFinishedRef.current = onTitleFinished;
@@ -100,9 +107,9 @@ export function useTaskProcessingController({
     !isProcessingStage(workflow.stage) &&
     !modelDownloadActive &&
     (workflow.composerSource.kind === "local_media" ||
-      canSubmitUrl(workflow.composerSource.urlDraft));
+      canSubmitUrl(workflow.composerSource.urlDraft) || Boolean(normalizeWebPageInput(workflow.composerSource.urlDraft)));
   const toolbarNewTaskButtonState = getToolbarNewTaskButtonState(workflow.stage);
-  const canRestoreHistory = !isProcessingStage(workflow.stage);
+  const canRestoreHistory = !submissionPending && !isProcessingStage(workflow.stage);
 
   const updateUrlDraft = useCallback((url: string) => {
     setWorkflow((current) =>
@@ -227,7 +234,7 @@ export function useTaskProcessingController({
 
   const restoreHistoryItem = useCallback(
     (item: HistoryItem): boolean => {
-      if (isProcessingStage(workflow.stage)) {
+      if (submissionClaimRef.current !== null || isProcessingStage(workflow.stage)) {
         return false;
       }
 
@@ -238,7 +245,7 @@ export function useTaskProcessingController({
       clearComposerSelectionBestEffort(workflow.composerSource);
       onResetTaskUi();
       const composerSource: TaskComposerSource =
-        item.source.kind === "url"
+        item.source.kind === "url" || item.source.kind === "web_page"
           ? { kind: "url", urlDraft: item.source.url }
           : { kind: "url", urlDraft: "" };
       setWorkflow({
@@ -295,8 +302,10 @@ export function useTaskProcessingController({
       submissionClaimRef.current = claim;
       setSubmissionPending(true);
       const previousOperationId = operationIdRef.current;
+      const isWeb = prepared.submission.kind === "url" && !normalizeSubmitUrl(prepared.submission.url);
+      let detachLifetimeAbort: (() => void) | undefined;
       try {
-        const asrModel = ensureAsrModelReady
+        const asrModel = isWeb ? "iic/SenseVoiceSmall-onnx" : ensureAsrModelReady
           ? await ensureAsrModelReady()
           : "iic/SenseVoiceSmall-onnx";
         if (
@@ -319,6 +328,7 @@ export function useTaskProcessingController({
                 : composerSource,
             },
             prepared.taskSource,
+            isWeb,
           ),
         );
         const onProgress = (event: Parameters<typeof mergeProgressEvent>[1]) => {
@@ -326,8 +336,22 @@ export function useTaskProcessingController({
             setWorkflow((current) => mergeProgressEvent(current, event));
           }
         };
+        const webOperationId = isWeb ? crypto.randomUUID() : null;
+        webOperationRef.current = webOperationId;
+        const webAbort = isWeb ? new AbortController() : null;
+        webAbortRef.current = webAbort;
+        if (webAbort && getLifetimeSignal) {
+          const lifetimeSignal = getLifetimeSignal();
+          const abort = () => webAbort.abort();
+          lifetimeSignal.addEventListener("abort", abort, { once: true });
+          if (lifetimeSignal.aborted) abort();
+          detachLifetimeAbort = () => lifetimeSignal.removeEventListener("abort", abort);
+        }
         const result =
-          prepared.submission.kind === "url"
+          webOperationId && prepared.submission.kind === "url"
+            ? await processWebPage(prepared.submission.url, webOperationId, onProgress, webAbort?.signal,
+                () => isActive() && operationIdRef.current === operationId && submissionClaimRef.current === claim && cancellationOperationIdRef.current !== operationId)
+            : prepared.submission.kind === "url"
             ? await processVideo(
                 prepared.submission.url,
                 asrModel,
@@ -348,7 +372,7 @@ export function useTaskProcessingController({
           return;
         }
         const cancellationRequested = cancellationOperationIdRef.current === operationId;
-        if (result.error?.code === "WORKER_CANCELLED") {
+        if (result.error?.code === "WORKER_CANCELLED" || result.error?.code === "WEB_CANCELLED") {
           operationIdRef.current += 1;
           onResetTaskUi();
           setWorkflow((current) => confirmProcessingCancellation(current));
@@ -371,7 +395,7 @@ export function useTaskProcessingController({
         const transcribed = {
           ...summarizeWorkerResult(result),
           composerSource: retainedSource,
-          taskSource: current.taskSource ?? prepared.taskSource,
+          taskSource: result.source ?? current.taskSource ?? prepared.taskSource,
         };
         workflowRef.current = transcribed;
         setWorkflow(transcribed);
@@ -428,7 +452,24 @@ export function useTaskProcessingController({
         cancellationOperationIdRef.current = null;
         titleFinishedRef.current?.();
         return completedNoteResult(result, completed);
+      } catch (error) {
+        if (!isWeb) throw error;
+        const code = error instanceof WebOperationCancelledError ? "WEB_CANCELLED" : closedWebOperationError(error);
+        if (operationIdRef.current === previousOperationId + 1 && isActive()) {
+          if (code === "WEB_CANCELLED") {
+            operationIdRef.current += 1;
+            onResetTaskUi();
+            setWorkflow((current) => confirmProcessingCancellation(current));
+          } else {
+            setWorkflow((current) => ({ ...current, stage: "failed", cancellingFromStage: null, progressMessage: null,
+              error: { code: error instanceof IpcProtocolError ? error.code : code ?? "WEB_PAGE_PROCESS_FAILED", message: "", stage: current.stage === "web_saving" ? "web_saving" : current.stage === "web_extracting" ? "web_extracting" : "web_loading" } }));
+          }
+        }
+        if (!code || error instanceof IpcProtocolError) throw error;
       } finally {
+        detachLifetimeAbort?.();
+        webOperationRef.current = null;
+        webAbortRef.current = null;
         if (submissionClaimRef.current === claim) {
           submissionClaimRef.current = null;
           setSubmissionPending(false);
@@ -442,6 +483,7 @@ export function useTaskProcessingController({
       modelDownloadActive,
       outputLanguage,
       isActive,
+      getLifetimeSignal,
     ],
   );
 
@@ -505,8 +547,9 @@ export function useTaskProcessingController({
     }
 
     cancellationOperationIdRef.current = operationId;
+    webAbortRef.current?.abort();
     setWorkflow((current) => requestProcessingCancellation(current));
-    const result = await cancelProcess();
+    const result = webOperationRef.current ? await cancelWebPage(webOperationRef.current) : await cancelProcess();
     if (operationIdRef.current !== operationId) {
       return;
     }
@@ -533,7 +576,7 @@ export function useTaskProcessingController({
     ) => {
       const current = workflowRef.current;
       if (!isActive() || submissionClaimRef.current !== null || modelDownloadActive ||
-        isProcessingStage(current.stage) || !current.taskId || !current.artifacts.transcript_txt) {
+        isProcessingStage(current.stage) || !hasSourceText(current)) {
         return;
       }
       if (!canGenerateAiWithAccount(account)) {
@@ -541,7 +584,7 @@ export function useTaskProcessingController({
         return;
       }
 
-      const taskId = current.taskId;
+      const taskId = current.taskId!;
       // Draft requires the seed insight id and the user-selected platform;
       // confirmDraftGeneration always supplies both (the card is only
       // available once a seed is selected). Guard defensively anyway.
@@ -662,10 +705,11 @@ function prepareTaskSubmission(
 ): PreparedTaskSubmission | null {
   switch (submission.kind) {
     case "url": {
-      const url = normalizeSubmitUrl(submission.url);
+      const mediaUrl = normalizeSubmitUrl(submission.url);
+      const url = mediaUrl ?? normalizeWebPageInput(submission.url);
       const composerUrl =
         composerSource.kind === "url"
-          ? normalizeSubmitUrl(composerSource.urlDraft)
+          ? normalizeSubmitUrl(composerSource.urlDraft) ?? normalizeWebPageInput(composerSource.urlDraft)
           : null;
       if (!url || composerUrl !== url) {
         return null;

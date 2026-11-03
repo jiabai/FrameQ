@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
+import { buildSystemWebViewHost } from "./build-system-webview-host.mjs";
 
 const validTargets = new Set(["windows-x64", "macos-arm64", "macos-x64"]);
 const defaultDenoVersion = "v2.9.1";
@@ -719,6 +720,7 @@ async function pruneBundledPythonRuntime(root) {  const prunedFilePatterns = ["*
 async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   const buildRoot = join(repoRoot, "build", "installer-runtime", options.target);
+  const articleReadme = readFileSync(join(resourcesRoot, "web", "README.txt"));
 
   if (!options.skipDownloads) {
     requireFileOrUrl(options.pythonStandaloneUrl, "PythonStandaloneUrl");
@@ -737,6 +739,8 @@ async function main(argv = process.argv.slice(2)) {
   await mkdir(pythonRoot, { recursive: true });
   await mkdir(workerRoot, { recursive: true });
   await mkdir(binRoot, { recursive: true });
+  await mkdir(join(resourcesRoot, "web"), { recursive: true });
+  await writeFile(join(resourcesRoot, "web", "README.txt"), articleReadme);
   await ensureGitKeep(resourcesRoot);
   await ensureGitKeep(pythonRoot);
   await ensureGitKeep(workerRoot);
@@ -807,6 +811,8 @@ async function main(argv = process.argv.slice(2)) {
   console.log(
     `PyTorch runtime component ready at ${componentZipPath} (${removedDistributions} shared distributions removed)`,
   );
+  run(process.execPath, [join(repoRoot, "scripts", "build-article-extractor.mjs")], "Build article extraction bundle");
+  buildSystemWebViewHost({ target: options.target });
   smokeTestDenoRuntime(binRoot, options.target, buildRoot);
   await removePythonCaches(pythonRoot);
   await removePythonCaches(workerRoot);
@@ -817,7 +823,6 @@ async function main(argv = process.argv.slice(2)) {
 
   if (!options.skipTauriBuild) {
     const tauriTarget = resolveTauriTargetTriple(options.target);
-    run(commandName("npm"), ["--prefix", appRoot, "install"], "Install app dependencies");
     run(commandName("npm"), ["--prefix", appRoot, "run", "tauri", "--", "build", "--target", tauriTarget], "Build Tauri installer");
   }
 

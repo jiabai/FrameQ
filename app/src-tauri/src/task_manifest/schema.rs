@@ -1,5 +1,6 @@
 use super::{
     source_identity::SourceIdentity, SOURCE_PRIVACY_MIGRATION_VERSION, TASK_SCHEMA_VERSION,
+    WEB_TASK_SCHEMA_VERSION, WebPageSource,
 };
 use crate::local_media_contract::{extension_matches_kind, is_safe_display_name, LocalMediaKind};
 use super::NoteTitle;
@@ -12,6 +13,8 @@ pub(crate) const TASK_ARTIFACT_KEYS: &[&str] = &[
     "audio",
     "transcript_txt",
     "transcript_md",
+    "article_txt",
+    "article_md",
     "segments",
     "summary",
     "mindmap",
@@ -28,6 +31,8 @@ pub(crate) enum TaskArtifact {
     Audio,
     TranscriptTxt,
     TranscriptMd,
+    ArticleTxt,
+    ArticleMd,
     Segments,
     Summary,
     Insights,
@@ -44,6 +49,8 @@ impl TaskArtifact {
             Self::Audio => "audio",
             Self::TranscriptTxt => "transcript_txt",
             Self::TranscriptMd => "transcript_md",
+            Self::ArticleTxt => "article_txt",
+            Self::ArticleMd => "article_md",
             Self::Segments => "segments",
             Self::Summary => "summary",
             Self::Insights => "insights",
@@ -131,6 +138,7 @@ pub(crate) struct InsightView {
 enum TaskSourceKind {
     Url,
     LocalFile,
+    WebPage,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -162,6 +170,41 @@ where
     D: serde::Deserializer<'de>,
 {
     NoteTitle::deserialize(deserializer).map(Some)
+}
+
+fn deserialize_present_web_source<'de, D>(deserializer: D) -> Result<Option<WebPageSource>, D::Error>
+where D: serde::Deserializer<'de>,
+{
+    WebPageSource::deserialize(deserializer).map(Some)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum RequiredNullable<T> {
+    Missing,
+    Present(Option<T>),
+}
+
+impl<T> Default for RequiredNullable<T> {
+    fn default() -> Self { Self::Missing }
+}
+
+impl<T> RequiredNullable<T> {
+    fn is_missing(&self) -> bool { matches!(self, Self::Missing) }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for RequiredNullable<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Option::<T>::deserialize(deserializer).map(Self::Present)
+    }
+}
+
+impl<T: Serialize> Serialize for RequiredNullable<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Missing | Self::Present(None) => serializer.serialize_none(),
+            Self::Present(Some(value)) => value.serialize(serializer),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -209,6 +252,12 @@ pub(crate) enum TaskSourceSummary {
         #[serde(rename = "mediaKind")]
         media_kind: LocalMediaKind,
     },
+    WebPage {
+        url: String,
+        title: String,
+        #[serde(rename = "extractedAt")]
+        extracted_at: String,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -234,6 +283,8 @@ pub(super) struct TaskManifest {
         deserialize_with = "deserialize_present_local_source"
     )]
     local_source: Option<LocalSourceManifest>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_present_web_source")]
+    web_source: Option<WebPageSource>,
     #[serde(default)]
     pub(super) platform: String,
     pub(super) status: String,
@@ -241,10 +292,10 @@ pub(super) struct TaskManifest {
     pub(super) app_version: String,
     #[serde(default)]
     pub(super) worker_version: String,
+    #[serde(default, skip_serializing_if = "RequiredNullable::is_missing")]
+    pub(super) model: RequiredNullable<String>,
     #[serde(default)]
-    pub(super) model: String,
-    #[serde(default)]
-    pub(super) transcript: Option<TranscriptMetadata>,
+    pub(super) transcript: RequiredNullable<TranscriptMetadata>,
     #[serde(default)]
     pub(super) artifacts: HashMap<String, String>,
     #[serde(default)]
@@ -334,6 +385,8 @@ impl TaskManifest {
             || self.source_privacy_migration_version != SOURCE_PRIVACY_MIGRATION_VERSION
             || !matches!(self.source_kind, None | Some(TaskSourceKind::Url))
             || self.local_source.is_some()
+            || self.web_source.is_some()
+            || matches!(self.model, RequiredNullable::Present(None))
         {
             return None;
         }
@@ -348,6 +401,9 @@ impl TaskManifest {
     }
 
     pub(super) fn safe_source_url(&self) -> &str {
+        if matches!(self.safe_source_summary(), Some(TaskSourceSummary::WebPage { .. })) {
+            return &self.source_url;
+        }
         self.safe_source_identity()
             .map(|identity| identity.canonical_url.as_str())
             .unwrap_or("")
@@ -355,14 +411,40 @@ impl TaskManifest {
 
     pub(super) fn safe_source_summary(&self) -> Option<TaskSourceSummary> {
         if self.source_privacy_quarantined
-            || self.schema_version != TASK_SCHEMA_VERSION
             || self.source_privacy_migration_version != SOURCE_PRIVACY_MIGRATION_VERSION
         {
             return None;
         }
 
         match self.source_kind {
+            Some(TaskSourceKind::WebPage) => {
+                let source = self.web_source.as_ref()?;
+                if self.schema_version != WEB_TASK_SCHEMA_VERSION
+                    || self.task_id.is_empty() || self.task_id.len() > 128
+                    || !self.task_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+                    || !source.is_safe()
+                    || super::canonical_web_url(&self.source_url).ok().as_deref() != Some(self.source_url.as_str())
+                    || !matches!(self.source_identity, RequiredSourceIdentity::Present(None))
+                    || !matches!(self.model, RequiredNullable::Present(None))
+                    || !matches!(self.transcript, RequiredNullable::Present(None))
+                    || self.local_source.is_some()
+                    || self.note_title.is_some()
+                    || self.platform != "web"
+                    || !["completed", "partial_completed", "failed"].contains(&self.status.as_str())
+                    || self.artifacts.get("article_txt").map(String::as_str) != Some("article/article.txt")
+                    || self.artifacts.get("article_md").map(String::as_str) != Some("article/article.md")
+                    || self.artifacts.iter().any(|(key, value)|
+                        ["video", "audio", "transcript_txt", "transcript_md", "segments"].contains(&key.as_str())
+                        || validate_relative_artifact_path(value, key).is_err())
+                {
+                    return None;
+                }
+                Some(TaskSourceSummary::WebPage { url: self.source_url.clone(), title: source.title.clone(), extracted_at: source.extracted_at.clone() })
+            }
             None | Some(TaskSourceKind::Url) => {
+                if self.artifacts.keys().any(|key| key.starts_with("article_")) {
+                    return None;
+                }
                 self.safe_source_identity()
                     .map(|identity| TaskSourceSummary::Url {
                         url: identity.canonical_url.clone(),
@@ -371,6 +453,10 @@ impl TaskManifest {
             Some(TaskSourceKind::LocalFile) => {
                 let source = self.local_source.as_ref()?;
                 if self.source_url != ""
+                    || self.schema_version != TASK_SCHEMA_VERSION
+                    || self.web_source.is_some()
+                    || matches!(self.model, RequiredNullable::Present(None))
+                    || self.artifacts.keys().any(|key| key.starts_with("article_"))
                     || !matches!(self.source_identity, RequiredSourceIdentity::Present(None))
                     || self.platform != "local"
                     || !source.is_safe()
@@ -398,11 +484,14 @@ impl TaskManifest {
     }
 
     pub(super) fn transcript_metadata(&self) -> Option<TranscriptMetadata> {
-        self.transcript.clone()
+        match &self.transcript {
+            RequiredNullable::Present(value) => value.clone(),
+            RequiredNullable::Missing => None,
+        }
     }
 }
 
-pub(super) fn validate_relative_artifact_path(
+pub(crate) fn validate_relative_artifact_path(
     raw_path: &str,
     field: &str,
 ) -> Result<PathBuf, String> {
@@ -412,6 +501,8 @@ pub(super) fn validate_relative_artifact_path(
     let fixed_dissection_path = match field {
         "dissection" => Some("ai/dissection.json"),
         "dissection_md" => Some("ai/dissection.md"),
+        "article_txt" => Some("article/article.txt"),
+        "article_md" => Some("article/article.md"),
         _ => None,
     };
     if fixed_dissection_path.is_some_and(|expected| raw_path != expected) {

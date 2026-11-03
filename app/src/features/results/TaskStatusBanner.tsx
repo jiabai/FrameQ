@@ -14,6 +14,7 @@ type TaskStatusBannerProps = {
 
 export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
   const { t } = useTranslation("workflow");
+  const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   if (model.kind === "local_complete") return null;
 
@@ -56,7 +57,7 @@ export function TaskStatusBanner({ model }: TaskStatusBannerProps) {
           exit={{ opacity: 0, y: -3 }}
           transition={UI_MOTION_TRANSITION}
         >
-          <strong>{t(model.stage === "title_generating" ? "stage.title_generating.title" : bannerTitleKey(model.kind))}</strong>
+          <strong>{model.stage === "web_loading" || model.stage === "web_extracting" || model.stage === "web_saving" ? webT(`stages.${model.stage}`) : t(model.stage === "title_generating" ? "stage.title_generating.title" : bannerTitleKey(model.kind))}</strong>
           <span>{message}</span>
         </motion.div>
       </AnimatePresence>

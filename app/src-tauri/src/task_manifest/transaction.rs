@@ -18,7 +18,7 @@ const RECOVERY_ERROR: &str = "Task artifacts could not be recovered safely.";
 // The worker writes this journal; the desktop reads and recovers it. Both sides
 // must accept exactly the same closed destination set, so this mirrors
 // `contracts/task-artifact-transaction-v1.json` verbatim.
-const ALLOWED_DESTINATIONS: [&str; 14] = [
+const ALLOWED_DESTINATIONS: [&str; 16] = [
     "frameq-task.json",
     "transcript/transcript.txt",
     "transcript/transcript.md",
@@ -33,22 +33,25 @@ const ALLOWED_DESTINATIONS: [&str; 14] = [
     "ai/dissection.md",
     "ai/draft.md",
     "ai/original/draft.md",
+    "article/article.txt",
+    "article/article.md",
 ];
-const INTERNAL_PARENTS: [&str; 5] = [
+const INTERNAL_PARENTS: [&str; 6] = [
     ".",
     "ai",
     "ai/original",
     "transcript",
     "transcript/original",
+    "article",
 ];
 
 #[cfg(test)]
-pub(crate) fn allowed_destinations_for_test() -> [&'static str; 14] {
+pub(crate) fn allowed_destinations_for_test() -> [&'static str; 16] {
     ALLOWED_DESTINATIONS
 }
 
 #[cfg(test)]
-pub(crate) fn internal_parents_for_test() -> [&'static str; 5] {
+pub(crate) fn internal_parents_for_test() -> [&'static str; 6] {
     INTERNAL_PARENTS
 }
 
@@ -100,6 +103,14 @@ pub(crate) fn commit_task_artifacts(
     task_dir: &Path,
     mutations: Vec<TaskArtifactMutation>,
 ) -> Result<(), String> {
+    commit_task_artifacts_observing(task_dir, mutations, |_| {})
+}
+
+fn commit_task_artifacts_observing(
+    task_dir: &Path,
+    mutations: Vec<TaskArtifactMutation>,
+    after_replace: impl Fn(&str),
+) -> Result<(), String> {
     validate_directory(task_dir).map_err(|_| COMMIT_ERROR.to_string())?;
     recover_task_artifacts(task_dir)?;
     let mutations =
@@ -134,6 +145,7 @@ pub(crate) fn commit_task_artifacts(
                 }
                 None => atomic_remove_file(&destination).map_err(|_| ())?,
             }
+            after_replace(&entry.destination);
         }
         let committed = TransactionJournal {
             state: "committed".to_string(),
@@ -151,6 +163,19 @@ pub(crate) fn commit_task_artifacts(
 
     let _ = remove_journal_then_cleanup(task_dir, &material_paths, false);
     Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn interrupt_article_commit_for_test(task_dir: &Path) {
+    let manifest = fs::read(task_dir.join(MANIFEST_DESTINATION)).unwrap();
+    commit_task_artifacts_observing(task_dir, vec![
+        TaskArtifactMutation::replace("article/article.txt", b"Rust article revision\n".to_vec()),
+        TaskArtifactMutation::replace("article/article.md", b"# Rust article revision\n".to_vec()),
+        TaskArtifactMutation::manifest(manifest),
+    ], |destination| {
+        if destination == "article/article.txt" { std::process::exit(74); }
+    }).unwrap();
+    panic!("article commit did not reach the interruption point");
 }
 
 pub(crate) fn recover_task_artifacts(task_dir: &Path) -> Result<RecoveryOutcome, String> {

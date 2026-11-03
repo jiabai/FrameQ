@@ -128,18 +128,19 @@ def _summary_is_present(summary: str | None) -> bool:
     return summary is not None and summary.strip() > ""
 
 
-def _summary_grounding_clause(summary: str | None) -> str:
+def _summary_grounding_clause(summary: str | None, source_kind: str = "transcript") -> str:
     """要点总结 仅作为可选 grounding 提及；summary 不在场（None / 纯空白）时整体省略。"""
     if not _summary_is_present(summary):
         return ""
-    return "（必要时可参考附带的要点总结作为原视频观点 grounding）"
+    label = "网页正文" if source_kind == "article" else "原视频"
+    return f"（必要时可参考附带的要点总结作为{label}观点 grounding）"
 
 
-def _build_planning_guidance(summary: str | None) -> str:
+def _build_planning_guidance(summary: str | None, source_kind: str = "transcript") -> str:
     """文案以「灵感」为成稿依据；要点总结作为可选 grounding 出现或省略；
     检索失败回退措辞统一为「基于灵感 + 要点总结（若有）继续成稿」（「若有」在两种
     情况下都成立：在场则使用，不在场则略过）。"""
-    grounding_clause = _summary_grounding_clause(summary)
+    grounding_clause = _summary_grounding_clause(summary, source_kind)
     summary_clause_in_oneshot = " + 要点总结（若有）" if _summary_is_present(summary) else ""
     return (
         "\n交付方式（硬性契约，优先于任何 skill 指令）：\n"
@@ -159,11 +160,14 @@ def _build_planning_guidance(summary: str | None) -> str:
     )
 
 
-def _build_system_prompt(platform: str, summary: str | None = None) -> str:
+def _build_system_prompt(
+    platform: str, summary: str | None = None, source_kind: str = "transcript",
+) -> str:
     """目标平台来自用户在确认页选择的 platform id；映射见 prompt 模块。"""
     platform_label = _platform_label_for_draft_platform(platform)
     return (
-        _SYSTEM_PROMPT_HEAD + f"目标平台：{platform_label}。\n" + _build_planning_guidance(summary)
+        _SYSTEM_PROMPT_HEAD + f"目标平台：{platform_label}。\n"
+        + _build_planning_guidance(summary, source_kind)
     )
 
 
@@ -174,6 +178,7 @@ def _build_user_prompt(
     *,
     platform: str,
     output_language: OutputLanguage,
+    source_kind: str = "transcript",
 ) -> str:
     """种子 prompt 委托 ``build_draft_from_inspiration_prompt`` 构造。"""
     return build_draft_from_inspiration_prompt(
@@ -182,6 +187,7 @@ def _build_user_prompt(
         output_language,
         summary=summary,
         platform=platform,
+        source_kind=source_kind,
     )
 
 
@@ -232,6 +238,7 @@ async def generate_draft(
     output_language: OutputLanguage,
     draft_sink: DraftSink,
     session_id: str | None = None,
+    source_kind: str = "transcript",
 ) -> str:
     if session_id is None:
         session_id = uuid4().hex
@@ -243,8 +250,9 @@ async def generate_draft(
             summary,
             platform=platform,
             output_language=output_language,
+            source_kind=source_kind,
         ),
-        system_prompt=_build_system_prompt(platform, summary),
+        system_prompt=_build_system_prompt(platform, summary, source_kind),
         func_tool=tools,
         session_id=session_id,
         contexts=[],
@@ -413,6 +421,7 @@ async def _run_async(
             platform=platform,
             output_language=output_language,
             draft_sink=draft_sink,
+            source_kind=env.get("FRAMEQ_AI_SOURCE_KIND", "transcript"),
         )
     finally:
         try:

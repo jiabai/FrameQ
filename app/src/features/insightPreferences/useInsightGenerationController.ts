@@ -26,6 +26,7 @@ import {
 import type { InsightRetryTarget, WorkflowState } from "../../workflow";
 import type { SupportedLocale } from "../../i18n/locale";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
+import { hasSourceText, isArticleTaskSource } from "../../webPageProtocol";
 
 type OpenAccountPanel = (notice?: UiMessage) => void;
 type RetryInsightGeneration = (
@@ -94,8 +95,8 @@ export function useInsightGenerationController({
   }, [reportAiNotice]);
 
   const openInsightPreferenceFlow = useCallback(async () => {
-    if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      reportAiNotice(uiMessage("preferences.notice.transcriptRequiredInsights"));
+    if (!hasSourceText(workflow)) {
+      reportAiNotice(uiMessage(isArticleTaskSource(workflow.taskSource) ? "webPage.waiting" : "preferences.notice.transcriptRequiredInsights"));
       return;
     }
 
@@ -110,17 +111,17 @@ export function useInsightGenerationController({
     } finally {
       setInsightPreferenceBusy(false);
     }
-  }, [reportAiNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
+  }, [reportAiNotice, workflow]);
 
   const openSummaryConfirmation = useCallback(() => {
-    if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      reportAiNotice(uiMessage("preferences.notice.transcriptRequiredSummary"));
+    if (!hasSourceText(workflow)) {
+      reportAiNotice(uiMessage(isArticleTaskSource(workflow.taskSource) ? "webPage.waiting" : "preferences.notice.transcriptRequiredSummary"));
       return;
     }
 
     reportAiNotice(null);
     setSummaryConfirmOpen(true);
-  }, [reportAiNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
+  }, [reportAiNotice, workflow]);
 
   const confirmSummaryGeneration = useCallback(async () => {
     const confirmedOutputLanguage = outputLanguage;
@@ -167,8 +168,8 @@ export function useInsightGenerationController({
   }, [closeSettings, reportAiNotice]);
 
   const openDirectionEditorFromDetail = useCallback(async () => {
-    if (!workflow.taskId || !workflow.artifacts.transcript_txt) {
-      reportAiNotice(uiMessage("preferences.notice.transcriptRequiredDirection"));
+    if (!hasSourceText(workflow)) {
+      reportAiNotice(uiMessage(isArticleTaskSource(workflow.taskSource) ? "webPage.waiting" : "preferences.notice.transcriptRequiredDirection"));
       return;
     }
 
@@ -183,7 +184,7 @@ export function useInsightGenerationController({
     } finally {
       setInsightPreferenceBusy(false);
     }
-  }, [closeDetail, reportAiNotice, workflow.artifacts.transcript_txt, workflow.taskId]);
+  }, [closeDetail, reportAiNotice, workflow]);
 
   const skipCurrentProfileSetup = useCallback(async () => {
     if (!insightPreferenceFlow) {

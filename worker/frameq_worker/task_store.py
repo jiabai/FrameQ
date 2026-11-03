@@ -33,6 +33,7 @@ from frameq_worker.task_transaction import (
     commit_task_artifacts,
     recover_task_artifacts,
 )
+from frameq_worker.web_page_contract import WebPageSource, validate_web_task_id
 
 TASK_MANIFEST_FILE_NAME = "frameq-task.json"
 TASK_SCHEMA_VERSION = 3
@@ -71,6 +72,14 @@ class TaskPaths:
     @property
     def transcript_dir(self) -> Path:
         return self.task_dir / "transcript"
+
+    @property
+    def article_txt_path(self) -> Path:
+        return self.task_dir / "article" / "article.txt"
+
+    @property
+    def article_md_path(self) -> Path:
+        return self.task_dir / "article" / "article.md"
 
     @property
     def transcript_original_dir(self) -> Path:
@@ -178,14 +187,14 @@ class LocalFileTaskSource:
             raise ValueError("Local task source is invalid.")
 
 
-TaskSource = UrlTaskSource | LocalFileTaskSource
+TaskSource = UrlTaskSource | LocalFileTaskSource | WebPageSource
 
 
 @dataclass(frozen=True)
 class TaskContext:
     paths: TaskPaths
     source: TaskSource
-    model: str
+    model: str | None
     created_at: str
     worker_version: str = "app"
     app_version: str = "app"
@@ -204,6 +213,8 @@ class TaskContext:
     def platform(self) -> str:
         if isinstance(self.source, UrlTaskSource):
             return self.source.identity.platform
+        if isinstance(self.source, WebPageSource):
+            return "web"
         return "local"
 
 
@@ -218,6 +229,21 @@ class OpenedTask:
 class TaskStoreFacade:
     output_root: Path
     cache_root: Path
+
+    def create_web(
+        self, source: WebPageSource, now: datetime | None = None, *, task_id: str | None = None,
+    ) -> TaskContext:
+        created = (now or datetime.now(UTC)).astimezone(UTC)
+        task_id = validate_web_task_id(
+            task_id if task_id is not None
+            else f"{created:%Y%m%d-%H%M%S}-web-{secrets.token_hex(8)}"
+        )
+        context = TaskContext(
+            TaskPaths(self.output_root, self.cache_root, task_id), source, None,
+            created.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        )
+        context.paths.task_dir.mkdir(parents=True, exist_ok=False)
+        return context
 
     def create(
         self,
@@ -259,7 +285,8 @@ class TaskStoreFacade:
             task_id,
             manifest,
         )
-        ensure_task_dirs(context.paths)
+        if not isinstance(context.source, WebPageSource):
+            ensure_task_dirs(context.paths)
         return OpenedTask(
             context=context,
             transcript=transcript_metadata_from_manifest(manifest),
@@ -278,6 +305,16 @@ class TaskStoreFacade:
             prior = load_task_manifest(self.output_root, context.task_id)
             result = replace(result, note_title=note_title_from_manifest(prior))
         artifact_payloads = result.artifact_payloads
+        article_paths = {"article/article.txt", "article/article.md"}
+        media_paths = {
+            "transcript/transcript.txt", "transcript/transcript.md", "transcript/segments.json",
+        }
+        if isinstance(context.source, WebPageSource):
+            if (result.transcript is not None or result.note_title is not None
+                    or set(artifact_payloads) & media_paths):
+                raise TaskArtifactCommitError()
+        elif set(artifact_payloads) & article_paths:
+            raise TaskArtifactCommitError()
         artifacts = (
             _artifacts_after_payloads(context, artifact_payloads)
             if artifact_payloads
@@ -309,6 +346,8 @@ class TaskStoreFacade:
         return task_result
 
     def read_note_title_transcript(self, context: TaskContext) -> str:
+        if isinstance(context.source, WebPageSource):
+            raise ValueError("Web page title generation is unavailable.")
         manifest = load_task_manifest(self.output_root, context.task_id)
         current = task_context_from_loaded_manifest(
             self.output_root, self.cache_root, context.task_id, manifest,
@@ -448,6 +487,12 @@ def task_artifacts_for_existing_files(
         "dissection_md": paths.dissection_markdown,
         "draft": paths.draft_path,
     }
+    if isinstance(source, WebPageSource):
+        candidates = {
+            key: path for key, path in candidates.items()
+            if key not in {"video", "audio", "transcript_txt", "transcript_md", "segments"}
+        }
+        candidates.update(article_txt=paths.article_txt_path, article_md=paths.article_md_path)
     return {
         key: path.relative_to(paths.task_dir).as_posix()
         for key, path in candidates.items()
@@ -467,6 +512,11 @@ def result_with_task(
     context: TaskContext,
     artifacts: dict[str, str] | None = None,
 ) -> ProcessResult:
+    article = isinstance(context.source, WebPageSource)
+    if article:
+        from frameq_worker.source_text import read_source_text
+
+        source_text = read_source_text(context.paths.output_root, context.task_id)
     return ProcessResult(
         status=result.status,
         task_id=context.task_id,
@@ -476,7 +526,7 @@ def result_with_task(
             if artifacts is not None
             else task_artifacts_for_existing_files(context.paths, context.source)
         ),
-        text=result.text,
+        text=source_text.text if article else result.text,
         summary=result.summary,
         insights=result.insights,
         transcript=result.transcript,
@@ -486,6 +536,8 @@ def result_with_task(
         draft=result.draft,
         note_title=result.note_title,
         task_created=result.task_created,
+        source=context.source if article else None,
+        markdown=_read_article_markdown(context.paths) if article else "",
     )
 
 
@@ -538,7 +590,11 @@ def serialize_task_manifest(
     else:
         prior_seed = draft_seed_insight_id  # explicit None (clear) or int (set)
 
-    draft_exists = context.paths.draft_path.exists()
+    draft_exists = (
+        result.artifact_payloads["ai/draft.md"] is not None
+        if "ai/draft.md" in result.artifact_payloads
+        else _is_committed_regular_file(context.paths.draft_path)
+    )
     draft_path = (
         context.paths.draft_path.relative_to(context.paths.task_dir).as_posix()
         if draft_exists
@@ -546,7 +602,7 @@ def serialize_task_manifest(
     )
 
     payload = {
-        "schema_version": TASK_SCHEMA_VERSION,
+        "schema_version": 4 if isinstance(context.source, WebPageSource) else TASK_SCHEMA_VERSION,
         "source_privacy_migration_version": SOURCE_PRIVACY_MIGRATION_VERSION,
         "source_privacy_quarantined": False,
         "task_id": context.task_id,
@@ -571,8 +627,10 @@ def serialize_task_manifest(
         title = note_title_from_manifest(
             load_task_manifest(context.paths.output_root, context.task_id),
         )
-    if title is not None:
+    if title is not None and not isinstance(context.source, WebPageSource):
         payload["note_title"] = title.to_dict()
+    _task_source_from_manifest(payload)
+    _validate_manifest_artifacts(payload)
     return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
@@ -613,9 +671,14 @@ def write_preference_snapshot_artifact(
 def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
     manifest_path = _validated_task_manifest_path(output_root, task_id)
     recover_task_artifacts(manifest_path.parent)
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    from frameq_worker.source_text import read_source_file
+
+    manifest = json.loads(read_source_file(manifest_path, 1024 * 1024).decode("utf-8"))
     if (
-        manifest.get("schema_version") != TASK_SCHEMA_VERSION
+        not isinstance(manifest, dict)
+        or manifest.get("task_id") != task_id
+        or type(manifest.get("schema_version")) is not int
+        or manifest.get("schema_version") not in {TASK_SCHEMA_VERSION, 4}
         or manifest.get("source_privacy_migration_version")
         != SOURCE_PRIVACY_MIGRATION_VERSION
         or manifest.get("source_privacy_quarantined") is True
@@ -624,6 +687,7 @@ def load_task_manifest(output_root: Path, task_id: str) -> dict[str, object]:
     try:
         _task_source_from_manifest(manifest)
         note_title_from_manifest(manifest)
+        _validate_manifest_artifacts(manifest)
     except ValueError:
         raise ValueError("Task is unavailable in the current history format.") from None
     return manifest
@@ -651,6 +715,7 @@ def _validated_task_manifest_path(output_root: Path, task_id: str) -> Path:
         or _is_link_or_junction(manifest_path)
         or not task_dir.is_dir()
         or not manifest_path.is_file()
+        or manifest_path.stat().st_nlink != 1
     ):
         raise ValueError("Task storage is unavailable or linked.")
     try:
@@ -666,6 +731,39 @@ def _is_link_or_junction(path: Path) -> bool:
     return path.is_symlink() or bool(is_junction(path))
 
 
+def _read_article_markdown(paths: TaskPaths) -> str:
+    from frameq_worker.source_text import read_source_file
+    from frameq_worker.web_page_contract import MAX_ARTICLE_MARKDOWN_BYTES
+
+    return read_source_file(paths.article_md_path, MAX_ARTICLE_MARKDOWN_BYTES).decode("utf-8")
+
+
+def _validate_manifest_artifacts(manifest: Mapping[str, object]) -> None:
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("Task artifacts are invalid.")
+    article = manifest.get("source_kind") == "web_page"
+    fixed = {key: relative for relative, key in ARTIFACT_KEY_BY_RELATIVE_PATH.items()}
+    if article:
+        if any(artifacts.get(key) != fixed[key] for key in ("article_txt", "article_md")):
+            raise ValueError("Web page body artifacts are required.")
+        if set(artifacts) & {"video", "audio", "transcript_txt", "transcript_md", "segments"}:
+            raise ValueError("Web page artifacts contain media.")
+    elif set(artifacts) & {"article_txt", "article_md"}:
+        raise ValueError("Media artifacts contain a web page.")
+    for key, relative in artifacts.items():
+        if key in fixed and relative != fixed[key]:
+            raise ValueError("Task artifact path is invalid.")
+        if key not in {*fixed, "video", "audio", "preference_snapshot"}:
+            raise ValueError("Task artifact kind is invalid.")
+        if key == "video" and relative not in {f"media/video.{ext}" for ext in VIDEO_EXTENSIONS}:
+            raise ValueError("Task video path is invalid.")
+        if key == "audio" and relative != "media/audio.wav":
+            raise ValueError("Task audio path is invalid.")
+        if key == "preference_snapshot" and relative != "ai/preference-snapshot.json":
+            raise ValueError("Task preference snapshot path is invalid.")
+
+
 def _artifacts_after_payloads(
     context: TaskContext,
     payloads: Mapping[str, bytes | None],
@@ -674,6 +772,8 @@ def _artifacts_after_payloads(
     for relative_path, content in payloads.items():
         artifact_key = ARTIFACT_KEY_BY_RELATIVE_PATH.get(relative_path)
         if artifact_key is None:
+            if relative_path == "ai/original/draft.md" and content is None:
+                continue
             raise TaskArtifactCommitError() from None
         if content is None:
             artifacts.pop(artifact_key, None)
@@ -699,7 +799,10 @@ def task_context_from_loaded_manifest(
     manifest: dict[str, object],
 ) -> TaskContext:
     source = _task_source_from_manifest(manifest)
-    model = str(manifest.get("model") or "iic/SenseVoiceSmall")
+    model = (
+        None if isinstance(source, WebPageSource)
+        else str(manifest.get("model") or "iic/SenseVoiceSmall")
+    )
     created_at = str(
         manifest.get("created_at")
         or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -715,6 +818,12 @@ def task_context_from_loaded_manifest(
 
 
 def _manifest_source_fields(source: TaskSource) -> dict[str, object]:
+    if isinstance(source, WebPageSource):
+        return {
+            "source_kind": "web_page", "source_url": source.url, "source_identity": None,
+            "platform": "web",
+            "web_source": {"title": source.title, "extracted_at": source.extracted_at},
+        }
     if isinstance(source, UrlTaskSource):
         canonical_url = canonical_url_for_persistence(source.identity)
         return {
@@ -739,6 +848,20 @@ def _manifest_source_fields(source: TaskSource) -> dict[str, object]:
 
 def _task_source_from_manifest(manifest: Mapping[str, object]) -> TaskSource:
     source_kind = manifest.get("source_kind")
+    if source_kind == "web_page":
+        metadata = manifest.get("web_source")
+        if (manifest.get("schema_version") != 4 or manifest.get("platform") != "web"
+                or "source_identity" not in manifest or manifest["source_identity"] is not None
+                or "model" not in manifest or manifest["model"] is not None
+                or "transcript" not in manifest or manifest["transcript"] is not None
+                or "local_source" in manifest or "note_title" in manifest
+                or not isinstance(metadata, dict) or set(metadata) != {"title", "extracted_at"}
+                or any(not isinstance(value, str) for value in metadata.values())
+                or not isinstance(manifest.get("source_url"), str)):
+            raise ValueError("Web page source is invalid.")
+        return WebPageSource(manifest["source_url"], metadata["title"], metadata["extracted_at"])
+    if manifest.get("schema_version") != 3 or "web_source" in manifest:
+        raise ValueError("Media source version is invalid.")
     if source_kind in {None, "url"}:
         if "local_source" in manifest:
             raise ValueError("URL task cannot contain a local source.")

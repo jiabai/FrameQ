@@ -1,0 +1,49 @@
+{
+  "title": "FrameQ native system WebView host protocol",
+  "description": "Protocol metadata; closed-field message validation is implemented by each native decoder.",
+  "contractVersion": 1,
+  "framing": "UTF-8 NDJSON, one bounded JSON object per newline",
+  "maxEncodedRecordBytes": 41943040,
+  "maxScriptBytes": 2097152,
+  "maxUrlBytes": 16384,
+  "maxTextBytes": 2097152,
+  "maxMarkdownBytes": 4194304,
+  "maxTitleCodepoints": 512,
+  "parentMessages": ["init", "start", "policy_decision", "cancel"],
+  "hostMessages": ["ready", "stage", "policy_check", "article", "error", "closed"],
+  "envelope": {
+    "required": ["type", "contract_version", "operation_id", "session_id"],
+    "contract_version": 1,
+    "operation_id": "canonical lowercase UUID",
+    "session_id": "canonical lowercase UUID"
+  },
+  "messageFields": {
+    "init": ["type", "contract_version", "operation_id", "session_id", "url", "extraction_script", "platform", "deadline_ms"],
+    "start": ["type", "contract_version", "operation_id", "session_id"],
+    "cancel": ["type", "contract_version", "operation_id", "session_id"],
+    "policy_decision": ["type", "contract_version", "operation_id", "session_id", "request_id", "navigation_generation", "allow", "error"],
+    "ready": ["type", "contract_version", "operation_id", "session_id", "runtime_version", "browser_pid"],
+    "stage": ["type", "contract_version", "operation_id", "session_id", "navigation_generation", "stage"],
+    "policy_check": ["type", "contract_version", "operation_id", "session_id", "request_id", "navigation_generation", "url", "kind"],
+    "article": ["type", "contract_version", "operation_id", "session_id", "navigation_generation", "final_url", "title", "text", "markdown"],
+    "error": ["type", "contract_version", "operation_id", "session_id", "code"],
+    "closed": ["type", "contract_version", "operation_id", "session_id", "clean"]
+  },
+  "platforms": {
+    "windows": { "requiredFields": ["kind", "user_data_dir"], "kind": "windows", "browser_pid": "positive integer" },
+    "macos": { "requiredFields": ["kind", "proxy_url"], "kind": "macos", "browser_pid": null }
+  },
+  "stages": ["web_loading", "web_extracting"],
+  "policyKinds": ["navigation", "resource"],
+  "policy": { "maxInFlight": 16, "maxQueued": 512, "queueDeadlineMilliseconds": 10000, "deadlineMilliseconds": 2000, "denyRequiresError": true, "allowRequiresNullError": true, "subresourceDenial": "block the individual resource; extraction still requires a valid stable main document", "mainDocumentDenial": "terminate with the specific policy error" },
+  "diagnostics": { "transport": "stderr, at most 16 closed category records and 4096 bytes", "fields": ["reason", "resource"], "requestData": "forbidden" },
+  "lifecycle": {
+    "beforeStart": "parent verifies and records helper and native browser identity",
+    "article": "current extraction generation, main frame and native final URL only",
+    "terminal": "article or error followed by closed and actual process exit",
+    "lateResults": "rejected after cancellation, generation change or deadline",
+    "unknownFields": "rejected",
+    "urlTransport": "stdin only; never process argv, environment or logs",
+    "processSelector": ["--operation-id", "canonical operation UUID"]
+  }
+}

@@ -8,6 +8,9 @@ export const WORKER_PROGRESS_STAGES = [
   "waiting_input",
   "video_extracting",
   "video_transcribing",
+  "web_loading",
+  "web_extracting",
+  "web_saving",
   "insights_generating",
   "title_generating",
   "completed",
@@ -46,6 +49,9 @@ export const PROGRESS_MESSAGE_MODELS = [
 type ProgressMessageArgKey = "model" | "language" | "attempt" | "total";
 
 export const WORKER_MESSAGE_CODE_RULES = {
+  "web.page.loading": { allowedArgs: [] },
+  "web.page.extracting": { allowedArgs: [] },
+  "web.page.saving": { allowedArgs: [] },
   "video.download.preparing": { allowedArgs: [] },
   "video.stream.validating": { allowedArgs: [] },
   "local.media.validating": { allowedArgs: [] },

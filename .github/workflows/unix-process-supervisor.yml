@@ -1,4 +1,4 @@
-name: macOS ProcessSupervisor
+name: Native ProcessSupervisor
 
 on:
   push:
@@ -6,10 +6,16 @@ on:
       - main
     paths:
       - "app/src-tauri/**"
+      - "app/native-webview-host/**"
+      - "scripts/build-system-webview-host.mjs"
+      - "worker/tests/fixtures/web_worker_orphan.py"
       - ".github/workflows/unix-process-supervisor.yml"
   pull_request:
     paths:
       - "app/src-tauri/**"
+      - "app/native-webview-host/**"
+      - "scripts/build-system-webview-host.mjs"
+      - "worker/tests/fixtures/web_worker_orphan.py"
       - ".github/workflows/unix-process-supervisor.yml"
   workflow_dispatch:
 
@@ -22,9 +28,13 @@ concurrency:
 
 jobs:
   cargo-test:
-    name: macOS Cargo tests
-    runs-on: macos-latest
+    name: Cargo tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -32,7 +42,30 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+
+      - name: Build native system WebView host
+        run: node scripts/build-system-webview-host.mjs
+
+      - name: Test macOS native host protocol
+        if: runner.os == 'macOS'
+        run: node scripts/build-system-webview-host.mjs --test-protocol
+
+      - name: Test Windows native host
+        if: runner.os == 'Windows'
+        run: cargo test --locked --manifest-path app/native-webview-host/windows/Cargo.toml
+
+      - name: Setup Python 3.12 for real process tests
+        id: process-python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
       - name: Run Tauri Rust tests
         env:
           RUST_BACKTRACE: "1"
+          FRAMEQ_PROCESS_TEST_PYTHON: ${{ steps.process-python.outputs.python-path }}
         run: cargo test --manifest-path app/src-tauri/Cargo.toml

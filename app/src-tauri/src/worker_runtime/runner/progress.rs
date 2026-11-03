@@ -22,6 +22,7 @@ pub(crate) enum ProgressRoute {
     None,
     Worker(Window),
     AsrModelDownload(Window),
+    WebSaving { inner: Box<ProgressRoute>, session: Arc<crate::web_page::session::NativeSession> },
 }
 
 #[cfg(test)]
@@ -29,9 +30,34 @@ pub(crate) enum ProgressRoute {
     None,
     Worker,
     AsrModelDownload,
+    WebSaving { inner: Box<ProgressRoute>, session: Arc<crate::web_page::session::NativeSession> },
 }
 
 impl ProgressRoute {
+    pub(crate) fn with_web_session(self, session: Arc<crate::web_page::session::NativeSession>) -> Self {
+        Self::WebSaving { inner: Box::new(self), session }
+    }
+
+    pub(crate) fn register_web_worker(&self, pid: u32) -> Result<(), String> {
+        match self {
+            Self::WebSaving { session, .. } => session.record("worker", pid),
+            _ => Ok(()),
+        }
+    }
+
+    pub(crate) fn web_stage(&self, stage: &str) -> Result<(), String> {
+        let (code, progress) = match stage {
+            "web_loading" => ("web.page.loading", 10),
+            "web_extracting" => ("web.page.extracting", 70),
+            "web_saving" => ("web.page.saving", 90),
+            _ => return Err("WEB_PROTOCOL_INVALID".into()),
+        };
+        let event = serde_json::json!({ "stage": stage, "progress": progress,
+            "message_code": code });
+        let event = validate_worker_progress_event(&event).map_err(|_| "WEB_PROTOCOL_INVALID")?;
+        self.emit(event);
+        Ok(())
+    }
     #[cfg(not(test))]
     pub(crate) fn worker(window: Window) -> Self {
         Self::Worker(window)
@@ -58,6 +84,7 @@ impl ProgressRoute {
             Self::None => ProgressProtocol::None,
             Self::Worker(_) => ProgressProtocol::Worker,
             Self::AsrModelDownload(_) => ProgressProtocol::AsrModelDownload,
+            Self::WebSaving { inner, .. } => inner.protocol(),
         }
 
         #[cfg(test)]
@@ -65,6 +92,7 @@ impl ProgressRoute {
             Self::None => ProgressProtocol::None,
             Self::Worker => ProgressProtocol::Worker,
             Self::AsrModelDownload => ProgressProtocol::AsrModelDownload,
+            Self::WebSaving { inner, .. } => inner.protocol(),
         }
     }
 
@@ -78,6 +106,7 @@ impl ProgressRoute {
             Self::AsrModelDownload(window) => {
                 let _ = window.emit(ASR_MODEL_DOWNLOAD_EVENT_NAME, payload);
             }
+            Self::WebSaving { inner, .. } => inner.emit(payload),
         }
 
         #[cfg(test)]

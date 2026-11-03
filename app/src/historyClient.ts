@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
-import { WORKER_PROGRESS_STAGES } from "./desktopWorkerProtocol";
 import { parseNoteTitleMetadata, type NoteTitleMetadata } from "./noteTitle";
 import { parseNoteMetadataProjection, type NoteMetadataProjection } from "./noteMetadata";
 import type { Insight } from "./insightPreferences";
@@ -22,6 +21,7 @@ import { parseTaskSourceSummary } from "./workflow";
 import {
   TASK_ARTIFACT_KEYS,
   TASK_INSIGHT_FIELDS,
+  TASK_ERROR_STAGES,
   parseDissection,
 } from "./workerResultProtocol";
 
@@ -55,6 +55,7 @@ export type HistoryDetailResponse = Partial<NoteMetadataProjection> & {
   artifacts: TaskArtifacts;
   error: HistoryErrorResponse | null;
   text: string;
+  markdown?: string;
   summary: string;
   transcript: TranscriptMetadata | null;
   insights: Insight[];
@@ -94,6 +95,7 @@ export type HistoryCleanupResult = {
 };
 
 export type HistoryItem = Partial<NoteMetadataProjection> & {
+  markdown?: string;
   noteTitle?: NoteTitleMetadata | null;
   taskId: string;
   source: TaskSourceSummary;
@@ -198,6 +200,7 @@ function parseHistoryListItemResponse(value: unknown): HistoryItemResponse {
   );
   const status = parseHistoryStatus(response.status);
   const error = parseHistoryListError(response.error);
+  const source = parseHistorySource(response.source);
   if (
     typeof response.task_id !== "string" ||
     response.id !== response.task_id ||
@@ -214,11 +217,11 @@ function parseHistoryListItemResponse(value: unknown): HistoryItemResponse {
     task_id: response.task_id,
     id: response.id,
     created_at: response.created_at,
-    source: parseHistorySource(response.source),
+    source,
     status,
     task_dir: response.task_dir,
     output_dir: response.output_dir,
-    artifacts: parseHistoryArtifacts(response.artifacts),
+    artifacts: parseSourceArtifacts(response.artifacts, source),
     error,
     text_preview: response.text_preview,
     insights_count: response.insights_count,
@@ -247,17 +250,21 @@ export function parseHistoryDetailResponse(
       "dissection",
       "dissection_source_status",
     ],
-    ["note_title", "note_metadata", "note_metadata_error"],
+    ["note_title", "note_metadata", "note_metadata_error", "markdown"],
     HISTORY_IPC_RESPONSE_INVALID,
   );
   const status = parseHistoryStatus(response.status);
   const error = parseHistoryDetailError(response.error);
   const dissection = parseDissection(response.dissection);
+  const source = parseHistorySource(response.source);
   if (
     response.task_id !== expectedTaskId ||
     typeof response.task_dir !== "string" ||
     typeof response.text !== "string" ||
     typeof response.summary !== "string" ||
+    (response.markdown !== undefined && typeof response.markdown !== "string") ||
+    (source.kind === "web_page" && (typeof response.markdown !== "string" || response.transcript !== null || dissection?.schemaVersion === 1)) ||
+    (source.kind !== "web_page" && dissection?.schemaVersion === 2) ||
     !isCoherentHistoryError(status, error)
     || dissection === undefined
     || (response.dissection_source_status !== null
@@ -269,12 +276,13 @@ export function parseHistoryDetailResponse(
   }
   return {
     task_id: expectedTaskId,
-    source: parseHistorySource(response.source),
+    source,
     status,
     task_dir: response.task_dir,
-    artifacts: parseHistoryArtifacts(response.artifacts),
+    artifacts: parseSourceArtifacts(response.artifacts, source),
     error,
     text: response.text,
+    ...(source.kind === "web_page" ? { markdown: response.markdown as string } : {}),
     summary: response.summary,
     transcript: parseHistoryTranscript(response.transcript),
     insights: parseHistoryInsights(response.insights),
@@ -308,7 +316,7 @@ function parseHistorySource(value: unknown): TaskSourceSummary {
   const source = readIpcDataObject(
     value,
     ["kind"],
-    ["url", "displayName", "mediaKind"],
+    ["url", "displayName", "mediaKind", "title", "extractedAt"],
     HISTORY_IPC_RESPONSE_INVALID,
   );
   const parsed = parseTaskSourceSummary(source);
@@ -335,6 +343,15 @@ function parseHistoryArtifacts(value: unknown): TaskArtifacts {
     }
     artifacts[key as TaskArtifactKey] = artifact;
   }
+  return artifacts;
+}
+
+function parseSourceArtifacts(value: unknown, source: TaskSourceSummary): TaskArtifacts {
+  const artifacts = parseHistoryArtifacts(value);
+  if (source.kind === "web_page") {
+    if (artifacts.article_txt !== "article/article.txt" || artifacts.article_md !== "article/article.md" ||
+      ["video", "audio", "transcript_txt", "transcript_md", "segments"].some((key) => key in artifacts)) throwInvalidHistoryResponse();
+  } else if (artifacts.article_txt !== undefined || artifacts.article_md !== undefined) throwInvalidHistoryResponse();
   return artifacts;
 }
 
@@ -375,7 +392,7 @@ function parseHistoryDetailError(
     typeof response.code !== "string" ||
     !SAFE_ERROR_CODE.test(response.code) ||
     typeof response.message !== "string" ||
-    !isOneOf(response.stage, WORKER_PROGRESS_STAGES)
+    !isOneOf(response.stage, TASK_ERROR_STAGES)
   ) {
     throwInvalidHistoryResponse();
   }
@@ -500,6 +517,7 @@ export function historyItemToWorkerResult(item: HistoryItem): WorkerResult {
     task_dir: item.taskDir,
     artifacts: item.artifacts,
     text: item.text,
+    ...(item.source.kind === "web_page" ? { markdown: item.markdown ?? "", source: item.source } : {}),
     summary: item.summary,
     insights: item.insights,
     transcript: item.transcript,
@@ -543,6 +561,7 @@ function mapHistoryDetailResponse(response: HistoryDetailResponse): HistoryItem 
     artifacts: response.artifacts,
     error: response.error,
     text: response.text,
+    ...(response.source.kind === "web_page" ? { markdown: response.markdown ?? "" } : {}),
     summary: response.summary,
     transcript: response.transcript,
     insights: response.insights,

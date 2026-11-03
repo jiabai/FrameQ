@@ -1,4 +1,3 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   type Dispatch,
   type SetStateAction,
@@ -8,6 +7,7 @@ import {
 
 import type { SupportedLocale } from "../../i18n/locale";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
+import { revealFileInDirectory } from "../common/revealPath";
 import {
   getDetailText,
   getExportPath,
@@ -133,7 +133,7 @@ export function useArtifactDetailController({
     }
 
     try {
-      await revealItemInDir(detailExportPath);
+      await revealFileInDirectory(detailExportPath);
       setActionNotice(uiMessage("transcript.notice.exportLocated"));
     } catch {
       setActionNotice(uiMessage("transcript.notice.exportLocateFailed"));
@@ -151,7 +151,7 @@ export function useArtifactDetailController({
       return;
     }
     try {
-      await revealItemInDir(transcriptPath);
+      await revealFileInDirectory(transcriptPath);
       setActionNotice(uiMessage("transcript.notice.transcriptLocated"));
     } catch {
       setActionNotice(uiMessage("transcript.notice.transcriptLocateFailed"));

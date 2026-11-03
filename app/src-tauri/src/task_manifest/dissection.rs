@@ -24,7 +24,7 @@ pub(super) fn verify_dissection_source(
     if !validate_task_dissection(report) {
         return Err(INVALID_DISSECTION_ARTIFACT.to_string());
     }
-    if sha256_hex(transcript) != report.source_transcript_sha256 {
+    if sha256_hex(transcript) != report.source_sha256() {
         return Ok(DissectionSourceStatus::Stale);
     }
 
@@ -36,6 +36,7 @@ pub(super) fn verify_dissection_source(
             usize::try_from(chunk.end_byte).map_err(|_| INVALID_DISSECTION_ARTIFACT.to_string())?;
         if start != expected_start
             || end > transcript.len()
+            || std::str::from_utf8(&transcript[start..end]).is_err()
             || sha256_hex(&transcript[start..end]) != chunk.sha256
         {
             return Err(INVALID_DISSECTION_ARTIFACT.to_string());
@@ -51,7 +52,11 @@ pub(super) fn verify_dissection_source(
 pub(super) fn build_dissection_view(
     report: TaskDissection,
     transcript: &[u8],
+    kind: super::SourceTextKind,
 ) -> Result<DissectionView, String> {
+    if report.is_article() != (kind == super::SourceTextKind::Article) {
+        return Err(INVALID_DISSECTION_ARTIFACT.to_string());
+    }
     let source_status = verify_dissection_source(&report, transcript)?;
     Ok(DissectionView {
         report,
@@ -65,7 +70,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{verify_dissection_source, DissectionSourceStatus};
+    use super::{build_dissection_view, verify_dissection_source, DissectionSourceStatus};
     use crate::worker_runtime::TaskDissection;
 
     fn report() -> TaskDissection {
@@ -104,5 +109,31 @@ mod tests {
         let mut invalid = report();
         invalid.source_chunks[0].end_byte = 4;
         assert!(verify_dissection_source(&invalid, b"abc").is_err());
+    }
+
+    #[test]
+    fn article_dissection_uses_version_two_and_its_exact_source_bytes() {
+        let mut value = serde_json::to_value(report()).unwrap();
+        let hash = value.as_object_mut().unwrap().remove("sourceTranscriptSha256").unwrap();
+        value["schemaVersion"] = serde_json::json!(2);
+        value["sourceKind"] = serde_json::json!("article");
+        value["sourceTextSha256"] = hash;
+        let article: TaskDissection = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(build_dissection_view(article.clone(), b"abc", crate::task_manifest::SourceTextKind::Article).unwrap().source_status, DissectionSourceStatus::Current);
+        assert!(build_dissection_view(article, b"abc", crate::task_manifest::SourceTextKind::Transcript).is_err());
+        value["sourceTranscriptSha256"] = serde_json::json!("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert!(!crate::worker_runtime::validate_task_dissection(&serde_json::from_value(value).unwrap()));
+    }
+
+    #[test]
+    fn dissection_ranges_must_follow_utf8_character_boundaries() {
+        let mut report = report();
+        let bytes = "中".as_bytes();
+        report.source_transcript_sha256 = Some(super::sha256_hex(bytes));
+        report.source_chunks = vec![
+            serde_json::from_value(serde_json::json!({"id":1,"startByte":0,"endByte":1,"sha256":super::sha256_hex(&bytes[..1])})).unwrap(),
+            serde_json::from_value(serde_json::json!({"id":2,"startByte":1,"endByte":3,"sha256":super::sha256_hex(&bytes[1..])})).unwrap(),
+        ];
+        assert!(verify_dissection_source(&report, bytes).is_err());
     }
 }

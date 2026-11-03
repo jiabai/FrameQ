@@ -73,9 +73,20 @@ pub(super) fn deliver_worker_stdin(
         .map_err(|_| "Failed to deliver worker request through stdin.".to_string())
 }
 
-pub(super) fn read_worker_stdout(mut stdout: ChildStdout) -> std::io::Result<Vec<u8>> {
+pub(super) fn read_worker_stdout(
+    stdout: ChildStdout,
+    max_bytes: Option<usize>,
+) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
-    stdout.read_to_end(&mut bytes).map(|_| bytes)
+    let mut reader = stdout.take(max_bytes.map_or(u64::MAX, |limit| limit as u64 + 1));
+    reader.read_to_end(&mut bytes)?;
+    if max_bytes.is_some_and(|limit| bytes.len() > limit) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Worker stdout exceeded its limit.",
+        ));
+    }
+    Ok(bytes)
 }
 
 pub(super) fn terminate_and_reap(child: &mut Child, process_group_id: u32) {

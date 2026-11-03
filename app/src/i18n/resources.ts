@@ -14,6 +14,7 @@ import { workflowResources } from "./workflowResources";
 import { shellResources } from "./shellResources";
 import { noteActionsResources } from "./noteActionsResources";
 import { dataStorageResources } from "./dataStorageResources";
+import { webPageResources } from "./webPageResources";
 
 export const RESOURCE_NAMESPACES = [
   "common",
@@ -33,12 +34,14 @@ export const RESOURCE_NAMESPACES = [
   "shell",
   "noteActions",
   "dataStorage",
+  "webPage",
 ] as const;
 export type ResourceNamespace = (typeof RESOURCE_NAMESPACES)[number];
 type ResourceTree = { readonly [key: string]: string | ResourceTree };
 
 export const resources = {
   "zh-CN": {
+    webPage: webPageResources["zh-CN"],
     common: {
       ...commonFeatureResources["zh-CN"],
       appName: "FrameQ",
@@ -69,6 +72,9 @@ export const resources = {
     progress: {
       worker: {
         video_download_preparing: "正在准备下载视频。",
+        web_page_loading: "正在加载网页。",
+        web_page_extracting: "正在提取网页正文。",
+        web_page_saving: "正在保存网页笔记。",
         video_stream_validating: "正在验证视频流。",
         audio_extract_running: "正在提取音频。",
         audio_extract_reused: "已复用本地音频文件。",
@@ -113,6 +119,9 @@ export const resources = {
         waiting_input: "正在等待输入。",
         cancelling: "正在取消当前任务。",
         video_extracting: "正在准备本地媒体文件。",
+        web_loading: "正在加载网页。",
+        web_extracting: "正在提取网页正文。",
+        web_saving: "正在保存网页笔记。",
         video_transcribing: "正在本地转写音频。",
         title_generating: "文字稿已保存，正在生成笔记标题。",
         insights_generating: "正在生成 AI 结果。",
@@ -156,6 +165,7 @@ export const resources = {
     dataStorage: dataStorageResources["zh-CN"],
   },
   "zh-TW": {
+    webPage: webPageResources["zh-TW"],
     common: {
       ...commonFeatureResources["zh-TW"],
       appName: "FrameQ",
@@ -186,6 +196,9 @@ export const resources = {
     progress: {
       worker: {
         video_download_preparing: "正在準備下載影片。",
+        web_page_loading: "正在載入網頁。",
+        web_page_extracting: "正在擷取網頁正文。",
+        web_page_saving: "正在儲存網頁筆記。",
         video_stream_validating: "正在驗證影片串流。",
         audio_extract_running: "正在擷取音訊。",
         audio_extract_reused: "已沿用本機音訊檔案。",
@@ -230,6 +243,9 @@ export const resources = {
         waiting_input: "正在等待輸入。",
         cancelling: "正在取消目前工作。",
         video_extracting: "正在準備本機媒體檔案。",
+        web_loading: "正在載入網頁。",
+        web_extracting: "正在擷取網頁正文。",
+        web_saving: "正在儲存網頁筆記。",
         video_transcribing: "正在本機轉寫音訊。",
         title_generating: "逐字稿已儲存，正在產生筆記標題。",
         insights_generating: "正在產生 AI 結果。",
@@ -273,6 +289,7 @@ export const resources = {
     dataStorage: dataStorageResources["zh-TW"],
   },
   "en-US": {
+    webPage: webPageResources["en-US"],
     common: {
       ...commonFeatureResources["en-US"],
       appName: "FrameQ",
@@ -303,6 +320,9 @@ export const resources = {
     progress: {
       worker: {
         video_download_preparing: "Preparing the video download.",
+        web_page_loading: "Loading the web page.",
+        web_page_extracting: "Extracting the article.",
+        web_page_saving: "Saving the web note.",
         video_stream_validating: "Validating the video stream.",
         audio_extract_running: "Extracting audio.",
         audio_extract_reused: "Reusing the local audio file.",
@@ -347,6 +367,9 @@ export const resources = {
         waiting_input: "Waiting for input.",
         cancelling: "Cancelling the current task.",
         video_extracting: "Preparing local media files.",
+        web_loading: "Loading the web page.",
+        web_extracting: "Extracting the article.",
+        web_saving: "Saving the web note.",
         video_transcribing: "Transcribing audio locally.",
         title_generating: "Transcript saved. Generating the note title.",
         insights_generating: "Generating AI results.",

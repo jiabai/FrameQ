@@ -247,7 +247,7 @@ export function DraftResultSheet({
     setNotice(
       (await revealPath(draftPath))
         ? uiMessage("synthesis.draftResult.exported")
-        : uiMessage("synthesis.draftResult.exportFailed", { path: draftPath }),
+        : uiMessage("synthesis.draftResult.exportFailed"),
     );
   }, [dirty, workflow]);
 

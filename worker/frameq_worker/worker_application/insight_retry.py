@@ -32,6 +32,7 @@ from frameq_worker.requests import (
     parse_preference_snapshot,
     parse_retry_insights_request,
 )
+from frameq_worker.source_text import read_source_text
 from frameq_worker.summary_agent import SummaryRunner
 from frameq_worker.task_store import (
     DRAFT_SEED_UNSET,
@@ -45,6 +46,7 @@ from frameq_worker.task_transaction import (
     TaskArtifactRecoveryError,
 )
 from frameq_worker.transcript_polish import run_transcript_polish_step
+from frameq_worker.web_page_contract import WebPageSource
 
 
 def retry_insights_once(
@@ -98,6 +100,14 @@ def retry_insights_once(
             ),
         ).to_dict()
     task_context = opened_task.context
+    runtime_env["FRAMEQ_AI_SOURCE_KIND"] = (
+        "article" if isinstance(task_context.source, WebPageSource) else "transcript"
+    )
+    if isinstance(task_context.source, WebPageSource) and request.target in {"title", "transcript"}:
+        return result_with_task(failed_insight_retry_result(
+            code="WEB_PAGE_RETRY_TARGET_INVALID",
+            message="This retry target is unavailable for web pages.", text="",
+        ), task_context).to_dict()
     if request.target == "title":
         title_result = run_note_title_step(
             store=task_store, context=task_context, runtime_env=runtime_env,
@@ -172,7 +182,9 @@ def retry_insights_once(
         )
 
     insight_result = run_insight_generation_step(
-        transcript_txt_path=task_context.paths.transcript_txt_path,
+        transcript_txt_path=(task_context.paths.article_txt_path
+                             if isinstance(task_context.source, WebPageSource)
+                             else task_context.paths.transcript_txt_path),
         output_dir=task_context.paths.ai_dir,
         output_stem="",
         transcript=opened_task.transcript,
@@ -326,20 +338,11 @@ def run_draft_generation_step(
             message="Draft generation returned an empty result.",
         )
 
-    paths.draft_path.parent.mkdir(parents=True, exist_ok=True)
-    paths.draft_path.write_text(draft_text, encoding="utf-8")
-
-    # 重生会产出新 AI 稿；旧的手改 original 备份已陈旧，删除以便下次首次编辑以新稿为基线重新备份。
-    # best-effort：失败不影响生成结果（最坏只是陈旧备份留到下次编辑）。
-    try:
-        paths.draft_original_path.unlink(missing_ok=True)
-    except OSError:
-        pass
-
     return ProcessResult(
         status=JobStage.COMPLETED,
         artifacts={"draft": "ai/draft.md"},
         draft=draft_text,
+        artifact_payloads={"ai/draft.md": draft_text.encode("utf-8"), "ai/original/draft.md": None},
     )
 
 
@@ -444,13 +447,15 @@ def read_existing_insights(paths: TaskPaths) -> list[Insight]:
 
 
 def read_existing_dissection(paths: TaskPaths) -> dict[str, object] | None:
-    if not paths.dissection_json.is_file() or not paths.transcript_txt_path.is_file():
+    if not paths.dissection_json.is_file():
         return None
     try:
         payload = json.loads(paths.dissection_json.read_text(encoding="utf-8"))
-        transcript = paths.transcript_txt_path.read_bytes().decode("utf-8")
-        return parse_persisted_dissection(payload, transcript=transcript).to_dict()
-    except (OSError, UnicodeError, json.JSONDecodeError, DissectionGenerationError):
+        source = read_source_text(paths.output_root, paths.task_id)
+        return parse_persisted_dissection(
+            payload, transcript=source.text, source_kind=source.kind,
+        ).to_dict()
+    except (OSError, ValueError, UnicodeError, json.JSONDecodeError, DissectionGenerationError):
         return None
 
 

@@ -21,6 +21,7 @@ export type NoteInfoSheetProps = {
 export function NoteInfoSheet({ item, info, collections, loading, notice, onRefresh, onClose }: NoteInfoSheetProps) {
   const { t } = useTranslation("noteActions");
   const { t: shellT } = useTranslation("shell");
+  const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   if (!item) return null;
   const current = info?.taskId === item.taskId ? info : null;
@@ -47,7 +48,8 @@ export function NoteInfoSheet({ item, info, collections, loading, notice, onRefr
           <div><dt>{t("info.fields.title")}</dt><dd>{getHistoryTitle(current)}</dd></div>
           <div><dt>{t("info.fields.titleOrigin")}</dt><dd>{t(`info.origins.${titleOrigin}`)}</dd></div>
           {created && !Number.isNaN(created.getTime()) ? <div><dt>{t("info.fields.createdAt")}</dt><dd><time dateTime={current.createdAt}>{formatDateTime(created, locale)}</time></dd></div> : null}
-          <div><dt>{t("info.fields.sourceType")}</dt><dd>{t(`info.sourceTypes.${current.source.kind === "url" ? "url" : current.source.mediaKind}`)}</dd></div>
+          <div><dt>{t("info.fields.sourceType")}</dt><dd>{current.source.kind === "web_page" ? webT("sourceType") : t(`info.sourceTypes.${current.source.kind === "url" ? "url" : current.source.mediaKind}`)}</dd></div>
+          {current.source.kind === "web_page" && <><div><dt>{webT("originalTitle")}</dt><dd>{current.source.title}</dd></div><div><dt>{webT("extractedAt")}</dt><dd><time dateTime={current.source.extractedAt}>{formatDateTime(new Date(current.source.extractedAt), locale)}</time></dd></div></>}
           {source ? <div><dt>{t("info.fields.source")}</dt><dd>{source}</dd></div> : null}
           <div><dt>{t("info.fields.status")}</dt><dd>{t(`info.statuses.${current.status}`)}</dd></div>
           {current.noteTitle ? <div><dt>{t("info.fields.titleStatus")}</dt><dd>{t(`info.titleStatuses.${current.noteTitle.status}`)}</dd></div> : null}

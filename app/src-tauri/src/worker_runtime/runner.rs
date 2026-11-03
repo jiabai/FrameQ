@@ -23,15 +23,18 @@ use super::supervisor::{
 use crate::diagnostics::begin_asr_model_download_diagnostics;
 use crate::vc_runtime::{check_vc_runtime, VcRuntimeStatus};
 use crate::{append_desktop_log, RuntimePaths};
+use super::web_process_tree::{finish_web_tree, WebProcessTree};
 use std::process::Output;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorkerOperation {
     ProcessVideo,
     ProcessLocalMedia,
+    ProcessWebPage,
     RetryInsights,
     ResolveSourceIdentity,
     DownloadAsrModel,
@@ -58,6 +61,7 @@ impl WorkerOperation {
         match self {
             Self::ProcessVideo => "process_video",
             Self::ProcessLocalMedia => "process_local_media",
+            Self::ProcessWebPage => "process_web_page",
             Self::RetryInsights => "retry_insights",
             Self::ResolveSourceIdentity => "resolve_source_identity",
             Self::DownloadAsrModel => "download_asr_model",
@@ -118,6 +122,7 @@ pub(crate) enum WorkerRunOutcome {
 #[derive(Default)]
 pub(crate) struct WorkerLane {
     supervisor: Arc<ProcessSupervisor>,
+    admission: Mutex<()>,
 }
 
 impl WorkerLane {
@@ -126,7 +131,22 @@ impl WorkerLane {
         paths: &RuntimePaths,
         request: WorkerRunRequest,
     ) -> Result<WorkerRunOutcome, WorkerRunError> {
-        self.run_inner(paths, request, RunnerHooks::default())
+        let admission = self.reserve()?;
+        self.run_inner(paths, request, RunnerHooks::default(), Some(admission))
+    }
+
+    pub(super) fn reserve(&self) -> Result<MutexGuard<'_, ()>, WorkerRunError> {
+        let guard = self.admission.try_lock().map_err(|_| WorkerRunError::new(
+            WorkerRunErrorKind::AlreadyRunning, "Another task is already running.",
+        ))?;
+        if self.supervisor.is_active() {
+            return Err(WorkerRunError::new(WorkerRunErrorKind::AlreadyRunning, "Another task is already running."));
+        }
+        Ok(guard)
+    }
+
+    pub(super) fn run_reserved(&self, paths: &RuntimePaths, request: WorkerRunRequest) -> Result<WorkerRunOutcome, WorkerRunError> {
+        self.run_inner(paths, request, RunnerHooks::default(), None)
     }
 
     pub(crate) fn cancel(&self) -> CancelProcessResult {
@@ -136,6 +156,10 @@ impl WorkerLane {
     pub(crate) fn is_active(&self) -> bool {
         self.supervisor.is_active()
     }
+
+    pub(super) fn is_reserved(&self) -> bool { self.admission.try_lock().is_err() }
+
+    pub(super) fn process_id(&self) -> Option<u32> { self.supervisor.process_id() }
 
     #[cfg(test)]
     pub(crate) fn activate_for_test(&self, pid: u32) -> u64 {
@@ -157,7 +181,7 @@ impl WorkerLane {
         request: WorkerRunRequest,
         hooks: RunnerHooks,
     ) -> Result<WorkerRunOutcome, WorkerRunError> {
-        self.run_inner(paths, request, hooks)
+        self.run_inner(paths, request, hooks, None)
     }
 
     fn run_inner(
@@ -165,6 +189,7 @@ impl WorkerLane {
         paths: &RuntimePaths,
         request: WorkerRunRequest,
         hooks: RunnerHooks,
+        admission: Option<MutexGuard<'_, ()>>,
     ) -> Result<WorkerRunOutcome, WorkerRunError> {
         let WorkerRunRequest {
             operation,
@@ -194,6 +219,15 @@ impl WorkerLane {
                 "Worker process failed to start.",
             )
         })?;
+        let mut web_tree = if operation == WorkerOperation::ProcessWebPage {
+            match WebProcessTree::attach(&child) {
+                Ok(tree) => Some(tree),
+                Err(_) => {
+                    let pid = child.id(); terminate_and_reap(&mut child, pid);
+                    return Err(WorkerRunError::new(WorkerRunErrorKind::SpawnFailed, "WEB_PROCESS_TREE_UNAVAILABLE"));
+                }
+            }
+        } else { None };
         let Some(instance) = self.supervisor.start(child.id()) else {
             let pid = child.id();
             terminate_and_reap(&mut child, pid);
@@ -202,7 +236,14 @@ impl WorkerLane {
                 "Another worker operation is already running.",
             ));
         };
+        let _web_admission = if operation == WorkerOperation::ProcessWebPage { admission } else { drop(admission); None };
         let mut instance_guard = InstanceGuard::new(self.supervisor.as_ref(), instance);
+        if progress.register_web_worker(child.id()).is_err() {
+            cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
+            instance_guard.finish();
+            finish_web_tree(&mut web_tree, None)?;
+            return Err(WorkerRunError::new(WorkerRunErrorKind::SpawnFailed, "WEB_STORAGE_FAILED"));
+        }
         let watchdog = match start_watchdog(
             paths.clone(),
             operation,
@@ -220,7 +261,7 @@ impl WorkerLane {
             }
         };
 
-        if deliver_worker_stdin(&mut child, stdin_payload).is_err() {
+        if (operation == WorkerOperation::ProcessWebPage && matches!(self.supervisor.phase_for(instance.instance_id), Some(ProcessPhase::Cancelling | ProcessPhase::TimingOut(_)))) || deliver_worker_stdin(&mut child, stdin_payload).is_err() {
             watchdog.stop_and_join();
             cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
             let phase = instance_guard.finish();
@@ -263,7 +304,8 @@ impl WorkerLane {
             if panic_stdout_reader {
                 panic!("forced stdout reader failure");
             }
-            read_worker_stdout(stdout)
+            read_worker_stdout(stdout, (operation == WorkerOperation::ProcessWebPage)
+                .then_some(super::command::MAX_WEB_PAGE_MESSAGE_BYTES))
         });
         let progress_paths = paths.clone();
         let reader_hooks = hooks.clone();
@@ -286,6 +328,7 @@ impl WorkerLane {
             watchdog.stop_and_join();
             cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
             instance_guard.finish();
+            finish_web_tree(&mut web_tree, None)?;
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
             return Err(WorkerRunError::new(
@@ -300,6 +343,7 @@ impl WorkerLane {
                 watchdog.stop_and_join();
                 cleanup_registered_child(&mut child, self.supervisor.as_ref(), instance);
                 instance_guard.finish();
+                finish_web_tree(&mut web_tree, None)?;
                 let _ = stdout_reader.join();
                 let _ = stderr_reader.join();
                 return Err(WorkerRunError::new(
@@ -310,6 +354,7 @@ impl WorkerLane {
         };
         watchdog.stop_and_join();
         let terminal_phase = instance_guard.finish();
+        finish_web_tree(&mut web_tree, None)?;
         let stdout = stdout_reader
             .join()
             .ok()

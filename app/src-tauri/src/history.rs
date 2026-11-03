@@ -51,6 +51,7 @@ pub(crate) struct HistoryDetailView {
     pub(crate) artifacts: HashMap<String, String>,
     pub(crate) error: Option<HistoryErrorView>,
     pub(crate) text: String,
+    pub(crate) markdown: String,
     pub(crate) summary: String,
     pub(crate) transcript: Option<task_manifest::TranscriptMetadata>,
     pub(crate) insights: Vec<task_manifest::InsightView>,
@@ -196,9 +197,11 @@ pub(crate) fn load_history_detail_from_output_root(
                 error
             }
         })?;
-    let text = task
-        .read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?
-        .unwrap_or_default();
+    let (text, markdown) = if task.is_web_page() {
+        (task.read_source_text()?.text, task.read_article_markdown()?)
+    } else {
+        (task.read_text_artifact(task_manifest::TaskArtifact::TranscriptTxt)?.unwrap_or_default(), String::new())
+    };
     let summary = task
         .read_text_artifact(task_manifest::TaskArtifact::Summary)?
         .unwrap_or_default();
@@ -218,6 +221,7 @@ pub(crate) fn load_history_detail_from_output_root(
             stage: error.stage,
         })),
         text,
+        markdown,
         summary,
         transcript: task.transcript_metadata(),
         insights,
@@ -231,6 +235,22 @@ pub(crate) fn load_history_detail_from_output_root(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn webpage_history_restores_markdown_metadata_and_exact_plain_text() {
+        let root = crate::task_manifest::web_tests::output_root();
+        crate::task_manifest::web_tests::write_task(&root, "web-history", &crate::task_manifest::web_tests::manifest("web-history"));
+        let items = super::load_history_from_output_root(&root).unwrap();
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        assert!(matches!(&item.source, crate::task_manifest::TaskSourceSummary::WebPage { title, .. } if title == "网页标题"));
+        assert!(item.note_title.is_none());
+        let detail = super::load_history_detail_from_output_root(&root, super::HistoryDetailRequest { task_id: "web-history".to_string() }).unwrap();
+        assert_eq!(detail.text, "第一段。\r\n\r\n第二段。\n");
+        assert_eq!(detail.markdown, "# 网页标题\n\n第一段。\n\n第二段。\n");
+        assert!(detail.transcript.is_none());
+        assert_eq!(serde_json::to_value(detail).unwrap()["source"]["extractedAt"], "2026-11-01T08:00:00Z");
+    }
+
     use super::{
         load_history_detail_from_output_root, load_history_from_output_root,
         load_history_with_stats, HistoryDetailRequest,

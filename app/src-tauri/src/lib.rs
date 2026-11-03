@@ -31,6 +31,7 @@ mod vc_runtime;
 mod video_processing;
 mod window_chrome;
 mod worker_runtime;
+mod web_page;
 
 #[cfg(test)]
 mod file_safety_tests;
@@ -61,7 +62,7 @@ pub(crate) use history_deletion::HistoryDeletionState;
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
 #[cfg(test)]
-pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 10;
+pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 11;
 pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "FRAMEQ_DIAGNOSTIC ";
 
 #[cfg(any(windows, target_os = "linux"))]
@@ -78,6 +79,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(ProcessSupervisors::default()))
+        .manage(Arc::new(web_page::WebPageOperations::default()))
         .manage(Arc::new(diagnostic_export::DiagnosticExportState::default()))
         .manage(Arc::new(asr_model::DiagnosticModelState::default()))
         .manage(Arc::new(HistoryDeletionState::default()))
@@ -108,9 +110,16 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(|invoke| match invoke.message.command() {
+            "begin_web_page" => web_page::begin_web_page(invoke),
+            "process_web_page" => web_page::process_web_page(invoke),
+            _ => {
+                let handler: fn(tauri::ipc::Invoke) -> bool = tauri::generate_handler![
             greet,
+            web_page::cancel_web_page,
             data_storage::get_data_storage_state,
+            data_storage::begin_data_storage_preflight,
+            data_storage::cancel_data_storage_preflight,
             data_storage::select_data_storage_directory,
             data_storage::prepare_data_storage_migration,
             data_storage::get_pending_data_storage_preview,
@@ -181,7 +190,10 @@ pub fn run() {
             window_chrome::toggle_maximize_window,
             window_chrome::get_window_position,
             window_chrome::set_window_position
-        ])
+                ];
+                handler(invoke)
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

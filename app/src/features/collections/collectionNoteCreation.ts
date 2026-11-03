@@ -1,6 +1,6 @@
 import type { WorkerResult } from "../../workflowState";
 
-export type CollectionNoteCreationResult = Pick<WorkerResult, "status" | "task_id" | "artifacts" | "error">;
+export type CollectionNoteCreationResult = Pick<WorkerResult, "status" | "task_id" | "artifacts" | "error" | "source">;
 
 type CollectionNoteIdentity = { intentId: number; collectionId: string };
 export type CollectionNoteAttachment = CollectionNoteIdentity & {
@@ -34,7 +34,7 @@ function completedTaskId(result: CollectionNoteCreationResult | undefined): stri
     (result.error?.code === "WORKER_CANCELLED" && result.error.stage !== "title_generating") ||
     !result.task_id?.trim() ||
     result.task_id !== result.task_id.trim() ||
-    !result.artifacts.transcript_txt?.trim()
+    !(result.source?.kind === "web_page" ? result.artifacts.article_txt?.trim() && result.artifacts.article_md?.trim() : result.artifacts.transcript_txt?.trim())
   ) return null;
   return result.task_id;
 }

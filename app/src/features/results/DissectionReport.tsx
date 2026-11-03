@@ -13,12 +13,13 @@ type Props = {
 
 export function DissectionReport({ report, stale, sourceLocationDisabled = false, onLocateChunks }: Props) {
   const { t } = useTranslation("synthesis");
+  const { t: webT } = useTranslation("webPage");
   const narrative = report.overallNarrative;
   return (
     <div className="dissection-report">
       {stale ? (
         <StatusLine className="dissection-stale-banner">
-          {t("dissection.report.stale")}
+          {report.schemaVersion === 2 ? webT("dissection.stale") : t("dissection.report.stale")}
         </StatusLine>
       ) : null}
       <section className="dissection-overview">
@@ -52,11 +53,11 @@ export function DissectionReport({ report, stale, sourceLocationDisabled = false
                 className="secondary-button compact-button"
                 data-source-chunks={segment.sourceChunkIds.join(",")}
                 disabled={stale || sourceLocationDisabled}
-                title={stale || sourceLocationDisabled ? t("dissection.report.locateDisabled") : undefined}
+                title={stale || sourceLocationDisabled ? report.schemaVersion === 2 ? webT("dissection.stale") : t("dissection.report.locateDisabled") : undefined}
                 onClick={() => onLocateChunks(segment.sourceChunkIds)}
               >
                 <LocateFixed size={15} />
-                <span>{t("dissection.report.locateSource")}</span>
+                <span>{report.schemaVersion === 2 ? webT("dissection.locate") : t("dissection.report.locateSource")}</span>
               </button>
             </article>
           ))}

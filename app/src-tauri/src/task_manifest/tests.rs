@@ -30,6 +30,8 @@ fn contract_artifact_fields_are_supported_by_manifest_validation() {
         let path = match field.as_str() {
             "dissection" => "ai/dissection.json",
             "dissection_md" => "ai/dissection.md",
+            "article_txt" => "article/article.txt",
+            "article_md" => "article/article.md",
             _ => "artifacts/result.txt",
         };
         super::schema::validate_relative_artifact_path(path, field)

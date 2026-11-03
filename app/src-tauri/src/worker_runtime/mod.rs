@@ -3,9 +3,12 @@ mod facade;
 mod result_protocol;
 mod runner;
 mod supervisor;
+mod web_process_tree;
+pub(crate) mod native_webview_host;
 
 use command::{build_asr_model_download_command_spec, build_runtime_component_download_command_spec};
 pub(crate) use facade::{AsrModelDownloadJob, RuntimeComponentDownloadJob, TaskWorkerFacade, WorkerJob};
+pub(crate) use runner::ProgressRoute;
 #[cfg(test)]
 pub(crate) use result_protocol::SourceIdentityFailure;
 pub(crate) use result_protocol::{
@@ -15,7 +18,7 @@ pub(crate) use result_protocol::{
 };
 #[cfg(test)]
 pub(crate) use runner::WorkerExitSummary;
-use runner::{ProgressRoute, WorkerLane, WorkerOperation, WorkerRunRequest};
+use runner::{WorkerLane, WorkerOperation, WorkerRunRequest};
 pub(crate) use runner::{WorkerRunError, WorkerRunErrorKind, WorkerRunOutcome, WorkerTimeoutKind};
 pub(crate) use supervisor::CancelProcessResult;
 use tauri::Window;
@@ -65,8 +68,10 @@ impl ProcessSupervisors {
     }
 
     pub(crate) fn is_task_active(&self) -> bool {
-        self.task.is_active()
+        self.task.is_active() || self.task.is_reserved()
     }
+
+    pub(crate) fn task_process_id(&self) -> Option<u32> { self.task.process_id() }
 
     pub(crate) fn run_asr_model_download(
         &self,

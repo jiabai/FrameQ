@@ -149,6 +149,7 @@ async def _generate_dissection(
     provider: Provider,
     max_turns: int,
     progress_callback: ProgressCallback | None,
+    source_kind: str = "transcript",
 ) -> TranscriptDissection:
     delivery = DissectionDelivery()
     tools = ToolSet()
@@ -160,7 +161,7 @@ async def _generate_dissection(
     ))
     session_id = uuid4().hex
     request = ProviderRequest(
-        prompt=build_dissection_agent_prompt(chunks, output_language),
+        prompt=build_dissection_agent_prompt(chunks, output_language, source_kind),
         system_prompt=(
             "You are the transcript dissection agent. Analyze the supplied transcript and "
             "deliver the complete report using submit_dissection. Resolve any validation "
@@ -230,6 +231,7 @@ def generate_dissection_via_agent_runtime(
             return await _generate_dissection(
                 transcript, chunks, output_language, source_language,
                 active_provider, max_turns, progress_callback,
+                resolved_env.get("FRAMEQ_AI_SOURCE_KIND", "transcript"),
             )
         finally:
             if provider is None:

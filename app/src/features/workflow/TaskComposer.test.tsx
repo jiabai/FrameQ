@@ -56,12 +56,14 @@ async function localized(ui: ReactElement, locale: SupportedLocale = "en-US") {
 afterEach(cleanup);
 
 describe("TaskComposer", () => {
-  test.each(["zh-CN", "zh-TW", "en-US"] as const)("discloses title sampling and the extra Credit before submission in %s", async (locale) => {
+  test.each(["zh-CN", "zh-TW", "en-US"] as const)("omits the automatic title disclosure from the home composer in %s", async (locale) => {
     render(await localized(<TaskComposer {...composerProps()} />, locale));
-    const disclosure = screen.getByText(workflowResources[locale].noteTitle.disclosure);
+    expect(screen.queryByText(workflowResources[locale].noteTitle.disclosure)).toBeNull();
     const submit = screen.getByRole("button", { name: workflowResources[locale].input.confirm });
-    expect(submit.getAttribute("aria-describedby")).toBe(disclosure.id);
-    expect(screen.getByRole("textbox").getAttribute("aria-describedby")?.split(" ")).toContain(disclosure.id);
+    expect(submit.hasAttribute("aria-describedby")).toBe(false);
+    const description = screen.getByRole("textbox").getAttribute("aria-describedby");
+    expect(description).toBeTruthy();
+    expect(document.getElementById(description!)).toBeTruthy();
   });
 
   test("renders a direct file chooser and retains the accessible URL input", async () => {
@@ -72,7 +74,7 @@ describe("TaskComposer", () => {
     expect(chooseFiles.getAttribute("type")).toBe("button");
     expect(chooseFiles.hasAttribute("aria-haspopup")).toBe(false);
     expect(screen.queryByRole("menu")).toBeNull();
-    const input = screen.getByRole("textbox", { name: "Video URL" }) as HTMLInputElement;
+    const input = screen.getByRole("textbox", { name: "Video or web page URL" }) as HTMLInputElement;
     expect(input.id).toBe("video-url");
     expect(input.value).toBe("https://www.bilibili.com/video/BV1xx411c7mD");
   });

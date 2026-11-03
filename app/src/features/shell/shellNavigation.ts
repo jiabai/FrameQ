@@ -169,6 +169,7 @@ export function getHistoryTitle(
   item: Pick<HistoryListItem, "taskId" | "source" | "textPreview" | "noteTitle" | "noteMetadata">,
 ): string {
   if (item.noteMetadata?.displayTitle) return item.noteMetadata.displayTitle;
+  if (item.source.kind === "web_page") return item.source.title;
   if (item.noteTitle?.text) return item.noteTitle.text;
   const preview = item.textPreview.replace(/\s+/gu, " ").trim();
   if (preview) {
@@ -188,7 +189,7 @@ export function getHistoryTitle(
 }
 
 const USER_ARTIFACT_KEYS = [
-  "video", "audio", "transcript_txt", "transcript_md", "summary", "mindmap",
+  "video", "audio", "transcript_txt", "transcript_md", "article_txt", "article_md", "summary", "mindmap",
   "insights", "insights_md", "dissection", "dissection_md", "draft",
 ] as const satisfies readonly TaskArtifactKey[];
 

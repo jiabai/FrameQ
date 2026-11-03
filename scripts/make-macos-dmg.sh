@@ -27,10 +27,12 @@ fi
 codesign --verify --deep --strict --verbose=4 "${APP}"
 
 case "${TARGET}" in
-  x86_64-apple-darwin) ARCH_SUFFIX="x64" ;;
-  aarch64-apple-darwin) ARCH_SUFFIX="aarch64" ;;
-  *) ARCH_SUFFIX="${TARGET}" ;;
+  x86_64-apple-darwin) ARCH_SUFFIX="x64"; NATIVE_TARGET="macos-x64" ;;
+  aarch64-apple-darwin) ARCH_SUFFIX="aarch64"; NATIVE_TARGET="macos-arm64" ;;
+  *) echo "Unsupported macOS target: ${TARGET}" >&2; exit 1 ;;
 esac
+
+node scripts/build-system-webview-host.mjs --target "${NATIVE_TARGET}" --verify-bundle "${APP}"
 
 VERSION="$(node -p "require('./app/src-tauri/tauri.conf.json').version")"
 DMG_DIR="${BUNDLE_DIR}/dmg"
@@ -38,7 +40,13 @@ DMG="${DMG_DIR}/${VOLNAME}_${VERSION}_${ARCH_SUFFIX}.dmg"
 mkdir -p "${DMG_DIR}"
 rm -f "${DMG}"
 
-STAGING="$(mktemp -d)"
+STAGING_ROOT="$(pwd -P)/build/dmg-staging"
+mkdir -p "${STAGING_ROOT}"
+STAGING="$(mktemp -d "${STAGING_ROOT}/package.XXXXXX")"
+case "${STAGING}" in
+  "${STAGING_ROOT}"/package.*) ;;
+  *) echo "Invalid DMG staging directory." >&2; exit 1 ;;
+esac
 trap 'rm -rf "${STAGING}"' EXIT
 # ditto preserves bundle metadata and the code signature.
 ditto "${APP}" "${STAGING}/${VOLNAME}.app"
@@ -51,5 +59,7 @@ hdiutil create \
   -format UDZO \
   -ov \
   "${DMG}"
+
+node scripts/build-system-webview-host.mjs --target "${NATIVE_TARGET}" --verify-dmg "${DMG}"
 
 echo "Created ${DMG}"

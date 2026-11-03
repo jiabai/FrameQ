@@ -40,6 +40,9 @@ import { TaskWorkspaceLayout } from "./features/results/TaskWorkspaceLayout";
 import { SettingsSheet } from "./features/settings/SettingsSheet";
 import { useSettingsController } from "./features/settings/useSettingsController";
 import { LocalTranscriptWorkspace } from "./features/transcript/LocalTranscriptWorkspace";
+import { ArticleWorkspace } from "./features/articles/ArticleWorkspace";
+import { getTaskArtifactPath } from "./taskArtifacts";
+import { isArticleTaskSource } from "./webPageProtocol";
 import { useTranscriptDetailController } from "./features/transcript/useTranscriptDetailController";
 import { useTranscriptPolishController } from "./features/transcript/useTranscriptPolishController";
 import { DesktopSidebar } from "./features/shell/DesktopSidebar";
@@ -151,10 +154,13 @@ function App() {
   const clearCollectionNoteRef = useRef<() => void>(() => {});
   const refreshAccountAfterTitleRef = useRef<() => void>(() => {});
   const appActiveRef = useRef(true);
+  const appLifetimeAbortRef = useRef(new AbortController());
   const appIsActive = useCallback(() => appActiveRef.current, []);
+  const appLifetimeSignal = useCallback(() => appLifetimeAbortRef.current.signal, []);
   useEffect(() => {
     appActiveRef.current = true;
-    return () => { appActiveRef.current = false; };
+    appLifetimeAbortRef.current = new AbortController();
+    return () => { appActiveRef.current = false; appLifetimeAbortRef.current.abort(); };
   }, []);
   const pendingNavigationRef = useRef<ShellNavigationAction | null>(null);
   const page = getShellPage(navigation);
@@ -205,6 +211,8 @@ function App() {
     resetInsightGenerationUiRef.current();
     setActionNotice(null);
   }, []);
+  const [articleChunks, setArticleChunks] = useState<number[]>([]);
+  const clearArticleChunks = useCallback(() => setArticleChunks([]), []);
   const prepareInsightRetryUi = useCallback(() => {
     closeDetailForTaskRef.current();
     setActionNotice(null);
@@ -241,6 +249,7 @@ function App() {
     outputLanguage: resolvedLocale,
     onTitleFinished: () => refreshAccountAfterTitleRef.current(),
     isActive: appIsActive,
+    getLifetimeSignal: appLifetimeSignal,
   });
   const transcriptDetailController = useTranscriptDetailController({
     workflow,
@@ -366,8 +375,10 @@ function App() {
       return;
     }
     closeDetail();
+    if (workflow.taskSource?.kind === "web_page") { setArticleChunks(chunkIds); return; }
     transcriptDetailController.locateTranscriptByteRange(chunk.startByte, chunk.endByte);
-  }, [closeDetail, transcriptDetailController, workflow.dissection, workflow.dissectionStale]);
+  }, [closeDetail, transcriptDetailController, workflow.dissection, workflow.dissectionStale, workflow.taskSource]);
+  useEffect(() => { setArticleChunks([]); }, [workflow.taskId]);
   useEffect(() => {
     resetInsightGenerationUiRef.current = resetInsightGenerationUi;
   }, [resetInsightGenerationUi]);
@@ -479,7 +490,7 @@ function App() {
     restartForUpdate,
     openReleases,
   } = useAppUpdateController({
-    processingActive: isProcessingStage(workflow.stage) || collectionNoteCreation.attaching,
+    processingActive: submissionPending || isProcessingStage(workflow.stage) || collectionNoteCreation.attaching,
     modelDownloadActive: modelDownloadActive || runtimeComponentDownloading,
     maintenanceActive: Boolean(dataStorage?.state && dataStorage.state.dataAccess !== "ready"),
     preparationActive: dataStorage?.preparing ?? false,
@@ -587,7 +598,7 @@ function App() {
     ? tShell(`collections.errors.${collectionsController.errorCode}`)
     : null;
   const pageTitle = page === "task"
-    ? workflow.noteMetadata?.displayTitle ?? currentHistoryItem?.noteMetadata?.displayTitle ?? workflow.noteTitle?.text ?? (currentHistoryItem ? getHistoryTitle(currentHistoryItem) : tShell("toolbar.currentTask"))
+    ? workflow.noteMetadata?.displayTitle ?? currentHistoryItem?.noteMetadata?.displayTitle ?? (workflow.taskSource?.kind === "web_page" ? workflow.taskSource.title : workflow.noteTitle?.text) ?? (currentHistoryItem ? getHistoryTitle(currentHistoryItem) : tShell("toolbar.currentTask"))
     : page === "collections" && selectedCollection ? selectedCollection.name
       : page === "home" && noteDestination && !collectionNoteCreation.failure ? tShell("collections.noteDestination", { name: noteDestination.name })
         : tShell(`nav.${page}`);
@@ -763,7 +774,7 @@ function App() {
         </div>
         <ShellToolbar
           collapsed={sidebarCollapsed}
-          title={pageTitle}
+          title={page === "task" ? "" : pageTitle}
           canBack={canNavigate && navigation.index > 0}
           canForward={canNavigate && navigation.index < navigation.entries.length - 1}
           disabledReason={!canNavigate ? navigationReason : ""}
@@ -867,7 +878,7 @@ function App() {
               )}
               <TaskWorkspaceLayout
                 title={pageTitle}
-                local={<LocalTranscriptWorkspace
+                local={isArticleTaskSource(workflow.taskSource) || workflow.stage.startsWith("web_") || workflow.cancellingFromStage?.startsWith("web_") ? <ArticleWorkspace workflow={workflow} model={taskWorkspaceModel.local} selectedChunks={articleChunks} onClearSelection={clearArticleChunks} onCancel={() => void cancelCurrentProcessing()} /> : <LocalTranscriptWorkspace
                   model={taskWorkspaceModel.local}
                   controller={transcriptDetailController}
                   actionNotice={aiActionNotice ? null : actionNotice}
@@ -942,10 +953,11 @@ function App() {
       />
 
       <SummaryConfirmationSheet
+        sourceKind={workflow.taskSource?.kind === "web_page" ? "article" : "media"}
         open={summaryConfirmOpen}
         locale={resolvedLocale}
         transcriptText={workflow.text}
-        transcriptPath={currentTranscriptPath}
+        transcriptPath={workflow.taskSource?.kind === "web_page" ? getTaskArtifactPath(workflow, "article_txt") : currentTranscriptPath}
         quotaRemaining={account.llmQuotaRemaining}
         busy={isProcessingStage(workflow.stage)}
         onConfirm={confirmSummaryGeneration}
@@ -953,11 +965,12 @@ function App() {
       />
 
       <InsightPreferenceFlow
+        sourceKind={workflow.taskSource?.kind === "web_page" ? "article" : "media"}
         flow={insightPreferenceFlow}
         busy={insightPreferenceBusy || isProcessingStage(workflow.stage)}
         accountQuotaRemaining={account.llmQuotaRemaining}
         transcriptText={workflow.text}
-        transcriptPath={currentTranscriptPath}
+        transcriptPath={workflow.taskSource?.kind === "web_page" ? getTaskArtifactPath(workflow, "article_txt") : currentTranscriptPath}
         locale={resolvedLocale}
         outputLanguage={confirmedOutputLanguage ?? resolvedLocale}
         onFlowChange={setInsightPreferenceFlow}
@@ -989,7 +1002,7 @@ function App() {
         workflow={workflow}
         busy={isProcessingStage(workflow.stage)}
         quotaRemaining={account.llmQuotaRemaining}
-        transcriptPath={currentTranscriptPath}
+        transcriptPath={workflow.taskSource?.kind === "web_page" ? getTaskArtifactPath(workflow, "article_txt") : currentTranscriptPath}
         onConfirm={confirmDraftGeneration}
         onCancel={() => setDraftConfirmOpen(false)}
       />

@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 const MAX_WORKER_STDIN_PAYLOAD_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_WEB_PAGE_MESSAGE_BYTES: usize = 40 * 1024 * 1024;
 const STORAGE_SYSTEM_ENVIRONMENT: &[&str] = &[
     "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR", "USERPROFILE",
     "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "APPDATA", "PROGRAMDATA", "PROGRAMFILES",
@@ -31,6 +32,7 @@ const STORAGE_SYSTEM_ENVIRONMENT: &[&str] = &[
 pub(super) enum WorkerInvocation {
     ProcessVideo(String),
     ProcessLocalMedia(String),
+    ProcessWebPage(String),
     RetryInsights(String),
     ResolveSourceIdentity(String),
 }
@@ -275,6 +277,9 @@ pub(super) fn build_worker_command_spec(
     invocation: WorkerInvocation,
     server_managed_llm: Option<account::ServerManagedLlmInvocation>,
 ) -> Result<WorkerCommandSpec, String> {
+    if let WorkerInvocation::ProcessWebPage(payload) = &invocation {
+        return build_web_page_command_spec(paths, payload);
+    }
     let include_server_managed_llm = worker_invocation_uses_server_managed_llm(&invocation);
     let (args, stdin_payload) = match invocation {
         WorkerInvocation::ProcessVideo(payload) => {
@@ -290,6 +295,7 @@ pub(super) fn build_worker_command_spec(
         WorkerInvocation::ResolveSourceIdentity(payload) => {
             (vec!["--resolve-source-stdin".to_string()], Some(payload))
         }
+        WorkerInvocation::ProcessWebPage(_) => unreachable!("web page commands use an isolated environment"),
     };
     if stdin_payload
         .as_ref()
@@ -368,11 +374,58 @@ pub(super) fn build_worker_command_spec(
     })
 }
 
+fn build_web_page_command_spec(
+    paths: &RuntimePaths,
+    payload: &str,
+) -> Result<WorkerCommandSpec, String> {
+    if payload.len() > MAX_WEB_PAGE_MESSAGE_BYTES {
+        return Err("WEB_REQUEST_INVALID".into());
+    }
+    let parsed: serde_json::Value = serde_json::from_str(payload).map_err(|_| "WEB_REQUEST_INVALID")?;
+    let operation_id = parsed.get("operation_id").and_then(serde_json::Value::as_str).ok_or("WEB_REQUEST_INVALID")?;
+    if uuid::Uuid::parse_str(operation_id).map_or(true, |id| id.to_string() != operation_id) {
+        return Err("WEB_REQUEST_INVALID".into());
+    }
+    let stringify = |path: &std::path::Path| {
+        path.to_str().map(str::to_owned).ok_or_else(|| "WEB_STORAGE_FAILED".to_string())
+    };
+    let mut env: Vec<(String, String)> = STORAGE_SYSTEM_ENVIRONMENT.iter()
+        .filter(|key| !matches!(**key, "HOME" | "USERPROFILE" | "LOCALAPPDATA" | "APPDATA" | "HOMEDRIVE" | "HOMEPATH" | "TEMP" | "TMP" | "TMPDIR"))
+        .filter_map(|key| std::env::var(key).ok().map(|value| ((*key).into(), value))).collect();
+    for key in ["HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "HOMEDRIVE", "HOMEPATH"] {
+        env.push((key.into(), stringify(&paths.user_data_dir)?));
+    }
+    env.extend([
+        ("PYTHONPATH".into(), stringify(&paths.resource_dir.join("worker"))?),
+        ("PYTHONUTF8".into(), "1".into()),
+        ("PYTHONIOENCODING".into(), "utf-8".into()),
+        ("PYTHONNOUSERSITE".into(), "1".into()),
+        ("PYTHONDONTWRITEBYTECODE".into(), "1".into()),
+        ("PATH".into(), storage_validation_path(paths)?),
+        (OUTPUT_DIR_ENV.into(), stringify(&paths.output_root()?)?),
+        (CACHE_DIR_ENV.into(), stringify(&paths.cache_root()?)?),
+        (RESOURCE_DIR_ENV.into(), stringify(&paths.resource_dir)?),
+        ("FRAMEQ_ALLOW_REAL_ASR".into(), "0".into()),
+        ("MODELSCOPE_OFFLINE".into(), "1".into()),
+        ("HF_HUB_OFFLINE".into(), "1".into()),
+        ("TEMP".into(), stringify(&paths.user_data_dir)?),
+        ("TMP".into(), stringify(&paths.user_data_dir)?),
+        ("TMPDIR".into(), stringify(&paths.user_data_dir)?),
+    ]);
+    Ok(WorkerCommandSpec {
+        program: bundled_python_path(&paths.resource_dir),
+        args: vec!["-m".into(), "frameq_worker".into(), "--save-web-page-stdin".into(), "--web-operation-id".into(), operation_id.into()],
+        stdin_payload: Some(payload.into()), env, clear_env: true, env_remove: Vec::new(),
+        current_dir: paths.user_data_dir.clone(),
+    })
+}
+
 fn worker_invocation_uses_server_managed_llm(invocation: &WorkerInvocation) -> bool {
     match invocation {
         WorkerInvocation::RetryInsights(_) => true,
         WorkerInvocation::ProcessVideo(_)
         | WorkerInvocation::ProcessLocalMedia(_)
+        | WorkerInvocation::ProcessWebPage(_)
         | WorkerInvocation::ResolveSourceIdentity(_) => false,
     }
 }
@@ -774,6 +827,49 @@ mod tests {
         assert_eq!(env.get("FRAMEQ_ANYSEARCH_SOURCE"), None);
         assert_eq!(env.get("FRAMEQ_ANYSEARCH_CHECKOUT_URL"), None);
         assert_eq!(env.get("FRAMEQ_ANYSEARCH_SESSION_TOKEN"), None);
+    }
+
+    #[test]
+    fn web_save_command_uses_bounded_pipe_and_storage_environment() {
+        let paths = command_test_paths();
+        let payload = serde_json::json!({
+            "contract_version": 2,
+            "operation_id": "00000000-0000-0000-0000-000000000001",
+            "task_id": "20261102-123456-web-0123456789abcdef",
+            "article": { "title": "Unicode article", "sourceUrl": "https://www.python.org/",
+                "text": "文".repeat(400_000), "markdown": "# Body\r\n" },
+        }).to_string();
+        assert!(payload.len() > 1024 * 1024);
+        let spec = build_worker_command_spec(
+            &paths, WorkerInvocation::ProcessWebPage(payload.clone()), None,
+        ).expect("web save payload accepted");
+        assert_eq!(spec.args, vec!["-m", "frameq_worker", "--save-web-page-stdin",
+            "--web-operation-id", "00000000-0000-0000-0000-000000000001"]);
+        assert_eq!(spec.stdin_payload.as_deref(), Some(payload.as_str()));
+        assert!(spec.clear_env);
+        assert!(spec.env_remove.is_empty());
+        assert_eq!(spec.current_dir, paths.user_data_dir);
+        let env = spec.env_map();
+        for key in ["FRAMEQ_WEB_ENGINE_DIR", "FRAMEQ_WEB_EXTRACTION_BUNDLE",
+            "FRAMEQ_LLM_SESSION_TOKEN", "FRAMEQ_ANYSEARCH_SESSION_TOKEN"] {
+            assert!(!env.contains_key(key));
+        }
+        assert!(!spec.args.iter().any(|value| value.contains("https://")));
+        assert!(!env.values().any(|value| value.contains("https://")));
+    }
+
+    #[test]
+    fn web_save_command_rejects_invalid_operation_and_oversize_payload() {
+        let paths = command_test_paths();
+        for payload in [
+            serde_json::json!({ "operation_id": "INVALID" }).to_string(),
+            serde_json::json!({ "operation_id": "00000000000000000000000000000001" }).to_string(),
+            "x".repeat(super::MAX_WEB_PAGE_MESSAGE_BYTES + 1),
+        ] {
+            assert!(build_worker_command_spec(
+                &paths, WorkerInvocation::ProcessWebPage(payload), None,
+            ).is_err());
+        }
     }
 
     #[test]

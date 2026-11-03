@@ -22,15 +22,19 @@ const watchdogTestsPath = resolve(
   "app/src-tauri/src/worker_runtime/runner/tests/watchdog.rs",
 );
 
-test("runs the Unix ProcessSupervisor fixture on macOS without unsupported Linux or privileged product integrations", async () => {
+test("runs native process fixtures on macOS and Windows with an explicit real Python", async () => {
   const workflow = await readFile(workflowPath, "utf8");
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /permissions:\s*\r?\n\s+contents: read/);
-  assert.match(workflow, /runs-on:\s*macos-latest/);
+  assert.match(workflow, /runs-on:\s*\$\{\{\s*matrix\.os\s*\}\}/);
+  assert.match(workflow, /os:\s*\[macos-latest,\s*windows-latest\]/);
   assert.match(workflow, /timeout-minutes:\s*30/);
   assert.match(workflow, /uses:\s*actions\/checkout@v5/);
   assert.doesNotMatch(workflow, /actions\/checkout@v4|node20/i);
   assert.match(workflow, /uses:\s*dtolnay\/rust-toolchain@stable/);
+  assert.match(workflow, /uses:\s*actions\/setup-python@v7/);
+  assert.match(workflow, /python-version:\s*"3\.12"/);
+  assert.match(workflow, /FRAMEQ_PROCESS_TEST_PYTHON:\s*\$\{\{ steps\.process-python\.outputs\.python-path \}\}/);
   assert.match(
     workflow,
     /run:\s*cargo test --manifest-path app\/src-tauri\/Cargo\.toml\s*(?:\r?\n|$)/,

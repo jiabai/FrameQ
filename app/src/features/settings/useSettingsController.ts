@@ -1,5 +1,4 @@
 import { type FormEvent, useCallback, useState } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 
 import {
@@ -17,6 +16,7 @@ import {
   type InsightPreferenceState,
 } from "../../insightPreferencesClient";
 import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
+import { revealFileInDirectory } from "../common/revealPath";
 
 export type SettingsCategory = "basic" | "inspiration" | "storage" | "updates" | "advanced";
 
@@ -158,7 +158,7 @@ export function useSettingsController(
     }
 
     try {
-      await revealItemInDir(settingsConfigPath);
+      await revealFileInDirectory(settingsConfigPath);
       setSettingsNotice(uiMessage("settings.notice.configLocated"));
     } catch {
       setSettingsNotice(uiMessage("settings.notice.configLocateFailed"));

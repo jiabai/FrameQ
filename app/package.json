@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run build:article-extractor && npm run build:system-webview-host && tsc && vite build",
+    "build:article-extractor": "node ../scripts/build-article-extractor.mjs",
+    "build:system-webview-host": "node ../scripts/build-system-webview-host.mjs",
     "lint": "tsc --noEmit && node ../scripts/check-i18n-literals.mjs",
     "test": "vitest run --no-file-parallelism",
     "preview": "vite preview",
@@ -15,12 +17,15 @@
     "tauri:dev:safe": "node ../scripts/snapshot-appdata.mjs && node ../scripts/tauri-dev-fresh-worker.mjs"
   },
   "dependencies": {
+    "@mozilla/readability": "0.6.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "dompurify": "3.4.17",
     "i18next": "^26.3.6",
+    "ipaddr.js": "2.3.0",
     "lucide-react": "^1.18.0",
     "motion": "^13.1.0",
     "qrcode": "^1.5.4",
@@ -29,7 +34,9 @@
     "react-i18next": "^17.0.9",
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "turndown": "7.2.0",
+    "turndown-plugin-gfm": "1.0.2"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
@@ -37,7 +44,9 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/turndown": "5.0.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "esbuild": "0.27.7",
     "jsdom": "^29.1.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",

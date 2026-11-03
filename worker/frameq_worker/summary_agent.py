@@ -206,11 +206,13 @@ class SummaryDeliveryHook(BaseAgentRunHooks[SessionContext]):
         output_language: OutputLanguage,
         delivery: SummaryDelivery,
         tools: ToolSet,
+        source_kind: str = "transcript",
     ) -> None:
         self._markdown = markdown
         self._output_language = output_language
         self._delivery = delivery
         self._tools = tools
+        self._source_kind = source_kind
         self._summary_prompt_added = False
 
     async def on_tool_end(self, run_context, tool, tool_args, tool_result) -> None:
@@ -230,6 +232,7 @@ class SummaryDeliveryHook(BaseAgentRunHooks[SessionContext]):
                     self._markdown,
                     self._delivery.mindmap,
                     output_language=self._output_language,
+                    source_kind=self._source_kind,
                 ),
             )
         )
@@ -255,13 +258,16 @@ async def _generate_summary(
     output_language: OutputLanguage,
     provider: Provider,
     max_turns: int,
+    source_kind: str = "transcript",
 ) -> tuple[str, str]:
     delivery = SummaryDelivery()
     tools = ToolSet()
     tools.add_tool(_build_mindmap_tool(delivery))
     session_id = uuid4().hex
     request = ProviderRequest(
-        prompt=build_mindmap_prompt(markdown, output_language=output_language),
+        prompt=build_mindmap_prompt(
+            markdown, output_language=output_language, source_kind=source_kind,
+        ),
         system_prompt=(
             "You are the key summary agent. First call submit_mindmap to deliver the "
             "mindmap; after the follow-up summary task arrives, call submit_summary to "
@@ -287,6 +293,7 @@ async def _generate_summary(
             output_language=output_language,
             delivery=delivery,
             tools=tools,
+            source_kind=source_kind,
         ),
         enforce_max_turns=max_turns,
         streaming=False,
@@ -336,6 +343,7 @@ def generate_summary_via_agent_runtime(
                 output_language,
                 active_provider,
                 max_turns,
+                resolved_env.get("FRAMEQ_AI_SOURCE_KIND", "transcript"),
             )
         finally:
             if provider is None:

@@ -109,13 +109,13 @@ test("installer build installs and imports the bundled ONNX runtime before Tauri
   );
 });
 
-test("installer bundles the version-10 title and diagnostic worker modules without private artifacts", () => {
+test("installer bundles the version-11 source and diagnostic worker modules without private artifacts", () => {
   const buildScript = readFileSync(buildInstallerPath, "utf8");
   const contract = JSON.parse(
     readFileSync(join(repoRoot, "contracts", "desktop-worker-contract.json"), "utf8"),
   );
 
-  assert.equal(contract.contractVersion, 10);
+  assert.equal(contract.contractVersion, 11);
   assert.equal(contract.events.workerDiagnosticPrefix, "FRAMEQ_DIAGNOSTIC ");
   assert.match(
     buildScript,
@@ -129,6 +129,7 @@ test("installer bundles the version-10 title and diagnostic worker modules witho
     "summary_agent.py", "topic_agent.py", "ai_runtime.py", "ai_prompts.py",
     "transcript_chunks.py", "dissection_report.py", "ai_artifacts.py",
     "note_title.py", "note_title_metadata.py",
+    "source_text.py", "web_page_contract.py", "web_page_storage.py",
   ]) {
     assert.equal(existsSync(join(repoRoot, "worker", "frameq_worker", module)), true);
   }

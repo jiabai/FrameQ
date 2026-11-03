@@ -104,7 +104,7 @@ describe("DraftConfirmationSheet", () => {
 
     // Data notice reuses the existing privacy copy (video/audio not uploaded),
     // and MUST NOT disclose web search / anysearch.
-    expect(markup).toContain("视频和音频不会上传");
+    expect(markup).toContain("将所选灵感、生成偏好与已有总结发送到当前配置的 AI 服务");
     expect(markup).not.toContain("检索");
     expect(markup).not.toContain("联网");
     expect(markup).not.toContain("anysearch");

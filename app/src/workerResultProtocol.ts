@@ -1,5 +1,6 @@
 import type { WorkerResult } from "./workflow";
 import { parseNoteTitleMetadata } from "./noteTitle";
+import { parseWebPageSource } from "./webPageProtocol";
 
 export const TASK_RESULT_FIELDS = [
   "status",
@@ -15,9 +16,11 @@ export const TASK_RESULT_FIELDS = [
   "error",
 ] as const;
 
-export const TASK_RESULT_OPTIONAL_FIELDS = ["dissection_source_status", "note_title", "task_created"] as const;
+export const TASK_RESULT_OPTIONAL_FIELDS = ["dissection_source_status", "note_title", "task_created", "source", "markdown"] as const;
 
 export const TASK_ARTIFACT_KEYS = [
+  "article_txt",
+  "article_md",
   "video",
   "audio",
   "transcript_txt",
@@ -48,10 +51,13 @@ export const TASK_TERMINAL_STATUSES = [
   "failed",
 ] as const;
 
-const TASK_ERROR_STAGES = [
+export const TASK_ERROR_STAGES = [
   "waiting_input",
   "video_extracting",
   "video_transcribing",
+  "web_loading",
+  "web_extracting",
+  "web_saving",
   "title_generating",
   "insights_generating",
   // Error-only stage for draft generation failures; draft progress reuses
@@ -158,6 +164,8 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
   );
   const error = parseTaskError(object.error);
   const noteTitle = Object.prototype.hasOwnProperty.call(object, "note_title") ? parseNoteTitleMetadata(object.note_title) : null;
+  const source = object.source == null ? null : parseWebPageSource(object.source);
+  const article = source !== null;
   if (
     taskId === undefined ||
     taskDir === undefined ||
@@ -169,6 +177,15 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
     dissection === undefined ||
     dissectionSourceStatus === undefined ||
     error === undefined ||
+    (object.source != null && !source) ||
+    (object.markdown !== undefined && typeof object.markdown !== "string") ||
+    (article && (transcript !== null || noteTitle !== null || typeof object.markdown !== "string" ||
+      !taskId?.trim() || !taskDir?.trim() || !object.text.trim() || !object.markdown.trim() ||
+      new TextEncoder().encode(object.text).byteLength > 2 * 1024 * 1024 || new TextEncoder().encode(object.markdown).byteLength > 4 * 1024 * 1024 ||
+      ["video", "audio", "transcript_txt", "transcript_md", "segments"].some((key) => key in artifacts) ||
+      artifacts.article_txt !== "article/article.txt" || artifacts.article_md !== "article/article.md" ||
+      dissection?.schemaVersion === 1)) ||
+    (!article && (artifacts.article_txt !== undefined || artifacts.article_md !== undefined || dissection?.schemaVersion === 2)) ||
     (Object.prototype.hasOwnProperty.call(object, "task_created") && typeof object.task_created !== "boolean")
   ) {
     return null;
@@ -176,12 +193,13 @@ function parseWorkerResultUnchecked(value: unknown): WorkerResult | null {
   if (
     (object.status === "completed" && error !== null) ||
     (object.status !== "completed" && error === null) ||
-    (object.task_created === true && (object.status === "failed" || !taskId?.trim() || !taskDir?.trim() || !artifacts.transcript_txt?.trim())) ||
+    (object.task_created === true && (object.status === "failed" || !taskId?.trim() || !taskDir?.trim() || !(article ? artifacts.article_txt : artifacts.transcript_txt)?.trim())) ||
     (noteTitle !== null && (!taskId?.trim() || !taskDir?.trim() || !artifacts.transcript_txt?.trim()))
   ) {
     return null;
   }
   return {
+    ...(source ? { source, markdown: object.markdown as string } : {}),
     status: object.status,
     task_id: taskId,
     task_dir: taskDir,
@@ -217,9 +235,10 @@ export function parseDissection(value: unknown): WorkerResult["dissection"] | un
   if (value === null) {
     return null;
   }
+  const version = readDataObject(value)?.values.schemaVersion;
   const object = readExactObject(value, [
     "schemaVersion",
-    "sourceTranscriptSha256",
+    ...(version === 2 ? ["sourceKind", "sourceTextSha256"] : ["sourceTranscriptSha256"]),
     "sourceLanguage",
     "sourceChunks",
     "overallNarrative",
@@ -232,9 +251,10 @@ export function parseDissection(value: unknown): WorkerResult["dissection"] | un
   ]);
   if (
     !object ||
-    object.schemaVersion !== 1 ||
-    typeof object.sourceTranscriptSha256 !== "string" ||
-    !SHA256.test(object.sourceTranscriptSha256) ||
+    (object.schemaVersion !== 1 && object.schemaVersion !== 2) ||
+    (object.schemaVersion === 2 && object.sourceKind !== "article") ||
+    typeof (version === 2 ? object.sourceTextSha256 : object.sourceTranscriptSha256) !== "string" ||
+    !SHA256.test((version === 2 ? object.sourceTextSha256 : object.sourceTranscriptSha256) as string) ||
     !isSourceLanguage(object.sourceLanguage)
   ) {
     return undefined;
@@ -298,8 +318,7 @@ export function parseDissection(value: unknown): WorkerResult["dissection"] | un
   }
 
   return {
-    schemaVersion: 1,
-    sourceTranscriptSha256: object.sourceTranscriptSha256,
+    ...(version === 2 ? { schemaVersion: 2 as const, sourceKind: "article" as const, sourceTextSha256: object.sourceTextSha256 as string } : { schemaVersion: 1 as const, sourceTranscriptSha256: object.sourceTranscriptSha256 as string }),
     sourceLanguage: object.sourceLanguage,
     sourceChunks,
     overallNarrative: narrative,

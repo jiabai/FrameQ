@@ -6,6 +6,21 @@ use std::path::PathBuf;
 const TASK: &str = "20261031-local-delete-note";
 const OTHER: &str = "20261031-local-keep-note";
 
+#[test]
+fn webpage_delete_removes_its_snapshot_and_preserves_other_collection_members() {
+    let fixture = Fixture::new();
+    let output = fixture.paths.user_data_dir.join("outputs");
+    crate::task_manifest::web_tests::write_task(&output, TASK, &crate::task_manifest::web_tests::manifest(TASK));
+    crate::task_manifest::web_tests::write_task(&output, OTHER, &crate::task_manifest::web_tests::manifest(OTHER));
+    assert_eq!(crate::task_manifest::SupportedTask::scan_read_only(&output).unwrap().into_tasks().len(), 2);
+    let result = delete_from_paths(&fixture.paths, TASK, &ProcessSupervisors::default(), &HistoryDeletionState::default()).unwrap();
+    assert_eq!(result.status, "completed");
+    assert!(!output.join("tasks").join(TASK).exists());
+    let remaining = crate::task_manifest::SupportedTask::open(&output, OTHER).unwrap();
+    assert_eq!(remaining.read_source_text().unwrap().text, "第一段。\r\n\r\n第二段。\n");
+    assert_eq!(fixture.members(), [OTHER, "missing-note"]);
+}
+
 struct Fixture { root: PathBuf, paths: RuntimePaths }
 
 impl Fixture {

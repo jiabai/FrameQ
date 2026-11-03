@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo } from "react";
+import { webPageResources } from "../../i18n/webPageResources";
 import {
   INSIGHT_PREFERENCE_FIELDS,
   type GenerationPreferenceField,
@@ -41,6 +42,7 @@ import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { useLastDefined } from "../common/useLastDefined";
 
 type InsightPreferenceFlowProps = {
+  sourceKind?: "article" | "media";
   flow: InsightPreferenceFlowState | null;
   busy: boolean;
   accountQuotaRemaining: number;
@@ -56,6 +58,7 @@ type InsightPreferenceFlowProps = {
 };
 
 export function InsightPreferenceFlow({
+  sourceKind = "media",
   flow,
   busy,
   accountQuotaRemaining,
@@ -148,6 +151,7 @@ export function InsightPreferenceFlow({
 
         {renderFlow.screen === "confirmation" ? (
           <ConfirmationStep
+            sourceKind={sourceKind}
             locale={locale}
             outputLanguage={outputLanguage}
             flow={renderFlow}
@@ -338,6 +342,7 @@ function GenerationStep({
 }
 
 function ConfirmationStep({
+  sourceKind,
   locale,
   outputLanguage,
   flow,
@@ -349,6 +354,7 @@ function ConfirmationStep({
   onConfirm,
   onCancel,
 }: {
+  sourceKind: "media" | "article";
   locale: SupportedLocale;
   outputLanguage: SupportedLocale;
   flow: InsightPreferenceFlowState;
@@ -370,19 +376,19 @@ function ConfirmationStep({
       <div className="preference-flow-content sheet-body">
         <p className="settings-warning privacy-callout">
           <ShieldCheck size={16} />
-          <span>{copy.privacyInsights}</span>
+          <span>{sourceKind === "article" ? webPageResources[locale].privacy : copy.privacyInsights}</span>
         </p>
         <dl className="sheet-facts">
           <div className="sheet-fact">
-            <dt>{copy.currentTranscript}</dt>
+            <dt>{sourceKind === "article" ? webPageResources[locale].currentText : copy.currentTranscript}</dt>
             <dd>
               <strong>
                 {transcriptUnitCount > 0
                   ? formatWordCount(transcriptUnitCount, locale)
-                  : copy.waitingTranscript}
+                  : sourceKind === "article" ? webPageResources[locale].waiting : copy.waitingTranscript}
               </strong>
               <small className={transcriptPath ? "sheet-path" : undefined} title={transcriptPath || undefined}>
-                {transcriptPath || copy.transcriptUnavailable}
+                {transcriptPath || (sourceKind === "article" ? webPageResources[locale].unavailable : copy.transcriptUnavailable)}
               </small>
             </dd>
           </div>

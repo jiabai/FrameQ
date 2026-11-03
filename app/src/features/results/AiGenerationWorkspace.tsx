@@ -53,6 +53,7 @@ export function AiGenerationWorkspace({
   onCancel,
 }: AiGenerationWorkspaceProps) {
   const { t } = useTranslation("synthesis");
+  const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   const renderedNotice = renderUiMessage(locale, notice);
   const renderedProgress = model.progressMessage
@@ -81,7 +82,7 @@ export function AiGenerationWorkspace({
           {model.activeTarget ? (
             <span className="workspace-status-badge active">{t("workspace.generating")}</span>
           ) : (
-            <span className="workspace-status-badge">{t("workspace.waitingTranscript")}</span>
+            <span className="workspace-status-badge">{model.sourceKind === "article" ? webT("waiting") : t("workspace.waitingTranscript")}</span>
           )}
         </div>
       ) : null}
@@ -113,7 +114,7 @@ export function AiGenerationWorkspace({
           },
           {
             target: model.dissection,
-            title: t("dissection.card.title"),
+            title: model.sourceKind === "article" ? webT("dissection.title") : t("dissection.card.title"),
             description: t("dissection.card.description"),
             onAction: onDissectionAction,
             stale: model.dissectionStale,

@@ -161,13 +161,16 @@ async def _generate_insights(
     preference_snapshot: PreferenceSnapshot | None,
     provider: Provider,
     max_turns: int,
+    source_kind: str = "transcript",
 ) -> list[Insight]:
     delivery = InsightDelivery()
     tools = ToolSet()
     tools.add_tool(_build_insights_tool(delivery, tuple(chunk.id for chunk in chunks)))
     session_id = uuid4().hex
     request = ProviderRequest(
-        prompt=build_insights_agent_prompt(chunks, output_language, preference_snapshot),
+        prompt=build_insights_agent_prompt(
+            chunks, output_language, preference_snapshot, source_kind,
+        ),
         system_prompt=(
             "You are the inspiration agent. Read the numbered transcript chunks, identify "
             "valuable transferable questions, review the complete list for grounding and "
@@ -228,7 +231,8 @@ def generate_insights_via_agent_runtime(
     async def run() -> list[Insight]:
         try:
             return await _generate_insights(
-                chunks, output_language, preference_snapshot, active_provider, max_turns
+                chunks, output_language, preference_snapshot, active_provider, max_turns,
+                resolved_env.get("FRAMEQ_AI_SOURCE_KIND", "transcript"),
             )
         finally:
             if provider is None:

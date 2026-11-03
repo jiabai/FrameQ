@@ -149,6 +149,8 @@ fn open_task(output_root: &Path, task_id: &str) -> Result<task_manifest::Support
     task_manifest::SupportedTask::open(output_root, task_id).map_err(|error| {
         if error == "Task is busy. Try again shortly." {
             BUSY
+        } else if matches!(error.as_str(), "Task storage identity is unavailable." | "Task storage identity changed.") {
+            "NOTE_UNSAFE_STORAGE"
         } else {
             UNAVAILABLE
         }
@@ -220,7 +222,7 @@ fn get_note_info_from_root(output_root: &Path, task_id: &str) -> Result<NoteInfo
 }
 
 fn note_info_from_task(task: task_manifest::SupportedTask) -> Result<NoteInfoView, String> {
-    if matches!(task.source(), task_manifest::TaskSourceSummary::Url { .. }) {
+    if matches!(task.source(), task_manifest::TaskSourceSummary::Url { .. } | task_manifest::TaskSourceSummary::WebPage { .. }) {
         canonical_source(&task)?;
     }
     if !["completed", "partial_completed", "failed"].contains(&task.status()) {
@@ -243,6 +245,8 @@ fn note_info_from_task(task: task_manifest::SupportedTask) -> Result<NoteInfoVie
         "audio",
         "transcript_txt",
         "transcript_md",
+        "article_txt",
+        "article_md",
         "summary",
         "mindmap",
         "insights",
@@ -277,6 +281,10 @@ fn note_info_from_task(task: task_manifest::SupportedTask) -> Result<NoteInfoVie
 }
 
 fn canonical_source(task: &task_manifest::SupportedTask) -> Result<String, String> {
+    if let task_manifest::TaskSourceSummary::WebPage { url, .. } = task.source() {
+        let canonical = task_manifest::canonical_web_url(&url).map_err(|_| SOURCE_UNAVAILABLE.to_string())?;
+        return if canonical == url { Ok(canonical) } else { Err(SOURCE_UNAVAILABLE.to_string()) };
+    }
     let identity = task
         .source_identity()
         .ok_or_else(|| SOURCE_UNAVAILABLE.to_string())?;

@@ -11,6 +11,9 @@ app/src-tauri/resources/*
 !app/src-tauri/resources/.gitkeep
 !app/src-tauri/resources/.env.template
 !app/src-tauri/resources/pyproject.toml
+!app/src-tauri/resources/web/
+app/src-tauri/resources/web/*
+!app/src-tauri/resources/web/README.txt
 dist/
 target/
 build/

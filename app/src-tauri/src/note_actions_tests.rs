@@ -5,6 +5,21 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+#[test]
+fn webpage_note_supports_manual_name_pinning_info_and_safe_source() {
+    let root = task_manifest::web_tests::output_root();
+    task_manifest::web_tests::write_task(&root, "web-note", &task_manifest::web_tests::manifest("web-note"));
+    let renamed = rename_note_from_root(&root, RenameRequest { task_id: "web-note".into(), title: "手动名称".into() }).unwrap();
+    assert_eq!(renamed.note_metadata.display_title.as_deref(), Some("手动名称"));
+    assert!(set_note_pinned_from_root(&root, PinRequest { task_id: "web-note".into(), pinned: true }).unwrap().note_metadata.pinned);
+    let info = get_note_info_from_root(&root, "web-note").unwrap();
+    assert_eq!(info.note_metadata.unwrap().display_title.as_deref(), Some("手动名称"));
+    assert_eq!(info.artifact_types, ["article_txt", "article_md"]);
+    assert!(info.transcript.is_none());
+    let task = task_manifest::SupportedTask::open(&root, "web-note").unwrap();
+    assert_eq!(canonical_source(&task).unwrap(), "https://example.com/article?id=12");
+}
+
 pub(crate) struct Fixture {
     root: PathBuf,
     pub(crate) output_root: PathBuf,

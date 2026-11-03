@@ -75,7 +75,7 @@ export function getExportPath(tab: ExportTarget, state: WorkflowState): string |
     return getTaskArtifactPath(state, tab);
   }
   if (tab === "transcript") {
-    return getTaskArtifactPath(state, "transcript_txt");
+    return getTaskArtifactPath(state, state.taskSource?.kind === "web_page" ? "article_md" : "transcript_txt");
   }
   if (tab === "summary") {
     return getTaskArtifactPath(state, "summary");

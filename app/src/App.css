@@ -2534,6 +2534,21 @@ h3 {
   padding: 16px 24px 0;
 }
 
+.article-reading-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  padding-bottom: 24px;
+  scrollbar-width: thin;
+}
+
+.article-reading-content mark {
+  background: var(--warning-soft, #fff0b8);
+  color: inherit;
+}
+
 .ai-generation-workspace {
   flex: 1 1 auto;
   overflow-y: auto;

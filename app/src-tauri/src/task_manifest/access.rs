@@ -29,6 +29,7 @@ enum ScanCandidate {
 pub(crate) struct SupportedTask {
     manifest: TaskManifest,
     task_dir: PathBuf,
+    directory_identity: crate::safe_filesystem::DirectoryIdentity,
     _lease: Arc<TaskLease>,
 }
 
@@ -52,14 +53,25 @@ impl SupportedTask {
     pub(crate) fn open(output_root: &Path, task_id: &str) -> Result<Self, String> {
         let task_dir = task_dir_for(output_root, task_id)?;
         let lease = acquire_task(&task_dir)?;
+        let directory_guard = crate::safe_filesystem::pin_directory(&task_dir)
+            .map_err(|error| if error.kind() == io::ErrorKind::NotFound {
+                "Task storage is unavailable."
+            } else {
+                "Task storage identity is unavailable."
+            }.to_string())?;
         recover_task_artifacts(&task_dir)?;
         let (manifest, task_dir) = load_task_manifest(output_root, task_id)?;
         if !manifest.source_privacy_ready() {
             return Err("Task is unavailable in the current history format.".to_string());
         }
+        directory_guard.check().map_err(|_| "Task storage identity changed.".to_string())?;
+        let directory_identity = crate::safe_filesystem::identity(&task_dir)
+            .map_err(|_| "Task storage identity is unavailable.".to_string())?;
+        directory_guard.check().map_err(|_| "Task storage identity changed.".to_string())?;
         Ok(Self {
             manifest,
             task_dir,
+            directory_identity,
             _lease: lease,
         })
     }
@@ -129,6 +141,9 @@ impl SupportedTask {
         manifest_path: &Path,
         lease: Arc<TaskLease>,
     ) -> Result<ScanCandidate, String> {
+        let directory_guard = crate::safe_filesystem::pin_directory(manifest_path.parent()
+            .ok_or_else(|| "Task manifest has no parent directory.".to_string())?)
+            .map_err(|_| "Task storage identity is unavailable.".to_string())?;
         let (manifest, task_dir) = read_task_manifest_path(manifest_path)?;
         let expected_task_dir = match task_dir_for(output_root, &manifest.task_id) {
             Ok(path) => path,
@@ -137,9 +152,14 @@ impl SupportedTask {
         if expected_task_dir != task_dir || !manifest.source_privacy_ready() {
             return Ok(ScanCandidate::Unsupported);
         }
+        directory_guard.check().map_err(|_| "Task storage identity changed.".to_string())?;
+        let directory_identity = crate::safe_filesystem::identity(&task_dir)
+            .map_err(|_| "Task storage identity is unavailable.".to_string())?;
+        directory_guard.check().map_err(|_| "Task storage identity changed.".to_string())?;
         Ok(ScanCandidate::Ready(Self {
             manifest,
             task_dir,
+            directory_identity,
             _lease: lease,
         }))
     }
@@ -161,7 +181,38 @@ impl SupportedTask {
     }
 
     pub(crate) fn model(&self) -> &str {
-        &self.manifest.model
+        match &self.manifest.model {
+            super::schema::RequiredNullable::Present(Some(value)) => value,
+            _ => "",
+        }
+    }
+
+    pub(crate) fn is_web_page(&self) -> bool {
+        matches!(self.source(), TaskSourceSummary::WebPage { .. })
+    }
+
+    pub(crate) fn read_source_text(&self) -> Result<super::SourceText, String> {
+        super::source_text::read(self)
+    }
+
+    pub(crate) fn read_article_markdown(&self) -> Result<String, String> {
+        self.verify_source_directory()?;
+        if !self.is_web_page() {
+            return Err("SOURCE_TEXT_INVALID".to_string());
+        }
+        let path = self.required_existing_artifact_path(TaskArtifact::ArticleMd)?;
+        let bytes = super::source_text::read_bounded(&path, 4 * 1024 * 1024)?;
+        let text = String::from_utf8(bytes).map_err(|_| "SOURCE_TEXT_INVALID".to_string())?;
+        if text.trim().is_empty() {
+            return Err("SOURCE_TEXT_INVALID".to_string());
+        }
+        self.verify_source_directory()?;
+        Ok(text)
+    }
+
+    pub(super) fn verify_source_directory(&self) -> Result<(), String> {
+        crate::safe_filesystem::check_identity(&self.task_dir, self.directory_identity)
+            .map_err(|_| "SOURCE_TEXT_INVALID".to_string())
     }
 
     pub(crate) fn safe_source_url(&self) -> &str {
@@ -220,19 +271,25 @@ impl SupportedTask {
     }
 
     pub(crate) fn reload(&self, output_root: &Path) -> Result<Self, String> {
+        self.verify_source_directory()?;
         recover_task_artifacts(&self.task_dir)?;
         let (manifest, task_dir) = load_task_manifest(output_root, self.task_id())?;
         if task_dir != self.task_dir || !manifest.source_privacy_ready() {
             return Err("Task is unavailable in the current history format.".to_string());
         }
+        self.verify_source_directory()?;
         Ok(Self {
             manifest,
             task_dir,
+            directory_identity: self.directory_identity,
             _lease: Arc::clone(&self._lease),
         })
     }
 
     pub(crate) fn save_note_title(&mut self, title: super::NoteTitle) -> Result<(), String> {
+        if self.is_web_page() {
+            return Err("WEB_RETRY_TARGET_UNSUPPORTED".to_string());
+        }
         if !title.is_valid() {
             return Err("Invalid note title metadata.".to_string());
         }
@@ -289,14 +346,12 @@ impl SupportedTask {
         else {
             return Ok(None);
         };
-        let transcript_path = self.required_existing_artifact_path(TaskArtifact::TranscriptTxt)?;
-        let report_bytes = fs::read(report_path)
+        let report_bytes = super::source_text::read_bounded(&report_path, 4 * 1024 * 1024)
             .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
-        let transcript_bytes = fs::read(transcript_path)
-            .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
+        let source = self.read_source_text()?;
         let report = serde_json::from_slice(&report_bytes)
             .map_err(|_| "Task dissection artifact is invalid.".to_string())?;
-        build_dissection_view(report, &transcript_bytes).map(Some)
+        build_dissection_view(report, &source.raw_bytes, source.kind).map(Some)
     }
 
     pub(crate) fn validated_existing_artifact_path(
@@ -447,6 +502,12 @@ impl TaskEditSession {
         artifact: TaskArtifact,
         relative_path: &str,
     ) -> Result<(), String> {
+        let is_web = matches!(self.manifest.safe_source_summary(), Some(TaskSourceSummary::WebPage { .. }));
+        if (is_web && matches!(artifact, TaskArtifact::Audio | TaskArtifact::TranscriptTxt | TaskArtifact::TranscriptMd | TaskArtifact::Segments))
+            || (!is_web && matches!(artifact, TaskArtifact::ArticleTxt | TaskArtifact::ArticleMd))
+        {
+            return Err("Task artifact does not match its source.".to_string());
+        }
         validate_relative_artifact_path(relative_path, artifact.as_str())?;
         self.manifest
             .artifacts

@@ -32,7 +32,7 @@ describe("frontend transcript controller ownership", () => {
     expect(root).not.toContain("convertFileSrc");
     expect(root).not.toContain("revealItemInDir");
 
-    expect(artifact).toContain("revealItemInDir");
+    expect(artifact).toContain("revealFileInDirectory");
     expect(artifact).toContain("navigator.clipboard.writeText");
     expect(artifact).not.toContain("loadTranscriptDetail");
     expect(artifact).not.toContain("convertFileSrc");

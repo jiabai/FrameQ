@@ -10,6 +10,7 @@ import type {
   WorkflowState,
   WorkflowStage,
 } from "./workflowState";
+import { hasSourceText, isArticleTaskSource } from "./webPageProtocol";
 
 export type WorkspaceCancellationOwner = "local" | "ai" | null;
 export type LocalWorkspacePhase = "waiting" | "processing" | "ready" | "failed";
@@ -60,12 +61,7 @@ export type TranscriptSourceViewModel =
   | null;
 
 function hasSavedTranscript(workflow: WorkflowState): boolean {
-  return Boolean(
-    workflow.taskId &&
-      workflow.taskDir &&
-      workflow.artifacts.transcript_txt &&
-      workflow.text,
-  );
+  return Boolean(workflow.taskDir && hasSourceText(workflow));
 }
 
 function isAiCancellation(workflow: WorkflowState): boolean {
@@ -78,9 +74,11 @@ function isAiCancellation(workflow: WorkflowState): boolean {
 function localProgressSteps(workflow: WorkflowState): ProgressStep[] {
   const stage =
     workflow.stage === "cancelling" ? workflow.cancellingFromStage : workflow.stage;
-  const activeIndex = LOCAL_PROGRESS_STEPS.findIndex((step) => step.id === stage);
+  const steps = isArticleTaskSource(workflow.taskSource) || stage?.startsWith("web_")
+    ? [{ id: "web_loading" as const }, { id: "web_extracting" as const }, { id: "web_saving" as const }] : LOCAL_PROGRESS_STEPS;
+  const activeIndex = steps.findIndex((step) => step.id === stage);
 
-  return LOCAL_PROGRESS_STEPS.map((step, index) => ({
+  return steps.map((step, index) => ({
     ...step,
     state:
       activeIndex === -1
@@ -174,7 +172,7 @@ function cancellationOwner(workflow: WorkflowState): WorkspaceCancellationOwner 
   if (stage === "insights_generating" || stage === "title_generating") {
     return "ai";
   }
-  if (stage === "video_extracting" || stage === "video_transcribing") {
+  if (stage === "video_extracting" || stage === "video_transcribing" || stage?.startsWith("web_")) {
     return "local";
   }
   return null;
@@ -222,6 +220,7 @@ export function createTaskWorkspaceViewModel(
   const localProcessing =
     workflow.stage === "video_extracting" ||
     workflow.stage === "video_transcribing" ||
+    workflow.stage.startsWith("web_") ||
     (workflow.stage === "cancelling" && !isAiCancellation(workflow));
   const localPhase: LocalWorkspacePhase = transcriptReady
     ? "ready"
@@ -252,7 +251,7 @@ export function createTaskWorkspaceViewModel(
         ? {
             kind: "local_complete" as const,
             message: uiMessage(
-              workflow.taskSource?.kind === "local_file" &&
+              workflow.taskSource?.kind === "web_page" ? "webPage.complete" : workflow.taskSource?.kind === "local_file" &&
                 workflow.taskSource.mediaKind === "audio"
                 ? "workflow.banner.localAudioCompleteMessage"
                 : "workflow.banner.localCompleteMessage",
@@ -288,7 +287,7 @@ export function createTaskWorkspaceViewModel(
       phase: localPhase,
       progressSteps: localProgressSteps(workflow),
       canReview: transcriptReady,
-      canEdit: transcriptReady && !readOnly,
+      canEdit: transcriptReady && !readOnly && !isArticleTaskSource(workflow.taskSource),
       readOnly,
       cancellation: workspaceCancellation(owner, "local", workflow),
       artifactActions: {
@@ -302,11 +301,11 @@ export function createTaskWorkspaceViewModel(
         ),
         locateTranscript: artifactAction(
           transcriptReady,
-          workflow.artifacts.transcript_txt,
+          workflow.taskSource?.kind === "web_page" ? workflow.artifacts.article_md : workflow.artifacts.transcript_txt,
         ),
         copyTranscript: artifactAction(
           transcriptReady,
-          workflow.artifacts.transcript_txt,
+          workflow.taskSource?.kind === "web_page" ? workflow.artifacts.article_txt : workflow.artifacts.transcript_txt,
         ),
       },
       transcriptSource: transcriptSource(workflow),
@@ -315,6 +314,7 @@ export function createTaskWorkspaceViewModel(
         : null,
     },
     ai: {
+      sourceKind: isArticleTaskSource(workflow.taskSource) ? "article" as const : "media" as const,
       taskId: workflow.taskId,
       phase: aiPhase,
       availability: aiAvailability(account),

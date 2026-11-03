@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contractVersion": 2,
+  "command": "process_web_page",
+  "stdinArgument": "--save-web-page-stdin",
+  "operationArgument": "--web-operation-id",
+  "request": {
+    "type": "object",
+    "required": ["contract_version", "operation_id", "task_id", "article"],
+    "properties": {
+      "contract_version": { "type": "integer", "const": 2 },
+      "operation_id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "task_id": {
+        "type": "string",
+        "pattern": "^[0-9]{8}-[0-9]{6}-web-[0-9a-f]{16}$"
+      },
+      "article": {
+        "type": "object",
+        "required": ["title", "sourceUrl", "text", "markdown"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "sourceUrl": { "type": "string", "minLength": 1, "maxLength": 16384 },
+          "text": { "type": "string", "minLength": 50, "maxLength": 2097152 },
+          "markdown": { "type": "string", "minLength": 1, "maxLength": 4194304 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "additionalProperties": false
+  },
+  "limits": {
+    "requestEncodedBytes": 41943040,
+    "stdoutEncodedBytes": 41943040,
+    "articleTextUtf8Bytes": 2097152,
+    "articleMarkdownUtf8Bytes": 4194304,
+    "savedMarkdownUtf8Bytes": 4194304,
+    "titleCodePoints": 512
+  },
+  "environment": {
+    "outputRoot": "FRAMEQ_OUTPUT_DIR",
+    "cacheRoot": "FRAMEQ_CACHE_DIR"
+  },
+  "stages": ["web_saving"],
+  "artifacts": { "article_txt": "article/article.txt", "article_md": "article/article.md" },
+  "manifestSchemaVersion": 4,
+  "sourceKind": "web_page",
+  "resultSchema": "desktop-worker-contract.json#/terminalResults/schemas/webPage"
+}

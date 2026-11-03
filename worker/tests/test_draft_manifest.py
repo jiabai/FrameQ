@@ -100,7 +100,10 @@ def _write_manifest(
         "worker_version": "app",
         "model": "iic/SenseVoiceSmall",
         "transcript": None,
-        "artifacts": {},
+        "artifacts": (
+            {"transcript_txt": "transcript/transcript.txt"}
+            if (task_dir / "transcript/transcript.txt").is_file() else {}
+        ),
         "error": None,
         "text_preview": "preview",
         "insights_count": 1,

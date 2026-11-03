@@ -112,11 +112,14 @@ class TranscriptDissection:
     audience_fit: tuple[DissectionAudienceFit, ...]
     strengths: tuple[str, ...]
     weaknesses: tuple[str, ...]
+    source_kind: str = "transcript"
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schemaVersion": 1,
-            "sourceTranscriptSha256": self.source_transcript_sha256,
+            "schemaVersion": 2 if self.source_kind == "article" else 1,
+            **({"sourceKind": "article", "sourceTextSha256": self.source_transcript_sha256}
+               if self.source_kind == "article"
+               else {"sourceTranscriptSha256": self.source_transcript_sha256}),
             "sourceLanguage": self.source_language,
             "sourceChunks": [chunk.to_dict() for chunk in self.source_chunks],
             "overallNarrative": self.overall_narrative.to_dict(),
@@ -144,7 +147,10 @@ def parse_dissection_report(
     transcript: str,
     chunks: list[MarkdownChunk],
     source_language: str | None,
+    source_kind: str = "transcript",
 ) -> TranscriptDissection:
+    if source_kind not in {"transcript", "article"}:
+        raise ValueError("Dissection source kind is invalid.")
     try:
         report = _parse_semantic_report(payload, transcript, {chunk.id for chunk in chunks})
     except (KeyError, TypeError, ValueError) as exc:
@@ -157,6 +163,7 @@ def parse_dissection_report(
     return TranscriptDissection(
         source_transcript_sha256=hashlib.sha256(transcript.encode("utf-8")).hexdigest(),
         source_language=source_language,
+        source_kind=source_kind,
         source_chunks=tuple(
             DissectionSourceChunk(
                 id=chunk.id,
@@ -174,13 +181,15 @@ def parse_persisted_dissection(
     payload: object,
     *,
     transcript: str,
+    source_kind: str = "transcript",
 ) -> TranscriptDissection:
     try:
         root = _closed_object(
             payload,
             {
                 "schemaVersion",
-                "sourceTranscriptSha256",
+                *({"sourceKind", "sourceTextSha256"} if source_kind == "article"
+                  else {"sourceTranscriptSha256"}),
                 "sourceLanguage",
                 "sourceChunks",
                 "overallNarrative",
@@ -192,7 +201,8 @@ def parse_persisted_dissection(
                 "weaknesses",
             },
         )
-        if root["schemaVersion"] != 1 or type(root["schemaVersion"]) is not int:
+        if (root["schemaVersion"] != (2 if source_kind == "article" else 1)
+                or type(root["schemaVersion"]) is not int):
             raise ValueError("schema version")
         source_language = root["sourceLanguage"]
         if source_language is not None and (
@@ -216,6 +226,7 @@ def parse_persisted_dissection(
             transcript=transcript,
             chunks=MarkdownSplitter().split(transcript),
             source_language=source_language,
+            source_kind=source_kind,
         )
         if report.to_dict() != root:
             raise ValueError("provenance")
@@ -335,6 +346,10 @@ def format_dissection_markdown(
             "separator": ": ",
         },
     }[output_language]
+    if report.source_kind == "article":
+        labels["title"] = {
+            "zh-CN": "正文解剖", "zh-TW": "正文解剖", "en-US": "Article Dissection",
+        }[output_language]
     narrative = report.overall_narrative
     lines = [f"# {labels['title']}", "", f"## {labels['narrative']}", ""]
     _append_markdown_field(

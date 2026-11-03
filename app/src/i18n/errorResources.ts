@@ -1,5 +1,6 @@
 export const errorResources = {
   "zh-CN": {
+    web: { invalid: "网页网址无效，请检查后重试。", blocked: "网页包含受限制的网络地址，无法加载。", unsupported: "新网页提取需要 Windows 11 或 macOS 14 及以上。", hostInvalid: "网页读取程序校验失败，请重新安装 FrameQ 后重试。", runtimeMissing: "系统网页运行环境缺失。Windows 请安装或更新 WebView2 Runtime，macOS 请更新系统后重试。", runtimeUnsafe: "系统网页运行配置不受支持，请恢复系统默认网页运行设置后重试。", cleanupFailed: "网页处理程序未能完整关闭，请重新启动 FrameQ 后重试。", loadFailed: "网页加载失败，请检查网络和页面公开访问状态后重试。", timeout: "网页处理已超过最长等待时间，请稍后重试。", limit: "网页超过当前资源处理限制。", restricted: "网页要求登录、验证或访问授权，无法提取正文。", content: "网页未返回稳定、可提取的 HTML 正文。", changed: "网页来源在提取过程中发生变化，请重新提交。", storageFailed: "网页正文未能安全保存，请检查本地存储后重试。" },
     generic: "操作失败，请稍后重试。错误码：{{code}}",
     genericNoCode: "操作失败，请稍后重试。",
     technicalDetails: "技术详情",
@@ -111,6 +112,7 @@ export const errorResources = {
     },
   },
   "zh-TW": {
+    web: { invalid: "網頁網址無效，請檢查後重試。", blocked: "網頁包含受限制的網路位址，無法載入。", unsupported: "新網頁擷取需要 Windows 11 或 macOS 14 及以上。", hostInvalid: "網頁讀取程式驗證失敗，請重新安裝 FrameQ 後重試。", runtimeMissing: "系統網頁執行環境缺少。Windows 請安裝或更新 WebView2 Runtime，macOS 請更新系統後重試。", runtimeUnsafe: "系統網頁執行設定不受支援，請恢復系統預設網頁執行設定後重試。", cleanupFailed: "網頁處理程式未能完整關閉，請重新啟動 FrameQ 後重試。", loadFailed: "網頁載入失敗，請檢查網路及頁面公開存取狀態後重試。", timeout: "網頁處理已超過最長等待時間，請稍後重試。", limit: "網頁超過目前資源處理限制。", restricted: "網頁要求登入、驗證或存取授權，無法擷取正文。", content: "網頁未傳回穩定、可擷取的 HTML 正文。", changed: "網頁來源在擷取過程中發生變化，請重新提交。", storageFailed: "網頁正文未能安全儲存，請檢查本機儲存空間後重試。" },
     generic: "操作失敗，請稍後重試。錯誤碼：{{code}}",
     genericNoCode: "操作失敗，請稍後重試。",
     technicalDetails: "技術詳細資料",
@@ -222,6 +224,7 @@ export const errorResources = {
     },
   },
   "en-US": {
+    web: { invalid: "The web page URL is invalid. Check it and try again.", blocked: "The page contains a restricted network address and cannot be loaded.", unsupported: "New web extraction requires Windows 11 or macOS 14 or later.", hostInvalid: "The web page reader could not be verified. Reinstall FrameQ and try again.", runtimeMissing: "The system web runtime is missing. Install or update WebView2 Runtime on Windows, or update macOS.", runtimeUnsafe: "The system web runtime configuration is unsupported. Restore its default settings and try again.", cleanupFailed: "The web page process could not close completely. Restart FrameQ and try again.", loadFailed: "The page could not be loaded. Check your connection and public access to the page.", timeout: "Web processing reached its time limit. Try again later.", limit: "The page exceeds the current resource limits.", restricted: "The page requires login, verification, or access authorization, so its article cannot be extracted.", content: "The page did not provide a stable, extractable HTML article.", changed: "The page source changed during extraction. Submit it again.", storageFailed: "The article could not be saved safely. Check local storage and try again." },
     generic: "The operation failed. Try again later. Error code: {{code}}",
     genericNoCode: "The operation failed. Try again later.",
     technicalDetails: "Technical details",

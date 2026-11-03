@@ -179,6 +179,25 @@ pub(crate) fn remove_matching_file(path:&Path,expected:DirectoryIdentity,length:
     #[cfg(windows)] let _=parent_guard;
     Ok(true)
 }
+pub(crate) fn remove_file_by_identity(path:&Path,expected:DirectoryIdentity)->io::Result<bool> {
+    let parent=pin_directory(path.parent().ok_or_else(||io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"))?)?;
+    #[cfg(windows)] {
+        use std::os::windows::{fs::OpenOptionsExt,io::AsRawHandle};
+        let file=OpenOptions::new().read(true).access_mode(0x8000_0000|0x0001_0000|0x100).share_mode(0x1).custom_flags(0x0020_0000).open(path)?;
+        let meta=file.metadata()?;
+        if !meta.is_file()||crate::atomic_files::is_link_or_reparse_point(&meta)||details(&file)?.1!=1||file_identity(&file)?!=expected{return Ok(false);}
+        if meta.permissions().readonly(){let mut permissions=meta.permissions();permissions.set_readonly(false);file.set_permissions(permissions)?;}
+        #[link(name="kernel32")] extern "system" {fn SetFileInformationByHandle(handle:*mut core::ffi::c_void,class:u32,information:*const core::ffi::c_void,size:u32)->i32;}
+        let disposition:u8=1;parent.check()?;
+        if unsafe{SetFileInformationByHandle(file.as_raw_handle().cast(),4,(&disposition as *const u8).cast(),1)}==0{return Err(io::Error::last_os_error());}
+    }
+    #[cfg(unix)] {
+        let file=open_regular(path)?;if file_identity(&file)?!=expected{return Ok(false);}
+        let current=open_regular(path)?;if file_identity(&current)?!=expected{return Ok(false);}drop(current);
+        parent.check()?;unix::remove_file(&parent.file,path.file_name().ok_or_else(||io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"))?)?;
+    }
+    Ok(true)
+}
 pub(crate) fn hash_file(path: &Path) -> io::Result<(u64, String, DirectoryIdentity)> {
     hash_file_while(path,||true)
 }

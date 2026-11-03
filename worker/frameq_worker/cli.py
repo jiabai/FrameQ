@@ -7,6 +7,7 @@ from collections.abc import Callable, Sequence
 from contextlib import redirect_stdout
 from io import TextIOBase
 from pathlib import Path
+from uuid import UUID
 
 from frameq_worker import worker_service as worker_service_module
 from frameq_worker.desktop_contract import (
@@ -23,6 +24,7 @@ from frameq_worker.progress_events import (
     validate_model_progress_event,
     validate_worker_progress_event,
 )
+from frameq_worker.web_page_contract import MAX_WEB_PAGE_MESSAGE_BYTES
 
 MAX_STDIN_REQUEST_BYTES = 1024 * 1024
 
@@ -31,18 +33,18 @@ class StdinRequestError(ValueError):
     pass
 
 
-def read_stdin_request(stream: TextIOBase) -> str:
+def read_stdin_request(stream: TextIOBase, *, max_bytes: int = MAX_STDIN_REQUEST_BYTES) -> str:
     reader = getattr(stream, "buffer", stream)
-    raw = reader.read(MAX_STDIN_REQUEST_BYTES + 1)
+    raw = reader.read(max_bytes + 1)
     if isinstance(raw, bytes):
-        if len(raw) > MAX_STDIN_REQUEST_BYTES:
+        if len(raw) > max_bytes:
             raise StdinRequestError
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise StdinRequestError from exc
     else:
-        if len(raw.encode("utf-8")) > MAX_STDIN_REQUEST_BYTES:
+        if len(raw.encode("utf-8")) > max_bytes:
             raise StdinRequestError
         text = raw
     if not text.strip():
@@ -62,7 +64,10 @@ def stdin_failure_result(mode: str) -> dict[str, object]:
             "status": "failed",
             "error": {"code": "WORKER_STDIN_INVALID"},
         }
-    stage = JobStage.INSIGHTS_GENERATING if mode == "retry_insights" else JobStage.WAITING_INPUT
+    stage = {
+        "retry_insights": JobStage.INSIGHTS_GENERATING,
+        "process_web_page": JobStage.WEB_SAVING,
+    }.get(mode, JobStage.WAITING_INPUT)
     return ProcessResult(
         status=JobStage.FAILED,
         error=WorkerError(
@@ -136,6 +141,8 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Read one ProcessLocalMediaRequest JSON object from stdin.",
     )
+    request_group.add_argument("--save-web-page-stdin", action="store_true",
+                               help="Read one WebPageSaveRequest JSON object from stdin.")
     request_group.add_argument(
         "--download-asr-model",
         action="store_true",
@@ -153,12 +160,23 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
         "--asr-model",
         help="Allowlisted ASR model ID required with --download-asr-model.",
     )
+    parser.add_argument("--web-operation-id", help="Native-owned webpage operation UUID.")
     request_group.add_argument(
         "--resolve-source-stdin",
         action="store_true",
         help="Read one source-identity request JSON object from stdin.",
     )
     args = parser.parse_args(argv)
+
+    if args.save_web_page_stdin != (args.web_operation_id is not None):
+        parser.error("--save-web-page-stdin requires --web-operation-id")
+    if args.web_operation_id is not None:
+        try:
+            canonical_operation = str(UUID(args.web_operation_id))
+        except ValueError:
+            parser.error("--web-operation-id must be a canonical UUID")
+        if canonical_operation != args.web_operation_id:
+            parser.error("--web-operation-id must be a canonical UUID")
 
     if args.asr_model is not None and not args.download_asr_model:
         parser.error("--asr-model is only valid with --download-asr-model")
@@ -172,6 +190,7 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
             for enabled, mode in [
                 (args.request_stdin, "process_video"),
                 (args.process_local_media_stdin, "process_local_media"),
+                (args.save_web_page_stdin, "process_web_page"),
                 (args.retry_insights_stdin, "retry_insights"),
                 (args.resolve_source_stdin, "resolve_source_identity"),
             ]
@@ -182,8 +201,15 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
     request_json: str | None = None
     if stdin_mode is not None:
         try:
-            request_json = read_stdin_request(sys.stdin)
+            request_json = read_stdin_request(
+                sys.stdin, max_bytes=(MAX_WEB_PAGE_MESSAGE_BYTES if args.save_web_page_stdin
+                                     else MAX_STDIN_REQUEST_BYTES),
+            )
         except (OSError, StdinRequestError):
+            print(render_result_json(stdin_failure_result(stdin_mode)))
+            return 1
+        if (args.save_web_page_stdin
+                and json.loads(request_json).get("operation_id") != args.web_operation_id):
             print(render_result_json(stdin_failure_result(stdin_mode)))
             return 1
     if is_model_download:
@@ -202,6 +228,10 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
                 progress_callback=print_model_download_event,
             )
         )
+    elif args.save_web_page_stdin:
+        result = run_worker_business(lambda: worker_service_module.save_web_page_once(
+            request_json or "{}", progress_callback=print_progress_event,
+        ))
     elif args.process_local_media_stdin:
         result = run_worker_business(
             lambda: worker_service_module.run_local_media_once(

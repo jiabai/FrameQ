@@ -1,5 +1,5 @@
 {
-  "contractVersion": 10,
+  "contractVersion": 11,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "FRAMEQ_PROGRESS ",
@@ -184,6 +184,9 @@
           "waiting_input",
           "video_extracting",
           "video_transcribing",
+          "web_loading",
+          "web_extracting",
+          "web_saving",
           "insights_generating",
           "title_generating",
           "completed",
@@ -253,6 +256,9 @@
         "message_args"
       ],
       "messageCodes": {
+        "web.page.loading": { "allowedArgs": [] },
+        "web.page.extracting": { "allowedArgs": [] },
+        "web.page.saving": { "allowedArgs": [] },
         "video.download.preparing": {
           "allowedArgs": []
         },
@@ -480,8 +486,9 @@
       "invalidPayloadPolicy": "reject_without_echo"
     },
     "operations": {
-      "process_video": "task",
-      "process_local_media": "task",
+      "process_video": "mediaTask",
+      "process_local_media": "mediaTask",
+      "process_web_page": "webPage",
       "retry_insights": "task",
       "resolve_source_identity": "sourceIdentity",
       "download_asr_model": "modelDownload"
@@ -493,6 +500,43 @@
       "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
     },
     "schemas": {
+      "mediaTask": {
+        "allOf": [
+          { "$ref": "#/terminalResults/schemas/task" },
+          { "not": { "anyOf": [{ "required": ["source"] }, { "required": ["markdown"] }] } },
+          { "properties": { "artifacts": { "not": { "anyOf": [
+            { "required": ["article_txt"] }, { "required": ["article_md"] }
+          ] } } } }
+        ]
+      },
+      "webPage": {
+        "allOf": [
+          { "$ref": "#/terminalResults/schemas/task" },
+          { "properties": { "status": { "enum": ["completed", "failed"] } } },
+          { "if": { "properties": { "status": { "const": "completed" } } },
+            "then": { "required": ["source", "markdown", "task_created"], "properties": {
+              "task_created": { "const": true },
+              "task_id": { "type": "string", "minLength": 1 },
+              "task_dir": { "type": "string", "minLength": 1 },
+              "artifacts": { "required": ["article_txt", "article_md"], "maxProperties": 2 },
+              "summary": { "const": "" }, "insights": { "maxItems": 0 },
+              "dissection": { "type": "null" }, "draft": { "const": "" },
+              "error": { "type": "null" }
+            } },
+            "else": {
+              "not": { "anyOf": [{ "required": ["source"] }, { "required": ["markdown"] }] },
+              "properties": {
+                "task_id": { "type": "null" }, "task_dir": { "type": "null" },
+                "task_created": { "const": false }, "artifacts": { "maxProperties": 0 },
+                "text": { "const": "" }, "summary": { "const": "" },
+                "insights": { "maxItems": 0 }, "dissection": { "type": "null" },
+                "draft": { "const": "" }, "transcript": { "type": "null" },
+                "error": { "type": "object" }
+              }
+            }
+          }
+        ]
+      },
       "task": {
         "type": "object",
         "required": [
@@ -509,6 +553,16 @@
           "error"
         ],
         "properties": {
+          "source": {
+            "type": "object", "required": ["kind", "url", "title", "extractedAt"],
+            "properties": {
+              "kind": { "const": "web_page" },
+              "url": { "type": "string", "minLength": 1 },
+              "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "extractedAt": { "type": "string", "minLength": 1 }
+            }, "additionalProperties": false
+          },
+          "markdown": { "type": "string" },
           "status": {
             "type": "string",
             "enum": [
@@ -559,6 +613,8 @@
           "artifacts": {
             "type": "object",
             "properties": {
+              "article_txt": { "const": "article/article.txt" },
+              "article_md": { "const": "article/article.md" },
               "video": {
                 "type": "string"
               },
@@ -710,7 +766,6 @@
                 "type": "object",
                 "required": [
                   "schemaVersion",
-                  "sourceTranscriptSha256",
                   "sourceLanguage",
                   "sourceChunks",
                   "overallNarrative",
@@ -723,8 +778,10 @@
                 ],
                 "properties": {
                   "schemaVersion": {
-                    "const": 1
+                    "enum": [1, 2]
                   },
+                  "sourceKind": { "const": "article" },
+                  "sourceTextSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
                   "sourceTranscriptSha256": {
                     "type": "string",
                     "pattern": "^[0-9a-f]{64}$"
@@ -854,7 +911,18 @@
                     "items": { "type": "string", "minLength": 1 }
                   }
                 },
-                "additionalProperties": false
+                "additionalProperties": false,
+                "allOf": [{
+                  "if": { "properties": { "schemaVersion": { "const": 2 } } },
+                  "then": {
+                    "required": ["sourceKind", "sourceTextSha256"],
+                    "not": { "required": ["sourceTranscriptSha256"] }
+                  },
+                  "else": {
+                    "required": ["sourceTranscriptSha256"],
+                    "not": { "anyOf": [{ "required": ["sourceKind"] }, { "required": ["sourceTextSha256"] }] }
+                  }
+                }]
               }
             ]
           },
@@ -900,8 +968,12 @@
                       "waiting_input",
                       "video_extracting",
                       "video_transcribing",
+                      "web_loading",
+                      "web_extracting",
+                      "web_saving",
                       "insights_generating",
                       "title_generating",
+                      "draft_generating",
                       "completed",
                       "partial_completed",
                       "failed"
@@ -914,6 +986,35 @@
           }
         },
         "additionalProperties": false,
+        "allOf": [{
+          "if": { "required": ["source"] },
+          "then": {
+            "required": ["markdown"],
+            "not": { "required": ["note_title"] },
+            "properties": {
+              "transcript": { "type": "null" },
+              "artifacts": { "not": { "anyOf": [
+                { "required": ["video"] }, { "required": ["audio"] },
+                { "required": ["transcript_txt"] }, { "required": ["transcript_md"] },
+                { "required": ["segments"] }
+              ] } },
+              "dissection": { "oneOf": [{ "type": "null" }, {
+                "type": "object", "properties": { "schemaVersion": { "const": 2 } }
+              }] }
+            }
+          },
+          "else": {
+            "not": { "required": ["markdown"] },
+            "properties": {
+              "artifacts": { "not": { "anyOf": [
+                { "required": ["article_txt"] }, { "required": ["article_md"] }
+              ] } },
+              "dissection": { "oneOf": [{ "type": "null" }, {
+                "type": "object", "properties": { "schemaVersion": { "const": 1 } }
+              }] }
+            }
+          }
+        }],
         "constraints": {
           "completedRequiresNullError": true,
           "nonCompletedRequiresStructuredError": true
@@ -1762,6 +1863,7 @@
     "preflightScope": "cache_lookup_only",
     "processRequestAcceptsPreflightIdentity": false,
     "manifestSchemaVersion": 3,
+    "webManifestSchemaVersion": 4,
     "manifestSourceUrl": "canonical_url_only",
     "downloadUrlTransport": "transient_request_json_only",
     "rawSourcePreflightTransport": "transient_cache_preflight_json_only",
@@ -1799,6 +1901,9 @@
   },
   "dissectionResult": {
     "schemaVersion": 1,
+    "articleSchemaVersion": 2,
+    "articleSourceKind": "article",
+    "articleSourceHash": "sourceTextSha256",
     "artifacts": {
       "json": {
         "key": "dissection",

@@ -26,10 +26,10 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v10_while_request_versions_stay_fixed() -> None:
+def test_contract_version_is_strictly_v11_while_request_versions_stay_fixed() -> None:
     contract = load_contract()
 
-    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 10
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 11
     assert LOCAL_MEDIA_CONTRACT_VERSION == 4
     assert PROCESS_VIDEO_CONTRACT_VERSION == 3
     assert contract["localMedia"]["workerRequest"]["properties"]["contract_version"] == {
@@ -409,8 +409,9 @@ def test_terminal_result_contract_closes_framing_operations_and_nested_shapes() 
         "invalidPayloadPolicy": "reject_without_echo",
     }
     assert terminal["operations"] == {
-        "process_video": "task",
-        "process_local_media": "task",
+        "process_video": "mediaTask",
+        "process_local_media": "mediaTask",
+        "process_web_page": "webPage",
         "retry_insights": "task",
         "resolve_source_identity": "sourceIdentity",
         "download_asr_model": "modelDownload",
@@ -432,6 +433,8 @@ def test_terminal_result_contract_closes_framing_operations_and_nested_shapes() 
         "failed",
     ]
     assert set(task["properties"]["artifacts"]["properties"]) == {
+        "article_txt",
+        "article_md",
         "video",
         "audio",
         "transcript_txt",
@@ -650,9 +653,10 @@ def test_terminal_dissection_schema_closes_every_nested_object() -> None:
         "dissection"
     ]["oneOf"][1]
 
-    assert list(schema["properties"]) == load_contract()["dissectionResult"][
-        "topLevelKeys"
+    media_keys = [
+        key for key in schema["properties"] if key not in {"sourceKind", "sourceTextSha256"}
     ]
+    assert media_keys == load_contract()["dissectionResult"]["topLevelKeys"]
     assert schema["additionalProperties"] is False
     for field in (
         "sourceChunks",
@@ -666,7 +670,7 @@ def test_terminal_dissection_schema_closes_every_nested_object() -> None:
             nested = nested["items"]
         assert nested["additionalProperties"] is False
 
-    assert schema["properties"]["schemaVersion"] == {"const": 1}
+    assert schema["properties"]["schemaVersion"] == {"enum": [1, 2]}
     assert schema["properties"]["sourceLanguage"]["oneOf"][1] == {"type": "null"}
     assert schema["properties"]["highlights"]["maxItems"] == 8
     assert schema["properties"]["strengths"]["maxItems"] == 6
@@ -695,6 +699,9 @@ def test_progress_events_use_structured_codes_and_safe_args() -> None:
                 "waiting_input",
                 "video_extracting",
                 "video_transcribing",
+                "web_loading",
+                "web_extracting",
+                "web_saving",
                 "insights_generating",
                 "title_generating",
                 "completed",
@@ -804,6 +811,9 @@ def test_progress_registry_covers_every_current_worker_and_model_message() -> No
     model_codes = progress_contract["asrModelDownload"]["messageCodes"]
 
     assert list(worker_codes) == [
+        "web.page.loading",
+        "web.page.extracting",
+        "web.page.saving",
         "video.download.preparing",
         "video.stream.validating",
         "local.media.validating",

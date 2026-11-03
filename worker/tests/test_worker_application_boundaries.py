@@ -31,6 +31,7 @@ EXPECTED_PRIVATE_FILES = {
 }
 EXPECTED_FACADE_SYMBOLS = [
     "run_worker_once",
+    "save_web_page_once",
     "run_local_media_once",
     "resolve_source_identity_once",
     "retry_insights_once",
@@ -217,10 +218,12 @@ def test_cli_is_only_the_process_adapter() -> None:
         "frameq_worker.diagnostic_events",
         "frameq_worker.models",
         "frameq_worker.progress_events",
+        "frameq_worker.web_page_contract",
         "io",
         "json",
         "pathlib",
         "sys",
+        "uuid",
     }
 
 

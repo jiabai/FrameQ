@@ -45,6 +45,8 @@ ARTIFACT_KEY_BY_RELATIVE_PATH: Mapping[str, str] = MappingProxyType(
         "transcript/transcript.txt": "transcript_txt",
         "transcript/transcript.md": "transcript_md",
         "transcript/segments.json": "segments",
+        "article/article.txt": "article_txt",
+        "article/article.md": "article_md",
         "ai/summary.md": "summary",
         "ai/mindmap.mmd": "mindmap",
         "ai/insights.json": "insights",

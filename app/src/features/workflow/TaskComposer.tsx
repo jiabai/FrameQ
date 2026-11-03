@@ -17,6 +17,8 @@ import { useUiLocale } from "../../i18n/LocaleProvider";
 import { selectLocalMedia } from "../../localMediaClient";
 import type { LocalMediaSelectionView } from "../../localMediaContract";
 import type { TaskComposerSource, TaskSubmission } from "../../workflow";
+import { normalizeSubmitUrl } from "../../urlSupport";
+import { normalizeWebPageInput } from "../../webPageProtocol";
 import "./composer.css";
 
 type TaskComposerProps = {
@@ -39,6 +41,8 @@ export function TaskComposer({
   onSubmit,
 }: TaskComposerProps) {
   const { t } = useTranslation("workflow");
+  const { t: webT } = useTranslation("webPage");
+  const isArticle = source.kind === "url" && !normalizeSubmitUrl(source.urlDraft) && Boolean(normalizeWebPageInput(source.urlDraft));
   const resolvedLocale = useUiLocale();
   const [expanded, setExpanded] = useState(false);
   const [pickerBusy, setPickerBusy] = useState(false);
@@ -152,7 +156,7 @@ export function TaskComposer({
               ref={urlInputRef}
               id="video-url"
               aria-label={t("input.urlAria")}
-              aria-describedby={`${helperId} ${helperId}-title`}
+              aria-describedby={isArticle ? `${helperId} ${helperId}-title` : helperId}
               value={source.urlDraft}
               onChange={(event) => onUrlDraftChange(event.currentTarget.value)}
               placeholder={t("input.placeholder")}
@@ -165,7 +169,7 @@ export function TaskComposer({
               data-media-kind={source.selection.mediaKind}
               role="group"
               aria-label={t("input.attachment.selectedAria")}
-              aria-describedby={`${helperId}-title`}
+              aria-describedby={isArticle ? `${helperId}-title` : undefined}
             >
               {source.selection.mediaKind === "video" ? (
                 <FileVideo size={20} aria-hidden="true" />
@@ -245,7 +249,7 @@ export function TaskComposer({
                 className="media-composer-submit"
                 type="submit"
                 aria-label={t("input.confirm")}
-                aria-describedby={`${helperId}-title`}
+                aria-describedby={isArticle ? `${helperId}-title` : undefined}
                 title={t("input.confirm")}
                 disabled={!canSubmit || pickerBusy || removing}
               >
@@ -279,9 +283,9 @@ export function TaskComposer({
       <p className="media-composer-helper" id={helperId}>
         {t("input.supportedSources")}
       </p>
-      <p className="media-composer-helper media-composer-title-disclosure" id={`${helperId}-title`}>
-        {t("noteTitle.disclosure")}
-      </p>
+      {isArticle && <p className="media-composer-helper media-composer-title-disclosure" id={`${helperId}-title`}>
+        {webT("disclosure")}
+      </p>}
       <p className="media-composer-status" aria-live="polite">
         {pickerBusy ? t("input.attachment.pickerBusy") : statusBody}
       </p>

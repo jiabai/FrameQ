@@ -45,6 +45,10 @@ async function renderToolbar(props = toolbarProps(), locale: SupportedLocale = "
 afterEach(cleanup);
 
 describe("ShellToolbar", () => {
+  test("omits the navigation title when opening a note", async () => {
+    const { container } = await renderToolbar(toolbarProps({ title: "" }));
+    expect(container.querySelector(".shell-toolbar-title")).toBeNull();
+  });
   test.each<SupportedLocale>(["zh-CN", "zh-TW", "en-US"])("keeps navigation and window controls without a settings action in %s", async (locale) => {
     await renderToolbar(toolbarProps(), locale);
     const toolbar = screen.getByRole("banner");

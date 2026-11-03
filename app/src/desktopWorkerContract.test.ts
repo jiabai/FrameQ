@@ -192,10 +192,10 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict desktop contract v10 while preserving request versions", () => {
+  test("uses strict desktop contract v11 while preserving request versions", () => {
     const contract = loadContract();
 
-    expect(contract.contractVersion).toBe(10);
+    expect(contract.contractVersion).toBe(11);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.events.workerDiagnosticPrefix).toBe("FRAMEQ_DIAGNOSTIC ");
@@ -218,7 +218,7 @@ describe("desktop/worker contract", () => {
     };
     visit(contract);
 
-    expect(contract.contractVersion).toBe(10);
+    expect(contract.contractVersion).toBe(11);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);
@@ -421,8 +421,9 @@ describe("desktop/worker contract", () => {
       invalidPayloadPolicy: "reject_without_echo",
     });
     expect(terminal.operations).toEqual({
-      process_video: "task",
-      process_local_media: "task",
+      process_video: "mediaTask",
+      process_local_media: "mediaTask",
+      process_web_page: "webPage",
       retry_insights: "task",
       resolve_source_identity: "sourceIdentity",
       download_asr_model: "modelDownload",
@@ -462,6 +463,8 @@ describe("desktop/worker contract", () => {
       "failed",
     ]);
     expect(Object.keys(task.properties.artifacts.properties)).toEqual([
+      "article_txt",
+      "article_md",
       "video",
       "audio",
       "transcript_txt",
@@ -692,6 +695,9 @@ describe("desktop/worker contract", () => {
 
     expect(dissection).toEqual({
       schemaVersion: 1,
+      articleSchemaVersion: 2,
+      articleSourceKind: "article",
+      articleSourceHash: "sourceTextSha256",
       artifacts: {
         json: { key: "dissection", path: "ai/dissection.json" },
         markdown: { key: "dissection_md", path: "ai/dissection.md" },
@@ -741,6 +747,9 @@ describe("desktop/worker contract", () => {
           "waiting_input",
           "video_extracting",
           "video_transcribing",
+          "web_loading",
+          "web_extracting",
+          "web_saving",
           "insights_generating",
           "title_generating",
           "completed",
@@ -866,6 +875,9 @@ describe("desktop/worker contract", () => {
     const progress = loadContract().progressEvents;
 
     expect(Object.keys(progress.worker.messageCodes)).toEqual([
+      "web.page.loading",
+      "web.page.extracting",
+      "web.page.saving",
       "video.download.preparing",
       "video.stream.validating",
       "local.media.validating",

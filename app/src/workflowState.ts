@@ -2,6 +2,7 @@ import type { Insight } from "./insightPreferences";
 import type { NoteTitleMetadata } from "./noteTitle";
 import type { NoteMetadata } from "./noteMetadata";
 import type { SupportedLocale } from "./i18n/locale";
+import { parseWebPageSource, type WebPageSource } from "./webPageProtocol";
 export type { NoteTitleMetadata } from "./noteTitle";
 import { uiMessage, type UiMessage } from "./i18n/uiMessage";
 import type {
@@ -32,6 +33,8 @@ export type TaskArtifactKey =
   | "audio"
   | "transcript_txt"
   | "transcript_md"
+  | "article_txt"
+  | "article_md"
   | "segments"
   | "summary"
   | "mindmap"
@@ -76,9 +79,14 @@ export type DissectionSegment = {
   riskFlags: string[];
 };
 
-export type TranscriptDissection = {
+export type TranscriptDissection = ({
   schemaVersion: 1;
   sourceTranscriptSha256: string;
+} | {
+  schemaVersion: 2;
+  sourceKind: "article";
+  sourceTextSha256: string;
+}) & {
   sourceLanguage: string | null;
   sourceChunks: DissectionSourceChunk[];
   overallNarrative: DissectionNarrative;
@@ -99,6 +107,7 @@ export type TaskSubmission =
   | { kind: "local_media"; selectionToken: string };
 
 export type TaskSourceSummary =
+  | WebPageSource
   | { kind: "url"; url: string }
   | {
       kind: "local_file";
@@ -118,6 +127,8 @@ const UNSAFE_SOURCE_NAME_PATTERN =
   /[\/\\\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
 export function parseTaskSourceSummary(value: unknown): TaskSourceSummary | null {
+  const article = parseWebPageSource(value);
+  if (article) return article;
   if (!isPlainRecord(value)) {
     return null;
   }
@@ -173,6 +184,8 @@ function hasExactKeys(
 }
 
 export type WorkerResult = {
+  source?: WebPageSource | null;
+  markdown?: string;
   status: "completed" | "partial_completed" | "failed";
   task_id: string | null;
   task_dir: string | null;
@@ -221,6 +234,7 @@ export type ToolbarNewTaskButtonState = {
 };
 
 export type WorkflowState = {
+  markdown: string;
   stage: WorkflowStage;
   // cancellingFromStage is one of the live processing phases the user can
   // cancel. draft_generating is an error-only stage, never a live phase,
@@ -260,6 +274,7 @@ export type WorkflowState = {
 };
 export function createInitialWorkflow(): WorkflowState {
   return {
+    markdown: "",
     stage: "waiting_input",
     cancellingFromStage: null,
     activeAiTarget: null,
@@ -290,10 +305,11 @@ export function createInitialWorkflow(): WorkflowState {
 export function startProcessing(
   state: WorkflowState,
   taskSource: TaskSourceSummary,
+  webPage = taskSource.kind === "web_page",
 ): WorkflowState {
   return {
     ...state,
-    stage: "video_extracting",
+    stage: webPage ? "web_loading" : "video_extracting",
     cancellingFromStage: null,
     activeAiTarget: null,
     aiErrorTarget: null,
@@ -302,13 +318,14 @@ export function startProcessing(
     statusMessage: null,
     progressMessage: {
       messageCode:
-        taskSource.kind === "local_file"
+        webPage ? "web.page.loading" : taskSource.kind === "local_file"
           ? "local.media.validating"
           : "video.download.preparing",
       args: {},
     },
     progressPercent: 12,
     text: "",
+    markdown: "",
     summary: "",
     insights: [],
     taskId: null,
@@ -420,6 +437,9 @@ export function requestProcessingCancellation(state: WorkflowState): WorkflowSta
   if (
     cancellingFromStage !== "video_extracting" &&
     cancellingFromStage !== "video_transcribing" &&
+    cancellingFromStage !== "web_loading" &&
+    cancellingFromStage !== "web_extracting" &&
+    cancellingFromStage !== "web_saving" &&
     cancellingFromStage !== "title_generating" &&
     cancellingFromStage !== "insights_generating"
   ) {
@@ -481,6 +501,9 @@ export function isProcessingStage(stage: WorkflowStage): boolean {
   return (
     stage === "video_extracting" ||
     stage === "video_transcribing" ||
+    stage === "web_loading" ||
+    stage === "web_extracting" ||
+    stage === "web_saving" ||
     stage === "title_generating" ||
     stage === "insights_generating" ||
     stage === "cancelling"
@@ -514,6 +537,8 @@ export function summarizeWorkerResult(
     progressMessage: null,
     progressPercent: result.status === "failed" ? 35 : 100,
     text: result.text,
+    markdown: result.markdown ?? "",
+    taskSource: result.source ?? null,
     summary: result.summary,
     insights: result.insights,
     taskId: result.task_id,
@@ -562,6 +587,7 @@ export function finishInsightRetry(
     stage: noteTitle && noteTitle.status !== "completed" ? "partial_completed" : next.stage,
     composerSource: state.composerSource,
     taskSource: state.taskSource,
+    markdown: state.markdown,
     aiErrorTarget: isAiTargetFailure(result.error) ? target : null,
     aiTargetErrors,
     dissection:
