@@ -55,7 +55,7 @@ HTTP/代理登录和客户端证书请求取消；`NSURLAuthenticationMethodServ
 专用 WKContentWorld 中的固定提取代码只读取 DOM 和克隆文档，不调用页面提供的函数。
 
 App Sandbox 身份、实际 entitlement、独立数据容器和主应用文件访问拒绝均必须对最终打包 helper 实测。
-托管 macOS CI 已完成 helper 编译、ad-hoc 签名与构建产物的身份/entitlement 回读；最终 Mac app/DMG 内回读、Sandbox 实测与真实页面/取消运行保留发行门禁。
+托管 macOS CI 已完成 helper 编译、ad-hoc 签名与构建产物的身份/entitlement 回读；最终 Mac app/DMG 内回读已由 `scripts/make-macos-dmg.sh` 的 `--verify-bundle` / `--verify-dmg` 接入发版流程（待首次真实发版 run 执行），Sandbox 实测与真实页面/取消运行保留发行门禁。
 
 ## 网页网络与限额
 

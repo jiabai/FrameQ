@@ -32,6 +32,27 @@ test("desktop release uses Node.js 24-capable actions in every platform job", as
   );
 });
 
+test("both macOS release jobs verify the packaged WebView host in the app and DMG", async () => {
+  const workflow = await readFile(workflowPath, "utf8");
+  const dmgScript = await readFile(
+    resolve(repositoryRoot, "scripts/make-macos-dmg.sh"),
+    "utf8",
+  );
+
+  assert.equal(
+    countMatches(workflow, /bash scripts\/make-macos-dmg\.sh x86_64-apple-darwin FrameQ/g),
+    1,
+  );
+  assert.equal(
+    countMatches(workflow, /bash scripts\/make-macos-dmg\.sh aarch64-apple-darwin FrameQ/g),
+    1,
+  );
+  assert.match(dmgScript, /x86_64-apple-darwin\) ARCH_SUFFIX="x64"; NATIVE_TARGET="macos-x64"/);
+  assert.match(dmgScript, /aarch64-apple-darwin\) ARCH_SUFFIX="aarch64"; NATIVE_TARGET="macos-arm64"/);
+  assert.match(dmgScript, /--target "\$\{NATIVE_TARGET\}" --verify-bundle "\$\{APP\}"/);
+  assert.match(dmgScript, /--target "\$\{NATIVE_TARGET\}" --verify-dmg "\$\{DMG\}"/);
+});
+
 test("desktop release keeps its draft-first three-platform boundary", async () => {
   const workflow = await readFile(workflowPath, "utf8");
 

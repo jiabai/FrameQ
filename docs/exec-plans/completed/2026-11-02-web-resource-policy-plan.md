@@ -42,4 +42,4 @@
 - `npm --prefix app run lint`、`npm --prefix app run build`、`npm --prefix app run tauri -- build --no-bundle`通过；no-bundle输出为Windows本地程序，未发布安装包。构建仍有既有Rust弃用/未使用代码与前端chunk体积提示。
 - Node脚本54项、Python脚本1项通过；Python缓存写入提示未影响测试。文档治理0错误/0警告。
 - 运行环境记录：并行完整Rust运行的3项时间敏感用例在串行完整回归中全部通过；并行编译非测试目标曾出现rustc进程异常，最终代理测试程序及正式Windows构建均通过。旧FrameQ占用构建输出，正常关闭窗口后残留主进程经身份/无worker检查结束，随后构建成功。
-- 未执行与残余风险：macOS Swift 编译、ad-hoc 签名与构建产物 entitlement 回读已由托管 macOS CI（run 41646010131）覆盖；最终签名 app/DMG 内回读、Sandbox 与 WKWebView 原生运行仍需 macOS 实机；共享代理真实网络测试已执行。CDP完成字节与代理均不覆盖全部系统网络路径，延迟加载/长期XHR继续受稳定性及整体期限限制。既有专项canary、其他系统环境及付费AI的发行门禁仍按系统WebView完成记录执行。
+- 未执行与残余风险：macOS Swift 编译、ad-hoc 签名与构建产物 entitlement 回读已由托管 macOS CI（run 41646010131）覆盖；最终签名 app/DMG 内回读已由 `scripts/make-macos-dmg.sh` 的 `--verify-bundle` / `--verify-dmg` 接入两个发布 job（待首次真实发版 run 执行），Sandbox 与 WKWebView 原生运行仍需 macOS 实机；共享代理真实网络测试已执行。CDP完成字节与代理均不覆盖全部系统网络路径，延迟加载/长期XHR继续受稳定性及整体期限限制。既有专项canary、其他系统环境及付费AI的发行门禁仍按系统WebView完成记录执行。

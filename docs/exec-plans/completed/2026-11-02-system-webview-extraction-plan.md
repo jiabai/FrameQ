@@ -1,6 +1,6 @@
 # 系统 WebView 网页正文提取 Plan
 
-状态：实现与 Windows 本地验收完成；macOS helper 编译、ad-hoc 签名、bundle 身份与 entitlement 回读已由托管 macOS CI 覆盖。最终 Mac app/DMG 内 helper 回读、Sandbox 实测、实际页面/取消行为、专项 canary 与扩展交互矩阵保留为发行门禁，见「未勾选项目逐项处置」与技术债记录。
+状态：实现与 Windows 本地验收完成；macOS helper 编译、ad-hoc 签名、bundle 身份与 entitlement 回读已由托管 macOS CI 覆盖，最终 Mac app/DMG 内 helper 回读已接入两个 macOS 发布 job。Sandbox 实测、实际页面/取消行为、专项 canary 与扩展交互矩阵保留为发行门禁，见「未勾选项目逐项处置」与技术债记录。
 
 ## Purpose / Big Picture
 
@@ -218,7 +218,7 @@ Files：`web_engine.rs` / `web_engine/`、`features/articles/useWebEngine.tsx`�
 | 位置 | 项目 | 处置 | 证据 / 剩余条件 |
 | --- | --- | --- | --- |
 | Task 2 / 78 | macOS 编译独立 helper `.app` 并验证产物 | 已闭环 | macOS CI 实际 swiftc 编译、ad-hoc codesign、`verifyMacHelper` 回读架构/Info.plist/签名/entitlements；产物 356896 字节；`--test-protocol` Swift 协议测试通过 |
-| Task 2 / 82 | 最终 Mac app/DMG 内 helper 回读签名、identifier、entitlement | 发行门禁 | 脚本已有 `--verify-bundle` / `--verify-dmg`，需要最终 app/DMG 产物；`desktop-release.yml` 目前只跑 `--test-protocol`，尚未接入 |
+| Task 2 / 82 | 最终 Mac app/DMG 内 helper 回读签名、identifier、entitlement | 已接入发版流程 | `scripts/make-macos-dmg.sh` 第 35 行 `--verify-bundle`、第 63 行 `--verify-dmg` 均带 `--target "${NATIVE_TARGET}"`；`desktop-release.yml` 两个 macOS 发布 job（第 173、243 行）都调用该脚本，`scripts/tests/desktop-release-workflow.test.mjs` 锁定该调用链。剩余条件：首次真实发版 run 执行并回读结果 |
 | Task 3 / 98 | Runtime 版本、静态/JS 正文、跨源资源、Cookie、重定向、frame/worker、权限与失败行为 | 部分覆盖 | Runtime 156.0.4314.58、静态/JavaScript 正文、失败分类见上表；跨源资源、临时 Cookie、重定向、frame/worker、权限专项 canary 未执行 |
 | Task 4 / 108 | 最终签名 helper 原生拒绝与主应用权限隔离 | 发行门禁 | 需 macOS 实机与最终签名 helper |
 | Task 4 / 111 | macOS 静态/JS 正文、HTTP/HTTPS CONNECT、重定向、Cookie、权限、WebRTC/WS、取消 | 发行门禁 | 需 macOS 实机运行；当前只有源码复核与协议测试 |
@@ -228,17 +228,17 @@ Files：`web_engine.rs` / `web_engine/`、`features/articles/useWebEngine.tsx`�
 | Task 8 / 164 | 真实本地 canary：IPC、文件、账号、私网、WS/RTC、权限路径 | 未执行 | 需真实宿主与本地 canary 设施；不得把未拦截路径标成通过 |
 | Task 8 / 165 | 三语/两尺寸正文与现有操作交互矩阵 | 部分覆盖 | 中文两尺寸 DOM 阅读见上表；三语完整交互矩阵与网页/媒体笔记、合集、名称/固定、迁移、AI 确认组合未重新执行 |
 
-结论：78 与 154 已闭环；98、129、165 为部分覆盖且缺专项；82、108、111、112、164 依赖 macOS 实机或最终签名产物，本机无法完成，全部保留发行门禁，未标成通过。
+结论：78 与 154 已闭环；82 的验证已接入两个 macOS 发布 job，待首次真实发版 run 执行；98、129、165 为部分覆盖且缺专项；108、111、112、164 依赖 macOS 实机或最终签名产物，本机无法完成，全部保留发行门禁，未标成通过。
 
 ### 发行前未验证范围
 
 - 扩展的三语完整交互矩阵及旧迁移各阶段与本次组件退役的逐项组合尚未重新执行。当前Rust完整回归包含迁移与旧baseline字段读取/回写验证；实际桌面覆盖中文两尺寸阅读和上述保存、取消、关闭、重开流程。
 - 系统宿主的 IPC/文件/账号、认证、权限、跨源 Cookie/frame/worker、私网、WebSocket/WebRTC、DNS变化等专项canary尚未全部执行；正文成功与旧独立Chromium结果均不覆盖这些项目。
-- macOS helper 编译、ad-hoc 签名与构建产物的 identifier/entitlement 回读已由托管 macOS CI 覆盖；最终 Mac app/DMG 内 helper 回读、Sandbox 文件/账号 canary、代理及实际页面/取消/系统服务行为未验证，保留发行门禁。
+- macOS helper 编译、ad-hoc 签名与构建产物的 identifier/entitlement 回读已由托管 macOS CI 覆盖；最终 Mac app/DMG 内 helper 回读已接入 `scripts/make-macos-dmg.sh` 并经两个发布 job 调用，但尚无真实发版 run 的执行证据；Sandbox 文件/账号 canary、代理及实际页面/取消/系统服务行为未验证，保留发行门禁。
 - 付费AI按用户要求跳过。本地保存和既有来源契约回归不产生供应商验收结论。
 
 ## Outcomes & Retrospective
 
 系统 WebView 原生宿主、版本2正文保存、组件准备流程退役和旧资料兼容已实现。
 Windows真实页面、保存、重开、取消后下一任务、退出恢复与默认桌面构建及启动已通过；具体结果见表。
-macOS helper 编译、签名与 entitlement 回读的缺失证据已由托管 macOS CI 补齐；最终签名产物、Sandbox 与实机运行及专项 canary 的缺失证据明确保留，未执行付费供应商调用。
+macOS helper 编译、签名与 entitlement 回读的缺失证据已由托管 macOS CI 补齐，最终 app/DMG 内 helper 回读已接入发版流程（待首次真实发版 run 执行）；Sandbox、实机运行及专项 canary 的缺失证据明确保留，未执行付费供应商调用。
