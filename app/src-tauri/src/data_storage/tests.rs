@@ -196,7 +196,7 @@ fn immutable_control_snapshot_does_not_block_atomic_control_replacement() {
 #[cfg(windows)]
 #[test]
 fn actual_canonical_windows_path_displays_without_internal_device_prefix() {
-    let f=Fixture::new();let canonical=f.target.canonicalize().unwrap();let fixture_name=f.base.file_name().unwrap().to_string_lossy();assert_eq!(location::display(&canonical),format!("D:/Github/FrameQ/build/data-storage-acceptance/{fixture_name}/target"));assert_eq!(location::display(Path::new(r"\\?\UNC\server\share\notes")),"//server/share/notes");
+    let f=Fixture::new();let canonical=f.target.canonicalize().unwrap();let base=f.base.to_string_lossy().replace('\\',"/");let plain=base.strip_prefix("//?/").unwrap_or(&base);assert_eq!(location::display(&canonical),format!("{plain}/target"));assert_eq!(location::display(Path::new(r"\\?\UNC\server\share\notes")),"//server/share/notes");
 }
 
 #[test]
