@@ -13,8 +13,9 @@ extern "C" {fn openat(directory:i32,name:*const core::ffi::c_char,flags:i32,...)
 fn name(value:&OsStr)->io::Result<CString> {if Path::new(value).components().count()!=1||!Path::new(value).components().all(|part|matches!(part,Component::Normal(_))){return Err(io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"));}CString::new(value.as_bytes()).map_err(|_|io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"))}
 fn open_child(parent:&File,part:&OsStr,flags:i32)->io::Result<File> {let name=name(part)?;let fd=unsafe{openat(parent.as_raw_fd(),name.as_ptr(),flags|NOFOLLOW|CLOEXEC,0o600u32)};if fd<0{return Err(io::Error::last_os_error());}Ok(unsafe{File::from_raw_fd(fd)})}
 pub(super) fn open_directory(path:&Path)->io::Result<File> {
-    if !path.is_absolute(){return Err(io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"));}let mut file=File::open("/")?;
-    for component in path.components(){match component{Component::RootDir=>{},Component::Normal(part)=>file=open_child(&file,part,DIRECTORY)?,_=>return Err(io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"))}}
+    if !path.is_absolute(){return Err(io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"));}
+    let canonical=path.canonicalize()?;let mut file=File::open("/")?;
+    for component in canonical.components(){match component{Component::RootDir=>{},Component::Normal(part)=>file=open_child(&file,part,DIRECTORY)?,_=>return Err(io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"))}}
     Ok(file)
 }
 pub(super) fn open_regular(path:&Path)->io::Result<File> {let parent=open_directory(path.parent().ok_or_else(||io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"))?)?;open_child(&parent,path.file_name().ok_or_else(||io::Error::new(io::ErrorKind::InvalidInput,"UnsafePath"))?,0)}
