@@ -55,7 +55,7 @@ HTTP/代理登录和客户端证书请求取消；`NSURLAuthenticationMethodServ
 专用 WKContentWorld 中的固定提取代码只读取 DOM 和克隆文档，不调用页面提供的函数。
 
 App Sandbox 身份、实际 entitlement、独立数据容器和主应用文件访问拒绝均必须对最终打包 helper 实测。
-当前 Windows 环境仅完成源码及打包配置核查，macOS 编译、最终签名和运行行为尚未验证。
+托管 macOS CI 已完成 helper 编译、ad-hoc 签名与构建产物的身份/entitlement 回读；最终 Mac app/DMG 内回读、Sandbox 实测与真实页面/取消运行保留发行门禁。
 
 ## 网页网络与限额
 
