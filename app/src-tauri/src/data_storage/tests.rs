@@ -37,6 +37,37 @@ fn complete_tree_copy_keeps_metadata_configs_and_requires_new_process_view() {
 }
 
 #[test]
+fn preflight_cancel_wakes_waiting_preparation_without_cancelling_existing_data_operation() {
+    let f=Fixture::new();f.write("cache/original.bin",b"keep original");let manager=f.manager();
+    let permit=manager.acquire().unwrap();let worker=Arc::clone(&manager);let target=f.target.clone();
+    let thread=std::thread::spawn(move ||worker.prepare_with_validation_and_progress(target,vec![],"main",0,
+        &mut ||panic!("existing data permit must remain held"),&mut |_,_|panic!("validation must not start"),&mut |_|Ok(())));
+    let deadline=std::time::Instant::now()+std::time::Duration::from_secs(5);
+    while !manager.inner.lock().unwrap().quiescing&&std::time::Instant::now()<deadline{std::thread::yield_now();}
+    assert!(manager.inner.lock().unwrap().quiescing);
+    manager.signal_preparation_cancel();
+    assert_eq!(thread.join().unwrap().unwrap_err().code,"Cancelled");
+    assert_eq!(manager.inner.lock().unwrap().active_count,1);
+    assert_eq!(manager.state().data_access,"ready");
+    assert_eq!(fs::read(f.config.join("cache/original.bin")).unwrap(),b"keep original");drop(permit);
+}
+
+#[test]
+fn preflight_competing_preparation_cannot_clear_an_active_cancellation() {
+    let f=Fixture::new();f.write("cache/original.bin",b"keep original");let manager=f.manager();
+    let (entered,waiting)=std::sync::mpsc::sync_channel(1);let (release,resume)=std::sync::mpsc::sync_channel(1);
+    let worker=Arc::clone(&manager);let target=f.target.clone();
+    let thread=std::thread::spawn(move ||worker.prepare_with_validation_and_progress(target,vec![],"main",0,
+        &mut ||{entered.send(()).unwrap();resume.recv().unwrap();Ok(())},&mut |_,_|panic!("cancelled validation must not start"),&mut |_|Ok(())));
+    waiting.recv_timeout(std::time::Duration::from_secs(5)).unwrap();manager.signal_preparation_cancel();
+    let other=f.base.join("other-target");fs::create_dir(&other).unwrap();
+    assert_eq!(manager.prepare(other.canonicalize().unwrap(),vec![],"main",0).unwrap_err().code,"Busy");
+    assert!(manager.cancellation_requested());release.send(()).unwrap();
+    assert_eq!(thread.join().unwrap().unwrap_err().code,"Cancelled");assert_eq!(manager.state().data_access,"ready");
+    assert_eq!(fs::read(f.config.join("cache/original.bin")).unwrap(),b"keep original");
+}
+
+#[test]
 fn duplicate_task_ids_require_identical_entire_trees() {
     let f=Fixture::new();let other=f.base.join("other");fs::create_dir_all(other.join("tasks/a")).unwrap();
     f.write("outputs/tasks/a/transcript.txt",b"original");fs::write(other.join("tasks/a/transcript.txt"),b"original").unwrap();fs::write(other.join("tasks/a/extra.txt"),b"different tree").unwrap();
@@ -53,9 +84,8 @@ fn identical_sources_are_copied_once_and_both_originals_retained() {
 }
 
 #[test]
-fn nonempty_nested_and_replaced_targets_fail_without_source_mutation() {
+fn nested_and_replaced_targets_fail_without_source_mutation() {
     let f=Fixture::new();f.write("outputs/tasks/a/value",b"saved");let m=f.manager();
-    fs::write(f.target.join("unrelated"),b"keep").unwrap();assert_eq!(m.prepare(f.target.clone(),vec![],"main",0).unwrap_err().code,"TargetConflict");fs::remove_file(f.target.join("unrelated")).unwrap();
     let nested=f.config.join("inside");fs::create_dir(&nested).unwrap();assert_eq!(m.prepare(nested,vec![],"main",0).unwrap_err().code,"UnsafePath");
     let p=f.prepare(&m);fs::rename(&f.target,f.base.join("moved-target")).unwrap();fs::create_dir(&f.target).unwrap();
     assert!(m.start(&p.plan_token,"main",&mut |_|{}).is_err());assert!(f.config.join("outputs/tasks/a/value").exists());

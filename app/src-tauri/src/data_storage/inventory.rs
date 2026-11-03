@@ -4,6 +4,10 @@ use serde::{Deserialize,Serialize};
 use sha2::{Digest,Sha256};
 use std::{collections::{BTreeMap,BTreeSet},fs,path::{Path,PathBuf}};
 
+#[cfg(test)]
+#[path="inventory_progress_tests.rs"]
+mod progress_tests;
+
 pub(super) const MAX_INVENTORY:u64=1024*1024*1024;
 #[derive(Debug,Clone,Serialize,Deserialize,PartialEq,Eq)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
@@ -22,7 +26,19 @@ pub(super) fn payload_path(target:&Path,id:&str)->PathBuf {target.join(".frameq-
 pub(super) fn digest(value:&Inventory)->Result<String> {
     Ok(format!("{:x}",Sha256::digest(serde_json::to_vec(value).map_err(|_|StorageError::new("ControlInvalid"))?)))
 }
-fn visit(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,cancel:Option<&std::sync::atomic::AtomicBool>,hash:bool)->Result<()> {
+struct ScanProgress<'a> {
+    state:PreflightProgress,
+    observer:&'a mut dyn FnMut(PreflightProgress)->Result<()>,
+}
+impl ScanProgress<'_> {
+    fn report(&mut self)->Result<()> {
+        if self.state.total_files.is_some_and(|total|self.state.completed_files>total){self.state.total_files=None;}
+        if self.state.total_bytes.is_some_and(|total|self.state.completed_bytes>total){self.state.total_bytes=None;}
+        (self.observer)(self.state.clone())
+    }
+}
+
+fn visit(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,cancel:Option<&std::sync::atomic::AtomicBool>,hash:bool,progress:&mut ScanProgress<'_>)->Result<()> {
     if cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)){return Err(StorageError::new("Cancelled"));}
     if depth>128 || entries.len()>1_000_000 || !control::safe_relative(destination) {return Err(StorageError::new("UnsafePath"));}
     let meta=fs::symlink_metadata(source)?;
@@ -32,12 +48,22 @@ fn visit(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,canc
         entries.push(Entry{source:source.into(),destination:destination.into(),directory:true,length:0,sha256:String::new(),identity:id,readonly:meta.permissions().readonly(),unix_mode:unix_mode(&meta)});
         let mut children=fs::read_dir(source)?.map(|v|v.map(|v|v.path())).collect::<std::io::Result<Vec<_>>>()?;
         children.sort();
-        for child in children {visit(&child,&destination.join(child.file_name().ok_or_else(||StorageError::new("UnsafePath"))?),entries,depth+1,cancel,hash)?;}
+        for child in children {visit(&child,&destination.join(child.file_name().ok_or_else(||StorageError::new("UnsafePath"))?),entries,depth+1,cancel,hash,progress)?;}
         safe_filesystem::check_identity(source,id)?;
     } else if meta.is_file() {
-        let(length,digest,id)=if hash {safe_filesystem::hash_file_while(source,||!cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)))?}
+        let base=progress.state.completed_bytes;
+        progress.state.current_file_bytes=0;progress.state.current_file_total_bytes=if hash{meta.len()}else{0};progress.report()?;
+        let(length,digest,id)=if hash {safe_filesystem::hash_file_with_progress(source,||!cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)),|bytes|{
+            if bytes>meta.len(){return Err(std::io::Error::other(StorageError::new("SourceChanged")));}
+            progress.state.current_file_bytes=bytes;
+            progress.state.completed_bytes=base.checked_add(bytes).ok_or_else(||std::io::Error::other(StorageError::new("ControlLimit")))?;
+            progress.report().map_err(std::io::Error::other)
+        })?}
             else {let file=safe_filesystem::open_regular(source)?;(file.metadata()?.len(),String::new(),safe_filesystem::file_identity(&file)?)};
+        if hash&&length!=meta.len(){return Err(StorageError::new("SourceChanged"));}
         entries.push(Entry{source:source.into(),destination:destination.into(),directory:false,length,sha256:digest,identity:id,readonly:meta.permissions().readonly(),unix_mode:unix_mode(&meta)});
+        progress.state.completed_files=progress.state.completed_files.checked_add(1).ok_or_else(||StorageError::new("ControlLimit"))?;
+        progress.report()?;
     } else {return Err(StorageError::new("UnsafePath"));}
     Ok(())
 }
@@ -45,12 +71,21 @@ fn visit(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,canc
 #[cfg(not(unix))] fn unix_mode(_meta:&fs::Metadata)->Option<u32> {None}
 
 pub(super) fn build_cancellable(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[ReceiptRef],cancel:Option<&std::sync::atomic::AtomicBool>)->Result<Inventory> {
-    build_inner(active,legacy_sources,receipts,cancel,true)
+    build_inner(active,legacy_sources,receipts,cancel,true,None,&mut |_|Ok(()))
 }
 pub(super) fn estimate(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[ReceiptRef],cancel:Option<&std::sync::atomic::AtomicBool>)->Result<Inventory> {
-    build_inner(active,legacy_sources,receipts,cancel,false)
+    estimate_with_progress(active,legacy_sources,receipts,cancel,&mut |_|Ok(()))
 }
-fn build_inner(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[ReceiptRef],cancel:Option<&std::sync::atomic::AtomicBool>,hash:bool)->Result<Inventory> {
+pub(super) fn estimate_with_progress(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[ReceiptRef],cancel:Option<&std::sync::atomic::AtomicBool>,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<Inventory> {
+    build_inner(active,legacy_sources,receipts,cancel,false,None,observer)
+}
+pub(super) fn build_with_progress(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[ReceiptRef],cancel:Option<&std::sync::atomic::AtomicBool>,expected_files:u64,expected_bytes:u64,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<Inventory> {
+    build_inner(active,legacy_sources,receipts,cancel,true,Some((expected_files,expected_bytes)),observer)
+}
+fn build_inner(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[ReceiptRef],cancel:Option<&std::sync::atomic::AtomicBool>,hash:bool,expected:Option<(u64,u64)>,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<Inventory> {
+    let mut state=PreflightProgress::stage(if hash{PreflightStage::IntegrityCheck}else{PreflightStage::InventoryScanning});
+    if let Some((files,bytes))=expected{state.total_files=Some(files);state.total_bytes=Some(bytes);}
+    let mut progress=ScanProgress{state,observer};progress.report()?;
     validate_active(active)?;
     if active.data_root.join("work").exists() && active.data_root.join("cache/legacy-work").exists() {return Err(StorageError::new("TargetConflict"));}
     let mut mappings=vec![(active.data_root.join("outputs"),PathBuf::from("outputs")),(active.data_root.join("cache"),"cache".into()),
@@ -82,7 +117,7 @@ fn build_inner(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[Receip
         let is_directory=fs::symlink_metadata(&source)?.is_dir();
         let id=if is_directory {safe_filesystem::identity(&source)?} else {let file=safe_filesystem::open_regular(&source)?;safe_filesystem::file_identity(&file)?};
         if !physical.insert((id.volume,id.file)) {continue;}
-        let mut current=Vec::new();visit(&source,&destination,&mut current,0,cancel,hash)?;
+        let mut current=Vec::new();visit(&source,&destination,&mut current,0,cancel,hash,&mut progress)?;
         let mut source_tasks:BTreeMap<PathBuf,BTreeMap<PathBuf,(bool,u64,String)>>=BTreeMap::new();
         for entry in &current {
             let parts:Vec<_>=entry.destination.components().collect();
@@ -106,18 +141,28 @@ fn build_inner(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[Receip
     let unique:Vec<_>=destinations.values().map(|v|(*v).clone()).collect();
     let total_bytes=unique.iter().try_fold(0u64,|a,v|a.checked_add(v.length).ok_or_else(||StorageError::new("InsufficientSpace")))?;
     let total_files=unique.iter().filter(|v|!v.directory).count() as u64;
+    if hash{progress.state.total_files=Some(progress.state.completed_files);progress.state.total_bytes=Some(progress.state.completed_bytes);}
+    progress.report()?;
     Ok(Inventory{schema_version:1,sources,entries,total_files,total_bytes,validation:serde_json::Value::Null})
 }
 pub(super) fn unique_entries(inventory:&Inventory)->Vec<&Entry> {
     let mut values=BTreeMap::new();for entry in &inventory.entries {values.entry(&entry.destination).or_insert(entry);}values.into_values().collect()
 }
 pub(super) fn verify_sources_cancellable(inventory:&Inventory,cancel:Option<&std::sync::atomic::AtomicBool>)->Result<()> {
+    verify_sources_with_progress(inventory,cancel,&mut |_|Ok(()))
+}
+pub(super) fn verify_sources_with_progress(inventory:&Inventory,cancel:Option<&std::sync::atomic::AtomicBool>,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<()> {
+    let mut state=PreflightProgress::stage(PreflightStage::IntegrityCheck);
+    state.total_files=Some(inventory.entries.iter().filter(|entry|!entry.directory).count()as u64);
+    state.total_bytes=Some(inventory.entries.iter().filter(|entry|!entry.directory).try_fold(0u64,|total,entry|total.checked_add(entry.length).ok_or_else(||StorageError::new("InsufficientSpace")))?);
+    let mut progress=ScanProgress{state,observer};progress.report()?;
     for source in &inventory.sources {
-        let mut current=Vec::new();visit(&source.path,&source.destination,&mut current,0,cancel,true)?;
+        let mut current=Vec::new();visit(&source.path,&source.destination,&mut current,0,cancel,true,&mut progress)?;
         let end=source.entry_start.checked_add(source.entry_count).ok_or_else(||StorageError::new("ControlInvalid"))?;
         let expected=inventory.entries.get(source.entry_start..end).ok_or_else(||StorageError::new("ControlInvalid"))?;
         if current!=expected {return Err(StorageError::new("SourceChanged"));}
     }
+    progress.report()?;
     Ok(())
 }
 pub(super) fn read(target:&Path,pending:&Pending)->Result<Inventory> {

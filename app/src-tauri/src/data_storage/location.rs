@@ -56,6 +56,7 @@ pub(super) struct Control {
 #[derive(Debug,Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub(super) struct Pending {
+    #[serde(default)] pub merge:bool,
     pub operation_id:String,pub phase:String,pub previous:ActiveStorage,pub target:PathBuf,
     pub target_identity:DirectoryIdentity,pub inventory_hash:String,pub plan_token:String,pub window_id:String,
     pub files_total:u64,pub bytes_total:u64,pub files_completed:u64,pub bytes_completed:u64,
@@ -74,6 +75,7 @@ pub(super) struct ReceiptRef {pub operation_id:String,pub relative_path:PathBuf,
 #[derive(Debug,Clone,Serialize)]
 #[serde(rename_all="camelCase")]
 pub(crate) struct OperationView {
+    pub merge:bool,
     pub operation_id:String,pub phase:String,pub source_paths:Vec<String>,pub target_path:String,
     pub total_files:u64,pub total_bytes:u64,pub completed_files:u64,pub completed_bytes:u64,
     pub can_cancel:bool,pub can_resume:bool,pub last_error:Option<String>,
@@ -91,12 +93,27 @@ pub(crate) struct StorageStateView {
 #[derive(Debug,Clone,Serialize)]
 #[serde(rename_all="camelCase")]
 pub(crate) struct MigrationPreview {
+    pub merge:bool,
     pub plan_token:String,pub operation_id:String,pub generation:u64,pub source_paths:Vec<String>,
     pub target_path:String,pub total_files:u64,pub total_bytes:u64,pub required_bytes:u64,pub available_bytes:u64,
 }
 #[derive(Debug,Clone,Serialize)]
 #[serde(rename_all="camelCase")]
 pub(crate) struct CleanupPreview {pub plan_token:String,pub receipt_id:String,pub generation:u64,pub total_files:u64,pub total_bytes:u64,pub retained_files:u64,pub source_paths:Vec<String>}
+
+#[derive(Debug,Clone,Copy,PartialEq,Eq,Serialize)]
+#[serde(rename_all="snake_case")]
+pub(crate) enum PreflightStage {Waiting,InventoryScanning,SourceValidation,IntegrityCheck,TargetCheck,CleanupChecking}
+
+#[derive(Debug,Clone,Serialize)]
+#[serde(rename_all="camelCase")]
+pub(crate) struct PreflightProgress {
+    pub stage:PreflightStage,pub completed_files:u64,pub total_files:Option<u64>,
+    pub completed_bytes:u64,pub total_bytes:Option<u64>,pub current_file_bytes:u64,pub current_file_total_bytes:u64,
+}
+impl PreflightProgress {
+    pub(crate) fn stage(stage:PreflightStage)->Self {Self{stage,completed_files:0,total_files:None,completed_bytes:0,total_bytes:None,current_file_bytes:0,current_file_total_bytes:0}}
+}
 
 pub(super) fn display(path:&Path)->String {
     #[cfg(windows)] {

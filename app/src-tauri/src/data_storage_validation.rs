@@ -16,6 +16,8 @@ pub(crate) struct StorageValidationBaseline {
     supported_task_ids: Vec<String>,
     collections: crate::collections::CollectionsView,
     ready_components: Vec<ReadyComponent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ready_web_engine: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +54,9 @@ impl StorageValidationBaseline {
                 || !component.version.chars().all(|value| value.is_ascii_alphanumeric() || matches!(value, '.' | '-' | '+'))
                 || component.fingerprint.trim().is_empty() || component.fingerprint.len() > 256)
         { return Err("ControlInvalid".into()); }
+        if self.ready_web_engine.as_ref().is_some_and(|value| value.is_empty() || value.len() > 160
+            || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.')))
+        { return Err("ControlInvalid".into()); }
         Ok(())
     }
 }
@@ -64,6 +69,7 @@ pub(crate) fn capture_for_sources(
     should_cancel: &dyn Fn() -> bool,
 ) -> Result<StorageValidationBaseline, String> {
     check_cancel(should_cancel)?;
+    crate::web_page::recover_workspaces(paths).map_err(|_| "TaskRecoveryFailed".to_string())?;
     let mut roots = vec![data.data_root.join("outputs")];
     if data.output_root.is_absolute() { roots.push(data.output_root.clone()); }
     roots.extend_from_slice(legacy_sources);
@@ -104,6 +110,8 @@ pub(crate) fn capture_for_sources(
             check_cancel(should_cancel)?;
         }
     }
+    check_cancel(should_cancel)?;
+    if crate::web_page::recovery_required(paths) { return Err("TaskRecoveryFailed".into()); }
     Ok(StorageValidationBaseline {
         schema_version: 1,
         ready_models: inspected.ready_models,
@@ -113,6 +121,7 @@ pub(crate) fn capture_for_sources(
         supported_task_ids,
         collections,
         ready_components,
+        ready_web_engine: None,
     })
 }
 
@@ -141,6 +150,7 @@ pub(crate) fn verify(
     supervisors: &ProcessSupervisors,
 ) -> Result<(), String> {
     baseline.validate()?;
+    crate::web_page::recover_workspaces(paths).map_err(|_| "VerificationFailed".to_string())?;
     verify_library(data, baseline)?;
     let import_component = baseline.component_state == "ready"
         && baseline.component_version == env!("CARGO_PKG_VERSION");
@@ -237,6 +247,7 @@ mod tests {
             schema_version: 1, ready_models: vec![], component_state: "ungated".into(), component_fingerprint: None,
             component_version: env!("CARGO_PKG_VERSION").into(), supported_task_ids: vec![], collections: collection,
             ready_components: vec![],
+            ready_web_engine: None,
         };
         let data = DataPaths { data_root: root.clone(), output_root: root.join("outputs"), cache_root: root.join("cache"), models_root: root.join("models"), runtime_root: root.join("runtime"), collections_path: collection_path.clone() };
         verify_library(&data, &baseline).unwrap();
@@ -263,6 +274,25 @@ mod tests {
         let paths = RuntimePaths { resource_dir: resources.clone(), user_data_dir: config.clone() };
         stored_note(&outputs, "default-note");
         stored_note(&legacy, "legacy-note");
+        let article_dir = outputs.join("tasks/web-note");
+        std::fs::create_dir_all(article_dir.join("article")).unwrap();
+        let article_text = "第一段网页正文。\r\n\r\n第二段网页正文。\n";
+        let article_markdown = "# 迁移网页标题\n\n第一段网页正文。\n\n第二段网页正文。\n";
+        std::fs::write(article_dir.join("article/article.txt"), article_text).unwrap();
+        std::fs::write(article_dir.join("article/article.md"), article_markdown).unwrap();
+        std::fs::write(article_dir.join("frameq-task.json"), serde_json::to_vec(&serde_json::json!({
+            "schema_version":4,"source_privacy_migration_version":2,"task_id":"web-note",
+            "created_at":"2026-11-01T08:00:00Z","source_kind":"web_page",
+            "source_url":"https://example.com/article?id=12","source_identity":null,
+            "platform":"web","status":"completed","model":null,"transcript":null,
+            "web_source":{"title":"迁移网页标题","extracted_at":"2026-11-01T08:00:00Z"},
+            "artifacts":{"article_txt":"article/article.txt","article_md":"article/article.md"},
+            "text_preview":"第一段网页正文。","error":null,"insights_count":0
+        })).unwrap()).unwrap();
+        let mut article = SupportedTask::open(&outputs, "web-note").unwrap().into_edit_session();
+        article.set_note_pinned(true).unwrap();
+        article.set_note_display_title("手动网页标题").unwrap();
+        drop(article);
         let text = "今天讨论如何保存笔记和原稿。\n";
         let mut task = SupportedTask::open(&outputs, "default-note").unwrap();
         task.save_note_title(NoteTitle { text: Some("自动生成的笔记标题".into()), status: NoteTitleStatus::Completed, output_language: "zh-CN".into(), error_code: None }).unwrap();
@@ -284,14 +314,14 @@ mod tests {
         std::fs::write(outputs.join("tasks/opaque-note/legacy.bin"), b"opaque preserved bytes").unwrap();
         let collections = crate::collections::CollectionsView { schema_version: 1, collections: vec![crate::collections::CollectionView {
             id: uuid::Uuid::new_v4().to_string(), name: "迁移验收合集".into(),
-            task_ids: vec!["default-note".into(), "legacy-note".into(), "opaque-note".into()],
+            task_ids: vec!["default-note".into(), "legacy-note".into(), "web-note".into(), "opaque-note".into()],
         }] };
         std::fs::write(config.join("collections.json"), serde_json::to_vec(&collections).unwrap()).unwrap();
         let supervisors = ProcessSupervisors::default();
         let manager = crate::data_storage::DataStorageManager::open(config.clone(), resources.clone()).unwrap();
         let preview = manager.prepare_with_validation(target.clone(), vec![legacy.clone()], "notes", 0, &mut || Ok(()), &mut |data, sources| {
             let baseline = capture_for_sources(&paths, data, sources, &supervisors, &|| false).map_err(|code| crate::data_storage::StorageError::new(&code))?;
-            assert_eq!(baseline.supported_task_ids, ["default-note", "legacy-note"]);
+            assert_eq!(baseline.supported_task_ids, ["default-note", "legacy-note", "web-note"]);
             assert_eq!(baseline.collections, collections);
             serde_json::to_value(baseline).map_err(|_| crate::data_storage::StorageError::new("ControlInvalid"))
         }).unwrap();
@@ -304,7 +334,7 @@ mod tests {
         }).unwrap();
         let data = paths.data_paths().unwrap();
         let history = crate::history::load_history_from_output_root(&data.output_root).unwrap();
-        assert_eq!(history.len(), 2);
+        assert_eq!(history.len(), 3);
         let request = serde_json::from_value(serde_json::json!({"task_id":"default-note"})).unwrap();
         let detail = crate::history::load_history_detail_from_output_root(&data.output_root, request).unwrap();
         assert_eq!(detail.text, text.trim());
@@ -313,15 +343,28 @@ mod tests {
         assert!(metadata.pinned);
         assert_eq!(metadata.display_title.as_deref(), Some("手动命名的笔记"));
         let view = crate::collections::get_collections_from_paths_for_test(&paths).unwrap();
-        assert_eq!(view.collections[0].task_ids, ["default-note", "legacy-note"]);
+        assert_eq!(view.collections[0].task_ids, ["default-note", "legacy-note", "web-note"]);
         assert_eq!(crate::collections::read_for_storage_validation(&data.collections_path).unwrap(), collections);
         for relative in ["transcript/transcript.txt", "transcript/original/transcript.txt", "ai/draft.md", "ai/original/draft.md", "frameq-note-metadata.json"] {
             assert_eq!(std::fs::read(outputs.join("tasks/default-note").join(relative)).unwrap(), std::fs::read(data.output_root.join("tasks/default-note").join(relative)).unwrap());
         }
         assert_eq!(std::fs::read(data.output_root.join("tasks/opaque-note/legacy.bin")).unwrap(), b"opaque preserved bytes");
+        let article = SupportedTask::open(&data.output_root, "web-note").unwrap();
+        assert_eq!(article.read_source_text().unwrap().raw_bytes, article_text.as_bytes());
+        assert_eq!(article.read_article_markdown().unwrap(), article_markdown);
+        drop(article);
+        let article_detail = crate::history::load_history_detail_from_output_root(&data.output_root,
+            serde_json::from_value(serde_json::json!({"task_id":"web-note"})).unwrap()).unwrap();
+        assert_eq!(article_detail.text, article_text);
+        assert!(article_detail.note_metadata.as_ref().unwrap().pinned);
+        assert_eq!(article_detail.note_metadata.unwrap().display_title.as_deref(), Some("手动网页标题"));
+        for relative in ["article/article.txt", "article/article.md", "frameq-task.json", "frameq-note-metadata.json"] {
+            assert_eq!(std::fs::read(article_dir.join(relative)).unwrap(), std::fs::read(data.output_root.join("tasks/web-note").join(relative)).unwrap());
+        }
         std::fs::write(root.join("note-roundtrip-result.json"), serde_json::to_vec_pretty(&serde_json::json!({
-            "supportedIds":["default-note","legacy-note"], "rawCollectionReferences":3, "visibleCollectionReferences":2,
+            "supportedIds":["default-note","legacy-note","web-note"], "rawCollectionReferences":4, "visibleCollectionReferences":3,
             "automaticTitlePreserved":true,"manualTitlePreserved":true,"pinnedPreserved":true,"transcriptAndOriginalsPreserved":true,
+            "articleBytesAndMetadataPreserved":true,
         })).unwrap()).unwrap();
         println!("supported-note evidence: {}", root.display());
     }
@@ -433,6 +476,12 @@ mod tests {
         });
         let baseline: StorageValidationBaseline = serde_json::from_value(valid.clone()).unwrap();
         assert!(baseline.validate().is_ok());
+        assert!(serde_json::to_value(&baseline).unwrap().get("readyWebEngine").is_none());
+        let mut legacy = valid.clone();
+        legacy["readyWebEngine"] = serde_json::json!("chromium-141.0.7390.37-playwright-1.56.1");
+        let legacy_baseline: StorageValidationBaseline = serde_json::from_value(legacy.clone()).unwrap();
+        assert!(legacy_baseline.validate().is_ok());
+        assert_eq!(serde_json::to_value(legacy_baseline).unwrap(), legacy);
         for field in ["schemaVersion", "readyModels", "componentState", "componentFingerprint", "componentVersion", "supportedTaskIds", "collections", "readyComponents"] {
             let mut record = valid.clone();
             record.as_object_mut().unwrap().remove(field);
@@ -444,6 +493,7 @@ mod tests {
             ("componentState", serde_json::json!("ready")),
             ("componentFingerprint", serde_json::json!(" ")),
             ("componentVersion", serde_json::json!("")),
+            ("readyWebEngine", serde_json::json!("../outside")),
         ] {
             let mut record = valid.clone();
             record[field] = value;

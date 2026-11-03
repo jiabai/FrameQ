@@ -50,7 +50,7 @@ pub(super) fn validate(value:&Control)->Result<()> {
         || (value.active.mode=="managed" && value.active.legacy_output_root.is_some()) {
         return Err(StorageError::new("ControlInvalid"));
     }
-    let phases=["waiting","prepared","copying","verifying","publishing","restart_required","validating","cleaning"];
+    let phases=["waiting","prepared","copying","verifying","merging","publishing","restart_required","validating","cleaning"];
     let mut operation_ids=std::collections::HashSet::new();
     for pending in value.pending.iter().chain(value.cancelled_copy_refs.iter()) {
         if !phases.contains(&pending.phase.as_str()) || !valid_uuid(&pending.operation_id)||!valid_uuid(&pending.plan_token)||!operation_ids.insert(&pending.operation_id)
@@ -61,6 +61,7 @@ pub(super) fn validate(value:&Control)->Result<()> {
             || pending.files_completed>pending.files_total || pending.bytes_completed>pending.bytes_total {
             return Err(StorageError::new("ControlInvalid"));
         }
+        if pending.phase=="merging"&&!pending.merge{return Err(StorageError::new("ControlInvalid"));}
         let mut artifacts=std::collections::HashSet::new();
         for relocation in &pending.source_relocations{if !safe_absolute(&relocation.old_root)||!safe_absolute(&relocation.new_root)||relocation.old_root==relocation.new_root||relocation.root_identity!=pending.previous.root_identity||super::inventory::relocated_path(&relocation.new_root,&pending.source_relocations)!=pending.previous.data_root{return Err(StorageError::new("ControlInvalid"));}}
         for artifact in &pending.owned_artifacts {

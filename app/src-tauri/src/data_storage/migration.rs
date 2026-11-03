@@ -3,6 +3,10 @@ use crate::safe_filesystem;
 use std::{fs::{self,OpenOptions},io::{Read,Write},path::{Path,PathBuf},sync::atomic::Ordering};
 use sha2::{Digest,Sha256};
 
+#[cfg(test)]
+#[path="migration_progress_tests.rs"]
+mod progress_tests;
+
 impl DataStorageManager {
     pub(super) fn announce_waiting(&self,target:&Path,sources:&[PathBuf],window_id:&str,generation:u64)->Result<std::fs::File> {
         safe_filesystem::validate_ancestors(target)?;let target=target.canonicalize()?;let guard=safe_filesystem::open_directory(&target)?;let target_identity=safe_filesystem::file_identity(&guard)?;
@@ -10,13 +14,13 @@ impl DataStorageManager {
         let mut value=inner.control.clone().ok_or_else(||StorageError::new("ControlInvalid"))?;
         if value.active.generation!=generation{return Err(StorageError::new("StaleOperation"));}validate_active(&value.active)?;
         if let Some(p)=value.pending.as_ref(){if p.phase!="waiting"||p.target!=target||p.target_identity!=target_identity||p.window_id!=window_id{return Err(StorageError::new("StaleOperation"));}return Ok(guard);}
-        if fs::read_dir(&target)?.next().is_some(){return Err(StorageError::new("TargetConflict"));}
+        let merge=super::merge::requires_merge(&target,&value)?;
         let mut roots=vec![value.active.data_root.clone(),self.resource_root.clone()];roots.extend(sources.iter().cloned());if let Some(root)=&value.active.legacy_output_root{if root.is_absolute(){roots.push(root.clone());}}
         for root in roots{let root=if root.exists(){root.canonicalize()?}else{root};if target.starts_with(&root)||root.starts_with(&target){return Err(StorageError::new("UnsafePath"));}}
-        value.pending=Some(Pending{operation_id:uuid::Uuid::new_v4().to_string(),phase:"waiting".into(),previous:value.active.clone(),target,target_identity,inventory_hash:String::new(),plan_token:uuid::Uuid::new_v4().to_string(),window_id:window_id.into(),files_total:0,bytes_total:0,files_completed:0,bytes_completed:0,last_error:None,legacy_sources:sources.to_vec(),owned_artifacts:vec![],source_relocations:vec![]});
+        value.pending=Some(Pending{merge,operation_id:uuid::Uuid::new_v4().to_string(),phase:"waiting".into(),previous:value.active.clone(),target,target_identity,inventory_hash:String::new(),plan_token:uuid::Uuid::new_v4().to_string(),window_id:window_id.into(),files_total:0,bytes_total:0,files_completed:0,bytes_completed:0,last_error:None,legacy_sources:sources.to_vec(),owned_artifacts:vec![],source_relocations:vec![]});
         control::save(&self.config_root,&value)?;inner.control=Some(value);Ok(guard)
     }
-    pub(super) fn prepare_inner(&self,target:PathBuf,legacy_sources:Vec<PathBuf>,window_id:&str,generation:u64,mut validator:Option<&mut dyn FnMut(&DataPaths,&[PathBuf])->Result<serde_json::Value>>)->Result<MigrationPreview> {
+    pub(super) fn prepare_inner(&self,target:PathBuf,legacy_sources:Vec<PathBuf>,window_id:&str,generation:u64,mut validator:Option<&mut dyn FnMut(&DataPaths,&[PathBuf])->Result<serde_json::Value>>,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<MigrationPreview> {
         if self.cancelled.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}
         let mut value=self.snapshot()?;
         if value.active.generation!=generation{return Err(StorageError::new("StaleOperation"));}
@@ -27,7 +31,7 @@ impl DataStorageManager {
         let _target_guard=safe_filesystem::open_directory(&target)?;
         let previous_waiting=value.pending.as_ref().filter(|p|p.phase=="waiting"&&p.target==target&&p.window_id==window_id).cloned();
         if value.pending.is_some()&&previous_waiting.is_none(){return Err(StorageError::new("StaleOperation"));}
-        if fs::read_dir(&target)?.next().is_some()&&previous_waiting.is_none(){return Err(StorageError::new("TargetConflict"));}
+        let merge=match &previous_waiting {Some(p)=>p.merge,None=>super::merge::requires_merge(&target,&value)?};
         let mut roots=vec![value.active.data_root.clone(),self.resource_root.clone()];
         if let Some(root)=&value.active.legacy_output_root {if root.is_absolute(){roots.push(root.clone());}}
         roots.extend(legacy_sources.iter().cloned());
@@ -37,15 +41,21 @@ impl DataStorageManager {
         }
         let id=previous_waiting.as_ref().map_or_else(||uuid::Uuid::new_v4().to_string(),|p|p.operation_id.clone());
         self.recover_owned_artifacts(&mut value)?;
-        value.pending=Some(Pending{operation_id:id.clone(),phase:"waiting".into(),previous:value.active.clone(),target:target.clone(),target_identity,inventory_hash:String::new(),plan_token:uuid::Uuid::new_v4().to_string(),window_id:window_id.into(),files_total:0,bytes_total:0,files_completed:0,bytes_completed:0,last_error:None,legacy_sources:legacy_sources.clone(),owned_artifacts:vec![],source_relocations:vec![]});
+        value.pending=Some(Pending{merge,operation_id:id.clone(),phase:"waiting".into(),previous:value.active.clone(),target:target.clone(),target_identity,inventory_hash:String::new(),plan_token:uuid::Uuid::new_v4().to_string(),window_id:window_id.into(),files_total:0,bytes_total:0,files_completed:0,bytes_completed:0,last_error:None,legacy_sources:legacy_sources.clone(),owned_artifacts:vec![],source_relocations:vec![]});
         self.persist(&value)?;
-        recover_task_transactions(&value.active,&legacy_sources)?;
-        let estimate=inventory::estimate(&value.active,&legacy_sources,&value.cleanup_receipts,Some(&self.cancelled))?;
-        check_space(&target,&self.config_root,&estimate)?;
+        observer(PreflightProgress::stage(PreflightStage::SourceValidation))?;
+        recover_task_transactions(&value.active,&legacy_sources,&self.cancelled)?;
+        let estimate=inventory::estimate_with_progress(&value.active,&legacy_sources,&value.cleanup_receipts,Some(&self.cancelled),observer)?;
+        if !merge{check_space(&target,&self.config_root,&estimate)?;}
         let mut output_sources=vec![value.active.data_root.join("outputs")];output_sources.extend(legacy_sources.iter().cloned());if let Some(root)=value.active.legacy_output_root.as_ref(){if root.is_absolute(){output_sources.push(root.clone());}}
-        let validation=match validator.as_mut(){Some(capture)=>capture(&DataPaths::from_active(&value.active),&output_sources)?,None=>serde_json::Value::Null};
-        let mut inventory=inventory::build_cancellable(&value.active,&legacy_sources,&value.cleanup_receipts,Some(&self.cancelled))?;inventory.validation=validation;
+        observer(PreflightProgress::stage(PreflightStage::SourceValidation))?;
+        let validation=if merge {serde_json::Value::Null}else{match validator.as_mut(){Some(capture)=>capture(&DataPaths::from_active(&value.active),&output_sources)?,None=>serde_json::Value::Null}};
+        let hash_files=estimate.entries.iter().filter(|entry|!entry.directory).count()as u64;
+        let hash_bytes=estimate.entries.iter().filter(|entry|!entry.directory).try_fold(0u64,|total,entry|total.checked_add(entry.length).ok_or_else(||StorageError::new("InsufficientSpace")))?;
+        let mut inventory=inventory::build_with_progress(&value.active,&legacy_sources,&value.cleanup_receipts,Some(&self.cancelled),hash_files,hash_bytes,observer)?;inventory.validation=validation;
         if self.cancelled.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}
+        observer(PreflightProgress::stage(PreflightStage::TargetCheck))?;
+        if merge{return self.prepare_merge_inner(value,inventory,window_id,generation,observer);}
         let (required,available)=check_space(&target,&self.config_root,&inventory)?;
         safe_filesystem::check_identity(&target,target_identity)?;
         let meta=target.join(".frameq-storage");
@@ -57,19 +67,23 @@ impl DataStorageManager {
         let probe_root=self.create_owned_artifact(&mut value,"probe",None)?;
         let probe_guard=safe_filesystem::pin_directory(&probe_root)?;
         probe(&probe_root)?;
-        probe_destination_names(&probe_root,&inventory)?;
+        probe_destination_names(&probe_root,&inventory,&self.cancelled,observer)?;
         drop(probe_guard);
         self.recover_owned_artifacts(&mut value)?;
-        let pending=Pending{operation_id:id.clone(),phase:"prepared".into(),previous:value.active.clone(),target:target.clone(),target_identity,
+        let pending=Pending{merge:false,operation_id:id.clone(),phase:"prepared".into(),previous:value.active.clone(),target:target.clone(),target_identity,
             inventory_hash:inventory::digest(&inventory)?,plan_token:uuid::Uuid::new_v4().to_string(),window_id:window_id.into(),files_total:inventory.total_files,bytes_total:inventory.total_bytes,files_completed:0,bytes_completed:0,last_error:None,legacy_sources,owned_artifacts:vec![],source_relocations:vec![]};
         value.pending.as_mut().unwrap().inventory_hash=inventory::digest(&inventory)?;self.persist(&value)?;
         self.write_target_json(&mut value,&inventory::inventory_path(&target,&id),&inventory,inventory::MAX_INVENTORY)?;
-        let preview=MigrationPreview{plan_token:pending.plan_token.clone(),operation_id:id,generation,source_paths:inventory.sources.iter().map(|s|display(&s.path)).collect(),target_path:display(&target),total_files:inventory.total_files,total_bytes:inventory.total_bytes,required_bytes:required,available_bytes:available};
+        let preview=MigrationPreview{merge:false,plan_token:pending.plan_token.clone(),operation_id:id,generation,source_paths:inventory.sources.iter().map(|s|display(&s.path)).collect(),target_path:display(&target),total_files:inventory.total_files,total_bytes:inventory.total_bytes,required_bytes:required,available_bytes:available};
         if self.cancelled.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}value.pending=Some(pending);self.persist(&value)?;Ok(preview)
     }
     pub(super) fn start_inner(&self,token:&str,window:&str,progress:&mut dyn FnMut(StorageStateView))->Result<StorageStateView> {
+        self.start_inner_with_preflight(token,window,progress,&mut |_|Ok(()))
+    }
+    pub(super) fn start_inner_with_preflight(&self,token:&str,window:&str,progress:&mut dyn FnMut(StorageStateView),observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<StorageStateView> {
         let mut value=self.snapshot()?;
         let mut pending=value.pending.clone().ok_or_else(||StorageError::new("StaleOperation"))?;
+        if pending.merge{return self.start_merge_inner(token,window,progress,observer);}
         if pending.plan_token!=token||pending.window_id!=window||!matches!(pending.phase.as_str(),"prepared"|"copying"|"verifying"|"publishing") {return Err(StorageError::new("StaleOperation"));}
         safe_filesystem::check_identity(&pending.target,pending.target_identity)?;
         validate_active(&pending.previous)?;
@@ -77,10 +91,10 @@ impl DataStorageManager {
         let lock=safe_filesystem::open_lock_file(&pending.target.join(".frameq-storage/operation.lock"))?;
         lock.try_lock().map_err(|_|StorageError::new("Busy"))?;
         let inventory=inventory::read(&pending.target,&pending)?;
-        inventory::verify_sources_cancellable(&inventory,Some(&self.cancelled))?;
+        inventory::verify_sources_with_progress(&inventory,Some(&self.cancelled),observer)?;
         validate_operation_namespace(&pending.target,&pending,&value.cleanup_receipts,&value.cancelled_copy_refs,&inventory)?;
         let payload=inventory::payload_path(&pending.target,&pending.operation_id);create_safe_dirs(&payload)?;
-        check_resume_space(&pending.target,&self.config_root,&payload,&inventory,pending.phase=="publishing",&self.cancelled)?;
+        check_resume_space(&pending.target,&self.config_root,&payload,&inventory,pending.phase=="publishing",&self.cancelled,observer)?;
         if pending.phase!="publishing" {
             pending.phase="copying".into();pending.files_completed=0;pending.bytes_completed=0;pending.last_error=None;
             value.pending=Some(pending.clone());self.persist(&value)?;progress(self.state());
@@ -126,11 +140,12 @@ impl DataStorageManager {
     fn pending_preview_inner(&self,window_id:&str)->Result<MigrationPreview> {
         let mut value=self.snapshot()?;let p=value.pending.as_mut().ok_or_else(||StorageError::new("StaleOperation"))?;
         if p.phase!="prepared"{return Err(StorageError::new("StaleOperation"));}
+        if p.merge{return self.pending_merge_preview(window_id);}
         safe_filesystem::check_identity(&p.target,p.target_identity)?;
         let data=inventory::read(&p.target,p)?;inventory::verify_sources_cancellable(&data,Some(&self.cancelled))?;
         let(required,available)=check_space(&p.target,&self.config_root,&data)?;
         p.window_id=window_id.into();p.plan_token=uuid::Uuid::new_v4().to_string();
-        let preview=MigrationPreview{plan_token:p.plan_token.clone(),operation_id:p.operation_id.clone(),generation:value.active.generation,source_paths:data.sources.iter().map(|s|display(&s.path)).collect(),target_path:display(&p.target),total_files:data.total_files,total_bytes:data.total_bytes,required_bytes:required,available_bytes:available};
+        let preview=MigrationPreview{merge:false,plan_token:p.plan_token.clone(),operation_id:p.operation_id.clone(),generation:value.active.generation,source_paths:data.sources.iter().map(|s|display(&s.path)).collect(),target_path:display(&p.target),total_files:data.total_files,total_bytes:data.total_bytes,required_bytes:required,available_bytes:available};
         self.persist(&value)?;Ok(preview)
     }
     fn verify_destination(&self,inventory:&Inventory,root:&Path,value:&mut Control,pending:&mut Pending,mut callback:Option<&mut dyn FnMut(StorageStateView)>)->Result<()> {
@@ -160,6 +175,11 @@ impl DataStorageManager {
         self.wait_exclusive()?;
         let result=(||{
             p.phase="validating".into();p.files_completed=0;p.bytes_completed=0;value.pending=Some(p.clone());self.persist(&value)?;
+            if p.merge {
+                self.verify_merge_destination(&mut value,&mut p)?;
+                if let Some(check)=validator.as_mut(){check(&DataPaths::from_active(&value.active),&serde_json::Value::Null)?;}
+                value.pending=None;self.persist(&value)?;return Ok(());
+            }
             let inventory=inventory::read(&value.active.data_root,&p)?;
             // 已发布的数据项单独核对，操作库存及历史凭据只按受控命名空间排除。
             for entry in inventory::unique_entries(&inventory) {
@@ -185,44 +205,58 @@ fn check_space(target:&Path,config:&Path,inventory:&Inventory)->Result<(u64,u64)
     if stats.available_space()<required||fs4::available_space(config)?<2*control::MAX_CONTROL+1024*1024{return Err(StorageError::new("InsufficientSpace"));}
     Ok((required,stats.available_space()))
 }
-fn check_resume_space(target:&Path,config:&Path,payload:&Path,inventory:&Inventory,publishing:bool,cancel:&std::sync::atomic::AtomicBool)->Result<()> {
+fn check_resume_space(target:&Path,config:&Path,payload:&Path,inventory:&Inventory,publishing:bool,cancel:&std::sync::atomic::AtomicBool,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<()> {
     let stats=fs4::statvfs(target)?;let mut remaining=0u64;
+    let mut progress=PreflightProgress::stage(PreflightStage::TargetCheck);progress.total_files=Some(inventory.total_files);observer(progress.clone())?;
     for entry in inventory::unique_entries(inventory){
+        if !publishing&&cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}
         let candidate=if publishing&&target.join(&entry.destination).exists(){target.join(&entry.destination)}else{payload.join(&entry.destination)};
         let reusable=if entry.directory{candidate.is_dir()}else{
-            match safe_filesystem::hash_file_while(&candidate,||publishing||!cancel.load(Ordering::Acquire)){
+            progress.current_file_bytes=0;
+            progress.current_file_total_bytes=match fs::symlink_metadata(&candidate){Ok(meta)=>meta.len(),Err(error) if error.kind()==std::io::ErrorKind::NotFound=>0,Err(error)=>return Err(error.into())};
+            observer(progress.clone())?;let base=progress.completed_bytes;
+            let reusable=match safe_filesystem::hash_file_with_progress(&candidate,||publishing||!cancel.load(Ordering::Acquire),|bytes|{
+                if bytes>progress.current_file_total_bytes{return Err(std::io::Error::new(std::io::ErrorKind::InvalidData,"SourceChanged"));}
+                progress.current_file_bytes=bytes;progress.completed_bytes=base.checked_add(bytes).ok_or_else(||std::io::Error::other(StorageError::new("ControlLimit")))?;
+                observer(progress.clone()).map_err(std::io::Error::other)
+            }){
                 Ok(v)=>v.0==entry.length&&v.1==entry.sha256,
-                Err(e) if e.kind()==std::io::ErrorKind::Interrupted=>return Err(e.into()),Err(_)=>false,
-            }
+                Err(e) if e.kind()==std::io::ErrorKind::Interrupted||e.get_ref().is_some_and(|error|error.downcast_ref::<StorageError>().is_some())=>return Err(e.into()),Err(_)=>false,
+            };progress.completed_files+=1;observer(progress.clone())?;reusable
         };
         if !reusable {remaining=remaining.checked_add(entry.length).and_then(|v|v.checked_add(stats.allocation_granularity())).ok_or_else(||StorageError::new("InsufficientSpace"))?;}
     }
     if stats.available_space()<remaining.saturating_add(64*1024*1024)||fs4::available_space(config)?<2*control::MAX_CONTROL+1024*1024{return Err(StorageError::new("InsufficientSpace"));}Ok(())
 }
-fn probe(root:&Path)->Result<()> {
+pub(super) fn probe(root:&Path)->Result<()> {
     let a=root.join("probe-a");let b=root.join("probe-b");
     let mut file=OpenOptions::new().write(true).create_new(true).open(&a)?;file.write_all(b"FrameQ storage probe")?;file.sync_all()?;drop(file);
         if safe_filesystem::hash_file(&a)?.0!=20{return Err(StorageError::new("VerificationFailed"));}
     fs::rename(&a,&b)?;let _file=safe_filesystem::open_regular(&b)?;drop(_file);fs::remove_file(b)?;Ok(())
 }
-fn probe_destination_names(operation:&Path,inventory:&Inventory)->Result<()> {
+pub(super) fn probe_destination_names(operation:&Path,inventory:&Inventory,cancel:&std::sync::atomic::AtomicBool,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<()> {
+    let mut progress=PreflightProgress::stage(PreflightStage::TargetCheck);progress.total_files=Some(inventory.total_files);observer(progress.clone())?;
     let root=operation.join("name-probe");fs::create_dir(&root).map_err(name_probe_error)?;
     let root_identity=safe_filesystem::identity(&root)?;
     let mut created:Vec<(PathBuf,bool,crate::safe_filesystem::DirectoryIdentity)>=vec![];
     let result=(||{
         let mut expected=std::collections::BTreeMap::new();
         for entry in inventory::unique_entries(inventory){
+            if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}
             if expected.insert(entry.destination.clone(),entry.directory).is_some_and(|directory|directory!=entry.directory){return Err(StorageError::new("TargetConflict"));}
             let mut parent=entry.destination.parent();while let Some(path)=parent{if path.as_os_str().is_empty(){break;}if expected.insert(path.into(),true)==Some(false){return Err(StorageError::new("TargetConflict"));}parent=path.parent();}
         }
         let mut entries:Vec<_>=expected.iter().collect();entries.sort_by_key(|(path,directory)|(path.components().count(),!**directory));
         for (relative,directory) in entries {
+            if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}
             let path=root.join(relative);
             let parent=safe_filesystem::pin_directory(path.parent().ok_or_else(||StorageError::new("UnsafePath"))?)?;
             if *directory {parent.create_dir(path.file_name().ok_or_else(||StorageError::new("UnsafePath"))?).map_err(name_probe_error)?;created.push((path.clone(),true,safe_filesystem::identity(&path)?));}
             else {let file=parent.create_new(path.file_name().ok_or_else(||StorageError::new("UnsafePath"))?).map_err(name_probe_error)?;let identity=safe_filesystem::file_identity(&file)?;drop(file);created.push((path,false,identity));}
+            if !*directory{progress.completed_files+=1;}observer(progress.clone())?;
         }
-        let mut actual=std::collections::BTreeSet::new();collect_relative(&root,&root,&mut actual)?;
+        if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}
+        let mut actual=std::collections::BTreeSet::new();collect_relative_with_cancel(&root,&root,&mut actual,Some(cancel))?;
         if actual!=expected.into_keys().collect(){return Err(StorageError::new("TargetConflict"));}Ok(())
     })();
     let cleanup=(||{
@@ -258,11 +292,15 @@ fn copy_entry(entry:&Entry,destination:&Path,partial_root:&Path,cancel:&std::syn
     Ok(())
 }
 fn collect_relative(root:&Path,path:&Path,entries:&mut std::collections::BTreeSet<PathBuf>)->Result<()> {
+    collect_relative_with_cancel(root,path,entries,None)
+}
+fn collect_relative_with_cancel(root:&Path,path:&Path,entries:&mut std::collections::BTreeSet<PathBuf>,cancel:Option<&std::sync::atomic::AtomicBool>)->Result<()> {
+    if cancel.is_some_and(|value|value.load(Ordering::Acquire)){return Err(StorageError::new("Cancelled"));}
     let _guard=safe_filesystem::open_directory(path)?;
-    for item in fs::read_dir(path)? {let path=item?.path();let meta=fs::symlink_metadata(&path)?;
+    for item in fs::read_dir(path)? {if cancel.is_some_and(|value|value.load(Ordering::Acquire)){return Err(StorageError::new("Cancelled"));}let path=item?.path();let meta=fs::symlink_metadata(&path)?;
         if crate::atomic_files::is_link_or_reparse_point(&meta){return Err(StorageError::new("UnsafePath"));}
         entries.insert(path.strip_prefix(root).map_err(|_|StorageError::new("UnsafePath"))?.into());
-        if meta.is_dir(){collect_relative(root,&path,entries)?;}else {let _f=safe_filesystem::open_regular(&path)?;}
+        if meta.is_dir(){collect_relative_with_cancel(root,&path,entries,cancel)?;}else {let _f=safe_filesystem::open_regular(&path)?;}
     }Ok(())
 }
 fn publish(target:&Path,payload:&Path,inventory:&Inventory)->Result<()> {
@@ -377,10 +415,10 @@ fn validate_temporary_references(operation:&Path,pending:&Pending)->Result<()> {
         else {let file=safe_filesystem::open_regular(&artifact.path())?;let identity=safe_filesystem::file_identity(&file)?;if reference.identity.is_some_and(|id|id!=identity)||file.metadata()?.len()>reference.expected_length{return Err(StorageError::new("TargetConflict"));}}
     }Ok(())
 }
-fn recover_task_transactions(active:&ActiveStorage,sources:&[PathBuf])->Result<()> {
+pub(super) fn recover_task_transactions(active:&ActiveStorage,sources:&[PathBuf],cancel:&std::sync::atomic::AtomicBool)->Result<()> {
     let mut roots=vec![active.data_root.join("outputs")];roots.extend(sources.iter().cloned());
     if let Some(root)=&active.legacy_output_root {if root.is_absolute(){roots.push(root.clone());}}
-    for root in roots {let tasks=root.join("tasks");if !tasks.exists(){continue;}let _guard=safe_filesystem::open_directory(&tasks)?;
-        for task in fs::read_dir(&tasks)? {let task=task?.path();if task.join(".frameq-artifact-transaction.json").exists(){let _guard=safe_filesystem::open_directory(&task)?;crate::task_manifest::recover_task_artifacts(&task).map_err(|_|StorageError::new("TaskRecoveryFailed"))?;}}
+    for root in roots {if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}let tasks=root.join("tasks");if !tasks.exists(){continue;}let _guard=safe_filesystem::open_directory(&tasks)?;
+        for task in fs::read_dir(&tasks)? {if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}let task=task?.path();if task.join(".frameq-artifact-transaction.json").exists(){let _guard=safe_filesystem::open_directory(&task)?;crate::task_manifest::recover_task_artifacts(&task).map_err(|_|StorageError::new("TaskRecoveryFailed"))?;}}
     }Ok(())
 }
