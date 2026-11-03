@@ -888,6 +888,7 @@ mod tests {
             .as_nanos();
         let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
         fs::create_dir_all(&dir).expect("create temp dir");
+        #[cfg(unix)] let dir = dir.canonicalize().expect("canonical temp dir");
         dir
     }
 }
