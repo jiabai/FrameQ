@@ -101,7 +101,7 @@ final class WebPageHost {
         guard Bundle.main.bundleIdentifier == "com.frameq.webview-host" else { throw HostFailure.invalidHost }
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
-              SecCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSNoNetworkAccess), nil) == errSecSuccess else {
+              SecCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate | SecCSFlags.noNetworkAccess.rawValue), nil) == errSecSuccess else {
             throw HostFailure.invalidHost
         }
         var staticCode: SecStaticCode?
