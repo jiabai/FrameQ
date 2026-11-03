@@ -2,12 +2,12 @@
 
 ## Status
 
-The user confirmed automatic LLM title generation after transcription, with submission-time disclosure of the cloud call and one additional AI Credit. On 2026-10-31, the user approved the written implementation plan and requested implementation in the main thread.
+Automatic LLM title generation follows transcription and consumes one additional AI Credit. The Home composer omits the title-generation disclosure paragraph.
 
 ## User-visible behavior
 
 - A newly created URL or local-media note automatically generates its title after the authoritative transcript has been saved successfully.
-- Before explicit submission, the composer discloses that transcript-derived text will be sent to the configured cloud LLM to generate the note title, and that the managed call consumes one additional AI Credit. This copy is available in Simplified Chinese, Traditional Chinese, and English.
+- The Home composer does not display the automatic-title cloud-call and extra-Credit paragraph in Simplified Chinese, Traditional Chinese, or English. Controls do not reference the removed paragraph through accessibility descriptions.
 - The title uses the UI language captured at submission. Changing the interface language during processing does not change that request's output language or translate an already saved title.
 - The title is a concise description grounded in the transcript: normally 12–24 Chinese characters or at most 10 English words. The persisted value is trimmed, non-empty, single-line plain text with at most 60 Unicode characters. The model receives an explicit title-delivery schema; empty, malformed, over-limit, or control-character output fails validation without an automatic repair call.
 - Title generation is a visible processing step with cancellation. The note is considered fully complete only after this step succeeds. Notes with an already saved transcript remain available if title generation fails, is cancelled, or cannot start because quota is unavailable.

@@ -1,6 +1,105 @@
 # FrameQ Architecture
 
+## Webpage notes and shared source text
+
+- `web_page.rs` owns the webpage operation, native data permit, reserved worker lane and
+  independent native helper. Windows uses the installed Stable WebView2 Runtime through direct
+  COM interfaces; macOS uses WKWebView in a separate sandboxed helper app. The helper initializes
+  no Tauri runtime, application IPC, asset handler, host object or page message bridge. The
+  parent verifies its bundled executable manifest, file identity and hash before execution.
+- `begin_web_page` synchronously registers a window-bound Pending operation and acknowledges
+  with JSON `null`. The long `process_web_page` call adopts only that matching registration;
+  the webpage request retains
+  exactly `contract_version`, `url` and `operation_id`. Pending registration owns no browser,
+  worker, proxy or downloaded files. Cancellation removes Pending or signals its adopted claim.
+  React installs the real event listener, awaits the acknowledgement and rechecks its AbortSignal
+  before invoking the long command. Unmount cancellation reaches native cleanup independently of
+  UI liveness; an invoked long command remains awaited until its actual terminal cleanup.
+- Native admission and close/exit/restart guards share one barrier. Closing removes Pending,
+  cancels adopted claims and waits for webpage activity as well as data permits and
+  worker lanes. A claim that has not yet acquired its data permit still prevents premature exit;
+  new registration or adoption is rejected once closing starts.
+- Windows requires Stable WebView2 143.0.3650.58 or later and checks the actual COM capabilities
+  and unsafe Runtime configuration overrides. Each operation gets an exclusive UDF and InPrivate
+  controller. macOS requires version 14 or later, an independent `com.frameq.webview-host` app,
+  a nonpersistent data store and a task-specific HTTP CONNECT proxy configured before loading.
+  Stored note readers and AI operations require neither helper nor browser preparation.
+- The application build compiles the small native helper and the existing article extraction
+  bundle in sequence. It does not package or download Chromium, Playwright or a Node driver.
+  Missing or unsupported system capabilities fail the current webpage operation. The component
+  preparation commands, download UI and old browser-component release tasks are removed.
+- `app/src/articleExtraction/` supplies the verified Readability/DOMPurify/Turndown bundle.
+  Native WebView2 CDP or WKContentWorld executes it in the current main document's isolated
+  JavaScript world after bounded stable samples. Host messages bind operation, session and
+  navigation generation; page script cannot authorize a save or choose a task directory.
+  Windows keeps native Cookie/CORS/network behavior and checks observable HTTP resources.
+  Policy checks use 16 active slots and a bounded queue of 512 entries instead of a cumulative
+  request limit. Denied subresources are blocked individually; denied main documents terminate.
+  Queue and active deadlines, native navigation completion, DOM stability and article validation
+  remain required. Helpers emit bounded closed-category policy diagnostics without request URLs.
+  Windows also tracks native CDP request completion for document/script/style/XHR/Fetch work,
+  bounds completed encoded transfers to 64 MiB and resamples if loading changes during extraction.
+  macOS keeps WebKit behavior and applies the public-address proxy to its configured HTTP(S)
+  paths. Platform limits, including incomplete private-network and system-process control,
+  are recorded in `docs/design-docs/2026-11-02-system-webview-extraction.md`.
+- Python receives only a validated version 2 article request through `--save-web-page-stdin`:
+  operation ID, preallocated task ID, title, canonical source URL, text and Markdown. It performs
+  no webpage loading. TaskStore publishes both article files and the schema 4 manifest in one
+  recoverable transaction. Webpage stdin/stdout permit up to 40 MiB of encoded JSON; text remains
+  limited to 2 MiB and Markdown to 4 MiB. Other worker requests retain their existing limits.
+- Media remains schema 3. Webpage schema 4 has `source_kind=web_page`, `source_identity=null`,
+  `model=null`, `transcript=null` and explicit webpage title/time. Formal article paths are
+  `article/article.txt` and `article/article.md`. Native and worker admission reject mixed sources.
+- The shared SourceText reader selects the formal TXT by verified source kind, retains raw UTF-8
+  bytes and SHA-256, and checks file/directory identity and bounds. Summary, inspiration and
+  dissection use this source. Article dissection schema 2 names its source kind and hash; its
+  references address TXT byte ranges. The article view displays that exact source when highlighting.
+  Draft inputs remain the selected inspiration, preferences and optional existing summary.
+- AI retries preserve article metadata and both formal article files. Webpage results are rebuilt
+  from those files before Rust validates the terminal result against the saved task. Notes,
+  Collection membership, local metadata, deletion and migration use the same task authority.
+  Migration preserves old runtime files in its inventory and accepts the optional schema 1
+  `readyWebEngine` field; it no longer starts a retired webpage-engine probe.
+
+- New operation workspaces use `cache/.frameq-system-webviews/<operation_id>/` and retain an
+  immutable owner receipt, bounded process records and a save receipt binding the preallocated
+  task ID to the expected title, source and article hashes. A real publication interrupted before
+  stdout is recovered only from that exact formal task and validated artifacts. The old
+  `.frameq-web-pages` ownership recovery remains supported; installed old component files are
+  retained without downloads, execution or probing.
+  Recovery checks directory and executable identities, native process birth time, command ownership
+  and recorded ancestry before terminating a matching orphan. Windows uses process handles and
+  creation FILETIME; macOS uses native microsecond birth time and process groups. Existing
+  root receipts bind one exact instance; a new process with identical arguments is not adopted.
+  The application owner is identified by its real PID, birth time, absolute executable path and
+  file identity; its no-follow executable reader also verifies the parent directory identity and
+  permits hard links created for the same application by Cargo. New helper and worker identities
+  remain strict. System WebView2 executables may use legitimate Runtime hard links, with native
+  process identity, ancestry and the physically verified UDF establishing ownership. The owner
+  PID is rejected from the terminable member set.
+  Temporary-tree removal binds the verified directory identity to native handles/file descriptors.
+- The webpage worker belongs to a Windows kill-on-close Job or independent Unix process group
+  before receiving stdin. Its root terminal path clears remaining group members before joining
+  pipe readers, including descendants that outlive the root and inherit stdout/stderr.
+- Work has one 90-second deadline. Parent-observed completion, cancellation or failure starts
+  one shared 15-second cleanup budget for the native host and owned cache. Windows closes the
+  controller, observes BrowserProcessExited and reaps verified owned members. macOS reaps the
+  helper and save worker; all WebKit XPC PIDs, total RSS and immediate system-service release
+  are outside the public API guarantee.
+- An uncertain cleanup pauses its physical library for the rest of the process. Ordinary data
+  commands, migration and old-copy cleanup refuse access; checking again cannot clear this state.
+  Controlled restart revalidates durable receipts before the storage gate exposes normal Ready.
+
 ## Data storage authority and recovery
+
+- Preflight work has a separate window/request/generation-bound in-memory session. Synchronous
+  registration precedes the long command; migration and cleanup use one active claim and retain
+  ownership until the worker actually exits. `data-storage-preflight-progress` carries monotonic
+  sequence numbers, closed stages, nullable totals and real file/chunk counts. It never changes
+  durable migration phases or writes the control record on each progress tick. Preparation,
+  resume source rechecks and target checks report their actual work; completed preview tokens
+  remain revocable by their original request. Superseding a request invalidates old withdrawal
+  authority. Commit/restart validation and actual deletion retain their non-cancellable boundary.
 
 - The system app-local directory is the fixed configuration root. It owns `.env`, authentication,
   UI/update/Inspiration preferences, application logs, and the bounded `data-storage.json` control
@@ -25,6 +124,16 @@
   and SHA-256 inventory. Copies and source rechecks complete before target publication and atomic
   control replacement. Errors retain the durable phase; precommit cancellation releases the old
   library and persists identifiable partial copies for explicit continuation.
+- A nonempty selected destination uses a persistent directory merge. Existing files win by
+  relative path and filename, and the corresponding source files are removed without a content
+  comparison. Missing files move through no-replace rename on one volume or verified copy and
+  source removal across volumes. Destination-only data remains in place. Once `merging` starts,
+  data permits remain paused through failures and process restarts until the operation continues
+  and commits. Empty destinations retain the copy migration flow.
+- Merge commits the source library ID with its next generation to the destination marker and
+  fixed control record. History and Draft artifacts scan the merged task tree using relative
+  paths; an existing destination `collections.json` remains authoritative. Restart validation
+  checks the actual merged destination and its offline model/component state.
 - Target probes and metadata temporaries have durable operation ownership, physical identity and
   expected-content records. Uncertain interrupted material remains referenced; re-preparation uses
   a new operation and confirmation. Sources changed after cancellation likewise require a new
@@ -33,8 +142,10 @@
 - A committed location stays paused until controlled restart. New-process validation checks the
   current physical library, task/Collection data and inventory. The formal supervised worker runs
   a read-only offline storage probe: existing model readiness and component fingerprint/import
-  results are compared with the pre-migration baseline. Missing, stale or previously unavailable
-  components retain their status without downloads, ASR, generation or checkout. Successful
+  results are compared with the pre-migration baseline for copy migration; merge validation captures
+  and verifies the actual committed destination. Missing, stale or previously unavailable
+  components retain their status without downloads, ASR, generation or checkout. Retired webpage
+  runtime files retain inventory/hash/copy checks without browser execution. Successful
   validation ends the pending migration; cleanup receipts alone do not block normal use.
 - `StorageBootstrap` follows locale initialization and precedes `App`. It subscribes before reading
   storage state and mounts data views only after native Ready. Invalid/offline storage and a browser
@@ -148,7 +259,8 @@
   `insight_errors.py` owns shared generation errors, and `ai_artifacts.py` owns shared artifact
   payload commits. The task retry application keeps `TaskStoreFacade.finalize()` as the owner of
   complete artifact/manifest transactions and preservation of previous successful results.
-- The three extraction agents expose only their delivery tools. Official transcript content,
+- The three extraction agents expose only their delivery tools. Official source text from the
+  verified media transcript or webpage article,
   generation instructions and this run's agent context enter supplier requests; preferences enter
   only inspiration. Video, audio, source URLs, other task files, retrieval, skills and external
   execution stay outside these three agents. FrameQ server receives only account and checkout
@@ -1416,7 +1528,7 @@ graph LR
 - worker 运行期使用 `frameq_worker` 内的 AI 模块及 `agent_runtime` 依赖，不跨目录导入
   外部参考项目或本仓库 server 代码。
 - 对外分发态的最终产物、缓存、模型、运行组件与合集均从当前数据位置派生；Legacy 保留有效旧输出解释，Managed 采用统一数据根。每个 worker 命令的输出、缓存、模型、组件路径来自同一快照，配置根与 cwd 保持固定。
-- 历史记录从当前有效输出根的受支持任务 manifest 读取。位置迁移按完整应用库存保留 task ID、相对产物路径、合集成员与原件；重启后重新生成绝对路径。
+- 历史记录从当前有效输出根的受支持任务 manifest 读取。位置迁移保留 task ID 与相对产物路径，重启后重新生成绝对路径。空目标保留原件；已有目录合并按相对路径同名文件的目标优先规则移动或删除源文件，目标合集文件优先。
 - 灵感失败不得阻断文字稿结果，客户端进入 `部分完成` 状态。
 
 ## 层级边界

@@ -1,6 +1,121 @@
 # Security and Compliance
 
+## Webpage extraction isolation
+
+- Remote pages run in an independent native helper with the system WebView: direct WebView2 COM
+  on Windows, or WKWebView in its own macOS helper app. They have no Tauri runtime, application
+  origins, asset handler, host objects or page message bridge. Each operation uses a new exclusive
+  InPrivate UDF on Windows or nonpersistent data store on macOS, without importing user browser
+  credentials or the main app's session. The helper environment is explicitly constructed and
+  receives no account or LLM configuration. Its versioned stdin/stdout protocol accepts only
+  closed fields with matching operation/session and navigation generation.
+- Windows uses Stable Runtime 143.0.3650.58 or later, validates COM capabilities and rejects unsafe
+  Runtime overrides. Before navigation it disables web messages, host objects, SSO, autofill,
+  password saving, developer tools and default UI, then installs native denial of permissions,
+  new windows, external schemes, downloads, authentication and invalid certificates. A deferrable
+  `_22` resource event submits observable HTTP requests to the parent's public-address DNS check;
+  denial, timeout or cancellation supplies an explicit blocking response. The native network
+  retains Cookie/CORS behavior. DNS admission does not pin WebView2's actual connection address.
+- The macOS helper has its own `com.frameq.webview-host` identifier and App Sandbox entitlement,
+  with only `network.client`; no inherited app sandbox, file/device/location grants, app groups or
+  shared credentials. Its data store receives a task-specific HTTP CONNECT proxy before loading,
+  with failover disabled. Delegates cancel unsafe navigation, uploads, new windows, downloads,
+  script dialogs, camera/microphone and HTTP/proxy/client-certificate authentication. ServerTrust
+  uses system default handling and rejects trust failures. Final signed app/DMG entitlement and
+  sandbox behavior require validation on macOS before release.
+- The macOS proxy binds a random loopback port, has no authentication/file/admin endpoint, rejects
+  DNS answer sets containing private/reserved addresses, and connects to a validated public IP.
+  Each CONNECT tunnel retains its permit until closure. Limits apply to visible paths: Windows
+  permits 16 policy decisions in flight and 512 queued requests, with two-second active and
+  ten-second queue deadlines; macOS permits 16 active proxy connections with admission backpressure
+  and 64 MiB of proxy-visible traffic. CONNECT tunnels release their permits after five seconds
+  without actual transferred bytes. Cumulative request counts do not terminate valid pages.
+  Unsafe main documents terminate; unsafe subresources are individually blocked. Extraction still
+  requires native navigation completion, completed document policy checks, stable DOM and valid
+  article content. Diagnostics persist only closed reason/resource categories, capped at 16 records
+  per helper. Neither platform provides a
+  complete private-network firewall: resource events and HTTP proxies do not cover every native
+  network path, including macOS WebRTC. Browser flags do not establish an additional guarantee.
+- Windows additionally observes native CDP Document/Script/Stylesheet/XHR/Fetch completion before
+  accepting a stable article, with 1024 tracked requests and a 64 MiB completed encoded-byte budget.
+  This completion-time accounting excludes unfinished/failed payloads and other transport paths;
+  it is not a pre-download bound for all Runtime traffic. A changed network revision during
+  extraction discards the candidate and repeats stable sampling. Main HTTP errors are rejected.
+  macOS delegates cannot observe each HTTPS-tunneled fetch completion; its native navigation,
+  policy-settlement and stable-DOM checks retain that platform limitation.
+- Native URL admission permits HTTP(S) on ports 80/443, rejects userinfo and private/reserved
+  hosts, and repeats validation independently of React. Persisted URLs discard fragments and
+  all query fields except bounded numeric article identifiers/page numbers. Raw request URLs
+  remain in memory/stdin and never enter argv, environment, diagnostics or account traffic.
+- Webpage processing requires a native Pending registration before
+  the long command. The synchronous begin command validates the closed arguments and `main`
+  window, binds the registration to that window and operation, and acknowledges with JSON `null`.
+  The long webpage call must also match its original validated request. Cancelled registration
+  cannot be adopted by a late long call. Registration itself creates no process or filesystem
+  resources. The client rechecks cancellation after listener setup and acknowledgement, and
+  unmount cancellation continues to reach native cleanup after UI callbacks become inactive.
+- Registration and adoption use the same native barrier as window close, application exit and
+  restart. Closing cancels Pending and active claims and waits for adopted claims even before
+  they acquire a data permit. Subsequent begin/long commands cannot enter after closing starts.
+  Active calls retain their real terminal/cleanup wait; cancellation does not synthesize success
+  or release resources on a frontend-only timeout.
+- Limits cover observable requests, main navigation, DOM admission, article sizes, extraction time,
+  stable samples and attributable process RSS. Work has one 90-second deadline, including 15-second
+  readiness, 60-second navigation and 2-second extraction callback limits. Parent-observed terminal
+  work or cancellation starts one shared 15-second cleanup budget. Windows closes the controller
+  and observes BrowserProcessExited before reaping verified Job members and cache. macOS closes
+  its proxy and reaps its helper/save worker; all WebKit XPC PIDs, total RSS and immediate service
+  cleanup are outside public API control. Cancellation is matched to the operation and
+  window; a reserved worker lane excludes competing submissions. A root terminal result does not
+  leave pipe-inheriting descendants alive while Rust waits for readers.
+- Recovery receipts bind directory identity, native high-precision process birth time, executable
+  identity, operation arguments and ancestry. Existing root records never authorize a replacement
+  instance with the same profile/UUID. The application owner is identified by its actual PID,
+  birth time, absolute executable path and file identity. Its executable may have Cargo-created
+  hard links; the owner reader still rejects symbolic links/reparse points and checks the parent identity.
+  The owner PID cannot enter the terminable member set. New helper and worker executables retain
+  strict identity checks. Windows system Runtime hard links require verified native process
+  identity, ancestry and the operation's actual UDF; they do not authorize an arbitrary matching
+  filename. Old receipts retain their own stricter executable protocol. Temporary deletion uses
+  identity-bound native handles on Windows and no-follow relative directory descriptors on macOS,
+  preserving unrelated replacement content.
+- Uncertain cleanup retains its receipt and pauses the physical library for the rest of the
+  process. Ordinary data access, migration and old-copy cleanup refuse new work; Check again
+  cannot clear this condition. A controlled restart rechecks durable ownership before Ready.
+- Extraction runs against a cloned document in an isolated JavaScript world. Stored Markdown
+  excludes active HTML, embedded remote images and unsafe links. Reading and reference highlights
+  use local formal artifacts; Markdown cannot invoke native commands or fetch embedded content.
+- Rust preallocates the task ID and records the expected title, canonical URL and article hashes.
+  Python `--save-web-page-stdin` validates version 2 fields and atomically publishes the article
+  files and schema 4 manifest. Recovery after publication but before stdout validates that exact
+  formal task; unknown IDs, changed hashes or corrupted receipts fail with retained evidence.
+  The operation's JSON encoding limit is 40 MiB, with raw text/Markdown limited to 2/4 MiB.
+- Only an explicit existing AI confirmation allows source-derived content to reach the configured
+  AI supplier. Drafts send their existing inspiration/preferences/summary inputs. Account services
+  retain billing responsibilities and receive no webpage body, source requests, browser cookies,
+  profile contents or local note history.
+
+Windows system-WebView validation has saved and reopened real static/JavaScript pages with Runtime
+156.0.4314.58, released the exclusive UDF, and cancelled a real loading operation before successfully
+saving another note. Exact evidence and current regression/desktop progress are in the system-WebView
+execution plan. Legacy independent-Chromium tests do not establish acceptance of this backend.
+macOS compilation, final signatures, Sandbox behavior and runtime acceptance remain unverified in
+this Windows environment. System-host private-network, WebSocket/WebRTC, authentication and permission
+canaries require separate recorded results; no all-network isolation claim follows from basic page
+success. Paid supplier acceptance remains skipped at the user's request.
+
 ## Data location, migration and recovery
+
+- Preflight registration and cancellation bind canonical request IDs to the actual native window
+  and library generation. Cancellation invalidates late events/previews, interrupts real file
+  reads and supervised validation, and waits for the real claim to finish before unfreezing data
+  actions. A cancelled completed preview loses its matching migration plan or cleanup token;
+  older requests cannot cancel a newer preparation. Closing a window prevents late claims and
+  waits for active preflight work. Non-cancellable commit/deletion work retains its protection.
+- Cleanup preview holds a normal data permit, scans both copies with no-follow identity and
+  SHA-256 checks, and rechecks library/receipt identity and cancellation before issuing a token.
+  Confirmed deletion repeats the original two-end checks and identity-bound removal. Progress
+  includes numeric byte counts without filenames; no progress data is uploaded.
 
 - The fixed system configuration root retains authentication, `.env`, preferences, application
   logs, the bounded storage-control record and process lock. Migratable data includes only the
@@ -9,8 +124,9 @@
 - Native folder selections produce purpose/window/generation/physical-identity-bound tokens.
   Migration and cleanup accept native identifiers and one-use confirmation tokens; frontend paths
   never authorize copying or deletion. Revalidate source/target identities, ancestors, no-follow
-  access, hard links and containment at mutation boundaries; reject nesting, aliases, unrelated
-  targets, conflicting task trees and ambiguous legacy ownership.
+  access, hard links and containment at mutation boundaries; reject nesting, aliases, incompatible
+  file/directory types and ambiguous legacy ownership. A nonempty destination may retain unrelated
+  files; only inventoried application source files participate in a merge.
 - A global native data permit covers ordinary work on both worker lanes and every implicit data write, including
   scan recovery, task transactions, accepted deletion cleanup and audio-cache preparation. Exclusive
   migration/cleanup drains permits and refuses new ones. Frontend Preparing allows existing
@@ -21,6 +137,14 @@
   authority. Failure retains the actual durable phase; explicit precommit cancellation preserves
   old authority and identifiable partial copies. Publication and postcommit validation cannot be
   cancelled into an old writable library.
+- For a user-confirmed nonempty-directory merge, a destination file with the same relative path
+  wins even when its contents differ. Source deletion uses type and physical-identity checks,
+  without comparing the duplicate file contents. Missing destination files use no-replace moves
+  or verified cross-volume copying before source deletion. Durable per-file records allow
+  continuation after termination; `merging` cannot release the partially moved source for normal
+  data use. Empty source application directories are removed without recursively deleting shared
+  roots, fixed configuration or unrelated files. Destination metadata is preserved alongside the
+  new operation; the committed marker and control record establish the resulting authority.
 - Windows pins destination ancestors and retains the partial-file handle through verification and
   no-replace installation. Unix traversal and installation use no-follow directory descriptors and
   relative filesystem operations. Interrupted probes with uncertain children are retained, and
@@ -29,11 +153,17 @@
   Offline, replaced or invalid storage enters recovery without creating a default empty library.
   Relinking accepts the same physical library with matching identity/generation, including a drive
   letter change; copied markers and older clones do not establish authority.
-- First-restart validation uses the formal supervised worker's read-only offline probe and a
-  pre-migration readiness baseline. It validates existing model caches and, only for a previously
+- First-restart validation uses the formal supervised worker's read-only offline probe. Copy
+  migration uses its pre-migration readiness baseline; directory merge captures and verifies the
+  actual committed destination, including destination-priority tasks, Collections and components.
+  It validates existing model caches and, only for a previously
   ready matching component version, performs real component imports from its verified package
-  directory. It creates no model/cache/component content, downloads nothing, runs no ASR or paid
-  generation, and preserves missing/stale/unavailable state. Its subprocess clears inherited
+  directory. Model/component contents remain unchanged. The optional schema 1 `readyWebEngine`
+  field remains readable for older migration records. Retired webpage runtime files retain ordinary
+  inventory/hash/copy checks without an executable browser probe. Old ownership receipts remain
+  recoverable, and uncertain cleanup pauses the library.
+  Validation downloads nothing, runs no ASR or paid generation, and preserves
+  missing/stale/unavailable state. Its subprocess clears inherited
   provider/session/proxy variables, uses fixed resource/configuration paths and the explicit data
   snapshot, disables bytecode writes and sets offline flags. Opaque legacy bytes remain untrusted.
 - The cancellable preflight probe starts only after ordinary data permits have drained. Its scoped
@@ -971,7 +1101,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 ## Local Data
 
 - `outputs/tasks/<task_id>/` 存放用户最终产物和 `frameq-task.json`，默认不提交仓库。
-- 用户通过设置中的数据存储位置迁移主要本机资料；Legacy 模式兼容已有 `FRAMEQ_OUTPUT_DIR`，Managed 模式采用受控数据根。迁移保留原件，清理需要明确确认。
+- 用户通过设置中的数据存储位置迁移主要本机资料；Legacy 模式兼容已有 `FRAMEQ_OUTPUT_DIR`，Managed 模式采用受控数据根。空目标迁移保留原件，清理需要明确确认；已有目录合并采用已经确认的目标同名文件优先规则，移动文件并删除重复源文件。
 - 当前数据根的 `cache/tasks/<task_id>/` 存放下载缓存、中间文件和调试产物，默认不提交仓库；它不得作为历史或正式产物真相源。
 - 只有满足当前 schema v3、source-privacy marker 和 canonical SourceIdentity 契约的
   `frameq-task.json` 才是任务库索引和 artifact 真相源；旧版记录与目录仅物理留存，
@@ -998,7 +1128,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 - 模型下载事件、日志和技术详情只允许保留源名称、主机名、公开模型 ID、尝试次数及超时/失败分类；不得保留带 token 的完整 URL、凭据、Cookie、请求头或完整原始下载器输出。
 - ASR 模型选择通过 `FRAMEQ_ASR_MODEL` 保存到本地 `.env`；该键只允许选择受支持的本地 ASR 模型标识，不得携带凭据、URL 查询 token 或敏感请求头。
 - `FRAMEQ_ASR_MODEL_MIGRATION` 只是本地的一次性界面提示状态，用于说明迁移把默认模型切到了 ONNX。它不参与模型选择、源验证或下载决策，也不得被当作信任信号；清除它只影响设置页是否显示提示。
-- 要点总结、启发灵感与文字稿解剖分别通过 agent_runtime 使用管理员配置的云端 LLM；每次实际供应商请求先独立 checkout，SDK、provider 与运行器的隐式重试关闭。worker 将正式文字稿与本次工具反馈发送到 checkout 返回的地址，确认面板必须明确提示这一点。偏好快照只允许随启发灵感目标发送。三个目标只开放产物交付工具。
+- 要点总结、启发灵感与文字稿解剖分别通过 agent_runtime 使用管理员配置的云端 LLM；每次实际供应商请求先独立 checkout，SDK、provider 与运行器的隐式重试关闭。worker 按来源读取正式媒体文字稿或网页正文，将允许的正文与本次工具反馈发送到 checkout 返回的地址，确认面板必须明确提示这一点。偏好快照只允许随启发灵感目标发送。三个目标只开放产物交付工具。
 - 桌面更新检查会访问 GitHub Releases 上的公开 `latest.json` updater manifest；该请求不上传本地文件、历史、模型缓存或账号 session。
 - UI 设置面板管理本机 ASR，并通过独立确认的迁移流程管理数据位置；云端 LLM 是否就绪由账号状态展示，文字稿主流程不依赖 LLM。
 - worker 对外部服务错误必须返回结构化错误码，不得吞掉失败。

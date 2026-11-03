@@ -1,6 +1,43 @@
 # FrameQ Design Guidelines
 
+## Webpage note reading
+
+- Home keeps its current greeting, composer and sidebar. The composer accepts existing video
+  URLs, webpage URLs and native-authorized media files. Webpage routing precedes ASR readiness;
+  its visible stages are Loading webpage → Extracting article → Saving note, with all three locales.
+  The form and workspace accessibility labels include webpage notes. A recognized webpage input
+  shows local-save and explicit-AI-billing copy; the media title-generation notice stays with media.
+- Webpage submission enters the loading stage directly and uses the system WebView in an
+  independent native helper. Missing/unsupported system capabilities use the existing failure
+  state with translated recovery guidance. There is no webpage component preparation/download
+  sheet. Startup and opening saved notes require no browser preparation.
+- Webpage notes use the article reading workspace with formatted local Markdown, Copy article
+  and Locate article actions. The note title, source and extraction time remain available through
+  normal note information and source actions. Sidebar, Notes and Collection behavior stays shared.
+- Summary, inspiration, dissection and draft retain their existing explicit AI confirmation,
+  quota display and supplier disclosure. Source labels describe article text for webpage notes.
+  A dissection reference opens and highlights the authoritative plain text; returning restores
+  formatted reading. Media-specific playback, timestamps and transcript editing belong to media.
+- A cleanup recovery state pauses data actions and exposes the existing storage recovery view.
+  The application retains uncertain local material. Checking again in the same process cannot
+  resume a quarantined library; controlled restart performs the ownership checks.
+
 ## Data storage settings and recovery
+
+- Selecting a nonempty destination offers the existing migration confirmation with merge copy:
+  existing relative-path filenames keep the destination file and remove the source file; missing
+  files move to the destination. No duplicate list or additional duplicate confirmation is shown.
+  `merging` displays real processed file/byte counts, prevents cancellation and provides continuation
+  after failure. Error text describes retained recovery records without claiming removed originals
+  are still present. An empty destination keeps the copy migration and optional old-copy cleanup.
+
+- Preflight distinguishes waiting, inventory enumeration, source validation, integrity checking
+  and destination checks. Unknown totals render an indeterminate indicator with actual discovered
+  counts; known totals and large-file reads use measured file/byte progress. Cleanup uses its own
+  title from entry, shows old-copy verification progress, then deletable files/bytes and retained
+  count before confirmation. Cancelling keeps the operation frozen until real backend completion;
+  stale replies cannot reopen a cancelled preview. Actual copy/delete events replace preflight
+  progress, while non-cancellable commit and delete stages keep their existing controls.
 
 - Settings → Basic contains one `数据存储位置 / 資料儲存位置 / Data storage location`
   row: title and current effective path on the left, `更改 / Change` on the right. Use 14px
@@ -239,6 +276,7 @@
   remain in generation confirmations with existing authorization and billing behavior.
 - The shared left title uses the real note title and existing manual/generated/history priority.
   The shared right title uses the localized AI Synthesis name; inner workspace titles are omitted.
+- AI Synthesis starts collapsed. Task navigation omits the duplicate note title in the outer toolbar.
 - A fixed 30px PanelRightClose/Open button at the title row's right edge controls AI visibility,
   with localized show/hide labels, aria-expanded/controls, and focus recovery. The title and full
   AI pane keep their mounted state but become inert/aria-hidden while collapsed. Hiding never

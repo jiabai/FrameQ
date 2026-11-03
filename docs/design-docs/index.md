@@ -10,6 +10,7 @@ FrameQ 持久设计决策文档总入口。`AGENTS.md` 不再逐条列出设计�
 
 ## 分发与平台验收
 
+- `2026-11-02-system-webview-extraction.md` — 独立系统 WebView 读取网页、版本2正文交接、取消与兼容；明确 Windows/macOS 的原生网络和进程控制范围及真实验证状态。
 - `2026-06-17-installer-distribution-plan.md` — 安装包分发计划
 - `2026-07-12-macos-intel-acceptance-artifact.md` — macOS Intel 验收产物
 - `2026-08-15-vc-runtime-selfcheck-and-import-diagnostics.md` — VC++ 运行库自检与导入诊断
