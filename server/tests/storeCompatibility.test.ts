@@ -61,11 +61,7 @@ const storeMethods = [
 
 const compatibilityMethods = [
   "createEmailOtp",
-  "findLatestUsableOtp",
-  "incrementOtpAttempts",
-  "consumeOtp",
   "createDesktopLoginTicket",
-  "consumeDesktopLoginTicket",
 ] as const;
 
 const arrayFixtureFields = [
@@ -176,11 +172,13 @@ describe("Store adapter compatibility surface", () => {
 
     expect(PublicMemoryStore).toBe(DefiningMemoryStore);
 
-    for (const storeClass of [PublicMemoryStore, PrismaStore]) {
-      const prototypeMethods = Object.getOwnPropertyNames(storeClass.prototype);
-      for (const method of expectedMethods) {
-        expect(prototypeMethods, `${storeClass.name}.${method}`).toContain(method);
-      }
+    const memoryPrototypeMethods = Object.getOwnPropertyNames(PublicMemoryStore.prototype);
+    for (const method of expectedMethods) {
+      expect(memoryPrototypeMethods, `MemoryStore.${method}`).toContain(method);
+    }
+    const prismaPrototypeMethods = Object.getOwnPropertyNames(PrismaStore.prototype);
+    for (const method of storeMethods) {
+      expect(prismaPrototypeMethods, `PrismaStore.${method}`).toContain(method);
     }
   });
 

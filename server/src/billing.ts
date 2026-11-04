@@ -98,5 +98,3 @@ export class BillingService {
     return this.store.findOrderByOutTradeNo(outTradeNo);
   }
 }
-
-export const monthlyPassAmountFen = MONTHLY_PASS_AMOUNT_FEN;

@@ -147,6 +147,7 @@ impl Pipes {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn extract(paths: &RuntimePaths, operation_id: &str, session_id: &str, url: &str, profile: &Path, script: &str,
     proxy_url: Option<&str>, cancel: &AtomicBool, on_stage: &dyn Fn(&str) -> Result<(), String>, record: &mut dyn FnMut(&str, u32) -> Result<(), String>, work_deadline: Instant) -> Result<HostArticle, String> {
     extract_with_cleanup_budget(paths, operation_id, session_id, url, profile, script, proxy_url, cancel, on_stage,

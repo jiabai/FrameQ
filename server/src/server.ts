@@ -107,7 +107,7 @@ export function buildServer(dependencies: ServerDependencies) {
   const anysearchConfig = new AnysearchConfigService({
     store: dependencies.store,
     now,
-    encryptionKey: dependencies.llmConfigEncryptionKey ?? process.env.FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY,
+    encryptionKey: dependencies.llmConfigEncryptionKey,
   });
   const billing = new BillingService({
     store: dependencies.store,

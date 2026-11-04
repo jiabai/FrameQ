@@ -159,8 +159,6 @@ impl WorkerLane {
 
     pub(super) fn is_reserved(&self) -> bool { self.admission.try_lock().is_err() }
 
-    pub(super) fn process_id(&self) -> Option<u32> { self.supervisor.process_id() }
-
     #[cfg(test)]
     pub(crate) fn activate_for_test(&self, pid: u32) -> u64 {
         self.supervisor

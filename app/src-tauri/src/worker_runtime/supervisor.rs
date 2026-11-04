@@ -132,9 +132,6 @@ impl TerminationLease {
 }
 
 impl ProcessSupervisor {
-    pub(super) fn process_id(&self) -> Option<u32> {
-        self.state.lock().expect("process supervisor lock poisoned").current.map(|(instance, _)| instance.pid)
-    }
     pub(super) fn is_active(&self) -> bool {
         self.state
             .lock()

@@ -400,50 +400,11 @@ pub(crate) fn observe(path: &Path) -> WebResult<()> {
 }
 
 pub(crate) fn record_worker(path: &Path, pid: u32) -> WebResult<()> { record_root(path, pid, false) }
-
-pub(super) fn process_birth(pid: u32) -> WebResult<Option<Birth>> {
-    Ok(process_identity::query(pid)?.map(|facts| facts.birth))
-}
-
-pub(super) fn process_rss(pid: u32, birth: Birth) -> WebResult<Option<u64>> {
-    process_identity::rss(pid, birth)
-}
-
 pub(crate) fn begin_worker(path: &Path) -> WebResult<()> { begin(path, "worker-starting.json") }
-pub(crate) fn cancel_worker_start(path: &Path) -> WebResult<()> { cancel_start(path, "worker-starting.json") }
-
-pub(super) fn begin_browser(profile: &Path) -> WebResult<()> {
-    if let Some(path) = owned_profile(profile) { begin(path, "browser-starting.json")?; }
-    Ok(())
-}
-
-pub(super) fn cancel_browser_start(profile: &Path) -> WebResult<()> {
-    if let Some(path) = owned_profile(profile) { cancel_start(path, "browser-starting.json")?; }
-    Ok(())
-}
-
-fn owned_profile(profile: &Path) -> Option<&Path> {
-    profile.parent().filter(|path| path.parent().and_then(Path::file_name) == Some(OsStr::new(ROOT)))
-}
 
 fn begin(path: &Path, name: &str) -> WebResult<()> {
     let workspace = load(path)?;
     write_new(&path.join(name), &workspace.owner)?;
-    Ok(())
-}
-
-fn cancel_start(path: &Path, name: &str) -> WebResult<()> {
-    use sha2::{Digest, Sha256};
-    let workspace = load(path)?;
-    let marker = path.join(name);
-    let (_, bytes) = read_json::<Owner>(&marker)?;
-    if bytes != workspace.bytes { return Err(WebPageError::StorageFailed); }
-    let file = safe::open_regular(&marker).map_err(storage)?;
-    let identity = safe::file_identity(&file).map_err(storage)?;
-    drop(file);
-    if !safe::remove_matching_file(&marker, identity, bytes.len() as u64, &format!("{:x}", Sha256::digest(&bytes))).map_err(storage)? {
-        return Err(WebPageError::StorageFailed);
-    }
     Ok(())
 }
 
@@ -475,11 +436,6 @@ fn recover_pending(path: &Path, owner: &Owner, system: &System) -> WebResult<()>
         write_new(&path.join(format!("{kind}.json")), &candidates[0])?;
     }
     check_pending(path, owner)
-}
-
-pub(super) fn record_browser(profile: &Path, pid: u32) -> WebResult<()> {
-    let Some(path) = owned_profile(profile) else { return Ok(()); };
-    record_root(path, pid, true)
 }
 
 fn record_root(path: &Path, pid: u32, browser: bool) -> WebResult<()> {

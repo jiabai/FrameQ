@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { buildServer } from "../src/server.js";
 import { sha256 } from "../src/security.js";
 import { MemoryStore } from "../src/store.js";
@@ -53,22 +53,6 @@ function buildTestServer(store: MemoryStore) {
     now: () => now,
   } as any);
 }
-
-const envMcpUrl = process.env.FRAMEQ_ANYSEARCH_MCP_URL;
-const envApiKey = process.env.FRAMEQ_ANYSEARCH_API_KEY;
-
-afterEach(() => {
-  if (envMcpUrl === undefined) {
-    delete process.env.FRAMEQ_ANYSEARCH_MCP_URL;
-  } else {
-    process.env.FRAMEQ_ANYSEARCH_MCP_URL = envMcpUrl;
-  }
-  if (envApiKey === undefined) {
-    delete process.env.FRAMEQ_ANYSEARCH_API_KEY;
-  } else {
-    process.env.FRAMEQ_ANYSEARCH_API_KEY = envApiKey;
-  }
-});
 
 describe("POST /api/desktop/anysearch/checkout", () => {
   test("rejects unauthenticated requests with 401 AUTH_REQUIRED", async () => {
@@ -202,27 +186,4 @@ describe("POST /api/desktop/anysearch/checkout", () => {
     });
   });
 
-  test("ignores anysearch env vars (hard cut, D2)", async () => {
-    const store = new MemoryStore();
-    await createAuthorizedUser(store);
-    await seedAnysearchConfig(store, {
-      mcpUrl: "https://from-store.example/mcp",
-      apiKey: "store-key",
-    });
-    process.env.FRAMEQ_ANYSEARCH_MCP_URL = "https://from-env.example/mcp";
-    process.env.FRAMEQ_ANYSEARCH_API_KEY = "env-key";
-    const app = buildTestServer(store);
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/desktop/anysearch/checkout",
-      headers: { authorization: "Bearer desktop-session-token" },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      mcp_url: "https://from-store.example/mcp",
-      api_key: "store-key",
-    });
-  });
 });

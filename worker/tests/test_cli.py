@@ -975,8 +975,7 @@ def test_worker_request_rejects_model_outside_release_contract(
 
 def test_main_reads_retry_draft_request_from_stdin(monkeypatch, capsys) -> None:
     """draft is the third target of retry_insights, dispatched
-    via ``--retry-insights-stdin`` with target=draft. The retired
-    ``--generate-draft-json`` flag is gone."""
+    via ``--retry-insights-stdin`` with target=draft."""
     payload = json.dumps({"task_id": "safe-task", "target": "draft", "insight_id": 5})
     captured: dict[str, str] = {}
 
@@ -1000,10 +999,3 @@ def test_main_reads_retry_draft_request_from_stdin(monkeypatch, capsys) -> None:
     }
     output = json.loads(capsys.readouterr().out)
     assert output["draft"] == "# 稿子"
-
-
-def test_main_rejects_retired_generate_draft_json_flag() -> None:
-    """Task 2.5: ``--generate-draft-json`` was retired (draft now flows via
-    ``--retry-insights-stdin`` target=draft). argparse must reject the old flag."""
-    with pytest.raises(SystemExit):
-        cli.main(["--generate-draft-json", "{}"])

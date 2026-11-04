@@ -71,8 +71,6 @@ impl ProcessSupervisors {
         self.task.is_active() || self.task.is_reserved()
     }
 
-    pub(crate) fn task_process_id(&self) -> Option<u32> { self.task.process_id() }
-
     pub(crate) fn run_asr_model_download(
         &self,
         paths: &RuntimePaths,

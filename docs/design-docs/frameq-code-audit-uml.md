@@ -2347,7 +2347,7 @@ stateDiagram-v2
 
 一次只选择一行进行源码审计，不要同时重构所有大文件。推荐按风险由低到高推进：
 
-1. **命名和无调用入口。** 例如 `greet`、已经失真的 `LlmConfig` 命名。容易验证，也最适合先改善人工可读性。
+1. **命名和无调用入口。** 例如已经失真的 `LlmConfig` 命名。容易验证，也最适合先改善人工可读性。
 2. **契约冗余。** 例如未来新增但没有明确 consumer 的 wire 字段。先查调用方和 contract test，再决定保留、恢复语义或版本化删除。
 3. **模块职责拆分。** 例如 remaining Python parser/helper。需要 focused tests，但通常不改变进程模型。
 4. **核心所有权和安全边界。** 例如 workflow owner、`WorkerLane`/private supervisor、task manifest/path validation。必须先写设计与迁移计划，不能用“文件太长”作为唯一理由。
@@ -2359,7 +2359,6 @@ stateDiagram-v2
 | `app/src/App.tsx` | 组装 9 个主要 controller，并通过 refs/callbacks 协调 reset、history、transcript、account 和 AI | 哪些协调属于 composition root；哪些可以成为明确的 application use case，而不产生第二个 workflow owner？ |
 | `useTranscriptDetailController.ts` | 历史 509 行混合 hook 已收口为 126 行稳定 facade；artifact/document/review 三个私有 owner 分别为 139/199/250 行 | 后续修改应进入对应 owner，并保持唯一 consumer surface、41-key projection、task identity、child dependency 和 source-boundary 门禁；不要把 feature state 移回 `App.tsx` |
 | `useTaskProcessingController.ts` | 同时处理 submit、progress、cancel、history restore、transcript merge 和 AI retry，并维护 operation ID | 是否需要拆 action/use-case，但仍保留唯一 task identity owner？ |
-| `app/src-tauri/src/lib.rs` 中的 `greet` | scaffold command 仍在 `generate_handler!` 注册，但 `app/src/` 没有调用点 | 是否可通过 focused command-registry test 后删除，避免无业务含义的公开 IPC surface？ |
 | `transcript_detail.rs` | 历史 1,133 行热点已收口为 134 行稳定 composition root；私有模块分别拥有 audio playback/cache、segment codec 与 official edit storage，完整证据见上方“已解决审计项” | 后续修改应进入对应私有 owner，并保持 root-only Tauri/runtime composition、`SupportedTask` / `TaskEditSession` 信任边界和 source-boundary 门禁；不要继续机械增加 facade |
 | `worker/frameq_worker/pipeline.py` | 历史 589 行热点已收口为 39 行稳定 direct-reexport root；四个私有 owner 分离 shared policy、transcript/ASR、AI target 与 URL orchestration，完整证据见上方“已解决审计项” | 后续修改应进入对应私有 owner，并保持 root-only production imports、exact object identity、process/AI isolation、facade 与 AST 门禁；不要继续机械增加 facade 或重建 generic stage framework |
 | `worker/frameq_worker/worker_service.py` | 历史 454 行五用例实现已收口为 25 行稳定 facade，exact `__all__` 只 direct-import 五个私有 handler；完整证据见上方“已解决审计项” | 后续用例变化应进入对应 handler，并保持五函数稳定 surface、唯一 retry task-persistence owner、稳定 stdin/result contract、root-only handler imports 与 direct-object identity 门禁 |

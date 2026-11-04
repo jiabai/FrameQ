@@ -1,7 +1,14 @@
 import { ChevronLeft, ChevronRight, Download, LoaderCircle, Minus, PanelLeft, Square, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { AppToolbarUpdateState } from "../window/AppToolbar";
 import { useWindowChromeController } from "../window/useWindowChromeController";
+
+type ShellToolbarUpdateState = {
+  visible: boolean;
+  status: string;
+  text: string;
+  busy: boolean;
+  spinnerVisible: boolean;
+};
 
 type ShellToolbarProps = {
   collapsed: boolean;
@@ -9,7 +16,7 @@ type ShellToolbarProps = {
   canBack: boolean;
   canForward: boolean;
   disabledReason: string;
-  update: AppToolbarUpdateState;
+  update: ShellToolbarUpdateState;
   onToggleSidebar: () => void;
   onBack: () => void;
   onForward: () => void;

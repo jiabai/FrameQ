@@ -32,11 +32,6 @@ export class AnysearchConfigService {
     return publicConfig(config);
   }
 
-  async isConfigured(): Promise<boolean> {
-    const config = await this.options.store.getAnysearchConfig();
-    return Boolean(config && config.mcpUrl);
-  }
-
   async saveConfig(input: {
     mcpUrl: string;
     apiKey?: string;

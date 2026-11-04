@@ -77,9 +77,6 @@ impl DataStorageManager {
         let preview=MigrationPreview{merge:false,plan_token:pending.plan_token.clone(),operation_id:id,generation,source_paths:inventory.sources.iter().map(|s|display(&s.path)).collect(),target_path:display(&target),total_files:inventory.total_files,total_bytes:inventory.total_bytes,required_bytes:required,available_bytes:available};
         if self.cancelled.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}value.pending=Some(pending);self.persist(&value)?;Ok(preview)
     }
-    pub(super) fn start_inner(&self,token:&str,window:&str,progress:&mut dyn FnMut(StorageStateView))->Result<StorageStateView> {
-        self.start_inner_with_preflight(token,window,progress,&mut |_|Ok(()))
-    }
     pub(super) fn start_inner_with_preflight(&self,token:&str,window:&str,progress:&mut dyn FnMut(StorageStateView),observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<StorageStateView> {
         let mut value=self.snapshot()?;
         let mut pending=value.pending.clone().ok_or_else(||StorageError::new("StaleOperation"))?;

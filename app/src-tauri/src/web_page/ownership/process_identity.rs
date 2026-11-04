@@ -25,7 +25,6 @@ mod windows {
     use std::time::{Duration, Instant};
     use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HANDLE};
     use windows_sys::Win32::System::Threading::{OpenProcess, GetProcessTimes, QueryFullProcessImageNameW, GetExitCodeProcess, TerminateProcess, WaitForSingleObject};
-    use windows_sys::Win32::System::ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
     struct OwnedHandle(HANDLE);
     impl Drop for OwnedHandle { fn drop(&mut self) { unsafe { CloseHandle(self.0); } } }
 
@@ -50,16 +49,6 @@ mod windows {
         Ok(Some(Facts { birth, executable: PathBuf::from(std::ffi::OsString::from_wide(&path[..size as usize])) }))
     }
     pub(crate) fn query(pid: u32) -> WebResult<Option<Facts>> { match open(pid, false)? { Some(handle) => read(&handle), None => Ok(None) } }
-    pub(crate) fn rss(pid: u32, expected: Birth) -> WebResult<Option<u64>> {
-        let Some(handle) = open(pid, false)? else { return Ok(None); };
-        let Some(actual) = read(&handle)? else { return Ok(None); };
-        if actual.birth != expected { return Ok(None); }
-        let mut memory = PROCESS_MEMORY_COUNTERS::default();
-        let size = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
-        memory.cb = size;
-        if unsafe { K32GetProcessMemoryInfo(handle.0, &mut memory, size) } == 0 || memory.WorkingSetSize == 0 { return Err(WebPageError::StorageFailed); }
-        Ok(Some(memory.WorkingSetSize as u64))
-    }
     pub(crate) fn terminate(pid: u32, expected: Birth) -> WebResult<()> {
         terminate_before(pid, expected, Instant::now() + Duration::from_secs(10))
     }
@@ -77,7 +66,7 @@ mod windows {
     }
 }
 
-#[cfg(windows)] pub(super) use windows::{query, rss, terminate, terminate_before};
+#[cfg(windows)] pub(super) use windows::{query, terminate, terminate_before};
 
 #[cfg(windows)]
 pub(super) fn system_console() -> WebResult<PathBuf> {
@@ -114,20 +103,3 @@ pub(super) fn query(pid: u32) -> WebResult<Option<Facts>> {
 
 #[cfg(not(any(windows, target_os="macos")))]
 pub(super) fn query(_: u32) -> WebResult<Option<Facts>> { Err(WebPageError::StorageFailed) }
-
-#[cfg(target_os="macos")]
-pub(super) fn rss(pid: u32, expected: Birth) -> WebResult<Option<u64>> {
-    let Some(before) = query(pid)? else { return Ok(None); };
-    if before.birth != expected { return Ok(None); }
-    let mut task = std::mem::MaybeUninit::<libc::proc_taskinfo>::zeroed();
-    let size = std::mem::size_of::<libc::proc_taskinfo>();
-    let read = unsafe { libc::proc_pidinfo(i32::try_from(pid).map_err(storage)?, libc::PROC_PIDTASKINFO, 0, task.as_mut_ptr().cast(), size as i32) };
-    if read != size as i32 { return Err(WebPageError::StorageFailed); }
-    let resident = unsafe { task.assume_init() }.pti_resident_size;
-    if query(pid)?.is_none_or(|after| after.birth != expected) { return Ok(None); }
-    if resident == 0 { return Err(WebPageError::StorageFailed); }
-    Ok(Some(resident))
-}
-
-#[cfg(not(any(windows, target_os="macos")))]
-pub(super) fn rss(_: u32, _: Birth) -> WebResult<Option<u64>> { Err(WebPageError::StorageFailed) }

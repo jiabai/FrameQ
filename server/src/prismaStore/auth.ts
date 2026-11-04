@@ -4,7 +4,6 @@ import { constantTimeEqual } from "../security.js";
 import type {
   AdminSessionRecord,
   DesktopLoginTicketRecord,
-  EmailOtpRecord,
   SessionRecord,
   Store,
   UserRecord,
@@ -276,72 +275,6 @@ export async function exchangeDesktopTicketAndCreateSession(
   return attempted.status === "exhausted"
     ? { status: "temporarily_unavailable" }
     : attempted.value;
-}
-
-export async function createEmailOtp(
-  prisma: PrismaClient,
-  input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
-): Promise<EmailOtpRecord> {
-  return prisma.emailOtp.create({
-    data: { ...input, id: randomUUID(), attempts: 0, consumedAt: null },
-  }) as Promise<EmailOtpRecord>;
-}
-
-export async function findLatestUsableOtp(
-  prisma: PrismaClient, email: string, state: string, now: Date,
-): Promise<EmailOtpRecord | null> {
-  return prisma.emailOtp.findFirst({
-    where: {
-      email,
-      state,
-      consumedAt: null,
-      attempts: { lt: 5 },
-      expiresAt: { gt: now },
-    },
-    orderBy: { createdAt: "desc" },
-  }) as Promise<EmailOtpRecord | null>;
-}
-
-export async function incrementOtpAttempts(
-  prisma: PrismaClient, otpId: string,
-): Promise<EmailOtpRecord> {
-  return prisma.emailOtp.update({
-    where: { id: otpId },
-    data: { attempts: { increment: 1 } },
-  }) as Promise<EmailOtpRecord>;
-}
-
-export async function consumeOtp(
-  prisma: PrismaClient, otpId: string, now: Date,
-): Promise<void> {
-  await prisma.emailOtp.update({
-    where: { id: otpId },
-    data: { consumedAt: now },
-  });
-}
-
-export async function createDesktopLoginTicket(
-  prisma: PrismaClient,
-  input: Omit<DesktopLoginTicketRecord, "id" | "consumedAt">,
-): Promise<DesktopLoginTicketRecord> {
-  return prisma.desktopLoginTicket.create({
-    data: { ...input, id: randomUUID(), consumedAt: null },
-  });
-}
-
-export async function consumeDesktopLoginTicket(
-  prisma: PrismaClient, ticketHash: string, state: string, now: Date,
-): Promise<DesktopLoginTicketRecord | null> {
-  const ticket = await prisma.desktopLoginTicket.findFirst({
-    where: { ticketHash, state, consumedAt: null, expiresAt: { gt: now } },
-  });
-  if (!ticket) {
-    return null;
-  }
-  return prisma.desktopLoginTicket.update({
-    where: { id: ticket.id },
-    data: { consumedAt: now },
-  });
 }
 
 export async function createSession(

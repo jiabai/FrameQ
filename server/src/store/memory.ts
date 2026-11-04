@@ -90,39 +90,10 @@ export class MemoryStore implements Store {
     return authOperations.createEmailOtp(this.authContext(), input);
   }
 
-  async findLatestUsableOtp(
-    email: string,
-    state: string,
-    now: Date,
-  ): Promise<EmailOtpRecord | null> {
-    return authOperations.findLatestUsableOtp(this.authContext(), email, state, now);
-  }
-
-  async incrementOtpAttempts(otpId: string): Promise<EmailOtpRecord> {
-    return authOperations.incrementOtpAttempts(this.authContext(), otpId);
-  }
-
-  async consumeOtp(otpId: string, now: Date): Promise<void> {
-    return authOperations.consumeOtp(this.authContext(), otpId, now);
-  }
-
   async createDesktopLoginTicket(
     input: Omit<DesktopLoginTicketRecord, "id" | "consumedAt">,
   ): Promise<DesktopLoginTicketRecord> {
     return authOperations.createDesktopLoginTicket(this.authContext(), input);
-  }
-
-  async consumeDesktopLoginTicket(
-    ticketHash: string,
-    state: string,
-    now: Date,
-  ): Promise<DesktopLoginTicketRecord | null> {
-    return authOperations.consumeDesktopLoginTicket(
-      this.authContext(),
-      ticketHash,
-      state,
-      now,
-    );
   }
 
   async createSession(input: Parameters<Store["createSession"]>[0]): ReturnType<Store["createSession"]> {

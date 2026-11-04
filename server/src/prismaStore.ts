@@ -1,9 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type {
-  DesktopLoginTicketRecord,
-  EmailOtpRecord,
-  Store,
-} from "./store.js";
+import type { Store } from "./store.js";
 import * as anysearchConfigOperations from "./prismaStore/anysearchConfig.js";
 import * as authOperations from "./prismaStore/auth.js";
 import * as billingOperations from "./prismaStore/billing.js";
@@ -55,42 +51,6 @@ export class PrismaStore implements Store {
     input: Parameters<Store["exchangeDesktopTicketAndCreateSession"]>[0],
   ): ReturnType<Store["exchangeDesktopTicketAndCreateSession"]> {
     return authOperations.exchangeDesktopTicketAndCreateSession(this.prisma, input);
-  }
-
-  async createEmailOtp(
-    input: Omit<EmailOtpRecord, "id" | "attempts" | "consumedAt">,
-  ): Promise<EmailOtpRecord> {
-    return authOperations.createEmailOtp(this.prisma, input);
-  }
-
-  async findLatestUsableOtp(
-    email: string,
-    state: string,
-    now: Date,
-  ): Promise<EmailOtpRecord | null> {
-    return authOperations.findLatestUsableOtp(this.prisma, email, state, now);
-  }
-
-  async incrementOtpAttempts(otpId: string): Promise<EmailOtpRecord> {
-    return authOperations.incrementOtpAttempts(this.prisma, otpId);
-  }
-
-  async consumeOtp(otpId: string, now: Date): Promise<void> {
-    return authOperations.consumeOtp(this.prisma, otpId, now);
-  }
-
-  async createDesktopLoginTicket(
-    input: Omit<DesktopLoginTicketRecord, "id" | "consumedAt">,
-  ): Promise<DesktopLoginTicketRecord> {
-    return authOperations.createDesktopLoginTicket(this.prisma, input);
-  }
-
-  async consumeDesktopLoginTicket(
-    ticketHash: string,
-    state: string,
-    now: Date,
-  ): Promise<DesktopLoginTicketRecord | null> {
-    return authOperations.consumeDesktopLoginTicket(this.prisma, ticketHash, state, now);
   }
 
   async createSession(

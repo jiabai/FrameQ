@@ -70,11 +70,6 @@ fn register_deep_links_on_startup() -> bool {
     cfg!(target_os = "linux") || !cfg!(debug_assertions)
 }
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -115,7 +110,6 @@ pub fn run() {
             "process_web_page" => web_page::process_web_page(invoke),
             _ => {
                 let handler: fn(tauri::ipc::Invoke) -> bool = tauri::generate_handler![
-            greet,
             web_page::cancel_web_page,
             data_storage::get_data_storage_state,
             data_storage::begin_data_storage_preflight,

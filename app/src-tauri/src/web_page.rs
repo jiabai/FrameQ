@@ -1,4 +1,6 @@
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod errors;
+#[cfg(any(target_os = "macos", test))]
 mod network;
 pub(crate) mod ownership;
 pub(crate) mod host_protocol;
@@ -251,7 +253,7 @@ fn run_claimed_web_page(
         if started.elapsed() >= Duration::from_secs(90) { return Err(WebPageError::Timeout.to_string()); }
         article.final_url = crate::task_manifest::canonical_web_url(&article.final_url)?;
         *cleanup_budget.lock().map_err(|_| "WEB_CLEANUP_FAILED")? = None;
-        let format = time::format_description::parse("[year][month][day]-[hour][minute][second]")
+        let format = time::format_description::parse_borrowed::<3>("[year][month][day]-[hour][minute][second]")
             .map_err(|_| WebPageError::StorageFailed.to_string())?;
         let stamp = time::OffsetDateTime::now_utc().format(&format).map_err(|_| WebPageError::StorageFailed.to_string())?;
         let task_id = format!("{stamp}-web-{}", &uuid::Uuid::new_v4().simple().to_string()[..16]);

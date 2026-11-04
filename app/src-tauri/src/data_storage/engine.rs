@@ -1,3 +1,4 @@
+#![cfg_attr(not(test), allow(dead_code))]
 #[path="location.rs"] mod location;
 #[path="control.rs"] mod control;
 #[path="inventory.rs"] mod inventory;

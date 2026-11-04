@@ -4,7 +4,6 @@ use std::fmt;
 pub(crate) enum WebPageError {
     RequestInvalid,
     PrivateAddress,
-    PlatformUnsupported,
     LoadFailed,
     BrowserFailed,
     Timeout,
@@ -19,7 +18,6 @@ impl WebPageError {
         match self {
             Self::RequestInvalid => "WEB_REQUEST_INVALID",
             Self::PrivateAddress => "WEB_PRIVATE_ADDRESS",
-            Self::PlatformUnsupported => "WEB_PLATFORM_UNSUPPORTED",
             Self::LoadFailed => "WEB_LOAD_FAILED",
             Self::BrowserFailed => "WEB_HOST_FAILED",
             Self::Timeout => "WEB_TIMEOUT",

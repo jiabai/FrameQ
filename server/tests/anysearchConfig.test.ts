@@ -148,13 +148,3 @@ describe("AnysearchConfigService.getDesktopConfig", () => {
     });
   });
 });
-
-describe("AnysearchConfigService.isConfigured", () => {
-  test("false when no record, true once a url is saved", async () => {
-    const store = new MemoryStore();
-    const service = buildService(store);
-    await expect(service.isConfigured()).resolves.toBe(false);
-    await service.saveConfig({ mcpUrl: "https://anysearch.example/mcp" });
-    await expect(service.isConfigured()).resolves.toBe(true);
-  });
-});

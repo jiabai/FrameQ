@@ -180,61 +180,11 @@ export async function createEmailOtp(
   context.state.emailOtps.push(otp);
   return otp;
 }
-export async function findLatestUsableOtp(
-  context: MemoryAuthContext, email: string, state: string, now: Date,
-): Promise<EmailOtpRecord | null> {
-  return (
-    [...context.state.emailOtps]
-      .reverse()
-      .find(
-        (otp) =>
-          otp.email === email &&
-          otp.state === state &&
-          otp.consumedAt === null &&
-          otp.attempts < 5 &&
-          otp.expiresAt > now,
-      ) ?? null
-  );
-}
-export async function incrementOtpAttempts(
-  context: MemoryAuthContext, otpId: string,
-): Promise<EmailOtpRecord> {
-  const otp = context.state.emailOtps.find((record) => record.id === otpId);
-  if (!otp) {
-    throw new Error("OTP record not found.");
-  }
-  otp.attempts += 1;
-  return otp;
-}
-export async function consumeOtp(
-  context: MemoryAuthContext, otpId: string, now: Date,
-): Promise<void> {
-  const otp = context.state.emailOtps.find((record) => record.id === otpId);
-  if (otp) {
-    otp.consumedAt = now;
-  }
-}
 export async function createDesktopLoginTicket(
   context: MemoryAuthContext, input: Omit<DesktopLoginTicketRecord, "id" | "consumedAt">,
 ): Promise<DesktopLoginTicketRecord> {
   const ticket = { ...input, id: randomUUID(), consumedAt: null };
   context.state.desktopLoginTickets.push(ticket);
-  return ticket;
-}
-export async function consumeDesktopLoginTicket(
-  context: MemoryAuthContext, ticketHash: string, state: string, now: Date,
-): Promise<DesktopLoginTicketRecord | null> {
-  const ticket =
-    context.state.desktopLoginTickets.find(
-      (record) =>
-        record.ticketHash === ticketHash &&
-        record.state === state &&
-        record.consumedAt === null &&
-        record.expiresAt > now,
-    ) ?? null;
-  if (ticket) {
-    ticket.consumedAt = now;
-  }
   return ticket;
 }
 export async function createSession(
