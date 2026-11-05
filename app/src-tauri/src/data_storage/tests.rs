@@ -458,6 +458,10 @@ fn control_semantics_reject_nil_ids_and_cross_phase_root_switches() {
 fn restart_handoff_atomically_stops_old_writer_before_releasing_process_lock() {
     let f=Fixture::new();let m=f.manager();let lease=m.acquire().unwrap();assert_eq!(m.prepare_restart().unwrap_err().code,"Busy");drop(lease);
     m.prepare_restart().unwrap();assert_eq!(m.acquire().err().unwrap().code,"Busy");let next=f.manager();assert_eq!(next.state().data_access,"ready");assert!(next.acquire().is_ok());
+    drop(m);
+    assert_eq!(DataStorageManager::open(f.config.clone(),f.resources.clone()).err().unwrap().code,"Busy");
+    drop(next);
+    assert!(DataStorageManager::open(f.config,f.resources).is_ok());
 }
 
 #[cfg(windows)]

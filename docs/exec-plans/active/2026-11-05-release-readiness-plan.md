@@ -17,6 +17,7 @@ Close the formal installer, macOS, and commit-specific CI evidence gaps for the 
 - [x] 2026-11-05: Commit and push reviewed product source `7a40fac1ec17393933a1a791bf16aeb3c787ed60` and complete corresponding hosted gates. Validation: Native CI `42013462846` passed all four jobs; each platform passed frontend 1503 / 1 skipped and Worker 1269 / 0 skipped. Windows Cargo passed 557 / 29 ignored and native host 18 / 9 ignored; macOS Cargo passed 533 / 28 ignored. Script CI `42013462854` passed on both platforms with zero documentation errors/warnings. Server CI `42013462806` passed 400 tests, eight migrations, preflight, and isolated restore.
 - [x] 2026-11-05: Add real subprocess/open-pipe regressions for short controls and 96 KiB initialization records, and implement incremental macOS stdin reads. Validation: the actual Swift binary exercised both owned child processes while their stdin remained open; both responses arrived within the unchanged five-second deadline and matched the submitted bytes. Native CI and both architecture artifact jobs passed the protocol checks.
 - [ ] Complete macOS internal artifact acceptance `42013737158` for the exact product commit, recording application and DMG identities.
+- [ ] Verify Unix storage-manager ownership releases its process lock while a duplicated descriptor remains open, preserving successor-manager exclusion and real interrupted-merge recovery.
 - [ ] Record remaining platform limitations and determine whether formal release gates are satisfied.
 
 ## Surprises & Discoveries
@@ -42,6 +43,8 @@ Decision: Include both macOS architectures in the internal acceptance matrix and
 Decision: Copy standard macOS Python launchers from the discovered versioned interpreter into independent ordinary executable files. Rationale: the launcher stays in the same bin directory and retains interpreter bytes and permissions while satisfying native file/process identity checks. Date/Author: 2026-11-05, Codex.
 
 Decision: Read macOS host stdin with bounded single POSIX reads and deliver each complete NDJSON record immediately. Rationale: the parent keeps stdin open for subsequent start, policy, and cancellation commands; record delivery must proceed independently of EOF. Preserve framing limits, interrupted-read handling, and the existing failure callbacks. Date/Author: 2026-11-05, Codex.
+
+Decision: Explicitly unlock the Unix storage manager's owned process lock when its lifetime ends. Rationale: duplicated or temporarily inherited descriptors share the original open-file description; owner destruction must release that lock independently of their close timing. A successor manager opens an independent description whose lock remains protected through old-owner destruction and old-descriptor closure. Date/Author: 2026-11-05, Codex.
 
 ## Outcomes & Retrospective
 

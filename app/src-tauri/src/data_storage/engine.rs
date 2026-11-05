@@ -19,6 +19,12 @@ pub(crate) struct DataStorageManager {
     config_root:PathBuf,resource_root:PathBuf,_process_lock:File,
     inner:Mutex<Inner>,drained:Condvar,cancelled:AtomicBool,boot_generation:AtomicU64,
 }
+#[cfg(unix)]
+impl Drop for DataStorageManager {
+    fn drop(&mut self) {
+        self._process_lock.unlock().expect("storage process lock release");
+    }
+}
 struct Inner {control:Option<Control>,initial_error:Option<String>,active_count:u64,quiescing:bool,running:bool,restart_prepared:bool,cleanup_tokens:HashMap<String,(String,String,u64)>}
 pub(crate) struct DataOperationPermit {manager:Arc<DataStorageManager>}
 impl Drop for DataOperationPermit {fn drop(&mut self){let mut inner=self.manager.inner.lock().expect("storage mutex");inner.active_count-=1;self.manager.drained.notify_all();}}
