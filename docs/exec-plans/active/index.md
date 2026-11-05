@@ -12,8 +12,6 @@
 
 
 
-- `2026-11-05-v0.5.0-desktop-release-plan.md` — 本地准备已完成：六处版本来源与营销站常量切到 v0.5.0，发布说明、站点发布说明、bump 门禁与提交齐备；下一步为推 main、打 tag、发布 release、补 `TASKS.md` 台账、归档计划与部署营销站。
-
 - `2026-08-09-desktop-diagnostic-export-plan.md` - Implementation and automated gates complete for contract v8 structured ASR model-download diagnostics, Rust-owned bounded persistence, and user-initiated local ZIP export from failure UI and Settings > Advanced; Windows/macOS native release smoke remains pending, with no automatic upload or network probes.
 
 See `../completed/index.md` for completed plans and `docs/exec-plans/index.md`

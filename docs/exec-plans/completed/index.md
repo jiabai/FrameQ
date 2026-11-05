@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-11-05-v0.5.0-desktop-release-plan.md` | v0.5.0 发布：tag 目标 `6857d97`、release run `42048599641` 三平台全绿；8 个资产归一化后与 v0.4.3 一致，两处 Windows 更新签名与 416 字节 `.sig` 逐字符相同，三个下载 URL 从部署服务器 range-check 返回 206；发布正文与 `docs/releases/v0.5.0.md` 只差尾部空行；营销站备份后部署 3 改 0 删、复跑 16 unchanged、三页 sha256 一致且线上只出现 v0.5.0。首次 Native CI 的 Windows Worker spawn 超时用例本地复跑通过、attempt 2 四个作业全绿。残余风险：macOS 图形交互、公证、专项 WebView 安全检查与公开签名更新链路未验证，Intel 验收工作流未手动触发。 |
 | `2026-11-05-release-readiness-plan.md` | 最终产品提交 ff22538 的 Windows 正式安装/覆盖升级、53 个原有任务文件保留、指定微信文章原生保存阅读和安装版默认 ONNX 完整识别通过；macOS Intel/Apple Silicon 各 534 项原生测试、真实静态/动态网页保存重开、应用/运行环境/签名及 DMG 回读通过。相同提交 Native/Script/Server CI 全部通过；macOS 人工交互、专项安全检查和公开更新分发保留未验证。 |
 | `2026-11-05-web-note-native-acceptance-plan.md` | 网页任务使用兼容日期格式，固定UTC编号回归、17项Rust检查和指定微信文章的真实系统保存/重开通过。原生应用完成加载、提取、保存与阅读，42777字节正文和Markdown核验一致；脚本55+1、文档检查和Windows构建通过。 |
 | `2026-11-05-processing-workspace-plan.md` | 用户确认的处理界面移植到真实组件；1502项前端测试、lint、生产构建、文档检查和150组浏览器验收通过。指定YouTube视频的Windows原生下载、86分钟音频识别、15085词/300分段文字稿与自动标题，以及指定微信文章的原生提取、保存、阅读均完成；后续正式安装包与macOS双架构原生验收见同日release-readiness计划。 |

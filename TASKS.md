@@ -18,6 +18,36 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.5.0 desktop release (2026-11-05) — ✅ Tag `v0.5.0` at
+  `6857d97` (release run `42048599641`, all three platform jobs green). Ship set: a redesigned
+  desktop workspace with draggable split panes, notes, collections and local data management;
+  the processing composition with real progress and three stages; webpage links saved as local
+  notes through the system WebView with no extra browser download; a unified data storage
+  setting with staged, cancellable migration and merge into an existing directory; transcript
+  footer cleanup (duplicate export removed, copy button renamed); macOS native host incremental
+  stdin reads and explicit storage-lock release. Gates on the bump commit: Native `42044874583`
+  attempt 2 (all four jobs), Script `42044874636`, Server `42044874570`; local version
+  consistency, Node scripts 57, Python scripts 1, docs ERROR/WARN zero, app lint and build,
+  `cargo check`, site build, `git diff --check`. The first Native attempt had one Windows Worker
+  failure in `test_markdown_splitter_advances_past_sentence_separator` (a four-second spawn
+  join under runner load); the case passed locally and the rerun was green. Assets (8, all
+  `uploaded`) match v0.4.3 after normalizing the version: `FrameQ_0.5.0_x64-setup.exe`
+  (212,087,502 bytes), `FrameQ_0.5.0_x64.dmg` (349,847,885), `FrameQ_0.5.0_aarch64.dmg`
+  (302,211,133), three `frameq-pytorch-runtime-*.zip`, `latest.json` and the `.sig`. Both
+  Windows updater signatures in `latest.json` equal the uploaded `.sig` byte for byte (416
+  bytes); the three download URLs answered `206` to `range: 0-0` from the deployment server.
+  Published 2026-11-05 23:51 +08:00 (`2026-11-05T15:51:03Z`):
+  https://github.com/jiabai/FrameQ/releases/tag/v0.5.0. Release notes:
+  `docs/releases/v0.5.0.md`; the live body differs from the source by one trailing blank line.
+  The marketing site was backed up (`webroot-20261105-225950.tar.gz`), deployed with 3 uploads
+  / 0 deletes, re-checked with 16 unchanged, and its three pages match `site/dist` byte for
+  byte with only `v0.5.0` on the public download page. Residual risks: macOS graphical
+  interaction, Gatekeeper/permission prompts and specialized WebView canaries remain
+  unverified; macOS builds are ad-hoc signed without notarization; the complete public
+  signed-update path was not exercised; `macos-intel-acceptance.yml` was not dispatched for
+  this tag; the optional PyTorch runtime component is version-bound, so upgraders on that
+  model download about 140 MB again; `yt-dlp` still has no external timeout.
+
 - [x] Remove the duplicated export action from the transcript review footer (2026-10-30) — ✅ Reported
   from the v0.4.3 result screen: the review footer「导出」and the artifact toolbar「定位文字稿」both
   called `exportTranscript`, which only runs `revealItemInDir` on the same `transcript.txt`, so two
