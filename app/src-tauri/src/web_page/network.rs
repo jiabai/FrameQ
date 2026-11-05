@@ -384,7 +384,11 @@ mod tests {
     fn saturated_proxy_waits_for_capacity_and_stop_releases_waiters() {
         let mut proxy = PublicProxy::start().unwrap();
         let mut clients = Vec::new();
-        for _ in 0..16 { clients.push(std::net::TcpStream::connect(proxy.address).unwrap()); }
+        for _ in 0..16 {
+            let client = std::net::TcpStream::connect(proxy.address).unwrap();
+            client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            clients.push(client);
+        }
         let mut waiting = std::net::TcpStream::connect(proxy.address).unwrap();
         waiting.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
         write!(waiting, "CONNECT 127.0.0.1:443 HTTP/1.1\r\nHost: 127.0.0.1:443\r\nConnection: close\r\n\r\n").unwrap();
@@ -396,7 +400,9 @@ mod tests {
         let count = waiting.read(&mut response).unwrap();
         assert!(std::str::from_utf8(&response[..count]).unwrap().starts_with("HTTP/1.1 403"));
         drop(waiting);
-        clients.push(std::net::TcpStream::connect(proxy.address).unwrap());
+        let client = std::net::TcpStream::connect(proxy.address).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        clients.push(client);
         let mut cancelled = std::net::TcpStream::connect(proxy.address).unwrap();
         cancelled.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         let began = std::time::Instant::now();
@@ -405,7 +411,6 @@ mod tests {
         let result = cancelled.read(&mut response);
         assert!(matches!(result, Ok(0)) || result.is_err());
         for mut client in clients {
-            client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
             assert_eq!(client.read(&mut response).unwrap(), 0);
         }
     }

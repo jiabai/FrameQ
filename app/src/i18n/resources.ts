@@ -15,6 +15,7 @@ import { shellResources } from "./shellResources";
 import { noteActionsResources } from "./noteActionsResources";
 import { dataStorageResources } from "./dataStorageResources";
 import { webPageResources } from "./webPageResources";
+import { processingResources } from "./processingResources";
 
 export const RESOURCE_NAMESPACES = [
   "common",
@@ -35,12 +36,14 @@ export const RESOURCE_NAMESPACES = [
   "noteActions",
   "dataStorage",
   "webPage",
+  "processing",
 ] as const;
 export type ResourceNamespace = (typeof RESOURCE_NAMESPACES)[number];
 type ResourceTree = { readonly [key: string]: string | ResourceTree };
 
 export const resources = {
   "zh-CN": {
+    processing: processingResources["zh-CN"],
     webPage: webPageResources["zh-CN"],
     common: {
       ...commonFeatureResources["zh-CN"],
@@ -165,6 +168,7 @@ export const resources = {
     dataStorage: dataStorageResources["zh-CN"],
   },
   "zh-TW": {
+    processing: processingResources["zh-TW"],
     webPage: webPageResources["zh-TW"],
     common: {
       ...commonFeatureResources["zh-TW"],
@@ -289,6 +293,7 @@ export const resources = {
     dataStorage: dataStorageResources["zh-TW"],
   },
   "en-US": {
+    processing: processingResources["en-US"],
     webPage: webPageResources["en-US"],
     common: {
       ...commonFeatureResources["en-US"],

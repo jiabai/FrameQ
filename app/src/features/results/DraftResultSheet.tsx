@@ -74,6 +74,7 @@ export function DraftResultSheet({
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState<UiMessage | null>(null);
   const [detailSeedId, setDetailSeedId] = useState<number | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const draftFallbackRef = useRef(workflow.draft);
   const [discardCandidate, setDiscardCandidate] = useState<{ taskId: string | null } | null>(null);
   const discardCandidateRef = useRef(discardCandidate);
@@ -127,6 +128,7 @@ export function DraftResultSheet({
   // ---- Open: load from disk ----
 
   useEffect(() => {
+    setDetailTaskId(null);
     if (!open) {
       setEditing(false);
       setExpanded(false);
@@ -166,6 +168,7 @@ export function DraftResultSheet({
         );
       } finally {
         if (!cancelled) {
+          setDetailTaskId(taskId);
           setLoading(false);
         }
       }
@@ -254,6 +257,7 @@ export function DraftResultSheet({
   // ---- Render ----
 
   const renderedNotice = renderUiMessage(resolvedLocale, notice);
+  const regenerationReady = open && !loading && workflow.taskId !== null && detailTaskId === workflow.taskId;
 
   return (
     <>
@@ -339,10 +343,10 @@ export function DraftResultSheet({
             <button
               type="button"
               onClick={() => {
-                if (!open || savingRef.current || discardCandidateRef.current) return;
+                if (!regenerationReady || savingRef.current || discardCandidateRef.current) return;
                 onRegenerate(detailSeedId ?? workflow.draftSeedInsightId ?? null, dirty);
               }}
-              disabled={saving || !buffer.trim()}
+              disabled={!regenerationReady || saving || !buffer.trim()}
             >
               <RefreshCw size={16} />
               <span>{t("draftResult.regenerate")}</span>

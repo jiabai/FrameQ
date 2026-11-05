@@ -14,18 +14,21 @@ const deletionSourcePath = resolve(
   "app/src-tauri/src/history_deletion/tests.rs",
 );
 
-test("builds one manual internal Intel macOS artifact with native tests and read-only permissions", async () => {
+test("builds manual internal macOS artifacts for both architectures with read-only permissions", async () => {
   const workflow = await readFile(workflowPath, "utf8");
 
-  assert.match(workflow, /^name:\s*macOS Intel Acceptance Artifact/m);
+  assert.match(workflow, /^name:\s*macOS Acceptance Artifacts/m);
   assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:\s*$/m);
   assert.match(workflow, /permissions:\s*\r?\n\s+contents:\s*read/);
-  assert.match(workflow, /runs-on:\s*macos-15-intel/);
+  assert.match(workflow, /runs-on:\s*\$\{\{ matrix\.runner \}\}/);
+  assert.match(workflow, /fail-fast:\s*false/);
+  assert.match(workflow, /platform:\s*macos-x64\s+runner:\s*macos-15-intel\s+target:\s*x86_64-apple-darwin\s+arch:\s*x86_64/);
+  assert.match(workflow, /platform:\s*macos-arm64\s+runner:\s*macos-15\s+target:\s*aarch64-apple-darwin\s+arch:\s*arm64/);
   assert.match(workflow, /timeout-minutes:\s*90/);
   assert.match(workflow, /uses:\s*actions\/checkout@v5/);
   assert.match(workflow, /uses:\s*actions\/setup-node@v5/);
   assert.match(workflow, /uses:\s*dtolnay\/rust-toolchain@stable/);
-  assert.match(workflow, /targets:\s*x86_64-apple-darwin/);
+  assert.match(workflow, /targets:\s*\$\{\{ matrix\.target \}\}/);
   assert.match(
     workflow,
     /uses:\s*astral-sh\/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990/,
@@ -37,17 +40,23 @@ test("builds one manual internal Intel macOS artifact with native tests and read
   assert.match(workflow, /run:\s*npm ci --prefix app/);
   assert.match(
     workflow,
-    /run:\s*cargo test --manifest-path app\/src-tauri\/Cargo\.toml --target x86_64-apple-darwin/,
+    /run:\s*cargo test --manifest-path app\/src-tauri\/Cargo\.toml --target \$\{\{ matrix\.target \}\}/,
   );
   assert.match(
     workflow,
-    /run:\s*node scripts\/build-installer\.mjs --target macos-x64 --skip-tauri-build/,
+    /run:\s*node scripts\/build-installer\.mjs --target \$\{\{ matrix\.platform \}\} --skip-tauri-build/,
   );
   assert.match(
     workflow,
-    /run:\s*>-[\s\S]{0,120}npm --prefix app run tauri -- build --bundles app[\s\S]{0,80}--target x86_64-apple-darwin/,
+    /run:\s*>-[\s\S]{0,120}npm --prefix app run tauri -- build --bundles app[\s\S]{0,80}--target \$\{\{ matrix\.target \}\}/,
   );
   assert.match(workflow, /createUpdaterArtifacts\":false/);
+  const prepare = workflow.indexOf("name: Prepare bundled runtime resources");
+  const build = workflow.indexOf("name: Build internal macOS app bundle");
+  const native = workflow.indexOf("name: Extract, save and reopen real static and dynamic pages");
+  assert(prepare >= 0 && build > prepare && native > build);
+  assert.match(workflow, /real_system_webview_static_and_dynamic_notes_are_saved_and_reopened -- --ignored --nocapture/);
+  assert.match(workflow, /run:\s*node scripts\/verify-packaged-worker\.mjs/);
   assert.match(
     workflow,
     /EXECUTABLE="\$\(\/usr\/libexec\/PlistBuddy -c 'Print :CFBundleExecutable' "\$APP\/Contents\/Info\.plist"\)"/,
@@ -56,6 +65,7 @@ test("builds one manual internal Intel macOS artifact with native tests and read
   assert.match(workflow, /test -f "\$BIN"/);
   assert.match(workflow, /file "\$BIN"/);
   assert.match(workflow, /lipo -archs "\$BIN"/);
+  assert.match(workflow, /test "\$\(lipo -archs "\$BIN"\)" = "\$\{\{ matrix\.arch \}\}"/);
   assert.match(
     workflow,
     /import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
@@ -64,8 +74,14 @@ test("builds one manual internal Intel macOS artifact with native tests and read
   assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$APP"/);
   assert.match(
     workflow,
-    /bash scripts\/make-macos-dmg\.sh x86_64-apple-darwin FrameQ/,
+    /bash scripts\/make-macos-dmg\.sh \$\{\{ matrix\.target \}\} FrameQ/,
   );
+  assert.match(workflow, /--target \$\{\{ matrix\.platform \}\} --verify-bundle "\$APP"/);
+  assert.match(workflow, /hdiutil verify "\$DMG"/);
+  assert.match(workflow, /hdiutil attach -readonly -nobrowse -mountpoint "\$MOUNT" "\$DMG"/);
+  assert.match(workflow, /trap 'hdiutil detach "\$MOUNT"' EXIT/);
+  assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$MOUNT\/FrameQ\.app"/);
+  assert.match(workflow, /--target \$\{\{ matrix\.platform \}\} --verify-bundle "\$MOUNT\/FrameQ\.app"/);
   assert.match(workflow, /shasum -a 256 "\$DMG" > "\$DMG\.sha256"/);
   assert.match(workflow, /uses:\s*actions\/upload-artifact@v6/);
   assert.doesNotMatch(workflow, /actions\/upload-artifact@(?:v4|v5)/);
@@ -73,14 +89,22 @@ test("builds one manual internal Intel macOS artifact with native tests and read
   assert.match(workflow, /if-no-files-found:\s*error/);
   assert.match(workflow, /path:\s*\|[\s\S]*\.dmg[\s\S]*\.dmg\.sha256/);
 
-  const referencedSecrets = [...workflow.matchAll(/secrets\.([A-Z0-9_]+)/g)]
+  const referencedSecrets = [...workflow.matchAll(/(?:python|ffmpeg|ffprobe)_archive:\s*([A-Z0-9_]+)/g)]
     .map((match) => match[1])
     .sort();
   assert.deepEqual(referencedSecrets, [
+    "FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64",
     "FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64",
+    "FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64",
     "FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64",
+    "FRAMEQ_PYTHON_STANDALONE_URL_ARM64",
     "FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64",
   ]);
+  for (const component of ["python", "ffmpeg", "ffprobe"]) {
+    assert.match(workflow, new RegExp(`secrets\\[matrix\\.${component}_archive\\]`));
+  }
+  assert.equal([...workflow.matchAll(/secrets\[/g)].length, 3);
+  assert.doesNotMatch(workflow, /secrets\./);
 
   assert.doesNotMatch(workflow, /^\s+(push|pull_request|schedule|release):/m);
   assert.doesNotMatch(workflow, /contents:\s*write/);

@@ -55,6 +55,8 @@
 
 ## History & Workspace
 
+- `2026-11-05-processing-workspace.md` — 用户确认的处理状态网页精准移植；集中任务、真实进度、来源、取消与后续用途提示，保留现有控制器和已保存笔记阅读。
+
 - `2026-10-31-client-surface-unification.md` — 以当前主界面统一客户端确认、结果、草稿、设置、账号、模型、历史和笔记弹窗的平面样式，保留真实流程与保护边界。
 
 - `2026-10-31-sidebar-note-actions.md` — Seven sidebar note actions, independent Pinned section, manual display names, canonical source operations, and confirmed permanent deletion with durable cleanup.

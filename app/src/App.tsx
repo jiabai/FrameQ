@@ -36,6 +36,8 @@ import { SummaryConfirmationSheet } from "./features/results/SummaryConfirmation
 import { useDraftRegeneration } from "./features/results/regenerateDraft";
 import { ConfirmDialog } from "./features/modal/ConfirmDialog";
 import { TaskStatusBanner } from "./features/results/TaskStatusBanner";
+import { ProcessingWorkspace } from "./features/results/ProcessingWorkspace";
+import { createProcessingWorkspaceModel, getProcessingRetrySubmission } from "./features/results/processingWorkspaceModel";
 import { TaskWorkspaceLayout } from "./features/results/TaskWorkspaceLayout";
 import { SettingsSheet } from "./features/settings/SettingsSheet";
 import { useSettingsController } from "./features/settings/useSettingsController";
@@ -738,6 +740,9 @@ function App() {
     collectionNoteCreation.begin(selectedCollection.id);
   };
 
+  const processingWorkspaceModel = createProcessingWorkspaceModel(workflow);
+  const processingRetrySubmission = getProcessingRetrySubmission(workflow);
+
   return (
     <main className="app-shell">
       <section className={`desktop-window sidebar-layout${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`} aria-label={tCommon("window.ariaLabel")}>
@@ -856,14 +861,23 @@ function App() {
               onManageHistory={() => void openHistory()}
             />
           ) : (
-            <>
-              <TaskStatusBanner model={taskWorkspaceModel.banner} />
-              <NoteTitleNotice
+            <ProcessingWorkspace
+              workflow={workflow}
+              onCancel={() => void cancelCurrentProcessing()}
+              onRetry={() => {
+                if (processingRetrySubmission) void collectionNoteCreation.submit(processingRetrySubmission);
+              }}
+              onEditSource={handleNewTaskFromToolbar}
+              retryDisabled={!processingRetrySubmission || !canSubmit || !canNavigateWorkflow || submissionPending}
+              notice={renderUiMessage(resolvedLocale, actionNotice)}
+            >
+              {!processingWorkspaceModel && <TaskStatusBanner model={taskWorkspaceModel.banner} />}
+              {!processingWorkspaceModel && <NoteTitleNotice
                 workflow={workflow}
                 retryDisabled={!canNavigateWorkflow}
                 onRetry={() => { void retryNoteTitle(account, openAccountPanel); }}
                 onCancel={() => { void cancelCurrentProcessing(); }}
-              />
+              />}
               {collectionNoteCreation.failure?.taskId === workflow.taskId && (
                 <div className="collection-note-notice" role="alert">
                   <span>{tShell("collections.noteSavedMembershipFailed")}</span>
@@ -915,7 +929,7 @@ function App() {
                   onCancel={() => void cancelCurrentProcessing()}
                 />}
               />
-            </>
+            </ProcessingWorkspace>
           )}
         </section>
       </section>

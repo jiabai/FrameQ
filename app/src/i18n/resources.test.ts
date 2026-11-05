@@ -46,6 +46,7 @@ describe("bundled localization resources", () => {
       "noteActions",
       "dataStorage",
       "webPage",
+      "processing",
     ]);
     expect(Object.keys(resources).sort()).toEqual([...SUPPORTED_LOCALES].sort());
   });

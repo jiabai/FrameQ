@@ -5,6 +5,17 @@ fn request(url: &str) -> WebPageRequest {
 }
 
 #[test]
+fn web_task_identity_uses_standard_utc_date_and_fixed_contract_fields() {
+    let now = time::Date::from_calendar_date(2026, time::Month::January, 2).unwrap()
+        .with_hms(3, 4, 5).unwrap().assume_utc();
+    let task_id = web_task_id(now).unwrap();
+    let suffix = task_id.strip_prefix("20260102-030405-web-").unwrap();
+    assert_eq!(suffix.len(), 16);
+    assert!(suffix.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+    assert_ne!(web_task_id(now).unwrap(), task_id);
+}
+
+#[test]
 fn pending_page_cancel_withdraws_admission_before_any_claim() {
     let operations = Arc::new(WebPageOperations::default());
     let input = request("https://quotes.toscrape.com/");
@@ -124,4 +135,30 @@ fn real_system_webview_wechat_note_is_complete_saved_and_reopened() {
     assert!(!supervisors.is_task_active());
     assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".frameq-system-webviews")).unwrap().count(), 0);
     println!("actual WeChat note saved and reopened: text_bytes={} task={id}", result.text.len());
+}
+
+#[test]
+#[ignore = "requires the actual installed system WebView2, bundled worker and public network"]
+fn real_system_webview_requested_wechat_note_is_saved_and_reopened() {
+    let paths = actual_paths();
+    let supervisors = Arc::new(crate::ProcessSupervisors::default());
+    let result = run_web_page(&paths, request("https://mp.weixin.qq.com/s/e59b93IR-W8lEOgQbxaShA"),
+        Arc::new(WebPageOperations::default()), Arc::clone(&supervisors), "main".into(), ProgressRoute::None).unwrap();
+    assert_eq!(serde_json::to_value(result.status).unwrap(), "completed");
+    assert!(result.transcript.is_none());
+    assert!(result.text.starts_with("Harness 已经很准了，为什么还需要一个 Agent Native Database"));
+    assert!(result.text.contains("6.6 工程实现与产品定位"));
+    assert!(result.text.contains("RAGFlow 的联合创始人"));
+    assert!(result.text.contains("\n\nEND\n\n"));
+    let id = result.task_id.as_ref().unwrap();
+    let task = crate::task_manifest::SupportedTask::open(&paths.output_root().unwrap(), id).unwrap();
+    assert!(result.validate_source_task(&task));
+    drop(task);
+    let detail = crate::history::load_history_detail_from_output_root(&paths.output_root().unwrap(),
+        serde_json::from_value(serde_json::json!({"task_id":id})).unwrap()).unwrap();
+    assert_eq!(detail.text, result.text);
+    assert_eq!(detail.markdown, result.markdown);
+    assert!(!supervisors.is_task_active());
+    assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".frameq-system-webviews")).unwrap().count(), 0);
+    println!("requested WeChat note saved and reopened: config={} text_bytes={} task={id}", paths.user_data_dir.display(), result.text.len());
 }

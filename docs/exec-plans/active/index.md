@@ -1,5 +1,7 @@
 # Active Exec Plans
 
+- `2026-11-05-release-readiness-plan.md` — 正式Windows安装包、完整回归、macOS双架构内部产物及对应提交CI验收。
+
 
 
 

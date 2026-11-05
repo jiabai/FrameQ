@@ -136,6 +136,7 @@ describe("DraftResultSheet", () => {
   // ---- 1b. Reopening reloads from disk ----
 
   test("closing and reopening the same task reloads from disk", async () => {
+    const regeneratedSeeds: (number | null)[] = [];
     function ReopenHost() {
       const [open, setOpen] = useState(true);
       return (
@@ -150,7 +151,7 @@ describe("DraftResultSheet", () => {
             open={open}
             workflow={completedWorkflow()}
             onSaved={vi.fn()}
-            onRegenerate={vi.fn()}
+            onRegenerate={(seed) => { regeneratedSeeds.push(seed); }}
             onClose={vi.fn()}
           />
         </>
@@ -170,16 +171,23 @@ describe("DraftResultSheet", () => {
       </LocaleProvider>,
     );
 
-    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+    await waitFor(() => expect((screen.getByRole("button", { name: /重新生成/ }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: /重新生成/ }));
+    expect(regeneratedSeeds).toEqual([42]);
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "close-sheet" }));
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "open-sheet" }));
-    });
+    fireEvent.click(screen.getByRole("button", { name: "open-sheet" }));
+    const regenButton = screen.getByRole("button", { name: /重新生成/ }) as HTMLButtonElement;
+    expect(regenButton.disabled).toBe(true);
+    fireEvent.click(regenButton);
+    expect(regeneratedSeeds).toEqual([42]);
 
     await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(regenButton.disabled).toBe(false));
+    fireEvent.click(regenButton);
+    expect(regeneratedSeeds).toEqual([42, 42]);
   });
 
   // ---- 2. Load failure fallback ----
@@ -374,12 +382,24 @@ describe("DraftResultSheet", () => {
 
   // ---- 8. Regenerate button ----
 
+  test("regenerate waits for the current draft detail before accepting input", async () => {
+    const { onRegenerate } = renderSheet();
+    const regenButton = screen.getByRole("button", { name: /重新生成/ }) as HTMLButtonElement;
+
+    expect(regenButton.disabled).toBe(true);
+    fireEvent.click(regenButton);
+    expect(onRegenerate).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(regenButton.disabled).toBe(false));
+    fireEvent.click(regenButton);
+    expect(onRegenerate).toHaveBeenCalledWith(42, false);
+  });
+
   test("regenerate button calls onRegenerate with detail seed insight id", async () => {
     const { onRegenerate } = renderSheet();
-    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
 
     const regenButton = screen.getByRole("button", { name: /重新生成/ }) as HTMLButtonElement;
-    expect(regenButton.disabled).toBe(false);
+    await waitFor(() => expect(regenButton.disabled).toBe(false));
 
     await act(async () => {
       fireEvent.click(regenButton);
@@ -396,7 +416,7 @@ describe("DraftResultSheet", () => {
     });
     const workflowWithSeed = completedWorkflow({ draftSeedInsightId: 99 });
     const { onRegenerate } = renderSheet({ workflow: workflowWithSeed });
-    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+    await waitFor(() => expect((screen.getByRole("button", { name: /重新生成/ }) as HTMLButtonElement).disabled).toBe(false));
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /重新生成/ }));
@@ -412,7 +432,7 @@ describe("DraftResultSheet", () => {
       draft_seed_insight_id: null,
     });
     const { onRegenerate } = renderSheet();
-    await waitFor(() => expect(mocks.loadDraftDetail).toHaveBeenCalledOnce());
+    await waitFor(() => expect((screen.getByRole("button", { name: /重新生成/ }) as HTMLButtonElement).disabled).toBe(false));
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /重新生成/ }));

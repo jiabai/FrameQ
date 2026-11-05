@@ -5,17 +5,25 @@ on:
     branches:
       - main
     paths:
-      - "app/src-tauri/**"
-      - "app/native-webview-host/**"
+      - "app/**"
+      - "worker/**"
+      - "contracts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "ruff.toml"
       - "scripts/build-system-webview-host.mjs"
-      - "worker/tests/fixtures/web_worker_orphan.py"
+      - "scripts/check-i18n-literals.mjs"
       - ".github/workflows/unix-process-supervisor.yml"
   pull_request:
     paths:
-      - "app/src-tauri/**"
-      - "app/native-webview-host/**"
+      - "app/**"
+      - "worker/**"
+      - "contracts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "ruff.toml"
       - "scripts/build-system-webview-host.mjs"
-      - "worker/tests/fixtures/web_worker_orphan.py"
+      - "scripts/check-i18n-literals.mjs"
       - ".github/workflows/unix-process-supervisor.yml"
   workflow_dispatch:
 
@@ -27,6 +35,68 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  desktop-checks:
+    name: Desktop checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      TMPDIR: ${{ github.workspace }}/build/desktop-checks/tmp
+      TEMP: ${{ github.workspace }}/build/desktop-checks/tmp
+      TMP: ${{ github.workspace }}/build/desktop-checks/tmp
+      UV_CACHE_DIR: ${{ github.workspace }}/build/desktop-checks/uv-cache
+      RUFF_CACHE_DIR: ${{ github.workspace }}/build/desktop-checks/ruff-cache
+      NPM_CONFIG_CACHE: ${{ github.workspace }}/build/desktop-checks/npm-cache
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Prepare test directories
+        run: mkdir -p build/desktop-checks/tmp build/desktop-checks/uv-cache build/desktop-checks/ruff-cache build/desktop-checks/npm-cache
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Install locked Worker and development dependencies
+        run: uv sync --frozen --dev --python 3.12
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Run complete frontend tests
+        run: npm --prefix app test
+
+      - name: Check frontend types and localized copy
+        run: npm --prefix app run lint
+
+      - name: Check Worker Python style
+        run: uv run --frozen ruff check worker
+
+      - name: Run complete Worker tests
+        run: >-
+          uv run --frozen python -m pytest worker/tests
+          --basetemp build/desktop-checks/pytest-temp -o cache_dir=build/desktop-checks/pytest-cache
+
   cargo-test:
     name: Cargo tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

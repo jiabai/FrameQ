@@ -253,10 +253,7 @@ fn run_claimed_web_page(
         if started.elapsed() >= Duration::from_secs(90) { return Err(WebPageError::Timeout.to_string()); }
         article.final_url = crate::task_manifest::canonical_web_url(&article.final_url)?;
         *cleanup_budget.lock().map_err(|_| "WEB_CLEANUP_FAILED")? = None;
-        let format = time::format_description::parse_borrowed::<3>("[year][month][day]-[hour][minute][second]")
-            .map_err(|_| WebPageError::StorageFailed.to_string())?;
-        let stamp = time::OffsetDateTime::now_utc().format(&format).map_err(|_| WebPageError::StorageFailed.to_string())?;
-        let task_id = format!("{stamp}-web-{}", &uuid::Uuid::new_v4().simple().to_string()[..16]);
+        let task_id = web_task_id(time::OffsetDateTime::now_utc())?;
         workspace.prepare_save(&task_id, &article)?;
         let expected_task_id = task_id.clone();
         let payload = serde_json::json!({
@@ -298,6 +295,13 @@ fn run_claimed_web_page(
             return Err(error);
         }
         outcome
+}
+
+fn web_task_id(now: time::OffsetDateTime) -> Result<String, String> {
+    let format = time::format_description::parse_borrowed::<2>("[year][month][day]-[hour][minute][second]")
+        .map_err(|_| WebPageError::StorageFailed.to_string())?;
+    let stamp = now.format(&format).map_err(|_| WebPageError::StorageFailed.to_string())?;
+    Ok(format!("{stamp}-web-{}", &uuid::Uuid::new_v4().simple().to_string()[..16]))
 }
 
 fn load_extractor(path: &Path) -> Result<String, String> {

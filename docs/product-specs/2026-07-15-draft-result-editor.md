@@ -51,6 +51,9 @@
 
 在结果视图新增「重新生成」入口（`workflow.draft` 非空或 `has_draft` 时可用），**逻辑与第一次生成完全一致**——重走确认页，不做静默一键复用：
 
+- 当前任务的草稿详情读取结束前，「重新生成」禁用且不接受触发；关闭、重新打开或切换任务时重新等待本次读取，不能沿用上一任务或上次打开时的种子。
+- 读取成功后优先采用当前详情的种子，再采用当前任务 `workflow.draftSeedInsightId`。读取失败显示既有提示，并允许使用当前任务的种子进入确认页；没有种子时沿用既有种子校验和重新选择要求。
+
 1. **dirty 拦截**：若 `workflow.draftEdited === true`（用户已手改），弹二次确认「将丢弃当前编辑（含已落盘的 `ai/draft.md`），是否继续？」；取消则不发起调用、不扣额度。
 2. **打开 `DraftConfirmationSheet`**（与首次生成同一个确认页）：
    - 种子：预选当前 `draftSeedInsightId`（当次会话）或 `load_draft_detail` 回传的 `draft_seed_insight_id`（历史）。

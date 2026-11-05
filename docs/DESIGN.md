@@ -1,5 +1,25 @@
 # FrameQ Design Guidelines
 
+## Processing workspace
+
+- The 2026-11-05 user-approved `build/processing-design-preview/` composition defines the active
+  task surface: centered source card, current-stage copy, paper/wave illustration, workflow
+  progress, three-stage timeline, compact cancellation action, and next-use guidance. Implementation
+  is `features/results/ProcessingWorkspace.tsx` with its scoped stylesheet and three-language copy.
+- Project actual worker progress as overall workflow progress. Measure elapsed time locally for
+  the current attempt; unknown progress remains indeterminate. Render validated progress messages
+  and the existing sanitized error presenter. URLs expose only platform/hostname; local files use
+  their validated display names. Webpage/audio inputs have source-appropriate stages and copy.
+- Cancellation confirmation invokes the existing owner and waits for the native terminal result.
+  Disable the action while cancelling; a failed cancellation resumes the existing task state.
+  Retry resubmits the current composer source through account/model and Collection checks.
+- Automatic title generation identifies its cloud operation and one-Credit cost. Saved text stays
+  readable below the task composition, using a keyed reader container that remains mounted when
+  title generation completes, fails, or is cancelled. Completed/restored notes use the existing
+  reading workspace without a local-completion banner. Existing title-recovery notices remain.
+- Keep the existing application shell. Bundle copy locally, retain local font rendering, and honor
+  reduced motion. Narrow windows scroll vertically without clipping their processing controls.
+
 ## Webpage note reading
 
 - Home keeps its current greeting, composer and sidebar. The composer accepts existing video
