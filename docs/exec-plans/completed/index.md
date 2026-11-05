@@ -2,8 +2,9 @@
 
 | File | Focus |
 |------|-------|
+| `2026-11-05-release-readiness-plan.md` | 最终产品提交 ff22538 的 Windows 正式安装/覆盖升级、53 个原有任务文件保留、指定微信文章原生保存阅读和安装版默认 ONNX 完整识别通过；macOS Intel/Apple Silicon 各 534 项原生测试、真实静态/动态网页保存重开、应用/运行环境/签名及 DMG 回读通过。相同提交 Native/Script/Server CI 全部通过；macOS 人工交互、专项安全检查和公开更新分发保留未验证。 |
 | `2026-11-05-web-note-native-acceptance-plan.md` | 网页任务使用兼容日期格式，固定UTC编号回归、17项Rust检查和指定微信文章的真实系统保存/重开通过。原生应用完成加载、提取、保存与阅读，42777字节正文和Markdown核验一致；脚本55+1、文档检查和Windows构建通过。 |
-| `2026-11-05-processing-workspace-plan.md` | 用户确认的处理界面移植到真实组件；1502项前端测试、lint、生产构建、文档检查和150组浏览器验收通过。指定YouTube视频的Windows原生下载、86分钟音频识别、15085词/300分段文字稿与自动标题，以及指定微信文章的原生提取、保存、阅读均完成；安装包及macOS未重新验收。 |
+| `2026-11-05-processing-workspace-plan.md` | 用户确认的处理界面移植到真实组件；1502项前端测试、lint、生产构建、文档检查和150组浏览器验收通过。指定YouTube视频的Windows原生下载、86分钟音频识别、15085词/300分段文字稿与自动标题，以及指定微信文章的原生提取、保存、阅读均完成；后续正式安装包与macOS双架构原生验收见同日release-readiness计划。 |
 | `2026-11-03-storage-directory-merge-plan.md` | 非空目标按相对路径同名文件目标优先、源文件移动/重复删除、空目录清理、逐文件恢复及实际目标读取。Rust556、前端1480、脚本54+1、生产worker1、真实跨盘复制终止/继续1与Windows构建通过；macOS、原生手动交互及真实容量耗尽未验证。 |
 | `2026-11-02-storage-preflight-progress-plan.md` | 迁移/清理预检查真实阶段、分块进度、后台取消和迟到结果隔离。Rust542、前端1471、脚本54+1、Windows构建通过；实际18,275文件盘点/哈希与独立副本双端核对、10文件取消通过，用户资料未删除；macOS及原生窗口手动交互未执行。 |
 | `2026-11-02-web-resource-policy-plan.md` | WEB_URL_BLOCKED资源数量误报修复；16项检查+512项队列、附属拒绝独立、正文网络完成观察和隐私诊断。Rust513、helper18+9、代理6、真实微信保存/重开、脚本54+1、lint及Windows no-bundle构建通过；macOS原生验证保留发行门禁。 |

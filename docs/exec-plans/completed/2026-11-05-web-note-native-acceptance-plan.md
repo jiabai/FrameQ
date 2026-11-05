@@ -27,7 +27,7 @@ Decision: Run the supplied address through both the real native integration test
 
 ## Outcomes & Retrospective
 
-The requested article completes native loading, extraction, atomic saving, and reader display. The actual saved title is “Harness 已经很准了，为什么还需要一个 Agent Native Database”; its TXT contains 17,469 Unicode characters (42,777 UTF-8 bytes), and Markdown contains 43,467 bytes. Manifest status is completed with no error; model and transcript are null. The independent real native integration test also reopens identical TXT/Markdown content. Markdown parsing found no executable HTML, image nodes, or unsafe URL protocols. The application remains open on the saved article. All listed local checks passed. Residual risk: macOS and installer packaging were not rerun; the existing frontend large-chunk build warning remains.
+The requested article completes native loading, extraction, atomic saving, and reader display. The actual saved title is “Harness 已经很准了，为什么还需要一个 Agent Native Database”; its TXT contains 17,469 Unicode characters (42,777 UTF-8 bytes), and Markdown contains 43,467 bytes. Manifest status is completed with no error; model and transcript are null. The independent real native integration test also reopens identical TXT/Markdown content. Markdown parsing found no executable HTML, image nodes, or unsafe URL protocols. The application remains open on the saved article. All listed local checks passed. Formal Windows installation/replacement and macOS dual-architecture native application/DMG acceptance are recorded in `docs/exec-plans/completed/2026-11-05-release-readiness-plan.md`. Native macOS graphical interaction remains unverified; the existing frontend large-chunk build warning remains.
 
 ## Context and Orientation
 

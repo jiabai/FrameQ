@@ -11,18 +11,19 @@ Close the formal installer, macOS, and commit-specific CI evidence gaps for the 
 - [x] 2026-11-05: Inspect the project release gates, native acceptance records, installer builder, and available workflows. Validation: current changes are on main; release artifacts require bundled runtime preparation and native packaging.
 - [x] 2026-11-05: Run complete frontend and Windows native checks. Validation: frontend 1503 passed / 1 skipped with lint passed; Rust 557 passed / 29 ignored, followed by the final socket shutdown regression passing with a single build job. Final local Node scripts 57 and Python scripts 1 passed; documentation validation and diff checks passed.
 - [x] 2026-11-05: Complete the serial Worker regression. Validation: Ruff passed; local complete Worker suite 1265 passed / 4 skipped, with all skips requiring Windows symbolic-link support. Final hosted suites exercised those real filesystem cases on both platforms and each passed all 1269 tests.
-- [x] 2026-11-05: Build, install, and replace the Windows release installer and verify installed behavior. Validation: optimized NSIS and `/S` installation succeeded; final `/S /UPDATE` exited 0, all 50 prior files retained their SHA-256 hashes, and installed Worker bytes match final source. Final native task `20261105-100804-web-6b22ab445fb54821` opened the exact verified article in the installed reader.
+- [x] 2026-11-05: Build, install, and replace the Windows release installer from final product commit `ff225385312e735d7cbe9d01e230646b450b80d6` and verify installed behavior. Validation: optimized NSIS build and `/S /UPDATE` exited 0; all 53 prior task files retained their SHA-256 hashes, and installed Worker bytes match canonical source. Final native task `20261105-113145-web-50ee1d9826284b5d` opened the exact verified article in the installed reader.
+- [x] 2026-11-05: Exercise the final installed default ONNX recognizer against the complete real YouTube audio. Validation: installed Python 3.12.16 with no discoverable PyTorch processed 5161.611 seconds of audio in 299.14 seconds, producing 80,951 characters and 300 valid ordered segments. The new transcript SHA-256 `213e2fcd1bd8ac60d4dde6399a0316b96e45d8f893c77e056206b0d3c7942031` exactly matches the earlier native result. Source audio and all 53 prior task files remain unchanged; no title, checkout, network request, or paid AI operation ran.
 - [x] 2026-11-05: Install the optimized Windows NSIS candidate and complete the real native webpage flow. Validation: installer exited 0; task `20261105-094047-web-f4d95af120b149a6` completed with the exact verified 42,777-byte article; all 47 pre-existing task files retained their original SHA-256 hashes. Final replacement and the second installed native task also passed.
 - [x] 2026-11-05: Prepare and independently review internal macOS Intel/Apple Silicon packaging and native acceptance coverage. Validation: workflow/YAML and source review passed; read-only permissions and internal artifact boundaries are preserved.
-- [x] 2026-11-05: Commit and push reviewed product source `7a40fac1ec17393933a1a791bf16aeb3c787ed60` and complete corresponding hosted gates. Validation: Native CI `42013462846` passed all four jobs; each platform passed frontend 1503 / 1 skipped and Worker 1269 / 0 skipped. Windows Cargo passed 557 / 29 ignored and native host 18 / 9 ignored; macOS Cargo passed 533 / 28 ignored. Script CI `42013462854` passed on both platforms with zero documentation errors/warnings. Server CI `42013462806` passed 400 tests, eight migrations, preflight, and isolated restore.
+- [x] 2026-11-05: Commit and push reviewed product source `ff225385312e735d7cbe9d01e230646b450b80d6` and complete corresponding hosted gates. Validation: Native CI `42017204405` passed all four jobs; each platform passed frontend 1503 / 1 skipped and Worker 1269 / 0 skipped. Windows Cargo passed 557 / 29 ignored and native host 18 / 9 ignored; macOS Cargo passed 534 / 28 ignored. Script CI `42017204256` passed on both platforms with zero documentation errors/warnings. Server CI `42017204288` passed 400 tests, eight migrations, preflight, and isolated restore.
 - [x] 2026-11-05: Add real subprocess/open-pipe regressions for short controls and 96 KiB initialization records, and implement incremental macOS stdin reads. Validation: the actual Swift binary exercised both owned child processes while their stdin remained open; both responses arrived within the unchanged five-second deadline and matched the submitted bytes. Native CI and both architecture artifact jobs passed the protocol checks.
-- [ ] Complete macOS internal artifact acceptance `42013737158` for the exact product commit, recording application and DMG identities.
-- [ ] Verify Unix storage-manager ownership releases its process lock while a duplicated descriptor remains open, preserving successor-manager exclusion and real interrupted-merge recovery.
-- [ ] Record remaining platform limitations and determine whether formal release gates are satisfied.
+- [x] 2026-11-05: Complete macOS internal artifact acceptance `42017205151` for the exact product commit. Validation: both Intel and Apple Silicon jobs succeeded, each passing 534 native tests / 28 ignored and the opt-in real static/JavaScript extraction, save, and reopen test. Both final applications passed architecture, installed runtime imports, resource integrity, strict ad-hoc signature, and helper checks; both DMGs passed checksum verification, read-only mounting, and contained application/helper checks. Internal artifacts `13413796078` (Intel) and `13410683200` (Apple Silicon) uploaded successfully.
+- [x] 2026-11-05: Verify Unix storage-manager ownership releases its process lock while a duplicated descriptor remains open. Validation: the actual macOS kernel-lock regression, successor-manager exclusion after restart handoff, and original interrupted-merge recovery all passed in the complete 534-test hosted native suite. The local Windows storage suite passed 76 tests / 5 ignored, including the extended restart handoff assertions.
+- [x] 2026-11-05: Record the completed installer, dual-architecture, and exact-source CI acceptance, together with remaining platform limits. Validation: the three requested evidence gaps are closed; native macOS graphical interaction, the remaining dedicated WebView security/permission canaries, and complete public signed-update distribution remain unverified. Public release publication was not performed.
 
 ## Surprises & Discoveries
 
-Evidence: `desktop-release.yml` publishes only through explicit tags/dispatch; the existing Intel acceptance workflow creates an internal artifact with read-only repository permission. Native process and script CI run on main. Current Windows acceptance used an unbundled debug application; the configured identifier and source data remain the production ones.
+Evidence: `desktop-release.yml` publishes only through explicit tags/dispatch; the dual-architecture macOS acceptance workflow creates internal artifacts with read-only repository permission. Native process and script CI run on main. Windows acceptance uses the optimized NSIS installer and the actual installed application with the production identifier and local data layout.
 
 Evidence: final source behavior waits for the current task's draft detail before accepting regeneration. Native proxy tests configure bounded socket reads before stopping the proxy, then retain the EOF and cleanup assertions. The installed-runtime acceptance uses a clean official CPython archive and lock-derived requirements.
 
@@ -30,7 +31,7 @@ Evidence: the Windows clean runtime uses official CPython archive SHA-256 `590df
 
 Evidence: complete Worker checks require the real PyTorch extra for the optional ASR path. Transcript link checks precede authority reads and retain the existing `TRANSCRIPT_TEXT_PATH_INVALID` contract. The native connection shutdown check accepts only EOF or explicit reset/abort, while bounded waits and unexpected-data rejection remain enforced. Browser readiness waits for the actual navigation document.
 
-Evidence: final Windows installer `FrameQ_0.4.3_x64-setup.exe` is 209,835,790 bytes with SHA-256 `3fd4636781f747594b871435bd7967085166a55a33a085ddfa29c9bd6f099cfe`. It uses the production identifier and default current-user installation location. The internal acceptance override disables updater signature sidecars; it leaves application behavior and resource paths intact. Actual installed-library checks and native accessibility records are in the ignored evidence directory.
+Evidence: final Windows installer `FrameQ_0.4.3_x64-setup.exe` is 209,814,953 bytes with SHA-256 `aaaf1e0f2d3a2d3fd966d5da0b383ba63f090ece5708678a2222f286497d0c9b`. It uses the production identifier and default current-user installation location. The internal acceptance override disables updater signature sidecars; it leaves application behavior and resource paths intact. Actual installed-library checks and native accessibility records are in the ignored evidence directory.
 
 ## Decision Log
 
@@ -48,7 +49,9 @@ Decision: Explicitly unlock the Unix storage manager's owned process lock when i
 
 ## Outcomes & Retrospective
 
-Acceptance is in progress. Residual risk: no local macOS host is available; hosted runner capabilities and actual native evidence must be recorded separately from build success.
+Internal candidate acceptance is complete for product commit `ff225385312e735d7cbe9d01e230646b450b80d6`. The optimized Windows installer passed actual replacement, preservation of all 53 pre-existing task files, native webpage extraction/reading, and complete installed default ONNX recognition of the real 86-minute audio. Intel and Apple Silicon hosted jobs passed actual system-WebView static/dynamic note persistence, native process and storage recovery tests, final application/runtime checks, and final DMG read-back. Native, Script, and Server CI passed for the same product commit. Independent source/workflow review found no implementation blocker.
+
+Not run and residual risk: no local macOS device was available for graphical interaction, Gatekeeper/permission interaction, or the remaining specialized WebView security canaries. The hosted webpage test exercises the built helper/Worker resources; separate final-bundle checks establish their packaged identities and signatures. macOS signatures are ad-hoc. Internal bundles disable updater sidecars; complete public signed-update distribution was not exercised. These boundaries remain explicit in the technical-debt tracker. No tag or public release was created.
 
 ## Context and Orientation
 
@@ -84,6 +87,17 @@ All acceptance artifacts and local test directories stay under the ignored proje
 ## Artifacts and Notes
 
 Keep test logs, artifact hashes, runtime checks, accessibility evidence, and hosted run summaries in the ignored evidence directory. Source-controlled records contain no credentials, user notes, or extracted article content.
+
+Hosted product-source evidence:
+
+- Native CI: `https://github.com/jiabai/FrameQ/actions/runs/42017204405`.
+- Script CI: `https://github.com/jiabai/FrameQ/actions/runs/42017204256`.
+- Server CI: `https://github.com/jiabai/FrameQ/actions/runs/42017204288`.
+- macOS acceptance: `https://github.com/jiabai/FrameQ/actions/runs/42017205151`.
+- Intel artifact `frameq-macos-x64-11-ff225385312e`: 341,052,865 bytes; artifact ZIP SHA-256 `f29496fc12eb5ed5fe3083c69fc6f79e0b77c9da2121436d2a2fb3e0ca4f77c5`.
+- Apple Silicon artifact `frameq-macos-arm64-11-ff225385312e`: 295,682,984 bytes; artifact ZIP SHA-256 `203bcfa448c559821eb00321e84f3346878c9e76dc3158be598b274b12aedfed`.
+
+The macOS digests above identify the uploaded artifact ZIPs. Each ZIP contains the DMG and its separate SHA-256 file; the workflow verified the actual DMG and mounted contents before upload. Internal artifacts have seven-day retention.
 
 ## Interfaces and Dependencies
 

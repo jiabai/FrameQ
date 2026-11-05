@@ -46,4 +46,4 @@ Integrate the approved central task composition into React using the existing wo
 
 ## Residual risks
 
-Windows native download/ASR and automatic title generation passed for the requested video; native extraction, saving, and reading passed for the requested webpage. Installer packaging and macOS rendering were not rerun; ASR accuracy was not evaluated sentence by sentence. Existing worker/native/server contracts are unchanged. The production build retains its existing JavaScript chunk-size warning.
+Windows native download/ASR and automatic title generation passed for the requested video; native extraction, saving, and reading passed for the requested webpage. Formal Windows installation/replacement, installed default ONNX recognition, and macOS dual-architecture native application/DMG acceptance are recorded in `docs/exec-plans/completed/2026-11-05-release-readiness-plan.md`. Native macOS graphical interaction remains unverified; ASR accuracy was not evaluated sentence by sentence. Existing worker/native/server contracts are unchanged. The production build retains its existing JavaScript chunk-size warning.

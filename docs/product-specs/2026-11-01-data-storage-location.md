@@ -1,6 +1,6 @@
 # 数据存储位置与可恢复迁移
 
-状态：已实现，Windows原迁移验收见 `docs/exec-plans/completed/2026-11-01-data-storage-location-plan.md`，预检查进度与取消验收见 `docs/exec-plans/completed/2026-11-02-storage-preflight-progress-plan.md`，已有目录合并验收见 `docs/exec-plans/completed/2026-11-03-storage-directory-merge-plan.md`。有效数据位置由本机受控记录决定；macOS及复制中途磁盘耗尽的环境验证保留未验证。
+状态：已实现，Windows原迁移验收见 `docs/exec-plans/completed/2026-11-01-data-storage-location-plan.md`，预检查进度与取消验收见 `docs/exec-plans/completed/2026-11-02-storage-preflight-progress-plan.md`，已有目录合并验收见 `docs/exec-plans/completed/2026-11-03-storage-directory-merge-plan.md`。有效数据位置由本机受控记录决定；macOS双架构自动化存储测试、进程锁交接及真实终止恢复验收见 `docs/exec-plans/completed/2026-11-05-release-readiness-plan.md`。原生设置页面人工操作及复制中途磁盘耗尽的环境验证保留未验证。
 
 ## 用户目标
 
