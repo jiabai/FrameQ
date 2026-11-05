@@ -261,8 +261,10 @@ describe("CollectionsWorkspace", () => {
     filter.focus();
     expect(document.activeElement).toBe(filter);
     complete(success);
-    await waitFor(() => expect(checkbox.disabled).toBe(false));
-    expect(document.activeElement).toBe(checkbox);
+    await waitFor(() => {
+      expect(checkbox.disabled).toBe(false);
+      expect(document.activeElement).toBe(checkbox);
+    });
   });
 
   test("does not restore a previous collection's checkbox after the selected collection changes", async () => {
