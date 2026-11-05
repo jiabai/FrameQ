@@ -11,11 +11,13 @@ Close the formal installer, macOS, and commit-specific CI evidence gaps for the 
 - [x] 2026-11-05: Inspect the project release gates, native acceptance records, installer builder, and available workflows. Validation: current changes are on main; release artifacts require bundled runtime preparation and native packaging.
 - [x] 2026-11-05: Run complete frontend and Windows native checks. Validation: frontend 1503 passed / 1 skipped with lint passed; Rust 557 passed / 29 ignored, followed by the final socket shutdown regression passing with a single build job. Node scripts 55 and Python scripts 1 passed; documentation validation and diff checks passed.
 - [x] 2026-11-05: Complete the final serial Worker regression. Validation: Ruff passed; complete Worker suite 1265 passed / 4 skipped, with all skips requiring Windows symbolic-link support. Hosted frontend/Worker gates and both macOS architecture jobs are defined for the final source.
-- [ ] Build and inspect the Windows release installer, verify installed resources and real application behavior, and verify same-version replacement without losing local notes.
+- [x] 2026-11-05: Build, install, and replace the Windows release installer and verify installed behavior. Validation: optimized NSIS and `/S` installation succeeded; final `/S /UPDATE` exited 0, all 50 prior files retained their SHA-256 hashes, and installed Worker bytes match final source. Final native task `20261105-100804-web-6b22ab445fb54821` opened the exact verified article in the installed reader.
 - [x] 2026-11-05: Install the optimized Windows NSIS candidate and complete the real native webpage flow. Validation: installer exited 0; task `20261105-094047-web-f4d95af120b149a6` completed with the exact verified 42,777-byte article; all 47 pre-existing task files retained their original SHA-256 hashes. The final resource refresh and replacement check are in progress.
 - [x] 2026-11-05: Prepare and independently review internal macOS Intel/Apple Silicon packaging and native acceptance coverage. Validation: workflow/YAML and source review passed; read-only permissions and internal artifact boundaries are preserved.
 - [x] 2026-11-05: Commit and push reviewed source `c92d2b7c812921fb51783fa0f809be315f710853` and start hosted acceptance. Validation: Script CI `42000704372` and Server CI `42000704493` passed; Native ProcessSupervisor `42000704525` and macOS artifacts `42000759848` are being followed to completion.
-- [ ] Complete corresponding hosted checks and internal artifact acceptance, recording exact commit and run identities.
+- [x] 2026-11-05: Complete final desktop and script hosted gates for `5e9b0d5db58b5d7ecc6964ed2293e3d2ec05cfab`. Validation: Native CI `42006858417` passed all four jobs, both platforms frontend 1503 passed / 1 skipped and Worker 1269 passed; Windows Cargo 557 passed / 29 ignored, macOS Cargo 533 passed / 28 ignored. Script CI `42006858589` passed. Same-commit Server CI `42008457731` and macOS artifact acceptance `42007067038` are being followed to completion.
+- [ ] Complete corresponding server checks and macOS internal artifact acceptance, recording exact commit and run identities.
+- [x] 2026-11-05: Add real subprocess/open-pipe regressions for short controls and 96 KiB initialization records, and implement incremental macOS stdin reads. Validation: the actual Swift test binary compiled and exercised the owned child process; final-source protocol and complete macOS acceptance are being run through hosted checks.
 - [ ] Record remaining platform limitations and determine whether formal release gates are satisfied.
 
 ## Surprises & Discoveries
@@ -28,6 +30,8 @@ Evidence: the Windows clean runtime uses official CPython archive SHA-256 `590df
 
 Evidence: complete Worker checks require the real PyTorch extra for the optional ASR path. Transcript link checks precede authority reads and retain the existing `TRANSCRIPT_TEXT_PATH_INVALID` contract. The native connection shutdown check accepts only EOF or explicit reset/abort, while bounded waits and unexpected-data rejection remain enforced. Browser readiness waits for the actual navigation document.
 
+Evidence: final Windows installer `FrameQ_0.4.3_x64-setup.exe` is 209,835,790 bytes with SHA-256 `3fd4636781f747594b871435bd7967085166a55a33a085ddfa29c9bd6f099cfe`. It uses the production identifier and default current-user installation location. The internal acceptance override disables updater signature sidecars; it leaves application behavior and resource paths intact. Actual installed-library checks and native accessibility records are in the ignored evidence directory.
+
 ## Decision Log
 
 Decision: Use internal acceptance artifacts and preserve the existing product identity and data format. Rationale: installed behavior must exercise production resource paths and local-history compatibility. Date/Author: 2026-11-05, User + Codex.
@@ -37,6 +41,8 @@ Decision: Keep public release creation and tag publication outside this acceptan
 Decision: Include both macOS architectures in the internal acceptance matrix and add hosted frontend/Worker gates alongside native checks. Rationale: evidence must apply to the final source commit and actual platform artifacts. Date/Author: 2026-11-05, Codex.
 
 Decision: Copy standard macOS Python launchers from the discovered versioned interpreter into independent ordinary executable files. Rationale: the launcher stays in the same bin directory and retains interpreter bytes and permissions while satisfying native file/process identity checks. Date/Author: 2026-11-05, Codex.
+
+Decision: Read macOS host stdin with bounded single POSIX reads and deliver each complete NDJSON record immediately. Rationale: the parent keeps stdin open for subsequent start, policy, and cancellation commands; record delivery must proceed independently of EOF. Preserve framing limits, interrupted-read handling, and the existing failure callbacks. Date/Author: 2026-11-05, Codex.
 
 ## Outcomes & Retrospective
 

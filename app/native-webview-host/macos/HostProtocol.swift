@@ -133,9 +133,19 @@ final class HostPipe {
                ended: @escaping @MainActor () -> Void) {
         reader.async {
             var buffer = Data()
+            var bytes = [UInt8](repeating: 0, count: 64 * 1024)
             do {
-                while let chunk = try FileHandle.standardInput.read(upToCount: 64 * 1024), !chunk.isEmpty {
-                    buffer.append(chunk)
+                while true {
+                    // 单次read返回当前收到的字节，完整记录立即交付。
+                    let count = bytes.withUnsafeMutableBufferPointer {
+                        Darwin.read(FileHandle.standardInput.fileDescriptor, $0.baseAddress, $0.count)
+                    }
+                    if count < 0 {
+                        if errno == EINTR { continue }
+                        throw HostFailure.invalidRequest
+                    }
+                    if count == 0 { break }
+                    buffer.append(contentsOf: bytes[..<count])
                     while let newline = buffer.firstIndex(of: 0x0A) {
                         let count = buffer.distance(from: buffer.startIndex, to: newline)
                         guard count > 0, count <= HostProtocol.maximumRecordBytes else { throw HostFailure.invalidRequest }
