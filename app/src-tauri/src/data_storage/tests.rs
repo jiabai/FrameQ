@@ -289,6 +289,23 @@ fn process_lock_is_real_and_released_when_manager_drops() {
     let f=Fixture::new();let m=f.manager();assert_eq!(DataStorageManager::open(f.config.clone(),f.resources.clone()).err().unwrap().code,"Busy");drop(m);assert!(DataStorageManager::open(f.config,f.resources).is_ok());
 }
 
+#[cfg(unix)]
+#[test]
+fn manager_drop_releases_process_lock_while_a_duplicated_descriptor_remains_open() {
+    let f=Fixture::new();
+    let manager=f.manager();
+    let inherited=manager._process_lock.try_clone().unwrap();
+    assert_eq!(DataStorageManager::open(f.config.clone(),f.resources.clone()).err().unwrap().code,"Busy");
+    drop(manager);
+    let reopened=f.manager();
+    assert!(inherited.metadata().unwrap().is_file());
+    assert_eq!(DataStorageManager::open(f.config.clone(),f.resources.clone()).err().unwrap().code,"Busy");
+    drop(inherited);
+    assert_eq!(DataStorageManager::open(f.config.clone(),f.resources.clone()).err().unwrap().code,"Busy");
+    drop(reopened);
+    assert!(DataStorageManager::open(f.config,f.resources).is_ok());
+}
+
 #[test]
 fn interrupted_copy_is_reopened_from_durable_operation() {
     let f=Fixture::new();f.write("cache/large",&vec![8;16*1024*1024]);let m=f.manager();let p=f.prepare(&m);let output=f.base.join("phase.txt");
