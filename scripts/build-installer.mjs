@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createWriteStream, existsSync, readFileSync } from "node:fs";
-import { chmod, copyFile, cp, mkdir, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -307,7 +307,7 @@ async function findPythonExecutable(root) {
   throw new Error(`Could not find bundled Python executable under ${root}`);
 }
 
-async function normalizeUnixPythonLaunchers(root) {
+export async function normalizeUnixPythonLaunchers(root) {
   const binDirectory = join(root, "bin");
   const versionedLauncher = await findVersionedUnixPythonLauncher(binDirectory);
   if (!versionedLauncher) {
@@ -317,7 +317,8 @@ async function normalizeUnixPythonLaunchers(root) {
   for (const launcherName of ["python", "python3"]) {
     const launcherPath = join(binDirectory, launcherName);
     await rm(launcherPath, { force: true });
-    await symlink(versionedLauncher, launcherPath);
+    // 标准入口保留在同一bin目录，使用独立普通文件满足原生进程身份校验。
+    await copyFile(join(binDirectory, versionedLauncher), launcherPath);
   }
 }
 

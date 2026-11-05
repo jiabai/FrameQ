@@ -47,6 +47,23 @@ def run_insight_generation_step(
     manifest_path = output_dir.parent / "frameq-task.json"
     source_kind = "transcript"
     expected_transcript_path = output_dir.parent / "transcript" / "transcript.txt"
+    if (
+        transcript_txt_path.absolute() == expected_transcript_path.absolute()
+        and any(
+            path.is_symlink() or is_junction(path)
+            for path in (transcript_txt_path, *transcript_txt_path.parents)
+        )
+    ):
+        return ProcessResult(
+            status=JobStage.PARTIAL_COMPLETED,
+            text="",
+            transcript=transcript,
+            error=WorkerError(
+                code="TRANSCRIPT_TEXT_PATH_INVALID",
+                message="Official transcript.txt is required for AI generation.",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ),
+        )
     if manifest_path.exists():
         try:
             source = read_source_text(output_dir.parent.parent.parent, output_dir.parent.name)

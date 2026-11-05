@@ -12,8 +12,10 @@ Close the formal installer, macOS, and commit-specific CI evidence gaps for the 
 - [x] 2026-11-05: Run complete frontend and Windows native checks. Validation: frontend 1503 passed / 1 skipped with lint passed; Rust 557 passed / 29 ignored, followed by the final socket shutdown regression passing with a single build job. Node scripts 55 and Python scripts 1 passed; documentation validation and diff checks passed.
 - [x] 2026-11-05: Complete the final serial Worker regression. Validation: Ruff passed; complete Worker suite 1265 passed / 4 skipped, with all skips requiring Windows symbolic-link support. Hosted frontend/Worker gates and both macOS architecture jobs are defined for the final source.
 - [ ] Build and inspect the Windows release installer, verify installed resources and real application behavior, and verify same-version replacement without losing local notes.
-- [ ] Prepare and review internal macOS Intel/Apple Silicon packaging and native acceptance coverage.
-- [ ] Commit the reviewed changes and run corresponding hosted checks and internal artifact acceptance, recording exact commit and run identities.
+- [x] 2026-11-05: Install the optimized Windows NSIS candidate and complete the real native webpage flow. Validation: installer exited 0; task `20261105-094047-web-f4d95af120b149a6` completed with the exact verified 42,777-byte article; all 47 pre-existing task files retained their original SHA-256 hashes. The final resource refresh and replacement check are in progress.
+- [x] 2026-11-05: Prepare and independently review internal macOS Intel/Apple Silicon packaging and native acceptance coverage. Validation: workflow/YAML and source review passed; read-only permissions and internal artifact boundaries are preserved.
+- [x] 2026-11-05: Commit and push reviewed source `c92d2b7c812921fb51783fa0f809be315f710853` and start hosted acceptance. Validation: Script CI `42000704372` and Server CI `42000704493` passed; Native ProcessSupervisor `42000704525` and macOS artifacts `42000759848` are being followed to completion.
+- [ ] Complete corresponding hosted checks and internal artifact acceptance, recording exact commit and run identities.
 - [ ] Record remaining platform limitations and determine whether formal release gates are satisfied.
 
 ## Surprises & Discoveries
@@ -22,6 +24,10 @@ Evidence: `desktop-release.yml` publishes only through explicit tags/dispatch; t
 
 Evidence: final source behavior waits for the current task's draft detail before accepting regeneration. Native proxy tests configure bounded socket reads before stopping the proxy, then retain the EOF and cleanup assertions. The installed-runtime acceptance uses a clean official CPython archive and lock-derived requirements.
 
+Evidence: the Windows clean runtime uses official CPython archive SHA-256 `590dfcbe3a34c07301e6332e13e2188b98655cd072b08afa45a7998dc4c22bc5`; the executable reports Python 3.12.16 and yt-dlp 2026.10.21. The bundled runtime excludes PyTorch, and its lock fingerprint is `96c66789b3bc1c19dd9dfd8566a37b31f2ce1d43e79bcf6a948c9f2ca90ede80`. Canonical Worker bytes match the prepared resource mirror.
+
+Evidence: complete Worker checks require the real PyTorch extra for the optional ASR path. Transcript link checks precede authority reads and retain the existing `TRANSCRIPT_TEXT_PATH_INVALID` contract. The native connection shutdown check accepts only EOF or explicit reset/abort, while bounded waits and unexpected-data rejection remain enforced. Browser readiness waits for the actual navigation document.
+
 ## Decision Log
 
 Decision: Use internal acceptance artifacts and preserve the existing product identity and data format. Rationale: installed behavior must exercise production resource paths and local-history compatibility. Date/Author: 2026-11-05, User + Codex.
@@ -29,6 +35,8 @@ Decision: Use internal acceptance artifacts and preserve the existing product id
 Decision: Keep public release creation and tag publication outside this acceptance task. Rationale: the user requested completion of release-readiness gaps. Date/Author: 2026-11-05, Codex.
 
 Decision: Include both macOS architectures in the internal acceptance matrix and add hosted frontend/Worker gates alongside native checks. Rationale: evidence must apply to the final source commit and actual platform artifacts. Date/Author: 2026-11-05, Codex.
+
+Decision: Copy standard macOS Python launchers from the discovered versioned interpreter into independent ordinary executable files. Rationale: the launcher stays in the same bin directory and retains interpreter bytes and permissions while satisfying native file/process identity checks. Date/Author: 2026-11-05, Codex.
 
 ## Outcomes & Retrospective
 

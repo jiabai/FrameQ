@@ -49,6 +49,7 @@ FrameQ 的 MVP 已能在开发环境中运行，但普通用户安装后不能�
 - Windows x64 构建机可使用真实 Python standalone 和 ffmpeg/ffprobe 产出不含模型权重的轻量 NSIS 安装包。
 - macOS arm64/x64 对应干净机器可安装并完成同样链路。
 - macOS arm64/x64 构建分别使用明确 target triple，不依赖构建宿主默认架构。
+- macOS 包内 `python/bin/python`、`python/bin/python3` 使用同目录版本化解释器的独立普通可执行文件副本，保留解释器字节和执行权限；标准入口与原生任务的文件及进程身份校验兼容，解释器次版本由实际归档确定。
 - 首启断网时应用可打开且不发起模型下载；模型已下载且本地媒体可用时，断网仍可进行本地 ASR。
 - ModelScope 下载成功时不会访问 Hugging Face；模拟 ModelScope 下载失败和超时两种情况时，均会在同一次用户操作内自动尝试一次 Hugging Face，并能在备用源成功后完成模型安装。
 - 配置 `FRAMEQ_ASR_MODEL_DOWNLOAD_URL` 时只访问该自定义源；自定义源失败时返回可重试错误，不访问两个官方源。

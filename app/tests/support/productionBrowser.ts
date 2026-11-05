@@ -89,7 +89,7 @@ export async function openPage(width = 1180, height = 760): Promise<CdpPage> {
   await page.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
   await page.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   await page.send("Page.navigate", { url: appUrl });
-  await waitFor(page, `document.documentElement.lang === 'en-US' && Boolean(document.querySelector('.data-storage-recovery [role="status"]'))`);
+  await waitFor(page, `document.documentElement?.lang === 'en-US' && Boolean(document.querySelector('.data-storage-recovery [role="status"]'))`);
   return page;
 }
 

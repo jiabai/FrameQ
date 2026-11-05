@@ -382,6 +382,11 @@ mod tests {
 
     #[test]
     fn saturated_proxy_waits_for_capacity_and_stop_releases_waiters() {
+        let assert_closed = |result: io::Result<usize>| match result {
+            Ok(0) => {},
+            Err(error) if matches!(error.kind(), io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionAborted) => {},
+            result => panic!("expected a closed TCP connection, got {result:?}"),
+        };
         let mut proxy = PublicProxy::start().unwrap();
         let mut clients = Vec::new();
         for _ in 0..16 {
@@ -408,10 +413,9 @@ mod tests {
         let began = std::time::Instant::now();
         proxy.stop().unwrap();
         assert!(began.elapsed() < Duration::from_secs(5));
-        let result = cancelled.read(&mut response);
-        assert!(matches!(result, Ok(0)) || result.is_err());
+        assert_closed(cancelled.read(&mut response));
         for mut client in clients {
-            assert_eq!(client.read(&mut response).unwrap(), 0);
+            assert_closed(client.read(&mut response));
         }
     }
 

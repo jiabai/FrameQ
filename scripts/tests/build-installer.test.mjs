@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,7 @@ import {
   bundleWindowsVcRuntimeDlls,
   copyDenoFromArchive,
   defaultDenoArchiveUrl,
+  normalizeUnixPythonLaunchers,
   parseArgs,
   requireBundledDeno,
   requiredDenoBinary,
@@ -25,6 +26,44 @@ const repoRoot = join(testDir, "..", "..");
 
 async function tempRoot(name) {
   return mkdtemp(join(tmpdir(), `frameq-${name}-`));
+}
+
+for (const minor of ["11", "13"]) {
+  test(`normalizes the python3.${minor} filename into independent executable launchers`, async () => {
+    const fixtures = join(repoRoot, "build", "installer-launcher-tests");
+    await mkdir(fixtures, { recursive: true });
+    const root = await mkdtemp(join(fixtures, "runtime-"));
+    const bin = join(root, "bin");
+    await mkdir(bin);
+    const python = spawnSync(process.platform === "win32" ? "python" : "python3", ["-c", "import sys; print(sys.executable)"], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    assert.equal(python.status, 0, python.stderr);
+    const versionedName = `python3.${minor}`;
+    const versioned = join(bin, versionedName);
+    await copyFile(python.stdout.trim(), versioned);
+    await chmod(versioned, 0o755);
+    if (process.platform !== "win32") {
+      await symlink(versionedName, join(bin, "python"));
+      await symlink(versionedName, join(bin, "python3"));
+    }
+
+    await normalizeUnixPythonLaunchers(root);
+    await normalizeUnixPythonLaunchers(root);
+
+    const original = readFileSync(versioned);
+    for (const name of ["python", "python3"]) {
+      const launcher = join(bin, name);
+      const metadata = await lstat(launcher);
+      assert.equal(metadata.isSymbolicLink(), false);
+      assert.equal(metadata.isFile(), true);
+      assert.equal(metadata.nlink, 1);
+      assert.deepEqual(readFileSync(launcher), original);
+      if (process.platform !== "win32") assert.notEqual(metadata.mode & 0o111, 0);
+    }
+    assert.deepEqual(readFileSync(versioned), original);
+  });
 }
 
 async function createFakeDenoArchive(binaryName) {
