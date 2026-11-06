@@ -83,11 +83,15 @@ test("超长文字稿显示长度限制提示，且不继续刷新整理稿", as
     { messageCode: "errors.transcript.polishTooLong" },
   ]);
   expect(actions).toEqual([]);
-  const notice = notices.at(-1) as UiMessage;
-  expect(renderUiMessage("zh-CN", notice)).toBe("文字稿过长，暂时无法整理。");
-  expect(renderUiMessage("zh-TW", notice)).toBe("逐字稿過長，暫時無法整理。");
+  const notice = notices[notices.length - 1] as UiMessage;
+  expect(renderUiMessage("zh-CN", notice)).toBe(
+    "文字稿过长，暂时无法整理。目前最多支持约 4.8 万字符（24 段，每段约 2,000 字符）。",
+  );
+  expect(renderUiMessage("zh-TW", notice)).toBe(
+    "逐字稿過長，暫時無法整理。目前最多支援約 4.8 萬字元（24 段，每段約 2,000 字元）。",
+  );
   expect(renderUiMessage("en-US", notice)).toBe(
-    "The transcript is too long to polish.",
+    "The transcript is too long to polish. The current limit is about 48,000 characters (24 segments of about 2,000 characters each).",
   );
 });
 
