@@ -1,7 +1,6 @@
 # Active Exec Plans
 
-
-
+- `2026-11-06-v0.5.0-respin-plan.md` — 同版本重发 v0.5.0：修复超长文字稿的整理提示；计划、发布说明与站点说明已写，门禁、重打 tag、发布与站点部署待执行。
 
 - `2026-10-31-llm-note-titles-plan.md` — 自动标题已实现；前端 1102、worker 1198、Rust 381 项通过，真实供应商两次共使用 2 个 AI Credit；完整原生 URL 流程验收待完成。
 - `2026-10-30-desktop-sidebar-home-plan.md` - 侧栏、Home、本地合集与笔记流程已实现；1039 项前端测试与 Windows 构建通过，完整原生交互及视觉验收记录见计划。
