@@ -11,6 +11,7 @@ import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { isProcessingStage, type WorkflowState } from "../../workflow";
 import type { RetryInsightsInput } from "../../workerClient";
 import { retryInsights } from "../../workerClient";
+import { formatWorkerError } from "../../workerErrorCopy";
 
 type PolishTranscriptRunner = (
   input: RetryInsightsInput,
@@ -77,11 +78,13 @@ export function useTranscriptPolishController({
       });
       if (result.error) {
         setActionNotice(
-          result.error.code
-            ? uiMessage("transcript.notice.polishFailed", {
-                code: result.error.code,
-              })
-            : uiMessage("transcript.notice.polishFailedNoCode"),
+          result.error.code === "POLISH_TRANSCRIPT_TOO_LONG"
+            ? uiMessage(formatWorkerError(result.error))
+            : result.error.code
+              ? uiMessage("transcript.notice.polishFailed", {
+                  code: result.error.code,
+                })
+              : uiMessage("transcript.notice.polishFailedNoCode"),
         );
         return;
       }
