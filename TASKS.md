@@ -18,7 +18,7 @@
 
 ## Active UI Work
 
-- [x] Prepare and publish FrameQ v0.5.0 desktop release (2026-11-05) — ✅ Tag `v0.5.0` at
+- [x] Prepare and publish FrameQ v0.5.0 desktop release (2026-11-05, re-published 2026-11-06) — ✅ Tag `v0.5.0` at
   `6857d97` (release run `42048599641`, all three platform jobs green). Ship set: a redesigned
   desktop workspace with draggable split panes, notes, collections and local data management;
   the processing composition with real progress and three stages; webpage links saved as local
@@ -47,6 +47,30 @@
   signed-update path was not exercised; `macos-intel-acceptance.yml` was not dispatched for
   this tag; the optional PyTorch runtime component is version-bound, so upgraders on that
   model download about 140 MB again; `yt-dlp` still has no external timeout.
+
+  Re-published under the same `v0.5.0` tag on 2026-11-06 14:52 +08:00
+  (`2026-11-06T06:52:07Z`) after the transcript-polish too-long notice fix. The first tag
+  target `6857d97` (run `42048599641`) and its release were deleted; annotated tag `827fcbc`
+  was re-created at `86a255c` (run `42172311942`, Windows updater, macOS Intel and Apple Silicon
+  jobs all green). Fixes `6315846`, `3d68fc0`, `86a255c`: `POLISH_TRANSCRIPT_TOO_LONG` now shows
+  a localized notice with the ~48,000-character / 24-chunk limit instead of a raw error code,
+  with controller and workspace render coverage. Gates: worker 1265 passed / 4 skipped, frontend
+  1506 passed / 1 skipped, server 399 passed / 1 skipped, Node scripts 57 and Python scripts 1,
+  app lint and production build, site build, `check-release-version.mjs 0.5.0`, docs ERROR/WARN
+  zero, `git diff --check`; hosted Script/Native green on `86a255c`, Script/Server green on
+  `c0718b1`, `ef1c92a`, `c7b08bf`. Assets (8, all `uploaded`) match v0.4.3 after normalizing the
+  version, including the three `frameq-pytorch-runtime-*.zip`; both Windows updater signatures in
+  `latest.json` equal the uploaded 416-byte `.sig` byte for byte; the three installer URLs
+  answered `206` to `range: 0-0` from the deployment server. The reviewed body
+  `docs/releases/v0.5.0.md` is live and differs from the read-back by one trailing blank line.
+  Marketing site: backup `webroot-20261106-141754.tar.gz`, 1 upload / 0 deletes, re-run dry-run
+  16 unchanged, three live pages match `site/dist` by SHA-256, zero `v0.4.3` strings and three
+  `v0.5.0` download links on the live page. Residual risks: `macos-intel-acceptance.yml` still
+  needs a manual dispatch; the local `cargo test` suite reports 54 permission-related failures in
+  real-filesystem cases, with no Rust source changed and hosted Native ProcessSupervisor green on
+  `86a255c`; anyone who installed the first `6857d97` build must reinstall manually because the
+  updater does not offer the same version. Release link:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.5.0
 
 - [x] Remove the duplicated export action from the transcript review footer (2026-10-30) — ✅ Reported
   from the v0.4.3 result screen: the review footer「导出」and the artifact toolbar「定位文字稿」both
