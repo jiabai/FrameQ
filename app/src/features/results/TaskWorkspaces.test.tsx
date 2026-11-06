@@ -19,6 +19,7 @@ import { AiResultDetailSheet } from "./AiResultDetailSheet";
 import { TaskStatusBanner } from "./TaskStatusBanner";
 import { TaskWorkspaceLayout } from "./TaskWorkspaceLayout";
 import { initializeI18n } from "../../i18n/i18n";
+import { uiMessage } from "../../i18n/uiMessage";
 import type { SupportedLocale } from "../../i18n/locale";
 
 function readyWorkflow(): WorkflowState {
@@ -602,6 +603,28 @@ describe("task domain workspaces", () => {
     expect(markup).toContain("整理中");
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('disabled=""');
+  });
+
+  test("local workspace renders the too-long notice with the length limit", () => {
+    const workflow = readyWorkflow();
+    const model = createTaskWorkspaceViewModel(workflow, aiAccount());
+    const markup = renderToStaticMarkup(
+      <LocalTranscriptWorkspace
+        model={model.local}
+        controller={transcriptController()}
+        actionNotice={uiMessage("errors.transcript.polishTooLong")}
+        polishingTranscript={false}
+        onPolishTranscript={vi.fn()}
+        onLocateArtifact={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain(
+      "文字稿过长，暂时无法整理。目前最多支持约 4.8 万字符（24 段，每段约 2,000 字符）。",
+    );
+    expect(markup).toContain('role="status"');
+    expect(markup).not.toContain("POLISH_TRANSCRIPT_TOO_LONG");
   });
 
   test("AI workspace has independent summary, inspiration, and dissection targets without a mindmap target", () => {
