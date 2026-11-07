@@ -98,7 +98,9 @@
   equals `site/dist/download/index.html` with `/health/live` green. Residual risks: anyone who
   installed a
   2026-11-05 or 2026-11-06 v0.5.0 build must reinstall manually because the updater does not
-  offer the same version; `macos-intel-acceptance.yml` still needs a manual dispatch; macOS
+  offer the same version; `macos-intel-acceptance.yml` was dispatched manually on 2026-11-08 and
+  its two DMG jobs (arm64 / x64) are green (run `42394922085`; attempt 1 failed on a transient
+  truncated runtime-archive download, rerun succeeded); macOS
   graphical interaction, notarization and the complete public signed-update path remain
   unverified; real login-page and end-to-end WebView2 acceptance is still pending. Release link:
   https://github.com/jiabai/FrameQ/releases/tag/v0.5.0
