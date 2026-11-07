@@ -82,6 +82,20 @@ enum ProtocolTests {
             throw TestFailure("初始化管道测试必须跨越64 KiB")
         }
         try roundTripThroughOpenPipe(largeInitialization, kind: "init")
+        for raw in ["https://www.xiaohongshu.com/login?redirectPath=%2Fexplore%2Fabc",
+                    "https://example.com/LOGIN/", "https://example.com/passport/login",
+                    "https://example.com/auth/checkpoint", "https://example.com/sign-in?returnUrl=%2Farticle"] {
+            guard let url = URL(string: raw), HostURLPolicy.accessRestrictedURL(url) else {
+                throw TestFailure("登录页 URL 未被识别：\(raw)")
+            }
+        }
+        for raw in ["https://example.com/article", "https://example.com/blog/how-to-login",
+                    "https://example.com/article?tag=login", "https://example.com/login/article"] {
+            guard let url = URL(string: raw), !HostURLPolicy.accessRestrictedURL(url) else {
+                throw TestFailure("普通文章 URL 被误判：\(raw)")
+            }
+        }
+        print("macOS 登录页 URL 判定：末段路径闭集与大小写验证通过")
         print("macOS 原生宿主协议：初始化、字段闭集、身份、版本、类型和容量验证通过")
         print("macOS 实际HostPipe：stdin保持开放时，短控制消息和跨64 KiB初始化均及时响应")
     }

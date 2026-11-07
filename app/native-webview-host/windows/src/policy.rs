@@ -55,6 +55,18 @@ pub fn permitted_url(value: &str) -> bool {
     }
 }
 
+const ACCESS_RESTRICTED_PATHS: [&str; 13] = [
+    "login", "signin", "sign-in", "logon", "auth", "authorize", "authenticate", "verify",
+    "verification", "captcha", "checkpoint", "passport", "sso",
+];
+
+pub fn access_restricted_url(value: &str) -> bool {
+    let Ok(url) = Url::parse(value) else { return false; };
+    let Some(last) = url.path_segments().and_then(|segments| segments.filter(|part| !part.is_empty()).last()) else { return false; };
+    let normalized = last.to_ascii_lowercase();
+    ACCESS_RESTRICTED_PATHS.contains(&normalized.as_str())
+}
+
 pub fn public_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => {
@@ -256,5 +268,22 @@ mod tests {
     fn local_and_dangerous_targets_fail_synchronous_validation() {
         for url in ["file:///C:/Users/test", "http://127.1/", "http://[::ffff:127.0.0.1]/", "http://192.168.1.1/", "http://10.0.0.1/", "http://localhost/", "http://printer.local/", "https://example.com:22/", "https://user:secret@example.com/", "https://[2001:db8::1]/"] { assert!(!permitted_url(url), "{url}"); }
         assert!(permitted_url("https://example.com/article"));
+    }
+    #[test]
+    fn access_restricted_url_matches_only_final_login_paths() {
+        for url in [
+            "https://www.xiaohongshu.com/login?redirectPath=%2Fexplore%2Fabc",
+            "https://example.com/LOGIN/",
+            "https://example.com/passport/login",
+            "https://example.com/auth/checkpoint",
+            "https://example.com/sign-in?returnUrl=%2Farticle",
+        ] { assert!(access_restricted_url(url), "{url}"); }
+        for url in [
+            "https://example.com/article",
+            "https://example.com/blog/how-to-login",
+            "https://example.com/article?tag=login",
+            "https://example.com/login/article",
+            "not a url",
+        ] { assert!(!access_restricted_url(url), "{url}"); }
     }
 }

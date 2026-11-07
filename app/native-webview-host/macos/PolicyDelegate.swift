@@ -55,6 +55,7 @@ final class PolicyDelegate: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
         let failure: HostFailure?
         if [401, 403, 407].contains(response.statusCode) { failure = .accessRestricted }
         else if !(200..<300).contains(response.statusCode) { failure = .httpFailed }
+        else if owner.hasFollowedRedirect && HostURLPolicy.accessRestrictedURL(url) { failure = .accessRestricted }
         else if !navigationResponse.canShowMIMEType || !["text/html", "application/xhtml+xml"].contains(response.mimeType?.lowercased() ?? "") {
             failure = .contentTypeInvalid
         } else if response.value(forHTTPHeaderField: "Content-Disposition")?.lowercased().hasPrefix("attachment") == true {

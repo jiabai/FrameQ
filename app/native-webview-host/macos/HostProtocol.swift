@@ -187,3 +187,16 @@ final class HostPipe {
         }
     }
 }
+
+enum HostURLPolicy {
+    private static let accessRestrictedPaths: Set<String> = [
+        "login", "signin", "sign-in", "logon", "auth", "authorize", "authenticate", "verify",
+        "verification", "captcha", "checkpoint", "passport", "sso"
+    ]
+
+    static func accessRestrictedURL(_ url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return false }
+        guard let last = components.path.split(separator: "/").last.map(String.init)?.lowercased() else { return false }
+        return accessRestrictedPaths.contains(last)
+    }
+}

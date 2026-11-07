@@ -11,10 +11,11 @@ pub fn fatal_process_failure(kind: COREWEBVIEW2_PROCESS_FAILED_KIND) -> bool {
     !matches!(kind, COREWEBVIEW2_PROCESS_FAILED_KIND_GPU_PROCESS_EXITED | COREWEBVIEW2_PROCESS_FAILED_KIND_UTILITY_PROCESS_EXITED)
 }
 
-fn main_response_failure(status: i32) -> Option<&'static str> {
+fn navigation_failure(status: i32, navigations: u32, main_url: &str) -> Option<&'static str> {
     match status {
         401 | 403 | 407 => Some("WEB_PAGE_ACCESS_RESTRICTED"),
-        200..=299 => None,
+        200..=299 => (navigations > 1 && policy::access_restricted_url(main_url))
+            .then_some("WEB_PAGE_ACCESS_RESTRICTED"),
         _ => Some("WEB_PAGE_HTTP_FAILED"),
     }
 }
@@ -215,7 +216,7 @@ unsafe fn install_navigation(webview: &ICoreWebView2, shared: Shared) -> windows
             if !success.as_bool() { state.error = Some("WEB_NAVIGATION_FAILED"); return Ok(()); }
             let mut status = 0;
             args.cast::<ICoreWebView2NavigationCompletedEventArgs2>()?.HttpStatusCode(&mut status)?;
-            if let Some(code) = main_response_failure(status) { state.error = Some(code); return Ok(()); }
+            if let Some(code) = navigation_failure(status, state.navigations, &state.main_url) { state.error = Some(code); return Ok(()); }
             state.javascript_pending = true;
             state.javascript_started = Instant::now();
             state.generation
@@ -254,9 +255,19 @@ mod tests {
     use super::*;
     #[test]
     fn completed_http_error_pages_cannot_be_saved_as_articles() {
-        for status in [401, 403, 407] { assert_eq!(main_response_failure(status), Some("WEB_PAGE_ACCESS_RESTRICTED")); }
-        for status in [0, 301, 404, 500] { assert_eq!(main_response_failure(status), Some("WEB_PAGE_HTTP_FAILED")); }
-        assert_eq!(main_response_failure(200), None);
+        let article = "https://example.com/article";
+        for status in [401, 403, 407] { assert_eq!(navigation_failure(status, 1, article), Some("WEB_PAGE_ACCESS_RESTRICTED")); }
+        for status in [0, 301, 404, 500] { assert_eq!(navigation_failure(status, 1, article), Some("WEB_PAGE_HTTP_FAILED")); }
+        assert_eq!(navigation_failure(200, 1, article), None);
+    }
+    #[test]
+    fn successful_login_redirect_fails_before_extraction() {
+        let login = "https://www.xiaohongshu.com/login?redirectPath=%2Fexplore%2F6ae608c9000000000e02f2d2";
+        assert_eq!(navigation_failure(200, 2, login), Some("WEB_PAGE_ACCESS_RESTRICTED"));
+        assert_eq!(navigation_failure(200, 3, login), Some("WEB_PAGE_ACCESS_RESTRICTED"));
+        assert_eq!(navigation_failure(200, 1, login), None);
+        assert_eq!(navigation_failure(200, 2, "https://www.xiaohongshu.com/explore/6ae608c9000000000e02f2d2"), None);
+        assert_eq!(navigation_failure(404, 2, login), Some("WEB_PAGE_HTTP_FAILED"));
     }
     #[test]
     fn browser_and_renderer_failures_invalidate_the_document() {

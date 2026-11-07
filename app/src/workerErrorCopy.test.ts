@@ -52,6 +52,12 @@ describe("worker error presentation", () => {
     });
   });
 
+  test("maps login-gated page responses to the restricted copy", () => {
+    expect(presentWorkerError(workerError("WEB_PAGE_ACCESS_RESTRICTED"))).toMatchObject({
+      messageCode: "errors.web.restricted",
+    });
+  });
+
   test.each([
     ["AI_LLM_QUOTA_UNAVAILABLE", "insight.quotaUnavailable"],
     ["AI_LLM_AUTH_REQUIRED", "insight.authRequired"],

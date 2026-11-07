@@ -27,6 +27,7 @@ final class WebPageHost {
     private(set) var navigationGeneration: UInt64 = 0
     private var navigationCount = 0
     private var redirectCount = 0
+    var hasFollowedRedirect: Bool { navigationGeneration > 1 || redirectCount > 0 }
     private var navigationIdentity: ObjectIdentifier?
     private var activeNavigationGeneration: UInt64 = 0
     private var mainNavigationPending = false
