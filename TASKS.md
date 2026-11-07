@@ -18,7 +18,7 @@
 
 ## Active UI Work
 
-- [x] Prepare and publish FrameQ v0.5.0 desktop release (2026-11-05, re-published 2026-11-06) — ✅ Tag `v0.5.0` at
+- [x] Prepare and publish FrameQ v0.5.0 desktop release (2026-11-05, re-published 2026-11-06 and 2026-11-07) — ✅ Tag `v0.5.0` at
   `6857d97` (release run `42048599641`, all three platform jobs green). Ship set: a redesigned
   desktop workspace with draggable split panes, notes, collections and local data management;
   the processing composition with real progress and three stages; webpage links saved as local
@@ -70,6 +70,31 @@
   real-filesystem cases, with no Rust source changed and hosted Native ProcessSupervisor green on
   `86a255c`; anyone who installed the first `6857d97` build must reinstall manually because the
   updater does not offer the same version. Release link:
+  https://github.com/jiabai/FrameQ/releases/tag/v0.5.0
+
+  Re-published a second time under the same `v0.5.0` tag on 2026-11-08 00:40 +08:00
+  (`2026-11-07T16:40:51Z`) with two fixes: `cc85a65` routes `xhslink.cn` short links through the
+  Xiaohongshu media flow (admission, short-link hosts, fallback dispatch, source identity and URL
+  support contract), and `4b43677` classifies HTTP 200 login redirects as
+  `WEB_PAGE_ACCESS_RESTRICTED` in both Windows and macOS native web hosts. The 11-06 release and
+  annotated tag `827fcbc` were deleted; new annotated tag `8e374a1` points at `4b43677`
+  (run `42387388050`, Windows updater, macOS Intel and Apple Silicon jobs all green). Gates:
+  worker 1270 passed / 4 skipped, frontend 1507 passed / 1 skipped, server 399 passed / 1 skipped,
+  Node scripts 57 and Python scripts 1, app lint and production build, site build,
+  `check-release-version.mjs 0.5.0` consistent, docs ERROR/WARN zero, `git diff --check`.
+  Hosted Script/Server green; Native ProcessSupervisor attempt 2 has all four jobs green (the
+  first macOS Desktop checks attempt failed on the known four-second spawn timeout in
+  `test_markdown_splitter_advances_past_sentence_separator`, 1 failed / 1273 passed); the macOS
+  Swift build and `--test-protocol` steps succeeded in `Cargo tests (macos-latest)`. Assets (8,
+  all `uploaded`) match the previous normalized name set; both Windows updater signatures in
+  `latest.json` equal the uploaded 416-byte `.sig` byte for byte; the reviewed body
+  `docs/releases/v0.5.0.md` is live and differs from the read-back by one trailing blank line.
+  Residual risks: the marketing-site download page and the three installer URL `206` range checks
+  still need the deployment server (this machine has no SSH credentials); anyone who installed a
+  2026-11-05 or 2026-11-06 v0.5.0 build must reinstall manually because the updater does not
+  offer the same version; `macos-intel-acceptance.yml` still needs a manual dispatch; macOS
+  graphical interaction, notarization and the complete public signed-update path remain
+  unverified; real login-page and end-to-end WebView2 acceptance is still pending. Release link:
   https://github.com/jiabai/FrameQ/releases/tag/v0.5.0
 
 - [x] Remove the duplicated export action from the transcript review footer (2026-10-30) — ✅ Reported
