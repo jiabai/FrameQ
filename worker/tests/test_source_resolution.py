@@ -168,6 +168,24 @@ def test_bilibili_short_link_revalidates_resolved_full_url(
     assert identity.canonical_url == expected_url
 
 
+def test_xhslink_cn_short_link_uses_xiaohongshu_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    canonical_url = "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f67890123456"
+    monkeypatch.setattr(
+        platform_resolvers_module,
+        "parse_xiaohongshu_input",
+        lambda _source: SimpleNamespace(full_url=canonical_url),
+    )
+
+    identity = build_default_source_resolver().identify(
+        "https://xhslink.cn/o/5Sr07UUGn54"
+    )
+
+    assert identity.platform == "xiaohongshu"
+    assert identity.canonical_url == canonical_url
+
+
 def test_short_link_rejects_parser_id_without_safe_resolved_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

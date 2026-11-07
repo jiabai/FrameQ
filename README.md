@@ -99,7 +99,7 @@ Supported video link
 | --- | --- |
 | Input workflow | One pasted public or user-authorized video source; FrameQ is transcription-first, not a general downloader |
 | Douyin public videos | Long links, short links, share text, `/note/{id}`, `/share/slides/{id}`, `modal_id`, and `aweme_id` inputs when they resolve to a playable public video |
-| Xiaohongshu public video notes | Share text, direct note IDs, full `xiaohongshu.com/explore/{note_id}` links, `xhslink.com` short links, and `www.xhslink.com` short links. A validated platform subtitle track is reused when present; otherwise the note goes through local ASR |
+| Xiaohongshu public video notes | Share text, direct note IDs, full `xiaohongshu.com/explore/{note_id}` links, `xhslink.com` / `www.xhslink.com` short links, and `xhslink.cn` / `www.xhslink.cn` short links. A validated platform subtitle track is reused when present; otherwise the note goes through local ASR |
 | Bilibili ordinary public videos | BV links, av links, selected `?p=N` parts, and safe `b23.tv` short links that resolve to ordinary `/video/` pages |
 | YouTube public single videos | `youtube.com/watch?v=...`, `youtu.be/...`, and `youtube.com/shorts/...`; `watch?v=...&list=...` is processed as one video with playlist context ignored |
 | Transcript output | Plain text and Markdown |

@@ -21,7 +21,12 @@ XHS_BASE_URL = "https://www.xiaohongshu.com"
 XHS_URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 XHS_NOTE_ID_EXACT_PATTERN = re.compile(r"(?i)^[0-9a-f]{24}$")
 XHS_NOTE_ID_PATTERN = re.compile(r"(?i)[0-9a-f]{24}")
-XHS_SHORT_HOSTS = {"xhslink.com", "www.xhslink.com"}
+XHS_SHORT_HOSTS = {
+    "xhslink.com",
+    "www.xhslink.com",
+    "xhslink.cn",
+    "www.xhslink.cn",
+}
 XHS_SHORT_LINK_BODY_BYTES = 256 * 1024
 XHS_MAX_REDIRECT_DEPTH = 5
 XHS_TRAILING_URL_PUNCTUATION = " \t\r\n\"'<>[]{}()，。！？；：、,.;:!?"

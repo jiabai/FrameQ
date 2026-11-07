@@ -317,6 +317,17 @@ def test_should_attempt_xiaohongshu_fallback_detects_embedded_short_link() -> No
     )
 
 
+def test_should_attempt_xiaohongshu_fallback_detects_cn_short_link() -> None:
+    assert media.should_attempt_xiaohongshu_fallback(
+        "share text https://xhslink.cn/o/5Sr07UUGn54 more text",
+        "ERROR: Unsupported URL",
+    )
+    assert not media.should_attempt_xiaohongshu_fallback(
+        "https://xhslink.cn.evil/o/5Sr07UUGn54",
+        "ERROR: Unsupported URL",
+    )
+
+
 def test_should_attempt_bilibili_fallback_detects_supported_links() -> None:
     assert media.should_attempt_bilibili_fallback(
         "https://www.bilibili.com/video/BV1Aa411c7mD?p=2",

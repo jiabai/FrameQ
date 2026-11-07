@@ -1,6 +1,12 @@
 const SUPPORTED_URL_PATTERN = /https?:\/\/[^\s"'<>]+/gi;
 const XIAOHONGSHU_NOTE_ID_PATTERN = /^[0-9a-f]{24}$/i;
 const TRAILING_URL_PUNCTUATION_PATTERN = /[，。！？；：、,.;:!?）)\]}]+$/u;
+const XIAOHONGSHU_SHORT_HOSTS = new Set([
+  "xhslink.com",
+  "www.xhslink.com",
+  "xhslink.cn",
+  "www.xhslink.cn",
+]);
 
 export function canSubmitUrl(rawUrl: string): boolean {
   return normalizeSubmitUrl(rawUrl) !== null;
@@ -84,7 +90,7 @@ function hasNumericSearchParam(url: URL, names: string[]): boolean {
 }
 
 function isXiaohongshuShortLink(hostname: string, normalizedPath: string): boolean {
-  if (hostname !== "xhslink.com" && hostname !== "www.xhslink.com") {
+  if (!XIAOHONGSHU_SHORT_HOSTS.has(hostname)) {
     return false;
   }
   const segments = normalizedPath.split("/").filter(Boolean);

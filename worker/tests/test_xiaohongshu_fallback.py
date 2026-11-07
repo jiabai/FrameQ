@@ -179,6 +179,60 @@ def test_parse_xiaohongshu_input_accepts_short_link_share_text_and_xsec_token() 
     assert result.full_url.startswith("https://www.xiaohongshu.com/explore/")
 
 
+def test_parse_xiaohongshu_input_resolves_cn_short_link_location() -> None:
+    short_url = "https://xhslink.cn/o/5Sr07UUGn54"
+    client = FakeHttpClient(
+        {
+            short_url: [
+                HttpResponse(
+                    status=302,
+                    headers={
+                        "Location": (
+                            f"https://www.xiaohongshu.com/explore/{NOTE_ID}"
+                            "?xsec_token=cn-token"
+                        )
+                    },
+                    body=b"",
+                    url=short_url,
+                )
+            ]
+        }
+    )
+
+    result = parse_xiaohongshu_input(short_url, http_client=client)
+
+    assert result.note_id == NOTE_ID
+    assert result.xsec_token == "cn-token"
+    assert result.full_url.startswith("https://www.xiaohongshu.com/explore/")
+    assert [call[0] for call in client.calls] == [short_url]
+
+
+def test_parse_xiaohongshu_input_resolves_cn_short_link_embedded_url() -> None:
+    short_url = "https://xhslink.cn/o/5Sr07UUGn54"
+    client = FakeHttpClient(
+        {
+            short_url: [
+                HttpResponse(
+                    status=200,
+                    headers={"Content-Type": "text/html"},
+                    body=(
+                        b'<a href="https://www.xiaohongshu.com/explore/'
+                        + NOTE_ID.encode()
+                        + b'?xsec_token=embedded-token">Found</a>'
+                    ),
+                    url=short_url,
+                )
+            ]
+        }
+    )
+
+    result = parse_xiaohongshu_input(short_url, http_client=client)
+
+    assert result.note_id == NOTE_ID
+    assert result.xsec_token == "embedded-token"
+    assert [call[0] for call in client.calls] == [short_url]
+
+
 def test_parse_xiaohongshu_input_accepts_3xx_location_and_https_retry() -> None:
     client = FakeHttpClient(
         {

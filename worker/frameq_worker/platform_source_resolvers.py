@@ -14,7 +14,14 @@ def build_default_source_resolver() -> SourceResolver:
         (
             ShortLinkAdapter(
                 platform="xiaohongshu",
-                hosts=frozenset({"xhslink.com", "www.xhslink.com"}),
+                hosts=frozenset(
+                    {
+                        "xhslink.com",
+                        "www.xhslink.com",
+                        "xhslink.cn",
+                        "www.xhslink.cn",
+                    }
+                ),
                 resolve=_resolve_xiaohongshu_short_url,
             ),
             ShortLinkAdapter(

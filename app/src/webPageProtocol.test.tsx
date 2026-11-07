@@ -46,6 +46,7 @@ describe("web article projection from real Document extraction", () => {
     expect(safeNoteSource(result.source)).toBe("https://example.com/articles/current?id=5");
     expect(normalizeWebPageInput("https://example.com/articles/current?token=secret")).toContain("token=secret");
     expect(classifyTaskUrl("https://www.youtube.com/watch?v=abcdefghijk")?.kind).toBe("media");
+    expect(classifyTaskUrl("https://xhslink.cn/o/5Sr07UUGn54")?.kind).toBe("media");
     expect(classifyTaskUrl("https://example.com/articles/current")?.kind).toBe("web_page");
     expect(classifyTaskUrl("Read https://example.com/articles/current")).toBeNull();
     expect(parseWebPageSource({ ...result.source, url: "https://example.com/articles/current?token=secret" })).toBeNull();

@@ -6,6 +6,14 @@
 > strict History vNext specification; older schema compatibility statements below are historical and
 > do not authorize runtime migration or loading of unsupported tasks.
 
+## 2026-11-07 xhslink.cn Short Link Support
+
+- FrameQ accepts `xhslink.cn` and `www.xhslink.cn` share short links in the existing single input workflow, including `https://xhslink.cn/o/<code>`.
+- Short-link resolution uses the existing Xiaohongshu path: one GET to the short link, then the `3xx` `Location`, the final response URL, or a note URL embedded in the HTML body yields the `xiaohongshu.com` note URL. Redirect depth, `http`-to-`https` retry, `xsec_token` handling, and host validation stay unchanged.
+- Frontend admission, worker fallback dispatch, the packaged worker resource mirror, source identity resolution, and the processing workspace platform label all recognize the new hosts.
+- Lookalike hosts such as `evil-xhslink.cn` and `xhslink.cn.evil` stay rejected, as does an empty `xhslink.cn/o/` link.
+- The URL support contract covers the new short link with a drift-only case, and no new user-facing error copy or AI behavior is introduced.
+
 ## 2026-10-22 Douyin Stream Download Stall Protection
 
 - The Douyin fallback stream download must never appear as a frozen task. A user who submits a Douyin share link sees continuous progress feedback during the media download instead of a static percentage, and the download step either finishes, switches to the next candidate stream, or fails with the existing `DOUYIN_STREAM_DOWNLOAD_FAILED` taxonomy within a bounded time.
@@ -284,8 +292,8 @@
 
 ## 2026-06-23 Xiaohongshu Short Link Support
 
-- The URL input should accept Xiaohongshu share short links in the form `http://xhslink.com/o/<code>` or `https://xhslink.com/o/<code>`.
-- The client should reject empty `xhslink.com/o/` links, non-Xiaohongshu hosts, and lookalike hosts before starting local processing.
+- The URL input should accept Xiaohongshu share short links in the form `http://xhslink.com/o/<code>`, `https://xhslink.com/o/<code>`, `http://xhslink.cn/o/<code>`, and `https://xhslink.cn/o/<code>`.
+- The client should reject empty `xhslink.com/o/` and `xhslink.cn/o/` links, non-Xiaohongshu hosts, and lookalike hosts before starting local processing.
 - Worker download should still pass the original URL to `yt-dlp`; after download it should select the media file created or updated by the current run when no platform-specific video ID is available.
 - FrameQ does not bypass Xiaohongshu platform access controls, login gates, risk checks, or CAPTCHA challenges; users should retry with a public, authorized video link.
 

@@ -28,10 +28,11 @@ function sourceIdentity(workflow: WorkflowState, isWeb: boolean): ProcessingWork
   if (isWeb) return { kind: "article", label: source?.kind === "web_page" ? source.title : host, host };
   const domain = host.replace(/^www\./u, "");
   const isDomain = (name: string) => domain === name || domain.endsWith(`.${name}`);
+  const isXiaohongshuShortDomain = isDomain("xhslink.com") || isDomain("xhslink.cn");
   const platform = isDomain("bilibili.com") || domain === "b23.tv" ? "bilibili"
     : isDomain("youtube.com") || domain === "youtu.be" ? "youtube"
       : isDomain("douyin.com") ? "douyin"
-        : isDomain("xiaohongshu.com") || isDomain("xhslink.com") || /^[0-9a-f]{24}$/iu.test(rawUrl) ? "xiaohongshu" : undefined;
+        : isDomain("xiaohongshu.com") || isXiaohongshuShortDomain || /^[0-9a-f]{24}$/iu.test(rawUrl) ? "xiaohongshu" : undefined;
   return { kind: "url", label: host, host, ...(platform ? { platform } : {}) };
 }
 

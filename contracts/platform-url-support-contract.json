@@ -233,6 +233,33 @@
       "knownAsymmetry": null
     },
     {
+      "id": "xiaohongshu-short-link-cn",
+      "platform": "xiaohongshu",
+      "input": "share https://xhslink.cn/o/5Sr07UUGn54 more text",
+      "frontend": {
+        "canSubmit": true,
+        "normalized": "https://xhslink.cn/o/5Sr07UUGn54"
+      },
+      "worker": {
+        "dispatch": true,
+        "failureMessage": "ERROR: Unsupported URL",
+        "parser": {
+          "outcome": "accepted",
+          "mediaId": "0123456789abcdef01234568",
+          "shortLinkResponse": {
+            "requestUrl": "https://xhslink.cn/o/5Sr07UUGn54",
+            "status": 302,
+            "headers": {
+              "Location": "https://www.xiaohongshu.com/discovery/item/0123456789abcdef01234568?xsec_token=tok"
+            },
+            "body": "",
+            "responseUrl": "https://xhslink.cn/o/5Sr07UUGn54"
+          }
+        }
+      },
+      "knownAsymmetry": null
+    },
+    {
       "id": "xiaohongshu-bare-note-id",
       "platform": "xiaohongshu",
       "input": "0123456789abcdef01234568",

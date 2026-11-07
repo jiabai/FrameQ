@@ -208,6 +208,10 @@ describe("workflow state model", () => {
     expect(canSubmitUrl("http://xhslink.com/o/jQzXcxNapU")).toBe(true);
     expect(canSubmitUrl("https://xhslink.com/o/jQzXcxNapU")).toBe(true);
     expect(canSubmitUrl("https://www.xhslink.com/demo")).toBe(true);
+    expect(canSubmitUrl("https://xhslink.cn/o/5Sr07UUGn54")).toBe(true);
+    expect(canSubmitUrl("http://xhslink.cn/o/5Sr07UUGn54")).toBe(true);
+    expect(canSubmitUrl("https://www.xhslink.cn/demo")).toBe(true);
+    expect(canSubmitUrl("share https://xhslink.cn/o/5Sr07UUGn54 more text")).toBe(true);
     expect(
       canSubmitUrl(
         "复制小红书笔记 https://www.xiaohongshu.com/explore/0123456789abcdef01234568?xsec_token=tok",
@@ -228,6 +232,9 @@ describe("workflow state model", () => {
     expect(canSubmitUrl("http://xhslink.com/o/")).toBe(false);
     expect(canSubmitUrl("https://evil-xhslink.com/o/jQzXcxNapU")).toBe(false);
     expect(canSubmitUrl("https://xhslink.com.evil/o/jQzXcxNapU")).toBe(false);
+    expect(canSubmitUrl("https://xhslink.cn/o/")).toBe(false);
+    expect(canSubmitUrl("https://evil-xhslink.cn/o/5Sr07UUGn54")).toBe(false);
+    expect(canSubmitUrl("https://xhslink.cn.evil/o/5Sr07UUGn54")).toBe(false);
     expect(
       canSubmitUrl("https://xiaohongshu.com.evil/explore/0123456789abcdef01234568"),
     ).toBe(false);
