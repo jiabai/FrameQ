@@ -87,10 +87,15 @@
   `test_markdown_splitter_advances_past_sentence_separator`, 1 failed / 1273 passed); the macOS
   Swift build and `--test-protocol` steps succeeded in `Cargo tests (macos-latest)`. Assets (8,
   all `uploaded`) match the previous normalized name set; both Windows updater signatures in
-  `latest.json` equal the uploaded 416-byte `.sig` byte for byte; the reviewed body
+  `latest.json` equal the   uploaded 416-byte `.sig` byte for byte; the reviewed body
   `docs/releases/v0.5.0.md` is live and differs from the read-back by one trailing blank line.
-  Residual risks: the marketing-site download page and the three installer URL `206` range checks
-  still need the deployment server (this machine has no SSH credentials); anyone who installed a
+  Follow-up completed 2026-11-08: the three installer URLs answered `206` with `Content-Range`
+  totals matching the asset sizes (checked locally); the user provided the deploy key
+  (`~/.ssh/id_rsa_aws`, key-based SSH to `ubuntu@49.234.56.225`), and the marketing site was
+  redeployed with backup `webroot-20261107-165710.tar.gz`, 1 upload / 0 deletes
+  (`download/index.html` only), re-run dry-run 15 unchanged, and the live download page SHA-256
+  equals `site/dist/download/index.html` with `/health/live` green. Residual risks: anyone who
+  installed a
   2026-11-05 or 2026-11-06 v0.5.0 build must reinstall manually because the updater does not
   offer the same version; `macos-intel-acceptance.yml` still needs a manual dispatch; macOS
   graphical interaction, notarization and the complete public signed-update path remain

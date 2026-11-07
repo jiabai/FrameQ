@@ -3,7 +3,6 @@
 
 
 
-- `2026-11-07-v0.5.0-second-respin-plan.md` — 沿用 `v0.5.0` 第二次同版本重发；发布说明与站点发布说明已补两项修复和手动重装要求，全套本地门禁通过（worker 1270、前端 1507、server 399、脚本 57+1、文档零告警、版本来源一致）。待推 main 后确认托管 CI、验证 macOS Swift 编译、删旧 release 并重打 tag 指向 `4b43677`。
 - `2026-11-07-web-login-response-classification-plan.md` — Windows 与 macOS 原生宿主把「HTTP 200 且重定向到登录页」在提取前判为 `WEB_PAGE_ACCESS_RESTRICTED`；Windows crate 20 项单测、前端 1507 项、脚本 57 项、生产构建与文档治理通过，native host 重编后 manifest 自动更新。macOS Swift 编译与真实登录页端到端验收待托管 CI。
 - `2026-10-31-llm-note-titles-plan.md` — 自动标题已实现；前端 1102、worker 1198、Rust 381 项通过，真实供应商两次共使用 2 个 AI Credit；完整原生 URL 流程验收待完成。
 - `2026-10-30-desktop-sidebar-home-plan.md` - 侧栏、Home、本地合集与笔记流程已实现；1039 项前端测试与 Windows 构建通过，完整原生交互及视觉验收记录见计划。
