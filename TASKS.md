@@ -90,7 +90,8 @@
   `latest.json` equal the   uploaded 416-byte `.sig` byte for byte; the reviewed body
   `docs/releases/v0.5.0.md` is live and differs from the read-back by one trailing blank line.
   Follow-up completed 2026-11-08: the three installer URLs answered `206` with `Content-Range`
-  totals matching the asset sizes (checked locally); the user provided the deploy key
+  totals matching the asset sizes (checked locally and again from the deployment server with
+  `range: 0-0`); the user provided the deploy key
   (`~/.ssh/id_rsa_aws`, key-based SSH to `ubuntu@49.234.56.225`), and the marketing site was
   redeployed with backup `webroot-20261107-165710.tar.gz`, 1 upload / 0 deletes
   (`download/index.html` only), re-run dry-run 15 unchanged, and the live download page SHA-256
