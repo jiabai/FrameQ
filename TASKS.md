@@ -895,6 +895,18 @@
 
 ## Account and Billing
 
+- [x] Verify post-deploy acceptance on an isolated database (2026-11-08) ✅ 用一次性 harness
+  在**与生产同 schema 的隔离 SQLite**（按全部 9 条迁移新建，不含任何生产行）上起真实 HTTP
+  服务：真实 `PrismaStore` + loopback 端口 + fake OTP / 激活码 / LLM 供应商 sender，
+  不发真实邮件、不调付费供应商、不碰生产库。11 项断言全通过：health 200；OTP 启动与验证
+  生成 `flt_` ticket；ticket 交换得到 session 且重放同一 ticket 被 400 拒绝（单次消费）；
+  激活码首次申领 200 `status=sent` + ISO `retry_at`；一分钟内二次申领 429
+  `ACTIVATION_REQUEST_RATE_LIMITED` + `retry_at` + `Retry-After: 60`；激活码兑换授予权益；
+  `POST /api/desktop/llm/checkouts` 用同一 `request_id` 两次均 200 且 `quota_remaining`
+  保持 19（幂等，不重复扣减），换新 `request_id` 后降到 18（对照）。harness 与报告用后
+  删除，未进仓库。边界：这是 runbook 的 fake 测试路径验收，不替代真机认证冒烟——后者仍需
+  真实测试邮箱收 OTP / 激活码、管理员登录，以及真实登录后的动态日志脱敏复核。
+
 - [x] Remove the unused WeChat Pay integration (2026-11-08) ✅ 该通道从未启用（生产
   `WECHAT_PAY_ENABLED=0`），前端无 UI 调用方。已删除 server 的 `wechat.ts` / `billing.ts` /
   `routes/billing.ts` / `prismaStore/billing.ts` / `memory/billing.ts`、`WECHAT_*` 运行时配置、
@@ -924,9 +936,11 @@
   preflight 7 项 ok → 启动与 restart，`/health/live`、`/health/ready` 直连/nginx 双通道 200。
   线上探针：`GET /api/desktop/updates/latest` 404 Fastify 三件套，`GET /api/desktop/account`
   与两条 POST 路由 auth-first 401；部署文件 sha256（LF 归一化）与 main 一致。
-  三个计划已归档 `docs/exec-plans/completed/`。残余风险：真实 OTP/管理员登录、ticket 交换、
-  幂等额度结账、日志脱敏与受限响应 `retry_at` 的人工验收未做（需真实账号/邮件/付费路径）；
-  回滚必须整套恢复代码 + 迁移前数据库 + 匹配 `.env`。
+  三个计划已归档 `docs/exec-plans/completed/`。后续补记：ticket 交换、幂等额度结账与
+  429 `retry_at` 已于 2026-11-08 在隔离库 HTTP 验收中闭环（见下一条，runbook 要求的
+  fake/provider-approved 测试路径，不涉及真实付款）；剩余真机认证冒烟（真实测试邮箱 OTP、
+  管理员登录、真实登录后的动态日志脱敏复核）待做。回滚必须整套恢复代码 + 迁移前数据库 +
+  匹配 `.env`。
 
 - [x] Roll out self-service email activation to the production server (2026-09-19) ✅ 生产
   `https://frameq.8xf.pro` 已从 `1afb925` 快进部署到 `5c9e974`，三条 20260824 迁移全部应用
