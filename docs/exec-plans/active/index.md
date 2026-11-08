@@ -7,9 +7,6 @@
 - `2026-10-31-llm-note-titles-plan.md` — 自动标题已实现；前端 1102、worker 1198、Rust 381 项通过，真实供应商两次共使用 2 个 AI Credit；完整原生 URL 流程验收待完成。
 - `2026-10-30-desktop-sidebar-home-plan.md` - 侧栏、Home、本地合集与笔记流程已实现；1039 项前端测试与 Windows 构建通过，完整原生交互及视觉验收记录见计划。
 
-- `2026-10-29-entitlement-expiry-only-plan.md` - 权益持久化状态与相关写入已移除；完整 server 测试、build、八条迁移、数据保留与约束、schema diff、备份校验和恢复验证通过，托管 CI 与生产部署待执行。
-- `2026-10-29-email-rate-limit-retry-time-plan.md` - 邮件限流按全部阻塞窗口的最晚解除时间返回；真实 SQLite/Memory 回归、完整 server 测试、build、迁移/preflight/restore 通过，生产部署与托管 CI 待执行。
-- `2026-10-28-server-update-manifest-removal-plan.md` - 服务端更新清单与路由已移除，完整 server 测试、build、隔离数据库迁移/preflight/restore 通过；生产部署与托管 CI 待执行。
 
 
 

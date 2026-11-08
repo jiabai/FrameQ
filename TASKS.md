@@ -895,6 +895,20 @@
 
 ## Account and Billing
 
+- [x] Deploy the 2026-10-28/29 server fixes to production (2026-11-08) ✅ 用户授权后按
+  `deploy/server-deployment.md` 把生产 `frameq-server` 从 `30934a4`（2026-10-20）部署到
+  `bf92310`：停服后 WAL 合并为单一 `frameq.sqlite`，旧代码 `db:preflight --mode current`
+  7 项 ok；备份 `20261108T103403Z`（sha256 清单、`integrity_check`、隔离 restore-smoke 7 项、
+  `migrate status` 7 条 up to date），异地副本存于本机受 ACL 收紧的站外目录。随后 fetch → checkout → `npm ci`（136 包）→ `prisma generate` →
+  `npm test`（39 文件 400 项通过）→ `tsc --noEmit` → `db:migrate:deploy` 应用第 8 条
+  `202610290001_remove_entitlement_status` → `migrate status` 8 条 up to date → 新代码
+  preflight 7 项 ok → 启动与 restart，`/health/live`、`/health/ready` 直连/nginx 双通道 200。
+  线上探针：`GET /api/desktop/updates/latest` 404 Fastify 三件套，`GET /api/desktop/account`
+  与两条 POST 路由 auth-first 401；部署文件 sha256（LF 归一化）与 main 一致。
+  三个计划已归档 `docs/exec-plans/completed/`。残余风险：真实 OTP/管理员登录、ticket 交换、
+  幂等额度结账、日志脱敏与受限响应 `retry_at` 的人工验收未做（需真实账号/邮件/付费路径）；
+  回滚必须整套恢复代码 + 迁移前数据库 + 匹配 `.env`。
+
 - [x] Roll out self-service email activation to the production server (2026-09-19) ✅ 生产
   `https://frameq.8xf.pro` 已从 `1afb925` 快进部署到 `5c9e974`，三条 20260824 迁移全部应用
   （共 6 条，`Database schema is up to date!`），`FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true`，

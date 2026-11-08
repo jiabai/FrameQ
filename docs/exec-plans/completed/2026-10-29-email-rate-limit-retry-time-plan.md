@@ -38,7 +38,19 @@ Rationale: 用户授权修复重试时间与验证计数一致性。Date/Author:
 完整 server 测试 349 项通过，Windows 子进程 SIGTERM 用例按现有规则跳过 1 项；TypeScript build 通过。
 隔离数据库位于 `build/side-email-rate-limit-dfc47ab833224b0c9fc36e4850cf6423/`，七条现有迁移、
 migration status、preflight 与独立副本 restore smoke 通过。本次没有数据库结构修改。
-Residual risk: 生产部署与托管 CI 尚未执行，计划保持 active 等待发布证据。
+### Production deployment — 2026-11-08
+
+生产从 `30934a4`（2026-10-20）部署到 `bf92310`（用户授权）。完整部署证据见
+`2026-10-28-server-update-manifest-removal-plan.md` 的同名小节：停服备份
+`20261108T103403Z` + 异地副本 + 隔离恢复演练，fetch/checkout、`npm ci`、
+`prisma generate`、39 文件 400 项测试、`tsc --noEmit`、第 8 条迁移、
+`migrate status`、新代码 preflight、启动与 restart 健康检查全部通过；
+`POST /api/desktop/activation-codes/request` 与 `/api/desktop/anysearch/checkout`
+线上均返回 401 `AUTH_REQUIRED`，确认修复后的 auth-first 路由已生效。
+部署的 `rateLimits.ts` sha256（LF 归一化）与本地 main 一致。
+
+Residual risk: 生产已部署；受限响应中「最晚解除时间 / retry_at」由完整 server 测试与线上
+auth-first 探针覆盖，**未发起真实邮件 OTP 请求**验证实际 429 响应体（会触发真实邮件投递）。
 
 ## Context and Orientation
 

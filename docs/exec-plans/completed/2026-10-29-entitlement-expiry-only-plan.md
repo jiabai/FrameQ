@@ -46,7 +46,22 @@ TypeScript build 与 Prisma client 生成通过。升级测试从七条历史迁
 空库门禁位于 `build/side-entitlement-expiry-0cf8a228c9fa46a6bb611db0726b0b76/`，完成八条迁移、
 migration status、schema diff（无差异）、preflight 和独立副本 restore smoke。数据库与恢复副本
 SHA-256 均为 `C8DFC14F4C9A4837C7698262CC162E1F0A0739FEE82DBC0775DA2344570706C0`。
-Residual risk: 托管 CI、生产停服备份、异地留存、配套部署和生产验收尚未执行；计划保持 active 等待发布证据。
+### Production deployment — 2026-11-08
+
+生产从 `30934a4`（2026-10-20）部署到 `bf92310`（用户授权）。按 runbook 完成停服备份：
+数据目录在停服后 WAL 合并为单一 `frameq.sqlite`，旧代码 `db:preflight --mode current`
+7 项 ok；备份 `20261108T103403Z` 的 sha256 清单通过、`PRAGMA integrity_check=ok`、
+迁移历史止于 `202610100001_anysearch_config`，异地副本存于本机受 ACL 限制的目录；
+隔离副本 `db:restore-smoke` 7 项 ok、`migrate status` 显示 7 条 up to date。
+随后 fetch → checkout → `npm ci`（136 包）→ `prisma generate` → `npm test`
+（39 文件 400 项通过）→ `tsc --noEmit` → `db:migrate:deploy` 成功应用
+`202610290001_remove_entitlement_status` → `migrate status` 8 条 up to date →
+新代码 `db:preflight --mode current` 7 项 ok。回读 `Entitlement` 列已无 `status`，
+`integrity_check` 正常。启动并 restart 后 `/health/live`、`/health/ready` 双通道 200。
+更多路由探针见 `2026-10-28-server-update-manifest-removal-plan.md`。
+
+Residual risk: 生产已部署；期限边界由 400 项 server 测试与隔离数据库演练覆盖，未做真实账号的
+额度到期人工验收。回滚仍必须按 runbook 整套恢复（代码 + 迁移前数据库 + 匹配 `.env`）。
 
 ## Context and Orientation
 

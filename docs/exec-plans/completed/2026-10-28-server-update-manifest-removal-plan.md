@@ -33,7 +33,24 @@ Decision: 数据库门禁使用 `build/` 下独立文件。Rationale: 本次修�
 完整 server 测试 321 项通过，Windows 上既有的子进程 SIGTERM 用例跳过 1 项；TypeScript build 通过。
 隔离数据库位于 `build/side-server-update-2a5ec98401ab435e929b7f5dada50bee/`，使用空文件执行全部
 Prisma migrations 后完成 schema status、preflight 与独立副本 restore smoke。
-Residual risk: 生产部署与托管 CI 尚未执行，计划保持 active 等待发布证据；本次没有数据库结构改动。
+### Production deployment — 2026-11-08
+
+生产从 `30934a4`（2026-10-20）部署到 `bf92310`（用户授权）。停服后备份
+`20261108T103403Z`（`server/backups/`，sha256 清单、`integrity_check` 与隔离 restore-smoke
+7 项均通过，另有异地加密副本）；旧代码 `db:preflight --mode current` ok，演练副本
+`migrate status` 显示 7 条 up to date。随后 fetch → checkout → `npm ci`（136 包）→
+`prisma generate` → `npm test`（39 文件 400 项通过）→ `tsc --noEmit` →
+`db:migrate:deploy`（应用第 8 条 `202610290001_remove_entitlement_status`）→
+`migrate status` 8 条 up to date → 新代码 preflight current ok → 启动并 restart，
+`/health/live` 与 `/health/ready` 在直连和 nginx 两条通道均返回 200。
+线上探针：`GET /api/desktop/updates/latest` 返回 404 且错误体为 Fastify 三件套
+（`message` / `error` / `statusCode`），确认服务端更新清单路径已移除；
+`GET /api/desktop/account` 与两条 POST 结账/请求路由均按 auth-first 返回 401
+`AUTH_REQUIRED`。部署后的 `rateLimits.ts`、`entitlements.ts`、`server.ts` 与新迁移
+SQL 的 sha256（LF 归一化）与本地 main 完全一致。
+
+Residual risk: 生产已部署并回归；未做真实 OTP 登录、管理员登录、ticket 交换、幂等额度结账与
+日志脱敏的人工验收（需要真实账号与付费路径）。
 
 ## Context and Orientation
 
