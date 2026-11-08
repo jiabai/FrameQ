@@ -984,12 +984,22 @@
   HTTP 状态码与错误码，不留邮箱、激活码、会话 token 或请求体。阻塞原因：缺真实测试邮箱。
 
 - [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
-  Windows native Save As manual verification is complete; macOS native dialog evidence remains
-  pending. Earlier automated acceptance recorded scripts 29/29, worker 782 passed / 2 skipped,
-  Rust 316 passed, frontend 740/740, Ruff/rustfmt/lint/build/governance/diff checks passed, and the refreshed
-  packaged worker matched the canonical worker byte-for-byte. The Windows Tauri no-bundle build
-  could not reach a native smoke because rustc failed memory allocation, including after a single-job
-  retry; do not treat the compiler cascade as a product regression. Product spec:
+  **native Save As dialog smoke remains unverified on Windows and macOS**. Correction on 2026-11-08:
+  the earlier claim "Windows native Save As manual verification is complete" was wrong, and the
+  "no-bundle build could not reach a native smoke because rustc failed memory allocation" line
+  describes the 2026-08-09 attempt only — the 2026-08-10 recheck built `app.exe` successfully
+  (8-second startup check) but the Tauri WebView exposed no CDP/UIA tree, so the dialog itself
+  could not be driven. Neither is passing native evidence. 2026-11-08 recheck on current main:
+  focused Rust `diagnostics::` 50 passed and `diagnostic_export::tests` 8 passed, worker diagnostic
+  tests 73 passed, scripts 57 passed, frontend diagnostic tests 23 passed, packaged worker
+  byte-identical to canonical source. Added a permanent regression test
+  `real_zip_export_to_disk_rejects_forbidden_data` driving the real `assemble_for_paths` +
+  `atomic_write` path: the ZIP lands on disk with only the three fixed root entries, a ten-field
+  closed `diagnostics.json`, <= 5 MiB, no `.part` residue and no app-local copy, while every entry
+  is free of seeded path/URL/token/email/IP material and `.env` / transcript / model-cache traps
+  are never read. This covers the scriptable portion of manual steps 1/4/5/7/8. Still release-host
+  work: success/cancel/replacement/bad-destination on a real packaged Windows Save As dialog,
+  packaged absence-of-forbidden-data evidence, and macOS native dialog/replacement. Product spec:
   `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
   `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
   `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.

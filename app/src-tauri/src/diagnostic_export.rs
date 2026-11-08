@@ -374,6 +374,142 @@ mod tests {
         assert!(!production.contains(&["join(\"", "models\")"].concat()));
     }
 
+    #[test]
+    fn real_zip_export_to_disk_rejects_forbidden_data() {
+        let root = temp_dir("zip-on-disk");
+        let paths = crate::RuntimePaths {
+            resource_dir: root.join("resources"),
+            user_data_dir: root.join("app-data"),
+        };
+        let logs = paths.user_data_dir.join("logs");
+        fs::create_dir_all(&logs).expect("logs");
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_millis() as u64;
+
+        let mut desktop_line = format!("unix_ms={now_ms} event=worker.download_asr_model.start");
+        for seeded in [
+            "C:\\Users\\victim\\secret.txt",
+            "https://attacker.example/collect?token=SECRET_TOKEN_123",
+            "victim@example.com",
+            "203.0.113.77",
+            "sk-SECRETKEY000000",
+        ] {
+            desktop_line.push(' ');
+            desktop_line.push_str(seeded);
+        }
+        fs::write(logs.join("frameq-desktop.log"), format!("{desktop_line}\n"))
+            .expect("desktop log");
+
+        let payload = "{\"version\":1,\"operation\":\"download_asr_model\",\"phase\":\"primary_model\",\"category\":\"network\",\"code\":\"connection_timeout\"}";
+        let asr_line = serde_json::json!({
+            "v": 1,
+            "utc_ms": now_ms,
+            "invocation": "inv-smoke00000001",
+            "kind": "structured",
+            "payload": payload,
+            "count": 1,
+            "truncated": false
+        });
+        fs::write(
+            logs.join(crate::runtime::ASR_DIAGNOSTIC_LOG_FILE_NAME),
+            format!("{asr_line}\n"),
+        )
+        .expect("asr log");
+
+        fs::write(paths.user_data_dir.join(".env"), "SECRET_ENV_VALUE\n").expect("env trap");
+        fs::write(logs.join("transcript.txt"), "PRIVATE_TRANSCRIPT\n").expect("transcript trap");
+        fs::create_dir_all(paths.user_data_dir.join("models")).expect("models trap");
+
+        let snapshot = DiagnosticModelSnapshot {
+            model: SupportedDiagnosticModel::SenseVoiceSmall,
+            cache_status: DiagnosticCacheStatus::Ready,
+        };
+        let destination = root.join("FrameQ-diagnostics-smoke.zip");
+        let state = DiagnosticExportState::default();
+        let result = export_to_selection(
+            &state,
+            Some(destination.clone()),
+            || super::assemble_for_paths(&paths, snapshot),
+            |path, bytes| crate::atomic_files::atomic_write(path, bytes).map_err(|_| ()),
+        );
+        assert_eq!(result, DiagnosticExportResult::Exported);
+
+        let on_disk = fs::read(&destination).expect("zip on disk");
+        assert!(on_disk.len() <= 5 * 1024 * 1024, "zip exceeds 5 MiB");
+        let mut archive = ZipArchive::new(Cursor::new(on_disk)).expect("open zip from disk");
+        let names: Vec<String> = archive.file_names().map(str::to_owned).collect();
+        assert!(
+            names.contains(&"diagnostics.json".to_string()),
+            "manifest missing"
+        );
+        for name in &names {
+            assert!(
+                matches!(
+                    name.as_str(),
+                    "diagnostics.json" | "frameq-desktop.log" | "asr-model-download.log"
+                ),
+                "unexpected ZIP entry: {name}"
+            );
+        }
+
+        let mut all_text = String::new();
+        for name in &names {
+            let mut entry = archive.by_name(name).expect("entry");
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf).expect("read entry");
+            all_text.push_str(&String::from_utf8_lossy(&buf));
+        }
+        for needle in [
+            "C:\\Users\\victim",
+            "attacker.example",
+            "SECRET_TOKEN_123",
+            "victim@example.com",
+            "203.0.113.77",
+            "sk-SECRETKEY000000",
+            "SECRET_ENV_VALUE",
+            "PRIVATE_TRANSCRIPT",
+        ] {
+            assert!(
+                !all_text.contains(needle),
+                "forbidden data leaked: {needle}"
+            );
+        }
+
+        let mut manifest = String::new();
+        archive
+            .by_name("diagnostics.json")
+            .expect("manifest entry")
+            .read_to_string(&mut manifest)
+            .expect("read manifest");
+        let value: serde_json::Value = serde_json::from_str(&manifest).expect("manifest json");
+        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value.as_object().expect("manifest object").len(), 10);
+        for key in [
+            "app_version",
+            "os",
+            "arch",
+            "exported_at_unix_ms",
+            "window_start_unix_ms",
+            "selected_model",
+            "cache_status",
+            "files",
+            "truncated",
+        ] {
+            assert!(value.get(key).is_some(), "manifest missing {key}");
+        }
+
+        assert!(fs::read_dir(&root)
+            .expect("list root")
+            .filter_map(Result::ok)
+            .all(|entry| !entry.file_name().to_string_lossy().contains(".part")));
+        assert!(!paths
+            .user_data_dir
+            .join("FrameQ-diagnostics-smoke.zip")
+            .exists());
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -109,6 +109,18 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   As dialog could not be driven by the available automation surface (Tauri WebView exposed no
   CDP/UIA tree), so Windows Save As success/cancel/replacement/destination-failure remains a
   manual acceptance item; no macOS native dialog evidence was attempted on Windows.
+- [x] 2026-11-08: Re-verified the export chain on current `main` and corrected the ledger wording.
+  Focused Rust suites passed (50 `diagnostics`, 8 `diagnostic_export`), worker diagnostic tests
+  73 passed, scripts 57 passed, frontend diagnostic tests 23 passed, and the packaged worker is
+  byte-identical to the canonical source. Added a permanent regression test
+  `real_zip_export_to_disk_rejects_forbidden_data` that runs the real `assemble_for_paths` and
+  `atomic_write` path: a ZIP is written to disk with only the three fixed root entries, a
+  ten-field closed `diagnostics.json`, <= 5 MiB, no `.part` residue and no app-local copy; every
+  entry is scanned for seeded path/URL/token/email/IP material and `.env`, transcript and
+  model-cache traps are never read. This covers the scriptable portion of manual steps 1/4/5/7/8.
+  The native Save As dialog smoke is still unverified: the earlier "Windows manual verification
+  is complete" claim was wrong (see Outcomes and `TASKS.md`). No GUI automation, network probe or
+  paid provider was used.
 
 ## Surprises & Discoveries
 
@@ -166,13 +178,16 @@ The implementation is complete through the worker, Rust persistence/export bound
 controller, both UI entry points, three locales, and packaged-worker mirror. Exact automated
 evidence is recorded in Progress and includes scripts 29/29, worker 782 passed / 2 skipped, Rust
 316 passed, and frontend 740/740, with Ruff, rustfmt, lint, build, and mirror equality passing.
-The Windows native packaged Save As smoke could not be completed on this host because
-`tauri build --no-bundle` failed during rustc memory allocation, including after a single-job
-retry; the resulting compiler cascade is an environment failure, not a passing build. Therefore
-native Save As success/cancel/replacement/bad-destination and packaged absence-of-forbidden-data
-evidence remain release-host work. macOS native dialog and replacement evidence is also unavailable
-on this Windows host. No release should claim those native checks until they run on the target
-hosts.
+The Windows native packaged Save As smoke could not be completed on this host. The 2026-08-09
+`tauri build --no-bundle` rustc memory-allocation failure was resolved by the 2026-08-10 recheck,
+which built `app.exe` successfully; the remaining blocker is that the Tauri WebView exposes no
+CDP/UIA tree, so the native Save As dialog cannot be driven by automation. Therefore native Save
+As success/cancel/replacement/bad-destination and packaged absence-of-forbidden-data evidence
+remain release-host work. macOS native dialog and replacement evidence is also unavailable on
+this Windows host. No release should claim those native checks until they run on the target
+hosts. On 2026-11-08 the scriptable export chain was re-verified on current main and a permanent
+regression test now writes a real ZIP to disk and scans every entry for seeded forbidden data,
+but that is library-level evidence and does not substitute for a packaged-app dialog smoke.
 
 ## Context and Orientation
 

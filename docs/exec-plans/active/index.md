@@ -10,7 +10,7 @@
 
 
 
-- `2026-08-09-desktop-diagnostic-export-plan.md` - Implementation and automated gates complete for contract v8 structured ASR model-download diagnostics, Rust-owned bounded persistence, and user-initiated local ZIP export from failure UI and Settings > Advanced; Windows/macOS native release smoke remains pending, with no automatic upload or network probes.
+- `2026-08-09-desktop-diagnostic-export-plan.md` - Implementation and automated gates complete for contract v8 structured ASR model-download diagnostics, Rust-owned bounded persistence, and user-initiated local ZIP export from failure UI and Settings > Advanced. 2026-11-08 recheck on current main: focused Rust 50+8, worker 73, scripts 57, frontend 23 and packaged-worker equality all green; a new permanent test writes a real ZIP to disk and scans every entry for seeded forbidden data, covering the scriptable part of manual steps 1/4/5/7/8. Windows/macOS **native Save As dialog** release smoke remains unverified (no CDP/UIA tree on this host); the earlier "Windows manual verification complete" claim was wrong and is corrected in the plan and `TASKS.md`. No automatic upload or network probes.
 
 See `../completed/index.md` for completed plans and `docs/exec-plans/index.md`
 for the full index.
