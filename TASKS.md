@@ -902,9 +902,17 @@
   `create_wechat_checkout` / `get_checkout_status` 两个 Tauri 命令与前端 accountClient 对应类型、
   解析与测试；清理 `.env.example`、nginx 回调 location、部署手册与当前产品/架构/安全/设计文档描述。
   新增破坏性迁移 `202611080001_remove_wechat_billing`（`DROP TABLE "Order"` 与
-  `DROP TABLE "WebhookEvent"`）。历史发布说明、归档计划与旧设计文档按史实保留。残余风险：迁移为
-  不可逆 DROP TABLE，回滚须整套恢复代码 + 迁移前数据库 + 匹配 `.env`；生产 `.env` 里遗留的
-  `WECHAT_*` 变量已变为被忽略的无害配置。
+  `DROP TABLE "WebhookEvent"`）。历史发布说明、归档计划与旧设计文档按史实保留。本地门禁：server
+  37 文件 375 项、前端 136 文件 1506 项、脚本 57 项、tsc 与前端 build、文档治理 0 错误 0 警告。
+  生产部署（用户授权）：备份 `20261108T113054Z`（两表均 0 行、sha256 清单、`integrity_check` ok、
+  隔离 restore-smoke 7 项、异地 ACL 副本）→ 12 KB 增量 bundle 送到 `5657c1e` → `npm ci` →
+  prisma generate → 376 项测试 → tsc → 第 9 条迁移（两表已消失、13 个用户保留、
+  `migrate status` 9 条 up to date）→ 新代码 preflight 7 项 ok → start/restart 双通道 health 200。
+  线上探针：`/api/wechat/notify` 与两条 billing 路由均 404，auth-first 路由 401；生产 `.env` 已删净
+  `WECHAT_*`（剩 13 个有效键），nginx `frameq-server.conf` 的回调 location 已删除并 reload
+  （`nginx -t` 通过、备份 `*.bak-remove-wechat-<STAMP>`），`/download/` 与 `/health/*` 仍 200。
+  部署文件哈希（LF 归一化）与本地 main 一致。残余风险：DROP TABLE 不可逆，回滚须整套恢复
+  代码 + 迁移前数据库 + 匹配 `.env`（备份内已含两者）。
 
 - [x] Deploy the 2026-10-28/29 server fixes to production (2026-11-08) ✅ 用户授权后按
   `deploy/server-deployment.md` 把生产 `frameq-server` 从 `30934a4`（2026-10-20）部署到
