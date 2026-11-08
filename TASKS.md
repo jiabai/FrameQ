@@ -1005,6 +1005,27 @@
   `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
   `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
 
+- [x] Desktop sidebar / Home / local Collections native acceptance (2026-10-30) — ✅ 2026-11-08
+  三项残余原生验收闭环。①**详情动作激活 13 项**：用真实指针/键盘输入打开 `大模型技术` 详情，
+  确认 `新建笔记` 与 `添加笔记到合集` 就位、外层管理动作不出现在详情、成员编辑区展开且搜索框
+  自动聚焦、真实勾选经 Rust IPC 写入 `collections.json` 再取消恢复、Escape 关闭并把焦点还回
+  来源按钮、`新建笔记` 打开主页 composer；前后 `collections.json` 字节一致。②**原生合集删除
+  14 项**：UI 创建临时合集并加入一条真实历史笔记，经外层管理器的确认框删除；合集条目消失，
+  该任务 6 个文件（`frameq-task.json`、`media/audio.wav`、`media/video.mp4`、
+  `transcript/segments.json`、`transcript/transcript.md`、`transcript/transcript.txt`）字节不变，
+  其余合集与 63 个任务文件均未变。③**新建笔记 → 真实处理 → 自动入集**：由用户手动操作完成，
+  从 0 篇的 `大模型技术` 点 `新建笔记`，提交公开文章
+  `https://mp.weixin.qq.com/s/uwOUu8X3OLQERlkv75mfrQ`，生成真实 `web_page` 任务
+  `20261108-145629-web-602ecab8a8b14291`（`status=completed`，`article/article.txt` 10,721 字节、
+  `article/article.md` 10,882 字节、`insights_count=0`、无 AI 生成），合集计数 0→1 且该 task id
+  已写入 `collections.json`；web 工作区正常清理、无付费供应商调用。前置修复：本机 11-05
+  native build 的 `resources/webview-host` 与 extractor 版本混用，导致 web 会话恒报
+  `WEB_STORAGE_FAILED` / `recovery_required`；清除孤立 `.frameq-system-webviews` 工作区并以
+  `tauri build --no-bundle` 重建（9m37s，exit 0）后 `dataAccess=ready`，属构建产物问题非产品
+  回归。**剩余边界**：membership-retry 失败提示与重试按钮未被触发（正常路径无失败），仍只有
+  组件测试覆盖；macOS 原生对话框与图形交互仍缺真机。证据见 `design-qa.md` 与
+  `docs/exec-plans/active/2026-10-30-desktop-sidebar-home-plan.md`。
+
 ## 待办
 
 - [x] Prove the `yt-dlp` 2026.10.21 upgrade with a real YouTube download (2026-10-22) — ✅ Verified
