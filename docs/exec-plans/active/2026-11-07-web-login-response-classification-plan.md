@@ -1,6 +1,6 @@
 # 2026-11-07 网页登录页错误码判定修复执行计划
 
-状态：Windows 实现与本地门禁完成；macOS Swift 编译与原生验收待托管 CI。
+状态：Windows 侧全部完成（含真实 WebView2 Runtime + 公网端到端验收）；macOS Swift 编译与协议测试已由托管 CI 覆盖，真实 WKWebView 登录跳转验收仍需 macOS 机器。
 
 ## 目标
 
@@ -36,10 +36,19 @@
 - `npm --prefix app test`（PowerShell 通道）：136 个测试文件全部通过，1507 passed / 1 skipped。
 - `node --test scripts/tests/*.test.mjs`：57 项全部通过。
 - `uv run python scripts/validate_agents_docs.py --level ERROR`：0 错误、0 警告；`node scripts/verify-packaged-worker.mjs`：打包 worker 字节一致。
+- 2026-11-08 真实 WebView2 端到端验收（本机，非模拟）：临时 harness 直接驱动 `frameq-webview-host.exe` 的 stdin/stdout JSON 协议，Stable WebView2 Runtime `157.0.4341.42`、真实公网、真实 DNS 放行、真实资源策略事件；宿主二进制构建时间 2026-11-07 16:32 晚于 `lifecycle.rs` 16:30，包含本次修复。
+
+  | 用例 | URL | 结果 |
+  | --- | --- | --- |
+  | 对照组：正常公开文章 | `https://example.com/` | `article` = `Example Domain`，14.6 s，clean exit |
+  | 登录跳转：HTTP 301 → HTTPS `/login`，最终 200 | `http://frameq.8xf.pro/login` | `error` = `WEB_PAGE_ACCESS_RESTRICTED`，12.5 s，**无任何 article 事件**，clean exit |
+  | 边界：直达 `/login`，200 且无第二次导航 | `https://frameq.8xf.pro/login` | `article` = `FrameQ Login`，13.9 s（符合 `navigations > 1` 前置条件的预期） |
+
+  结论：真实 WebView2 的导航计数与主 URL 更新确实让新判定在提取前触发，不再是 60 秒 `WEB_NAVIGATION_TIMEOUT`；正常文章不误报；`navigations > 1` 的边界行为与单测一致。临时 harness 用后已删除，未进入仓库或生产 webroot。
 
 ## 残余风险
 
-- 本机没有 Swift 工具链，`HostURLPolicy`、`PolicyDelegate` 与 `ProtocolTests` 的编译和 `--test-protocol` 执行需要 macOS runner。
-- 真实登录页端到端验收（确认由 60 秒超时变为即时受限文案）需要真实 WebView2 Runtime 与公网，本机 9 项集成测试处于 ignored 状态。
-- 封闭路径集合需要随站点维护；集合之外的登录页、未产生第二次导航的登录页沿用既有超时行为。
+- macOS Swift 编译与 `--test-protocol` 已由 v0.5.0 重发的托管 macOS runner 验证通过；但**真实 WKWebView 登录跳转验收**仍需一台 macOS 机器，本机无法覆盖。
+- Windows 侧真实登录页端到端验收已于 2026-11-08 完成，见「验证记录」；结论是由 60 秒超时变为约 12.5 秒即时受限错误码。
+- 封闭路径集合需要随站点维护；集合之外的登录页、未产生第二次导航的登录页沿用既有行为（实测直达 200 `/login` 会被当作文章提取，与 `navigations > 1` 的设计边界一致）。
 - 前端命令需走 PowerShell 通道，Bash 工具通道的 Node 注入与沙箱文件权限会造成误报。

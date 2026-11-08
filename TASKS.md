@@ -95,14 +95,22 @@
   (`~/.ssh/id_rsa_aws`, key-based SSH to `ubuntu@49.234.56.225`), and the marketing site was
   redeployed with backup `webroot-20261107-165710.tar.gz`, 1 upload / 0 deletes
   (`download/index.html` only), re-run dry-run 15 unchanged, and the live download page SHA-256
-  equals `site/dist/download/index.html` with `/health/live` green. Residual risks: anyone who
+  equals `site/dist/download/index.html` with `/health/live` green. A real WebView2
+  end-to-end acceptance also ran on 2026-11-08: driving `frameq-webview-host.exe` over its
+  stdin/stdout protocol with Stable WebView2 Runtime 157.0.4341.42 and public Internet,
+  `http://frameq.8xf.pro/login` (301 to HTTPS `/login`, final 200) emitted
+  `WEB_PAGE_ACCESS_RESTRICTED` in 12.5 s before any article event, while the control
+  `https://example.com/` still extracted `Example Domain` in 14.6 s; a direct 200 `/login`
+  without a redirect extracted `FrameQ Login` as an article, confirming the documented
+  `navigations > 1` boundary. Residual risks: anyone who
   installed a
   2026-11-05 or 2026-11-06 v0.5.0 build must reinstall manually because the updater does not
   offer the same version; `macos-intel-acceptance.yml` was dispatched manually on 2026-11-08 and
   its two DMG jobs (arm64 / x64) are green (run `42394922085`; attempt 1 failed on a transient
   truncated runtime-archive download, rerun succeeded); macOS
   graphical interaction, notarization and the complete public signed-update path remain
-  unverified; real login-page and end-to-end WebView2 acceptance is still pending. Release link:
+  unverified; the same real WKWebView login-redirect acceptance still needs a macOS machine.
+  Release link:
   https://github.com/jiabai/FrameQ/releases/tag/v0.5.0
 
 - [x] Remove the duplicated export action from the transcript review footer (2026-10-30) — ✅ Reported
