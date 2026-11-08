@@ -118,9 +118,10 @@ or raw exception text, and FrameQ never uploads it or starts a network probe.
   ten-field closed `diagnostics.json`, <= 5 MiB, no `.part` residue and no app-local copy; every
   entry is scanned for seeded path/URL/token/email/IP material and `.env`, transcript and
   model-cache traps are never read. This covers the scriptable portion of manual steps 1/4/5/7/8.
-  The native Save As dialog smoke is still unverified: the earlier "Windows manual verification
-  is complete" claim was wrong (see Outcomes and `TASKS.md`). No GUI automation, network probe or
-  paid provider was used.
+  Later the same day the real Windows Save As dialog was driven through CDP + Win32/SendInput
+  and all four scenarios passed (see Outcomes). The earlier "Windows manual verification is
+  complete" claim was still wrong at the time it was written. No network probe or paid provider
+  was used.
 
 ## Surprises & Discoveries
 
@@ -178,16 +179,26 @@ The implementation is complete through the worker, Rust persistence/export bound
 controller, both UI entry points, three locales, and packaged-worker mirror. Exact automated
 evidence is recorded in Progress and includes scripts 29/29, worker 782 passed / 2 skipped, Rust
 316 passed, and frontend 740/740, with Ruff, rustfmt, lint, build, and mirror equality passing.
-The Windows native packaged Save As smoke could not be completed on this host. The 2026-08-09
-`tauri build --no-bundle` rustc memory-allocation failure was resolved by the 2026-08-10 recheck,
-which built `app.exe` successfully; the remaining blocker is that the Tauri WebView exposes no
-CDP/UIA tree, so the native Save As dialog cannot be driven by automation. Therefore native Save
-As success/cancel/replacement/bad-destination and packaged absence-of-forbidden-data evidence
-remain release-host work. macOS native dialog and replacement evidence is also unavailable on
-this Windows host. No release should claim those native checks until they run on the target
-hosts. On 2026-11-08 the scriptable export chain was re-verified on current main and a permanent
-regression test now writes a real ZIP to disk and scans every entry for seeded forbidden data,
-but that is library-level evidence and does not substitute for a packaged-app dialog smoke.
+On 2026-11-08 the Windows native Save As dialog was driven successfully without mouse input.
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` exposed CDP (the 2026-08-10
+"no CDP/UIA tree" blocker was an unconfigured debugger, not a hard limit); CDP invoked
+`export_diagnostics`, and Win32 messages plus `SendInput` drove the system dialog because .NET
+UIA assembly loading is blocked in this environment. Four scenarios passed on the 2026-11-05
+native release build: success (`exported`, real ZIP on disk, fixed entries, closed manifest,
+zero forbidden-data hits out of five seeded markers and three real config values), cancel
+(`cancelled`, no file), replace-existing (`exported`, overwrite confirmed, prior file replaced,
+no `.part` residue, no app-local copy), and destination failure (read-only, exclusive-lock and
+directory targets were rejected by the Common Item Dialog before the write stage, returning
+`cancelled` with the prior destination intact and no residual dialog). No production data, mail
+or paid provider was touched; the harness and all generated artifacts were removed.
+
+Remaining release-host work: the host binary is a native release build whose embedded
+`app_version` is `0.4.3`, not an NSIS-installed package, so strict packaged-app
+absence-of-forbidden-data evidence is still missing; the Rust `DIAGNOSTIC_EXPORT_FAILED`
+write-stage result is covered by the unit test
+`writer_failure_preserves_existing_destination_and_result_has_no_path` but was not reachable
+through the dialog on this host; and macOS native dialog/replacement evidence still requires a
+real macOS machine. No release should claim three-platform native acceptance until those run.
 
 ## Context and Orientation
 

@@ -984,22 +984,23 @@
   HTTP 状态码与错误码，不留邮箱、激活码、会话 token 或请求体。阻塞原因：缺真实测试邮箱。
 
 - [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
-  **native Save As dialog smoke remains unverified on Windows and macOS**. Correction on 2026-11-08:
-  the earlier claim "Windows native Save As manual verification is complete" was wrong, and the
-  "no-bundle build could not reach a native smoke because rustc failed memory allocation" line
-  describes the 2026-08-09 attempt only — the 2026-08-10 recheck built `app.exe` successfully
-  (8-second startup check) but the Tauri WebView exposed no CDP/UIA tree, so the dialog itself
-  could not be driven. Neither is passing native evidence. 2026-11-08 recheck on current main:
-  focused Rust `diagnostics::` 50 passed and `diagnostic_export::tests` 8 passed, worker diagnostic
-  tests 73 passed, scripts 57 passed, frontend diagnostic tests 23 passed, packaged worker
-  byte-identical to canonical source. Added a permanent regression test
-  `real_zip_export_to_disk_rejects_forbidden_data` driving the real `assemble_for_paths` +
-  `atomic_write` path: the ZIP lands on disk with only the three fixed root entries, a ten-field
-  closed `diagnostics.json`, <= 5 MiB, no `.part` residue and no app-local copy, while every entry
-  is free of seeded path/URL/token/email/IP material and `.env` / transcript / model-cache traps
-  are never read. This covers the scriptable portion of manual steps 1/4/5/7/8. Still release-host
-  work: success/cancel/replacement/bad-destination on a real packaged Windows Save As dialog,
-  packaged absence-of-forbidden-data evidence, and macOS native dialog/replacement. Product spec:
+  2026-11-08 在 Windows native Tauri build 上**脚本化跑通了真实系统 Save As 对话框的四项验收**，
+  macOS 仍未验。做法：给 WebView2 加 `--remote-debugging-port=9222` 打开 CDP（解除 8-10 记录的
+  「WebView 无 CDP/UIA 树」阻塞），CDP 调 `export_diagnostics`，再用 Win32 消息 + `SendInput`
+  绕过被安全策略拦住的 .NET UIA 驱动「另存为」对话框，全程无鼠标点击。四项结果：success →
+  `exported`，ZIP 真实落盘且只有 `diagnostics.json` + `frameq-desktop.log`、十字段闭合 manifest、
+  <= 5 MiB，5 个 seed 敏感标记与 3 个真实配置值全部 0 命中；cancel → `cancelled` 且不产生文件；
+  覆盖替换 → `exported`，确认框点「是」后目标被真实 ZIP 替换、旧 sentinel 消失、无 `.part`
+  残留、无 app-local 副本；目标失败 → 注入只读/独占锁/目录目标时 Common Item Dialog 在选文件
+  阶段即拒绝，返回 `cancelled`，原文件完好、无 `.part`、UI 稳定且无残留对话框。
+  同日另复跑门禁（Rust `diagnostics::` 50 + `diagnostic_export::tests` 8、worker 73、scripts 57、
+  前端 23、打包 worker 字节一致）并新增常驻回归测试 `real_zip_export_to_disk_rejects_forbidden_data`
+  （真实 `assemble_for_paths` + `atomic_write` 落盘、全条目脱敏扫描、`.env`/文字稿/模型缓存陷阱
+  不被读取）。**限制**：宿主二进制是 2026-11-05 native release build（内嵌 `app_version=0.4.3`），
+  **不是 NSIS 安装包**——diagnostic-export 模块自 8-10 未改动，但严格意义的 packaged
+  absence-of-forbidden-data 证据仍缺；目标失败只验到对话框层稳定拒绝，Rust `failed` 码仍由单测
+  `writer_failure_preserves_existing_destination_and_result_has_no_path` 覆盖；macOS 对话框与替换
+  行为仍缺真机。全程不碰生产、不发邮件、不调供应商，harness 与产物用后删除。Product spec:
   `docs/product-specs/2026-08-09-desktop-diagnostic-export.md`. Design:
   `docs/design-docs/2026-08-09-desktop-diagnostic-export.md`. ExecPlan:
   `docs/exec-plans/active/2026-08-09-desktop-diagnostic-export-plan.md`.
