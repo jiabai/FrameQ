@@ -9,9 +9,6 @@ function buildHealthServer(readiness: ReadinessController) {
     sendOtp: async () => {
       throw new Error("health must not call SMTP");
     },
-    createNativePayment: async () => {
-      throw new Error("health must not call payment providers");
-    },
     readiness,
   });
 }

@@ -188,7 +188,7 @@ describe("production deployment contracts", () => {
     ]) {
       expect(workflow).toContain(expected);
     }
-    expect(workflow).not.toMatch(/SMTP_PASS|WECHAT_MCH_PRIVATE_KEY|FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY/);
+    expect(workflow).not.toMatch(/SMTP_PASS|FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY/);
   });
 
   test("example environment documents the self-service activation and SMTP boundary", () => {

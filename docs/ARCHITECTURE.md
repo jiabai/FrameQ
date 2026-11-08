@@ -1123,7 +1123,7 @@
 - `BillingService`, `ActivationCodeService`, and the entitlement-adjustment use case own policy invocation and compatible error mapping. Fastify routes own only authentication, CSRF, request parsing, and HTTP mapping.
 - Payment idempotency is keyed by provider event and reconciled with immutable order transaction identity. A verified replay can complete a deterministically incomplete historical payment once; conflicting order/event/transaction state fails without overwriting. Activation and administrator adjustments have no automatic legacy compensation path when their intended grant cannot be reconstructed safely.
 - Administrator quota display is read-only. Every administrator quota grant goes through `applyEntitlementAdjustmentWithAudit` with positive `quota_add` and a reason; there is no parallel remaining-quota write route or Store method.
-- WeChat billing code remains a disabled future integration. The server enables its routes only when `WECHAT_PAY_ENABLED` is exactly `"1"`; ordinary release behavior keeps the channel closed and does not imply provider readiness.
+- WeChat Native billing was a disabled future integration. The unused channel (code, routes, runtime configuration, and the `Order` / `WebhookEvent` tables) was removed on 2026-11-08.
 
 ## 2026-07-10 Source Identity and AI Input Boundary
 
@@ -1348,7 +1348,7 @@
 - The service stores encrypted administrator-managed LLM config for a dedicated FrameQ client supplier key and tracks per-user LLM API-call quota.
 - Desktop authentication uses `frameq://auth/callback` deep links. The browser receives a short-lived ticket, and the desktop client exchanges that ticket for an opaque session token.
 - The user-facing entitlement is a monthly pass. Activation codes are the current administrator-issued way to open or extend that monthly pass, and they update the same `Entitlement` record used by the processing gate.
-- WeChat purchase is paused because of WeChat approval requirements. Any WeChat payment route must remain disabled and hidden by default unless the product explicitly re-enables that channel.
+- No self-serve payment provider is integrated. Monthly passes are opened and extended only with activation codes; the unused WeChat purchase channel was removed on 2026-11-08.
 - Each activation grants 20 cloud LLM API-call uses. The desktop worker authorizes quota through server-managed checkout before each supplier chat-completion/API call, then calls the LLM supplier directly with the returned config for that call.
 - Admin Web access is limited to the configured administrator email and uses short-lived HttpOnly cookie sessions.
 - The account service never receives video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents. It may store and return the dedicated FrameQ client LLM key.

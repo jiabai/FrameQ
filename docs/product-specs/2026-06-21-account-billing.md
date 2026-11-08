@@ -8,7 +8,7 @@ a monthly pass: redeeming a code opens a 31-day monthly pass and grants the conf
 quota. Administrator-issued universal codes remain available, but no longer require per-user
 participation in the default flow.
 
-WeChat purchase is paused because of WeChat approval requirements. Payment routes and code may remain for later use, but the ordinary desktop client and support documentation must not present WeChat purchase as an available channel unless the product explicitly re-enables it.
+WeChat purchase was paused because of WeChat approval requirements. The unused channel (routes, code, runtime configuration, and database tables) was removed on 2026-11-08. Product, UI, deployment, and support documentation describe only the activation-code monthly pass flow.
 
 Keep new product, UI, deployment, and support documentation aligned to the activation-code monthly pass flow:
 

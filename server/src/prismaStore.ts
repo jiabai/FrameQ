@@ -2,7 +2,6 @@ import type { PrismaClient } from "@prisma/client";
 import type { Store } from "./store.js";
 import * as anysearchConfigOperations from "./prismaStore/anysearchConfig.js";
 import * as authOperations from "./prismaStore/auth.js";
-import * as billingOperations from "./prismaStore/billing.js";
 import * as entitlementOperations from "./prismaStore/entitlements.js";
 import * as llmConfigOperations from "./prismaStore/llmConfig.js";
 import * as selfServiceActivationOperations from "./prismaStore/selfServiceActivation.js";
@@ -71,33 +70,6 @@ export class PrismaStore implements Store {
     now: Date,
   ): ReturnType<Store["revokeSession"]> {
     return authOperations.revokeSession(this.prisma, tokenHash, now);
-  }
-
-
-  async createOrder(
-    input: Parameters<Store["createOrder"]>[0],
-  ): ReturnType<Store["createOrder"]> {
-    return billingOperations.createOrder(this.prisma, input);
-  }
-
-  async findOrderByOutTradeNo(
-    outTradeNo: string,
-  ): ReturnType<Store["findOrderByOutTradeNo"]> {
-    return billingOperations.findOrderByOutTradeNo(this.prisma, outTradeNo);
-  }
-
-  async markOrderPaid(
-    outTradeNo: string,
-    transactionId: string,
-    paidAt: Date,
-  ): ReturnType<Store["markOrderPaid"]> {
-    return billingOperations.markOrderPaid(this.prisma, outTradeNo, transactionId, paidAt);
-  }
-
-  async settlePaidOrder(
-    input: Parameters<Store["settlePaidOrder"]>[0],
-  ): ReturnType<Store["settlePaidOrder"]> {
-    return billingOperations.settlePaidOrder(this.prisma, input);
   }
 
 
@@ -296,9 +268,4 @@ export class PrismaStore implements Store {
   }
 
 
-  async createWebhookEvent(
-    input: Parameters<Store["createWebhookEvent"]>[0],
-  ): ReturnType<Store["createWebhookEvent"]> {
-    return billingOperations.createWebhookEvent(this.prisma, input);
-  }
 }

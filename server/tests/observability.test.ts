@@ -20,10 +20,6 @@ describe("production observability", () => {
       sendOtp: async (_email, code) => {
         otpSecretMarker = code;
       },
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
       observability: {
         enabled: true,
         requestIdFactory: () => "srv-test-request-id",
@@ -72,7 +68,6 @@ describe("production observability", () => {
         "x-request-id": "attacker-chosen-request-id",
         "x-api-key": "api-key-secret-marker",
         "x-smtp-pass": "smtp-secret-marker",
-        "x-wechat-api-v3-key": "payment-secret-marker",
       },
       payload: {
         otp: "otp-body-secret-marker",
@@ -92,7 +87,6 @@ describe("production observability", () => {
       "attacker-chosen-request-id",
       "api-key-secret-marker",
       "smtp-secret-marker",
-      "payment-secret-marker",
       "otp-body-secret-marker",
       "request-body-secret-marker",
       adminEmailMarker,

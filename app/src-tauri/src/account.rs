@@ -113,42 +113,6 @@ impl ActivationCodeRequestError {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct WechatCheckoutView {
-    order_id: String,
-    amount_fen: i32,
-    currency: String,
-    code_url: String,
-    expires_at: String,
-    status: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ServerWechatCheckout {
-    order_id: String,
-    amount_fen: i32,
-    currency: String,
-    code_url: String,
-    expires_at: String,
-    status: String,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct CheckoutStatusView {
-    order_id: String,
-    status: String,
-    entitlement_expires_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ServerCheckoutStatus {
-    order_id: String,
-    status: String,
-    entitlement_expires_at: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct ServerManagedLlmInvocation {
     pub(crate) server_base_url: String,
@@ -295,73 +259,6 @@ pub(crate) async fn request_activation_code(
         &locale,
     )
     .await
-}
-
-#[tauri::command]
-pub(crate) async fn create_wechat_checkout(app: AppHandle) -> Result<WechatCheckoutView, String> {
-    let paths = resolve_fixed_paths(&app)?;
-    let session = require_account_session(&paths)?;
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{}/api/desktop/billing/wechat-native",
-            server_base_url()
-        ))
-        .bearer_auth(session.session_token)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "Checkout failed with status {}.",
-            response.status()
-        ));
-    }
-    let checkout = response
-        .json::<ServerWechatCheckout>()
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(WechatCheckoutView {
-        order_id: checkout.order_id,
-        amount_fen: checkout.amount_fen,
-        currency: checkout.currency,
-        code_url: checkout.code_url,
-        expires_at: checkout.expires_at,
-        status: checkout.status,
-    })
-}
-
-#[tauri::command]
-pub(crate) async fn get_checkout_status(
-    app: AppHandle,
-    order_id: String,
-) -> Result<CheckoutStatusView, String> {
-    let paths = resolve_fixed_paths(&app)?;
-    let session = require_account_session(&paths)?;
-    let response = reqwest::Client::new()
-        .get(format!(
-            "{}/api/desktop/billing/orders/{}",
-            server_base_url(),
-            percent_encode(&order_id)
-        ))
-        .bearer_auth(session.session_token)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "Order status failed with status {}.",
-            response.status()
-        ));
-    }
-    let status = response
-        .json::<ServerCheckoutStatus>()
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(CheckoutStatusView {
-        order_id: status.order_id,
-        status: status.status,
-        entitlement_expires_at: status.entitlement_expires_at,
-    })
 }
 
 pub(crate) fn server_managed_llm_invocation(

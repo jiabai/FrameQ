@@ -3,9 +3,7 @@ import {
   ActivationCodeRequestError,
   beginAuthFlow,
   completeAuthFlow,
-  createWechatCheckout,
   getAccountStatus,
-  getCheckoutStatus,
   logoutAccount,
   requestActivationCode,
   redeemActivationCode,
@@ -118,23 +116,6 @@ describe("account client", () => {
           can_generate_ai: false,
         };
       }
-      if (command === "create_wechat_checkout") {
-        return {
-          order_id: "fq_order",
-          amount_fen: 990,
-          currency: "CNY",
-          code_url: "weixin://wxpay/bizpayurl?pr=fq_order",
-          expires_at: "2026-06-21T08:30:00.000Z",
-          status: "pending",
-        };
-      }
-      if (command === "get_checkout_status") {
-        return {
-          order_id: "fq_order",
-          status: "paid",
-          entitlement_expires_at: "2026-07-22T08:00:00.000Z",
-        };
-      }
       if (command === "logout_account") {
         return null;
       }
@@ -153,19 +134,6 @@ describe("account client", () => {
       canProcess: false,
       canGenerateAi: false,
     });
-    await expect(createWechatCheckout(runner)).resolves.toEqual({
-      orderId: "fq_order",
-      amountFen: 990,
-      currency: "CNY",
-      codeUrl: "weixin://wxpay/bizpayurl?pr=fq_order",
-      expiresAt: "2026-06-21T08:30:00.000Z",
-      status: "pending",
-    });
-    await expect(getCheckoutStatus("fq_order", runner)).resolves.toEqual({
-      orderId: "fq_order",
-      status: "paid",
-      entitlementExpiresAt: "2026-07-22T08:00:00.000Z",
-    });
     await expect(logoutAccount(runner)).resolves.toBeUndefined();
 
     expect(calls).toEqual([
@@ -174,8 +142,6 @@ describe("account client", () => {
         command: "complete_auth_flow",
         args: { callbackUrl: "frameq://auth/callback?ticket=flt_abc&state=state-1" },
       },
-      { command: "create_wechat_checkout", args: {} },
-      { command: "get_checkout_status", args: { orderId: "fq_order" } },
       { command: "logout_account", args: {} },
     ]);
   });
@@ -431,27 +397,6 @@ describe("account client", () => {
         authenticated: true,
         email: "user@example.com",
         can_process: true,
-      })),
-    ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
-  });
-
-  test("rejects malformed checkout and checkout-status responses", async () => {
-    await expect(
-      createWechatCheckout(async () => ({
-        order_id: "fq_order",
-        amount_fen: Number.NaN,
-        currency: "CNY",
-        code_url: "weixin://wxpay/bizpayurl?pr=private",
-        expires_at: "2026-06-21T08:30:00.000Z",
-        status: "pending",
-      })),
-    ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
-
-    await expect(
-      getCheckoutStatus("expected-order", async () => ({
-        order_id: "different-order",
-        status: "paid",
-        entitlement_expires_at: null,
       })),
     ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
   });

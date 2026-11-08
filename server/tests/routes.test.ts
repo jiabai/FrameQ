@@ -93,10 +93,6 @@ function buildDesktopAuthApp(options: {
     sendOtp: async (_email, code) => {
       sentCode = code;
     },
-    createNativePayment: async () => ({
-      codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-      providerPayload: {},
-    }),
     now: options.now,
     selfServiceActivationEnabled: options.selfServiceActivationEnabled,
     selfServiceActivationService: options.selfServiceActivationService,
@@ -140,10 +136,6 @@ describe("desktop account routes", () => {
     const app = buildServer({
       store: new MemoryStore(),
       sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
     });
     const routes = [
       ["GET", "/health/live"],
@@ -165,9 +157,6 @@ describe("desktop account routes", () => {
       ["POST", "/api/desktop/logout"],
       ["POST", "/api/desktop/activation-codes/redeem"],
       ["POST", "/api/desktop/llm/checkouts"],
-      ["POST", "/api/desktop/billing/wechat-native"],
-      ["GET", "/api/desktop/billing/orders/:orderId"],
-      ["POST", "/api/wechat/notify"],
       ["POST", "/user/auth/email/start"],
       ["POST", "/user/auth/email/verify"],
       ["POST", "/user/auth/logout"],
@@ -191,10 +180,6 @@ describe("desktop account routes", () => {
     const app = buildServer({
       store: new MemoryStore(),
       sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
     });
 
     const response = await app.inject({
@@ -214,10 +199,6 @@ describe("desktop account routes", () => {
     const app = buildServer({
       store: new MemoryStore(),
       sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
     });
 
     const response = await app.inject({
@@ -236,10 +217,6 @@ describe("desktop account routes", () => {
       sendOtp: async (_email, code) => {
         sentCode = code;
       },
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
     });
 
     const start = await app.inject({
@@ -539,10 +516,6 @@ describe("desktop account routes", () => {
       sendOtp: async (_email, code) => {
         sentCode = code;
       },
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
       now: () => new Date("2026-06-21T08:00:00.000Z"),
     });
 
@@ -601,28 +574,6 @@ describe("desktop account routes", () => {
     });
   });
 
-  test("keeps WeChat routes disabled unless explicitly enabled", async () => {
-    const app = buildServer({
-      store: new MemoryStore(),
-      sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
-      wechatPayEnabled: false,
-    });
-
-    const responses = await Promise.all([
-      app.inject({ method: "POST", url: "/api/desktop/billing/wechat-native" }),
-      app.inject({ method: "GET", url: "/api/desktop/billing/orders/fq_disabled" }),
-      app.inject({ method: "POST", url: "/api/wechat/notify", payload: { id: "notice-1" } }),
-    ]);
-
-    for (const response of responses) {
-      expect(response.statusCode).toBe(404);
-      expect(response.json()).toEqual({ error: "WECHAT_PAY_DISABLED" });
-    }
-  });
 
   test("returns a generic error when email delivery fails", async () => {
     const app = buildServer({
@@ -630,10 +581,6 @@ describe("desktop account routes", () => {
       sendOtp: async () => {
         throw new Error("smtp password secret leaked by provider");
       },
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
     });
 
     const response = await app.inject({
@@ -653,10 +600,6 @@ describe("desktop account routes", () => {
     const app = buildServer({
       store: new TemporarilyUnavailableAuthStore(),
       sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
       adminEmail: "admin@example.com",
     });
 
@@ -698,10 +641,6 @@ describe("desktop account routes", () => {
     const app = buildServer({
       store: new FailingAuthStore(),
       sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
       adminEmail: "admin@example.com",
     });
 
@@ -741,57 +680,6 @@ describe("desktop account routes", () => {
     }
   });
 
-  test("rejects WeChat notifications when signature parsing fails", async () => {
-    const app = buildServer({
-      store: new MemoryStore(),
-      sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
-      parseWechatNotification: async () => {
-        throw new Error("invalid wechat signature");
-      },
-      wechatPayEnabled: true,
-    });
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/wechat/notify",
-      payload: { id: "notice-1" },
-    });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ code: "FAIL", message: "invalid wechat signature" });
-  });
-
-  test("forwards the exact WeChat JSON bytes to the notification parser", async () => {
-    const rawBody = '{\n  "id": "notice-raw",\n  "nested": { "amount": 1 }\n}';
-    let captured: { body: unknown; rawBody: string } | undefined;
-    const app = buildServer({
-      store: new MemoryStore(),
-      sendOtp: async () => {},
-      createNativePayment: async () => ({
-        codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-        providerPayload: {},
-      }),
-      parseWechatNotification: async (input) => {
-        captured = { body: input.body, rawBody: input.rawBody };
-        throw new Error("capture complete");
-      },
-      wechatPayEnabled: true,
-    });
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/wechat/notify",
-      headers: { "content-type": "application/json" },
-      payload: rawBody,
-    });
-
-    expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({ code: "FAIL", message: "internal error" });
-    expect(captured?.body).toEqual({ id: "notice-raw", nested: { amount: 1 } });
-    expect(captured?.rawBody).toBe(rawBody);
-  });
 });

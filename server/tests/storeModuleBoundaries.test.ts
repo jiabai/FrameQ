@@ -17,7 +17,6 @@ const expectedStoreOwners = [
   "memory/anysearchConfig.ts",
   "memory/atomic.ts",
   "memory/auth.ts",
-  "memory/billing.ts",
   "memory/entitlements.ts",
   "memory/llmConfig.ts",
   "memory/rateLimits.ts",
@@ -29,7 +28,6 @@ const expectedStoreOwners = [
 const expectedPrismaOwners = [
   "anysearchConfig.ts",
   "auth.ts",
-  "billing.ts",
   "concurrency.ts",
   "entitlements.ts",
   "llmConfig.ts",
@@ -60,9 +58,7 @@ const expectedContractTypes = [
   "LlmConfigRecord",
   "LlmQuotaCheckoutResult",
   "LlmUsageEventRecord",
-  "OrderRecord",
   "OtpPurpose",
-  "PaidOrderSettlement",
   "PrepareSelfServiceActivationCodeResult",
   "SessionRecord",
   "Store",
@@ -72,7 +68,6 @@ const expectedContractTypes = [
   "VerifyDesktopOtpAndWebSessionResult",
   "VerifyDesktopOtpResult",
   "VerifyUserOtpResult",
-  "WebhookEventRecord",
 ] as const;
 
 const semanticOwners = {
@@ -91,10 +86,6 @@ const semanticOwners = {
   exchangeDesktopTicketAndCreateSession: {
     memory: "store/memory/auth.ts",
     prisma: "prismaStore/auth.ts",
-  },
-  settlePaidOrder: {
-    memory: "store/memory/billing.ts",
-    prisma: "prismaStore/billing.ts",
   },
   consumeLlmQuota: {
     memory: "store/memory/entitlements.ts",
@@ -162,15 +153,6 @@ const expectedCapabilities = {
       "verifyAdminOtpAndCreateSession",
     ],
   },
-  "billing.ts": {
-    alias: "BillingStore",
-    keys: [
-      "createOrder",
-      "findOrderByOutTradeNo",
-      "findSessionByTokenHash",
-      "settlePaidOrder",
-    ],
-  },
   "activation.ts": {
     alias: "ActivationStore",
     keys: [
@@ -209,10 +191,6 @@ const expectedCapabilities = {
   "routes/desktopLlm.ts": {
     alias: "DesktopLlmStore",
     keys: ["consumeLlmQuota", "findSessionByTokenHash"],
-  },
-  "routes/billing.ts": {
-    alias: "BillingRouteStore",
-    keys: ["findSessionByTokenHash", "getEntitlement"],
   },
   "routes/admin.ts": {
     alias: "AdminRouteStore",
@@ -635,7 +613,6 @@ describe("Store adapter module ownership", () => {
       "activation.ts",
       "adminAuth.ts",
       "auth.ts",
-      "billing.ts",
       "database.ts",
       "email.ts",
       "entitlementAdjustment.ts",
@@ -647,7 +624,6 @@ describe("Store adapter module ownership", () => {
       "server.ts",
       "store.ts",
       "userAuth.ts",
-      "wechat.ts",
     ]);
     const privateEntries = entries.filter(
       (entry) =>

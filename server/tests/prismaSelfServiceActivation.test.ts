@@ -857,7 +857,6 @@ describe("self-service activation retry signal over the real store", () => {
       now: () => clock,
       selfServiceActivationEnabled: true,
       sendOtp: async () => {},
-      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       sendActivationCode: {
         sendActivationCode: async () => {
           throw new Error("smtp unavailable");

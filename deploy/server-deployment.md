@@ -51,8 +51,7 @@ working SMTP account. Install under `/opt/frameq/FrameQ` as the unprivileged `fr
 
 Create `/opt/frameq/FrameQ/server/.env` with mode `0600`. Production startup fails closed unless
 the database URL, administrator email, encryption key, and complete SMTP configuration are
-present. `FRAMEQ_ALLOW_CONSOLE_OTP=1` and `WECHAT_DEV_INSECURE_NOTIFY=1` are forbidden in
-production.
+present. `FRAMEQ_ALLOW_CONSOLE_OTP=1` is forbidden in production.
 
 ```dotenv
 NODE_ENV=production
@@ -67,7 +66,6 @@ SMTP_PORT=587
 SMTP_USER=frameq@example.com
 SMTP_PASS=<smtp-password>
 SMTP_FROM=FrameQ <frameq@example.com>
-WECHAT_PAY_ENABLED=0
 ```
 
 Generate the encryption key with `openssl rand -hex 32`. Back up the exact key separately from the

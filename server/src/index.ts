@@ -7,7 +7,6 @@ import { PrismaStore } from "./prismaStore.js";
 import { ReadinessController } from "./readiness.js";
 import { parseRuntimeConfig, RuntimeConfigurationError } from "./runtimeConfig.js";
 import { buildServer } from "./server.js";
-import { createWechatNativePayment, createWechatNotificationParser } from "./wechat.js";
 
 async function main(): Promise<void> {
   const runtimeConfig = parseRuntimeConfig(process.env);
@@ -23,11 +22,8 @@ async function main(): Promise<void> {
       sendActivationCode: runtimeConfig.smtp
         ? createActivationCodeSender(runtimeConfig)
         : undefined,
-      createNativePayment: createWechatNativePayment(runtimeConfig.wechat),
-      parseWechatNotification: createWechatNotificationParser(runtimeConfig.wechat),
       adminEmail: runtimeConfig.adminEmail,
       selfServiceActivationEnabled: runtimeConfig.selfServiceActivationEnabled,
-      wechatPayEnabled: runtimeConfig.wechatPayEnabled,
       llmConfigEncryptionKey: runtimeConfig.llmConfigEncryptionKey,
       observability: createObservabilityConfig(runtimeConfig.environment === "production"),
       trustLoopbackProxy: runtimeConfig.trustLoopbackProxy,

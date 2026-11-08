@@ -7,6 +7,7 @@ const requiredMigrations = [
   "202607220001_baseline",
   "202607220002_auth_quota_hardening",
   "202610290001_remove_entitlement_status",
+  "202611080001_remove_wechat_billing",
 ];
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const prismaRoot = join(serverRoot, "prisma");

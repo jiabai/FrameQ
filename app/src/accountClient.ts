@@ -24,21 +24,6 @@ export type CompleteAuthFlow = {
   canGenerateAi: boolean;
 };
 
-export type WechatCheckout = {
-  orderId: string;
-  amountFen: number;
-  currency: string;
-  codeUrl: string;
-  expiresAt: string;
-  status: string;
-};
-
-export type CheckoutStatus = {
-  orderId: string;
-  status: string;
-  entitlementExpiresAt: string | null;
-};
-
 export type ActivationCodeRequestResult = {
   status: "sent";
   retryAt: string;
@@ -119,21 +104,6 @@ type CompleteAuthFlowResponse = {
   email: string;
   can_process: boolean;
   can_generate_ai: boolean;
-};
-
-type WechatCheckoutResponse = {
-  order_id: string;
-  amount_fen: number;
-  currency: string;
-  code_url: string;
-  expires_at: string;
-  status: string;
-};
-
-type CheckoutStatusResponse = {
-  order_id: string;
-  status: string;
-  entitlement_expires_at: string | null;
 };
 
 type ActivationCodeRequestResponse = {
@@ -222,28 +192,6 @@ export async function requestActivationCode(
     }
     throw parseActivationCodeRequestError(error);
   }
-}
-
-export async function createWechatCheckout(
-  runner: AccountCommandRunner = defaultRunner,
-): Promise<WechatCheckout> {
-  return mapWechatCheckout(
-    parseWechatCheckoutResponse(
-      await runner("create_wechat_checkout", {}),
-    ),
-  );
-}
-
-export async function getCheckoutStatus(
-  orderId: string,
-  runner: AccountCommandRunner = defaultRunner,
-): Promise<CheckoutStatus> {
-  return mapCheckoutStatus(
-    parseCheckoutStatusResponse(
-      await runner("get_checkout_status", { orderId }),
-      orderId,
-    ),
-  );
 }
 
 function parseAccountStatusResponse(value: unknown): AccountStatusResponse {
@@ -347,64 +295,6 @@ function parseCompleteAuthFlowResponse(
   };
 }
 
-function parseWechatCheckoutResponse(value: unknown): WechatCheckoutResponse {
-  const response = readIpcDataObject(
-    value,
-    [
-      "order_id",
-      "amount_fen",
-      "currency",
-      "code_url",
-      "expires_at",
-      "status",
-    ],
-    [],
-    ACCOUNT_IPC_RESPONSE_INVALID,
-  );
-  if (
-    typeof response.order_id !== "string" ||
-    !isNonNegativeInteger(response.amount_fen) ||
-    typeof response.currency !== "string" ||
-    typeof response.code_url !== "string" ||
-    typeof response.expires_at !== "string" ||
-    typeof response.status !== "string"
-  ) {
-    throwInvalidAccountResponse();
-  }
-  return {
-    order_id: response.order_id,
-    amount_fen: response.amount_fen,
-    currency: response.currency,
-    code_url: response.code_url,
-    expires_at: response.expires_at,
-    status: response.status,
-  };
-}
-
-function parseCheckoutStatusResponse(
-  value: unknown,
-  expectedOrderId: string,
-): CheckoutStatusResponse {
-  const response = readIpcDataObject(
-    value,
-    ["order_id", "status", "entitlement_expires_at"],
-    [],
-    ACCOUNT_IPC_RESPONSE_INVALID,
-  );
-  if (
-    response.order_id !== expectedOrderId ||
-    typeof response.status !== "string" ||
-    !isNullableString(response.entitlement_expires_at)
-  ) {
-    throwInvalidAccountResponse();
-  }
-  return {
-    order_id: response.order_id,
-    status: response.status,
-    entitlement_expires_at: response.entitlement_expires_at,
-  };
-}
-
 function parseActivationCodeRequestResponse(
   value: unknown,
 ): ActivationCodeRequestResponse {
@@ -487,25 +377,6 @@ function mapAccountStatus(response: AccountStatusResponse): AccountStatus {
     canGenerateAi: response.can_generate_ai,
     canRequestActivationCode: response.can_request_activation_code,
     serverError: response.server_error,
-  };
-}
-
-function mapWechatCheckout(response: WechatCheckoutResponse): WechatCheckout {
-  return {
-    orderId: response.order_id,
-    amountFen: response.amount_fen,
-    currency: response.currency,
-    codeUrl: response.code_url,
-    expiresAt: response.expires_at,
-    status: response.status,
-  };
-}
-
-function mapCheckoutStatus(response: CheckoutStatusResponse): CheckoutStatus {
-  return {
-    orderId: response.order_id,
-    status: response.status,
-    entitlementExpiresAt: response.entitlement_expires_at,
   };
 }
 

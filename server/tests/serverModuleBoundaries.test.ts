@@ -9,7 +9,6 @@ const routesRoot = fileURLToPath(new URL("../src/routes/", import.meta.url));
 
 const featureRouteFiles = [
   "admin.ts",
-  "billing.ts",
   "dashboard.ts",
   "desktopAccount.ts",
   "desktopAuth.ts",
@@ -36,11 +35,6 @@ const expectedRoutes: Record<(typeof featureRouteFiles)[number], string[]> = {
     "POST /admin/auth/email/start",
     "POST /admin/auth/email/verify",
     "POST /admin/auth/logout",
-  ],
-  "billing.ts": [
-    "GET /api/desktop/billing/orders/:orderId",
-    "POST /api/desktop/billing/wechat-native",
-    "POST /api/wechat/notify",
   ],
   "dashboard.ts": ["GET /api/dashboard/account", "GET /dashboard"],
   "desktopAccount.ts": [
@@ -160,15 +154,12 @@ describe("server route module boundaries", () => {
     expect(source).not.toContain('from "zod"');
     expect(source).toContain("createFastifyOptions(");
     expect(source).toContain("registerObservability(app, observability)");
-    expect(source).toContain('removeContentTypeParser("application/json")');
-    expect(source).toContain('addContentTypeParser("application/json"');
     for (const service of [
       "AuthService",
       "AdminAuthService",
       "UserAuthService",
       "ActivationCodeService",
       "LlmConfigService",
-      "BillingService",
       "EntitlementAdjustmentService",
     ]) {
       expect(source).toContain(`new ${service}(`);
@@ -229,14 +220,11 @@ describe("server route module boundaries", () => {
     }
   });
 
-  test("keeps raw webhook and administrator cookie constants with their security owners", () => {
+  test("keeps administrator cookie constants with their security owners", () => {
     const allRouteFiles = [...featureRouteFiles, "authSchemas.ts", "shared.ts"] as const;
     const sources = new Map(
       allRouteFiles.map((file) => [file, readSource(sourcePath(`routes/${file}`))] as const),
     );
-    const rawBodyOwners = allRouteFiles.filter((file) => sources.get(file)?.includes("rawBody"));
-
-    expect(rawBodyOwners).toEqual(["billing.ts"]);
     for (const token of ["frameq_admin_session", "frameq_admin_csrf"]) {
       expect(allRouteFiles.filter((file) => sources.get(file)?.includes(token)), token).toEqual([
         "admin.ts",

@@ -28,7 +28,6 @@ function buildTestServer(options: {
     sendOtp: async (email, code) => {
       sentCodes.push({ email, code });
     },
-    createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
     secureCookies: options.secureCookies ?? false,
     now: () => now,
   });

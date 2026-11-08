@@ -895,6 +895,17 @@
 
 ## Account and Billing
 
+- [x] Remove the unused WeChat Pay integration (2026-11-08) ✅ 该通道从未启用（生产
+  `WECHAT_PAY_ENABLED=0`），前端无 UI 调用方。已删除 server 的 `wechat.ts` / `billing.ts` /
+  `routes/billing.ts` / `prismaStore/billing.ts` / `memory/billing.ts`、`WECHAT_*` 运行时配置、
+  exact-raw-body JSON parser、`Order` 与 `WebhookEvent` Prisma 模型及 Store 方法；桌面端删除
+  `create_wechat_checkout` / `get_checkout_status` 两个 Tauri 命令与前端 accountClient 对应类型、
+  解析与测试；清理 `.env.example`、nginx 回调 location、部署手册与当前产品/架构/安全/设计文档描述。
+  新增破坏性迁移 `202611080001_remove_wechat_billing`（`DROP TABLE "Order"` 与
+  `DROP TABLE "WebhookEvent"`）。历史发布说明、归档计划与旧设计文档按史实保留。残余风险：迁移为
+  不可逆 DROP TABLE，回滚须整套恢复代码 + 迁移前数据库 + 匹配 `.env`；生产 `.env` 里遗留的
+  `WECHAT_*` 变量已变为被忽略的无害配置。
+
 - [x] Deploy the 2026-10-28/29 server fixes to production (2026-11-08) ✅ 用户授权后按
   `deploy/server-deployment.md` 把生产 `frameq-server` 从 `30934a4`（2026-10-20）部署到
   `bf92310`：停服后 WAL 合并为单一 `frameq.sqlite`，旧代码 `db:preflight --mode current`

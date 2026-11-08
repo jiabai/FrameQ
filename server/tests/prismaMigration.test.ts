@@ -113,7 +113,7 @@ describe("reviewed Prisma migration chain", () => {
     const { databasePath } = temporaryDatabase();
     new DatabaseSync(databasePath).close();
 
-    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("8 migrations");
+    expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("9 migrations");
     expect(runPrisma(databasePath, ["migrate", "deploy"])).toContain("No pending migrations");
     expect(runPrisma(databasePath, ["migrate", "status"])).toContain(
       "Database schema is up to date",
@@ -155,6 +155,7 @@ describe("reviewed Prisma migration chain", () => {
         { migration_name: "202608240003_self_service_active_unique" },
         { migration_name: "202610100001_anysearch_config" },
         { migration_name: entitlementMigration },
+        { migration_name: "202611080001_remove_wechat_billing" },
       ]);
       expect(() => database.prepare(
         'INSERT INTO "AuthRateLimit" ("id", "keyHash", "purpose", "scope", "windowStartedAt", "count", "nextAllowedAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

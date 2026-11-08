@@ -466,7 +466,7 @@
 - Update installation waits for worker processing, model/component downloads and storage maintenance. Storage preparation waits for an already-running update and requires an installed update's restart before migration.
 - The account sheet shows email login, activation-code monthly pass redemption, monthly pass expiry, and remaining LLM API-call uses in a stable layout.
 - Successful activation-code redemption opens or extends the monthly pass and returns the user to the existing processing workflow without changing the local-first worker UI stages.
-- WeChat purchase is paused because of WeChat approval requirements, so the desktop UI must not show a WeChat purchase entry by default.
+- The desktop UI exposes no purchase entry. Monthly passes are opened and extended with activation codes; the unused WeChat purchase channel was removed on 2026-11-08.
 
 ## Admin Web Compensation UI
 

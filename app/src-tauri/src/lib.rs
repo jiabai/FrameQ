@@ -176,8 +176,6 @@ pub fn run() {
             account::logout_account,
             account::redeem_activation_code,
             account::request_activation_code,
-            account::create_wechat_checkout,
-            account::get_checkout_status,
             window_chrome::start_window_drag,
             window_chrome::close_window,
             window_chrome::minimize_window,

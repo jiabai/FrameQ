@@ -475,9 +475,10 @@ success. Paid supplier acceptance remains skipped at the user's request.
   then enter payload validation and mutation. Rejection returns the existing 401/403 response with
   no writes or cookie clearing. Logout uses the authenticated token to revoke only that session;
   entitlement adjustment derives its administrator identity from the authenticated session.
-- The root Fastify instance still captures exact JSON bytes before parsing. Only
-  `server/src/routes/billing.ts` consumes `rawBody` for WeChat signature verification, and neither
-  the parser nor the route adds logging, persistence, or response echo of the raw payload.
+- The exact-raw-body JSON parser and `server/src/routes/billing.ts` existed only for WeChat
+  signature verification. Both were removed with the unused payment channel on 2026-11-08; the
+  Fastify instance now uses the default JSON parser, with no raw payload logging, persistence, or
+  response echo.
 - Desktop LLM checkout remains private to its authenticated route owner and preserves the existing
   bearer-token hashing, entitlement/quota checks, server-managed secret handling, and fixed failure
   mapping. The route split does not widen supplier credentials or add a diagnostic path.
@@ -810,7 +811,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - Administrator compensation audit records are required evidence, not best-effort telemetry. A failure to write the append-only audit record rolls back the entitlement mutation. Logs may identify record IDs and users but must not include payment payloads, activation-code plaintext, session tokens, or free-form support notes.
 - All administrator quota grants are additive, require an audit reason, preserve `llmQuotaUsed`, and use the same entitlement-adjustment transaction. Direct remaining-quota edits, reductions, and resets are not supported without a separately approved audited operation.
 - Historical automatic recovery is limited to a verified, deterministic payment replay. Ambiguous redeemed-code and missing-audit states require an administrator `manual_repair` adjustment so the repair itself is append-only and auditable.
-- WeChat Pay routes are disabled by default and must not be represented as production payment support. Local billing tests exercise only internal state transitions; they do not use provider credentials, call the provider, validate a live callback, or establish end-to-end payment readiness.
+- WeChat Pay was never enabled and was removed on 2026-11-08. No payment provider code, route, credential, or database table remains; the local billing tests that exercised internal state transitions were removed with the channel.
 
 ## 2026-07-10 Source URL Secret Boundary
 

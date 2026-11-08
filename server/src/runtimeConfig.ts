@@ -11,17 +11,6 @@ export type SmtpConfig = Readonly<{
   from: string;
 }>;
 
-export type WechatConfig = Readonly<{
-  appId: string;
-  mchId: string;
-  serialNo: string;
-  privateKey: string;
-  notifyUrl: string;
-  apiV3Key: string;
-  platformCertPem: string;
-  allowInsecureNotify: boolean;
-}>;
-
 export type RuntimeConfig = Readonly<{
   environment: RuntimeEnvironment;
   host: string;
@@ -33,8 +22,6 @@ export type RuntimeConfig = Readonly<{
   smtp: SmtpConfig | null;
   allowConsoleOtp: boolean;
   trustLoopbackProxy: true;
-  wechatPayEnabled: boolean;
-  wechat: WechatConfig | null;
 }>;
 
 export class RuntimeConfigurationError extends Error {
@@ -56,16 +43,6 @@ const REQUIRED_SMTP_KEYS = [
   "SMTP_FROM",
 ] as const;
 
-const WECHAT_PAYMENT_KEYS = [
-  "WECHAT_APP_ID",
-  "WECHAT_MCH_ID",
-  "WECHAT_MCH_SERIAL_NO",
-  "WECHAT_MCH_PRIVATE_KEY",
-  "WECHAT_NOTIFY_URL",
-] as const;
-
-const WECHAT_NOTIFICATION_KEYS = ["WECHAT_API_V3_KEY", "WECHAT_PLATFORM_CERT_PEM"] as const;
-
 export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
   const issues: string[] = [];
   const environment = parseEnvironment(env.NODE_ENV, issues);
@@ -85,12 +62,6 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
     "FRAMEQ_ALLOW_CONSOLE_OTP",
     issues,
   );
-  const wechatPayEnabled = parseFlag(env.WECHAT_PAY_ENABLED, "WECHAT_PAY_ENABLED", issues);
-  const allowInsecureWechatNotify = parseFlag(
-    env.WECHAT_DEV_INSECURE_NOTIFY,
-    "WECHAT_DEV_INSECURE_NOTIFY",
-    issues,
-  );
 
   if (environment === "production") {
     requireValue(databaseUrl, "DATABASE_URL", issues);
@@ -102,9 +73,6 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
     if (allowConsoleOtp) {
       issues.push("FRAMEQ_ALLOW_CONSOLE_OTP");
     }
-    if (allowInsecureWechatNotify) {
-      issues.push("WECHAT_DEV_INSECURE_NOTIFY");
-    }
   }
 
   if (adminEmail && !isEmail(adminEmail)) {
@@ -115,10 +83,6 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
   if (!smtp && environment !== "production" && !allowConsoleOtp) {
     issues.push("FRAMEQ_ALLOW_CONSOLE_OTP");
   }
-
-  const wechat = wechatPayEnabled
-    ? parseWechatConfig(env, allowInsecureWechatNotify, environment, issues)
-    : null;
 
   if (issues.length > 0) {
     throw invalidConfiguration(issues);
@@ -135,8 +99,6 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
     smtp,
     allowConsoleOtp,
     trustLoopbackProxy: true,
-    wechatPayEnabled,
-    wechat,
   };
   return Object.freeze(config);
 }
@@ -187,42 +149,6 @@ function parseSmtpConfig(
     user: values.SMTP_USER,
     pass: values.SMTP_PASS,
     from: values.SMTP_FROM,
-  });
-}
-
-function parseWechatConfig(
-  env: NodeJS.ProcessEnv,
-  allowInsecureNotify: boolean,
-  environment: RuntimeEnvironment,
-  issues: string[],
-): WechatConfig | null {
-  const requiredKeys = [
-    ...WECHAT_PAYMENT_KEYS,
-    ...(allowInsecureNotify && environment !== "production" ? [] : WECHAT_NOTIFICATION_KEYS),
-  ];
-  for (const key of requiredKeys) {
-    requireValue(clean(env[key]), key, issues);
-  }
-  const apiV3Key = clean(env.WECHAT_API_V3_KEY);
-  if (
-    !(allowInsecureNotify && environment !== "production") &&
-    apiV3Key &&
-    Buffer.byteLength(apiV3Key, "utf8") !== 32
-  ) {
-    issues.push("WECHAT_API_V3_KEY");
-  }
-  if (requiredKeys.some((key) => !clean(env[key]))) {
-    return null;
-  }
-  return Object.freeze({
-    appId: clean(env.WECHAT_APP_ID),
-    mchId: clean(env.WECHAT_MCH_ID),
-    serialNo: clean(env.WECHAT_MCH_SERIAL_NO),
-    privateKey: clean(env.WECHAT_MCH_PRIVATE_KEY).replace(/\\n/g, "\n"),
-    notifyUrl: clean(env.WECHAT_NOTIFY_URL),
-    apiV3Key,
-    platformCertPem: clean(env.WECHAT_PLATFORM_CERT_PEM).replace(/\\n/g, "\n"),
-    allowInsecureNotify,
   });
 }
 

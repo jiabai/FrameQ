@@ -14,7 +14,6 @@ const completeProductionEnv = {
   SMTP_USER: "mailer@example.com",
   SMTP_PASS: "smtp-secret",
   SMTP_FROM: "FrameQ <mailer@example.com>",
-  WECHAT_PAY_ENABLED: "0",
 } satisfies NodeJS.ProcessEnv;
 
 describe("runtime configuration", () => {
@@ -38,7 +37,6 @@ describe("runtime configuration", () => {
         pass: "smtp-secret",
         from: "FrameQ <mailer@example.com>",
       },
-      wechatPayEnabled: false,
     });
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.smtp)).toBe(true);
@@ -147,66 +145,9 @@ describe("runtime configuration", () => {
     ).toThrow("SMTP_USER");
   });
 
-  test("enabled WeChat Pay rejects incomplete provider configuration", () => {
-    expect(() =>
-      parseRuntimeConfig({
-        ...completeProductionEnv,
-        WECHAT_PAY_ENABLED: "1",
-      }),
-    ).toThrow("WECHAT_APP_ID");
-  });
 
-  test("normalizes a complete enabled WeChat configuration into the closed config", () => {
-    const config = parseRuntimeConfig({
-      ...completeProductionEnv,
-      WECHAT_PAY_ENABLED: "1",
-      WECHAT_APP_ID: "wx-app-id",
-      WECHAT_MCH_ID: "merchant-id",
-      WECHAT_MCH_SERIAL_NO: "serial-no",
-      WECHAT_MCH_PRIVATE_KEY: "private-key-line-1\\nprivate-key-line-2",
-      WECHAT_NOTIFY_URL: "https://frameq.example/api/wechat/notify",
-      WECHAT_API_V3_KEY: "12345678901234567890123456789012",
-      WECHAT_PLATFORM_CERT_PEM: "certificate-line-1\\ncertificate-line-2",
-    });
 
-    expect(config.wechatPayEnabled).toBe(true);
-    expect(config.wechat).toEqual({
-      appId: "wx-app-id",
-      mchId: "merchant-id",
-      serialNo: "serial-no",
-      privateKey: "private-key-line-1\nprivate-key-line-2",
-      notifyUrl: "https://frameq.example/api/wechat/notify",
-      apiV3Key: "12345678901234567890123456789012",
-      platformCertPem: "certificate-line-1\ncertificate-line-2",
-      allowInsecureNotify: false,
-    });
-    expect(Object.isFrozen(config.wechat)).toBe(true);
-  });
 
-  test("production rejects insecure WeChat notification parsing", () => {
-    expect(() =>
-      parseRuntimeConfig({
-        ...completeProductionEnv,
-        WECHAT_DEV_INSECURE_NOTIFY: "1",
-      }),
-    ).toThrow("WECHAT_DEV_INSECURE_NOTIFY");
-  });
-
-  test("enabled WeChat Pay rejects an invalid APIv3 key length", () => {
-    expect(() =>
-      parseRuntimeConfig({
-        ...completeProductionEnv,
-        WECHAT_PAY_ENABLED: "1",
-        WECHAT_APP_ID: "wx-app-id",
-        WECHAT_MCH_ID: "merchant-id",
-        WECHAT_MCH_SERIAL_NO: "serial-no",
-        WECHAT_MCH_PRIVATE_KEY: "private-key",
-        WECHAT_NOTIFY_URL: "https://frameq.example/api/wechat/notify",
-        WECHAT_API_V3_KEY: "too-short",
-        WECHAT_PLATFORM_CERT_PEM: "certificate",
-      }),
-    ).toThrow("WECHAT_API_V3_KEY");
-  });
 
   test.each([
     ["FRAMEQ_SERVER_PORT", "0"],

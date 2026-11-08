@@ -74,7 +74,7 @@ Supported video link
 - agent_runtime-based intelligent extraction: `summary_agent`, `topic_agent`, `dissection_agent`, and `draft_agent` produce the summary, insight topics, transcript dissection, and draft artifacts.
 - Transcript dissection (`文字稿解剖`) AI target for traceable structural review of a saved transcript, with explicit cloud-text disclosure and bounded per-run quota.
 - Draft generation (`生成文字稿`) AI target that turns one selected insight into a platform-style draft through server-managed anysearch retrieval and a platform skill. The transcript, video, audio, and source URL never enter the draft prompt, and the result is written to `ai/draft.md` with the pre-edit copy kept under `ai/original/`.
-- Server-managed account, activation-code monthly pass entitlement, self-service activation-email requests for inactive or expired desktop accounts, LLM checkout, and insight quota service. WeChat purchase is paused for the first release because of WeChat approval requirements and is not user-visible by default.
+- Server-managed account, activation-code monthly pass entitlement, self-service activation-email requests for inactive or expired desktop accounts, LLM checkout, and insight quota service.
 - Browser-side per-user Web dashboard (`/dashboard`) with email-OTP login, plus per-page `zh-CN` / `en` / `zh-TW` switching on the `/login`, `/dashboard`, `/admin/login`, and `/admin` pages.
 - User-initiated, local-only desktop diagnostic export of the most recent seven days from the failure UI and Settings.
 - Motion-enhanced UI with reduced-motion support (processing stage, task state, ASR download progress, AI target, and history list).
@@ -289,7 +289,7 @@ This file is for local output, ASR, and model-download settings only. Insight-to
 
 ## Server Deployment
 
-The `server/` service handles account login, activation-code monthly pass entitlement, self-service activation-code email delivery, and server-managed LLM checkout. Inactive or expired desktop accounts can request a code by email through `POST /api/desktop/activation-codes/request`; the request is authenticated first, accepts only `locale`, returns only `status`, `retry_at`, and `redeem_by`, and never returns the plaintext code. `GET /api/desktop/account` now advertises the additive `can_request_activation_code` capability so newer clients can show the request action while older clients continue working unchanged. The WeChat purchase channel remains paused and disabled by default.
+The `server/` service handles account login, activation-code monthly pass entitlement, self-service activation-code email delivery, and server-managed LLM checkout. Inactive or expired desktop accounts can request a code by email through `POST /api/desktop/activation-codes/request`; the request is authenticated first, accepts only `locale`, returns only `status`, `retry_at`, and `redeem_by`, and never returns the plaintext code. `GET /api/desktop/account` now advertises the additive `can_request_activation_code` capability so newer clients can show the request action while older clients continue working unchanged.
 
 Self-service rollout is Server-first and fail-closed:
 

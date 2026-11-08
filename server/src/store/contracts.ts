@@ -71,20 +71,6 @@ export type SessionRecord = {
   revokedAt: Date | null;
 };
 
-export type OrderRecord = {
-  id: string;
-  userId: string;
-  outTradeNo: string;
-  amountFen: number;
-  status: "pending" | "paid" | "expired" | "cancelled";
-  codeUrl: string;
-  expiresAt: Date;
-  createdAt: Date;
-  paidAt: Date | null;
-  transactionId: string | null;
-  providerPayload: string;
-};
-
 export type EntitlementRecord = {
   id: string;
   userId: string;
@@ -174,22 +160,6 @@ export type AdminEntitlementAdjustmentRecord = {
   afterLlmQuotaUsed: number;
   createdAt: Date;
 };
-
-export type WebhookEventRecord = {
-  id: string;
-  provider: string;
-  eventId: string;
-  outTradeNo: string;
-  payload: string;
-  createdAt: Date;
-};
-
-export type PaidOrderSettlement =
-  | { status: "settled"; entitlement: EntitlementRecord }
-  | { status: "order_not_found" }
-  | { status: "order_state_conflict" }
-  | { status: "webhook_order_mismatch" }
-  | { status: "transaction_mismatch" };
 
 export type ActivationRedemption =
   | { status: "redeemed"; entitlement: EntitlementRecord }
@@ -306,24 +276,6 @@ export type Store = {
   createSession(input: Omit<SessionRecord, "id" | "revokedAt">): Promise<SessionRecord>;
   findSessionByTokenHash(tokenHash: string, now: Date): Promise<SessionRecord | null>;
   revokeSession(tokenHash: string, now: Date): Promise<void>;
-  createOrder(
-    input: Omit<OrderRecord, "id" | "paidAt" | "transactionId">,
-  ): Promise<OrderRecord>;
-  findOrderByOutTradeNo(outTradeNo: string): Promise<OrderRecord | null>;
-  markOrderPaid(
-    outTradeNo: string,
-    transactionId: string,
-    paidAt: Date,
-  ): Promise<OrderRecord>;
-  settlePaidOrder(input: {
-    provider: string;
-    eventId: string;
-    outTradeNo: string;
-    transactionId: string;
-    paidAt: Date;
-    now: Date;
-    passDays: number;
-  }): Promise<PaidOrderSettlement>;
   getEntitlement(userId: string): Promise<EntitlementRecord | null>;
   upsertEntitlement(
     userId: string,
@@ -422,7 +374,4 @@ export type Store = {
   listAdminEntitlementAdjustments(
     limit?: number,
   ): Promise<AdminEntitlementAdjustmentRecord[]>;
-  createWebhookEvent(
-    input: Omit<WebhookEventRecord, "id" | "createdAt"> & { createdAt: Date },
-  ): Promise<boolean>;
 };

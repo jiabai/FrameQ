@@ -28,8 +28,6 @@ const sensitiveLogPaths = Object.freeze([
   "smtp.pass",
   "smtpPass",
   "SMTP_PASS",
-  "WECHAT_MCH_PRIVATE_KEY",
-  "WECHAT_API_V3_KEY",
 ]);
 
 export function createObservabilityConfig(

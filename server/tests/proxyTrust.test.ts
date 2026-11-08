@@ -6,10 +6,6 @@ function buildIpTestServer(store: MemoryStore) {
   return buildServer({
     store,
     sendOtp: async () => {},
-    createNativePayment: async () => ({
-      codeUrl: "weixin://wxpay/bizpayurl?pr=test",
-      providerPayload: {},
-    }),
     trustLoopbackProxy: true,
   });
 }

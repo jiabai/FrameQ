@@ -13,7 +13,6 @@ model User {
   createdAt                     DateTime
   updatedAt                     DateTime
   sessions                      Session[]
-  orders                        Order[]
   entitlements                  Entitlement[]
   issuedActivationCodes         ActivationCode[] @relation("ActivationCodeIssuedToUser")
   redeemedCodes                 ActivationCode[] @relation("ActivationCodeRedeemedByUser")
@@ -69,23 +68,6 @@ model Session {
   expiresAt DateTime
   revokedAt DateTime?
   user      User      @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-}
-
-model Order {
-  id              String    @id
-  userId          String
-  outTradeNo      String    @unique
-  amountFen       Int
-  status          String
-  codeUrl         String
-  expiresAt       DateTime
-  createdAt       DateTime
-  paidAt          DateTime?
-  transactionId   String?
-  providerPayload String
-  user            User      @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }
@@ -201,15 +183,4 @@ model AdminEntitlementAdjustment {
 
   @@index([userId])
   @@index([createdAt])
-}
-
-model WebhookEvent {
-  id         String   @id
-  provider   String
-  eventId    String
-  outTradeNo String
-  payload    String
-  createdAt  DateTime
-
-  @@unique([provider, eventId])
 }

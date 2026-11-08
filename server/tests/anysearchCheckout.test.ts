@@ -47,7 +47,6 @@ function buildTestServer(store: MemoryStore) {
   return buildServer({
     store,
     sendOtp: async () => {},
-    createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
     adminEmail: "lantianye@163.com",
     llmConfigEncryptionKey: encryptionKey,
     now: () => now,

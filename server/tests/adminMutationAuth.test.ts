@@ -4,7 +4,6 @@ import { createOtpSender } from "../src/email.js";
 import { PrismaStore } from "../src/prismaStore.js";
 import { sha256 } from "../src/security.js";
 import { buildServer } from "../src/server.js";
-import { createWechatNativePayment } from "../src/wechat.js";
 import { createTemporaryPrismaClient } from "./prismaTestHarness.js";
 
 const now = new Date("2026-10-29T08:00:00.000Z");
@@ -63,7 +62,6 @@ async function prepare(state: RejectedState | "valid" = "valid") {
   const app = buildServer({
     store,
     sendOtp,
-    createNativePayment: createWechatNativePayment(),
     adminEmail,
     llmConfigEncryptionKey: encryptionKey,
     secureCookies: true,

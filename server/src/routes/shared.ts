@@ -38,13 +38,6 @@ const publicOperationErrors = new Set([
   "FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY is required.",
   "Anysearch MCP URL is required.",
   "Anysearch MCP URL must start with http:// or https://.",
-  "invalid wechat signature",
-  "invalid notification",
-  "WeChat notification verification is not configured.",
-  "WeChat APIv3 key must be 32 bytes.",
-  "Payment transaction does not match order.",
-  "Webhook does not match order.",
-  "Order cannot be settled in its current state.",
 ]);
 
 export function publicError(error: unknown): string | null {

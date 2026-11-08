@@ -9,17 +9,14 @@ import type {
   EntitlementRecord,
   LlmConfigRecord,
   LlmUsageEventRecord,
-  OrderRecord,
   SessionRecord,
   Store,
   UserRecord,
   UserSessionRecord,
-  WebhookEventRecord,
 } from "./contracts.js";
 import { MemoryAtomicCoordinator } from "./memory/atomic.js";
 import * as anysearchConfigOperations from "./memory/anysearchConfig.js";
 import * as authOperations from "./memory/auth.js";
-import * as billingOperations from "./memory/billing.js";
 import * as entitlementOperations from "./memory/entitlements.js";
 import * as llmConfigOperations from "./memory/llmConfig.js";
 import * as selfServiceActivationOperations from "./memory/selfServiceActivation.js";
@@ -30,7 +27,6 @@ export class MemoryStore implements Store {
   emailOtps: EmailOtpRecord[] = [];
   desktopLoginTickets: DesktopLoginTicketRecord[] = [];
   sessions: SessionRecord[] = [];
-  orders: OrderRecord[] = [];
   entitlements: EntitlementRecord[] = [];
   llmConfig: LlmConfigRecord | null = null;
   anysearchConfig: AnysearchConfigRecord | null = null;
@@ -38,7 +34,6 @@ export class MemoryStore implements Store {
   activationCodes: ActivationCodeRecord[] = [];
   adminSessions: AdminSessionRecord[] = [];
   adminEntitlementAdjustments: AdminEntitlementAdjustmentRecord[] = [];
-  webhookEvents: WebhookEventRecord[] = [];
   authRateLimits: AuthRateLimitRecord[] = [];
   userSessions: UserSessionRecord[] = [];
   private readonly atomic = new MemoryAtomicCoordinator(this);
@@ -112,33 +107,6 @@ export class MemoryStore implements Store {
     now: Date,
   ): ReturnType<Store["revokeSession"]> {
     return authOperations.revokeSession(this.authContext(), tokenHash, now);
-  }
-
-  async createOrder(input: Parameters<Store["createOrder"]>[0]): ReturnType<Store["createOrder"]> {
-    return billingOperations.createOrder(this.billingContext(), input);
-  }
-
-  async findOrderByOutTradeNo(
-    outTradeNo: string,
-  ): ReturnType<Store["findOrderByOutTradeNo"]> {
-    return billingOperations.findOrderByOutTradeNo(this.billingContext(), outTradeNo);
-  }
-
-  async markOrderPaid(
-    outTradeNo: string,
-    transactionId: string,
-    paidAt: Date,
-  ): ReturnType<Store["markOrderPaid"]> {
-    return billingOperations.markOrderPaid(
-      this.billingContext(),
-      outTradeNo,
-      transactionId,
-      paidAt,
-    );
-  }
-
-  async settlePaidOrder(input: Parameters<Store["settlePaidOrder"]>[0]): ReturnType<Store["settlePaidOrder"]> {
-    return billingOperations.settlePaidOrder(this.billingContext(), input);
   }
 
   async getEntitlement(userId: string): ReturnType<Store["getEntitlement"]> {
@@ -345,12 +313,6 @@ export class MemoryStore implements Store {
     );
   }
 
-  async createWebhookEvent(
-    input: Parameters<Store["createWebhookEvent"]>[0],
-  ): ReturnType<Store["createWebhookEvent"]> {
-    return billingOperations.createWebhookEvent(this.billingContext(), input);
-  }
-
   private llmConfigContext() {
     return { state: this };
   }
@@ -368,18 +330,6 @@ export class MemoryStore implements Store {
       createActivationCode: this.createActivationCode.bind(this),
       createAdminEntitlementAdjustment:
         this.createAdminEntitlementAdjustment.bind(this),
-    };
-  }
-
-  private billingContext() {
-    return {
-      state: this,
-      atomic: this.atomic,
-      findOrderByOutTradeNo: this.findOrderByOutTradeNo.bind(this),
-      markOrderPaid: this.markOrderPaid.bind(this),
-      getEntitlement: this.getEntitlement.bind(this),
-      upsertEntitlement: this.upsertEntitlement.bind(this),
-      createWebhookEvent: this.createWebhookEvent.bind(this),
     };
   }
 

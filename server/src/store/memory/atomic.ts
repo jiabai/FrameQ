@@ -9,11 +9,9 @@ import type {
   EntitlementRecord,
   LlmConfigRecord,
   LlmUsageEventRecord,
-  OrderRecord,
   SessionRecord,
   UserRecord,
   UserSessionRecord,
-  WebhookEventRecord,
 } from "../contracts.js";
 
 export type MemoryState = {
@@ -21,14 +19,12 @@ export type MemoryState = {
   emailOtps: EmailOtpRecord[];
   desktopLoginTickets: DesktopLoginTicketRecord[];
   sessions: SessionRecord[];
-  orders: OrderRecord[];
   entitlements: EntitlementRecord[];
   llmConfig: LlmConfigRecord | null;
   llmUsageEvents: LlmUsageEventRecord[];
   activationCodes: ActivationCodeRecord[];
   adminSessions: AdminSessionRecord[];
   adminEntitlementAdjustments: AdminEntitlementAdjustmentRecord[];
-  webhookEvents: WebhookEventRecord[];
   authRateLimits: AuthRateLimitRecord[];
   userSessions: UserSessionRecord[];
   anysearchConfig: AnysearchConfigRecord | null;
@@ -54,14 +50,12 @@ export class MemoryAtomicCoordinator {
       emailOtps: this.#state.emailOtps,
       desktopLoginTickets: this.#state.desktopLoginTickets,
       sessions: this.#state.sessions,
-      orders: this.#state.orders,
       entitlements: this.#state.entitlements,
       llmConfig: this.#state.llmConfig,
       llmUsageEvents: this.#state.llmUsageEvents,
       activationCodes: this.#state.activationCodes,
       adminSessions: this.#state.adminSessions,
       adminEntitlementAdjustments: this.#state.adminEntitlementAdjustments,
-      webhookEvents: this.#state.webhookEvents,
       authRateLimits: this.#state.authRateLimits,
       userSessions: this.#state.userSessions,
       anysearchConfig: this.#state.anysearchConfig,
@@ -73,14 +67,12 @@ export class MemoryAtomicCoordinator {
       this.#state.emailOtps = snapshot.emailOtps;
       this.#state.desktopLoginTickets = snapshot.desktopLoginTickets;
       this.#state.sessions = snapshot.sessions;
-      this.#state.orders = snapshot.orders;
       this.#state.entitlements = snapshot.entitlements;
       this.#state.llmConfig = snapshot.llmConfig;
       this.#state.llmUsageEvents = snapshot.llmUsageEvents;
       this.#state.activationCodes = snapshot.activationCodes;
       this.#state.adminSessions = snapshot.adminSessions;
       this.#state.adminEntitlementAdjustments = snapshot.adminEntitlementAdjustments;
-      this.#state.webhookEvents = snapshot.webhookEvents;
       this.#state.authRateLimits = snapshot.authRateLimits;
       this.#state.userSessions = snapshot.userSessions;
       this.#state.anysearchConfig = snapshot.anysearchConfig;

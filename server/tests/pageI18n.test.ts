@@ -13,7 +13,6 @@ function buildTestServer() {
     sendOtp: async (email, code) => {
       sentCodes.push({ email, code });
     },
-    createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
     secureCookies: false,
     now: () => now,
   });
@@ -297,7 +296,6 @@ describe("server page i18n — /admin", () => {
     const app = buildServer({
       store,
       sendOtp: async () => {},
-      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       adminEmail: "admin@example.com",
       now: () => now,
     });

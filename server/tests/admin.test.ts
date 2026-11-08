@@ -19,7 +19,6 @@ describe("admin activation code routes", () => {
     const app = buildServer({
       store: new MemoryStore(),
       sendOtp: async () => {},
-      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       adminEmail: "lantianye@163.com",
       now: () => now,
     });
@@ -45,7 +44,6 @@ describe("admin activation code routes", () => {
       sendOtp: async (email, code) => {
         sent.push({ email, code });
       },
-      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       adminEmail: "lantianye@163.com",
       now: () => now,
     });
@@ -75,7 +73,6 @@ describe("admin activation code routes", () => {
       sendOtp: async (_email, code) => {
         sentCode = code;
       },
-      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       adminEmail: "lantianye@163.com",
       secureCookies: true,
       now: () => now,
@@ -203,7 +200,6 @@ describe("admin activation code routes", () => {
     const app = buildServer({
       store,
       sendOtp: async () => {},
-      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       adminEmail: "lantianye@163.com",
       now: () => now,
     });
@@ -266,7 +262,6 @@ describe("admin activation code routes", () => {
     const app = buildServer({
       store,
       sendOtp: async () => {},
-      createNativePayment: async () => ({ codeUrl: "unused", providerPayload: {} }),
       adminEmail: "lantianye@163.com",
       now: () => now,
     });

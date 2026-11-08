@@ -13,7 +13,7 @@
 | 路径 | 处理方式 |
 |---|---|
 | `/`、`/download`、`/privacy`、`/_astro/`、`/video/`、`/og/`、`/robots.txt`、`/sitemap*` | nginx 直接静态托管 `dist/` |
-| `/api/dashboard/*`、`/api/desktop/*`、`/api/wechat/notify`、`/auth/`、`/user/`、`/login`、`/dashboard`、`/admin`、`/admin/*`、`/health/live`、`/health/ready` | 反代到后端 `127.0.0.1:8787`（仅这几个子路径，其它 `/api/*` 落到 `location /` 返回 404） |
+| `/api/dashboard/*`、`/api/desktop/*`、`/auth/`、`/user/`、`/login`、`/dashboard`、`/admin`、`/admin/*`、`/health/live`、`/health/ready` | 反代到后端 `127.0.0.1:8787`（仅这几个子路径，其它 `/api/*` 落到 `location /` 返回 404） |
 
 **关键前提**：`site/` 已被整体 `gitignore`。仓库里**没有**营销站源码，部署方式是
 **本机构建 → 只把 `dist/` 内容传到服务器**，服务器上不需要 git 仓库、不需要 Node 运行时。

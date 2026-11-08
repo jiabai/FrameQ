@@ -26,10 +26,6 @@ const storeMethods = [
   "createSession",
   "findSessionByTokenHash",
   "revokeSession",
-  "createOrder",
-  "findOrderByOutTradeNo",
-  "markOrderPaid",
-  "settlePaidOrder",
   "getEntitlement",
   "upsertEntitlement",
   "consumeLlmQuota",
@@ -50,7 +46,6 @@ const storeMethods = [
   "createAdminEntitlementAdjustment",
   "applyEntitlementAdjustmentWithAudit",
   "listAdminEntitlementAdjustments",
-  "createWebhookEvent",
   "verifyUserOtpAndCreateWebSession",
   "createUserSession",
   "findUserSessionByTokenHash",
@@ -69,13 +64,11 @@ const arrayFixtureFields = [
   "emailOtps",
   "desktopLoginTickets",
   "sessions",
-  "orders",
   "entitlements",
   "llmUsageEvents",
   "activationCodes",
   "adminSessions",
   "adminEntitlementAdjustments",
-  "webhookEvents",
   "authRateLimits",
   "userSessions",
 ] as const;
@@ -199,18 +192,6 @@ describe("Store adapter compatibility surface", () => {
     const alpha = await store.upsertUserByEmail("alpha@example.com", later);
     expect(await store.getUserById(zulu.id)).toBe(zulu);
     expect(await store.listUsers()).toEqual([alpha, zulu]);
-
-    const order = await store.createOrder({
-      userId: alpha.id,
-      outTradeNo: "compatibility-order",
-      amountFen: 990,
-      status: "pending",
-      codeUrl: "weixin://compatibility-order",
-      expiresAt: new Date(later.getTime() + 30 * 60 * 1000),
-      createdAt: later,
-      providerPayload: "{}",
-    });
-    expect(await store.findOrderByOutTradeNo(order.outTradeNo)).toBe(order);
 
     const entitlement = await store.upsertEntitlement(
       alpha.id,
