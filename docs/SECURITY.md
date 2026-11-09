@@ -273,7 +273,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-08-10 Desktop diagnostic export privacy boundary
 
-- Contract v8 adds the strict `FRAMEQ_DIAGNOSTIC ` stderr prefix. It is a non-watchdog,
+- Contract v8 adds the strict `APP_DIAGNOSTIC ` stderr prefix. It is a non-watchdog,
   non-progress, non-terminal side channel: only the Rust runner decodes it, and invalid or
   duplicate/expanded records fail closed to a fixed rejection marker without echoing the input.
 - Python emits only one closed, message-free classification for a terminal ASR model-download
@@ -491,7 +491,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-07-20 ASR application module boundary
 
-- `frameq_worker.asr` remains the only supported production import surface. The private
+- `worker_core.asr` remains the only supported production import surface. The private
   `asr_runtime/` owners cannot import the root, CLI, pipeline, worker service, task store, LLM, or
   AI extraction layers, and production callers cannot bypass the stable root.
 - SenseVoice SDK imports remain inside their default loaders; optional `numpy` and
@@ -504,7 +504,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   Existing provider exceptions remain wrapped with the current text and cause for compatibility;
   this layer does not claim that third-party exception text is sanitized, so it must not be added
   to a new diagnostic or persistence path without a separate security review.
-- Canonical worker source remains under `worker/frameq_worker/`. The ignored Tauri worker resource
+- Canonical worker source remains under `worker/worker_core/`. The ignored Tauri worker resource
   was refreshed only through the established build path, and recursive relative-path plus SHA-256
   comparison proved all 56 files byte-equal. No dependency, credential, contract, manifest, or
   model-download boundary changed.
@@ -620,7 +620,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   before source resolution or task mutation. Fixed invalid-request errors must not echo payloads,
   URLs, userinfo, query values, fragments, settings paths, environment values, or parser details.
 - The process path has no model compatibility fallback and Python must not override the explicit
-  worker model from `FRAMEQ_ASR_MODEL`. Desktop and bundled worker remain an atomic release unit.
+  worker model from `APP_ASR_MODEL`. Desktop and bundled worker remain an atomic release unit.
 - Shared schema and cross-language tests are security gates: adding a field requires a closed type,
   explicit owner and consumer, safe failure policy, and non-echoing negative tests.
 
@@ -899,7 +899,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-07-21 Worker Pipeline Private-Owner Enforcement
 
-- `frameq_worker.pipeline` is the sole production import surface for pipeline-owned symbols. Modules
+- `worker_core.pipeline` is the sole production import surface for pipeline-owned symbols. Modules
   outside the private `pipeline_runtime/` tree must not import its children directly, and private
   children must not import the stable root, CLI, or worker service.
 - URL process orchestration owns no AI extraction, LLM, output-language, or retry dependency. The AI
@@ -1061,7 +1061,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 ## 2026-06-23 LLM Secret Boundary
 
 - Desktop clients must not read repository-root `.env` files for LLM configuration.
-- Local dotenv files must not be treated as a supported place for `FRAMEQ_LLM_PROVIDER`, `FRAMEQ_LLM_BASE_URL`, `FRAMEQ_LLM_API_KEY`, `FRAMEQ_LLM_MODEL`, or `FRAMEQ_LLM_TIMEOUT_SECONDS`.
+- Local dotenv files must not be treated as a supported place for `APP_LLM_PROVIDER`, `APP_LLM_BASE_URL`, `APP_LLM_API_KEY`, `APP_LLM_MODEL`, or `APP_LLM_TIMEOUT_SECONDS`.
 - Tauri worker subprocesses remove legacy local LLM environment variables before launch.
 - Server-managed checkout environment variables remain allowed only for the insight-generation invocation.
 - Fixed-root `.env` retains non-LLM settings and legacy output compatibility. Ordinary saves write only the supported ASR selection and preserve existing output keys; managed data authority comes from the separate atomic storage-control record.
@@ -1081,11 +1081,11 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - Login deep-link tickets expire after 5 minutes, are single-use, and must be bound to a desktop-generated `state` value.
 - SMTP credentials and server encryption keys must only be configured through the server environment. They must not be bundled into the desktop installer.
 - Activation codes must be high-entropy, single-use, and stored as hashes only. The full code is displayed once when an administrator creates it.
-- Admin Web access is restricted to `FRAMEQ_ADMIN_EMAIL` and uses HttpOnly 12-hour sessions. The
+- Admin Web access is restricted to `APP_ADMIN_EMAIL` and uses HttpOnly 12-hour sessions. The
   historical development fallback is not a valid production configuration; production must set the
   administrator email explicitly. Admin write routes must validate CSRF tokens.
 - The service must not accept uploads or API fields containing video, audio, transcript, insight, cookie, or user-local configuration data.
-- The service may store a dedicated FrameQ client LLM API key. It must be encrypted at rest with `FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY`, never displayed in full, and treated as revocable client runtime material rather than a supplier master key.
+- The service may store a dedicated FrameQ client LLM API key. It must be encrypted at rest with `APP_LLM_CONFIG_ENCRYPTION_KEY`, never displayed in full, and treated as revocable client runtime material rather than a supplier master key.
 - The dedicated client LLM key is delivered to authenticated entitled desktop clients during checkout. This improves out-of-box setup but does not prevent extraction from a compromised client; supplier-side key rotation and quota controls remain required.
 
 <!-- 由 vibe-coding-launcher 生成。 -->
@@ -1103,7 +1103,7 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 ## Local Data
 
 - `outputs/tasks/<task_id>/` 存放用户最终产物和 `frameq-task.json`，默认不提交仓库。
-- 用户通过设置中的数据存储位置迁移主要本机资料；Legacy 模式兼容已有 `FRAMEQ_OUTPUT_DIR`，Managed 模式采用受控数据根。空目标迁移保留原件，清理需要明确确认；已有目录合并采用已经确认的目标同名文件优先规则，移动文件并删除重复源文件。
+- 用户通过设置中的数据存储位置迁移主要本机资料；Legacy 模式兼容已有 `APP_OUTPUT_DIR`，Managed 模式采用受控数据根。空目标迁移保留原件，清理需要明确确认；已有目录合并采用已经确认的目标同名文件优先规则，移动文件并删除重复源文件。
 - 当前数据根的 `cache/tasks/<task_id>/` 存放下载缓存、中间文件和调试产物，默认不提交仓库；它不得作为历史或正式产物真相源。
 - 只有满足当前 schema v3、source-privacy marker 和 canonical SourceIdentity 契约的
   `frameq-task.json` 才是任务库索引和 artifact 真相源；旧版记录与目录仅物理留存，
@@ -1117,8 +1117,8 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 
 - LLM API Key、代理地址和云端配置不得硬编码到桌面端或 worker；管理员在 server Admin Web 中配置，server 负责加密保存。
 - LLM 配置不得从 app-local data `.env` 或项目根 `.env` 读取；真实 `.env` 被 `.gitignore` 忽略，仓库只保留不含 LLM key 的 `.env.example` 和安装包 `.env.template` 占位模板。
-- 旧本地 LLM 键名 `FRAMEQ_LLM_PROVIDER`、`FRAMEQ_LLM_BASE_URL`、`FRAMEQ_LLM_API_KEY`、`FRAMEQ_LLM_MODEL` 和 `FRAMEQ_LLM_TIMEOUT_SECONDS` 必须被 dotenv 加载链路忽略。
-- 旧输出兼容键 `FRAMEQ_OUTPUT_DIR` 不得包含网络路径凭据或敏感 token；普通配置保存不能覆盖该键或改变已管理数据位置。
+- 旧本地 LLM 键名 `APP_LLM_PROVIDER`、`APP_LLM_BASE_URL`、`APP_LLM_API_KEY`、`APP_LLM_MODEL` 和 `APP_LLM_TIMEOUT_SECONDS` 必须被 dotenv 加载链路忽略。
+- 旧输出兼容键 `APP_OUTPUT_DIR` 不得包含网络路径凭据或敏感 token；普通配置保存不能覆盖该键或改变已管理数据位置。
 - 日志不得输出完整密钥、cookies 或敏感请求头。
 
 ## External Services
@@ -1126,10 +1126,10 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 - LLM-generated Markdown rendered in the desktop UI must go through the sanitized Markdown renderer. Raw HTML from `summary.md` must be skipped or sanitized and must not be rendered with `dangerouslySetInnerHTML`.
 - 下载、转码和 ASR 默认本地处理。
 - 现有 PyTorch `iic/SenseVoiceSmall` 保留其既有官方 ModelScope 优先、Hugging Face 回退的兼容下载策略，且不得根据 UI 语言、locale 或账号地区改变顺序。ONNX `iic/SenseVoiceSmall-onnx` 仅可访问官方 ModelScope ASR 与 ONNX VAD 模型，不得使用 Hugging Face、镜像、自定义归档或运行期导出回退。
-- 发布方配置 `FRAMEQ_ASR_MODEL_DOWNLOAD_URL` 时只访问该自定义归档源，不得再访问 ModelScope 或 Hugging Face；该配置不得包含凭据、URL 查询 token 或敏感请求头。
+- 发布方配置 `APP_ASR_MODEL_DOWNLOAD_URL` 时只访问该自定义归档源，不得再访问 ModelScope 或 Hugging Face；该配置不得包含凭据、URL 查询 token 或敏感请求头。
 - 模型下载事件、日志和技术详情只允许保留源名称、主机名、公开模型 ID、尝试次数及超时/失败分类；不得保留带 token 的完整 URL、凭据、Cookie、请求头或完整原始下载器输出。
-- ASR 模型选择通过 `FRAMEQ_ASR_MODEL` 保存到本地 `.env`；该键只允许选择受支持的本地 ASR 模型标识，不得携带凭据、URL 查询 token 或敏感请求头。
-- `FRAMEQ_ASR_MODEL_MIGRATION` 只是本地的一次性界面提示状态，用于说明迁移把默认模型切到了 ONNX。它不参与模型选择、源验证或下载决策，也不得被当作信任信号；清除它只影响设置页是否显示提示。
+- ASR 模型选择通过 `APP_ASR_MODEL` 保存到本地 `.env`；该键只允许选择受支持的本地 ASR 模型标识，不得携带凭据、URL 查询 token 或敏感请求头。
+- `APP_ASR_MODEL_MIGRATION` 只是本地的一次性界面提示状态，用于说明迁移把默认模型切到了 ONNX。它不参与模型选择、源验证或下载决策，也不得被当作信任信号；清除它只影响设置页是否显示提示。
 - 要点总结、启发灵感与文字稿解剖分别通过 agent_runtime 使用管理员配置的云端 LLM；每次实际供应商请求先独立 checkout，SDK、provider 与运行器的隐式重试关闭。worker 按来源读取正式媒体文字稿或网页正文，将允许的正文与本次工具反馈发送到 checkout 返回的地址，确认面板必须明确提示这一点。偏好快照只允许随启发灵感目标发送。三个目标只开放产物交付工具。
 - 桌面更新检查会访问 GitHub Releases 上的公开 `latest.json` updater manifest；该请求不上传本地文件、历史、模型缓存或账号 session。
 - UI 设置面板管理本机 ASR，并通过独立确认的迁移流程管理数据位置；云端 LLM 是否就绪由账号状态展示，文字稿主流程不依赖 LLM。

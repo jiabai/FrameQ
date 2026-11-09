@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import frameq_worker.douyin_fallback as douyin_fallback
 import pytest
-from frameq_worker.douyin_fallback import (
+import worker_core.douyin_fallback as douyin_fallback
+from worker_core.douyin_fallback import (
     DOUYIN_MOBILE_USER_AGENT,
     PLAY_QUALITIES,
     SHARE_PAGE_ATTEMPTS,
@@ -20,7 +20,7 @@ from frameq_worker.douyin_fallback import (
     resolve_aweme_id_from_input,
     select_stream_candidates,
 )
-from frameq_worker.download_reliability import SafeDownloadError
+from worker_core.download_reliability import SafeDownloadError
 
 ROOT_COMPATIBILITY_SURFACE = {
     "DOUYIN_MOBILE_USER_AGENT",

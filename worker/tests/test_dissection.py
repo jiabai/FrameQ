@@ -5,15 +5,15 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker.ai_prompts import build_dissection_agent_prompt
-from frameq_worker.dissection_report import (
+from worker_core.ai_prompts import build_dissection_agent_prompt
+from worker_core.dissection_report import (
     DissectionGenerationError,
     build_dissection_artifacts,
     format_dissection_markdown,
     parse_dissection_report,
     parse_persisted_dissection,
 )
-from frameq_worker.transcript_chunks import MarkdownSplitter
+from worker_core.transcript_chunks import MarkdownSplitter
 
 
 def valid_semantic_report() -> dict[str, object]:

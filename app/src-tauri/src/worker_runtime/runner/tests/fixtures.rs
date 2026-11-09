@@ -76,7 +76,7 @@ pub(super) fn watchdog_tree_fixture_request(pid_file: &Path) -> WorkerRunRequest
             args,
             stdin_payload: None,
             env: vec![(
-                "FRAMEQ_TEST_CHILD_PID_FILE".to_string(),
+                "APP_TEST_CHILD_PID_FILE".to_string(),
                 pid_file.to_string_lossy().into_owned(),
             )],
             clear_env: false,
@@ -107,7 +107,7 @@ pub(super) fn shell_fixture_command(script: String) -> (PathBuf, Vec<String>) {
 }
 
 pub(super) fn valid_progress_line() -> &'static str {
-    r#"FRAMEQ_PROGRESS {"stage":"video_extracting","progress":22,"message_code":"video.download.preparing"}"#
+    r#"APP_PROGRESS {"stage":"video_extracting","progress":22,"message_code":"video.download.preparing"}"#
 }
 
 #[cfg(windows)]
@@ -122,12 +122,12 @@ pub(super) fn silent_fixture_script() -> String {
 
 #[cfg(windows)]
 pub(super) fn watchdog_tree_fixture_script() -> String {
-    "$child = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 30') -PassThru -WindowStyle Hidden; [System.IO.File]::WriteAllText($env:FRAMEQ_TEST_CHILD_PID_FILE, [string]$child.Id); Wait-Process -Id $child.Id".to_string()
+    "$child = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 30') -PassThru -WindowStyle Hidden; [System.IO.File]::WriteAllText($env:APP_TEST_CHILD_PID_FILE, [string]$child.Id); Wait-Process -Id $child.Id".to_string()
 }
 
 #[cfg(unix)]
 pub(super) fn watchdog_tree_fixture_script() -> String {
-    "sleep 30 & child_pid=$!; printf '%s' \"$child_pid\" > \"$FRAMEQ_TEST_CHILD_PID_FILE\"; trap 'wait \"$child_pid\" 2>/dev/null; exit 143' TERM INT HUP; wait \"$child_pid\"".to_string()
+    "sleep 30 & child_pid=$!; printf '%s' \"$child_pid\" > \"$APP_TEST_CHILD_PID_FILE\"; trap 'wait \"$child_pid\" 2>/dev/null; exit 143' TERM INT HUP; wait \"$child_pid\"".to_string()
 }
 
 #[cfg(windows)]
@@ -166,12 +166,12 @@ pub(super) fn endless_progress_fixture_script() -> String {
 
 #[cfg(windows)]
 pub(super) fn untrusted_spam_fixture_script() -> String {
-    "while ($true) { [Console]::Error.WriteLine('FRAMEQ_PROGRESS {not-json'); [Console]::Error.WriteLine('diagnostic'); [Console]::Error.WriteLine(''); [Console]::Out.WriteLine('stdout-noise'); [Console]::Error.Flush(); [Console]::Out.Flush(); Start-Sleep -Milliseconds 250 }".to_string()
+    "while ($true) { [Console]::Error.WriteLine('APP_PROGRESS {not-json'); [Console]::Error.WriteLine('diagnostic'); [Console]::Error.WriteLine(''); [Console]::Out.WriteLine('stdout-noise'); [Console]::Error.Flush(); [Console]::Out.Flush(); Start-Sleep -Milliseconds 250 }".to_string()
 }
 
 #[cfg(unix)]
 pub(super) fn untrusted_spam_fixture_script() -> String {
-    "while :; do printf '%s\\n' 'FRAMEQ_PROGRESS {not-json' 'diagnostic' '' >&2; printf '%s\\n' 'stdout-noise'; sleep 0.25; done".to_string()
+    "while :; do printf '%s\\n' 'APP_PROGRESS {not-json' 'diagnostic' '' >&2; printf '%s\\n' 'stdout-noise'; sleep 0.25; done".to_string()
 }
 
 #[cfg(windows)]
@@ -322,7 +322,7 @@ pub(super) fn test_paths(label: &str) -> RuntimePaths {
         .as_nanos();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../build/data-storage-acceptance")
-        .join(format!("frameq-worker-runner-{label}-{}-{nonce}", std::process::id()));
+        .join(format!("worker-core-runner-{label}-{}-{nonce}", std::process::id()));
     std::fs::create_dir_all(root.join("user-data")).expect("create worker runner fixture");
     let root = root.canonicalize().expect("resolve worker runner fixture");
     RuntimePaths {

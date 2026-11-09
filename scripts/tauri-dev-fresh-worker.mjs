@@ -18,10 +18,10 @@ export function resolveFreshWorkerPaths(repoRoot = defaultRepoRoot) {
 
   return {
     repoRoot: root,
-    sourceWorker: resolve(root, "worker", "frameq_worker"),
+    sourceWorker: resolve(root, "worker", "worker_core"),
     resourcesRoot,
     resourceWorker,
-    resourceWorkerPackage: resolve(resourceWorker, "frameq_worker"),
+    resourceWorkerPackage: resolve(resourceWorker, "worker_core"),
   };
 }
 

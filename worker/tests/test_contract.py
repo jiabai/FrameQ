@@ -4,8 +4,8 @@ import json
 import re
 from pathlib import Path
 
-from frameq_worker.asr import DEFAULT_ASR_MODEL
-from frameq_worker.desktop_contract import (
+from worker_core.asr import DEFAULT_ASR_MODEL
+from worker_core.desktop_contract import (
     AUDIO_EXTENSIONS,
     CACHE_DIR_ENV,
     DESKTOP_WORKER_CONTRACT_VERSION,
@@ -18,7 +18,7 @@ from frameq_worker.desktop_contract import (
     PROGRESS_EVENT_PREFIX,
     VIDEO_EXTENSIONS,
 )
-from frameq_worker.models import Insight, JobStage, ProcessResult
+from worker_core.models import Insight, JobStage, ProcessResult
 
 
 def load_contract() -> dict[str, object]:

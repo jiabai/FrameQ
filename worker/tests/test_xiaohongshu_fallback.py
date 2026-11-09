@@ -5,12 +5,12 @@ from pathlib import Path
 
 import brotli
 import pytest
-from frameq_worker import xiaohongshu_fallback
-from frameq_worker.download_reliability import SafeDownloadError
-from frameq_worker.xiaohongshu import source as private_source
-from frameq_worker.xiaohongshu import transport as private_transport
-from frameq_worker.xiaohongshu import types as private_types
-from frameq_worker.xiaohongshu_fallback import (
+from worker_core import xiaohongshu_fallback
+from worker_core.download_reliability import SafeDownloadError
+from worker_core.xiaohongshu import source as private_source
+from worker_core.xiaohongshu import transport as private_transport
+from worker_core.xiaohongshu import types as private_types
+from worker_core.xiaohongshu_fallback import (
     HttpResponse,
     XiaohongshuFallbackError,
     XiaohongshuStreamCandidate,

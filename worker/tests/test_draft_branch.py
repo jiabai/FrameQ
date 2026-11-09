@@ -13,14 +13,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from frameq_worker.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
-from frameq_worker.models import (
+from worker_core.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
+from worker_core.models import (
     GenerationPreferences,
     Insight,
     PreferenceLabelSnapshot,
     PreferenceSnapshot,
 )
-from frameq_worker.worker_application.insight_retry import retry_insights_once
+from worker_core.worker_application.insight_retry import retry_insights_once
 
 TASK_ID = "20260709-120000-douyin-demo"
 INSIGHT_ID = 5
@@ -205,7 +205,7 @@ def test_draft_branch_success_writes_draft_md_and_populates_process_result(
         return "# 完整稿子\n\n正文"
 
     with patch(
-        "frameq_worker.worker_application.insight_retry.run_draft",
+        "worker_core.worker_application.insight_retry.run_draft",
         side_effect=fake_run_draft,
     ) as mock_run:
         result = retry_insights_once(
@@ -251,7 +251,7 @@ def test_draft_branch_empty_result_fails_without_writing_disk(
 ) -> None:
     _write_task_skeleton(tmp_path)
 
-    with patch("frameq_worker.worker_application.insight_retry.run_draft", return_value=empty_text):
+    with patch("worker_core.worker_application.insight_retry.run_draft", return_value=empty_text):
         result = retry_insights_once(
             _draft_request(),
             project_root=tmp_path,
@@ -278,8 +278,8 @@ def test_draft_branch_seed_not_in_insights_json_fails_without_running_draft(
     _write_task_skeleton(tmp_path, insight_id=INSIGHT_ID)
 
     with (
-        patch("frameq_worker.worker_application.insight_retry.run_draft") as mock_run,
-        patch("frameq_worker.draft_agent.resolve_draft_credentials") as mock_creds,
+        patch("worker_core.worker_application.insight_retry.run_draft") as mock_run,
+        patch("worker_core.draft_agent.resolve_draft_credentials") as mock_creds,
     ):
         result = retry_insights_once(
             _draft_request(insight_id=999),
@@ -299,7 +299,7 @@ def test_draft_branch_missing_insights_json_fails_with_seed_invalid(tmp_path: Pa
     # No insights.json at all → seed cannot be resolved → DRAFT_SEED_INVALID.
     _write_task_skeleton(tmp_path, with_insights=False)
 
-    with patch("frameq_worker.worker_application.insight_retry.run_draft") as mock_run:
+    with patch("worker_core.worker_application.insight_retry.run_draft") as mock_run:
         result = retry_insights_once(
             _draft_request(),
             project_root=tmp_path,
@@ -332,7 +332,7 @@ def test_draft_branch_missing_preference_snapshot_degrades_to_none(tmp_path: Pat
         return "# 稿子正文"
 
     with patch(
-        "frameq_worker.worker_application.insight_retry.run_draft",
+        "worker_core.worker_application.insight_retry.run_draft",
         side_effect=fake_run_draft,
     ):
         result = retry_insights_once(
@@ -379,10 +379,10 @@ def test_draft_branch_run_draft_exception_wraps_as_generation_failed(
     if invalid_checkout:
         # 无协议的地址会在 Request 构造时产生真实异常，不发起网络请求。
         runtime_env.update(
-            FRAMEQ_LLM_SOURCE="server",
-            FRAMEQ_LLM_CHECKOUT_URL="s8-private-checkout-canary",
-            FRAMEQ_LLM_SESSION_TOKEN="s8-session-canary",
-            FRAMEQ_LLM_CHECKOUT_REQUEST_ID="s8-request-canary",
+            APP_LLM_SOURCE="server",
+            APP_LLM_CHECKOUT_URL="s8-private-checkout-canary",
+            APP_LLM_SESSION_TOKEN="s8-session-canary",
+            APP_LLM_CHECKOUT_REQUEST_ID="s8-request-canary",
         )
 
     result = retry_insights_once(
@@ -421,7 +421,7 @@ def test_draft_branch_failure_keeps_existing_ai_artifacts(tmp_path: Path) -> Non
 
     _write_task_skeleton(tmp_path, with_summary=True)
 
-    with patch("frameq_worker.worker_application.insight_retry.run_draft", return_value=""):
+    with patch("worker_core.worker_application.insight_retry.run_draft", return_value=""):
         result = retry_insights_once(
             _draft_request(),
             project_root=tmp_path,
@@ -441,7 +441,7 @@ def test_draft_branch_failure_keeps_existing_ai_artifacts(tmp_path: Path) -> Non
 
 
 def _original_draft_path(tmp_path: Path) -> Path:
-    from frameq_worker.task_store import TaskPaths
+    from worker_core.task_store import TaskPaths
 
     return TaskPaths(
         output_root=tmp_path / "outputs",
@@ -465,7 +465,7 @@ def test_draft_branch_success_deletes_stale_original_backup(tmp_path: Path) -> N
         return "# 新生成稿\n\n新内容"
 
     with patch(
-        "frameq_worker.worker_application.insight_retry.run_draft",
+        "worker_core.worker_application.insight_retry.run_draft",
         side_effect=fake_run_draft,
     ):
         result = retry_insights_once(
@@ -499,7 +499,7 @@ def test_draft_branch_success_no_original_is_ok(tmp_path: Path) -> None:
         return "# 新生成稿\n\n新内容"
 
     with patch(
-        "frameq_worker.worker_application.insight_retry.run_draft",
+        "worker_core.worker_application.insight_retry.run_draft",
         side_effect=fake_run_draft,
     ):
         result = retry_insights_once(
@@ -525,7 +525,7 @@ def test_draft_branch_failure_preserves_original_backup(tmp_path: Path) -> None:
     original_path.parent.mkdir(parents=True, exist_ok=True)
     original_path.write_text("# 旧稿备份\n\n旧内容", encoding="utf-8")
 
-    with patch("frameq_worker.worker_application.insight_retry.run_draft", return_value=""):
+    with patch("worker_core.worker_application.insight_retry.run_draft", return_value=""):
         result = retry_insights_once(
             _draft_request(),
             project_root=tmp_path,

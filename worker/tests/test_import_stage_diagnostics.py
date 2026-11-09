@@ -5,21 +5,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-import frameq_worker.cli as cli
 import pytest
-from frameq_worker.desktop_contract import (
+import worker_core.cli as cli
+from worker_core.desktop_contract import (
     DIAGNOSTIC_EVENT_PREFIX as CONTRACT_DIAGNOSTIC_EVENT_PREFIX,
 )
-from frameq_worker.diagnostic_events import validate_diagnostic_event
-from frameq_worker.import_stage_diagnostics import (
+from worker_core.diagnostic_events import validate_diagnostic_event
+from worker_core.import_stage_diagnostics import (
     DIAGNOSTIC_EVENT_PREFIX,
     emit_import_stage_diagnostic,
 )
 
 
 def parse_diagnostic_line(line: str) -> dict[str, object]:
-    assert line.startswith("FRAMEQ_DIAGNOSTIC ")
-    return json.loads(line[len("FRAMEQ_DIAGNOSTIC ") :])
+    assert line.startswith("APP_DIAGNOSTIC ")
+    return json.loads(line[len("APP_DIAGNOSTIC ") :])
 
 
 def test_emit_import_stage_diagnostic_writes_one_closed_event(
@@ -29,7 +29,7 @@ def test_emit_import_stage_diagnostic_writes_one_closed_event(
 
     captured = capsys.readouterr()
     diagnostic_lines = [
-        line for line in captured.err.splitlines() if line.startswith("FRAMEQ_DIAGNOSTIC ")
+        line for line in captured.err.splitlines() if line.startswith("APP_DIAGNOSTIC ")
     ]
     assert len(diagnostic_lines) == 1
     validated = validate_diagnostic_event(parse_diagnostic_line(diagnostic_lines[0]))
@@ -62,7 +62,7 @@ def test_cli_main_guard_emits_diagnostic_and_reraises(
 
     captured = capsys.readouterr()
     diagnostic_lines = [
-        line for line in captured.err.splitlines() if line.startswith("FRAMEQ_DIAGNOSTIC ")
+        line for line in captured.err.splitlines() if line.startswith("APP_DIAGNOSTIC ")
     ]
     assert len(diagnostic_lines) == 1
     validated = validate_diagnostic_event(parse_diagnostic_line(diagnostic_lines[0]))
@@ -93,7 +93,7 @@ def test_cli_main_guard_passes_system_exit_through_without_diagnostic(
 
 def test_import_stage_guard_emits_event_when_cli_import_fails(tmp_path: Path) -> None:
     fake_package_root = tmp_path / "fake"
-    fake_package = fake_package_root / "frameq_worker"
+    fake_package = fake_package_root / "worker_core"
     fake_package.mkdir(parents=True)
     (fake_package / "__init__.py").write_text("", encoding="utf-8")
     # The entry point imports the stdlib-only diagnostic emitter before
@@ -123,7 +123,7 @@ def test_import_stage_guard_emits_event_when_cli_import_fails(tmp_path: Path) ->
 
     assert proc.returncode != 0
     diagnostic_lines = [
-        line for line in proc.stderr.splitlines() if line.startswith("FRAMEQ_DIAGNOSTIC ")
+        line for line in proc.stderr.splitlines() if line.startswith("APP_DIAGNOSTIC ")
     ]
     assert len(diagnostic_lines) == 1
     validated = validate_diagnostic_event(parse_diagnostic_line(diagnostic_lines[0]))

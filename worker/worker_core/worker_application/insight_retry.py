@@ -1,0 +1,477 @@
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from pathlib import Path
+
+from worker_core.atomic_files import AtomicFileCommitError
+from worker_core.config import load_project_env
+from worker_core.desktop_contract import ProgressCallback
+from worker_core.dissection_report import (
+    DissectionGenerationError,
+    parse_persisted_dissection,
+)
+from worker_core.draft_agent import run_draft
+from worker_core.models import (
+    Insight,
+    JobStage,
+    PreferenceSnapshot,
+    ProcessResult,
+    RetryInsightsRequest,
+    TranscriptMetadata,
+    WorkerError,
+)
+from worker_core.note_title import run_note_title_step
+from worker_core.pipeline import (
+    resolve_cache_dir,
+    resolve_output_dir,
+    run_insight_generation_step,
+)
+from worker_core.requests import (
+    INVALID_RETRY_PAYLOAD_MESSAGE,
+    parse_preference_snapshot,
+    parse_retry_insights_request,
+)
+from worker_core.source_text import read_source_text
+from worker_core.summary_agent import SummaryRunner
+from worker_core.task_store import (
+    DRAFT_SEED_UNSET,
+    TaskContext,
+    TaskPaths,
+    TaskStoreFacade,
+    result_with_task,
+)
+from worker_core.task_transaction import (
+    TaskArtifactCommitError,
+    TaskArtifactRecoveryError,
+)
+from worker_core.transcript_polish import run_transcript_polish_step
+from worker_core.web_page_contract import WebPageSource
+
+
+def retry_insights_once(
+    request_json: str,
+    project_root: Path | None = None,
+    environ: dict[str, str] | None = None,
+    progress_callback: ProgressCallback | None = None,
+    summary_runner: SummaryRunner | None = None,
+) -> dict[str, object]:
+    try:
+        payload = json.loads(request_json)
+    except json.JSONDecodeError:
+        return ProcessResult(
+            status=JobStage.FAILED,
+            error=WorkerError(
+                code="INVALID_RETRY_JSON",
+                message="Retry payload must be valid JSON.",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ),
+        ).to_dict()
+
+    try:
+        request = parse_retry_insights_request(payload)
+    except ValueError:
+        return failed_insight_retry_result(
+            code="INVALID_RETRY_PAYLOAD",
+            message=INVALID_RETRY_PAYLOAD_MESSAGE,
+            text="",
+        ).to_dict()
+
+    root = project_root or Path.cwd()
+    runtime_env = load_project_env(root, environ)
+    output_dir = resolve_output_dir(root, runtime_env)
+    cache_dir = resolve_cache_dir(root, runtime_env)
+    task_store = TaskStoreFacade(output_root=output_dir, cache_root=cache_dir)
+    try:
+        opened_task = task_store.open(request.task_id)
+    except TaskArtifactRecoveryError:
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_RECOVERY_FAILED",
+            message="Task artifacts could not be recovered safely.",
+            text="",
+        ).to_dict()
+    except (OSError, ValueError, json.JSONDecodeError):
+        return ProcessResult(
+            status=JobStage.PARTIAL_COMPLETED,
+            error=WorkerError(
+                code="TASK_MANIFEST_NOT_FOUND",
+                message="A safe task manifest is required to regenerate insights.",
+                stage=JobStage.INSIGHTS_GENERATING,
+            ),
+        ).to_dict()
+    task_context = opened_task.context
+    runtime_env["APP_AI_SOURCE_KIND"] = (
+        "article" if isinstance(task_context.source, WebPageSource) else "transcript"
+    )
+    if isinstance(task_context.source, WebPageSource) and request.target in {"title", "transcript"}:
+        return result_with_task(failed_insight_retry_result(
+            code="WEB_PAGE_RETRY_TARGET_INVALID",
+            message="This retry target is unavailable for web pages.", text="",
+        ), task_context).to_dict()
+    if request.target == "title":
+        title_result = run_note_title_step(
+            store=task_store, context=task_context, runtime_env=runtime_env,
+            output_language=request.output_language, progress_callback=progress_callback,
+        )
+        merged_title_result = merge_existing_ai_artifacts(task_context.paths, title_result)
+        return result_with_task(merged_title_result, task_context).to_dict()
+    if request.target == "insights" and request.preference_snapshot is not None:
+        try:
+            task_store.save_preference_snapshot(
+                task_context,
+                request.preference_snapshot,
+            )
+        except TaskArtifactRecoveryError:
+            return failed_insight_retry_result(
+                code="TASK_ARTIFACT_RECOVERY_FAILED",
+                message="Task artifacts could not be recovered safely.",
+                text="",
+                transcript=opened_task.transcript,
+            ).to_dict()
+        except (AtomicFileCommitError, TaskArtifactCommitError):
+            return failed_insight_retry_result(
+                code="TASK_ARTIFACT_COMMIT_FAILED",
+                message="Task artifacts could not be stored safely.",
+                text="",
+                transcript=opened_task.transcript,
+            ).to_dict()
+
+    if request.target == "draft":
+        # seed validation happens BEFORE any checkout / run_draft call
+        # (invalid seed consumes no quota).
+        draft_result = run_draft_generation_step(
+            task_context=task_context,
+            request=request,
+            runtime_env=runtime_env,
+        )
+        merged_result = merge_existing_ai_artifacts(task_context.paths, draft_result)
+        try:
+            return task_store.finalize(
+                task_context,
+                merged_result,
+                draft_seed_insight_id=request.insight_id,
+            ).to_dict()
+        except TaskArtifactRecoveryError:
+            return failed_insight_retry_result(
+                code="TASK_ARTIFACT_RECOVERY_FAILED",
+                message="Task artifacts could not be recovered safely.",
+                text=merged_result.text,
+                transcript=opened_task.transcript,
+            ).to_dict()
+        except (AtomicFileCommitError, TaskArtifactCommitError):
+            return failed_insight_retry_result(
+                code="TASK_ARTIFACT_COMMIT_FAILED",
+                message="Task artifacts could not be stored safely.",
+                text=merged_result.text,
+                transcript=opened_task.transcript,
+            ).to_dict()
+
+    if request.target == "transcript":
+        # 整理文字稿：读已保存的正式稿，产出 transcript/polished.txt，原稿不动。
+        polish_result = run_transcript_polish_step(
+            task_context=task_context,
+            runtime_env=runtime_env,
+            progress_callback=progress_callback,
+        )
+        merged_polish_result = merge_existing_ai_artifacts(task_context.paths, polish_result)
+        return _finalize_retry_result(
+            task_store=task_store,
+            task_context=task_context,
+            merged_result=merged_polish_result,
+            transcript=opened_task.transcript,
+        )
+
+    insight_result = run_insight_generation_step(
+        transcript_txt_path=(task_context.paths.article_txt_path
+                             if isinstance(task_context.source, WebPageSource)
+                             else task_context.paths.transcript_txt_path),
+        output_dir=task_context.paths.ai_dir,
+        output_stem="",
+        transcript=opened_task.transcript,
+        preference_snapshot=request.preference_snapshot,
+        target=request.target,
+        output_language=request.output_language,
+        persist=False,
+        progress_callback=progress_callback,
+        runtime_env=runtime_env,
+        summary_runner=summary_runner,
+    )
+
+    merged_result = merge_existing_ai_artifacts(task_context.paths, insight_result)
+    # target=insights regen changes the insight ids, so the old draft seed id
+    # is now invalid — clear it. target=summary/dissection leaves insights
+    # untouched, so the seed is preserved (finalize defaults to DRAFT_SEED_UNSET
+    # which serialize_task_manifest carries forward from the prior manifest).
+    draft_seed = (
+        None if request.target == "insights" and insight_result.insights else DRAFT_SEED_UNSET
+    )
+    try:
+        return task_store.finalize(
+            task_context,
+            merged_result,
+            draft_seed_insight_id=draft_seed,
+        ).to_dict()
+    except TaskArtifactRecoveryError:
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_RECOVERY_FAILED",
+            message="Task artifacts could not be recovered safely.",
+            text=insight_result.text,
+            transcript=opened_task.transcript,
+        ).to_dict()
+    except (AtomicFileCommitError, TaskArtifactCommitError):
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_COMMIT_FAILED",
+            message="Task artifacts could not be stored safely.",
+            text=insight_result.text,
+            transcript=opened_task.transcript,
+        ).to_dict()
+
+
+def merge_existing_ai_artifacts(
+    paths: TaskPaths,
+    result: ProcessResult,
+) -> ProcessResult:
+    summary = result.summary or read_existing_summary(paths)
+    insights = result.insights or read_existing_insights(paths)
+    dissection = result.dissection or read_existing_dissection(paths)
+    return ProcessResult(
+        status=result.status,
+        artifacts=result.artifacts,
+        text=result.text,
+        summary=summary,
+        insights=insights,
+        transcript=result.transcript,
+        dissection=dissection,
+        error=result.error,
+        artifact_payloads=result.artifact_payloads,
+        draft=result.draft,
+        note_title=result.note_title,
+        task_created=result.task_created,
+    )
+
+
+def _finalize_retry_result(
+    *,
+    task_store: TaskStoreFacade,
+    task_context: TaskContext,
+    merged_result: ProcessResult,
+    transcript: TranscriptMetadata | None,
+) -> dict[str, object]:
+    try:
+        return task_store.finalize(
+            task_context,
+            merged_result,
+            draft_seed_insight_id=DRAFT_SEED_UNSET,
+        ).to_dict()
+    except TaskArtifactRecoveryError:
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_RECOVERY_FAILED",
+            message="Task artifacts could not be recovered safely.",
+            text=merged_result.text,
+            transcript=transcript,
+        ).to_dict()
+    except (AtomicFileCommitError, TaskArtifactCommitError):
+        return failed_insight_retry_result(
+            code="TASK_ARTIFACT_COMMIT_FAILED",
+            message="Task artifacts could not be stored safely.",
+            text=merged_result.text,
+            transcript=transcript,
+        ).to_dict()
+
+
+def run_draft_generation_step(
+    *,
+    task_context: TaskContext,
+    request: RetryInsightsRequest,
+    runtime_env: dict[str, str],
+    draft_runner: Callable[..., str] | None = None,
+) -> ProcessResult:
+    """draft branch: seed from a single Insight + task-local snapshot + summary.
+
+    Validates the seed against ``ai/insights.json`` BEFORE any checkout / run_draft
+    call (invalid seed consumes no LLM quota). Reads ``ai/preference-snapshot.json``
+    and ``ai/summary.md`` from disk (optional grounding). On success writes
+    ``ai/draft.md`` and returns a ``ProcessResult`` carrying ``draft`` text.
+    """
+    paths = task_context.paths
+
+    # seed invalidation — resolve the Insight by insight_id BEFORE checkout.
+    seed = _find_insight_by_id(read_existing_insights(paths), request.insight_id)
+    if seed is None:
+        return _draft_step_failed(
+            code="DRAFT_SEED_INVALID",
+            message=(
+                f"insight_id {request.insight_id} is not present in ai/insights.json; "
+                "re-select an insight and retry."
+            ),
+        )
+
+    # preference snapshot comes from disk (written when target=insights ran).
+    # Missing → None (no-personalization degrade, do not block).
+    preference_snapshot = read_existing_preference_snapshot(paths)
+    # summary is optional grounding; missing → None.
+    existing_summary = read_existing_summary(paths)
+    summary: str | None = existing_summary or None
+
+    # Resolve at call time so tests can patch
+    # worker_core.worker_application.insight_retry.run_draft.
+    runner = draft_runner if draft_runner is not None else run_draft
+    try:
+        draft_text = runner(
+            seed,
+            preference_snapshot,
+            summary,
+            request.platform,
+            runtime_env,
+            output_language=request.output_language,
+        )
+    except Exception:  # noqa: BLE001 - 保留失败分类，不回显 LLM / MCP / agent 异常原文。
+        return _draft_step_failed(
+            code="DRAFT_GENERATION_FAILED",
+            message="Draft generation failed.",
+        )
+
+    if not draft_text or not draft_text.strip():
+        # 空串 / 纯空白判失败且不落盘：写空文件 + 报成功是静默失败。
+        return _draft_step_failed(
+            code="DRAFT_EMPTY_RESULT",
+            message="Draft generation returned an empty result.",
+        )
+
+    return ProcessResult(
+        status=JobStage.COMPLETED,
+        artifacts={"draft": "ai/draft.md"},
+        draft=draft_text,
+        artifact_payloads={"ai/draft.md": draft_text.encode("utf-8"), "ai/original/draft.md": None},
+    )
+
+
+def _draft_step_failed(*, code: str, message: str) -> ProcessResult:
+    """Draft-branch failure wrapper — stage is always DRAFT_GENERATING."""
+    return ProcessResult(
+        status=JobStage.PARTIAL_COMPLETED,
+        error=WorkerError(
+            code=code,
+            message=message,
+            stage=JobStage.DRAFT_GENERATING,
+        ),
+    )
+
+
+def _find_insight_by_id(
+    insights: list[Insight],
+    insight_id: int | None,
+) -> Insight | None:
+    if insight_id is None:
+        return None
+    for insight in insights:
+        if insight.id == insight_id:
+            return insight
+    return None
+
+
+def read_existing_preference_snapshot(paths: TaskPaths) -> PreferenceSnapshot | None:
+    """Round-trip ``ai/preference-snapshot.json`` back to a PreferenceSnapshot.
+
+    Missing or malformed → None (no-personalization degrade). Reuses
+    ``parse_preference_snapshot`` so the on-disk schema is validated identically.
+    """
+    snapshot_path = paths.preference_snapshot_path
+    if not snapshot_path.is_file():
+        return None
+    try:
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    try:
+        return parse_preference_snapshot(payload)
+    except ValueError:
+        return None
+
+
+def read_existing_summary(paths: TaskPaths) -> str:
+    summary_path = paths.summary_path
+    if not summary_path.is_file():
+        return ""
+    return summary_path.read_text(encoding="utf-8").strip()
+
+
+def read_existing_insights(paths: TaskPaths) -> list[Insight]:
+    insights_path = paths.insights_json_path
+    if not insights_path.is_file():
+        return []
+    try:
+        payload = json.loads(insights_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, dict) or payload.get("schemaVersion") != 1:
+        return []
+    raw_insights = payload.get("insights")
+    if not isinstance(raw_insights, list):
+        return []
+
+    insights: list[Insight] = []
+    for raw in raw_insights:
+        if not isinstance(raw, dict):
+            return []
+        try:
+            insight_id = int(raw["id"])
+            topic = str(raw["topic"]).strip()
+            match_reason = str(raw["matchReason"]).strip()
+            raw_questions = raw["followUpQuestions"]
+            if not isinstance(raw_questions, list):
+                return []
+            follow_up_questions = tuple(
+                question.strip()
+                for question in raw_questions
+                if isinstance(question, str) and question.strip()
+            )
+            suitable_use = str(raw["suitableUse"]).strip()
+            raw_source_chunk_id = raw.get("sourceChunkId")
+            source_chunk_id = int(raw_source_chunk_id) if raw_source_chunk_id is not None else None
+        except (KeyError, TypeError, ValueError):
+            return []
+        if not topic or not match_reason or not follow_up_questions or not suitable_use:
+            return []
+        insights.append(
+            Insight(
+                id=insight_id,
+                topic=topic,
+                match_reason=match_reason,
+                follow_up_questions=follow_up_questions,
+                suitable_use=suitable_use,
+                source_chunk_id=source_chunk_id,
+            )
+        )
+    return insights
+
+
+def read_existing_dissection(paths: TaskPaths) -> dict[str, object] | None:
+    if not paths.dissection_json.is_file():
+        return None
+    try:
+        payload = json.loads(paths.dissection_json.read_text(encoding="utf-8"))
+        source = read_source_text(paths.output_root, paths.task_id)
+        return parse_persisted_dissection(
+            payload, transcript=source.text, source_kind=source.kind,
+        ).to_dict()
+    except (OSError, ValueError, UnicodeError, json.JSONDecodeError, DissectionGenerationError):
+        return None
+
+
+def failed_insight_retry_result(
+    code: str,
+    message: str,
+    text: str,
+    transcript: TranscriptMetadata | None = None,
+) -> ProcessResult:
+    return ProcessResult(
+        status=JobStage.PARTIAL_COMPLETED,
+        text=text,
+        transcript=transcript,
+        error=WorkerError(
+            code=code,
+            message=message,
+            stage=JobStage.INSIGHTS_GENERATING,
+        ),
+    )

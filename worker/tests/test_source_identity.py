@@ -4,15 +4,15 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker import task_store as task_store_module
-from frameq_worker.models import ProcessRequest
-from frameq_worker.source_identity import (
+from worker_core import task_store as task_store_module
+from worker_core.models import ProcessRequest
+from worker_core.source_identity import (
     SourceIdentity,
     SourceIdentityError,
     identify_source,
 )
-from frameq_worker.source_resolution import resolve_source_request
-from frameq_worker.task_store import create_task_context, task_context_from_manifest
+from worker_core.source_resolution import resolve_source_request
+from worker_core.task_store import create_task_context, task_context_from_manifest
 
 XHS_NOTE_ID = "64a1b2c3d4e5f67890123456"
 

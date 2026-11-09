@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 
 import pytest
-from frameq_worker.ai_runtime import (
+from worker_core.ai_runtime import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     ServerManagedInsightProvider,
     SingleCallInsightProvider,
@@ -16,8 +16,8 @@ from frameq_worker.ai_runtime import (
     build_insight_provider,
     insight_target_env,
 )
-from frameq_worker.insight_errors import InsightGenerationError
-from frameq_worker.llm import (
+from worker_core.insight_errors import InsightGenerationError
+from worker_core.llm import (
     DEFAULT_LLM_TIMEOUT_SECONDS,
     _managed_checkout_http_error,
     checkout_llm_config_once,
@@ -138,7 +138,7 @@ def test_timeout_keeps_positive_fractional_seconds() -> None:
 def test_shared_runtime_imports_independently_in_fresh_python_process() -> None:
     environment = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
     completed = subprocess.run(
-        [sys.executable, "-c", "from frameq_worker.ai_runtime import build_insight_provider"],
+        [sys.executable, "-c", "from worker_core.ai_runtime import build_insight_provider"],
         env=environment,
         check=False,
         capture_output=True,
@@ -151,11 +151,11 @@ def test_shared_runtime_imports_independently_in_fresh_python_process() -> None:
 def test_local_provider_disables_http_retries_and_keeps_generation_configuration() -> None:
     provider = build_insight_provider(
         {
-            "FRAMEQ_LLM_API_KEY": "configuration-only-key",
-            "FRAMEQ_LLM_MODEL": "configuration-only-model",
-            "FRAMEQ_LLM_BASE_URL": "https://llm.example/v1",
-            "FRAMEQ_LLM_TIMEOUT_SECONDS": "12.5",
-            "FRAMEQ_LLM_MAX_TOKENS": "4096",
+            "APP_LLM_API_KEY": "configuration-only-key",
+            "APP_LLM_MODEL": "configuration-only-model",
+            "APP_LLM_BASE_URL": "https://llm.example/v1",
+            "APP_LLM_TIMEOUT_SECONDS": "12.5",
+            "APP_LLM_MAX_TOKENS": "4096",
         }
     )
     try:
@@ -171,12 +171,12 @@ def test_local_provider_disables_http_retries_and_keeps_generation_configuration
 
 @pytest.mark.parametrize("build", [build_insight_provider, _build_single_call_provider])
 def test_unset_output_budget_falls_back_to_shared_ceiling(build) -> None:
-    # 回归：不设 FRAMEQ_LLM_MAX_TOKENS 时曾退化为服务商默认上限（DeepSeek 系常为
+    # 回归：不设 APP_LLM_MAX_TOKENS 时曾退化为服务商默认上限（DeepSeek 系常为
     # 4096），长篇解剖报告会被截成半截 JSON，校验失败后重试并再次扣 AI Credit。
     provider = build(
         {
-            "FRAMEQ_LLM_API_KEY": "configuration-only-key",
-            "FRAMEQ_LLM_MODEL": "configuration-only-model",
+            "APP_LLM_API_KEY": "configuration-only-key",
+            "APP_LLM_MODEL": "configuration-only-model",
         }
     )
     try:
@@ -191,8 +191,8 @@ def test_unset_output_budget_falls_back_to_shared_ceiling(build) -> None:
 def test_local_provider_propagates_original_request_error_without_recovery() -> None:
     provider = build_insight_provider(
         {
-            "FRAMEQ_LLM_API_KEY": "configuration-only-key",
-            "FRAMEQ_LLM_MODEL": "configuration-only-model",
+            "APP_LLM_API_KEY": "configuration-only-key",
+            "APP_LLM_MODEL": "configuration-only-model",
         }
     )
     error = RuntimeError("request failed")
@@ -208,13 +208,13 @@ def test_local_provider_propagates_original_request_error_without_recovery() -> 
     "environment",
     [
         {},
-        {"FRAMEQ_LLM_API_KEY": "configuration-only-key"},
-        {"FRAMEQ_LLM_MODEL": "configuration-only-model"},
-        {"FRAMEQ_LLM_SOURCE": "server"},
+        {"APP_LLM_API_KEY": "configuration-only-key"},
+        {"APP_LLM_MODEL": "configuration-only-model"},
+        {"APP_LLM_SOURCE": "server"},
         {
-            "FRAMEQ_LLM_API_KEY": "configuration-only-key",
-            "FRAMEQ_LLM_MODEL": "configuration-only-model",
-            "FRAMEQ_LLM_PROVIDER": "unsupported",
+            "APP_LLM_API_KEY": "configuration-only-key",
+            "APP_LLM_MODEL": "configuration-only-model",
+            "APP_LLM_PROVIDER": "unsupported",
         },
     ],
 )
@@ -230,10 +230,10 @@ def test_provider_rejects_missing_configuration_before_constructing_client(
 def test_managed_provider_construction_requires_no_checkout_request() -> None:
     provider = build_insight_provider(
         {
-            "FRAMEQ_LLM_SOURCE": "server",
-            "FRAMEQ_LLM_CHECKOUT_URL": "https://frameq.example/api/desktop/llm/checkouts",
-            "FRAMEQ_LLM_SESSION_TOKEN": "configuration-only-session",
-            "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "operation-1",
+            "APP_LLM_SOURCE": "server",
+            "APP_LLM_CHECKOUT_URL": "https://frameq.example/api/desktop/llm/checkouts",
+            "APP_LLM_SESSION_TOKEN": "configuration-only-session",
+            "APP_LLM_CHECKOUT_REQUEST_ID": "operation-1",
         }
     )
     assert isinstance(provider, ServerManagedInsightProvider)
@@ -246,7 +246,7 @@ def test_managed_provider_missing_checkout_env_degrades_to_error_response() -> N
     # 回归：checkout 缺 env 曾抛裸 RuntimeError，会穿透 text_chat 里
     # except InsightGenerationError 逃逸出 provider；现在必须转为 err 响应。
     # 直接构造 provider 以绕过 build_insight_provider 的同款前置守卫。
-    provider = ServerManagedInsightProvider({"FRAMEQ_LLM_SOURCE": "server"})
+    provider = ServerManagedInsightProvider({"APP_LLM_SOURCE": "server"})
 
     response = asyncio.run(provider.text_chat(messages=[]))
 
@@ -256,10 +256,10 @@ def test_managed_provider_missing_checkout_env_degrades_to_error_response() -> N
 
 @pytest.mark.parametrize("seed", ["operation-12345678", "x" * 200])
 def test_target_request_ids_stay_unique_within_server_limit(seed: str) -> None:
-    environment = {"FRAMEQ_LLM_CHECKOUT_REQUEST_ID": seed, "OTHER": "preserved"}
+    environment = {"APP_LLM_CHECKOUT_REQUEST_ID": seed, "OTHER": "preserved"}
     requests = {
         derive_per_call_request_id(
-            insight_target_env(environment, target)["FRAMEQ_LLM_CHECKOUT_REQUEST_ID"], call
+            insight_target_env(environment, target)["APP_LLM_CHECKOUT_REQUEST_ID"], call
         )
         for target in ("summary", "insights", "dissection")
         for call in (1, 2)
@@ -267,7 +267,7 @@ def test_target_request_ids_stay_unique_within_server_limit(seed: str) -> None:
 
     assert len(requests) == 6
     assert all(len(request) <= 160 for request in requests)
-    assert environment["FRAMEQ_LLM_CHECKOUT_REQUEST_ID"] == seed
+    assert environment["APP_LLM_CHECKOUT_REQUEST_ID"] == seed
     assert insight_target_env(environment, "summary")["OTHER"] == "preserved"
 
 
@@ -275,10 +275,10 @@ def test_target_request_ids_stay_unique_within_server_limit(seed: str) -> None:
 def test_managed_token_budget_is_validated_before_checkout(value: str) -> None:
     with pytest.raises(InsightGenerationError, match="token budget is invalid") as error:
         build_insight_provider({
-            "FRAMEQ_LLM_SOURCE": "server",
-            "FRAMEQ_LLM_CHECKOUT_URL": "https://frameq.example/api/desktop/llm/checkouts",
-            "FRAMEQ_LLM_SESSION_TOKEN": "configuration-only-session",
-            "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "operation-1",
-            "FRAMEQ_LLM_MAX_TOKENS": value,
+            "APP_LLM_SOURCE": "server",
+            "APP_LLM_CHECKOUT_URL": "https://frameq.example/api/desktop/llm/checkouts",
+            "APP_LLM_SESSION_TOKEN": "configuration-only-session",
+            "APP_LLM_CHECKOUT_REQUEST_ID": "operation-1",
+            "APP_LLM_MAX_TOKENS": value,
         })
     assert error.value.code == "AI_CONFIG_MISSING"

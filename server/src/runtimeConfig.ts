@@ -46,42 +46,42 @@ const REQUIRED_SMTP_KEYS = [
 export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
   const issues: string[] = [];
   const environment = parseEnvironment(env.NODE_ENV, issues);
-  const host = clean(env.FRAMEQ_SERVER_HOST) || "127.0.0.1";
-  const port = parsePort(env.FRAMEQ_SERVER_PORT, "FRAMEQ_SERVER_PORT", 8787, issues);
+  const host = clean(env.APP_SERVER_HOST) || "127.0.0.1";
+  const port = parsePort(env.APP_SERVER_PORT, "APP_SERVER_PORT", 8787, issues);
   const selfServiceActivationEnabled = parseExplicitProductionFlag(
-    env.FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED,
-    "FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED",
+    env.APP_SELF_SERVICE_ACTIVATION_ENABLED,
+    "APP_SELF_SERVICE_ACTIVATION_ENABLED",
     environment,
     issues,
   );
   const databaseUrl = clean(env.DATABASE_URL);
-  const adminEmail = clean(env.FRAMEQ_ADMIN_EMAIL);
-  const llmConfigEncryptionKey = clean(env.FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY);
+  const adminEmail = clean(env.APP_ADMIN_EMAIL);
+  const llmConfigEncryptionKey = clean(env.APP_LLM_CONFIG_ENCRYPTION_KEY);
   const allowConsoleOtp = parseFlag(
-    env.FRAMEQ_ALLOW_CONSOLE_OTP,
-    "FRAMEQ_ALLOW_CONSOLE_OTP",
+    env.APP_ALLOW_CONSOLE_OTP,
+    "APP_ALLOW_CONSOLE_OTP",
     issues,
   );
 
   if (environment === "production") {
     requireValue(databaseUrl, "DATABASE_URL", issues);
-    requireValue(adminEmail, "FRAMEQ_ADMIN_EMAIL", issues);
-    requireValue(llmConfigEncryptionKey, "FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY", issues);
+    requireValue(adminEmail, "APP_ADMIN_EMAIL", issues);
+    requireValue(llmConfigEncryptionKey, "APP_LLM_CONFIG_ENCRYPTION_KEY", issues);
     if (llmConfigEncryptionKey && llmConfigEncryptionKey.length < 32) {
-      issues.push("FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY");
+      issues.push("APP_LLM_CONFIG_ENCRYPTION_KEY");
     }
     if (allowConsoleOtp) {
-      issues.push("FRAMEQ_ALLOW_CONSOLE_OTP");
+      issues.push("APP_ALLOW_CONSOLE_OTP");
     }
   }
 
   if (adminEmail && !isEmail(adminEmail)) {
-    issues.push("FRAMEQ_ADMIN_EMAIL");
+    issues.push("APP_ADMIN_EMAIL");
   }
 
   const smtp = parseSmtpConfig(env, environment, issues);
   if (!smtp && environment !== "production" && !allowConsoleOtp) {
-    issues.push("FRAMEQ_ALLOW_CONSOLE_OTP");
+    issues.push("APP_ALLOW_CONSOLE_OTP");
   }
 
   if (issues.length > 0) {

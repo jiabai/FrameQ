@@ -94,9 +94,9 @@ fn inventory_preflight_reports_real_read_permission_failure_without_completion()
 }
 
 #[test]
-#[ignore="只读扫描当前真实资料库；需要显式FRAMEQ_STORAGE_READONLY_CONFIG指向固定配置目录"]
+#[ignore="只读扫描当前真实资料库；需要显式APP_STORAGE_READONLY_CONFIG指向固定配置目录"]
 fn inventory_preflight_reads_real_user_library_without_mutation() {
-    let config=PathBuf::from(std::env::var_os("FRAMEQ_STORAGE_READONLY_CONFIG").expect("explicit readonly library config"));
+    let config=PathBuf::from(std::env::var_os("APP_STORAGE_READONLY_CONFIG").expect("explicit readonly library config"));
     let control=control::load(&config).unwrap().unwrap();
     assert!(control.pending.is_none(),"真实资料必须处于静止状态");
     let before=fs::read(config.join("data-storage.json")).unwrap();let mut scanned=0;

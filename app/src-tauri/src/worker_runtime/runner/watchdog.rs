@@ -219,7 +219,7 @@ pub(super) fn start_watchdog(
 ) -> Result<WatchdogHandle, WorkerRunError> {
     let control = Arc::new(WatchdogControl::new());
     let thread_control = Arc::clone(&control);
-    let builder = std::thread::Builder::new().name("frameq-worker-watchdog".to_string());
+    let builder = std::thread::Builder::new().name("worker-core-watchdog".to_string());
     if force_start_failure {
         return Err(WorkerRunError::new(
             WorkerRunErrorKind::WatchdogStartFailed,

@@ -11,18 +11,18 @@ from functools import partial
 from pathlib import Path
 
 import pytest
-from frameq_worker.runtime_component import (
+from worker_core.runtime_component import (
     COMPONENT_MANIFEST_NAME,
     COMPONENT_SITE_PACKAGES_NAME,
     evaluate_component,
 )
-from frameq_worker.runtime_component_download import (
+from worker_core.runtime_component_download import (
     RUNTIME_COMPONENT_DOWNLOAD_FAILED,
     RUNTIME_COMPONENT_INVALID,
     RuntimeComponentDownloadError,
     download_pytorch_runtime_component,
 )
-from frameq_worker.worker_application.runtime_component_download import (
+from worker_core.worker_application.runtime_component_download import (
     COMPONENT_DIR_ENV,
     COMPONENT_SHA256_ENV,
     COMPONENT_URL_ENV,

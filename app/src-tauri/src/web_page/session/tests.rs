@@ -69,11 +69,11 @@ fn native_session_recovers_actual_atomic_save_after_stdout_interruption() {
     });
     let output = paths.output_root().unwrap();
     let mut command = Command::new(crate::bundled_python_path(&paths.resource_dir));
-    command.args(["-m", "frameq_worker", "--save-web-page-stdin", "--web-operation-id",
+    command.args(["-m", "worker_core", "--save-web-page-stdin", "--web-operation-id",
         &session.owner.operation_id]).env_clear()
         .env("PYTHONPATH", Path::new(env!("CARGO_MANIFEST_DIR")).join("../../worker").canonicalize().unwrap())
         .env("PYTHONUTF8", "1").env("PYTHONDONTWRITEBYTECODE", "1").env("PYTHONNOUSERSITE", "1")
-        .env("FRAMEQ_OUTPUT_DIR", &output).env("FRAMEQ_CACHE_DIR", paths.cache_root().unwrap())
+        .env("APP_OUTPUT_DIR", &output).env("APP_CACHE_DIR", paths.cache_root().unwrap())
         .current_dir(&paths.user_data_dir).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     for key in ["HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "HOMEDRIVE", "HOMEPATH",
         "TEMP", "TMP", "TMPDIR"] {
@@ -153,7 +153,7 @@ fn native_session_deadline_retains_identity_and_allows_cleanup_retry() {
 #[test]
 #[ignore = "Runs real owner and native helper processes"]
 fn native_session_recovers_verified_receipt_after_actual_owner_exit() {
-    const CONFIG: &str = "FRAMEQ_NATIVE_SESSION_OWNER_CONFIG";
+    const CONFIG: &str = "APP_NATIVE_SESSION_OWNER_CONFIG";
     if let Some(config) = std::env::var_os(CONFIG) {
         let resource_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").canonicalize().unwrap();
         let paths = RuntimePaths { resource_dir, user_data_dir: PathBuf::from(config) };
@@ -165,7 +165,7 @@ fn native_session_recovers_verified_receipt_after_actual_owner_exit() {
         hide(&mut command);
         let mut child = command.spawn().unwrap();
         session.record("helper", child.id()).unwrap();
-        let task_id = if std::env::var_os("FRAMEQ_NATIVE_SESSION_PUBLISH").is_some() {
+        let task_id = if std::env::var_os("APP_NATIVE_SESSION_PUBLISH").is_some() {
             let article = HostArticle {
                 navigation_generation: 1, final_url: "https://www.python.org/doc/".into(),
                 title: "重启恢复正文".into(), text: "持久正文 Unicode 🙂。\r\n".repeat(20),
@@ -200,7 +200,7 @@ fn native_session_recovers_verified_receipt_after_actual_owner_exit() {
 
 fn verify_owner_exit(published: bool) {
     const CASE: &str = "web_page::session::tests::native_session_recovers_verified_receipt_after_actual_owner_exit";
-    const CONFIG: &str = "FRAMEQ_NATIVE_SESSION_OWNER_CONFIG";
+    const CONFIG: &str = "APP_NATIVE_SESSION_OWNER_CONFIG";
     let (paths, _) = context();
     let mut command = Command::new(std::env::current_exe().unwrap());
     command.args(["--exact", CASE, "--ignored", "--nocapture"])
@@ -208,7 +208,7 @@ fn verify_owner_exit(published: bool) {
         .stdout(Stdio::from(fs::File::create(paths.user_data_dir.join("owner-stdout.log")).unwrap()))
         .stderr(Stdio::from(fs::File::create(paths.user_data_dir.join("owner-stderr.log")).unwrap()));
     hide(&mut command);
-    if published { command.env("FRAMEQ_NATIVE_SESSION_PUBLISH", "1"); }
+    if published { command.env("APP_NATIVE_SESSION_PUBLISH", "1"); }
     let mut owner = command.spawn().unwrap();
     let deadline = Instant::now() + Duration::from_secs(30);
     let ready = paths.user_data_dir.join("owner-ready.json");

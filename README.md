@@ -189,7 +189,7 @@ flowchart LR
   Insight --> Files
 ```
 
-Runtime boundary: the app must not import code from outside this repository's `server/`. Intelligent extraction agents (`summary_agent`, `topic_agent`, `dissection_agent`, `draft_agent`) live inside `worker/frameq_worker/`.
+Runtime boundary: the app must not import code from outside this repository's `server/`. Intelligent extraction agents (`summary_agent`, `topic_agent`, `dissection_agent`, `draft_agent`) live inside `worker/worker_core/`.
 
 ## Quick Start
 
@@ -239,13 +239,13 @@ Snapshots go to `build/appdata-snapshot/<timestamp>/` and the five most recent a
 
 ## Desktop Release Runtime
 
-Installed builds run the bundled Python worker directly and set `FRAMEQ_ALLOW_REAL_ASR=1` automatically. Release builds default to SenseVoiceSmall-ONNX, whose runtime ships in the installer; the model cache is downloaded on first run into app-local data. Selecting the PyTorch SenseVoice Small model additionally requires the runtime component, offered from the model sheet.
+Installed builds run the bundled Python worker directly and set `APP_ALLOW_REAL_ASR=1` automatically. Release builds default to SenseVoiceSmall-ONNX, whose runtime ships in the installer; the model cache is downloaded on first run into app-local data. Selecting the PyTorch SenseVoice Small model additionally requires the runtime component, offered from the model sheet.
 
 Build unsigned internal installer resources and package:
 
 ```cmd
-set FRAMEQ_PYTHON_STANDALONE_URL=D:\archives\python-build-standalone.tar.zst
-set FRAMEQ_FFMPEG_ARCHIVE_URL=D:\archives\ffmpeg-release.zip
+set APP_PYTHON_STANDALONE_URL=D:\archives\python-build-standalone.tar.zst
+set APP_FFMPEG_ARCHIVE_URL=D:\archives\ffmpeg-release.zip
 node scripts\build-installer.mjs --target windows-x64
 ```
 
@@ -253,14 +253,14 @@ The Python and ffmpeg values may be URLs or local archive paths. Use `--target w
 
 The installer does not bundle SenseVoice Small weights, and it does not bundle the PyTorch ASR runtime either: `funasr`, `torch`, and `torchaudio` live in the `pytorch` extra of `pyproject.toml`, and the build script exports the bundled runtime without extras. It prunes non-runtime Python debug, cache, test, and header artifacts; keeps `resources/models` out of the bundle; and guides the user through downloading `iic/SenseVoiceSmall-onnx` into app-local data on first run. Upgrades from a settings file that still held the old PyTorch default are moved to the ONNX model once, and the settings sheet explains the change with a dismissible notice.
 
-The same build also assembles the PyTorch runtime component: it installs `uv export --no-dev --extra pytorch` into a standalone `site-packages/`, removes every distribution the bundled runtime already provides (matched by METADATA name, files located via each dist's RECORD), writes a `runtime-manifest.json` carrying the `uv.lock` SHA-256 fingerprint, and packs `frameq-pytorch-runtime-<target>.zip`. The CI jobs upload that zip to the GitHub release next to the installer; the desktop downloads it on demand and the worker compares fingerprints before injecting it into `sys.path` (see `worker/frameq_worker/runtime_component.py`).
+The same build also assembles the PyTorch runtime component: it installs `uv export --no-dev --extra pytorch` into a standalone `site-packages/`, removes every distribution the bundled runtime already provides (matched by METADATA name, files located via each dist's RECORD), writes a `runtime-manifest.json` carrying the `uv.lock` SHA-256 fingerprint, and packs `frameq-pytorch-runtime-<target>.zip`. The CI jobs upload that zip to the GitHub release next to the installer; the desktop downloads it on demand and the worker compares fingerprints before injecting it into `sys.path` (see `worker/worker_core/runtime_component.py`).
 
 On the macOS Intel (`macos-x64`) build, the newest versions of some native dependencies ship no prebuilt x86_64 wheel — `llvmlite` (reached through `librosa` → `numba`, shared by both ASR runtimes) is the notable one, and building it from source needs a matching LLVM install the runners lack. The build therefore pins `numba`/`llvmlite` to the last releases with self-contained macOS x86_64 wheels (see the pins in `pyproject.toml`), and installs with `pip install --only-binary=llvmlite` so a missing wheel fails loudly instead of falling back to a source build that would bake in Homebrew paths (for example `/usr/local/opt/zstd/lib/libzstd.1.dylib`) and break on clean user Macs.
 
 Two build-time checks then confirm the packaged runtime is self-contained, and together they need no clean Mac:
 
 - `scripts/verify-macos-self-contained.mjs` runs inside the installer build (both arches) and fails if any bundled library references a non-bundled path (`/usr/local`, `/opt/homebrew`, `/opt/local`). This is static analysis, so it catches leaks even on the Homebrew-rich runner where an import smoke test would pass.
-- The release workflow then imports the packaged runtime from the built `.app` (`import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker`) with `PYTHONDONTWRITEBYTECODE=1`, and checks that `runtime-manifest.json` made it into the bundle. This fails if a required library did not make it into the bundle before the DMG is uploaded. The workflow and DMG script also reject `__pycache__` / `.pyc` files and run `codesign --verify --deep --strict` before packaging, because writing bytecode after Tauri signs the `.app` invalidates the bundle and makes downloaded apps appear damaged in Gatekeeper.
+- The release workflow then imports the packaged runtime from the built `.app` (`import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core`) with `PYTHONDONTWRITEBYTECODE=1`, and checks that `runtime-manifest.json` made it into the bundle. This fails if a required library did not make it into the bundle before the DMG is uploaded. The workflow and DMG script also reject `__pycache__` / `.pyc` files and run `codesign --verify --deep --strict` before packaging, because writing bytecode after Tauri signs the `.app` invalidates the bundle and makes downloaded apps appear damaged in Gatekeeper.
 
 ### GitHub Releases updater artifacts
 
@@ -273,32 +273,32 @@ https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-upd
 The GitHub Actions workflow `.github/workflows/desktop-release.yml` prepares the bundled runtime resources, builds the Windows NSIS installer, uploads updater artifacts, uploads `latest.json` for Tauri updater checks, and uploads separate macOS Intel / Apple Silicon DMG assets. Configure these repository secrets before running it:
 
 ```text
-FRAMEQ_PYTHON_STANDALONE_URL
-FRAMEQ_FFMPEG_ARCHIVE_URL
-FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64
-FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64
-FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64
-FRAMEQ_PYTHON_STANDALONE_URL_ARM64
-FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64
-FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64
+APP_PYTHON_STANDALONE_URL
+APP_FFMPEG_ARCHIVE_URL
+APP_PYTHON_STANDALONE_URL_MACOS_X64
+APP_FFMPEG_ARCHIVE_URL_MACOS_X64
+APP_FFPROBE_ARCHIVE_URL_MACOS_X64
+APP_PYTHON_STANDALONE_URL_ARM64
+APP_FFMPEG_ARCHIVE_URL_ARM64
+APP_FFPROBE_ARCHIVE_URL_ARM64
 TAURI_SIGNING_PRIVATE_KEY
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 ```
 
-The `FRAMEQ_PYTHON_STANDALONE_URL` / `FRAMEQ_FFMPEG_ARCHIVE_URL` pair is used only by the Windows job. Each macOS job requires its own architecture-specific archives and does not fall back to the Windows secrets: set `FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64`, `FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64`, and `FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64` for the Intel DMG job, and `FRAMEQ_PYTHON_STANDALONE_URL_ARM64`, `FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64`, and `FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64` for the Apple Silicon job. Both macOS jobs use split media archives: point the `..._FFMPEG_ARCHIVE_URL_...` secret at the ffmpeg archive and the `..._FFPROBE_ARCHIVE_URL_...` secret at the ffprobe archive. A missing macOS secret fails the build instead of silently reusing Windows runtime inputs.
+The `APP_PYTHON_STANDALONE_URL` / `APP_FFMPEG_ARCHIVE_URL` pair is used only by the Windows job. Each macOS job requires its own architecture-specific archives and does not fall back to the Windows secrets: set `APP_PYTHON_STANDALONE_URL_MACOS_X64`, `APP_FFMPEG_ARCHIVE_URL_MACOS_X64`, and `APP_FFPROBE_ARCHIVE_URL_MACOS_X64` for the Intel DMG job, and `APP_PYTHON_STANDALONE_URL_ARM64`, `APP_FFMPEG_ARCHIVE_URL_ARM64`, and `APP_FFPROBE_ARCHIVE_URL_ARM64` for the Apple Silicon job. Both macOS jobs use split media archives: point the `..._FFMPEG_ARCHIVE_URL_...` secret at the ffmpeg archive and the `..._FFPROBE_ARCHIVE_URL_...` secret at the ffprobe archive. A missing macOS secret fails the build instead of silently reusing Windows runtime inputs.
 
 > [!IMPORTANT]
-> `FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64` must be a **CPython 3.11 or 3.12** standalone. The `pytorch` extra pins `torch==2.2.2` on Intel (the last PyTorch release with macOS x86_64 wheels), which publishes wheels only up to CPython 3.12 (cp312). A 3.13+ standalone has no matching `torch==2.2.2` wheel, so the Intel job fails when the build script installs the PyTorch component. The installer's launcher setup is CPython-minor-agnostic, so this torch pin is the only Python-version constraint. Apple Silicon and Windows track modern torch and are not affected.
+> `APP_PYTHON_STANDALONE_URL_MACOS_X64` must be a **CPython 3.11 or 3.12** standalone. The `pytorch` extra pins `torch==2.2.2` on Intel (the last PyTorch release with macOS x86_64 wheels), which publishes wheels only up to CPython 3.12 (cp312). A 3.13+ standalone has no matching `torch==2.2.2` wheel, so the Intel job fails when the build script installs the PyTorch component. The installer's launcher setup is CPython-minor-agnostic, so this torch pin is the only Python-version constraint. Apple Silicon and Windows track modern torch and are not affected.
 
 Create or update a release by pushing a `v*` tag or running the workflow manually with a tag such as `v0.1.0`. Manual runs can disable `build_windows_updater`, `build_macos_x64`, or `build_macos_arm64` when patching only one release asset. Draft releases are useful for inspection, but updater clients only resolve `releases/latest/download/latest.json?frameq-updater=1` after the release is published as a non-draft, non-prerelease release.
 
 Release operators can override the default ModelScope download source:
 
 ```powershell
-$env:FRAMEQ_ASR_MODEL_DOWNLOAD_URL = "https://cdn.example.com/frameq/sensevoice-small-cache.zip"
-$env:FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256 = "expected-sha256"
-$env:FRAMEQ_MODELSCOPE_ENDPOINT = "https://www.modelscope.cn"
-$env:FRAMEQ_SENSEVOICE_REVISION = "master"
+$env:APP_ASR_MODEL_DOWNLOAD_URL = "https://cdn.example.com/frameq/sensevoice-small-cache.zip"
+$env:APP_ASR_MODEL_DOWNLOAD_SHA256 = "expected-sha256"
+$env:APP_MODELSCOPE_ENDPOINT = "https://www.modelscope.cn"
+$env:APP_SENSEVOICE_REVISION = "master"
 ```
 
 The custom archive must contain:
@@ -338,7 +338,7 @@ macOS updates are manual for the same reason: the Tauri updater only publishes W
 
 The desktop app stores non-LLM local settings in its app-local data `.env` file. The settings sheet creates this file when needed, shows its path, and can reveal it in the system file manager.
 
-This file is for local output, ASR, and model-download settings only. Insight-topic LLM configuration is managed on the FrameQ server and is not read from desktop `.env` files. Do not put `FRAMEQ_LLM_*` keys in desktop `.env`; legacy local LLM keys are ignored by the desktop worker.
+This file is for local output, ASR, and model-download settings only. Insight-topic LLM configuration is managed on the FrameQ server and is not read from desktop `.env` files. Do not put `APP_LLM_*` keys in desktop `.env`; legacy local LLM keys are ignored by the desktop worker.
 
 ## Server Deployment
 
@@ -346,7 +346,7 @@ The `server/` service handles account login, activation-code monthly pass entitl
 
 Self-service rollout is Server-first and fail-closed:
 
-- `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` must be explicitly `true` or `false` in production and accepts `0`/`1` as false/true; development and test default to `false`.
+- `APP_SELF_SERVICE_ACTIVATION_ENABLED` must be explicitly `true` or `false` in production and accepts `0`/`1` as false/true; development and test default to `false`.
 - The feature is unavailable unless SMTP is configured; missing SMTP or partial SMTP configuration is a production startup failure, and there is no console fallback for activation-code email.
 - Request eligibility is enforced on the Server: only a valid desktop session whose entitlement is missing or expired can request a code.
 - Successful requests are cooled down by persisted dispatch limits: one per email per 60 seconds, five per email per fixed hour, and twenty per trusted client IP per fixed hour. Rate-limited responses return `retry_at` and `Retry-After`.
@@ -410,7 +410,7 @@ The reviewed migration chain is:
 
 Production rollout and rollback checklist:
 
-- Deploy the reviewed migration chain and Server code with `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=false`.
+- Deploy the reviewed migration chain and Server code with `APP_SELF_SERVICE_ACTIVATION_ENABLED=false`.
 - Verify SMTP delivery, `/health/live`, `/health/ready`, `GET /api/desktop/account`, the request route, and the Admin Web activation-code audit table before enabling the flag.
 - Turn the feature on only after the desktop build that understands `can_request_activation_code` is available.
 - If rollback is needed, switch the flag off first, then restore the matched code/database/config set per `deploy/server-deployment.md`.
@@ -427,7 +427,7 @@ $env:PYTHONPATH = "$PWD\worker"
 @'
 import json
 from pathlib import Path
-from frameq_worker.worker_service import retry_insights_once
+from worker_core.worker_service import retry_insights_once
 
 result = retry_insights_once(
     json.dumps({

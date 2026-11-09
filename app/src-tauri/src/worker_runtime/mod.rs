@@ -198,7 +198,7 @@ mod tests {
             request.command.args,
             vec![
                 "-m",
-                "frameq_worker",
+                "worker_core",
                 "--download-asr-model",
                 "--asr-model",
                 "iic/SenseVoiceSmall-onnx",
@@ -206,7 +206,7 @@ mod tests {
         );
         assert_eq!(request.command.stdin_payload, None);
         assert_eq!(
-            request.command.env_map().get("FRAMEQ_MODEL_DIR"),
+            request.command.env_map().get("APP_MODEL_DIR"),
             Some(&crate::path_to_env_string(paths.user_data_dir.join("models")))
         );
     }

@@ -7,18 +7,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from frameq_worker.models import JobStage, ProcessLocalMediaRequest, ProcessResult
-from frameq_worker.note_title import (
+from worker_core.models import JobStage, ProcessLocalMediaRequest, ProcessResult
+from worker_core.note_title import (
     build_title_prompt,
     parse_title_response,
     run_note_title_step,
     sample_transcript,
 )
-from frameq_worker.note_title_metadata import NoteTitleMetadata, parse_note_title_metadata
-from frameq_worker.requests import parse_retry_insights_request
-from frameq_worker.task_store import TaskStoreFacade, load_task_manifest
-from frameq_worker.task_transaction import TaskArtifactCommitError, recover_task_artifacts
-from frameq_worker.worker_application.insight_retry import retry_insights_once
+from worker_core.note_title_metadata import NoteTitleMetadata, parse_note_title_metadata
+from worker_core.requests import parse_retry_insights_request
+from worker_core.task_store import TaskStoreFacade, load_task_manifest
+from worker_core.task_transaction import TaskArtifactCommitError, recover_task_artifacts
+from worker_core.worker_application.insight_retry import retry_insights_once
 
 
 def test_title_sample_covers_beginning_middle_and_end_with_a_fixed_budget() -> None:
@@ -295,8 +295,8 @@ def test_title_retry_path_keeps_identity_and_unknown_manifest_fields_without_clo
         json.dumps({"task_id": context.task_id, "target": "title", "output_language": "zh-TW"}),
         project_root=tmp_path,
         environ={
-            "FRAMEQ_OUTPUT_DIR": str(store.output_root),
-            "FRAMEQ_CACHE_DIR": str(store.cache_root),
+            "APP_OUTPUT_DIR": str(store.output_root),
+            "APP_CACHE_DIR": str(store.cache_root),
         },
     )
     assert result["task_id"] == context.task_id

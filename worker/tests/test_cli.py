@@ -4,28 +4,28 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-import frameq_worker.cli as cli
-import frameq_worker.media_preparation as media_preparation
-import frameq_worker.pipeline as pipeline
 import pytest
-from frameq_worker import platform_source_resolvers as platform_resolvers_module
-from frameq_worker.asr import Transcript
-from frameq_worker.cli import (
+import worker_core.cli as cli
+import worker_core.media_preparation as media_preparation
+import worker_core.pipeline as pipeline
+from worker_core import platform_source_resolvers as platform_resolvers_module
+from worker_core.asr import Transcript
+from worker_core.cli import (
     print_diagnostic_event,
     render_diagnostic_event,
     render_model_download_event,
     render_progress_event,
     render_result_json,
 )
-from frameq_worker.desktop_contract import (
+from worker_core.desktop_contract import (
     LOCAL_MEDIA_CONTRACT_VERSION,
     MODEL_DOWNLOAD_EVENT_PREFIX,
     PROCESS_VIDEO_CONTRACT_VERSION,
     PROGRESS_EVENT_PREFIX,
 )
-from frameq_worker.diagnostic_events import DiagnosticEvent
-from frameq_worker.media import CommandResult
-from frameq_worker.worker_service import (
+from worker_core.diagnostic_events import DiagnosticEvent
+from worker_core.media import CommandResult
+from worker_core.worker_service import (
     resolve_source_identity_once,
     run_local_media_once,
     run_worker_once,
@@ -829,8 +829,8 @@ def test_run_worker_once_uses_configured_output_and_cache_roots(tmp_path: Path) 
         command_runner=FakeMediaRunner(),
         transcriber=FakeTranscriber(),
         environ={
-            "FRAMEQ_OUTPUT_DIR": custom_output_dir.as_posix(),
-            "FRAMEQ_CACHE_DIR": custom_cache_dir.as_posix(),
+            "APP_OUTPUT_DIR": custom_output_dir.as_posix(),
+            "APP_CACHE_DIR": custom_cache_dir.as_posix(),
         },
     )
 
@@ -923,7 +923,7 @@ def test_run_worker_once_uses_explicit_asr_model_instead_of_user_data_env(
     user_data_dir.mkdir()
     create_valid_asr_cache(tmp_path / "models")
     (user_data_dir / ".env").write_text(
-        "FRAMEQ_ASR_MODEL=vendor/not-supported\n",
+        "APP_ASR_MODEL=vendor/not-supported\n",
         encoding="utf-8",
     )
 
@@ -938,7 +938,7 @@ def test_run_worker_once_uses_explicit_asr_model_instead_of_user_data_env(
         command_runner=FakeMediaRunner(),
         transcriber_factory=fake_build_asr_transcriber,
         allow_real_asr=True,
-        environ={"FRAMEQ_USER_DATA_DIR": user_data_dir.as_posix()},
+        environ={"APP_USER_DATA_DIR": user_data_dir.as_posix()},
     )
 
     transcript_md = task_dir_from_result(result) / "transcript" / "transcript.md"

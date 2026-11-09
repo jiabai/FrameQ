@@ -7,10 +7,10 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const productionOwners = [
-  "worker/frameq_worker/asr_runtime/artifacts.py",
-  "worker/frameq_worker/summary_agent.py",
-  "worker/frameq_worker/topic_agent.py",
-  "worker/frameq_worker/dissection_agent.py",
+  "worker/worker_core/asr_runtime/artifacts.py",
+  "worker/worker_core/summary_agent.py",
+  "worker/worker_core/topic_agent.py",
+  "worker/worker_core/dissection_agent.py",
   "app/src-tauri/src/task_manifest/storage.rs",
   "app/src-tauri/src/transcript_detail/edit_storage.rs",
   "app/src-tauri/src/transcript_detail/segments.rs",

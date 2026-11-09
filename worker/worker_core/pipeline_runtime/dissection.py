@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import os
+from collections.abc import Mapping
+from dataclasses import replace
+from pathlib import Path
+
+from worker_core.desktop_contract import ProgressCallback
+from worker_core.dissection_agent import (
+    DissectionRunner,
+    generate_dissection_via_agent_runtime,
+)
+from worker_core.dissection_report import (
+    DissectionArtifacts,
+    build_dissection_artifacts,
+)
+from worker_core.output_language import OutputLanguage
+
+
+def run_dissection_generation(
+    transcript: str,
+    *,
+    output_dir: Path,
+    output_language: OutputLanguage,
+    source_language: str | None,
+    progress_callback: ProgressCallback | None = None,
+    runtime_env: Mapping[str, str] | None = None,
+    dissection_runner: DissectionRunner | None = None,
+    source_kind: str = "transcript",
+) -> DissectionArtifacts:
+    runner = dissection_runner or generate_dissection_via_agent_runtime
+    report = runner(
+        transcript,
+        os.environ if runtime_env is None else runtime_env,
+        output_language,
+        source_language,
+        progress_callback=progress_callback,
+    )
+    report = replace(report, source_kind=source_kind)
+    return build_dissection_artifacts(
+        report,
+        output_dir=output_dir,
+        output_language=output_language,
+    )

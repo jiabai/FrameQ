@@ -2,9 +2,9 @@ import json
 import sys
 from pathlib import Path
 
-import frameq_worker.media as media
 import pytest
-from frameq_worker.media import (
+import worker_core.media as media
+from worker_core.media import (
     CommandExecutionError,
     CommandResult,
     build_audio_extract_command,

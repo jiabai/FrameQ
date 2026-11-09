@@ -6,18 +6,20 @@ import os
 from pathlib import Path
 
 import pytest
-from frameq_worker.ai_prompts import build_mindmap_prompt, build_summary_prompt
-from frameq_worker.dissection_report import (
+from jsonschema import Draft202012Validator, ValidationError
+from test_dissection import valid_semantic_report
+from worker_core.ai_prompts import build_mindmap_prompt, build_summary_prompt
+from worker_core.dissection_report import (
     DissectionGenerationError,
     parse_dissection_report,
     parse_persisted_dissection,
 )
-from frameq_worker.models import JobStage, ProcessResult
-from frameq_worker.source_text import read_source_text
-from frameq_worker.task_store import TaskStoreFacade, load_task_manifest
-from frameq_worker.task_transaction import TaskArtifactCommitError
-from frameq_worker.transcript_chunks import MarkdownSplitter
-from frameq_worker.web_page_contract import (
+from worker_core.models import JobStage, ProcessResult
+from worker_core.source_text import read_source_text
+from worker_core.task_store import TaskStoreFacade, load_task_manifest
+from worker_core.task_transaction import TaskArtifactCommitError
+from worker_core.transcript_chunks import MarkdownSplitter
+from worker_core.web_page_contract import (
     MAX_ARTICLE_MARKDOWN_BYTES,
     MAX_ARTICLE_TEXT_BYTES,
     MAX_WEB_PAGE_MESSAGE_BYTES,
@@ -25,10 +27,8 @@ from frameq_worker.web_page_contract import (
     canonical_web_url,
     parse_web_page_request,
 )
-from frameq_worker.web_page_storage import save_web_page
-from frameq_worker.worker_application.insight_retry import retry_insights_once
-from jsonschema import Draft202012Validator, ValidationError
-from test_dissection import valid_semantic_report
+from worker_core.web_page_storage import save_web_page
+from worker_core.worker_application.insight_retry import retry_insights_once
 
 
 def article() -> dict[str, str]:
@@ -141,7 +141,7 @@ def test_web_page_worker_rejects_media_retry_before_ai(tmp_path: Path, target: s
     result = retry_insights_once(json.dumps({
         "task_id": saved.task_id, "target": target, "output_language": "zh-CN",
     }), project_root=tmp_path, environ={
-        "FRAMEQ_OUTPUT_DIR": str(store.output_root), "FRAMEQ_CACHE_DIR": str(store.cache_root),
+        "APP_OUTPUT_DIR": str(store.output_root), "APP_CACHE_DIR": str(store.cache_root),
     })
     assert result["error"]["code"] == "WEB_PAGE_RETRY_TARGET_INVALID"
     assert result["source"]["kind"] == "web_page"
@@ -249,7 +249,7 @@ def test_each_retry_reads_current_authoritative_article_bytes(tmp_path: Path) ->
         "task_id": saved.task_id, "target": "summary", "output_language": "en-US",
     })
     environment = {
-        "FRAMEQ_OUTPUT_DIR": str(store.output_root), "FRAMEQ_CACHE_DIR": str(store.cache_root),
+        "APP_OUTPUT_DIR": str(store.output_root), "APP_CACHE_DIR": str(store.cache_root),
     }
     first = retry_insights_once(request, project_root=tmp_path, environ=environment)
     assert first["error"]["code"] == "AI_CONFIG_MISSING"
@@ -274,7 +274,7 @@ def test_web_retry_preserves_authoritative_source_without_engine_or_provider(
     if target == "draft":
         request.update({"insight_id": 1, "platform": "xiaohongshu"})
     result = retry_insights_once(json.dumps(request), project_root=tmp_path, environ={
-        "FRAMEQ_OUTPUT_DIR": str(store.output_root), "FRAMEQ_CACHE_DIR": str(store.cache_root),
+        "APP_OUTPUT_DIR": str(store.output_root), "APP_CACHE_DIR": str(store.cache_root),
     })
     assert result["error"]["code"] == (
         "DRAFT_SEED_INVALID" if target == "draft" else "AI_CONFIG_MISSING"

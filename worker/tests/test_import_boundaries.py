@@ -10,9 +10,9 @@ import pytest
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
 CORE_SOURCE_MODULES = (
-    WORKER_ROOT / "frameq_worker" / "models.py",
-    WORKER_ROOT / "frameq_worker" / "source_identity.py",
-    WORKER_ROOT / "frameq_worker" / "source_resolution.py",
+    WORKER_ROOT / "worker_core" / "models.py",
+    WORKER_ROOT / "worker_core" / "source_identity.py",
+    WORKER_ROOT / "worker_core" / "source_resolution.py",
 )
 FORBIDDEN_INFRASTRUCTURE_IMPORTS = {
     "brotli",
@@ -27,13 +27,13 @@ def test_core_model_import_does_not_load_platform_fallbacks() -> None:
     script = """
 import sys
 
-import frameq_worker.models
-import frameq_worker.source_identity
+import worker_core.models
+import worker_core.source_identity
 
 loaded = sorted(
     name
     for name in sys.modules
-    if name.startswith("frameq_worker.") and name.endswith("_fallback")
+    if name.startswith("worker_core.") and name.endswith("_fallback")
 )
 if loaded:
     raise SystemExit(f"core import loaded platform fallbacks: {loaded}")

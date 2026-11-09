@@ -142,7 +142,7 @@ pub(super) fn build_asr_model_download_command_spec(
         program: bundled_python_path(&paths.resource_dir),
         args: vec![
             "-m".to_string(),
-            "frameq_worker".to_string(),
+            "worker_core".to_string(),
             "--download-asr-model".to_string(),
             "--asr-model".to_string(),
             job.asr_model().to_string(),
@@ -174,7 +174,7 @@ pub(super) fn build_storage_validation_for_component(
         || matches!(component_version, "." | "..")
         || !component_version.chars().all(|value| value.is_ascii_alphanumeric() || matches!(value, '.' | '-' | '+'))
     { return Err("StorageValidationFailed".into()); }
-    let mut args = vec!["-m".to_string(), "frameq_worker.storage_validation".to_string()];
+    let mut args = vec!["-m".to_string(), "worker_core.storage_validation".to_string()];
     if import_component { args.push("--import-component".to_string()); }
     let mut env = STORAGE_SYSTEM_ENVIRONMENT.iter().filter_map(|key| {
         std::env::var_os(key).map(|value| ((*key).to_string(), value.to_string_lossy().into_owned()))
@@ -261,7 +261,7 @@ pub(super) fn build_runtime_component_download_command_spec(
         program: bundled_python_path(&paths.resource_dir),
         args: vec![
             "-m".to_string(),
-            "frameq_worker".to_string(),
+            "worker_core".to_string(),
             "--download-runtime-component".to_string(),
         ],
         stdin_payload: None,
@@ -365,7 +365,7 @@ pub(super) fn build_worker_command_spec(
 
     Ok(WorkerCommandSpec {
         program: bundled_python_path(&paths.resource_dir),
-        args: [vec!["-m".to_string(), "frameq_worker".to_string()], args].concat(),
+        args: [vec!["-m".to_string(), "worker_core".to_string()], args].concat(),
         stdin_payload,
         env,
         clear_env: false,
@@ -405,7 +405,7 @@ fn build_web_page_command_spec(
         (OUTPUT_DIR_ENV.into(), stringify(&paths.output_root()?)?),
         (CACHE_DIR_ENV.into(), stringify(&paths.cache_root()?)?),
         (RESOURCE_DIR_ENV.into(), stringify(&paths.resource_dir)?),
-        ("FRAMEQ_ALLOW_REAL_ASR".into(), "0".into()),
+        ("APP_ALLOW_REAL_ASR".into(), "0".into()),
         ("MODELSCOPE_OFFLINE".into(), "1".into()),
         ("HF_HUB_OFFLINE".into(), "1".into()),
         ("TEMP".into(), stringify(&paths.user_data_dir)?),
@@ -414,7 +414,7 @@ fn build_web_page_command_spec(
     ]);
     Ok(WorkerCommandSpec {
         program: bundled_python_path(&paths.resource_dir),
-        args: vec!["-m".into(), "frameq_worker".into(), "--save-web-page-stdin".into(), "--web-operation-id".into(), operation_id.into()],
+        args: vec!["-m".into(), "worker_core".into(), "--save-web-page-stdin".into(), "--web-operation-id".into(), operation_id.into()],
         stdin_payload: Some(payload.into()), env, clear_env: true, env_remove: Vec::new(),
         current_dir: paths.user_data_dir.clone(),
     })
@@ -456,19 +456,19 @@ mod tests {
 
     fn assert_removes_legacy_local_llm_env(spec: &WorkerCommandSpec) {
         for key in [
-            "FRAMEQ_LLM_PROVIDER",
-            "FRAMEQ_LLM_BASE_URL",
-            "FRAMEQ_LLM_API_KEY",
-            "FRAMEQ_LLM_MODEL",
-            "FRAMEQ_LLM_TIMEOUT_SECONDS",
+            "APP_LLM_PROVIDER",
+            "APP_LLM_BASE_URL",
+            "APP_LLM_API_KEY",
+            "APP_LLM_MODEL",
+            "APP_LLM_TIMEOUT_SECONDS",
         ] {
             assert!(spec.env_remove.iter().any(|value| value == key));
         }
         for key in [
-            "FRAMEQ_LLM_SOURCE",
-            "FRAMEQ_LLM_CHECKOUT_URL",
-            "FRAMEQ_LLM_SESSION_TOKEN",
-            "FRAMEQ_LLM_CHECKOUT_REQUEST_ID",
+            "APP_LLM_SOURCE",
+            "APP_LLM_CHECKOUT_URL",
+            "APP_LLM_SESSION_TOKEN",
+            "APP_LLM_CHECKOUT_REQUEST_ID",
         ] {
             assert!(!spec.env_remove.iter().any(|value| value == key));
         }
@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     fn readonly_storage_probe_removes_provider_session_proxy_and_canary_environment() {
-        for key in ["FRAMEQ_STORAGE_VALIDATION_CANARY", "FRAMEQ_LLM_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "PYTHONHOME", "PYTHONPATH", "FRAMEQ_OUTPUT_DIR", "LC_API_KEY"] {
+        for key in ["APP_STORAGE_VALIDATION_CANARY", "APP_LLM_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "PYTHONHOME", "PYTHONPATH", "APP_OUTPUT_DIR", "LC_API_KEY"] {
             assert!(!storage_validation_needs_system_environment(key));
         }
         for key in ["SystemRoot", "WINDIR", "ComSpec", "TEMP", "TMP", "HOME", "USERPROFILE", "LANG", "LC_CTYPE"] {
@@ -485,17 +485,17 @@ mod tests {
         let paths = command_test_paths();
         let probe = build_storage_validation_command_spec(&paths, &paths.data_paths().unwrap(), false).unwrap();
         assert!(probe.clear_env);
-        assert!(!probe.env.iter().any(|(key, _)| key == "FRAMEQ_STORAGE_VALIDATION_CANARY"));
+        assert!(!probe.env.iter().any(|(key, _)| key == "APP_STORAGE_VALIDATION_CANARY"));
         assert!(probe.env.iter().all(|(key, _)| !key.contains("SESSION") && !key.contains("API_KEY") && !key.contains("PROXY")));
         assert_eq!(std::env::split_paths(probe.env_map().get("PATH").unwrap()).next(), Some(paths.resource_dir.join("bin")));
     }
 
     #[test]
-    #[ignore = "需要预构建的真实 Python 以及 FRAMEQ_STORAGE_VALIDATION_CANARY 环境变量"]
+    #[ignore = "需要预构建的真实 Python 以及 APP_STORAGE_VALIDATION_CANARY 环境变量"]
     fn packaged_python_probe_does_not_inherit_the_environment_canary() {
         use super::super::runner::{ProgressRoute, WorkerLane, WorkerOperation, WorkerRunOutcome, WorkerRunRequest};
         use super::super::result_protocol::ValidatedWorkerResult;
-        assert!(std::env::var_os("FRAMEQ_STORAGE_VALIDATION_CANARY").is_some());
+        assert!(std::env::var_os("APP_STORAGE_VALIDATION_CANARY").is_some());
         let mut paths = command_test_paths();
         paths.resource_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").canonicalize().expect("built resources");
         assert!(bundled_python_path(&paths.resource_dir).is_file());
@@ -503,7 +503,7 @@ mod tests {
         let source_worker = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../worker").canonicalize().expect("worker source");
         command.env.retain(|(key, _)| key != "PYTHONPATH");
         command.env.push(("PYTHONPATH".into(), path_to_env_string(source_worker)));
-        command.args = vec!["-c".into(), "import os,runpy,sys; assert 'FRAMEQ_STORAGE_VALIDATION_CANARY' not in os.environ; sys.argv=['storage_validation']; runpy.run_module('frameq_worker.storage_validation',run_name='__main__')".into()];
+        command.args = vec!["-c".into(), "import os,runpy,sys; assert 'APP_STORAGE_VALIDATION_CANARY' not in os.environ; sys.argv=['storage_validation']; runpy.run_module('worker_core.storage_validation',run_name='__main__')".into()];
         let outcome = WorkerLane::default().run(&paths, WorkerRunRequest {
             operation: WorkerOperation::StorageValidation,
             command,
@@ -542,19 +542,19 @@ mod tests {
         let probe = build_storage_validation_command_spec(&paths, &paths.data_paths().unwrap(), true).expect("readonly probe command");
         for command in [&worker, &model, &component, &probe] {
             assert_eq!(command.current_dir, paths.user_data_dir);
-            assert_eq!(command.env_map().get("FRAMEQ_USER_DATA_DIR"), Some(&path_to_env_string(&paths.user_data_dir)));
-            assert_eq!(command.env_map().get("FRAMEQ_MODEL_DIR"), Some(&path_to_env_string(target.join("models"))));
-            assert_eq!(command.env_map().get("FRAMEQ_RESOURCE_DIR"), Some(&path_to_env_string(&paths.resource_dir)));
+            assert_eq!(command.env_map().get("APP_USER_DATA_DIR"), Some(&path_to_env_string(&paths.user_data_dir)));
+            assert_eq!(command.env_map().get("APP_MODEL_DIR"), Some(&path_to_env_string(target.join("models"))));
+            assert_eq!(command.env_map().get("APP_RESOURCE_DIR"), Some(&path_to_env_string(&paths.resource_dir)));
         }
         for command in [&worker, &probe] {
-            assert_eq!(command.env_map().get("FRAMEQ_OUTPUT_DIR"), Some(&path_to_env_string(target.join("outputs"))));
-            assert_eq!(command.env_map().get("FRAMEQ_CACHE_DIR"), Some(&path_to_env_string(target.join("cache"))));
-            assert_eq!(command.env_map().get("FRAMEQ_PYTORCH_RUNTIME_DIR"), Some(&path_to_env_string(&component_dir)));
+            assert_eq!(command.env_map().get("APP_OUTPUT_DIR"), Some(&path_to_env_string(target.join("outputs"))));
+            assert_eq!(command.env_map().get("APP_CACHE_DIR"), Some(&path_to_env_string(target.join("cache"))));
+            assert_eq!(command.env_map().get("APP_PYTORCH_RUNTIME_DIR"), Some(&path_to_env_string(&component_dir)));
         }
-        assert_eq!(probe.args, vec!["-m", "frameq_worker.storage_validation", "--import-component"]);
+        assert_eq!(probe.args, vec!["-m", "worker_core.storage_validation", "--import-component"]);
         assert!(probe.stdin_payload.is_none());
         assert_eq!(probe.env_map().get("PYTHONDONTWRITEBYTECODE"), Some(&"1".to_string()));
-        assert!(!probe.env.iter().any(|(key, _)| key.starts_with("FRAMEQ_LLM_") || key.starts_with("FRAMEQ_ANYSEARCH_")));
+        assert!(!probe.env.iter().any(|(key, _)| key.starts_with("APP_LLM_") || key.starts_with("APP_ANYSEARCH_")));
     }
 
     #[test]
@@ -577,7 +577,7 @@ mod tests {
             spec.args,
             vec![
                 "-m",
-                "frameq_worker",
+                "worker_core",
                 "--download-asr-model",
                 "--asr-model",
                 "iic/SenseVoiceSmall",
@@ -586,23 +586,23 @@ mod tests {
         assert_eq!(spec.stdin_payload, None);
         assert_eq!(spec.current_dir, paths.user_data_dir);
         assert_eq!(
-            env.get("FRAMEQ_MODEL_DIR"),
+            env.get("APP_MODEL_DIR"),
             Some(&path_to_env_string(paths.user_data_dir.join("models")))
         );
         assert_eq!(
-            env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_URL"),
+            env.get("APP_ASR_MODEL_DOWNLOAD_URL"),
             Some(&"https://cdn.example/sensevoice.zip".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256"),
+            env.get("APP_ASR_MODEL_DOWNLOAD_SHA256"),
             Some(&"abc123".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_MODELSCOPE_ENDPOINT"),
+            env.get("APP_MODELSCOPE_ENDPOINT"),
             Some(&"https://modelscope.example".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_SENSEVOICE_REVISION"),
+            env.get("APP_SENSEVOICE_REVISION"),
             Some(&"revision-1".to_string())
         );
         assert_removes_legacy_local_llm_env(&spec);
@@ -625,23 +625,23 @@ mod tests {
             spec.args,
             vec![
                 "-m".to_string(),
-                "frameq_worker".to_string(),
+                "worker_core".to_string(),
                 "--download-runtime-component".to_string()
             ]
         );
         assert_eq!(spec.stdin_payload, None);
         assert_eq!(
-            env.get("FRAMEQ_PYTORCH_RUNTIME_URL"),
+            env.get("APP_PYTORCH_RUNTIME_URL"),
             Some(&"https://github.com/jiabai/FrameQ/releases/download/v0.3.9/frameq-pytorch-runtime-windows-x64.zip".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_PYTORCH_RUNTIME_SHA256"),
+            env.get("APP_PYTORCH_RUNTIME_SHA256"),
             Some(&"deadbeef".to_string())
         );
         assert!(env
-            .get("FRAMEQ_PYTORCH_RUNTIME_DIR")
+            .get("APP_PYTORCH_RUNTIME_DIR")
             .is_some_and(|value| value.ends_with("runtime/pytorch/0.3.9") || value.ends_with("runtime\\pytorch\\0.3.9")));
-        for key in ["PYTHONPATH", "FRAMEQ_RESOURCE_DIR", "FRAMEQ_USER_DATA_DIR", "FRAMEQ_MODEL_DIR"] {
+        for key in ["PYTHONPATH", "APP_RESOURCE_DIR", "APP_USER_DATA_DIR", "APP_MODEL_DIR"] {
             assert!(env.contains_key(key), "missing fixed key {key}");
         }
         assert_removes_legacy_local_llm_env(&spec);
@@ -658,10 +658,10 @@ mod tests {
         let env = spec.env_map();
 
         for key in [
-            "FRAMEQ_ASR_MODEL_DOWNLOAD_URL",
-            "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256",
-            "FRAMEQ_MODELSCOPE_ENDPOINT",
-            "FRAMEQ_SENSEVOICE_REVISION",
+            "APP_ASR_MODEL_DOWNLOAD_URL",
+            "APP_ASR_MODEL_DOWNLOAD_SHA256",
+            "APP_MODELSCOPE_ENDPOINT",
+            "APP_SENSEVOICE_REVISION",
         ] {
             assert!(!env.contains_key(key), "unexpected optional key {key}");
         }
@@ -670,9 +670,9 @@ mod tests {
             "PYTHONUTF8",
             "PYTHONIOENCODING",
             "PATH",
-            "FRAMEQ_MODEL_DIR",
-            "FRAMEQ_RESOURCE_DIR",
-            "FRAMEQ_USER_DATA_DIR",
+            "APP_MODEL_DIR",
+            "APP_RESOURCE_DIR",
+            "APP_USER_DATA_DIR",
         ] {
             assert!(env.contains_key(key), "missing fixed key {key}");
         }
@@ -694,7 +694,7 @@ mod tests {
         let env = spec.env_map();
 
         assert_eq!(spec.program, bundled_python_path(&paths.resource_dir));
-        assert_eq!(spec.args, vec!["-m", "frameq_worker", "--request-stdin"]);
+        assert_eq!(spec.args, vec!["-m", "worker_core", "--request-stdin"]);
         assert_eq!(spec.stdin_payload.as_deref(), Some(request_json));
         assert!(!spec.args.join(" ").contains(request_json));
         assert!(!spec.args.join(" ").contains("xsec_token"));
@@ -706,22 +706,22 @@ mod tests {
             Some(&path_to_env_string(paths.resource_dir.join("worker")))
         );
         assert_eq!(
-            env.get("FRAMEQ_OUTPUT_DIR"),
+            env.get("APP_OUTPUT_DIR"),
             Some(&path_to_env_string(paths.user_data_dir.join("outputs")))
         );
         assert_eq!(
-            env.get("FRAMEQ_CACHE_DIR"),
+            env.get("APP_CACHE_DIR"),
             Some(&path_to_env_string(paths.user_data_dir.join("cache")))
         );
         assert_eq!(
-            env.get("FRAMEQ_MODEL_DIR"),
+            env.get("APP_MODEL_DIR"),
             Some(&path_to_env_string(paths.user_data_dir.join("models")))
         );
         assert_eq!(
-            env.get("FRAMEQ_RESOURCE_DIR"),
+            env.get("APP_RESOURCE_DIR"),
             Some(&path_to_env_string(&paths.resource_dir))
         );
-        assert_eq!(env.get("FRAMEQ_ALLOW_REAL_ASR"), Some(&"1".to_string()));
+        assert_eq!(env.get("APP_ALLOW_REAL_ASR"), Some(&"1".to_string()));
         assert_eq!(env.get("MODELSCOPE_OFFLINE"), Some(&"1".to_string()));
         assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(spec.current_dir, paths.user_data_dir);
@@ -766,7 +766,7 @@ mod tests {
                 spec.args,
                 vec![
                     "-m".to_string(),
-                    "frameq_worker".to_string(),
+                    "worker_core".to_string(),
                     expected_mode.to_string()
                 ]
             );
@@ -820,13 +820,13 @@ mod tests {
 
         assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(spec.stdin_payload.as_deref(), Some(request_json));
-        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), None);
-        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_URL"), None);
-        assert_eq!(env.get("FRAMEQ_LLM_SESSION_TOKEN"), None);
-        assert_eq!(env.get("FRAMEQ_LLM_CHECKOUT_REQUEST_ID"), None);
-        assert_eq!(env.get("FRAMEQ_ANYSEARCH_SOURCE"), None);
-        assert_eq!(env.get("FRAMEQ_ANYSEARCH_CHECKOUT_URL"), None);
-        assert_eq!(env.get("FRAMEQ_ANYSEARCH_SESSION_TOKEN"), None);
+        assert_eq!(env.get("APP_LLM_SOURCE"), None);
+        assert_eq!(env.get("APP_LLM_CHECKOUT_URL"), None);
+        assert_eq!(env.get("APP_LLM_SESSION_TOKEN"), None);
+        assert_eq!(env.get("APP_LLM_CHECKOUT_REQUEST_ID"), None);
+        assert_eq!(env.get("APP_ANYSEARCH_SOURCE"), None);
+        assert_eq!(env.get("APP_ANYSEARCH_CHECKOUT_URL"), None);
+        assert_eq!(env.get("APP_ANYSEARCH_SESSION_TOKEN"), None);
     }
 
     #[test]
@@ -843,15 +843,15 @@ mod tests {
         let spec = build_worker_command_spec(
             &paths, WorkerInvocation::ProcessWebPage(payload.clone()), None,
         ).expect("web save payload accepted");
-        assert_eq!(spec.args, vec!["-m", "frameq_worker", "--save-web-page-stdin",
+        assert_eq!(spec.args, vec!["-m", "worker_core", "--save-web-page-stdin",
             "--web-operation-id", "00000000-0000-0000-0000-000000000001"]);
         assert_eq!(spec.stdin_payload.as_deref(), Some(payload.as_str()));
         assert!(spec.clear_env);
         assert!(spec.env_remove.is_empty());
         assert_eq!(spec.current_dir, paths.user_data_dir);
         let env = spec.env_map();
-        for key in ["FRAMEQ_WEB_ENGINE_DIR", "FRAMEQ_WEB_EXTRACTION_BUNDLE",
-            "FRAMEQ_LLM_SESSION_TOKEN", "FRAMEQ_ANYSEARCH_SESSION_TOKEN"] {
+        for key in ["APP_WEB_ENGINE_DIR", "APP_WEB_EXTRACTION_BUNDLE",
+            "APP_LLM_SESSION_TOKEN", "APP_ANYSEARCH_SESSION_TOKEN"] {
             assert!(!env.contains_key(key));
         }
         assert!(!spec.args.iter().any(|value| value.contains("https://")));
@@ -891,29 +891,29 @@ mod tests {
 
         assert_removes_legacy_local_llm_env(&spec);
         assert_eq!(spec.stdin_payload.as_deref(), Some(request_json));
-        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), Some(&"server".to_string()));
+        assert_eq!(env.get("APP_LLM_SOURCE"), Some(&"server".to_string()));
         assert_eq!(
-            env.get("FRAMEQ_LLM_CHECKOUT_URL"),
+            env.get("APP_LLM_CHECKOUT_URL"),
             Some(&"http://127.0.0.1:8787/api/desktop/llm/checkouts".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_LLM_SESSION_TOKEN"),
+            env.get("APP_LLM_SESSION_TOKEN"),
             Some(&"desktop-token".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_LLM_CHECKOUT_REQUEST_ID"),
+            env.get("APP_LLM_CHECKOUT_REQUEST_ID"),
             Some(&"llm-run-12345678".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_ANYSEARCH_SOURCE"),
+            env.get("APP_ANYSEARCH_SOURCE"),
             Some(&"server".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_ANYSEARCH_CHECKOUT_URL"),
+            env.get("APP_ANYSEARCH_CHECKOUT_URL"),
             Some(&"http://127.0.0.1:8787/api/desktop/anysearch/checkout".to_string())
         );
         assert_eq!(
-            env.get("FRAMEQ_ANYSEARCH_SESSION_TOKEN"),
+            env.get("APP_ANYSEARCH_SESSION_TOKEN"),
             Some(&"desktop-token".to_string())
         );
     }

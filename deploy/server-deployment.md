@@ -51,16 +51,16 @@ working SMTP account. Install under `/opt/frameq/FrameQ` as the unprivileged `fr
 
 Create `/opt/frameq/FrameQ/server/.env` with mode `0600`. Production startup fails closed unless
 the database URL, administrator email, encryption key, and complete SMTP configuration are
-present. `FRAMEQ_ALLOW_CONSOLE_OTP=1` is forbidden in production.
+present. `APP_ALLOW_CONSOLE_OTP=1` is forbidden in production.
 
 ```dotenv
 NODE_ENV=production
-FRAMEQ_SERVER_HOST=127.0.0.1
-FRAMEQ_SERVER_PORT=8787
-FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=false
+APP_SERVER_HOST=127.0.0.1
+APP_SERVER_PORT=8787
+APP_SELF_SERVICE_ACTIVATION_ENABLED=false
 DATABASE_URL=file:/opt/frameq/FrameQ/server/data/frameq.sqlite
-FRAMEQ_ADMIN_EMAIL=admin@example.com
-FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY=<at-least-32-random-characters>
+APP_ADMIN_EMAIL=admin@example.com
+APP_LLM_CONFIG_ENCRYPTION_KEY=<at-least-32-random-characters>
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=frameq@example.com
@@ -69,7 +69,7 @@ SMTP_FROM=FrameQ <frameq@example.com>
 ```
 
 Generate the encryption key with `openssl rand -hex 32`. Back up the exact key separately from the
-database; encrypted LLM credentials cannot be recovered without it. `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED`
+database; encrypted LLM credentials cannot be recovered without it. `APP_SELF_SERVICE_ACTIVATION_ENABLED`
 must be explicitly set to `true`/`false` in production and also accepts `1`/`0`. Development and
 test default to `false`; production omitting the variable is a startup failure. Never put `.env`,
 database, backup, log, certificate private-key, or restore artifacts in Git.
@@ -311,7 +311,7 @@ peer is loopback. Port 8787 must remain firewalled from the Internet.
 Rollback restores a matched code, database, and configuration set:
 
 1. stop the service;
-2. set `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=false`;
+2. set `APP_SELF_SERVICE_ACTIVATION_ENABLED=false`;
 3. preserve the failed deployment for offline diagnosis without logging its contents;
 4. restore the prior reviewed code/tag, complete SQLite backup, and matching `.env`/encryption key;
 5. verify SHA-256, run the isolated restore smoke, and confirm migration status with that code;

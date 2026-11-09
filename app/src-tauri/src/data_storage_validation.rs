@@ -372,7 +372,7 @@ mod tests {
     #[test]
     #[ignore = "需要隔离目录中的真实公开模型/组件副本及预构建 Python"]
     fn real_public_model_library_migrates_and_reopens_with_validated_baseline() {
-        let root = PathBuf::from(std::env::var_os("FRAMEQ_STORAGE_ACCEPTANCE_ROOT").expect("isolated acceptance root")).canonicalize().unwrap();
+        let root = PathBuf::from(std::env::var_os("APP_STORAGE_ACCEPTANCE_ROOT").expect("isolated acceptance root")).canonicalize().unwrap();
         let allowed = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../build/data-storage-acceptance").canonicalize().unwrap();
         assert!(root.starts_with(&allowed) && root != allowed);
         let config = root.join("config");
@@ -398,7 +398,7 @@ mod tests {
     #[test]
     #[ignore = "使用现有隔离真实模型迁移记录，正式恢复实际I/O中断"]
     fn resume_real_public_model_library_after_actual_io_interruption() {
-        let root = PathBuf::from(std::env::var_os("FRAMEQ_STORAGE_ACCEPTANCE_ROOT").expect("isolated acceptance root")).canonicalize().unwrap();
+        let root = PathBuf::from(std::env::var_os("APP_STORAGE_ACCEPTANCE_ROOT").expect("isolated acceptance root")).canonicalize().unwrap();
         let allowed = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../build/data-storage-acceptance").canonicalize().unwrap();
         assert!(root.starts_with(&allowed) && root != allowed);
         let paths = RuntimePaths {

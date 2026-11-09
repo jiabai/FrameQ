@@ -3,10 +3,10 @@
 !include "FileFunc.nsh"
 
 ; 步骤日志固定放在临时目录：任何安装模式下都可写，且不进诊断包
-!define FRAMEQ_INSTALL_LOG "$TEMP\FrameQ-install.log"
-!define FRAMEQ_INSTALL_LOG_MAX_BYTES 65536
+!define APP_INSTALL_LOG "$TEMP\FrameQ-install.log"
+!define APP_INSTALL_LOG_MAX_BYTES 65536
 ; 空间余量：估算体积只含负载，不含安装临时文件与 WebView2 引导程序
-!define FRAMEQ_FREE_SPACE_MARGIN_KB 262144
+!define APP_FREE_SPACE_MARGIN_KB 262144
 
 ; 追加一行步骤日志。任何写入失败都只被忽略，绝不影响安装。
 ; ${LINE} 里的运行时变量必须在 ${GetTime} 之前固化，否则会被时间字段覆盖。
@@ -24,17 +24,17 @@
   StrCpy $R8 "${LINE}"
 
   ClearErrors
-  FileOpen $R9 "${FRAMEQ_INSTALL_LOG}" r
+  FileOpen $R9 "${APP_INSTALL_LOG}" r
   ${IfNot} ${Errors}
     FileSeek $R9 0 END $R6
     FileClose $R9
-    ${If} $R6 > ${FRAMEQ_INSTALL_LOG_MAX_BYTES}
-      Delete "${FRAMEQ_INSTALL_LOG}"
+    ${If} $R6 > ${APP_INSTALL_LOG_MAX_BYTES}
+      Delete "${APP_INSTALL_LOG}"
     ${EndIf}
   ${EndIf}
 
   ClearErrors
-  FileOpen $R9 "${FRAMEQ_INSTALL_LOG}" a
+  FileOpen $R9 "${APP_INSTALL_LOG}" a
   ${IfNot} ${Errors}
     FileSeek $R9 0 END
     ${GetTime} "" "L" $R0 $R1 $R2 $R3 $R4 $R5 $R6
@@ -163,9 +163,9 @@
   ; 空间预检：估算体积 + 余量，换算成 MB
   ; ESTIMATEDSIZE 由 Tauri 模板在本文件 include 之后才定义，所以回退必须在这里判断
   !ifdef ESTIMATEDSIZE
-    IntOp $R2 ${ESTIMATEDSIZE} + ${FRAMEQ_FREE_SPACE_MARGIN_KB}
+    IntOp $R2 ${ESTIMATEDSIZE} + ${APP_FREE_SPACE_MARGIN_KB}
   !else
-    IntOp $R2 900000 + ${FRAMEQ_FREE_SPACE_MARGIN_KB}
+    IntOp $R2 900000 + ${APP_FREE_SPACE_MARGIN_KB}
   !endif
   IntOp $R2 $R2 / 1024
   !insertmacro FrameQFreeSpaceMb "$INSTDIR" $R1
@@ -174,7 +174,7 @@
   ${ElseIf} $R1 < $R2
     !insertmacro FrameQLog "step=freespace result=fail free_mb=$R1 required_mb=$R2"
     ${If} $R3 == "interactive"
-      MessageBox MB_OK|MB_ICONSTOP "安装位置所在磁盘空间不足。$\r$\n$\r$\n需要约 $R2 MB，当前可用 $R1 MB。$\r$\n$\r$\n请清理磁盘空间，或换一个安装位置后重试。$\r$\n$\r$\n$INSTDIR$\r$\n$\r$\n安装日志：${FRAMEQ_INSTALL_LOG}"
+      MessageBox MB_OK|MB_ICONSTOP "安装位置所在磁盘空间不足。$\r$\n$\r$\n需要约 $R2 MB，当前可用 $R1 MB。$\r$\n$\r$\n请清理磁盘空间，或换一个安装位置后重试。$\r$\n$\r$\n$INSTDIR$\r$\n$\r$\n安装日志：${APP_INSTALL_LOG}"
       Abort
     ${EndIf}
   ${Else}
@@ -188,7 +188,7 @@
   ${Else}
     !insertmacro FrameQLog "step=writability result=fail"
     ${If} $R3 == "interactive"
-      MessageBox MB_OK|MB_ICONSTOP "安装程序无法写入下面的目录。$\r$\n$\r$\n$INSTDIR$\r$\n$\r$\n常见原因是选到了受保护的系统目录，或安全软件拦截了写入。请换一个安装位置（建议使用默认位置），或把该目录加入安全软件信任区后重试。$\r$\n$\r$\n安装日志：${FRAMEQ_INSTALL_LOG}"
+      MessageBox MB_OK|MB_ICONSTOP "安装程序无法写入下面的目录。$\r$\n$\r$\n$INSTDIR$\r$\n$\r$\n常见原因是选到了受保护的系统目录，或安全软件拦截了写入。请换一个安装位置（建议使用默认位置），或把该目录加入安全软件信任区后重试。$\r$\n$\r$\n安装日志：${APP_INSTALL_LOG}"
       Abort
     ${EndIf}
   ${EndIf}

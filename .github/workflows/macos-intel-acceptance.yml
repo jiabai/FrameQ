@@ -23,20 +23,20 @@ jobs:
             runner: macos-15-intel
             target: x86_64-apple-darwin
             arch: x86_64
-            python_archive: FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64
-            ffmpeg_archive: FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64
-            ffprobe_archive: FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64
+            python_archive: APP_PYTHON_STANDALONE_URL_MACOS_X64
+            ffmpeg_archive: APP_FFMPEG_ARCHIVE_URL_MACOS_X64
+            ffprobe_archive: APP_FFPROBE_ARCHIVE_URL_MACOS_X64
           - platform: macos-arm64
             runner: macos-15
             target: aarch64-apple-darwin
             arch: arm64
-            python_archive: FRAMEQ_PYTHON_STANDALONE_URL_ARM64
-            ffmpeg_archive: FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64
-            ffprobe_archive: FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64
+            python_archive: APP_PYTHON_STANDALONE_URL_ARM64
+            ffmpeg_archive: APP_FFMPEG_ARCHIVE_URL_ARM64
+            ffprobe_archive: APP_FFPROBE_ARCHIVE_URL_ARM64
     env:
-      FRAMEQ_PYTHON_STANDALONE_URL: ${{ secrets[matrix.python_archive] }}
-      FRAMEQ_FFMPEG_ARCHIVE_URL: ${{ secrets[matrix.ffmpeg_archive] }}
-      FRAMEQ_FFPROBE_ARCHIVE_URL: ${{ secrets[matrix.ffprobe_archive] }}
+      APP_PYTHON_STANDALONE_URL: ${{ secrets[matrix.python_archive] }}
+      APP_FFMPEG_ARCHIVE_URL: ${{ secrets[matrix.ffmpeg_archive] }}
+      APP_FFPROBE_ARCHIVE_URL: ${{ secrets[matrix.ffprobe_archive] }}
     steps:
       - name: Checkout exact acceptance commit
         uses: actions/checkout@v5
@@ -73,15 +73,15 @@ jobs:
       - name: Run native macOS Rust acceptance
         env:
           RUST_BACKTRACE: "1"
-          FRAMEQ_PROCESS_TEST_PYTHON: ${{ steps.process-python.outputs.python-path }}
+          APP_PROCESS_TEST_PYTHON: ${{ steps.process-python.outputs.python-path }}
         run: cargo test --manifest-path app/src-tauri/Cargo.toml --target ${{ matrix.target }}
 
       - name: Confirm required runtime archives are configured
         run: |
           for variable in \
-            FRAMEQ_PYTHON_STANDALONE_URL \
-            FRAMEQ_FFMPEG_ARCHIVE_URL \
-            FRAMEQ_FFPROBE_ARCHIVE_URL
+            APP_PYTHON_STANDALONE_URL \
+            APP_FFMPEG_ARCHIVE_URL \
+            APP_FFPROBE_ARCHIVE_URL
           do
             if [ -z "${!variable}" ]; then
               echo "A required macOS runtime archive is unavailable." >&2
@@ -104,7 +104,7 @@ jobs:
       - name: Extract, save and reopen real static and dynamic pages
         env:
           RUST_BACKTRACE: "1"
-          FRAMEQ_PROCESS_TEST_PYTHON: ${{ steps.process-python.outputs.python-path }}
+          APP_PROCESS_TEST_PYTHON: ${{ steps.process-python.outputs.python-path }}
         run: >-
           cargo test --manifest-path app/src-tauri/Cargo.toml --target ${{ matrix.target }}
           real_system_webview_static_and_dynamic_notes_are_saved_and_reopened -- --ignored --nocapture
@@ -118,7 +118,7 @@ jobs:
           test -f "$BIN"
           file "$BIN"
           test "$(lipo -archs "$BIN")" = "${{ matrix.arch }}"
-          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core; print('bundled runtime import OK')"
           test -f "$RES/python/runtime-manifest.json"
           DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/frameq-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
           if find "$RES" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then

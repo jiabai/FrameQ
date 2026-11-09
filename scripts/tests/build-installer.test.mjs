@@ -141,7 +141,7 @@ test("installer build installs and imports the bundled ONNX runtime before Tauri
   );
   assert.match(
     buildScript,
-    /import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
+    /import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core/,
   );
   assert.ok(
     buildScript.indexOf("Python runtime smoke test") < buildScript.indexOf("Build Tauri installer"),
@@ -155,13 +155,13 @@ test("installer bundles the version-11 source and diagnostic worker modules with
   );
 
   assert.equal(contract.contractVersion, 11);
-  assert.equal(contract.events.workerDiagnosticPrefix, "FRAMEQ_DIAGNOSTIC ");
+  assert.equal(contract.events.workerDiagnosticPrefix, "APP_DIAGNOSTIC ");
   assert.match(
     buildScript,
-    /copyDirectoryContents\(join\(repoRoot, "worker", "frameq_worker"\), join\(destination, "frameq_worker"\)\)/,
+    /copyDirectoryContents\(join\(repoRoot, "worker", "worker_core"\), join\(destination, "worker_core"\)\)/,
   );
   assert.equal(
-    existsSync(join(repoRoot, "worker", "frameq_worker", "dissection_agent.py")),
+    existsSync(join(repoRoot, "worker", "worker_core", "dissection_agent.py")),
     true,
   );
   for (const module of [
@@ -170,18 +170,18 @@ test("installer bundles the version-11 source and diagnostic worker modules with
     "note_title.py", "note_title_metadata.py",
     "source_text.py", "web_page_contract.py", "web_page_storage.py",
   ]) {
-    assert.equal(existsSync(join(repoRoot, "worker", "frameq_worker", module)), true);
+    assert.equal(existsSync(join(repoRoot, "worker", "worker_core", module)), true);
   }
-  assert.equal(existsSync(join(repoRoot, "worker", "frameq_worker", "insightflow")), false);
+  assert.equal(existsSync(join(repoRoot, "worker", "worker_core", "insightflow")), false);
   assert.equal(
-    existsSync(join(repoRoot, "worker", "frameq_worker", "pipeline_runtime", "dissection.py")),
+    existsSync(join(repoRoot, "worker", "worker_core", "pipeline_runtime", "dissection.py")),
     true,
   );
   assert.equal(
-    existsSync(join(repoRoot, "worker", "frameq_worker", "diagnostic_events.py")),
+    existsSync(join(repoRoot, "worker", "worker_core", "diagnostic_events.py")),
     true,
   );
-  assert.doesNotMatch(buildScript, /FRAMEQ_LLM_API_KEY\s*=|dissection\.json["']\s*,\s*["']/);
+  assert.doesNotMatch(buildScript, /APP_LLM_API_KEY\s*=|dissection\.json["']\s*,\s*["']/);
 });
 
 test("requireBundledDeno fails clearly when skip-download resources lack Deno", async () => {

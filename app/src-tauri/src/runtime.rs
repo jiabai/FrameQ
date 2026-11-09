@@ -2,15 +2,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
-pub(crate) const OUTPUT_DIR_ENV: &str = "FRAMEQ_OUTPUT_DIR";
-pub(crate) const CACHE_DIR_ENV: &str = "FRAMEQ_CACHE_DIR";
-pub(crate) const MODEL_DIR_ENV: &str = "FRAMEQ_MODEL_DIR";
-pub(crate) const RESOURCE_DIR_ENV: &str = "FRAMEQ_RESOURCE_DIR";
-pub(crate) const USER_DATA_DIR_ENV: &str = "FRAMEQ_USER_DATA_DIR";
-pub(crate) const PYTORCH_RUNTIME_DIR_ENV: &str = "FRAMEQ_PYTORCH_RUNTIME_DIR";
-pub(crate) const PYTORCH_RUNTIME_URL_ENV: &str = "FRAMEQ_PYTORCH_RUNTIME_URL";
-pub(crate) const PYTORCH_RUNTIME_SHA256_ENV: &str = "FRAMEQ_PYTORCH_RUNTIME_SHA256";
-pub(crate) const ALLOW_REAL_ASR_ENV: &str = "FRAMEQ_ALLOW_REAL_ASR";
+pub(crate) const OUTPUT_DIR_ENV: &str = "APP_OUTPUT_DIR";
+pub(crate) const CACHE_DIR_ENV: &str = "APP_CACHE_DIR";
+pub(crate) const MODEL_DIR_ENV: &str = "APP_MODEL_DIR";
+pub(crate) const RESOURCE_DIR_ENV: &str = "APP_RESOURCE_DIR";
+pub(crate) const USER_DATA_DIR_ENV: &str = "APP_USER_DATA_DIR";
+pub(crate) const PYTORCH_RUNTIME_DIR_ENV: &str = "APP_PYTORCH_RUNTIME_DIR";
+pub(crate) const PYTORCH_RUNTIME_URL_ENV: &str = "APP_PYTORCH_RUNTIME_URL";
+pub(crate) const PYTORCH_RUNTIME_SHA256_ENV: &str = "APP_PYTORCH_RUNTIME_SHA256";
+pub(crate) const ALLOW_REAL_ASR_ENV: &str = "APP_ALLOW_REAL_ASR";
 pub(crate) const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
 pub(crate) const AUDIO_REVIEW_CACHE_DIR_NAME: &str = ".frameq-audio-review";
 #[cfg(test)]

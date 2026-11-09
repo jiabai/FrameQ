@@ -5,7 +5,7 @@ import wave
 from pathlib import Path
 
 import pytest
-from frameq_worker.asr import (
+from worker_core.asr import (
     ASRDependencyError,
     ASRRuntimeError,
     ASRUnsupportedModelError,
@@ -20,8 +20,8 @@ from frameq_worker.asr import (
     transcribe_and_write,
     write_transcript_files,
 )
-from frameq_worker.models import TranscriptMetadata
-from frameq_worker.source_identity import SourceIdentity, SourceIdentityError, identify_source
+from worker_core.models import TranscriptMetadata
+from worker_core.source_identity import SourceIdentity, SourceIdentityError, identify_source
 
 
 class FakeTranscriber:
@@ -234,7 +234,7 @@ def test_transcript_replace_failure_preserves_complete_previous_revision(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    atomic_files = importlib.import_module("worker_core.atomic_files")
     output_dir = tmp_path / "task" / "transcript"
     output_dir.mkdir(parents=True)
     txt_path = output_dir / "transcript.txt"
@@ -283,7 +283,7 @@ def test_transcript_failed_first_commit_leaves_no_authoritative_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    atomic_files = importlib.import_module("worker_core.atomic_files")
     output_dir = tmp_path / "task" / "transcript"
     monkeypatch.setattr(
         atomic_files.os,
@@ -313,7 +313,7 @@ def test_resolve_model_cache_dir_defaults_to_project_models(tmp_path: Path) -> N
 def test_resolve_model_cache_dir_uses_explicit_env_path(tmp_path: Path) -> None:
     cache_dir = resolve_model_cache_dir(
         project_root=tmp_path,
-        environ={"FRAMEQ_MODEL_DIR": str(tmp_path / "custom-model-cache")},
+        environ={"APP_MODEL_DIR": str(tmp_path / "custom-model-cache")},
     )
 
     assert cache_dir == tmp_path / "custom-model-cache"

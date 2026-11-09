@@ -5,20 +5,20 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from frameq_worker import draft_agent
-from frameq_worker.ai_prompts import build_draft_from_inspiration_prompt
-from frameq_worker.draft_agent import (
+from worker_core import draft_agent
+from worker_core.ai_prompts import build_draft_from_inspiration_prompt
+from worker_core.draft_agent import (
     _RETRIEVAL_FALLBACK_PHRASE,
     _build_system_prompt,
     _build_user_prompt,
 )
-from frameq_worker.models import (
+from worker_core.models import (
     GenerationPreferences,
     Insight,
     PreferenceLabelSnapshot,
     PreferenceSnapshot,
 )
-from frameq_worker.task_store import TaskPaths
+from worker_core.task_store import TaskPaths
 
 
 def test_task_paths_draft_path_points_at_ai_draft_md(tmp_path: Path) -> None:

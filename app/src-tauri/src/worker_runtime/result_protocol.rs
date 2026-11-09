@@ -917,7 +917,7 @@ mod tests {
     fn webpage_python_cli_retries_match_rust_authoritative_source() {
         let project = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..").canonicalize().unwrap();
-        let python = std::env::var_os("FRAMEQ_STORAGE_TEST_PYTHON")
+        let python = std::env::var_os("APP_STORAGE_TEST_PYTHON")
             .map(std::path::PathBuf::from).unwrap_or_else(|| project.join(
                 if cfg!(windows) { ".venv/Scripts/python.exe" } else { ".venv/bin/python" }
             ));
@@ -961,7 +961,7 @@ mod tests {
             &root.join("outputs"), serde_json::from_value(json!({"task_id": task_id})).unwrap(),
         ).unwrap();
         assert_eq!(detail.error.as_ref().unwrap().stage, "draft_generating");
-        if let Some(destination) = std::env::var_os("FRAMEQ_WEB_HISTORY_DETAIL") {
+        if let Some(destination) = std::env::var_os("APP_WEB_HISTORY_DETAIL") {
             let destination = std::path::PathBuf::from(destination);
             assert!(destination.parent().unwrap().canonicalize().unwrap().starts_with(project.join("build")));
             std::fs::write(destination, serde_json::to_vec(&detail).unwrap()).unwrap();

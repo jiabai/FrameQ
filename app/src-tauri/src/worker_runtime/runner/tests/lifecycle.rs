@@ -72,7 +72,7 @@ fn spawn_failure_is_typed_and_never_activates_the_lane() {
 
 #[test]
 fn missing_required_pipe_terminates_reaps_and_clears_the_lane() {
-    const PROBE_ENV: &str = "FRAMEQ_RUNNER_MISSING_PIPE_PROBE";
+    const PROBE_ENV: &str = "APP_RUNNER_MISSING_PIPE_PROBE";
     const TEST_NAME: &str = "worker_runtime::runner::tests::lifecycle::missing_required_pipe_terminates_reaps_and_clears_the_lane";
     if std::env::var_os(PROBE_ENV).is_some() {
         std::thread::sleep(Duration::from_secs(30));
@@ -98,7 +98,7 @@ fn missing_required_pipe_terminates_reaps_and_clears_the_lane() {
 
 #[test]
 fn wait_failure_terminates_reaps_and_clears_the_lane() {
-    const PROBE_ENV: &str = "FRAMEQ_RUNNER_WAIT_FAILURE_PROBE";
+    const PROBE_ENV: &str = "APP_RUNNER_WAIT_FAILURE_PROBE";
     const TEST_NAME: &str =
         "worker_runtime::runner::tests::lifecycle::wait_failure_terminates_reaps_and_clears_the_lane";
     if std::env::var_os(PROBE_ENV).is_some() {
@@ -159,7 +159,7 @@ fn sensitive_request_is_delivered_only_through_stdin() {
 
 #[test]
 fn stdin_delivery_failure_is_typed_sanitized_and_clears_the_lane() {
-    const PROBE_ENV: &str = "FRAMEQ_RUNNER_STDIN_FAILURE_PROBE";
+    const PROBE_ENV: &str = "APP_RUNNER_STDIN_FAILURE_PROBE";
     const TEST_NAME: &str = "worker_runtime::runner::tests::lifecycle::stdin_delivery_failure_is_typed_sanitized_and_clears_the_lane";
     const SECRET: &str = "runner-review-secret";
     if std::env::var_os(PROBE_ENV).is_some() {
@@ -186,7 +186,7 @@ fn stdin_delivery_failure_is_typed_sanitized_and_clears_the_lane() {
 
 #[test]
 fn blocked_stdin_delivery_remains_cancellable() {
-    const PROBE_ENV: &str = "FRAMEQ_RUNNER_BLOCKED_STDIN_PROBE";
+    const PROBE_ENV: &str = "APP_RUNNER_BLOCKED_STDIN_PROBE";
     const TEST_NAME: &str =
         "worker_runtime::runner::tests::lifecycle::blocked_stdin_delivery_remains_cancellable";
     if std::env::var_os(PROBE_ENV).is_some() {
@@ -306,7 +306,7 @@ fn stdout_reader_panic_finishes_lane_and_returns_fixed_protocol_error() {
 fn web_orphan_request(paths: &crate::RuntimePaths, mode: &str) -> WorkerRunRequest {
     let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let resources = repository.join("app/src-tauri/resources");
-    let python = std::env::var_os("FRAMEQ_PROCESS_TEST_PYTHON").map(std::path::PathBuf::from)
+    let python = std::env::var_os("APP_PROCESS_TEST_PYTHON").map(std::path::PathBuf::from)
         .unwrap_or_else(|| crate::bundled_python_path(&resources));
     assert!(python.is_absolute() && python.is_file(), "A real absolute Python executable is required");
     let mut env = Vec::new();

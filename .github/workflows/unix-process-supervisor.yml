@@ -137,5 +137,5 @@ jobs:
       - name: Run Tauri Rust tests
         env:
           RUST_BACKTRACE: "1"
-          FRAMEQ_PROCESS_TEST_PYTHON: ${{ steps.process-python.outputs.python-path }}
+          APP_PROCESS_TEST_PYTHON: ${{ steps.process-python.outputs.python-path }}
         run: cargo test --manifest-path app/src-tauri/Cargo.toml

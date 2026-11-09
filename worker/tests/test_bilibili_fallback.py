@@ -2,10 +2,10 @@ import gzip
 import json
 from pathlib import Path
 
-import frameq_worker.bilibili_fallback as bilibili_fallback
 import pytest
-from frameq_worker.bilibili import transport as bilibili_transport
-from frameq_worker.bilibili_fallback import (
+import worker_core.bilibili_fallback as bilibili_fallback
+from worker_core.bilibili import transport as bilibili_transport
+from worker_core.bilibili_fallback import (
     BilibiliFallbackError,
     HttpResponse,
     build_playurl_url,
@@ -14,7 +14,7 @@ from frameq_worker.bilibili_fallback import (
     parse_bilibili_input,
     select_dash_stream_pair,
 )
-from frameq_worker.media import CommandResult
+from worker_core.media import CommandResult
 
 BVID = "BV1Aa411c7mD"
 AID = 170001
@@ -178,7 +178,7 @@ def test_bilibili_root_compatibility_surface_is_stable() -> None:
 
 
 def test_bilibili_root_reexports_private_type_identities() -> None:
-    from frameq_worker.bilibili import types as bilibili_types
+    from worker_core.bilibili import types as bilibili_types
 
     assert bilibili_fallback.BilibiliFallbackError is bilibili_types.BilibiliFallbackError
     assert bilibili_fallback.HttpResponse is bilibili_types.HttpResponse

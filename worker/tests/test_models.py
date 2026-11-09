@@ -1,4 +1,4 @@
-from frameq_worker.models import (
+from worker_core.models import (
     Insight,
     JobStage,
     ProcessRequest,

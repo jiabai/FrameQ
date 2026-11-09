@@ -5,7 +5,7 @@ describe("OTP email sender", () => {
   test("does not implicitly fall back to printing OTPs when SMTP is absent", () => {
     expect(() =>
       createOtpSender({ environment: "development", smtp: null, allowConsoleOtp: false }),
-    ).toThrow("FRAMEQ_ALLOW_CONSOLE_OTP");
+    ).toThrow("APP_ALLOW_CONSOLE_OTP");
   });
 
   test("allows console OTP only through explicit non-production opt-in", async () => {

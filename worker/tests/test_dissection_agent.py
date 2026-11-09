@@ -7,14 +7,14 @@ import pytest
 from agent_runtime.core import SessionContext
 from agent_runtime.core.run_context import ContextWrapper
 from agent_runtime.provider.entities import LLMResponse
-from frameq_worker.dissection_agent import (
+from worker_core.dissection_agent import (
     DissectionDelivery,
     DissectionDeliveryHook,
     build_dissection_tool,
     generate_dissection_via_agent_runtime,
 )
-from frameq_worker.dissection_report import DissectionGenerationError
-from frameq_worker.transcript_chunks import MarkdownSplitter
+from worker_core.dissection_report import DissectionGenerationError
+from worker_core.transcript_chunks import MarkdownSplitter
 
 
 def semantic_report() -> dict[str, object]:

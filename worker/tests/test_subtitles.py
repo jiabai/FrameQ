@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from frameq_worker.subtitles import find_subtitle_transcript
+from worker_core.subtitles import find_subtitle_transcript
 
 
 def test_find_subtitle_transcript_prefers_configured_languages_and_parses_srt(

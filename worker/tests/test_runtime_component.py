@@ -6,8 +6,8 @@ import json
 import types
 from pathlib import Path
 
-from frameq_worker.pipeline_runtime.transcript import evaluate_pytorch_component_gate
-from frameq_worker.runtime_component import (
+from worker_core.pipeline_runtime.transcript import evaluate_pytorch_component_gate
+from worker_core.runtime_component import (
     BUNDLED_MANIFEST_ENV,
     COMPONENT_DIR_ENV,
     COMPONENT_MANIFEST_NAME,
@@ -54,16 +54,16 @@ def test_locate_bundled_manifest_prefers_project_root_and_env(tmp_path: Path) ->
 
 def test_locate_bundled_manifest_falls_back_to_resource_dir(tmp_path: Path) -> None:
     resource_manifest = _write_manifest(tmp_path / "resources" / "python", "fp-1")
-    environ = {"FRAMEQ_RESOURCE_DIR": str(tmp_path / "resources")}
+    environ = {"APP_RESOURCE_DIR": str(tmp_path / "resources")}
     assert locate_bundled_manifest(tmp_path / "user-data", environ) == resource_manifest
     # 资源目录里没有时回退项目根（dev 形态）
     assert (
-        locate_bundled_manifest(tmp_path / "repo", {"FRAMEQ_RESOURCE_DIR": str(tmp_path / "none")})
+        locate_bundled_manifest(tmp_path / "repo", {"APP_RESOURCE_DIR": str(tmp_path / "none")})
         is None
     )
     project_root_manifest = _write_manifest(tmp_path / "repo", "fp-1")
     assert (
-        locate_bundled_manifest(tmp_path / "repo", {"FRAMEQ_RESOURCE_DIR": str(tmp_path / "none")})
+        locate_bundled_manifest(tmp_path / "repo", {"APP_RESOURCE_DIR": str(tmp_path / "none")})
         == project_root_manifest
     )
 

@@ -640,7 +640,7 @@ mod tests {
         fs::create_dir_all(&paths.user_data_dir).expect("app data");
         fs::write(
             paths.user_data_dir.join(".env"),
-            "FRAMEQ_ASR_MODEL=private/vendor-model\n",
+            "APP_ASR_MODEL=private/vendor-model\n",
         )
         .expect("settings");
 
@@ -653,7 +653,7 @@ mod tests {
 
         fs::write(
             paths.user_data_dir.join(".env"),
-            format!("FRAMEQ_ASR_MODEL={SENSEVOICE_SMALL_ONNX_MODEL}\n"),
+            format!("APP_ASR_MODEL={SENSEVOICE_SMALL_ONNX_MODEL}\n"),
         )
         .expect("onnx settings");
         let onnx = diagnostic_model_snapshot_for(&paths, SENSEVOICE_SMALL_ONNX_MODEL);

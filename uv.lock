@@ -852,7 +852,7 @@ wheels = [
 ]
 
 [[package]]
-name = "frameq-worker"
+name = "worker-core"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

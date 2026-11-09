@@ -34,7 +34,7 @@ test("runs native process fixtures on macOS and Windows with an explicit real Py
   assert.match(workflow, /uses:\s*dtolnay\/rust-toolchain@stable/);
   assert.match(workflow, /uses:\s*actions\/setup-python@v7/);
   assert.match(workflow, /python-version:\s*"3\.12"/);
-  assert.match(workflow, /FRAMEQ_PROCESS_TEST_PYTHON:\s*\$\{\{ steps\.process-python\.outputs\.python-path \}\}/);
+  assert.match(workflow, /APP_PROCESS_TEST_PYTHON:\s*\$\{\{ steps\.process-python\.outputs\.python-path \}\}/);
   assert.match(
     workflow,
     /run:\s*cargo test --manifest-path app\/src-tauri\/Cargo\.toml\s*(?:\r?\n|$)/,

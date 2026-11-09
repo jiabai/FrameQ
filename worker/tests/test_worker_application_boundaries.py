@@ -4,21 +4,21 @@ import ast
 import inspect
 from pathlib import Path
 
-import frameq_worker.worker_application.insight_retry as insight_retry
-import frameq_worker.worker_application.local_media as local_media
-import frameq_worker.worker_application.model_download as model_download
-import frameq_worker.worker_application.runtime_component_download as runtime_component_download
-import frameq_worker.worker_application.source_identity as source_identity
-import frameq_worker.worker_application.url_processing as url_processing
-import frameq_worker.worker_service as worker_service
-from frameq_worker.task_store import TaskPaths
+import worker_core.worker_application.insight_retry as insight_retry
+import worker_core.worker_application.local_media as local_media
+import worker_core.worker_application.model_download as model_download
+import worker_core.worker_application.runtime_component_download as runtime_component_download
+import worker_core.worker_application.source_identity as source_identity
+import worker_core.worker_application.url_processing as url_processing
+import worker_core.worker_service as worker_service
+from worker_core.task_store import TaskPaths
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
-FRAMEQ_WORKER_ROOT = WORKER_ROOT / "frameq_worker"
-PRIVATE_ROOT = FRAMEQ_WORKER_ROOT / "worker_application"
-CLI_PATH = FRAMEQ_WORKER_ROOT / "cli.py"
-FACADE_PATH = FRAMEQ_WORKER_ROOT / "worker_service.py"
-MAIN_PATH = FRAMEQ_WORKER_ROOT / "__main__.py"
+APP_WORKER_ROOT = WORKER_ROOT / "worker_core"
+PRIVATE_ROOT = APP_WORKER_ROOT / "worker_application"
+CLI_PATH = APP_WORKER_ROOT / "cli.py"
+FACADE_PATH = APP_WORKER_ROOT / "worker_service.py"
+MAIN_PATH = APP_WORKER_ROOT / "__main__.py"
 EXPECTED_PRIVATE_FILES = {
     "__init__.py",
     "defaults.py",
@@ -39,12 +39,12 @@ EXPECTED_FACADE_SYMBOLS = [
     "run_runtime_component_download_once",
 ]
 HANDLER_MODULES = {
-    "frameq_worker.worker_application.insight_retry",
-    "frameq_worker.worker_application.local_media",
-    "frameq_worker.worker_application.model_download",
-    "frameq_worker.worker_application.runtime_component_download",
-    "frameq_worker.worker_application.source_identity",
-    "frameq_worker.worker_application.url_processing",
+    "worker_core.worker_application.insight_retry",
+    "worker_core.worker_application.local_media",
+    "worker_core.worker_application.model_download",
+    "worker_core.worker_application.runtime_component_download",
+    "worker_core.worker_application.source_identity",
+    "worker_core.worker_application.url_processing",
 }
 
 
@@ -213,12 +213,12 @@ def test_cli_is_only_the_process_adapter() -> None:
         "argparse",
         "collections.abc",
         "contextlib",
-        "frameq_worker",
-        "frameq_worker.desktop_contract",
-        "frameq_worker.diagnostic_events",
-        "frameq_worker.models",
-        "frameq_worker.progress_events",
-        "frameq_worker.web_page_contract",
+        "worker_core",
+        "worker_core.desktop_contract",
+        "worker_core.diagnostic_events",
+        "worker_core.models",
+        "worker_core.progress_events",
+        "worker_core.web_page_contract",
         "io",
         "json",
         "pathlib",
@@ -229,7 +229,7 @@ def test_cli_is_only_the_process_adapter() -> None:
 
 def test_only_facade_imports_application_handlers_in_production() -> None:
     violations: list[str] = []
-    for path in FRAMEQ_WORKER_ROOT.rglob("*.py"):
+    for path in APP_WORKER_ROOT.rglob("*.py"):
         if PRIVATE_ROOT in path.parents or path == FACADE_PATH:
             continue
         imported_handlers = _imported_modules(path) & HANDLER_MODULES
@@ -247,8 +247,8 @@ def test_handlers_have_no_sibling_or_application_back_edges() -> None:
             continue
         for module in _imported_modules(path):
             if module in HANDLER_MODULES or module in {
-                "frameq_worker.cli",
-                "frameq_worker.worker_service",
+                "worker_core.cli",
+                "worker_core.worker_service",
             }:
                 violations.append(f"{path.name}: {module}")
 
@@ -257,8 +257,8 @@ def test_handlers_have_no_sibling_or_application_back_edges() -> None:
 
 def test_production_dependency_factories_have_one_defaults_owner() -> None:
     expected_factory_imports = {
-        "frameq_worker.asr": "build_asr_transcriber",
-        "frameq_worker.platform_source_resolvers": ("build_default_source_resolver"),
+        "worker_core.asr": "build_asr_transcriber",
+        "worker_core.platform_source_resolvers": ("build_default_source_resolver"),
     }
     owners: dict[str, list[str]] = {}
     application_paths = [
@@ -269,7 +269,7 @@ def test_production_dependency_factories_have_one_defaults_owner() -> None:
     for path in application_paths:
         for module, name in expected_factory_imports.items():
             if name in _names_imported_from(path, module):
-                owners.setdefault(name, []).append(path.relative_to(FRAMEQ_WORKER_ROOT).as_posix())
+                owners.setdefault(name, []).append(path.relative_to(APP_WORKER_ROOT).as_posix())
 
     assert owners == {
         name: ["worker_application/defaults.py"] for name in expected_factory_imports.values()
@@ -278,15 +278,15 @@ def test_production_dependency_factories_have_one_defaults_owner() -> None:
 
 def test_main_module_imports_only_cli_main_and_stdlib_only_guard() -> None:
     assert _imported_modules(MAIN_PATH) == {
-        "frameq_worker.cli",
-        "frameq_worker.import_stage_diagnostics",
+        "worker_core.cli",
+        "worker_core.import_stage_diagnostics",
     }
-    assert _names_imported_from(MAIN_PATH, "frameq_worker.cli") == {"main"}
-    assert _names_imported_from(MAIN_PATH, "frameq_worker.import_stage_diagnostics") == {
+    assert _names_imported_from(MAIN_PATH, "worker_core.cli") == {"main"}
+    assert _names_imported_from(MAIN_PATH, "worker_core.import_stage_diagnostics") == {
         "emit_import_stage_diagnostic"
     }
 
 
 def test_import_stage_diagnostics_module_imports_stdlib_only() -> None:
-    path = FRAMEQ_WORKER_ROOT / "import_stage_diagnostics.py"
+    path = APP_WORKER_ROOT / "import_stage_diagnostics.py"
     assert _imported_modules(path) <= {"__future__", "json", "sys"}

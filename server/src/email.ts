@@ -75,7 +75,7 @@ export function createOtpSender(
     throw new Error("SMTP configuration is required in production.");
   }
   if (!config.allowConsoleOtp) {
-    throw new Error("FRAMEQ_ALLOW_CONSOLE_OTP=1 is required when SMTP is absent.");
+    throw new Error("APP_ALLOW_CONSOLE_OTP=1 is required when SMTP is absent.");
   }
 
   developmentOutput.warn(

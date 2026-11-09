@@ -8,7 +8,7 @@ impl Fixture {
         let config=base.join("config");let resources=base.join("resources");let target=base.join("target");
         for path in [&config,&resources,&target]{fs::create_dir_all(path).unwrap();}
         let config=config.canonicalize().unwrap();
-        fs::write(config.join(".env"),format!("FRAMEQ_OUTPUT_DIR={}\n",config.join("outputs").display())).unwrap();
+        fs::write(config.join(".env"),format!("APP_OUTPUT_DIR={}\n",config.join("outputs").display())).unwrap();
         Self{config,resources:resources.canonicalize().unwrap(),target:target.canonicalize().unwrap()}
     }
     fn write(&self,name:&str,bytes:&[u8]) {let file=self.config.join("cache").join(name);fs::create_dir_all(file.parent().unwrap()).unwrap();fs::write(file,bytes).unwrap();}
@@ -117,9 +117,9 @@ fn cleanup_preflight_retains_files_when_windows_read_access_is_denied() {
 }
 
 #[test]
-#[ignore="只读核对当前真实资料库与工作区独立副本；需要显式FRAMEQ_STORAGE_READONLY_CONFIG及足够可用空间"]
+#[ignore="只读核对当前真实资料库与工作区独立副本；需要显式APP_STORAGE_READONLY_CONFIG及足够可用空间"]
 fn cleanup_preflight_checks_real_library_snapshot_and_cancels_without_user_mutation() {
-    let config=PathBuf::from(std::env::var_os("FRAMEQ_STORAGE_READONLY_CONFIG").expect("explicit readonly library config"));
+    let config=PathBuf::from(std::env::var_os("APP_STORAGE_READONLY_CONFIG").expect("explicit readonly library config"));
     let before=fs::read(config.join("data-storage.json")).unwrap();
     let control=control::load(&config).unwrap().unwrap();
     assert!(control.pending.is_none(),"真实资料必须处于静止状态");

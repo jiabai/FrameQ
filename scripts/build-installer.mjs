@@ -29,11 +29,11 @@ const tarCommand =
 export function parseArgs(argv) {
   const options = {
     target: "windows-x64",
-    pythonStandaloneUrl: process.env.FRAMEQ_PYTHON_STANDALONE_URL ?? "",
-    ffmpegArchiveUrl: process.env.FRAMEQ_FFMPEG_ARCHIVE_URL ?? "",
-    ffprobeArchiveUrl: process.env.FRAMEQ_FFPROBE_ARCHIVE_URL ?? "",
-    denoArchiveUrl: process.env.FRAMEQ_DENO_ARCHIVE_URL ?? "",
-    denoVersion: process.env.FRAMEQ_DENO_VERSION ?? defaultDenoVersion,
+    pythonStandaloneUrl: process.env.APP_PYTHON_STANDALONE_URL ?? "",
+    ffmpegArchiveUrl: process.env.APP_FFMPEG_ARCHIVE_URL ?? "",
+    ffprobeArchiveUrl: process.env.APP_FFPROBE_ARCHIVE_URL ?? "",
+    denoArchiveUrl: process.env.APP_DENO_ARCHIVE_URL ?? "",
+    denoVersion: process.env.APP_DENO_VERSION ?? defaultDenoVersion,
     skipDownloads: false,
     skipTauriBuild: false,
   };
@@ -110,7 +110,7 @@ async function resetDirectory(path) {
 
 function requireFileOrUrl(value, name) {
   if (!value || value.trim().length === 0) {
-    throw new Error(`${name} is required. Pass the parameter or set the matching FRAMEQ_* environment variable.`);
+    throw new Error(`${name} is required. Pass the parameter or set the matching APP_* environment variable.`);
   }
 }
 
@@ -267,7 +267,7 @@ async function removePythonCaches(root) {
 async function copyWorkerRuntime(destination) {
   await resetDirectory(destination);
   await ensureGitKeep(destination);
-  await copyDirectoryContents(join(repoRoot, "worker", "frameq_worker"), join(destination, "frameq_worker"));
+  await copyDirectoryContents(join(repoRoot, "worker", "worker_core"), join(destination, "worker_core"));
   await removePythonCaches(destination);
 }
 
@@ -675,7 +675,7 @@ export async function buildPytorchRuntimeComponent({
   await removePythonCaches(componentStaging);
   run(
     pythonExe,
-    ["-c", "import funasr, torch, torchaudio; import frameq_worker"],
+    ["-c", "import funasr, torch, torchaudio; import worker_core"],
     "PyTorch component import smoke test",
     {
       env: {
@@ -787,7 +787,7 @@ async function main(argv = process.argv.slice(2)) {
     await bundleWindowsVcRuntimeDlls(pythonRoot);
   }
   // PyTorch 族已外置：包内只保 ONNX 路径，funasr 与 torch 由按需组件提供。
-  run(pythonExe, ["-c", "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker"], "Python runtime smoke test", {
+  run(pythonExe, ["-c", "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core"], "Python runtime smoke test", {
     env: { PYTHONDONTWRITEBYTECODE: "1", PYTHONPATH: workerRoot },
   });
   const lockFingerprint = computeLockFingerprint();

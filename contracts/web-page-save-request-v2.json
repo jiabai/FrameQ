@@ -40,8 +40,8 @@
     "titleCodePoints": 512
   },
   "environment": {
-    "outputRoot": "FRAMEQ_OUTPUT_DIR",
-    "cacheRoot": "FRAMEQ_CACHE_DIR"
+    "outputRoot": "APP_OUTPUT_DIR",
+    "cacheRoot": "APP_CACHE_DIR"
   },
   "stages": ["web_saving"],
   "artifacts": { "article_txt": "article/article.txt", "article_md": "article/article.md" },

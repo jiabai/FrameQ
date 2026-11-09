@@ -4,7 +4,7 @@ import re
 from pathlib import Path, PurePosixPath
 
 import pytest
-from frameq_worker import task_transaction as transaction
+from worker_core import task_transaction as transaction
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "task-artifact-transaction-v1.json"
 

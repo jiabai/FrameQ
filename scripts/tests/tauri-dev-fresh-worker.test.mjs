@@ -32,14 +32,14 @@ async function relativeWorkerFiles(root, current = root) {
 
 test("refreshes the Tauri worker resource mirror from source worker", async () => {
   const root = await tempRoot();
-  const sourceWorker = join(root, "worker", "frameq_worker");
+  const sourceWorker = join(root, "worker", "worker_core");
   const staleMirror = join(
     root,
     "app",
     "src-tauri",
     "resources",
     "worker",
-    "frameq_worker",
+    "worker_core",
   );
 
   try {
@@ -81,7 +81,7 @@ test("refreshes the Tauri worker resource mirror from source worker", async () =
 
 test("stages Windows VC++ runtime DLLs for the dev worker resource", async () => {
   const root = await tempRoot();
-  const sourceWorker = join(root, "worker", "frameq_worker");
+  const sourceWorker = join(root, "worker", "worker_core");
   const pythonRoot = join(root, "app", "src-tauri", "resources", "python");
   const systemRoot = join(root, "Windows");
   const system32 = join(systemRoot, "System32");

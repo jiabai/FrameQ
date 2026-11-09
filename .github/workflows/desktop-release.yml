@@ -42,8 +42,8 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
       RELEASE_DRAFT: ${{ github.event_name == 'push' || inputs.release_draft }}
-      FRAMEQ_PYTHON_STANDALONE_URL: ${{ secrets.FRAMEQ_PYTHON_STANDALONE_URL }}
-      FRAMEQ_FFMPEG_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFMPEG_ARCHIVE_URL }}
+      APP_PYTHON_STANDALONE_URL: ${{ secrets.APP_PYTHON_STANDALONE_URL }}
+      APP_FFMPEG_ARCHIVE_URL: ${{ secrets.APP_FFMPEG_ARCHIVE_URL }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
@@ -119,9 +119,9 @@ jobs:
     runs-on: macos-15-intel
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      FRAMEQ_PYTHON_STANDALONE_URL: ${{ secrets.FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 }}
-      FRAMEQ_FFMPEG_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64 }}
-      FRAMEQ_FFPROBE_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64 }}
+      APP_PYTHON_STANDALONE_URL: ${{ secrets.APP_PYTHON_STANDALONE_URL_MACOS_X64 }}
+      APP_FFMPEG_ARCHIVE_URL: ${{ secrets.APP_FFMPEG_ARCHIVE_URL_MACOS_X64 }}
+      APP_FFPROBE_ARCHIVE_URL: ${{ secrets.APP_FFPROBE_ARCHIVE_URL_MACOS_X64 }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
@@ -159,7 +159,7 @@ jobs:
         run: |
           APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app"
           RES="$APP/Contents/Resources/resources"
-          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core; print('bundled runtime import OK')"
           test -f "$RES/python/runtime-manifest.json" && echo "bundled runtime manifest OK"
           DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/frameq-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
           if find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
@@ -189,9 +189,9 @@ jobs:
     runs-on: macos-15
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      FRAMEQ_PYTHON_STANDALONE_URL: ${{ secrets.FRAMEQ_PYTHON_STANDALONE_URL_ARM64 }}
-      FRAMEQ_FFMPEG_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64 }}
-      FRAMEQ_FFPROBE_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64 }}
+      APP_PYTHON_STANDALONE_URL: ${{ secrets.APP_PYTHON_STANDALONE_URL_ARM64 }}
+      APP_FFMPEG_ARCHIVE_URL: ${{ secrets.APP_FFMPEG_ARCHIVE_URL_ARM64 }}
+      APP_FFPROBE_ARCHIVE_URL: ${{ secrets.APP_FFPROBE_ARCHIVE_URL_ARM64 }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
@@ -229,7 +229,7 @@ jobs:
         run: |
           APP="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/FrameQ.app"
           RES="$APP/Contents/Resources/resources"
-          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print('bundled runtime import OK')"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core; print('bundled runtime import OK')"
           test -f "$RES/python/runtime-manifest.json" && echo "bundled runtime manifest OK"
           DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/frameq-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
           if find "$APP/Contents/Resources/resources" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then

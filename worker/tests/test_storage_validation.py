@@ -14,9 +14,9 @@ def _run_probe(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env.update(
         {
-            "FRAMEQ_MODEL_DIR": str(model_root),
-            "FRAMEQ_RESOURCE_DIR": str(root / "resources"),
-            "FRAMEQ_PYTORCH_RUNTIME_DIR": str(root / "runtime"),
+            "APP_MODEL_DIR": str(model_root),
+            "APP_RESOURCE_DIR": str(root / "resources"),
+            "APP_PYTORCH_RUNTIME_DIR": str(root / "runtime"),
             "PYTHONPATH": str(Path(__file__).resolve().parents[1]),
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONNOUSERSITE": "1",
@@ -24,9 +24,9 @@ def _run_probe(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
             "HF_HUB_OFFLINE": "1",
         }
     )
-    env.pop("FRAMEQ_BUNDLED_RUNTIME_MANIFEST", None)
+    env.pop("APP_BUNDLED_RUNTIME_MANIFEST", None)
     return subprocess.run(
-        [sys.executable, "-m", "frameq_worker.storage_validation", *arguments],
+        [sys.executable, "-m", "worker_core.storage_validation", *arguments],
         cwd=root,
         env=env,
         text=True,

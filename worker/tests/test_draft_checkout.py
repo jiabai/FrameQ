@@ -6,9 +6,9 @@ from urllib.error import HTTPError
 from urllib.request import Request
 
 import pytest
-from frameq_worker.draft_agent import resolve_draft_credentials
-from frameq_worker.insight_errors import InsightGenerationError
-from frameq_worker.llm import (
+from worker_core.draft_agent import resolve_draft_credentials
+from worker_core.insight_errors import InsightGenerationError
+from worker_core.llm import (
     checkout_anysearch_config_once,
     checkout_llm_config_once,
     parse_anysearch_checkout_response,
@@ -57,11 +57,11 @@ def test_resolve_local_passthrough_does_not_touch_network() -> None:
     recorded: list[Request] = []
     transport = _make_transport(recorded=recorded)
     env = {
-        "FRAMEQ_LLM_API_KEY": "local-key",
-        "FRAMEQ_LLM_MODEL": "local-model",
+        "APP_LLM_API_KEY": "local-key",
+        "APP_LLM_MODEL": "local-model",
         "ANYSEARCH_MCP_URL": "https://local.anysearch/mcp",
         "ANYSEARCH_API_KEY": "local-anys-key",
-        "FRAMEQ_LLM_MAX_TOKENS": "4096",
+        "APP_LLM_MAX_TOKENS": "4096",
     }
 
     merged = resolve_draft_credentials(env, transport)
@@ -74,25 +74,25 @@ def test_resolve_server_llm_flattens_five_fields_and_preserves_max_tokens() -> N
     recorded: list[Request] = []
     transport = _make_transport(llm_response=LLM_CHECKOUT_RESPONSE, recorded=recorded)
     env = {
-        "FRAMEQ_LLM_SOURCE": "server",
-        "FRAMEQ_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
-        "FRAMEQ_LLM_SESSION_TOKEN": "desktop-token",
-        "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "draft-abc-123",
+        "APP_LLM_SOURCE": "server",
+        "APP_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
+        "APP_LLM_SESSION_TOKEN": "desktop-token",
+        "APP_LLM_CHECKOUT_REQUEST_ID": "draft-abc-123",
         # 本地残留：均应被 checkout 结果覆盖（server 模式 checkout 优先于本地）。
-        "FRAMEQ_LLM_API_KEY": "stale-local-key",
-        "FRAMEQ_LLM_MODEL": "stale-model",
-        "FRAMEQ_LLM_TIMEOUT_SECONDS": "5",
-        "FRAMEQ_LLM_MAX_TOKENS": "4096",  # 非 server 托管 → 原样保留
+        "APP_LLM_API_KEY": "stale-local-key",
+        "APP_LLM_MODEL": "stale-model",
+        "APP_LLM_TIMEOUT_SECONDS": "5",
+        "APP_LLM_MAX_TOKENS": "4096",  # 非 server 托管 → 原样保留
     }
 
     merged = resolve_draft_credentials(env, transport)
 
-    assert merged["FRAMEQ_LLM_API_KEY"] == "server-llm-key"
-    assert merged["FRAMEQ_LLM_MODEL"] == "dedicated-draft-model"
-    assert merged["FRAMEQ_LLM_BASE_URL"] == "https://llm.example/v1"
-    assert merged["FRAMEQ_LLM_PROVIDER"] == "openai_compatible"
-    assert merged["FRAMEQ_LLM_TIMEOUT_SECONDS"] == "33"
-    assert merged["FRAMEQ_LLM_MAX_TOKENS"] == "4096"  # 保留
+    assert merged["APP_LLM_API_KEY"] == "server-llm-key"
+    assert merged["APP_LLM_MODEL"] == "dedicated-draft-model"
+    assert merged["APP_LLM_BASE_URL"] == "https://llm.example/v1"
+    assert merged["APP_LLM_PROVIDER"] == "openai_compatible"
+    assert merged["APP_LLM_TIMEOUT_SECONDS"] == "33"
+    assert merged["APP_LLM_MAX_TOKENS"] == "4096"  # 保留
 
     # 一篇只 checkout 一次；鉴权头复用桌面端 session token。
     assert len(recorded) == 1
@@ -107,9 +107,9 @@ def test_resolve_server_anysearch_with_key_overrides_local() -> None:
         recorded=recorded,
     )
     env = {
-        "FRAMEQ_ANYSEARCH_SOURCE": "server",
-        "FRAMEQ_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
-        "FRAMEQ_ANYSEARCH_SESSION_TOKEN": "desktop-token",
+        "APP_ANYSEARCH_SOURCE": "server",
+        "APP_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
+        "APP_ANYSEARCH_SESSION_TOKEN": "desktop-token",
         "ANYSEARCH_MCP_URL": "https://stale.local/mcp",  # 被覆盖
     }
 
@@ -128,9 +128,9 @@ def test_resolve_server_anysearch_anonymous_removes_residual_key() -> None:
         anysearch_response={"mcp_url": "https://anysearch.example/mcp", "api_key": None},
     )
     env = {
-        "FRAMEQ_ANYSEARCH_SOURCE": "server",
-        "FRAMEQ_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
-        "FRAMEQ_ANYSEARCH_SESSION_TOKEN": "desktop-token",
+        "APP_ANYSEARCH_SOURCE": "server",
+        "APP_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
+        "APP_ANYSEARCH_SESSION_TOKEN": "desktop-token",
         "ANYSEARCH_MCP_URL": "https://stale.local/mcp",
         "ANYSEARCH_API_KEY": "stale-residual-key",  # server 匿名 → 应被移除
     }
@@ -145,10 +145,10 @@ def test_resolve_mixed_llm_server_anysearch_local() -> None:
     recorded: list[Request] = []
     transport = _make_transport(llm_response=LLM_CHECKOUT_RESPONSE, recorded=recorded)
     env = {
-        "FRAMEQ_LLM_SOURCE": "server",
-        "FRAMEQ_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
-        "FRAMEQ_LLM_SESSION_TOKEN": "desktop-token",
-        "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "draft-mix",
+        "APP_LLM_SOURCE": "server",
+        "APP_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
+        "APP_LLM_SESSION_TOKEN": "desktop-token",
+        "APP_LLM_CHECKOUT_REQUEST_ID": "draft-mix",
         # anysearch local（不 checkout）
         "ANYSEARCH_MCP_URL": "https://local.anys/mcp",
         "ANYSEARCH_API_KEY": "local-anys",
@@ -156,7 +156,7 @@ def test_resolve_mixed_llm_server_anysearch_local() -> None:
 
     merged = resolve_draft_credentials(env, transport)
 
-    assert merged["FRAMEQ_LLM_API_KEY"] == "server-llm-key"
+    assert merged["APP_LLM_API_KEY"] == "server-llm-key"
     assert merged["ANYSEARCH_MCP_URL"] == "https://local.anys/mcp"
     assert merged["ANYSEARCH_API_KEY"] == "local-anys"
     assert len(recorded) == 1  # 只打 LLM checkout，anysearch 未触网
@@ -170,17 +170,17 @@ def test_resolve_mixed_llm_local_anysearch_server() -> None:
     )
     env = {
         # LLM local（不 checkout）
-        "FRAMEQ_LLM_API_KEY": "local-llm-key",
-        "FRAMEQ_LLM_MODEL": "local-model",
+        "APP_LLM_API_KEY": "local-llm-key",
+        "APP_LLM_MODEL": "local-model",
         # anysearch server
-        "FRAMEQ_ANYSEARCH_SOURCE": "server",
-        "FRAMEQ_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
-        "FRAMEQ_ANYSEARCH_SESSION_TOKEN": "desktop-token",
+        "APP_ANYSEARCH_SOURCE": "server",
+        "APP_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
+        "APP_ANYSEARCH_SESSION_TOKEN": "desktop-token",
     }
 
     merged = resolve_draft_credentials(env, transport)
 
-    assert merged["FRAMEQ_LLM_API_KEY"] == "local-llm-key"  # 未覆盖
+    assert merged["APP_LLM_API_KEY"] == "local-llm-key"  # 未覆盖
     assert merged["ANYSEARCH_MCP_URL"] == "https://anys.example/mcp"
     assert "ANYSEARCH_API_KEY" not in merged  # 匿名
     assert len(recorded) == 1
@@ -198,10 +198,10 @@ def test_resolve_propagates_llm_checkout_exception() -> None:
     )
     transport = _make_transport(llm_response=boom)
     env = {
-        "FRAMEQ_LLM_SOURCE": "server",
-        "FRAMEQ_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
-        "FRAMEQ_LLM_SESSION_TOKEN": "desktop-token",
-        "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "draft-xyz",
+        "APP_LLM_SOURCE": "server",
+        "APP_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
+        "APP_LLM_SESSION_TOKEN": "desktop-token",
+        "APP_LLM_CHECKOUT_REQUEST_ID": "draft-xyz",
     }
 
     with pytest.raises(InsightGenerationError) as exc_info:
@@ -220,9 +220,9 @@ def test_resolve_propagates_anysearch_checkout_error_as_neutral_runtime_error() 
     )
     transport = _make_transport(anysearch_response=boom)
     env = {
-        "FRAMEQ_ANYSEARCH_SOURCE": "server",
-        "FRAMEQ_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
-        "FRAMEQ_ANYSEARCH_SESSION_TOKEN": "desktop-token",
+        "APP_ANYSEARCH_SOURCE": "server",
+        "APP_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
+        "APP_ANYSEARCH_SESSION_TOKEN": "desktop-token",
     }
 
     with pytest.raises(RuntimeError) as exc_info:
@@ -239,9 +239,9 @@ def test_checkout_llm_config_once_uses_request_id_verbatim_no_per_call_suffix() 
     recorded: list[Request] = []
     transport = _make_transport(llm_response=LLM_CHECKOUT_RESPONSE, recorded=recorded)
     env = {
-        "FRAMEQ_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
-        "FRAMEQ_LLM_SESSION_TOKEN": "desktop-token",
-        "FRAMEQ_LLM_CHECKOUT_REQUEST_ID": "draft-seed-12345",
+        "APP_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL,
+        "APP_LLM_SESSION_TOKEN": "desktop-token",
+        "APP_LLM_CHECKOUT_REQUEST_ID": "draft-seed-12345",
     }
 
     config = checkout_llm_config_once(env, transport)
@@ -262,7 +262,7 @@ def test_checkout_llm_config_once_missing_env_raises() -> None:
     transport = _make_transport(llm_response=LLM_CHECKOUT_RESPONSE)
     # 缺 session token / request_id（server 模式必需 env）。
     with pytest.raises(InsightGenerationError) as captured:
-        checkout_llm_config_once({"FRAMEQ_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL}, transport)
+        checkout_llm_config_once({"APP_LLM_CHECKOUT_URL": LLM_CHECKOUT_URL}, transport)
     assert captured.value.code == "AI_CONFIG_MISSING"
 
 
@@ -273,8 +273,8 @@ def test_checkout_anysearch_config_once_returns_mcp_url_and_key() -> None:
         recorded=recorded,
     )
     env = {
-        "FRAMEQ_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
-        "FRAMEQ_ANYSEARCH_SESSION_TOKEN": "desktop-token",
+        "APP_ANYSEARCH_CHECKOUT_URL": ANYSEARCH_CHECKOUT_URL,
+        "APP_ANYSEARCH_SESSION_TOKEN": "desktop-token",
     }
 
     config = checkout_anysearch_config_once(env, transport)

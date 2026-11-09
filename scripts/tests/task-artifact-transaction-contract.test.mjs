@@ -62,7 +62,7 @@ test("transaction contract is closed and mirrored by Python and Rust", async () 
   const contract = JSON.parse(
     await read("contracts/task-artifact-transaction-v1.json"),
   );
-  const python = await read("worker/frameq_worker/task_transaction.py");
+  const python = await read("worker/worker_core/task_transaction.py");
   const rust = await read("app/src-tauri/src/task_manifest/transaction.rs");
 
   assert.equal(contract.contractVersion, 1);

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from agent_runtime.extensions.skills import SkillManager, build_skill_tool
 from agent_runtime.tools.func_tool_manager import FunctionToolManager
-from frameq_worker import draft_agent
+from worker_core import draft_agent
 
 _PKG_SKILLS = Path(draft_agent.__file__).parent / "skills"
 
@@ -184,7 +184,7 @@ def test_composite_on_before_complete_exception_defaults_admit() -> None:
     assert _run(vote(False)) is False  # skills(default True) and inner False
 
 
-# —— D4: skills 始终开启，与 FRAMEQ_DRAFT_PLANNING 正交（结构断言）——
+# —— D4: skills 始终开启，与 APP_DRAFT_PLANNING 正交（结构断言）——
 
 
 def test_skill_wiring_is_outside_planning_branch() -> None:

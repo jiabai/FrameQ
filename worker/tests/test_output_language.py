@@ -6,23 +6,23 @@ import re
 from pathlib import Path
 
 import pytest
-from frameq_worker.ai_prompts import (
+from worker_core.ai_prompts import (
     build_dissection_agent_prompt,
     build_insights_agent_prompt,
     build_mindmap_prompt,
     build_summary_prompt,
 )
-from frameq_worker.models import Insight
-from frameq_worker.output_language import output_language_semantics
-from frameq_worker.requests import parse_retry_insights_request
-from frameq_worker.summary_agent import (
+from worker_core.models import Insight
+from worker_core.output_language import output_language_semantics
+from worker_core.requests import parse_retry_insights_request
+from worker_core.summary_agent import (
     normalize_mermaid_mindmap,
     normalize_summary_markdown,
     write_summary_files,
 )
-from frameq_worker.topic_agent import write_insight_files
-from frameq_worker.transcript_chunks import MarkdownSplitter
-from frameq_worker.worker_service import retry_insights_once
+from worker_core.topic_agent import write_insight_files
+from worker_core.transcript_chunks import MarkdownSplitter
+from worker_core.worker_service import retry_insights_once
 
 SUPPORTED_OUTPUT_LANGUAGES = ("zh-CN", "zh-TW", "en-US")
 

@@ -31,11 +31,11 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from frameq_worker.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
-from frameq_worker.models import JobStage, ProcessResult
-from frameq_worker.source_identity import SourceIdentity
-from frameq_worker.summary_agent import write_summary_files
-from frameq_worker.task_store import (
+from worker_core.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
+from worker_core.models import JobStage, ProcessResult
+from worker_core.source_identity import SourceIdentity
+from worker_core.summary_agent import write_summary_files
+from worker_core.task_store import (
     TASK_SCHEMA_VERSION,
     TaskContext,
     TaskPaths,
@@ -44,7 +44,7 @@ from frameq_worker.task_store import (
     task_artifacts_for_existing_files,
     write_task_manifest,
 )
-from frameq_worker.worker_application.insight_retry import retry_insights_once
+from worker_core.worker_application.insight_retry import retry_insights_once
 
 TASK_ID = "20260712-120000-douyin-7524373044106677544"
 INSIGHT_ID = 5
@@ -272,7 +272,7 @@ def test_retry_draft_success_sets_seed_id_in_manifest(tmp_path: Path) -> None:
     _skeleton(tmp_path, with_draft_file=False)
 
     with patch(
-        "frameq_worker.worker_application.insight_retry.run_draft",
+        "worker_core.worker_application.insight_retry.run_draft",
         return_value="# 完整稿子",
     ):
         result = retry_insights_once(

@@ -225,7 +225,7 @@ export function createUiSmokeBridgeScript(scenario: UiSmokeScenario): string {
           }
         }
       };
-      window.__FRAMEQ_UI_SMOKE__ = smoke;
+      window.__APP_UI_SMOKE__ = smoke;
       window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
       window.__TAURI_INTERNALS__ = {
         callbacks,

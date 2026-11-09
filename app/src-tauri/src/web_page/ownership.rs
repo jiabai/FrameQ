@@ -296,7 +296,7 @@ fn find_roots(path: &Path, owner: &Owner, system: &System) -> WebResult<Vec<Memb
                 process.cmd().iter().any(|arg| arg == "--frameq-engine-probe")
             } else {
                 process.cmd().iter().any(|arg| arg == "--process-web-page-stdin")
-                    && process.cmd().windows(2).any(|pair| pair[0] == "-m" && pair[1] == "frameq_worker")
+                    && process.cmd().windows(2).any(|pair| pair[0] == "-m" && pair[1] == "worker_core")
             };
         if browser || worker {
             let member = Member::read(process)?;

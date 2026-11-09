@@ -287,7 +287,7 @@ fn account_pending_state_path(paths: &RuntimePaths) -> std::path::PathBuf {
 }
 
 pub(crate) fn server_base_url() -> String {
-    std::env::var("FRAMEQ_SERVER_BASE_URL")
+    std::env::var("APP_SERVER_BASE_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_SERVER_BASE_URL.to_string())

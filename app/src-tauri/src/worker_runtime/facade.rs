@@ -332,7 +332,7 @@ mod typed_job_policy_tests {
         assert!(matches!(request.progress, ProgressRoute::Worker));
         assert_eq!(
             request.command.args,
-            vec!["-m", "frameq_worker", "--request-stdin"]
+            vec!["-m", "worker_core", "--request-stdin"]
         );
         assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
         assert_eq!(resolver_calls.get(), 0);
@@ -340,7 +340,7 @@ mod typed_job_policy_tests {
             .command
             .env
             .iter()
-            .any(|(key, _)| key.starts_with("FRAMEQ_LLM_")));
+            .any(|(key, _)| key.starts_with("APP_LLM_")));
     }
 
     #[test]
@@ -370,7 +370,7 @@ mod typed_job_policy_tests {
         assert!(matches!(request.progress, ProgressRoute::Worker));
         assert_eq!(
             request.command.args,
-            vec!["-m", "frameq_worker", "--process-local-media-stdin"]
+            vec!["-m", "worker_core", "--process-local-media-stdin"]
         );
         assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
         assert_eq!(resolver_calls.get(), 0);
@@ -388,7 +388,7 @@ mod typed_job_policy_tests {
             .command
             .env
             .iter()
-            .any(|(key, _)| key.starts_with("FRAMEQ_LLM_")));
+            .any(|(key, _)| key.starts_with("APP_LLM_")));
     }
 
     #[test]
@@ -414,7 +414,7 @@ mod typed_job_policy_tests {
         assert!(matches!(request.progress, ProgressRoute::None));
         assert_eq!(
             request.command.args,
-            vec!["-m", "frameq_worker", "--resolve-source-stdin"]
+            vec!["-m", "worker_core", "--resolve-source-stdin"]
         );
         assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
         assert_eq!(resolver_calls.get(), 0);
@@ -445,13 +445,13 @@ mod typed_job_policy_tests {
         assert!(matches!(request.progress, ProgressRoute::Worker));
         assert_eq!(
             request.command.args,
-            vec!["-m", "frameq_worker", "--retry-insights-stdin"]
+            vec!["-m", "worker_core", "--retry-insights-stdin"]
         );
         assert_eq!(request.command.stdin_payload.as_deref(), Some(payload));
         assert_eq!(resolver_calls.get(), 1);
-        assert_eq!(env.get("FRAMEQ_LLM_SOURCE"), Some(&"server".to_string()));
+        assert_eq!(env.get("APP_LLM_SOURCE"), Some(&"server".to_string()));
         assert_eq!(
-            env.get("FRAMEQ_LLM_SESSION_TOKEN"),
+            env.get("APP_LLM_SESSION_TOKEN"),
             Some(&"desktop-token".to_string())
         );
     }

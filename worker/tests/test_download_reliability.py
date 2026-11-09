@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import pytest
-from frameq_worker.douyin_fallback import HttpResponse
-from frameq_worker.download_reliability import (
+from worker_core.douyin_fallback import HttpResponse
+from worker_core.download_reliability import (
     SafeDownloadError,
     write_http_response_atomically,
     write_http_stream_atomically,

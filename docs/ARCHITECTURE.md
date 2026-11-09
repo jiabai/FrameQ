@@ -112,7 +112,7 @@
   location snapshot supplies every operation's output, cache, model and component paths.
 - Legacy mode preserves the effective `.env` then process-environment output setting and the
   default output root. Managed mode derives all data paths from the committed root. Ordinary
-  settings saves update the ASR model only; they do not write `FRAMEQ_OUTPUT_DIR` or initialize
+  settings saves update the ASR model only; they do not write `APP_OUTPUT_DIR` or initialize
   bulk-data directories. Migration inventories effective legacy output plus default remnants and
   the full application data trees, including physically preserved unsupported task directories.
 - Ordinary data commands retain a global permit through their complete native operation, including both
@@ -191,7 +191,7 @@
   only genuinely new saved tasks with `task_created=true`; cached URL reuse and history reads never
   acquire title-generation authority. React captures the submission locale and keeps one operation
   claim across transcription and the following `retry_insights` request with `target="title"`.
-- `worker/frameq_worker/note_title.py` samples the beginning, middle, and end of the saved transcript
+- `worker/worker_core/note_title.py` samples the beginning, middle, and end of the saved transcript
   within 12,000 Unicode characters and calls the existing configured provider once. Supplier retries,
   repair calls, and tool-loop turns are disabled. A closed JSON title response is validated before storage.
 - Contract v10 adds `title_generating`, the title retry target, optional `note_title` result metadata,
@@ -271,7 +271,7 @@
 - 「整理文字稿」 reuses the `retry_insights` command with `target="transcript"`, raising the global
   desktop-worker contract to v9. No new Tauri command and no new FrameQ server interface exist for
   transcript polishing.
-- The worker step lives in `worker/frameq_worker/transcript_polish.py` and is dispatched by the
+- The worker step lives in `worker/worker_core/transcript_polish.py` and is dispatched by the
   `retry_insights_once` transcript branch. It reads only the exact-path-validated, non-link official
   `transcript/transcript.txt`, splits it into ~2000-char sentence-boundary chunks (at most 24 chunks,
   200 chars of preceding text as join context), and moderately polishes each chunk via the same
@@ -359,14 +359,14 @@
   later of now/current expiry” behavior. Self-service codes require the bound session user, fail
   when entitlement is already active, and on success start a fresh 31-day window with quota reset
   to limit 20 / used 0. After expiry, the same account can repeat the cycle without a lifetime cap.
-- Production rollout is Server-first behind `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED`, which must be
+- Production rollout is Server-first behind `APP_SELF_SERVICE_ACTIVATION_ENABLED`, which must be
   explicit in production and defaults false in development/test. Reviewed schema rollout uses the
   migration chain `202608240001`, `202608240002`, and `202608240003` after the existing baseline
   and user-session migrations.
 
 ## 2026-08-10 Desktop diagnostic export boundary
 
-- The global desktop-worker contract is v9. `FRAMEQ_DIAGNOSTIC ` is a separate, strict stderr
+- The global desktop-worker contract is v9. `APP_DIAGNOSTIC ` is a separate, strict stderr
   channel for one message-free, closed diagnostic event on terminal ASR model-download failure.
   The Rust worker runner is its only consumer: diagnostic records never enter `ProgressRoute`,
   never refresh the idle watchdog, never become UI progress, and never alter stdout terminal
@@ -592,9 +592,9 @@
 
 ## 2026-07-20 ASR application module boundary
 
-- `worker/frameq_worker/asr.py` is now a slim stable compatibility surface. Production callers
+- `worker/worker_core/asr.py` is now a slim stable compatibility surface. Production callers
   continue importing errors, transcript DTOs, adapters, registry/cache functions, and artifact
-  writers only from `frameq_worker.asr`; the root re-exports the actual private objects rather than
+  writers only from `worker_core.asr`; the root re-exports the actual private objects rather than
   wrappers or duplicate classes.
 - The private `asr_runtime/` package separates five owners: `types.py` owns shared contracts,
   `sensevoice.py` owns SenseVoice normalization/VAD/WAV behavior, `sensevoice_onnx.py` owns the ONNX
@@ -608,7 +608,7 @@
   validation-before-directory-creation, filenames, Markdown/JSON shape, direct non-atomic writes,
   and public error behavior were unchanged; `61d489a` later replaced those writes without changing
   the ASR formats.
-- The canonical `worker/frameq_worker/` tree remains authoritative. Packaging validation refreshed
+- The canonical `worker/worker_core/` tree remains authoritative. Packaging validation refreshed
   the ignored Tauri resource through the established build path and proved all 56 relative files
   byte-equal, including the new private package. Worker contracts, local-media runtime, manifests,
   model-download behavior, UI, and server code are unchanged.
@@ -621,7 +621,7 @@
 - The private `douyin/` package separates immutable shared types, source/short-link policy, pure
   Router Data interpretation, bit-rate/ratio-probe stream policy, and CookieJar/urllib/atomic-write
   transport. The package initializer exports nothing, and production consumers outside the package
-  continue importing only `frameq_worker.douyin_fallback`.
+  continue importing only `worker_core.douyin_fallback`.
 - One default `UrllibDouyinHttpClient` and its process-local anonymous `CookieJar` still span source
   resolution, share-page request, ratio probes, and final media request. Direct canonical IDs remain
   network-free.
@@ -744,9 +744,9 @@
 
 ## 2026-07-21 Worker pipeline private-owner boundary
 
-- `worker/frameq_worker/pipeline.py` is now a slim stable compatibility surface containing only
+- `worker/worker_core/pipeline.py` is now a slim stable compatibility surface containing only
   explicit direct re-exports. Production callers continue importing pipeline-owned symbols only
-  from `frameq_worker.pipeline`; the root owns no processing behavior and preserves the exact
+  from `worker_core.pipeline`; the root owns no processing behavior and preserves the exact
   private function/class objects rather than wrappers or duplicate definitions.
 - The empty-initializer private `pipeline_runtime/` package separates four owners: `shared.py` owns
   path/progress/failure policy, `transcript.py` owns subtitle and ASR stages, `insights.py` owns
@@ -1234,7 +1234,7 @@
 
 ## 2026-11-09 有界的 yt-dlp 下载执行
 
-- `worker/frameq_worker/media.py` 的 `run_command` 对形如 `sys.executable -m yt_dlp ...` 的下载命令施加 20 分钟 `subprocess.run` 预算；`ffprobe` 与 `ffmpeg` 命令不设该预算。
+- `worker/worker_core/media.py` 的 `run_command` 对形如 `sys.executable -m yt_dlp ...` 的下载命令施加 20 分钟 `subprocess.run` 预算；`ffprobe` 与 `ffmpeg` 命令不设该预算。
 - 预算到期返回 `VIDEO_DOWNLOAD_TIMEOUT` 结果，`download_video` 直接抛出 `CommandExecutionError`，跳过字幕重跑、YouTube 单次重试与三个平台备用下载；`MediaPreparationFacade` 仍把它归入 `VIDEO_DOWNLOAD_FAILED`。
 - `CommandRunner` 的单参数签名、平台 URL 支持规则、下载策略表、任务产物布局与账号服务数据边界保持不变。
 
@@ -1242,8 +1242,8 @@
 
 - Bilibili fallback remains worker-owned and ordinary-public-video-only. UI and Tauri submit a source string and receive the existing worker result shape; they do not call Bilibili APIs, select DASH streams, import cookies, or manage downloads.
 - The frontend may accept ordinary Bilibili BV/av video URLs and safe `b23.tv` short links, but all platform interpretation happens inside the Python worker.
-- `worker/frameq_worker/bilibili_fallback.py` is the slim stable compatibility/application adapter and the only Bilibili import path used by production modules outside the private package. It owns default dependency construction, page/output composition, final MP4 replacement, cleanup sequencing, and the five `bilibili.*` progress events.
-- Private `worker/frameq_worker/bilibili/` modules separate shared identities (`types.py`), input/short-link policy (`source.py`), public API/DASH policy (`playback.py`), bounded HTTP/resumable streaming (`transport.py`), and candidate/FFmpeg effects (`artifacts.py`). Private children do not import the root adapter or task/application/ASR/AI layers; no new facade class or generic multi-platform downloader framework exists.
+- `worker/worker_core/bilibili_fallback.py` is the slim stable compatibility/application adapter and the only Bilibili import path used by production modules outside the private package. It owns default dependency construction, page/output composition, final MP4 replacement, cleanup sequencing, and the five `bilibili.*` progress events.
+- Private `worker/worker_core/bilibili/` modules separate shared identities (`types.py`), input/short-link policy (`source.py`), public API/DASH policy (`playback.py`), bounded HTTP/resumable streaming (`transport.py`), and candidate/FFmpeg effects (`artifacts.py`). Private children do not import the root adapter or task/application/ASR/AI layers; no new facade class or generic multi-platform downloader framework exists.
 - `yt-dlp` stays the first attempt. Bilibili fallback runs only after a Bilibili-related failure and only for public or user-authorized ordinary videos.
 - The fallback parses BV/av IDs, resolves safe `b23.tv` links, selects one part from `?p=N` or the first part, fetches `x/web-interface/view` and `x/player/playurl`, chooses one video stream plus one audio stream, downloads `.m4s` files safely, and merges them to MP4 with the existing bundled FFmpeg. Stable root re-exports preserve the repository-observed type and function identities.
 - The fallback must not add Bilibili QR login, account login automation, `SESSDATA` collection or storage, browser cookie import, PGC/bangumi support, VIP/member-only access, DRM decryption, stream picker UI, batch queue, proxy pools, or a download-center product surface.
@@ -1252,8 +1252,8 @@
 
 - Xiaohongshu fallback remains worker-owned and video-only. UI and Tauri submit a source string and receive the existing worker result shape; they do not parse Xiaohongshu HTML, select streams, import cookies, or manage downloads.
 - The frontend may accept Xiaohongshu share text, full note URLs, and short links, but all platform interpretation happens inside the Python worker.
-- `worker/frameq_worker/xiaohongshu_fallback.py` is the slim stable compatibility/application adapter and the only Xiaohongshu import path used by production modules outside the private package. It owns default dependency composition, the complete fallback sequence, output naming, nested candidate/backup attempts, and all three `xiaohongshu.*` progress events.
-- Private `worker/frameq_worker/xiaohongshu/` modules separate shared identities (`types.py`), source/short-link policy (`source.py`), bounded page-state interpretation (`page.py`), deterministic stream ranking (`streams.py`), and CookieJar/urllib/safe-download effects (`transport.py`). Private children do not import the root adapter or task/application/ASR/AI layers; no facade class or generic multi-platform fallback framework exists.
+- `worker/worker_core/xiaohongshu_fallback.py` is the slim stable compatibility/application adapter and the only Xiaohongshu import path used by production modules outside the private package. It owns default dependency composition, the complete fallback sequence, output naming, nested candidate/backup attempts, and all three `xiaohongshu.*` progress events.
+- Private `worker/worker_core/xiaohongshu/` modules separate shared identities (`types.py`), source/short-link policy (`source.py`), bounded page-state interpretation (`page.py`), deterministic stream ranking (`streams.py`), and CookieJar/urllib/safe-download effects (`transport.py`). Private children do not import the root adapter or task/application/ASR/AI layers; no facade class or generic multi-platform fallback framework exists.
 - The worker ports only the required EasyDownload Xiaohongshu parser/client/downloader ideas into these Python boundaries and shared download helpers; it does not call or bundle the Go/Wails EasyDownload runtime. Stable root re-exports preserve repository-observed type, client, source-builder, and test-seam identities.
 - `yt-dlp` stays the first attempt. Xiaohongshu fallback runs only after a Xiaohongshu-related failure and only for public or user-authorized video notes.
 - The fallback preserves transient `xsec_token`, short-link `3xx` and embedded-HTML resolution, `gzip`/`br`/`deflate` note-page decoding, `window.__INITIAL_STATE__` parsing, deterministic stream ranking, one process-local client/CookieJar, and safe resumable `.part` writes with atomic final replacement.
@@ -1304,13 +1304,13 @@
 - Desktop worker runtime configuration no longer reads repository-root `.env` files such as `D:/Github/FrameQ/.env`.
 - Fixed-root `.env` stores ASR model selection and model-download overrides. Its existing output key is read for legacy compatibility; settings saves retain that key unchanged, and committed managed storage takes precedence.
 - The desktop settings panel returns and displays the app-local data `.env` path, can locate it in the file manager, and creates a commented template if the file is missing.
-- Legacy local `FRAMEQ_LLM_PROVIDER`, `FRAMEQ_LLM_BASE_URL`, `FRAMEQ_LLM_API_KEY`, `FRAMEQ_LLM_MODEL`, and `FRAMEQ_LLM_TIMEOUT_SECONDS` dotenv values are ignored.
+- Legacy local `APP_LLM_PROVIDER`, `APP_LLM_BASE_URL`, `APP_LLM_API_KEY`, `APP_LLM_MODEL`, and `APP_LLM_TIMEOUT_SECONDS` dotenv values are ignored.
 - Insight topic generation receives LLM runtime material only through server-managed checkout environment variables injected by Tauri for the insight-generation worker invocation.
 
 ## 2026-06-23 ASR Model Cache Layout Boundary
 
-- Desktop `FRAMEQ_MODEL_DIR` points to the active data root's `models/` ModelScope cache root, not the directory that directly contains `iic/SenseVoiceSmall`.
-- The canonical release ASR layout is `<FRAMEQ_MODEL_DIR>/models/iic/SenseVoiceSmall` plus `<FRAMEQ_MODEL_DIR>/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch`.
+- Desktop `APP_MODEL_DIR` points to the active data root's `models/` ModelScope cache root, not the directory that directly contains `iic/SenseVoiceSmall`.
+- The canonical release ASR layout is `<APP_MODEL_DIR>/models/iic/SenseVoiceSmall` plus `<APP_MODEL_DIR>/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch`.
 - Worker startup keeps legacy top-level `iic/...` readable for upgrade compatibility, but normalizes it to the canonical layout before real ASR loading.
 - Automatic cleanup is limited to FrameQ's known SenseVoice/VAD legacy directories and stale `._____temp` folders without `model.pt`.
 
@@ -1335,12 +1335,12 @@
 
 ## 2026-10-22 Settings Schema Migration and Migration Notice
 
-- Local settings carry `FRAMEQ_SETTINGS_SCHEMA_VERSION`. The first read of a file without the
-  current version rewrites `FRAMEQ_ASR_MODEL` to the ONNX default and stamps the version, so the
+- Local settings carry `APP_SETTINGS_SCHEMA_VERSION`. The first read of a file without the
+  current version rewrites `APP_ASR_MODEL` to the ONNX default and stamps the version, so the
   rewrite happens once. A later explicit PyTorch selection is preserved because the version
   already matches.
 - When the rewritten value was still the old PyTorch template default, the migration also writes
-  `FRAMEQ_ASR_MODEL_MIGRATION=1`. A file that already held the ONNX model gets no marker, so the
+  `APP_ASR_MODEL_MIGRATION=1`. A file that already held the ONNX model gets no marker, so the
   notice only appears for users whose selection actually changed.
 - `get_llm_config` returns `asr_model_migrated` from that marker. The settings sheet renders a
   one-time notice explaining why the default changed and how to switch back; it does not block
@@ -1376,12 +1376,12 @@ FrameQ 是本地优先的桌面客户端：本地 worker 处理公开视频或�
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
 | `app/src-tauri/src/worker_runtime/` | Rust worker 命令构造、单一受监督运行器、实例安全取消、progress 校验路由和进程树终止 | `WorkerLane::run` 已统一 process-video、AI retry、source preflight 与 ASR model download；低层生命周期 API 对应用模块不可见 |
 | `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认选中 SenseVoice Small，缺失模型仅在已验证任务提交时按选择下载 |
-| `worker/frameq_worker/summary_agent.py`、`topic_agent.py`、`dissection_agent.py` | 三个智能提炼 agent 的工具、验收与有界运行 | 共享 `agent_runtime`，通过交付工具提交完整产物，每次实际调用独立 checkout |
-| `worker/frameq_worker/ai_runtime.py`、`ai_prompts.py`、`transcript_chunks.py` | 托管 provider、提示词与确定性文字稿分段 | 供应商调用最多执行一次，分段记录 UTF-8 偏移和 SHA-256 |
-| `worker/frameq_worker/dissection_report.py`、`ai_artifacts.py`、`insight_errors.py` | 解剖报告、产物提交与生成错误 | 保留闭合 schema、完整导出、任务事务与错误协议 |
+| `worker/worker_core/summary_agent.py`、`topic_agent.py`、`dissection_agent.py` | 三个智能提炼 agent 的工具、验收与有界运行 | 共享 `agent_runtime`，通过交付工具提交完整产物，每次实际调用独立 checkout |
+| `worker/worker_core/ai_runtime.py`、`ai_prompts.py`、`transcript_chunks.py` | 托管 provider、提示词与确定性文字稿分段 | 供应商调用最多执行一次，分段记录 UTF-8 偏移和 SHA-256 |
+| `worker/worker_core/dissection_report.py`、`ai_artifacts.py`、`insight_errors.py` | 解剖报告、产物提交与生成错误 | 保留闭合 schema、完整导出、任务事务与错误协议 |
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
 | `app/src-tauri/src/data_storage.rs`、`data_storage/`、`safe_filesystem.rs` | 数据许可、位置权威、身份与完整性、复制提交、恢复及旧副本清理 | 固定控制根与可迁移数据根分离；前端只提交原生选择和确认令牌 |
-| 数据根 `models/` | 用户本机可写模型缓存；桌面由 `FRAMEQ_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...` |
+| 数据根 `models/` | 用户本机可写模型缓存；桌面由 `APP_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...` |
 | 数据根 `outputs/`；Legacy 模式下的有效旧输出根 | `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `frameq-task.json` | 由位置快照派生，设置中的明确迁移流程改变有效位置 |
 | 数据根 `cache/`、`runtime/`、`collections.json` | 任务与播放缓存、按需运行组件、合集及成员 | 随任务和模型一同迁移；缓存分类保留播放缓存清理 |
 | 固定配置根 `updates.json` | 桌面更新偏好，不含用户内容或签名私钥 | 记录检查时间、稍后提醒时间和跳过版本 |
@@ -1402,7 +1402,7 @@ graph LR
     A3["worker_runtime/<br/>command.rs · runner.rs + runner/*<br/>supervisor.rs"]
   end
 
-  subgraph "worker/frameq_worker/"
+  subgraph "worker/worker_core/"
     W1["cli.py · pipeline.py<br/>pipeline_runtime/<br/>models.py"]
     W2["media.py<br/>asr.py · asr_runtime/<br/>model_download.py"]
     W3["summary_agent · topic_agent<br/>dissection_agent<br/>agent_runtime"]
@@ -1461,11 +1461,11 @@ graph LR
 - 改 task manifest、artifact 或 History/cache/transcript/delete 的任务信任规则：从稳定
   `app/src-tauri/src/task_manifest.rs` surface 进入，再按职责修改私有 `source_identity.rs`、
   `schema.rs`、`storage.rs` 或 `access.rs`；同时核对 Python
-  `worker/frameq_worker/task_store.py` 的 `TaskStoreFacade`，调用方不得恢复 raw manifest/path
+  `worker/worker_core/task_store.py` 的 `TaskStoreFacade`，调用方不得恢复 raw manifest/path
   组合或直接导入私有 child。
 - 改 Rust worker 生命周期顺序：从 `app/src-tauri/src/worker_runtime/runner.rs` 进入；按职责修改私有 `runner/process_io.rs`、`watchdog.rs`、`progress.rs` 或 `terminal.rs`，进程树信号仍只改 `supervisor.rs`，固定 invocation/env 仍只改 `command.rs`；应用命令只保留领域映射。
-- 改下载 / 媒体校验 / 音频提取：`worker/frameq_worker/cli.py` → `media.py` → 对应平台 fallback。
-- 改 ASR 行为或模型缓存：`worker/frameq_worker/asr.py` → `asr_runtime/` → `model_download.py` → 当前数据根 `models/`。
+- 改下载 / 媒体校验 / 音频提取：`worker/worker_core/cli.py` → `media.py` → 对应平台 fallback。
+- 改 ASR 行为或模型缓存：`worker/worker_core/asr.py` → `asr_runtime/` → `model_download.py` → 当前数据根 `models/`。
 - 改数据位置、迁移或访问许可：`dataStorageClient.ts` / `features/dataStorage/` → `data_storage.rs` → 私有 engine 与 `safe_filesystem.rs`；正式模型/组件核验由 `data_storage_validation.rs` 和受监督只读 worker 负责。
 - 改灵感 / 总结 / mindmap / 解剖：从 `pipeline_runtime/insights.py` 进入相应
   `summary_agent.py`、`topic_agent.py` 或 `dissection_agent.py`；共享提示词、分段与调用分别
@@ -1494,27 +1494,27 @@ graph LR
 - `app/src-tauri/src/worker_runtime/command.rs`：固定 worker invocation、受限 stdin payload 与配置根/当前数据快照环境构造。
 - `app/src-tauri/src/worker_runtime/runner.rs`：所有 Rust-owned Python 子进程唯一的生命周期编排；私有 `runner/process_io.rs`、`watchdog.rs`、`progress.rs`、`terminal.rs` 分别拥有底层实现，不构成新的应用入口。
 - `app/src-tauri/src/worker_runtime/supervisor.rs`：每 lane 的实例状态、取消 claim/rollback 与 Windows/macOS 进程树终止。
-- `worker/frameq_worker/models.py`：worker request/result/error schema。
-- `worker/frameq_worker/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
-- `worker/frameq_worker/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
-- `worker/frameq_worker/asr.py`：稳定 ASR 导入入口；实现按 failure boundary 位于私有 `asr_runtime/` 的 types、registry、SenseVoice/VAD、ONNX 和 artifact owners。
-- `worker/frameq_worker/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
-- `worker/frameq_worker/runtime_component.py`：PyTorch 运行时组件的检测、指纹比对与 `sys.path` 注入；包内 manifest 缺失时门禁不生效，保持未裁剪运行时的原有行为。
-- `worker/frameq_worker/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
-- `worker/frameq_worker/llm.py`：托管 LLM checkout 的 HTTP 协议、配置校验、超时和逐调用请求标识。
-- `worker/frameq_worker/ai_runtime.py`：智能提炼共享 provider，逐次 checkout、供应商单次调用、
+- `worker/worker_core/models.py`：worker request/result/error schema。
+- `worker/worker_core/cli.py`：worker CLI/facade 入口，默认在真实 ASR 未启用时返回结构化 `ASR_MODEL_NOT_READY`。
+- `worker/worker_core/media.py`：yt-dlp、ffprobe 和 ffmpeg 音频提取服务。
+- `worker/worker_core/asr.py`：稳定 ASR 导入入口；实现按 failure boundary 位于私有 `asr_runtime/` 的 types、registry、SenseVoice/VAD、ONNX 和 artifact owners。
+- `worker/worker_core/model_download.py`：SenseVoice Small 与 VAD 模型缓存下载、归档解压、校验和 `MODEL_VERSION.txt` 写入。
+- `worker/worker_core/runtime_component.py`：PyTorch 运行时组件的检测、指纹比对与 `sys.path` 注入；包内 manifest 缺失时门禁不生效，保持未裁剪运行时的原有行为。
+- `worker/worker_core/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
+- `worker/worker_core/llm.py`：托管 LLM checkout 的 HTTP 协议、配置校验、超时和逐调用请求标识。
+- `worker/worker_core/ai_runtime.py`：智能提炼共享 provider，逐次 checkout、供应商单次调用、
   target 请求标识与专用错误映射。
-- `worker/frameq_worker/ai_prompts.py`：智能提炼和成稿提示词、偏好序列化与平台词表。
-- `worker/frameq_worker/transcript_chunks.py`：确定性文字稿分段、UTF-8 字节范围和片段 SHA-256。
-- `worker/frameq_worker/pipeline.py`：稳定 pipeline 导入入口；`pipeline_runtime/shared.py`、
+- `worker/worker_core/ai_prompts.py`：智能提炼和成稿提示词、偏好序列化与平台词表。
+- `worker/worker_core/transcript_chunks.py`：确定性文字稿分段、UTF-8 字节范围和片段 SHA-256。
+- `worker/worker_core/pipeline.py`：稳定 pipeline 导入入口；`pipeline_runtime/shared.py`、
   `transcript.py`、`insights.py`、`orchestration.py` 分别拥有共享 policy、字幕/ASR、AI target
   和 URL task orchestration。
-- `worker/frameq_worker/summary_agent.py`：脑图与总结的顺序工具交付、规范化和产物构造。
-- `worker/frameq_worker/topic_agent.py`：完整灵感工具交付、JSON Schema 和重复主题校验、产物导出。
-- `worker/frameq_worker/dissection_agent.py`：文字稿解剖的有界 agent 循环、工具校验反馈与进度。
-- `worker/frameq_worker/dissection_report.py`：解剖闭合模型、来源校验、UTF-8 溯源与 Markdown 导出。
-- `worker/frameq_worker/ai_artifacts.py`：AI 产物 payload 的原子提交适配。
-- `worker/frameq_worker/insight_errors.py`：智能提炼共享生成错误与现有错误码。
+- `worker/worker_core/summary_agent.py`：脑图与总结的顺序工具交付、规范化和产物构造。
+- `worker/worker_core/topic_agent.py`：完整灵感工具交付、JSON Schema 和重复主题校验、产物导出。
+- `worker/worker_core/dissection_agent.py`：文字稿解剖的有界 agent 循环、工具校验反馈与进度。
+- `worker/worker_core/dissection_report.py`：解剖闭合模型、来源校验、UTF-8 溯源与 Markdown 导出。
+- `worker/worker_core/ai_artifacts.py`：AI 产物 payload 的原子提交适配。
+- `worker/worker_core/insight_errors.py`：智能提炼共享生成错误与现有错误码。
 
 ## 架构不变量
 
@@ -1532,7 +1532,7 @@ graph LR
   单条 Insight 与任务局部偏好，经 anysearch、skills、planning 和 `submit_draft` 生成
   `ai/draft.md`；`transcript` 目标分段整理原稿，生成 `transcript/polished.txt`。后两者
   沿用各自的一次确认计费契约。
-- worker 运行期使用 `frameq_worker` 内的 AI 模块及 `agent_runtime` 依赖，不跨目录导入
+- worker 运行期使用 `worker_core` 内的 AI 模块及 `agent_runtime` 依赖，不跨目录导入
   外部参考项目或本仓库 server 代码。
 - 对外分发态的最终产物、缓存、模型、运行组件与合集均从当前数据位置派生；Legacy 保留有效旧输出解释，Managed 采用统一数据根。每个 worker 命令的输出、缓存、模型、组件路径来自同一快照，配置根与 cwd 保持固定。
 - 历史记录从当前有效输出根的受支持任务 manifest 读取。位置迁移保留 task ID 与相对产物路径，重启后重新生成绝对路径。空目标保留原件；已有目录合并按相对路径同名文件的目标优先规则移动或删除源文件，目标合集文件优先。

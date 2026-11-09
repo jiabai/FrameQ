@@ -30,8 +30,8 @@ function extractedResult() {
 }
 
 describe("web article projection from real Document extraction", () => {
-  it.runIf(Boolean(process.env.FRAMEQ_WEB_HISTORY_DETAIL))("reopens a real Python draft failure through the Rust history projection", () => {
-    const actual = JSON.parse(readFileSync(process.env.FRAMEQ_WEB_HISTORY_DETAIL!, "utf8"));
+  it.runIf(Boolean(process.env.APP_WEB_HISTORY_DETAIL))("reopens a real Python draft failure through the Rust history projection", () => {
+    const actual = JSON.parse(readFileSync(process.env.APP_WEB_HISTORY_DETAIL!, "utf8"));
     const detail = parseHistoryDetailResponse(actual, actual.task_id);
     expect(detail.error?.stage).toBe("draft_generating");
     expect(detail.error?.code).toBe("DRAFT_SEED_INVALID");

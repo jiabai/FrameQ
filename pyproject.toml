@@ -1,5 +1,5 @@
 [project]
-name = "frameq-worker"
+name = "worker-core"
 version = "0.1.0"
 description = "Python worker for FrameQ desktop video transcription workflows."
 requires-python = ">=3.11"
@@ -15,7 +15,7 @@ dependencies = [
     "onnxruntime<1.24 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # macOS Intel (x86_64) is pinned to torch 2.2.2 — the last release that ships
     # macOS x86_64 wheels — which only publishes up to CPython 3.12 (cp312) and
-    # requires numpy<2. Keep FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 on CPython
+    # requires numpy<2. Keep APP_PYTHON_STANDALONE_URL_MACOS_X64 on CPython
     # 3.11 or 3.12: a newer standalone (e.g. 3.13) has no torch==2.2.2 wheel, so
     # the Intel build fails at pip install / the import smoke test in
     # scripts/build-installer.mjs. The numpy<2 pin below keeps the bundled and

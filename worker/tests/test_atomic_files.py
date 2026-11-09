@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker import atomic_files
+from worker_core import atomic_files
 
 
 def test_atomic_write_text_replaces_existing_bytes(tmp_path: Path) -> None:

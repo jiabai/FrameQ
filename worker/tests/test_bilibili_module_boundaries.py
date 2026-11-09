@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
-WORKER_PACKAGE = WORKER_ROOT / "frameq_worker"
+WORKER_PACKAGE = WORKER_ROOT / "worker_core"
 ROOT_ADAPTER = WORKER_PACKAGE / "bilibili_fallback.py"
 PRIVATE_MODULES = {
     "types": WORKER_PACKAGE / "bilibili" / "types.py",
@@ -14,21 +14,21 @@ PRIVATE_MODULES = {
     "artifacts": WORKER_PACKAGE / "bilibili" / "artifacts.py",
 }
 FORBIDDEN_PRIVATE_IMPORT_PREFIXES = (
-    "frameq_worker.asr",
-    "frameq_worker.bilibili_fallback",
-    "frameq_worker.ai_artifacts",
-    "frameq_worker.ai_prompts",
-    "frameq_worker.ai_runtime",
-    "frameq_worker.dissection_agent",
-    "frameq_worker.dissection_report",
-    "frameq_worker.insight_errors",
-    "frameq_worker.summary_agent",
-    "frameq_worker.topic_agent",
-    "frameq_worker.transcript_chunks",
-    "frameq_worker.llm",
-    "frameq_worker.media",
-    "frameq_worker.pipeline",
-    "frameq_worker.task_store",
+    "worker_core.asr",
+    "worker_core.bilibili_fallback",
+    "worker_core.ai_artifacts",
+    "worker_core.ai_prompts",
+    "worker_core.ai_runtime",
+    "worker_core.dissection_agent",
+    "worker_core.dissection_report",
+    "worker_core.insight_errors",
+    "worker_core.summary_agent",
+    "worker_core.topic_agent",
+    "worker_core.transcript_chunks",
+    "worker_core.llm",
+    "worker_core.media",
+    "worker_core.pipeline",
+    "worker_core.task_store",
 )
 BILIBILI_PROGRESS_CODES = {
     "bilibili.metadata.resolving",
@@ -79,7 +79,7 @@ def test_production_modules_outside_root_do_not_import_bilibili_children() -> No
         private_imports = sorted(
             imported
             for imported in _imported_modules(module_path)
-            if imported.startswith("frameq_worker.bilibili.")
+            if imported.startswith("worker_core.bilibili.")
         )
         if private_imports:
             violations[module_path.name] = private_imports
@@ -92,9 +92,9 @@ def test_transport_owns_urllib_and_safe_streaming_dependencies() -> None:
     root_imports = _imported_modules(ROOT_ADAPTER)
 
     assert "urllib.request" in transport_imports
-    assert "frameq_worker.download_reliability" in transport_imports
+    assert "worker_core.download_reliability" in transport_imports
     assert "urllib.request" not in root_imports
-    assert "frameq_worker.download_reliability" not in root_imports
+    assert "worker_core.download_reliability" not in root_imports
 
 
 def test_artifacts_owns_ffmpeg_and_download_attempt_dependencies() -> None:
@@ -104,9 +104,9 @@ def test_artifacts_owns_ffmpeg_and_download_attempt_dependencies() -> None:
     root_imports = _imported_modules(ROOT_ADAPTER)
 
     assert "subprocess" in artifacts_imports
-    assert "frameq_worker.download_reliability" in artifacts_imports
+    assert "worker_core.download_reliability" in artifacts_imports
     assert "subprocess" not in root_imports
-    assert "frameq_worker.download_reliability" not in root_imports
+    assert "worker_core.download_reliability" not in root_imports
 
 
 def test_artifacts_owns_dash_cleanup_primitives() -> None:

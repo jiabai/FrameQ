@@ -8,7 +8,7 @@ impl Fixture {
         let config=base.join("config");let resources=base.join("resources");let target=base.join("target");
         for path in [&config,&resources,&target]{fs::create_dir_all(path).unwrap();}
         let config=config.canonicalize().unwrap();let resources=resources.canonicalize().unwrap();let target=target.canonicalize().unwrap();
-        fs::write(config.join(".env"),format!("FRAMEQ_OUTPUT_DIR={}\n",config.join("outputs").display())).unwrap();
+        fs::write(config.join(".env"),format!("APP_OUTPUT_DIR={}\n",config.join("outputs").display())).unwrap();
         Self{base:base.canonicalize().unwrap(),config,resources,target}
     }
     fn write(&self,path:&str,bytes:&[u8]) {let path=self.config.join(path);fs::create_dir_all(path.parent().unwrap()).unwrap();fs::write(path,bytes).unwrap();}
@@ -254,7 +254,7 @@ fn stored_inventory_reference_contract_resumes_actual_interrupted_copy_and_rejec
 
 #[test]
 fn relative_legacy_requires_explicit_source_and_unrecognized_custom_files_block() {
-    let f=Fixture::new();fs::write(f.config.join(".env"),b"FRAMEQ_OUTPUT_DIR=relative-results\n").unwrap();let m=f.manager();
+    let f=Fixture::new();fs::write(f.config.join(".env"),b"APP_OUTPUT_DIR=relative-results\n").unwrap();let m=f.manager();
     assert_eq!(m.prepare(f.target.clone(),vec![],"main",0).unwrap_err().code,"LegacySourceAmbiguous");
     let f=Fixture::new();let custom=f.base.join("custom");fs::create_dir(&custom).unwrap();fs::write(custom.join("unowned"),b"keep").unwrap();let m=f.manager();
     assert_eq!(m.prepare(f.target.clone(),vec![custom],"main",0).unwrap_err().code,"LegacySourceAmbiguous");
@@ -318,14 +318,14 @@ fn interrupted_copy_is_reopened_from_durable_operation() {
 #[test]
 #[ignore="由阶段终止测试在独立真实进程中执行"]
 fn storage_child_process() {
-    let config=PathBuf::from(std::env::var_os("FRAMEQ_TEST_STORAGE_CONFIG").expect("isolated test config"));
+    let config=PathBuf::from(std::env::var_os("APP_TEST_STORAGE_CONFIG").expect("isolated test config"));
     let base=config.parent().unwrap();let resources=base.join("resources");let target=base.join("target");
-    let action=std::env::var("FRAMEQ_TEST_STORAGE_ACTION").unwrap();
+    let action=std::env::var("APP_TEST_STORAGE_ACTION").unwrap();
     if action=="lock" {
         let result=DataStorageManager::open(config,resources);assert_eq!(result.err().unwrap().code,"Busy");println!("STORAGE_BUSY_CONFIRMED");return;
     }
     let m=DataStorageManager::open(config,resources).unwrap();
-    let stop=std::env::var("FRAMEQ_TEST_STORAGE_PHASE").unwrap();
+    let stop=std::env::var("APP_TEST_STORAGE_PHASE").unwrap();
     let notify=|phase:&str|{println!("STORAGE_DURABLE_PHASE:{phase}");std::io::stdout().flush().unwrap();loop{std::thread::park();}};
     if action=="prepare" {m.prepare(target,vec![],"worker",m.state().generation).unwrap();notify("prepared");}
     else if action=="start" {
@@ -347,7 +347,7 @@ fn child_command(f:&Fixture,action:&str,phase:&str)->std::process::Command {
     let mut command=std::process::Command::new(std::env::current_exe().unwrap());
     let module=module_path!().split_once("::").unwrap().1;
     command.args(["--ignored","--exact",&format!("{module}::storage_child_process"),"--nocapture"])
-        .env("FRAMEQ_TEST_STORAGE_CONFIG",&f.config).env("FRAMEQ_TEST_STORAGE_ACTION",action).env("FRAMEQ_TEST_STORAGE_PHASE",phase)
+        .env("APP_TEST_STORAGE_CONFIG",&f.config).env("APP_TEST_STORAGE_ACTION",action).env("APP_TEST_STORAGE_PHASE",phase)
         .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());command
 }
 

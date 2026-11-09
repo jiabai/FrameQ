@@ -710,7 +710,7 @@ mod selection_tests {
             .join(format!("selection-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(path.join("config/outputs")).expect("create isolated configuration");
         let path = path.canonicalize().expect("resolve workspace");
-        fs::write(path.join("config/.env"), format!("FRAMEQ_OUTPUT_DIR={}\n", crate::path_to_env_string(path.join("config/outputs"))))
+        fs::write(path.join("config/.env"), format!("APP_OUTPUT_DIR={}\n", crate::path_to_env_string(path.join("config/outputs"))))
             .expect("write isolated configuration");
         path
     }
@@ -777,10 +777,10 @@ mod selection_tests {
     }
 
     #[test]
-    #[ignore = "需要显式指定另一真实卷的隔离 FRAMEQ_STORAGE_CROSS_VOLUME_ROOT"]
+    #[ignore = "需要显式指定另一真实卷的隔离 APP_STORAGE_CROSS_VOLUME_ROOT"]
     fn cross_volume_source_is_copied_verified_and_retained() {
         let root = workspace();
-        let other = PathBuf::from(std::env::var_os("FRAMEQ_STORAGE_CROSS_VOLUME_ROOT").expect("isolated second volume root"));
+        let other = PathBuf::from(std::env::var_os("APP_STORAGE_CROSS_VOLUME_ROOT").expect("isolated second volume root"));
         assert!(other.is_absolute());
         let source = other.join(format!("cross-volume-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(source.join("tasks/cross-volume/transcript")).unwrap();
@@ -894,7 +894,7 @@ mod selection_tests {
     #[test]
     #[ignore = "仅用于指定独立 bundle ID 的真实原生迁移恢复验收"]
     fn prepare_existing_isolated_native_library_for_restart_acceptance() {
-        let config = PathBuf::from(std::env::var_os("FRAMEQ_NATIVE_ACCEPTANCE_CONFIG").expect("isolated native configuration")).canonicalize().unwrap();
+        let config = PathBuf::from(std::env::var_os("APP_NATIVE_ACCEPTANCE_CONFIG").expect("isolated native configuration")).canonicalize().unwrap();
         assert_eq!(config.file_name().unwrap(), "com.frameq.storage-acceptance-20261101-3e8a");
         assert!(!config.join("auth").exists());
         let resources = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").canonicalize().unwrap();

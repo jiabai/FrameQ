@@ -57,8 +57,8 @@ function walkFiles(root) {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function main() {
-  const canonical = join(repoRoot, "worker", "frameq_worker");
-  const packaged = join(repoRoot, "app", "src-tauri", "resources", "worker", "frameq_worker");
+  const canonical = join(repoRoot, "worker", "worker_core");
+  const packaged = join(repoRoot, "app", "src-tauri", "resources", "worker", "worker_core");
   const errors = compareWorkerTrees(canonical, packaged);
   if (errors.length > 0) {
     console.error("Packaged worker is out of sync with the canonical source:");

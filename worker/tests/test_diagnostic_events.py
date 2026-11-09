@@ -9,9 +9,9 @@ import urllib.error
 from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
 
-import frameq_worker.diagnostic_events as diagnostic_events
 import pytest
-from frameq_worker.diagnostic_events import (
+import worker_core.diagnostic_events as diagnostic_events
+from worker_core.diagnostic_events import (
     DIAGNOSTIC_CODES,
     DIAGNOSTIC_PHASES,
     DiagnosticEvent,
@@ -19,7 +19,7 @@ from frameq_worker.diagnostic_events import (
     render_diagnostic_event,
     validate_diagnostic_event,
 )
-from frameq_worker.model_download import ARCHIVE_INVALID_ERROR_CODE, ModelDownloadError
+from worker_core.model_download import ARCHIVE_INVALID_ERROR_CODE, ModelDownloadError
 
 
 def load_diagnostic_contract() -> dict[str, object]:
@@ -204,7 +204,7 @@ def test_renders_frozen_valid_event_as_compact_ascii_json() -> None:
     event = DiagnosticEvent(**event_values(exception_type="ReadTimeout"))
 
     assert render_diagnostic_event(event) == (
-        'FRAMEQ_DIAGNOSTIC {"version":1,"operation":"download_asr_model",'
+        'APP_DIAGNOSTIC {"version":1,"operation":"download_asr_model",'
         '"phase":"primary_model","category":"network","code":"connection_timeout",'
         '"exception_type":"ReadTimeout"}'
     )

@@ -4,8 +4,8 @@ use super::*;
 fn hardlinked_owner_executable_is_preserved_live_and_recovered_after_exit() {
     use std::process::{Command, Stdio};
     const NAME: &str = "web_page::ownership::tests::hardlinked_owner_executable_is_preserved_live_and_recovered_after_exit";
-    const CACHE: &str = "FRAMEQ_HARDLINKED_OWNER_CACHE";
-    const COMPONENT: &str = "FRAMEQ_HARDLINKED_OWNER_COMPONENT";
+    const CACHE: &str = "APP_HARDLINKED_OWNER_CACHE";
+    const COMPONENT: &str = "APP_HARDLINKED_OWNER_COMPONENT";
     if let Some(cache) = std::env::var_os(CACHE) {
         let cache = PathBuf::from(cache);
         let component = PathBuf::from(std::env::var_os(COMPONENT).unwrap());
@@ -105,9 +105,9 @@ fn damaged_ownership_and_replaced_directory_are_retained() {
 #[ignore = "requires actual bundled Python and permission to terminate owned child processes"]
 fn interrupted_owner_recovery_terminates_only_recorded_real_python() {
     use std::process::{Command, Stdio};
-    const FIXTURE: &str = "FRAMEQ_OWNERSHIP_FIXTURE";
-    const FOREIGN: &str = "FRAMEQ_OWNERSHIP_FOREIGN";
-    const BEFORE_RECORD: &str = "FRAMEQ_OWNERSHIP_BEFORE_RECORD";
+    const FIXTURE: &str = "APP_OWNERSHIP_FIXTURE";
+    const FOREIGN: &str = "APP_OWNERSHIP_FOREIGN";
+    const BEFORE_RECORD: &str = "APP_OWNERSHIP_BEFORE_RECORD";
     const NAME: &str = "web_page::ownership::tests::interrupted_owner_recovery_terminates_only_recorded_real_python";
     let python = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/python")
         .join(if cfg!(windows) { "python.exe" } else { "bin/python3" }).canonicalize().unwrap();
@@ -203,7 +203,7 @@ fn exited_root_receipt_never_adopts_a_new_python_with_the_same_operation() {
     let cache = cache.canonicalize().unwrap();
     let mut creator = Command::new(std::env::current_exe().unwrap());
     creator.args(["--exact", "web_page::ownership::tests::interrupted_owner_recovery_terminates_only_recorded_real_python", "--ignored", "--nocapture"])
-        .env("FRAMEQ_OWNERSHIP_FIXTURE", &cache)
+        .env("APP_OWNERSHIP_FIXTURE", &cache)
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)] { use std::os::windows::process::CommandExt; creator.creation_flags(0x0800_0000); }
     let mut creator = creator.spawn().unwrap();

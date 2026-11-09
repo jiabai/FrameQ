@@ -58,11 +58,11 @@ const desktopReleaseWorkflowPath = resolve(
 const workerManifestPath = resolve(import.meta.dirname, "../../pyproject.toml");
 const bundledWorkerCliPath = resolve(
   import.meta.dirname,
-  "../src-tauri/resources/worker/frameq_worker/cli.py",
+  "../src-tauri/resources/worker/worker_core/cli.py",
 );
 const bundledWorkerModelDownloadPath = resolve(
   import.meta.dirname,
-  "../src-tauri/resources/worker/frameq_worker/model_download.py",
+  "../src-tauri/resources/worker/worker_core/model_download.py",
 );
 
 describe("Tauri desktop window configuration", () => {
@@ -178,12 +178,12 @@ describe("Tauri desktop window configuration", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
     expect(script).not.toContain("SenseVoiceModelDir");
-    expect(script).not.toContain("FRAMEQ_SENSEVOICE_MODEL_DIR");
+    expect(script).not.toContain("APP_SENSEVOICE_MODEL_DIR");
     expect(script).not.toContain("resources\\models");
     expect(script).not.toContain("Copy-SenseVoiceModelCache");
     expect(script).not.toContain("Require-DirectoryWithFiles");
     expect(script).toContain("copyWorkerRuntime(workerRoot)");
-    expect(script).toContain('join(repoRoot, "worker", "frameq_worker")');
+    expect(script).toContain('join(repoRoot, "worker", "worker_core")');
     expect(script).toContain("normalizeUnixPythonLaunchers");
     expect(script).toContain("PYTHONDONTWRITEBYTECODE");
     expect(script).not.toContain("powershell");
@@ -194,7 +194,7 @@ describe("Tauri desktop window configuration", () => {
     const script = readFileSync(installerScriptPath, "utf8");
 
     expect(script).toContain("ffprobeArchiveUrl");
-    expect(script).toContain("FRAMEQ_FFPROBE_ARCHIVE_URL");
+    expect(script).toContain("APP_FFPROBE_ARCHIVE_URL");
     expect(script).toContain("--ffprobe-archive-url");
     expect(script).toContain("const ffprobeArchive = options.ffprobeArchiveUrl");
     expect(script).toContain("await copyFfmpegFromArchive(ffmpegArchive, ffprobeArchive, binRoot, options.target)");
@@ -270,11 +270,11 @@ describe("Tauri desktop window configuration", () => {
     const envExample = readFileSync(rootEnvExamplePath, "utf8");
 
     expect(script).toContain('join(repoRoot, ".env.example")');
-    expect(envExample).toContain("FRAMEQ_OUTPUT_DIR=");
-    expect(envExample).toContain("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall");
-    expect(envExample).not.toContain("FRAMEQ_LLM_API_KEY");
-    expect(envExample).not.toContain("FRAMEQ_LLM_BASE_URL");
-    expect(envExample).not.toContain("FRAMEQ_LLM_MODEL=");
+    expect(envExample).toContain("APP_OUTPUT_DIR=");
+    expect(envExample).toContain("APP_ASR_MODEL=iic/SenseVoiceSmall");
+    expect(envExample).not.toContain("APP_LLM_API_KEY");
+    expect(envExample).not.toContain("APP_LLM_BASE_URL");
+    expect(envExample).not.toContain("APP_LLM_MODEL=");
   });
 
   test("installer script maps macOS targets to explicit Tauri triples", () => {
@@ -298,8 +298,8 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("includeUpdaterJson: true");
     expect(workflow).toContain("updaterJsonPreferNsis: true");
     expect(workflow).toContain("TAURI_SIGNING_PRIVATE_KEY");
-    expect(workflow).toContain("FRAMEQ_PYTHON_STANDALONE_URL");
-    expect(workflow).toContain("FRAMEQ_FFMPEG_ARCHIVE_URL");
+    expect(workflow).toContain("APP_PYTHON_STANDALONE_URL");
+    expect(workflow).toContain("APP_FFMPEG_ARCHIVE_URL");
     expect(workflow).toContain("node scripts\\build-installer.mjs --target windows-x64 --skip-tauri-build");
     expect(workflow).not.toContain("shell: pwsh");
     expect(workflow).not.toContain("build-installer.ps1");
@@ -329,9 +329,9 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("build_macos_arm64:");
     expect(workflow).toContain("github.event_name == 'push' || inputs.build_macos_arm64");
     expect(workflow).toContain("runs-on: macos-15");
-    expect(workflow).toContain("FRAMEQ_PYTHON_STANDALONE_URL_ARM64");
-    expect(workflow).toContain("FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64");
-    expect(workflow).toContain("FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64");
+    expect(workflow).toContain("APP_PYTHON_STANDALONE_URL_ARM64");
+    expect(workflow).toContain("APP_FFMPEG_ARCHIVE_URL_ARM64");
+    expect(workflow).toContain("APP_FFPROBE_ARCHIVE_URL_ARM64");
     expect(workflow).toContain("node scripts/build-installer.mjs --target macos-arm64 --skip-tauri-build");
     expect(workflow).toContain("npm --prefix app run tauri -- build --bundles app --target aarch64-apple-darwin");
     expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ");
@@ -345,7 +345,7 @@ describe("Tauri desktop window configuration", () => {
     // delocated @loader_path links inside the built .app). funasr 外置到组件，
     // 包内冒烟只保 ONNX 路径。
     expect(workflow).toContain(
-      'import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker; print(\'bundled runtime import OK\')',
+      'import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core; print(\'bundled runtime import OK\')',
     );
     expect(workflow).toContain('test -f "$RES/python/runtime-manifest.json"');
   });
@@ -393,10 +393,10 @@ describe("Tauri desktop window configuration", () => {
 
     // 包内只保 ONNX 路径；funasr/torch 由按需组件提供，组件侧单独冒烟。
     expect(script).toContain(
-      "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker",
+      "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core",
     );
     expect(script).toContain('"--extra", "pytorch"');
-    expect(script).toContain("import funasr, torch, torchaudio; import frameq_worker");
+    expect(script).toContain("import funasr, torch, torchaudio; import worker_core");
     expect(script).toContain('BUNDLED_MANIFEST_NAME = "runtime-manifest.json"');
     expect(script).not.toContain("MODEL_VERSION.txt");
   });
@@ -444,9 +444,9 @@ describe("Tauri desktop window configuration", () => {
 
     // torch==2.2.2 macOS x86_64 wheels stop at cp312, so the bundled standalone
     // must stay on CPython 3.11/3.12. Keep that rationale next to the pin so the
-    // secret FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 is not bumped blindly.
+    // secret APP_PYTHON_STANDALONE_URL_MACOS_X64 is not bumped blindly.
     expect(manifest).toContain("cp312");
-    expect(manifest).toContain("FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64");
+    expect(manifest).toContain("APP_PYTHON_STANDALONE_URL_MACOS_X64");
   });
 
   test("local bundled worker does not expose old history json helpers when present", () => {

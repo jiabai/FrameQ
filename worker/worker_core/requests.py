@@ -1,0 +1,524 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from worker_core.ai_prompts import DRAFT_PLATFORM_IDS
+from worker_core.asr import (
+    SENSEVOICE_SMALL_MODEL,
+    SENSEVOICE_SMALL_ONNX_MODEL,
+)
+from worker_core.desktop_contract import (
+    AUDIO_EXTENSIONS,
+    LOCAL_MEDIA_CONTRACT_VERSION,
+    PROCESS_VIDEO_CONTRACT_VERSION,
+    VIDEO_EXTENSIONS,
+)
+from worker_core.models import (
+    GenerationPreferences,
+    InspirationProfile,
+    PreferenceLabelSnapshot,
+    PreferenceLabelSnapshotItem,
+    PreferenceLabelValue,
+    PreferenceSnapshot,
+    ProcessLocalMediaRequest,
+    ProcessRequest,
+    RetryInsightsRequest,
+)
+from worker_core.output_language import is_output_language
+
+PROFILE_FIELD_OPTIONS: dict[str, set[str]] = {
+    "role": {
+        "content_creator",
+        "product_ops",
+        "marketing_sales",
+        "entrepreneur",
+        "student_researcher",
+        "teacher_trainer",
+        "investor_business_analyst",
+        "general_learner",
+        "unspecified",
+    },
+    "domain": {
+        "content_media",
+        "product_operations",
+        "marketing_sales",
+        "education_training",
+        "technology_rd",
+        "management_consulting",
+        "investment_business",
+        "freelance",
+        "general_perspective",
+        "unspecified",
+    },
+    "stage": {
+        "student",
+        "early_career",
+        "experienced_professional",
+        "manager",
+        "entrepreneur_operator",
+        "retired",
+        "unspecified",
+    },
+    "cityContext": {
+        "tier1_city",
+        "new_tier1_city",
+        "lower_tier_city",
+        "county_township",
+        "overseas",
+        "unspecified",
+    },
+    "genderPerspective": {
+        "unspecified",
+        "female_perspective",
+        "male_perspective",
+        "neutral_perspective",
+    },
+    "platforms": {
+        "douyin",
+        "xiaohongshu",
+        "wechat_channels",
+        "bilibili",
+        "wechat_official_account",
+        "podcast",
+        "course_community",
+        "internal_sharing",
+    },
+}
+
+# 必须列两个显式常量：用 DEFAULT_ASR_MODEL 拼集合会在默认切到 ONNX 后塌缩成单元素。
+DESKTOP_ASR_MODELS = frozenset({SENSEVOICE_SMALL_MODEL, SENSEVOICE_SMALL_ONNX_MODEL})
+
+GENERATION_FIELD_OPTIONS: dict[str, set[str]] = {
+    "goal": {
+        "content_creation",
+        "learning_understanding",
+        "review_deconstruction",
+        "business_insight",
+        "controversy_discussion",
+        "action_advice",
+    },
+    "scenario": {
+        "personal_notes",
+        "short_video",
+        "article_official_account",
+        "livestream_podcast",
+        "team_sharing",
+        "client_communication",
+        "course_community",
+    },
+    "angles": {
+        "topic_angle",
+        "contrarian_view",
+        "audience_pain_point",
+        "practical_advice",
+        "case_analogy",
+        "risk_controversy",
+        "trend_judgment",
+        "reusable_method",
+        "memorable_phrase",
+        "cognitive_refresh",
+    },
+    "audience": {
+        "self",
+        "beginners",
+        "peers",
+        "clients",
+        "boss_team",
+        "fans_readers",
+    },
+    "styles": {
+        "direct_sharp",
+        "gentle_inspiring",
+        "professional_analysis",
+        "grounded",
+        "storytelling",
+        "short_video_friendly",
+        "long_form_friendly",
+    },
+    "avoid": {
+        "chicken_soup",
+        "academic",
+        "vague",
+        "clickbait",
+        "commercialized",
+        "negative",
+        "grand_narrative",
+    },
+}
+
+TASK_ID_PATTERN = re.compile(r"^[0-9A-Za-z_-]+$")
+PROCESS_VIDEO_REQUEST_FIELDS = frozenset({"contract_version", "url", "asr_model"})
+INVALID_PROCESS_PAYLOAD_MESSAGE = "Process request payload was invalid."
+LOCAL_MEDIA_REQUEST_FIELDS = frozenset(
+    {
+        "contract_version",
+        "source_path",
+        "media_kind",
+        "safe_display_name",
+        "source_extension",
+        "asr_model",
+    }
+)
+INVALID_LOCAL_MEDIA_PAYLOAD_MESSAGE = "Local media request payload was invalid."
+RETRY_REQUEST_FIELDS = frozenset(
+    {
+        "task_id",
+        "target",
+        "output_language",
+        "preference_snapshot",
+        "insight_id",
+        "platform",
+    }
+)
+PREFERENCE_SNAPSHOT_FIELDS = frozenset(
+    {"profile", "profileSkipped", "generationPreferences", "labelSnapshot"}
+)
+GENERATION_PREFERENCE_FIELDS = frozenset(GENERATION_FIELD_OPTIONS)
+LABEL_SNAPSHOT_FIELDS = frozenset({"profile", "generationPreferences"})
+LABEL_SNAPSHOT_ITEM_FIELDS = frozenset({"field", "label", "values"})
+LABEL_VALUE_FIELDS = frozenset({"id", "label"})
+INVALID_RETRY_PAYLOAD_MESSAGE = "Retry request payload was invalid."
+UNSAFE_BASENAME_CHARACTER_PATTERN = re.compile(
+    r"[/\\\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]"
+)
+
+
+def parse_process_request(payload: object) -> ProcessRequest:
+    try:
+        return _parse_process_request(payload)
+    except (TypeError, ValueError):
+        raise ValueError(INVALID_PROCESS_PAYLOAD_MESSAGE) from None
+
+
+def _parse_process_request(payload: object) -> ProcessRequest:
+    if not isinstance(payload, dict) or set(payload) != PROCESS_VIDEO_REQUEST_FIELDS:
+        raise ValueError
+
+    if payload.get("contract_version") != PROCESS_VIDEO_CONTRACT_VERSION:
+        raise ValueError
+
+    url = payload.get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise ValueError
+
+    asr_model = payload.get("asr_model")
+    if not isinstance(asr_model, str) or asr_model not in DESKTOP_ASR_MODELS:
+        raise ValueError
+
+    return ProcessRequest(
+        url=url.strip(),
+        asr_model=asr_model,
+    )
+
+
+def parse_process_local_media_request(payload: object) -> ProcessLocalMediaRequest:
+    try:
+        return _parse_process_local_media_request(payload)
+    except (TypeError, ValueError, OSError):
+        raise ValueError(INVALID_LOCAL_MEDIA_PAYLOAD_MESSAGE) from None
+
+
+def _parse_process_local_media_request(payload: object) -> ProcessLocalMediaRequest:
+    if not isinstance(payload, dict) or set(payload) != LOCAL_MEDIA_REQUEST_FIELDS:
+        raise ValueError
+
+    contract_version = payload.get("contract_version")
+    if type(contract_version) is not int or contract_version != LOCAL_MEDIA_CONTRACT_VERSION:
+        raise ValueError
+
+    source_path_value = payload.get("source_path")
+    if not isinstance(source_path_value, str) or not source_path_value:
+        raise ValueError
+    source_path = Path(source_path_value)
+    if not source_path.is_absolute():
+        raise ValueError
+
+    media_kind = payload.get("media_kind")
+    if not isinstance(media_kind, str) or media_kind not in {"video", "audio"}:
+        raise ValueError
+
+    source_extension = payload.get("source_extension")
+    if not isinstance(source_extension, str):
+        raise ValueError
+    allowed_extensions = (
+        VIDEO_EXTENSIONS if media_kind == "video" else AUDIO_EXTENSIONS
+    )
+    if source_extension not in allowed_extensions:
+        raise ValueError
+    if source_path.suffix.lower() != f".{source_extension}":
+        raise ValueError
+
+    safe_display_name = payload.get("safe_display_name")
+    if not _is_safe_local_media_display_name(safe_display_name, source_extension):
+        raise ValueError
+
+    asr_model = payload.get("asr_model")
+    if not isinstance(asr_model, str) or asr_model not in DESKTOP_ASR_MODELS:
+        raise ValueError
+
+    return ProcessLocalMediaRequest(
+        source_path=source_path,
+        media_kind=media_kind,
+        safe_display_name=safe_display_name,
+        source_extension=source_extension,
+        asr_model=asr_model,
+    )
+
+
+def _is_safe_local_media_display_name(value: object, extension: str) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and len(value) <= 160
+        and value not in {".", ".."}
+        and UNSAFE_BASENAME_CHARACTER_PATTERN.search(value) is None
+        and value.lower().endswith(f".{extension}")
+    )
+
+
+def parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
+    try:
+        return _parse_retry_insights_request(payload)
+    except (TypeError, ValueError):
+        raise ValueError(INVALID_RETRY_PAYLOAD_MESSAGE) from None
+
+
+def _parse_retry_insights_request(payload: object) -> RetryInsightsRequest:
+    if not isinstance(payload, dict) or set(payload) - RETRY_REQUEST_FIELDS:
+        raise ValueError
+
+    task_id = payload.get("task_id")
+    if not isinstance(task_id, str) or not task_id.strip():
+        raise ValueError
+    task_id = task_id.strip()
+    if not TASK_ID_PATTERN.fullmatch(task_id):
+        raise ValueError
+
+    target = payload.get("target")
+    if target not in {"summary", "insights", "dissection", "draft", "transcript", "title"}:
+        raise ValueError
+    if target == "title" and set(payload) != {"task_id", "target", "output_language"}:
+        raise ValueError
+
+    output_language = payload.get("output_language")
+    if not is_output_language(output_language):
+        raise ValueError
+
+    preference_snapshot = None
+    if "preference_snapshot" in payload:
+        raw_preference_snapshot = payload["preference_snapshot"]
+        if target != "insights" or not isinstance(raw_preference_snapshot, dict):
+            raise ValueError
+        preference_snapshot = parse_preference_snapshot(raw_preference_snapshot)
+
+    # platform：请求级字段，仅 target="draft" 携带；非 draft target 出现即非法。
+    raw_platform = payload.get("platform")
+    if target != "draft" and raw_platform is not None:
+        raise ValueError
+
+    insight_id: int | None = None
+    platform: str | None = None
+    if target == "draft":
+        # seed is a single Insight id, validated against insights.json in the worker.
+        if "insight_id" not in payload or payload.get("insight_id") is None:
+            raise ValueError
+        raw_insight_id = payload.get("insight_id")
+        # bool is a subclass of int — reject True/False explicitly.
+        if isinstance(raw_insight_id, bool) or not isinstance(raw_insight_id, int):
+            raise ValueError
+        insight_id = raw_insight_id
+
+        # platform 校验在 checkout 之前：缺失 / 非字符串 / 空白 / 非 9-id 词表
+        # 均抛 ValueError（→ INVALID_RETRY_PAYLOAD，不消耗额度）。
+        if not isinstance(raw_platform, str):
+            raise ValueError
+        platform = raw_platform.strip()
+        if not platform or platform not in DRAFT_PLATFORM_IDS:
+            raise ValueError
+
+    return RetryInsightsRequest(
+        task_id=task_id,
+        target=target,
+        output_language=output_language,
+        preference_snapshot=preference_snapshot,
+        insight_id=insight_id,
+        platform=platform,
+    )
+
+
+def parse_preference_snapshot(payload: object) -> PreferenceSnapshot | None:
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        raise ValueError("preference_snapshot must be a JSON object.")
+    if set(payload) != PREFERENCE_SNAPSHOT_FIELDS:
+        raise ValueError("preference_snapshot fields were invalid.")
+
+    profile_skipped = payload.get("profileSkipped")
+    if not isinstance(profile_skipped, bool):
+        raise ValueError("preference_snapshot.profileSkipped must be a boolean.")
+
+    generation_preferences = _parse_generation_preferences(
+        payload.get("generationPreferences")
+    )
+    label_snapshot = _parse_label_snapshot(payload.get("labelSnapshot"))
+    profile_payload = payload.get("profile")
+    profile = None if profile_payload is None else _parse_inspiration_profile(profile_payload)
+
+    return PreferenceSnapshot(
+        profile=profile,
+        profile_skipped=profile_skipped,
+        generation_preferences=generation_preferences,
+        label_snapshot=label_snapshot,
+    )
+
+
+def _parse_inspiration_profile(payload: object) -> InspirationProfile:
+    if not isinstance(payload, dict):
+        raise ValueError("preference_snapshot.profile must be a JSON object or null.")
+    if set(payload) != set(PROFILE_FIELD_OPTIONS):
+        raise ValueError("preference_snapshot.profile fields were invalid.")
+
+    return InspirationProfile(
+        role=_read_single_option(payload, "role", PROFILE_FIELD_OPTIONS),
+        domain=_read_single_option(payload, "domain", PROFILE_FIELD_OPTIONS),
+        stage=_read_single_option(payload, "stage", PROFILE_FIELD_OPTIONS),
+        city_context=_read_single_option(payload, "cityContext", PROFILE_FIELD_OPTIONS),
+        gender_perspective=_read_single_option(
+            payload,
+            "genderPerspective",
+            PROFILE_FIELD_OPTIONS,
+        ),
+        platforms=_read_multi_option(payload, "platforms", PROFILE_FIELD_OPTIONS, 0, 3),
+    )
+
+
+def _parse_generation_preferences(payload: object) -> GenerationPreferences:
+    if not isinstance(payload, dict):
+        raise ValueError("preference_snapshot.generationPreferences must be a JSON object.")
+    if set(payload) != GENERATION_PREFERENCE_FIELDS:
+        raise ValueError("preference_snapshot.generationPreferences fields were invalid.")
+
+    return GenerationPreferences(
+        goal=_read_single_option(payload, "goal", GENERATION_FIELD_OPTIONS),
+        scenario=_read_single_option(payload, "scenario", GENERATION_FIELD_OPTIONS),
+        angles=_read_multi_option(payload, "angles", GENERATION_FIELD_OPTIONS, 1, 3),
+        audience=_read_single_option(payload, "audience", GENERATION_FIELD_OPTIONS),
+        styles=_read_multi_option(payload, "styles", GENERATION_FIELD_OPTIONS, 1, 2),
+        avoid=_read_multi_option(payload, "avoid", GENERATION_FIELD_OPTIONS, 0, 3),
+    )
+
+
+def _parse_label_snapshot(payload: object) -> PreferenceLabelSnapshot:
+    if not isinstance(payload, dict):
+        raise ValueError("preference_snapshot.labelSnapshot must be a JSON object.")
+    if set(payload) != LABEL_SNAPSHOT_FIELDS:
+        raise ValueError("preference_snapshot.labelSnapshot fields were invalid.")
+
+    return PreferenceLabelSnapshot(
+        profile=_parse_label_snapshot_items(payload.get("profile"), "profile"),
+        generation_preferences=_parse_label_snapshot_items(
+            payload.get("generationPreferences"),
+            "generationPreferences",
+        ),
+    )
+
+
+def _parse_label_snapshot_items(
+    payload: object,
+    section: str,
+) -> tuple[PreferenceLabelSnapshotItem, ...]:
+    if not isinstance(payload, list):
+        raise ValueError(f"preference_snapshot.labelSnapshot.{section} must be a list.")
+
+    allowed_fields = (
+        PROFILE_FIELD_OPTIONS
+        if section == "profile"
+        else GENERATION_FIELD_OPTIONS
+    )
+    return tuple(
+        _parse_label_snapshot_item(item, section, allowed_fields) for item in payload
+    )
+
+
+def _parse_label_snapshot_item(
+    payload: object,
+    section: str,
+    allowed_fields: dict[str, set[str]],
+) -> PreferenceLabelSnapshotItem:
+    if not isinstance(payload, dict):
+        raise ValueError(f"preference_snapshot.labelSnapshot.{section} items must be objects.")
+    if set(payload) != LABEL_SNAPSHOT_ITEM_FIELDS:
+        raise ValueError(
+            f"preference_snapshot.labelSnapshot.{section} item fields were invalid."
+        )
+
+    field = payload.get("field")
+    label = payload.get("label")
+    values = payload.get("values")
+    if not isinstance(field, str) or field not in allowed_fields:
+        raise ValueError("preference_snapshot.labelSnapshot item field was invalid.")
+    if not isinstance(label, str):
+        raise ValueError("preference_snapshot.labelSnapshot item label must be a string.")
+    if not isinstance(values, list):
+        raise ValueError("preference_snapshot.labelSnapshot item values must be a list.")
+
+    return PreferenceLabelSnapshotItem(
+        field=field,
+        label=label,
+        values=tuple(_parse_label_value(value) for value in values),
+    )
+
+
+def _parse_label_value(payload: object) -> PreferenceLabelValue:
+    if not isinstance(payload, dict):
+        raise ValueError("preference_snapshot.labelSnapshot values must be objects.")
+    if set(payload) != LABEL_VALUE_FIELDS:
+        raise ValueError("preference_snapshot.labelSnapshot value fields were invalid.")
+
+    value_id = payload.get("id")
+    label = payload.get("label")
+    if not isinstance(value_id, str) or not value_id.strip():
+        raise ValueError("preference_snapshot.labelSnapshot value id must be a string.")
+    if not isinstance(label, str):
+        raise ValueError("preference_snapshot.labelSnapshot value label must be a string.")
+
+    return PreferenceLabelValue(id=value_id, label=label)
+
+
+def _read_single_option(
+    payload: dict[object, object],
+    field: str,
+    allowed_options: dict[str, set[str]],
+) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str) or value not in allowed_options[field]:
+        raise ValueError(f"preference_snapshot.{field} has an invalid option id.")
+    return value
+
+
+def _read_multi_option(
+    payload: dict[object, object],
+    field: str,
+    allowed_options: dict[str, set[str]],
+    min_count: int,
+    max_count: int,
+) -> tuple[str, ...]:
+    values = payload.get(field)
+    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+        raise ValueError(f"preference_snapshot.{field} must be a list of option ids.")
+    if len(values) < min_count or len(values) > max_count:
+        raise ValueError(
+            f"preference_snapshot.{field} must include between {min_count} and {max_count} ids."
+        )
+    if len(set(values)) != len(values):
+        raise ValueError(f"preference_snapshot.{field} must not contain duplicate ids.")
+    if any(value not in allowed_options[field] for value in values):
+        raise ValueError(f"preference_snapshot.{field} has an invalid option id.")
+    return tuple(values)
+
+
+def optional_env(env: dict[str, str], key: str) -> str | None:
+    value = env.get(key, "").strip()
+    return value or None

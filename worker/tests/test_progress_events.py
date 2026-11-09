@@ -94,7 +94,7 @@ MODEL_SPECS = {
 
 
 def progress_events_module():
-    return importlib.import_module("frameq_worker.progress_events")
+    return importlib.import_module("worker_core.progress_events")
 
 
 def load_contract() -> dict[str, object]:
@@ -589,7 +589,7 @@ def test_contract_current_file_pattern_matches_portable_runtime_fixtures() -> No
 
 
 def test_every_python_producer_code_is_declared_at_its_actual_source() -> None:
-    root = Path(__file__).parents[1] / "frameq_worker"
+    root = Path(__file__).parents[1] / "worker_core"
     reserved_local_media_codes = {
         "local.media.validating",
         "local.video.copying",

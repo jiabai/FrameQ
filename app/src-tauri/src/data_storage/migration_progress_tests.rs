@@ -40,7 +40,7 @@ fn target_preflight_callback_rejection_cleans_its_created_entries() {
 }
 
 fn migration_manager(source:&Path)->DataStorageManager {
-    fs::write(source.join(".env"),format!("FRAMEQ_OUTPUT_DIR={}\n",source.join("outputs").display())).unwrap();
+    fs::write(source.join(".env"),format!("APP_OUTPUT_DIR={}\n",source.join("outputs").display())).unwrap();
     let resources=source.parent().unwrap().join("resources");fs::create_dir_all(&resources).unwrap();
     DataStorageManager::open(source.into(),resources.canonicalize().unwrap()).unwrap()
 }

@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker import task_transaction
-from frameq_worker.task_transaction import (
+from worker_core import task_transaction
+from worker_core.task_transaction import (
     JOURNAL_FILE_NAME,
     RecoveryOutcome,
     TaskArtifactCommitError,
@@ -384,7 +384,7 @@ def test_closed_destinations_match_shared_contract() -> None:
 
 
 def test_store_manifest_keys_come_from_the_transaction_owner() -> None:
-    from frameq_worker import task_store
+    from worker_core import task_store
 
     assert (
         task_store.ARTIFACT_KEY_BY_RELATIVE_PATH

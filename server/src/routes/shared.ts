@@ -35,7 +35,7 @@ const publicOperationErrors = new Set([
   "LLM base URL must start with http:// or https://.",
   "LLM model is required.",
   "LLM timeout seconds must be between 1 and 600.",
-  "FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY is required.",
+  "APP_LLM_CONFIG_ENCRYPTION_KEY is required.",
   "Anysearch MCP URL is required.",
   "Anysearch MCP URL must start with http:// or https://.",
 ]);

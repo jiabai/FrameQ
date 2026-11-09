@@ -198,7 +198,7 @@ describe("desktop/worker contract", () => {
     expect(contract.contractVersion).toBe(11);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
-    expect(contract.events.workerDiagnosticPrefix).toBe("FRAMEQ_DIAGNOSTIC ");
+    expect(contract.events.workerDiagnosticPrefix).toBe("APP_DIAGNOSTIC ");
   });
 
   test("keeps watchdog policy out of requests while accepting the fixed timeout codes", () => {

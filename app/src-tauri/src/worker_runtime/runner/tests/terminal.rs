@@ -143,7 +143,7 @@ fn lifecycle_log_details_exclude_command_request_paths_and_worker_content() {
         program: PathBuf::from(format!("C:/private/{secret}/python.exe")),
         args: vec![format!("--prompt={secret}")],
         stdin_payload: Some(format!(r#"{{"transcript":"{secret}"}}"#)),
-        env: vec![("FRAMEQ_LLM_SESSION_TOKEN".to_string(), secret.to_string())],
+        env: vec![("APP_LLM_SESSION_TOKEN".to_string(), secret.to_string())],
         env_remove: Vec::new(),
         current_dir: PathBuf::from(format!("C:/private/{secret}/data")),
     };

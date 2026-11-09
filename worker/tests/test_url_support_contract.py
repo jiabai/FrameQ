@@ -6,24 +6,24 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from frameq_worker import media
-from frameq_worker.bilibili_fallback import (
+from worker_core import media
+from worker_core.bilibili_fallback import (
     BilibiliFallbackError,
     parse_bilibili_input,
 )
-from frameq_worker.bilibili_fallback import (
+from worker_core.bilibili_fallback import (
     HttpResponse as BilibiliHttpResponse,
 )
-from frameq_worker.douyin_fallback import (
+from worker_core.douyin_fallback import (
     HttpResponse as DouyinHttpResponse,
 )
-from frameq_worker.douyin_fallback import (
+from worker_core.douyin_fallback import (
     resolve_aweme_id_from_input,
 )
-from frameq_worker.xiaohongshu_fallback import (
+from worker_core.xiaohongshu_fallback import (
     HttpResponse as XiaohongshuHttpResponse,
 )
-from frameq_worker.xiaohongshu_fallback import (
+from worker_core.xiaohongshu_fallback import (
     XiaohongshuFallbackError,
     parse_xiaohongshu_input,
 )

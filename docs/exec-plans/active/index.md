@@ -1,5 +1,7 @@
 # Active Exec Plans
 
+- `2026-11-09-project-rename-locus-plan.md` — 改名为 Locus 并彻底去品牌化：先把包名、环境变量、应用标识符、磁盘契约与日志改成中性名（`worker_core` / `APP_*` / `pro.8xf.app` / `task.json`），再把品牌收敛到三处常量并用 `{{product}}` 渲染文案；不写迁移代码，最后跑三端门禁与本机重装验证。规格、命名规范与计划已定稿，等待确认后执行。
+
 
 
 

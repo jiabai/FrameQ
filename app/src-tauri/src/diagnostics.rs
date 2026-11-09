@@ -106,8 +106,8 @@ pub(crate) fn sanitize_diagnostic_text(text: &str) -> String {
 fn redact_sensitive_line(line: &str) -> String {
     let trimmed = line.trim_start();
     let sensitive_prefixes = [
-        "FRAMEQ_LLM_API_KEY=",
-        "FRAMEQ_LLM_SESSION_TOKEN=",
+        "APP_LLM_API_KEY=",
+        "APP_LLM_SESSION_TOKEN=",
         "Authorization:",
         "Cookie:",
         "Set-Cookie:",
@@ -340,7 +340,7 @@ mod tests {
         append_desktop_log(
             &paths,
             "worker.finish",
-            "FRAMEQ_LLM_API_KEY=sk-secret\nFRAMEQ_LLM_SESSION_TOKEN=session-token\nhttps://rr1---sn.googlevideo.com/videoplayback?sig=SECRET Use --cookies cookies.txt.",
+            "APP_LLM_API_KEY=sk-secret\nAPP_LLM_SESSION_TOKEN=session-token\nhttps://rr1---sn.googlevideo.com/videoplayback?sig=SECRET Use --cookies cookies.txt.",
         )
         .expect("write desktop log");
 
@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn diagnostic_text_redacts_llm_and_cookie_material() {
         let sanitized = sanitize_diagnostic_text(
-            "FRAMEQ_LLM_API_KEY=secret\nFRAMEQ_LLM_SESSION_TOKEN=token\nAuthorization: Bearer abc\nCookie: SID=1\n--cookies-from-browser chrome",
+            "APP_LLM_API_KEY=secret\nAPP_LLM_SESSION_TOKEN=token\nAuthorization: Bearer abc\nCookie: SID=1\n--cookies-from-browser chrome",
         );
 
         assert!(sanitized.contains("[redacted]"));

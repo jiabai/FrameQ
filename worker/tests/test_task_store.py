@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from frameq_worker.models import (
+from worker_core.models import (
     GenerationPreferences,
     JobStage,
     PreferenceLabelSnapshot,
@@ -16,8 +16,8 @@ from frameq_worker.models import (
     ProcessResult,
     TranscriptMetadata,
 )
-from frameq_worker.source_identity import SourceIdentity
-from frameq_worker.task_store import (
+from worker_core.source_identity import SourceIdentity
+from worker_core.task_store import (
     LocalFileTaskSource,
     TaskContext,
     TaskStoreFacade,
@@ -244,7 +244,7 @@ def test_finalize_preserves_previous_manifest_when_atomic_replace_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    atomic_files = importlib.import_module("worker_core.atomic_files")
     store, context = _create_store_context(tmp_path)
     store.finalize(context, ProcessResult(status=JobStage.COMPLETED))
     previous_manifest = context.paths.manifest_path.read_text(encoding="utf-8")
@@ -275,7 +275,7 @@ def test_preference_snapshot_preserves_previous_json_when_atomic_replace_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    atomic_files = importlib.import_module("worker_core.atomic_files")
     store, context = _create_store_context(tmp_path)
     previous_snapshot = '{"profile_skipped":false}\n'
     context.paths.preference_snapshot_path.write_text(
@@ -309,7 +309,7 @@ def test_manifest_sync_failure_does_not_replace_previous_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    atomic_files = importlib.import_module("frameq_worker.atomic_files")
+    atomic_files = importlib.import_module("worker_core.atomic_files")
     store, context = _create_store_context(tmp_path)
     store.finalize(context, ProcessResult(status=JobStage.COMPLETED))
     previous_manifest = context.paths.manifest_path.read_text(encoding="utf-8")

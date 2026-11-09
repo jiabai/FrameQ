@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-WORKER_ROOT = Path(__file__).resolve().parents[1] / "frameq_worker"
+WORKER_ROOT = Path(__file__).resolve().parents[1] / "worker_core"
 ROOT_MODULE = WORKER_ROOT / "douyin_fallback.py"
 PACKAGE_ROOT = WORKER_ROOT / "douyin"
 PLANNED_MODULES = {
@@ -26,7 +26,7 @@ LOW_LEVEL_EFFECT_IMPORTS = {
     "http.cookiejar",
     "urllib.error",
     "urllib.request",
-    "frameq_worker.download_reliability",
+    "worker_core.download_reliability",
 }
 ROOT_FORBIDDEN_IMPORTS = {
     "http.cookiejar",
@@ -35,31 +35,31 @@ ROOT_FORBIDDEN_IMPORTS = {
     "urllib.error",
     "urllib.parse",
     "urllib.request",
-    "frameq_worker.download_reliability",
+    "worker_core.download_reliability",
 }
 FORBIDDEN_CHILD_IMPORT_PREFIXES = {
-    "frameq_worker.asr",
-    "frameq_worker.bilibili",
-    "frameq_worker.douyin_fallback",
-    "frameq_worker.ai_artifacts",
-    "frameq_worker.ai_prompts",
-    "frameq_worker.ai_runtime",
-    "frameq_worker.dissection_agent",
-    "frameq_worker.dissection_report",
-    "frameq_worker.insight_errors",
-    "frameq_worker.summary_agent",
-    "frameq_worker.topic_agent",
-    "frameq_worker.transcript_chunks",
-    "frameq_worker.llm",
-    "frameq_worker.media",
-    "frameq_worker.media_preparation",
-    "frameq_worker.pipeline",
-    "frameq_worker.platform_source_resolvers",
-    "frameq_worker.source_identity",
-    "frameq_worker.source_resolution",
-    "frameq_worker.task_store",
-    "frameq_worker.worker_service",
-    "frameq_worker.xiaohongshu",
+    "worker_core.asr",
+    "worker_core.bilibili",
+    "worker_core.douyin_fallback",
+    "worker_core.ai_artifacts",
+    "worker_core.ai_prompts",
+    "worker_core.ai_runtime",
+    "worker_core.dissection_agent",
+    "worker_core.dissection_report",
+    "worker_core.insight_errors",
+    "worker_core.summary_agent",
+    "worker_core.topic_agent",
+    "worker_core.transcript_chunks",
+    "worker_core.llm",
+    "worker_core.media",
+    "worker_core.media_preparation",
+    "worker_core.pipeline",
+    "worker_core.platform_source_resolvers",
+    "worker_core.source_identity",
+    "worker_core.source_resolution",
+    "worker_core.task_store",
+    "worker_core.worker_service",
+    "worker_core.xiaohongshu",
 }
 EXPECTED_OWNER_SYMBOLS = {
     "types.py": {
@@ -171,7 +171,7 @@ def test_page_policy_has_no_network_filesystem_or_progress_dependencies() -> Non
         module
         for module in imports
         if module.startswith("urllib")
-        or module in {"os", "pathlib", "frameq_worker.download_reliability"}
+        or module in {"os", "pathlib", "worker_core.download_reliability"}
         or module.endswith("progress_events")
     )
     assert forbidden == []
@@ -182,8 +182,8 @@ def test_root_adapter_no_longer_owns_low_level_implementation_imports() -> None:
 
 
 def test_root_reexports_exact_shared_type_identities() -> None:
-    from frameq_worker import douyin_fallback
-    from frameq_worker.douyin import types
+    from worker_core import douyin_fallback
+    from worker_core.douyin import types
 
     assert douyin_fallback.DouyinFallbackError is types.DouyinFallbackError
     assert douyin_fallback.DouyinStreamCandidate is types.DouyinStreamCandidate
@@ -191,8 +191,8 @@ def test_root_reexports_exact_shared_type_identities() -> None:
 
 
 def test_root_reexports_exact_concrete_client_identity() -> None:
-    from frameq_worker import douyin_fallback
-    from frameq_worker.douyin import transport
+    from worker_core import douyin_fallback
+    from worker_core.douyin import transport
 
     assert douyin_fallback.UrllibDouyinHttpClient is transport.UrllibDouyinHttpClient
 
@@ -213,8 +213,8 @@ def test_production_modules_import_douyin_only_through_the_stable_root() -> None
         private_imports = sorted(
             module
             for module in imported_modules(path)
-            if module == "frameq_worker.douyin"
-            or module.startswith("frameq_worker.douyin.")
+            if module == "worker_core.douyin"
+            or module.startswith("worker_core.douyin.")
         )
         if private_imports:
             offenders[path.relative_to(WORKER_ROOT).as_posix()] = private_imports

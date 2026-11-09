@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
-WORKER_PACKAGE = WORKER_ROOT / "frameq_worker"
+WORKER_PACKAGE = WORKER_ROOT / "worker_core"
 ROOT_ADAPTER = WORKER_PACKAGE / "xiaohongshu_fallback.py"
 PRIVATE_PACKAGE = WORKER_PACKAGE / "xiaohongshu"
 PRIVATE_MODULES = {
@@ -16,24 +16,24 @@ PRIVATE_MODULES = {
     "transport": PRIVATE_PACKAGE / "transport.py",
 }
 FORBIDDEN_PRIVATE_IMPORT_PREFIXES = (
-    "frameq_worker.asr",
-    "frameq_worker.ai_artifacts",
-    "frameq_worker.ai_prompts",
-    "frameq_worker.ai_runtime",
-    "frameq_worker.dissection_agent",
-    "frameq_worker.dissection_report",
-    "frameq_worker.insight_errors",
-    "frameq_worker.summary_agent",
-    "frameq_worker.topic_agent",
-    "frameq_worker.transcript_chunks",
-    "frameq_worker.llm",
-    "frameq_worker.media",
-    "frameq_worker.media_preparation",
-    "frameq_worker.pipeline",
-    "frameq_worker.source_identity",
-    "frameq_worker.source_resolution",
-    "frameq_worker.task_store",
-    "frameq_worker.xiaohongshu_fallback",
+    "worker_core.asr",
+    "worker_core.ai_artifacts",
+    "worker_core.ai_prompts",
+    "worker_core.ai_runtime",
+    "worker_core.dissection_agent",
+    "worker_core.dissection_report",
+    "worker_core.insight_errors",
+    "worker_core.summary_agent",
+    "worker_core.topic_agent",
+    "worker_core.transcript_chunks",
+    "worker_core.llm",
+    "worker_core.media",
+    "worker_core.media_preparation",
+    "worker_core.pipeline",
+    "worker_core.source_identity",
+    "worker_core.source_resolution",
+    "worker_core.task_store",
+    "worker_core.xiaohongshu_fallback",
 )
 XIAOHONGSHU_PROGRESS_CODES = {
     "xiaohongshu.page.resolving",
@@ -88,7 +88,7 @@ def test_production_modules_outside_root_do_not_import_xiaohongshu_children() ->
         private_imports = sorted(
             imported
             for imported in _imported_modules(module_path)
-            if imported.startswith("frameq_worker.xiaohongshu.")
+            if imported.startswith("worker_core.xiaohongshu.")
         )
         if private_imports:
             violations[module_path.name] = private_imports
@@ -110,17 +110,17 @@ def test_transport_owns_cookiejar_urllib_and_safe_downloads() -> None:
 
     assert "http.cookiejar" in transport_imports
     assert "urllib.request" in transport_imports
-    assert "frameq_worker.download_reliability" in transport_imports
+    assert "worker_core.download_reliability" in transport_imports
     assert "http.cookiejar" not in root_imports
     assert "urllib.request" not in root_imports
-    assert "frameq_worker.download_reliability" not in root_imports
+    assert "worker_core.download_reliability" not in root_imports
 
 
 def test_stream_policy_has_no_network_filesystem_or_progress_dependencies() -> None:
     stream_imports = _imported_modules(PRIVATE_MODULES["streams"])
     forbidden = {
-        "frameq_worker.download_reliability",
-        "frameq_worker.progress_events",
+        "worker_core.download_reliability",
+        "worker_core.progress_events",
         "http.cookiejar",
         "pathlib",
         "urllib.request",
@@ -132,8 +132,8 @@ def test_stream_policy_has_no_network_filesystem_or_progress_dependencies() -> N
 def test_subtitle_policy_has_no_network_filesystem_or_progress_dependencies() -> None:
     subtitle_imports = _imported_modules(PRIVATE_MODULES["subtitles"])
     forbidden = {
-        "frameq_worker.download_reliability",
-        "frameq_worker.progress_events",
+        "worker_core.download_reliability",
+        "worker_core.progress_events",
         "http.cookiejar",
         "pathlib",
         "urllib.request",

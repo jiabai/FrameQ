@@ -4,11 +4,11 @@ import inspect
 import json
 from types import SimpleNamespace
 
-import frameq_worker.platform_source_resolvers as platform_resolvers_module
-import frameq_worker.worker_service as worker_service
 import pytest
-from frameq_worker.source_identity import identify_source
-from frameq_worker.source_resolution import SourceRequest
+import worker_core.platform_source_resolvers as platform_resolvers_module
+import worker_core.worker_service as worker_service
+from worker_core.source_identity import identify_source
+from worker_core.source_resolution import SourceRequest
 
 EXPECTED_SIGNATURES = {
     "run_worker_once": (

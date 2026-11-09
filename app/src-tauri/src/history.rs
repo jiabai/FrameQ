@@ -784,7 +784,7 @@ mod tests {
 
     #[test]
     fn optional_workspace_history_count_probe_is_manifest_only() {
-        let Ok(project_root) = std::env::var("FRAMEQ_HISTORY_PROBE_PROJECT_ROOT") else {
+        let Ok(project_root) = std::env::var("APP_HISTORY_PROBE_PROJECT_ROOT") else {
             return;
         };
         let output_root =

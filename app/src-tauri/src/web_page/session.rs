@@ -174,7 +174,7 @@ impl NativeSession {
                 && member.process.parent() == Some(self.owner.owner.pid()),
             "worker" => selector(&command, "--web-operation-id", &self.owner.operation_id)
                 && command.iter().any(|arg| arg == "--save-web-page-stdin")
-                && selector(&command, "-m", "frameq_worker")
+                && selector(&command, "-m", "worker_core")
                 && member.process.parent() == Some(self.owner.owner.pid()),
             "browser" => members.iter().find(|member| member.role == "helper")
                 .is_some_and(|helper| member.process.birth() >= helper.process.birth())

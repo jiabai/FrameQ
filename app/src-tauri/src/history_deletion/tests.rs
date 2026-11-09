@@ -330,7 +330,7 @@ fn running_native_child_keeps_delete_outside_filesystem_mutation() {
     let fixture = Fixture::new();
     let mut child = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", "history_deletion::tests::deletion_busy_child", "--nocapture"])
-        .env("FRAMEQ_DELETION_BUSY_CHILD", "1")
+        .env("APP_DELETION_BUSY_CHILD", "1")
         .stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
     let supervisors = ProcessSupervisors::default();
     let instance = supervisors.activate_task_for_test(child.id());
@@ -344,7 +344,7 @@ fn running_native_child_keeps_delete_outside_filesystem_mutation() {
 
 #[test]
 fn deletion_busy_child() {
-    if std::env::var_os("FRAMEQ_DELETION_BUSY_CHILD").is_none() { return; }
+    if std::env::var_os("APP_DELETION_BUSY_CHILD").is_none() { return; }
     use std::io::Read;
     let mut bytes = Vec::new();
     std::io::stdin().read_to_end(&mut bytes).unwrap();
@@ -425,7 +425,7 @@ fn abrupt_subprocess_exit_after_rename_is_recovered_by_identity() {
     let fixture = Fixture::new();
     let status = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", "history_deletion::tests::deletion_crash_child", "--nocapture"])
-        .env("FRAMEQ_DELETION_TEST_ROOT", &fixture.root)
+        .env("APP_DELETION_TEST_ROOT", &fixture.root)
         .stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap();
     assert_eq!(status.code(), Some(73));
     let job = intent::read(&fixture.paths).unwrap().unwrap();
@@ -437,7 +437,7 @@ fn abrupt_subprocess_exit_after_rename_is_recovered_by_identity() {
 
 #[test]
 fn deletion_crash_child() {
-    let Some(root) = std::env::var_os("FRAMEQ_DELETION_TEST_ROOT") else { return; };
+    let Some(root) = std::env::var_os("APP_DELETION_TEST_ROOT") else { return; };
     let root = PathBuf::from(root);
     let build = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build").canonicalize().unwrap();
     assert!(root.starts_with(&build) && root != build);

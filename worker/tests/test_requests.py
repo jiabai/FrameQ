@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker.requests import (
+from worker_core.requests import (
     parse_preference_snapshot,
     parse_process_local_media_request,
     parse_process_request,

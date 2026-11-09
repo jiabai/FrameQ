@@ -7,11 +7,11 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-import frameq_worker.model_download as model_download
-import frameq_worker.worker_application.model_download as model_download_handler
-import frameq_worker.worker_service as worker_service
 import pytest
-from frameq_worker.model_download import (
+import worker_core.model_download as model_download
+import worker_core.worker_application.model_download as model_download_handler
+import worker_core.worker_service as worker_service
+from worker_core.model_download import (
     ARCHIVE_INVALID_ERROR_CODE,
     DEFAULT_SENSEVOICE_REVISION,
     ONNX_SENSEVOICE_BPE_MODEL_ID,
@@ -24,7 +24,7 @@ from frameq_worker.model_download import (
     normalize_asr_model_cache_layout,
     validate_asr_model_cache,
 )
-from frameq_worker.progress_events import (
+from worker_core.progress_events import (
     MODEL_PROGRESS_REGISTRY,
     build_model_progress_event,
 )
@@ -106,7 +106,7 @@ def test_model_download_terminal_success_omits_local_model_directory(
 
     result = worker_service.run_asr_model_download_once(
         project_root=tmp_path,
-        environ={"FRAMEQ_MODEL_DIR": secret_dir.as_posix()},
+        environ={"APP_MODEL_DIR": secret_dir.as_posix()},
         asr_model=SENSEVOICE_MODEL_ID,
     )
 
@@ -133,8 +133,8 @@ def test_model_download_terminal_uses_allowlisted_onnx_model_and_ignores_pytorch
         asr_model=ONNX_SENSEVOICE_MODEL_ID,
         project_root=tmp_path,
         environ={
-            "FRAMEQ_ASR_MODEL_DOWNLOAD_URL": "https://third-party.invalid/model.zip",
-            "FRAMEQ_MODELSCOPE_ENDPOINT": "https://third-party.invalid/modelscope",
+            "APP_ASR_MODEL_DOWNLOAD_URL": "https://third-party.invalid/model.zip",
+            "APP_MODELSCOPE_ENDPOINT": "https://third-party.invalid/modelscope",
         },
     )
 
@@ -291,7 +291,7 @@ def test_model_download_refines_archive_invalid_phase_without_message_inspection
 
     worker_service.run_asr_model_download_once(
         project_root=tmp_path,
-        environ={"FRAMEQ_ASR_MODEL_DOWNLOAD_URL": "https://private.example/model.zip"},
+        environ={"APP_ASR_MODEL_DOWNLOAD_URL": "https://private.example/model.zip"},
         asr_model=SENSEVOICE_MODEL_ID,
         diagnostic_callback=diagnostics.append,
     )

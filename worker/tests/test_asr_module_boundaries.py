@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
-FRAMEQ_WORKER_ROOT = WORKER_ROOT / "frameq_worker"
-PUBLIC_ASR_PATH = FRAMEQ_WORKER_ROOT / "asr.py"
-PRIVATE_ASR_ROOT = FRAMEQ_WORKER_ROOT / "asr_runtime"
+APP_WORKER_ROOT = WORKER_ROOT / "worker_core"
+PUBLIC_ASR_PATH = APP_WORKER_ROOT / "asr.py"
+PRIVATE_ASR_ROOT = APP_WORKER_ROOT / "asr_runtime"
 EXPECTED_PRIVATE_FILES = {
     "__init__.py",
     "artifacts.py",
@@ -171,18 +171,18 @@ def test_public_asr_root_is_only_a_compatibility_surface() -> None:
         "os",
         "re",
         "wave",
-        "frameq_worker.models",
-        "frameq_worker.source_identity",
+        "worker_core.models",
+        "worker_core.source_identity",
     } & imported_modules
 
 
 def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
-    public = importlib.import_module("frameq_worker.asr")
-    artifacts = importlib.import_module("frameq_worker.asr_runtime.artifacts")
-    registry = importlib.import_module("frameq_worker.asr_runtime.registry")
-    sensevoice = importlib.import_module("frameq_worker.asr_runtime.sensevoice")
-    sensevoice_onnx = importlib.import_module("frameq_worker.asr_runtime.sensevoice_onnx")
-    types = importlib.import_module("frameq_worker.asr_runtime.types")
+    public = importlib.import_module("worker_core.asr")
+    artifacts = importlib.import_module("worker_core.asr_runtime.artifacts")
+    registry = importlib.import_module("worker_core.asr_runtime.registry")
+    sensevoice = importlib.import_module("worker_core.asr_runtime.sensevoice")
+    sensevoice_onnx = importlib.import_module("worker_core.asr_runtime.sensevoice_onnx")
+    types = importlib.import_module("worker_core.asr_runtime.types")
 
     for name in (
         "ASRDependencyError",
@@ -233,7 +233,7 @@ def test_public_asr_root_reexports_exact_private_objects_and_values() -> None:
         == 30000
     )
     assert public.DEFAULT_ASR_MODEL == registry.DEFAULT_ASR_MODEL == "iic/SenseVoiceSmall-onnx"
-    assert public.DEFAULT_MODEL_CACHE_ENV == registry.DEFAULT_MODEL_CACHE_ENV == "FRAMEQ_MODEL_DIR"
+    assert public.DEFAULT_MODEL_CACHE_ENV == registry.DEFAULT_MODEL_CACHE_ENV == "APP_MODEL_DIR"
     assert public.MODELSCOPE_CACHE_ENV == registry.MODELSCOPE_CACHE_ENV == "MODELSCOPE_CACHE"
     assert public.supported_asr_model_names() == [
         "iic/SenseVoiceSmall",
@@ -246,7 +246,7 @@ def test_stable_root_import_does_not_load_provider_sdks() -> None:
     code = """
 import json
 import sys
-import frameq_worker.asr
+import worker_core.asr
 
 print(
     json.dumps(
@@ -278,12 +278,12 @@ print(
 
 def test_production_callers_do_not_import_private_asr_modules() -> None:
     violations: list[str] = []
-    for path in FRAMEQ_WORKER_ROOT.rglob("*.py"):
+    for path in APP_WORKER_ROOT.rglob("*.py"):
         if path == PUBLIC_ASR_PATH or PRIVATE_ASR_ROOT in path.parents:
             continue
         for module in _imported_modules(path):
-            if module == "frameq_worker.asr_runtime" or module.startswith(
-                "frameq_worker.asr_runtime."
+            if module == "worker_core.asr_runtime" or module.startswith(
+                "worker_core.asr_runtime."
             ):
                 violations.append(f"{path.relative_to(WORKER_ROOT)}: {module}")
 
@@ -292,22 +292,22 @@ def test_production_callers_do_not_import_private_asr_modules() -> None:
 
 def test_private_asr_modules_have_no_root_or_application_back_edges() -> None:
     forbidden_modules = {
-        "frameq_worker.ai_artifacts",
-        "frameq_worker.ai_prompts",
-        "frameq_worker.ai_runtime",
-        "frameq_worker.asr",
-        "frameq_worker.cli",
-        "frameq_worker.dissection_agent",
-        "frameq_worker.dissection_report",
-        "frameq_worker.insight_errors",
-        "frameq_worker.llm",
-        "frameq_worker.media",
-        "frameq_worker.pipeline",
-        "frameq_worker.summary_agent",
-        "frameq_worker.task_store",
-        "frameq_worker.topic_agent",
-        "frameq_worker.transcript_chunks",
-        "frameq_worker.worker_service",
+        "worker_core.ai_artifacts",
+        "worker_core.ai_prompts",
+        "worker_core.ai_runtime",
+        "worker_core.asr",
+        "worker_core.cli",
+        "worker_core.dissection_agent",
+        "worker_core.dissection_report",
+        "worker_core.insight_errors",
+        "worker_core.llm",
+        "worker_core.media",
+        "worker_core.pipeline",
+        "worker_core.summary_agent",
+        "worker_core.task_store",
+        "worker_core.topic_agent",
+        "worker_core.transcript_chunks",
+        "worker_core.worker_service",
     }
     violations: list[str] = []
     for path in PRIVATE_ASR_ROOT.glob("*.py"):
@@ -325,13 +325,13 @@ def test_low_level_dependencies_have_one_approved_owner() -> None:
     assert _owners_importing("wave") == {"sensevoice.py"}
     assert _owners_importing("os") == {"registry.py"}
     assert _owners_importing("json") == {"artifacts.py"}
-    assert _owners_importing("frameq_worker.models") == {"artifacts.py"}
-    assert _owners_importing("frameq_worker.source_identity") == {"artifacts.py"}
+    assert _owners_importing("worker_core.models") == {"artifacts.py"}
+    assert _owners_importing("worker_core.source_identity") == {"artifacts.py"}
 
 
 def test_provider_modules_do_not_depend_on_registry() -> None:
     for filename in ("sensevoice.py", "sensevoice_onnx.py"):
-        assert "frameq_worker.asr_runtime.registry" not in _imported_modules(
+        assert "worker_core.asr_runtime.registry" not in _imported_modules(
             PRIVATE_ASR_ROOT / filename
         )
         assert "registry" not in _imported_modules(PRIVATE_ASR_ROOT / filename)

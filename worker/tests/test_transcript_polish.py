@@ -14,11 +14,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from frameq_worker.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
-from frameq_worker.progress_events import build_worker_progress_event
-from frameq_worker.task_store import LocalFileTaskSource, TaskContext, TaskPaths
-from frameq_worker.task_transaction import recover_task_artifacts
-from frameq_worker.transcript_polish import (
+from worker_core.desktop_contract import CACHE_DIR_ENV, OUTPUT_DIR_ENV
+from worker_core.progress_events import build_worker_progress_event
+from worker_core.task_store import LocalFileTaskSource, TaskContext, TaskPaths
+from worker_core.task_transaction import recover_task_artifacts
+from worker_core.transcript_polish import (
     POLISH_MAX_CHUNKS,
     _polish_chunks,
     build_polish_prompt,
@@ -26,7 +26,7 @@ from frameq_worker.transcript_polish import (
     run_transcript_polish_step,
     source_transcript_sha256,
 )
-from frameq_worker.worker_application.insight_retry import retry_insights_once
+from worker_core.worker_application.insight_retry import retry_insights_once
 
 TASK_ID = "20260709-120000-douyin-demo"
 OFFICIAL_BODY = "第一段语音识别结果，有一个同音错误。第二段内容。"
@@ -245,7 +245,7 @@ def test_single_empty_chunk_falls_back_to_the_original_body() -> None:
 
 
 def test_polish_system_prompt_keeps_moderate_bounds() -> None:
-    from frameq_worker.transcript_polish import POLISH_SYSTEM_PROMPT
+    from worker_core.transcript_polish import POLISH_SYSTEM_PROMPT
 
     # 中度整理：既要求删除口头语与分段，也必须锁住不改事实、不换实词。
     assert "口头语" in POLISH_SYSTEM_PROMPT
@@ -311,7 +311,7 @@ def test_retry_insights_transcript_branch_keeps_manifest_preview(tmp_path: Path)
             polish_runner=lambda body, env, cb=None: POLISHED_BODY,
         )
     with patch(
-        "frameq_worker.worker_application.insight_retry.run_transcript_polish_step",
+        "worker_core.worker_application.insight_retry.run_transcript_polish_step",
         side_effect=fake_step,
     ):
         result = retry_insights_once(
@@ -343,7 +343,7 @@ def test_retry_insights_transcript_branch_keeps_manifest_preview(tmp_path: Path)
 
 @pytest.mark.parametrize("target", ["summary", "insights", "dissection", "draft", "transcript"])
 def test_retry_target_whitelist_accepts_transcript(target: str) -> None:
-    from frameq_worker.requests import parse_retry_insights_request
+    from worker_core.requests import parse_retry_insights_request
 
     payload: dict[str, object] = {
         "task_id": TASK_ID,

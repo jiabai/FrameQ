@@ -188,13 +188,13 @@ describe("production deployment contracts", () => {
     ]) {
       expect(workflow).toContain(expected);
     }
-    expect(workflow).not.toMatch(/SMTP_PASS|FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY/);
+    expect(workflow).not.toMatch(/SMTP_PASS|APP_LLM_CONFIG_ENCRYPTION_KEY/);
   });
 
   test("example environment documents the self-service activation and SMTP boundary", () => {
     const envExample = readFileSync(join(serverRoot, ".env.example"), "utf8");
 
-    expect(envExample).toContain("FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=");
+    expect(envExample).toContain("APP_SELF_SERVICE_ACTIVATION_ENABLED=");
     expect(envExample).toContain("Production must set this to true or false explicitly.");
     expect(envExample).toContain("Self-service activation email also requires every SMTP value below.");
     expect(envExample).not.toContain("console fallback");

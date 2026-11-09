@@ -300,7 +300,7 @@ fn membership_uses_current_configured_output_root_and_rejects_unavailable_tasks(
     fs::write(
         fixture.paths.user_data_dir.join(".env"),
         format!(
-            "FRAMEQ_OUTPUT_DIR={}\n",
+            "APP_OUTPUT_DIR={}\n",
             crate::path_to_env_string(&configured)
         ),
     )

@@ -8,17 +8,17 @@ import time
 from pathlib import Path
 
 import pytest
-from frameq_worker.ai_prompts import (
+from worker_core.ai_prompts import (
     build_insights_agent_prompt,
     build_mindmap_prompt,
     build_summary_prompt,
     format_preference_snapshot_for_prompt,
 )
-from frameq_worker.insight_errors import InsightGenerationError
-from frameq_worker.models import Insight
-from frameq_worker.requests import parse_preference_snapshot
-from frameq_worker.topic_agent import validate_insights_delivery, write_insight_files
-from frameq_worker.transcript_chunks import MarkdownSplitter
+from worker_core.insight_errors import InsightGenerationError
+from worker_core.models import Insight
+from worker_core.requests import parse_preference_snapshot
+from worker_core.topic_agent import validate_insights_delivery, write_insight_files
+from worker_core.transcript_chunks import MarkdownSplitter
 
 
 def preference_snapshot():

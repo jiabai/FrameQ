@@ -6,7 +6,7 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-from frameq_worker.cli import MAX_STDIN_REQUEST_BYTES
+from worker_core.cli import MAX_STDIN_REQUEST_BYTES
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "desktop-worker-contract.json"
 SECRET = b"frameq-stdin-private-input"
@@ -43,7 +43,7 @@ def test_invalid_stdin_emits_closed_non_echoing_result(
 ) -> None:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     completed = subprocess.run(
-        [sys.executable, "-m", "frameq_worker", flag],
+        [sys.executable, "-m", "worker_core", flag],
         input=payload,
         capture_output=True,
         cwd=tmp_path,

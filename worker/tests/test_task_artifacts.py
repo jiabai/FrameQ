@@ -4,29 +4,29 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker import media, task_transaction, worker_service
-from frameq_worker.asr import Transcript
-from frameq_worker.atomic_files import AtomicFileCommitError
-from frameq_worker.desktop_contract import (
+from worker_core import media, task_transaction, worker_service
+from worker_core.asr import Transcript
+from worker_core.atomic_files import AtomicFileCommitError
+from worker_core.desktop_contract import (
     CACHE_DIR_ENV,
     OUTPUT_DIR_ENV,
     PROCESS_VIDEO_CONTRACT_VERSION,
 )
-from frameq_worker.dissection_report import (
+from worker_core.dissection_report import (
     build_dissection_artifacts,
     parse_dissection_report,
 )
-from frameq_worker.media import CommandResult
-from frameq_worker.models import Insight, JobStage, ProcessRequest, ProcessResult
-from frameq_worker.pipeline import run_worker_pipeline
-from frameq_worker.requests import parse_preference_snapshot
-from frameq_worker.summary_agent import write_summary_files
-from frameq_worker.task_store import TaskPaths, TaskStoreFacade
-from frameq_worker.topic_agent import write_insight_files
-from frameq_worker.transcript_chunks import MarkdownSplitter
-from frameq_worker.worker_application import url_processing
-from frameq_worker.worker_application.insight_retry import merge_existing_ai_artifacts
-from frameq_worker.worker_service import retry_insights_once
+from worker_core.media import CommandResult
+from worker_core.models import Insight, JobStage, ProcessRequest, ProcessResult
+from worker_core.pipeline import run_worker_pipeline
+from worker_core.requests import parse_preference_snapshot
+from worker_core.summary_agent import write_summary_files
+from worker_core.task_store import TaskPaths, TaskStoreFacade
+from worker_core.topic_agent import write_insight_files
+from worker_core.transcript_chunks import MarkdownSplitter
+from worker_core.worker_application import url_processing
+from worker_core.worker_application.insight_retry import merge_existing_ai_artifacts
+from worker_core.worker_service import retry_insights_once
 
 
 class FakeTranscriber:

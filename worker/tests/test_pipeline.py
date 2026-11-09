@@ -2,12 +2,12 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker.asr import Transcript, TranscriptSegment
-from frameq_worker.desktop_contract import OUTPUT_DIR_ENV
-from frameq_worker.media import CommandResult
-from frameq_worker.media_preparation import MediaPreparationError, MediaPreparationFacade
-from frameq_worker.models import ProcessLocalMediaRequest, ProcessRequest
-from frameq_worker.pipeline import (
+from worker_core.asr import Transcript, TranscriptSegment
+from worker_core.desktop_contract import OUTPUT_DIR_ENV
+from worker_core.media import CommandResult
+from worker_core.media_preparation import MediaPreparationError, MediaPreparationFacade
+from worker_core.models import ProcessLocalMediaRequest, ProcessRequest
+from worker_core.pipeline import (
     run_asr_transcript_step,
     run_insight_generation_step,
     run_local_media_pipeline,
@@ -15,10 +15,10 @@ from frameq_worker.pipeline import (
     run_worker_pipeline,
     write_prepared_subtitle_stage,
 )
-from frameq_worker.source_identity import SourceIdentity, SourceIdentityError
-from frameq_worker.source_resolution import SourceRequest
-from frameq_worker.subtitles import SubtitleTranscript
-from frameq_worker.task_store import TaskContext, TaskPaths, UrlTaskSource
+from worker_core.source_identity import SourceIdentity, SourceIdentityError
+from worker_core.source_resolution import SourceRequest
+from worker_core.subtitles import SubtitleTranscript
+from worker_core.task_store import TaskContext, TaskPaths, UrlTaskSource
 
 
 class FakeTranscriber:

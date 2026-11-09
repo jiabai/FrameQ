@@ -13,25 +13,25 @@ use crate::{
 };
 
 pub(crate) const DOTENV_FILE_NAME: &str = ".env";
-pub(crate) const LLM_PROVIDER_ENV: &str = "FRAMEQ_LLM_PROVIDER";
-pub(crate) const LLM_BASE_URL_ENV: &str = "FRAMEQ_LLM_BASE_URL";
-pub(crate) const LLM_API_KEY_ENV: &str = "FRAMEQ_LLM_API_KEY";
-pub(crate) const LLM_MODEL_ENV: &str = "FRAMEQ_LLM_MODEL";
-pub(crate) const LLM_TIMEOUT_ENV: &str = "FRAMEQ_LLM_TIMEOUT_SECONDS";
-pub(crate) const LLM_SOURCE_ENV: &str = "FRAMEQ_LLM_SOURCE";
-pub(crate) const LLM_CHECKOUT_URL_ENV: &str = "FRAMEQ_LLM_CHECKOUT_URL";
-pub(crate) const LLM_SESSION_TOKEN_ENV: &str = "FRAMEQ_LLM_SESSION_TOKEN";
-pub(crate) const LLM_CHECKOUT_REQUEST_ID_ENV: &str = "FRAMEQ_LLM_CHECKOUT_REQUEST_ID";
-pub(crate) const ANYSEARCH_SOURCE_ENV: &str = "FRAMEQ_ANYSEARCH_SOURCE";
-pub(crate) const ANYSEARCH_CHECKOUT_URL_ENV: &str = "FRAMEQ_ANYSEARCH_CHECKOUT_URL";
-pub(crate) const ANYSEARCH_SESSION_TOKEN_ENV: &str = "FRAMEQ_ANYSEARCH_SESSION_TOKEN";
-pub(crate) const ASR_MODEL_ENV: &str = "FRAMEQ_ASR_MODEL";
-pub(crate) const SETTINGS_SCHEMA_VERSION_ENV: &str = "FRAMEQ_SETTINGS_SCHEMA_VERSION";
-pub(crate) const ASR_MODEL_MIGRATION_ENV: &str = "FRAMEQ_ASR_MODEL_MIGRATION";
-pub(crate) const ASR_MODEL_DOWNLOAD_URL_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_URL";
-pub(crate) const ASR_MODEL_DOWNLOAD_SHA256_ENV: &str = "FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256";
-pub(crate) const MODELSCOPE_ENDPOINT_ENV: &str = "FRAMEQ_MODELSCOPE_ENDPOINT";
-pub(crate) const SENSEVOICE_REVISION_ENV: &str = "FRAMEQ_SENSEVOICE_REVISION";
+pub(crate) const LLM_PROVIDER_ENV: &str = "APP_LLM_PROVIDER";
+pub(crate) const LLM_BASE_URL_ENV: &str = "APP_LLM_BASE_URL";
+pub(crate) const LLM_API_KEY_ENV: &str = "APP_LLM_API_KEY";
+pub(crate) const LLM_MODEL_ENV: &str = "APP_LLM_MODEL";
+pub(crate) const LLM_TIMEOUT_ENV: &str = "APP_LLM_TIMEOUT_SECONDS";
+pub(crate) const LLM_SOURCE_ENV: &str = "APP_LLM_SOURCE";
+pub(crate) const LLM_CHECKOUT_URL_ENV: &str = "APP_LLM_CHECKOUT_URL";
+pub(crate) const LLM_SESSION_TOKEN_ENV: &str = "APP_LLM_SESSION_TOKEN";
+pub(crate) const LLM_CHECKOUT_REQUEST_ID_ENV: &str = "APP_LLM_CHECKOUT_REQUEST_ID";
+pub(crate) const ANYSEARCH_SOURCE_ENV: &str = "APP_ANYSEARCH_SOURCE";
+pub(crate) const ANYSEARCH_CHECKOUT_URL_ENV: &str = "APP_ANYSEARCH_CHECKOUT_URL";
+pub(crate) const ANYSEARCH_SESSION_TOKEN_ENV: &str = "APP_ANYSEARCH_SESSION_TOKEN";
+pub(crate) const ASR_MODEL_ENV: &str = "APP_ASR_MODEL";
+pub(crate) const SETTINGS_SCHEMA_VERSION_ENV: &str = "APP_SETTINGS_SCHEMA_VERSION";
+pub(crate) const ASR_MODEL_MIGRATION_ENV: &str = "APP_ASR_MODEL_MIGRATION";
+pub(crate) const ASR_MODEL_DOWNLOAD_URL_ENV: &str = "APP_ASR_MODEL_DOWNLOAD_URL";
+pub(crate) const ASR_MODEL_DOWNLOAD_SHA256_ENV: &str = "APP_ASR_MODEL_DOWNLOAD_SHA256";
+pub(crate) const MODELSCOPE_ENDPOINT_ENV: &str = "APP_MODELSCOPE_ENDPOINT";
+pub(crate) const SENSEVOICE_REVISION_ENV: &str = "APP_SENSEVOICE_REVISION";
 
 const LEGACY_LOCAL_LLM_ENV_KEYS: [&str; 5] = [
     LLM_PROVIDER_ENV,
@@ -45,23 +45,23 @@ const ASR_MODEL_MIGRATION_MARKER: &str = "1";
 const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# FrameQ desktop local settings.\n\
 # This file lives in app-local data and is read by the desktop client/worker.\n\
 # Insight LLM configuration is managed by the FrameQ server Admin Web.\n\
-# Do not put FRAMEQ_LLM_* keys here.\n\
+# Do not put APP_LLM_* keys here.\n\
 \n\
 # Optional output directory for generated videos, transcripts, and insights.\n\
 # Leave blank to use app-local data outputs/.\n\
-FRAMEQ_OUTPUT_DIR=\n\
+APP_OUTPUT_DIR=\n\
 \n\
 # Local ASR model for new transcription tasks.\n\
-FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\n\
+APP_ASR_MODEL=iic/SenseVoiceSmall-onnx\n\
 \n\
 # Optional release ASR model download overrides.\n\
-# FRAMEQ_ASR_MODEL_DOWNLOAD_URL=\n\
-# FRAMEQ_ASR_MODEL_DOWNLOAD_SHA256=\n\
-# FRAMEQ_MODELSCOPE_ENDPOINT=\n\
-# FRAMEQ_SENSEVOICE_REVISION=master\n\
+# APP_ASR_MODEL_DOWNLOAD_URL=\n\
+# APP_ASR_MODEL_DOWNLOAD_SHA256=\n\
+# APP_MODELSCOPE_ENDPOINT=\n\
+# APP_SENSEVOICE_REVISION=master\n\
 \n\
 # Settings schema version used for one-time migrations. Leave it as is.\n\
-FRAMEQ_SETTINGS_SCHEMA_VERSION=2\n";
+APP_SETTINGS_SCHEMA_VERSION=2\n";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -500,7 +500,7 @@ mod tests {
     fn saving_asr_keeps_the_legacy_output_setting_and_fixed_files() {
         let root = temp_dir("preserve_legacy_output");
         let path = root.join(".env");
-        fs::write(&path, "FRAMEQ_OUTPUT_DIR=D:/existing-notes\nFRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\nFRAMEQ_SETTINGS_SCHEMA_VERSION=2\n").expect("write existing settings");
+        fs::write(&path, "APP_OUTPUT_DIR=D:/existing-notes\nAPP_ASR_MODEL=iic/SenseVoiceSmall-onnx\nAPP_SETTINGS_SCHEMA_VERSION=2\n").expect("write existing settings");
         fs::create_dir_all(root.join("auth")).expect("auth directory");
         fs::write(root.join("auth/session.json"), b"existing-local-session").expect("session fixture");
         let view = super::save_llm_config_to_file(&path, LlmConfigInput {
@@ -508,7 +508,7 @@ mod tests {
         }).expect("save model preference");
         assert_eq!(view.output_dir, "D:/existing-notes");
         assert_eq!(view.asr_model, "iic/SenseVoiceSmall");
-        assert!(fs::read_to_string(&path).unwrap().contains("FRAMEQ_OUTPUT_DIR=D:/existing-notes"));
+        assert!(fs::read_to_string(&path).unwrap().contains("APP_OUTPUT_DIR=D:/existing-notes"));
         assert_eq!(fs::read(root.join("auth/session.json")).unwrap(), b"existing-local-session");
         assert!(!root.join("outputs").exists());
     }
@@ -558,7 +558,7 @@ mod tests {
         fs::create_dir_all(&paths.user_data_dir).expect("app data");
         fs::write(
             paths.user_data_dir.join(".env"),
-            "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\n",
+            "APP_ASR_MODEL=iic/SenseVoiceSmall-onnx\n",
         )
         .expect("settings");
         let state = DiagnosticModelState::default();
@@ -611,8 +611,8 @@ mod tests {
         let saved = fs::read_to_string(paths.user_data_dir.join(".env")).expect("read settings");
 
         assert_eq!(loaded.asr_model, "iic/SenseVoiceSmall-onnx");
-        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
-        assert!(saved.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
+        assert!(saved.contains("APP_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(saved.contains("APP_SETTINGS_SCHEMA_VERSION=2"));
     }
 
     #[test]
@@ -624,7 +624,7 @@ mod tests {
         };
         fs::create_dir_all(&paths.user_data_dir).expect("app data");
         let env = paths.user_data_dir.join(".env");
-        fs::write(&env, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n").expect("legacy settings");
+        fs::write(&env, "APP_ASR_MODEL=iic/SenseVoiceSmall\n").expect("legacy settings");
         let state = DiagnosticModelState::default();
 
         let migrated = load_llm_config_for_paths(&paths, &state).expect("migrate settings");
@@ -632,9 +632,9 @@ mod tests {
 
         assert_eq!(migrated.asr_model, "iic/SenseVoiceSmall-onnx");
         assert!(migrated.asr_model_migrated);
-        assert!(migrated_file.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
-        assert!(migrated_file.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
-        assert!(migrated_file.contains("FRAMEQ_ASR_MODEL_MIGRATION=1"));
+        assert!(migrated_file.contains("APP_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(migrated_file.contains("APP_SETTINGS_SCHEMA_VERSION=2"));
+        assert!(migrated_file.contains("APP_ASR_MODEL_MIGRATION=1"));
 
         let restored = save_llm_config_for_paths(
             &paths,
@@ -661,7 +661,7 @@ mod tests {
         };
         fs::create_dir_all(&paths.user_data_dir).expect("app data");
         let env = paths.user_data_dir.join(".env");
-        fs::write(&env, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx\n").expect("legacy settings");
+        fs::write(&env, "APP_ASR_MODEL=iic/SenseVoiceSmall-onnx\n").expect("legacy settings");
 
         let migrated = load_llm_config_for_paths(&paths, &DiagnosticModelState::default())
             .expect("migrate settings");
@@ -669,8 +669,8 @@ mod tests {
 
         assert_eq!(migrated.asr_model, "iic/SenseVoiceSmall-onnx");
         assert!(!migrated.asr_model_migrated);
-        assert!(!migrated_file.contains("FRAMEQ_ASR_MODEL_MIGRATION"));
-        assert!(migrated_file.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
+        assert!(!migrated_file.contains("APP_ASR_MODEL_MIGRATION"));
+        assert!(migrated_file.contains("APP_SETTINGS_SCHEMA_VERSION=2"));
     }
 
     #[test]
@@ -682,7 +682,7 @@ mod tests {
         };
         fs::create_dir_all(&paths.user_data_dir).expect("app data");
         let env = paths.user_data_dir.join(".env");
-        fs::write(&env, "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall\n").expect("legacy settings");
+        fs::write(&env, "APP_ASR_MODEL=iic/SenseVoiceSmall\n").expect("legacy settings");
         let state = DiagnosticModelState::default();
 
         let migrated = load_llm_config_for_paths(&paths, &state).expect("migrate settings");
@@ -694,9 +694,9 @@ mod tests {
 
         assert!(!dismissed.asr_model_migrated);
         assert_eq!(dismissed.asr_model, "iic/SenseVoiceSmall-onnx");
-        assert!(!dismissed_file.contains("FRAMEQ_ASR_MODEL_MIGRATION"));
-        assert!(dismissed_file.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
-        assert!(dismissed_file.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
+        assert!(!dismissed_file.contains("APP_ASR_MODEL_MIGRATION"));
+        assert!(dismissed_file.contains("APP_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(dismissed_file.contains("APP_SETTINGS_SCHEMA_VERSION=2"));
     }
 
     fn temp_dir(test_name: &str) -> PathBuf {

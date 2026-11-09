@@ -60,10 +60,10 @@ pub(crate) use worker_runtime::{
 pub(crate) use history_deletion::HistoryDeletionState;
 
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
-pub(crate) const PROGRESS_EVENT_PREFIX: &str = "FRAMEQ_PROGRESS ";
+pub(crate) const PROGRESS_EVENT_PREFIX: &str = "APP_PROGRESS ";
 #[cfg(test)]
 pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 11;
-pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "FRAMEQ_DIAGNOSTIC ";
+pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "APP_DIAGNOSTIC ";
 
 #[cfg(any(windows, target_os = "linux"))]
 fn register_deep_links_on_startup() -> bool {
@@ -228,18 +228,18 @@ mod tests {
 
     #[test]
     fn server_base_url_defaults_to_production_domain_and_allows_override() {
-        let original = std::env::var("FRAMEQ_SERVER_BASE_URL").ok();
-        std::env::remove_var("FRAMEQ_SERVER_BASE_URL");
+        let original = std::env::var("APP_SERVER_BASE_URL").ok();
+        std::env::remove_var("APP_SERVER_BASE_URL");
 
         assert_eq!(server_base_url(), "https://frameq.8xf.pro");
 
-        std::env::set_var("FRAMEQ_SERVER_BASE_URL", "http://127.0.0.1:8787/");
+        std::env::set_var("APP_SERVER_BASE_URL", "http://127.0.0.1:8787/");
 
         assert_eq!(server_base_url(), "http://127.0.0.1:8787");
 
         match original {
-            Some(value) => std::env::set_var("FRAMEQ_SERVER_BASE_URL", value),
-            None => std::env::remove_var("FRAMEQ_SERVER_BASE_URL"),
+            Some(value) => std::env::set_var("APP_SERVER_BASE_URL", value),
+            None => std::env::remove_var("APP_SERVER_BASE_URL"),
         }
     }
 
@@ -288,14 +288,14 @@ mod tests {
         fs::write(
             &env_path,
             [
-                "FRAMEQ_LLM_PROVIDER=openai_compatible",
-                "FRAMEQ_LLM_BASE_URL=https://llm.example/v1",
-                "FRAMEQ_LLM_API_KEY=secret-key",
-                "FRAMEQ_LLM_MODEL=demo-model",
-                "FRAMEQ_LLM_TIMEOUT_SECONDS=42",
-                "FRAMEQ_OUTPUT_DIR=D:/FrameQ/results",
-                "FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall",
-                "FRAMEQ_SETTINGS_SCHEMA_VERSION=2",
+                "APP_LLM_PROVIDER=openai_compatible",
+                "APP_LLM_BASE_URL=https://llm.example/v1",
+                "APP_LLM_API_KEY=secret-key",
+                "APP_LLM_MODEL=demo-model",
+                "APP_LLM_TIMEOUT_SECONDS=42",
+                "APP_OUTPUT_DIR=D:/FrameQ/results",
+                "APP_ASR_MODEL=iic/SenseVoiceSmall",
+                "APP_SETTINGS_SCHEMA_VERSION=2",
             ]
             .join("\n"),
         )
@@ -321,10 +321,10 @@ mod tests {
         assert_eq!(config.config_path, path_to_env_string(&env_path));
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall-onnx");
         assert!(saved.contains("FrameQ desktop local settings"));
-        assert!(saved.contains("FRAMEQ_OUTPUT_DIR="));
-        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
-        assert!(saved.contains("FRAMEQ_SETTINGS_SCHEMA_VERSION=2"));
-        assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
+        assert!(saved.contains("APP_OUTPUT_DIR="));
+        assert!(saved.contains("APP_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
+        assert!(saved.contains("APP_SETTINGS_SCHEMA_VERSION=2"));
+        assert!(!saved.contains("APP_LLM_API_KEY"));
     }
 
     #[test]
@@ -334,13 +334,13 @@ mod tests {
             &env_path,
             [
                 "# keep this comment",
-                "FRAMEQ_LLM_PROVIDER=openai_compatible",
-                "FRAMEQ_LLM_BASE_URL=https://old.example/v1",
-                "FRAMEQ_LLM_API_KEY=old-secret",
-                "FRAMEQ_LLM_MODEL=old-model",
-                "FRAMEQ_LLM_TIMEOUT_SECONDS=44",
+                "APP_LLM_PROVIDER=openai_compatible",
+                "APP_LLM_BASE_URL=https://old.example/v1",
+                "APP_LLM_API_KEY=old-secret",
+                "APP_LLM_MODEL=old-model",
+                "APP_LLM_TIMEOUT_SECONDS=44",
                 "OTHER_SETTING=keep-me",
-                "FRAMEQ_OUTPUT_DIR=D:/FrameQ/custom-results",
+                "APP_OUTPUT_DIR=D:/FrameQ/custom-results",
             ]
             .join("\n"),
         )
@@ -358,14 +358,14 @@ mod tests {
         assert_eq!(config.output_dir, "D:/FrameQ/custom-results");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
         assert_eq!(config.config_path, path_to_env_string(&env_path));
-        assert!(saved.contains("FRAMEQ_OUTPUT_DIR=D:/FrameQ/custom-results"));
-        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
+        assert!(saved.contains("APP_OUTPUT_DIR=D:/FrameQ/custom-results"));
+        assert!(saved.contains("APP_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("OTHER_SETTING=keep-me"));
-        assert!(!saved.contains("FRAMEQ_LLM_PROVIDER"));
-        assert!(!saved.contains("FRAMEQ_LLM_BASE_URL"));
-        assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
-        assert!(!saved.contains("FRAMEQ_LLM_MODEL"));
-        assert!(!saved.contains("FRAMEQ_LLM_TIMEOUT_SECONDS"));
+        assert!(!saved.contains("APP_LLM_PROVIDER"));
+        assert!(!saved.contains("APP_LLM_BASE_URL"));
+        assert!(!saved.contains("APP_LLM_API_KEY"));
+        assert!(!saved.contains("APP_LLM_MODEL"));
+        assert!(!saved.contains("APP_LLM_TIMEOUT_SECONDS"));
     }
 
     #[test]
@@ -383,10 +383,10 @@ mod tests {
 
         assert!(config.output_dir.is_empty());
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
-        assert!(saved.contains("FRAMEQ_OUTPUT_DIR="));
-        assert!(saved.contains("FRAMEQ_ASR_MODEL=iic/SenseVoiceSmall"));
+        assert!(saved.contains("APP_OUTPUT_DIR="));
+        assert!(saved.contains("APP_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("FrameQ desktop local settings"));
-        assert!(!saved.contains("FRAMEQ_LLM_API_KEY"));
+        assert!(!saved.contains("APP_LLM_API_KEY"));
     }
 
     #[test]

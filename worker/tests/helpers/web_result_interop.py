@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from frameq_worker.task_store import TaskStoreFacade
+from worker_core.task_store import TaskStoreFacade
 
 
 def main() -> None:
@@ -23,7 +23,7 @@ def main() -> None:
     environment.update({
         "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
         "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1",
-        "FRAMEQ_OUTPUT_DIR": str(store.output_root), "FRAMEQ_CACHE_DIR": str(store.cache_root),
+        "APP_OUTPUT_DIR": str(store.output_root), "APP_CACHE_DIR": str(store.cache_root),
         "HOME": str(args.root), "USERPROFILE": str(args.root),
         "MODELSCOPE_CACHE": str(args.root / "modelscope-cache"),
     })
@@ -39,7 +39,7 @@ def main() -> None:
         },
     }
     completed = subprocess.run(
-        [sys.executable, "-m", "frameq_worker", "--save-web-page-stdin",
+        [sys.executable, "-m", "worker_core", "--save-web-page-stdin",
          "--web-operation-id", operation_id],
         input=json.dumps(save_request).encode("utf-8"), capture_output=True, timeout=60,
         check=False, cwd=args.root, env=environment,
@@ -55,7 +55,7 @@ def main() -> None:
         if target == "draft":
             request.update({"insight_id": 1, "platform": "xiaohongshu"})
         completed = subprocess.run(
-            [sys.executable, "-m", "frameq_worker", "--retry-insights-stdin"],
+            [sys.executable, "-m", "worker_core", "--retry-insights-stdin"],
             input=json.dumps(request).encode("utf-8"), capture_output=True, timeout=60,
             check=False, cwd=args.root, env=environment,
         )

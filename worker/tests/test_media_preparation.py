@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 
 import pytest
-from frameq_worker import atomic_files
-from frameq_worker.media import CommandResult
-from frameq_worker.models import ProcessLocalMediaRequest
-from frameq_worker.source_identity import SourceIdentity
-from frameq_worker.source_resolution import SourceRequest
-from frameq_worker.task_store import (
+from worker_core import atomic_files
+from worker_core.media import CommandResult
+from worker_core.models import ProcessLocalMediaRequest
+from worker_core.source_identity import SourceIdentity
+from worker_core.source_resolution import SourceRequest
+from worker_core.task_store import (
     LocalFileTaskSource,
     TaskContext,
     TaskPaths,
@@ -101,7 +101,7 @@ def _normalized_wav_probe_payload() -> str:
 def test_pipeline_enters_media_subsystem_only_through_facade() -> None:
     orchestration_path = (
         Path(__file__).resolve().parents[1]
-        / "frameq_worker"
+        / "worker_core"
         / "pipeline_runtime"
         / "orchestration.py"
     )
@@ -110,7 +110,7 @@ def test_pipeline_enters_media_subsystem_only_through_facade() -> None:
     imported_names = {
         alias.name
         for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.module == "frameq_worker.media"
+        if isinstance(node, ast.ImportFrom) and node.module == "worker_core.media"
         for alias in node.names
     }
     called_names = {
@@ -119,9 +119,9 @@ def test_pipeline_enters_media_subsystem_only_through_facade() -> None:
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
 
-    public_pipeline = importlib.import_module("frameq_worker.pipeline")
+    public_pipeline = importlib.import_module("worker_core.pipeline")
     private_orchestration = importlib.import_module(
-        "frameq_worker.pipeline_runtime.orchestration"
+        "worker_core.pipeline_runtime.orchestration"
     )
 
     assert public_pipeline.run_worker_pipeline is private_orchestration.run_worker_pipeline
@@ -143,7 +143,7 @@ def test_pipeline_enters_media_subsystem_only_through_facade() -> None:
 def test_media_facade_excludes_asr_ai_and_task_persistence() -> None:
     facade_path = (
         Path(__file__).resolve().parents[1]
-        / "frameq_worker"
+        / "worker_core"
         / "media_preparation.py"
     )
     source = facade_path.read_text(encoding="utf-8")
@@ -157,22 +157,22 @@ def test_media_facade_excludes_asr_ai_and_task_persistence() -> None:
         alias.name
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom)
-        and node.module == "frameq_worker.task_store"
+        and node.module == "worker_core.task_store"
         for alias in node.names
     }
 
-    assert "frameq_worker.asr" not in imported_modules
+    assert "worker_core.asr" not in imported_modules
     assert imported_modules.isdisjoint(
         {
-            "frameq_worker.ai_artifacts",
-            "frameq_worker.ai_prompts",
-            "frameq_worker.ai_runtime",
-            "frameq_worker.dissection_agent",
-            "frameq_worker.dissection_report",
-            "frameq_worker.insight_errors",
-            "frameq_worker.summary_agent",
-            "frameq_worker.topic_agent",
-            "frameq_worker.transcript_chunks",
+            "worker_core.ai_artifacts",
+            "worker_core.ai_prompts",
+            "worker_core.ai_runtime",
+            "worker_core.dissection_agent",
+            "worker_core.dissection_report",
+            "worker_core.insight_errors",
+            "worker_core.summary_agent",
+            "worker_core.topic_agent",
+            "worker_core.transcript_chunks",
         }
     )
     assert task_store_imports == {"TaskContext"}
@@ -181,7 +181,7 @@ def test_media_facade_excludes_asr_ai_and_task_persistence() -> None:
 
 
 def test_url_media_facade_prepares_task_owned_video_and_audio(tmp_path: Path) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     context = _build_context(tmp_path, "url-media-facade")
     paths = context.paths
     source_request = _source_request(context)
@@ -251,7 +251,7 @@ def test_media_facade_reads_xiaohongshu_fallback_subtitle_sidecar(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     context = _build_context(tmp_path, "xhs-subtitle-sidecar")
     source_request = _source_request(context)
     subtitle_text = "1\n00:00:00,000 --> 00:00:01,000\n平台字幕\n"
@@ -306,7 +306,7 @@ def test_video_commit_failure_preserves_previous_official_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     context = _build_context(tmp_path, "video-commit-failure")
     context.paths.video_path.write_bytes(b"previous video")
     original_replace = atomic_files.os.replace
@@ -349,7 +349,7 @@ def test_video_commit_failure_preserves_previous_official_file(
 def test_failed_ffmpeg_removes_partial_audio_and_returns_safe_error(
     tmp_path: Path,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     context = _build_context(tmp_path, "audio-command-failure")
 
     def runner(command: list[str]) -> CommandResult:
@@ -388,7 +388,7 @@ def test_copy_failure_removes_staging_and_preserves_previous_video(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     context = _build_context(tmp_path, "video-copy-failure")
     context.paths.video_path.write_bytes(b"previous video")
 
@@ -425,7 +425,7 @@ def test_audio_commit_failure_preserves_previous_official_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     context = _build_context(tmp_path, "audio-commit-failure")
     context.paths.audio_path.write_bytes(b"previous audio")
     original_replace = atomic_files.os.replace
@@ -472,7 +472,7 @@ def test_audio_commit_failure_preserves_previous_official_file(
 
 
 def test_invalid_extracted_audio_is_not_committed(tmp_path: Path) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     context = _build_context(tmp_path, "audio-validation-failure")
 
     def runner(command: list[str]) -> CommandResult:
@@ -513,7 +513,7 @@ def test_invalid_extracted_audio_is_not_committed(tmp_path: Path) -> None:
 def test_local_video_uses_generic_staging_preserves_bytes_and_normalizes_audio(
     tmp_path: Path,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     private_root = tmp_path / "review-secret"
     private_root.mkdir()
     source_path = private_root / "Interview.wmv"
@@ -571,7 +571,7 @@ def test_local_video_uses_generic_staging_preserves_bytes_and_normalizes_audio(
 def test_local_audio_accepts_cover_art_creates_no_video_and_cleans_stage(
     tmp_path: Path,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     private_root = tmp_path / "review-secret"
     private_root.mkdir()
     source_path = private_root / "Podcast.mp3"
@@ -644,7 +644,7 @@ def test_local_media_missing_required_streams_fail_with_fixed_codes(
     probe_payload: str,
     expected_code: str,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     extension = "wmv" if media_kind == "video" else "mp3"
     source_path = tmp_path / f"private.{extension}"
     source_path.write_bytes(b"media")
@@ -677,7 +677,7 @@ def test_local_video_copy_failure_removes_generic_partial_without_path_echo(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     private_root = tmp_path / "review-secret"
     private_root.mkdir()
     source_path = private_root / "Interview.wmv"
@@ -711,7 +711,7 @@ def test_local_video_copy_failure_removes_generic_partial_without_path_echo(
 def test_local_audio_rejects_non_normalized_wav_and_removes_all_partials(
     tmp_path: Path,
 ) -> None:
-    media_preparation = importlib.import_module("frameq_worker.media_preparation")
+    media_preparation = importlib.import_module("worker_core.media_preparation")
     source_path = tmp_path / "Podcast.mp3"
     source_path.write_bytes(b"audio")
     request = ProcessLocalMediaRequest(

@@ -251,7 +251,7 @@ fn valid_diagnostic_events_do_not_record_watchdog_activity() {
     let paths = test_paths("watchdog-valid-diagnostic");
     let record = inspect_stderr_line(
         ProgressProtocol::AsrModelDownload,
-        r#"FRAMEQ_DIAGNOSTIC {"version":1,"operation":"download_asr_model","phase":"primary_model","category":"network","code":"connection_timeout","exception_type":"ReadTimeout"}"#,
+        r#"APP_DIAGNOSTIC {"version":1,"operation":"download_asr_model","phase":"primary_model","category":"network","code":"connection_timeout","exception_type":"ReadTimeout"}"#,
     );
 
     route_stderr_record(

@@ -68,7 +68,7 @@ test("builds manual internal macOS artifacts for both architectures with read-on
   assert.match(workflow, /test "\$\(lipo -archs "\$BIN"\)" = "\$\{\{ matrix\.arch \}\}"/);
   assert.match(
     workflow,
-    /import funasr_onnx, modelscope, onnxruntime, yt_dlp; import frameq_worker/,
+    /import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core/,
   );
   assert.match(workflow, /bundled deno OK/);
   assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$APP"/);
@@ -93,12 +93,12 @@ test("builds manual internal macOS artifacts for both architectures with read-on
     .map((match) => match[1])
     .sort();
   assert.deepEqual(referencedSecrets, [
-    "FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64",
-    "FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64",
-    "FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64",
-    "FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64",
-    "FRAMEQ_PYTHON_STANDALONE_URL_ARM64",
-    "FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64",
+    "APP_FFMPEG_ARCHIVE_URL_ARM64",
+    "APP_FFMPEG_ARCHIVE_URL_MACOS_X64",
+    "APP_FFPROBE_ARCHIVE_URL_ARM64",
+    "APP_FFPROBE_ARCHIVE_URL_MACOS_X64",
+    "APP_PYTHON_STANDALONE_URL_ARM64",
+    "APP_PYTHON_STANDALONE_URL_MACOS_X64",
   ]);
   for (const component of ["python", "ffmpeg", "ffprobe"]) {
     assert.match(workflow, new RegExp(`secrets\\[matrix\\.${component}_archive\\]`));

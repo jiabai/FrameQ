@@ -47,7 +47,7 @@ def test_onnx_transcriber_loads_direct_quantized_asr_and_online_vad(
         ),
     )
 
-    from frameq_worker.asr_runtime.sensevoice_onnx import SenseVoiceOnnxTranscriber
+    from worker_core.asr_runtime.sensevoice_onnx import SenseVoiceOnnxTranscriber
 
     asr_dir = tmp_path / "SenseVoiceSmall-onnx"
     vad_dir = tmp_path / "vad"
@@ -81,7 +81,7 @@ def test_onnx_transcriber_streams_bounded_vad_and_calls_asr_per_segment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime import sensevoice_onnx
 
     samples = _install_pcm(
         monkeypatch,
@@ -145,8 +145,8 @@ def test_onnx_vad_failure_is_terminal_without_asr_call(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
-    from frameq_worker.asr_runtime.types import ASRRuntimeError
+    from worker_core.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime.types import ASRRuntimeError
 
     _install_pcm(monkeypatch, sensevoice_onnx)
     asr_calls: list[object] = []
@@ -192,8 +192,8 @@ def test_onnx_invalid_vad_event_stream_is_terminal_without_asr_call(
     monkeypatch: pytest.MonkeyPatch,
     vad_result: object,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
-    from frameq_worker.asr_runtime.types import ASRRuntimeError
+    from worker_core.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime.types import ASRRuntimeError
 
     _install_pcm(monkeypatch, sensevoice_onnx)
     asr_calls: list[object] = []
@@ -219,8 +219,8 @@ def test_onnx_completed_empty_vad_stream_returns_empty_transcript_without_asr_ca
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
-    from frameq_worker.asr_runtime.types import ASREmptyTranscriptError
+    from worker_core.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime.types import ASREmptyTranscriptError
 
     _install_pcm(monkeypatch, sensevoice_onnx)
     asr_calls: list[object] = []
@@ -246,8 +246,8 @@ def test_onnx_pcm_read_failure_is_terminal_without_provider_calls(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
-    from frameq_worker.asr_runtime.types import ASRRuntimeError
+    from worker_core.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime.types import ASRRuntimeError
 
     provider_calls: list[str] = []
     monkeypatch.setattr(
@@ -281,8 +281,8 @@ def test_onnx_unusable_slices_are_terminal_without_asr_call(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
-    from frameq_worker.asr_runtime.types import ASRRuntimeError
+    from worker_core.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime.types import ASRRuntimeError
 
     _install_pcm(monkeypatch, sensevoice_onnx)
     asr_calls: list[object] = []
@@ -313,8 +313,8 @@ def test_onnx_all_empty_blocks_return_empty_transcript(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
-    from frameq_worker.asr_runtime.types import ASREmptyTranscriptError
+    from worker_core.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime.types import ASREmptyTranscriptError
 
     _install_pcm(monkeypatch, sensevoice_onnx, duration_seconds=2.0)
     asr_calls: list[np.ndarray] = []
@@ -343,8 +343,8 @@ def test_onnx_segment_failure_does_not_fall_back_to_full_audio(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from frameq_worker.asr_runtime import sensevoice_onnx
-    from frameq_worker.asr_runtime.types import ASRRuntimeError
+    from worker_core.asr_runtime import sensevoice_onnx
+    from worker_core.asr_runtime.types import ASRRuntimeError
 
     _install_pcm(monkeypatch, sensevoice_onnx)
     calls: list[object] = []
@@ -372,7 +372,7 @@ def test_onnx_segment_failure_does_not_fall_back_to_full_audio(
 def test_onnx_provider_never_imports_or_calls_full_audio_or_pytorch() -> None:
     provider_source = (
         Path(__file__).parents[1]
-        / "frameq_worker"
+        / "worker_core"
         / "asr_runtime"
         / "sensevoice_onnx.py"
     ).read_text(encoding="utf-8")

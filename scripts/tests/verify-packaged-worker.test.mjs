@@ -24,14 +24,14 @@ test("byte comparison passes for identical trees and ignores pycache", async () 
     const canonical = join(root, "canonical");
     const packaged = join(root, "packaged");
     const files = {
-      "frameq_worker/cli.py": "cli-source",
-      "frameq_worker/import_stage_diagnostics.py": "guard-source",
-      "frameq_worker/__pycache__/cli.cpython-312.pyc": "stale-cache",
+      "worker_core/cli.py": "cli-source",
+      "worker_core/import_stage_diagnostics.py": "guard-source",
+      "worker_core/__pycache__/cli.cpython-312.pyc": "stale-cache",
     };
     await writeTree(canonical, files);
     await writeTree(packaged, {
-      "frameq_worker/cli.py": "cli-source",
-      "frameq_worker/import_stage_diagnostics.py": "guard-source",
+      "worker_core/cli.py": "cli-source",
+      "worker_core/import_stage_diagnostics.py": "guard-source",
     });
 
     assert.deepEqual(compareWorkerTrees(canonical, packaged), []);
@@ -46,21 +46,21 @@ test("byte comparison reports missing, mismatched, and extra files", async () =>
     const canonical = join(root, "canonical");
     const packaged = join(root, "packaged");
     await writeTree(canonical, {
-      "frameq_worker/cli.py": "cli-source",
-      "frameq_worker/only-canonical.py": "extra",
+      "worker_core/cli.py": "cli-source",
+      "worker_core/only-canonical.py": "extra",
     });
     await writeTree(packaged, {
-      "frameq_worker/cli.py": "cli-DRIFTED",
-      "frameq_worker/only-packaged.py": "extra",
+      "worker_core/cli.py": "cli-DRIFTED",
+      "worker_core/only-packaged.py": "extra",
     });
 
     const errors = compareWorkerTrees(canonical, packaged);
-    assert.ok(errors.some((error) => error.includes("byte mismatch: frameq_worker/cli.py")));
+    assert.ok(errors.some((error) => error.includes("byte mismatch: worker_core/cli.py")));
     assert.ok(
-      errors.some((error) => error.includes("missing in packaged resources: frameq_worker/only-canonical.py")),
+      errors.some((error) => error.includes("missing in packaged resources: worker_core/only-canonical.py")),
     );
     assert.ok(
-      errors.some((error) => error.includes("extra in packaged resources: frameq_worker/only-packaged.py")),
+      errors.some((error) => error.includes("extra in packaged resources: worker_core/only-packaged.py")),
     );
   } finally {
     await rm(root, { recursive: true, force: true });

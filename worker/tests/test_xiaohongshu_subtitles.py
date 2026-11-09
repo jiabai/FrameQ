@@ -4,11 +4,11 @@ import json
 from collections.abc import Mapping
 
 import pytest
-from frameq_worker.xiaohongshu.subtitles import (
+from worker_core.xiaohongshu.subtitles import (
     is_allowed_subtitle_url,
     select_preferred_subtitle_track,
 )
-from frameq_worker.xiaohongshu.types import XiaohongshuSubtitleTrack
+from worker_core.xiaohongshu.types import XiaohongshuSubtitleTrack
 
 
 def note_with_groups(groups: Mapping[str, object]) -> dict[str, object]:

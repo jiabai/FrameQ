@@ -168,7 +168,7 @@ fn webpage_transaction_publishes_manifest_last_and_recovers_shared_journal() {
 #[test]
 #[ignore = "Runs real Python and Rust child processes; requires the installed worker Python environment"]
 fn webpage_cross_language_journals_recover_real_process_interruptions() {
-    const CHILD_TASK: &str = "FRAMEQ_STORAGE_TEST_TASK_DIR";
+    const CHILD_TASK: &str = "APP_STORAGE_TEST_TASK_DIR";
     let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
     if let Some(path) = std::env::var_os(CHILD_TASK) {
         let task = PathBuf::from(path).canonicalize().unwrap();
@@ -176,7 +176,7 @@ fn webpage_cross_language_journals_recover_real_process_interruptions() {
         super::transaction::interrupt_article_commit_for_test(&task);
         unreachable!();
     }
-    let python = std::env::var_os("FRAMEQ_STORAGE_TEST_PYTHON").map(PathBuf::from)
+    let python = std::env::var_os("APP_STORAGE_TEST_PYTHON").map(PathBuf::from)
         .unwrap_or_else(|| project.join(if cfg!(windows) { ".venv/Scripts/python.exe" } else { ".venv/bin/python" }));
     let helper = project.join("worker/tests/helpers/web_storage_interop.py");
     let root = output_root();

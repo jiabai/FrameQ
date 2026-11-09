@@ -7,8 +7,8 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from frameq_worker.source_text import read_source_text
-from frameq_worker.task_store import TaskStoreFacade
+from worker_core.source_text import read_source_text
+from worker_core.task_store import TaskStoreFacade
 
 
 def save_request() -> dict[str, object]:
@@ -157,9 +157,9 @@ def run_web_cli(
     environment.update({
         "PYTHONPATH": str(Path(__file__).resolve().parents[1]),
         "PYTHONUTF8": "1", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1",
-        "FRAMEQ_OUTPUT_DIR": str(root / "outputs"), "FRAMEQ_CACHE_DIR": str(root / "cache"),
+        "APP_OUTPUT_DIR": str(root / "outputs"), "APP_CACHE_DIR": str(root / "cache"),
     })
     return subprocess.run([
-        sys.executable, "-m", "frameq_worker", *arguments,
+        sys.executable, "-m", "worker_core", *arguments,
     ], input=json.dumps(payload).encode("utf-8"), capture_output=True, cwd=root,
         env=environment, timeout=60, check=False)

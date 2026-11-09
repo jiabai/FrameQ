@@ -6,7 +6,7 @@ from shutil import rmtree
 from uuid import uuid4
 
 import pytest
-from frameq_worker.models import (
+from worker_core.models import (
     JobStage,
     ProcessLocalMediaRequest,
     ProcessRequest,
@@ -14,9 +14,9 @@ from frameq_worker.models import (
     TranscriptMetadata,
     WorkerError,
 )
-from frameq_worker.note_title_metadata import NoteTitleMetadata
-from frameq_worker.source_identity import SourceIdentity
-from frameq_worker.task_store import TaskContext, TaskStoreFacade, write_task_manifest
+from worker_core.note_title_metadata import NoteTitleMetadata
+from worker_core.source_identity import SourceIdentity
+from worker_core.task_store import TaskContext, TaskStoreFacade, write_task_manifest
 
 
 @pytest.fixture

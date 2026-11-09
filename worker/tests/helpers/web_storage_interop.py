@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from frameq_worker.task_transaction import commit_task_artifacts, recover_task_artifacts
+from worker_core.task_transaction import commit_task_artifacts, recover_task_artifacts
 
 
 def interrupt_after_article(point: str) -> None:

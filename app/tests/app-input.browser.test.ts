@@ -22,7 +22,7 @@ describe("Production desktop frontend without the native data bridge", { timeout
       navigation: document.querySelectorAll('nav[aria-label="Main navigation"] button').length,
       libraries: document.querySelectorAll('.shell-library,.collections-workspace,.task-workspace-layout').length,
       inputs: document.querySelectorAll('#video-url').length,
-      hiddenBridge: '__FRAMEQ_UI_SMOKE__' in window,
+      hiddenBridge: '__APP_UI_SMOKE__' in window,
       nativeRuntime: '__TAURI_INTERNALS__' in window,
       removedActions: [...document.querySelectorAll('button')].map(button => button.getAttribute('aria-label') || button.textContent.trim()).filter(name => name === 'Search')
     }))()`);

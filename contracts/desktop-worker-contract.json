@@ -2,10 +2,10 @@
   "contractVersion": 11,
   "events": {
     "workerProgress": "worker-progress",
-    "workerProgressPrefix": "FRAMEQ_PROGRESS ",
+    "workerProgressPrefix": "APP_PROGRESS ",
     "asrModelDownloadProgress": "asr-model-download-progress",
-    "asrModelDownloadPrefix": "FRAMEQ_MODEL_DOWNLOAD ",
-    "workerDiagnosticPrefix": "FRAMEQ_DIAGNOSTIC "
+    "asrModelDownloadPrefix": "APP_MODEL_DOWNLOAD ",
+    "workerDiagnosticPrefix": "APP_DIAGNOSTIC "
   },
   "diagnosticEvents": {
     "version": 1,
@@ -1870,9 +1870,9 @@
     "aiTranscriptArtifact": "transcript/transcript.txt"
   },
   "env": {
-    "outputDir": "FRAMEQ_OUTPUT_DIR",
-    "cacheDir": "FRAMEQ_CACHE_DIR",
-    "modelDir": "FRAMEQ_MODEL_DIR"
+    "outputDir": "APP_OUTPUT_DIR",
+    "cacheDir": "APP_CACHE_DIR",
+    "modelDir": "APP_MODEL_DIR"
   },
   "workerResultKeys": [
     "status",

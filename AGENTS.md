@@ -18,7 +18,7 @@ FrameQ 是本地优先的桌面应用：粘贴公开或已授权的视频链接�
 | --- | --- | --- |
 | `app/` | Tauri + React + TypeScript 桌面客户端 | 是 |
 | `worker/` | Python worker：下载、媒体校验、音频提取、ASR、agent_runtime 智能提炼 | 是 |
-| `worker/frameq_worker/summary_agent.py`、`topic_agent.py`、`dissection_agent.py` | 要点总结、启发灵感、文字稿解剖；共用 `ai_runtime.py`、`ai_prompts.py` 与 `transcript_chunks.py` | 是 |
+| `worker/worker_core/summary_agent.py`、`topic_agent.py`、`dissection_agent.py` | 要点总结、启发灵感、文字稿解剖；共用 `ai_runtime.py`、`ai_prompts.py` 与 `transcript_chunks.py` | 是 |
 | `server/` | Fastify 账号/额度/LLM 结账服务 | 是 |
 | `site/` | Astro 营销站。版本号唯一来源是 `site/src/consts.ts` 的 `LATEST_VERSION`，构建用 `npm --prefix site run build` | 否 |
 | `video/` | Remotion 宣传视频工程（`promo-video`、`remotion-video1`） | 否 |
@@ -52,7 +52,7 @@ FrameQ 是本地优先的桌面应用：粘贴公开或已授权的视频链接�
 1. **本地优先**：视频、音频、文字稿、模型缓存与本地历史默认留在用户本机。
 2. **处理阶段可见**：UI 必须始终显示清晰处理阶段（输入 → 视频提取 → 视频转译 → 话题点生成 → 完成/失败）。
 3. **安装包轻量**：安装包不得内置 ASR 权重、LLM key、云端 LLM 模型或用户私有配置；核心本地 ASR 模型仅在用户提交已验证任务且所选模型缺失时按需下载到 app-local data，启动时不得自动下载。模型版本、缓存、下载进度、取消、失败降级与离线行为必须在产品与 worker 中显式处理。
-4. **代码边界**：worker 运行期不得跨目录 import 本仓库的其他模块，尤其不得 import `server/` 的代码；智能提炼能力由 `worker/frameq_worker/` 内的 agent、提示词、分段器和报告模块维护。
+4. **代码边界**：worker 运行期不得跨目录 import 本仓库的其他模块，尤其不得 import `server/` 的代码；智能提炼能力由 `worker/worker_core/` 内的 agent、提示词、分段器和报告模块维护。
 5. **安全边界**：只处理公开、自有或已授权视频，不绕过平台登录墙、访问控制、CAPTCHA、版权或隐私限制；account 服务不得接收视频/音频/文字稿/洞察/cookie/模型缓存/本地历史内容；真实 `.env`、SQLite、备份、日志、模型缓存、产物与密钥一律不进 git。
 
 ## 约束机制

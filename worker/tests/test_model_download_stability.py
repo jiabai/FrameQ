@@ -6,9 +6,9 @@ import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 
-import frameq_worker.model_download as model_download
 import pytest
-from frameq_worker.model_download import (
+import worker_core.model_download as model_download
+from worker_core.model_download import (
     MIN_MODEL_DOWNLOAD_FREE_BYTES,
     MODEL_DOWNLOAD_ERROR_CODE,
     ModelDownloadError,

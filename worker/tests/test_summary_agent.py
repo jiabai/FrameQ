@@ -8,9 +8,9 @@ from agent_runtime.core import SessionContext
 from agent_runtime.core.run_context import ContextWrapper
 from agent_runtime.core.tool import ToolSet
 from agent_runtime.provider.entities import LLMResponse
-from frameq_worker.ai_runtime import agent_error, build_insight_provider
-from frameq_worker.insight_errors import InsightGenerationError
-from frameq_worker.summary_agent import (
+from worker_core.ai_runtime import agent_error, build_insight_provider
+from worker_core.insight_errors import InsightGenerationError
+from worker_core.summary_agent import (
     SummaryDelivery,
     SummaryDeliveryHook,
     _build_mindmap_tool,
@@ -61,7 +61,7 @@ def test_summary_tools_reject_missing_arguments_with_fixed_feedback() -> None:
 
 
 def test_insight_runner_has_one_attempt_per_step() -> None:
-    from frameq_worker.ai_runtime import StrictInsightRunner
+    from worker_core.ai_runtime import StrictInsightRunner
 
     assert StrictInsightRunner.EMPTY_OUTPUT_RETRY_ATTEMPTS == 1
 
@@ -122,9 +122,9 @@ def test_summary_agent_rejects_output_language_before_provider_configuration() -
 
 
 @pytest.mark.parametrize("env", [
-    {}, {"FRAMEQ_LLM_API_KEY": "key"}, {"FRAMEQ_LLM_MODEL": "model"},
-    {"FRAMEQ_LLM_SOURCE": "server"},
-    {"FRAMEQ_LLM_API_KEY": "key", "FRAMEQ_LLM_MODEL": "model", "FRAMEQ_LLM_PROVIDER": "unknown"},
+    {}, {"APP_LLM_API_KEY": "key"}, {"APP_LLM_MODEL": "model"},
+    {"APP_LLM_SOURCE": "server"},
+    {"APP_LLM_API_KEY": "key", "APP_LLM_MODEL": "model", "APP_LLM_PROVIDER": "unknown"},
 ])
 def test_provider_configuration_fails_before_network(env) -> None:
     with pytest.raises(InsightGenerationError, match="not configured") as error:

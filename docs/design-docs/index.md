@@ -5,6 +5,7 @@ FrameQ 持久设计决策文档总入口。`AGENTS.md` 不再逐条列出设计�
 ## 核心信念与设计规范
 
 - `core-beliefs.md` — 核心信念
+- `2026-11-09-neutral-naming-policy.md` — 中性命名规范：品牌只进文案，机器标识用「组织域 + 角色」，并给出冻结标识与改名成本
 - `web-marketing-site-design.md` — Web 宣传站设计规范
 - `frameq-code-audit-uml.md` — FrameQ 代码审计 UML
 - `2026-11-07-frameq-architecture-walkthrough.md` — 新人向架构与核心链路说明，含当前契约版本、目录职责、三条主链路与文档出入

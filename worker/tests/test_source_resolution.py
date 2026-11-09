@@ -5,15 +5,15 @@ import importlib.util
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from frameq_worker import platform_source_resolvers as platform_resolvers_module
-from frameq_worker.platform_source_resolvers import build_default_source_resolver
-from frameq_worker.source_identity import SourceIdentityError
+from worker_core import platform_source_resolvers as platform_resolvers_module
+from worker_core.platform_source_resolvers import build_default_source_resolver
+from worker_core.source_identity import SourceIdentityError
 
 
 def _resolution_module() -> ModuleType:
-    spec = importlib.util.find_spec("frameq_worker.source_resolution")
+    spec = importlib.util.find_spec("worker_core.source_resolution")
     assert spec is not None, "source_resolution application boundary is missing"
-    return importlib.import_module("frameq_worker.source_resolution")
+    return importlib.import_module("worker_core.source_resolution")
 
 
 def test_direct_source_resolution_does_not_call_short_link_adapter() -> None:

@@ -3,7 +3,7 @@
 // Check whether the self-service email activation code rollout has reached a
 // given FrameQ server deployment.
 //
-// Why this exists: `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` and the deployment
+// Why this exists: `APP_SELF_SERVICE_ACTIVATION_ENABLED` and the deployment
 // commit move independently, and an operator wants to confirm the route is
 // deployed without holding a user session. What this script can and cannot
 // prove was established by running the real server on the deployment host:
@@ -88,7 +88,7 @@ export function classifyRequestProbe(response) {
     return {
       state: ROLLOUT_STATE.FEATURE_DISABLED,
       detail:
-        "route is registered, the session was accepted, and FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED is off",
+        "route is registered, the session was accepted, and APP_SELF_SERVICE_ACTIVATION_ENABLED is off",
     };
   }
 
@@ -300,7 +300,7 @@ function summarizeBody(body) {
 }
 
 function parseArgs(argv) {
-  let baseUrl = process.env.FRAMEQ_ROLLOUT_BASE_URL ?? DEFAULT_BASE_URL;
+  let baseUrl = process.env.APP_ROLLOUT_BASE_URL ?? DEFAULT_BASE_URL;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--base-url") {
@@ -334,7 +334,7 @@ function printHelp() {
       "",
       "Options:",
       `  --base-url <url>   Target server (default: ${DEFAULT_BASE_URL},`,
-      "                     or FRAMEQ_ROLLOUT_BASE_URL when set)",
+      "                     or APP_ROLLOUT_BASE_URL when set)",
       "",
       "Exit codes:",
       "  0  route is deployed and every check passed",
@@ -368,13 +368,13 @@ async function main() {
   } else if (result.state === ROLLOUT_STATE.ROUTE_REGISTERED) {
     process.stdout.write(
       "Next step: confirm the feature flag separately - the anonymous probe cannot see it.\n" +
-        "  - read FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED on the host and confirm the service\n" +
+        "  - read APP_SELF_SERVICE_ACTIVATION_ENABLED on the host and confirm the service\n" +
         "    restarted healthy after it changed; or\n" +
         "  - run the authenticated smoke (request -> email -> redeem) with a test account.\n",
     );
   } else if (result.state === ROLLOUT_STATE.FEATURE_DISABLED) {
     process.stdout.write(
-      "Next step: set FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true and restart frameq-server.\n",
+      "Next step: set APP_SELF_SERVICE_ACTIVATION_ENABLED=true and restart frameq-server.\n",
     );
   }
 

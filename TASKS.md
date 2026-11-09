@@ -357,7 +357,7 @@
   desktop accounts can request an account-bound activation code by email, manually redeem it for a
   fresh 31-day entitlement plus 20 AI Credits, and repeat after every expiry without stacking active
   entitlement. Server rollout is kill-switch guarded by
-  `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` (production explicit true/false, `0`/`1` compatible,
+  `APP_SELF_SERVICE_ACTIVATION_ENABLED` (production explicit true/false, `0`/`1` compatible,
   dev/test default false) and requires SMTP with no console fallback. New route
   `POST /api/desktop/activation-codes/request` is auth-first, accepts only locale, returns
   `status/retry_at/redeem_by`, and pairs with `GET /api/desktop/account.can_request_activation_code`.
@@ -423,7 +423,7 @@
   commit (run 31022512026 success), reviewed `docs/releases/v0.3.1.md` notes replaced the generic
   generated body, and Draft published as stable non-prerelease
   (https://github.com/jiabai/FrameQ/releases/tag/v0.3.1). Gate-fixed contract-v7 regressions:
-  `worker/frameq_worker/desktop_contract.py` 6→7, `build-installer.test.mjs` 6→7, 7 frontend
+  `worker/worker_core/desktop_contract.py` 6→7, `build-installer.test.mjs` 6→7, 7 frontend
   fixtures missing `dissection_source_status`. Residual risk: Inspiration Profile v2 packaged
   launch, Web session no IP/UA binding (transcript dissection real paid-supplier smoke 已于
   2026-08-23 真实付费烟测闭合，见 v0.3.0 条目). Product
@@ -695,7 +695,7 @@
   hosted workflow was not run for these commits and remains residual platform evidence.
 
 - [x] Split the Python worker pipeline by responsibility (2026-07-21) — ✅ Acceptance: keep
-  `frameq_worker.pipeline` as the sole stable production import surface and direct-reexport the
+  `worker_core.pipeline` as the sole stable production import surface and direct-reexport the
   exact current objects; move shared path/progress/failure policy, subtitle/ASR stages,
   official-transcript AI generation, and URL task/media/finalization orchestration into private
   `pipeline_runtime/shared.py`, `transcript.py`, `insights.py`, and `orchestration.py` owners behind
@@ -746,7 +746,7 @@
   compatibility residual.
 
 - [x] Split the Python ASR application module by failure boundary (2026-07-20) — ✅ Acceptance: keep
-  `frameq_worker.asr` as the sole stable production import surface; move errors/data/protocol,
+  `worker_core.asr` as the sole stable production import surface; move errors/data/protocol,
   registry/cache/factory policy, Qwen integration, SenseVoice normalization/VAD/WAV behavior, and
   transcript artifact writing into five private `asr_runtime/` owners. Preserve exact root
   definition/function identities, constant values, signatures/defaults, model order/default/cache
@@ -779,7 +779,7 @@
   `docs/exec-plans/completed/2026-07-20-transcript-detail-module-split-plan.md`.
 
 - [x] Split the Douyin public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
-  retain `frameq_worker.douyin_fallback` as the sole stable production/test adapter; separate shared
+  retain `worker_core.douyin_fallback` as the sole stable production/test adapter; separate shared
   types, source/short-link policy, Router Data parsing, stream/ratio-probe policy, and
   CookieJar/HTTP/atomic-download effects into a private `douyin/` package. Preserve exact accepted
   inputs, one process-local anonymous client, request/probe policy, candidate order/deduplication,
@@ -796,7 +796,7 @@
   `docs/exec-plans/completed/2026-07-20-douyin-fallback-module-split-plan.md`.
 
 - [x] Split the Xiaohongshu public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
-  kept the 169-line `frameq_worker.xiaohongshu_fallback` as the stable production/test adapter and
+  kept the 169-line `worker_core.xiaohongshu_fallback` as the stable production/test adapter and
   separated types, source/short-link, page-state, stream-policy, and CookieJar/transport ownership
   into a private `xiaohongshu/` package. Public note/share/short-link and transient `xsec_token`, one
   process-local anonymous CookieJar, decode/state/ranking, nested primary/backup attempts,
@@ -809,7 +809,7 @@
   `docs/exec-plans/completed/2026-07-20-xiaohongshu-fallback-module-split-plan.md`.
 
 - [x] Split the Bilibili public-video fallback by failure boundary (2026-07-20) — ✅ Acceptance:
-  kept the 137-line `frameq_worker.bilibili_fallback` as the stable production/test adapter and
+  kept the 137-line `worker_core.bilibili_fallback` as the stable production/test adapter and
   separated types, source, playback, transport, and artifact responsibilities into a private
   `bilibili/` package. URL/API/DASH selection, fallback order, fixed errors/progress, resumable
   download, `.m4s`/merge cleanup, previous/final MP4 behavior, and root type identities remain
@@ -967,7 +967,7 @@
 
 - [x] Roll out self-service email activation to the production server (2026-09-19) ✅ 生产
   `https://frameq.8xf.pro` 已从 `1afb925` 快进部署到 `5c9e974`，三条 20260824 迁移全部应用
-  （共 6 条，`Database schema is up to date!`），`FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED=true`，
+  （共 6 条，`Database schema is up to date!`），`APP_SELF_SERVICE_ACTIVATION_ENABLED=true`，
   `.env` 权限 600，服务 `active (running)` 且 `Result=success`。两阶段灰度：Phase A（开关 false）
   探针报 `ROLLOUT_STATE=route_registered`，回归面全绿（`/health/live`、`/health/ready` 200，
   `/login` 200、`/admin/login` 200、`/dashboard` 302、营销站 `/`、`/privacy`、`/download` 200，
@@ -1061,7 +1061,7 @@
   ```bash
   PYTHONPATH=worker uv run python -c "
   from pathlib import Path
-  from frameq_worker.media import download_video
+  from worker_core.media import download_video
   result = download_video('https://www.youtube.com/watch?v=jNQXAC9IVRw', Path('build/ytdlp-smoke'))
   print(result.returncode)
   print((result.stdout or result.stderr)[:400])
@@ -1139,7 +1139,7 @@
   `worker.douyin.share_page.retry`（detail 恒为 `stage=douyin_share_page`），
   `diagnostics/export.rs` 的 `safe_desktop_event` 把它列入白名单输出为
   `worker_douyin_share_page_retry`；导出包 `frameq-desktop.log` 中一条记录对应一次重试，
-  首次成功与重试后成功可区分。未改 `FRAMEQ_DIAGNOSTIC` DTO、未 bump 契约版本、未改 worker，
+  首次成功与重试后成功可区分。未改 `APP_DIAGNOSTIC` DTO、未 bump 契约版本、未改 worker，
   普通 stderr 仍只在模型下载时才落盘。门禁：`cargo test --lib share_page` 2 项通过（含真实
   `ProcessVideo` 运行与一条对照）；`cargo test --lib` 510 passed / 50 failed / 29 ignored，
   同一命令在 `git stash` 回退的 HEAD 上为 508 passed / 50 failed / 29 ignored，失败全部落在
@@ -1223,7 +1223,7 @@
 
 - [x] 实现桌面端一键升级（2026-06-23）— Tauri updater + GitHub Releases updater manifest/artifacts；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 代码完成，自动化门禁全部通过（server 32、app 84、Rust 31、worker 99、ruff、build、docs）。✅ 2026-06-27 项目决策：因中国境内访问 GitHub Releases 速度过慢，不再执行旧版到新版的 GitHub updater 真实下载/安装测试；该项作为 v1 测试豁免，不再阻塞发布。
 
-- [x] Add manual audio playback cache management in settings (2026-07-07) - Settings shows `$APPLOCALDATA/outputs/.frameq-audio-review` size as `Audio playback cache: <size>` and provides `Clear audio playback cache`; clearing deletes only that app-local playback cache, preserves `<FRAMEQ_OUTPUT_DIR>/tasks/<task_id>/` source artifacts, and allows cache regeneration when transcript detail is opened again. ✅ Acceptance: settings UI shows cache size, clear action calls a canonicalized Tauri cleanup command, source task audio remains untouched, and tests cover clear + regenerate-on-open.
+- [x] Add manual audio playback cache management in settings (2026-07-07) - Settings shows `$APPLOCALDATA/outputs/.frameq-audio-review` size as `Audio playback cache: <size>` and provides `Clear audio playback cache`; clearing deletes only that app-local playback cache, preserves `<APP_OUTPUT_DIR>/tasks/<task_id>/` source artifacts, and allows cache regeneration when transcript detail is opened again. ✅ Acceptance: settings UI shows cache size, clear action calls a canonicalized Tauri cleanup command, source task audio remains untouched, and tests cover clear + regenerate-on-open.
 - [x] 完成干净 Windows VM 与 macOS arm64/x64 真实安装包验证（2026-07-08）— 用户确认 Windows 与 macOS 安装包验证已完成且无问题；轻量 runtime 安装包在无 Python/uv/ffmpeg 的干净机器完成首启模型下载、URL → 下载 → ASR 文字稿路径。✅ 验收：干净机器安装、首启模型下载、公开视频转写、app-local 数据保留和签名/公证状态记录完成；若最终公开分发 artifact 仍未签名/公证，需在 release note 中显式披露。
 - [x] 桌面端一键升级 GitHub updater 真实下载/安装测试豁免（2026-06-27）— 因中国境内访问 GitHub Releases 速度过慢，本项目 v1 不再把旧版到新版的 GitHub updater 实测作为验收或发布阻塞项。✅ 验收口径：自动化门禁、manifest/artifact 生成、Tauri 签名校验配置和直接分发新版安装包路径成立；未声明国内 GitHub 网络真实升级链路已实测通过。
 
@@ -1249,21 +1249,21 @@
 - [x] 简化首页为单输入卡片（2026-06-18）✅ 等待输入态只显示 `粘贴视频链接` 卡片；提交 URL 后才显示 task monitor 和结果工作区；浏览器回归测试覆盖状态切换
 - [x] 增加 LLM 话题分段规划策略（2026-06-18）✅ 话题点生成先让 LLM 输出 topic plan，再按话题段生成问题；planner 失败时 fallback 到直接生成策略；最终去重并限制总量；worker 测试覆盖 planner、fallback 和总量上限
 - [x] 对齐 InsightFlow 话题点 prompt 和生成参数（2026-06-18）✅ FrameQ prompt 同步参考服务的读者视角表达约束，直接生成 fallback 按约每 1000 字 1 个问题，OpenAI-compatible LLM 默认 `temperature=0.7`；worker 测试和 ruff 通过
-- [x] Route SenseVoice ModelScope cache into project models directory (2026-06-17) ✅ Worker maps `FRAMEQ_MODEL_DIR` / project `models/` to `MODELSCOPE_CACHE` before building SenseVoice models; worker tests, ruff, and docs validation passed.
+- [x] Route SenseVoice ModelScope cache into project models directory (2026-06-17) ✅ Worker maps `APP_MODEL_DIR` / project `models/` to `MODELSCOPE_CACHE` before building SenseVoice models; worker tests, ruff, and docs validation passed.
 - [x] Improve SenseVoice long-audio transcription parameters (2026-06-17) ✅ SenseVoice now enables `fsmn-vad`, long-audio merge parameters, and strips SenseVoice control tags before writing transcripts; worker tests and ruff passed.
 - [x] Harden Tauri worker stdout parsing (2026-06-17) ✅ Tauri now extracts the final structured worker JSON result even when ASR/LLM dependencies print logs to stdout; Rust tests and frontend tests passed.
 - [x] Reuse local media for repeat URL runs (2026-06-17) ✅ Kept yt-dlp invocation, selected downloaded video by URL video ID, and skipped ffmpeg when an existing WAV validates successfully; worker tests, ruff, and docs validation passed.
 
 - [x] 将默认 ASR 模型切换为 SenseVoice Small（2026-06-17）✅ 默认请求、设置默认值、Tauri 默认配置和 worker schema 均使用 `iic/SenseVoiceSmall`；Qwen3-ASR 仍保留为可选模型
 
-- [x] 增加可选 ASR 模型支持（2026-06-17）✅ 设置面板保存 `FRAMEQ_ASR_MODEL`，worker 支持 Qwen3-ASR 和 `iic/SenseVoiceSmall`；worker/Rust/frontend 测试、文档门禁和 Tauri no-bundle 构建通过
+- [x] 增加可选 ASR 模型支持（2026-06-17）✅ 设置面板保存 `APP_ASR_MODEL`，worker 支持 Qwen3-ASR 和 `iic/SenseVoiceSmall`；worker/Rust/frontend 测试、文档门禁和 Tauri no-bundle 构建通过
 
-- [x] 增加历史任务查看和输出目录配置（2026-06-17，旧方案已被 task manifest 取代）✅ 曾采用本地 history 记录任务历史；当前任务库以 `frameq-task.json` 为准，设置面板仍保存 `FRAMEQ_OUTPUT_DIR`
+- [x] 增加历史任务查看和输出目录配置（2026-06-17，旧方案已被 task manifest 取代）✅ 曾采用本地 history 记录任务历史；当前任务库以 `frameq-task.json` 为准，设置面板仍保存 `APP_OUTPUT_DIR`
 
 - [x] 早期 UI 层 LLM 配置入口（2026-06-17，已废弃）✅ 曾支持桌面 UI 保存 OpenAI-compatible base URL、API key、model 和 timeout；当前已由 server-managed LLM 取代，桌面设置不再输入、保存或回显 LLM 信息。
 - [x] MVP 最终验收和残余风险整理（2026-06-17）✅ 真实 InsightFlow LLM retry smoke 返回 `completed` 且生成 8 个话题点；自动化测试、文档门禁和 Tauri no-bundle 构建均通过；高优先级技术债已关闭
 - [x] 早期取消任务语义（2026-06-17，已由 2026-07-10 ProcessSupervisor 方案取代）✅ 曾在 UI 点击后立即返回输入态；当前不再忽略可能先到的真实终态。
-- [x] 早期 `.env` LLM smoke（2026-06-16，已废弃）✅ 曾用项目根 `.env` 验证 OpenAI-compatible Chat Completions；当前桌面 worker 不再读取项目根或 app-local `.env` 中的 `FRAMEQ_LLM_*`，LLM key/config 只由 FrameQ server 管理。
+- [x] 早期 `.env` LLM smoke（2026-06-16，已废弃）✅ 曾用项目根 `.env` 验证 OpenAI-compatible Chat Completions；当前桌面 worker 不再读取项目根或 app-local `.env` 中的 `APP_LLM_*`，LLM key/config 只由 FrameQ server 管理。
 - [x] 完善话题点重试交互（2026-06-16）✅ `部分完成` 状态的话题点卡片可重新触发 InsightFlow，保留既有文字稿并只重跑话题点生成
 - [x] 完善模型下载/加载进度展示（2026-06-16）✅ worker 进度事件经 Tauri 转发到 UI，展示下载、校验、音频提取、模型缓存、模型加载、转写和话题点生成文案
 - [x] 完善详情浮窗复制/导出交互（2026-06-16）✅ 复制使用当前 tab 文本，导出在文件管理器中定位生成的 transcript/insights 文件

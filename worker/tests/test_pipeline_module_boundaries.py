@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
-FRAMEQ_WORKER_ROOT = WORKER_ROOT / "frameq_worker"
-PUBLIC_PIPELINE_PATH = FRAMEQ_WORKER_ROOT / "pipeline.py"
-PRIVATE_PIPELINE_ROOT = FRAMEQ_WORKER_ROOT / "pipeline_runtime"
+APP_WORKER_ROOT = WORKER_ROOT / "worker_core"
+PUBLIC_PIPELINE_PATH = APP_WORKER_ROOT / "pipeline.py"
+PRIVATE_PIPELINE_ROOT = APP_WORKER_ROOT / "pipeline_runtime"
 EXPECTED_PRIVATE_FILES = {
     "__init__.py",
     "dissection.py",
@@ -175,19 +175,19 @@ def test_public_pipeline_root_reexports_exact_private_objects() -> None:
         "insights": EXPECTED_OWNER_SYMBOLS["insights.py"],
         "orchestration": EXPECTED_OWNER_SYMBOLS["orchestration.py"],
     }
-    public = importlib.import_module("frameq_worker.pipeline")
+    public = importlib.import_module("worker_core.pipeline")
 
     for owner, names in owner_exports.items():
-        private = importlib.import_module(f"frameq_worker.pipeline_runtime.{owner}")
+        private = importlib.import_module(f"worker_core.pipeline_runtime.{owner}")
         for name in names:
             assert getattr(public, name) is getattr(private, name)
 
 
 def test_private_modules_have_no_root_or_application_back_edges() -> None:
     forbidden_modules = {
-        "frameq_worker.cli",
-        "frameq_worker.pipeline",
-        "frameq_worker.worker_service",
+        "worker_core.cli",
+        "worker_core.pipeline",
+        "worker_core.worker_service",
     }
     violations: list[str] = []
     for path in PRIVATE_PIPELINE_ROOT.glob("*.py"):
@@ -201,25 +201,25 @@ def test_private_modules_have_no_root_or_application_back_edges() -> None:
 def test_shared_owner_imports_only_the_asr_transcriber_contract() -> None:
     shared_path = PRIVATE_PIPELINE_ROOT / "shared.py"
 
-    assert _names_imported_from(shared_path, "frameq_worker.asr") == {"Transcriber"}
+    assert _names_imported_from(shared_path, "worker_core.asr") == {"Transcriber"}
     assert _has_forbidden_module(
         shared_path,
         {
-            "frameq_worker.ai_artifacts",
-            "frameq_worker.ai_prompts",
-            "frameq_worker.ai_runtime",
-            "frameq_worker.dissection_agent",
-            "frameq_worker.dissection_report",
-            "frameq_worker.insight_errors",
-            "frameq_worker.summary_agent",
-            "frameq_worker.topic_agent",
-            "frameq_worker.transcript_chunks",
-            "frameq_worker.media",
-            "frameq_worker.media_preparation",
-            "frameq_worker.model_download",
-            "frameq_worker.output_language",
-            "frameq_worker.source_resolution",
-            "frameq_worker.task_store",
+            "worker_core.ai_artifacts",
+            "worker_core.ai_prompts",
+            "worker_core.ai_runtime",
+            "worker_core.dissection_agent",
+            "worker_core.dissection_report",
+            "worker_core.insight_errors",
+            "worker_core.summary_agent",
+            "worker_core.topic_agent",
+            "worker_core.transcript_chunks",
+            "worker_core.media",
+            "worker_core.media_preparation",
+            "worker_core.model_download",
+            "worker_core.output_language",
+            "worker_core.source_resolution",
+            "worker_core.task_store",
         },
     ) == []
 
@@ -232,22 +232,22 @@ def test_transcript_owner_excludes_media_ai_and_orchestration() -> None:
         {
             ".insights",
             ".orchestration",
-            "frameq_worker.pipeline_runtime.insights",
-            "frameq_worker.pipeline_runtime.orchestration",
-            "frameq_worker.ai_artifacts",
-            "frameq_worker.ai_prompts",
-            "frameq_worker.ai_runtime",
-            "frameq_worker.dissection_agent",
-            "frameq_worker.dissection_report",
-            "frameq_worker.insight_errors",
-            "frameq_worker.summary_agent",
-            "frameq_worker.topic_agent",
-            "frameq_worker.transcript_chunks",
-            "frameq_worker.llm",
-            "frameq_worker.media",
-            "frameq_worker.media_preparation",
-            "frameq_worker.output_language",
-            "frameq_worker.source_resolution",
+            "worker_core.pipeline_runtime.insights",
+            "worker_core.pipeline_runtime.orchestration",
+            "worker_core.ai_artifacts",
+            "worker_core.ai_prompts",
+            "worker_core.ai_runtime",
+            "worker_core.dissection_agent",
+            "worker_core.dissection_report",
+            "worker_core.insight_errors",
+            "worker_core.summary_agent",
+            "worker_core.topic_agent",
+            "worker_core.transcript_chunks",
+            "worker_core.llm",
+            "worker_core.media",
+            "worker_core.media_preparation",
+            "worker_core.output_language",
+            "worker_core.source_resolution",
         },
     ) == []
 
@@ -261,15 +261,15 @@ def test_insights_owner_excludes_process_media_asr_and_task_dependencies() -> No
             ".orchestration",
             ".shared",
             ".transcript",
-            "frameq_worker.pipeline_runtime.orchestration",
-            "frameq_worker.pipeline_runtime.shared",
-            "frameq_worker.pipeline_runtime.transcript",
-            "frameq_worker.asr",
-            "frameq_worker.media",
-            "frameq_worker.media_preparation",
-            "frameq_worker.source_identity",
-            "frameq_worker.source_resolution",
-            "frameq_worker.task_store",
+            "worker_core.pipeline_runtime.orchestration",
+            "worker_core.pipeline_runtime.shared",
+            "worker_core.pipeline_runtime.transcript",
+            "worker_core.asr",
+            "worker_core.media",
+            "worker_core.media_preparation",
+            "worker_core.source_identity",
+            "worker_core.source_resolution",
+            "worker_core.task_store",
         },
     ) == []
 
@@ -281,45 +281,45 @@ def test_orchestration_owner_excludes_ai_dependencies() -> None:
         orchestration_path,
         {
             ".insights",
-            "frameq_worker.pipeline_runtime.insights",
-            "frameq_worker.ai_artifacts",
-            "frameq_worker.ai_prompts",
-            "frameq_worker.ai_runtime",
-            "frameq_worker.dissection_agent",
-            "frameq_worker.dissection_report",
-            "frameq_worker.insight_errors",
-            "frameq_worker.summary_agent",
-            "frameq_worker.topic_agent",
-            "frameq_worker.transcript_chunks",
-            "frameq_worker.llm",
-            "frameq_worker.output_language",
+            "worker_core.pipeline_runtime.insights",
+            "worker_core.ai_artifacts",
+            "worker_core.ai_prompts",
+            "worker_core.ai_runtime",
+            "worker_core.dissection_agent",
+            "worker_core.dissection_report",
+            "worker_core.insight_errors",
+            "worker_core.summary_agent",
+            "worker_core.topic_agent",
+            "worker_core.transcript_chunks",
+            "worker_core.llm",
+            "worker_core.output_language",
         },
     ) == []
 
 
 def test_low_level_application_dependencies_have_approved_owners() -> None:
-    assert _owners_importing("frameq_worker.asr") == {"shared.py", "transcript.py"}
-    assert _owners_importing("frameq_worker.media_preparation") == {"orchestration.py"}
-    assert _owners_importing("frameq_worker.source_resolution") == {"orchestration.py"}
+    assert _owners_importing("worker_core.asr") == {"shared.py", "transcript.py"}
+    assert _owners_importing("worker_core.media_preparation") == {"orchestration.py"}
+    assert _owners_importing("worker_core.source_resolution") == {"orchestration.py"}
     assert _names_imported_from(
-        PRIVATE_PIPELINE_ROOT / "transcript.py", "frameq_worker.task_store"
+        PRIVATE_PIPELINE_ROOT / "transcript.py", "worker_core.task_store"
     ) == {"TaskContext"}
     assert "TaskStoreFacade" not in _names_imported_from(
-        PRIVATE_PIPELINE_ROOT / "transcript.py", "frameq_worker.task_store"
+        PRIVATE_PIPELINE_ROOT / "transcript.py", "worker_core.task_store"
     )
     assert "TaskStoreFacade" in _names_imported_from(
-        PRIVATE_PIPELINE_ROOT / "orchestration.py", "frameq_worker.task_store"
+        PRIVATE_PIPELINE_ROOT / "orchestration.py", "worker_core.task_store"
     )
 
 
 def test_production_callers_do_not_import_private_pipeline_modules() -> None:
     violations: list[str] = []
-    for path in FRAMEQ_WORKER_ROOT.rglob("*.py"):
+    for path in APP_WORKER_ROOT.rglob("*.py"):
         if path == PUBLIC_PIPELINE_PATH or PRIVATE_PIPELINE_ROOT in path.parents:
             continue
         for module in _imported_modules(path):
-            if module == "frameq_worker.pipeline_runtime" or module.startswith(
-                "frameq_worker.pipeline_runtime."
+            if module == "worker_core.pipeline_runtime" or module.startswith(
+                "worker_core.pipeline_runtime."
             ):
                 violations.append(f"{path.relative_to(WORKER_ROOT)}: {module}")
 

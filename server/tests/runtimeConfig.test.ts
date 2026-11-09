@@ -3,12 +3,12 @@ import { parseRuntimeConfig, RuntimeConfigurationError } from "../src/runtimeCon
 
 const completeProductionEnv = {
   NODE_ENV: "production",
-  FRAMEQ_SERVER_HOST: "127.0.0.1",
-  FRAMEQ_SERVER_PORT: "8787",
-  FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "false",
+  APP_SERVER_HOST: "127.0.0.1",
+  APP_SERVER_PORT: "8787",
+  APP_SELF_SERVICE_ACTIVATION_ENABLED: "false",
   DATABASE_URL: "file:../data/frameq.sqlite",
-  FRAMEQ_ADMIN_EMAIL: "admin@example.com",
-  FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY: "production-encryption-secret-at-least-32",
+  APP_ADMIN_EMAIL: "admin@example.com",
+  APP_LLM_CONFIG_ENCRYPTION_KEY: "production-encryption-secret-at-least-32",
   SMTP_HOST: "smtp.example.com",
   SMTP_PORT: "465",
   SMTP_USER: "mailer@example.com",
@@ -44,9 +44,9 @@ describe("runtime configuration", () => {
 
   test.each([
     "DATABASE_URL",
-    "FRAMEQ_ADMIN_EMAIL",
-    "FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY",
-    "FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED",
+    "APP_ADMIN_EMAIL",
+    "APP_LLM_CONFIG_ENCRYPTION_KEY",
+    "APP_SELF_SERVICE_ACTIVATION_ENABLED",
     "SMTP_HOST",
     "SMTP_PORT",
     "SMTP_USER",
@@ -84,9 +84,9 @@ describe("runtime configuration", () => {
     expect(() =>
       parseRuntimeConfig({
         ...completeProductionEnv,
-        FRAMEQ_ALLOW_CONSOLE_OTP: "1",
+        APP_ALLOW_CONSOLE_OTP: "1",
       }),
-    ).toThrow("FRAMEQ_ALLOW_CONSOLE_OTP");
+    ).toThrow("APP_ALLOW_CONSOLE_OTP");
   });
 
   test("non-production console OTP requires explicit opt-in", () => {
@@ -94,11 +94,11 @@ describe("runtime configuration", () => {
       parseRuntimeConfig({
         NODE_ENV: "development",
       }),
-    ).toThrow("FRAMEQ_ALLOW_CONSOLE_OTP");
+    ).toThrow("APP_ALLOW_CONSOLE_OTP");
 
     const config = parseRuntimeConfig({
       NODE_ENV: "development",
-      FRAMEQ_ALLOW_CONSOLE_OTP: "1",
+      APP_ALLOW_CONSOLE_OTP: "1",
     });
     expect(config.allowConsoleOtp).toBe(true);
     expect(config.smtp).toBeNull();
@@ -107,7 +107,7 @@ describe("runtime configuration", () => {
   test("development defaults self-service activation to disabled", () => {
     const config = parseRuntimeConfig({
       NODE_ENV: "development",
-      FRAMEQ_ALLOW_CONSOLE_OTP: "1",
+      APP_ALLOW_CONSOLE_OTP: "1",
     });
 
     expect(config.selfServiceActivationEnabled).toBe(false);
@@ -117,29 +117,29 @@ describe("runtime configuration", () => {
     expect(
       parseRuntimeConfig({
         ...completeProductionEnv,
-        FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "true",
+        APP_SELF_SERVICE_ACTIVATION_ENABLED: "true",
       }).selfServiceActivationEnabled,
     ).toBe(true);
     expect(
       parseRuntimeConfig({
         ...completeProductionEnv,
-        FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED: "false",
+        APP_SELF_SERVICE_ACTIVATION_ENABLED: "false",
       }).selfServiceActivationEnabled,
     ).toBe(false);
   });
 
   test("production requires an explicit self-service activation flag value", () => {
     const env: Partial<typeof completeProductionEnv> = { ...completeProductionEnv };
-    delete env.FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED;
+    delete env.APP_SELF_SERVICE_ACTIVATION_ENABLED;
 
-    expect(() => parseRuntimeConfig(env)).toThrow("FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED");
+    expect(() => parseRuntimeConfig(env)).toThrow("APP_SELF_SERVICE_ACTIVATION_ENABLED");
   });
 
   test("partial SMTP is rejected even when development console delivery is enabled", () => {
     expect(() =>
       parseRuntimeConfig({
         NODE_ENV: "development",
-        FRAMEQ_ALLOW_CONSOLE_OTP: "1",
+        APP_ALLOW_CONSOLE_OTP: "1",
         SMTP_HOST: "smtp.example.com",
       }),
     ).toThrow("SMTP_USER");
@@ -150,9 +150,9 @@ describe("runtime configuration", () => {
 
 
   test.each([
-    ["FRAMEQ_SERVER_PORT", "0"],
-    ["FRAMEQ_SERVER_PORT", "65536"],
-    ["FRAMEQ_SERVER_PORT", "not-a-port"],
+    ["APP_SERVER_PORT", "0"],
+    ["APP_SERVER_PORT", "65536"],
+    ["APP_SERVER_PORT", "not-a-port"],
     ["SMTP_PORT", "not-a-port"],
   ])("rejects an invalid %s without echoing its value", (name, value) => {
     expect(() =>
