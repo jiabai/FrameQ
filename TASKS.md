@@ -1097,6 +1097,18 @@
 
 ## 已完成
 
+- [x] Remove the fixed four-second wait from the MarkdownSplitter child-process test (2026-11-09) — ✅
+  `worker/tests/test_insights.py` 改为两段事件等待：子进程先发 `started` 信号（30 秒预算，覆盖
+  `spawn` 解释器启动），再发结果（10 秒预算，只约束 splitter 本身）；任一超时都终止子进程并抛
+  `AssertionError`，保留「splitter 永不前进」的死锁检测。新增
+  `test_markdown_splitter_child_stall_is_reported_and_terminated` 用真实挂起子进程验证。本机实测
+  spawn 到首个信号 0.19–0.27 秒，而 CI `42044874583` attempt 1 在负载下超过 4 秒。门禁：ruff 通过；
+  聚焦 13 项；worker 全量 1276 passed / 4 skipped；Node 脚本 57 项；Python 脚本 1 项；文档治理
+  0 错误 0 警告。技术债 Medium 对应条目已移入 Completed / Resolved。顺带核对：另一条浏览器 flake
+  债务里描述的 locale-freeze 等待已随 `app-input.browser.test.ts` 重写而消失，当前文件是 5 项
+  storage 边界用例；`waitFor` helper 仍是 25 ms 轮询 + 8 秒预算，无正在失败的断言，事件驱动改造
+  列为可选，不再当作待修故障。
+
 - [x] Bound the `yt-dlp` download child process with an execution budget (2026-11-09) — ✅
   `media.py` 的 `run_command` 对 `sys.executable -m yt_dlp ...` 形状命令施加 20 分钟
   `subprocess.run` 预算；`ffprobe`、`ffmpeg` 与 B 站备用路径不受影响。`download_video` 在三个下载

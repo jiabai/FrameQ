@@ -4,6 +4,7 @@ import hashlib
 import json
 import multiprocessing
 import queue
+import time
 from pathlib import Path
 
 import pytest
@@ -62,9 +63,51 @@ def preference_snapshot():
     return snapshot
 
 
+# The spawn interpreter start is unrelated to the splitter's work: CI Windows runners have
+# exceeded four seconds under load while local starts measured 0.19-0.27 seconds. The child
+# publishes a "started" signal first, so only the second wait bounds the splitter itself.
+SPLITTER_STARTUP_TIMEOUT_SECONDS = 30.0
+SPLITTER_RESULT_TIMEOUT_SECONDS = 10.0
+
+
 def _split_markdown_worker(markdown: str, max_length: int, result_queue) -> None:
+    result_queue.put("started")
     chunks = MarkdownSplitter(max_length=max_length).split(markdown)
     result_queue.put([len(chunk.content) for chunk in chunks])
+
+
+def _hanging_markdown_worker(result_queue) -> None:
+    result_queue.put("started")
+    time.sleep(30)
+
+
+def _terminate_splitter_child(process) -> None:
+    if process.is_alive():
+        process.terminate()
+    process.join(2)
+
+
+def _run_splitter_child(target, args, startup_timeout: float, result_timeout: float):
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue()
+    process = context.Process(target=target, args=(*args, result_queue))
+    process.start()
+    try:
+        assert result_queue.get(timeout=startup_timeout) == "started"
+    except queue.Empty as exc:
+        _terminate_splitter_child(process)
+        raise AssertionError("MarkdownSplitter child did not start within its budget.") from exc
+    try:
+        lengths = result_queue.get(timeout=result_timeout)
+    except queue.Empty as exc:
+        _terminate_splitter_child(process)
+        raise AssertionError("MarkdownSplitter did not advance past the separator.") from exc
+    process.join(result_timeout)
+    if process.is_alive():
+        _terminate_splitter_child(process)
+        raise AssertionError("MarkdownSplitter child did not exit after publishing its result.")
+    assert process.exitcode == 0
+    return lengths
 
 
 def test_markdown_splitter_preserves_heading_context() -> None:
@@ -78,22 +121,24 @@ def test_markdown_splitter_preserves_heading_context() -> None:
 
 def test_markdown_splitter_advances_past_sentence_separator() -> None:
     markdown = "# Transcript\n\n" + ("a" * 40) + "。" + ("b" * 180)
-    context = multiprocessing.get_context("spawn")
-    result_queue = context.Queue()
-    process = context.Process(target=_split_markdown_worker, args=(markdown, 80, result_queue))
-    process.start()
-    process.join(4)
-    if process.is_alive():
-        process.terminate()
-        process.join(2)
-        raise AssertionError("MarkdownSplitter did not advance past the separator.")
-    assert process.exitcode == 0
-    try:
-        lengths = result_queue.get_nowait()
-    except queue.Empty as exc:
-        raise AssertionError("MarkdownSplitter produced no result.") from exc
+    lengths = _run_splitter_child(
+        _split_markdown_worker,
+        (markdown, 80),
+        SPLITTER_STARTUP_TIMEOUT_SECONDS,
+        SPLITTER_RESULT_TIMEOUT_SECONDS,
+    )
     assert len(lengths) > 1
     assert all(length > 0 for length in lengths)
+
+
+def test_markdown_splitter_child_stall_is_reported_and_terminated() -> None:
+    with pytest.raises(AssertionError, match="did not advance past the separator"):
+        _run_splitter_child(
+            _hanging_markdown_worker,
+            (),
+            SPLITTER_STARTUP_TIMEOUT_SECONDS,
+            0.2,
+        )
 
 
 def test_splitter_source_chunks_preserve_exact_utf8_provenance() -> None:
