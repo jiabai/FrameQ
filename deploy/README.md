@@ -1,6 +1,6 @@
-# FrameQ Server Deployment
+# Locus Server Deployment
 
-This directory contains deployment notes and reference configs for the FrameQ account,
+This directory contains deployment notes and reference configs for the Locus account,
 activation-code, self-service activation-email, LLM-checkout, and entitlement server.
 
 - [server-deployment.md](./server-deployment.md) - production deployment runbook.

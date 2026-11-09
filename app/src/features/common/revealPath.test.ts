@@ -4,9 +4,9 @@ import { toFileManagerPath } from "./revealPath";
 
 describe("file manager paths", () => {
   test.each([
-    ["//?/D:/FrameQ/笔记/media/audio.wav", String.raw`\\?\D:\FrameQ\笔记\media\audio.wav`],
-    ["//?/c:/FrameQ data/transcript/transcript.txt", String.raw`\\?\c:\FrameQ data\transcript\transcript.txt`],
-    [String.raw`\\?\D:\FrameQ/media/video.mp4`, String.raw`\\?\D:\FrameQ\media\video.mp4`],
+    ["//?/D:/Locus/笔记/media/audio.wav", String.raw`\\?\D:\Locus\笔记\media\audio.wav`],
+    ["//?/c:/Locus data/transcript/transcript.txt", String.raw`\\?\c:\Locus data\transcript\transcript.txt`],
+    [String.raw`\\?\D:\Locus/media/video.mp4`, String.raw`\\?\D:\Locus\media\video.mp4`],
     ["//?/UNC/server/share/笔记/audio.wav", String.raw`\\?\UNC\server\share\笔记\audio.wav`],
     ["//?/unc/server/share/audio.wav", String.raw`\\?\unc\server\share\audio.wav`],
     [String.raw`\\?\UNC\server\share/notes/audio.wav`, String.raw`\\?\UNC\server\share\notes\audio.wav`],
@@ -20,14 +20,14 @@ describe("file manager paths", () => {
   });
 
   test.each([
-    "D:/FrameQ/media/audio.wav",
-    String.raw`D:\FrameQ\media\audio.wav`,
+    "D:/Locus/media/audio.wav",
+    String.raw`D:\Locus\media\audio.wav`,
     "//server/share/media/audio.wav",
     String.raw`\\server\share\media\audio.wav`,
-    String.raw`\\?\D:\FrameQ\media\audio.wav`,
+    String.raw`\\?\D:\Locus\media\audio.wav`,
     String.raw`\\?\UNC\server\share\media\audio.wav`,
-    "/Users/aaron/FrameQ/audio.wav",
-    "/home/aaron/FrameQ/audio.wav",
+    "/Users/aaron/Locus/audio.wav",
+    "/home/aaron/Locus/audio.wav",
     "relative/media/audio.wav",
     "https://example.com/audio.wav",
     "//?/Volume{example}/audio.wav",

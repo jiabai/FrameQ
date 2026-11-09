@@ -12,7 +12,7 @@ afterEach(cleanup);
 
 test.each(["title_generating", "cancelling"] as const)("polishing starts no work during %s", async (stage) => {
   const workflow: WorkflowState = {
-    ...createInitialWorkflow(), stage, taskId: "saved-note", taskDir: "D:/FrameQ/outputs/tasks/saved-note",
+    ...createInitialWorkflow(), stage, taskId: "saved-note", taskDir: "D:/Locus/outputs/tasks/saved-note",
     text: "Saved transcript", artifacts: { transcript_txt: "transcript/transcript.txt" },
     cancellingFromStage: stage === "cancelling" ? "title_generating" : null,
   };

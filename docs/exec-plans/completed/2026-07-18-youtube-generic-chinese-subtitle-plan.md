@@ -83,7 +83,7 @@ automatic captions in UI and continues to report only `Platform subtitle`.
 - Parser priority: `worker/frameq_worker/subtitles.py` and `worker/tests/test_subtitles.py`.
 - ASR fallback orchestration: `worker/frameq_worker/pipeline.py`.
 - Concurrent unrelated user changes in the primary worktree: `docs/ARCHITECTURE.md` and
-  `docs/design-docs/frameq-code-audit-uml.md` must remain untouched.
+  `docs/design-docs/code-audit-uml.md` must remain untouched.
 
 ## Plan of Work
 

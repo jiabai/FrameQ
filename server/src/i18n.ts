@@ -1,10 +1,12 @@
 /**
- * Server-side i18n for FrameQ web pages (login, dashboard, admin).
+ * Server-side i18n for the web pages (login, dashboard, admin).
  *
  * Locale is detected from the `lang` cookie (set by the language switcher)
  * with a fallback to zh-CN.  All user-visible strings are keyed flat and
  * resolved via `t(locale, key)`.
  */
+
+import { PRODUCT_NAME } from "./brand.js";
 
 export type Locale = "zh-CN" | "en" | "zh-TW";
 
@@ -27,31 +29,31 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     "lang.select_label": "语言",
 
     // ── login page ──────────────────────────────────────────
-    "login.title": "FrameQ Login",
-    "login.intro.desktop": "输入邮箱获取验证码，验证成功后会自动回到 FrameQ 客户端。",
-    "login.intro.web": "输入邮箱获取验证码，验证成功后会进入 FrameQ 控制台。",
+    "login.title": "{{product}} Login",
+    "login.intro.desktop": "输入邮箱获取验证码，验证成功后会自动回到 {{product}} 客户端。",
+    "login.intro.web": "输入邮箱获取验证码，验证成功后会进入 {{product}} 控制台。",
     "login.email": "邮箱",
     "login.send_code": "获取验证码",
     "login.code": "验证码",
-    "login.verify_desktop": "登录 FrameQ",
+    "login.verify_desktop": "登录 {{product}}",
     "login.verify_web": "登录控制台",
-    "login.fallback": "打开 FrameQ 客户端",
+    "login.fallback": "打开 {{product}} 客户端",
     "login.success_title": "登录成功",
-    "login.success_body": "此窗口可关闭，请返回并继续使用 FrameQ",
+    "login.success_body": "此窗口可关闭，请返回并继续使用 {{product}}",
     "login.success_dashboard": "去到 Web Dashboard",
     "login.status_sending": "正在发送验证码...",
     "login.status_sent": "验证码已发送，请检查邮箱。开发环境会在服务端终端输出验证码。",
     "login.status_verifying": "正在验证...",
-    "login.status_verified_web": "验证成功，正在进入 FrameQ 控制台...",
-    "login.error_state_desktop": "登录请求已失效，请回到 FrameQ 重新发起登录。",
-    "login.error_callback": "登录回调地址无效，请回到 FrameQ 重新发起登录。",
+    "login.status_verified_web": "验证成功，正在进入 {{product}} 控制台...",
+    "login.error_state_desktop": "登录请求已失效，请回到 {{product}} 重新发起登录。",
+    "login.error_callback": "登录回调地址无效，请回到 {{product}} 重新发起登录。",
     "login.error_state_web": "登录请求已失效，请刷新页面重试。",
     "login.error_request": "请求失败，请稍后重试。",
     "login.error_verify": "验证失败，请重试。",
     "login.error_invalid": "登录请求无效。",
 
     // ── dashboard page ──────────────────────────────────────
-    "dashboard.title": "FrameQ 控制台",
+    "dashboard.title": "{{product}} 控制台",
     "dashboard.logout": "退出登录",
     "dashboard.account_quota": "账号与额度",
     "dashboard.plan_status": "套餐状态",
@@ -74,32 +76,32 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     "dashboard.no_activation_code": "未绑定激活码",
     "dashboard.bound_at": "绑定于",
     "dashboard.task_history": "任务历史",
-    "dashboard.task_history_placeholder": "即将推出。当前请在 FrameQ 桌面客户端查看任务历史。",
+    "dashboard.task_history_placeholder": "即将推出。当前请在 {{product}} 桌面客户端查看任务历史。",
     "dashboard.preferences": "偏好设置",
-    "dashboard.preferences_placeholder": "即将推出。当前请在 FrameQ 桌面客户端管理偏好设置。",
+    "dashboard.preferences_placeholder": "即将推出。当前请在 {{product}} 桌面客户端管理偏好设置。",
     "dashboard.logging_out": "正在退出...",
     "dashboard.logout_failed": "退出失败，请重试。",
     "dashboard.network_error": "网络错误，请重试。",
 
     // ── admin login page ────────────────────────────────────
-    "admin_login.title": "FrameQ Admin Login",
+    "admin_login.title": "{{product}} Admin Login",
     "admin_login.heading": "管理员登录",
     "admin_login.intro": "使用管理员邮箱获取验证码，登录后可生成和查看激活码。",
     "admin_login.email": "管理员邮箱",
     "admin_login.send_code": "获取验证码",
     "admin_login.code": "邮箱验证码",
     "admin_login.code_placeholder": "6 位数字",
-    "admin_login.signin": "登录 FrameQ Admin",
+    "admin_login.signin": "登录 {{product}} Admin",
     "admin_login.status_sending": "正在发送验证码...",
     "admin_login.status_sent": "验证码已发送，请查看邮箱。",
     "admin_login.status_send_failed": "验证码发送失败，请确认邮箱权限。",
     "admin_login.status_verifying": "正在验证...",
     "admin_login.status_success": "登录成功，正在进入后台...",
     "admin_login.status_code_error": "验证码错误或已过期。",
-    "admin_login.network_error": "无法连接 FrameQ 服务端。",
+    "admin_login.network_error": "无法连接 {{product}} 服务端。",
 
     // ── admin page ─────────────────────────────────────────
-    "admin.title": "FrameQ Admin",
+    "admin.title": "{{product}} Admin",
     "admin.heading": "激活码管理",
     "admin.logged_in_as": "已登录：",
     "admin.logout": "退出登录",
@@ -192,31 +194,31 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     "lang.select_label": "語言",
 
     // ── login page ──────────────────────────────────────────
-    "login.title": "FrameQ Login",
-    "login.intro.desktop": "輸入電子郵件取得驗證碼，驗證成功後會自動回到 FrameQ 用戶端。",
-    "login.intro.web": "輸入電子郵件取得驗證碼，驗證成功後會進入 FrameQ 控制台。",
+    "login.title": "{{product}} Login",
+    "login.intro.desktop": "輸入電子郵件取得驗證碼，驗證成功後會自動回到 {{product}} 用戶端。",
+    "login.intro.web": "輸入電子郵件取得驗證碼，驗證成功後會進入 {{product}} 控制台。",
     "login.email": "電子郵件",
     "login.send_code": "取得驗證碼",
     "login.code": "驗證碼",
-    "login.verify_desktop": "登入 FrameQ",
+    "login.verify_desktop": "登入 {{product}}",
     "login.verify_web": "登入控制台",
-    "login.fallback": "開啟 FrameQ 用戶端",
+    "login.fallback": "開啟 {{product}} 用戶端",
     "login.success_title": "登入成功",
-    "login.success_body": "此視窗可關閉，請返回並繼續使用 FrameQ",
+    "login.success_body": "此視窗可關閉，請返回並繼續使用 {{product}}",
     "login.success_dashboard": "前往 Web Dashboard",
     "login.status_sending": "正在發送驗證碼...",
     "login.status_sent": "驗證碼已發送，請檢查電子郵件。開發環境會在伺服器端終端輸出驗證碼。",
     "login.status_verifying": "正在驗證...",
-    "login.status_verified_web": "驗證成功，正在進入 FrameQ 控制台...",
-    "login.error_state_desktop": "登入請求已失效，請回到 FrameQ 重新發起登入。",
-    "login.error_callback": "登入回呼網址無效，請回到 FrameQ 重新發起登入。",
+    "login.status_verified_web": "驗證成功，正在進入 {{product}} 控制台...",
+    "login.error_state_desktop": "登入請求已失效，請回到 {{product}} 重新發起登入。",
+    "login.error_callback": "登入回呼網址無效，請回到 {{product}} 重新發起登入。",
     "login.error_state_web": "登入請求已失效，請重新整理頁面重試。",
     "login.error_request": "請求失敗，請稍後重試。",
     "login.error_verify": "驗證失敗，請重試。",
     "login.error_invalid": "登入請求無效。",
 
     // ── dashboard page ──────────────────────────────────────
-    "dashboard.title": "FrameQ 控制台",
+    "dashboard.title": "{{product}} 控制台",
     "dashboard.logout": "登出",
     "dashboard.account_quota": "帳號與額度",
     "dashboard.plan_status": "方案狀態",
@@ -239,32 +241,32 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     "dashboard.no_activation_code": "未綁定啟用碼",
     "dashboard.bound_at": "綁定於",
     "dashboard.task_history": "任務歷程",
-    "dashboard.task_history_placeholder": "即將推出。目前請在 FrameQ 桌面用戶端查看任務歷程。",
+    "dashboard.task_history_placeholder": "即將推出。目前請在 {{product}} 桌面用戶端查看任務歷程。",
     "dashboard.preferences": "偏好設定",
-    "dashboard.preferences_placeholder": "即將推出。目前請在 FrameQ 桌面用戶端管理偏好設定。",
+    "dashboard.preferences_placeholder": "即將推出。目前請在 {{product}} 桌面用戶端管理偏好設定。",
     "dashboard.logging_out": "正在登出...",
     "dashboard.logout_failed": "登出失敗，請重試。",
     "dashboard.network_error": "網路錯誤，請重試。",
 
     // ── admin login page ────────────────────────────────────
-    "admin_login.title": "FrameQ Admin Login",
+    "admin_login.title": "{{product}} Admin Login",
     "admin_login.heading": "管理員登入",
     "admin_login.intro": "使用管理員電子郵件取得驗證碼，登入後可產生與查看啟用碼。",
     "admin_login.email": "管理員電子郵件",
     "admin_login.send_code": "取得驗證碼",
     "admin_login.code": "電子郵件驗證碼",
     "admin_login.code_placeholder": "6 位數字",
-    "admin_login.signin": "登入 FrameQ Admin",
+    "admin_login.signin": "登入 {{product}} Admin",
     "admin_login.status_sending": "正在發送驗證碼...",
     "admin_login.status_sent": "驗證碼已發送，請查看電子郵件。",
     "admin_login.status_send_failed": "驗證碼發送失敗，請確認電子郵件權限。",
     "admin_login.status_verifying": "正在驗證...",
     "admin_login.status_success": "登入成功，正在進入後台...",
     "admin_login.status_code_error": "驗證碼錯誤或已過期。",
-    "admin_login.network_error": "無法連線 FrameQ 伺服器端。",
+    "admin_login.network_error": "無法連線 {{product}} 伺服器端。",
 
     // ── admin page ─────────────────────────────────────────
-    "admin.title": "FrameQ Admin",
+    "admin.title": "{{product}} Admin",
     "admin.heading": "啟用碼管理",
     "admin.logged_in_as": "已登入：",
     "admin.logout": "登出",
@@ -357,31 +359,31 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     "lang.select_label": "Language",
 
     // ── login page ──────────────────────────────────────────
-    "login.title": "FrameQ Login",
-    "login.intro.desktop": "Enter your email to receive a verification code. After verification, you'll be redirected back to the FrameQ client.",
-    "login.intro.web": "Enter your email to receive a verification code. After verification, you'll enter the FrameQ dashboard.",
+    "login.title": "{{product}} Login",
+    "login.intro.desktop": "Enter your email to receive a verification code. After verification, you'll be redirected back to the {{product}} client.",
+    "login.intro.web": "Enter your email to receive a verification code. After verification, you'll enter the {{product}} dashboard.",
     "login.email": "Email",
     "login.send_code": "Get code",
     "login.code": "Verification code",
-    "login.verify_desktop": "Sign in to FrameQ",
+    "login.verify_desktop": "Sign in to {{product}}",
     "login.verify_web": "Sign in to dashboard",
-    "login.fallback": "Open FrameQ client",
+    "login.fallback": "Open {{product}} client",
     "login.success_title": "Sign-in successful",
-    "login.success_body": "You can close this window. Return to FrameQ to continue.",
+    "login.success_body": "You can close this window. Return to {{product}} to continue.",
     "login.success_dashboard": "Go to Web Dashboard",
     "login.status_sending": "Sending verification code...",
     "login.status_sent": "Verification code sent. Please check your email. (In development, the code is printed in the server terminal.)",
     "login.status_verifying": "Verifying...",
-    "login.status_verified_web": "Verification successful. Entering FrameQ dashboard...",
-    "login.error_state_desktop": "Login request expired. Please restart login from FrameQ.",
-    "login.error_callback": "Login callback URL is invalid. Please restart login from FrameQ.",
+    "login.status_verified_web": "Verification successful. Entering {{product}} dashboard...",
+    "login.error_state_desktop": "Login request expired. Please restart login from {{product}}.",
+    "login.error_callback": "Login callback URL is invalid. Please restart login from {{product}}.",
     "login.error_state_web": "Login request expired. Please refresh and try again.",
     "login.error_request": "Request failed. Please try again later.",
     "login.error_verify": "Verification failed. Please try again.",
     "login.error_invalid": "Invalid login request.",
 
     // ── dashboard page ──────────────────────────────────────
-    "dashboard.title": "FrameQ Dashboard",
+    "dashboard.title": "{{product}} Dashboard",
     "dashboard.logout": "Sign out",
     "dashboard.account_quota": "Account & quota",
     "dashboard.plan_status": "Plan status",
@@ -404,32 +406,32 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     "dashboard.no_activation_code": "No activation code bound",
     "dashboard.bound_at": "bound on",
     "dashboard.task_history": "Task history",
-    "dashboard.task_history_placeholder": "Coming soon. For now, view task history in the FrameQ desktop client.",
+    "dashboard.task_history_placeholder": "Coming soon. For now, view task history in the {{product}} desktop client.",
     "dashboard.preferences": "Preferences",
-    "dashboard.preferences_placeholder": "Coming soon. For now, manage preferences in the FrameQ desktop client.",
+    "dashboard.preferences_placeholder": "Coming soon. For now, manage preferences in the {{product}} desktop client.",
     "dashboard.logging_out": "Signing out...",
     "dashboard.logout_failed": "Sign-out failed. Please try again.",
     "dashboard.network_error": "Network error. Please try again.",
 
     // ── admin login page ────────────────────────────────────
-    "admin_login.title": "FrameQ Admin Login",
+    "admin_login.title": "{{product}} Admin Login",
     "admin_login.heading": "Admin Sign-in",
     "admin_login.intro": "Use your admin email to get a verification code. After sign-in, you can generate and view activation codes.",
     "admin_login.email": "Admin email",
     "admin_login.send_code": "Get code",
     "admin_login.code": "Email verification code",
     "admin_login.code_placeholder": "6 digits",
-    "admin_login.signin": "Sign in to FrameQ Admin",
+    "admin_login.signin": "Sign in to {{product}} Admin",
     "admin_login.status_sending": "Sending verification code...",
     "admin_login.status_sent": "Verification code sent. Please check your email.",
     "admin_login.status_send_failed": "Failed to send verification code. Please verify your email permissions.",
     "admin_login.status_verifying": "Verifying...",
     "admin_login.status_success": "Sign-in successful. Entering admin...",
     "admin_login.status_code_error": "Verification code is incorrect or expired.",
-    "admin_login.network_error": "Cannot connect to FrameQ server.",
+    "admin_login.network_error": "Cannot connect to {{product}} server.",
 
     // ── admin page ─────────────────────────────────────────
-    "admin.title": "FrameQ Admin",
+    "admin.title": "{{product}} Admin",
     "admin.heading": "Activation Code Management",
     "admin.logged_in_as": "Signed in: ",
     "admin.logout": "Sign out",
@@ -517,12 +519,19 @@ const STRINGS: Record<Locale, Record<string, string>> = {
 };
 
 export function t(locale: Locale, key: string): string {
-  return STRINGS[locale]?.[key] ?? STRINGS[DEFAULT_LOCALE][key] ?? key;
+  return interpolateBrand(STRINGS[locale]?.[key] ?? STRINGS[DEFAULT_LOCALE][key] ?? key);
+}
+
+/** Fill the brand placeholder once, so no copy table hardcodes the product name. */
+function interpolateBrand(template: string): string {
+  return template.replaceAll("{{product}}", PRODUCT_NAME);
 }
 
 /** Build a JSON object of all strings for a locale, for client-side JS use. */
 export function buildClientStrings(locale: Locale): Record<string, string> {
-  return { ...STRINGS[locale] };
+  return Object.fromEntries(
+    Object.entries(STRINGS[locale]).map(([key, value]) => [key, interpolateBrand(value)]),
+  );
 }
 
 /**

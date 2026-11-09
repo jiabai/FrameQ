@@ -55,7 +55,7 @@ fn write_note(root: &Path, id: &str, text: &str, draft: &str, title: &str) {
         "artifacts":{"transcript_txt":"transcript/transcript.txt","draft":"ai/draft.md"},
         "error":null,"text_preview":text,"insights_count":0,
     });
-    fs::write(task.join("frameq-task.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    fs::write(task.join("task.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
     let mut note = SupportedTask::open(&root.join("outputs"), id).unwrap().into_edit_session();
     note.set_note_display_title(title).unwrap();
     note.set_note_pinned(true).unwrap();
@@ -93,7 +93,7 @@ fn merge_reopens_real_history_drafts_and_target_collections_with_target_content_
     write_note(&library.target, "target-only", "目标独有正文", "# 目标独有作品", "目标独有标题");
     write_note(&library.target, "shared-note", "目标重复正文", "# 目标重复作品", "目标重复标题");
     let target_collections = write_collection(&library.target, "目标合集", &["target-only", "shared-note"]);
-    let metadata = library.target.join(".frameq-storage");
+    let metadata = library.target.join(".app-storage");
     fs::create_dir_all(metadata.join("receipts")).unwrap();
     let old_marker = StoreMarker { schema_version: 1, library_id: uuid::Uuid::new_v4().to_string(),
         generation: 29, root_identity: safe_filesystem::identity(&library.target).unwrap() };
@@ -101,7 +101,7 @@ fn merge_reopens_real_history_drafts_and_target_collections_with_target_content_
     let retained = metadata.join("receipts/unregistered-record.json");
     fs::write(&retained, b"retained target metadata").unwrap();
     fs::write(library.config.join("auth-preserved.json"), b"fixed settings").unwrap();
-    let target_manifest = fs::read(library.target.join("outputs/tasks/shared-note/frameq-task.json")).unwrap();
+    let target_manifest = fs::read(library.target.join("outputs/tasks/shared-note/task.json")).unwrap();
     let manager = library.merge_and_reopen();
     let output = library.target.join("outputs");
     let mut ids = crate::history::load_history_from_output_root(&output).unwrap()
@@ -111,7 +111,7 @@ fn merge_reopens_real_history_drafts_and_target_collections_with_target_content_
     assert_note(&output, "source-only", "来源独有正文", "# 来源独有作品", "来源独有标题");
     assert_note(&output, "target-only", "目标独有正文", "# 目标独有作品", "目标独有标题");
     assert_note(&output, "shared-note", "目标重复正文", "# 目标重复作品", "目标重复标题");
-    assert_eq!(fs::read(output.join("tasks/shared-note/frameq-task.json")).unwrap(), target_manifest);
+    assert_eq!(fs::read(output.join("tasks/shared-note/task.json")).unwrap(), target_manifest);
     assert_eq!(crate::collections::get_collections_from_paths_for_test(&library.runtime()).unwrap(), target_collections);
     assert!(!library.config.join("collections.json").exists());
     assert!(!library.config.join("outputs").exists());
@@ -173,7 +173,7 @@ fn managed_source_merges_into_existing_library_and_reopens_target_notes() {
     assert_note(&library.target.join("outputs"), "managed-source-note", "受管来源正文", "# 受管来源作品", "受管来源标题");
     assert_note(&library.target.join("outputs"), "existing-target-note", "受管目标正文", "# 受管目标作品", "受管目标标题");
     assert!(!source.join("outputs").exists());
-    assert!(library.config.join("outputs/tasks/managed-source-note/frameq-task.json").is_file());
+    assert!(library.config.join("outputs/tasks/managed-source-note/task.json").is_file());
 }
 
 #[test]

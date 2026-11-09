@@ -118,7 +118,7 @@ fn interrupted_owner_recovery_terminates_only_recorded_real_python() {
         let id = uuid::Uuid::new_v4().to_string();
         let owned = OwnedWorkspace::new(&cache, &id, &python, &python, &cache.join("component"), true).unwrap();
         let mut command = Command::new(&python);
-        command.args(["-I", "-S", "-B", "-c", "import time; time.sleep(60)", "--web-operation-id", &id, "--frameq-engine-probe"])
+        command.args(["-I", "-S", "-B", "-c", "import time; time.sleep(60)", "--web-operation-id", &id, "--app-engine-probe"])
             .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
         #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x0800_0000); }
         #[cfg(unix)] { use std::os::unix::process::CommandExt; command.process_group(0); }
@@ -223,7 +223,7 @@ fn exited_root_receipt_never_adopts_a_new_python_with_the_same_operation() {
     }
     assert!(records.iter().all(|member| member.alive(&processes()).is_ok_and(|value| value.is_none())));
     let mut replacement = Command::new(&workspace.owner.worker.path);
-    replacement.args(["-I", "-S", "-B", "-c", "import time; time.sleep(60)", "--web-operation-id", &workspace.owner.operation_id, "--frameq-engine-probe"])
+    replacement.args(["-I", "-S", "-B", "-c", "import time; time.sleep(60)", "--web-operation-id", &workspace.owner.operation_id, "--app-engine-probe"])
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)] { use std::os::windows::process::CommandExt; replacement.creation_flags(0x0800_0000); }
     #[cfg(unix)] { use std::os::unix::process::CommandExt; replacement.process_group(0); }

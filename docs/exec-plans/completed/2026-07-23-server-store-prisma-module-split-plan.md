@@ -316,7 +316,7 @@ Local SQLite and fake/internal behavior evidence must not be presented as those 
 - Durable architecture/security:
   `docs/ARCHITECTURE.md` and `docs/SECURITY.md`.
 - Current structural audit:
-  `docs/design-docs/frameq-code-audit-uml.md`.
+  `docs/design-docs/code-audit-uml.md`.
 
 ## Approved Target Tree
 
@@ -1204,7 +1204,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/design-docs/2026-07-23-server-store-prisma-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`
 - Modify: `docs/exec-plans/active/index.md`
@@ -1295,7 +1295,7 @@ status codes, messages, supplier calls, cookies, and response bodies remain unch
 - [x] Create the final authorized documentation/archive checkpoint:
 
   ```powershell
-  git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md docs/design-docs/2026-07-23-server-store-prisma-module-split.md docs/design-docs/frameq-code-audit-uml.md docs/exec-plans/active/index.md docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md docs/exec-plans/completed/index.md docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md
+  git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md docs/design-docs/2026-07-23-server-store-prisma-module-split.md docs/design-docs/code-audit-uml.md docs/exec-plans/active/index.md docs/exec-plans/active/2026-07-23-server-store-prisma-module-split-plan.md docs/exec-plans/completed/index.md docs/exec-plans/completed/2026-07-23-server-store-prisma-module-split-plan.md
   git commit -m "docs(server): complete store adapter module split"
   ```
 

@@ -26,8 +26,8 @@ describe("Production desktop frontend without the native data bridge", { timeout
       nativeRuntime: '__TAURI_INTERNALS__' in window,
       removedActions: [...document.querySelectorAll('button')].map(button => button.getAttribute('aria-label') || button.textContent.trim()).filter(name => name === 'Search')
     }))()`);
-    expect(state.name).toBe("FrameQ");
-    expect(state.status).toBe("Local data storage is unavailable. Open your data in the FrameQ desktop app.");
+    expect(state.name).toBe("Locus");
+    expect(state.status).toBe("Local data storage is unavailable. Open your data in the Locus desktop app.");
     expect(state.navigation).toBe(0);
     expect(state.libraries).toBe(0);
     expect(state.inputs).toBe(0);

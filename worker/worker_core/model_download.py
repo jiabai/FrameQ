@@ -555,7 +555,7 @@ def _download_custom_archive(
     expected_sha256: str | None,
     progress_callback: ModelDownloadEventCallback | None,
 ) -> None:
-    with tempfile.TemporaryDirectory(prefix="frameq-asr-model-") as temp_dir_text:
+    with tempfile.TemporaryDirectory(prefix="app-asr-model-") as temp_dir_text:
         temp_dir = Path(temp_dir_text)
         archive_path = _resolve_archive(download_url, temp_dir, progress_callback)
         if expected_sha256:
@@ -789,7 +789,7 @@ def _make_modelscope_progress_callback(
     start: int,
     span: int,
 ) -> type[ModelScopeProgressCallback]:
-    class FrameQModelScopeProgressCallback(ModelScopeProgressCallback):
+    class ModelScopeProgressCallbackAdapter(ModelScopeProgressCallback):
         def __init__(self, filename: str, file_size: int) -> None:
             super().__init__(filename, file_size)
             self.downloaded = 0
@@ -834,7 +834,7 @@ def _make_modelscope_progress_callback(
                 current_file=safe_current_file_basename(self.filename),
             )
 
-    return FrameQModelScopeProgressCallback
+    return ModelScopeProgressCallbackAdapter
 
 
 def _emit(

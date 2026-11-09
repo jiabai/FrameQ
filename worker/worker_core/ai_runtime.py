@@ -21,6 +21,8 @@ from worker_core.llm import (
     parse_timeout,
 )
 
+from .brand import PRODUCT_NAME
+
 
 class StrictInsightRunner(ToolLoopAgentRunner):
     EMPTY_OUTPUT_RETRY_ATTEMPTS = 1
@@ -28,17 +30,17 @@ class StrictInsightRunner(ToolLoopAgentRunner):
 
 _CHECKOUT_ERROR_MESSAGES = {
     "AI_CONFIG_MISSING": "Insight agent LLM is not configured.",
-    "AI_LLM_AUTH_REQUIRED": "FrameQ login is required to use the managed LLM.",
+    "AI_LLM_AUTH_REQUIRED": f"{PRODUCT_NAME} login is required to use the managed LLM.",
     "AI_LLM_QUOTA_UNAVAILABLE": (
         "No cloud LLM API-call uses are available for this account."
     ),
-    "AI_LLM_CONFIG_MISSING": "FrameQ managed LLM is not configured.",
-    "AI_LLM_CHECKOUT_TIMEOUT": "FrameQ LLM checkout timed out. Please retry later.",
+    "AI_LLM_CONFIG_MISSING": f"{PRODUCT_NAME} managed LLM is not configured.",
+    "AI_LLM_CHECKOUT_TIMEOUT": f"{PRODUCT_NAME} LLM checkout timed out. Please retry later.",
     "AI_LLM_CHECKOUT_FAILED": (
-        "FrameQ LLM checkout failed before a usable response was returned."
+        f"{PRODUCT_NAME} LLM checkout failed before a usable response was returned."
     ),
     "AI_LLM_CHECKOUT_INVALID_RESPONSE": (
-        "FrameQ LLM checkout did not return usable configuration."
+        f"{PRODUCT_NAME} LLM checkout did not return usable configuration."
     ),
 }
 
@@ -80,7 +82,7 @@ def _max_output_tokens(env: Mapping[str, str]) -> int:
 
 def _build_single_call_provider(env: Mapping[str, str]) -> SingleCallInsightProvider:
     config = {
-        "id": "frameq_insights",
+        "id": "app_insights",
         "type": "openai_chat_completion",
         "key": [env["APP_LLM_API_KEY"].strip()],
         "model": env["APP_LLM_MODEL"].strip(),
@@ -102,7 +104,7 @@ def insight_target_env(env: Mapping[str, str], target: str) -> dict[str, str]:
 
 class ServerManagedInsightProvider(Provider):
     def __init__(self, env: Mapping[str, str], transport: Transport | None = None) -> None:
-        super().__init__({"id": "frameq_managed_insights", "type": "openai_chat_completion"}, {})
+        super().__init__({"id": "app_managed_insights", "type": "openai_chat_completion"}, {})
         self._env = dict(env)
         self._transport = transport
         self._call_index = 0

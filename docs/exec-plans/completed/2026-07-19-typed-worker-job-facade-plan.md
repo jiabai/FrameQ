@@ -83,7 +83,7 @@ transport, and Tauri IPC behavior are unchanged; the full process-lifecycle suit
 - Runtime composition: `app/src-tauri/src/worker_runtime/mod.rs`.
 - Application callers: `app/src-tauri/src/video_processing.rs`,
   `app/src-tauri/src/asr_model.rs`, and `app/src-tauri/src/history_deletion.rs`.
-- Architecture audit: `docs/design-docs/frameq-code-audit-uml.md`.
+- Architecture audit: `docs/design-docs/code-audit-uml.md`.
 
 ## Plan of Work
 

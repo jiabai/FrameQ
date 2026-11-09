@@ -135,8 +135,8 @@ describe("transactional entitlement boundaries in MemoryStore", () => {
       method: "POST",
       url: `/admin/api/users/${user.id}/entitlement-adjustments`,
       headers: {
-        cookie: `frameq_admin_session=${adminToken}; frameq_admin_csrf=${csrfToken}`,
-        "x-frameq-csrf": csrfToken,
+        cookie: `app_admin_session=${adminToken}; app_admin_csrf=${csrfToken}`,
+        "x-app-csrf": csrfToken,
       },
       payload: { extend_days: 7, quota_add: 5, reason: "manual_repair" },
     });

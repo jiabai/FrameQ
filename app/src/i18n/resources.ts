@@ -47,7 +47,7 @@ export const resources = {
     webPage: webPageResources["zh-CN"],
     common: {
       ...commonFeatureResources["zh-CN"],
-      appName: "FrameQ",
+      appName: "{{product}}",
       wordCount_one: "{{formattedCount}} 字",
       wordCount_other: "{{formattedCount}} 字",
     },
@@ -55,7 +55,7 @@ export const resources = {
       ...settingsFeatureResources["zh-CN"],
       language: {
         title: "界面与 AI 结果语言",
-        description: "选择 FrameQ 界面及后续 AI 生成结果使用的语言。",
+        description: "选择 {{product}} 界面及后续 AI 生成结果使用的语言。",
         label: "语言",
         options: {
           system: "跟随系统",
@@ -68,9 +68,9 @@ export const resources = {
     },
     diagnostics: diagnosticsResources["zh-CN"],
     bootstrap: {
-      preferencesRecovered: "语言偏好文件已损坏，FrameQ 已恢复为系统语言。",
-      preferencesReadFailed: "无法读取语言偏好，FrameQ 暂时使用系统语言。",
-      preferencesReadTimedOut: "读取语言偏好超时，FrameQ 暂时使用系统语言。",
+      preferencesRecovered: "语言偏好文件已损坏，{{product}} 已恢复为系统语言。",
+      preferencesReadFailed: "无法读取语言偏好，{{product}} 暂时使用系统语言。",
+      preferencesReadTimedOut: "读取语言偏好超时，{{product}} 暂时使用系统语言。",
     },
     progress: {
       worker: {
@@ -172,7 +172,7 @@ export const resources = {
     webPage: webPageResources["zh-TW"],
     common: {
       ...commonFeatureResources["zh-TW"],
-      appName: "FrameQ",
+      appName: "{{product}}",
       wordCount_one: "{{formattedCount}} 字",
       wordCount_other: "{{formattedCount}} 字",
     },
@@ -180,7 +180,7 @@ export const resources = {
       ...settingsFeatureResources["zh-TW"],
       language: {
         title: "介面與 AI 結果語言",
-        description: "選擇 FrameQ 介面及後續 AI 產生結果所使用的語言。",
+        description: "選擇 {{product}} 介面及後續 AI 產生結果所使用的語言。",
         label: "語言",
         options: {
           system: "跟隨系統",
@@ -193,9 +193,9 @@ export const resources = {
     },
     diagnostics: diagnosticsResources["zh-TW"],
     bootstrap: {
-      preferencesRecovered: "語言偏好檔案已損毀，FrameQ 已恢復為系統語言。",
-      preferencesReadFailed: "無法讀取語言偏好，FrameQ 暫時使用系統語言。",
-      preferencesReadTimedOut: "讀取語言偏好逾時，FrameQ 暫時使用系統語言。",
+      preferencesRecovered: "語言偏好檔案已損毀，{{product}} 已恢復為系統語言。",
+      preferencesReadFailed: "無法讀取語言偏好，{{product}} 暫時使用系統語言。",
+      preferencesReadTimedOut: "讀取語言偏好逾時，{{product}} 暫時使用系統語言。",
     },
     progress: {
       worker: {
@@ -297,7 +297,7 @@ export const resources = {
     webPage: webPageResources["en-US"],
     common: {
       ...commonFeatureResources["en-US"],
-      appName: "FrameQ",
+      appName: "{{product}}",
       wordCount_one: "{{formattedCount}} word",
       wordCount_other: "{{formattedCount}} words",
     },
@@ -305,7 +305,7 @@ export const resources = {
       ...settingsFeatureResources["en-US"],
       language: {
         title: "Interface & AI result language",
-        description: "Choose the language for FrameQ and future AI-generated results.",
+        description: "Choose the language for {{product}} and future AI-generated results.",
         label: "Language",
         options: {
           system: "Use system language",
@@ -318,9 +318,9 @@ export const resources = {
     },
     diagnostics: diagnosticsResources["en-US"],
     bootstrap: {
-      preferencesRecovered: "The language preference file was damaged. FrameQ restored the system language.",
-      preferencesReadFailed: "FrameQ could not read the language preference and is temporarily using the system language.",
-      preferencesReadTimedOut: "Reading the language preference timed out. FrameQ is temporarily using the system language.",
+      preferencesRecovered: "The language preference file was damaged. {{product}} restored the system language.",
+      preferencesReadFailed: "{{product}} could not read the language preference and is temporarily using the system language.",
+      preferencesReadTimedOut: "Reading the language preference timed out. {{product}} is temporarily using the system language.",
     },
     progress: {
       worker: {

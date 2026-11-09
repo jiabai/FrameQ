@@ -1,5 +1,10 @@
 # Tasks
 
+> [!NOTE]
+> 项目在 v0.6.0 改名为 **Locus**（原 FrameQ），并把品牌名从包名、环境变量、应用标识符与磁盘契约中移除。
+> 本文件中早于该次改名的条目保留当时的产品名与路径，属于历史记录，不回改。
+> 规范见 `docs/design-docs/2026-11-09-neutral-naming-policy.md`。
+
 ## Completed Worker Work
 
 - [x] 拆分 YouTube 403 与 429 失败原因（2026-10-20）: ✅ 已完成。`classify_youtube_download_failure`
@@ -18,13 +23,13 @@
 
 ## Active UI Work
 
-- [x] Prepare and publish FrameQ v0.5.1 desktop release (2026-11-09) — ✅ Tag `v0.5.1` at `36f1a6c`
+- [x] Prepare and publish Locus v0.5.1 desktop release (2026-11-09) — ✅ Tag `v0.5.1` at `36f1a6c`
   (release run `42604242544`, Windows updater / macOS Intel / macOS Apple Silicon all green;
   published `2026-11-09T11:36:10Z`). Ship set: a 20-minute execution budget for the `yt-dlp`
   download child so a stalled download ends with a retryable `VIDEO_DOWNLOAD_FAILED` instead of
   waiting for the 45-minute idle watchdog; Douyin share-page retries recorded in the exported
   desktop log as `worker.douyin.share_page.retry`; Windows installer free-space and writability
-  preflight with a Chinese failure message and a step log at `%TEMP%\FrameQ-install.log`; the
+  preflight with a Chinese failure message and a step log at `%TEMP%\install.log`; the
   MarkdownSplitter child-process test waits on child signals instead of `join(4)`. Gates: Script
   `42601635850`, Server `42601635862`, Native `42601635875` (its first macOS desktop job failed the
   `TaskComposer` focus assertion; `gh run rerun --failed` was green, recorded as a new Medium debt);
@@ -39,7 +44,7 @@
   path still untested end to end, `macos-intel-acceptance.yml` needs a manual dispatch, PyTorch
   runtime components re-download for upgraders, a very slow large download can hit the 20-minute
   budget, and the installer's interactive failure dialog was not exercised by hand.
-- [x] Prepare and publish FrameQ v0.5.0 desktop release (2026-11-05, re-published 2026-11-06 and 2026-11-07) — ✅ Tag `v0.5.0` at
+- [x] Prepare and publish Locus v0.5.0 desktop release (2026-11-05, re-published 2026-11-06 and 2026-11-07) — ✅ Tag `v0.5.0` at
   `6857d97` (release run `42048599641`, all three platform jobs green). Ship set: a redesigned
   desktop workspace with draggable split panes, notes, collections and local data management;
   the processing composition with real progress and three stages; webpage links saved as local
@@ -52,9 +57,9 @@
   `cargo check`, site build, `git diff --check`. The first Native attempt had one Windows Worker
   failure in `test_markdown_splitter_advances_past_sentence_separator` (a four-second spawn
   join under runner load); the case passed locally and the rerun was green. Assets (8, all
-  `uploaded`) match v0.4.3 after normalizing the version: `FrameQ_0.5.0_x64-setup.exe`
-  (212,087,502 bytes), `FrameQ_0.5.0_x64.dmg` (349,847,885), `FrameQ_0.5.0_aarch64.dmg`
-  (302,211,133), three `frameq-pytorch-runtime-*.zip`, `latest.json` and the `.sig`. Both
+  `uploaded`) match v0.4.3 after normalizing the version: `Locus_0.5.0_x64-setup.exe`
+  (212,087,502 bytes), `Locus_0.5.0_x64.dmg` (349,847,885), `Locus_0.5.0_aarch64.dmg`
+  (302,211,133), three `pytorch-runtime-*.zip`, `latest.json` and the `.sig`. Both
   Windows updater signatures in `latest.json` equal the uploaded `.sig` byte for byte (416
   bytes); the three download URLs answered `206` to `range: 0-0` from the deployment server.
   Published 2026-11-05 23:51 +08:00 (`2026-11-05T15:51:03Z`):
@@ -80,7 +85,7 @@
   app lint and production build, site build, `check-release-version.mjs 0.5.0`, docs ERROR/WARN
   zero, `git diff --check`; hosted Script/Native green on `86a255c`, Script/Server green on
   `c0718b1`, `ef1c92a`, `c7b08bf`. Assets (8, all `uploaded`) match v0.4.3 after normalizing the
-  version, including the three `frameq-pytorch-runtime-*.zip`; both Windows updater signatures in
+  version, including the three `pytorch-runtime-*.zip`; both Windows updater signatures in
   `latest.json` equal the uploaded 416-byte `.sig` byte for byte; the three installer URLs
   answered `206` to `range: 0-0` from the deployment server. The reviewed body
   `docs/releases/v0.5.0.md` is live and differs from the read-back by one trailing blank line.
@@ -117,12 +122,12 @@
   redeployed with backup `webroot-20261107-165710.tar.gz`, 1 upload / 0 deletes
   (`download/index.html` only), re-run dry-run 15 unchanged, and the live download page SHA-256
   equals `site/dist/download/index.html` with `/health/live` green. A real WebView2
-  end-to-end acceptance also ran on 2026-11-08: driving `frameq-webview-host.exe` over its
+  end-to-end acceptance also ran on 2026-11-08: driving `app-webview-host.exe` over its
   stdin/stdout protocol with Stable WebView2 Runtime 157.0.4341.42 and public Internet,
   `http://frameq.8xf.pro/login` (301 to HTTPS `/login`, final 200) emitted
   `WEB_PAGE_ACCESS_RESTRICTED` in 12.5 s before any article event, while the control
   `https://example.com/` still extracted `Example Domain` in 14.6 s; a direct 200 `/login`
-  without a redirect extracted `FrameQ Login` as an article, confirming the documented
+  without a redirect extracted `Locus Login` as an article, confirming the documented
   `navigations > 1` boundary. Residual risks: anyone who
   installed a
   2026-11-05 or 2026-11-06 v0.5.0 build must reinstall manually because the updater does not
@@ -160,7 +165,7 @@
   Product spec, `ARCHITECTURE.md`, and `DESIGN.md` now state that the switch happens inside that
   save. Shipped by re-tagging `v0.4.3` (see the release entry below).
 
-- [x] Prepare and publish FrameQ v0.4.3 desktop release (2026-10-30) — ✅ Tag target `a8b8907`
+- [x] Prepare and publish Locus v0.4.3 desktop release (2026-10-30) — ✅ Tag target `a8b8907`
   tagged `v0.4.3`. Ship set: a results-toolbar transcript polish action (`retry_insights` gains a
   `transcript` target; the worker chunks the official transcript through one server-managed
   checkout and writes `transcript/polished.txt` plus a SHA-256 meta file, the original
@@ -174,8 +179,8 @@
   green); after the real-installer smoke surfaced the polish-button defect the tag and release were
   deleted and `v0.4.3` was re-tagged at `a8b8907`, rebuilt in run `40989202026` (all jobs green).
   Assets match v0.4.2 after normalizing the version:
-  `FrameQ_0.4.3_x64-setup.exe` (210,791,734 bytes), `FrameQ_0.4.3_x64.dmg` (348,061,958),
-  `FrameQ_0.4.3_aarch64.dmg` (300,595,679), three `frameq-pytorch-runtime-*.zip`, and
+  `Locus_0.4.3_x64-setup.exe` (210,791,734 bytes), `Locus_0.4.3_x64.dmg` (348,061,958),
+  `Locus_0.4.3_aarch64.dmg` (300,595,679), three `pytorch-runtime-*.zip`, and
   `latest.json`; every asset reports `uploaded`, and both Windows updater signatures in
   `latest.json` matched the uploaded `.sig` byte for byte (416 bytes each, fetched through the API
   channel). Gates: Worker 1162 passed / 3 skipped, frontend 86 files / 867 tests (866 on the first
@@ -186,7 +191,7 @@
   https://github.com/jiabai/FrameQ/releases/tag/v0.4.3. Release notes:
   `docs/releases/v0.4.3.md`. The `macos-intel-acceptance.yml` workflow is
   `workflow_dispatch`-only, so it did not run on the tag; it was dispatched manually on
-  `953af94` afterwards and passed all 14 steps (artifact `frameq-macos-intel-6-953af9418be5`,
+  `953af94` afterwards and passed all 14 steps (artifact `app-macos-intel-6-953af9418be5`,
   339,497,834 bytes). `953af94` differs from the final tag target `a8b8907` only in the polish
   button fix and its tests/docs, so both builds were checked against the same packaging code.
   Residual risks: both macOS builds are ad-hoc signed without notarization; the diagnostic ZIP
@@ -200,7 +205,7 @@
   restart-recovery three-state flow was hand-run in a real installer on the `e80c8bd` build (that
   is where the defect was found); the fixed build carries automated coverage only.
 
-- [x] Prepare and publish FrameQ v0.4.2 desktop release (2026-10-23) — ✅ Tag target `41d2bd1`
+- [x] Prepare and publish Locus v0.4.2 desktop release (2026-10-23) — ✅ Tag target `41d2bd1`
   tagged `v0.4.2`, rebuilt the same day after the first release (tag target `950377c`, run
   `39814037035`) so the installer also carries the transcript file copy action. Ship set: the
   Douyin fallback download no longer presents as a frozen task (media streams to disk, a
@@ -209,9 +214,9 @@
   rejected, and received bytes drive the existing in-stage progress), plus a results-toolbar
   action that copies the saved `transcript.txt` body independent of unsaved editor edits.
   Three-platform release run `39904496623` green on all jobs. Assets match v0.4.1 after
-  normalizing the version: `FrameQ_0.4.2_x64-setup.exe` (210,829,825 bytes),
-  `FrameQ_0.4.2_x64.dmg` (348,094,090), `FrameQ_0.4.2_aarch64.dmg` (300,592,634), three
-  `frameq-pytorch-runtime-*.zip`, and `latest.json`; every asset reports `uploaded` and both
+  normalizing the version: `Locus_0.4.2_x64-setup.exe` (210,829,825 bytes),
+  `Locus_0.4.2_x64.dmg` (348,094,090), `Locus_0.4.2_aarch64.dmg` (300,592,634), three
+  `pytorch-runtime-*.zip`, and `latest.json`; every asset reports `uploaded` and both
   Windows updater signatures matched the uploaded `.sig` byte for byte. Gates: Worker 1021
   passed with two skips, frontend 83 files / 857 tests, app lint and production build, Rust 338
   passed with no failures (unchanged by this rebuild), packaging smoke plus a real Douyin
@@ -250,18 +255,18 @@
   `/home/ubuntu/FrameQ/site.bak.20261023T005949Z`. Live checks from the server: `/`,
   `/download/` and `/privacy/` answer 200, the download page carries `0.4.2` 21 times with zero
   `0.4.1` asset URLs and three links pointing at the v0.4.2 GitHub assets, and
-  `/video/frameq-demo.mp4` answers 206 with `accept-ranges: bytes`.
+  `/video/app-demo.mp4` answers 206 with `accept-ranges: bytes`.
 
-- [x] Prepare and publish FrameQ v0.4.1 desktop release (2026-10-22) — ✅ Tag target `219d716`
+- [x] Prepare and publish Locus v0.4.1 desktop release (2026-10-22) — ✅ Tag target `219d716`
   tagged `v0.4.1`; fixes the settings template that kept fresh installs on
   `iic/SenseVoiceSmall` after the PyTorch runtime had been externalized, adds a
   schema-versioned one-time migration that moves existing settings to
   `iic/SenseVoiceSmall-onnx` while preserving a later explicit PyTorch choice, aligns
   `.env.example` with the installer template, and binds the vite dev server to 127.0.0.1 so
   the webview can load. Three-platform release run `39740146660` green on all jobs. Assets
-  match v0.4.0 after normalizing the version: `FrameQ_0.4.1_x64-setup.exe` (210,808,182
-  bytes), `FrameQ_0.4.1_x64.dmg` (348,107,096), `FrameQ_0.4.1_aarch64.dmg` (300,694,422),
-  three `frameq-pytorch-runtime-*.zip`, and `latest.json`; every asset reports `uploaded`
+  match v0.4.0 after normalizing the version: `Locus_0.4.1_x64-setup.exe` (210,808,182
+  bytes), `Locus_0.4.1_x64.dmg` (348,107,096), `Locus_0.4.1_aarch64.dmg` (300,694,422),
+  three `pytorch-runtime-*.zip`, and `latest.json`; every asset reports `uploaded`
   and the Windows updater signature matched the uploaded `.sig` byte for byte. Gates:
   frontend 83 files / 851 tests, Worker 1013 passed with two known symlink environment
   failures, Rust lib 330 passed with four known symlink failures plus two load-sensitive
@@ -280,22 +285,22 @@
   directory swap; the previous tree is kept at
   `/home/ubuntu/FrameQ/site.bak.20261022T092543Z`. Live checks from the server: `/`,
   `/download/` and `/privacy/` answer 200, the download page carries `0.4.1` 21 times and no
-  stale asset URL, `/video/frameq-demo.mp4` answers 200 with `accept-ranges: bytes`, and the
+  stale asset URL, `/video/app-demo.mp4` answers 200 with `accept-ranges: bytes`, and the
   Windows installer URL answers 206.
 
-- [x] Prepare and publish FrameQ v0.4.0 desktop release (2026-10-21) — ✅ Tag target `d89c5ef`
+- [x] Prepare and publish Locus v0.4.0 desktop release (2026-10-21) — ✅ Tag target `d89c5ef`
   tagged `v0.4.0`; installer runtime externalized (bundled Python runtime 16,810 files / 502 MB after
   trimming, PyTorch runtime moved to an on-demand 140 MB component), default model switched to
   `iic/SenseVoiceSmall-onnx`, model sheet gained the component download entry. Three-platform release
-  run `39622626442` green after three retags; assets include `FrameQ_0.4.0_x64-setup.exe` (210 MB),
-  `FrameQ_0.4.0_x64.dmg` (348 MB), `FrameQ_0.4.0_aarch64.dmg` (300 MB) and three
-  `frameq-pytorch-runtime-*.zip` (117 to 184 MB). updater signature matched `latest.json` and the
+  run `39622626442` green after three retags; assets include `Locus_0.4.0_x64-setup.exe` (210 MB),
+  `Locus_0.4.0_x64.dmg` (348 MB), `Locus_0.4.0_aarch64.dmg` (300 MB) and three
+  `pytorch-runtime-*.zip` (117 to 184 MB). updater signature matched `latest.json` and the
   download URL answered 206. Gates: Worker 1013/2 skipped, frontend 851/851, Rust lib 328 passed with
   six known environment failures. Residual risks: macOS Intel acceptance workflow not run; macOS builds
   are ad-hoc signed; mac build inputs now come from osxexperts and python-build-standalone. Release
   notes: `docs/releases/v0.4.0.md`.
 
-- [x] Prepare and publish FrameQ v0.3.8 desktop release (2026-09-19) — ✅ Tag target `fc83df9`
+- [x] Prepare and publish Locus v0.3.8 desktop release (2026-09-19) — ✅ Tag target `fc83df9`
   committed to `main` and tagged `v0.3.8` (`909c232` yt-dlp fix, `3711aeb` version display,
   `e5c16c4` release prep, `fc83df9` docs correction); local release gates passed (Worker 858/2
   skipped, Ruff clean, frontend 766/766, app lint and build, Server 292/1 skipped, Server build,
@@ -319,7 +324,7 @@
   `YOUTUBE_DOWNLOAD_FAILED` copy that tells the user to check a healthy network; public-platform
   availability and deployed server capability remain external dependencies.
 
-- [x] Prepare and publish FrameQ v0.3.7 desktop release (2026-09-19) — ✅ Release commit `9a0cd65`
+- [x] Prepare and publish Locus v0.3.7 desktop release (2026-09-19) — ✅ Release commit `9a0cd65`
   committed to `main` and tagged `v0.3.7`; local release gates passed (Worker 858/2 skipped,
   Douyin-focused 147, Ruff clean, frontend 762/762, Server 292/1 skipped, scripts 50, docs
   governance 0 errors/0 warnings), and Desktop Release run `35434877136` finished green on all three
@@ -340,7 +345,7 @@
   so an exported bundle cannot tell a first-attempt success from a retried one; public-platform
   availability and deployed server capability remain external dependencies.
 
-- [x] Prepare and publish FrameQ v0.3.6 desktop release (2026-09-06) — ✅ Current desktop source was
+- [x] Prepare and publish Locus v0.3.6 desktop release (2026-09-06) — ✅ Current desktop source was
   committed to `main` (`9fc7834`) and tagged `v0.3.6`; local release gates passed (Worker 854/2
   skipped, frontend 762, Server 291/1 skipped, Rust 315, scripts 37), hosted Server CI and macOS
   ProcessSupervisor passed, and Desktop Release built the Windows updater/installer, `latest.json`,
@@ -370,7 +375,7 @@
   `202608240003_self_service_active_unique`. Documentation gates and `git diff --check` passed.
   ExecPlan: `docs/exec-plans/completed/2026-08-24-self-service-email-activation-code-plan.md`.
 
-- [x] Prepare and publish FrameQ v0.3.5 desktop feature release (2026-08-16) — ✅ Acceptance:
+- [x] Prepare and publish Locus v0.3.5 desktop feature release (2026-08-16) — ✅ Acceptance:
   Motion interaction enhancement (processing stage, task state, ASR download progress, AI target
   and history list animations; Account/Settings/History/ASR Model/AI Detail and confirmation
   Sheet lifecycle; reduced-motion respect) plus Windows app-local VC++ runtime staging and
@@ -382,7 +387,7 @@
   restart-new-task interaction). Release plan:
   `docs/exec-plans/completed/2026-08-16-v0.3.5-desktop-feature-release-plan.md`.
 
-- [x] Prepare and publish FrameQ v0.3.4 icon release (2026-08-16) — ✅ Acceptance: updated desktop
+- [x] Prepare and publish Locus v0.3.4 icon release (2026-08-16) — ✅ Acceptance: updated desktop
   app icon and Windows/macOS bundle icon resources; version source unified at 0.3.4, annotated
   tag `v0.3.4` (commit `1e20aec`) pushed to origin, Desktop Release workflow generated Windows
   updater/Intel DMG/Apple Silicon DMG, stable release published
@@ -391,7 +396,7 @@
   behavior changed. Release plan:
   `docs/exec-plans/completed/2026-08-16-v0.3.4-icon-release-plan.md`.
 
-- [x] Prepare and publish FrameQ v0.3.3 desktop feature release (2026-08-15) — ✅ Acceptance:
+- [x] Prepare and publish Locus v0.3.3 desktop feature release (2026-08-15) — ✅ Acceptance:
   Windows VC++ 2015-2022 runtime self-check with runtime-missing guidance, import-stage
   structured diagnostic fallback, and the model-download stability hardening batch (ONNX staging
   cleanup, streamed custom-source download with timeout/size limit/retry, disk-space precheck,
@@ -405,14 +410,14 @@
   failure. Release plan:
   `docs/exec-plans/completed/2026-08-15-v0.3.3-desktop-feature-release-plan.md`.
 
-- [x] Prepare and publish FrameQ v0.3.2 desktop diagnostic export release (2026-08-10) — ✅ Acceptance:
+- [x] Prepare and publish Locus v0.3.2 desktop diagnostic export release (2026-08-10) — ✅ Acceptance:
   merged
   `codex/desktop-diagnostic-export` into `main`, synchronized five version sources at 0.3.2, and
   added release notes. Hosted CI/Desktop Release passed, annotated tag `v0.3.2` was pushed, and
   stable release publication completed. Release plan:
   `docs/exec-plans/completed/2026-08-10-v0.3.2-desktop-diagnostic-export-release-plan.md`.
 
-- [x] Prepare and publish FrameQ v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance: five
+- [x] Prepare and publish Locus v0.3.1 desktop feature release (2026-08-05) — ✅ Acceptance: five
   version sources synchronized at 0.3.1, `scripts/tests/release-version.test.mjs` asserts
   `0.3.1`, local release gates pass (scripts 28/29 with pre-existing Windows fs.rm env failure;
   app lint/test 73 files/699/build; worker Ruff + pytest 690/2 sandbox-symlink env failures;
@@ -433,7 +438,7 @@
   运行时、locale/layout、本地媒体导入、ONNX VAD 流式已于 2026-08-06 在真实 macOS 主机
   完成实测验收。
 
-- [x] Prepare and publish FrameQ v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
+- [x] Prepare and publish Locus v0.3.0 desktop feature release (2026-08-03) — ✅ Acceptance: five
   version sources synchronized at 0.3.0, `scripts/tests/release-version.test.mjs` asserts `0.3.0`,
   complete local release gates pass (scripts, app tests/lint/build, Rust tests/rustfmt, worker
   tests/Ruff, server tests/build, governance, diff, refreshed packaged-worker SHA-256 equality,
@@ -485,7 +490,7 @@
 - [x] Add selectable SenseVoiceSmall-ONNX and selected-model on-demand installation (2026-07-27) — preserved the default PyTorch model, added the ModelScope-only `funasr_onnx` runtime/cache validation, and downloads only a missing frozen task model before automatically resuming URL/local-media intent. ✅ Automated acceptance: startup does not download; cancellation/failure creates no task; ONNX never calls `funasr.AutoModel`. Live network/package-platform checks remain release residuals. Product spec: `docs/product-specs/2026-07-27-selectable-asr-model-on-demand-download.md`; ExecPlan: `docs/exec-plans/completed/2026-07-27-selectable-asr-model-on-demand-download-plan.md`.
 
 - [x] Close general Tauri IPC runtime-decoding gaps (2026-07-24) — ✅ Account, History,
-  remaining settings, transcript detail, and FrameQ-owned update command runners return
+  remaining settings, transcript detail, and Locus-owned update command runners return
   `Promise<unknown>`; each domain decodes closed top-level/nested DTOs before state mutation;
   malformed/accessor/symbol/exotic values fail through stable non-echoing `IpcProtocolError` codes;
   worker/local-media specialized parsers and valid behavior remain unchanged. ✅ Focused App 64/64,
@@ -563,7 +568,7 @@
   failures/32 passes, GREEN passed 35/35, worker passed 364/364, and Ruff/docs/diff/live simulation
   passed. ExecPlan: `docs/exec-plans/completed/2026-07-18-youtube-generic-chinese-subtitle-plan.md`.
 
-- [x] Prepare and publish FrameQ v0.2.17 desktop i18n release (2026-07-25) — ✅ Acceptance: five version
+- [x] Prepare and publish Locus v0.2.17 desktop i18n release (2026-07-25) — ✅ Acceptance: five version
   sources synchronized at 0.2.17, app lint gate restored, Gatekeeper-first release notes reviewed, local
   release validation passed (app 637/637, server 146/1skip, worker 576/2env, build, governance 0/0).
   All broad-release blockers resolved: atomic persistence ✅, worker watchdog ✅, server auth/quota
@@ -611,13 +616,13 @@
   Desktop Release was triggered. ExecPlan:
   `docs/exec-plans/completed/2026-07-12-github-actions-node24-upgrade-plan.md`.
 
-- [x] Publish FrameQ v0.2.16 open-source stable release (2026-07-12) — ✅ Version-drift TDD,
+- [x] Publish Locus v0.2.16 open-source stable release (2026-07-12) — ✅ Version-drift TDD,
   complete local gates, Windows/Intel/Apple Silicon hosted builds, runtime/Deno/codesign evidence,
   local DMG SHA-256 matching, reviewed Gatekeeper disclosure, and explicit final publication
   confirmation all passed. Release: `https://github.com/jiabai/FrameQ/releases/tag/v0.2.16`.
   ExecPlan: `docs/exec-plans/completed/2026-07-12-v0.2.16-open-source-release-plan.md`.
 
-- [x] Add permanent History task deletion (2026-07-12) — Delete one explicitly confirmed supported History vNext task, its video/audio/transcript/AI artifacts, and per-task playback cache to release disk space immediately. Active processing, AI generation, cancellation, transcript save, legacy tasks, and linked storage remain ineligible. Partial filesystem deletion remains an accepted and explicitly reported residual risk. ✅ Windows/local gates passed app 256, Rust 104, worker 231, server 57, scripts 11, builds, Ruff, docs and diff checks; hosted Intel macOS run `29187106602` passed Cargo 103/103 and produced checksum-verified internal DMG artifact `frameq-macos-intel-2-eb5ed4122c0c`. ExecPlans: `docs/exec-plans/completed/2026-07-12-history-task-permanent-deletion-plan.md` and `docs/exec-plans/completed/2026-07-12-macos-intel-acceptance-artifact-plan.md`.
+- [x] Add permanent History task deletion (2026-07-12) — Delete one explicitly confirmed supported History vNext task, its video/audio/transcript/AI artifacts, and per-task playback cache to release disk space immediately. Active processing, AI generation, cancellation, transcript save, legacy tasks, and linked storage remain ineligible. Partial filesystem deletion remains an accepted and explicitly reported residual risk. ✅ Windows/local gates passed app 256, Rust 104, worker 231, server 57, scripts 11, builds, Ruff, docs and diff checks; hosted Intel macOS run `29187106602` passed Cargo 103/103 and produced checksum-verified internal DMG artifact `app-macos-intel-2-eb5ed4122c0c`. ExecPlans: `docs/exec-plans/completed/2026-07-12-history-task-permanent-deletion-plan.md` and `docs/exec-plans/completed/2026-07-12-macos-intel-acceptance-artifact-plan.md`.
 
 - [x] Polish History height, typography rhythm, and toolbar grouping (2026-07-12) — Applied option A without changing short transcript height or product data flows. ✅ TDD and acceptance: History CSS RED/GREEN, short/long History geometry, toolbar 1366/720 alignment, browser 22/22, app 35 files / 244 tests, production build, docs 0/0, and diff check passed. ExecPlan: `docs/exec-plans/completed/2026-07-12-desktop-density-history-toolbar-polish-plan.md`.
 
@@ -944,14 +949,14 @@
   prisma generate → 376 项测试 → tsc → 第 9 条迁移（两表已消失、13 个用户保留、
   `migrate status` 9 条 up to date）→ 新代码 preflight 7 项 ok → start/restart 双通道 health 200。
   线上探针：`/api/wechat/notify` 与两条 billing 路由均 404，auth-first 路由 401；生产 `.env` 已删净
-  `WECHAT_*`（剩 13 个有效键），nginx `frameq-server.conf` 的回调 location 已删除并 reload
+  `WECHAT_*`（剩 13 个有效键），nginx `app-server.conf` 的回调 location 已删除并 reload
   （`nginx -t` 通过、备份 `*.bak-remove-wechat-<STAMP>`），`/download/` 与 `/health/*` 仍 200。
   部署文件哈希（LF 归一化）与本地 main 一致。残余风险：DROP TABLE 不可逆，回滚须整套恢复
   代码 + 迁移前数据库 + 匹配 `.env`（备份内已含两者）。
 
 - [x] Deploy the 2026-10-28/29 server fixes to production (2026-11-08) ✅ 用户授权后按
-  `deploy/server-deployment.md` 把生产 `frameq-server` 从 `30934a4`（2026-10-20）部署到
-  `bf92310`：停服后 WAL 合并为单一 `frameq.sqlite`，旧代码 `db:preflight --mode current`
+  `deploy/server-deployment.md` 把生产 `app-server` 从 `30934a4`（2026-10-20）部署到
+  `bf92310`：停服后 WAL 合并为单一 `app.sqlite`，旧代码 `db:preflight --mode current`
   7 项 ok；备份 `20261108T103403Z`（sha256 清单、`integrity_check`、隔离 restore-smoke 7 项、
   `migrate status` 7 条 up to date），异地副本存于本机受 ACL 收紧的站外目录。随后 fetch → checkout → `npm ci`（136 包）→ `prisma generate` →
   `npm test`（39 文件 400 项通过）→ `tsc --noEmit` → `db:migrate:deploy` 应用第 8 条
@@ -988,7 +993,7 @@
 
 - [x] Make payment settlement, activation-code redemption, and administrator compensation transactional (2026-07-10) ✅ Store semantic transaction boundaries now commit all related state together; administrator quota grants use the same audited additive adjustment and have no remaining-quota bypass; verified webhook replays recover only deterministic old payment states, while ambiguous old activation/admin states require audited `manual_repair`. WeChat billing remains disabled/unintegrated. Server/worker/app/Rust/docs/diff gates passed.
 
-- [x] Add server-managed LLM config and monthly insight quota (2026-06-22) ✅ Admin Web owns encrypted dedicated FrameQ client LLM config and per-user quota editing; desktop accounts quota per cloud LLM API call attempt; settings no longer exposes LLM fields; server/app/Rust/worker/docs gates passed.
+- [x] Add server-managed LLM config and monthly insight quota (2026-06-22) ✅ Admin Web owns encrypted dedicated Locus client LLM config and per-user quota editing; desktop accounts quota per cloud LLM API call attempt; settings no longer exposes LLM fields; server/app/Rust/worker/docs gates passed.
 
 - [x] Use administrator-issued activation codes as the visible entitlement unlock path (2026-06-21) ✅ Admin OTP login, hash-only one-time 31-day activation codes, desktop redemption, entitlement reuse, Admin Web list/create flow, and client-side processing gate; server/app/Rust/docs gates passed.
 
@@ -1013,7 +1018,7 @@
   macOS 仍未验。做法：给 WebView2 加 `--remote-debugging-port=9222` 打开 CDP（解除 8-10 记录的
   「WebView 无 CDP/UIA 树」阻塞），CDP 调 `export_diagnostics`，再用 Win32 消息 + `SendInput`
   绕过被安全策略拦住的 .NET UIA 驱动「另存为」对话框，全程无鼠标点击。四项结果：success →
-  `exported`，ZIP 真实落盘且只有 `diagnostics.json` + `frameq-desktop.log`、十字段闭合 manifest、
+  `exported`，ZIP 真实落盘且只有 `diagnostics.json` + `desktop.log`、十字段闭合 manifest、
   <= 5 MiB，5 个 seed 敏感标记与 3 个真实配置值全部 0 命中；cancel → `cancelled` 且不产生文件；
   覆盖替换 → `exported`，确认框点「是」后目标被真实 ZIP 替换、旧 sentinel 消失、无 `.part`
   残留、无 app-local 副本；目标失败 → 注入只读/独占锁/目录目标时 Common Item Dialog 在选文件
@@ -1036,7 +1041,7 @@
   自动聚焦、真实勾选经 Rust IPC 写入 `collections.json` 再取消恢复、Escape 关闭并把焦点还回
   来源按钮、`新建笔记` 打开主页 composer；前后 `collections.json` 字节一致。②**原生合集删除
   14 项**：UI 创建临时合集并加入一条真实历史笔记，经外层管理器的确认框删除；合集条目消失，
-  该任务 6 个文件（`frameq-task.json`、`media/audio.wav`、`media/video.mp4`、
+  该任务 6 个文件（`task.json`、`media/audio.wav`、`media/video.mp4`、
   `transcript/segments.json`、`transcript/transcript.md`、`transcript/transcript.txt`）字节不变，
   其余合集与 63 个任务文件均未变。③**新建笔记 → 真实处理 → 自动入集**：由用户手动操作完成，
   从 0 篇的 `大模型技术` 点 `新建笔记`，提交公开文章
@@ -1045,7 +1050,7 @@
   `article/article.md` 10,882 字节、`insights_count=0`、无 AI 生成），合集计数 0→1 且该 task id
   已写入 `collections.json`；web 工作区正常清理、无付费供应商调用。前置修复：本机 11-05
   native build 的 `resources/webview-host` 与 extractor 版本混用，导致 web 会话恒报
-  `WEB_STORAGE_FAILED` / `recovery_required`；清除孤立 `.frameq-system-webviews` 工作区并以
+  `WEB_STORAGE_FAILED` / `recovery_required`；清除孤立 `.app-system-webviews` 工作区并以
   `tauri build --no-bundle` 重建（9m37s，exit 0）后 `dataAccess=ready`，属构建产物问题非产品
   回归。**剩余边界**：membership-retry 失败提示与重试按钮未被触发（正常路径无失败），仍只有
   组件测试覆盖；macOS 原生对话框与图形交互仍缺真机。证据见 `design-qa.md` 与
@@ -1121,7 +1126,7 @@
 - [x] Add free-space and writability preflight plus a step log to the Windows installer (2026-11-09) — ✅
   `app/src-tauri/windows/installer-hooks.nsh` 在首个负载写入前用 `${DriveSpace}` 量 `$INSTDIR` 所在卷
   余量（要求 `ESTIMATEDSIZE` + 256 MB），再建探针文件验证可写；两项结果与安装步骤追加到
-  `$TEMP\FrameQ-install.log`（超 64 KB 先清空，写入失败一律忽略）。交互安装失败弹一条中文提示
+  `$TEMP\install.log`（超 64 KB 先清空，写入失败一律忽略）。交互安装失败弹一条中文提示
   （写明哪项失败、实测数字或路径、日志路径）并 `Abort` 回组件页；静默 / `/P` / `/UPDATE` 只记录
   不阻断。2026-10-20 的安全软件提示仍在最前且保持建议性质。踩到的三个坑：模板在本文件 include
   之后才 `!define ESTIMATEDSIZE`（回退必须写在宏展开处）、`FileOpen ... a` 不定位到末尾（需
@@ -1138,7 +1143,7 @@
   `runner/progress.rs` 在路由已校验事件时识别该 message code，按固定文案追加桌面日志
   `worker.douyin.share_page.retry`（detail 恒为 `stage=douyin_share_page`），
   `diagnostics/export.rs` 的 `safe_desktop_event` 把它列入白名单输出为
-  `worker_douyin_share_page_retry`；导出包 `frameq-desktop.log` 中一条记录对应一次重试，
+  `worker_douyin_share_page_retry`；导出包 `desktop.log` 中一条记录对应一次重试，
   首次成功与重试后成功可区分。未改 `APP_DIAGNOSTIC` DTO、未 bump 契约版本、未改 worker，
   普通 stderr 仍只在模型下载时才落盘。门禁：`cargo test --lib share_page` 2 项通过（含真实
   `ProcessVideo` 运行与一条对照）；`cargo test --lib` 510 passed / 50 failed / 29 ignored，
@@ -1199,7 +1204,7 @@
   `releases/download/v0.3.6/`，线上三页与本地 `site/dist` **逐字节一致**，演示视频哈希部署前后未变。
   改动：`site/src/consts.ts` 的 `LATEST_VERSION` → `v0.3.6`、`RELEASE_NOTES_PATH` → `docs/releases/v0.3.6.md`，
   并新增私有 `VERSION_NUMBER` 派生三个产物名与 footer 标签（此前版本号散在 5 处）；
-  `site/src/pages/download.astro` 的 Windows 安装步骤原先**再硬编码一份** `FrameQ_0.3.3_x64-setup.exe`，
+  `site/src/pages/download.astro` 的 Windows 安装步骤原先**再硬编码一份** `Locus_0.3.3_x64-setup.exe`，
   改为从 `DOWNLOAD_ASSETS` 查找、缺失时构建期抛错；补齐 `site/src/content/release-notes/` 的
   v0.3.4/v0.3.5/v0.3.6 三篇（去术语文案，素材取自 `docs/releases/`）。**动因**：自助激活的客户端 UI 随
   v0.3.6 才发布，此前从官网安装的新用户拿到的是 v0.3.3、看不到申领按钮，服务端当日上线的能力对官网渠道不可达。
@@ -1223,7 +1228,7 @@
 
 - [x] 实现桌面端一键升级（2026-06-23）— Tauri updater + GitHub Releases updater manifest/artifacts；客户端与 worker 整体升级，保留 app-local data，不打包 ASR 权重或私有配置。✅ 代码完成，自动化门禁全部通过（server 32、app 84、Rust 31、worker 99、ruff、build、docs）。✅ 2026-06-27 项目决策：因中国境内访问 GitHub Releases 速度过慢，不再执行旧版到新版的 GitHub updater 真实下载/安装测试；该项作为 v1 测试豁免，不再阻塞发布。
 
-- [x] Add manual audio playback cache management in settings (2026-07-07) - Settings shows `$APPLOCALDATA/outputs/.frameq-audio-review` size as `Audio playback cache: <size>` and provides `Clear audio playback cache`; clearing deletes only that app-local playback cache, preserves `<APP_OUTPUT_DIR>/tasks/<task_id>/` source artifacts, and allows cache regeneration when transcript detail is opened again. ✅ Acceptance: settings UI shows cache size, clear action calls a canonicalized Tauri cleanup command, source task audio remains untouched, and tests cover clear + regenerate-on-open.
+- [x] Add manual audio playback cache management in settings (2026-07-07) - Settings shows `$APPLOCALDATA/outputs/.app-audio-review` size as `Audio playback cache: <size>` and provides `Clear audio playback cache`; clearing deletes only that app-local playback cache, preserves `<APP_OUTPUT_DIR>/tasks/<task_id>/` source artifacts, and allows cache regeneration when transcript detail is opened again. ✅ Acceptance: settings UI shows cache size, clear action calls a canonicalized Tauri cleanup command, source task audio remains untouched, and tests cover clear + regenerate-on-open.
 - [x] 完成干净 Windows VM 与 macOS arm64/x64 真实安装包验证（2026-07-08）— 用户确认 Windows 与 macOS 安装包验证已完成且无问题；轻量 runtime 安装包在无 Python/uv/ffmpeg 的干净机器完成首启模型下载、URL → 下载 → ASR 文字稿路径。✅ 验收：干净机器安装、首启模型下载、公开视频转写、app-local 数据保留和签名/公证状态记录完成；若最终公开分发 artifact 仍未签名/公证，需在 release note 中显式披露。
 - [x] 桌面端一键升级 GitHub updater 真实下载/安装测试豁免（2026-06-27）— 因中国境内访问 GitHub Releases 速度过慢，本项目 v1 不再把旧版到新版的 GitHub updater 实测作为验收或发布阻塞项。✅ 验收口径：自动化门禁、manifest/artifact 生成、Tauri 签名校验配置和直接分发新版安装包路径成立；未声明国内 GitHub 网络真实升级链路已实测通过。
 
@@ -1241,14 +1246,14 @@
 - [x] 增加文字稿要点总结与 Mermaid 思维导图（2026-06-25）✅ 二次确认后一次 AI整理生成 `summary.md`、`mindmap.mmd` 和既有启发话题点；UI 只展示总结和话题点，不展示 Mermaid 源码；worker/Rust/frontend 测试、前端构建和文档门禁通过。
 - [x] Expose four artifacts and split transcript/insight flow (2026-06-22) ✅ 主流程只下载视频、提取音频和生成文字稿；结果区提供视频/音频/文字稿/话题点入口；话题点由确认面板单独启动并消耗额度；app/Rust/worker 测试、前端构建和文档门禁通过。
 - [x] 改为轻量安装包 + 首启 ASR 模型下载（2026-06-19）✅ 安装包不再打入 `resources/models`；新增 SenseVoice Small / VAD 下载助手、Tauri 下载/取消命令、首启下载引导、缺模型 `ASR_MODEL_NOT_DOWNLOADED` 降级错误和可配置下载源；focused worker/Rust/frontend 测试通过
-- [x] 产出 Windows x64 full-bundle 内测安装包（2026-06-19，已被轻量方案取代）✅ 使用真实 Python standalone、ffmpeg/ffprobe 和 `D:\Github\FrameQ\models\models\iic\SenseVoiceSmall` 验证过旧 full-bundle resources；默认 release 依赖排除 `qwen-asr`、显式包含 `torch`，并裁剪 Python debug/cache/test/header 文件；`npm --prefix app run tauri -- build --target x86_64-pc-windows-msvc` 曾成功产出 `FrameQ_0.1.0_x64-setup.exe`（约 1055.5MB）
+- [x] 产出 Windows x64 full-bundle 内测安装包（2026-06-19，已被轻量方案取代）✅ 使用真实 Python standalone、ffmpeg/ffprobe 和 `D:\Github\Locus\models\models\iic\SenseVoiceSmall` 验证过旧 full-bundle resources；默认 release 依赖排除 `qwen-asr`、显式包含 `torch`，并裁剪 Python debug/cache/test/header 文件；`npm --prefix app run tauri -- build --target x86_64-pc-windows-msvc` 曾成功产出 `Locus_0.1.0_x64-setup.exe`（约 1055.5MB）
 - [x] 加固安装包发布门禁（2026-06-18，部分规则已被轻量方案取代）✅ 曾加入 full-bundle 模型资源检查；后续轻量方案改为首启下载模型并检查 app-local data 中的 `MODEL_VERSION.txt`、SenseVoice `model.pt` 和 VAD `model.pt`；macOS arm64/x64 构建显式传入 Tauri target triple；Cargo 发布元数据去除脚手架值；新增 Rust/Vitest 回归测试并通过聚焦验证
 - [x] 接入普通用户安装即用分发基础（2026-06-18）✅ Tauri release runtime 改为内置 Python/worker/bin resources，配置、历史、输出、cache 和模型缓存改入 app-local data；首启只检测本机 ASR/非 LLM 设置，LLM 就绪状态由 server 管理；release UI 只暴露 SenseVoice Small；补齐 installer distribution spec、active ExecPlan、Tauri resources 与 `scripts/build-installer.mjs`；自动化门禁全部通过
 - [x] 接入自定义窗口拖拽和红黄绿窗口按钮（2026-06-18）✅ 红/黄/绿按钮分别调用关闭、最小化、最大化/还原；补齐 Tauri window capability 最小权限；toolbar 拖动改为 Rust 位置更新 fallback 并通过真实窗口坐标验证；新增窗口 chrome 单元测试和浏览器回归断言
 - [x] 升级 macOS 桌面工具风格 UI（2026-06-18）✅ React UI 改为桌面窗口、toolbar、URL command panel、task monitor、result workspace 和 sheet 面板；新增浏览器回归测试；前端测试、web build、文档门禁和截图检查通过
 - [x] 简化首页为单输入卡片（2026-06-18）✅ 等待输入态只显示 `粘贴视频链接` 卡片；提交 URL 后才显示 task monitor 和结果工作区；浏览器回归测试覆盖状态切换
 - [x] 增加 LLM 话题分段规划策略（2026-06-18）✅ 话题点生成先让 LLM 输出 topic plan，再按话题段生成问题；planner 失败时 fallback 到直接生成策略；最终去重并限制总量；worker 测试覆盖 planner、fallback 和总量上限
-- [x] 对齐 InsightFlow 话题点 prompt 和生成参数（2026-06-18）✅ FrameQ prompt 同步参考服务的读者视角表达约束，直接生成 fallback 按约每 1000 字 1 个问题，OpenAI-compatible LLM 默认 `temperature=0.7`；worker 测试和 ruff 通过
+- [x] 对齐 InsightFlow 话题点 prompt 和生成参数（2026-06-18）✅ Locus prompt 同步参考服务的读者视角表达约束，直接生成 fallback 按约每 1000 字 1 个问题，OpenAI-compatible LLM 默认 `temperature=0.7`；worker 测试和 ruff 通过
 - [x] Route SenseVoice ModelScope cache into project models directory (2026-06-17) ✅ Worker maps `APP_MODEL_DIR` / project `models/` to `MODELSCOPE_CACHE` before building SenseVoice models; worker tests, ruff, and docs validation passed.
 - [x] Improve SenseVoice long-audio transcription parameters (2026-06-17) ✅ SenseVoice now enables `fsmn-vad`, long-audio merge parameters, and strips SenseVoice control tags before writing transcripts; worker tests and ruff passed.
 - [x] Harden Tauri worker stdout parsing (2026-06-17) ✅ Tauri now extracts the final structured worker JSON result even when ASR/LLM dependencies print logs to stdout; Rust tests and frontend tests passed.
@@ -1258,17 +1263,17 @@
 
 - [x] 增加可选 ASR 模型支持（2026-06-17）✅ 设置面板保存 `APP_ASR_MODEL`，worker 支持 Qwen3-ASR 和 `iic/SenseVoiceSmall`；worker/Rust/frontend 测试、文档门禁和 Tauri no-bundle 构建通过
 
-- [x] 增加历史任务查看和输出目录配置（2026-06-17，旧方案已被 task manifest 取代）✅ 曾采用本地 history 记录任务历史；当前任务库以 `frameq-task.json` 为准，设置面板仍保存 `APP_OUTPUT_DIR`
+- [x] 增加历史任务查看和输出目录配置（2026-06-17，旧方案已被 task manifest 取代）✅ 曾采用本地 history 记录任务历史；当前任务库以 `task.json` 为准，设置面板仍保存 `APP_OUTPUT_DIR`
 
 - [x] 早期 UI 层 LLM 配置入口（2026-06-17，已废弃）✅ 曾支持桌面 UI 保存 OpenAI-compatible base URL、API key、model 和 timeout；当前已由 server-managed LLM 取代，桌面设置不再输入、保存或回显 LLM 信息。
 - [x] MVP 最终验收和残余风险整理（2026-06-17）✅ 真实 InsightFlow LLM retry smoke 返回 `completed` 且生成 8 个话题点；自动化测试、文档门禁和 Tauri no-bundle 构建均通过；高优先级技术债已关闭
 - [x] 早期取消任务语义（2026-06-17，已由 2026-07-10 ProcessSupervisor 方案取代）✅ 曾在 UI 点击后立即返回输入态；当前不再忽略可能先到的真实终态。
-- [x] 早期 `.env` LLM smoke（2026-06-16，已废弃）✅ 曾用项目根 `.env` 验证 OpenAI-compatible Chat Completions；当前桌面 worker 不再读取项目根或 app-local `.env` 中的 `APP_LLM_*`，LLM key/config 只由 FrameQ server 管理。
+- [x] 早期 `.env` LLM smoke（2026-06-16，已废弃）✅ 曾用项目根 `.env` 验证 OpenAI-compatible Chat Completions；当前桌面 worker 不再读取项目根或 app-local `.env` 中的 `APP_LLM_*`，LLM key/config 只由 Locus server 管理。
 - [x] 完善话题点重试交互（2026-06-16）✅ `部分完成` 状态的话题点卡片可重新触发 InsightFlow，保留既有文字稿并只重跑话题点生成
 - [x] 完善模型下载/加载进度展示（2026-06-16）✅ worker 进度事件经 Tauri 转发到 UI，展示下载、校验、音频提取、模型缓存、模型加载、转写和话题点生成文案
 - [x] 完善详情浮窗复制/导出交互（2026-06-16）✅ 复制使用当前 tab 文本，导出在文件管理器中定位生成的 transcript/insights 文件
 - [x] 运行真实 Qwen3-ASR 模型推理（2026-06-16）✅ `outputs/7524373044106677544_transcript.txt` 由真实 ASR 生成且非空，模型缓存位于 `models/`
-- [x] 用户完成桌面 UI 手工验证（2026-06-16）✅ `app.exe` 显示 FrameQ、提交后进入失败态、返回 `ASR_MODEL_NOT_READY`、失败态不显示取消按钮
+- [x] 用户完成桌面 UI 手工验证（2026-06-16）✅ `app.exe` 显示 Locus、提交后进入失败态、返回 `ASR_MODEL_NOT_READY`、失败态不显示取消按钮
 - [x] 完成安装器打包验证（2026-06-16）✅ 用户报告 `npm --prefix app run tauri -- build` 已成功
 - [x] 将 Rust/Cargo 加入持久 PATH（2026-06-16）✅ 用户报告 `cargo -V` / `rustc -V` 在新会话可用
 - [x] 连接 Tauri command、UI 进度与 worker CLI（2026-06-16）✅ `npm --prefix app run tauri -- build --no-bundle` 生成 `app.exe`，worker CLI 子进程烟测返回结构化 JSON

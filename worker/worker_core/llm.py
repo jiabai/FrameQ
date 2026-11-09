@@ -8,6 +8,8 @@ from urllib.request import Request
 
 from worker_core.insight_errors import InsightGenerationError
 
+from .brand import PRODUCT_NAME
+
 DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_LLM_TIMEOUT_SECONDS = 60.0
 
@@ -47,13 +49,13 @@ def parse_managed_checkout_response(raw_response: bytes) -> dict[str, str | int]
     except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise InsightGenerationError(
             "AI_LLM_CHECKOUT_INVALID_RESPONSE",
-            "FrameQ LLM checkout did not return usable configuration.",
+            f"{PRODUCT_NAME} LLM checkout did not return usable configuration.",
         ) from exc
 
     if provider not in {"openai", "openai_compatible"} or not base_url or not model or not api_key:
         raise InsightGenerationError(
             "AI_LLM_CHECKOUT_INVALID_RESPONSE",
-            "FrameQ LLM checkout did not return usable configuration.",
+            f"{PRODUCT_NAME} LLM checkout did not return usable configuration.",
         )
     return {
         "provider": provider,
@@ -98,12 +100,12 @@ def checkout_llm_config_once(
     except TimeoutError as exc:
         raise InsightGenerationError(
             "AI_LLM_CHECKOUT_TIMEOUT",
-            "FrameQ LLM checkout timed out. Please retry later.",
+            f"{PRODUCT_NAME} LLM checkout timed out. Please retry later.",
         ) from exc
     except (urllib.error.URLError, OSError) as exc:
         raise InsightGenerationError(
             "AI_LLM_CHECKOUT_FAILED",
-            "FrameQ LLM checkout failed before a usable response was returned.",
+            f"{PRODUCT_NAME} LLM checkout failed before a usable response was returned.",
         ) from exc
 
     return parse_managed_checkout_response(raw_response)
@@ -179,7 +181,7 @@ def _managed_checkout_http_error(error: urllib.error.HTTPError) -> InsightGenera
     if error.code == 401:
         return InsightGenerationError(
             "AI_LLM_AUTH_REQUIRED",
-            "FrameQ login is required to use the managed LLM.",
+            f"{PRODUCT_NAME} login is required to use the managed LLM.",
         )
     if error.code == 403:
         return InsightGenerationError(
@@ -189,11 +191,11 @@ def _managed_checkout_http_error(error: urllib.error.HTTPError) -> InsightGenera
     if detail == "LLM_CONFIG_MISSING":
         return InsightGenerationError(
             "AI_LLM_CONFIG_MISSING",
-            "FrameQ managed LLM is not configured.",
+            f"{PRODUCT_NAME} managed LLM is not configured.",
         )
     return InsightGenerationError(
         "AI_LLM_CHECKOUT_FAILED",
-        f"FrameQ LLM checkout failed with HTTP {error.code}.",
+        f"{PRODUCT_NAME} LLM checkout failed with HTTP {error.code}.",
     )
 
 

@@ -14,7 +14,7 @@ afterEach(cleanup);
 test("title generation blocks competing paid actions while saved results stay viewable", async () => {
   await initializeI18n("en-US");
   const saved = {
-    ...createInitialWorkflow(), stage: "completed" as const, taskId: "saved-note", taskDir: "D:/FrameQ/outputs/tasks/saved-note", text: "A saved transcript",
+    ...createInitialWorkflow(), stage: "completed" as const, taskId: "saved-note", taskDir: "D:/Locus/outputs/tasks/saved-note", text: "A saved transcript",
     artifacts: { transcript_txt: "transcript/transcript.txt", summary: "ai/summary.md" }, summary: "A saved summary",
   };
   const workflow = startNoteTitleGeneration(saved, "en-US");

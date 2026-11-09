@@ -1,4 +1,4 @@
-# FrameQ：AI 协作规则
+# Locus：AI 协作规则
 
 本文件是给 AI coding agent 的工作指令：只放"下一个进来干活的 agent 需要知道的事"。历史台账（发布记录、release notes、已完成的执行计划）在 `docs/` 下维护，不在此展开。
 
@@ -6,7 +6,7 @@
 
 ## 项目概述
 
-FrameQ 是本地优先的桌面应用：粘贴公开或已授权的视频链接，本地完成下载、音频提取、SenseVoice Small 语音识别，导出文字稿，并在用户确认且额度充足时生成总结、脑图与灵感话题。
+Locus 是本地优先的桌面应用：粘贴公开或已授权的视频链接，本地完成下载、音频提取、SenseVoice Small 语音识别，导出文字稿，并在用户确认且额度充足时生成总结、脑图与灵感话题。
 
 - 桌面端：Tauri + React + TypeScript（`app/`）
 - Worker：Python + uv（`worker/`），智能提炼统一使用 agent_runtime

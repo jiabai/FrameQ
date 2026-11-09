@@ -2,7 +2,7 @@
 
 使用 macOS 14+ 的 AppKit、WebKit、Network 和 Security 公共接口。构建器需要将 `Main.swift`、
 `HostProtocol.swift`、`WebPageHost.swift`、`PolicyDelegate.swift`、`Extraction.swift` 编译为
-`FrameQWebViewHost.app/Contents/MacOS/frameq-webview-host`，使用本目录 Info.plist 和 entitlements.plist
+`AppWebViewHost.app/Contents/MacOS/app-webview-host`，使用本目录 Info.plist 和 entitlements.plist
 签名。Swift 编译参数包含 `-swift-version 5 -parse-as-library` 和上述四个 framework。
 
 启动参数严格使用 `--operation-id <canonical UUID>`。helper 从私有 stdin 管道读取 init，核验 operation ID

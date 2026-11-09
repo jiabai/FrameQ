@@ -423,7 +423,7 @@ residual risk for this source-level internal refactor.
 
 - `docs/design-docs/2026-07-18-task-access-facade.md`
 - `docs/design-docs/2026-07-20-transcript-detail-module-split.md`
-- `docs/design-docs/frameq-code-audit-uml.md`
+- `docs/design-docs/code-audit-uml.md`
 - `docs/ARCHITECTURE.md`, section `2026-07-18 Task access facade boundary`
 - `docs/SECURITY.md`, sections `Task Access Facade Enforcement` and
   `Unsupported Legacy Task Isolation Boundary`

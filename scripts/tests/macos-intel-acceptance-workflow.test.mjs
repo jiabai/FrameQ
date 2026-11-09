@@ -74,14 +74,14 @@ test("builds manual internal macOS artifacts for both architectures with read-on
   assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$APP"/);
   assert.match(
     workflow,
-    /bash scripts\/make-macos-dmg\.sh \$\{\{ matrix\.target \}\} FrameQ/,
+    /bash scripts\/make-macos-dmg\.sh \$\{\{ matrix\.target \}\} Locus/,
   );
   assert.match(workflow, /--target \$\{\{ matrix\.platform \}\} --verify-bundle "\$APP"/);
   assert.match(workflow, /hdiutil verify "\$DMG"/);
   assert.match(workflow, /hdiutil attach -readonly -nobrowse -mountpoint "\$MOUNT" "\$DMG"/);
   assert.match(workflow, /trap 'hdiutil detach "\$MOUNT"' EXIT/);
-  assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$MOUNT\/FrameQ\.app"/);
-  assert.match(workflow, /--target \$\{\{ matrix\.platform \}\} --verify-bundle "\$MOUNT\/FrameQ\.app"/);
+  assert.match(workflow, /codesign --verify --deep --strict --verbose=4 "\$MOUNT\/Locus\.app"/);
+  assert.match(workflow, /--target \$\{\{ matrix\.platform \}\} --verify-bundle "\$MOUNT\/Locus\.app"/);
   assert.match(workflow, /shasum -a 256 "\$DMG" > "\$DMG\.sha256"/);
   assert.match(workflow, /uses:\s*actions\/upload-artifact@v6/);
   assert.doesNotMatch(workflow, /actions\/upload-artifact@(?:v4|v5)/);

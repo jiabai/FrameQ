@@ -18,7 +18,7 @@ fn native_runtime_ready_cancel_and_browser_exit() {
     let directory = root.join(".tmp").join(format!("native-host-{}-{}", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
     std::fs::create_dir_all(&directory).unwrap();
     let script = std::fs::read_to_string(root.join("app/src-tauri/resources/web/extract-article.js")).expect("build the production extractor first");
-    let child = Command::new(env!("CARGO_BIN_EXE_frameq-webview-host")).args(["--operation-id", "bbd02c47-7155-47e9-b72b-be6583cbff09"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
+    let child = Command::new(env!("CARGO_BIN_EXE_app-webview-host")).args(["--operation-id", "bbd02c47-7155-47e9-b72b-be6583cbff09"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
     let mut running = Running { child, directory };
     let mut input = running.child.stdin.take().unwrap();
     let output = running.child.stdout.take().unwrap();
@@ -61,7 +61,7 @@ fn native_runtime_cancel_during_preparation_waits_for_browser_exit() {
     let directory = root.join(".tmp").join(format!("native-prepare-cancel-{}-{}", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
     std::fs::create_dir_all(&directory).unwrap();
     let script = std::fs::read_to_string(root.join("app/src-tauri/resources/web/extract-article.js")).unwrap();
-    let child = Command::new(env!("CARGO_BIN_EXE_frameq-webview-host")).args(["--operation-id", "bbd02c47-7155-47e9-b72b-be6583cbff09"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
+    let child = Command::new(env!("CARGO_BIN_EXE_app-webview-host")).args(["--operation-id", "bbd02c47-7155-47e9-b72b-be6583cbff09"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
     let mut running = Running { child, directory };
     let mut input = running.child.stdin.take().unwrap();
     let mut output = BufReader::new(running.child.stdout.take().unwrap());

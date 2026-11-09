@@ -81,10 +81,10 @@ describe("storage preflight progress boundary", () => {
 });
 
 function ready() {
-  return { schemaVersion: 1, generation: 3, dataAccess: "ready", mode: "managed", currentPath: "D:/FrameQData", legacyOutputPath: null, lastError: null, operation: null, cleanupReceipts: [], recoveryCandidates: [] };
+  return { schemaVersion: 1, generation: 3, dataAccess: "ready", mode: "managed", currentPath: "D:/LocusData", legacyOutputPath: null, lastError: null, operation: null, cleanupReceipts: [], recoveryCandidates: [] };
 }
 function operation() {
-  return { operationId: "migration-1", merge: false, phase: "copying", sourcePaths: ["C:/Data/outputs"], targetPath: "D:/FrameQData", totalFiles: 4, completedFiles: 1, totalBytes: 1024, completedBytes: 256, canCancel: true, canResume: false, lastError: null };
+  return { operationId: "migration-1", merge: false, phase: "copying", sourcePaths: ["C:/Data/outputs"], targetPath: "D:/LocusData", totalFiles: 4, completedFiles: 1, totalBytes: 1024, completedBytes: 256, canCancel: true, canResume: false, lastError: null };
 }
 describe("data-storage response boundary", () => {
   test("ready remains usable with durable cleanup and cancelled recovery candidates", () => {
@@ -129,14 +129,14 @@ describe("data-storage response boundary", () => {
   });
   test("parses selection cancellation and only declared preview fields", () => {
     expect(parseDirectorySelection(null)).toBeNull();
-    expect(parseDirectorySelection({ selectionToken: "selection-1", path: "D:/FrameQData" })?.selectionToken).toBe("selection-1");
-    const preview = { planToken: "plan", operationId: "operation", merge: false, generation: 3, sourcePaths: ["C:/Data"], targetPath: "D:/FrameQData", totalFiles: 1, totalBytes: 10, requiredBytes: 1024, availableBytes: 2048 };
+    expect(parseDirectorySelection({ selectionToken: "selection-1", path: "D:/LocusData" })?.selectionToken).toBe("selection-1");
+    const preview = { planToken: "plan", operationId: "operation", merge: false, generation: 3, sourcePaths: ["C:/Data"], targetPath: "D:/LocusData", totalFiles: 1, totalBytes: 10, requiredBytes: 1024, availableBytes: 2048 };
     expect(parseMigrationPreview(preview).requiredBytes).toBe(1024);
     expect(() => parseMigrationPreview({ ...preview, availableBytes: Infinity })).toThrow();
     expect(parseCleanupPreview({ planToken: "cleanup", receiptId: "receipt", generation: 3, totalFiles: 1, totalBytes: 10, retainedFiles: 2, sourcePaths: ["C:/Data"] }).retainedFiles).toBe(2);
   });
   test("retains explicit merge policy and protected resumable progress", () => {
-    const preview = { planToken: "plan", operationId: "operation", merge: true, generation: 3, sourcePaths: ["C:/Data"], targetPath: "D:/FrameQData", totalFiles: 1, totalBytes: 10, requiredBytes: 1024, availableBytes: 2048 };
+    const preview = { planToken: "plan", operationId: "operation", merge: true, generation: 3, sourcePaths: ["C:/Data"], targetPath: "D:/LocusData", totalFiles: 1, totalBytes: 10, requiredBytes: 1024, availableBytes: 2048 };
     expect(parseMigrationPreview(preview).merge).toBe(true);
     expect(() => parseMigrationPreview({ ...preview, merge: undefined })).toThrow("DATA_STORAGE_IPC_RESPONSE_INVALID");
     const merging = parseStorageState({ ...ready(), operation: { ...operation(), merge: true, phase: "merging", canCancel: false, canResume: true } }).operation;

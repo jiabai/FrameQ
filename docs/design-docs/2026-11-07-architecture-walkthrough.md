@@ -270,7 +270,7 @@ AI 结账：
 按“先边界、再宿主、再实现”的顺序阅读，能最快建立可改代码的心智模型。
 
 1. 规则与总览：`AGENTS.md`、`RULES.md`、`README.md` 的架构图与产物说明。
-2. 现有代码审计：`docs/design-docs/frameq-code-audit-uml.md`。它提供模块清单、调用关系和风险清单，但基线是 contract `9`，阅读时以本文和当前代码为准。
+2. 现有代码审计：`docs/design-docs/code-audit-uml.md`。它提供模块清单、调用关系和风险清单，但基线是 contract `9`，阅读时以本文和当前代码为准。
 3. 共享契约：[desktop-worker-contract.json](../../contracts/desktop-worker-contract.json#L1-L3)、[desktopWorkerProtocol.ts](../../app/src/desktopWorkerProtocol.ts)、[result_protocol.rs](../../app/src-tauri/src/worker_runtime/result_protocol.rs)、[requests.py](../../worker/frameq_worker/requests.py)、[progress_events.py](../../worker/frameq_worker/progress_events.py)。
 4. Rust 宿主：[lib.rs](../../app/src-tauri/src/lib.rs#L73-L198)、[worker_runtime/runner.rs](../../app/src-tauri/src/worker_runtime/runner.rs)、[watchdog.rs](../../app/src-tauri/src/worker_runtime/runner/watchdog.rs)、[task_manifest.rs](../../app/src-tauri/src/task_manifest.rs)、[video_processing/url_processing.rs](../../app/src-tauri/src/video_processing/url_processing.rs)。
 5. Worker：[cli.py](../../worker/frameq_worker/cli.py)、[worker_service.py](../../worker/frameq_worker/worker_service.py)、[pipeline_runtime/orchestration.py](../../worker/frameq_worker/pipeline_runtime/orchestration.py)、[media_preparation.py](../../worker/frameq_worker/media_preparation.py)、[media.py](../../worker/frameq_worker/media.py)、[asr_runtime/](../../worker/frameq_worker/asr_runtime)、[task_store.py](../../worker/frameq_worker/task_store.py)。
@@ -292,7 +292,7 @@ AI 结账：
 
 ### 6.2 代码审计文档基线过期
 
-[frameq-code-audit-uml.md](../design-docs/frameq-code-audit-uml.md) 写明基线为 2026-07-22、contract `9`，并把 `App.tsx` 记为 740 行；当前契约是 `11`，`App.tsx` 是 1103 行。它仍有很高的参考价值，但其中的模块行数、契约版本和调用关系不能直接当成当前事实。
+[code-audit-uml.md](../design-docs/code-audit-uml.md) 写明基线为 2026-07-22、contract `9`，并把 `App.tsx` 记为 740 行；当前契约是 `11`，`App.tsx` 是 1103 行。它仍有很高的参考价值，但其中的模块行数、契约版本和调用关系不能直接当成当前事实。
 
 ### 6.3 ARCHITECTURE.md 是倒序边界日志
 

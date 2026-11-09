@@ -66,7 +66,7 @@ describe("update client", () => {
     expect(runner).toHaveBeenCalledTimes(1);
   });
 
-  test("reports the exact FrameQ-owned update delivery response", async () => {
+  test("reports the exact Locus-owned update delivery response", async () => {
     await expect(
       getUpdateDelivery(async () => ({
         inAppUpdates: false,

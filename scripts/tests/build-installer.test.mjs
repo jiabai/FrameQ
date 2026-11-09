@@ -25,7 +25,7 @@ const projectManifestPath = join(testDir, "..", "..", "pyproject.toml");
 const repoRoot = join(testDir, "..", "..");
 
 async function tempRoot(name) {
-  return mkdtemp(join(tmpdir(), `frameq-${name}-`));
+  return mkdtemp(join(tmpdir(), `app-${name}-`));
 }
 
 for (const minor of ["11", "13"]) {

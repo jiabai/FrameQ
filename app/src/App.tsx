@@ -746,7 +746,7 @@ function App() {
   return (
     <main className="app-shell">
       <section className={`desktop-window sidebar-layout${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`} aria-label={tCommon("window.ariaLabel")}>
-        <div id="frameq-sidebar" className="shell-sidebar-region">
+        <div id="app-sidebar" className="shell-sidebar-region">
           <DesktopSidebar
             page={page}
             collapsed={sidebarCollapsed}

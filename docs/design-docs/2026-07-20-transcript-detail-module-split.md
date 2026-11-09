@@ -333,7 +333,7 @@ changed.
 ## References
 
 - `docs/design-docs/2026-07-18-task-access-facade.md`
-- `docs/design-docs/frameq-code-audit-uml.md`
+- `docs/design-docs/code-audit-uml.md`
 - `docs/ARCHITECTURE.md` sections “Task access facade boundary” and “Transcript Detail and Audio
   Review Boundary”
 - `docs/SECURITY.md` sections “Task Access Facade Enforcement” and “Transcript Audio Review Local

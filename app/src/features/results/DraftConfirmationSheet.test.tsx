@@ -26,7 +26,7 @@ function workflowWithSeed(): WorkflowState {
   const state = summarizeWorkerResult({
     status: "completed",
     task_id: "task-draft",
-    task_dir: "/FrameQ/outputs/tasks/task-draft",
+    task_dir: "/Locus/outputs/tasks/task-draft",
     artifacts: {
       transcript_txt: "transcript/transcript.txt",
       insights_md: "ai/insights.md",

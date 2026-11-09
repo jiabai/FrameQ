@@ -40,11 +40,11 @@ test("both macOS release jobs verify the packaged WebView host in the app and DM
   );
 
   assert.equal(
-    countMatches(workflow, /bash scripts\/make-macos-dmg\.sh x86_64-apple-darwin FrameQ/g),
+    countMatches(workflow, /bash scripts\/make-macos-dmg\.sh x86_64-apple-darwin Locus/g),
     1,
   );
   assert.equal(
-    countMatches(workflow, /bash scripts\/make-macos-dmg\.sh aarch64-apple-darwin FrameQ/g),
+    countMatches(workflow, /bash scripts\/make-macos-dmg\.sh aarch64-apple-darwin Locus/g),
     1,
   );
   assert.match(dmgScript, /x86_64-apple-darwin\) ARCH_SUFFIX="x64"; NATIVE_TARGET="macos-x64"/);

@@ -9,7 +9,7 @@ import type { HistoryListItem } from "../../historyClient";
 import { noteActionsResources } from "../../i18n/noteActionsResources";
 import { shellResources } from "../../i18n/shellResources";
 import { renderUiMessage } from "../../i18n/uiMessage";
-import { frameqI18n, initializeI18n } from "../../i18n/i18n";
+import { appI18n, initializeI18n } from "../../i18n/i18n";
 import { useCollectionsController } from "../collections/useCollectionsController";
 import type { NoteAction } from "../shell/SidebarNoteMenu";
 import { NoteCollectionsSheet } from "./NoteCollectionsSheet";
@@ -19,7 +19,7 @@ import { useNoteActionsController } from "./useNoteActionsController";
 const item: HistoryListItem = {
   taskId: "saved-note", id: "saved-note", createdAt: "2026-10-31T00:00:00Z",
   source: { kind: "local_file", displayName: "Interview.mp3", mediaKind: "audio" },
-  status: "completed", taskDir: "D:/FrameQ/outputs/saved-note", outputDir: "D:/FrameQ/outputs/saved-note",
+  status: "completed", taskDir: "D:/Locus/outputs/saved-note", outputDir: "D:/Locus/outputs/saved-note",
   artifacts: { transcript_txt: "transcript/transcript.txt" }, error: null, textPreview: "Original title", insightsCount: 0,
   noteMetadata: { pinned: false, displayTitle: "Saved name" }, noteMetadataError: null,
 };
@@ -53,7 +53,7 @@ function ControllerSheets({ allowed = true, items = [item] }: { allowed?: boolea
 
 async function localized(ui: ReactElement) {
   await initializeI18n("en-US");
-  const wrap = (element: ReactElement) => <I18nextProvider i18n={frameqI18n}>{element}</I18nextProvider>;
+  const wrap = (element: ReactElement) => <I18nextProvider i18n={appI18n}>{element}</I18nextProvider>;
   return { ...render(wrap(ui)), wrap };
 }
 

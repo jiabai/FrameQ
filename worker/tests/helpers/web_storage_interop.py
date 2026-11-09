@@ -20,11 +20,11 @@ def main() -> None:
     if args.operation == "recover":
         print(recover_task_artifacts(args.task_dir).value)
     else:
-        manifest = (args.task_dir / "frameq-task.json").read_bytes()
+        manifest = (args.task_dir / "task.json").read_bytes()
         commit_task_artifacts(args.task_dir, {
             "article/article.txt": b"Python article revision\n",
             "article/article.md": b"# Python article revision\n",
-            "frameq-task.json": manifest,
+            "task.json": manifest,
         }, _fault_hook=interrupt_after_article)
 
 

@@ -6,7 +6,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-pub(super) const FILE_NAME: &str = ".frameq-note-deletion.json";
+pub(super) const FILE_NAME: &str = ".app-note-deletion.json";
 const MAX_BYTES: u64 = 16 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

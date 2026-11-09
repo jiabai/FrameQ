@@ -258,7 +258,7 @@ describe("App result workspace layout styles", () => {
     expect(appTsx).toContain("<ShellToolbar");
     expect(shellToolbarTsx).toContain("onClick={onToggleSidebar}");
     expect(shellToolbarTsx).toContain("aria-expanded={!collapsed}");
-    expect(shellToolbarTsx).toContain('aria-controls="frameq-sidebar"');
+    expect(shellToolbarTsx).toContain('aria-controls="app-sidebar"');
     expect(shellToolbarTsx).toContain("onClick={onBack} disabled={!canBack}");
     expect(shellToolbarTsx).toContain("onClick={onForward} disabled={!canForward}");
     expect(shellToolbarTsx).toContain("onClick={onInstallUpdate}");

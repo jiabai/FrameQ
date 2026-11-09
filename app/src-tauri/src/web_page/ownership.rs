@@ -11,7 +11,7 @@ use sysinfo::{Pid, Process, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate
 
 const OWNER: &str = "owner.json";
 const MEMBERS: &str = "processes.json";
-const ROOT: &str = ".frameq-web-pages";
+const ROOT: &str = ".app-web-pages";
 mod process_identity;
 mod removal;
 mod quarantine;
@@ -293,7 +293,7 @@ fn find_roots(path: &Path, owner: &Owner, system: &System) -> WebResult<Vec<Memb
         let worker = owner.worker.matches(process)
             && process.cmd().windows(2).any(|pair| pair[0] == "--web-operation-id" && pair[1] == OsStr::new(&owner.operation_id))
             && if owner.probe {
-                process.cmd().iter().any(|arg| arg == "--frameq-engine-probe")
+                process.cmd().iter().any(|arg| arg == "--app-engine-probe")
             } else {
                 process.cmd().iter().any(|arg| arg == "--process-web-page-stdin")
                     && process.cmd().windows(2).any(|pair| pair[0] == "-m" && pair[1] == "worker_core")

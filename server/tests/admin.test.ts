@@ -96,15 +96,15 @@ describe("admin activation code routes", () => {
         ? [verified.headers["set-cookie"]]
         : [];
     expect(verifiedCookies.map((value) => value.split("=")[0])).toEqual([
-      "frameq_admin_session",
-      "frameq_admin_session",
-      "frameq_admin_csrf",
+      "app_admin_session",
+      "app_admin_session",
+      "app_admin_csrf",
     ]);
     const sessionCookieHeader = verifiedCookies.find((value) =>
-      value.startsWith("frameq_admin_session="),
+      value.startsWith("app_admin_session="),
     );
     const csrfCookieHeader = verifiedCookies.find((value) =>
-      value.startsWith("frameq_admin_csrf="),
+      value.startsWith("app_admin_csrf="),
     );
     for (const cookie of [sessionCookieHeader, csrfCookieHeader]) {
       expect(cookie).toContain("Path=/");
@@ -114,8 +114,8 @@ describe("admin activation code routes", () => {
     }
     expect(sessionCookieHeader).toContain("HttpOnly");
     expect(csrfCookieHeader).not.toContain("HttpOnly");
-    const sessionCookie = parseCookie(verified.headers["set-cookie"], "frameq_admin_session");
-    const csrfCookie = parseCookie(verified.headers["set-cookie"], "frameq_admin_csrf");
+    const sessionCookie = parseCookie(verified.headers["set-cookie"], "app_admin_session");
+    const csrfCookie = parseCookie(verified.headers["set-cookie"], "app_admin_csrf");
     expect(String(verified.headers["set-cookie"])).toContain("HttpOnly");
 
     const missingCsrf = await app.inject({
@@ -131,7 +131,7 @@ describe("admin activation code routes", () => {
       url: "/admin/api/activation-codes",
       headers: {
         cookie: `${sessionCookie}; ${csrfCookie}`,
-        "x-frameq-csrf": csrfCookie.replace("frameq_admin_csrf=", ""),
+        "x-app-csrf": csrfCookie.replace("app_admin_csrf=", ""),
       },
       payload: { redeem_window_days: 0 },
     });
@@ -142,7 +142,7 @@ describe("admin activation code routes", () => {
       url: "/admin/api/activation-codes",
       headers: {
         cookie: `${sessionCookie}; ${csrfCookie}`,
-        "x-frameq-csrf": csrfCookie.replace("frameq_admin_csrf=", ""),
+        "x-app-csrf": csrfCookie.replace("app_admin_csrf=", ""),
       },
       payload: { redeem_window_days: 7 },
     });
@@ -207,11 +207,11 @@ describe("admin activation code routes", () => {
     const response = await app.inject({
       method: "GET",
       url: "/admin",
-      headers: { cookie: `frameq_admin_session=${adminToken}` },
+      headers: { cookie: `app_admin_session=${adminToken}` },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain("FrameQ Admin");
+    expect(response.body).toContain("Locus Admin");
     expect(response.body).toContain("user@example.com");
     expect(response.body).toContain("FQ-ABCD");
     expect(response.body).toContain("FQ-SELF");
@@ -243,7 +243,7 @@ describe("admin activation code routes", () => {
     expect(response.body).toContain(">—<");
     expect(response.body).not.toContain("code-hash");
     expect(response.body).not.toContain("self-service-hash");
-    expect(response.body).not.toContain("frameq_admin_session");
+    expect(response.body).not.toContain("app_admin_session");
     expect(response.body).not.toContain("生成 31 天月卡码");
     expect(response.body).not.toContain("兑换有效期");
   });
@@ -269,14 +269,14 @@ describe("admin activation code routes", () => {
     const noSession = await app.inject({
       method: "POST",
       url: "/admin/auth/logout",
-      headers: { "x-frameq-csrf": csrfToken },
+      headers: { "x-app-csrf": csrfToken },
     });
     expect(noSession.statusCode).toBe(401);
 
     const missingCsrf = await app.inject({
       method: "POST",
       url: "/admin/auth/logout",
-      headers: { cookie: `frameq_admin_session=${adminToken}; frameq_admin_csrf=${csrfToken}` },
+      headers: { cookie: `app_admin_session=${adminToken}; app_admin_csrf=${csrfToken}` },
     });
     expect(missingCsrf.statusCode).toBe(403);
     expect(store.adminSessions[0]?.revokedAt).toBeNull();
@@ -285,16 +285,16 @@ describe("admin activation code routes", () => {
       method: "POST",
       url: "/admin/auth/logout",
       headers: {
-        cookie: `frameq_admin_session=${adminToken}; frameq_admin_csrf=${csrfToken}`,
-        "x-frameq-csrf": csrfToken,
+        cookie: `app_admin_session=${adminToken}; app_admin_csrf=${csrfToken}`,
+        "x-app-csrf": csrfToken,
       },
     });
 
     expect(loggedOut.statusCode).toBe(200);
     expect(loggedOut.json()).toEqual({ ok: true, redirect_url: "/admin/login" });
     expect(store.adminSessions[0]?.revokedAt).toEqual(now);
-    expect(String(loggedOut.headers["set-cookie"])).toContain("frameq_admin_session=");
-    expect(String(loggedOut.headers["set-cookie"])).toContain("frameq_admin_csrf=");
+    expect(String(loggedOut.headers["set-cookie"])).toContain("app_admin_session=");
+    expect(String(loggedOut.headers["set-cookie"])).toContain("app_admin_csrf=");
     expect(String(loggedOut.headers["set-cookie"])).toContain("Max-Age=0");
     const clearedCookies = Array.isArray(loggedOut.headers["set-cookie"])
       ? loggedOut.headers["set-cookie"]
@@ -302,26 +302,26 @@ describe("admin activation code routes", () => {
         ? [loggedOut.headers["set-cookie"]]
         : [];
     expect(clearedCookies.map((value) => value.split("=")[0])).toEqual([
-      "frameq_admin_session",
-      "frameq_admin_session",
-      "frameq_admin_csrf",
+      "app_admin_session",
+      "app_admin_session",
+      "app_admin_csrf",
     ]);
     for (const cookie of clearedCookies) {
       expect(cookie).toContain("Path=/");
       expect(cookie).toContain("Max-Age=0");
       expect(cookie).toContain("SameSite=Lax");
     }
-    expect(clearedCookies.find((value) => value.startsWith("frameq_admin_session="))).toContain(
+    expect(clearedCookies.find((value) => value.startsWith("app_admin_session="))).toContain(
       "HttpOnly",
     );
-    expect(clearedCookies.find((value) => value.startsWith("frameq_admin_csrf="))).not.toContain(
+    expect(clearedCookies.find((value) => value.startsWith("app_admin_csrf="))).not.toContain(
       "HttpOnly",
     );
 
     const afterLogout = await app.inject({
       method: "GET",
       url: "/admin",
-      headers: { cookie: `frameq_admin_session=${adminToken}; frameq_admin_csrf=${csrfToken}` },
+      headers: { cookie: `app_admin_session=${adminToken}; app_admin_csrf=${csrfToken}` },
     });
     expect(afterLogout.statusCode).toBe(302);
     expect(afterLogout.headers.location).toBe("/admin/login");

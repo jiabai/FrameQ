@@ -125,8 +125,8 @@ enum HostProtocol {
 }
 
 final class HostPipe {
-    private let reader = DispatchQueue(label: "com.frameq.webview-host.input")
-    private let writer = DispatchQueue(label: "com.frameq.webview-host.output")
+    private let reader = DispatchQueue(label: "pro.8xf.webview-host.input")
+    private let writer = DispatchQueue(label: "pro.8xf.webview-host.output")
 
     func start(receive: @escaping @MainActor (Data) -> Void,
                failed: @escaping @MainActor (HostFailure) -> Void,

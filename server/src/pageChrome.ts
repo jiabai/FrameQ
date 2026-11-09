@@ -1,7 +1,8 @@
+import { PRODUCT_MARK } from "./brand.js";
 /**
- * Shared FrameQ brand chrome for server-rendered web pages.
+ * Shared brand chrome for server-rendered web pages.
  *
- * Brand identity (the `FQ` monogram tile, its row layout and the eyebrow label)
+ * Brand identity (the monogram tile, its row layout and the eyebrow label)
  * must read as one product across `/login`, `/dashboard`, `/admin/login` and
  * `/admin`. Each page injects {@link brandChromeCss} into its `<style>` and
  * composes its header with {@link renderBrandMark}, so the brand mark is defined
@@ -40,13 +41,13 @@ export function brandChromeCss(): string {
   `;
 }
 
-/** Renders the FrameQ `FQ` monogram tile. Decorative — not exposed to AT. */
+/** Renders the brand monogram tile. Decorative — not exposed to AT. */
 export function renderBrandMark(): string {
-  return `<span class="brand-mark" aria-hidden="true">FQ</span>`;
+  return `<span class="brand-mark" aria-hidden="true">${PRODUCT_MARK}</span>`;
 }
 
 /**
- * Copy of `site/public/favicon.svg` (the FrameQ mark), inlined as a base64
+ * Copy of `site/public/favicon.svg` (the brand mark), inlined as a base64
  * SVG data URI so every server page gets a browser-tab icon without needing a
  * static-file route. Color (`#0066cc`) matches `--fq-primary`; keep the two in
  * sync if the brand primary ever changes. Updated once at module load.
@@ -59,14 +60,14 @@ const APP_FAVICON_SVG =
 
 const APP_FAVICON_URI = `data:image/svg+xml;base64,${Buffer.from(APP_FAVICON_SVG, "utf8").toString("base64")}`;
 
-/** `<link rel="icon">` for the FrameQ mark, ready to drop into a page `<head>`. */
+/** `<link rel="icon">` for the brand mark, ready to drop into a page `<head>`. */
 export function faviconLink(): string {
   return `<link rel="icon" type="image/svg+xml" href="${APP_FAVICON_URI}" />`;
 }
 
 /** Options for {@link renderFrameHeader}. */
 export type FrameHeaderOptions = {
-  /** Optional eyebrow label above the title (e.g. "FrameQ Admin"). */
+  /** Optional eyebrow label above the title (e.g. the admin console). */
   eyebrow?: string;
   /** Page title (already localized). */
   title: string;
@@ -81,7 +82,7 @@ export type FrameHeaderOptions = {
 };
 
 /**
- * Renders the shared FrameQ page header: a `<header>` containing the brand row
+ * Renders the shared page header: a `<header>` containing the brand row
  * (brand mark + optional eyebrow / title / subtitle) and an optional right-side
  * actions slot. Pages pass their own localized title and right-side HTML, so the
  * brand block is defined once instead of copy-pasted across the four headers.

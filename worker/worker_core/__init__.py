@@ -1,4 +1,4 @@
-"""FrameQ Python worker package."""
+"""Worker Python worker package."""
 
 from worker_core.models import JobStage, ProcessRequest, ProcessResult, WorkerError
 

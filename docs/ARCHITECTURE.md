@@ -1,4 +1,4 @@
-# FrameQ Architecture
+# Locus Architecture
 
 ## Webpage notes and shared source text
 
@@ -61,11 +61,11 @@
   Migration preserves old runtime files in its inventory and accepts the optional schema 1
   `readyWebEngine` field; it no longer starts a retired webpage-engine probe.
 
-- New operation workspaces use `cache/.frameq-system-webviews/<operation_id>/` and retain an
+- New operation workspaces use `cache/.app-system-webviews/<operation_id>/` and retain an
   immutable owner receipt, bounded process records and a save receipt binding the preallocated
   task ID to the expected title, source and article hashes. A real publication interrupted before
   stdout is recovered only from that exact formal task and validated artifacts. The old
-  `.frameq-web-pages` ownership recovery remains supported; installed old component files are
+  `.app-web-pages` ownership recovery remains supported; installed old component files are
   retained without downloads, execution or probing.
   Recovery checks directory and executable identities, native process birth time, command ownership
   and recorded ancestry before terminating a matching orphan. Windows uses process handles and
@@ -168,7 +168,7 @@
 
 ## 2026-10-31 Local note actions
 
-- `frameq-note-metadata.json` belongs to its verified task directory and stores versioned pinned
+- `app-note-metadata.json` belongs to its verified task directory and stores versioned pinned
   state and the optional manual display title. TaskEditSession retains TaskLease, reads current
   settings for each field update, and publishes through atomic replacement. Malformed settings
   remain untouched and produce a separate error projection while the note stays readable.
@@ -263,13 +263,13 @@
   verified media transcript or webpage article,
   generation instructions and this run's agent context enter supplier requests; preferences enter
   only inspiration. Video, audio, source URLs, other task files, retrieval, skills and external
-  execution stay outside these three agents. FrameQ server receives only account and checkout
+  execution stay outside these three agents. Locus server receives only account and checkout
   metadata.
 
 ## 2026-10-24 Transcript polish target boundary
 
 - 「整理文字稿」 reuses the `retry_insights` command with `target="transcript"`, raising the global
-  desktop-worker contract to v9. No new Tauri command and no new FrameQ server interface exist for
+  desktop-worker contract to v9. No new Tauri command and no new Locus server interface exist for
   transcript polishing.
 - The worker step lives in `worker/worker_core/transcript_polish.py` and is dispatched by the
   `retry_insights_once` transcript branch. It reads only the exact-path-validated, non-link official
@@ -300,7 +300,7 @@
 
 - `AI整理` exposes four peer target cards: `要点总结`, `文字稿解剖`, `启发灵感`, and
   `生成文字稿`. Draft generation reuses the `retry_insights` command with `target="draft"`, so no
-  new Tauri command and no new FrameQ server interface exist for it.
+  new Tauri command and no new Locus server interface exist for it.
 - Draft generation runs an agent rather than a single completion. Server-managed anysearch
   retrieval supplies factual grounding, a platform skill supplies the voice, and the agent delivers
   through the `submit_draft` contract. The transcript, video, audio, and source URL never enter the
@@ -379,7 +379,7 @@
 - The Rust-owned ASR store enforces seven-day retention, a 4 MiB file ceiling, 1,000-character
   sanitized payloads, a 200-line fallback cap per invocation, bounded record count, and adjacent
   duplicate collapse. Export re-sanitizes both fixed source logs, uses only the fixed ZIP root
-  allowlist `diagnostics.json`, `frameq-desktop.log`, and `asr-model-download.log`, and keeps the
+  allowlist `diagnostics.json`, `desktop.log`, and `asr-model-download.log`, and keeps the
   final archive at or below 5 MiB with truthful newest-first truncation metadata.
 - The export command accepts no frontend path or content and returns only a closed path-free
   status. It writes through the native Save As destination with atomic replacement and retains no
@@ -446,7 +446,7 @@
 - Rust remains the task/path authority. It closes v5 terminal decoding, validates the two fixed
   artifacts and source transcript/range hashes, restores current or stale reports from History,
   and never confuses splitter chunk IDs with ASR segment IDs.
-- Every supplier attempt uses the existing server-managed checkout independently. The FrameQ server
+- Every supplier attempt uses the existing server-managed checkout independently. The Locus server
   receives only account/entitlement/quota/checkout data; it does not receive or persist transcript,
   prompt, report, preferences, URL, or local paths. Cancellation/failure exposes no partial report
   and preserves the last complete version.
@@ -485,7 +485,7 @@
   expected DTO. Every reviewed client runner must return `Promise<unknown>` and decode the complete
   domain shape before any value enters controller or application state.
 - `accountClient.ts`, `historyClient.ts`, `settingsClient.ts`, `transcriptDetailClient.ts`, and the
-  FrameQ-owned command portion of `updateClient.ts` implement the boundary. Each client
+  Locus-owned command portion of `updateClient.ts` implement the boundary. Each client
   remains its domain adapter and owns `parseXxxResponse(unknown)` functions.
 - `app/src/tauriIpcProtocol.ts` provides only domain-free safe data-object inspection and a
   stable non-echoing `IpcProtocolError`. It will not become a generic `BaseClient<T>`, schema
@@ -713,7 +713,7 @@
   media where applicable, and install them with `os.replace` only after success.
 - `MediaPreparationFacade` owns staging, validation, installation, and safe failure mapping for the
   current URL video and normalized WAV. The pipeline receives only committed `PreparedMedia` paths.
-- `TaskStoreFacade` atomically installs `frameq-task.json` and the preference snapshot. The manifest
+- `TaskStoreFacade` atomically installs `task.json` and the preference snapshot. The manifest
   is the final task-result commit record and may reference only committed ordinary files at known
   official artifact paths.
 - Video and audio use independent per-file commits. A later audio failure may preserve an already
@@ -891,7 +891,7 @@
 - Tauri must be the only owner of app-local `ui-preferences.json` schema v1. The file must contain
   only the language preference, fail safely to `system` with recovery metadata, and remain separate
   from `.env`, server/account state, task manifests, History, and inspiration preferences.
-- Desktop startup must use a neutral FrameQ shell and a bounded 1.5-second preference read. Timeout
+- Desktop startup must use a neutral Locus shell and a bounded 1.5-second preference read. Timeout
   or failure must mount once with resolved system language and ignore a late result. Sequenced saves
   must preserve the most recent successfully persisted rollback anchor.
 - `contracts/desktop-worker-contract.json` v2 declares a closed `retry_insights` request schema and
@@ -908,19 +908,19 @@
   request headers, and preference prose must remain forbidden.
 - `cancelling` is a desktop ProcessSupervisor/UI transition, not a worker-progress wire stage; the
   shared stage enum and Python/Rust/TypeScript worker boundaries therefore reject it on that channel.
-- Language adherence must remain a best-effort prompt constraint. FrameQ must add no output-language
+- Language adherence must remain a best-effort prompt constraint. Locus must add no output-language
   detector, translation, or automatic retry, preserving server-managed LLM data flow and AI Credits
   per-call accounting.
 
 ## 2026-07-13 Draft Generation from Inspiration Boundary
 
-- `生成文字稿` is the third peer `AI整理` target card alongside `要点总结` and `启发灵感`, triggered by extending `retry_insights` with `target="draft"` (`RetryInsightsRequest{ task_id, target="draft", insight_id, output_language }`). No new Tauri command or FrameQ server interface is added for drafts; the standalone CLI `--generate-draft-json` / `generate_draft_once` / `GenerateDraftRequest` path is retired and its persistence logic is absorbed into the `retry_insights_once` draft branch.
+- `生成文字稿` is the third peer `AI整理` target card alongside `要点总结` and `启发灵感`, triggered by extending `retry_insights` with `target="draft"` (`RetryInsightsRequest{ task_id, target="draft", insight_id, output_language }`). No new Tauri command or Locus server interface is added for drafts; the standalone CLI `--generate-draft-json` / `generate_draft_once` / `GenerateDraftRequest` path is retired and its persistence logic is absorbed into the `retry_insights_once` draft branch.
 - The seed is exactly one user-selected `Insight` from `启发灵感`. The worker reads the task-local `PreferenceSnapshot` from `ai/preference-snapshot.json` and the optional summary grounding from `ai/summary.md` itself; the frontend SHALL NOT send `preference_snapshot` in a `target="draft"` request, so the snapshot always matches the one used when the selected insight was generated. A missing snapshot degrades to non-personalized generation without fabricating a persona; a missing summary degrades to pure web retrieval. The request carries the confirmation-frozen shared `output_language` enum, rejected when missing or invalid at the TypeScript/Rust/Python boundaries.
 - Draft generation runs an agent (anysearch web retrieval + skills + planning + `submit_draft` delivery contract), not a single LLM call. `anysearch` retrieval is the factual grounding path; original transcript fragments, video, audio, and source URL SHALL NOT enter the draft prompt. `suitableUse` drives form/platform direction in the prompt; platform-style skills (v1 `viral-writer` covers Douyin / Xiaohongshu / WeChat Official Account, with the `公众号` ↔ `微信公众号` name mapping) are self-loaded by the LLM and never hard-matched in the backend. Adding a platform means dropping a `SKILL.md` under `skills/`, with no code change.
 - Quota is flat per confirmation attempt: one checkout = one credit, charged at server checkout (`consumeLlmQuota`, idempotent per `(userId, requestId)`) regardless of success or failure, with no refund; entering the confirmation page or cancelling charges nothing; retries mint a fresh `request_id` and charge again. Agent planning/writing turns and anysearch retrieval calls do not consume additional user quota.
 - The draft is an independent artifact at `{task_dir}/ai/draft.md`, parallel to transcript/summary/insights/mindmap, never written back to `transcript.txt`. `ProcessResult` and Rust `ProcessVideoResult` carry `draft`; the manifest carries `draft_path` / `has_draft` / `draft_seed_insight_id` with no full draft text. Draft viewing renders sanitized GitHub Flavored Markdown and shares no container with the official transcript.
 - Seed validity: `insight_id` must exist in the current `insights.json`; otherwise the worker returns `DRAFT_SEED_INVALID` and consumes no draft checkout. Regenerating `启发灵感` clears `draft_seed_insight_id` and returns `生成文字稿` to a quiet disabled state. A failed draft attributes only to the draft target via `WorkerError.stage = JobStage.DRAFT_GENERATING`; the overall task is `partial_completed` and other targets' artifacts are unaffected. The UI reuses the `insights_generating` phase with `activeAiTarget="draft"` / `aiErrorTarget="draft"` and SHALL NOT infer the target from status text.
-- The confirmation panel's user-visible data prompt stays "send the selected insight fields + preference snapshot to the cloud LLM; do not upload video/audio/full transcript" and SHALL NOT add an anysearch disclosure row in v1. The internal privacy boundary is relaxed to allow anysearch-retrieved context to re-enter the LLM, while the "no full transcript upload" boundary is preserved. FrameQ server still owns only account, entitlement, quota, and LLM+anysearch checkout; it never receives or stores insights, preferences, or drafts.
+- The confirmation panel's user-visible data prompt stays "send the selected insight fields + preference snapshot to the cloud LLM; do not upload video/audio/full transcript" and SHALL NOT add an anysearch disclosure row in v1. The internal privacy boundary is relaxed to allow anysearch-retrieved context to re-enter the LLM, while the "no full transcript upload" boundary is preserved. Locus server still owns only account, entitlement, quota, and LLM+anysearch checkout; it never receives or stores insights, preferences, or drafts.
 
 ## 2026-07-12 History Task Permanent Deletion Boundary
 
@@ -987,7 +987,7 @@
 
 ## 2026-07-11 History vNext Strict Read Boundary
 
-- `frameq-task.json` schema v3 is the only history authority. Every history, cache,
+- `task.json` schema v3 is the only history authority. Every history, cache,
   transcript, edit, and retry read first requires the current privacy marker, an
   allowlisted canonical SourceIdentity matching `source_url`, and
   `source_privacy_quarantined != true`. Schema v1/v2, missing markers, invalid identities,
@@ -1019,7 +1019,7 @@
 ## 2026-07-10 Desktop Process Supervision and Cancellation Boundary
 
 - `ProcessSupervisors` privately owns one `WorkerLane` for video/source/AI work and one for ASR model download. Each lane wraps the same private `ProcessSupervisor` state machine, admits one child at a time, and records a monotonically increasing instance ID, PID, Unix PGID (equal to the controlled child PID), and `Running`, `Cancelling`, `CleaningUp`, or typed `TimingOut` phase; absence is the only finished state.
-- `WorkerLane::run` is the sole FrameQ child-process lifecycle owner. It accepts the runtime-private typed `WorkerRunRequest`; application modules enter the task-producing lane only through `TaskWorkerFacade` and request model download only through `AsrModelDownloadJob`. No application module can construct a raw process specification or own spawn, pipe, wait/reap, supervisor mutation, or process-tree termination.
+- `WorkerLane::run` is the sole Locus child-process lifecycle owner. It accepts the runtime-private typed `WorkerRunRequest`; application modules enter the task-producing lane only through `TaskWorkerFacade` and request model download only through `AsrModelDownloadJob`. No application module can construct a raw process specification or own spawn, pipe, wait/reap, supervisor mutation, or process-tree termination.
 - `worker_runtime/facade.rs` exhaustively derives URL/local/AI task invocation, lifecycle operation, progress route, retry-only server-managed LLM material, and lane, and exposes the opaque four-override model-download job. `command.rs` owns fixed task and model-download invocation/environment construction, `supervisor.rs` owns instance-safe state and OS process-tree termination, and `runner.rs` remains the sole owner of spawn/register/stdin/read/wait/finish/parse/classify/log ordering above four private implementation owners: `runner/process_io.rs`, `watchdog.rs`, `progress.rs`, and `terminal.rs`. Application modules cannot import these child paths.
 - Start, cancellation claim, signal-failure rollback, and terminal cleanup must match the running instance ID. A stale waiter or PID cannot clear or restore a newer child. A duplicate cancellation request returns structured `already_cancelling` and sends no second signal.
 - Registration and watchdog startup occur before one-shot stdin delivery. After terminal observation, the runner stops and joins the watchdog, finishes the matching instance before joining stderr readers, and an internal guard clears only its own instance on every setup or wait failure. A termination-in-flight lease prevents lane reuse until the complete OS termination call returns.
@@ -1137,7 +1137,7 @@
   Summary, inspiration, dissection and transcript polish validate that exact path before reading
   its plain text body; `transcript.md`, alternate same-named files and linked/reparse-point targets
   must not be used as prompt sources.
-- Unsupported legacy task directories are physically retained but excluded from every product read. FrameQ does not migrate, redact, repair, rename, index, or delete them; users may manage backups or deletion outside the product.
+- Unsupported legacy task directories are physically retained but excluded from every product read. Locus does not migrate, redact, repair, rename, index, or delete them; users may manage backups or deletion outside the product.
 
 ## 2026-07-09 Account Processing and AI Gate Boundary
 
@@ -1159,7 +1159,7 @@
   it must not re-download media or rerun ASR.
 - The `summary` target generates only `ai/summary.md` and hidden `ai/mindmap.mmd`. It must not accept, read, write, or prompt with the personalized preference snapshot.
 - The `insights` target generates only `ai/insights.json` and `ai/insights.md`. It may persist `ai/preference-snapshot.json` and may include that snapshot only in insight-topic prompts.
-- Retrying either target must merge existing AI artifacts from the same task directory before writing `frameq-task.json`, so generating one output cannot clear the other output or reset `insights_count`.
+- Retrying either target must merge existing AI artifacts from the same task directory before writing `task.json`, so generating one output cannot clear the other output or reset `insights_count`.
 - Each user confirmation uses server-managed LLM checkout and consumes quota per actual supplier API-call attempt for that target.
 
 ## 2026-07-06 Personalized Insight Preferences Boundary
@@ -1172,7 +1172,7 @@
 - Inspiration generation supplies deterministic numbered transcript chunks and compact structured
   preference JSON to the agent. The agent reviews the full supplied source and submits a complete
   list with source references through its delivery tool.
-- FrameQ server continues to own only account, entitlement, quota, and LLM checkout. It must not receive or store inspiration profiles, generation preferences, transcripts, generated insights, or local task manifests.
+- Locus server continues to own only account, entitlement, quota, and LLM checkout. It must not receive or store inspiration profiles, generation preferences, transcripts, generated insights, or local task manifests.
 - Quota is counted per cloud LLM API call attempt: `1 quota use = 1 supplier chat-completion/API call
   attempt`. Summary, inspiration and dissection agents consume separate quota uses for each actual
   call after their target is confirmed. Re-running via `换个方向` starts a fresh confirmed
@@ -1182,7 +1182,7 @@
 
 ## 2026-07-05 Desktop Diagnostics Boundary
 
-- The Tauri desktop layer owns app-local diagnostic logs at `logs/frameq-desktop.log`.
+- The Tauri desktop layer owns app-local diagnostic logs at `logs/desktop.log`.
 - Worker lifecycle diagnostics are emitted only by `WorkerLane::run` from a closed operation mapping. They record fixed operation kind, supervisor-owned PID, safe exit/status markers, and structured safe summaries; they never include raw args, stdin, environment values, full executable/current-directory paths, source/local-media paths, URLs, credentials, transcripts, prompts, preference prose, generated bodies, or raw stderr.
 - Application diagnostics may retain task id, structured error code, validated retry target/output locale, cache outcomes, and sanitized short messages, but they do not reconstruct process lifecycle logs.
 - A validated worker progress code may be folded into one fixed desktop log record when the closed contract makes it diagnostic evidence. `worker.douyin.share_page.retry` records only that `douyin.page.retrying` occurred; retry count, attempt numbers, delays and URLs are not persisted, and exported record count is the retry count.
@@ -1192,10 +1192,10 @@
 
 ## 2026-07-05 Task-Owned Artifact Store Boundary
 
-- A processing run is now a first-class task. The worker creates `<output_root>/tasks/<task_id>/frameq-task.json` and writes all final user artifacts under that same task directory.
+- A processing run is now a first-class task. The worker creates `<output_root>/tasks/<task_id>/task.json` and writes all final user artifacts under that same task directory.
 - Final artifacts use stable names inside task folders: `media/video.mp4`, `media/audio.wav`, `transcript/transcript.txt`, `transcript/transcript.md`, `transcript/segments.json`, `ai/summary.md`, `ai/mindmap.mmd`, `ai/insights.json`, and `ai/insights.md`.
 - The active data root's `cache/tasks/<task_id>/` owns temporary downloads, partial files, media merge scratch space, and diagnostics. It is not the user-facing artifact contract.
-- `frameq-task.json` is the source of truth for desktop history and artifact lookup. Any cache index is rebuildable, not the authority.
+- `task.json` is the source of truth for desktop history and artifact lookup. Any cache index is rebuildable, not the authority.
 - Tauri may satisfy a repeated canonical source identity from an existing completed or partial-completed task manifest when the transcript artifact still exists. Exact canonical URLs can hit before Python launch; variants and short links may invoke the worker's lightweight identity preflight, but a hit returns before download/transcode/ASR and unusable or broken old tasks are skipped.
 - Tauri commands should resolve artifacts from `task_id` and manifest-relative paths only. They must not accept arbitrary transcript/audio/result paths for normal task operations.
 - Legacy flat outputs and unsupported manifests do not become trusted task authorities. Location migration preserves application-owned legacy bytes without converting them into current tasks; ambiguous shared-root contents block migration.
@@ -1206,7 +1206,7 @@
 - Subtitle probing runs after media validation/audio extraction and before ASR model readiness/loading checks. This preserves the current `media/video.mp4`, `media/audio.wav`, audio review, result cards, and history behavior while skipping only ASR model load/inference when subtitles are usable.
 - Bilibili public fallback does not fetch or reuse subtitles in v1. If `yt-dlp` fails and `download_bilibili_video` succeeds, the task continues through the existing ASR path.
 - Subtitle parsing writes the same official `transcript/transcript.txt`, `transcript/transcript.md`, and `transcript/segments.json` artifacts as ASR. Later AI整理 reads only the official saved `transcript.txt` body.
-- `frameq-task.json` schema version 3 keeps top-level `model`, `transcript: { source, language, engine }`, canonical `source_url`, and the structured `source_identity`. Schema versions 1 and 2 remain readable; version 1 manifests without `transcript` are treated as ASR-sourced, while missing source identity triggers bounded migration or a no-link placeholder.
+- `task.json` schema version 3 keeps top-level `model`, `transcript: { source, language, engine }`, canonical `source_url`, and the structured `source_identity`. Schema versions 1 and 2 remain readable; version 1 manifests without `transcript` are treated as ASR-sourced, while missing source identity triggers bounded migration or a no-link placeholder.
 - Raw `.vtt` / `.srt` files remain temporary files in `cache/tasks/<task_id>/download/` and are not user-facing artifacts or manifest paths.
 
 ## 2026-07-03 Transcript Detail and Audio Review Boundary
@@ -1216,10 +1216,10 @@
 - Existing transcript `.txt` and `.md` files remain the official text artifacts. The segment sidecar is optional enhancement metadata, so old tasks and ASR outputs without valid timing keep working as full-text review.
 - Tauri owns `load_transcript_detail` and `save_transcript_edit` commands. These commands validate local transcript/audio paths, read/write only approved transcript artifacts, create the first original backup, and update local history previews after save.
 - `app/src-tauri/src/transcript_detail.rs` is the only crate-visible transcript-detail command and composition root. It opens one validated `SupportedTask` per operation, then delegates audio playback/cache preparation to private `audio_playback`, tolerant segment decoding and strict encoding to private `segments`, and official transcript load/edit persistence to private `edit_storage`.
-- Transcript-detail children accept validated task capabilities rather than output roots, task IDs, or raw manifests. `edit_storage` is the only child that converts a task into `TaskEditSession`; none of the children resolve Tauri runtime roots or parse/write `frameq-task.json` directly.
+- Transcript-detail children accept validated task capabilities rather than output roots, task IDs, or raw manifests. `edit_storage` is the only child that converts a task into `TaskEditSession`; none of the children resolve Tauri runtime roots or parse/write `task.json` directly.
 - Tauri must not expose arbitrary file playback or arbitrary text-file write commands. Frontend audio playback may only use paths returned by the validated detail command.
-- Tauri resolves direct audio authorization and rebuildable playback copies from the same active location snapshot. Copies, when required, live under `<data_root>/cache/.frameq-audio-review/<task_id>/`. The frontend plays `audio_asset_path`; `audio_path` remains the original validated task artifact.
-- The existing Settings cache category queries and clears only the active `.frameq-audio-review` subtree under a data permit. Task artifacts, other caches, models and fixed configuration remain protected.
+- Tauri resolves direct audio authorization and rebuildable playback copies from the same active location snapshot. Copies, when required, live under `<data_root>/cache/.app-audio-review/<task_id>/`. The frontend plays `audio_asset_path`; `audio_path` remains the original validated task artifact.
+- The existing Settings cache category queries and clears only the active `.app-audio-review` subtree under a data permit. Task artifacts, other caches, models and fixed configuration remain protected.
 - The frontend owns the native audio element, current segment selection, playback-following highlight, edit pause/resume behavior, dirty state, copy-from-draft behavior, and save feedback.
 - Later AI整理 must read the saved official transcript, not an unsaved frontend draft.
 
@@ -1273,7 +1273,7 @@
 - The Python worker owns all platform-specific public-link fallback strategy, safe media download helpers, candidate probing, media validation, and structured error mapping.
 - UI and Tauri continue to pass a source URL into the existing command flow and receive the same worker JSON shape; they must not parse platform HTML, choose media candidates, manage cookies, or become a download queue.
 - `yt-dlp` remains the first attempt for supported public links. Worker fallback code may run only after matching failures and only for public or user-authorized links that can expose a playable media URL.
-- EasyDownload is an MIT-licensed design and algorithm reference. FrameQ should port the minimal needed behavior into `worker/` and must not import, shell out to, or bundle the Go/Wails application as a runtime dependency.
+- EasyDownload is an MIT-licensed design and algorithm reference. Locus should port the minimal needed behavior into `worker/` and must not import, shell out to, or bundle the Go/Wails application as a runtime dependency.
 - Shared download reliability helpers may support `.part` files, resume-safe range checks, no-progress timeouts, maximum-size guardrails, and candidate retries, but they must preserve the current output/history/result contract.
 - Xiaohongshu fallback is scoped to video suitable for transcription. Bilibili fallback is scoped to ordinary public videos that expose no-cookie DASH streams. Image albums, platform archiving, login-gated content, Bilibili PGC/bangumi/member-only/DRM behavior, and broad multi-platform downloader behavior are outside the desktop worker boundary.
 
@@ -1281,11 +1281,11 @@
 
 - The Python worker owns Douyin fallback extraction. UI and Tauri commands continue to submit a source URL and receive the same structured worker result; they do not parse Douyin HTML, choose streams, or download media directly.
 - The download path becomes a small strategy chain: attempt `yt-dlp` first, then, only for Douyin download failures that match empty web detail JSON or cookie/challenge-like extractor failures, attempt a local Douyin share page fallback.
-- The fallback is derived from EasyDownload's MIT-licensed approach, but FrameQ should port the minimal algorithm into `worker/` rather than importing or bundling the Go/Wails EasyDownload application.
+- The fallback is derived from EasyDownload's MIT-licensed approach, but Locus should port the minimal algorithm into `worker/` rather than importing or bundling the Go/Wails EasyDownload application.
 - The fallback extracts an `aweme_id`, requests `https://www.iesdouyin.com/share/video/{aweme_id}/?app=aweme`, parses `window._ROUTER_DATA`, builds stream candidates from `bit_rate` or `play_addr.uri`, and probes candidate streams with ranged GET requests.
 - The fallback may use a fixed mobile Safari `User-Agent` (`iPhone OS 16_5`, Safari `604.1`) plus minimal public-page headers. It must not implement UA rotation, proxy pools, browser fingerprint spoofing, CAPTCHA solving, or account automation.
 - A process-local cookie jar may keep anonymous cookies naturally issued by the public share page for the current worker invocation only; browser cookies are not read, persisted, or uploaded.
-- Candidate selection is automatic. FrameQ chooses the largest valid stream by byte size to preserve the highest-quality local video for users who keep the downloaded file, with resolution or quality rank as a tie-breaker.
+- Candidate selection is automatic. Locus chooses the largest valid stream by byte size to preserve the highest-quality local video for users who keep the downloaded file, with resolution or quality rank as a tie-breaker.
 - Duplicate candidate streams should be collapsed by verified `Content-Range` total size. If the selected stream fails download or media validation, the worker tries the next candidate before surfacing failure.
 - The selected media is written into the current task's `media/video.mp4` artifact and then flows through `ffprobe`, `ffmpeg`, ASR, task manifest, and result workspace handling.
 - If all fallback candidates fail download or media validation, the worker returns a structured `VIDEO_DOWNLOAD_FAILED` with a short cause and recovery guidance; it must not hide the failed stage behind a generic worker error.
@@ -1293,7 +1293,7 @@
 ## 2026-06-23 Desktop Update Boundary
 
 - Desktop app updates use Tauri updater signed artifacts and GitHub Releases as the static updater metadata/artifact host.
-- The desktop updater endpoint is `https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1`; release automation uploads `latest.json`, the NSIS installer, and signed updater bundles to the published GitHub Release.
+- The desktop updater endpoint is `https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?updater=1`; release automation uploads `latest.json`, the NSIS installer, and signed updater bundles to the published GitHub Release.
 - Python worker code upgrades together with the desktop application bundle; v1 does not support independent worker hot updates from app-local data.
 - App-local data `updates.json` stores only update preferences such as `lastCheckedAt`, `postponedUntil`, and `skippedVersion`.
 - Updates preserve the active data root and fixed configuration root, including migrated models/components, task data, caches, authentication and local settings. Installation and restart wait for active data work; migration waits for update completion and an installed update's restart.
@@ -1301,7 +1301,7 @@
 
 ## 2026-06-23 Runtime Configuration Boundary
 
-- Desktop worker runtime configuration no longer reads repository-root `.env` files such as `D:/Github/FrameQ/.env`.
+- Desktop worker runtime configuration no longer reads repository-root `.env` files such as `D:/Github/Locus/.env`.
 - Fixed-root `.env` stores ASR model selection and model-download overrides. Its existing output key is read for legacy compatibility; settings saves retain that key unchanged, and committed managed storage takes precedence.
 - The desktop settings panel returns and displays the app-local data `.env` path, can locate it in the file manager, and creates a commented template if the file is missing.
 - Legacy local `APP_LLM_PROVIDER`, `APP_LLM_BASE_URL`, `APP_LLM_API_KEY`, `APP_LLM_MODEL`, and `APP_LLM_TIMEOUT_SECONDS` dotenv values are ignored.
@@ -1312,7 +1312,7 @@
 - Desktop `APP_MODEL_DIR` points to the active data root's `models/` ModelScope cache root, not the directory that directly contains `iic/SenseVoiceSmall`.
 - The canonical release ASR layout is `<APP_MODEL_DIR>/models/iic/SenseVoiceSmall` plus `<APP_MODEL_DIR>/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch`.
 - Worker startup keeps legacy top-level `iic/...` readable for upgrade compatibility, but normalizes it to the canonical layout before real ASR loading.
-- Automatic cleanup is limited to FrameQ's known SenseVoice/VAD legacy directories and stale `._____temp` folders without `model.pt`.
+- Automatic cleanup is limited to Locus's known SenseVoice/VAD legacy directories and stale `._____temp` folders without `model.pt`.
 
 ## 2026-07-27 Selectable ASR Models and On-Demand Download
 
@@ -1351,19 +1351,19 @@
 ## 2026-06-21 Account and Billing Boundary
 
 - `server/` is a small TypeScript Fastify service for email OTP login, desktop session exchange, administrator-issued activation-code monthly passes, entitlement status, Admin Web, and server-managed LLM checkout.
-- The service stores account and entitlement state in a private SQLite database at `server/data/frameq.sqlite` with WAL mode enabled. It is designed for a single writer service instance.
-- The service stores encrypted administrator-managed LLM config for a dedicated FrameQ client supplier key and tracks per-user LLM API-call quota.
+- The service stores account and entitlement state in a private SQLite database at `server/data/app.sqlite` with WAL mode enabled. It is designed for a single writer service instance.
+- The service stores encrypted administrator-managed LLM config for a dedicated Locus client supplier key and tracks per-user LLM API-call quota.
 - Desktop authentication uses `frameq://auth/callback` deep links. The browser receives a short-lived ticket, and the desktop client exchanges that ticket for an opaque session token.
 - The user-facing entitlement is a monthly pass. Activation codes are the current administrator-issued way to open or extend that monthly pass, and they update the same `Entitlement` record used by the processing gate.
 - No self-serve payment provider is integrated. Monthly passes are opened and extended only with activation codes; the unused WeChat purchase channel was removed on 2026-11-08.
 - Each activation grants 20 cloud LLM API-call uses. The desktop worker authorizes quota through server-managed checkout before each supplier chat-completion/API call, then calls the LLM supplier directly with the returned config for that call.
 - Admin Web access is limited to the configured administrator email and uses short-lived HttpOnly cookie sessions.
-- The account service never receives video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents. It may store and return the dedicated FrameQ client LLM key.
+- The account service never receives video files, audio files, transcripts, generated insights, cookies, model caches, or local history contents. It may store and return the dedicated Locus client LLM key.
 - The local worker remains the execution owner for video extraction, ASR and AI generation.
 
 ## 概述
 
-FrameQ 是本地优先的桌面客户端：本地 worker 处理公开视频或已授权视频链接、本地媒体、
+Locus 是本地优先的桌面客户端：本地 worker 处理公开视频或已授权视频链接、本地媒体、
 媒体校验、音频提取与 ASR。正式文字稿完成后，用户可独立确认要点总结、文字稿解剖与
 启发灵感，由 `agent_runtime` 生成对应本地 AI 产物。
 
@@ -1382,7 +1382,7 @@ FrameQ 是本地优先的桌面客户端：本地 worker 处理公开视频或�
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
 | `app/src-tauri/src/data_storage.rs`、`data_storage/`、`safe_filesystem.rs` | 数据许可、位置权威、身份与完整性、复制提交、恢复及旧副本清理 | 固定控制根与可迁移数据根分离；前端只提交原生选择和确认令牌 |
 | 数据根 `models/` | 用户本机可写模型缓存；桌面由 `APP_MODEL_DIR` 指向 | ModelScope cache root；canonical ASR files live under `models/iic/...` |
-| 数据根 `outputs/`；Legacy 模式下的有效旧输出根 | `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `frameq-task.json` | 由位置快照派生，设置中的明确迁移流程改变有效位置 |
+| 数据根 `outputs/`；Legacy 模式下的有效旧输出根 | `tasks/<task_id>/` 最终视频、音频、文字稿、AI 产物和 `task.json` | 由位置快照派生，设置中的明确迁移流程改变有效位置 |
 | 数据根 `cache/`、`runtime/`、`collections.json` | 任务与播放缓存、按需运行组件、合集及成员 | 随任务和模型一同迁移；缓存分类保留播放缓存清理 |
 | 固定配置根 `updates.json` | 桌面更新偏好，不含用户内容或签名私钥 | 记录检查时间、稍后提醒时间和跳过版本 |
 | 固定配置根 `.env` | 本机非 LLM 配置；设置页可定位，缺失时创建注释模板 | 普通保存只写 ASR 选择，保留旧输出键；托管 LLM 配置不从 dotenv 读取 |
@@ -1417,7 +1417,7 @@ graph LR
   end
 
   subgraph "当前数据根 (本机可迁移)"
-    D1["outputs/tasks/&lt;task_id&gt;/<br/>frameq-task.json<br/>media · transcript · ai"]
+    D1["outputs/tasks/&lt;task_id&gt;/<br/>task.json<br/>media · transcript · ai"]
     D2["cache/tasks/&lt;task_id&gt;/<br/>下载缓存 · 临时产物"]
     D3["models/<br/>ASR 缓存<br/>iic/SenseVoiceSmall"]
     D4["runtime/ · collections.json<br/>运行组件 · 合集"]
@@ -1476,7 +1476,7 @@ graph LR
 ## 关键文件
 
 - `AGENTS.md`：AI 协作入口地图和最高优先级约束摘要。
-- `docs/design-docs/frameq-code-audit-uml.md`：面向 LLM 与人工重构评审的当前代码 UML 基线、依赖证据和结构压力点。
+- `docs/design-docs/code-audit-uml.md`：面向 LLM 与人工重构评审的当前代码 UML 基线、依赖证据和结构压力点。
 - `docs/design-docs/2026-07-18-task-access-facade.md`：Rust/Python 任务访问门面、安全不变量和迁移边界。
 - `docs/design-docs/2026-07-21-task-manifest-module-split.md`：Rust task-manifest 私有 owner
   拆分、稳定 root surface 与 source/dependency boundary。
@@ -1520,7 +1520,7 @@ graph LR
 
 - UI 只编排任务和展示状态，不直接调用 `yt-dlp`、`ffmpeg`、ASR 或 LLM。
 - Tauri 应用模块只能通过 `TaskWorkerFacade::execute(WorkerJob)`、
-  `AsrModelDownloadJob` 以及语义 cancel/activity query 管理 FrameQ worker；
+  `AsrModelDownloadJob` 以及语义 cancel/activity query 管理 Locus worker；
   `WorkerLane::run`、`WorkerRunRequest` 和 `WorkerCommandSpec` 都是 runtime 内部能力。应用层不得
   直接 spawn、wait、finish、发送 OS 信号或转发未验证 progress。
 - UI 通过 Tauri command 保存 ASR；数据位置通过原生目录令牌、库存确认和重启验证改变。LLM 配置由 server Admin Web 管理，桌面 UI 不回显也不输入 API Key。

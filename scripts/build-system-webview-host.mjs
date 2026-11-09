@@ -8,11 +8,11 @@ const repository = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const resources = join(repository, "app", "src-tauri", "resources", "webview-host");
 const sources = join(repository, "app", "native-webview-host");
 const targets = new Map([
-  ["windows-x64", { host: "win32-x64", triple: "x86_64-pc-windows-msvc", binary: "frameq-webview-host.exe" }],
-  ["macos-arm64", { host: "darwin-arm64", triple: "arm64-apple-macos14.0", binary: "FrameQWebViewHost.app/Contents/MacOS/frameq-webview-host", arch: "arm64" }],
-  ["macos-x64", { host: "darwin-x64", triple: "x86_64-apple-macos14.0", binary: "FrameQWebViewHost.app/Contents/MacOS/frameq-webview-host", arch: "x86_64" }],
+  ["windows-x64", { host: "win32-x64", triple: "x86_64-pc-windows-msvc", binary: "app-webview-host.exe" }],
+  ["macos-arm64", { host: "darwin-arm64", triple: "arm64-apple-macos14.0", binary: "AppWebViewHost.app/Contents/MacOS/app-webview-host", arch: "arm64" }],
+  ["macos-x64", { host: "darwin-x64", triple: "x86_64-apple-macos14.0", binary: "AppWebViewHost.app/Contents/MacOS/app-webview-host", arch: "x86_64" }],
 ]);
-const helperIdentifier = "com.frameq.webview-host";
+const helperIdentifier = "pro.8xf.webview-host";
 
 export function validateSystemWebViewTarget(target, host = `${process.platform}-${process.arch}`) {
   const configuration = targets.get(target);
@@ -54,7 +54,7 @@ function plistValue(path, key) {
 }
 
 function verifyMacHelper(root, configuration) {
-  const bundle = join(root, "FrameQWebViewHost.app");
+  const bundle = join(root, "AppWebViewHost.app");
   const binary = join(root, configuration.binary);
   requireRegularFile(binary);
   if (run("/usr/bin/lipo", ["-archs", binary], { capture: true }).trim() !== configuration.arch) {
@@ -62,7 +62,7 @@ function verifyMacHelper(root, configuration) {
   }
   const info = join(bundle, "Contents", "Info.plist");
   if (plistValue(info, "CFBundleIdentifier") !== helperIdentifier ||
-      plistValue(info, "CFBundleExecutable") !== "frameq-webview-host" ||
+      plistValue(info, "CFBundleExecutable") !== "app-webview-host" ||
       plistValue(info, "LSMinimumSystemVersion") !== "14.0") {
     throw new Error("The macOS WebView host bundle identity is invalid.");
   }
@@ -110,7 +110,7 @@ export function verifySystemWebViewDmg(dmg, target) {
   const mount = join(repository, "build", "system-webview-host", `dmg-verify-${randomUUID()}`);
   mkdirSync(mount, { recursive: true });
   run("/usr/bin/hdiutil", ["attach", "-readonly", "-nobrowse", "-mountpoint", mount, resolve(dmg)]);
-  try { return verifyPackagedSystemWebViewHost(join(mount, "FrameQ.app"), target); }
+  try { return verifyPackagedSystemWebViewHost(join(mount, "Locus.app"), target); }
   finally { run("/usr/bin/hdiutil", ["detach", mount]); }
 }
 
@@ -142,7 +142,7 @@ export function buildSystemWebViewHost({ target = nativeSystemWebViewTarget() } 
     const cargoTarget = join(buildRoot, "cargo-target");
     run("cargo", ["build", "--locked", "--release", "--target", configuration.triple,
       "--manifest-path", join(sources, "windows", "Cargo.toml")], { env: { CARGO_TARGET_DIR: cargoTarget } });
-    const builtBinary = join(cargoTarget, configuration.triple, "release", "frameq-webview-host.exe");
+    const builtBinary = join(cargoTarget, configuration.triple, "release", "app-webview-host.exe");
     requireRegularFile(builtBinary);
     copyFileSync(builtBinary, destination);
   } else {
@@ -154,7 +154,7 @@ export function buildSystemWebViewHost({ target = nativeSystemWebViewTarget() } 
       ...["Main", "HostProtocol", "WebPageHost", "PolicyDelegate", "Extraction"].map((name) => join(mac, `${name}.swift`)), "-o", destination],
     { env: { TMPDIR: buildRoot } });
     chmodSync(destination, 0o755);
-    const bundle = join(resources, "FrameQWebViewHost.app");
+    const bundle = join(resources, "AppWebViewHost.app");
     copyFileSync(join(mac, "Info.plist"), join(bundle, "Contents", "Info.plist"));
     run("/usr/bin/codesign", ["--force", "--sign", "-", "--identifier", helperIdentifier, "--entitlements", join(mac, "entitlements.plist"), bundle]);
     verifyMacHelper(resources, configuration);

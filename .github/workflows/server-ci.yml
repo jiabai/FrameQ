@@ -56,7 +56,7 @@ jobs:
       - name: Configure database URL
         # runner context is unavailable in job-level env; inject via $GITHUB_ENV
         # so every subsequent step sees DATABASE_URL.
-        run: echo "DATABASE_URL=file:$RUNNER_TEMP/frameq-server-ci.sqlite" >> "$GITHUB_ENV"
+        run: echo "DATABASE_URL=file:$RUNNER_TEMP/app-server-ci.sqlite" >> "$GITHUB_ENV"
 
       - name: Install locked dependencies
         run: npm ci
@@ -65,7 +65,7 @@ jobs:
         run: npm run prisma:generate
 
       - name: Create disposable SQLite file
-        run: touch "$RUNNER_TEMP/frameq-server-ci.sqlite"
+        run: touch "$RUNNER_TEMP/app-server-ci.sqlite"
 
       - name: Deploy and verify reviewed migrations
         run: |
@@ -80,5 +80,5 @@ jobs:
 
       - name: Rehearse isolated restore smoke
         run: |
-          cp "$RUNNER_TEMP/frameq-server-ci.sqlite" "$RUNNER_TEMP/frameq-server-restore.sqlite"
-          npm run db:restore-smoke -- --database "$RUNNER_TEMP/frameq-server-restore.sqlite"
+          cp "$RUNNER_TEMP/app-server-ci.sqlite" "$RUNNER_TEMP/app-server-restore.sqlite"
+          npm run db:restore-smoke -- --database "$RUNNER_TEMP/app-server-restore.sqlite"

@@ -38,10 +38,10 @@ describe("settings client", () => {
     const runner: SettingsCommandRunner = async (command, args) => {
       calls.push({ command, args });
       return {
-        user_data_dir: "C:\\Users\\demo\\AppData\\Local\\FrameQ",
-        default_output_dir: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs",
+        user_data_dir: "C:\\Users\\demo\\AppData\\Local\\Locus",
+        default_output_dir: "C:\\Users\\demo\\AppData\\Local\\Locus\\outputs",
         asr_model: "iic/SenseVoiceSmall",
-        asr_model_dir: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\models",
+        asr_model_dir: "C:\\Users\\demo\\AppData\\Local\\Locus\\models",
         asr_model_available: false,
         asr_model_source: "modelscope",
       };
@@ -56,10 +56,10 @@ describe("settings client", () => {
       },
     ]);
     expect(status).toEqual({
-      userDataDir: "C:\\Users\\demo\\AppData\\Local\\FrameQ",
-      defaultOutputDir: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\outputs",
+      userDataDir: "C:\\Users\\demo\\AppData\\Local\\Locus",
+      defaultOutputDir: "C:\\Users\\demo\\AppData\\Local\\Locus\\outputs",
       asrModel: "iic/SenseVoiceSmall",
-      asrModelDir: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\models",
+      asrModelDir: "C:\\Users\\demo\\AppData\\Local\\Locus\\models",
       asrModelAvailable: false,
       asrModelSource: "modelscope",
     });
@@ -123,10 +123,10 @@ describe("settings client", () => {
     const runner: SettingsCommandRunner = async (command, args) => {
       calls.push({ command, args });
       return {
-        output_dir: "D:\\FrameQ\\outputs",
+        output_dir: "D:\\Locus\\outputs",
         asr_model: "iic/SenseVoiceSmall",
         supported_asr_models: ["iic/SenseVoiceSmall"],
-        config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+        config_path: "C:\\Users\\demo\\AppData\\Local\\Locus\\.env",
         asr_model_migrated: true,
       };
     };
@@ -135,10 +135,10 @@ describe("settings client", () => {
 
     expect(calls).toEqual([{ command: "get_llm_config", args: {} }]);
     expect(config).toEqual({
-      outputDir: "D:\\FrameQ\\outputs",
+      outputDir: "D:\\Locus\\outputs",
       asrModel: "iic/SenseVoiceSmall",
       supportedAsrModels: ["iic/SenseVoiceSmall"],
-      configPath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+      configPath: "C:\\Users\\demo\\AppData\\Local\\Locus\\.env",
       asrModelMigrated: true,
     });
   });
@@ -148,17 +148,17 @@ describe("settings client", () => {
     const runner: SettingsCommandRunner = async (command, args) => {
       calls.push({ command, args });
       return {
-        output_dir: "D:\\FrameQ\\outputs",
+        output_dir: "D:\\Locus\\outputs",
         asr_model: "iic/SenseVoiceSmall-onnx",
         supported_asr_models: ["iic/SenseVoiceSmall"],
-        config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+        config_path: "C:\\Users\\demo\\AppData\\Local\\Locus\\.env",
         asr_model_migrated: false,
       };
     };
 
     const config = await saveLlmConfig(
       {
-        outputDir: "D:\\FrameQ\\outputs",
+        outputDir: "D:\\Locus\\outputs",
         asrModel: "iic/SenseVoiceSmall-onnx",
       },
       runner,
@@ -175,8 +175,8 @@ describe("settings client", () => {
       },
     ]);
     expect(config).toMatchObject({
-      outputDir: "D:\\FrameQ\\outputs",
-      configPath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+      outputDir: "D:\\Locus\\outputs",
+      configPath: "C:\\Users\\demo\\AppData\\Local\\Locus\\.env",
     });
   });
 
@@ -188,7 +188,7 @@ describe("settings client", () => {
         output_dir: "",
         asr_model: "iic/SenseVoiceSmall-onnx",
         supported_asr_models: [],
-        config_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\.env",
+        config_path: "C:\\Users\\demo\\AppData\\Local\\Locus\\.env",
         asr_model_migrated: false,
       };
     };
@@ -206,22 +206,22 @@ describe("settings client", () => {
       if (command === "get_audio_review_cache_usage") {
         return {
           size_bytes: 1_572_864,
-          cache_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\cache\\.frameq-audio-review",
+          cache_path: "C:\\Users\\demo\\AppData\\Local\\Locus\\cache\\.app-audio-review",
         };
       }
       return {
         size_bytes: 0,
-        cache_path: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\cache\\.frameq-audio-review",
+        cache_path: "C:\\Users\\demo\\AppData\\Local\\Locus\\cache\\.app-audio-review",
       };
     };
 
     await expect(getAudioReviewCacheUsage(runner)).resolves.toEqual({
       sizeBytes: 1_572_864,
-      cachePath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\cache\\.frameq-audio-review",
+      cachePath: "C:\\Users\\demo\\AppData\\Local\\Locus\\cache\\.app-audio-review",
     });
     await expect(clearAudioReviewCache(runner)).resolves.toEqual({
       sizeBytes: 0,
-      cachePath: "C:\\Users\\demo\\AppData\\Local\\FrameQ\\cache\\.frameq-audio-review",
+      cachePath: "C:\\Users\\demo\\AppData\\Local\\Locus\\cache\\.app-audio-review",
     });
 
     expect(calls).toEqual([
@@ -233,10 +233,10 @@ describe("settings client", () => {
   test("rejects malformed runtime settings and model arrays", async () => {
     await expect(
       getLlmConfig(async () => ({
-        output_dir: "D:\\FrameQ\\outputs",
+        output_dir: "D:\\Locus\\outputs",
         asr_model: "iic/SenseVoiceSmall",
         supported_asr_models: ["iic/SenseVoiceSmall", 42],
-        config_path: "C:\\Users\\private\\FrameQ\\.env",
+        config_path: "C:\\Users\\private\\Locus\\.env",
         asr_model_migrated: false,
       })),
     ).rejects.toEqual(
@@ -249,7 +249,7 @@ describe("settings client", () => {
           output_dir: "",
           asr_model: "iic/SenseVoiceSmall",
           supported_asr_models: [],
-          config_path: "C:\\Users\\private\\FrameQ\\.env",
+          config_path: "C:\\Users\\private\\Locus\\.env",
           asr_model_migrated: false,
           unexpected: true,
         }),
@@ -270,10 +270,10 @@ describe("settings client", () => {
     );
     await expect(
       getAsrModelStatus(async () => ({
-        user_data_dir: "C:\\Users\\private\\FrameQ",
-        default_output_dir: "C:\\Users\\private\\FrameQ\\outputs",
+        user_data_dir: "C:\\Users\\private\\Locus",
+        default_output_dir: "C:\\Users\\private\\Locus\\outputs",
         asr_model: "iic/SenseVoiceSmall",
-        asr_model_dir: "C:\\Users\\private\\FrameQ\\models",
+        asr_model_dir: "C:\\Users\\private\\Locus\\models",
         asr_model_available: "false",
         asr_model_source: "modelscope",
       })),

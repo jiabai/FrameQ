@@ -132,7 +132,7 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
     summary: "",
     insights: [],
     taskId: "task-1",
-    taskDir: "D:/FrameQ/tasks/task-1",
+    taskDir: "D:/Locus/tasks/task-1",
     artifacts: {
       transcript_txt: "transcript/transcript.txt",
     },
@@ -178,7 +178,7 @@ function createInsightPreferences(
     profileStatus: "valid",
     profileError: null,
     defaultGenerationPreferences: null,
-    preferencesPath: "D:/FrameQ/app-data/insight-preferences.json",
+    preferencesPath: "D:/Locus/app-data/insight-preferences.json",
     ...overrides,
   };
 }

@@ -5,6 +5,7 @@ use tauri_plugin_deep_link::DeepLinkExt;
 mod account;
 mod asr_model;
 mod atomic_files;
+mod brand;
 mod data_storage;
 mod data_storage_validation;
 mod safe_filesystem;
@@ -212,11 +213,11 @@ mod tests {
     #[test]
     fn auth_login_url_includes_state_and_redirect_scheme() {
         let url =
-            build_auth_login_url("https://frameq.example", "state-123456").expect("build auth url");
+            build_auth_login_url("https://app.example", "state-123456").expect("build auth url");
 
         assert_eq!(
             url,
-            "https://frameq.example/login?desktop=1&state=state-123456&redirect_uri=frameq%3A%2F%2Fauth%2Fcallback"
+            "https://app.example/login?desktop=1&state=state-123456&redirect_uri=pro.8xf.app%3A%2F%2Fauth%2Fcallback"
         );
     }
 
@@ -246,15 +247,15 @@ mod tests {
     #[test]
     fn activation_redeem_url_targets_desktop_activation_route() {
         assert_eq!(
-            build_activation_redeem_url("https://frameq.example/"),
-            "https://frameq.example/api/desktop/activation-codes/redeem"
+            build_activation_redeem_url("https://app.example/"),
+            "https://app.example/api/desktop/activation-codes/redeem"
         );
     }
 
     #[test]
     fn auth_callback_parser_accepts_matching_state() {
         let callback = parse_auth_callback_url(
-            "frameq://auth/callback?ticket=flt_abc123&state=state-123456",
+            "pro.8xf.app://auth/callback?ticket=flt_abc123&state=state-123456",
             "state-123456",
         )
         .expect("parse auth callback");
@@ -271,12 +272,12 @@ mod tests {
     #[test]
     fn auth_callback_parser_rejects_wrong_state_or_path() {
         assert!(parse_auth_callback_url(
-            "frameq://auth/callback?ticket=flt_abc123&state=other-state",
+            "pro.8xf.app://auth/callback?ticket=flt_abc123&state=other-state",
             "state-123456",
         )
         .is_err());
         assert!(parse_auth_callback_url(
-            "frameq://billing/callback?ticket=flt_abc123&state=state-123456",
+            "pro.8xf.app://billing/callback?ticket=flt_abc123&state=state-123456",
             "state-123456",
         )
         .is_err());
@@ -293,7 +294,7 @@ mod tests {
                 "APP_LLM_API_KEY=secret-key",
                 "APP_LLM_MODEL=demo-model",
                 "APP_LLM_TIMEOUT_SECONDS=42",
-                "APP_OUTPUT_DIR=D:/FrameQ/results",
+                "APP_OUTPUT_DIR=D:/Locus/results",
                 "APP_ASR_MODEL=iic/SenseVoiceSmall",
                 "APP_SETTINGS_SCHEMA_VERSION=2",
             ]
@@ -303,7 +304,7 @@ mod tests {
 
         let config = load_llm_config_from_file(&env_path).expect("load config");
 
-        assert_eq!(config.output_dir, "D:/FrameQ/results");
+        assert_eq!(config.output_dir, "D:/Locus/results");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
         assert_eq!(
             config.supported_asr_models,
@@ -320,7 +321,7 @@ mod tests {
 
         assert_eq!(config.config_path, path_to_env_string(&env_path));
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall-onnx");
-        assert!(saved.contains("FrameQ desktop local settings"));
+        assert!(saved.contains("Desktop local settings"));
         assert!(saved.contains("APP_OUTPUT_DIR="));
         assert!(saved.contains("APP_ASR_MODEL=iic/SenseVoiceSmall-onnx"));
         assert!(saved.contains("APP_SETTINGS_SCHEMA_VERSION=2"));
@@ -340,7 +341,7 @@ mod tests {
                 "APP_LLM_MODEL=old-model",
                 "APP_LLM_TIMEOUT_SECONDS=44",
                 "OTHER_SETTING=keep-me",
-                "APP_OUTPUT_DIR=D:/FrameQ/custom-results",
+                "APP_OUTPUT_DIR=D:/Locus/custom-results",
             ]
             .join("\n"),
         )
@@ -355,10 +356,10 @@ mod tests {
         .expect("save config");
         let saved = fs::read_to_string(&env_path).expect("read saved env");
 
-        assert_eq!(config.output_dir, "D:/FrameQ/custom-results");
+        assert_eq!(config.output_dir, "D:/Locus/custom-results");
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
         assert_eq!(config.config_path, path_to_env_string(&env_path));
-        assert!(saved.contains("APP_OUTPUT_DIR=D:/FrameQ/custom-results"));
+        assert!(saved.contains("APP_OUTPUT_DIR=D:/Locus/custom-results"));
         assert!(saved.contains("APP_ASR_MODEL=iic/SenseVoiceSmall"));
         assert!(saved.contains("OTHER_SETTING=keep-me"));
         assert!(!saved.contains("APP_LLM_PROVIDER"));
@@ -385,7 +386,7 @@ mod tests {
         assert_eq!(config.asr_model, "iic/SenseVoiceSmall");
         assert!(saved.contains("APP_OUTPUT_DIR="));
         assert!(saved.contains("APP_ASR_MODEL=iic/SenseVoiceSmall"));
-        assert!(saved.contains("FrameQ desktop local settings"));
+        assert!(saved.contains("Desktop local settings"));
         assert!(!saved.contains("APP_LLM_API_KEY"));
     }
 
@@ -462,7 +463,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("app-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
     }

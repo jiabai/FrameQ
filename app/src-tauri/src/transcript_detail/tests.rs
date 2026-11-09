@@ -87,7 +87,7 @@ fn load_detail_copies_external_output_audio_to_app_local_playback_path() {
     let audio_asset_path = detail.audio_asset_path.expect("audio asset path");
     assert!(audio_path.ends_with("media/audio.wav"));
     assert!(audio_asset_path.ends_with(
-        "cache/.frameq-audio-review/20260705-153012-douyin-7645505408425004329/audio.wav"
+        "cache/.app-audio-review/20260705-153012-douyin-7645505408425004329/audio.wav"
     ));
     assert_ne!(audio_path, audio_asset_path);
     let app_local_cache = app_local_cache
@@ -143,7 +143,7 @@ fn load_detail_replaces_existing_cache_link_without_overwriting_link_target() {
         .audio_asset_path
         .expect("audio asset path")
         .ends_with(
-            "cache/.frameq-audio-review/20260705-153012-douyin-7645505408425004329/audio.wav"
+            "cache/.app-audio-review/20260705-153012-douyin-7645505408425004329/audio.wav"
         ));
     assert_eq!(
         fs::read(&outside_target).expect("read outside target"),
@@ -256,7 +256,7 @@ fn save_detail_creates_original_backup_once_and_updates_manifest() {
             .expect("read segments")
             .contains("seg-0001")
     );
-    let manifest = fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
+    let manifest = fs::read_to_string(task_dir.join("task.json")).expect("read manifest");
     assert!(manifest.contains(r#""text_preview": "second version""#));
     assert!(manifest.contains(r#""segments": "transcript/segments.json""#));
 
@@ -328,7 +328,7 @@ fn save_detail_rejects_nested_alternate_transcript_path() {
     let alternate_txt = alternate_dir.join("transcript.txt");
     fs::write(&alternate_txt, "alternate original\n").expect("write alternate transcript");
     write_manifest(&task_dir, task_id, false);
-    let manifest_path = task_dir.join("frameq-task.json");
+    let manifest_path = task_dir.join("task.json");
     let manifest = fs::read_to_string(&manifest_path)
         .expect("read manifest")
         .replace(
@@ -374,7 +374,7 @@ fn save_detail_never_backs_up_sensitive_legacy_source_metadata() {
     )
     .expect("write markdown");
     fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 2,
@@ -420,7 +420,7 @@ fn transcript_load_and_save_reject_quarantined_tasks() {
     )
     .expect("write transcript");
     fs::write(
-        task_dir.join("frameq-task.json"),
+        task_dir.join("task.json"),
         format!(
             r#"{{
   "schema_version": 3,
@@ -486,7 +486,7 @@ fn save_detail_rejects_empty_text_and_path_traversal() {
     .is_err());
 
     fs::write(
-        task_dir.join("frameq-task.json"),
+        task_dir.join("task.json"),
         format!(
             r#"{{
   "schema_version": 1,
@@ -602,7 +602,7 @@ fn load_detail_routes_direct_audio_without_cache_and_allows_missing_audio() {
         .join(crate::AUDIO_REVIEW_CACHE_DIR_NAME)
         .exists());
 
-    let manifest_path = task_dir.join("frameq-task.json");
+    let manifest_path = task_dir.join("task.json");
     let manifest = fs::read_to_string(&manifest_path)
         .expect("read manifest")
         .replace("    \"audio\": \"media/audio.wav\",\n", "");
@@ -664,7 +664,7 @@ fn save_detail_preserves_markdown_prefix_and_existing_empty_segments_declaration
     )
     .expect("parse segments");
     assert_eq!(segments["segments"], serde_json::json!([]));
-    let manifest = fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
+    let manifest = fs::read_to_string(task_dir.join("task.json")).expect("read manifest");
     assert!(manifest.contains(r#""segments": "transcript/segments.json""#));
 }
 
@@ -676,7 +676,7 @@ fn save_detail_mid_commit_failure_restores_complete_previous_revision() {
     let transcript_path = task_dir.join("transcript").join("transcript.txt");
     let markdown_path = task_dir.join("transcript").join("transcript.md");
     let segments_path = task_dir.join("transcript").join("segments.json");
-    let manifest_path = task_dir.join("frameq-task.json");
+    let manifest_path = task_dir.join("task.json");
     fs::write(&transcript_path, b"first version\n").expect("write transcript");
     fs::write(
         &markdown_path,
@@ -724,7 +724,7 @@ fn save_detail_mid_commit_failure_restores_complete_previous_revision() {
         .join("original")
         .join("transcript.txt")
         .exists());
-    assert!(!task_dir.join(".frameq-artifact-transaction.json").exists());
+    assert!(!task_dir.join(".artifact-transaction.json").exists());
     assert_eq!(
         fs::read_dir(task_dir.join("transcript"))
             .expect("read transcript dir")
@@ -732,7 +732,7 @@ fn save_detail_mid_commit_failure_restores_complete_previous_revision() {
             .filter(|entry| entry
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".frameq-artifact-"))
+                .starts_with(".artifact-"))
             .count(),
         0
     );
@@ -893,7 +893,7 @@ fn transcript_detail_module_boundary_matches_approved_owners() {
             "resolve_runtime_paths",
             "ensure_runtime_dirs",
             "TaskManifest",
-            "frameq-task.json",
+            "task.json",
         ] {
             assert!(
                 !source.contains(forbidden),
@@ -924,7 +924,7 @@ fn write_manifest(task_dir: &Path, task_id: &str, include_segments: bool) {
         ""
     };
     fs::write(
-        task_dir.join("frameq-task.json"),
+        task_dir.join("task.json"),
         format!(
             r#"{{
   "schema_version": 3,
@@ -970,7 +970,7 @@ fn temp_dir(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system time")
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
+    let dir = std::env::temp_dir().join(format!("app-{name}-{unique}"));
     fs::create_dir_all(&dir).expect("create temp dir");
     #[cfg(unix)] let dir = dir.canonicalize().expect("canonical temp dir");
     dir

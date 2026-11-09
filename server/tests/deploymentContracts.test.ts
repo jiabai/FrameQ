@@ -22,9 +22,9 @@ afterEach(() => {
 });
 
 function temporaryDatabase(): { directory: string; databasePath: string } {
-  const directory = mkdtempSync(join(tmpdir(), "frameq-deployment-contract-"));
+  const directory = mkdtempSync(join(tmpdir(), "app-deployment-contract-"));
   directories.push(directory);
-  return { directory, databasePath: join(directory, "frameq.sqlite") };
+  return { directory, databasePath: join(directory, "app.sqlite") };
 }
 
 function databaseUrl(databasePath: string): string {

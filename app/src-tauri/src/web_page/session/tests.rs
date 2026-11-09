@@ -94,8 +94,8 @@ fn native_session_recovers_actual_atomic_save_after_stdout_interruption() {
     }
     let task = output.join("tasks").join(&task_id);
     let deadline = Instant::now() + Duration::from_secs(60);
-    while !(task.join("frameq-task.json").is_file()
-        && !task.join(".frameq-artifact-transaction.json").exists()) {
+    while !(task.join("task.json").is_file()
+        && !task.join(".artifact-transaction.json").exists()) {
         if child.try_wait().unwrap().is_some() || Instant::now() >= deadline {
             let _ = child.kill();
             let output = child.wait_with_output().unwrap();
@@ -115,7 +115,7 @@ fn native_session_recovers_actual_atomic_save_after_stdout_interruption() {
     assert!(session.path.join(SAVE).exists());
     fs::write(task.join("article/article.txt"), article.text.as_bytes()).unwrap();
     session.cleanup().unwrap();
-    assert!(task.join("frameq-task.json").is_file());
+    assert!(task.join("task.json").is_file());
 }
 
 #[test]

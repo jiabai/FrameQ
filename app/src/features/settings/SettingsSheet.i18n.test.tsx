@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 
-import { frameqI18n, initializeI18n } from "../../i18n/i18n";
+import { appI18n, initializeI18n } from "../../i18n/i18n";
 import type { SupportedLocale } from "../../i18n/locale";
 import { uiMessage } from "../../i18n/uiMessage";
 import { createInitialUpdateState } from "../../updateState";
@@ -81,12 +81,12 @@ function controller(
   return {
     settingsOpen: true,
     settingsCategory: category,
-    settingsDraft: { asrModel: "iic/SenseVoiceSmall", outputDir: "D:/FrameQ/output" },
+    settingsDraft: { asrModel: "iic/SenseVoiceSmall", outputDir: "D:/Locus/output" },
     settingsSupportedAsrModels: ["iic/SenseVoiceSmall"],
-    settingsConfigPath: "D:/FrameQ/app-data/.env",
+    settingsConfigPath: "D:/Locus/app-data/.env",
     audioReviewCacheUsage: {
       sizeBytes: 2048,
-      cachePath: "D:/FrameQ/cache/.frameq-audio-review",
+      cachePath: "D:/Locus/cache/.app-audio-review",
     },
     settingsInsightPreferences: null,
     settingsNotice: null,
@@ -121,7 +121,7 @@ function renderSettings(
       controller={controller(category, options.controller)}
       asrModelStatus={{
         available: true,
-        modelDir: "D:/FrameQ/models/SenseVoiceSmall",
+        modelDir: "D:/Locus/models/SenseVoiceSmall",
       } as never}
       modelDownloadActive={false}
       updateState={options.updateState ?? createInitialUpdateState()}
@@ -173,7 +173,7 @@ describe("settings localization", () => {
     expect(markup).toContain(`>${output}</span>`);
     expect(markup).toContain("SenseVoice Small");
     expect(markup).toContain('class="data-storage-setting"');
-    expect(markup).not.toContain('value="D:/FrameQ/output"');
+    expect(markup).not.toContain('value="D:/Locus/output"');
   });
 
   test.each([
@@ -197,7 +197,7 @@ describe("settings localization", () => {
       };
 
       const markup = renderSettings(locale, "updates", { updateState });
-      const progressLabel = frameqI18n.getFixedT(locale, "updates")(
+      const progressLabel = appI18n.getFixedT(locale, "updates")(
         "section.downloadProgressAria",
       );
 

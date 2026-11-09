@@ -11,7 +11,7 @@ import {
 } from "../tauri-dev-fresh-worker.mjs";
 
 async function tempRoot() {
-  return mkdtemp(join(tmpdir(), "frameq-tauri-dev-"));
+  return mkdtemp(join(tmpdir(), "app-tauri-dev-"));
 }
 
 async function relativeWorkerFiles(root, current = root) {

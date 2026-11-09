@@ -207,7 +207,7 @@ mod tests {
             "local_source": {"display_name":"recording.wav","media_kind":"audio","extension":"wav"},
             "platform":"local", "status":"completed", "artifacts":{}, "error":null, "text_preview":"", "insights_count":0,
         });
-        std::fs::write(task.join("frameq-task.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        std::fs::write(task.join("task.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
     }
 
     #[test]
@@ -280,7 +280,7 @@ mod tests {
         let article_markdown = "# 迁移网页标题\n\n第一段网页正文。\n\n第二段网页正文。\n";
         std::fs::write(article_dir.join("article/article.txt"), article_text).unwrap();
         std::fs::write(article_dir.join("article/article.md"), article_markdown).unwrap();
-        std::fs::write(article_dir.join("frameq-task.json"), serde_json::to_vec(&serde_json::json!({
+        std::fs::write(article_dir.join("task.json"), serde_json::to_vec(&serde_json::json!({
             "schema_version":4,"source_privacy_migration_version":2,"task_id":"web-note",
             "created_at":"2026-11-01T08:00:00Z","source_kind":"web_page",
             "source_url":"https://example.com/article?id=12","source_identity":null,
@@ -345,7 +345,7 @@ mod tests {
         let view = crate::collections::get_collections_from_paths_for_test(&paths).unwrap();
         assert_eq!(view.collections[0].task_ids, ["default-note", "legacy-note", "web-note"]);
         assert_eq!(crate::collections::read_for_storage_validation(&data.collections_path).unwrap(), collections);
-        for relative in ["transcript/transcript.txt", "transcript/original/transcript.txt", "ai/draft.md", "ai/original/draft.md", "frameq-note-metadata.json"] {
+        for relative in ["transcript/transcript.txt", "transcript/original/transcript.txt", "ai/draft.md", "ai/original/draft.md", "app-note-metadata.json"] {
             assert_eq!(std::fs::read(outputs.join("tasks/default-note").join(relative)).unwrap(), std::fs::read(data.output_root.join("tasks/default-note").join(relative)).unwrap());
         }
         assert_eq!(std::fs::read(data.output_root.join("tasks/opaque-note/legacy.bin")).unwrap(), b"opaque preserved bytes");
@@ -358,7 +358,7 @@ mod tests {
         assert_eq!(article_detail.text, article_text);
         assert!(article_detail.note_metadata.as_ref().unwrap().pinned);
         assert_eq!(article_detail.note_metadata.unwrap().display_title.as_deref(), Some("手动网页标题"));
-        for relative in ["article/article.txt", "article/article.md", "frameq-task.json", "frameq-note-metadata.json"] {
+        for relative in ["article/article.txt", "article/article.md", "task.json", "app-note-metadata.json"] {
             assert_eq!(std::fs::read(article_dir.join(relative)).unwrap(), std::fs::read(data.output_root.join("tasks/web-note").join(relative)).unwrap());
         }
         std::fs::write(root.join("note-roundtrip-result.json"), serde_json::to_vec_pretty(&serde_json::json!({

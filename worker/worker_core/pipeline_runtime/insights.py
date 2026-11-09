@@ -44,7 +44,7 @@ def run_insight_generation_step(
     summary_runner: SummaryRunner | None = None,
 ) -> ProcessResult:
     is_junction = getattr(os.path, "isjunction", lambda _path: False)
-    manifest_path = output_dir.parent / "frameq-task.json"
+    manifest_path = output_dir.parent / "task.json"
     source_kind = "transcript"
     expected_transcript_path = output_dir.parent / "transcript" / "transcript.txt"
     if (

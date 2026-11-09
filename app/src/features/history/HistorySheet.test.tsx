@@ -21,8 +21,8 @@ function createHistoryItem(overrides: Partial<HistoryListItem> = {}): HistoryLis
       url: "https://www.example.test/history-video",
     },
     status: "completed",
-    taskDir: "D:/FrameQ/outputs/tasks/history-task",
-    outputDir: "D:/FrameQ/outputs",
+    taskDir: "D:/Locus/outputs/tasks/history-task",
+    outputDir: "D:/Locus/outputs",
     artifacts: { transcript_txt: "transcript/transcript.txt" },
     error: null,
     textPreview: "history preview",
@@ -135,7 +135,7 @@ describe("HistorySheet selection accessibility", () => {
     const longYoutubeUrl =
       "https://www.youtube.com/watch?v=abcdefghijk&feature=share&this_is_a_long_safe_parameter=value";
     const longOutputDir =
-      "D:/FrameQ/outputs/a-very-long-history-output-directory/with/additional/nested/folders";
+      "D:/Locus/outputs/a-very-long-history-output-directory/with/additional/nested/folders";
     const failedCode = "HISTORY_ARTIFACT_UNAVAILABLE";
     const items = [
       createHistoryItem({ taskId: "zh", id: "zh", textPreview: longChinesePreview }),

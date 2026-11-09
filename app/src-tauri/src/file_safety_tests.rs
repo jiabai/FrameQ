@@ -50,7 +50,7 @@ impl TaskFixture {
             "insights_count": 0
         });
         fs::write(
-            task.join("frameq-task.json"),
+            task.join("task.json"),
             serde_json::to_vec(&manifest).unwrap(),
         )
         .expect("write task manifest");
@@ -58,7 +58,7 @@ impl TaskFixture {
     }
 
     fn manifest(&self) -> Vec<u8> {
-        fs::read(self.task.join("frameq-task.json")).expect("read manifest")
+        fs::read(self.task.join("task.json")).expect("read manifest")
     }
 
     fn save_transcript(&self, text: &str) -> bool {
@@ -84,7 +84,7 @@ impl TaskFixture {
         assert!(!self.save_transcript("Unwanted transcript replacement."));
         assert!(!self.save_draft("Unwanted draft replacement."));
         assert_eq!(self.manifest(), manifest);
-        assert!(!self.task.join(".frameq-artifact-transaction.json").exists());
+        assert!(!self.task.join(".artifact-transaction.json").exists());
     }
 }
 
@@ -165,7 +165,7 @@ fn ordinary_paths_preserve_entry_type_rules_and_original_backup_layout() {
     }
     assert!(!fixture
         .task
-        .join(".frameq-artifact-transaction.json")
+        .join(".artifact-transaction.json")
         .exists());
 }
 

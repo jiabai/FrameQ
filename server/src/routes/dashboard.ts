@@ -29,7 +29,7 @@ export function registerDashboardRoutes(
 ): void {
   app.get("/dashboard", async (request, reply) => {
     const cookies = parseCookies(request.headers.cookie);
-    const sessionToken = cookies.get("frameq_user_session") ?? null;
+    const sessionToken = cookies.get("app_user_session") ?? null;
     const session = await dependencies.userAuth.authenticate(sessionToken);
     if (!session || !sessionToken) {
       return reply.redirect("/login");
@@ -40,7 +40,7 @@ export function registerDashboardRoutes(
       userId: session.userId,
       now: dependencies.now(),
     });
-    const csrfToken = cookies.get("frameq_user_csrf") ?? "";
+    const csrfToken = cookies.get("app_user_csrf") ?? "";
     reply.type("text/html; charset=utf-8");
     reply.header("cache-control", "no-store");
     return renderDashboardPage({
@@ -56,7 +56,7 @@ export function registerDashboardRoutes(
 
   app.get("/api/dashboard/account", async (request, reply) => {
     const cookies = parseCookies(request.headers.cookie);
-    const sessionToken = cookies.get("frameq_user_session") ?? null;
+    const sessionToken = cookies.get("app_user_session") ?? null;
     const session = await dependencies.userAuth.authenticate(sessionToken);
     if (!session || !sessionToken) {
       return reply.code(401).send({ error: "AUTH_REQUIRED" });

@@ -1449,7 +1449,7 @@ mod tests {
     #[test]
     fn sanitizer_replaces_hostile_values_with_fixed_tokens() {
         let hostile = concat!(
-            "failure at C:\\Users\\alice\\AppData\\Local\\com.frameq.desktop\\logs\\x.py ",
+            "failure at C:\\Users\\alice\\AppData\\Local\\pro.8xf.app\\logs\\x.py ",
             "UNC=\\\\workstation\\share\\secret POSIX=/home/alice/private HOME=~/private ",
             "user=alice hostname=DESKTOP-SECRET ip=192.168.1.42 ipv6=2001:db8::1 ",
             "email=alice@example.com url=https://alice:pw@example.com/model?q=secret ",
@@ -1699,7 +1699,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-task3-{test_name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("app-task3-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
     }

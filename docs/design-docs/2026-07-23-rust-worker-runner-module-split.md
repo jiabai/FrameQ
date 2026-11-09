@@ -406,7 +406,7 @@ The implementation closeout updated:
 - `TASKS.md` with exact test and line-count evidence;
 - `docs/ARCHITECTURE.md` with the stable runner/private-owner dependency boundary;
 - `docs/SECURITY.md` with the retained sole-orchestrator and supervisor signalling boundaries;
-- `docs/design-docs/frameq-code-audit-uml.md` with implemented owners and current line counts;
+- `docs/design-docs/code-audit-uml.md` with implemented owners and current line counts;
 - `docs/exec-plans/active/index.md` and `docs/exec-plans/index.md` while the implementation plan is
   activated/archived; and
 - any active local-media or release plan that names `runner.rs` as a future change location.

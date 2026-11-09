@@ -554,7 +554,7 @@ mod tests {
             .expect("system time")
             .as_nanos();
         std::env::temp_dir()
-            .join(format!("frameq-ui-preferences-{name}-{unique}"))
+            .join(format!("app-ui-preferences-{name}-{unique}"))
             .join(UI_PREFERENCES_FILE_NAME)
     }
 

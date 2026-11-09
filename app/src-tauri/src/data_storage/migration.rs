@@ -25,7 +25,7 @@ impl DataStorageManager {
         let mut value=self.snapshot()?;
         if value.active.generation!=generation{return Err(StorageError::new("StaleOperation"));}
         validate_active(&value.active)?;
-        if self.config_root.join(".frameq-note-deletion.json").exists(){return Err(StorageError::new("Busy"));}
+        if self.config_root.join(".app-note-deletion.json").exists(){return Err(StorageError::new("Busy"));}
         safe_filesystem::validate_ancestors(&target)?;
         let target=target.canonicalize()?;let target_identity=safe_filesystem::identity(&target)?;
         let _target_guard=safe_filesystem::open_directory(&target)?;
@@ -58,9 +58,9 @@ impl DataStorageManager {
         if merge{return self.prepare_merge_inner(value,inventory,window_id,generation,observer);}
         let (required,available)=check_space(&target,&self.config_root,&inventory)?;
         safe_filesystem::check_identity(&target,target_identity)?;
-        let meta=target.join(".frameq-storage");
+        let meta=target.join(".app-storage");
         if meta.exists(){
-            if previous_waiting.is_none()||fs::read_dir(&target)?.any(|v|v.map(|v|v.file_name()!=".frameq-storage").unwrap_or(true)){return Err(StorageError::new("TargetConflict"));}
+            if previous_waiting.is_none()||fs::read_dir(&target)?.any(|v|v.map(|v|v.file_name()!=".app-storage").unwrap_or(true)){return Err(StorageError::new("TargetConflict"));}
             safe_filesystem::validate_ancestors(&meta)?;
         } else {fs::create_dir(&meta).map_err(|e|if e.kind()==std::io::ErrorKind::AlreadyExists{StorageError::new("TargetConflict")}else{e.into()})?;}
         let operation=meta.join("operations").join(&id);create_safe_dirs(&operation)?;
@@ -85,7 +85,7 @@ impl DataStorageManager {
         safe_filesystem::check_identity(&pending.target,pending.target_identity)?;
         validate_active(&pending.previous)?;
         let _target_guard=safe_filesystem::open_directory(&pending.target)?;
-        let lock=safe_filesystem::open_lock_file(&pending.target.join(".frameq-storage/operation.lock"))?;
+        let lock=safe_filesystem::open_lock_file(&pending.target.join(".app-storage/operation.lock"))?;
         lock.try_lock().map_err(|_|StorageError::new("Busy"))?;
         let inventory=inventory::read(&pending.target,&pending)?;
         inventory::verify_sources_with_progress(&inventory,Some(&self.cancelled),observer)?;
@@ -100,7 +100,7 @@ impl DataStorageManager {
                 let destination=payload.join(&entry.destination);
                 if entry.directory {create_safe_dirs(&destination)?;continue;}
                 let base=pending.bytes_completed;
-                copy_entry(entry,&destination,&pending.target.join(".frameq-storage/operations").join(&pending.operation_id).join("partial"),&self.cancelled,&mut |bytes|{
+                copy_entry(entry,&destination,&pending.target.join(".app-storage/operations").join(&pending.operation_id).join("partial"),&self.cancelled,&mut |bytes|{
                     pending.bytes_completed=base+bytes;value.pending=Some(pending.clone());self.persist(&value)?;progress(self.state());Ok(())
                 })?;
                 pending.files_completed+=1;pending.bytes_completed=base+entry.length;value.pending=Some(pending.clone());self.persist(&value)?;progress(self.state());
@@ -118,8 +118,8 @@ impl DataStorageManager {
         verify_published(&pending.target,&inventory)?;
         let generation=pending.previous.generation.checked_add(1).ok_or_else(||StorageError::new("ControlLimit"))?;
         let marker=StoreMarker{schema_version:1,library_id:pending.previous.library_id.clone(),generation,root_identity:pending.target_identity};
-        self.write_target_json(&mut value,&pending.target.join(".frameq-storage/store.json"),&marker,64*1024)?;
-        let receipt_dir=pending.target.join(".frameq-storage/receipts").join(&pending.operation_id);create_safe_dirs(&receipt_dir)?;
+        self.write_target_json(&mut value,&pending.target.join(".app-storage/store.json"),&marker,64*1024)?;
+        let receipt_dir=pending.target.join(".app-storage/receipts").join(&pending.operation_id);create_safe_dirs(&receipt_dir)?;
         let receipt_path=receipt_dir.join("inventory.json");
         self.write_target_json(&mut value,&receipt_path,&inventory,inventory::MAX_INVENTORY)?;
         let reference=ReceiptRef{operation_id:pending.operation_id.clone(),relative_path:receipt_path.strip_prefix(&pending.target).map_err(|_|StorageError::new("UnsafePath"))?.into(),sha256:inventory::digest(&inventory)?,source_paths:inventory.sources.iter().map(|s|s.path.clone()).collect(),total_files:inventory.total_files,total_bytes:inventory.total_bytes};
@@ -225,10 +225,12 @@ fn check_resume_space(target:&Path,config:&Path,payload:&Path,inventory:&Invento
     }
     if stats.available_space()<remaining.saturating_add(64*1024*1024)||fs4::available_space(config)?<2*control::MAX_CONTROL+1024*1024{return Err(StorageError::new("InsufficientSpace"));}Ok(())
 }
+/// Fixed payload for the write probe; its length is asserted after the round trip.
+const STORAGE_PROBE_PAYLOAD: &[u8] = b"app storage probe";
 pub(super) fn probe(root:&Path)->Result<()> {
     let a=root.join("probe-a");let b=root.join("probe-b");
-    let mut file=OpenOptions::new().write(true).create_new(true).open(&a)?;file.write_all(b"FrameQ storage probe")?;file.sync_all()?;drop(file);
-        if safe_filesystem::hash_file(&a)?.0!=20{return Err(StorageError::new("VerificationFailed"));}
+    let mut file=OpenOptions::new().write(true).create_new(true).open(&a)?;file.write_all(STORAGE_PROBE_PAYLOAD)?;file.sync_all()?;drop(file);
+        if safe_filesystem::hash_file(&a)?.0!=STORAGE_PROBE_PAYLOAD.len() as u64{return Err(StorageError::new("VerificationFailed"));}
     fs::rename(&a,&b)?;let _file=safe_filesystem::open_regular(&b)?;drop(_file);fs::remove_file(b)?;Ok(())
 }
 pub(super) fn probe_destination_names(operation:&Path,inventory:&Inventory,cancel:&std::sync::atomic::AtomicBool,observer:&mut dyn FnMut(PreflightProgress)->Result<()>)->Result<()> {
@@ -301,10 +303,10 @@ fn collect_relative_with_cancel(root:&Path,path:&Path,entries:&mut std::collecti
     }Ok(())
 }
 fn publish(target:&Path,payload:&Path,inventory:&Inventory)->Result<()> {
-    for item in fs::read_dir(target)? {let name=item?.file_name();if ![".frameq-storage","outputs","cache","models","runtime","collections.json"].iter().any(|v|name==*v){return Err(StorageError::new("TargetConflict"));}}
+    for item in fs::read_dir(target)? {let name=item?.file_name();if ![".app-storage","outputs","cache","models","runtime","collections.json"].iter().any(|v|name==*v){return Err(StorageError::new("TargetConflict"));}}
     let mut tops=std::collections::BTreeSet::new();
     for entry in inventory::unique_entries(inventory) {
-        if entry.destination.starts_with(".frameq-storage/receipts") {
+        if entry.destination.starts_with(".app-storage/receipts") {
             let parent=entry.destination.parent().ok_or_else(||StorageError::new("UnsafePath"))?;
             create_safe_dirs(&target.join(parent))?;
             if !entry.directory {
@@ -332,7 +334,7 @@ fn verify_published(target:&Path,inventory:&Inventory)->Result<()> {
         let path=target.join(&entry.destination);
         verify_permissions(&path,entry)?;
         if entry.directory {let _guard=safe_filesystem::open_directory(&path)?;}else{let(length,hash,_)=safe_filesystem::hash_file(&path)?;if length!=entry.length||hash!=entry.sha256{return Err(StorageError::new("VerificationFailed"));}}
-        if entry.destination.starts_with(".frameq-storage"){continue;}
+        if entry.destination.starts_with(".app-storage"){continue;}
         expected.insert(entry.destination.clone());let mut path=entry.destination.parent();while let Some(p)=path {if p.as_os_str().is_empty(){break;}expected.insert(p.into());path=p.parent();}
     }
     for name in ["outputs","cache","models","runtime"]{expected.insert(PathBuf::from(name));}
@@ -357,7 +359,7 @@ fn verify_permissions(path:&Path,entry:&Entry)->Result<()> {
     Ok(())
 }
 fn validate_operation_namespace(target:&Path,pending:&Pending,receipts:&[ReceiptRef],preserved:&[Pending],inventory:&Inventory)->Result<()> {
-    let meta=target.join(".frameq-storage");let _guard=safe_filesystem::open_directory(&meta)?;
+    let meta=target.join(".app-storage");let _guard=safe_filesystem::open_directory(&meta)?;
     for child in fs::read_dir(&meta)? {let child=child?;if !["operations","receipts","store.json","operation.lock"].iter().any(|n|child.file_name()==*n){return Err(StorageError::new("TargetConflict"));}}
     if meta.join("operation.lock").exists(){let file=fs::symlink_metadata(meta.join("operation.lock"))?;if !file.is_file()||crate::atomic_files::is_link_or_reparse_point(&file){return Err(StorageError::new("UnsafePath"));}}
     if meta.join("store.json").exists(){let marker:StoreMarker=control::read_json(&meta.join("store.json"),64*1024)?;
@@ -416,6 +418,6 @@ pub(super) fn recover_task_transactions(active:&ActiveStorage,sources:&[PathBuf]
     let mut roots=vec![active.data_root.join("outputs")];roots.extend(sources.iter().cloned());
     if let Some(root)=&active.legacy_output_root {if root.is_absolute(){roots.push(root.clone());}}
     for root in roots {if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}let tasks=root.join("tasks");if !tasks.exists(){continue;}let _guard=safe_filesystem::open_directory(&tasks)?;
-        for task in fs::read_dir(&tasks)? {if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}let task=task?.path();if task.join(".frameq-artifact-transaction.json").exists(){let _guard=safe_filesystem::open_directory(&task)?;crate::task_manifest::recover_task_artifacts(&task).map_err(|_|StorageError::new("TaskRecoveryFailed"))?;}}
+        for task in fs::read_dir(&tasks)? {if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}let task=task?.path();if task.join(".artifact-transaction.json").exists(){let _guard=safe_filesystem::open_directory(&task)?;crate::task_manifest::recover_task_artifacts(&task).map_err(|_|StorageError::new("TaskRecoveryFailed"))?;}}
     }Ok(())
 }

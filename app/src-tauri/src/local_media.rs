@@ -292,7 +292,7 @@ mod tests {
             .canonicalize()
             .expect("resolve physical temp dir");
         let path = temp_root.join(format!(
-            "frameq-local-media-{label}-{}-{nonce}",
+            "app-local-media-{label}-{}-{nonce}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("create temp dir");

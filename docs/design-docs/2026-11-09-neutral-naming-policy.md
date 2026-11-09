@@ -10,7 +10,7 @@
 
 ## 问题
 
-项目原来把品牌名写进了几乎每一层：Python 包 `frameq_worker`、环境变量 `FRAMEQ_*`、应用标识符 `com.frameq.desktop`、数据库 `frameq.sqlite`、磁盘契约 `frameq-task.json`、日志 `frameq-desktop.log`、安装包 `FrameQ_<version>_x64-setup.exe`，以及三语文案里的 106 处字面量。
+项目原来把品牌名写进了几乎每一层：Python 包 `frameq_worker`、环境变量 `FRAMEQ_*`、应用标识符 `com.frameq.desktop`、数据库 `frameq.sqlite`、磁盘契约 `frameq-task.json`、日志 `frameq-desktop.log`、安装包 `Locus_<version>_x64-setup.exe`，以及三语文案里的 106 处字面量。
 
 改名因此不是「改一个名字」，而是 660 个文件、5,806 处引用的连带改动，还牵扯到用户数据目录、生产 `.env`、老任务恢复和更新链路。这与「产品名应该可以随时更换」的商业现实冲突。
 

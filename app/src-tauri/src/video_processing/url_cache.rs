@@ -213,7 +213,7 @@ mod tests {
         )
         .expect("write insights");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -288,7 +288,7 @@ mod tests {
         .expect("write transcript");
         let canonical_url = format!("https://www.xiaohongshu.com/explore/{note_id}");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -351,7 +351,7 @@ mod tests {
         )
         .expect("write transcript");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -408,7 +408,7 @@ mod tests {
         )
         .expect("write insights");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -470,7 +470,7 @@ mod tests {
         )
         .expect("write dissection report");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -530,7 +530,7 @@ mod tests {
         let task_dir = output_root.join("tasks").join(task_id);
         fs::create_dir_all(&task_dir).expect("create task dir");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 1,
@@ -565,7 +565,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("app-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
         #[cfg(unix)] let dir = dir.canonicalize().expect("canonical temp dir");
         dir

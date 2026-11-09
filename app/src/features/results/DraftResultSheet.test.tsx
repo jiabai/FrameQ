@@ -47,7 +47,7 @@ function completedWorkflow(overrides?: Partial<WorkflowState>): WorkflowState {
     ...createInitialWorkflow(),
     stage: "completed",
     taskId: "task-draft-1",
-    taskDir: "/FrameQ/outputs/tasks/task-draft-1",
+    taskDir: "/Locus/outputs/tasks/task-draft-1",
     text: "原始文字稿",
     draft: "# 标题\n\n原始草稿内容",
     artifacts: { draft: "ai/draft.md" },

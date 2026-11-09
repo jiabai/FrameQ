@@ -4,7 +4,7 @@
 
 ## Purpose
 
-本文件定义 FrameQ 的默认协作流程。目标是让桌面客户端、Python worker、模型管理和 agent_runtime 智能提炼的改动先有可审查意图，再进入实现。
+本文件定义 Locus 的默认协作流程。目标是让桌面客户端、Python worker、模型管理和 agent_runtime 智能提炼的改动先有可审查意图，再进入实现。
 
 ## Mandatory Rule
 

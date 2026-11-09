@@ -20,9 +20,9 @@ def test_atomic_write_text_replaces_existing_bytes(tmp_path: Path) -> None:
 def test_atomic_write_bytes_creates_absent_destination(tmp_path: Path) -> None:
     destination = tmp_path / "artifact.bin"
 
-    atomic_files.atomic_write_bytes(destination, b"\x00FrameQ\xff")
+    atomic_files.atomic_write_bytes(destination, b"\x00Locus\xff")
 
-    assert destination.read_bytes() == b"\x00FrameQ\xff"
+    assert destination.read_bytes() == b"\x00Locus\xff"
     assert not list(tmp_path.glob(".artifact.*"))
 
 
@@ -224,7 +224,7 @@ def test_synced_staging_can_be_installed_after_all_payloads_are_ready(
 ) -> None:
     destination = tmp_path / "artifact.txt"
     destination.write_text("previous\n", encoding="utf-8")
-    staging = tmp_path / ".frameq-artifact-deadbeef-0.staging"
+    staging = tmp_path / ".artifact-deadbeef-0.staging"
 
     atomic_files.write_synced_new_file(staging, b"next\n")
     assert destination.read_text(encoding="utf-8") == "previous\n"

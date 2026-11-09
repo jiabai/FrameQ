@@ -1,4 +1,4 @@
-# FrameQ Design Guidelines
+# Locus Design Guidelines
 
 ## Processing workspace
 
@@ -141,7 +141,7 @@
   `合集`, and `作品`; Traditional Chinese uses `主頁`, `筆記`, `合集`, and `作品`;
   English uses `Home`, `Notes`, `Collection`, and `Artifacts`.
 - Home uses a local-time serif greeting, the actual account name derived from the email, and one
-  156px-high media composer. The existing FrameQ blue artwork is a standalone transparent SVG with
+  156px-high media composer. The existing Locus blue artwork is a standalone transparent SVG with
   its outer whitespace cropped; never surround it with an icon tile, border, or shadow.
 - Center the Home greeting and composer as one group within the content surface, with symmetric
   vertical padding and safe alignment so tall content remains reachable by scrolling. The composer
@@ -238,7 +238,7 @@
 - Settings > Basic starts with `界面与 AI 结果语言` and offers Follow System, Simplified Chinese,
   Traditional Chinese, and English. Selection updates the visible UI immediately; only the latest
   failed save may roll back the optimistic choice and show a localized notice.
-- A neutral startup shell contains only `FrameQ`. It must not flash one locale before the saved or
+- A neutral startup shell contains only `Locus`. It must not flash one locale before the saved or
   resolved locale mounts, and preference recovery remains a non-blocking notice rather than a modal.
 - The product glossary fixes `智能提炼 / AI 提煉 / AI Synthesis`, `本地文字稿 / 本機逐字稿 /
   Local Transcript`, `要点总结 / 重點摘要 / Key Summary`, and `启发灵感 / 靈感啟發 /
@@ -256,7 +256,7 @@
 - At `720x640`, English expansion must wrap and scroll without horizontal overflow, clipped actions,
   or unreachable keyboard focus. Locale changes must not clear URL, ASR settings, storage confirmation, transcript
   edits, preference flows, current tasks, or existing AI results.
-- `FrameQ`, `AI Credits`, ASR, LLM, Mermaid, model names, platform brands, paths, emails, user content,
+- `Locus`, `AI Credits`, ASR, LLM, Mermaid, model names, platform brands, paths, emails, user content,
   subtitles, transcripts, and historical AI results are not translated.
 
 ## Local Transcript and AI Workspaces
@@ -447,7 +447,7 @@
 - Douyin share page fallback is invisible by default: the user still submits one URL and sees the existing `视频提取中` stage.
 - Worker progress copy may mention `正在解析公开视频分享页`, `正在探测可用视频流`, and `正在保存最高质量视频` when the fallback path is active.
 - MVP should not show a stream picker or ask the user to choose a resolution during processing. The default policy is to preserve the highest-quality local video by selecting the largest validated stream.
-- If the largest stream fails and the worker retries a smaller candidate, progress copy should remain low-noise and say that FrameQ is retrying another available video stream.
+- If the largest stream fails and the worker retries a smaller candidate, progress copy should remain low-noise and say that Locus is retrying another available video stream.
 - If all fallback candidates fail, the failure copy should explain that the public share page or playable media stream was unavailable, and should ask the user to retry with a public, authorized link.
 
 ## Account and Entitlement UI
@@ -455,7 +455,7 @@
 - The toolbar exposes account status as a compact utility control, not as a marketing banner.
 - Update availability appears as a compact toolbar utility only when action is needed; it must not replace the task monitor or interrupt URL input.
 - Login and activation-code monthly pass flows use sheet-style panels consistent with settings/history.
-- Browser deep-link return from login must restore and focus the existing desktop window so the account sheet is visible without the user hunting for FrameQ.
+- Browser deep-link return from login must restore and focus the existing desktop window so the account sheet is visible without the user hunting for Locus.
 - Account copy must clearly distinguish local processing from server-side account and entitlement verification.
 - Submitting a URL is blocked only when the user is not signed in or does not have an active entitlement; missing LLM config or exhausted LLM quota must not block local video/audio/ASR processing.
 - Retrying summary or inspiration generation opens the account sheet and does not start worker processing when the user is not entitled, LLM config is missing, or LLM quota is exhausted.
@@ -481,7 +481,7 @@
 
 ## Product Shape
 
-FrameQ 是安静、清晰、可扫描的工具型桌面应用。首屏直接展示 URL 输入，不做营销式首页。
+Locus 是安静、清晰、可扫描的工具型桌面应用。首屏直接展示 URL 输入，不做营销式首页。
 
 ## Interaction States
 

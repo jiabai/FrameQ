@@ -37,20 +37,20 @@ describe("localized worker error resources", () => {
     expect(errorResources).toMatchObject({
       "zh-CN": {
         worker: {
-          idleTimeout: "处理长时间没有新的进展，FrameQ 已停止本次任务。现有结果已保留，请重试。",
-          executionTimeout: "处理已超过最长运行时间，FrameQ 已停止本次任务。现有结果已保留，请重试。",
+          idleTimeout: "处理长时间没有新的进展，{{product}} 已停止本次任务。现有结果已保留，请重试。",
+          executionTimeout: "处理已超过最长运行时间，{{product}} 已停止本次任务。现有结果已保留，请重试。",
         },
       },
       "zh-TW": {
         worker: {
-          idleTimeout: "處理長時間沒有新的進度，FrameQ 已停止本次工作。現有結果已保留，請重試。",
-          executionTimeout: "處理已超過最長執行時間，FrameQ 已停止本次工作。現有結果已保留，請重試。",
+          idleTimeout: "處理長時間沒有新的進度，{{product}} 已停止本次工作。現有結果已保留，請重試。",
+          executionTimeout: "處理已超過最長執行時間，{{product}} 已停止本次工作。現有結果已保留，請重試。",
         },
       },
       "en-US": {
         worker: {
-          idleTimeout: "FrameQ stopped this operation after it made no progress for too long. Existing results were kept; try again.",
-          executionTimeout: "FrameQ stopped this operation after it reached the maximum run time. Existing results were kept; try again.",
+          idleTimeout: "{{product}} stopped this operation after it made no progress for too long. Existing results were kept; try again.",
+          executionTimeout: "{{product}} stopped this operation after it reached the maximum run time. Existing results were kept; try again.",
         },
       },
     });

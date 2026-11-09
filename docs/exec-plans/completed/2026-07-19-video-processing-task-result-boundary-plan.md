@@ -132,7 +132,7 @@ this extraction; future cache or preflight extraction still requires separate de
 - Existing safe result diagnostics: `app/src-tauri/src/diagnostics.rs`.
 - Future consumer:
   `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
-- Architecture audit: `docs/design-docs/frameq-code-audit-uml.md`.
+- Architecture audit: `docs/design-docs/code-audit-uml.md`.
 
 ## File Responsibility Map
 
@@ -658,7 +658,7 @@ for facts observed during execution; do not invent a surprise entry when none oc
 - Modify: `docs/design-docs/2026-07-19-video-processing-task-result-boundary.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`
@@ -689,7 +689,7 @@ Measure both production files:
 (Get-Content app/src-tauri/src/video_processing/task_result.rs).Count
 ```
 
-Update `docs/design-docs/frameq-code-audit-uml.md` with the measured line counts. In the hotspot table,
+Update `docs/design-docs/code-audit-uml.md` with the measured line counts. In the hotspot table,
 remove task-result adaptation from `video_processing.rs` responsibilities but retain request parsing,
 cache, preflight, diagnostics, and command orchestration. Add the implemented adapter to the resolved
 audit evidence while explicitly stating that the parent remains a maintenance hotspot and that cache
@@ -724,7 +724,7 @@ files remain uncommitted.
 - [x] **Step 6: Commit closeout documentation**
 
 ```powershell
-git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md docs/design-docs/2026-07-19-video-processing-task-result-boundary.md docs/design-docs/frameq-code-audit-uml.md docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md docs/exec-plans/active/index.md docs/exec-plans/completed/index.md docs/exec-plans/completed/2026-07-19-video-processing-task-result-boundary-plan.md
+git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md docs/design-docs/2026-07-19-video-processing-task-result-boundary.md docs/design-docs/code-audit-uml.md docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md docs/exec-plans/active/index.md docs/exec-plans/completed/index.md docs/exec-plans/completed/2026-07-19-video-processing-task-result-boundary-plan.md
 git commit -m "docs(tauri): close task result boundary"
 ```
 

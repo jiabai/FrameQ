@@ -151,7 +151,7 @@ passed.
 
 - `docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md`
 - `docs/design-docs/2026-07-19-closed-worker-terminal-results.md`
-- `docs/design-docs/frameq-code-audit-uml.md`
+- `docs/design-docs/code-audit-uml.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SECURITY.md`
 - `TASKS.md`
@@ -212,7 +212,7 @@ passed.
   `docs/design-docs/2026-07-24-tauri-ipc-runtime-decoding-boundary.md`
 - Create:
   `docs/exec-plans/completed/2026-07-24-tauri-ipc-runtime-decoding-plan.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/exec-plans/active/index.md`
@@ -442,7 +442,7 @@ documented response.
 - Modify: `docs/exec-plans/active/index.md`
 - Modify: `docs/exec-plans/completed/index.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`

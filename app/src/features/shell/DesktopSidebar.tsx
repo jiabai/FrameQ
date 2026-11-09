@@ -19,7 +19,7 @@ import type { Collection } from "../../collectionsClient";
 import type { HistoryListItem } from "../../historyClient";
 import { useUiLocale } from "../../i18n/LocaleProvider";
 import { getCollectionTaskCount } from "../collections/collectionModel";
-import { FrameQMark } from "./FrameQMark";
+import { AppMark } from "./AppMark";
 import type { ShellPage } from "./shellNavigation";
 import { SidebarNoteRow, type SidebarNoteSection } from "./SidebarNoteRow";
 
@@ -164,7 +164,7 @@ export function DesktopSidebar({
   return (
     <aside className={`desktop-sidebar${collapsed ? " is-collapsed" : ""}`}>
       <div className="shell-sidebar-brand" aria-label={commonT("appName")}>
-        <FrameQMark className="shell-sidebar-mark" />
+        <AppMark className="shell-sidebar-mark" />
         <span className="shell-sidebar-label">{commonT("appName")}</span>
       </div>
 

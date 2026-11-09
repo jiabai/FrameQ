@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: MIT
  * Adapted from InsightFlow readingSession.cjs:57-400 and useMarkdownConverter.ts.
  * Copyright (c) 2025 StandlX. See licenses/InsightFlow-MIT.txt.
- * FrameQ changes: explicit Document/URL, Readability-only generic extraction,
+ * Locus changes: explicit Document/URL, Readability-only generic extraction,
  * bounded input/output, DOMPurify, safe links, image removal and GFM tables.
  */
 import { Readability } from "@mozilla/readability";

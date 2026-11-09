@@ -1,5 +1,5 @@
 {
-  "title": "FrameQ native system WebView host protocol",
+  "title": "Native system WebView host protocol",
   "description": "Protocol metadata; closed-field message validation is implemented by each native decoder.",
   "contractVersion": 1,
   "framing": "UTF-8 NDJSON, one bounded JSON object per newline",

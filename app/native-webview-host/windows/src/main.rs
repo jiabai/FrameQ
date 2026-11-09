@@ -1,4 +1,4 @@
-use frameq_webview_host::{lifecycle, protocol::{canonical_uuid, read_record, Identity, Input, Platform}};
+use app_webview_host::{lifecycle, protocol::{canonical_uuid, read_record, Identity, Input, Platform}};
 use serde_json::json;
 use std::io::BufReader;
 

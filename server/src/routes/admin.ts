@@ -78,13 +78,13 @@ async function authenticateAdminMutation(
   reply: FastifyReply,
   adminAuth: AdminAuthService,
 ) {
-  const sessionToken = parseCookies(request.headers.cookie).get("frameq_admin_session") ?? null;
+  const sessionToken = parseCookies(request.headers.cookie).get("app_admin_session") ?? null;
   const session = await adminAuth.authenticate(sessionToken);
   if (!session || !sessionToken) {
     reply.code(401).send({ error: "ADMIN_AUTH_REQUIRED" });
     return null;
   }
-  const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
+  const csrfToken = firstHeader(request.headers["x-app-csrf"]);
   if (!adminAuth.validateCsrf(session, csrfToken)) {
     reply.code(403).send({ error: "CSRF_INVALID" });
     return null;
@@ -141,12 +141,12 @@ export function registerAdminRoutes(
     }
     try {
       const result = await dependencies.adminAuth.verifyEmailCode(parsed.data);
-      setCookie(reply, "frameq_admin_session", result.sessionToken, {
+      setCookie(reply, "app_admin_session", result.sessionToken, {
         httpOnly: true,
         maxAgeSeconds: adminSessionMaxAgeSeconds,
         secure: dependencies.secureCookies,
       });
-      setCookie(reply, "frameq_admin_csrf", result.csrfToken, {
+      setCookie(reply, "app_admin_csrf", result.csrfToken, {
         httpOnly: false,
         maxAgeSeconds: adminSessionMaxAgeSeconds,
         secure: dependencies.secureCookies,
@@ -169,20 +169,20 @@ export function registerAdminRoutes(
       return reply;
     }
     await dependencies.store.revokeAdminSession(sha256(authenticated.sessionToken), dependencies.now());
-    clearCookie(reply, "frameq_admin_session", true, dependencies.secureCookies);
-    clearCookie(reply, "frameq_admin_csrf", false, dependencies.secureCookies);
+    clearCookie(reply, "app_admin_session", true, dependencies.secureCookies);
+    clearCookie(reply, "app_admin_csrf", false, dependencies.secureCookies);
     return { ok: true, redirect_url: "/admin/login" };
   });
 
   app.get("/admin", async (request, reply) => {
     const cookies = parseCookies(request.headers.cookie);
     const session = await dependencies.adminAuth.authenticate(
-      cookies.get("frameq_admin_session") ?? null,
+      cookies.get("app_admin_session") ?? null,
     );
     if (!session) {
       return reply.redirect("/admin/login");
     }
-    const csrfToken = cookies.get("frameq_admin_csrf") ?? "";
+    const csrfToken = cookies.get("app_admin_csrf") ?? "";
     const publicLlmConfig = await dependencies.llmConfig.getPublicConfig();
     const publicAnysearchConfig = await dependencies.anysearchConfig.getPublicConfig();
     const users = await dependencies.store.listUsers();

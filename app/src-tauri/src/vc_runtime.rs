@@ -62,7 +62,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-vc-runtime-{test_name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("app-vc-runtime-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
     }

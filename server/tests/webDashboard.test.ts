@@ -81,29 +81,29 @@ describe("web user dashboard login flow", () => {
       "web-state-1",
     );
     expect(body).toEqual({ ok: true, redirect_url: "/dashboard" });
-    expect(cookies.has("frameq_user_session")).toBe(true);
-    expect(cookies.has("frameq_user_csrf")).toBe(true);
+    expect(cookies.has("app_user_session")).toBe(true);
+    expect(cookies.has("app_user_csrf")).toBe(true);
 
-    const sessionCookie = cookies.get("frameq_user_session")!;
-    const csrfCookie = cookies.get("frameq_user_csrf")!;
+    const sessionCookie = cookies.get("app_user_session")!;
+    const csrfCookie = cookies.get("app_user_csrf")!;
 
     const dashboardPage = await app.inject({
       method: "GET",
       url: "/dashboard",
-      cookies: { frameq_user_session: sessionCookie, frameq_user_csrf: csrfCookie },
+      cookies: { app_user_session: sessionCookie, app_user_csrf: csrfCookie },
     });
     expect(dashboardPage.statusCode).toBe(200);
     expect(dashboardPage.headers["content-type"]).toContain("text/html");
     expect(dashboardPage.headers["cache-control"]).toBe("no-store");
     expect(dashboardPage.body).toContain("user@example.com");
     expect(dashboardPage.body).toContain("控制台");
-    expect(dashboardPage.body).not.toContain("frameq_user_session");
+    expect(dashboardPage.body).not.toContain("app_user_session");
     expect(dashboardPage.body).not.toContain(sessionCookie);
 
     const dashboardJson = await app.inject({
       method: "GET",
       url: "/api/dashboard/account",
-      cookies: { frameq_user_session: sessionCookie },
+      cookies: { app_user_session: sessionCookie },
     });
     expect(dashboardJson.statusCode).toBe(200);
     const account = dashboardJson.json();
@@ -115,8 +115,8 @@ describe("web user dashboard login flow", () => {
     const logoutResponse = await app.inject({
       method: "POST",
       url: "/user/auth/logout",
-      cookies: { frameq_user_session: sessionCookie },
-      headers: { "x-frameq-csrf": csrfCookie },
+      cookies: { app_user_session: sessionCookie },
+      headers: { "x-app-csrf": csrfCookie },
     });
     expect(logoutResponse.statusCode).toBe(200);
     expect(logoutResponse.json()).toEqual({ ok: true, redirect_url: "/login" });
@@ -124,7 +124,7 @@ describe("web user dashboard login flow", () => {
     const redirectAfterLogout = await app.inject({
       method: "GET",
       url: "/dashboard",
-      cookies: { frameq_user_session: sessionCookie },
+      cookies: { app_user_session: sessionCookie },
     });
     expect(redirectAfterLogout.statusCode).toBe(302);
     expect(redirectAfterLogout.headers.location).toBe("/login");
@@ -153,10 +153,10 @@ describe("web user dashboard login flow", () => {
         : [];
 
     const sessionHeader = setCookieHeaders.find((h) =>
-      h.startsWith("frameq_user_session="),
+      h.startsWith("app_user_session="),
     );
     const csrfHeader = setCookieHeaders.find((h) =>
-      h.startsWith("frameq_user_csrf="),
+      h.startsWith("app_user_csrf="),
     );
 
     expect(sessionHeader).toContain("HttpOnly");
@@ -224,13 +224,13 @@ describe("web user dashboard login flow", () => {
       },
     });
     const cookies = parseCookies(verifyResponse.headers["set-cookie"]);
-    const sessionCookie = cookies.get("frameq_user_session")!;
+    const sessionCookie = cookies.get("app_user_session")!;
 
     const badCsrf = await app.inject({
       method: "POST",
       url: "/user/auth/logout",
-      cookies: { frameq_user_session: sessionCookie },
-      headers: { "x-frameq-csrf": "wrong-csrf-token" },
+      cookies: { app_user_session: sessionCookie },
+      headers: { "x-app-csrf": "wrong-csrf-token" },
     });
     expect(badCsrf.statusCode).toBe(403);
     expect(badCsrf.json()).toEqual({ error: "CSRF_INVALID" });
@@ -266,8 +266,8 @@ describe("web user dashboard login flow", () => {
       "secrets-state",
     );
 
-    const sessionCookie = verifyResponse.cookies.get("frameq_user_session")!;
-    const csrfCookie = verifyResponse.cookies.get("frameq_user_csrf")!;
+    const sessionCookie = verifyResponse.cookies.get("app_user_session")!;
+    const csrfCookie = verifyResponse.cookies.get("app_user_csrf")!;
     const user = store.users.find((u) => u.email === "secrets@example.com");
 
     const code = await store.createActivationCode({
@@ -292,8 +292,8 @@ describe("web user dashboard login flow", () => {
       method: "GET",
       url: "/dashboard",
       cookies: {
-        frameq_user_session: sessionCookie,
-        frameq_user_csrf: csrfCookie,
+        app_user_session: sessionCookie,
+        app_user_csrf: csrfCookie,
       },
     });
     expect(dashboardPage.statusCode).toBe(200);
@@ -304,7 +304,7 @@ describe("web user dashboard login flow", () => {
 });
 
 describe("desktop login regression (contract preserved, cookies added)", () => {
-  test("desktop mode login returns ticket + frameq:// redirect AND sets user session cookies", async () => {
+  test("desktop mode login returns ticket + pro.8xf.app:// auth redirect AND sets user session cookies", async () => {
     const sentCodes: Array<{ email: string; code: string }> = [];
     const { app } = buildTestServer({ sentCodes });
 
@@ -327,9 +327,9 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
     });
     expect(verifyResponse.statusCode).toBe(200);
     const body = verifyResponse.json();
-    // Desktop client contract preserved: ticket + frameq:// redirect_url.
+    // Desktop client contract preserved: ticket + pro.8xf.app:// auth redirect_url.
     expect(body).toHaveProperty("ticket");
-    expect(body.redirect_url).toMatch(/^frameq:\/\/auth\/callback/);
+    expect(body.redirect_url).toMatch(/^pro.8xf.app:\/\/auth\/callback/);
 
     // New behavior: the same verify call also sets the web session cookies so the
     // user can optionally visit /dashboard without re-authenticating.
@@ -339,8 +339,8 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
         ? [verifyResponse.headers["set-cookie"]]
         : [];
     const cookieNames = setCookieHeaders.map((h) => h.split("=")[0]);
-    expect(cookieNames).toContain("frameq_user_session");
-    expect(cookieNames).toContain("frameq_user_csrf");
+    expect(cookieNames).toContain("app_user_session");
+    expect(cookieNames).toContain("app_user_csrf");
 
     // Desktop exchange still works with the ticket.
     const exchangeResponse = await app.inject({
@@ -381,13 +381,13 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
     expect(verifyResponse.statusCode).toBe(200);
 
     const cookies = parseCookies(verifyResponse.headers["set-cookie"]);
-    const sessionCookie = cookies.get("frameq_user_session")!;
-    const csrfCookie = cookies.get("frameq_user_csrf")!;
+    const sessionCookie = cookies.get("app_user_session")!;
+    const csrfCookie = cookies.get("app_user_csrf")!;
 
     const dashboardPage = await app.inject({
       method: "GET",
       url: "/dashboard",
-      cookies: { frameq_user_session: sessionCookie, frameq_user_csrf: csrfCookie },
+      cookies: { app_user_session: sessionCookie, app_user_csrf: csrfCookie },
     });
     expect(dashboardPage.statusCode).toBe(200);
     expect(dashboardPage.body).toContain("dash@example.com");
@@ -395,7 +395,7 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
     const dashboardJson = await app.inject({
       method: "GET",
       url: "/api/dashboard/account",
-      cookies: { frameq_user_session: sessionCookie },
+      cookies: { app_user_session: sessionCookie },
     });
     expect(dashboardJson.statusCode).toBe(200);
     expect(dashboardJson.json()).toMatchObject({ email: "dash@example.com" });
@@ -418,8 +418,8 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
     });
     const body = verifyResponse.json<{ ticket: string }>();
     const cookies = parseCookies(verifyResponse.headers["set-cookie"]);
-    const sessionCookie = cookies.get("frameq_user_session")!;
-    const csrfCookie = cookies.get("frameq_user_csrf")!;
+    const sessionCookie = cookies.get("app_user_session")!;
+    const csrfCookie = cookies.get("app_user_csrf")!;
 
     // Exchange the ticket for a desktop bearer token.
     const exchangeResponse = await app.inject({
@@ -433,8 +433,8 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
     const logoutResponse = await app.inject({
       method: "POST",
       url: "/user/auth/logout",
-      cookies: { frameq_user_session: sessionCookie },
-      headers: { "x-frameq-csrf": csrfCookie },
+      cookies: { app_user_session: sessionCookie },
+      headers: { "x-app-csrf": csrfCookie },
     });
     expect(logoutResponse.statusCode).toBe(200);
 
@@ -442,7 +442,7 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
     const webAfterLogout = await app.inject({
       method: "GET",
       url: "/dashboard",
-      cookies: { frameq_user_session: sessionCookie },
+      cookies: { app_user_session: sessionCookie },
     });
     expect(webAfterLogout.statusCode).toBe(302);
     expect(webAfterLogout.headers.location).toBe("/login");
@@ -465,19 +465,19 @@ describe("desktop login regression (contract preserved, cookies added)", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/login?desktop=1&state=state-regression&redirect_uri=frameq%3A%2F%2Fauth%2Fcallback",
+      url: "/login?desktop=1&state=state-regression&redirect_uri=pro.8xf.app%3A%2F%2Fauth%2Fcallback",
     });
     expect(response.statusCode).toBe(200);
     // The login page script contains both ternary branches (desktop and web) as string
     // literals; we assert the desktop targets are present. Desktop-mode runtime behavior
-    // (frameq:// redirect + cookie setting) is verified by the tests above.
+    // (pro.8xf.app:// auth redirect + cookie setting) is verified by the tests above.
     expect(response.body).toContain("/auth/email/start");
     expect(response.body).toContain("/auth/email/verify");
     expect(response.body).toContain("assertDesktopLoginRequest");
-    expect(response.body).toContain('redirectUri !== "frameq://auth/callback"');
+    expect(response.body).toContain('redirectUri !== "pro.8xf.app://auth/callback"');
     // Success panel is present (hidden by default, shown after desktop verify).
     expect(response.body).toContain("登录成功");
-    expect(response.body).toContain("此窗口可关闭，请返回并继续使用 FrameQ");
+    expect(response.body).toContain("此窗口可关闭，请返回并继续使用 Locus");
     expect(response.body).toContain('href="/dashboard"');
     expect(response.body).toContain("去到 Web Dashboard");
   });
@@ -556,7 +556,7 @@ describe("web login open-redirect protection", () => {
     // guard is in place and that the web targets are present.
     expect(loginPage.body).toContain("/user/auth/email/start");
     expect(loginPage.body).toContain("/user/auth/email/verify");
-    expect(loginPage.body).toContain('redirectUri !== "frameq://auth/callback"');
+    expect(loginPage.body).toContain('redirectUri !== "pro.8xf.app://auth/callback"');
 
     await app.inject({
       method: "POST",

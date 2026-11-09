@@ -141,7 +141,7 @@ fn default_export_file_name() -> String {
     let hour = seconds_of_day / 3_600;
     let minute = seconds_of_day % 3_600 / 60;
     let second = seconds_of_day % 60;
-    format!("FrameQ-diagnostics-{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}.zip")
+    format!("diagnostics-{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}.zip")
 }
 
 fn civil_date_from_unix_days(days: i64) -> (i64, i64, i64) {
@@ -179,9 +179,9 @@ mod tests {
     #[test]
     fn default_name_uses_fixed_zip_shape() {
         let name = super::default_export_file_name();
-        assert!(name.starts_with("FrameQ-diagnostics-"));
+        assert!(name.starts_with("diagnostics-"));
         assert!(name.ends_with(".zip"));
-        assert_eq!(name.len(), "FrameQ-diagnostics-20260810-123456.zip".len());
+        assert_eq!(name.len(), "diagnostics-20260810-123456.zip".len());
         assert_eq!(super::civil_date_from_unix_days(0), (1970, 1, 1));
         assert_eq!(super::civil_date_from_unix_days(20_675), (2026, 8, 10));
     }
@@ -399,7 +399,7 @@ mod tests {
             desktop_line.push(' ');
             desktop_line.push_str(seeded);
         }
-        fs::write(logs.join("frameq-desktop.log"), format!("{desktop_line}\n"))
+        fs::write(logs.join("desktop.log"), format!("{desktop_line}\n"))
             .expect("desktop log");
 
         let payload = "{\"version\":1,\"operation\":\"download_asr_model\",\"phase\":\"primary_model\",\"category\":\"network\",\"code\":\"connection_timeout\"}";
@@ -426,7 +426,7 @@ mod tests {
             model: SupportedDiagnosticModel::SenseVoiceSmall,
             cache_status: DiagnosticCacheStatus::Ready,
         };
-        let destination = root.join("FrameQ-diagnostics-smoke.zip");
+        let destination = root.join("diagnostics-smoke.zip");
         let state = DiagnosticExportState::default();
         let result = export_to_selection(
             &state,
@@ -448,7 +448,7 @@ mod tests {
             assert!(
                 matches!(
                     name.as_str(),
-                    "diagnostics.json" | "frameq-desktop.log" | "asr-model-download.log"
+                    "diagnostics.json" | "desktop.log" | "asr-model-download.log"
                 ),
                 "unexpected ZIP entry: {name}"
             );
@@ -506,7 +506,7 @@ mod tests {
             .all(|entry| !entry.file_name().to_string_lossy().contains(".part")));
         assert!(!paths
             .user_data_dir
-            .join("FrameQ-diagnostics-smoke.zip")
+            .join("diagnostics-smoke.zip")
             .exists());
     }
 
@@ -515,7 +515,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("frameq-command-{name}-{unique}"));
+        let root = std::env::temp_dir().join(format!("app-command-{name}-{unique}"));
         fs::create_dir_all(&root).expect("root");
         root
     }

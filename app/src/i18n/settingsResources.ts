@@ -28,7 +28,7 @@ export const settingsFeatureResources = {
     },
     storage: {
       heading: "存储与缓存",
-      description: "临时播放缓存保存在当前数据位置的 cache/.frameq-audio-review；清理不会删除原始任务音频。",
+      description: "临时播放缓存保存在当前数据位置的 cache/.app-audio-review；清理不会删除原始任务音频。",
       audioCache: "音频播放缓存：{{size}}",
       clear: "清理播放缓存",
     },
@@ -93,7 +93,7 @@ export const settingsFeatureResources = {
     },
     storage: {
       heading: "儲存空間與快取",
-      description: "暫時播放快取儲存在目前資料位置的 cache/.frameq-audio-review；清除不會刪除原始工作音訊。",
+      description: "暫時播放快取儲存在目前資料位置的 cache/.app-audio-review；清除不會刪除原始工作音訊。",
       audioCache: "音訊播放快取：{{size}}",
       clear: "清除播放快取",
     },
@@ -158,7 +158,7 @@ export const settingsFeatureResources = {
     },
     storage: {
       heading: "Storage and Cache",
-      description: "Temporary playback cache is stored in cache/.frameq-audio-review at the current data location. Clearing it does not delete original task audio.",
+      description: "Temporary playback cache is stored in cache/.app-audio-review at the current data location. Clearing it does not delete original task audio.",
       audioCache: "Audio playback cache: {{size}}",
       clear: "Clear playback cache",
     },
@@ -190,7 +190,7 @@ export const settingsFeatureResources = {
       configLocated: "The local configuration file is shown in the file manager.",
       configLocateFailed: "The configuration file could not be shown in the file manager. Please try again later.",
       migrationDismissFailed: "Could not dismiss the notice. Try again later.",
-      profileCleared: "The Inspiration Profile is cleared. FrameQ will ask again before the next Inspiration generation.",
+      profileCleared: "The Inspiration Profile is cleared. {{product}} will ask again before the next Inspiration generation.",
       profileClearFailed: "The Inspiration Profile could not be cleared. Try again later.",
     },
   },

@@ -670,7 +670,7 @@ export async function buildPytorchRuntimeComponent({
   run(commandName("uv"), ["pip", "install", "--python", pythonExe, "--target", componentSitePackages, "-r", join(buildRoot, "requirements-pytorch.txt")], "Install PyTorch component dependencies");
   const removedDistributions = await harvestComponentSitePackages(componentSitePackages, bundledSitePackages);
   await writeFile(join(componentStaging, BUNDLED_MANIFEST_NAME), runtimeManifestPayload(fingerprint, "pytorch-component", target));
-  const componentZipPath = join(buildRoot, `frameq-pytorch-runtime-${target}.zip`);
+  const componentZipPath = join(buildRoot, `pytorch-runtime-${target}.zip`);
   run(tarCommand, ["-a", "-c", "-f", componentZipPath, "-C", componentStaging, COMPONENT_SITE_PACKAGES_NAME, BUNDLED_MANIFEST_NAME], "Package PyTorch runtime component");
   await removePythonCaches(componentStaging);
   run(
@@ -827,7 +827,7 @@ async function main(argv = process.argv.slice(2)) {
     run(commandName("npm"), ["--prefix", appRoot, "run", "tauri", "--", "build", "--target", tauriTarget], "Build Tauri installer");
   }
 
-  console.log(`FrameQ installer resources prepared at ${resourcesRoot}`);
+  console.log(`Installer resources prepared at ${resourcesRoot}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

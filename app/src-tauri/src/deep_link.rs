@@ -21,7 +21,7 @@ impl DeepLinkActivationWindow for WebviewWindow {
     }
 
     fn emit_deep_link_args(&self, argv: Vec<String>) -> Result<(), String> {
-        self.emit("frameq-deep-link-args", argv)
+        self.emit("app-deep-link-args", argv)
             .map_err(|error| error.to_string())
     }
 }
@@ -80,7 +80,7 @@ mod tests {
 
         activate_main_window_for_deep_link(
             &window,
-            vec!["frameq://auth/callback?ticket=flt_abc&state=state-1".to_string()],
+            vec!["pro.8xf.app://auth/callback?ticket=flt_abc&state=state-1".to_string()],
         );
 
         assert_eq!(
@@ -89,7 +89,7 @@ mod tests {
                 "unminimize",
                 "show",
                 "focus",
-                "emit:frameq://auth/callback?ticket=flt_abc&state=state-1",
+                "emit:pro.8xf.app://auth/callback?ticket=flt_abc&state=state-1",
             ]
         );
     }

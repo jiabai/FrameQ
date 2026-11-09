@@ -6,6 +6,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{ensure_config_dirs, resolve_fixed_paths, RuntimePaths};
+use crate::brand::PRODUCT_NAME;
 
 const ACCOUNT_SESSION_FILE_NAME: &str = "session.json";
 const ACCOUNT_PENDING_STATE_FILE_NAME: &str = "pending_auth_state.txt";
@@ -99,11 +100,11 @@ pub(crate) struct ActivationCodeRequestError {
 }
 
 impl ActivationCodeRequestError {
-    fn new(error_code: &str, message: &str) -> Self {
+    fn new(error_code: &str, message: impl Into<String>) -> Self {
         Self {
             error_code: error_code.to_string(),
             retry_at: None,
-            message: message.to_string(),
+            message: message.into(),
         }
     }
 
@@ -299,17 +300,19 @@ fn generate_auth_state() -> String {
     format!("state-{}", Uuid::new_v4().simple())
 }
 
+const AUTH_CALLBACK_SCHEME: &str = "pro.8xf.app";
+
 pub(crate) fn build_auth_login_url(server_base_url: &str, state: &str) -> Result<String, String> {
     validate_auth_state(state)?;
     let base = server_base_url.trim_end_matches('/');
     if !base.starts_with("http://") && !base.starts_with("https://") {
-        return Err("FrameQ server URL must start with http:// or https://.".to_string());
+        return Err(format!("{PRODUCT_NAME} server URL must start with http:// or https://."));
     }
     Ok(format!(
         "{}/login?desktop=1&state={}&redirect_uri={}",
         base,
         percent_encode(state),
-        percent_encode("frameq://auth/callback")
+        percent_encode(&format!("{AUTH_CALLBACK_SCHEME}://auth/callback"))
     ))
 }
 
@@ -333,7 +336,7 @@ pub(crate) fn parse_auth_callback_url(
 ) -> Result<AuthCallback, String> {
     validate_auth_state(expected_state)?;
     let url = Url::parse(callback_url).map_err(|_| "Auth callback URL is invalid.".to_string())?;
-    if url.scheme() != "frameq" || url.host_str() != Some("auth") || url.path() != "/callback" {
+    if url.scheme() != AUTH_CALLBACK_SCHEME || url.host_str() != Some("auth") || url.path() != "/callback" {
         return Err("Auth callback URL target is invalid.".to_string());
     }
     let mut ticket: Option<String> = None;
@@ -397,7 +400,7 @@ async fn request_activation_code_with_session(
     let Some(session_token) = session_token.filter(|value| !value.trim().is_empty()) else {
         return Err(ActivationCodeRequestError::new(
             "AUTH_REQUIRED",
-            "Please log in to FrameQ first.",
+            format!("Please log in to {PRODUCT_NAME} first."),
         ));
     };
     request_activation_code_from_server(server_base_url, session_token, locale).await
@@ -417,7 +420,7 @@ async fn request_activation_code_from_server(
         .map_err(|_| {
             ActivationCodeRequestError::new(
                 "SERVER_TEMPORARILY_UNAVAILABLE",
-                "FrameQ server is temporarily unavailable.",
+                format!("{PRODUCT_NAME} server is temporarily unavailable."),
             )
         })?;
 
@@ -558,7 +561,7 @@ fn read_account_session(path: &Path) -> Result<Option<AccountSessionFile>, Strin
 
 fn require_account_session(paths: &RuntimePaths) -> Result<AccountSessionFile, String> {
     read_account_session(&account_session_path(paths))?
-        .ok_or_else(|| "Please log in to FrameQ first.".to_string())
+        .ok_or_else(|| format!("Please log in to {PRODUCT_NAME} first."))
 }
 
 fn guest_account_status() -> AccountStatusView {
@@ -585,7 +588,7 @@ fn map_activation_request_error(
     retry_at: Option<String>,
 ) -> ActivationCodeRequestError {
     let error = match status_code {
-        401 => ActivationCodeRequestError::new("AUTH_REQUIRED", "Please log in to FrameQ first."),
+        401 => ActivationCodeRequestError::new("AUTH_REQUIRED", format!("Please log in to {PRODUCT_NAME} first.")),
         404 => ActivationCodeRequestError::new(
             "ACTIVATION_REQUEST_NOT_AVAILABLE",
             "Activation code request is unavailable.",
@@ -600,7 +603,7 @@ fn map_activation_request_error(
         ),
         503 => ActivationCodeRequestError::new(
             "SERVER_TEMPORARILY_UNAVAILABLE",
-            "FrameQ server is temporarily unavailable.",
+            format!("{PRODUCT_NAME} server is temporarily unavailable."),
         ),
         _ => ActivationCodeRequestError::new(
             "INTERNAL_SERVER_ERROR",
@@ -637,6 +640,7 @@ mod tests {
         request_activation_code_from_server, request_activation_code_with_session,
         validate_activation_request_locale, ActivationCodeRequestError, ServerAccountStatus,
     };
+    use crate::brand::PRODUCT_NAME;
     use serde_json::json;
     use std::collections::HashMap;
     use std::io::{Read, Write};
@@ -748,8 +752,8 @@ mod tests {
     #[test]
     fn activation_request_url_targets_desktop_request_route() {
         assert_eq!(
-            build_activation_request_url("https://frameq.example/"),
-            "https://frameq.example/api/desktop/activation-codes/request"
+            build_activation_request_url("https://app.example/"),
+            "https://app.example/api/desktop/activation-codes/request"
         );
     }
 
@@ -789,14 +793,14 @@ mod tests {
     #[test]
     fn request_activation_code_requires_existing_session_before_http() {
         let error = tauri::async_runtime::block_on(request_activation_code_with_session(
-            "https://frameq.example",
+            "https://app.example",
             None,
             "en-US",
         ))
         .expect_err("missing session must fail");
 
         assert_eq!(error.error_code, "AUTH_REQUIRED");
-        assert_eq!(error.message, "Please log in to FrameQ first.");
+        assert_eq!(error.message, format!("Please log in to {PRODUCT_NAME} first."));
     }
 
     #[test]
@@ -821,7 +825,7 @@ mod tests {
                 r#"{"error_code":"AUTH_REQUIRED","retry_at":"2026-08-24T13:00:00Z","message":"secret body"}"#,
                 "AUTH_REQUIRED",
                 Some("2026-08-24T13:00:00Z"),
-                "Please log in to FrameQ first.",
+                "Please log in to {PRODUCT_NAME} first.",
             ),
             (
                 404,
@@ -856,7 +860,7 @@ mod tests {
                 r#"{"error_code":"SERVER_BUSY"}"#,
                 "SERVER_TEMPORARILY_UNAVAILABLE",
                 None,
-                "FrameQ server is temporarily unavailable.",
+                &format!("{PRODUCT_NAME} server is temporarily unavailable."),
             ),
             (
                 500,
@@ -886,7 +890,7 @@ mod tests {
             assert_eq!(request.method, "POST");
             assert_eq!(error.error_code, expected_code);
             assert_eq!(error.retry_at.as_deref(), expected_retry_at);
-            assert_eq!(error.message, expected_message);
+            assert_eq!(error.message, expected_message.replace("{PRODUCT_NAME}", PRODUCT_NAME));
             assert!(!error.message.contains("SECRET"));
         }
     }

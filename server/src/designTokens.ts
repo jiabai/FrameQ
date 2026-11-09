@@ -1,5 +1,5 @@
 /**
- * Shared design tokens and base element styles for FrameQ server-rendered web
+ * Shared design tokens and base element styles for server-rendered web
  * pages (login / dashboard / admin).
  *
  * These pages are standalone HTML documents served as strings, so each page
@@ -8,7 +8,7 @@
  * adds page-specific layout that references `var(--fq-*)`.
  *
  * The token values converge the three previously divergent inline palettes onto
- * the FrameQ brand primary `#0066cc` (the value documented in
+ * the brand primary `#0066cc` (the value documented in
  * `design-system/globals.css`), a single neutral/background set, one font stack,
  * one radius, one shadow language and one focus-ring treatment.
  *

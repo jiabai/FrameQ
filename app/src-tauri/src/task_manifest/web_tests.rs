@@ -28,7 +28,7 @@ pub(crate) fn write_task(root: &Path, task_id: &str, value: &Value) -> PathBuf {
     fs::create_dir_all(task.join("article")).unwrap();
     fs::write(task.join("article/article.txt"), "第一段。\r\n\r\n第二段。\n").unwrap();
     fs::write(task.join("article/article.md"), "# 网页标题\n\n第一段。\n\n第二段。\n").unwrap();
-    fs::write(task.join("frameq-task.json"), serde_json::to_vec_pretty(value).unwrap()).unwrap();
+    fs::write(task.join("task.json"), serde_json::to_vec_pretty(value).unwrap()).unwrap();
     task
 }
 
@@ -151,12 +151,12 @@ fn webpage_transaction_publishes_manifest_last_and_recovers_shared_journal() {
     ]).unwrap();
     assert_eq!(SupportedTask::open(&root, "web-1").unwrap().read_source_text().unwrap().text, "article\n");
     let id = "cccccccccccccccccccccccccccccccc";
-    fs::write(task_dir.join("article/.frameq-artifact-cccccccccccccccccccccccccccccccc-0.rollback"), b"article\n").unwrap();
+    fs::write(task_dir.join("article/.artifact-cccccccccccccccccccccccccccccccc-0.rollback"), b"article\n").unwrap();
     fs::write(task_dir.join("article/article.txt"), b"interrupted").unwrap();
     fs::write(task_dir.join(super::transaction::JOURNAL_FILE_NAME), serde_json::to_vec(&json!({
         "schema_version":1,"transaction_id":id,"state":"prepared","entries":[{
-            "destination":"article/article.txt", "staging":format!("article/.frameq-artifact-{id}-0.staging"),
-            "rollback":format!("article/.frameq-artifact-{id}-0.rollback"),"existed_before":true
+            "destination":"article/article.txt", "staging":format!("article/.artifact-{id}-0.staging"),
+            "rollback":format!("article/.artifact-{id}-0.rollback"),"existed_before":true
         }]
     })).unwrap()).unwrap();
     assert!(SupportedTask::scan_read_only(&root).unwrap().into_tasks().is_empty());

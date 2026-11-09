@@ -18,7 +18,7 @@ import { InsightPreferenceFlow } from "../insightPreferences/InsightPreferenceFl
 import { DraftConfirmationSheet } from "./DraftConfirmationSheet";
 import { SummaryConfirmationSheet } from "./SummaryConfirmationSheet";
 
-const TRANSCRIPT_PATH = "D:/FrameQ/outputs/tasks/long-task-name/transcript/full-transcript.txt";
+const TRANSCRIPT_PATH = "D:/Locus/outputs/tasks/long-task-name/transcript/full-transcript.txt";
 const FLOW = createInsightPreferenceFlow({
   profile: {
     role: "marketing_sales",

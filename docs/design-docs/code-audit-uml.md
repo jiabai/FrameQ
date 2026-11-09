@@ -2502,7 +2502,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 推荐审计提示词：
 
 ```text
-以 docs/design-docs/frameq-code-audit-uml.md 作为当前代码结构基线。
+以 docs/design-docs/code-audit-uml.md 作为当前代码结构基线。
 只审计一个指定子系统，并回到源码验证每个结论。
 不要把 active ExecPlan 或目标架构当作已实现代码。
 每个 finding 必须引用 UML 节点、源码路径和 symbol；区分事实、推断和建议。

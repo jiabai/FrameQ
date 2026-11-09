@@ -18,10 +18,10 @@ struct ItemState {target_identity:Option<DirectoryIdentity>,temporary_identity:O
 pub(super) fn requires_merge(target:&Path,value:&Control)->location::Result<bool> {
     let names=fs::read_dir(target)?.map(|entry|entry.map(|entry|entry.file_name())).collect::<std::io::Result<Vec<_>>>()?;
     if names.is_empty(){return Ok(false);}
-    if names.len()==1&&names[0]==".frameq-storage"&&value.cancelled_copy_refs.iter().any(|pending|!pending.merge&&pending.target==target){return Ok(false);}
+    if names.len()==1&&names[0]==".app-storage"&&value.cancelled_copy_refs.iter().any(|pending|!pending.merge&&pending.target==target){return Ok(false);}
     Ok(true)
 }
-fn operation_root(pending:&Pending)->PathBuf{pending.target.join(".frameq-storage/operations").join(&pending.operation_id)}
+fn operation_root(pending:&Pending)->PathBuf{pending.target.join(".app-storage/operations").join(&pending.operation_id)}
 fn plan_path(pending:&Pending)->PathBuf{operation_root(pending).join("merge.json")}
 fn state_path(pending:&Pending,index:usize)->PathBuf{operation_root(pending).join("merge-state").join(format!("{index}.json"))}
 fn write_owned_json<T:Serialize>(path:&Path,data:&T,max:u64)->location::Result<()> {
@@ -82,7 +82,7 @@ impl DataStorageManager {
         let mut target_active=value.active.clone();target_active.mode="legacy".into();target_active.data_root=pending.target.clone();target_active.root_identity=pending.target_identity;target_active.legacy_output_root=None;
         super::migration::recover_task_transactions(&target_active,&[],&self.cancelled)?;
         inspect_target(&pending.target,&self.cancelled,observer)?;
-        let marker_path=pending.target.join(".frameq-storage/store.json");
+        let marker_path=pending.target.join(".app-storage/store.json");
         if marker_path.exists(){let marker:StoreMarker=control::read_json(&marker_path,64*1024)?;
             if marker.schema_version!=1||uuid::Uuid::parse_str(&marker.library_id).is_err(){return Err(StorageError::new("ControlInvalid"));}}
         let (required,available)=merge_space(&pending.target,&self.config_root,&inventory)?;
@@ -116,7 +116,7 @@ impl DataStorageManager {
         if !pending.merge||pending.plan_token!=token||pending.window_id!=window||!matches!(pending.phase.as_str(),"prepared"|"merging"){return Err(StorageError::new("StaleOperation"));}
         validate_active(&pending.previous)?;safe_filesystem::check_identity(&pending.target,pending.target_identity)?;
         let _root=safe_filesystem::pin_directory(&pending.target)?;let _operation=safe_filesystem::pin_directory(&operation_root(&pending))?;
-        let lock=safe_filesystem::open_lock_file(&pending.target.join(".frameq-storage/operation.lock"))?;lock.try_lock().map_err(|_|StorageError::new("Busy"))?;
+        let lock=safe_filesystem::open_lock_file(&pending.target.join(".app-storage/operation.lock"))?;lock.try_lock().map_err(|_|StorageError::new("Busy"))?;
         let inventory=inventory::read(&pending.target,&pending)?;let plan=load_plan(&pending,&inventory)?;
         if pending.phase=="prepared" {
             inventory::verify_sources_with_progress(&inventory,Some(&self.cancelled),observer)?;
@@ -137,7 +137,7 @@ impl DataStorageManager {
         self.verify_merge_destination(&mut value,&mut pending)?;
         let generation=pending.previous.generation.checked_add(1).ok_or_else(||StorageError::new("ControlLimit"))?;
         let marker=StoreMarker{schema_version:1,library_id:pending.previous.library_id.clone(),generation,root_identity:pending.target_identity};
-        write_owned_json(&pending.target.join(".frameq-storage/store.json"),&marker,64*1024)?;
+        write_owned_json(&pending.target.join(".app-storage/store.json"),&marker,64*1024)?;
         let mut valid_receipts=Vec::new();
         for receipt in &value.cleanup_receipts{let path=pending.target.join(&receipt.relative_path);if safe_filesystem::entry_exists(&path)?&&safe_filesystem::hash_file(&path)?.1==receipt.sha256{valid_receipts.push(receipt.clone());}}
         value.cleanup_receipts=valid_receipts;

@@ -36,7 +36,7 @@ function panelController(locatedTranscriptRange: LocatedRange): TranscriptDetail
     transcriptAudioProgress: 0,
     transcriptAudioScrubberMax: 0,
     transcriptAudioScrubberStyle: {},
-    currentTranscriptPath: "D:/FrameQ/outputs/tasks/same-task/transcript/transcript.txt",
+    currentTranscriptPath: "D:/Locus/outputs/tasks/same-task/transcript/transcript.txt",
     copyTranscript: vi.fn(),
     exportTranscript: vi.fn(),
     saveTranscriptDraft: vi.fn(),

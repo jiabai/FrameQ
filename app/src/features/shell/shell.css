@@ -147,7 +147,7 @@
 
 .sidebar-layout .workspace.shell-content {
   container-type: inline-size;
-  container-name: frameq-workspace;
+  container-name: app-workspace;
   grid-column: 2;
   grid-row: 2;
   min-height: 0;

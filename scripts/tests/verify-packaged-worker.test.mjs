@@ -7,7 +7,7 @@ import test from "node:test";
 import { compareWorkerTrees } from "../verify-packaged-worker.mjs";
 
 async function tempRoot(name) {
-  return mkdtemp(join(tmpdir(), `frameq-${name}-`));
+  return mkdtemp(join(tmpdir(), `app-${name}-`));
 }
 
 async function writeTree(root, files) {

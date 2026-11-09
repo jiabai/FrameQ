@@ -14,7 +14,7 @@ function detailWorkflow() {
   return summarizeWorkerResult({
     status: "completed",
     task_id: "task-1",
-    task_dir: "D:/FrameQ/tasks/task-1",
+    task_dir: "D:/Locus/tasks/task-1",
     artifacts: { insights: "ai/insights.json" },
     text: "Transcript",
     summary: "# 总结\n\n内容",
@@ -42,7 +42,7 @@ function detailController(tab: DetailTab | null): TranscriptDetailController {
     closeDetail: vi.fn(),
     copyDetail: vi.fn(),
     exportDetail: vi.fn(),
-    exportPath: "D:/FrameQ/tasks/task-1/ai/insights.md",
+    exportPath: "D:/Locus/tasks/task-1/ai/insights.md",
     detailText: "text",
     transcriptDirty: false,
   } as unknown as TranscriptDetailController;

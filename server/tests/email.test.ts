@@ -41,7 +41,7 @@ describe("OTP email sender", () => {
           secure: true,
           user: "mailer@example.com",
           pass: "app-password",
-          from: "FrameQ <mailer@example.com>",
+          from: "Locus <mailer@example.com>",
         },
       },
       (options) => {
@@ -63,9 +63,9 @@ describe("OTP email sender", () => {
       auth: { user: "mailer@example.com", pass: "app-password" },
     });
     expect(sentMessages[0]).toMatchObject({
-      from: "FrameQ <mailer@example.com>",
+      from: "Locus <mailer@example.com>",
       to: "USER@Example.COM",
-      subject: "FrameQ login code",
+      subject: "Locus login code",
     });
     expect(JSON.stringify(sentMessages[0])).toContain("123456");
     expect(JSON.stringify(sentMessages[0])).toContain("10 minutes");
@@ -86,7 +86,7 @@ describe("activation email sender", () => {
   test.each([
     {
       locale: "zh-CN" as const,
-      subject: "FrameQ 激活码",
+      subject: "Locus 激活码",
       snippets: [
         "完整激活码",
         "绑定邮箱",
@@ -98,7 +98,7 @@ describe("activation email sender", () => {
     },
     {
       locale: "zh-TW" as const,
-      subject: "FrameQ 啟用碼",
+      subject: "Locus 啟用碼",
       snippets: [
         "完整啟用碼",
         "綁定信箱",
@@ -110,7 +110,7 @@ describe("activation email sender", () => {
     },
     {
       locale: "en-US" as const,
-      subject: "Your FrameQ activation code",
+      subject: "Your Locus activation code",
       snippets: [
         "Full activation code",
         "Bound email",
@@ -132,7 +132,7 @@ describe("activation email sender", () => {
           secure: true,
           user: "mailer@example.com",
           pass: "app-password",
-          from: "FrameQ <mailer@example.com>",
+          from: "Locus <mailer@example.com>",
         },
       },
       () => ({
@@ -154,7 +154,7 @@ describe("activation email sender", () => {
     expect(sentMessages).toHaveLength(1);
     const message = sentMessages[0]!;
     expect(message).toMatchObject({
-      from: "FrameQ <mailer@example.com>",
+      from: "Locus <mailer@example.com>",
       to: "user@example.com",
       subject,
     });
@@ -180,7 +180,7 @@ describe("activation email sender", () => {
           secure: true,
           user: "mailer@example.com",
           pass: "app-password",
-          from: "FrameQ <mailer@example.com>",
+          from: "Locus <mailer@example.com>",
         },
       },
       () => ({
@@ -219,7 +219,7 @@ describe("activation email sender", () => {
           secure: true,
           user: "mailer@example.com",
           pass: "app-password",
-          from: "FrameQ <mailer@example.com>",
+          from: "Locus <mailer@example.com>",
         },
       },
       () => ({

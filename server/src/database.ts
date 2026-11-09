@@ -12,7 +12,7 @@ export function resolveDatabaseUrlFrom(configured: string | undefined): string {
     return configured.trim();
   }
   const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const sqlitePath = resolve(serverRoot, "data", "frameq.sqlite").replace(/\\/g, "/");
+  const sqlitePath = resolve(serverRoot, "data", "app.sqlite").replace(/\\/g, "/");
   return `file:${sqlitePath}`;
 }
 

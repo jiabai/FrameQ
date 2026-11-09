@@ -15,8 +15,8 @@ const SAMPLE: &str = r#"(() => {
   const html = document.documentElement.outerHTML;
   const bytes = new TextEncoder().encode(html).byteLength;
   if (bytes > 8388608) throw Error('article_extraction:input_limit');
-  const stable = globalThis.__frameqPreviousDom === html;
-  globalThis.__frameqPreviousDom = html;
+  const stable = globalThis.__appPreviousDom === html;
+  globalThis.__appPreviousDom = html;
   return {stable, nodes, bytes};
 })()"#;
 
@@ -63,7 +63,7 @@ pub unsafe fn create_world(webview: &ICoreWebView2, shared: Shared, generation: 
         let Some(frame) = frame else { fail(&shared, generation, "WEB_EXTRACTION_FAILED"); return Ok(()); };
         let state = shared.clone();
         let view2 = view.clone();
-        call(&view, "Page.createIsolatedWorld", json!({"frameId":frame, "worldName":format!("frameq-{}-{generation}", shared.borrow().identity.session_id)}), move |status, response| {
+        call(&view, "Page.createIsolatedWorld", json!({"frameId":frame, "worldName":format!("app-{}-{generation}", shared.borrow().identity.session_id)}), move |status, response| {
             if !state.borrow().current(generation) { return Ok(()); }
             if status.is_err() { fail(&state, generation, "WEB_EXTRACTION_FAILED"); return Ok(()); }
             let context = serde_json::from_str::<Value>(&response).ok().and_then(|v| v.get("executionContextId").and_then(Value::as_u64));
@@ -124,7 +124,7 @@ unsafe fn extract(webview: &ICoreWebView2, shared: Shared, generation: u64, cont
         state.javascript_pending = true;
         state.extracting = true;
         state.javascript_started = Instant::now();
-        (format!("{}\n;globalThis.__frameqExtractArticle(document, {})", state.script, serde_json::to_string(&final_url).expect("URL JSON")), state.network.epoch())
+        (format!("{}\n;globalThis.__appExtractArticle(document, {})", state.script, serde_json::to_string(&final_url).expect("URL JSON")), state.network.epoch())
     };
     let view = webview.clone();
     call(webview, "Runtime.evaluate", json!({"expression":expression, "contextId":context, "returnByValue":true, "awaitPromise":true}), move |status, response| {

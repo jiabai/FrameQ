@@ -96,7 +96,7 @@ def test_checkout_http_error_maps_to_existing_contract(
     expected_code: str,
 ) -> None:
     error = HTTPError(
-        "https://frameq.example/api/desktop/llm/checkouts",
+        "https://app.example/api/desktop/llm/checkouts",
         status,
         "checkout failed",
         None,
@@ -106,7 +106,7 @@ def test_checkout_http_error_maps_to_existing_contract(
     translated = _managed_checkout_http_error(error)
 
     assert translated.code == expected_code
-    assert "frameq.example" not in str(translated)
+    assert "app.example" not in str(translated)
 
 
 def test_checkout_rejects_missing_configuration_before_network_request() -> None:
@@ -231,7 +231,7 @@ def test_managed_provider_construction_requires_no_checkout_request() -> None:
     provider = build_insight_provider(
         {
             "APP_LLM_SOURCE": "server",
-            "APP_LLM_CHECKOUT_URL": "https://frameq.example/api/desktop/llm/checkouts",
+            "APP_LLM_CHECKOUT_URL": "https://app.example/api/desktop/llm/checkouts",
             "APP_LLM_SESSION_TOKEN": "configuration-only-session",
             "APP_LLM_CHECKOUT_REQUEST_ID": "operation-1",
         }
@@ -276,7 +276,7 @@ def test_managed_token_budget_is_validated_before_checkout(value: str) -> None:
     with pytest.raises(InsightGenerationError, match="token budget is invalid") as error:
         build_insight_provider({
             "APP_LLM_SOURCE": "server",
-            "APP_LLM_CHECKOUT_URL": "https://frameq.example/api/desktop/llm/checkouts",
+            "APP_LLM_CHECKOUT_URL": "https://app.example/api/desktop/llm/checkouts",
             "APP_LLM_SESSION_TOKEN": "configuration-only-session",
             "APP_LLM_CHECKOUT_REQUEST_ID": "operation-1",
             "APP_LLM_MAX_TOKENS": value,

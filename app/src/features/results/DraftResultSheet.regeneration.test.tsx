@@ -4,7 +4,7 @@ import { useState } from "react";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { frameqI18n, initializeI18n } from "../../i18n/i18n";
+import { appI18n, initializeI18n } from "../../i18n/i18n";
 import { createInitialWorkflow } from "../../workflowState";
 import { ConfirmDialog } from "../modal/ConfirmDialog";
 import { DraftConfirmationSheet } from "./DraftConfirmationSheet";
@@ -23,7 +23,7 @@ function DraftSheets({ persistedEdits }: { persistedEdits: boolean }) {
   const [draftSeedInsightId, setDraftSeedInsightId] = useState<number | null>(99);
   const workflow = {
     ...createInitialWorkflow(), stage: "completed" as const,
-    taskId: "draft-1", taskDir: "D:/FrameQ/outputs/tasks/draft-1",
+    taskId: "draft-1", taskDir: "D:/Locus/outputs/tasks/draft-1",
     draft: "# Original draft", draftEdited: persistedEdits, draftSeedInsightId,
     artifacts: { draft: "ai/draft.md" },
   };
@@ -47,7 +47,7 @@ function DraftSheets({ persistedEdits }: { persistedEdits: boolean }) {
 
 async function editableSheets(persistedEdits: boolean) {
   await initializeI18n("zh-CN");
-  render(<I18nextProvider i18n={frameqI18n}><DraftSheets persistedEdits={persistedEdits} /></I18nextProvider>);
+  render(<I18nextProvider i18n={appI18n}><DraftSheets persistedEdits={persistedEdits} /></I18nextProvider>);
   await waitFor(() => expect(screen.getByRole("status").textContent).toContain("无法读取草稿"));
   fireEvent.click(screen.getByRole("button", { name: "编辑模式" }));
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "Unsaved draft" } });

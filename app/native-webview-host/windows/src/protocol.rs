@@ -144,7 +144,7 @@ mod tests {
             let value = serde_json::json!({"type":"init", "contract_version":1,
                 "operation_id":"bbd02c47-7155-47e9-b72b-be6583cbff09", "session_id":"7213a9bd-a39b-4d3b-b33c-c35408a53135",
                 "url":"https://example.com/", "extraction_script":"x".repeat(bytes),
-                "platform":{"kind":"windows", "user_data_dir":"D:\\FrameQ\\profile"}, "deadline_ms":90000});
+                "platform":{"kind":"windows", "user_data_dir":"D:\\Locus\\profile"}, "deadline_ms":90000});
             let mut input = std::io::Cursor::new(format!("{value}\n"));
             assert_eq!(read_record(&mut input).is_ok(), accepted);
         }

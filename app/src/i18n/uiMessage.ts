@@ -1,4 +1,4 @@
-import { frameqI18n } from "./i18n";
+import { appI18n } from "./i18n";
 import type { SupportedLocale } from "./locale";
 
 export type UiMessageArgs = Readonly<Record<string, string | number>>;
@@ -40,7 +40,7 @@ export function renderUiMessage(
   const separator = message.messageCode.indexOf(".");
   const namespace = message.messageCode.slice(0, separator);
   const key = message.messageCode.slice(separator + 1);
-  const dynamicI18n = frameqI18n as unknown as DynamicI18n;
+  const dynamicI18n = appI18n as unknown as DynamicI18n;
   if (!dynamicI18n.exists(key, { lng: locale, ns: namespace })) {
     return "";
   }

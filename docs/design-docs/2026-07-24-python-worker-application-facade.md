@@ -321,7 +321,7 @@ Implementation must update:
 
 - `docs/ARCHITECTURE.md` to move production composition from CLI to the application layer;
 - `docs/SECURITY.md` to record the closed process-adapter and handler ownership boundaries;
-- `docs/design-docs/frameq-code-audit-uml.md` to show the five handlers and mark the issue resolved;
+- `docs/design-docs/code-audit-uml.md` to show the five handlers and mark the issue resolved;
 - `docs/exec-plans/tech-debt-tracker.md` to move this item from High Priority to resolved;
 - `TASKS.md`, `AGENTS.md`, and active/completed ExecPlan indexes.
 

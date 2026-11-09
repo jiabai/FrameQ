@@ -681,7 +681,7 @@ mod tests {
             .expect("system time")
             .as_millis();
         std::env::temp_dir()
-            .join("frameq-insight-preferences-tests")
+            .join("app-insight-preferences-tests")
             .join(format!("{name}-{millis}"))
             .join("insight-preferences.json")
     }

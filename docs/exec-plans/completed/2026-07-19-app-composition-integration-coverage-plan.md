@@ -72,7 +72,7 @@ against the real operating-system file manager in this automated test.
   browser smoke suite.
 - `docs/design-docs/2026-07-19-app-composition-integration-coverage.md`: durable test-boundary
   decision.
-- `docs/design-docs/frameq-code-audit-uml.md`: audit status and test ownership evidence.
+- `docs/design-docs/code-audit-uml.md`: audit status and test ownership evidence.
 - `TASKS.md`, `AGENTS.md`, ExecPlan indexes: living governance status.
 
 ## Task 1: Register the plan
@@ -208,7 +208,7 @@ git commit -m "test(app): cover composition root lifecycles"
 
 **Files:**
 - Modify: `docs/design-docs/2026-07-19-app-composition-integration-coverage.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `TASKS.md`, `AGENTS.md`
 - Modify: `docs/exec-plans/active/index.md`, `docs/exec-plans/completed/index.md`
 - Move: this plan from `active/` to `completed/`

@@ -71,7 +71,7 @@ describe("Tauri desktop window configuration", () => {
     const [mainWindow] = config.app.windows;
 
     expect(mainWindow).toMatchObject({
-      title: "FrameQ",
+      title: "Locus",
       width: 1180,
       height: 760,
       minWidth: 720,
@@ -131,7 +131,7 @@ describe("Tauri desktop window configuration", () => {
     expect(config.plugins?.updater?.pubkey).toEqual(expect.any(String));
     expect(config.plugins?.updater?.pubkey?.length).toBeGreaterThan(80);
     expect(config.plugins?.updater?.endpoints).toEqual([
-      "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1",
+      "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?updater=1",
     ]);
     expect(config.plugins?.updater?.windows?.installMode).toBe("passive");
     expect(config.bundle.resources).not.toContain("resources/models/**/*");
@@ -166,8 +166,8 @@ describe("Tauri desktop window configuration", () => {
   test("uses release-grade application metadata", () => {
     const manifest = readFileSync(cargoManifestPath, "utf8");
 
-    expect(manifest).toContain('description = "FrameQ desktop video transcription client"');
-    expect(manifest).toContain('authors = ["FrameQ"]');
+    expect(manifest).toContain('description = "Locus desktop video transcription client"');
+    expect(manifest).toContain('authors = ["Locus contributors"]');
     expect(manifest).toContain('tauri-plugin-updater = "2"');
     expect(manifest).toContain('tauri-plugin-process = "2"');
     expect(manifest).not.toContain('description = "A Tauri App"');
@@ -218,7 +218,7 @@ describe("Tauri desktop window configuration", () => {
       import { join } from "node:path";
       import { findStandalonePythonRuntimeRoot } from ${JSON.stringify(pathToFileURL(installerScriptPath).href)};
 
-      const tempRoot = await mkdtemp(join(tmpdir(), "frameq-python-root-"));
+      const tempRoot = await mkdtemp(join(tmpdir(), "app-python-root-"));
       const runtimeRoot = join(tempRoot, "python");
       try {
         await mkdir(join(runtimeRoot, "Lib", "venv", "scripts", "nt"), { recursive: true });
@@ -316,12 +316,12 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("node scripts/build-installer.mjs --target macos-x64 --skip-tauri-build");
     expect(workflow).toContain("npm --prefix app run tauri -- build --bundles app --target x86_64-apple-darwin");
     // The DMG is packaged with hdiutil, not Tauri's Finder-driven bundle_dmg.sh.
-    expect(workflow).toContain("bash scripts/make-macos-dmg.sh x86_64-apple-darwin FrameQ");
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh x86_64-apple-darwin Locus");
     expect(workflow).toContain("target/x86_64-apple-darwin/release/bundle/dmg/*.dmg");
     // The Intel job re-imports the packaged runtime so a dropped .dylibs folder
     // (delocate output) fails the build before the DMG is uploaded.
     expect(workflow).toContain(
-      'APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/FrameQ.app"',
+      'APP="app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Locus.app"',
     );
     expect(workflow).toContain('RES="$APP/Contents/Resources/resources"');
 
@@ -334,10 +334,10 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("APP_FFPROBE_ARCHIVE_URL_ARM64");
     expect(workflow).toContain("node scripts/build-installer.mjs --target macos-arm64 --skip-tauri-build");
     expect(workflow).toContain("npm --prefix app run tauri -- build --bundles app --target aarch64-apple-darwin");
-    expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ");
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin Locus");
     expect(workflow).toContain("target/aarch64-apple-darwin/release/bundle/dmg/*.dmg");
     expect(workflow).toContain(
-      'APP="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/FrameQ.app"',
+      'APP="app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Locus.app"',
     );
     expect(workflow).toContain('RES="$APP/Contents/Resources/resources"');
 
@@ -356,8 +356,8 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("PYTHONDONTWRITEBYTECODE=1");
     expect(workflow).toContain("find \"$APP/Contents/Resources/resources\" \\( -name __pycache__ -o -name '*.pyc' \\)");
     expect(workflow).toContain("codesign --verify --deep --strict --verbose=4 \"$APP\"");
-    expect(workflow).toContain("bash scripts/make-macos-dmg.sh x86_64-apple-darwin FrameQ");
-    expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin FrameQ");
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh x86_64-apple-darwin Locus");
+    expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin Locus");
   });
 
   test("installer verifies the macOS runtime is self-contained", () => {

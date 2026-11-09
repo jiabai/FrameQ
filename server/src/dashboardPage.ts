@@ -143,7 +143,7 @@ export function renderDashboardPage(input: DashboardPageInput): string {
         try {
           const response = await fetch("/user/auth/logout", {
             method: "POST",
-            headers: { "x-frameq-csrf": csrfToken },
+            headers: { "x-app-csrf": csrfToken },
           });
           if (response.ok) {
             window.location.href = "/login";

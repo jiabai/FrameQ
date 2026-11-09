@@ -16,7 +16,7 @@ function note(overrides: Partial<HistoryListItem> = {}): HistoryListItem {
   return {
     taskId: "saved-note", id: "saved-note", createdAt: "2026-10-31T00:00:00Z",
     source: { kind: "url", url: "https://www.youtube.com/watch?v=abcDEF_123-" },
-    status: "completed", taskDir: "D:/FrameQ/outputs/saved-note", outputDir: "D:/FrameQ/outputs/saved-note",
+    status: "completed", taskDir: "D:/Locus/outputs/saved-note", outputDir: "D:/Locus/outputs/saved-note",
     artifacts: { transcript_txt: "transcript/transcript.txt" }, error: null,
     textPreview: "Saved note", insightsCount: 0, ...overrides,
   };

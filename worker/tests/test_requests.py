@@ -676,7 +676,7 @@ def test_retry_non_draft_target_without_platform_parses_with_none(
         "../outside",
         "nested/task",
         "nested\\task",
-        "C:/FrameQ/task",
+        "C:/Locus/task",
         "20260705-153012-douyin-demo/../outside",
     ],
 )

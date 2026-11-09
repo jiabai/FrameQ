@@ -47,7 +47,7 @@ export async function buildArticleExtractor(outputRoot = join(appRoot, "src-taur
     sourcemap: false,
     charset: "utf8",
     legalComments: "external",
-    banner: { js: "/*! FrameQ article extractor. See NOTICE.txt, licenses/ and source/siteRules.ts. */" },
+    banner: { js: "/*! Article extractor. See NOTICE.txt, licenses/ and source/siteRules.ts. */" },
   });
   const copies = [
     [join(sourceRoot, "NOTICE.txt"), "NOTICE.txt"],
@@ -70,7 +70,7 @@ export async function buildArticleExtractor(outputRoot = join(appRoot, "src-taur
   const manifest = {
     schema_version: 1,
     bundle: bundle.path,
-    global: "__frameqExtractArticle",
+    global: "__appExtractArticle",
     bytes: bundle.bytes,
     sha256: bundle.sha256,
     compiler: { name: "esbuild", version: compilerVersion },

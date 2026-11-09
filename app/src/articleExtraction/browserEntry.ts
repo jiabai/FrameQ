@@ -2,7 +2,7 @@
 import { extractArticle } from "./extractArticle";
 
 declare global {
-  var __frameqExtractArticle: typeof extractArticle;
+  var __appExtractArticle: typeof extractArticle;
 }
 
-globalThis.__frameqExtractArticle = extractArticle;
+globalThis.__appExtractArticle = extractArticle;

@@ -24,7 +24,7 @@ async function buildAdminServer() {
     llmConfigEncryptionKey: encryptionKey,
     now: () => now,
   } as any);
-  const cookie = `frameq_admin_session=${adminToken}; frameq_admin_csrf=${csrfToken}`;
+  const cookie = `app_admin_session=${adminToken}; app_admin_csrf=${csrfToken}`;
   return { store, app, cookie, csrfToken };
 }
 
@@ -43,7 +43,7 @@ describe("GET /admin — anysearch config section", () => {
     await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "https://anysearch.example/mcp", api_key: "sk-secret-1234" },
     });
     const response = await app.inject({ method: "GET", url: "/admin", headers: { cookie } });
@@ -57,7 +57,7 @@ describe("POST /admin/api/anysearch-config", () => {
     const response = await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "https://anysearch.example/mcp", api_key: "sk-secret-1234" },
     });
     expect(response.statusCode).toBe(200);
@@ -74,13 +74,13 @@ describe("POST /admin/api/anysearch-config", () => {
     await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "https://anysearch.example/mcp", api_key: "sk-secret-1234" },
     });
     const cleared = await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "https://anysearch.example/mcp", clear_api_key: true },
     });
     expect(cleared.statusCode).toBe(200);
@@ -92,13 +92,13 @@ describe("POST /admin/api/anysearch-config", () => {
     await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "https://anysearch.example/mcp", api_key: "sk-secret-1234" },
     });
     const kept = await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "https://anysearch.example/mcp" },
     });
     expect(kept.statusCode).toBe(200);
@@ -120,7 +120,7 @@ describe("POST /admin/api/anysearch-config", () => {
     await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "https://anysearch.example/mcp", api_key: "sk-secret-1234" },
     });
 
@@ -164,7 +164,7 @@ describe("POST /admin/api/anysearch-config", () => {
     const response = await app.inject({
       method: "POST",
       url: "/admin/api/anysearch-config",
-      headers: { cookie, "x-frameq-csrf": csrfToken },
+      headers: { cookie, "x-app-csrf": csrfToken },
       payload: { mcp_url: "ftp://nope.example/mcp" },
     });
     expect(response.statusCode).toBe(400);

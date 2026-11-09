@@ -10,8 +10,8 @@ function historyItem(taskId: string): HistoryListItem {
   return {
     taskId, id: taskId, createdAt: "2026-10-30T10:00:00Z",
     source: { kind: "local_file", displayName: "Interview.mp3", mediaKind: "audio" },
-    status: "completed", taskDir: `D:/FrameQ/outputs/tasks/${taskId}`,
-    outputDir: `D:/FrameQ/outputs/tasks/${taskId}`, artifacts: {},
+    status: "completed", taskDir: `D:/Locus/outputs/tasks/${taskId}`,
+    outputDir: `D:/Locus/outputs/tasks/${taskId}`, artifacts: {},
     error: null, textPreview: taskId, insightsCount: 0,
   };
 }

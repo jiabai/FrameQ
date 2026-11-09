@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { frameqI18n, initializeI18n } from "./i18n";
+import { appI18n, initializeI18n } from "./i18n";
 import { SUPPORTED_LOCALES } from "./locale";
 import { processingResources } from "./processingResources";
 import { RESOURCE_NAMESPACES, resources } from "./resources";
@@ -23,7 +23,7 @@ describe("processing workspace localization", () => {
     expect(entries.map(([key]) => key)).toEqual(resourceEntries(processingResources["en-US"]).map(([key]) => key));
     for (const [key, value] of entries) {
       expect(value.trim(), key).not.toBe("");
-      expect(frameqI18n.getResource(locale, "processing", key), key).toBe(value);
+      expect(appI18n.getResource(locale, "processing", key), key).toBe(value);
     }
   });
 
@@ -33,7 +33,7 @@ describe("processing workspace localization", () => {
     ["en-US", "Good content. Your next note.", "Step 2 of 3", "Video from Bilibili", "Elapsed 01:46"],
   ] as const)("renders the approved composition and interpolated labels in %s", async (locale, title, counter, source, elapsed) => {
     await initializeI18n(locale);
-    const t = frameqI18n.getFixedT(locale, "processing");
+    const t = appI18n.getFixedT(locale, "processing");
 
     expect(t("pageTitle")).toBe(title);
     expect(t("stepCounter", { current: 2, total: 3 })).toBe(counter);

@@ -20,7 +20,7 @@ test("compiles a reproducible executable browser bundle with fingerprints and co
     const second = await buildArticleExtractor(output);
     assert.deepEqual(first, second);
     assert.equal(first.schema_version, 1);
-    assert.equal(first.global, "__frameqExtractArticle");
+    assert.equal(first.global, "__appExtractArticle");
     assert.deepEqual(Object.fromEntries(Object.entries(first.dependencies).map(([name, data]) => [name, data.version])), EXTRACTOR_DEPENDENCIES);
     for (const file of first.files) {
       const bytes = await readFile(join(output, file.path));
@@ -32,7 +32,7 @@ test("compiles a reproducible executable browser bundle with fingerprints and co
     try {
       const original = dom.window.document.documentElement.outerHTML;
       dom.window.eval(await readFile(join(output, first.bundle), "utf8"));
-      const result = dom.window.__frameqExtractArticle(dom.window.document, "https://example.com/articles/current?id=1&token=secret");
+      const result = dom.window.__appExtractArticle(dom.window.document, "https://example.com/articles/current?id=1&token=secret");
       assert.deepEqual(Object.keys(result).sort(), ["markdown", "sourceUrl", "text", "title"]);
       assert.equal(result.sourceUrl, "https://example.com/articles/current?id=1");
       assert.match(result.markdown, /\| Method \| Result \|/);

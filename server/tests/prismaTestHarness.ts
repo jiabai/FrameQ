@@ -19,10 +19,10 @@ export async function createTemporaryPrismaClient(options: TemporaryPrismaClient
   databaseUrl: string;
   cleanup: () => Promise<void>;
 }> {
-  const directory = mkdtempSync(join(tmpdir(), "frameq-prisma-transaction-"));
+  const directory = mkdtempSync(join(tmpdir(), "app-prisma-transaction-"));
   const clients = new Set<PrismaClient>();
   try {
-    const databasePath = join(directory, "frameq.sqlite").replace(/\\/g, "/");
+    const databasePath = join(directory, "app.sqlite").replace(/\\/g, "/");
     const databaseUrl = `file:${databasePath}`;
     const database = new DatabaseSync(databasePath);
     try {

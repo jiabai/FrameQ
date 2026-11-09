@@ -4,7 +4,7 @@ import { cancelNoteTitleGeneration, createInitialWorkflow, startNoteTitleGenerat
 import { bindNoteTitleResult, completedNoteResult, finishCancelledTitleAttempt, shouldGenerateNoteTitle } from "./noteTitleSubmission";
 
 const localResult: WorkerResult = {
-  status: "completed", task_id: "saved-note", task_dir: "D:/FrameQ/outputs/tasks/saved-note",
+  status: "completed", task_id: "saved-note", task_dir: "D:/Locus/outputs/tasks/saved-note",
   artifacts: { transcript_txt: "transcript/transcript.txt", audio: "media/audio.wav" },
   text: "A saved transcript", summary: "", insights: [], transcript: null,
   dissection: null, dissection_source_status: null, draft: "", error: null,

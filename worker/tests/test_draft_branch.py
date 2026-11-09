@@ -105,7 +105,7 @@ def _write_task_skeleton(
     ai_dir = task_dir / "ai"
     ai_dir.mkdir(parents=True, exist_ok=True)
 
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,
@@ -373,7 +373,7 @@ def test_draft_branch_run_draft_exception_wraps_as_generation_failed(
     protected = {
         path: path.read_bytes()
         for path in _task_dir(tmp_path).rglob("*")
-        if path.is_file() and path.name != "frameq-task.json"
+        if path.is_file() and path.name != "task.json"
     }
     runtime_env = _env(tmp_path)
     if invalid_checkout:
@@ -400,7 +400,7 @@ def test_draft_branch_run_draft_exception_wraps_as_generation_failed(
     }
     assert captured.out == ""
     assert captured.err == ""
-    manifest = json.loads((_task_dir(tmp_path) / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_task_dir(tmp_path) / "task.json").read_text(encoding="utf-8"))
     assert manifest["error"] == result["error"]
     for path, content in protected.items():
         assert path.read_bytes() == content

@@ -20,7 +20,7 @@ impl Fixture {
 #[test]
 fn complete_tree_copy_keeps_metadata_configs_and_requires_new_process_view() {
     let f=Fixture::new();
-    for path in ["outputs/tasks/a/frameq-task.json","outputs/tasks/a/frameq-note-metadata.json","outputs/tasks/a/transcript/original/transcript.txt","models/MODEL_VERSION.txt","runtime/pytorch/v/runtime-manifest.json","cache/tasks/a/scratch.bin","cache/.frameq-audio-review/a/audio.wav","collections.json","work/legacy.txt"] {f.write(path,path.as_bytes());}
+    for path in ["outputs/tasks/a/task.json","outputs/tasks/a/app-note-metadata.json","outputs/tasks/a/transcript/original/transcript.txt","models/MODEL_VERSION.txt","runtime/pytorch/v/runtime-manifest.json","cache/tasks/a/scratch.bin","cache/.app-audio-review/a/audio.wav","collections.json","work/legacy.txt"] {f.write(path,path.as_bytes());}
     f.write("auth/session.json",b"private credential");f.write("logs/desktop.log",b"fixed log");
     let m=f.manager();f.migrate(&m);
     assert_eq!(m.state().data_access,"restart_required");assert!(m.acquire().is_err());assert!(m.can_restart());
@@ -32,7 +32,7 @@ fn complete_tree_copy_keeps_metadata_configs_and_requires_new_process_view() {
     m.recheck().unwrap();assert_eq!(m.state().data_access,"ready");
     let paths=paths_for_config(&f.config).unwrap();assert_eq!(paths.data_root,f.target);
     assert!(paths.models_root.join("MODEL_VERSION.txt").is_file());
-    fs::write(f.target.join("outputs/tasks/a/frameq-note-metadata.json"),b"later legitimate edit").unwrap();
+    fs::write(f.target.join("outputs/tasks/a/app-note-metadata.json"),b"later legitimate edit").unwrap();
     drop(m);let m=f.manager();assert_eq!(m.state().data_access,"ready");
 }
 
@@ -106,7 +106,7 @@ fn waiting_can_be_cancelled_while_the_existing_writer_finishes() {
     let f=Fixture::new();let m=f.manager();let permit=m.acquire().unwrap();let target=f.target.clone();let manager=Arc::clone(&m);let child=std::thread::spawn(move||manager.prepare(target,vec![],"main",0));
     let until=std::time::Instant::now()+std::time::Duration::from_secs(5);let operation=loop{if let Some(p)=m.state().operation{break p;}assert!(std::time::Instant::now()<until);std::thread::yield_now();};
     assert_eq!(operation.phase,"waiting");m.cancel(&operation.operation_id,0).unwrap();assert_eq!(child.join().unwrap().unwrap_err().code,"Cancelled");
-    f.write("cache/existing-writer",b"finished");drop(permit);assert_eq!(m.state().data_access,"ready");assert!(m.acquire().is_ok());assert!(!f.target.join(".frameq-storage").exists());
+    f.write("cache/existing-writer",b"finished");drop(permit);assert_eq!(m.state().data_access,"ready");assert!(m.acquire().is_ok());assert!(!f.target.join(".app-storage").exists());
 }
 
 #[test]
@@ -247,8 +247,8 @@ fn stored_inventory_reference_contract_resumes_actual_interrupted_copy_and_rejec
     let mut child=child_command(&f,"start","copying").spawn().unwrap();let stdout=child.stdout.take().unwrap();let(send,receive)=std::sync::mpsc::channel();std::thread::spawn(move||{for line in std::io::BufReader::new(stdout).lines(){let line=line.unwrap();if line.starts_with("STORAGE_DURABLE_PHASE:"){send.send(line).unwrap();return;}}});
     let reached=receive.recv_timeout(std::time::Duration::from_secs(30));child.kill().unwrap();let output=child.wait_with_output().unwrap();assert!(reached.is_ok(),"{}",String::from_utf8_lossy(&output.stderr));
     let path=f.config.join("data-storage.json");let mut stored:serde_json::Value=serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();let pending=stored.get_mut("pending").unwrap().as_object_mut().unwrap();assert_eq!(pending["phase"],"copying");let hash=pending["inventoryHash"].clone();pending.remove("sourceRelocations");
-    pending.insert("inventoryVersions".into(),serde_json::json!([{"relativePath":format!(".frameq-storage/operations/{}/inventory.json",p.operation_id),"sha256":hash}]));
-    let mut invalid=stored.clone();invalid["pending"]["inventoryVersions"][0]["relativePath"]=serde_json::json!(".frameq-storage/foreign/inventory.json");control::write_json(&path,&invalid,control::MAX_CONTROL).unwrap();let invalid_manager=f.manager();assert_eq!(invalid_manager.state().last_error.as_deref(),Some("ControlInvalid"));drop(invalid_manager);
+    pending.insert("inventoryVersions".into(),serde_json::json!([{"relativePath":format!(".app-storage/operations/{}/inventory.json",p.operation_id),"sha256":hash}]));
+    let mut invalid=stored.clone();invalid["pending"]["inventoryVersions"][0]["relativePath"]=serde_json::json!(".app-storage/foreign/inventory.json");control::write_json(&path,&invalid,control::MAX_CONTROL).unwrap();let invalid_manager=f.manager();assert_eq!(invalid_manager.state().last_error.as_deref(),Some("ControlInvalid"));drop(invalid_manager);
     control::write_json(&path,&stored,control::MAX_CONTROL).unwrap();let m=f.manager();assert_eq!(m.state().operation.as_ref().unwrap().phase,"copying");m.resume(&p.operation_id,0,"recovery",&mut |_|{}).unwrap();drop(m);let m=f.manager();m.recheck().unwrap();assert_eq!(m.state().data_access,"ready");assert_eq!(fs::metadata(f.target.join("cache/large")).unwrap().len(),9*1024*1024);assert!(f.config.join("cache/large").is_file());
 }
 
@@ -405,11 +405,11 @@ fn target_is_pinned_during_long_preflight_and_foreign_metadata_never_commits() {
         if fs::rename(&f.target,&moved).is_ok(){renamed=true;fs::create_dir(&f.target).unwrap();}
         Ok(serde_json::Value::Null)
     });
-    if renamed {assert!(result.is_err());assert!(!f.target.join(".frameq-storage").exists());}else{assert!(result.is_ok());}
+    if renamed {assert!(result.is_err());assert!(!f.target.join(".app-storage").exists());}else{assert!(result.is_ok());}
     let f=Fixture::new();f.write("cache/file",b"saved");let m=f.manager();let p=f.prepare(&m);let mut added=false;
-    let result=m.start(&p.plan_token,"main",&mut |s|{if !added&&s.operation.as_ref().is_some_and(|p|p.phase=="copying"&&p.completed_files>0){fs::write(f.target.join(".frameq-storage/foreign"),b"unrelated").unwrap();added=true;}});
+    let result=m.start(&p.plan_token,"main",&mut |s|{if !added&&s.operation.as_ref().is_some_and(|p|p.phase=="copying"&&p.completed_files>0){fs::write(f.target.join(".app-storage/foreign"),b"unrelated").unwrap();added=true;}});
     assert_eq!(result.unwrap_err().code,"TargetConflict");assert_eq!(paths_for_config(&f.config).unwrap().data_root,f.config);
-    assert_eq!(fs::read(f.target.join(".frameq-storage/foreign")).unwrap(),b"unrelated");assert!(f.config.join("cache/file").exists());
+    assert_eq!(fs::read(f.target.join(".app-storage/foreign")).unwrap(),b"unrelated");assert!(f.config.join("cache/file").exists());
 }
 
 #[test]

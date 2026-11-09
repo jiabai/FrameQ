@@ -3,7 +3,7 @@ import Foundation
 import Darwin
 
 @main
-enum FrameQWebViewHost {
+enum AppWebViewHost {
     @MainActor
     static func main() {
         guard CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--operation-id",

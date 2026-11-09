@@ -10,8 +10,8 @@ import { DataStorageProvider } from "./useDataStorageController";
 
 async function markup(locale: SupportedLocale, merge: boolean, phase?: StoragePhase, error: string | null = null) {
   await initializeI18n(locale);
-  const preview = phase ? null : parseMigrationPreview({ planToken: "plan", operationId: "operation", merge, generation: 3, sourcePaths: ["C:/FrameQData"], targetPath: "D:/FrameQData", totalFiles: 3, totalBytes: 4096, requiredBytes: 8192, availableBytes: 65536 });
-  const state = parseStorageState({ schemaVersion: 1, generation: 3, dataAccess: "recovery_required", mode: "managed", currentPath: "C:/FrameQData", legacyOutputPath: null, lastError: null, cleanupReceipts: [], recoveryCandidates: [], operation: { operationId: "operation", merge, phase: phase ?? "prepared", sourcePaths: ["C:/FrameQData"], targetPath: "D:/FrameQData", totalFiles: 3, completedFiles: 1, totalBytes: 4096, completedBytes: 1024, canCancel: !phase, canResume: true, lastError: error } });
+  const preview = phase ? null : parseMigrationPreview({ planToken: "plan", operationId: "operation", merge, generation: 3, sourcePaths: ["C:/LocusData"], targetPath: "D:/LocusData", totalFiles: 3, totalBytes: 4096, requiredBytes: 8192, availableBytes: 65536 });
+  const state = parseStorageState({ schemaVersion: 1, generation: 3, dataAccess: "recovery_required", mode: "managed", currentPath: "C:/LocusData", legacyOutputPath: null, lastError: null, cleanupReceipts: [], recoveryCandidates: [], operation: { operationId: "operation", merge, phase: phase ?? "prepared", sourcePaths: ["C:/LocusData"], targetPath: "D:/LocusData", totalFiles: 3, completedFiles: 1, totalBytes: 4096, completedBytes: 1024, canCancel: !phase, canResume: true, lastError: error } });
   return renderToStaticMarkup(<LocaleProvider initialOutcome={{ preference: locale, resolvedLocale: locale, persistedAnchor: locale, notice: null }}>
     <DataStorageProvider>{controller => <DataStorageMigrationSheet controller={{ ...controller, state, preview, open: true }} />}</DataStorageProvider>
   </LocaleProvider>);

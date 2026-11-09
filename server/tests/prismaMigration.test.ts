@@ -23,9 +23,9 @@ afterEach(() => {
 });
 
 function temporaryDatabase(): { directory: string; databasePath: string } {
-  const directory = mkdtempSync(join(tmpdir(), "frameq-prisma-migration-"));
+  const directory = mkdtempSync(join(tmpdir(), "app-prisma-migration-"));
   directories.push(directory);
-  return { directory, databasePath: join(directory, "frameq.sqlite") };
+  return { directory, databasePath: join(directory, "app.sqlite") };
 }
 
 function databaseUrl(databasePath: string): string {

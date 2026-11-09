@@ -200,7 +200,7 @@ warning.
   `docs/ARCHITECTURE.md`,
   `docs/DESIGN.md`,
   `docs/SECURITY.md`, and
-  `docs/design-docs/frameq-code-audit-uml.md`.
+  `docs/design-docs/code-audit-uml.md`.
 
 ## File Responsibility Map
 
@@ -1112,7 +1112,7 @@ approved design commit.
 **Files:**
 
 - Modify: `docs/design-docs/2026-07-23-frontend-transcript-controller-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`
 - Modify: `TASKS.md`

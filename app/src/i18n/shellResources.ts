@@ -66,7 +66,7 @@ export const shellResources = {
     },
     account: {
       guest: "访客",
-      guestDescription: "登录 FrameQ 账号",
+      guestDescription: "登录 {{product}} 账号",
       menu: "打开账号菜单",
       openAccount: "账号与授权",
       openSettings: "设置",
@@ -217,7 +217,7 @@ export const shellResources = {
     },
     account: {
       guest: "訪客",
-      guestDescription: "登入 FrameQ 帳號",
+      guestDescription: "登入 {{product}} 帳號",
       menu: "開啟帳號選單",
       openAccount: "帳號與授權",
       openSettings: "設定",
@@ -368,7 +368,7 @@ export const shellResources = {
     },
     account: {
       guest: "Guest",
-      guestDescription: "Sign in to FrameQ",
+      guestDescription: "Sign in to {{product}}",
       menu: "Open account menu",
       openAccount: "Account and authorization",
       openSettings: "Settings",

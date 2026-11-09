@@ -18,7 +18,7 @@ export function resolveSnapshotPaths({ repoRoot = defaultRepoRoot, sourceRoot } 
   const localAppData = process.env.LOCALAPPDATA ?? "";
   const source = sourceRoot
     ? resolve(sourceRoot)
-    : join(localAppData, "com.frameq.desktop");
+    : join(localAppData, "pro.8xf.app");
 
   return {
     source,

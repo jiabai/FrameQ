@@ -220,7 +220,7 @@ fn share_page_retry_is_recorded_in_the_desktop_log_only_for_its_message_code() {
             paths
                 .user_data_dir
                 .join("logs")
-                .join("frameq-desktop.log"),
+                .join("desktop.log"),
         )
         .unwrap_or_default();
         assert_eq!(

@@ -47,7 +47,7 @@ export const asrModelResources = {
       cancelFailed: "无法取消模型下载。下载仍在继续，请稍后重试。",
       awaitingFinalResult: "下载已接近结束，正在等待最终结果。",
       runtimeMissing:
-        "模型下载进程无法启动。安装包中的 Windows VC++ 运行组件缺失或被安全软件隔离，请重新安装 FrameQ 后重试。",
+        "模型下载进程无法启动。安装包中的 Windows VC++ 运行组件缺失或被安全软件隔离，请重新安装 {{product}} 后重试。",
     },
   },
   "zh-TW": {
@@ -98,7 +98,7 @@ export const asrModelResources = {
       cancelFailed: "無法取消模型下載。下載仍在繼續，請稍後重試。",
       awaitingFinalResult: "下載即將結束，正在等待最終結果。",
       runtimeMissing:
-        "模型下載程序無法啟動。安裝包中的 Windows VC++ 執行元件缺失或被安全軟體隔離，請重新安裝 FrameQ 後重試。",
+        "模型下載程序無法啟動。安裝包中的 Windows VC++ 執行元件缺失或被安全軟體隔離，請重新安裝 {{product}} 後重試。",
     },
   },
   "en-US": {
@@ -149,7 +149,7 @@ export const asrModelResources = {
       cancelFailed: "The model download could not be cancelled. It is still running; try again later.",
       awaitingFinalResult: "The download is almost finished. Waiting for the final result.",
       runtimeMissing:
-        "The model download process could not start. Windows VC++ runtime components are missing from the installer or were quarantined by security software; reinstall FrameQ and try again.",
+        "The model download process could not start. Windows VC++ runtime components are missing from the installer or were quarantined by security software; reinstall {{product}} and try again.",
     },
   },
 } as const;

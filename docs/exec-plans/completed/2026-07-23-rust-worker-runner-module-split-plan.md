@@ -104,7 +104,7 @@ user-visible error.
 - `runner.rs` is 2,162 physical lines, not the 1,144 lines previously recorded by the audit. Lines
   1-1,006 are production and lines 1,007-2,162 are the inline test module.
   Evidence: `Get-Content app/src-tauri/src/worker_runtime/runner.rs` and the corrected
-  `docs/design-docs/frameq-code-audit-uml.md`.
+  `docs/design-docs/code-audit-uml.md`.
 - `WorkerOperation::watchdog_policy()` is not purely local to runner tests. `facade.rs` tests call it
   and inspect the inferred `WatchdogPolicy` through idle/absolute accessors.
   Evidence: `app/src-tauri/src/worker_runtime/facade.rs`, lines 132-149.
@@ -258,7 +258,7 @@ inferred.
   Boundary`, and `docs/SECURITY.md`, section `2026-07-10 Desktop Process-Tree Cancellation
   Boundary`.
 - Current structural audit:
-  `docs/design-docs/frameq-code-audit-uml.md`.
+  `docs/design-docs/code-audit-uml.md`.
 
 ## Target File Responsibility Map
 
@@ -1175,7 +1175,7 @@ method may be implemented in `watchdog.rs`, but its method path and effective
 - Modify: `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - Modify: `docs/design-docs/2026-07-22-rust-worker-watchdog.md`
 - Modify: `docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`
 - Modify: `docs/exec-plans/active/index.md`

@@ -26,8 +26,8 @@ afterEach(() => {
 
 describe("SQLite database startup", () => {
   test("initializes WAL pragmas without execute-returned-results errors", async () => {
-    tempDir = mkdtempSync(join(tmpdir(), "frameq-sqlite-"));
-    const databasePath = join(tempDir, "frameq.sqlite").replace(/\\/g, "/");
+    tempDir = mkdtempSync(join(tmpdir(), "app-sqlite-"));
+    const databasePath = join(tempDir, "app.sqlite").replace(/\\/g, "/");
     process.env.DATABASE_URL = `file:${databasePath}`;
 
     const prisma = await createPrismaClient();

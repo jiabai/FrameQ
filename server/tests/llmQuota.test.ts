@@ -28,8 +28,8 @@ const encryptionKey = "0123456789abcdef0123456789abcdef";
 
 function adminHeaders(adminToken = "admin-token", csrfToken = "csrf-token") {
   return {
-    cookie: `frameq_admin_session=${adminToken}; frameq_admin_csrf=${csrfToken}`,
-    "x-frameq-csrf": csrfToken,
+    cookie: `app_admin_session=${adminToken}; app_admin_csrf=${csrfToken}`,
+    "x-app-csrf": csrfToken,
   };
 }
 
@@ -79,7 +79,7 @@ async function saveLlmConfig(app: ReturnType<typeof buildServer>) {
     payload: {
       provider: "openai_compatible",
       base_url: "https://llm.example/v1",
-      model: "dedicated-frameq-model",
+      model: "dedicated-app-model",
       api_key: "client-secret-key",
       timeout_seconds: 45,
     },
@@ -99,7 +99,7 @@ describe("server-managed LLM config and quota", () => {
       ok: true,
       provider: "openai_compatible",
       base_url: "https://llm.example/v1",
-      model: "dedicated-frameq-model",
+      model: "dedicated-app-model",
       timeout_seconds: 45,
       has_api_key: true,
     });
@@ -125,7 +125,7 @@ describe("server-managed LLM config and quota", () => {
     expect(first.json()).toMatchObject({
       provider: "openai_compatible",
       base_url: "https://llm.example/v1",
-      model: "dedicated-frameq-model",
+      model: "dedicated-app-model",
       api_key: "client-secret-key",
       timeout_seconds: 45,
       quota_remaining: 19,
@@ -399,7 +399,7 @@ describe("server-managed LLM config and quota", () => {
     const missingCsrf = await app.inject({
       method: "POST",
       url: `/admin/api/users/${user.id}/entitlement-adjustments`,
-      headers: { cookie: "frameq_admin_session=admin-token; frameq_admin_csrf=csrf-token" },
+      headers: { cookie: "app_admin_session=admin-token; app_admin_csrf=csrf-token" },
       payload: { extend_days: 1, reason: "bug_compensation" },
     });
     expect(missingCsrf.statusCode).toBe(403);

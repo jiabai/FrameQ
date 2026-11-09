@@ -131,6 +131,6 @@ describe("web article projection from real Document extraction", () => {
     expect(closedWebOperationError("WEB_CANCELLED")).toBe("WEB_CANCELLED");
     expect(closedWebOperationError("WEB_TIMEOUT")).toBe("WEB_TIMEOUT");
     expect(closedWebOperationError("https://example.com/?token=secret")).toBeNull();
-    expect(closedWebOperationError("D:\\FrameQ\\private")).toBeNull();
+    expect(closedWebOperationError("D:\\Locus\\private")).toBeNull();
   });
 });

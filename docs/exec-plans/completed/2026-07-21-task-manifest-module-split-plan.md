@@ -192,7 +192,7 @@ no new rollback/atomicity guarantee; that was deliberately outside this move-onl
 - Durable architecture/security: `docs/ARCHITECTURE.md` section
   `2026-07-18 Task access facade boundary` and `docs/SECURITY.md` sections covering task access,
   unsupported legacy isolation, local media paths, transcript editing, and deletion.
-- Current structural audit: `docs/design-docs/frameq-code-audit-uml.md`.
+- Current structural audit: `docs/design-docs/code-audit-uml.md`.
 
 ## Target File Responsibility Map
 
@@ -633,7 +633,7 @@ validators are intentionally absent from the re-export list.
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/design-docs/2026-07-18-task-access-facade.md`
 - Modify: `docs/design-docs/2026-07-21-task-manifest-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`

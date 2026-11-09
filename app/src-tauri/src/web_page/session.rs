@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
-const ROOT: &str = ".frameq-system-webviews";
+const ROOT: &str = ".app-system-webviews";
 const OWNER: &str = "owner.json";
 const MEMBERS: &str = "processes.json";
 const SAVE: &str = "save-receipt.json";
@@ -245,7 +245,7 @@ impl NativeSession {
             return Err(storage(()));
         }
         let output = paths.output_root()?;
-        let manifest = output.join("tasks").join(&receipt.task_id).join("frameq-task.json");
+        let manifest = output.join("tasks").join(&receipt.task_id).join("task.json");
         for parent in manifest.parent().ok_or_else(|| storage(()))?.ancestors() {
             match fs::symlink_metadata(parent) {
                 Ok(_) => { safe::validate_ancestors(parent).map_err(storage)?; break; },

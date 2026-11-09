@@ -71,10 +71,10 @@ async function prepare(state: RejectedState | "valid" = "valid") {
   const headers: Record<string, string> = {};
   if (state !== "missing") {
     const token = state === "empty" ? "" : state === "unknown" ? "unknown-token" : sessionToken;
-    headers.cookie = `frameq_admin_session=${token}; frameq_admin_csrf=${csrfToken}`;
+    headers.cookie = `app_admin_session=${token}; app_admin_csrf=${csrfToken}`;
   }
   if (state !== "csrf-missing") {
-    headers["x-frameq-csrf"] = state === "csrf-wrong"
+    headers["x-app-csrf"] = state === "csrf-wrong"
       ? "wrong-csrf"
       : state === "csrf-other-session" ? otherCsrfToken : csrfToken;
   }

@@ -307,7 +307,7 @@ LLM, or consume AI Credits.
 - Modify: `AGENTS.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/active/index.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`
 - Modify: `TASKS.md`
@@ -332,7 +332,7 @@ Expected: governance reports zero errors and zero warnings; diff check exits 0.
 
 ```powershell
 git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md `
-  docs/design-docs/frameq-code-audit-uml.md `
+  docs/design-docs/code-audit-uml.md `
   docs/exec-plans/active/2026-07-24-python-worker-application-facade-plan.md `
   docs/exec-plans/active/index.md docs/exec-plans/tech-debt-tracker.md
 git commit -m "docs(worker): plan application facade refactor"
@@ -1050,7 +1050,7 @@ git commit -m "refactor(worker): close CLI application boundary"
 - Modify: `TASKS.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`
 - Modify:
   `docs/exec-plans/active/2026-07-24-python-worker-application-facade-plan.md`
@@ -1130,7 +1130,7 @@ Expected: both pass.
 
 ```powershell
 git add AGENTS.md TASKS.md docs/ARCHITECTURE.md docs/SECURITY.md `
-  docs/design-docs/frameq-code-audit-uml.md docs/exec-plans/active/index.md `
+  docs/design-docs/code-audit-uml.md docs/exec-plans/active/index.md `
   docs/exec-plans/completed/index.md docs/exec-plans/tech-debt-tracker.md `
   docs/exec-plans/completed/2026-07-24-python-worker-application-facade-plan.md
 git commit -m "docs(worker): record application facade refactor"

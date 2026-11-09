@@ -6,6 +6,7 @@ import {
   type Locale,
   t,
 } from "./i18n.js";
+import { PRODUCT_NAME } from "./brand.js";
 import { basePageCss, designTokenCss } from "./designTokens.js";
 import { brandChromeCss, faviconLink, renderFrameHeader } from "./pageChrome.js";
 import type {
@@ -33,7 +34,7 @@ export function renderAdminLoginPage(locale: Locale = "zh-CN"): string {
       <section class="login-card" aria-labelledby="login-title">
         ${renderFrameHeader({
           wrapperClass: "login-card-header",
-          eyebrow: "FrameQ Admin",
+          eyebrow: `${PRODUCT_NAME} Admin`,
           title: t(locale, "admin_login.heading"),
           titleId: "login-title",
           rightHtml: renderLangSwitcher(locale),
@@ -202,7 +203,7 @@ export function renderAdminPage(input: {
     <main class="admin-shell">
       ${renderFrameHeader({
         wrapperClass: "admin-header",
-        eyebrow: "FrameQ Admin",
+        eyebrow: `${PRODUCT_NAME} Admin`,
         title: t(locale, "admin.heading"),
         rightHtml: `<div class="admin-session">
           <span class="session-chip">${t(locale, "admin.logged_in_as")}${escapeHtml(input.adminEmail)}</span>
@@ -211,7 +212,7 @@ export function renderAdminPage(input: {
         </div>`,
       })}
 
-      <section class="metrics-grid" aria-label="FrameQ Admin summary">
+      <section class="metrics-grid" aria-label="${PRODUCT_NAME} Admin summary">
         <div class="metric"><span>${t(locale, "admin.users_count")}</span><strong>${input.users.length}</strong></div>
         <div class="metric"><span>${t(locale, "admin.active_users")}</span><strong>${activeUsers}</strong></div>
         <div class="metric"><span>${t(locale, "admin.available_codes")}</span><strong>${availableCodes}</strong></div>
@@ -220,7 +221,7 @@ export function renderAdminPage(input: {
       <section class="admin-panel config-panel">
         <header class="config-head">
           <p class="eyebrow">LLM config</p>
-          <h2>Dedicated FrameQ client LLM</h2>
+          <h2>Dedicated ${PRODUCT_NAME} client LLM</h2>
           <p class="muted">This key is sent to entitled desktop clients at runtime. Use a dedicated revocable supplier key, not a master key.</p>
         </header>
         <form id="llm-config-form" class="config-form">
@@ -392,7 +393,7 @@ export function renderAdminPage(input: {
         setLlmConfigStatus("Saving LLM config...");
         const response = await fetch("/admin/api/llm-config", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-frameq-csrf": csrfToken },
+          headers: { "Content-Type": "application/json", "x-app-csrf": csrfToken },
           body: JSON.stringify({
             provider: document.getElementById("llm-provider").value,
             base_url: document.getElementById("llm-base-url").value,
@@ -431,7 +432,7 @@ export function renderAdminPage(input: {
         };
         const response = await fetch("/admin/api/anysearch-config", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-frameq-csrf": csrfToken },
+          headers: { "Content-Type": "application/json", "x-app-csrf": csrfToken },
           body: JSON.stringify(payload),
         });
         setAnysearchConfigStatus(
@@ -465,7 +466,7 @@ export function renderAdminPage(input: {
           try {
             const response = await fetch("/admin/api/users/" + encodeURIComponent(userId) + "/entitlement-adjustments", {
               method: "POST",
-              headers: { "Content-Type": "application/json", "x-frameq-csrf": csrfToken },
+              headers: { "Content-Type": "application/json", "x-app-csrf": csrfToken },
               body: JSON.stringify(payload),
             });
             const data = await response.json().catch(() => null);
@@ -499,7 +500,7 @@ export function renderAdminPage(input: {
         try {
           const response = await fetch("/admin/api/activation-codes", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-frameq-csrf": csrfToken },
+            headers: { "Content-Type": "application/json", "x-app-csrf": csrfToken },
             body: JSON.stringify({ redeem_window_days: redeemWindowDays }),
           });
           const data = await response.json();
@@ -527,7 +528,7 @@ export function renderAdminPage(input: {
         try {
           const response = await fetch("/admin/auth/logout", {
             method: "POST",
-            headers: { "x-frameq-csrf": csrfToken },
+            headers: { "x-app-csrf": csrfToken },
           });
           if (response.ok) {
             const data = await response.json();

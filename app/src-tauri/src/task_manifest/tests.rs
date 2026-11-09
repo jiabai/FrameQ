@@ -109,13 +109,13 @@ fn prepared_dissection_journal_written_by_the_worker_is_recovered() {
             "entries": [
                 {
                     "destination": "ai/dissection.json",
-                    "staging": format!("ai/.frameq-artifact-{transaction_id}-0.staging"),
+                    "staging": format!("ai/.artifact-{transaction_id}-0.staging"),
                     "rollback": null,
                     "existed_before": false
                 },
                 {
                     "destination": "ai/dissection.md",
-                    "staging": format!("ai/.frameq-artifact-{transaction_id}-1.staging"),
+                    "staging": format!("ai/.artifact-{transaction_id}-1.staging"),
                     "rollback": null,
                     "existed_before": false
                 }
@@ -142,7 +142,7 @@ fn prepared_transaction_recovery_restores_previous_revision_idempotently() {
     let transcript = transcript_dir.join("transcript.txt");
     fs::write(&transcript, b"mixed new text\n").expect("write mixed transcript");
     let transaction_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    let rollback = transcript_dir.join(format!(".frameq-artifact-{transaction_id}-0.rollback"));
+    let rollback = transcript_dir.join(format!(".artifact-{transaction_id}-0.rollback"));
     fs::write(&rollback, b"old text\n").expect("write rollback");
     fs::write(
         task_dir.join(JOURNAL_FILE_NAME),
@@ -152,8 +152,8 @@ fn prepared_transaction_recovery_restores_previous_revision_idempotently() {
             "state": "prepared",
             "entries": [{
                 "destination": "transcript/transcript.txt",
-                "staging": format!("transcript/.frameq-artifact-{transaction_id}-0.staging"),
-                "rollback": format!("transcript/.frameq-artifact-{transaction_id}-0.rollback"),
+                "staging": format!("transcript/.artifact-{transaction_id}-0.staging"),
+                "rollback": format!("transcript/.artifact-{transaction_id}-0.rollback"),
                 "existed_before": true
             }]
         }))
@@ -185,7 +185,7 @@ fn committed_transaction_recovery_keeps_new_revision_and_cleans_material() {
     let summary = ai_dir.join("summary.md");
     fs::write(&summary, b"# New summary\n").expect("write new summary");
     let transaction_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    let rollback = ai_dir.join(format!(".frameq-artifact-{transaction_id}-0.rollback"));
+    let rollback = ai_dir.join(format!(".artifact-{transaction_id}-0.rollback"));
     fs::write(&rollback, b"# Old summary\n").expect("write rollback");
     fs::write(
         task_dir.join(JOURNAL_FILE_NAME),
@@ -195,8 +195,8 @@ fn committed_transaction_recovery_keeps_new_revision_and_cleans_material() {
             "state": "committed",
             "entries": [{
                 "destination": "ai/summary.md",
-                "staging": format!("ai/.frameq-artifact-{transaction_id}-0.staging"),
-                "rollback": format!("ai/.frameq-artifact-{transaction_id}-0.rollback"),
+                "staging": format!("ai/.artifact-{transaction_id}-0.staging"),
+                "rollback": format!("ai/.artifact-{transaction_id}-0.rollback"),
                 "existed_before": true
             }]
         }))
@@ -242,7 +242,7 @@ fn invalid_transaction_journal_fails_closed_without_echo_or_mutation() {
 #[test]
 fn rust_atomic_replace_failure_preserves_previous_destination() {
     let directory = temp_dir("atomic-replace-failure");
-    let destination = directory.join("frameq-task.json");
+    let destination = directory.join("task.json");
     fs::write(&destination, b"previous manifest\n").expect("write previous manifest");
 
     let result = crate::atomic_files::atomic_write_with_replace_for_test(
@@ -263,7 +263,7 @@ fn rust_atomic_replace_failure_preserves_previous_destination() {
             .filter(|entry| entry
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".frameq-task."))
+                .starts_with(".app-task."))
             .count(),
         0
     );
@@ -275,7 +275,7 @@ fn rust_atomic_windows_sharing_violation_preserves_previous_destination() {
     use std::os::windows::fs::OpenOptionsExt;
 
     let directory = temp_dir("atomic-sharing-violation");
-    let destination = directory.join("frameq-task.json");
+    let destination = directory.join("task.json");
     fs::write(&destination, b"previous manifest\n").expect("write previous manifest");
     let locked = fs::OpenOptions::new()
         .read(true)
@@ -299,7 +299,7 @@ fn rust_atomic_unix_permission_failure_preserves_previous_destination() {
     use std::os::unix::fs::PermissionsExt;
 
     let directory = temp_dir("atomic-permission-failure");
-    let destination = directory.join("frameq-task.json");
+    let destination = directory.join("task.json");
     fs::write(&destination, b"previous manifest\n").expect("write previous manifest");
     let original_permissions = fs::metadata(&directory)
         .expect("read directory metadata")
@@ -710,7 +710,7 @@ fn supported_task_open_recovers_prepared_transaction_before_reading_artifacts() 
     let transaction_id = "dddddddddddddddddddddddddddddddd";
     let rollback = task_dir
         .join("transcript")
-        .join(format!(".frameq-artifact-{transaction_id}-0.rollback"));
+        .join(format!(".artifact-{transaction_id}-0.rollback"));
     fs::write(&rollback, b"facade transcript\n").expect("write rollback");
     fs::write(
         task_dir.join(JOURNAL_FILE_NAME),
@@ -720,8 +720,8 @@ fn supported_task_open_recovers_prepared_transaction_before_reading_artifacts() 
             "state": "prepared",
             "entries": [{
                 "destination": "transcript/transcript.txt",
-                "staging": format!("transcript/.frameq-artifact-{transaction_id}-0.staging"),
-                "rollback": format!("transcript/.frameq-artifact-{transaction_id}-0.rollback"),
+                "staging": format!("transcript/.artifact-{transaction_id}-0.staging"),
+                "rollback": format!("transcript/.artifact-{transaction_id}-0.rollback"),
                 "existed_before": true
             }]
         }))
@@ -750,11 +750,11 @@ fn supported_task_scan_isolates_corrupt_and_unsupported_manifests() {
     );
     let corrupt_dir = output_root.join("tasks").join("corrupt-task");
     fs::create_dir_all(&corrupt_dir).expect("create corrupt task");
-    fs::write(corrupt_dir.join("frameq-task.json"), b"{not-json").expect("write corrupt manifest");
+    fs::write(corrupt_dir.join("task.json"), b"{not-json").expect("write corrupt manifest");
     let legacy_dir = output_root.join("tasks").join("legacy-task");
     fs::create_dir_all(&legacy_dir).expect("create legacy task");
     fs::write(
-        legacy_dir.join("frameq-task.json"),
+        legacy_dir.join("task.json"),
         r#"{"schema_version":2,"task_id":"legacy-task","created_at":"2026-07-18T12:00:00Z","status":"completed"}"#,
     )
     .expect("write legacy manifest");
@@ -799,7 +799,7 @@ fn supported_task_artifact_errors_do_not_echo_manifest_path_material() {
     let output_root = temp_dir("supported-task-safe-artifact-error");
     let task_id = "20260718-120000-youtube-dQw4w9WgXcQ";
     let task_dir = write_supported_task(&output_root, task_id, "dQw4w9WgXcQ");
-    let manifest_path = task_dir.join("frameq-task.json");
+    let manifest_path = task_dir.join("task.json");
     let manifest = fs::read_to_string(&manifest_path).expect("read manifest");
     fs::write(
         &manifest_path,
@@ -1039,7 +1039,7 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system time")
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
+    let dir = std::env::temp_dir().join(format!("app-{name}-{unique}"));
     fs::create_dir_all(&dir).expect("create temp dir");
     #[cfg(unix)] let dir = dir.canonicalize().expect("canonical temp dir");
     dir
@@ -1058,7 +1058,7 @@ fn write_supported_task(
     )
     .expect("write transcript");
     fs::write(
-        task_dir.join("frameq-task.json"),
+        task_dir.join("task.json"),
         format!(
             r#"{{
   "schema_version": 3,

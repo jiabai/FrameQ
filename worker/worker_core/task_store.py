@@ -35,7 +35,7 @@ from worker_core.task_transaction import (
 )
 from worker_core.web_page_contract import WebPageSource, validate_web_task_id
 
-TASK_MANIFEST_FILE_NAME = "frameq-task.json"
+TASK_MANIFEST_FILE_NAME = "task.json"
 TASK_SCHEMA_VERSION = 3
 _LOCAL_TASK_RANDOM_ID_PATTERN = re.compile(r"^[a-z0-9]{6,32}$")
 
@@ -547,7 +547,7 @@ def write_task_manifest(
     *,
     draft_seed_insight_id: int | None | object = DRAFT_SEED_UNSET,
 ) -> None:
-    """Rebuild and persist the task manifest (``frameq-task.json``).
+    """Rebuild and persist the task manifest (``task.json``).
 
     The manifest payload is rebuilt from scratch on every retry, so any field the
     frontend owns (notably ``draft_seed_insight_id`` — the Insight the user picked

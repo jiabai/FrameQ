@@ -16,7 +16,7 @@ use zip::{CompressionMethod, ZipWriter};
 pub(crate) const MAX_ZIP_BYTES: usize = 5 * 1024 * 1024;
 const MAX_SOURCE_BYTES: u64 = 16 * 1024 * 1024;
 const PRECOMPRESSION_LOG_BUDGET: usize = 4 * 1024 * 1024;
-const DESKTOP_LOG_FILE_NAME: &str = "frameq-desktop.log";
+const DESKTOP_LOG_FILE_NAME: &str = "desktop.log";
 const MANIFEST_FILE_NAME: &str = "diagnostics.json";
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -940,7 +940,7 @@ mod tests {
     #[test]
     fn precompression_budget_measures_total_once_and_drops_oldest_across_logs() {
         let mut desktop = safe_log(
-            "frameq-desktop.log",
+            "desktop.log",
             (0..60_000_u64)
                 .map(|index| safe_record(NOW - index * 2, 96))
                 .collect(),
@@ -1008,7 +1008,7 @@ mod tests {
         let asr_line = padded_line(&asr_record.to_string(), 1_024);
         let repeats = MAX_SOURCE_BYTES as usize / 1_024;
         fs::write(
-            logs.join("frameq-desktop.log"),
+            logs.join("desktop.log"),
             format!("{desktop_line}{}", desktop_line.repeat(repeats)),
         )
         .expect("oversized desktop");
@@ -1024,7 +1024,7 @@ mod tests {
         let manifest: Value = serde_json::from_slice(&read_entry(&mut archive, "diagnostics.json"))
             .expect("manifest");
         assert_eq!(manifest["truncated"], true);
-        for name in ["frameq-desktop.log", "asr-model-download.log"] {
+        for name in ["desktop.log", "asr-model-download.log"] {
             let status = manifest["files"]
                 .as_array()
                 .expect("files")
@@ -1040,7 +1040,7 @@ mod tests {
 
     #[test]
     fn unknown_source_count_combines_with_known_record_omissions_as_multiple() {
-        let mut log = safe_log("frameq-desktop.log", vec![safe_record(NOW, 64)]);
+        let mut log = safe_log("desktop.log", vec![safe_record(NOW, 64)]);
         log.truncated = true;
         log.size_limited_records_unknown = true;
         log.malformed_records = 2;
@@ -1073,7 +1073,7 @@ mod tests {
             names,
             vec![
                 "diagnostics.json",
-                "frameq-desktop.log",
+                "desktop.log",
                 "asr-model-download.log"
             ]
         );
@@ -1108,7 +1108,7 @@ mod tests {
         let bytes =
             assemble_diagnostic_zip_at(&paths, &snapshot(), "0.3.1", NOW).expect("assemble zip");
         let mut archive = ZipArchive::new(Cursor::new(bytes)).expect("open zip");
-        let desktop = String::from_utf8(read_entry(&mut archive, "frameq-desktop.log"))
+        let desktop = String::from_utf8(read_entry(&mut archive, "desktop.log"))
             .expect("desktop utf8");
         assert!(desktop.contains("worker_download_asr_model_exit"));
         for forbidden in [
@@ -1127,7 +1127,7 @@ mod tests {
         let paths = runtime_paths("source-omissions");
         let logs = paths.user_data_dir.join("logs");
         fs::create_dir_all(&logs).expect("logs");
-        fs::write(logs.join("frameq-desktop.log"), "not-a-record\n").expect("malformed");
+        fs::write(logs.join("desktop.log"), "not-a-record\n").expect("malformed");
 
         let bytes =
             assemble_diagnostic_zip_at(&paths, &snapshot(), "0.3.1", NOW).expect("assemble zip");
@@ -1207,7 +1207,7 @@ mod tests {
                 index
             ));
         }
-        fs::write(logs.join("frameq-desktop.log"), lines).expect("desktop source");
+        fs::write(logs.join("desktop.log"), lines).expect("desktop source");
 
         let bytes =
             assemble_diagnostic_zip_at(&paths, &snapshot(), "0.3.1", NOW).expect("assemble zip");
@@ -1216,7 +1216,7 @@ mod tests {
         let manifest =
             String::from_utf8(read_entry(&mut archive, "diagnostics.json")).expect("manifest utf8");
         assert!(manifest.contains("\"truncated\":true"));
-        let desktop = String::from_utf8(read_entry(&mut archive, "frameq-desktop.log"))
+        let desktop = String::from_utf8(read_entry(&mut archive, "desktop.log"))
             .expect("desktop utf8");
         assert!(desktop
             .lines()
@@ -1279,7 +1279,7 @@ mod tests {
         let logs = paths.user_data_dir.join("logs");
         fs::create_dir_all(&logs).expect("logs");
         fs::write(
-            logs.join("frameq-desktop.log"),
+            logs.join("desktop.log"),
             format!(
                 "unix_ms={NOW} event=worker.download_asr_model.result operation=download_asr_model outcome=structured\nraw desktop secret\n"
             ),
@@ -1306,7 +1306,7 @@ mod tests {
         let manifest: Value = serde_json::from_slice(&read_entry(&mut archive, "diagnostics.json"))
             .expect("manifest");
         assert_eq!(manifest["truncated"], true);
-        for name in ["frameq-desktop.log", "asr-model-download.log"] {
+        for name in ["desktop.log", "asr-model-download.log"] {
             let status = manifest["files"]
                 .as_array()
                 .expect("files")
@@ -1369,7 +1369,7 @@ mod tests {
         let paths = runtime_paths("target-replacement");
         let logs = paths.user_data_dir.join("logs");
         fs::create_dir_all(&logs).expect("logs");
-        let target = logs.join("frameq-desktop.log");
+        let target = logs.join("desktop.log");
         fs::write(
             &target,
             format!("unix_ms={NOW} event=asr_diagnostic.write_failed\n"),
@@ -1395,7 +1395,7 @@ mod tests {
         let paths = runtime_paths("parent-replacement");
         let logs = paths.user_data_dir.join("logs");
         fs::create_dir_all(&logs).expect("logs");
-        let target = logs.join("frameq-desktop.log");
+        let target = logs.join("desktop.log");
         fs::write(
             &target,
             format!("unix_ms={NOW} event=asr_diagnostic.write_failed\n"),
@@ -1457,7 +1457,7 @@ mod tests {
         let mut file = fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(logs.join("frameq-desktop.log"))
+            .open(logs.join("desktop.log"))
             .expect("open desktop log");
         writeln!(file, "unix_ms={utc_ms} event={event} {detail}").expect("desktop log");
     }
@@ -1492,7 +1492,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("frameq-export-{name}-{unique}"));
+        let root = std::env::temp_dir().join(format!("app-export-{name}-{unique}"));
         fs::create_dir_all(&root).expect("root");
         RuntimePaths {
             resource_dir: root.join("resources"),

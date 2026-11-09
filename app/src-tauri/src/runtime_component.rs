@@ -1,7 +1,7 @@
 //! PyTorch 运行时组件的下载编排。
 //!
 //! 组件以 GitHub Releases 资产随桌面端一起发布：`v<版本>` 下按平台存放
-//! `frameq-pytorch-runtime-<target>.zip`。这里负责拼资产地址、组件目录
+//! `pytorch-runtime-<target>.zip`。这里负责拼资产地址、组件目录
 //! （`<data_root>/runtime/pytorch/<版本>`），并复用模型下载通道运行 worker。
 
 use std::path::{Path, PathBuf};
@@ -45,7 +45,7 @@ pub(crate) fn component_target() -> &'static str {
 
 pub(crate) fn component_release_url(version: &str, target: &str) -> String {
     format!(
-        "https://github.com/{RELEASE_REPO}/releases/download/v{version}/frameq-pytorch-runtime-{target}.zip"
+        "https://github.com/{RELEASE_REPO}/releases/download/v{version}/pytorch-runtime-{target}.zip"
     )
 }
 
@@ -101,19 +101,19 @@ mod tests {
     fn release_url_targets_the_versioned_platform_asset() {
         assert_eq!(
             component_release_url("0.3.9", "windows-x64"),
-            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/frameq-pytorch-runtime-windows-x64.zip"
+            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/pytorch-runtime-windows-x64.zip"
         );
         assert_eq!(
             component_release_url("0.3.9", "macos-arm64"),
-            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/frameq-pytorch-runtime-macos-arm64.zip"
+            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/pytorch-runtime-macos-arm64.zip"
         );
     }
 
     #[test]
     fn component_dir_is_versioned_under_data_root() {
         assert_eq!(
-            component_dir(Path::new("/data/frameq"), "0.3.9"),
-            PathBuf::from("/data/frameq").join("runtime").join("pytorch").join("0.3.9")
+            component_dir(Path::new("/data/app"), "0.3.9"),
+            PathBuf::from("/data/app").join("runtime").join("pytorch").join("0.3.9")
         );
     }
 

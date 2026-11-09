@@ -106,7 +106,7 @@ describe("account client", () => {
     const runner: AccountCommandRunner = async (command, args) => {
       calls.push({ command, args });
       if (command === "begin_auth_flow") {
-        return { auth_url: "https://frameq.example/login?state=state-1", state: "state-1" };
+        return { auth_url: "https://app.example/login?state=state-1", state: "state-1" };
       }
       if (command === "complete_auth_flow") {
         return {
@@ -123,11 +123,11 @@ describe("account client", () => {
     };
 
     await expect(beginAuthFlow(runner)).resolves.toEqual({
-      authUrl: "https://frameq.example/login?state=state-1",
+      authUrl: "https://app.example/login?state=state-1",
       state: "state-1",
     });
     await expect(
-      completeAuthFlow("frameq://auth/callback?ticket=flt_abc&state=state-1", runner),
+      completeAuthFlow("pro.8xf.app://auth/callback?ticket=flt_abc&state=state-1", runner),
     ).resolves.toEqual({
       authenticated: true,
       email: "user@example.com",
@@ -140,7 +140,7 @@ describe("account client", () => {
       { command: "begin_auth_flow", args: {} },
       {
         command: "complete_auth_flow",
-        args: { callbackUrl: "frameq://auth/callback?ticket=flt_abc&state=state-1" },
+        args: { callbackUrl: "pro.8xf.app://auth/callback?ticket=flt_abc&state=state-1" },
       },
       { command: "logout_account", args: {} },
     ]);
@@ -386,14 +386,14 @@ describe("account client", () => {
   test("rejects malformed auth-flow responses with one stable account code", async () => {
     await expect(
       beginAuthFlow(async () => ({
-        auth_url: "https://frameq.example/login",
+        auth_url: "https://app.example/login",
         state: "state-1",
         unexpected: true,
       })),
     ).rejects.toEqual(new IpcProtocolError("ACCOUNT_IPC_RESPONSE_INVALID"));
 
     await expect(
-      completeAuthFlow("frameq://auth/callback", async () => ({
+      completeAuthFlow("pro.8xf.app://auth/callback", async () => ({
         authenticated: true,
         email: "user@example.com",
         can_process: true,

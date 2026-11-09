@@ -218,7 +218,7 @@ def test_task_store_facade_open_rejects_unsupported_task_without_raw_manifest(
     task_id = "legacy-task"
     task_dir = output_root / "tasks" / task_id
     task_dir.mkdir(parents=True)
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 2,
@@ -251,7 +251,7 @@ def test_finalize_preserves_previous_manifest_when_atomic_replace_fails(
 
     def fail_replace(_source: Path, destination: Path) -> None:
         assert destination == context.paths.manifest_path
-        raise OSError("D:/private/output/frameq-task.json is locked")
+        raise OSError("D:/private/output/task.json is locked")
 
     monkeypatch.setattr(atomic_files.os, "replace", fail_replace)
 
@@ -267,7 +267,7 @@ def test_finalize_preserves_previous_manifest_when_atomic_replace_fails(
     assert not [
         path
         for path in context.paths.task_dir.iterdir()
-        if path.name.startswith(".frameq-task.")
+        if path.name.startswith(".app-task.")
     ]
 
 
@@ -315,7 +315,7 @@ def test_manifest_sync_failure_does_not_replace_previous_json(
     previous_manifest = context.paths.manifest_path.read_text(encoding="utf-8")
 
     def fail_sync(_descriptor: int) -> None:
-        raise OSError("D:/private/output/frameq-task.json could not be synced")
+        raise OSError("D:/private/output/task.json could not be synced")
 
     monkeypatch.setattr(atomic_files.os, "fsync", fail_sync)
 
@@ -325,7 +325,7 @@ def test_manifest_sync_failure_does_not_replace_previous_json(
     assert str(captured.value) == "Atomic file commit failed."
     assert captured.value.__cause__ is None
     assert context.paths.manifest_path.read_text(encoding="utf-8") == previous_manifest
-    assert not list(context.paths.task_dir.glob(".frameq-task.*.part.json"))
+    assert not list(context.paths.task_dir.glob(".app-task.*.part.json"))
 
 
 def test_finalize_registers_only_known_committed_regular_files(tmp_path: Path) -> None:
@@ -334,18 +334,18 @@ def test_finalize_registers_only_known_committed_regular_files(tmp_path: Path) -
     context.paths.audio_path.write_bytes(b"committed audio")
     staging_path = context.paths.media_dir / ".audio.interrupted.part.wav"
     staging_path.write_bytes(b"partial audio")
-    (context.paths.task_dir / ".frameq-artifact-transaction.json").write_text(
+    (context.paths.task_dir / ".artifact-transaction.json").write_text(
         "{}\n",
         encoding="utf-8",
     )
-    (context.paths.ai_dir / ".frameq-artifact-aaaaaaaa-0.rollback").write_bytes(
+    (context.paths.ai_dir / ".artifact-aaaaaaaa-0.rollback").write_bytes(
         b"internal rollback"
     )
 
     assert task_artifacts_for_existing_files(context.paths) == {
         "audio": "media/audio.wav"
     }
-    (context.paths.task_dir / ".frameq-artifact-transaction.json").unlink()
+    (context.paths.task_dir / ".artifact-transaction.json").unlink()
 
     finalized = store.finalize(
         context,

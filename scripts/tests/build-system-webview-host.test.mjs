@@ -8,7 +8,7 @@ import { nativeSystemWebViewTarget, validateSystemWebViewTarget, verifySystemWeb
 const resources = resolve(dirname(fileURLToPath(import.meta.url)), "../../app/src-tauri/resources/webview-host");
 
 test("native host compilation requires the matching platform and architecture", () => {
-  assert.equal(validateSystemWebViewTarget("windows-x64", "win32-x64").binary, "frameq-webview-host.exe");
+  assert.equal(validateSystemWebViewTarget("windows-x64", "win32-x64").binary, "app-webview-host.exe");
   assert.equal(validateSystemWebViewTarget("macos-arm64", "darwin-arm64").arch, "arm64");
   assert.equal(validateSystemWebViewTarget("macos-x64", "darwin-x64").arch, "x86_64");
   assert.throws(() => validateSystemWebViewTarget("macos-arm64", "win32-x64"));

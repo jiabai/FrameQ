@@ -1,4 +1,4 @@
-"""FrameQ worker package entry point."""
+"""Worker worker package entry point."""
 
 from worker_core.import_stage_diagnostics import emit_import_stage_diagnostic
 

@@ -1,6 +1,6 @@
-# FrameQ Desktop App
+# Locus Desktop App
 
-This directory contains the Tauri + React desktop client for FrameQ.
+This directory contains the Tauri + React desktop client for Locus.
 
 Start with the project-level [README](../README.md) for product scope, release downloads, supported links, and quality gates. This file only keeps the app-local development shortcuts close to the desktop source.
 

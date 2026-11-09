@@ -71,7 +71,7 @@ describe("server page i18n — /login", () => {
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toContain('<html lang="zh-CN">');
-    expect(response.body).toContain("FrameQ 客户端");
+    expect(response.body).toContain("Locus 客户端");
     // Dropdown lists English as an option.
     expect(response.body).toContain(">English<");
     expectSwitcher(response.body);
@@ -88,7 +88,7 @@ describe("server page i18n — /login", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="en">');
     expect(response.body).toContain("Enter your email to receive a verification code");
-    expect(response.body).toContain("FrameQ client");
+    expect(response.body).toContain("Locus client");
     expect(response.body).toContain(">中文<");
     expectSwitcher(response.body);
   });
@@ -103,7 +103,7 @@ describe("server page i18n — /login", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="zh-TW">');
-    expect(response.body).toContain("登入 FrameQ");
+    expect(response.body).toContain("登入 Locus");
     expect(response.body).toContain("輸入電子郵件取得驗證碼");
     expect(response.body).toContain('<option value="zh-TW" selected>');
   });
@@ -118,7 +118,7 @@ describe("server page i18n — /login", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="zh-TW">');
-    expect(response.body).toContain("登入 FrameQ");
+    expect(response.body).toContain("登入 Locus");
   });
 
   test("persists an explicit desktop deep-link locale (?lang=zh-TW) as a cookie", async () => {
@@ -150,7 +150,7 @@ describe("server page i18n — /login", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="zh-CN">');
-    expect(response.body).toContain("FrameQ 客户端");
+    expect(response.body).toContain("Locus 客户端");
   });
 
   test("falls back to zh-CN when lang cookie is unknown", async () => {
@@ -171,21 +171,21 @@ describe("server page i18n — /dashboard", () => {
     const { app, sentCodes } = buildTestServer();
     const email = "user@example.com";
     const sessionCookies = await performWebLoginReal(app, sentCodes, email);
-    const sessionToken = sessionCookies.get("frameq_user_session")!;
-    const csrfToken = sessionCookies.get("frameq_user_csrf")!;
+    const sessionToken = sessionCookies.get("app_user_session")!;
+    const csrfToken = sessionCookies.get("app_user_csrf")!;
 
     const response = await app.inject({
       method: "GET",
       url: "/dashboard",
       headers: {
-        cookie: `frameq_user_session=${sessionToken}; frameq_user_csrf=${csrfToken}; lang=en`,
+        cookie: `app_user_session=${sessionToken}; app_user_csrf=${csrfToken}; lang=en`,
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toContain('<html lang="en">');
-    expect(response.body).toContain("FrameQ Dashboard");
+    expect(response.body).toContain("Locus Dashboard");
     expect(response.body).toContain("Sign out");
     expect(response.body).toContain("Account & quota");
     expect(response.body).toContain(">中文<");
@@ -198,21 +198,21 @@ describe("server page i18n — /dashboard", () => {
     const { app, sentCodes } = buildTestServer();
     const email = "user@example.com";
     const sessionCookies = await performWebLoginReal(app, sentCodes, email);
-    const sessionToken = sessionCookies.get("frameq_user_session")!;
-    const csrfToken = sessionCookies.get("frameq_user_csrf")!;
+    const sessionToken = sessionCookies.get("app_user_session")!;
+    const csrfToken = sessionCookies.get("app_user_csrf")!;
 
     const response = await app.inject({
       method: "GET",
       url: "/dashboard",
       headers: {
-        cookie: `frameq_user_session=${sessionToken}; frameq_user_csrf=${csrfToken}`,
+        cookie: `app_user_session=${sessionToken}; app_user_csrf=${csrfToken}`,
         "accept-language": "zh-TW",
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="zh-TW">');
-    expect(response.body).toContain("FrameQ 控制台");
+    expect(response.body).toContain("Locus 控制台");
     expect(response.body).toContain("登出");
   });
 
@@ -220,20 +220,20 @@ describe("server page i18n — /dashboard", () => {
     const { app, sentCodes } = buildTestServer();
     const email = "user@example.com";
     const sessionCookies = await performWebLoginReal(app, sentCodes, email);
-    const sessionToken = sessionCookies.get("frameq_user_session")!;
-    const csrfToken = sessionCookies.get("frameq_user_csrf")!;
+    const sessionToken = sessionCookies.get("app_user_session")!;
+    const csrfToken = sessionCookies.get("app_user_csrf")!;
 
     const response = await app.inject({
       method: "GET",
       url: "/dashboard",
       headers: {
-        cookie: `frameq_user_session=${sessionToken}; frameq_user_csrf=${csrfToken}`,
+        cookie: `app_user_session=${sessionToken}; app_user_csrf=${csrfToken}`,
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="zh-CN">');
-    expect(response.body).toContain("FrameQ 控制台");
+    expect(response.body).toContain("Locus 控制台");
     expect(response.body).toContain("退出登录");
   });
 });
@@ -251,7 +251,7 @@ describe("server page i18n — /admin/login", () => {
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toContain('<html lang="en">');
     expect(response.body).toContain("Admin Sign-in");
-    expect(response.body).toContain("Sign in to FrameQ Admin");
+    expect(response.body).toContain("Sign in to Locus Admin");
     expect(response.body).toContain(">中文<");
     expectSwitcher(response.body);
   });
@@ -267,7 +267,7 @@ describe("server page i18n — /admin/login", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="zh-TW">');
     expect(response.body).toContain("管理員登入");
-    expect(response.body).toContain("登入 FrameQ Admin");
+    expect(response.body).toContain("登入 Locus Admin");
   });
 
   test("renders in zh-CN by default (no lang cookie)", async () => {
@@ -277,7 +277,7 @@ describe("server page i18n — /admin/login", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('<html lang="zh-CN">');
     expect(response.body).toContain("管理员登录");
-    expect(response.body).toContain("登录 FrameQ Admin");
+    expect(response.body).toContain("登录 Locus Admin");
   });
 });
 
@@ -301,7 +301,7 @@ describe("server page i18n — /admin", () => {
     });
     return {
       app,
-      adminCookie: `frameq_admin_session=${adminToken}; frameq_admin_csrf=${csrfToken}`,
+      adminCookie: `app_admin_session=${adminToken}; app_admin_csrf=${csrfToken}`,
     };
   }
 
@@ -373,14 +373,14 @@ describe("server page i18n — secret-leak regression", () => {
     const { app, sentCodes } = buildTestServer();
     const email = "user@example.com";
     const sessionCookies = await performWebLoginReal(app, sentCodes, email);
-    const sessionToken = sessionCookies.get("frameq_user_session")!;
-    const csrfToken = sessionCookies.get("frameq_user_csrf")!;
+    const sessionToken = sessionCookies.get("app_user_session")!;
+    const csrfToken = sessionCookies.get("app_user_csrf")!;
 
     const enResponse = await app.inject({
       method: "GET",
       url: "/dashboard",
       headers: {
-        cookie: `frameq_user_session=${sessionToken}; frameq_user_csrf=${csrfToken}; lang=en`,
+        cookie: `app_user_session=${sessionToken}; app_user_csrf=${csrfToken}; lang=en`,
       },
     });
 

@@ -107,7 +107,7 @@ def test_local_audio_pipeline_skips_url_subtitles_and_ai_and_persists_path_free_
     )
     result_value = result.to_dict()
     task_dir = Path(str(result_value["task_dir"]))
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     transcript_markdown = (task_dir / "transcript" / "transcript.md").read_text(
         encoding="utf-8"
     )
@@ -297,7 +297,7 @@ def test_media_failure_finalizes_the_created_task(
         "stage": "video_extracting",
     }
     task_dir = Path(str(result["task_dir"]))
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "failed"
     assert manifest["error"] == result["error"]
 

@@ -10,7 +10,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const checkerPath = resolve(repositoryRoot, "scripts/check-i18n-literals.mjs");
 
 async function createFixture(files) {
-  const root = await mkdtemp(join(tmpdir(), "frameq-i18n-literals-"));
+  const root = await mkdtemp(join(tmpdir(), "app-i18n-literals-"));
 
   await Promise.all(
     Object.entries(files).map(async ([relativePath, contents]) => {

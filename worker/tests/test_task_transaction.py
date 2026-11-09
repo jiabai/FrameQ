@@ -30,7 +30,7 @@ def _transaction_internal_files(task_dir: Path) -> list[Path]:
     return sorted(
         (
             path
-            for path in task_dir.rglob(".frameq-*")
+            for path in task_dir.rglob(".app-*")
             if path.is_file()
         ),
         key=lambda path: path.as_posix(),
@@ -41,7 +41,7 @@ def test_commit_replaces_complete_bundle_and_cleans_internal_files(tmp_path: Pat
     task_dir = _task_dir(tmp_path)
     txt_path = task_dir / "transcript" / "transcript.txt"
     md_path = task_dir / "transcript" / "transcript.md"
-    manifest_path = task_dir / "frameq-task.json"
+    manifest_path = task_dir / "task.json"
     txt_path.write_bytes(b"old text\n")
     md_path.write_bytes(b"# Old\n")
     manifest_path.write_bytes(b'{"status":"old"}\n')
@@ -51,7 +51,7 @@ def test_commit_replaces_complete_bundle_and_cleans_internal_files(tmp_path: Pat
         {
             "transcript/transcript.txt": b"new text\n",
             "transcript/transcript.md": b"# New\n",
-            "frameq-task.json": b'{"status":"new"}\n',
+            "task.json": b'{"status":"new"}\n',
         },
     )
 
@@ -69,7 +69,7 @@ def test_transaction_accepts_only_fixed_dissection_artifact_paths(tmp_path: Path
         {
             "ai/dissection.json": b'{}\n',
             "ai/dissection.md": b"# report\n",
-            "frameq-task.json": b'{}\n',
+            "task.json": b'{}\n',
         },
     )
 
@@ -85,7 +85,7 @@ def test_transaction_accepts_only_fixed_dissection_artifact_paths(tmp_path: Path
         "after_journal_prepared",
         "after_replace:ai/dissection.json",
         "after_replace:ai/dissection.md",
-        "after_replace:frameq-task.json",
+        "after_replace:task.json",
     ],
 )
 def test_interrupted_dissection_bundle_restores_previous_complete_revision(
@@ -96,7 +96,7 @@ def test_interrupted_dissection_bundle_restores_previous_complete_revision(
     old_payloads = {
         "ai/dissection.json": b'{"revision":"old"}\n',
         "ai/dissection.md": b"# old\n",
-        "frameq-task.json": b'{"artifacts":{"dissection":"ai/dissection.json"}}\n',
+        "task.json": b'{"artifacts":{"dissection":"ai/dissection.json"}}\n',
     }
     for relative, content in old_payloads.items():
         path = task_dir / relative
@@ -113,7 +113,7 @@ def test_interrupted_dissection_bundle_restores_previous_complete_revision(
             {
                 "ai/dissection.json": b'{"revision":"new"}\n',
                 "ai/dissection.md": b"# new\n",
-                "frameq-task.json": b'{"artifacts":{"dissection":"ai/dissection.json"}}\n',
+                "task.json": b'{"artifacts":{"dissection":"ai/dissection.json"}}\n',
             },
             _fault_hook=interrupt,
         )
@@ -131,7 +131,7 @@ def test_commit_accepts_draft_destinations(tmp_path: Path) -> None:
         {
             "ai/draft.md": b"# draft\n",
             "ai/original/draft.md": b"# draft before edit\n",
-            "frameq-task.json": b'{"artifacts":{"draft":"ai/draft.md"}}\n',
+            "task.json": b'{"artifacts":{"draft":"ai/draft.md"}}\n',
         },
     )
 
@@ -266,7 +266,7 @@ def test_invalid_journal_fails_closed_without_touching_authoritative_files(
                 "entries": [
                     {
                         "destination": "../outside.txt",
-                        "staging": ".frameq-artifact-"
+                        "staging": ".artifact-"
                         + "a" * 32
                         + "-0.staging",
                         "rollback": None,
@@ -302,14 +302,14 @@ def test_missing_prepared_rollback_fails_before_any_restore(tmp_path: Path) -> N
         "entries": [
             {
                 "destination": "transcript/transcript.txt",
-                "staging": f"transcript/.frameq-artifact-{transaction_id}-0.staging",
-                "rollback": f"transcript/.frameq-artifact-{transaction_id}-0.rollback",
+                "staging": f"transcript/.artifact-{transaction_id}-0.staging",
+                "rollback": f"transcript/.artifact-{transaction_id}-0.rollback",
                 "existed_before": True,
             },
             {
                 "destination": "transcript/transcript.md",
-                "staging": f"transcript/.frameq-artifact-{transaction_id}-1.staging",
-                "rollback": f"transcript/.frameq-artifact-{transaction_id}-1.rollback",
+                "staging": f"transcript/.artifact-{transaction_id}-1.staging",
+                "rollback": f"transcript/.artifact-{transaction_id}-1.rollback",
                 "existed_before": True,
             },
         ],
@@ -318,7 +318,7 @@ def test_missing_prepared_rollback_fails_before_any_restore(tmp_path: Path) -> N
         json.dumps(journal),
         encoding="utf-8",
     )
-    (task_dir / "transcript" / f".frameq-artifact-{transaction_id}-0.rollback").write_bytes(
+    (task_dir / "transcript" / f".artifact-{transaction_id}-0.rollback").write_bytes(
         b"old text\n"
     )
 
@@ -334,9 +334,9 @@ def test_recovery_removes_only_closed_name_orphans(tmp_path: Path) -> None:
     orphan = (
         task_dir
         / "ai"
-        / ".frameq-artifact-cccccccccccccccccccccccccccccccc-0.staging"
+        / ".artifact-cccccccccccccccccccccccccccccccc-0.staging"
     )
-    unrelated = task_dir / "ai" / ".frameq-user-note.staging"
+    unrelated = task_dir / "ai" / ".app-user-note.staging"
     orphan.write_bytes(b"orphan")
     unrelated.write_bytes(b"keep")
 
@@ -396,7 +396,7 @@ def test_recovery_removes_closed_orphan_journal_staging(tmp_path: Path) -> None:
     task_dir = _task_dir(tmp_path)
     orphan = (
         task_dir
-        / ".frameq-artifact-transaction.dddddddddddddddddddddddddddddddd.part.json"
+        / ".artifact-transaction.dddddddddddddddddddddddddddddddd.part.json"
     )
     orphan.write_bytes(b"incomplete journal")
 

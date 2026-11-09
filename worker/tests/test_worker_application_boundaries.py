@@ -214,6 +214,7 @@ def test_cli_is_only_the_process_adapter() -> None:
         "collections.abc",
         "contextlib",
         "worker_core",
+        "worker_core.brand",
         "worker_core.desktop_contract",
         "worker_core.diagnostic_events",
         "worker_core.models",

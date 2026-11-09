@@ -190,7 +190,7 @@ separate user-authorized actions.
 Design and governance:
 
 - `docs/design-docs/2026-07-20-douyin-fallback-module-split.md`
-- `docs/design-docs/frameq-code-audit-uml.md`
+- `docs/design-docs/code-audit-uml.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DESIGN.md`
 - `docs/SECURITY.md`
@@ -262,7 +262,7 @@ Planned canonical modules:
 - Modify: `AGENTS.md`
 - Modify: `TASKS.md`
 - Modify: `docs/exec-plans/active/index.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 
 - [x] **Step 1: Register the design and active plan**
 
@@ -941,7 +941,7 @@ unverified. A live smoke is optional and must not weaken or delay deterministic 
 **Files:**
 
 - Modify: `docs/design-docs/2026-07-20-douyin-fallback-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `AGENTS.md`

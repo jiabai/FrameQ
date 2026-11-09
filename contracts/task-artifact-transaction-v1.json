@@ -1,6 +1,6 @@
 {
   "contractVersion": 1,
-  "journalFileName": ".frameq-artifact-transaction.json",
+  "journalFileName": ".artifact-transaction.json",
   "journal": {
     "requiredFields": [
       "schema_version",
@@ -39,7 +39,7 @@
     }
   },
   "allowedDestinations": [
-    "frameq-task.json",
+    "task.json",
     "transcript/transcript.txt",
     "transcript/transcript.md",
     "transcript/segments.json",
@@ -79,13 +79,13 @@
     "ai/draft.md": "draft"
   },
   "nonArtifactDestinations": [
-    "frameq-task.json",
+    "task.json",
     "transcript/original/transcript.txt",
     "transcript/original/transcript.md",
     "ai/original/draft.md"
   ],
   "internalPath": {
-    "fileNameTemplate": ".frameq-artifact-{transaction_id}-{entry_index}.{kind}",
+    "fileNameTemplate": ".artifact-{transaction_id}-{entry_index}.{kind}",
     "kinds": [
       "staging",
       "rollback"
@@ -93,7 +93,7 @@
     "sameDirectoryAsDestination": true
   },
   "commitOrder": {
-    "manifestDestination": "frameq-task.json",
+    "manifestDestination": "task.json",
     "manifestMustBeLast": true,
     "journalCommittedStateIsCommitPoint": true
   },
@@ -105,14 +105,14 @@
       "entries": [
         {
           "destination": "transcript/transcript.txt",
-          "staging": "transcript/.frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
-          "rollback": "transcript/.frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.rollback",
+          "staging": "transcript/.artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
+          "rollback": "transcript/.artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.rollback",
           "existed_before": true
         },
         {
-          "destination": "frameq-task.json",
-          "staging": ".frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1.staging",
-          "rollback": ".frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1.rollback",
+          "destination": "task.json",
+          "staging": ".artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1.staging",
+          "rollback": ".artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1.rollback",
           "existed_before": true
         }
       ]
@@ -150,7 +150,7 @@
         "entries": [
           {
             "destination": "../outside.txt",
-            "staging": ".frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
+            "staging": ".artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
             "rollback": null,
             "existed_before": false
           }
@@ -166,7 +166,7 @@
         "entries": [
           {
             "destination": "ai/summary.md",
-            "staging": "ai/.frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
+            "staging": "ai/.artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
             "rollback": null,
             "existed_before": false,
             "content": "must never be accepted"
@@ -183,13 +183,13 @@
         "entries": [
           {
             "destination": "ai/summary.md",
-            "staging": "ai/.frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
+            "staging": "ai/.artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.staging",
             "rollback": null,
             "existed_before": false
           },
           {
             "destination": "ai/summary.md",
-            "staging": "ai/.frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1.staging",
+            "staging": "ai/.artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1.staging",
             "rollback": null,
             "existed_before": false
           }
@@ -205,7 +205,7 @@
         "entries": [
           {
             "destination": "ai/summary.md",
-            "staging": "ai/.frameq-artifact-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-0.staging",
+            "staging": "ai/.artifact-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-0.staging",
             "rollback": null,
             "existed_before": false
           }

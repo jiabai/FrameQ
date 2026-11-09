@@ -20,7 +20,7 @@ function loadTauriConfig(): TauriConfig {
 }
 
 describe("installer config", () => {
-  test("pins the Windows NSIS installer icon to the FrameQ ICO asset", () => {
+  test("pins the Windows NSIS installer icon to the Locus ICO asset", () => {
     const config = loadTauriConfig();
     const nsisConfig = config.bundle?.windows?.nsis;
 

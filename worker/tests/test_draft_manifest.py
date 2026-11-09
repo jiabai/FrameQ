@@ -114,13 +114,13 @@ def _write_manifest(
         payload["draft_seed_insight_id"] = draft_seed_insight_id
     (task_dir / "ai").mkdir(parents=True, exist_ok=True)
     task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(payload, ensure_ascii=False), encoding="utf-8"
     )
 
 
 def _load_manifest(task_dir: Path) -> dict[str, object]:
-    return json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    return json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
 
 
 # --------------------------------------------------------------------------- #

@@ -1,9 +1,9 @@
 export const commonFeatureResources = {
   "zh-CN": {
-    productName: "FrameQ",
-    appMark: "FQ",
+    productName: "{{product}}",
+    appMark: "{{productMark}}",
     window: {
-      ariaLabel: "FrameQ 桌面窗口",
+      ariaLabel: "{{product}} 桌面窗口",
       controls: "窗口操作",
       close: "关闭窗口",
       minimize: "最小化窗口",
@@ -18,10 +18,10 @@ export const commonFeatureResources = {
     },
   },
   "zh-TW": {
-    productName: "FrameQ",
-    appMark: "FQ",
+    productName: "{{product}}",
+    appMark: "{{productMark}}",
     window: {
-      ariaLabel: "FrameQ 桌面視窗",
+      ariaLabel: "{{product}} 桌面視窗",
       controls: "視窗操作",
       close: "關閉視窗",
       minimize: "最小化視窗",
@@ -36,10 +36,10 @@ export const commonFeatureResources = {
     },
   },
   "en-US": {
-    productName: "FrameQ",
-    appMark: "FQ",
+    productName: "{{product}}",
+    appMark: "{{productMark}}",
     window: {
-      ariaLabel: "FrameQ desktop window",
+      ariaLabel: "{{product}} desktop window",
       controls: "Window controls",
       close: "Close window",
       minimize: "Minimize window",

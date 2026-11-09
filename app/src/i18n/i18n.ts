@@ -1,15 +1,16 @@
 import { createInstance, type Resource } from "i18next";
 import { initReactI18next } from "react-i18next";
+import { PRODUCT_MARK, PRODUCT_NAME } from "../brand";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "./locale";
 import { RESOURCE_NAMESPACES, resources } from "./resources";
 
-export const frameqI18n = createInstance();
+export const appI18n = createInstance();
 
 let initialization: Promise<void> | null = null;
 
 export async function initializeI18n(locale: SupportedLocale): Promise<void> {
   if (!initialization) {
-    initialization = frameqI18n
+    initialization = appI18n
       .use(initReactI18next)
       .init({
         resources: resources as unknown as Resource,
@@ -19,14 +20,17 @@ export async function initializeI18n(locale: SupportedLocale): Promise<void> {
         load: "currentOnly",
         ns: [...RESOURCE_NAMESPACES],
         defaultNS: "common",
-        interpolation: { escapeValue: false },
+        interpolation: {
+          escapeValue: false,
+          defaultVariables: { product: PRODUCT_NAME, productMark: PRODUCT_MARK },
+        },
         returnNull: false,
       })
       .then(() => undefined);
   }
 
   await initialization;
-  if (frameqI18n.resolvedLanguage !== locale) {
-    await frameqI18n.changeLanguage(locale);
+  if (appI18n.resolvedLanguage !== locale) {
+    await appI18n.changeLanguage(locale);
   }
 }

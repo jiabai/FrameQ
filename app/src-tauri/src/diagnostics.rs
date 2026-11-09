@@ -22,7 +22,7 @@ pub(crate) fn begin_asr_model_download_diagnostics(paths: &RuntimePaths) -> AsrD
     AsrDiagnosticSink::new(paths)
 }
 
-const DESKTOP_LOG_FILE_NAME: &str = "frameq-desktop.log";
+const DESKTOP_LOG_FILE_NAME: &str = "desktop.log";
 const DESKTOP_LOG_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 pub(crate) fn desktop_log_path(paths: &RuntimePaths) -> PathBuf {
@@ -325,7 +325,7 @@ mod tests {
 
         assert_eq!(
             desktop_log_path(&paths),
-            paths.user_data_dir.join("logs").join("frameq-desktop.log")
+            paths.user_data_dir.join("logs").join("desktop.log")
         );
     }
 
@@ -452,7 +452,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{test_name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("app-{test_name}-{unique}"));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
     }

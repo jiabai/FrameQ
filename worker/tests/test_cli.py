@@ -137,7 +137,7 @@ def task_dir_from_result(result: dict[str, object]) -> Path:
 
 
 def manifest_from_result(result: dict[str, object]) -> dict[str, object]:
-    manifest_path = task_dir_from_result(result) / "frameq-task.json"
+    manifest_path = task_dir_from_result(result) / "task.json"
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 

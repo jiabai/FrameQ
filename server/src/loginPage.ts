@@ -160,10 +160,10 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
       const i18n = ${JSON.stringify(i18n)};
       const params = new URLSearchParams(window.location.search);
       const desktopParam = params.get("desktop");
-      const redirectUri = params.get("redirect_uri") || "frameq://auth/callback";
+      const redirectUri = params.get("redirect_uri") || "pro.8xf.app://auth/callback";
       // Desktop mode is the OAuth-style deep-link handshake launched by the desktop client.
       // Everything else (including a plain browser visit to /login) is web mode and lands on /dashboard.
-      const desktopMode = desktopParam === "1" && redirectUri === "frameq://auth/callback";
+      const desktopMode = desktopParam === "1" && redirectUri === "pro.8xf.app://auth/callback";
       const state = desktopMode
         ? (params.get("state") || "")
         : (params.get("state") || ("web-" + crypto.randomUUID()));
@@ -195,7 +195,7 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
         if (!state || !/^[a-zA-Z0-9._~-]{8,160}$/.test(state)) {
           throw new Error(i18n["login.error_state_desktop"]);
         }
-        if (redirectUri !== "frameq://auth/callback") {
+        if (redirectUri !== "pro.8xf.app://auth/callback") {
           throw new Error(i18n["login.error_callback"]);
         }
       }

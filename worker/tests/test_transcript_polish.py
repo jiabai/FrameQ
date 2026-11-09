@@ -273,7 +273,7 @@ def test_retry_insights_transcript_branch_keeps_manifest_preview(tmp_path: Path)
     before = transcript_path.read_bytes()
     output_root = tmp_path / "outputs"
     task_dir = _task_dir(tmp_path)
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,
@@ -333,7 +333,7 @@ def test_retry_insights_transcript_branch_keeps_manifest_preview(tmp_path: Path)
     assert result["status"] == "completed"
     assert result["error"] is None
     assert transcript_path.read_bytes() == before
-    manifest = json.loads((_task_dir(tmp_path) / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_task_dir(tmp_path) / "task.json").read_text(encoding="utf-8"))
     assert manifest["text_preview"] == OFFICIAL_BODY[:180]
     assert manifest["artifacts"]["transcript_txt"] == "transcript/transcript.txt"
     # 事务恢复不会删掉没登记进白名单的整理稿。

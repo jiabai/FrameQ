@@ -184,7 +184,7 @@ describe("desktop account routes", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/login?desktop=1&state=state-1001&redirect_uri=frameq%3A%2F%2Fauth%2Fcallback",
+      url: "/login?desktop=1&state=state-1001&redirect_uri=pro.8xf.app%3A%2F%2Fauth%2Fcallback",
     });
 
     expect(response.statusCode).toBe(200);

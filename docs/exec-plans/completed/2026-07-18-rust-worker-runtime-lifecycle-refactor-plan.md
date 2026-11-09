@@ -179,7 +179,7 @@ exposure. The existing Vite chunk-size advisory is unrelated to this Rust owners
 ## Context and Orientation
 
 - Approved design: `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`.
-- Code-audit baseline: `docs/design-docs/frameq-code-audit-uml.md`.
+- Code-audit baseline: `docs/design-docs/code-audit-uml.md`.
 - Worker command construction: `app/src-tauri/src/worker_runtime/command.rs`.
 - Supervised runner: `app/src-tauri/src/worker_runtime/runner.rs`.
 - Supervisor and OS process-tree control: `app/src-tauri/src/worker_runtime/supervisor.rs`.

@@ -71,7 +71,7 @@ def test_finalize_keeps_native_sidecar_bytes_and_excludes_it_from_artifacts(
     isolated_root: Path, kind: str, transactional: bool, status: JobStage,
 ) -> None:
     store, context = saved_task(isolated_root, kind)
-    sidecar = context.paths.task_dir / "frameq-note-metadata.json"
+    sidecar = context.paths.task_dir / "app-note-metadata.json"
     before = (json.dumps({
         "schema_version": 1, "task_id": context.task_id,
         "pinned": True, "display_title": "保留用户手动标题",
@@ -93,7 +93,7 @@ def test_finalize_keeps_native_sidecar_bytes_and_excludes_it_from_artifacts(
     assert sidecar.read_bytes() == before
     assert context.paths.transcript_txt_path.read_bytes() == transcript_before
     assert store.open(context.task_id).context == context
-    assert "frameq-note-metadata.json" not in result.artifacts.values()
+    assert "app-note-metadata.json" not in result.artifacts.values()
     assert "display_title" not in result.to_dict()
 
 
@@ -106,7 +106,7 @@ def test_title_state_and_direct_manifest_rebuild_preserve_native_sidecar(
     isolated_root: Path, kind: str, status: str, code: str | None,
 ) -> None:
     store, context = saved_task(isolated_root, kind)
-    sidecar = context.paths.task_dir / "frameq-note-metadata.json"
+    sidecar = context.paths.task_dir / "app-note-metadata.json"
     before = b"deliberately unreadable native settings stay untouched\n"
     sidecar.write_bytes(before)
     metadata = NoteTitleMetadata("已经提交的生成标题", status, "zh-CN", code)

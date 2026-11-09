@@ -188,7 +188,7 @@ def test_legacy_manifest_is_rejected_without_mutation(tmp_path: Path) -> None:
     task_id = "legacy-task"
     task_dir = output_root / "tasks" / task_id
     task_dir.mkdir(parents=True)
-    manifest_path = task_dir / "frameq-task.json"
+    manifest_path = task_dir / "task.json"
     original = json.dumps(
         {
             "schema_version": 2,
@@ -214,7 +214,7 @@ def test_retry_context_rejects_linked_task_directory(
     task_dir = output_root / "tasks" / task_id
     task_dir.mkdir(parents=True)
     canonical = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,

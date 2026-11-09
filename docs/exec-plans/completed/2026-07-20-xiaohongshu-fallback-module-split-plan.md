@@ -196,7 +196,7 @@ platform framework, extra facade, contract, or UI behavior was added to compensa
 Design and governance:
 
 - docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md
-- docs/design-docs/frameq-code-audit-uml.md
+- docs/design-docs/code-audit-uml.md
 - docs/ARCHITECTURE.md
 - docs/SECURITY.md
 - WORKFLOW.md
@@ -954,7 +954,7 @@ intended source/test/docs plus ignored generated outputs.
 **Files:**
 
 - Modify: docs/design-docs/2026-07-20-xiaohongshu-fallback-module-split.md
-- Modify: docs/design-docs/frameq-code-audit-uml.md
+- Modify: docs/design-docs/code-audit-uml.md
 - Modify: docs/ARCHITECTURE.md
 - Modify: docs/SECURITY.md
 - Modify: TASKS.md

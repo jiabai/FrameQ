@@ -281,7 +281,7 @@ export function useAccountController({
 
   const handleAuthCallback = useCallback(
     async (callbackUrl: string) => {
-      if (!callbackUrl.startsWith("frameq://auth/callback")) {
+      if (!callbackUrl.startsWith("pro.8xf.app://auth/callback")) {
         return;
       }
       const operationId = beginActiveOperation();

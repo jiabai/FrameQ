@@ -70,7 +70,7 @@ pub fn reject_overrides() -> HostResult<()> {
 pub type Preparation = Rc<RefCell<Option<windows::core::Result<Native>>>>;
 
 pub unsafe fn begin(directory: &Path) -> HostResult<Preparation> {
-    let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, w!("STATIC"), w!("FrameQ Web Page"),
+    let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, w!("STATIC"), w!("Locus Web Page"),
         WS_OVERLAPPEDWINDOW, 0, 0, 1280, 900, None, None, None, None).map_err(|_| "WEB_HOST_FAILED")?;
     let output: Preparation = Rc::new(RefCell::new(None));
     let result = output.clone();
@@ -97,7 +97,7 @@ pub unsafe fn begin(directory: &Path) -> HostResult<Preparation> {
             validate_version(&runtime).map_err(|_| windows::core::Error::from(E_NOINTERFACE))?;
             let environment10 = environment.cast::<ICoreWebView2Environment10>()?;
             let options = environment10.CreateCoreWebView2ControllerOptions()?;
-            options.SetProfileName(w!("FrameQ"))?;
+            options.SetProfileName(w!("Locus"))?;
             options.SetIsInPrivateModeEnabled(true)?;
             let controller_output = result.clone();
             let env = environment.clone();

@@ -114,7 +114,7 @@ function readyWorkflow(
     ...createInitialWorkflow(),
     stage: "completed",
     taskId,
-    taskDir: `D:/FrameQ/outputs/tasks/${taskId}`,
+    taskDir: `D:/Locus/outputs/tasks/${taskId}`,
     text,
     artifacts: { transcript_txt: "transcript/transcript.txt" },
   };
@@ -135,8 +135,8 @@ function detailResponse(
         text,
       },
     ],
-    audio_path: `D:/FrameQ/outputs/tasks/${taskId}/media/audio.wav`,
-    audio_asset_path: `D:/FrameQ/cache/audio-review/${taskId}.wav`,
+    audio_path: `D:/Locus/outputs/tasks/${taskId}/media/audio.wav`,
+    audio_asset_path: `D:/Locus/cache/audio-review/${taskId}.wav`,
     has_original_backup: false,
     polished_text: null,
   };

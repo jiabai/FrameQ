@@ -1,4 +1,4 @@
-use frameq_webview_host::policy::{permitted_url, public_ip};
+use app_webview_host::policy::{permitted_url, public_ip};
 use serde_json::{json, Value};
 use std::{io::{BufRead, BufReader, Write}, net::ToSocketAddrs, path::PathBuf, process::{Child, ChildStdin, Command, Stdio}, sync::{Arc, Mutex, mpsc::{self, Receiver}}, thread::JoinHandle, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
 
@@ -20,7 +20,7 @@ impl Running {
         let directory = root.join(".tmp").join(format!("native-host-{}-{}", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir_all(&directory).unwrap();
         let script = std::fs::read_to_string(root.join("app/src-tauri/resources/web/extract-article.js")).expect("build the production extractor first");
-        let mut child = Command::new(env!("CARGO_BIN_EXE_frameq-webview-host")).args(["--operation-id", "bbd02c47-7155-47e9-b72b-be6583cbff09"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
+        let mut child = Command::new(env!("CARGO_BIN_EXE_app-webview-host")).args(["--operation-id", "bbd02c47-7155-47e9-b72b-be6583cbff09"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
         let input = child.stdin.take().unwrap();
         let output = child.stdout.take().unwrap();
         let (sender, receiver) = mpsc::channel();

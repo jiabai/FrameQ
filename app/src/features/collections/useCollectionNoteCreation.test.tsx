@@ -10,7 +10,7 @@ const submission: TaskSubmission = { kind: "url", url: "https://www.youtube.com/
 
 function completed(taskId = "saved-task"): WorkerResult {
   return {
-    status: "completed", task_id: taskId, task_dir: `D:/FrameQ/outputs/tasks/${taskId}`,
+    status: "completed", task_id: taskId, task_dir: `D:/Locus/outputs/tasks/${taskId}`,
     artifacts: { transcript_txt: "transcript/transcript.txt" },
     text: "Saved transcript", summary: "", insights: [], transcript: null,
     dissection: null, dissection_source_status: null, draft: "", error: null,

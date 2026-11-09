@@ -36,7 +36,7 @@ def test_parse_dotenv_ignores_comments_blank_lines_and_malformed_entries(
                 "",
                 "# comment",
                 "not-an-env-line",
-                'APP_OUTPUT_DIR="D:/FrameQ/results"',
+                'APP_OUTPUT_DIR="D:/Locus/results"',
             ]
         ),
         encoding="utf-8",
@@ -44,7 +44,7 @@ def test_parse_dotenv_ignores_comments_blank_lines_and_malformed_entries(
 
     env = parse_dotenv(dotenv_path)
 
-    assert env == {"APP_OUTPUT_DIR": "D:/FrameQ/results"}
+    assert env == {"APP_OUTPUT_DIR": "D:/Locus/results"}
 
 
 def test_load_project_env_reads_user_data_dotenv_without_legacy_llm_keys(

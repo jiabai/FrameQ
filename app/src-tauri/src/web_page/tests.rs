@@ -69,7 +69,7 @@ fn real_system_webview_static_and_dynamic_notes_are_saved_and_reopened() {
     let operations = Arc::new(WebPageOperations::default());
     let supervisors = Arc::new(crate::ProcessSupervisors::default());
     let mut task_ids = Vec::new();
-    for url in ["https://quotes.toscrape.com/?id=42&token=frameq-native-canary#part", "https://quotes.toscrape.com/js/"] {
+    for url in ["https://quotes.toscrape.com/?id=42&token=app-native-canary#part", "https://quotes.toscrape.com/js/"] {
         let result = run_web_page(&paths, request(url), Arc::clone(&operations), Arc::clone(&supervisors), "main".into(), ProgressRoute::None).unwrap();
         assert_eq!(serde_json::to_value(result.status).unwrap(), "completed");
         assert!(result.transcript.is_none());
@@ -77,7 +77,7 @@ fn real_system_webview_static_and_dynamic_notes_are_saved_and_reopened() {
         let id = result.task_id.as_ref().unwrap();
         let task = crate::task_manifest::SupportedTask::open(&paths.output_root().unwrap(), id).unwrap();
         assert!(result.validate_source_task(&task));
-        assert!(!fs::read_to_string(task.task_dir().join("frameq-task.json")).unwrap().contains("frameq-native-canary"));
+        assert!(!fs::read_to_string(task.task_dir().join("task.json")).unwrap().contains("app-native-canary"));
         drop(task);
         let detail = crate::history::load_history_detail_from_output_root(&paths.output_root().unwrap(),
             serde_json::from_value(serde_json::json!({"task_id":id})).unwrap()).unwrap();
@@ -86,7 +86,7 @@ fn real_system_webview_static_and_dynamic_notes_are_saved_and_reopened() {
         assert!(!supervisors.is_task_active());
     }
     assert_ne!(task_ids[0], task_ids[1]);
-    assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".frameq-system-webviews")).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".app-system-webviews")).unwrap().count(), 0);
     println!("system WebView saved: {}", serde_json::json!({"config":paths.user_data_dir,"tasks":task_ids}));
 }
 
@@ -101,7 +101,7 @@ fn real_system_webview_cancel_releases_lane_and_allows_another_note() {
     let thread_paths = paths.clone(); let thread_ops = Arc::clone(&operations); let thread_supervisors = Arc::clone(&supervisors);
     let thread = std::thread::spawn(move || run_web_page(&thread_paths, input, thread_ops, thread_supervisors, "main".into(), ProgressRoute::None));
     let deadline = Instant::now() + Duration::from_secs(20);
-    let root = paths.cache_root().unwrap().join(".frameq-system-webviews").join(&id);
+    let root = paths.cache_root().unwrap().join(".app-system-webviews").join(&id);
     while !root.join("processes.json").exists() && Instant::now() < deadline { std::thread::sleep(Duration::from_millis(20)); }
     assert!(root.join("processes.json").exists());
     assert_eq!(cancel_matching(&operations, &id, "main").status, "cancelling");
@@ -133,7 +133,7 @@ fn real_system_webview_wechat_note_is_complete_saved_and_reopened() {
     assert_eq!(detail.text, result.text);
     assert_eq!(detail.markdown, result.markdown);
     assert!(!supervisors.is_task_active());
-    assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".frameq-system-webviews")).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".app-system-webviews")).unwrap().count(), 0);
     println!("actual WeChat note saved and reopened: text_bytes={} task={id}", result.text.len());
 }
 
@@ -159,6 +159,6 @@ fn real_system_webview_requested_wechat_note_is_saved_and_reopened() {
     assert_eq!(detail.text, result.text);
     assert_eq!(detail.markdown, result.markdown);
     assert!(!supervisors.is_task_active());
-    assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".frameq-system-webviews")).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(paths.cache_root().unwrap().join(".app-system-webviews")).unwrap().count(), 0);
     println!("requested WeChat note saved and reopened: config={} text_bytes={} task={id}", paths.user_data_dir.display(), result.text.len());
 }

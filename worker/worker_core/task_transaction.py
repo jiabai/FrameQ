@@ -21,17 +21,17 @@ from worker_core.atomic_files import (
     write_synced_new_file,
 )
 
-JOURNAL_FILE_NAME = ".frameq-artifact-transaction.json"
+JOURNAL_FILE_NAME = ".artifact-transaction.json"
 SCHEMA_VERSION = 1
-_MANIFEST_DESTINATION = "frameq-task.json"
+_MANIFEST_DESTINATION = "task.json"
 _MAX_ENTRIES = 8
 _MAX_JOURNAL_BYTES = 64 * 1024
 _TRANSACTION_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 _ORPHAN_NAME_PATTERN = re.compile(
-    r"^\.frameq-artifact-[0-9a-f]{32}-[0-7]\.(?:staging|rollback)$"
+    r"^\.artifact-[0-9a-f]{32}-[0-7]\.(?:staging|rollback)$"
 )
 _JOURNAL_STAGING_NAME_PATTERN = re.compile(
-    r"^\.frameq-artifact-transaction\.[0-9a-f]{32}\.part\.json$"
+    r"^\.artifact-transaction\.[0-9a-f]{32}\.part\.json$"
 )
 
 # Single source of truth for the closed destination set. Every destination the
@@ -491,7 +491,7 @@ def _internal_relative_path(
     kind: Literal["staging", "rollback"],
 ) -> str:
     parent = PurePosixPath(destination).parent
-    name = f".frameq-artifact-{transaction_id}-{index}.{kind}"
+    name = f".artifact-{transaction_id}-{index}.{kind}"
     return name if parent == PurePosixPath(".") else (parent / name).as_posix()
 
 

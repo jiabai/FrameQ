@@ -9,7 +9,7 @@ import {
   runRolloutChecks,
 } from "../check-self-service-rollout.mjs";
 
-const BASE_URL = "https://frameq.example.test";
+const BASE_URL = "https://app.example.test";
 
 const AUTH_REQUIRED = { status: 401, body: { error: "AUTH_REQUIRED" } };
 const FEATURE_NOT_AVAILABLE = { status: 404, body: { error: "FEATURE_NOT_AVAILABLE" } };

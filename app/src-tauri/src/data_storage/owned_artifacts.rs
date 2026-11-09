@@ -6,7 +6,7 @@ use sha2::{Digest,Sha256};
 impl DataStorageManager {
     pub(super) fn create_owned_artifact(&self,value:&mut Control,kind:&str,expected:Option<(&Path,&[u8])>)->Result<std::path::PathBuf> {
         let pending=value.pending.as_mut().ok_or_else(||StorageError::new("StaleOperation"))?;
-        let relative=std::path::PathBuf::from(".frameq-storage/operations").join(&pending.operation_id).join("temporary").join(uuid::Uuid::new_v4().to_string());
+        let relative=std::path::PathBuf::from(".app-storage/operations").join(&pending.operation_id).join("temporary").join(uuid::Uuid::new_v4().to_string());
         let path=pending.target.join(&relative);create_safe_dirs(path.parent().ok_or_else(||StorageError::new("UnsafePath"))?)?;
         let (destination,expected_sha256,expected_length)=if let Some((destination,bytes))=expected{(Some(destination.strip_prefix(&pending.target).map_err(|_|StorageError::new("UnsafePath"))?.to_path_buf()),format!("{:x}",Sha256::digest(bytes)),bytes.len()as u64)}else{(None,String::new(),0)};
         pending.owned_artifacts.push(OwnedArtifact{relative_path:relative,identity:None,kind:kind.into(),expected_sha256,expected_length,destination});self.persist(value)?;

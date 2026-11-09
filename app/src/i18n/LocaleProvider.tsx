@@ -10,7 +10,7 @@ import {
 } from "react";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import { getUiPreferences, saveUiPreferences } from "../settingsClient";
-import { frameqI18n } from "./i18n";
+import { appI18n } from "./i18n";
 import { LanguagePreferenceQueue } from "./languagePreferenceQueue";
 import { renderUiMessage, uiMessage, type UiMessage } from "./uiMessage";
 import {
@@ -67,7 +67,7 @@ export function LocaleProvider({
   const applyResolvedLocale = useCallback((locale: SupportedLocale) => {
     setResolvedLocale(locale);
     syncDocumentLocale(locale);
-    void frameqI18n.changeLanguage(locale);
+    void appI18n.changeLanguage(locale);
   }, []);
 
   const applyPreference = useCallback(
@@ -115,7 +115,7 @@ export function LocaleProvider({
   );
 
   return (
-    <I18nextProvider i18n={frameqI18n}>
+    <I18nextProvider i18n={appI18n}>
       <LocaleContext.Provider value={value}>
         {notice ? (
           <div className="locale-recovery-notice" role="status" aria-live="polite">

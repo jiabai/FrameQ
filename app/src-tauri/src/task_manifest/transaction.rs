@@ -8,9 +8,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-pub(super) const JOURNAL_FILE_NAME: &str = ".frameq-artifact-transaction.json";
+pub(super) const JOURNAL_FILE_NAME: &str = ".artifact-transaction.json";
 const SCHEMA_VERSION: u64 = 1;
-const MANIFEST_DESTINATION: &str = "frameq-task.json";
+const MANIFEST_DESTINATION: &str = "task.json";
 const MAX_ENTRIES: usize = 8;
 const MAX_JOURNAL_BYTES: u64 = 64 * 1024;
 const COMMIT_ERROR: &str = "Task artifacts could not be stored safely.";
@@ -19,7 +19,7 @@ const RECOVERY_ERROR: &str = "Task artifacts could not be recovered safely.";
 // must accept exactly the same closed destination set, so this mirrors
 // `contracts/task-artifact-transaction-v1.json` verbatim.
 const ALLOWED_DESTINATIONS: [&str; 16] = [
-    "frameq-task.json",
+    "task.json",
     "transcript/transcript.txt",
     "transcript/transcript.md",
     "transcript/segments.json",
@@ -463,7 +463,7 @@ fn cleanup_closed_orphans_best_effort(task_dir: &Path) {
 }
 
 fn closed_material_name(name: &str) -> bool {
-    let Some(rest) = name.strip_prefix(".frameq-artifact-") else {
+    let Some(rest) = name.strip_prefix(".artifact-") else {
         return false;
     };
     let Some((stem, kind)) = rest.rsplit_once('.') else {
@@ -483,7 +483,7 @@ fn closed_material_name(name: &str) -> bool {
 
 fn closed_journal_staging_name(name: &str) -> bool {
     let Some(id) = name
-        .strip_prefix(".frameq-artifact-transaction.")
+        .strip_prefix(".artifact-transaction.")
         .and_then(|value| value.strip_suffix(".part.json"))
     else {
         return false;
@@ -533,7 +533,7 @@ fn internal_relative_path(
     index: usize,
     kind: &str,
 ) -> String {
-    let name = format!(".frameq-artifact-{transaction_id}-{index}.{kind}");
+    let name = format!(".artifact-{transaction_id}-{index}.{kind}");
     destination
         .rsplit_once('/')
         .map(|(parent, _)| format!("{parent}/{name}"))

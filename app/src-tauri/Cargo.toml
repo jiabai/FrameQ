@@ -1,8 +1,8 @@
 [package]
 name = "app"
 version = "0.5.1"
-description = "FrameQ desktop video transcription client"
-authors = ["FrameQ"]
+description = "Locus desktop video transcription client"
+authors = ["Locus contributors"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

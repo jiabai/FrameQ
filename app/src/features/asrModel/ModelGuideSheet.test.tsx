@@ -106,7 +106,7 @@ async function renderModelGuide(
         modelDownloadActive={options.modelDownloadActive ?? true}
         asrModelStatus={{
           model: "iic/SenseVoiceSmall",
-          modelDir: "D:/FrameQ/models",
+          modelDir: "D:/Locus/models",
           available: false,
           source: "modelscope",
         }}
@@ -166,7 +166,7 @@ describe("ModelGuideSheet localization", () => {
       expect(markup).toContain(percent);
       expect(markup).toContain("SenseVoice Small");
       expect(markup).toContain("ModelScope");
-      expect(markup).toContain("D:/FrameQ/models");
+      expect(markup).toContain("D:/Locus/models");
       expect(markup).toContain('data-motion="sheet"');
       expect(markup).toContain('role="progressbar"');
       expect(markup).toContain('data-motion="asr-progress"');

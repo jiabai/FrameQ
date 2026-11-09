@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import UUID
 
 from worker_core import worker_service as worker_service_module
+from worker_core.brand import PRODUCT_NAME
 from worker_core.desktop_contract import (
     MODEL_DOWNLOAD_EVENT_PREFIX,
     PROGRESS_EVENT_PREFIX,
@@ -124,7 +125,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _main_inner(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run one FrameQ worker request.")
+    parser = argparse.ArgumentParser(description=f"Run one {PRODUCT_NAME} worker request.")
     request_group = parser.add_mutually_exclusive_group(required=True)
     request_group.add_argument(
         "--request-stdin",

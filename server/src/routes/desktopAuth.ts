@@ -88,12 +88,12 @@ export function registerDesktopAuthRoutes(
     }
     try {
       const result = await dependencies.auth.verifyEmailCodeAndCreateWebSession(parsed.data);
-      setCookie(reply, "frameq_user_session", result.sessionToken, {
+      setCookie(reply, "app_user_session", result.sessionToken, {
         httpOnly: true,
         maxAgeSeconds: userSessionMaxAgeSeconds,
         secure: dependencies.secureCookies,
       });
-      setCookie(reply, "frameq_user_csrf", result.csrfToken, {
+      setCookie(reply, "app_user_csrf", result.csrfToken, {
         httpOnly: false,
         maxAgeSeconds: userSessionMaxAgeSeconds,
         secure: dependencies.secureCookies,

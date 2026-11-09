@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { frameqI18n, initializeI18n } from "../../i18n/i18n";
+import { appI18n, initializeI18n } from "../../i18n/i18n";
 import { synthesisResources } from "../../i18n/synthesisResources";
 import { createInitialWorkflow } from "../../workflowState";
 import { canCloseDraftResult, DraftResultSheet } from "./DraftResultSheet";
@@ -17,7 +17,7 @@ function workflow(taskId = "task-draft-1") {
     ...createInitialWorkflow(),
     stage: "completed" as const,
     taskId,
-    taskDir: `D:/FrameQ/outputs/tasks/${taskId}`,
+    taskDir: `D:/Locus/outputs/tasks/${taskId}`,
     draft: "# Original draft",
     artifacts: { draft: "ai/draft.md" },
   };
@@ -25,7 +25,7 @@ function workflow(taskId = "task-draft-1") {
 
 async function localization() {
   await initializeI18n("zh-CN");
-  return frameqI18n;
+  return appI18n;
 }
 
 afterEach(cleanup);

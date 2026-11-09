@@ -174,7 +174,7 @@ analysis.
 Design and governance:
 
 - `docs/design-docs/2026-07-20-bilibili-fallback-module-split.md`
-- `docs/design-docs/frameq-code-audit-uml.md`
+- `docs/design-docs/code-audit-uml.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SECURITY.md`
 - `AGENTS.md`
@@ -735,7 +735,7 @@ Expected: all commands exit 0; status contains only reviewed canonical source/te
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/design-docs/2026-07-20-bilibili-fallback-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`
 - Move: `docs/exec-plans/active/2026-07-20-bilibili-fallback-module-split-plan.md`

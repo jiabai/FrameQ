@@ -28,9 +28,9 @@ describe("i18n module constants", () => {
 
 describe("t(locale, key)", () => {
   test("resolves an existing key in all three locales", () => {
-    expect(t("zh-CN", "login.title")).toBe("FrameQ Login");
-    expect(t("en", "login.title")).toBe("FrameQ Login");
-    expect(t("zh-TW", "login.title")).toBe("FrameQ Login");
+    expect(t("zh-CN", "login.title")).toBe("Locus Login");
+    expect(t("en", "login.title")).toBe("Locus Login");
+    expect(t("zh-TW", "login.title")).toBe("Locus Login");
 
     expect(t("zh-CN", "dashboard.logout")).toBe("退出登录");
     expect(t("en", "dashboard.logout")).toBe("Sign out");

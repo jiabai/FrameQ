@@ -140,7 +140,7 @@ mod tests {
     fn temp_dir(test_name: &str) -> PathBuf {
         let mut dir = std::env::temp_dir();
         dir.push(format!(
-            "frameq-tauri-updates-{}-{}",
+            "app-tauri-updates-{}-{}",
             test_name,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

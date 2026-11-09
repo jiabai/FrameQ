@@ -1,4 +1,4 @@
-FrameQ article extractor
+Locus article extractor
 
 InsightFlow extraction helpers and Markdown configuration:
 Copyright (c) 2025 StandlX; MIT License.
@@ -6,7 +6,7 @@ Source repository: https://github.com/jiabai/InsightFlow
 Reviewed local revision: a641ebb61f12b29333d459021e84ec7513f596a2.
 Sources: src/extension/immersive/readingSession.cjs:57-400,
 src/extension/hooks/useMarkdownConverter.ts, src/extension/lib/tagsToRemove.ts.
-FrameQ adaptations pass Document and URL explicitly, preserve structured text,
+Locus adaptations pass Document and URL explicitly, preserve structured text,
 use Readability for generic pages, sanitize with DOMPurify, restrict URLs,
 replace images with descriptions, support GFM tables and impose size limits.
 The extraction module's MIT notice is licenses/InsightFlow-MIT.txt.

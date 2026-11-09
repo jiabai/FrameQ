@@ -13,10 +13,10 @@ const languageFieldSource = readFileSync(
 );
 
 describe("localized application bootstrap", () => {
-  test("shows only a neutral FrameQ shell while preferences race the 1.5 second deadline", () => {
+  test("shows only a neutral Locus shell while preferences race the 1.5 second deadline", () => {
     expect(indexHtml).toContain('<html lang="en-US" dir="ltr">');
-    expect(indexHtml).toContain("<title>FrameQ</title>");
-    expect(indexHtml).toMatch(/<div id="root">[\s\S]*?FrameQ[\s\S]*?<\/div>/);
+    expect(indexHtml).toContain("<title>Locus</title>");
+    expect(indexHtml).toMatch(/<div id="root">[\s\S]*?Locus[\s\S]*?<\/div>/);
     expect(indexHtml).not.toContain("Tauri + React + Typescript");
   });
 

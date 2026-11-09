@@ -290,7 +290,7 @@ production-operations ExecPlan, so broad publication is still blocked.
 - Modify: `docs/product-specs/2026-07-22-release-reliability-hardening.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`
 - Modify: `TASKS.md`
 - Modify: this ExecPlan throughout implementation

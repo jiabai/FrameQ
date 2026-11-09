@@ -283,7 +283,7 @@ Implementation closeout updates:
 - `TASKS.md` with acceptance evidence;
 - `docs/ARCHITECTURE.md` with the stable root/private-owner dependency boundary;
 - `docs/SECURITY.md` with the process/AI isolation and root-only import gate;
-- `docs/design-docs/frameq-code-audit-uml.md` with current line counts, module ownership, and the
+- `docs/design-docs/code-audit-uml.md` with current line counts, module ownership, and the
   resolved audit item;
 - the active local-media ExecPlan so future worker steps start from the actual private owners;
 - the technical-debt tracker so manual real-platform smoke points at the actual orchestration

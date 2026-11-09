@@ -66,7 +66,7 @@ describe("note information response protocol", () => {
     { ...info, note_title: { text: "Invalid incomplete title" } },
     { ...info, note_metadata: null },
     { ...info, artifact_types: ["segments"] }, { ...info, artifact_types: ["preference_snapshot"] },
-    { ...info, artifact_types: ["frameq-note-metadata.json"] },
+    { ...info, artifact_types: ["app-note-metadata.json"] },
     { ...info, artifact_types: ["audio", "audio"] }, { ...info, artifact_types: [1] },
   ])("rejects malformed information %#", (value) => {
     expect(() => parseNoteInfo(value, "note-1")).toThrowError(invalid);

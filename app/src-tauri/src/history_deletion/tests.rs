@@ -44,8 +44,8 @@ impl Fixture {
         fs::create_dir_all(task.join("transcript")).unwrap();
         fs::write(task.join("media/audio.wav"), b"saved audio").unwrap();
         fs::write(task.join("transcript/transcript.txt"), b"Saved transcript.").unwrap();
-        fs::write(task.join("frameq-note-metadata.json"), b"invalid settings remain deletable").unwrap();
-        fs::write(task.join("frameq-task.json"), serde_json::to_vec(&json!({
+        fs::write(task.join("app-note-metadata.json"), b"invalid settings remain deletable").unwrap();
+        fs::write(task.join("task.json"), serde_json::to_vec(&json!({
             "schema_version": 3, "source_privacy_migration_version": 2, "task_id": id,
             "created_at": "2026-10-31T12:00:00Z", "source_kind": "local_file",
             "source_url": "", "source_identity": null, "platform": "local",
@@ -56,7 +56,7 @@ impl Fixture {
         task
     }
     fn cache(&self, id: &str) {
-        for base in ["cache/tasks", "cache/.frameq-audio-review"] {
+        for base in ["cache/tasks", "cache/.app-audio-review"] {
             let path = self.paths.user_data_dir.join(base).join(id);
             fs::create_dir_all(&path).unwrap();
             fs::write(path.join("cached.wav"), b"cached audio").unwrap();
@@ -105,7 +105,7 @@ fn complete_delete_removes_only_selected_note_both_caches_and_exact_memberships(
     assert_eq!(result.status, "completed");
     assert_eq!(result.error_code, None);
     assert!(!fixture.paths.user_data_dir.join("outputs/tasks").join(TASK).exists());
-    for base in ["cache/tasks", "cache/.frameq-audio-review"] {
+    for base in ["cache/tasks", "cache/.app-audio-review"] {
         assert!(!fixture.paths.user_data_dir.join(base).join(TASK).exists());
         assert!(fixture.paths.user_data_dir.join(base).join(OTHER).exists());
     }
@@ -120,12 +120,12 @@ fn prepared_without_move_is_discarded_and_preserves_original_cache_and_membershi
     let fixture = Fixture::new();
     let job = fixture.prepared();
     let original = fixture.roots().task(&job);
-    let metadata = fs::read(original.join("frameq-task.json")).unwrap();
+    let metadata = fs::read(original.join("task.json")).unwrap();
     assert!(guard_pending_task(&fixture.paths, TASK).is_err());
     assert!(!deletion_is_accepted(&fixture.paths, TASK).unwrap());
     assert!(guard_pending_task(&fixture.paths, OTHER).is_ok());
     assert_eq!(fixture.resume().unwrap().status, "idle");
-    assert_eq!(fs::read(original.join("frameq-task.json")).unwrap(), metadata);
+    assert_eq!(fs::read(original.join("task.json")).unwrap(), metadata);
     assert_eq!(fixture.members(), [TASK, OTHER, "missing-note"]);
     assert!(fixture.paths.user_data_dir.join("cache/tasks").join(TASK).exists());
 }
@@ -185,7 +185,7 @@ fn successful_move_then_identity_change_returns_pending_and_retains_both_directo
     assert_eq!(result.error_code, Some(PENDING));
     assert_eq!(intent::read(&fixture.paths).unwrap().unwrap().phase, Phase::Accepted);
     assert_eq!(storage::identity(&original).unwrap(), job.task);
-    assert!(original.join("frameq-task.json").exists());
+    assert!(original.join("task.json").exists());
     assert_eq!(fs::read(stage.join("replacement.txt")).unwrap(), b"replacement remains");
     assert_eq!(fixture.members(), [TASK, OTHER, "missing-note"]);
     assert!(fixture.paths.user_data_dir.join("cache/tasks").join(TASK).exists());
@@ -198,7 +198,7 @@ fn partially_removed_stage_requires_no_manifest_for_restart_cleanup() {
     let fixture = Fixture::new();
     let job = fixture.accepted();
     let roots = fixture.roots();
-    fs::remove_file(roots.task_stage(&job).join("frameq-task.json")).unwrap();
+    fs::remove_file(roots.task_stage(&job).join("task.json")).unwrap();
     assert_eq!(fixture.resume().unwrap().status, "completed");
     assert!(!roots.task_stage(&job).exists());
 }
@@ -210,7 +210,7 @@ fn accepted_original_identity_moved_back_is_not_reported_as_physically_removed()
     let roots = fixture.roots();
     fs::rename(roots.task_stage(&job), roots.task(&job)).unwrap();
     assert_eq!(fixture.resume().unwrap().status, "cleanup_pending");
-    assert!(roots.task(&job).join("frameq-task.json").exists());
+    assert!(roots.task(&job).join("task.json").exists());
     assert_eq!(fixture.members(), [TASK, OTHER, "missing-note"]);
 }
 
@@ -235,7 +235,7 @@ fn changed_prepared_root_returns_unaccepted_error_and_preserves_original() {
     fs::rename(&cache, fixture.root.join("old-cache")).unwrap();
     fs::create_dir(&cache).unwrap();
     assert_eq!(fixture.resume().unwrap_err(), HistoryDeleteError::UnsafeStorage);
-    assert!(fixture.roots().task(&job).join("frameq-task.json").exists());
+    assert!(fixture.roots().task(&job).join("task.json").exists());
     assert_eq!(fixture.members(), [TASK, OTHER, "missing-note"]);
 }
 
@@ -361,7 +361,7 @@ fn locked_original_directory_causes_pre_accept_failure_without_cache_changes() {
         .open(&original).unwrap();
     let result = delete_from_paths(&fixture.paths, TASK, &ProcessSupervisors::default(), &HistoryDeletionState::default());
     assert_eq!(result.unwrap_err(), HistoryDeleteError::DeleteFailed);
-    assert!(original.join("frameq-task.json").exists());
+    assert!(original.join("task.json").exists());
     assert!(fixture.paths.user_data_dir.join("cache/tasks").join(TASK).exists());
     assert_eq!(fixture.members(), [TASK, OTHER, "missing-note"]);
     assert!(!intent::path(&fixture.paths).exists());
@@ -376,7 +376,7 @@ fn locked_staged_file_keeps_cleanup_pending_then_restarts_without_manifest() {
     let fixture = Fixture::new();
     let job = fixture.accepted();
     let stage = fixture.roots().task_stage(&job);
-    fs::remove_file(stage.join("frameq-task.json")).unwrap();
+    fs::remove_file(stage.join("task.json")).unwrap();
     let locked = OpenOptions::new().read(true).share_mode(0x1).open(stage.join("media/audio.wav")).unwrap();
     assert_eq!(fixture.resume().unwrap().status, "cleanup_pending");
     assert!(intent::path(&fixture.paths).exists());
@@ -395,7 +395,7 @@ fn collection_file_lock_keeps_accepted_files_until_fresh_memberships_can_commit(
     let job = fixture.accepted();
     let locked = OpenOptions::new().read(true).share_mode(0x1).open(fixture.paths.user_data_dir.join("collections.json")).unwrap();
     assert_eq!(fixture.resume().unwrap().status, "cleanup_pending");
-    assert!(fixture.roots().task_stage(&job).join("frameq-task.json").exists());
+    assert!(fixture.roots().task_stage(&job).join("task.json").exists());
     assert_eq!(fixture.members(), [TASK, OTHER, "missing-note"]);
     drop(locked);
     fixture.collections(&[TASK, OTHER, "missing-note", "interleaved-new-member"]);
@@ -483,7 +483,7 @@ fn rejects_linked_tasks_root_before_removal() {
     fs::rename(&tasks, &actual).unwrap();
     create_dir_link(&actual, &tasks);
     assert_eq!(delete_from_paths(&fixture.paths, TASK, &ProcessSupervisors::default(), &HistoryDeletionState::default()).unwrap_err(), HistoryDeleteError::UnsafeStorage);
-    assert!(actual.join(TASK).join("frameq-task.json").exists());
+    assert!(actual.join(TASK).join("task.json").exists());
     assert_eq!(fixture.members(), [TASK, OTHER, "missing-note"]);
     remove_dir_link(&tasks);
 }
@@ -491,7 +491,7 @@ fn rejects_linked_tasks_root_before_removal() {
 #[test]
 fn rejects_linked_playback_cache_root_before_task_removal() {
     let fixture = Fixture::new();
-    let review = fixture.paths.user_data_dir.join("cache/.frameq-audio-review");
+    let review = fixture.paths.user_data_dir.join("cache/.app-audio-review");
     let actual = fixture.root.join("actual-review");
     fs::rename(&review, &actual).unwrap();
     create_dir_link(&actual, &review);
@@ -506,7 +506,7 @@ fn rejects_linked_playback_cache_root_before_task_removal() {
 #[test]
 fn rejects_dangling_playback_cache_symlink_before_task_removal() {
     let fixture = Fixture::new();
-    let target = fixture.paths.user_data_dir.join("cache/.frameq-audio-review").join(TASK);
+    let target = fixture.paths.user_data_dir.join("cache/.app-audio-review").join(TASK);
     fs::remove_dir_all(&target).unwrap();
     std::os::unix::fs::symlink(fixture.root.join("missing-target"), &target).unwrap();
     assert_eq!(delete_from_paths(&fixture.paths, TASK, &ProcessSupervisors::default(), &HistoryDeletionState::default()).unwrap_err(), HistoryDeleteError::UnsafeStorage);

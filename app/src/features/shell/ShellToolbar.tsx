@@ -30,7 +30,7 @@ export function ShellToolbar({ collapsed, title, canBack, canForward, disabledRe
   return (
     <header className="app-toolbar shell-toolbar" data-tauri-drag-region="" onMouseDown={chrome.handleToolbarMouseDown}>
       <div className="shell-toolbar-navigation">
-        <button type="button" className="shell-toolbar-button" onClick={onToggleSidebar} aria-label={t(collapsed ? "toolbar.expandSidebar" : "toolbar.collapseSidebar")} title={t(collapsed ? "toolbar.expandSidebar" : "toolbar.collapseSidebar")} aria-expanded={!collapsed} aria-controls="frameq-sidebar">
+        <button type="button" className="shell-toolbar-button" onClick={onToggleSidebar} aria-label={t(collapsed ? "toolbar.expandSidebar" : "toolbar.collapseSidebar")} title={t(collapsed ? "toolbar.expandSidebar" : "toolbar.collapseSidebar")} aria-expanded={!collapsed} aria-controls="app-sidebar">
           <PanelLeft size={18} aria-hidden="true" />
         </button>
         <button type="button" className="shell-toolbar-button" onClick={onBack} disabled={!canBack} aria-label={t("toolbar.back")} title={canBack ? t("toolbar.back") : disabledReason}>

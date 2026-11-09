@@ -99,7 +99,7 @@ final class WebPageHost {
     }
 
     private static func validateSandbox() throws {
-        guard Bundle.main.bundleIdentifier == "com.frameq.webview-host" else { throw HostFailure.invalidHost }
+        guard Bundle.main.bundleIdentifier == "pro.8xf.webview-host" else { throw HostFailure.invalidHost }
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
               SecCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate | SecCSFlags.noNetworkAccess.rawValue), nil) == errSecSuccess else {
@@ -110,7 +110,7 @@ final class WebPageHost {
         var information: CFDictionary?
         guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
               let information = information as? [String: Any],
-              information[kSecCodeInfoIdentifier as String] as? String == "com.frameq.webview-host",
+              information[kSecCodeInfoIdentifier as String] as? String == "pro.8xf.webview-host",
               let entitlements = information[kSecCodeInfoEntitlementsDict as String] as? [String: Any],
               entitlements["com.apple.security.app-sandbox"] as? Bool == true,
               entitlements["com.apple.security.network.client"] as? Bool == true else { throw HostFailure.invalidHost }

@@ -52,12 +52,12 @@ export function registerUserAuthRoutes(
     }
     try {
       const result = await dependencies.userAuth.verifyEmailCode(parsed.data);
-      setCookie(reply, "frameq_user_session", result.sessionToken, {
+      setCookie(reply, "app_user_session", result.sessionToken, {
         httpOnly: true,
         maxAgeSeconds: userSessionMaxAgeSeconds,
         secure: dependencies.secureCookies,
       });
-      setCookie(reply, "frameq_user_csrf", result.csrfToken, {
+      setCookie(reply, "app_user_csrf", result.csrfToken, {
         httpOnly: false,
         maxAgeSeconds: userSessionMaxAgeSeconds,
         secure: dependencies.secureCookies,
@@ -84,18 +84,18 @@ export function registerUserAuthRoutes(
 
   app.post("/user/auth/logout", async (request, reply) => {
     const cookies = parseCookies(request.headers.cookie);
-    const sessionToken = cookies.get("frameq_user_session") ?? null;
+    const sessionToken = cookies.get("app_user_session") ?? null;
     const session = await dependencies.userAuth.authenticate(sessionToken);
     if (!session || !sessionToken) {
       return reply.code(401).send({ error: "AUTH_REQUIRED" });
     }
-    const csrfToken = firstHeader(request.headers["x-frameq-csrf"]);
+    const csrfToken = firstHeader(request.headers["x-app-csrf"]);
     if (!dependencies.userAuth.validateCsrf(session, csrfToken)) {
       return reply.code(403).send({ error: "CSRF_INVALID" });
     }
     await dependencies.store.revokeUserSession(sha256(sessionToken), dependencies.now());
-    clearCookie(reply, "frameq_user_session", true, dependencies.secureCookies);
-    clearCookie(reply, "frameq_user_csrf", false, dependencies.secureCookies);
+    clearCookie(reply, "app_user_session", true, dependencies.secureCookies);
+    clearCookie(reply, "app_user_csrf", false, dependencies.secureCookies);
     return { ok: true, redirect_url: "/login" };
   });
 }

@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.frameq.webview-host</string>
+    <string>pro.8xf.webview-host</string>
     <key>CFBundleExecutable</key>
-    <string>frameq-webview-host</string>
+    <string>app-webview-host</string>
     <key>CFBundleName</key>
-    <string>FrameQ WebView Host</string>
+    <string>System WebView Host</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

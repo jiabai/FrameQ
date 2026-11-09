@@ -188,7 +188,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   A failed, stopped cleanup retains its receipt and releases ordinary library access.
 - Progress exposes closed operation/generation/phase/error fields and aggregate counts plus local
   reviewed source/target paths. It never carries file contents, per-file private names, credentials,
-  model bytes, prompts or media. No migration path or content is uploaded to FrameQ services.
+  model bytes, prompts or media. No migration path or content is uploaded to Locus services.
 
 ## 2026-10-31 Local note settings and deletion
 
@@ -217,7 +217,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - Only a deterministic transcript-derived sample of at most 12,000 Unicode characters plus title
   instructions goes directly to the configured supplier. Media, source URLs, paths, account details,
   preferences, and other AI results are excluded from the title prompt. Transcript content is treated
-  as quoted evidence. FrameQ account-server requests contain only existing checkout/account metadata.
+  as quoted evidence. Locus account-server requests contain only existing checkout/account metadata.
 - The one-call provider disables SDK and supplier retries. Invalid or over-limit output fails without
   a repair call. User retries disclose the same cost and create a new checkout identifier. Quota,
   configuration, supplier, cancellation, and storage failure preserve the saved transcript and any
@@ -242,7 +242,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   restricted to subtitle-safe content types, non-empty bodies, and at most 2 MiB; atomic `.part`
   cleanup prevents partial files from reaching the parser.
 - Raw SRT/VTT exists only in the task cache download directory and is not a registered manifest
-  artifact. The existing transcript pipeline reads the parsed result locally; FrameQ server never
+  artifact. The existing transcript pipeline reads the parsed result locally; Locus server never
   receives the video, subtitle, transcript, or signed URL.
 - Subtitle acquisition is best-effort. Invalid metadata, expired signatures, blocked responses,
   oversized content, and parse misses fall back to local ASR without replacing a successful MP4
@@ -284,7 +284,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   1,000 characters, fallback capture is at most 200 lines per invocation, and adjacent duplicates
   are collapsed within bounded storage. Export treats both fixed logs as untrusted, re-sanitizes
   them, rejects links/reparse paths, and writes only the fixed ZIP allowlist: `diagnostics.json`,
-  `frameq-desktop.log`, and `asr-model-download.log`. The archive is capped at 5 MiB and records
+  `desktop.log`, and `asr-model-download.log`. The archive is capped at 5 MiB and records
   closed omission/truncation metadata.
 - The native Save As command receives no frontend path/content and returns no path or ZIP bytes.
   It retains no app-local archive and performs no upload, DNS/HTTP/network probe, model retry,
@@ -301,7 +301,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - Worker stdin contains target/task intent, not transcript text or a frontend-supplied path. Rust
   admits only a supported task; Python reads one validated `transcript/transcript.txt` snapshot and
   sends only required transcript-derived chunks/prompts to the checked-out supplier.
-- FrameQ server checkout requests contain account, entitlement, quota, and idempotency data only.
+- Locus server checkout requests contain account, entitlement, quota, and idempotency data only.
   Video/audio bytes, source URL, local paths, transcript/prompt/report content, preferences, other
   AI results, credentials, and private configuration are forbidden from server payloads, logs,
   progress, errors, fixtures shipped in the package, and diagnostics.
@@ -317,7 +317,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-07-24 General Tauri IPC Result Validation Boundary
 
-- Every FrameQ-owned Rust/Tauri command result is untrusted at the TypeScript runtime boundary.
+- Every Locus-owned Rust/Tauri command result is untrusted at the TypeScript runtime boundary.
   Client runners return `Promise<unknown>` and domain parsers must validate closed top-level and
   nested shapes before any field is read, defaulted, logged, or stored in application state.
 - The shared parsing primitive may inspect only own data-property descriptors on ordinary objects.
@@ -328,7 +328,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   raw exception, getter result, account/payment data, URL, path, transcript, artifact content, or
   updater metadata must not appear in its message, cause, enumerable fields, technical details, or
   logs.
-- Account, History, settings, transcript detail, and FrameQ-owned update command DTOs are in scope.
+- Account, History, settings, transcript detail, and Locus-owned update command DTOs are in scope.
   Existing worker terminal-result and local-media parsers remain authoritative for their families;
   the behavior-bearing updater plugin handle remains behind its typed plugin adapter.
 - TypeScript decoding is an integrity and compatibility boundary, not an authorization boundary.
@@ -600,7 +600,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - A failed write, sync, probe, decode, or replace preserves any previous official file. Raw operating
   system, source URL, ffprobe, FFmpeg, staging-path, and destination-path text must not cross the
   structured worker error boundary.
-- `frameq-task.json` is installed atomically after its complete payload is serialized. It may record
+- `task.json` is installed atomically after its complete payload is serialized. It may record
   only committed ordinary files at known task-owned paths; existence of an arbitrary or partial file
   is insufficient evidence for registration.
 - Phase 1 per-file media atomicity still preserves independently committed valid artifacts under
@@ -654,7 +654,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - A local manifest is accepted only when exactly one safe source variant holds. URL requires the
   existing canonical SourceIdentity predicate; local requires empty URL/null identity and closed safe
   metadata. Unrecognized variants remain product-isolated and physically untouched.
-- Media never goes to FrameQ server or the LLM provider. Existing confirmed AI may read the saved
+- Media never goes to Locus server or the LLM provider. Existing confirmed AI may read the saved
   transcript but receives no local filename, path, selection token, media bytes, or manifest. Logs may
   record only safe aggregate kind/extension/size-or-duration buckets, stage, elapsed time, and code.
 
@@ -663,7 +663,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - `ui-preferences.json` must remain app-local and contain only schema version plus the closed language
   preference enum. It must not contain account/session data, source URLs, output/model paths,
   inspiration preferences, transcripts, prompts, or generated content, and it must never be sent to
-  FrameQ server.
+  Locus server.
 - All locale resources must be bundled. UI locale selection and switching must make no
   translation-resource network request or introduce a remote translation or telemetry provider.
 - Worker/model progress producers must accept only contract-registered codes and closed per-key
@@ -692,7 +692,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-07-12 Open-Source macOS Release Boundary
 
-- FrameQ v0.2.16 may use ad-hoc-signed, non-notarized macOS DMGs only for the explicitly approved
+- Locus v0.2.16 may use ad-hoc-signed, non-notarized macOS DMGs only for the explicitly approved
   personal-development, small-user, and open-source distribution model. The release page must
   disclose the one-time Gatekeeper approval before presenting feature highlights.
 - Ad-hoc signing is an integrity seal, not Apple identity verification. Release notes and UI/docs
@@ -710,7 +710,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 - The local and AI workspaces are two UI projections of one task, not two storage or network
   pipelines. Video, audio, raw source URL, complete transcript, task manifest, and local
-  preferences remain on the desktop and must not be sent to FrameQ server.
+  preferences remain on the desktop and must not be sent to Locus server.
 - The local workspace may read local media/transcript artifacts only through existing
   validated task-root Tauri commands. Extracting `TranscriptReviewPanel` must not duplicate
   path resolution, relax link/reparse checks, or bypass expected-task save guards.
@@ -744,7 +744,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   settings, auth state, diagnostics, update state, or global cache.
 - Unsupported legacy, malformed, quarantined, missing-marker, or invalid-identity directories
   remain physically untouched and unavailable to the delete UI.
-- Playback cache deletion is limited to `.frameq-audio-review/<task-id>` and precedes authoritative
+- Playback cache deletion is limited to `.app-audio-review/<task-id>` and precedes authoritative
   task deletion. Cache failure aborts before task mutation; primary recursive deletion failure may
   partially complete and cannot be rolled back.
 - Deletion diagnostics expose only fixed outcome/error codes and elapsed time. They must not
@@ -762,7 +762,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
   junction, and reparse-point tasks are unsupported legacy data. Product code fails closed
   before artifact reads and must not return their task id, directory name, source URL,
   error detail, preview, or artifact content to UI, logs, or diagnostics.
-- Unsupported directories remain physically untouched. FrameQ does not start a migration
+- Unsupported directories remain physically untouched. Locus does not start a migration
   worker, rewrite manifests/artifacts, add markers, rename directories, backfill indexes,
   quarantine data, or delete files. Users may back up or delete those directories manually
   outside the product.
@@ -782,7 +782,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 ## 2026-07-10 Desktop Process-Tree Cancellation Boundary
 
 - Only `worker_runtime::supervisor` may signal a PID/PGID, and only one recorded by the private `ProcessSupervisor` for the current in-process worker or model-download instance. Application modules receive semantic task/model-download execution plus cancellation/activity methods; the lanes, raw requests/specifications, and all supervisor mutation/OS termination functions remain private.
-- `WorkerLane::run` is the sole owner of FrameQ worker spawn, register-before-stdin, pipe ownership, reader startup, wait/reap, finish-before-reader-join, terminal classification, and lifecycle diagnostics. It must not accept a PID, PGID, executable, command, environment key, or shell fragment from IPC, UI, worker output, task data, or a log entry.
+- `WorkerLane::run` is the sole owner of Locus worker spawn, register-before-stdin, pipe ownership, reader startup, wait/reap, finish-before-reader-join, terminal classification, and lifecycle diagnostics. It must not accept a PID, PGID, executable, command, environment key, or shell fragment from IPC, UI, worker output, task data, or a log entry.
 - `TaskWorkerFacade::execute(WorkerJob)` is the only application-facing task-lane execution entry.
   It must derive the fixed invocation, lifecycle operation, progress route, lane, and credential
   policy exhaustively. Only `RetryInsights` may resolve server-managed LLM invocation material;
@@ -816,7 +816,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 ## 2026-07-10 Source URL Secret Boundary
 
 - A submitted source URL is credential-bearing input even when it points to public content. `xsec_token`, access/session/auth tokens, signatures, expiries, cookies encoded in queries, URL userinfo, and fragments must be treated as secrets or volatile request material.
-- `SourceRequest.download_url` is transient request material for frontend-to-Tauri IPC, the one-shot worker stdin pipe, and the downloader/fallback argument. A cache-only worker preflight may also receive the raw submission through stdin but may return only validated `SourceIdentity`. Neither request object has a persistence/result serialization path; the raw URL must not enter worker argv, worker environment variables, `frameq-task.json`, transcript files, results, progress events, history, desktop logs, UI errors, cloud prompts, or server requests.
+- `SourceRequest.download_url` is transient request material for frontend-to-Tauri IPC, the one-shot worker stdin pipe, and the downloader/fallback argument. A cache-only worker preflight may also receive the raw submission through stdin but may return only validated `SourceIdentity`. Neither request object has a persistence/result serialization path; the raw URL must not enter worker argv, worker environment variables, `task.json`, transcript files, results, progress events, history, desktop logs, UI errors, cloud prompts, or server requests.
 - Production worker argv contains fixed mode flags only. Payload-bearing child stdin is piped, capped at 1 MiB, written once, and closed before waiting; fixed no-payload commands use null stdin. Empty, oversized, malformed, unreadable, or undeliverable input fails with fixed messages that do not include parser text or payload fragments.
 - Request transport never uses a shell and does not accept a command, executable, PID, or environment key from the request payload. `WorkerLane::run` registers payload-bearing production workers before stdin delivery, so Windows tree termination and Unix process-group TERM-to-KILL escalation remain available even while a pipe write is blocked. Delivery failure or cancellation terminates and reaps the matching child and must not create a fallback argv/environment path.
 - `canonical_url` is reconstructed from an allowlisted platform identifier and is the only source URL allowed beyond the current download boundary. Canonicalization must drop userinfo, fragments, and every query field except Bilibili's non-default part selector.
@@ -828,7 +828,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-07-06 Insight Preference Privacy Boundary
 
-- `我的灵感档案` and per-run generation preferences are local desktop data by default and must not be uploaded to FrameQ server.
+- `我的灵感档案` and per-run generation preferences are local desktop data by default and must not be uploaded to Locus server.
 - The inspiration profile should be stored under app-local data as a constrained JSON file, not in app-local `.env`, because it is product data rather than runtime configuration.
 - The current app-local file is schema v2. Its profile contains exactly the six long-term-context
   fields, and Tauri must validate before atomically mutating it. There is no v1 migration: the
@@ -849,12 +849,12 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-07-05 Desktop Diagnostics Log Boundary
 
-- Desktop diagnostics are written only to app-local data `logs/frameq-desktop.log`.
+- Desktop diagnostics are written only to app-local data `logs/desktop.log`.
 - Worker lifecycle logs may include only fixed operation kind, supervisor-owned PID, safe process exit/status markers, structured status/error/stage fields, and closed safe summaries. They must not include raw command vectors, stdin, environment values, full executable/current-directory paths, source/local-media paths, URL material, raw stderr, transcripts, prompts, preferences, or generated bodies.
 - Non-lifecycle desktop logs may include task id, structured error code, validated target/locale, cache outcomes, and sanitized short error text. Any local path diagnostic must be explicitly justified and constrained; lifecycle code must not log full resource or app-local paths.
 - Logs must not include LLM API keys, desktop session tokens, cookies, sensitive request headers, complete volatile YouTube media/CDN URLs, or Google/YouTube login material.
 - YouTube JavaScript runtime support must not introduce browser cookie import, account login automation, CAPTCHA solving, proxy bypass, remote component fetching, or private-content scraping.
-- Diagnostic logs are not uploaded to FrameQ server and are not exposed through normal result artifact actions.
+- Diagnostic logs are not uploaded to Locus server and are not exposed through normal result artifact actions.
 - Deno is bundled only as a local `yt-dlp` JavaScript runtime. It must not be used for browser cookie import, account login automation, CAPTCHA solving, proxy bypass, remote app-code loading, or private-content scraping.
 
 ## 2026-07-18 Task Access Facade Enforcement
@@ -960,7 +960,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - Subtitle-first reuse may request only public subtitle files exposed through the same no-login `yt-dlp` flow used for public YouTube and Bilibili video downloads.
 - Subtitle support must not add `--cookies`, `--cookies-from-browser`, browser cookie stores, account login automation, QR login, CAPTCHA solving, proxies for access-control bypass, private-content scraping, or member/age/private bypass.
 - Raw `.vtt` and `.srt` files belong to `cache/tasks/<task_id>/download/` and must not be exposed as normal result artifacts or written into manifest artifact paths.
-- `frameq-task.json` may record transcript source metadata and text preview, but must not store complete raw subtitle files, cookies, credential-bearing headers, or volatile media CDN URLs.
+- `task.json` may record transcript source metadata and text preview, but must not store complete raw subtitle files, cookies, credential-bearing headers, or volatile media CDN URLs.
 - Subtitle parse failures, missing files, unsupported formats, and unusable text must degrade to local ASR rather than surfacing platform bypass instructions or asking users for cookies/login material.
 
 ## 2026-07-03 Transcript Audio Review Local File Boundary
@@ -972,19 +972,19 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - `load_transcript_detail` may return transcript text, optional segment metadata, backup status, and a validated local audio path. It must not return cookies, request headers, remote media CDN URLs, LLM keys, or private signing material.
 - `save_transcript_edit` may write the official transcript `.txt`, matching `.md`, optional segment sidecar, and local history preview. The first save should create an original backup once and must not overwrite that backup later.
 - Empty transcript saves, path traversal, non-transcript files, and unrelated local paths must fail recoverably.
-- Segment metadata is local-only review data. It must not be sent to FrameQ server unless a future product spec explicitly adds a server workflow.
+- Segment metadata is local-only review data. It must not be sent to Locus server unless a future product spec explicitly adds a server workflow.
 - The audio player should use Tauri-validated local paths only. Missing audio must degrade to text editing without attempting remote downloads or network lookups.
-- Tauri may create playback copies under the active data root's `cache/.frameq-audio-review/<task_id>/` only after validating the original manifest-declared audio artifact. This cache is rebuildable and acquires the same native data permit as the task read.
-- Manual playback-cache cleanup accepts no arbitrary path and resolves only the active location snapshot's `.frameq-audio-review` subtree. It protects task artifacts, other caches, models, runtime components, Collections, authentication, `.env`, logs and preferences.
-- Playback-cache size reporting is local UI state only. It must not upload audio paths, source paths, transcripts, or cache metadata to FrameQ server.
+- Tauri may create playback copies under the active data root's `cache/.app-audio-review/<task_id>/` only after validating the original manifest-declared audio artifact. This cache is rebuildable and acquires the same native data permit as the task read.
+- Manual playback-cache cleanup accepts no arbitrary path and resolves only the active location snapshot's `.app-audio-review` subtree. It protects task artifacts, other caches, models, runtime components, Collections, authentication, `.env`, logs and preferences.
+- Playback-cache size reporting is local UI state only. It must not upload audio paths, source paths, transcripts, or cache metadata to Locus server.
 - The Tauri asset protocol authorizes only the verified active output `tasks/` and playback-cache subtrees. Every returned audio path remains task-validated; fixed configuration, models, general task scratch files and arbitrary user directories are outside authorization. Unavailable storage revokes prior roots.
 
 ## 2026-06-29 YouTube Public Video Safety Boundary
 
 - YouTube v1 may request only user-submitted public ordinary video or Shorts links through `yt-dlp`, and only to create one local media file for transcription.
-- FrameQ must not read browser cookies, persist cookies, request cookie files, use `--cookies`, use `--cookies-from-browser`, store Google/YouTube login material, automate login, solve CAPTCHA, bypass age/member/private restrictions, use proxies for access control bypass, or process playlists as a batch.
+- Locus must not read browser cookies, persist cookies, request cookie files, use `--cookies`, use `--cookies-from-browser`, store Google/YouTube login material, automate login, solve CAPTCHA, bypass age/member/private restrictions, use proxies for access control bypass, or process playlists as a batch.
 - `watch?v=...&list=...` may be accepted only as a single-video request with `--no-playlist`; playlist/channel/handle/music/live/login-gated inputs must fail recoverably.
-- YouTube/Google volatile media CDN URLs, signed query strings, cookies, Authorization headers, and login or bypass instructions must not be stored in app-local history, UI errors, logs, settings, or FrameQ server requests.
+- YouTube/Google volatile media CDN URLs, signed query strings, cookies, Authorization headers, and login or bypass instructions must not be stored in app-local history, UI errors, logs, settings, or Locus server requests.
 - Worker error sanitization should remove `googlevideo.com`/`videoplayback` signed URLs and cookie guidance before messages reach the UI.
 - Existing completed local media files must be preserved if a new YouTube download attempt fails.
 - A bounded 20-minute execution budget terminates a `yt-dlp` download child that stops making progress. The timeout result carries no URL, cookie, token or media CDN value, is reported through the existing `VIDEO_DOWNLOAD_FAILED` path, and triggers no automatic retry, platform fallback, or AI Credit call.
@@ -998,22 +998,22 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - The stable root adapter is the only production entry point outside the private `bilibili/` package. `transport.py` owns urllib, bounded response decoding, Range restart, and safe streaming; `artifacts.py` owns candidate attempts and FFmpeg execution. AST gates reject child-to-root/application/ASR/AI back-edges and direct production imports of private modules.
 - Compressed response input and decoded gzip/Brotli/deflate output are both checked against the fixed response limit before JSON interpretation. Oversized decoded output fails with `BILIBILI_VIDEO_INFO_UNAVAILABLE` without including the response URL, encoding header, body, or decoder exception text. This post-decode rejection is not a strict compression-library peak-memory guarantee.
 - Streaming/resumable video and audio download helpers must enforce max-size and no-progress limits, keep partial files scoped to destination `.part`/temporary `.m4s` files, and preserve any existing completed media file if the new download or FFmpeg merge fails.
-- Full volatile Bilibili CDN URLs, cookies, `SESSDATA`, sensitive request headers, authorization material, and DRM key material must not be stored in local history, UI errors, logs, app-local settings, or FrameQ server requests. Logs may keep short causes, hostnames, Bilibili IDs, part index, quality labels, byte sizes, and local output paths.
+- Full volatile Bilibili CDN URLs, cookies, `SESSDATA`, sensitive request headers, authorization material, and DRM key material must not be stored in local history, UI errors, logs, app-local settings, or Locus server requests. Logs may keep short causes, hostnames, Bilibili IDs, part index, quality labels, byte sizes, and local output paths.
 
 ## 2026-06-27 Xiaohongshu Public Video Fallback Safety Boundary
 
 - Xiaohongshu fallback may request only user-submitted public or user-authorized share links, short links, full note URLs, and their public media URLs.
 - The fallback must not read browser cookies, persist cookies, upload cookies, automate login, solve CAPTCHA, scrape private notes, rotate user agents, use proxy pools, or spoof browser fingerprints.
-- Process-local anonymous cookies naturally issued by a public Xiaohongshu page may exist for one worker invocation only and must not be written to app-local settings, history, logs, UI errors, or FrameQ server requests.
+- Process-local anonymous cookies naturally issued by a public Xiaohongshu page may exist for one worker invocation only and must not be written to app-local settings, history, logs, UI errors, or Locus server requests.
 - The stable root adapter is the only production entry point outside the private `xiaohongshu/` package. `source.py` owns allowlisted host/path and bounded short-link policy; `page.py` owns status/decompression/state interpretation; `streams.py` is deterministic and side-effect-free; `transport.py` alone owns CookieJar, raw urllib, Range restart, and safe writes. AST gates reject child-to-root/application/ASR/AI back-edges and direct production imports of private modules.
 - Brotli/gzip/deflate decoding keeps the existing post-decompression size cap and fixed non-echoing failures. Compression libraries may allocate expanded output before that rejection, so this boundary does not claim a strict peak-memory guarantee.
 - Streaming/resumable video download helpers must enforce max-size and no-progress limits, keep partial files scoped to the destination `.part`, and preserve any existing completed media file if the new download fails.
-- Full volatile media CDN URLs, cookies, sensitive request headers, `xsec_token`, and authorization material must not be stored in manifests, History, progress, diagnostics, AI prompts, FrameQ server requests, or UI error text. Logs may keep short fixed causes, hostnames, quality labels, byte sizes, and local output paths.
+- Full volatile media CDN URLs, cookies, sensitive request headers, `xsec_token`, and authorization material must not be stored in manifests, History, progress, diagnostics, AI prompts, Locus server requests, or UI error text. Logs may keep short fixed causes, hostnames, quality labels, byte sizes, and local output paths.
 - Image-only notes, unavailable notes, login-gated notes, CAPTCHA-gated notes, private notes, rate-limited pages, malformed page state, oversized videos, stalled downloads, and no-playable-stream cases must return structured recoverable errors rather than attempting to bypass platform controls.
 
 ## 2026-06-27 Admin Entitlement Adjustment Boundary
 
-- Manual entitlement and quota adjustments are restricted to the configured Admin Web account and must reuse HttpOnly admin session cookies plus `x-frameq-csrf` validation.
+- Manual entitlement and quota adjustments are restricted to the configured Admin Web account and must reuse HttpOnly admin session cookies plus `x-app-csrf` validation.
 - Every successful adjustment must be auditable with administrator email, target user, reason, before/after values, and timestamp. Corrections should create another audit record instead of rewriting the original event.
 - Adjustment notes are operational metadata only. They must not include LLM API keys, cookies, transcripts, private video URLs, local file paths, activation-code plaintext beyond the creation response, or sensitive support chat contents.
 - Server logs should identify adjustment IDs and target users, but should avoid logging free-form notes in full.
@@ -1021,9 +1021,9 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-06-26 Public Link Fallback Safety Boundary
 
-- EasyDownload-derived work may improve FrameQ's handling of public or user-authorized share links, but it must not introduce browser cookie import, persistent cookie storage, account login automation, QR login, CAPTCHA solving, private-content scraping, proxy pools, user-agent rotation, or browser fingerprint spoofing.
-- FrameQ must not migrate EasyDownload's WeChat MITM, certificate authority installation, system proxy changes, or administrator-elevation behavior.
-- Worker fallbacks may use fixed compatibility headers and process-local anonymous cookies naturally issued by a public share page for one invocation only. Those cookies must not be read from browser stores, written to disk, sent to FrameQ server, or stored in history/logs.
+- EasyDownload-derived work may improve Locus's handling of public or user-authorized share links, but it must not introduce browser cookie import, persistent cookie storage, account login automation, QR login, CAPTCHA solving, private-content scraping, proxy pools, user-agent rotation, or browser fingerprint spoofing.
+- Locus must not migrate EasyDownload's WeChat MITM, certificate authority installation, system proxy changes, or administrator-elevation behavior.
+- Worker fallbacks may use fixed compatibility headers and process-local anonymous cookies naturally issued by a public share page for one invocation only. Those cookies must not be read from browser stores, written to disk, sent to Locus server, or stored in history/logs.
 - Bilibili ordinary public-video DASH assembly is allowed only when it can run without login or cookies and produces one local MP4 for transcription. Bilibili login, QR login, SESSDATA handling, PGC/bangumi, member-only behavior, DRM, and downloader-oriented workflows remain out of scope.
 - Safe download helpers must avoid logging cookies, sensitive headers, authorization material, submitted/download URLs, or full volatile media CDN URLs. Logs may keep platform names, hostnames, short sanitized error causes, quality labels, byte sizes, task ids, and local output paths; history may keep only canonical source identities.
 - When a link is unavailable, login-gated, CAPTCHA-gated, private, image-only, or has no playable video stream, the worker must return structured recoverable errors rather than attempting to bypass access controls.
@@ -1045,14 +1045,14 @@ success. Paid supplier acceptance remains skipped at the user's request.
   destination and preserves an existing completed MP4 until a valid replacement succeeds.
 - The fallback must not attempt to solve CAPTCHA, defeat login gates, bypass private content restrictions, or automate account-authenticated scraping.
 - Worker logs, history records, and UI errors must not store submitted/download URLs, cookies, sensitive request headers, or full media CDN URLs when those URLs contain volatile request tokens. Logs may keep canonical platform identifiers, short sanitized error summaries, hostnames, stream quality labels, byte sizes, task ids, and local output paths.
-- Downloaded video, extracted audio, transcripts, summaries, mindmaps, and topic outputs remain local artifacts under the configured output/cache directories; no fallback media data is sent to the FrameQ server.
+- Downloaded video, extracted audio, transcripts, summaries, mindmaps, and topic outputs remain local artifacts under the configured output/cache directories; no fallback media data is sent to the Locus server.
 - The packaged worker must be generated from canonical source and compared recursively by file set
   and bytes; the private package must never be maintained through hand-edited resource copies.
 
 ## 2026-06-23 Desktop Update Boundary
 
 - Desktop updates must use Tauri updater signature verification before installation.
-- The updater public key may be bundled in `tauri.conf.json`; the private signing key and signing password must never be committed, bundled, or stored on FrameQ server runtime hosts unless that host is the intended signing environment.
+- The updater public key may be bundled in `tauri.conf.json`; the private signing key and signing password must never be committed, bundled, or stored on Locus server runtime hosts unless that host is the intended signing environment.
 - The public update endpoint returns only release metadata and artifact URLs; it must not require desktop authentication and must not return user data, account data, LLM keys, or ASR model credentials.
 - `updates.json` may store `lastCheckedAt`, `postponedUntil`, and `skippedVersion` only. It must not store downloaded installers, signatures, private keys, session tokens, video URLs, transcripts, or model cache paths beyond generic update preferences.
 - Updating the app preserves the active data root and fixed configuration root. Installation waits for worker/model/component operations and migration; restart uses `restart_application` and cannot bypass native storage protection through a process-plugin permission.
@@ -1068,7 +1068,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 
 ## 2026-06-23 ASR Model Cache Cleanup Boundary
 
-- Automatic ASR cache cleanup may only touch FrameQ's known SenseVoice Small and VAD model cache directories plus stale `._____temp` directories without `model.pt`.
+- Automatic ASR cache cleanup may only touch Locus's known SenseVoice Small and VAD model cache directories plus stale `._____temp` directories without `model.pt`.
 - Unknown model directories or user-created files under the active data root's `models/` must be preserved.
 - Cleanup failures must not delete broader app-local data, block transcription, or hide the original ASR model availability state.
 
@@ -1085,14 +1085,14 @@ success. Paid supplier acceptance remains skipped at the user's request.
   historical development fallback is not a valid production configuration; production must set the
   administrator email explicitly. Admin write routes must validate CSRF tokens.
 - The service must not accept uploads or API fields containing video, audio, transcript, insight, cookie, or user-local configuration data.
-- The service may store a dedicated FrameQ client LLM API key. It must be encrypted at rest with `APP_LLM_CONFIG_ENCRYPTION_KEY`, never displayed in full, and treated as revocable client runtime material rather than a supplier master key.
+- The service may store a dedicated Locus client LLM API key. It must be encrypted at rest with `APP_LLM_CONFIG_ENCRYPTION_KEY`, never displayed in full, and treated as revocable client runtime material rather than a supplier master key.
 - The dedicated client LLM key is delivered to authenticated entitled desktop clients during checkout. This improves out-of-box setup but does not prevent extraction from a compromised client; supplier-side key rotation and quota controls remain required.
 
 <!-- 由 vibe-coding-launcher 生成。 -->
 
 ## Scope
 
-FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、可选 LLM API 和导出文件。本文件定义默认安全边界。
+Locus 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、可选 LLM API 和导出文件。本文件定义默认安全边界。
 
 ## Content Boundary
 
@@ -1102,11 +1102,11 @@ FrameQ 涉及公开视频 URL、下载文件、本地音频、ASR 文字稿、�
 
 ## Local Data
 
-- `outputs/tasks/<task_id>/` 存放用户最终产物和 `frameq-task.json`，默认不提交仓库。
+- `outputs/tasks/<task_id>/` 存放用户最终产物和 `task.json`，默认不提交仓库。
 - 用户通过设置中的数据存储位置迁移主要本机资料；Legacy 模式兼容已有 `APP_OUTPUT_DIR`，Managed 模式采用受控数据根。空目标迁移保留原件，清理需要明确确认；已有目录合并采用已经确认的目标同名文件优先规则，移动文件并删除重复源文件。
 - 当前数据根的 `cache/tasks/<task_id>/` 存放下载缓存、中间文件和调试产物，默认不提交仓库；它不得作为历史或正式产物真相源。
 - 只有满足当前 schema v3、source-privacy marker 和 canonical SourceIdentity 契约的
-  `frameq-task.json` 才是任务库索引和 artifact 真相源；旧版记录与目录仅物理留存，
+  `task.json` 才是任务库索引和 artifact 真相源；旧版记录与目录仅物理留存，
   不作为当前任务读取或信任。数据位置迁移按应用归属保留其原件，不改变信任等级。
 - 当前数据根的 `models/` 和 `runtime/` 存放模型与运行组件，默认不提交仓库。
 - `updates.json` 只存放更新检查偏好，默认不提交仓库；不得包含用户内容、账号 session、release signing private key 或下载包二进制。

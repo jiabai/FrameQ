@@ -6,7 +6,7 @@ import {
   type WorkflowStage,
 } from "../desktopWorkerProtocol";
 import type { AsrModelDownloadLocalPhase } from "../modelDownloadState";
-import { frameqI18n } from "./i18n";
+import { appI18n } from "./i18n";
 import type { SupportedLocale } from "./locale";
 
 type Translate = (
@@ -15,7 +15,7 @@ type Translate = (
 ) => string;
 
 function progressTranslator(locale: SupportedLocale): Translate {
-  return frameqI18n.getFixedT(locale, "progress") as unknown as Translate;
+  return appI18n.getFixedT(locale, "progress") as unknown as Translate;
 }
 
 function codeResourceKey(prefix: "worker" | "model", code: string): string {

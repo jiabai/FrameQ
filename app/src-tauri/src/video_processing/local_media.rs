@@ -229,7 +229,7 @@ mod tests {
             .canonicalize()
             .expect("resolve physical temp dir");
         let path = temp_root.join(format!(
-            "frameq-local-command-{label}-{}-{nonce}",
+            "app-local-command-{label}-{}-{nonce}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("create temp dir");
@@ -246,7 +246,7 @@ mod tests {
         TaskTerminalResult::from_value(json!({
             "status": status,
             "task_id": if status == "completed" { Some("task-1") } else { None },
-            "task_dir": if status == "completed" { Some("C:/FrameQ/task-1") } else { None },
+            "task_dir": if status == "completed" { Some("C:/Locus/task-1") } else { None },
             "artifacts": {},
             "text": "",
             "summary": "",

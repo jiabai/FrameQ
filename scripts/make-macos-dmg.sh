@@ -9,7 +9,7 @@
 set -euo pipefail
 
 TARGET="${1:?usage: make-macos-dmg.sh <target-triple> [volume-name]}"
-VOLNAME="${2:-FrameQ}"
+VOLNAME="${2:-Locus}"
 
 BUNDLE_DIR="app/src-tauri/target/${TARGET}/release/bundle"
 APP="${BUNDLE_DIR}/macos/${VOLNAME}.app"

@@ -286,7 +286,7 @@ mod tests {
         )
         .expect("write insights");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -307,7 +307,7 @@ mod tests {
     "transcript_txt": "transcript/transcript.txt",
     "summary": "ai/summary.md",
     "insights": "ai/insights.json",
-    "mindmap": "ai/.frameq-artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.rollback",
+    "mindmap": "ai/.artifact-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0.rollback",
     "preference_snapshot": "ai/.preference-snapshot.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.part.json",
     "debug_url": "https://example.test/?xsec_token=review-secret"
   }},
@@ -322,7 +322,7 @@ mod tests {
         let legacy_dir = output_root.join("tasks").join("unsupported-legacy");
         fs::create_dir_all(&legacy_dir).expect("create legacy dir");
         fs::write(
-            legacy_dir.join("frameq-task.json"),
+            legacy_dir.join("task.json"),
             r#"{"schema_version":2,"task_id":"unsupported-legacy","created_at":"2026-07-01T00:00:00Z","source_url":"https://example.test/?xsec_token=review-secret","status":"completed"}"#,
         )
         .expect("write legacy manifest");
@@ -444,7 +444,7 @@ mod tests {
         let task_dir = output_root.join("tasks").join(task_id);
         fs::create_dir_all(&task_dir).expect("create task dir");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 2,
@@ -480,7 +480,7 @@ mod tests {
         let output_root = temp_dir("history_skips_corrupt_manifest");
         let corrupt_dir = output_root.join("tasks").join("corrupt-task");
         fs::create_dir_all(&corrupt_dir).expect("create corrupt task");
-        fs::write(corrupt_dir.join("frameq-task.json"), b"{not-json")
+        fs::write(corrupt_dir.join("task.json"), b"{not-json")
             .expect("write corrupt manifest");
 
         let valid_task_id = "20260710-120000-douyin-7645505408425004329";
@@ -492,7 +492,7 @@ mod tests {
         )
         .expect("write valid transcript");
         fs::write(
-            valid_task_dir.join("frameq-task.json"),
+            valid_task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -543,7 +543,7 @@ mod tests {
         )
         .expect("write insights");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -581,7 +581,7 @@ mod tests {
         let task_dir = output_root.join("tasks").join(task_id);
         fs::create_dir_all(&task_dir).expect("create task dir");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -627,7 +627,7 @@ mod tests {
             let task_dir = output_root.join("tasks").join(task_id);
             fs::create_dir_all(&task_dir).expect("create task dir");
             fs::write(
-                task_dir.join("frameq-task.json"),
+                task_dir.join("task.json"),
                 format!(
                     r#"{{"schema_version":{schema_version},"source_privacy_migration_version":2,"source_privacy_quarantined":false,"task_id":"{task_id}","created_at":"2026-07-11T00:00:00Z","source_url":"{source_url}"{source_identity},"status":"completed","artifacts":{{}},"error":null,"text_preview":"safe preview","insights_count":0}}"#,
                 ),
@@ -657,7 +657,7 @@ mod tests {
         let task_dir = output_root.join("tasks").join(task_id);
         fs::create_dir_all(&task_dir).expect("create task dir");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -747,7 +747,7 @@ mod tests {
         )
         .expect("write report");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{"schema_version":3,"source_privacy_migration_version":2,"source_privacy_quarantined":false,"task_id":"{task_id}","created_at":"2026-07-31T12:00:00Z","source_url":"https://www.youtube.com/watch?v=abcdefghijk","source_identity":{{"version":1,"platform":"youtube","stable_id":"abcdefghijk","effective_part":null,"canonical_url":"https://www.youtube.com/watch?v=abcdefghijk"}},"platform":"youtube","status":"completed","artifacts":{{"transcript_txt":"transcript/transcript.txt","dissection":"ai/dissection.json","dissection_md":"ai/dissection.md"}},"error":null,"text_preview":"abc","insights_count":0}}"#
             ),
@@ -810,7 +810,7 @@ mod tests {
         fs::write(task_dir.join("ai").join("insights.json"), insights_payload)
             .expect("write insights");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -852,7 +852,7 @@ mod tests {
         )
         .expect("write local transcript");
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -886,7 +886,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("app-{name}-{unique}"));
         fs::create_dir_all(&dir).expect("create temp dir");
         #[cfg(unix)] let dir = dir.canonicalize().expect("canonical temp dir");
         dir

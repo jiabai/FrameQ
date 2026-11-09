@@ -179,7 +179,7 @@ only residual validation risk for this structural refactor.
   “Transcript Detail and Audio Review Boundary”.
 - Existing security rules: `docs/SECURITY.md` sections “Task Access Facade Enforcement” and
   “Transcript Audio Review Local File Boundary”.
-- Current audit entry: `docs/design-docs/frameq-code-audit-uml.md`.
+- Current audit entry: `docs/design-docs/code-audit-uml.md`.
 - Independent future feature: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
 
 ## File Responsibility Map
@@ -397,7 +397,7 @@ packaged worker resources.
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/design-docs/2026-07-20-transcript-detail-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`
 - Modify: `docs/exec-plans/active/index.md`

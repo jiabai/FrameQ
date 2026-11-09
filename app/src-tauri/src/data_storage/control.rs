@@ -41,7 +41,7 @@ fn normalize_inventory_reference(value:&mut serde_json::Value)->Result<()> {
     let id=object.get("operationId").and_then(serde_json::Value::as_str).ok_or_else(||StorageError::new("ControlInvalid"))?;
     let digest=object.get("inventoryHash").and_then(serde_json::Value::as_str).ok_or_else(||StorageError::new("ControlInvalid"))?;
     if references.is_empty()&&(digest.is_empty()||object.get("phase").and_then(serde_json::Value::as_str)==Some("cleaning")){return Ok(());}
-    let expected=std::path::PathBuf::from(".frameq-storage/operations").join(id).join("inventory.json");
+    let expected=std::path::PathBuf::from(".app-storage/operations").join(id).join("inventory.json");
     if references.len()!=1||references[0].relative_path!=expected||references[0].sha256!=digest{return Err(StorageError::new("ControlInvalid"));}Ok(())
 }
 pub(super) fn validate(value:&Control)->Result<()> {
@@ -65,10 +65,10 @@ pub(super) fn validate(value:&Control)->Result<()> {
         let mut artifacts=std::collections::HashSet::new();
         for relocation in &pending.source_relocations{if !safe_absolute(&relocation.old_root)||!safe_absolute(&relocation.new_root)||relocation.old_root==relocation.new_root||relocation.root_identity!=pending.previous.root_identity||super::inventory::relocated_path(&relocation.new_root,&pending.source_relocations)!=pending.previous.data_root{return Err(StorageError::new("ControlInvalid"));}}
         for artifact in &pending.owned_artifacts {
-            let expected_parent=std::path::PathBuf::from(".frameq-storage/operations").join(&pending.operation_id).join("temporary");
+            let expected_parent=std::path::PathBuf::from(".app-storage/operations").join(&pending.operation_id).join("temporary");
             if artifact.relative_path.parent()!=Some(expected_parent.as_path())||!artifact.relative_path.file_name().and_then(|n|n.to_str()).is_some_and(valid_uuid)||!["probe","json"].contains(&artifact.kind.as_str())||!artifacts.insert(&artifact.relative_path){return Err(StorageError::new("ControlInvalid"));}
             if artifact.kind=="probe"{if artifact.destination.is_some()||!artifact.expected_sha256.is_empty()||artifact.expected_length!=0{return Err(StorageError::new("ControlInvalid"));}}
-            else {let inventory=std::path::PathBuf::from(".frameq-storage/operations").join(&pending.operation_id).join("inventory.json");let receipt=std::path::PathBuf::from(".frameq-storage/receipts").join(&pending.operation_id).join("inventory.json");if !valid_hash(&artifact.expected_sha256)||artifact.expected_length>super::inventory::MAX_INVENTORY||!artifact.destination.as_ref().is_some_and(|path|path==&inventory||path==&receipt||path==Path::new(".frameq-storage/store.json")){return Err(StorageError::new("ControlInvalid"));}}
+            else {let inventory=std::path::PathBuf::from(".app-storage/operations").join(&pending.operation_id).join("inventory.json");let receipt=std::path::PathBuf::from(".app-storage/receipts").join(&pending.operation_id).join("inventory.json");if !valid_hash(&artifact.expected_sha256)||artifact.expected_length>super::inventory::MAX_INVENTORY||!artifact.destination.as_ref().is_some_and(|path|path==&inventory||path==&receipt||path==Path::new(".app-storage/store.json")){return Err(StorageError::new("ControlInvalid"));}}
         }
     }
     if let Some(p)=value.pending.as_ref(){
@@ -81,7 +81,7 @@ pub(super) fn validate(value:&Control)->Result<()> {
     }
     let mut receipt_ids=std::collections::HashSet::new();
     for receipt in &value.cleanup_receipts {
-        let expected=std::path::PathBuf::from(".frameq-storage/receipts").join(&receipt.operation_id).join("inventory.json");
+        let expected=std::path::PathBuf::from(".app-storage/receipts").join(&receipt.operation_id).join("inventory.json");
         if !valid_uuid(&receipt.operation_id) || !valid_hash(&receipt.sha256)||!receipt_ids.insert(&receipt.operation_id)
             || receipt.relative_path!=expected || receipt.source_paths.iter().any(|p|!safe_absolute(p)) {
             return Err(StorageError::new("ControlInvalid"));

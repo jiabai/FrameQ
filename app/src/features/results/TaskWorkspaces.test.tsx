@@ -26,7 +26,7 @@ function readyWorkflow(): WorkflowState {
   return summarizeWorkerResult({
     status: "completed",
     task_id: "same-task",
-    task_dir: "D:/FrameQ/outputs/tasks/same-task",
+    task_dir: "D:/Locus/outputs/tasks/same-task",
     artifacts: {
       video: "media/video.mp4",
       audio: "media/audio.wav",
@@ -105,8 +105,8 @@ function transcriptController(): TranscriptDetailController {
     closeDetail: vi.fn(),
     detailTitle: "完整文字稿",
     detailText: "第一段正式文字稿。第二段正式文字稿。",
-    exportPath: "D:/FrameQ/outputs/tasks/same-task/transcript/transcript.txt",
-    currentTranscriptPath: "D:/FrameQ/outputs/tasks/same-task/transcript/transcript.txt",
+    exportPath: "D:/Locus/outputs/tasks/same-task/transcript/transcript.txt",
+    currentTranscriptPath: "D:/Locus/outputs/tasks/same-task/transcript/transcript.txt",
     transcriptDetail: {
       task_id: "same-task",
       text: "第一段正式文字稿。第二段正式文字稿。",
@@ -114,8 +114,8 @@ function transcriptController(): TranscriptDetailController {
         { id: "segment-1", start_ms: 0, end_ms: 5000, text: "第一段正式文字稿。" },
         { id: "segment-2", start_ms: 5000, end_ms: 9000, text: "第二段正式文字稿。" },
       ],
-      audio_asset_path: "D:/FrameQ/outputs/tasks/same-task/media/audio.wav",
-      audio_path: "D:/FrameQ/outputs/tasks/same-task/media/audio.wav",
+      audio_asset_path: "D:/Locus/outputs/tasks/same-task/media/audio.wav",
+      audio_path: "D:/Locus/outputs/tasks/same-task/media/audio.wav",
       has_original_backup: true,
       artifacts: { transcript_txt: "transcript/transcript.txt" },
       transcript: { source: "asr", language: "zh", engine: "SenseVoice" },
@@ -490,7 +490,7 @@ describe("task domain workspaces", () => {
     const workflow = summarizeWorkerResult({
       status: "completed",
       task_id: "audio-only-task",
-      task_dir: "D:/FrameQ/outputs/tasks/audio-only-task",
+      task_dir: "D:/Locus/outputs/tasks/audio-only-task",
       artifacts: {
         audio: "media/audio.wav",
         transcript_txt: "transcript/transcript.txt",
@@ -529,7 +529,7 @@ describe("task domain workspaces", () => {
     const workflow = summarizeWorkerResult({
       status: "completed",
       task_id: "polished-task",
-      task_dir: "D:/FrameQ/outputs/tasks/polished-task",
+      task_dir: "D:/Locus/outputs/tasks/polished-task",
       artifacts: {
         audio: "media/audio.wav",
         transcript_txt: "transcript/transcript.txt",
@@ -572,7 +572,7 @@ describe("task domain workspaces", () => {
     const workflow = summarizeWorkerResult({
       status: "completed",
       task_id: "polishing-task",
-      task_dir: "D:/FrameQ/outputs/tasks/polishing-task",
+      task_dir: "D:/Locus/outputs/tasks/polishing-task",
       artifacts: {
         audio: "media/audio.wav",
         transcript_txt: "transcript/transcript.txt",
@@ -698,7 +698,7 @@ describe("task domain workspaces", () => {
       ...transcriptController(),
       detailTab: "dissection",
       detailText: "# 文字稿解剖",
-      exportPath: "D:/FrameQ/outputs/tasks/same-task/ai/dissection.md",
+      exportPath: "D:/Locus/outputs/tasks/same-task/ai/dissection.md",
     } as TranscriptDetailController;
     const markup = renderToStaticMarkup(
       <AiResultDetailSheet
@@ -731,7 +731,7 @@ describe("task domain workspaces", () => {
       ...transcriptController(),
       detailTab: "dissection",
       detailText: "",
-      exportPath: "D:/FrameQ/outputs/tasks/same-task/ai/dissection.md",
+      exportPath: "D:/Locus/outputs/tasks/same-task/ai/dissection.md",
     } as TranscriptDetailController;
     const markup = renderToStaticMarkup(
       <AiResultDetailSheet
@@ -930,9 +930,9 @@ describe("task domain workspaces", () => {
   });
 
   test.each([
-    ["zh-CN", "处理已超过最长运行时间，FrameQ 已停止本次任务。现有结果已保留，请重试。"],
-    ["zh-TW", "處理已超過最長執行時間，FrameQ 已停止本次工作。現有結果已保留，請重試。"],
-    ["en-US", "FrameQ stopped this operation after it reached the maximum run time. Existing results were kept; try again."],
+    ["zh-CN", "处理已超过最长运行时间，Locus 已停止本次任务。现有结果已保留，请重试。"],
+    ["zh-TW", "處理已超過最長執行時間，Locus 已停止本次工作。現有結果已保留，請重試。"],
+    ["en-US", "Locus stopped this operation after it reached the maximum run time. Existing results were kept; try again."],
   ] as const)(
     "shows AI execution-timeout recovery guidance in %s",
     async (locale, expectedGuidance) => {

@@ -94,7 +94,7 @@ export class AuthService {
 
     return {
       ticket,
-      redirectUrl: `frameq://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(input.state)}`,
+      redirectUrl: `pro.8xf.app://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(input.state)}`,
     };
   }
 
@@ -138,7 +138,7 @@ export class AuthService {
 
     return {
       ticket,
-      redirectUrl: `frameq://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(input.state)}`,
+      redirectUrl: `pro.8xf.app://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(input.state)}`,
       sessionToken,
       csrfToken,
     };

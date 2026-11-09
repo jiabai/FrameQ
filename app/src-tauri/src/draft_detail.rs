@@ -328,7 +328,7 @@ mod tests {
             "user edited draft\n"
         );
         let manifest =
-            fs::read_to_string(task_dir.join("frameq-task.json")).expect("read manifest");
+            fs::read_to_string(task_dir.join("task.json")).expect("read manifest");
         assert!(manifest.contains(r#""draft": "ai/draft.md""#));
     }
 
@@ -473,7 +473,7 @@ mod tests {
         fs::write(task_dir.join("ai").join("draft.md"), "draft\n").expect("write draft");
 
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -520,7 +520,7 @@ mod tests {
         fs::write(task_dir.join("ai").join("draft.md"), "original\n").expect("write draft");
 
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -577,7 +577,7 @@ mod tests {
 
     fn write_manifest(task_dir: &Path, task_id: &str) {
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -613,7 +613,7 @@ mod tests {
             None => String::new(),
         };
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -646,7 +646,7 @@ mod tests {
 
     fn write_quarantined_manifest(task_dir: &Path, task_id: &str) {
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -671,7 +671,7 @@ mod tests {
 
     fn write_quarantined_manifest_with_draft(task_dir: &Path, task_id: &str) {
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 3,
@@ -697,7 +697,7 @@ mod tests {
 
     fn write_legacy_manifest(task_dir: &Path, task_id: &str) {
         fs::write(
-            task_dir.join("frameq-task.json"),
+            task_dir.join("task.json"),
             format!(
                 r#"{{
   "schema_version": 2,
@@ -723,7 +723,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("frameq-{name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("app-{name}-{unique}"));
         fs::create_dir_all(&dir).expect("create temp dir");
         #[cfg(unix)] let dir = dir.canonicalize().expect("canonical temp dir");
         dir

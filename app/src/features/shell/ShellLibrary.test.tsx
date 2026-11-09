@@ -21,8 +21,8 @@ const task: HistoryListItem = {
   createdAt: "2026-10-30T10:00:00Z",
   source: { kind: "local_file", displayName: "interview.mp4", mediaKind: "video" },
   status: "completed",
-  taskDir: "D:/FrameQ/private/local-task",
-  outputDir: "D:/FrameQ/private/local-task",
+  taskDir: "D:/Locus/private/local-task",
+  outputDir: "D:/Locus/private/local-task",
   artifacts: {
     transcript_txt: "transcript/transcript.txt",
     summary: "ai/summary.md",

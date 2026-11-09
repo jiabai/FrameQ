@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 //
 // Check whether the self-service email activation code rollout has reached a
-// given FrameQ server deployment.
+// given server deployment.
 //
 // Why this exists: `APP_SELF_SERVICE_ACTIVATION_ENABLED` and the deployment
 // commit move independently, and an operator wants to confirm the route is
@@ -56,7 +56,7 @@ const LOCALES = Object.freeze(["zh-CN", "zh-TW", "en-US"]);
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /**
- * Recognize Fastify's built-in "route not found" body. FrameQ's own handlers
+ * Recognize Fastify's built-in "route not found" body. the server's own handlers
  * only ever return `{"error":"..."}`, so the presence of `message` plus
  * `error: "Not Found"` plus `statusCode` is a reliable signature.
  */
@@ -323,7 +323,7 @@ function parseArgs(argv) {
 function printHelp() {
   process.stdout.write(
     [
-      "Check the self-service email activation code rollout state of a FrameQ server.",
+      "Check the self-service email activation code rollout state of the server.",
       "",
       "Reports whether the activation-code route is deployed. The feature flag",
       "itself is NOT observable from an unauthenticated probe, because the route",
@@ -353,7 +353,7 @@ async function main() {
 
   const result = await runRolloutChecks({ baseUrl });
 
-  process.stdout.write(`FrameQ self-service activation rollout check\n`);
+  process.stdout.write(`Self-service activation rollout check\n`);
   process.stdout.write(`  target: ${result.baseUrl}\n`);
   process.stdout.write(`  state : ${result.state} - ${result.detail}\n\n`);
   for (const check of result.checks) {

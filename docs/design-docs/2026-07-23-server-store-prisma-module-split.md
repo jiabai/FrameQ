@@ -554,7 +554,7 @@ The implementation closeout must update:
 - `docs/ARCHITECTURE.md` with stable Store roots, private transaction owners, and narrow consumer
   ports;
 - `docs/SECURITY.md` with retained transaction-client and semantic-operation boundaries;
-- `docs/design-docs/frameq-code-audit-uml.md` with implemented paths and measured sizes;
+- `docs/design-docs/code-audit-uml.md` with implemented paths and measured sizes;
 - ExecPlan indexes when the implementation plan is activated and archived; and
 - active server production-operations/release plans if their source/evidence maps reference moved
   Store implementation locations.

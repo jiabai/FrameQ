@@ -15,7 +15,7 @@ mod tests;
 #[cfg(test)]
 pub(crate) mod web_tests;
 
-pub(crate) const TASK_MANIFEST_FILE_NAME: &str = "frameq-task.json";
+pub(crate) const TASK_MANIFEST_FILE_NAME: &str = "task.json";
 pub(crate) const TASKS_DIR_NAME: &str = "tasks";
 pub(crate) const TASK_SCHEMA_VERSION: u64 = 3;
 pub(crate) const WEB_TASK_SCHEMA_VERSION: u64 = 4;

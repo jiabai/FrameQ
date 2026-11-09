@@ -42,9 +42,9 @@ const LEGACY_LOCAL_LLM_ENV_KEYS: [&str; 5] = [
 ];
 const SETTINGS_SCHEMA_VERSION: &str = "2";
 const ASR_MODEL_MIGRATION_MARKER: &str = "1";
-const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# FrameQ desktop local settings.\n\
+const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# Desktop local settings.\n\
 # This file lives in app-local data and is read by the desktop client/worker.\n\
-# Insight LLM configuration is managed by the FrameQ server Admin Web.\n\
+# Insight LLM configuration is managed by the server Admin Web.\n\
 # Do not put APP_LLM_* keys here.\n\
 \n\
 # Optional output directory for generated videos, transcripts, and insights.\n\
@@ -518,7 +518,7 @@ mod tests {
         let app_root = temp_dir("audio_review_cache_usage_and_clear");
         let cache_root = app_root.join("cache");
         let outputs_root = app_root.join("outputs");
-        let cache_dir = cache_root.join(".frameq-audio-review");
+        let cache_dir = cache_root.join(".app-audio-review");
         let task_audio = outputs_root
             .join("tasks")
             .join("task-1")
@@ -536,7 +536,7 @@ mod tests {
         let usage = audio_review_cache_usage_from_cache(&cache_root).expect("read cache usage");
 
         assert_eq!(usage.size_bytes, 12);
-        assert!(usage.cache_path.ends_with("cache/.frameq-audio-review"));
+        assert!(usage.cache_path.ends_with("cache/.app-audio-review"));
 
         let cleared = clear_audio_review_cache_from_cache(&cache_root).expect("clear audio cache");
 

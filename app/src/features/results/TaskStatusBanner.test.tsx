@@ -21,7 +21,7 @@ afterEach(cleanup);
 
 function savedTranscript(): WorkflowState {
   return summarizeWorkerResult({
-    status: "completed", task_id: "saved-note", task_dir: "D:/FrameQ/outputs/tasks/saved-note",
+    status: "completed", task_id: "saved-note", task_dir: "D:/Locus/outputs/tasks/saved-note",
     artifacts: { audio: "media/audio.wav", transcript_txt: "transcript/transcript.txt" },
     text: "Saved transcript", summary: "", insights: [], transcript: null,
     dissection: null, dissection_source_status: null, draft: "", error: null,

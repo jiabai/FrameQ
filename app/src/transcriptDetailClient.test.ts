@@ -18,8 +18,8 @@ describe("transcript detail client", () => {
         task_id: "task-1",
         text: "transcript",
         segments: [],
-        audio_path: "D:\\FrameQ\\outputs\\tasks\\task-1\\media\\audio.wav",
-        audio_asset_path: "C:\\Users\\tester\\AppData\\Local\\FrameQ\\cache\\.frameq-audio-review\\task-1\\audio.wav",
+        audio_path: "D:\\Locus\\outputs\\tasks\\task-1\\media\\audio.wav",
+        audio_asset_path: "C:\\Users\\tester\\AppData\\Local\\Locus\\cache\\.app-audio-review\\task-1\\audio.wav",
         has_original_backup: false,
       };
     };
@@ -28,7 +28,7 @@ describe("transcript detail client", () => {
 
     expect(detail.task_id).toBe("task-1");
     expect(detail.text).toBe("transcript");
-    expect(detail.audio_asset_path).toContain("cache\\.frameq-audio-review");
+    expect(detail.audio_asset_path).toContain("cache\\.app-audio-review");
     expect(calls).toEqual([
       {
         command: "load_transcript_detail",

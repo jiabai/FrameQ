@@ -63,11 +63,11 @@ impl Roots {
         Ok(Self { output, cache, tasks })
     }
     fn task(&self, job: &Intent) -> PathBuf { self.tasks.join(&job.task_id) }
-    fn task_stage(&self, job: &Intent) -> PathBuf { self.output.join(format!(".frameq-delete-{}", job.operation_id)) }
+    fn task_stage(&self, job: &Intent) -> PathBuf { self.output.join(format!(".app-delete-{}", job.operation_id)) }
     fn worker_root(&self) -> PathBuf { self.cache.join("tasks") }
     fn review_root(&self) -> PathBuf { self.cache.join(AUDIO_REVIEW_CACHE_DIR_NAME) }
     fn cache_stage(&self, job: &Intent, kind: &str) -> PathBuf {
-        self.cache.join(format!(".frameq-delete-{}-{kind}", job.operation_id))
+        self.cache.join(format!(".app-delete-{}-{kind}", job.operation_id))
     }
     fn validate(&self, paths: &RuntimePaths, job: &Intent) -> Result<(), HistoryDeleteError> {
         storage::validate_ancestors(&paths.user_data_dir)?;

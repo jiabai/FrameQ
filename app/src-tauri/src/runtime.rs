@@ -12,7 +12,7 @@ pub(crate) const PYTORCH_RUNTIME_URL_ENV: &str = "APP_PYTORCH_RUNTIME_URL";
 pub(crate) const PYTORCH_RUNTIME_SHA256_ENV: &str = "APP_PYTORCH_RUNTIME_SHA256";
 pub(crate) const ALLOW_REAL_ASR_ENV: &str = "APP_ALLOW_REAL_ASR";
 pub(crate) const MODELSCOPE_OFFLINE_ENV: &str = "MODELSCOPE_OFFLINE";
-pub(crate) const AUDIO_REVIEW_CACHE_DIR_NAME: &str = ".frameq-audio-review";
+pub(crate) const AUDIO_REVIEW_CACHE_DIR_NAME: &str = ".app-audio-review";
 #[cfg(test)]
 pub(crate) const LEGACY_TEMP_DIR_NAME: &str = "work";
 pub(crate) const DESKTOP_LOG_DIR_NAME: &str = "logs";
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn normalize_resource_dir_uses_packaged_resources_subdir_when_tauri_returns_install_root() {
         let root = temp_dir("normalize_resource_dir_uses_packaged_resources_subdir");
-        let install_root = root.join("FrameQ");
+        let install_root = root.join("Locus");
         let resources = install_root.join("resources");
         let python = bundled_python_path(&resources);
         fs::create_dir_all(python.parent().expect("packaged python parent"))

@@ -6,14 +6,14 @@ const completeProductionEnv = {
   APP_SERVER_HOST: "127.0.0.1",
   APP_SERVER_PORT: "8787",
   APP_SELF_SERVICE_ACTIVATION_ENABLED: "false",
-  DATABASE_URL: "file:../data/frameq.sqlite",
+  DATABASE_URL: "file:../data/app.sqlite",
   APP_ADMIN_EMAIL: "admin@example.com",
   APP_LLM_CONFIG_ENCRYPTION_KEY: "production-encryption-secret-at-least-32",
   SMTP_HOST: "smtp.example.com",
   SMTP_PORT: "465",
   SMTP_USER: "mailer@example.com",
   SMTP_PASS: "smtp-secret",
-  SMTP_FROM: "FrameQ <mailer@example.com>",
+  SMTP_FROM: "Locus <mailer@example.com>",
 } satisfies NodeJS.ProcessEnv;
 
 describe("runtime configuration", () => {
@@ -25,7 +25,7 @@ describe("runtime configuration", () => {
       host: "127.0.0.1",
       port: 8787,
       selfServiceActivationEnabled: false,
-      databaseUrl: "file:../data/frameq.sqlite",
+      databaseUrl: "file:../data/app.sqlite",
       adminEmail: "admin@example.com",
       llmConfigEncryptionKey: "production-encryption-secret-at-least-32",
       allowConsoleOtp: false,
@@ -35,7 +35,7 @@ describe("runtime configuration", () => {
         secure: true,
         user: "mailer@example.com",
         pass: "smtp-secret",
-        from: "FrameQ <mailer@example.com>",
+        from: "Locus <mailer@example.com>",
       },
     });
     expect(Object.isFrozen(config)).toBe(true);

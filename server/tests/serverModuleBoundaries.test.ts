@@ -225,16 +225,16 @@ describe("server route module boundaries", () => {
     const sources = new Map(
       allRouteFiles.map((file) => [file, readSource(sourcePath(`routes/${file}`))] as const),
     );
-    for (const token of ["frameq_admin_session", "frameq_admin_csrf"]) {
+    for (const token of ["app_admin_session", "app_admin_csrf"]) {
       expect(allRouteFiles.filter((file) => sources.get(file)?.includes(token)), token).toEqual([
         "admin.ts",
       ]);
     }
     expect(
-      allRouteFiles.filter((file) => sources.get(file)?.includes("x-frameq-csrf")),
-      "x-frameq-csrf",
+      allRouteFiles.filter((file) => sources.get(file)?.includes("x-app-csrf")),
+      "x-app-csrf",
     ).toEqual(["admin.ts", "userAuth.ts"]);
-    for (const token of ["frameq_user_session", "frameq_user_csrf"]) {
+    for (const token of ["app_user_session", "app_user_csrf"]) {
       expect(
         allRouteFiles.filter((file) => sources.get(file)?.includes(token)),
         token,

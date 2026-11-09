@@ -103,7 +103,7 @@ fn write_task(output_root: &Path, task_id: &str) -> PathBuf {
         "insights_count": 0
     });
     fs::write(
-        task.join("frameq-task.json"),
+        task.join("task.json"),
         serde_json::to_vec(&manifest).unwrap(),
     )
     .expect("write real task manifest");
@@ -246,7 +246,7 @@ fn invalid_and_case_insensitive_duplicate_names_preserve_committed_data() {
 fn memberships_share_existing_tasks_and_filter_stale_refs_without_changing_task_files() {
     let fixture = Fixture::new();
     let task = fixture.task("task-a");
-    let manifest = fs::read(task.join("frameq-task.json")).unwrap();
+    let manifest = fs::read(task.join("task.json")).unwrap();
     let transcript = fs::read(task.join("transcript/transcript.txt")).unwrap();
     let first_id = fixture.create("First").collections[0].id.clone();
     let second_id = fixture.create("Second").collections[1].id.clone();
@@ -267,13 +267,13 @@ fn memberships_share_existing_tasks_and_filter_stale_refs_without_changing_task_
     assert_eq!(removed.collections[1].task_ids, ["task-a"]);
     let deleted = delete_collection_from_paths(&fixture.paths, &first_id).unwrap();
     assert_eq!(deleted.collections.len(), 1);
-    assert_eq!(fs::read(task.join("frameq-task.json")).unwrap(), manifest);
+    assert_eq!(fs::read(task.join("task.json")).unwrap(), manifest);
     assert_eq!(
         fs::read(task.join("transcript/transcript.txt")).unwrap(),
         transcript
     );
     let stored = fs::read(fixture.store()).unwrap();
-    fs::remove_file(task.join("frameq-task.json")).unwrap();
+    fs::remove_file(task.join("task.json")).unwrap();
     assert!(get_collections_from_paths(&fixture.paths)
         .unwrap()
         .collections[0]

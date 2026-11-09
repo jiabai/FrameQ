@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FrameQMark } from "./FrameQMark";
+import { AppMark } from "./AppMark";
 import { getGreetingPeriod } from "./greetingTime";
 
 export function HomeGreeting({ email }: { email: string | null }) {
@@ -13,7 +13,7 @@ export function HomeGreeting({ email }: { email: string | null }) {
   const name = email?.split("@")[0] || t("account.guest");
   return (
     <h1 className="shell-home-greeting">
-      <FrameQMark className="shell-greeting-mark" />
+      <AppMark className="shell-greeting-mark" />
       <span>{t(`home.${getGreetingPeriod(hour)}`, { name })}</span>
     </h1>
   );

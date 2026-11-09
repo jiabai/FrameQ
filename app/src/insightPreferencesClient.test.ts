@@ -75,6 +75,6 @@ function preferenceState() {
     profileStatus: "valid",
     profileError: null,
     defaultGenerationPreferences: GENERATION_PREFERENCES,
-    preferencesPath: "D:/FrameQ/insight-preferences.json",
+    preferencesPath: "D:/Locus/insight-preferences.json",
   };
 }

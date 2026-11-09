@@ -181,7 +181,7 @@ The existing Python 3.13 `pydub`/`audioop` and Vite chunk-size warnings remain s
 - Canonical packaging copy path: `scripts/build-installer.mjs` and its existing worker-resource
   equality tests.
 - Durable boundaries to preserve: `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, and
-  `docs/design-docs/frameq-code-audit-uml.md`.
+  `docs/design-docs/code-audit-uml.md`.
 - Independent pending feature: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
 
 ## Target File Responsibility Map
@@ -540,7 +540,7 @@ repository-observed constant/function named in the design.
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/design-docs/2026-07-20-asr-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md` only if measured evidence changes tracked debt
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`

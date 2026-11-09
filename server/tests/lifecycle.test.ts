@@ -193,10 +193,10 @@ describe("server lifecycle", () => {
   });
 
   test("normal shutdown releases the SQLite file", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "frameq-lifecycle-"));
+    const directory = mkdtempSync(join(tmpdir(), "app-lifecycle-"));
     tempDirectories.push(directory);
-    const databasePath = join(directory, "frameq.sqlite");
-    const movedPath = join(directory, "frameq-moved.sqlite");
+    const databasePath = join(directory, "app.sqlite");
+    const movedPath = join(directory, "app-moved.sqlite");
     const prisma = await createPrismaClient(`file:${databasePath.replace(/\\/g, "/")}`);
     const lifecycle = createServerLifecycle({
       app: {

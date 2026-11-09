@@ -65,7 +65,7 @@ def test_dissection_finalization_publishes_json_markdown_and_manifest(
     (transcript_dir / "transcript.txt").write_text(
         "saved transcript\n", encoding="utf-8"
     )
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,
@@ -152,7 +152,7 @@ def test_dissection_finalization_publishes_json_markdown_and_manifest(
     assert result["artifacts"]["dissection_md"] == "ai/dissection.md"
     assert (task_dir / "ai" / "dissection.json").is_file()
     assert (task_dir / "ai" / "dissection.md").is_file()
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["artifacts"]["dissection"] == "ai/dissection.json"
     assert "preference_snapshot" not in manifest["artifacts"]
 
@@ -180,7 +180,7 @@ def test_dissection_finalization_publishes_json_markdown_and_manifest(
     assert (task_dir / "ai" / "dissection.json").read_bytes() == previous_json
     assert (task_dir / "ai" / "dissection.md").read_bytes() == previous_markdown
     failed_manifest = json.loads(
-        (task_dir / "frameq-task.json").read_text(encoding="utf-8")
+        (task_dir / "task.json").read_text(encoding="utf-8")
     )
     assert failed_manifest["artifacts"] == previous_mapping
 
@@ -342,7 +342,7 @@ def test_worker_pipeline_writes_task_owned_artifacts_and_manifest(tmp_path: Path
     assert transcript == "task transcript"
     assert not list(output_root.glob("*.mp4"))
 
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["schema_version"] == 3
     assert manifest["task_id"] == result["task_id"]
     assert manifest["source_url"] == "https://www.douyin.com/video/7524373044106677544"
@@ -436,7 +436,7 @@ def test_sensitive_xhs_download_url_never_crosses_local_process_boundary(
     )
     assert canonical_url in transcript_md
     assert raw_url not in transcript_md
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["source_url"] == canonical_url
     assert manifest["source_identity"]["canonical_url"] == canonical_url
     assert list((task_dir / "ai").iterdir()) == []
@@ -525,7 +525,7 @@ def test_worker_pipeline_uses_platform_subtitle_before_asr_model_ready(
     assert "Model:" not in transcript_md
     assert (task_dir / "media" / "audio.wav").is_file()
 
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["schema_version"] == 3
     assert manifest["model"] == "iic/SenseVoiceSmall"
     assert manifest["transcript"] == result["transcript"]
@@ -596,7 +596,7 @@ def test_xiaohongshu_platform_subtitle_skips_asr_and_stays_task_local(
     )
     assert "Transcript Source: Platform subtitle" in transcript_md
     assert "Model:" not in transcript_md
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["model"] == "iic/SenseVoiceSmall"
     assert manifest["transcript"] == result["transcript"]
     download_dir = cache_root / "tasks" / str(result["task_id"]) / "download"
@@ -686,7 +686,7 @@ def test_insights_finalization_updates_same_task_and_saves_local_preferences(
         "stale markdown transcript\n",
         encoding="utf-8",
     )
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,
@@ -762,7 +762,7 @@ def test_insights_finalization_updates_same_task_and_saves_local_preferences(
     assert "review-secret" not in artifacts.json_bytes.decode("utf-8")
     assert "xsec_token" not in artifacts.md_bytes.decode("utf-8")
 
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "completed"
     assert manifest["artifacts"] == result["artifacts"]
     assert manifest["artifacts"]["preference_snapshot"] == "ai/preference-snapshot.json"
@@ -775,7 +775,7 @@ def test_retry_quarantined_task_never_returns_sensitive_task_id(tmp_path: Path) 
     task_id = "legacy-xiaohongshu-review-secret"
     task_dir = output_root / "tasks" / task_id
     task_dir.mkdir(parents=True)
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,
@@ -826,7 +826,7 @@ def test_retry_rejects_linked_transcript_before_reading_or_persisting_target(
         transcript_path.symlink_to(linked_target)
     except OSError:
         pytest.skip("Creating symlinks requires operating system support.")
-    manifest_path = task_dir / "frameq-task.json"
+    manifest_path = task_dir / "task.json"
     manifest_path.write_text(
         json.dumps(
             {
@@ -910,7 +910,7 @@ def test_summary_finalization_preserves_existing_insights_count(tmp_path: Path) 
         encoding="utf-8",
     )
     (ai_dir / "insights.md").write_text("# 启发灵感\n", encoding="utf-8")
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,
@@ -978,7 +978,7 @@ def test_summary_finalization_preserves_existing_insights_count(tmp_path: Path) 
     assert result["artifacts"]["insights"] == "ai/insights.json"
     assert "preference_snapshot" not in result["artifacts"]
 
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "completed"
     assert manifest["artifacts"] == result["artifacts"]
     assert manifest["insights_count"] == 1
@@ -1001,7 +1001,7 @@ def test_insights_finalization_preserves_existing_summary(tmp_path: Path) -> Non
     )
     (ai_dir / "summary.md").write_text("# existing summary\n", encoding="utf-8")
     (ai_dir / "mindmap.mmd").write_text("mindmap\n  root((existing))\n", encoding="utf-8")
-    (task_dir / "frameq-task.json").write_text(
+    (task_dir / "task.json").write_text(
         json.dumps(
             {
                 "schema_version": 3,
@@ -1070,7 +1070,7 @@ def test_insights_finalization_preserves_existing_summary(tmp_path: Path) -> Non
     assert result["artifacts"]["insights"] == "ai/insights.json"
     assert result["artifacts"]["preference_snapshot"] == "ai/preference-snapshot.json"
 
-    manifest = json.loads((task_dir / "frameq-task.json").read_text(encoding="utf-8"))
+    manifest = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "completed"
     assert manifest["artifacts"] == result["artifacts"]
     assert manifest["insights_count"] == 1
@@ -1094,7 +1094,7 @@ def test_finalization_rejects_invalid_payload_and_preserves_previous_artifacts(
     mindmap_path = ai_dir / "mindmap.mmd"
     summary_path.write_bytes(b"# Previous summary\n")
     mindmap_path.write_bytes(b"mindmap\n  root((Previous))\n")
-    manifest_path = task_dir / "frameq-task.json"
+    manifest_path = task_dir / "task.json"
     manifest_path.write_text(
         json.dumps(
             {
@@ -1152,4 +1152,4 @@ def test_finalization_rejects_invalid_payload_and_preserves_previous_artifacts(
     assert summary_path.read_bytes() == b"# Previous summary\n"
     assert mindmap_path.read_bytes() == b"mindmap\n  root((Previous))\n"
     assert manifest_path.read_bytes() == previous_manifest
-    assert not list(task_dir.rglob(".frameq-artifact-*"))
+    assert not list(task_dir.rglob(".artifact-*"))

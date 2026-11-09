@@ -9,7 +9,7 @@ import pytest
 from worker_core.cli import MAX_STDIN_REQUEST_BYTES
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "desktop-worker-contract.json"
-SECRET = b"frameq-stdin-private-input"
+SECRET = b"app-stdin-private-input"
 
 
 @pytest.mark.parametrize(

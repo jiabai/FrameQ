@@ -69,7 +69,7 @@ def test_web_page_roundtrip_ai_commit_and_fresh_snapshot(tmp_path: Path) -> None
 def test_web_page_manifest_rejects_mixed_or_corrupt_sources(tmp_path: Path, change: str) -> None:
     store = TaskStoreFacade(tmp_path / "outputs", tmp_path / "cache")
     saved = save_web_page(store, article())
-    path = Path(saved.task_dir) / "frameq-task.json"
+    path = Path(saved.task_dir) / "task.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
     if change == "version":
         manifest["schema_version"] = 3
@@ -131,7 +131,7 @@ def test_unpublished_article_is_invisible_after_commit_failure(tmp_path: Path) -
             raise OSError("storage interruption")
     with pytest.raises(TaskArtifactCommitError):
         save_web_page(store, article(), _fault_hook=stop_before_publish)
-    assert not list(store.output_root.glob("tasks/*/frameq-task.json"))
+    assert not list(store.output_root.glob("tasks/*/task.json"))
 
 
 @pytest.mark.parametrize("target", ["title", "transcript"])

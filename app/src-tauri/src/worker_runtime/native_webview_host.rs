@@ -26,7 +26,7 @@ fn executable(paths: &RuntimePaths) -> Result<(PathBuf, File, safe::PinnedDirect
     let manifest = safe::open_regular(&root.join("manifest.json")).map_err(|_| "WEB_HOST_FAILED")?;
     if manifest.metadata().map_err(|_| "WEB_HOST_FAILED")?.len() > 16384 { return Err("WEB_HOST_FAILED".into()); }
     let manifest: Manifest = serde_json::from_reader(manifest).map_err(|_| "WEB_HOST_FAILED")?;
-    let expected = if cfg!(windows) { "frameq-webview-host.exe" } else { "FrameQWebViewHost.app/Contents/MacOS/frameq-webview-host" };
+    let expected = if cfg!(windows) { "app-webview-host.exe" } else { "AppWebViewHost.app/Contents/MacOS/app-webview-host" };
     if manifest.schema_version != 1 || manifest.target != target() || manifest.binary != expected
         || manifest.bytes == 0 || manifest.bytes > 128 * 1024 * 1024
         || manifest.sha256.len() != 64 || !manifest.sha256.bytes().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase())
@@ -489,7 +489,7 @@ mod tests {
             system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
             let process = system.process(sysinfo::Pid::from_u32(pid)).ok_or("WEB_HOST_FAILED")?;
             let executable = process.exe().ok_or("WEB_HOST_FAILED")?;
-            assert_eq!(executable.file_name().and_then(|name| name.to_str()), Some(if role == "helper" { "frameq-webview-host.exe" } else { "msedgewebview2.exe" }));
+            assert_eq!(executable.file_name().and_then(|name| name.to_str()), Some(if role == "helper" { "app-webview-host.exe" } else { "msedgewebview2.exe" }));
             recorded.push((role.to_owned(), pid));
             Ok(())
         };

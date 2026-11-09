@@ -11,7 +11,7 @@ const releaseWorkflowPath = resolve(repoRoot, ".github/workflows/desktop-release
 
 describe("desktop updater release manifest", () => {
   test("normalizes latest.json to UTF-8 JSON without a BOM", () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "frameq-updater-manifest-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "updater-manifest-"));
     const manifestPath = join(tempDir, "latest.json");
     writeFileSync(
       manifestPath,

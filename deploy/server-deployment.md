@@ -1,20 +1,20 @@
-# FrameQ Server Production Runbook
+# Locus Server Production Runbook
 
 ## 1. Supported topology
 
-FrameQ server handles account OTP login, administrator access, activation entitlements, self-service
+Locus server handles account OTP login, administrator access, activation entitlements, self-service
 activation email delivery, encrypted LLM configuration, and atomic AI-credit checkout. It never
 receives desktop video, audio, transcript, or generated-content files.
 
 The supported first production topology is one process and one local SQLite database:
 
 ```text
-Internet -> Nginx :443 -> FrameQ server 127.0.0.1:8787
+Internet -> Nginx :443 -> Locus server 127.0.0.1:8787
                                 -> local SQLite file
                                 -> SMTP provider
 ```
 
-Run exactly one FrameQ server instance for each SQLite file. Do not place the database on NFS,
+Run exactly one Locus server instance for each SQLite file. Do not place the database on NFS,
 SMB, a synchronized folder, or shared storage. Changing the proxy or database topology requires a
 new architecture review and trusted-proxy tests.
 
@@ -65,7 +65,7 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=frameq@example.com
 SMTP_PASS=<smtp-password>
-SMTP_FROM=FrameQ <frameq@example.com>
+SMTP_FROM=Locus <frameq@example.com>
 ```
 
 Generate the encryption key with `openssl rand -hex 32`. Back up the exact key separately from the

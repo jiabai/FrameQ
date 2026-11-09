@@ -56,18 +56,18 @@ impl Fixture {
                 "preference_snapshot":"ai/preference_snapshot.json"},
             "preserved":{"user":"existing metadata"}
         });
-        fs::write(task_dir.join("frameq-task.json"), serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        fs::write(task_dir.join("task.json"), serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
         Self { root, output_root, task_dir }
     }
 
-    fn metadata_path(&self) -> PathBuf { self.task_dir.join("frameq-note-metadata.json") }
+    fn metadata_path(&self) -> PathBuf { self.task_dir.join("app-note-metadata.json") }
 
     fn manifest(&self) -> Value {
-        serde_json::from_slice(&fs::read(self.task_dir.join("frameq-task.json")).unwrap()).unwrap()
+        serde_json::from_slice(&fs::read(self.task_dir.join("task.json")).unwrap()).unwrap()
     }
 
     fn save_manifest(&self, manifest: &Value) {
-        fs::write(self.task_dir.join("frameq-task.json"), serde_json::to_vec_pretty(manifest).unwrap()).unwrap();
+        fs::write(self.task_dir.join("task.json"), serde_json::to_vec_pretty(manifest).unwrap()).unwrap();
     }
 
     fn pin(&self, pinned: bool) -> Result<NoteMutationResult, String> {
@@ -81,7 +81,7 @@ impl Fixture {
     #[cfg(windows)]
     pub(crate) fn pending_replacement_paths(&self) -> crate::RuntimePaths {
         use std::os::windows::fs::OpenOptionsExt;
-        let manifest = fs::read(self.task_dir.join("frameq-task.json")).unwrap();
+        let manifest = fs::read(self.task_dir.join("task.json")).unwrap();
         let paths = crate::RuntimePaths {
             resource_dir: self.root.join("resources"),
             user_data_dir: self.root.clone(),
@@ -104,7 +104,7 @@ impl Fixture {
         drop(lock);
         fs::create_dir_all(self.task_dir.join("transcript")).unwrap();
         fs::create_dir_all(self.task_dir.join("ai")).unwrap();
-        fs::write(self.task_dir.join("frameq-task.json"), &manifest).unwrap();
+        fs::write(self.task_dir.join("task.json"), &manifest).unwrap();
         fs::write(self.task_dir.join("transcript/transcript.txt"), "Replacement transcript").unwrap();
         fs::write(self.task_dir.join("ai/draft.md"), "Replacement draft").unwrap();
         assert!(task_manifest::SupportedTask::open(&self.output_root, "note-1").is_ok());
@@ -136,7 +136,7 @@ fn legacy_metadata_is_default_and_info_contains_only_saved_user_fields() {
 #[test]
 fn pin_and_rename_reopen_latest_settings_without_changing_task_files() {
     let fixture = Fixture::new();
-    let manifest_before = fs::read(fixture.task_dir.join("frameq-task.json")).unwrap();
+    let manifest_before = fs::read(fixture.task_dir.join("task.json")).unwrap();
     let transcript_before = fs::read(fixture.task_dir.join("transcript/transcript.txt")).unwrap();
     assert!(fixture.pin(true).unwrap().note_metadata.pinned);
     assert_eq!(fixture.rename("  我的手动标题  ").unwrap().note_metadata.display_title.as_deref(), Some("我的手动标题"));
@@ -145,7 +145,7 @@ fn pin_and_rename_reopen_latest_settings_without_changing_task_files() {
     assert!(!committed.note_metadata.pinned);
     let info = get_note_info_from_root(&fixture.output_root, "note-1").unwrap();
     assert_eq!(info.note_metadata.unwrap(), committed.note_metadata);
-    assert_eq!(fs::read(fixture.task_dir.join("frameq-task.json")).unwrap(), manifest_before);
+    assert_eq!(fs::read(fixture.task_dir.join("task.json")).unwrap(), manifest_before);
     assert_eq!(fs::read(fixture.task_dir.join("transcript/transcript.txt")).unwrap(), transcript_before);
     let stored: Value = serde_json::from_slice(&fs::read(fixture.metadata_path()).unwrap()).unwrap();
     assert_eq!(stored, json!({"schema_version":1,"task_id":"note-1","pinned":false,"display_title":"第二个手动标题"}));
@@ -274,7 +274,7 @@ fn junction_settings_and_parent_directories_cannot_receive_metadata() {
         .arg(&tasks).arg(&moved).creation_flags(0x08000000).output().unwrap();
     assert!(result.status.success());
     assert_eq!(fixture.pin(true).unwrap_err(), "NOTE_UNSAFE_STORAGE");
-    assert!(!moved.join("note-1/frameq-note-metadata.json").exists());
+    assert!(!moved.join("note-1/app-note-metadata.json").exists());
     fs::remove_dir(&tasks).unwrap();
 }
 
@@ -359,7 +359,7 @@ fn closed_requests_and_stale_task_ids_fail_without_writes() {
 fn pending_deletion_blocks_replacement_note_settings_info_and_existing_edit_commands() {
     let fixture = Fixture::new();
     let paths = fixture.pending_replacement_paths();
-    let manifest = fs::read(fixture.task_dir.join("frameq-task.json")).unwrap();
+    let manifest = fs::read(fixture.task_dir.join("task.json")).unwrap();
     assert_eq!(set_note_pinned_from_paths(&paths, PinRequest {
         task_id:"note-1".into(), pinned:true,
     }).unwrap_err(), "NOTE_BUSY");
@@ -383,7 +383,7 @@ fn pending_deletion_blocks_replacement_note_settings_info_and_existing_edit_comm
         &paths, serde_json::from_value(json!({"task_id":"note-1"})).unwrap(),
     );
     assert_eq!(draft_detail.unwrap_err(), "HISTORY_DELETE_CLEANUP_PENDING");
-    assert_eq!(fs::read(fixture.task_dir.join("frameq-task.json")).unwrap(), manifest);
+    assert_eq!(fs::read(fixture.task_dir.join("task.json")).unwrap(), manifest);
     assert_eq!(fs::read_to_string(fixture.task_dir.join("transcript/transcript.txt")).unwrap(), "Replacement transcript");
     assert_eq!(fs::read_to_string(fixture.task_dir.join("ai/draft.md")).unwrap(), "Replacement draft");
     assert!(!fixture.metadata_path().exists());

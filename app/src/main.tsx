@@ -11,7 +11,7 @@ import { StorageBootstrap } from "./features/dataStorage/StorageBootstrap";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
-  throw new Error("FrameQ root element is missing");
+  throw new Error("Locus root element is missing");
 }
 
 void startLocalizedApplication({

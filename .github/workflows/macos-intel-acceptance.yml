@@ -111,7 +111,7 @@ jobs:
 
       - name: Verify native architecture and packaged runtime
         run: |
-          APP="app/src-tauri/target/${{ matrix.target }}/release/bundle/macos/FrameQ.app"
+          APP="app/src-tauri/target/${{ matrix.target }}/release/bundle/macos/Locus.app"
           RES="$APP/Contents/Resources/resources"
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
           BIN="$APP/Contents/MacOS/$EXECUTABLE"
@@ -120,7 +120,7 @@ jobs:
           test "$(lipo -archs "$BIN")" = "${{ matrix.arch }}"
           PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$RES/worker" "$RES/python/bin/python3" -c "import funasr_onnx, modelscope, onnxruntime, yt_dlp; import worker_core; print('bundled runtime import OK')"
           test -f "$RES/python/runtime-manifest.json"
-          DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/frameq-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
+          DENO_NO_UPDATE_CHECK=1 DENO_DIR="$RUNNER_TEMP/app-deno-cache" "$RES/bin/deno" eval "console.log('bundled deno OK')"
           if find "$RES" \( -name __pycache__ -o -name '*.pyc' \) | grep -q .; then
             echo "Packaged runtime smoke test mutated the app bundle." >&2
             exit 1
@@ -129,7 +129,7 @@ jobs:
           node scripts/build-system-webview-host.mjs --target ${{ matrix.platform }} --verify-bundle "$APP"
 
       - name: Package internal macOS DMG
-        run: bash scripts/make-macos-dmg.sh ${{ matrix.target }} FrameQ
+        run: bash scripts/make-macos-dmg.sh ${{ matrix.target }} Locus
 
       - name: Verify final DMG and contained application
         run: |
@@ -140,8 +140,8 @@ jobs:
           mkdir -p "$MOUNT"
           hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG"
           trap 'hdiutil detach "$MOUNT"' EXIT
-          codesign --verify --deep --strict --verbose=4 "$MOUNT/FrameQ.app"
-          node scripts/build-system-webview-host.mjs --target ${{ matrix.platform }} --verify-bundle "$MOUNT/FrameQ.app"
+          codesign --verify --deep --strict --verbose=4 "$MOUNT/Locus.app"
+          node scripts/build-system-webview-host.mjs --target ${{ matrix.platform }} --verify-bundle "$MOUNT/Locus.app"
 
       - name: Generate artifact identity and SHA-256
         id: artifact
@@ -149,7 +149,7 @@ jobs:
           DMG="$(find app/src-tauri/target/${{ matrix.target }}/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -print -quit)"
           test -n "$DMG"
           shasum -a 256 "$DMG" > "$DMG.sha256"
-          echo "name=frameq-${{ matrix.platform }}-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+          echo "name=app-${{ matrix.platform }}-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
 
       - name: Upload internal macOS DMG artifact
         uses: actions/upload-artifact@v6

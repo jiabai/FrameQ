@@ -129,7 +129,7 @@ function createHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
       url: "https://www.example.test/history-video",
     },
     status: "completed",
-    taskDir: "D:/FrameQ/outputs/tasks/history-task",
+    taskDir: "D:/Locus/outputs/tasks/history-task",
     artifacts: {
       transcript_txt: "transcript/transcript.txt",
       summary: "ai/summary.md",
@@ -160,7 +160,7 @@ function createWorkerResult(overrides: Partial<WorkerResult> = {}): WorkerResult
   return {
     status: "completed",
     task_id: "active-task",
-    task_dir: "D:/FrameQ/outputs/tasks/active-task",
+    task_dir: "D:/Locus/outputs/tasks/active-task",
     artifacts: { transcript_txt: "transcript/transcript.txt" },
     text: "active transcript",
     summary: "active summary",
@@ -368,7 +368,7 @@ describe("useTaskProcessingController cancellation", () => {
     }>(resolveWorker)({
       status: "completed",
       task_id: "task-1",
-      task_dir: "D:/FrameQ/outputs/task-1",
+      task_dir: "D:/Locus/outputs/task-1",
       artifacts: {},
       text: "final transcript",
       summary: "",
@@ -440,7 +440,7 @@ describe("useTaskProcessingController watchdog timeouts", () => {
   test("keeps the complete current task after AI timeout without retrying or opening Credits", async () => {
     const source = createHistoryItem({
       taskId: "source-task",
-      taskDir: "D:/FrameQ/outputs/tasks/source-task",
+      taskDir: "D:/Locus/outputs/tasks/source-task",
       artifacts: {
         transcript_txt: "transcript/transcript.txt",
         transcript_md: "transcript/transcript.md",

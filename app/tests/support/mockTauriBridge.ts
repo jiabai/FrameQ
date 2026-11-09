@@ -13,8 +13,8 @@ const firstHistoryTask = {
     url: "https://www.douyin.com/video/7000000000000000001",
   },
   status: "completed",
-  task_dir: "C:/FrameQ/outputs/tasks/history-task-a",
-  output_dir: "C:/FrameQ/outputs",
+  task_dir: "C:/Locus/outputs/tasks/history-task-a",
+  output_dir: "C:/Locus/outputs",
   artifacts: {
     video: "media/video.mp4",
     audio: "media/audio.wav",
@@ -39,7 +39,7 @@ const secondHistoryTask = {
     kind: "url",
     url: "https://www.douyin.com/video/7000000000000000002",
   },
-  task_dir: "C:/FrameQ/outputs/tasks/history-task-b",
+  task_dir: "C:/Locus/outputs/tasks/history-task-b",
   text_preview: "历史任务乙文字稿",
   text: "历史任务乙完整文字稿",
 };
@@ -97,10 +97,10 @@ const defaultResponses: Record<string, unknown> = {
     recovered: false,
   },
   get_asr_model_status: {
-    user_data_dir: "C:/FrameQ",
-    default_output_dir: "C:/FrameQ/outputs",
+    user_data_dir: "C:/Locus",
+    default_output_dir: "C:/Locus/outputs",
     asr_model: "iic/SenseVoiceSmall",
-    asr_model_dir: "C:/FrameQ/models/SenseVoiceSmall",
+    asr_model_dir: "C:/Locus/models/SenseVoiceSmall",
     asr_model_available: true,
     asr_model_source: "modelscope",
   },
@@ -129,19 +129,19 @@ const defaultResponses: Record<string, unknown> = {
     skippedVersion: null,
   },
   get_llm_config: {
-    output_dir: "C:/FrameQ/outputs",
+    output_dir: "C:/Locus/outputs",
     asr_model: "iic/SenseVoiceSmall",
     supported_asr_models: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
-    config_path: "C:/FrameQ/frameq-settings.json",
+    config_path: "C:/Locus/app-settings.json",
     asr_model_migrated: false,
   },
   get_audio_review_cache_usage: {
     size_bytes: 1_572_864,
-    cache_path: "C:/FrameQ/cache/.frameq-audio-review",
+    cache_path: "C:/Locus/cache/.app-audio-review",
   },
   clear_audio_review_cache: {
     size_bytes: 0,
-    cache_path: "C:/FrameQ/cache/.frameq-audio-review",
+    cache_path: "C:/Locus/cache/.app-audio-review",
   },
   get_insight_preferences: {
     profile: {
@@ -163,7 +163,7 @@ const defaultResponses: Record<string, unknown> = {
       styles: ["professional_analysis"],
       avoid: [],
     },
-    preferencesPath: "C:/FrameQ/insight-preferences.json",
+    preferencesPath: "C:/Locus/insight-preferences.json",
   },
   get_history: [firstHistoryTask, secondHistoryTask].map(
     ({ text: _text, summary: _summary, transcript: _transcript, insights: _insights, ...item }) => item,
@@ -175,7 +175,7 @@ const defaultResponses: Record<string, unknown> = {
   process_video: {
     status: "completed",
     task_id: "live-task",
-    task_dir: "C:/FrameQ/outputs/tasks/live-task",
+    task_dir: "C:/Locus/outputs/tasks/live-task",
     artifacts: firstHistoryTask.artifacts,
     text: "当前处理任务文字稿",
     summary: "",

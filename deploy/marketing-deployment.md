@@ -1,4 +1,4 @@
-# FrameQ 营销站（静态站点）部署文档
+# Locus 营销站（静态站点）部署文档
 
 > 配套文档：`deploy/server-deployment.md`（后端运行手册）。
 > 本文件只讲 **Astro 静态营销站** 的上线，不涉及后端 Server 的数据库、OTP、迁移等流程。
@@ -8,7 +8,7 @@
 ## 1. 概述
 
 营销站是一个纯静态站点（Astro SSG），构建后产出自包含的 `site/dist/`。
-它与 FrameQ 后端 **共用同一个域名 `https://frameq.8xf.pro/`**，由 nginx 在同一 `443 server` 块内分工：
+它与 Locus 后端 **共用同一个域名 `https://frameq.8xf.pro/`**，由 nginx 在同一 `443 server` 块内分工：
 
 | 路径 | 处理方式 |
 |---|---|
@@ -28,7 +28,7 @@ Internet ──▶ Nginx :443 (frameq.8xf.pro)
                   ├── /           ──▶ 静态文件  /home/ubuntu/FrameQ/site   (营销站 dist 内容)
                   ├── /_astro/    ──▶ 静态资源（哈希、immutable）
                   ├── /video/     ──▶ 演示视频 / 海报
-                  └── /api/* 等   ──▶ 反代  127.0.0.1:8787              (FrameQ 后端)
+                  └── /api/* 等   ──▶ 反代  127.0.0.1:8787              (Locus 后端)
 ```
 
 ---
@@ -56,7 +56,7 @@ Internet ──▶ Nginx :443 (frameq.8xf.pro)
 ## 4. 本机构建
 
 ```bash
-cd D:/Github/FrameQ/site
+cd D:/Github/Locus/site
 npm ci
 npm run build
 ```
@@ -123,7 +123,7 @@ sudo systemctl reload nginx
 且运行时完全用不上。实测：`dist/` ≈ 12.5 MB（含 `site.zip` 残留约 6 MB），`site/` ≈ 159 MB。
 
 > 构建后建议先清掉 `site/dist/site.zip`（Astro 偶发残留，约 6 MB，线上用不到）：
-> `rm -f D:/Github/FrameQ/site/dist/site.zip`
+> `rm -f D:/Github/Locus/site/dist/site.zip`
 
 ### 方式 A：手动 scp（当前实际使用）
 
@@ -131,7 +131,7 @@ sudo systemctl reload nginx
 
 ```bash
 # 1) 本机构建
-cd D:/Github/FrameQ/site && npm ci && npm run build
+cd D:/Github/Locus/site && npm ci && npm run build
 rm -f dist/site.zip   # 清掉残留
 
 # 2) 传到服务器（Windows 下用 scp，PowerShell/Git Bash 均可）
@@ -145,7 +145,7 @@ scp -r dist/* user@你的服务器:/home/ubuntu/FrameQ/site/
 ssh user@你的服务器 'rm -rf /home/ubuntu/FrameQ/site/*'
 
 # 本机传新内容
-scp -r D:/Github/FrameQ/site/dist/* user@你的服务器:/home/ubuntu/FrameQ/site/
+scp -r D:/Github/Locus/site/dist/* user@你的服务器:/home/ubuntu/FrameQ/site/
 ```
 
 > 注：`scp -r` 不带 `--delete`，不会自动清旧文件。若不清空，旧的 `_astro/` 哈希资源
@@ -157,7 +157,7 @@ scp -r D:/Github/FrameQ/site/dist/* user@你的服务器:/home/ubuntu/FrameQ/sit
 清掉服务器多余文件，适合习惯 rsync 的场景：
 
 ```bash
-cd D:/Github/FrameQ
+cd D:/Github/Locus
 DEPLOY_SERVER=user@你的服务器 ./scripts/deploy-marketing.sh
 ```
 
@@ -239,14 +239,14 @@ sudo rsync -a --delete /home/ubuntu/FrameQ/site.bak.<时间戳>/ /home/ubuntu/Fr
 
 ```bash
 # 1) 本机：构建
-cd D:/Github/FrameQ/site && npm ci && npm run build
+cd D:/Github/Locus/site && npm ci && npm run build
 rm -f dist/site.zip   # 清掉残留
 
 # 2) 服务器：备份当前站点（可选但建议）
 ssh user@服务器 'sudo cp -a /home/ubuntu/FrameQ/site /home/ubuntu/FrameQ/site.bak.$(date -u +%Y%m%dT%H%M%SZ)'
 
 # 3) 本机：传 dist 内容到 webroot（首次部署或 nginx 有变动时，额外执行第 4 步覆盖 conf）
-scp -r D:/Github/FrameQ/site/dist/* user@服务器:/home/ubuntu/FrameQ/site/
+scp -r D:/Github/Locus/site/dist/* user@服务器:/home/ubuntu/FrameQ/site/
 
 # 4) 服务器：若 nginx 配置有变动，覆盖并校验
 sudo cp deploy/nginx/frameq-server.conf /etc/nginx/sites-available/frameq

@@ -175,7 +175,7 @@ def test_metadata_is_closed_and_consistent(payload: object) -> None:
         parse_note_title_metadata(payload)
 
 
-@pytest.mark.parametrize("event", ["after_journal_prepared", "after_replace:frameq-task.json"])
+@pytest.mark.parametrize("event", ["after_journal_prepared", "after_replace:task.json"])
 def test_failed_title_publication_restores_previous_metadata_and_all_files(
     tmp_path: Path, event: str,
 ) -> None:
@@ -212,7 +212,7 @@ def test_crash_recovery_keeps_prior_title_until_manifest_commit(tmp_path: Path) 
     transcript = context.paths.transcript_txt_path.read_bytes()
 
     def interrupt(event: str) -> None:
-        if event == "after_replace:frameq-task.json":
+        if event == "after_replace:task.json":
             raise PublicationInterrupted()
 
     with pytest.raises(PublicationInterrupted):

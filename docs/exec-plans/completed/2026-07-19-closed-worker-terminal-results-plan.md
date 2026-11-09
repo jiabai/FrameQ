@@ -534,7 +534,7 @@ git commit -m "feat(app): validate worker IPC results"
 **Files:**
 - Modify: `docs/design-docs/2026-07-19-closed-worker-terminal-results.md`
 - Modify: `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md` only if its tracked finding is present
+- Modify: `docs/design-docs/code-audit-uml.md` only if its tracked finding is present
 - Modify: `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `TASKS.md`, `AGENTS.md`
 - Modify: `docs/exec-plans/active/index.md`, `docs/exec-plans/completed/index.md`
 - Move: this plan from `active/` to `completed/`

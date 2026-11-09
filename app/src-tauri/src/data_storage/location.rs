@@ -127,7 +127,7 @@ pub(super) fn display(path:&Path)->String {
 pub(super) fn validate_active(active:&ActiveStorage)->Result<()> {
     safe_filesystem::check_identity(&active.data_root,active.root_identity)?;
     if active.mode=="managed" {
-        let marker:StoreMarker=super::control::read_json(&active.data_root.join(".frameq-storage/store.json"),64*1024)?;
+        let marker:StoreMarker=super::control::read_json(&active.data_root.join(".app-storage/store.json"),64*1024)?;
         if marker.schema_version!=1 || marker.library_id!=active.library_id || marker.generation!=active.generation || marker.root_identity!=active.root_identity {
             return Err(StorageError::new("DataUnavailable"));
         }

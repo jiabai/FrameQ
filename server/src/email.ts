@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { PRODUCT_NAME } from "./brand.js";
 import type { RuntimeEnvironment, SmtpConfig } from "./runtimeConfig.js";
 import type {
   ActivationCodeEmailSender,
@@ -49,7 +50,7 @@ const defaultDevelopmentOutput: DevelopmentOtpOutput = {
     console.warn(message);
   },
   write(email, code) {
-    console.warn(`[frameq-server] DEVELOPMENT OTP for ${email}: ${code}`);
+    console.warn(`[app-server] DEVELOPMENT OTP for ${email}: ${code}`);
   },
 };
 
@@ -79,7 +80,7 @@ export function createOtpSender(
   }
 
   developmentOutput.warn(
-    "[frameq-server] DEVELOPMENT ONLY: console OTP delivery is enabled; never use this mode in production.",
+    "[app-server] DEVELOPMENT ONLY: console OTP delivery is enabled; never use this mode in production.",
   );
   return async (email: string, code: string) => {
     developmentOutput.write(email, code);
@@ -95,16 +96,16 @@ export function buildLoginCodeMessage(input: {
   return {
     from: input.from,
     to: input.to,
-    subject: "FrameQ login code",
+    subject: `${PRODUCT_NAME} login code`,
     text: [
-      `Your FrameQ login code is: ${input.code}`,
+      `Your ${PRODUCT_NAME} login code is: ${input.code}`,
       "",
       "This code expires in 10 minutes. If you did not request it, you can ignore this email.",
     ].join("\n"),
     html: [
       "<!doctype html>",
       '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#171717">',
-      "<h2>FrameQ login code</h2>",
+      "<h2>" + `${PRODUCT_NAME} login code` + "</h2>",
       "<p>Your verification code is:</p>",
       `<p style="font-size:28px;font-weight:700;letter-spacing:4px">${escapedCode}</p>`,
       "<p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>",
@@ -231,9 +232,9 @@ const ACTIVATION_EMAIL_COPY: Record<
   }
 > = {
   "zh-CN": {
-    subject: "FrameQ 激活码",
-    heading: "FrameQ 激活码",
-    intro: "请使用以下信息完成 FrameQ 激活。",
+    subject: `${PRODUCT_NAME} 激活码`,
+    heading: `${PRODUCT_NAME} 激活码`,
+    intro: `请使用以下信息完成 ${PRODUCT_NAME} 激活。`,
     codeLabel: "完整激活码",
     emailLabel: "绑定邮箱",
     deadlineLabel: "兑换截止时间",
@@ -241,9 +242,9 @@ const ACTIVATION_EMAIL_COPY: Record<
     accountNotice: "仅限当前账号使用，请勿转发。",
   },
   "zh-TW": {
-    subject: "FrameQ 啟用碼",
-    heading: "FrameQ 啟用碼",
-    intro: "請使用以下資訊完成 FrameQ 啟用。",
+    subject: `${PRODUCT_NAME} 啟用碼`,
+    heading: `${PRODUCT_NAME} 啟用碼`,
+    intro: `請使用以下資訊完成 ${PRODUCT_NAME} 啟用。`,
     codeLabel: "完整啟用碼",
     emailLabel: "綁定信箱",
     deadlineLabel: "兌換截止時間",
@@ -251,9 +252,9 @@ const ACTIVATION_EMAIL_COPY: Record<
     accountNotice: "僅限目前帳號使用，請勿轉寄。",
   },
   "en-US": {
-    subject: "Your FrameQ activation code",
-    heading: "FrameQ activation code",
-    intro: "Use the details below to activate FrameQ.",
+    subject: `Your ${PRODUCT_NAME} activation code`,
+    heading: `${PRODUCT_NAME} activation code`,
+    intro: `Use the details below to activate ${PRODUCT_NAME}.`,
     codeLabel: "Full activation code",
     emailLabel: "Bound email",
     deadlineLabel: "Redeem by",

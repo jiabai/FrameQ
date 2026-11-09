@@ -14,7 +14,7 @@ function renderWorkspace() {
   const workflow = summarizeWorkerResult({
     status: "completed",
     task_id: "task-1",
-    task_dir: "D:/FrameQ/tasks/task-1",
+    task_dir: "D:/Locus/tasks/task-1",
     artifacts: { transcript_txt: "transcript/transcript.txt" },
     text: "User transcript content",
     summary: "",

@@ -173,7 +173,7 @@ header is preserved and explicitly deferred to a separate behavior/security chan
 - Durable transaction decision: `docs/ARCHITECTURE.md`, section
   `2026-07-10 Server Entitlement Transaction Boundary`.
 - Security constraints: `docs/SECURITY.md`.
-- Current structural audit: `docs/design-docs/frameq-code-audit-uml.md`, sections
+- Current structural audit: `docs/design-docs/code-audit-uml.md`, sections
   `Server Service 与 Store` and `结构压力点与审计问题`.
 
 ## Target File Responsibility Map
@@ -355,7 +355,7 @@ npm.cmd --prefix server run build
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/design-docs/2026-07-21-server-route-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `TASKS.md`
 - Modify: `AGENTS.md`
 - Modify: `docs/exec-plans/active/index.md`

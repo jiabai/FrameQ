@@ -499,7 +499,7 @@ change unless implementation unexpectedly touches IPC, asset scope, or packaged 
 
 ## References
 
-- `docs/design-docs/frameq-code-audit-uml.md`
+- `docs/design-docs/code-audit-uml.md`
 - `docs/design-docs/2026-07-19-app-composition-integration-coverage.md`
 - `docs/design-docs/2026-07-20-transcript-detail-module-split.md`
 - `docs/ARCHITECTURE.md` sections “Local Transcript and AI Workspace Boundary,” “Desktop

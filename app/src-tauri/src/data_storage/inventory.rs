@@ -21,8 +21,8 @@ pub(super) struct Source {pub path:PathBuf,pub destination:PathBuf,pub identity:
 #[derive(Debug,Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub(super) struct Inventory {pub schema_version:u8,pub sources:Vec<Source>,pub entries:Vec<Entry>,pub total_files:u64,pub total_bytes:u64,pub validation:serde_json::Value}
-pub(super) fn inventory_path(target:&Path,id:&str)->PathBuf {target.join(".frameq-storage/operations").join(id).join("inventory.json")}
-pub(super) fn payload_path(target:&Path,id:&str)->PathBuf {target.join(".frameq-storage/operations").join(id).join("payload")}
+pub(super) fn inventory_path(target:&Path,id:&str)->PathBuf {target.join(".app-storage/operations").join(id).join("inventory.json")}
+pub(super) fn payload_path(target:&Path,id:&str)->PathBuf {target.join(".app-storage/operations").join(id).join("payload")}
 pub(super) fn digest(value:&Inventory)->Result<String> {
     Ok(format!("{:x}",Sha256::digest(serde_json::to_vec(value).map_err(|_|StorageError::new("ControlInvalid"))?)))
 }

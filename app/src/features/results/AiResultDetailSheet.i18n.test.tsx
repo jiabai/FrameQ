@@ -13,7 +13,7 @@ function renderDetails() {
   const workflow = summarizeWorkerResult({
     status: "completed",
     task_id: "task-1",
-    task_dir: "D:/FrameQ/tasks/task-1",
+    task_dir: "D:/Locus/tasks/task-1",
     artifacts: { insights: "ai/insights.json" },
     text: "Transcript",
     summary: "",
@@ -38,7 +38,7 @@ function renderDetails() {
     closeDetail: vi.fn(),
     copyDetail: vi.fn(),
     exportDetail: vi.fn(),
-    exportPath: "D:/FrameQ/tasks/task-1/ai/insights.md",
+    exportPath: "D:/Locus/tasks/task-1/ai/insights.md",
     detailText: USER_TOPIC,
   } as unknown as TranscriptDetailController;
 

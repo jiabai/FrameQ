@@ -13,7 +13,7 @@ import {
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 async function createVersionFixture(versions) {
-  const root = await mkdtemp(join(tmpdir(), "frameq-release-version-"));
+  const root = await mkdtemp(join(tmpdir(), "app-release-version-"));
   await mkdir(join(root, "app", "src-tauri"), { recursive: true });
 
   await writeFile(
@@ -70,7 +70,7 @@ test("release version mismatch reports only stable source labels", async () => {
           "Release version mismatch: appPackageLock, cargoManifest",
         );
         assert.doesNotMatch(error.message, /0\.2\.1[45]/);
-        assert.doesNotMatch(error.message, /frameq-release-version/);
+        assert.doesNotMatch(error.message, /app-release-version/);
         return true;
       },
     );

@@ -167,7 +167,7 @@ advisory, unrelated to this Rust-only refactor.
 - `docs/design-docs/2026-07-19-typed-worker-job-facade.md`
 - `docs/design-docs/2026-07-18-rust-worker-runtime-lifecycle.md`
 - `docs/design-docs/2026-07-23-rust-worker-runner-module-split.md`
-- `docs/design-docs/frameq-code-audit-uml.md`
+- `docs/design-docs/code-audit-uml.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SECURITY.md`
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -217,7 +217,7 @@ No new Rust source file or dependency is needed.
   `docs/exec-plans/active/2026-07-24-asr-model-download-job-capability-plan.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/active/index.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`
 - Modify: `TASKS.md`
@@ -856,7 +856,7 @@ git commit -m "refactor(worker): make process specs runtime-private"
   `docs/exec-plans/completed/2026-07-24-asr-model-download-job-capability-plan.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/active/index.md`
 - Modify: `docs/exec-plans/completed/index.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`

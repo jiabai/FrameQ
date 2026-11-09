@@ -11,7 +11,7 @@ struct NativeArticle {
 final class ArticleExtractor {
     private weak var webView: WKWebView?
     private let script: String
-    private let world = WKContentWorld.world(name: "com.frameq.webview-host.extraction.v1")
+    private let world = WKContentWorld.world(name: "pro.8xf.webview-host.extraction.v1")
     private var token: UUID?
     private var callbackTimer: DispatchSourceTimer?
     private var sampleTimer: DispatchSourceTimer?
@@ -152,12 +152,12 @@ final class ArticleExtractor {
     if (!document.documentElement || !document.body || document.readyState !== "complete") {
       return { status: "waiting" };
     }
-    let state = globalThis.__frameqNativeDocumentState;
+    let state = globalThis.__appNativeDocumentState;
     if (!state || state.document !== document) {
       state = { document, revision: 0, observer: null };
       state.observer = new MutationObserver(() => { state.revision += 1; });
       state.observer.observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
-      Object.defineProperty(globalThis, "__frameqNativeDocumentState", { value: state, configurable: false, writable: false });
+      Object.defineProperty(globalThis, "__appNativeDocumentState", { value: state, configurable: false, writable: false });
     }
     const walker = document.createTreeWalker(document, 0xffffffff);
     let count = 0;
@@ -168,8 +168,8 @@ final class ArticleExtractor {
 
     private static let extractScript = """
     try {
-      if (typeof globalThis.__frameqExtractArticle !== "function") return { ok: false, error: "missing_extractor" };
-      const article = globalThis.__frameqExtractArticle(document, sourceURL);
+      if (typeof globalThis.__appExtractArticle !== "function") return { ok: false, error: "missing_extractor" };
+      const article = globalThis.__appExtractArticle(document, sourceURL);
       return { ok: true, title: article.title, text: article.text, markdown: article.markdown };
     } catch (error) {
       const message = error instanceof Error ? error.message : "";

@@ -1,4 +1,4 @@
-# FrameQ
+# Locus
 
 <div align="center">
 
@@ -6,10 +6,10 @@
 
 <sub>开源版 Google NotebookLM · 本地优先 · 视频与网页即来源</sub>
 
-Paste a video link, a web page, or a local media file. FrameQ keeps it on your machine, transcribes it, and turns it into a searchable notebook with summaries, mindmaps, and grounded insight prompts.
+Paste a video link, a web page, or a local media file. Locus keeps it on your machine, transcribes it, and turns it into a searchable notebook with summaries, mindmaps, and grounded insight prompts.
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue?style=flat-square)](LICENSE)
-[![Open Source](https://img.shields.io/badge/Open%20Source-NotebookLM%20alternative-7c3aed?style=flat-square)](#frameq-vs-google-notebooklm)
+[![Open Source](https://img.shields.io/badge/Open%20Source-NotebookLM%20alternative-7c3aed?style=flat-square)](#locus-vs-google-notebooklm)
 
 [![Desktop](https://img.shields.io/badge/Desktop-Tauri-2563eb?style=flat-square)](https://tauri.app/)
 [![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-0ea5e9?style=flat-square)](https://react.dev/)
@@ -23,11 +23,11 @@ Paste a video link, a web page, or a local media file. FrameQ keeps it on your m
 
 ## Overview
 
-**FrameQ is an open-source alternative to Google NotebookLM.** NotebookLM turns the documents you upload into a grounded notebook; FrameQ does the same job for the sources that NotebookLM cannot handle well — video links, web pages, and local media — and it does the heavy lifting on your own machine instead of in a cloud pipeline.
+**Locus is an open-source alternative to Google NotebookLM.** NotebookLM turns the documents you upload into a grounded notebook; Locus does the same job for the sources that NotebookLM cannot handle well — video links, web pages, and local media — and it does the heavy lifting on your own machine instead of in a cloud pipeline.
 
 > 一句话：**把视频、网页和本地音视频变成你的本地笔记库**——转写、摘要、思维导图、要点与解剖都在本机完成，只有你确认的 AI 步骤才会把文字发出去。
 
-Paste a supported public or authorized video link, a public web page, or pick a local video/audio file. FrameQ coordinates the local worker to download the media, extract audio, transcribe speech with SenseVoice Small, and save a note you can reopen, search, collect, and export. Summary, mindmap, insight-topic, transcript-dissection, and draft generation are separate, explicitly confirmed steps that use the server-managed LLM checkout and quota flow.
+Paste a supported public or authorized video link, a public web page, or pick a local video/audio file. Locus coordinates the local worker to download the media, extract audio, transcribe speech with SenseVoice Small, and save a note you can reopen, search, collect, and export. Summary, mindmap, insight-topic, transcript-dissection, and draft generation are separate, explicitly confirmed steps that use the server-managed LLM checkout and quota flow.
 
 > [!NOTE]
 > Latest stable release: **v0.5.1** (Windows x64, macOS Intel, macOS Apple Silicon), published 2026-11-09. See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
@@ -45,13 +45,13 @@ Public or authorized video link / web page / local media file
 ```
 
 > [!IMPORTANT]
-> FrameQ is for public videos, videos you own, or videos you are authorized to process. It is not designed to bypass platform access controls, login walls, CAPTCHA, copyright restrictions, or privacy boundaries.
+> Locus is for public videos, videos you own, or videos you are authorized to process. It is not designed to bypass platform access controls, login walls, CAPTCHA, copyright restrictions, or privacy boundaries.
 
 ## Contents
 
 - [Download Latest Release](#download-latest-release)
-- [FrameQ vs Google NotebookLM](#frameq-vs-google-notebooklm)
-- [Why FrameQ](#why-frameq)
+- [Locus vs Google NotebookLM](#locus-vs-google-notebooklm)
+- [Why Locus](#why-locus)
 - [Current Capabilities](#current-capabilities)
 - [Supported Inputs and Outputs](#supported-inputs-and-outputs)
 - [Architecture](#architecture)
@@ -75,13 +75,15 @@ Grab the newest installer from **[GitHub Releases → latest](https://github.com
 | macOS Apple Silicon | `FrameQ_0.5.1_aarch64.dmg` |
 | macOS Intel | `FrameQ_0.5.1_x64.dmg` |
 
-Each release also carries `latest.json` for the Tauri updater and the on-demand `frameq-pytorch-runtime-*.zip` components. The macOS builds are ad-hoc signed, not notarized — see [macOS install and Gatekeeper](#macos-install-and-gatekeeper) for the one-time approval step.
+Installer assets keep the `FrameQ_` prefix until the first release published under the new name.
 
-## FrameQ vs Google NotebookLM
+Each release also carries `latest.json` for the Tauri updater and the on-demand `pytorch-runtime-*.zip` components. The macOS builds are ad-hoc signed, not notarized — see [macOS install and Gatekeeper](#macos-install-and-gatekeeper) for the one-time approval step.
 
-NotebookLM popularized the "give it your sources, get a grounded notebook back" loop. FrameQ is the **open-source version of that idea**, rebuilt around two constraints NotebookLM does not have: your media stays local, and video is a first-class source rather than an afterthought.
+## Locus vs Google NotebookLM
 
-| Capability | Google NotebookLM | FrameQ |
+NotebookLM popularized the "give it your sources, get a grounded notebook back" loop. Locus is the **open-source version of that idea**, rebuilt around two constraints NotebookLM does not have: your media stays local, and video is a first-class source rather than an afterthought.
+
+| Capability | Google NotebookLM | Locus |
 | --- | --- | --- |
 | License and hosting | Proprietary, cloud-only | **Apache-2.0**, desktop app you install and run |
 | Video as a source | Accepts some video URLs as a text source | **Full local pipeline**: download, `ffprobe`, audio extraction, local ASR, timestamped transcript |
@@ -90,12 +92,12 @@ NotebookLM popularized the "give it your sources, get a grounded notebook back" 
 | Where media is processed | Uploaded to Google | **On your machine.** Video, audio, transcripts and model caches stay in app-local storage |
 | Transcription | Cloud ASR | **SenseVoice Small, local**, ONNX runtime in the installer |
 | Grounded artifacts | Audio/video overviews, mindmaps, reports, study aids | Summary, Mermaid mindmap, insight topics, transcript dissection, platform-style draft |
-| Source-grounded chat | Yes, with citations | **Not yet** — FrameQ generates artifacts rather than answering follow-up questions |
+| Source-grounded chat | Yes, with citations | **Not yet** — Locus generates artifacts rather than answering follow-up questions |
 | Multi-source synthesis | Many sources in one notebook | One source per note; collections group notes but do not cross-analyze them |
 
-Honest boundary: FrameQ is not a feature-for-feature clone. It covers the *source → transcript → notebook → grounded artifacts* path and adds local media processing; it does not yet ship an audio overview, a chat surface, or cross-document reasoning. See [Current Capabilities](#current-capabilities) for exactly what exists today.
+Honest boundary: Locus is not a feature-for-feature clone. It covers the *source → transcript → notebook → grounded artifacts* path and adds local media processing; it does not yet ship an audio overview, a chat surface, or cross-document reasoning. See [Current Capabilities](#current-capabilities) for exactly what exists today.
 
-## Why FrameQ
+## Why Locus
 
 | Principle | What it means |
 | --- | --- |
@@ -127,7 +129,7 @@ Honest boundary: FrameQ is not a feature-for-feature clone. It covers the *sourc
 - Server-managed account, activation-code monthly pass entitlement, self-service activation-email requests for inactive or expired desktop accounts, LLM checkout, and insight quota service.
 - Browser-side per-user Web dashboard (`/dashboard`) with email-OTP login, plus per-page `zh-CN` / `en` / `zh-TW` switching on the `/login`, `/dashboard`, `/admin/login`, and `/admin` pages.
 - User-initiated, local-only desktop diagnostic export of the most recent seven days from the failure UI and Settings. Douyin share-page retries are recorded as fixed log entries, so a run that only succeeded after a retry is distinguishable from a first-try success.
-- Windows installer preflight: free-space and writability checks before any files are written, one Chinese failure message naming the cause and the log path, and a step log at `%TEMP%\FrameQ-install.log`. Silent installs record the same steps without blocking.
+- Windows installer preflight: free-space and writability checks before any files are written, one Chinese failure message naming the cause and the log path, and a step log at `%TEMP%\install.log`. Silent installs record the same steps without blocking.
 - Motion-enhanced UI with reduced-motion support (processing stage, task state, ASR download progress, AI target, and history list).
 - Exported artifacts:
   - `outputs/tasks/<task_id>/media/video.mp4`
@@ -148,7 +150,7 @@ Honest boundary: FrameQ is not a feature-for-feature clone. It covers the *sourc
 
 | Area | Supported today |
 | --- | --- |
-| Input workflow | One source at a time: a public or user-authorized video link, a public web page, or a local video/audio file. FrameQ is a local notebook for that source, not a general downloader or batch queue |
+| Input workflow | One source at a time: a public or user-authorized video link, a public web page, or a local video/audio file. Locus is a local notebook for that source, not a general downloader or batch queue |
 | Local media files | One video or audio file picked from disk; transcribed locally without any network download |
 | Public web pages | Any page a system WebView can load without login, paywall, or CAPTCHA; the body is extracted into a Markdown note with its source URL and UTC extraction time |
 | Douyin public videos | Long links, short links, share text, `/note/{id}`, `/share/slides/{id}`, `modal_id`, and `aweme_id` inputs when they resolve to a playable public video |
@@ -160,7 +162,7 @@ Honest boundary: FrameQ is not a feature-for-feature clone. It covers the *sourc
 | Video, audio, and transcript viewing | Locate generated files in the system file manager |
 
 > [!NOTE]
-> Platform links may still fail if they are expired, private, region-blocked, login-gated, CAPTCHA-gated, age-restricted, member-only, DRM-protected, or otherwise unavailable to the local worker. FrameQ does not provide platform login, browser-cookie import, proxy setup, stream picking, batch queues, or a download center.
+> Platform links may still fail if they are expired, private, region-blocked, login-gated, CAPTCHA-gated, age-restricted, member-only, DRM-protected, or otherwise unavailable to the local worker. Locus does not provide platform login, browser-cookie import, proxy setup, stream picking, batch queues, or a download center.
 
 ## Architecture
 
@@ -177,7 +179,7 @@ flowchart LR
   Files --> App
 
   App --> Account["Account and Quota API"]
-  Account --> Server["FrameQ Server"]
+  Account --> Server["Locus Server"]
   Server --> SQLite["SQLite"]
   Server --> SMTP["SMTP OTP + activation email"]
 
@@ -228,7 +230,7 @@ The built executable is written to:
 app/src-tauri/target/release/app.exe
 ```
 
-The desktop app keeps its local state in `%LOCALAPPDATA%\com.frameq.desktop` (`~/Library/Application Support/com.frameq.desktop` on macOS). When you want a recovery point before a dev run:
+The desktop app keeps its local state in `%LOCALAPPDATA%\pro.8xf.app` (`~/Library/Application Support/pro.8xf.app` on macOS). When you want a recovery point before a dev run:
 
 ```powershell
 npm --prefix app run tauri:dev:safe    # snapshot first, then start the dev app
@@ -253,7 +255,7 @@ The Python and ffmpeg values may be URLs or local archive paths. Use `--target w
 
 The installer does not bundle SenseVoice Small weights, and it does not bundle the PyTorch ASR runtime either: `funasr`, `torch`, and `torchaudio` live in the `pytorch` extra of `pyproject.toml`, and the build script exports the bundled runtime without extras. It prunes non-runtime Python debug, cache, test, and header artifacts; keeps `resources/models` out of the bundle; and guides the user through downloading `iic/SenseVoiceSmall-onnx` into app-local data on first run. Upgrades from a settings file that still held the old PyTorch default are moved to the ONNX model once, and the settings sheet explains the change with a dismissible notice.
 
-The same build also assembles the PyTorch runtime component: it installs `uv export --no-dev --extra pytorch` into a standalone `site-packages/`, removes every distribution the bundled runtime already provides (matched by METADATA name, files located via each dist's RECORD), writes a `runtime-manifest.json` carrying the `uv.lock` SHA-256 fingerprint, and packs `frameq-pytorch-runtime-<target>.zip`. The CI jobs upload that zip to the GitHub release next to the installer; the desktop downloads it on demand and the worker compares fingerprints before injecting it into `sys.path` (see `worker/worker_core/runtime_component.py`).
+The same build also assembles the PyTorch runtime component: it installs `uv export --no-dev --extra pytorch` into a standalone `site-packages/`, removes every distribution the bundled runtime already provides (matched by METADATA name, files located via each dist's RECORD), writes a `runtime-manifest.json` carrying the `uv.lock` SHA-256 fingerprint, and packs `pytorch-runtime-<target>.zip`. The CI jobs upload that zip to the GitHub release next to the installer; the desktop downloads it on demand and the worker compares fingerprints before injecting it into `sys.path` (see `worker/worker_core/runtime_component.py`).
 
 On the macOS Intel (`macos-x64`) build, the newest versions of some native dependencies ship no prebuilt x86_64 wheel — `llvmlite` (reached through `librosa` → `numba`, shared by both ASR runtimes) is the notable one, and building it from source needs a matching LLVM install the runners lack. The build therefore pins `numba`/`llvmlite` to the last releases with self-contained macOS x86_64 wheels (see the pins in `pyproject.toml`), and installs with `pip install --only-binary=llvmlite` so a missing wheel fails loudly instead of falling back to a source build that would bake in Homebrew paths (for example `/usr/local/opt/zstd/lib/libzstd.1.dylib`) and break on clean user Macs.
 
@@ -264,10 +266,10 @@ Two build-time checks then confirm the packaged runtime is self-contained, and t
 
 ### GitHub Releases updater artifacts
 
-FrameQ desktop uses Tauri signed updater artifacts hosted on GitHub Releases. The bundled updater endpoint is:
+Locus desktop uses Tauri signed updater artifacts hosted on GitHub Releases. The bundled updater endpoint is:
 
 ```text
-https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1
+https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?updater=1
 ```
 
 The GitHub Actions workflow `.github/workflows/desktop-release.yml` prepares the bundled runtime resources, builds the Windows NSIS installer, uploads updater artifacts, uploads `latest.json` for Tauri updater checks, and uploads separate macOS Intel / Apple Silicon DMG assets. Configure these repository secrets before running it:
@@ -290,7 +292,7 @@ The `APP_PYTHON_STANDALONE_URL` / `APP_FFMPEG_ARCHIVE_URL` pair is used only by 
 > [!IMPORTANT]
 > `APP_PYTHON_STANDALONE_URL_MACOS_X64` must be a **CPython 3.11 or 3.12** standalone. The `pytorch` extra pins `torch==2.2.2` on Intel (the last PyTorch release with macOS x86_64 wheels), which publishes wheels only up to CPython 3.12 (cp312). A 3.13+ standalone has no matching `torch==2.2.2` wheel, so the Intel job fails when the build script installs the PyTorch component. The installer's launcher setup is CPython-minor-agnostic, so this torch pin is the only Python-version constraint. Apple Silicon and Windows track modern torch and are not affected.
 
-Create or update a release by pushing a `v*` tag or running the workflow manually with a tag such as `v0.1.0`. Manual runs can disable `build_windows_updater`, `build_macos_x64`, or `build_macos_arm64` when patching only one release asset. Draft releases are useful for inspection, but updater clients only resolve `releases/latest/download/latest.json?frameq-updater=1` after the release is published as a non-draft, non-prerelease release.
+Create or update a release by pushing a `v*` tag or running the workflow manually with a tag such as `v0.1.0`. Manual runs can disable `build_windows_updater`, `build_macos_x64`, or `build_macos_arm64` when patching only one release asset. Draft releases are useful for inspection, but updater clients only resolve `releases/latest/download/latest.json?updater=1` after the release is published as a non-draft, non-prerelease release.
 
 Release operators can override the default ModelScope download source:
 
@@ -322,12 +324,12 @@ signed, notarized, App Store reviewed, or suitable for silent enterprise deploym
 consumer/commercial release that removes the manual Gatekeeper step still requires Developer ID
 signing and notarization.
 
-- **macOS 15 Sequoia and later:** double-click the app once, dismiss the warning, then open **System Settings → Privacy & Security**, scroll to the FrameQ message, and click **Open Anyway**.
+- **macOS 15 Sequoia and later:** double-click the app once, dismiss the warning, then open **System Settings → Privacy & Security**, scroll to the Locus message, and click **Open Anyway**.
 - **macOS 14 and earlier:** Control-click (right-click) the app in `/Applications` and choose **Open**, then confirm **Open** in the dialog.
 - **Terminal fallback (any version):** remove the download quarantine attribute directly.
 
   ```bash
-  xattr -dr com.apple.quarantine /Applications/FrameQ.app
+  xattr -dr com.apple.quarantine /Applications/Locus.app
   ```
 
 Removing this one-time prompt entirely requires an Apple Developer Program membership plus notarization, which is intentionally deferred until the desktop app proves commercial demand. Until then, ad-hoc signing keeps the failure mode to a bypassable prompt rather than the non-recoverable "app is damaged" error, as long as the signed `.app` is not modified after signing. See `docs/exec-plans/tech-debt-tracker.md` for the removal condition.
@@ -338,7 +340,7 @@ macOS updates are manual for the same reason: the Tauri updater only publishes W
 
 The desktop app stores non-LLM local settings in its app-local data `.env` file. The settings sheet creates this file when needed, shows its path, and can reveal it in the system file manager.
 
-This file is for local output, ASR, and model-download settings only. Insight-topic LLM configuration is managed on the FrameQ server and is not read from desktop `.env` files. Do not put `APP_LLM_*` keys in desktop `.env`; legacy local LLM keys are ignored by the desktop worker.
+This file is for local output, ASR, and model-download settings only. Insight-topic LLM configuration is managed on the Locus server and is not read from desktop `.env` files. Do not put `APP_LLM_*` keys in desktop `.env`; legacy local LLM keys are ignored by the desktop worker.
 
 ## Server Deployment
 
@@ -364,19 +366,19 @@ Deployment files:
 | File | Purpose |
 | --- | --- |
 | `deploy/server-deployment.md` | Production deployment runbook |
-| `deploy/nginx/frameq-server.conf` | Nginx reverse proxy for `frameq.8xf.pro` |
-| `deploy/nginx/frameq-proxy-headers.conf` | Shared proxy headers snippet |
-| `deploy/systemd/frameq-server.service` | systemd service example |
+| `deploy/nginx/app-server.conf` | Nginx reverse proxy for `frameq.8xf.pro` |
+| `deploy/nginx/app-proxy-headers.conf` | Shared proxy headers snippet |
+| `deploy/systemd/app-server.service` | systemd service example |
 
 Recommended production shape:
 
 ```text
 Nginx :443 on frameq.8xf.pro
-  -> FrameQ server 127.0.0.1:8787
-      -> server/data/frameq.sqlite
+  -> Locus server 127.0.0.1:8787
+      -> server/data/app.sqlite
 ```
 
-The server uses SQLite, so run a single FrameQ server instance against a given database.
+The server uses SQLite, so run a single Locus server instance against a given database.
 
 Server checks:
 
@@ -486,8 +488,8 @@ npm --prefix app run tauri -- build --no-bundle
 
 ## Security Boundary
 
-- FrameQ is for public videos, user-owned videos, or videos the user is authorized to process.
-- FrameQ does not implement bypasses for platform login walls, access controls, CAPTCHA, or privacy restrictions.
+- Locus is for public videos, user-owned videos, or videos the user is authorized to process.
+- Locus does not implement bypasses for platform login walls, access controls, CAPTCHA, or privacy restrictions.
 - The account service stores email accounts, OTP metadata, session token hashes, activation-code records, entitlements, encrypted LLM config, and quota events.
 - Self-service activation email derives the destination strictly from the authenticated session. Plaintext codes live only in one email-sending process memory window and the outbound email; they are excluded from logs, Admin HTML, desktop IPC responses, diagnostics, and local UI persistence.
 - The self-service path has no console delivery fallback. Missing SMTP keeps the capability unavailable, and production requires full SMTP configuration before startup succeeds.

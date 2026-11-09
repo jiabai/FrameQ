@@ -6,7 +6,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use unicode_general_category::{get_general_category, GeneralCategory};
 
-const FILE_NAME: &str = "frameq-note-metadata.json";
+const FILE_NAME: &str = "app-note-metadata.json";
 const MAX_FILE_BYTES: u64 = 4_096;
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]

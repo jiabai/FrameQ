@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "FrameQ",
+  "productName": "Locus",
   "version": "0.5.1",
-  "identifier": "com.frameq.desktop",
+  "identifier": "pro.8xf.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "FrameQ",
+        "title": "Locus",
         "width": 1180,
         "height": 760,
         "minWidth": 720,
@@ -34,7 +34,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBOTY0QTMzNkM2QkRFQjEKUldTeDNtdHNNMHFXdXFaTDMvMkdOZEJPdEJWaWorUmxjQlQ2Sk9wSmtDMitBb25yMGVTN09FaUwK",
       "endpoints": [
-        "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?frameq-updater=1"
+        "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?updater=1"
       ],
       "windows": {
         "installMode": "passive"
@@ -42,7 +42,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["frameq"]
+        "schemes": ["pro.8xf.app"]
       }
     }
   },

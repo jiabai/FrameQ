@@ -204,7 +204,7 @@ changes. Existing `audioop` deprecation and Vite chunk-size warnings are unrelat
   `app/src-tauri/resources/worker/frameq_worker/`.
 - Active future feature: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`.
 - Durable architecture/security: `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, and
-  `docs/design-docs/frameq-code-audit-uml.md`.
+  `docs/design-docs/code-audit-uml.md`.
 
 ## Target File Responsibility Map
 
@@ -670,7 +670,7 @@ themselves are the compatibility API.
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/SECURITY.md`
 - Modify: `docs/design-docs/2026-07-21-worker-pipeline-module-split.md`
-- Modify: `docs/design-docs/frameq-code-audit-uml.md`
+- Modify: `docs/design-docs/code-audit-uml.md`
 - Modify: `docs/exec-plans/active/2026-07-16-local-media-file-import-plan.md`
 - Modify: `docs/exec-plans/tech-debt-tracker.md`
 - Modify: `TASKS.md`

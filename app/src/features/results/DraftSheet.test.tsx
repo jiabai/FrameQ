@@ -59,7 +59,7 @@ function workflowWithSeed(): WorkflowState {
   const state = summarizeWorkerResult({
     status: "completed",
     task_id: "task-draft",
-    task_dir: "D:/FrameQ/outputs/tasks/task-draft",
+    task_dir: "D:/Locus/outputs/tasks/task-draft",
     artifacts: {
       transcript_txt: "transcript/transcript.txt",
       insights_md: "ai/insights.md",
@@ -88,7 +88,7 @@ describe("DraftConfirmationSheet", () => {
         workflow={workflow}
         busy={false}
         quotaRemaining={5}
-        transcriptPath="D:/FrameQ/outputs/tasks/task-draft/transcript/transcript.txt"
+        transcriptPath="D:/Locus/outputs/tasks/task-draft/transcript/transcript.txt"
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,

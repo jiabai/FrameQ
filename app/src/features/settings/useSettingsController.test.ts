@@ -76,10 +76,10 @@ function createHookHarness(): HookHarness {
 
 function createLlmConfig(overrides: Partial<LlmConfig> = {}): LlmConfig {
   return {
-    outputDir: "D:/FrameQ/outputs",
+    outputDir: "D:/Locus/outputs",
     asrModel: "iic/SenseVoiceSmall",
     supportedAsrModels: ["iic/SenseVoiceSmall", "iic/SenseVoiceSmall-onnx"],
-    configPath: "D:/FrameQ/app-data/frameq-settings.json",
+    configPath: "D:/Locus/app-data/app-settings.json",
     asrModelMigrated: false,
     ...overrides,
   };
@@ -90,7 +90,7 @@ function createAudioCacheUsage(
 ): AudioReviewCacheUsage {
   return {
     sizeBytes: 4096,
-    cachePath: "D:/FrameQ/app-cache/.frameq-audio-review",
+    cachePath: "D:/Locus/app-cache/.app-audio-review",
     ...overrides,
   };
 }
@@ -104,7 +104,7 @@ function createInsightPreferences(
     profileStatus: "missing",
     profileError: null,
     defaultGenerationPreferences: null,
-    preferencesPath: "D:/FrameQ/app-data/insight-preferences.json",
+    preferencesPath: "D:/Locus/app-data/insight-preferences.json",
     ...overrides,
   };
 }
@@ -343,10 +343,10 @@ describe("useSettingsController", () => {
 
   test("saves draft settings and refreshes saved config metadata", async () => {
     const savedConfig = createLlmConfig({
-      outputDir: "D:/FrameQ/new-output",
+      outputDir: "D:/Locus/new-output",
       asrModel: "iic/SenseVoiceSmall-onnx",
       supportedAsrModels: ["iic/SenseVoiceSmall-onnx"],
-      configPath: "D:/FrameQ/app-data/new-settings.json",
+      configPath: "D:/Locus/app-data/new-settings.json",
     });
     mocks.saveLlmConfig.mockResolvedValueOnce(savedConfig);
     const { render } = await createController();
@@ -472,7 +472,7 @@ describe("useSettingsController", () => {
     const clearedPreferences = createInsightPreferences({
       profileSkipped: false,
       profileStatus: "missing",
-      preferencesPath: "D:/FrameQ/app-data/cleared-preferences.json",
+      preferencesPath: "D:/Locus/app-data/cleared-preferences.json",
     });
     mocks.clearInspirationProfile.mockResolvedValueOnce(clearedPreferences);
     const { render } = await createController();
