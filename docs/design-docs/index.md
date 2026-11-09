@@ -71,6 +71,7 @@ Locus 持久设计决策文档总入口。`AGENTS.md` 不再逐条列出设计�
 
 ## 功能与特性
 
+- `2026-11-10-llm-byok-architecture.md` — 自定义 LLM 配置（BYOK）架构：四种方案对比，选定「本机系统钥匙串 + Rust 按来源注入 + worker 复用现有 provider 分支」；写清密钥不出机的边界、双模式契约改动、`env_remove` 分支化与草稿半托管状态。
 - `2026-08-24-self-service-email-activation-code.md` — 未授权或授权过期用户自助申领账号绑定的邮件激活码，保留手动兑换与管理员通用码
 - `2026-07-31-transcript-dissection-feature.md` — 文字稿解剖（Transcript Dissection）功能
 - `2026-07-15-draft-result-editor.md` — 文字稿结果：只读预览 → 可编辑 + 落盘 + 重新生成
