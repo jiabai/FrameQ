@@ -29,7 +29,7 @@ Last updated: 2026-11-09
 - Resolution: `worker/frameq_worker/media.py` applies a 20-minute `subprocess.run` budget only to commands shaped `sys.executable -m yt_dlp ...`. `ffprobe` and `ffmpeg` keep their existing execution. On expiry `run_command` returns a `VIDEO_DOWNLOAD_TIMEOUT` result and `download_video` raises immediately, skipping subtitle retry, the YouTube single retry and all platform fallbacks; `MediaPreparationFacade` reports it through the existing `VIDEO_DOWNLOAD_FAILED` path with no new frontend code.
 - Evidence: `uv run ruff check worker` clean; `uv run pytest worker/tests/test_media.py` 40 passed, including five new cases with one real hung child process terminated inside a short injected budget; `uv run pytest worker/tests` 1275 passed / 4 skipped; `node --test scripts/tests/*.test.mjs` 57 passed; `uv run python -m pytest scripts/tests` 1 passed; `validate_agents_docs.py --level WARN` 0 errors / 0 warnings; `git diff --check` clean. A real `yt-dlp 2026.10.21` child completed `run_command` with returncode 0 under the 1200-second default budget.
 - Boundary: a public-network YouTube download regression was blocked by the local proxy returning `502 Bad Gateway` on `127.0.0.1:7890`; the substituted checks do not replace that evidence. Python terminates the yt-dlp parent only, so an ffmpeg merge child may briefly remain until the desktop `ProcessSupervisor` terminates the worker tree. A fixed budget can end a very slow large download early.
-- Plan: `docs/exec-plans/active/2026-11-09-bounded-ytdlp-download-plan.md`.
+- Plan: `docs/exec-plans/completed/2026-11-09-bounded-ytdlp-download-plan.md` (archived 2026-11-09 after the public YouTube download regression passed).
 
 ### Hosted Linux Server Signal Evidence
 

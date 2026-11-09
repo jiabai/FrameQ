@@ -2,6 +2,7 @@
 
 | File | Focus |
 |------|-------|
+| `2026-11-09-bounded-ytdlp-download-plan.md` | yt-dlp 下载子进程 20 分钟固定预算：`run_command` 按 `sys.executable -m yt_dlp` 形状传 `subprocess.run(timeout=...)`，`TimeoutExpired` 转 `VIDEO_DOWNLOAD_TIMEOUT`，`download_video` 命中即早退并沿用 `VIDEO_DOWNLOAD_FAILED`；`ffprobe`/`ffmpeg` 与单参数 `CommandRunner` 不变。ruff、worker 1275 项、Node 57 项、Python 脚本 1 项、文档治理与 diff 检查全绿，真实挂起子进程终止验证通过。公网回归 `https://www.youtube.com/shorts/nnV9a4w2WjQ` 返回 `returncode=0`，产物 1,557,058 字节 / 59.44 秒，ffprobe 确认 av1 视频 + aac 音频。踩坑记录：`uv run` 子进程会读到 WorkBuddy 内置代理（对 YouTube 返 502），须在 Python 进程内改写小写 `https_proxy` 指向系统代理 7890 并把 `app/src-tauri/resources/bin` 前置进 PATH。残余风险：合并阶段 ffmpeg 可能短时残留、极慢网络下大文件被预算提前结束、公网代理挂起现场未复现。 |
 | `2026-10-29-entitlement-expiry-only-plan.md` | 权益持久化状态移除：2026-11-08 用户授权后按 runbook 部署生产（停服备份 `20261108T103403Z` + 异地 ACL 副本 + 隔离恢复演练，旧代码 preflight 与 7 条迁移历史核对通过），checkout `bf92310`、`npm ci`、Prisma generate、39 文件 400 项测试、`tsc`、第 8 条迁移 `202610290001_remove_entitlement_status`、migrate status、新代码 preflight、启动/restart 健康检查全通过，`Entitlement` 已无 `status` 列。残余风险：真实账号额度到期人工验收未做；回滚必须整套恢复。 |
 | `2026-10-29-email-rate-limit-retry-time-plan.md` | 邮件限流最晚解除时间：随 2026-11-08 生产部署上线，`rateLimits.ts` 线上哈希与 main 一致，POST 激活码/结账路由 auth-first 401 验证通过。残余风险：未发起真实邮件 OTP 请求验证 429 的 `retry_at` 响应体（会触发真实投递）。 |
 | `2026-10-28-server-update-manifest-removal-plan.md` | 服务端更新清单与路由移除：2026-11-08 生产部署，`GET /api/desktop/updates/latest` 线上返回 404 Fastify 三件套，桌面账号/结账/激活码路由 auth-first 401，health 双通道 200。完整部署证据（备份、演练、测试、迁移、重启）记在计划内。残余风险：真实 OTP/管理员登录、ticket 交换、幂等额度结账与日志脱敏人工验收未做。 |

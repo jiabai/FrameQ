@@ -1106,10 +1106,13 @@
   结果形状。门禁：ruff 通过；worker 聚焦 40 项、全量 1275 passed / 4 skipped；Node 脚本 57 项；
   Python 脚本 1 项；文档治理 0 错误 0 警告；`git diff --check` 通过。真实 `yt-dlp 2026.10.21`
   子进程在 1200 秒默认预算下 `returncode=0`。产品规格
-  `docs/product-specs/2026-11-09-bounded-ytdlp-download.md`，执行计划
-  `docs/exec-plans/active/2026-11-09-bounded-ytdlp-download-plan.md`，技术债 Medium 第一条已移入
-  Completed / Resolved。**未跑**：公网 YouTube 下载回归，本机代理 `127.0.0.1:7890` 返回
-  `502 Bad Gateway`，系统代理注册表值同为 7890，内置代理 `127.0.0.1:58593` 亦不可达；代理恢复后补跑。
+  `docs/product-specs/2026-11-09-bounded-ytdlp-download.md`，执行计划已归档
+  `docs/exec-plans/completed/2026-11-09-bounded-ytdlp-download-plan.md`，技术债 Medium 第一条已移入
+  Completed / Resolved。公网回归同日补跑通过：根因是 `uv run` 子进程读到 WorkBuddy 内置代理
+  `127.0.0.1:54717`（对 YouTube 返 502），shell 前缀设的 7890 未传导；在 Python 进程内改写小写
+  `https_proxy`/`http_proxy` 指向系统代理 7890、把 `app/src-tauri/resources/bin` 前置进 PATH 后，
+  `download_video('https://www.youtube.com/shorts/nnV9a4w2WjQ')` 返回 `returncode=0`，产物
+  1,557,058 字节 / 59.443084 秒，`ffprobe` 确认 av1 360x640 视频 + aac 音频。
   Residual risk：Python 只终止 yt-dlp 父进程，合并阶段派生的 ffmpeg 可能残留至 `ProcessSupervisor`
   终止整个 worker 进程树；固定预算在极慢网络下可能提前结束大文件下载。
 
