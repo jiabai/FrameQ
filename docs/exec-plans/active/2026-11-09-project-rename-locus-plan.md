@@ -25,7 +25,7 @@ The de-branding pass must land before the brand switch. If the brand is replaced
 - [x] 2026-11-09: Step 3-4 — identifier `pro.8xf.app`, `app.sqlite`, `desktop.log`, `task.json`, `.artifact-*`; contract, Python and Rust updated together; Rust contract tests 47 passed.
 - [x] 2026-11-09: Step 5 — `pytorch-runtime-<target>.zip`, `?updater=1`, NSIS `AppLog`/`AppFreeSpaceMb`/`AppCheckWritability`/`AppProbe`, `install.log`, `.install-probe`, neutral scratch names, webview host bundle `AppWebViewHost.app`, `app-webview-host.exe`.
 - [x] 2026-11-09: Step 6-7 — brand constants on all four surfaces, `{{product}}` placeholders in desktop and server copy, `FrameQ` → `Locus` across living code and docs; Chinese name removed.
-- [ ] 2026-11-09: Step 8 — full gate set and local launch check.
+- [x] 2026-11-09: Step 8 — gates green: ruff clean, worker 1276 passed / 4 skipped, frontend 1506 passed / 1 skipped, server 375 passed / 1 skipped, scripts 57 + 1, docs 0/0, `git diff --check`, `tauri build --no-bundle` built `app.exe` (20,242,432 bytes), launched with title `Locus`, new data dir `pro.8xf.app`, log `desktop.log`, clean exit 0. Rust `--lib`: 507 passed / 53 failed, all 53 in the known `data_storage` / `history_deletion` / `web_page` file-permission family this sandbox cannot host.
 
 ## Validation
 
@@ -58,4 +58,25 @@ The de-branding pass must land before the brand switch. If the brand is replaced
 
 ## Outcomes & Retrospective
 
-Pending.
+Done in one pass, commit `5d312de` (290 files). The product is Locus everywhere a user can see it, and no machine identifier carries the brand any more:
+
+| Surface | Before | After |
+| --- | --- | --- |
+| Python package / distribution | `frameq_worker` / `frameq-worker` | `worker_core` / `worker-core` |
+| Environment variables (103) | `FRAMEQ_*` | `APP_*` |
+| App identifier / data dir | `com.frameq.desktop` | `pro.8xf.app` |
+| Database file | `frameq.sqlite` | `app.sqlite` |
+| Artifact contract | `frameq-task.json`, `.frameq-artifact-*` | `task.json`, `.artifact-*` |
+| Desktop log | `frameq-desktop.log` | `desktop.log` |
+| Diagnostics zip | `FrameQ-diagnostics-*.zip` | `diagnostics-*.zip` |
+| Runtime component asset | `frameq-pytorch-runtime-*.zip` | `pytorch-runtime-*.zip` |
+| Deep link | `frameq://auth/callback` | `pro.8xf.app://auth/callback` |
+| Installer log / probe | `FrameQ-install.log`, `.frameq-install-probe` | `install.log`, `.install-probe` |
+| Brand value | `FrameQ` (106 literals) | `Locus` via 4 constants + `{{product}}` |
+
+Residual work, deliberately outside this change:
+
+- The previous app-data directory `%LOCALAPPDATA%\com.frameq.desktop` is untouched. Nothing migrates it; the new build starts from an empty library unless the folder is moved by hand.
+- Production identities still read `frameq`: domain `frameq.8xf.pro`, repository `jiabai/FrameQ`, server paths `/opt/frameq/FrameQ` and service `frameq-server`, database file `frameq.sqlite`. Changing them is deployment work.
+- `site/src/consts.ts` now derives installer names from `PRODUCT_NAME`, so the marketing site must not be deployed before the first Locus release publishes `Locus_*` assets.
+- macOS-specific pieces (helper bundle `AppWebViewHost.app`, ad-hoc signing, DMG naming) changed but cannot be built or verified on this machine; the next hosted macOS run is the first real proof.
