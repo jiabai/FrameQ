@@ -1097,6 +1097,20 @@
 
 ## 已完成
 
+- [x] Make Douyin share page retries visible in exported diagnostics (2026-11-09) — ✅ worker 早已通过封闭进度契约
+  上报 `douyin.page.retrying`，缺的是桌面端：进度事件不进诊断包，
+  `runner/progress.rs` 在路由已校验事件时识别该 message code，按固定文案追加桌面日志
+  `worker.douyin.share_page.retry`（detail 恒为 `stage=douyin_share_page`），
+  `diagnostics/export.rs` 的 `safe_desktop_event` 把它列入白名单输出为
+  `worker_douyin_share_page_retry`；导出包 `frameq-desktop.log` 中一条记录对应一次重试，
+  首次成功与重试后成功可区分。未改 `FRAMEQ_DIAGNOSTIC` DTO、未 bump 契约版本、未改 worker，
+  普通 stderr 仍只在模型下载时才落盘。门禁：`cargo test --lib share_page` 2 项通过（含真实
+  `ProcessVideo` 运行与一条对照）；`cargo test --lib` 510 passed / 50 failed / 29 ignored，
+  同一命令在 `git stash` 回退的 HEAD 上为 508 passed / 50 failed / 29 ignored，失败全部落在
+  `data_storage`、`history_deletion`、`web_page` 的文件权限用例，progress/diagnostics/export
+  无失败，并已用 stash 复现同一失败确认与本次改动无关。技术债 Medium 对应条目已移入
+  Completed / Resolved。
+
 - [x] Remove the fixed four-second wait from the MarkdownSplitter child-process test (2026-11-09) — ✅
   `worker/tests/test_insights.py` 改为两段事件等待：子进程先发 `started` 信号（30 秒预算，覆盖
   `spawn` 解释器启动），再发结果（10 秒预算，只约束 splitter 本身）；任一超时都终止子进程并抛

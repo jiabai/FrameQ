@@ -16,6 +16,10 @@ use std::time::{Duration, Instant};
 use tauri::{Emitter, Window};
 
 const MAX_DIAGNOSTIC_EVENT_CHARS: usize = 1_000;
+// 分享页重试只通过封闭的进度契约上报，诊断包不会记录进度事件，因此把它折成一条
+// 固定文案的桌面日志：导出时按条数即可区分「首次成功」与「重试后才成功」。
+const DOUYIN_SHARE_PAGE_RETRY_CODE: &str = "douyin.page.retrying";
+const DOUYIN_SHARE_PAGE_RETRY_LOG_EVENT: &str = "worker.douyin.share_page.retry";
 
 #[cfg(not(test))]
 pub(crate) enum ProgressRoute {
@@ -238,7 +242,9 @@ pub(super) fn route_stderr_record(
 ) {
     match record {
         StderrRecord::ValidatedProgress(payload) => {
+            // 先记账再落日志：日志写盘不能拖慢看门狗的活动重置。
             watchdog.record_validated_progress();
+            record_share_page_retry(paths, &payload);
             progress.emit(payload);
         }
         StderrRecord::InvalidProgress(detail) => {
@@ -268,6 +274,19 @@ pub(super) fn route_stderr_record(
         }
         StderrRecord::Empty => {}
     }
+}
+
+fn record_share_page_retry(paths: &RuntimePaths, payload: &serde_json::Value) {
+    if payload.get("message_code").and_then(serde_json::Value::as_str)
+        != Some(DOUYIN_SHARE_PAGE_RETRY_CODE)
+    {
+        return;
+    }
+    let _ = append_desktop_log(
+        paths,
+        DOUYIN_SHARE_PAGE_RETRY_LOG_EVENT,
+        "stage=douyin_share_page",
+    );
 }
 
 pub(super) fn inspect_stderr_line(protocol: ProgressProtocol, line: &str) -> StderrRecord {

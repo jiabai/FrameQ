@@ -342,6 +342,7 @@ fn safe_desktop_event(event: &str) -> Option<&'static str> {
             Some("worker_download_asr_model_watchdog_signal_failed")
         }
         "worker.model_progress.invalid" => Some("worker_model_progress_invalid"),
+        "worker.douyin.share_page.retry" => Some("worker_douyin_share_page_retry"),
         "asr_diagnostic.write_failed" => Some("asr_diagnostic_write_failed"),
         _ => None,
     }
@@ -1244,6 +1245,31 @@ mod tests {
                 "unix_ms={NOW} event=worker.download_asr_model.result operation=download_asr_model outcome={invalid}"
             ))
             .is_none());
+        }
+    }
+
+    #[test]
+    fn share_page_retry_events_survive_export_and_unknown_douyin_events_do_not() {
+        let parsed = parse_desktop_line(&format!(
+            "unix_ms={NOW} event=worker.douyin.share_page.retry stage=douyin_share_page"
+        ))
+        .expect("whitelisted share page retry event");
+        assert_eq!(
+            parsed.line,
+            format!("unix_ms={NOW} event=worker_douyin_share_page_retry")
+        );
+
+        for rejected in [
+            "worker.douyin.share_page.raw",
+            "worker.douyin.share_page.retry.extra",
+        ] {
+            assert!(
+                parse_desktop_line(&format!(
+                    "unix_ms={NOW} event={rejected} url=https://example.com/private"
+                ))
+                .is_none(),
+                "{rejected} must stay outside the whitelist"
+            );
         }
     }
 

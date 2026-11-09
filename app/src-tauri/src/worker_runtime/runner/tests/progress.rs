@@ -186,3 +186,47 @@ fn invalid_diagnostic_is_persisted_only_as_a_fixed_rejection() {
     assert!(!log.contains(secret));
     assert!(!log.contains("not-json"));
 }
+
+#[test]
+fn share_page_retry_is_recorded_in_the_desktop_log_only_for_its_message_code() {
+    let retry_line = r#"FRAMEQ_PROGRESS {"stage":"video_extracting","progress":22,"message_code":"douyin.page.retrying","message_args":{"attempt":2,"total":3}}"#;
+    let ordinary_line = r#"FRAMEQ_PROGRESS {"stage":"video_extracting","progress":22,"message_code":"video.download.preparing"}"#;
+
+    for (case, line, expected) in [
+        ("share-page-retry", retry_line, true),
+        ("share-page-no-retry", ordinary_line, false),
+    ] {
+        let paths = test_paths(case);
+        #[cfg(windows)]
+        let script = format!("[Console]::Error.WriteLine('{line}'); exit 1");
+        #[cfg(unix)]
+        let script = format!("printf '%s\\n' '{line}' >&2; exit 1");
+
+        let outcome = WorkerLane::default()
+            .run_with_hooks(
+                &paths,
+                watchdog_fixture_request(
+                    WorkerOperation::ProcessVideo,
+                    ProgressRoute::Worker,
+                    script,
+                    None,
+                ),
+                RunnerHooks::default(),
+            )
+            .expect("missing terminal output is an unstructured failure");
+        assert!(matches!(outcome, WorkerRunOutcome::UnstructuredFailure(_)));
+
+        let log = std::fs::read_to_string(
+            paths
+                .user_data_dir
+                .join("logs")
+                .join("frameq-desktop.log"),
+        )
+        .unwrap_or_default();
+        assert_eq!(
+            log.contains("event=worker.douyin.share_page.retry"),
+            expected,
+            "{case} desktop log: {log}"
+        );
+    }
+}
