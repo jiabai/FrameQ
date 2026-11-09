@@ -1231,6 +1231,12 @@
 - YouTube-specific failures are classified only inside the worker error message as sanitized `YOUTUBE_*` prefixes under the existing top-level `VIDEO_DOWNLOAD_FAILED` error.
 - YouTube v1 must not add YouTube login, browser cookie import, cookies-from-browser, Authorization headers, proxy/bypass settings, playlist batching, live-stream handling, age/member/private bypass, stream picker UI, or a download-center product surface.
 
+## 2026-11-09 有界的 yt-dlp 下载执行
+
+- `worker/frameq_worker/media.py` 的 `run_command` 对形如 `sys.executable -m yt_dlp ...` 的下载命令施加 20 分钟 `subprocess.run` 预算；`ffprobe` 与 `ffmpeg` 命令不设该预算。
+- 预算到期返回 `VIDEO_DOWNLOAD_TIMEOUT` 结果，`download_video` 直接抛出 `CommandExecutionError`，跳过字幕重跑、YouTube 单次重试与三个平台备用下载；`MediaPreparationFacade` 仍把它归入 `VIDEO_DOWNLOAD_FAILED`。
+- `CommandRunner` 的单参数签名、平台 URL 支持规则、下载策略表、任务产物布局与账号服务数据边界保持不变。
+
 ## 2026-06-27 Bilibili Public Video Fallback Boundary
 
 - Bilibili fallback remains worker-owned and ordinary-public-video-only. UI and Tauri submit a source string and receive the existing worker result shape; they do not call Bilibili APIs, select DASH streams, import cookies, or manage downloads.

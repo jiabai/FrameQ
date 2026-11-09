@@ -987,6 +987,7 @@ success. Paid supplier acceptance remains skipped at the user's request.
 - YouTube/Google volatile media CDN URLs, signed query strings, cookies, Authorization headers, and login or bypass instructions must not be stored in app-local history, UI errors, logs, settings, or FrameQ server requests.
 - Worker error sanitization should remove `googlevideo.com`/`videoplayback` signed URLs and cookie guidance before messages reach the UI.
 - Existing completed local media files must be preserved if a new YouTube download attempt fails.
+- A bounded 20-minute execution budget terminates a `yt-dlp` download child that stops making progress. The timeout result carries no URL, cookie, token or media CDN value, is reported through the existing `VIDEO_DOWNLOAD_FAILED` path, and triggers no automatic retry, platform fallback, or AI Credit call.
 
 ## 2026-06-27 Bilibili Public Video Fallback Safety Boundary
 

@@ -1093,6 +1093,22 @@
 
 ## 已完成
 
+- [x] Bound the `yt-dlp` download child process with an execution budget (2026-11-09) — ✅
+  `media.py` 的 `run_command` 对 `sys.executable -m yt_dlp ...` 形状命令施加 20 分钟
+  `subprocess.run` 预算；`ffprobe`、`ffmpeg` 与 B 站备用路径不受影响。`download_video` 在三个下载
+  结果入口判定 `VIDEO_DOWNLOAD_TIMEOUT`，命中后直接抛出 `CommandExecutionError`，跳过字幕重跑、
+  YouTube 单次重试与三个平台备用下载，经 `MediaPreparationFacade` 归入既有 `VIDEO_DOWNLOAD_FAILED`。
+  新增 5 项测试，其中 `test_run_command_terminates_a_hung_ytdlp_child` 用真实挂起子进程验证终止与
+  结果形状。门禁：ruff 通过；worker 聚焦 40 项、全量 1275 passed / 4 skipped；Node 脚本 57 项；
+  Python 脚本 1 项；文档治理 0 错误 0 警告；`git diff --check` 通过。真实 `yt-dlp 2026.10.21`
+  子进程在 1200 秒默认预算下 `returncode=0`。产品规格
+  `docs/product-specs/2026-11-09-bounded-ytdlp-download.md`，执行计划
+  `docs/exec-plans/active/2026-11-09-bounded-ytdlp-download-plan.md`，技术债 Medium 第一条已移入
+  Completed / Resolved。**未跑**：公网 YouTube 下载回归，本机代理 `127.0.0.1:7890` 返回
+  `502 Bad Gateway`，系统代理注册表值同为 7890，内置代理 `127.0.0.1:58593` 亦不可达；代理恢复后补跑。
+  Residual risk：Python 只终止 yt-dlp 父进程，合并阶段派生的 ffmpeg 可能残留至 `ProcessSupervisor`
+  终止整个 worker 进程树；固定预算在极慢网络下可能提前结束大文件下载。
+
 - [x] 清理营销站隐私页与 FAQ 的残留开发术语并上线（2026-09-19）— ✅ 已部署：`https://frameq.8xf.pro` 首页与
   隐私页的 `LLM` / `ASR 权重` / `app-local data` / `server-managed` / `有界额度` 全部归零，线上三页经 nginx
   回读的 sha256 与本地 `site/dist` **逐字节一致**，演示视频哈希未变。改动 6 个源文件共 22 处：

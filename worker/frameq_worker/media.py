@@ -54,6 +54,8 @@ YOUTUBE_FORMAT_SELECTOR = (
     "best[height<=720]/best"
 )
 YOUTUBE_JS_RUNTIMES = ("deno", "node", "quickjs", "bun")
+YTDLP_DOWNLOAD_TIMEOUT_SECONDS = 20 * 60
+YTDLP_DOWNLOAD_TIMEOUT_CODE = "VIDEO_DOWNLOAD_TIMEOUT"
 DOWNLOADED_MEDIA_SUFFIXES = (".mp4", ".mkv", ".webm", ".mov", ".m4v")
 PLATFORM_SUBTITLE_ARGS = [
     "--write-subs",
@@ -222,8 +224,53 @@ def build_audio_extract_command(input_path: Path, output_path: Path) -> list[str
     ]
 
 
-def run_command(command: list[str]) -> CommandResult:
-    completed = subprocess.run(command, capture_output=True, check=False, text=True)
+def is_ytdlp_download_command(command: list[str]) -> bool:
+    return (
+        len(command) >= 3
+        and command[0] == sys.executable
+        and command[1:3] == ["-m", "yt_dlp"]
+    )
+
+
+def command_timeout_seconds(command: list[str]) -> float | None:
+    if is_ytdlp_download_command(command):
+        return YTDLP_DOWNLOAD_TIMEOUT_SECONDS
+    return None
+
+
+def _raise_if_download_timeout(result: CommandResult) -> None:
+    if _structured_error_code(result.stderr) == YTDLP_DOWNLOAD_TIMEOUT_CODE:
+        raise CommandExecutionError(result)
+
+
+def run_command(
+    command: list[str],
+    *,
+    timeout_seconds: float | None = None,
+) -> CommandResult:
+    effective_timeout = (
+        command_timeout_seconds(command)
+        if timeout_seconds is None
+        else timeout_seconds
+    )
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=effective_timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return CommandResult(
+            command=command,
+            returncode=1,
+            stdout="",
+            stderr=(
+                f"{YTDLP_DOWNLOAD_TIMEOUT_CODE}: "
+                "Media download command exceeded its time budget."
+            ),
+        )
     return CommandResult(
         command=command,
         returncode=completed.returncode,
@@ -241,6 +288,7 @@ def download_video(
     output_dir.mkdir(parents=True, exist_ok=True)
     download_command = build_ytdlp_command(url, output_dir)
     result = runner(download_command)
+    _raise_if_download_timeout(result)
     if result.returncode != 0:
         failure_message = result.stderr or result.stdout
         is_youtube_video = should_attempt_youtube_processing(url)
@@ -259,6 +307,7 @@ def download_video(
                 include_subtitles=False,
             )
             result = runner(download_command)
+            _raise_if_download_timeout(result)
             if result.returncode == 0:
                 return result
             failure_message = result.stderr or result.stdout
@@ -266,6 +315,7 @@ def download_video(
             classify_youtube_download_failure(result).stderr,
         ) in ("YOUTUBE_DOWNLOAD_FAILED", "YOUTUBE_STREAM_FORBIDDEN"):
             result = runner(download_command)
+            _raise_if_download_timeout(result)
             if result.returncode == 0:
                 return result
             failure_message = result.stderr or result.stdout

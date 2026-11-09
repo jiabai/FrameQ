@@ -780,6 +780,110 @@ def test_probe_media_file_runs_ffprobe_and_parses_stdout() -> None:
     assert info.video_codec == "h264"
 
 
+def test_command_timeout_applies_only_to_ytdlp_download_commands() -> None:
+    ytdlp_command = build_ytdlp_command(
+        "https://www.douyin.com/video/7524373044106677544",
+        output_dir=Path("outputs"),
+    )
+
+    assert media.is_ytdlp_download_command(ytdlp_command)
+    assert media.command_timeout_seconds(ytdlp_command) == (
+        media.YTDLP_DOWNLOAD_TIMEOUT_SECONDS
+    )
+    assert media.command_timeout_seconds(
+        build_ffprobe_command(Path("outputs/demo.mp4"))
+    ) is None
+    assert media.command_timeout_seconds(
+        build_audio_extract_command(Path("outputs/demo.mp4"), Path("cache/demo.wav"))
+    ) is None
+
+
+def test_run_command_terminates_a_hung_ytdlp_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "yt_dlp.py").write_text(
+        "import time\ntime.sleep(30)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+    result = media.run_command(
+        [sys.executable, "-m", "yt_dlp", "--no-playlist"],
+        timeout_seconds=1.0,
+    )
+
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert result.stderr.startswith(f"{media.YTDLP_DOWNLOAD_TIMEOUT_CODE}: ")
+
+
+def test_download_video_stops_on_initial_timeout(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str]) -> CommandResult:
+        calls.append(command)
+        return CommandResult(
+            command=command,
+            returncode=1,
+            stdout="",
+            stderr=f"{media.YTDLP_DOWNLOAD_TIMEOUT_CODE}: budget exceeded",
+        )
+
+    with pytest.raises(CommandExecutionError, match=media.YTDLP_DOWNLOAD_TIMEOUT_CODE):
+        download_video(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            output_dir=tmp_path,
+            runner=fake_runner,
+        )
+
+    assert len(calls) == 1
+
+
+def test_download_video_stops_on_timeout_during_subtitle_retry(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str]) -> CommandResult:
+        calls.append(command)
+        stderr = (
+            "ERROR: unable to download video subtitles"
+            if len(calls) == 1
+            else f"{media.YTDLP_DOWNLOAD_TIMEOUT_CODE}: budget exceeded"
+        )
+        return CommandResult(command, 1, "", stderr)
+
+    with pytest.raises(CommandExecutionError, match=media.YTDLP_DOWNLOAD_TIMEOUT_CODE):
+        download_video(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            output_dir=tmp_path,
+            runner=fake_runner,
+        )
+
+    assert len(calls) == 2
+
+
+def test_download_video_stops_on_timeout_during_youtube_retry(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str]) -> CommandResult:
+        calls.append(command)
+        stderr = (
+            "ERROR: extractor failed."
+            if len(calls) == 1
+            else f"{media.YTDLP_DOWNLOAD_TIMEOUT_CODE}: budget exceeded"
+        )
+        return CommandResult(command, 1, "", stderr)
+
+    with pytest.raises(CommandExecutionError, match=media.YTDLP_DOWNLOAD_TIMEOUT_CODE):
+        download_video(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            output_dir=tmp_path,
+            runner=fake_runner,
+        )
+
+    assert len(calls) == 2
+
+
 def test_extract_audio_creates_parent_dir_and_runs_ffmpeg(tmp_path: Path) -> None:
     calls: list[list[str]] = []
 

@@ -1,6 +1,6 @@
 # Tech Debt Tracker
 
-Last updated: 2026-11-05
+Last updated: 2026-11-09
 
 ## High Priority
 
@@ -12,7 +12,6 @@ Last updated: 2026-11-05
 
 | Topic | Why it matters | Source | Removal Condition |
 |------|----------------|--------|-------------------|
-| The `yt-dlp` child process runs without an external timeout | The worker executes yt-dlp through `subprocess.run` with `capture_output=True` and no `timeout` in `run_command`, so a hung network transfer inside yt-dlp reproduces the frozen-task experience the Douyin fallback showed on 2026-10-22: the 45-minute idle watchdog is the only bound. The 2026-10-22 Douyin fix bounded the in-process fallback path with a 60-second no-progress budget; the YouTube and Bilibili yt-dlp path keeps the unbounded window. yt-dlp's internal socket timeouts bound single operations, but the same session observed a proxy keeping a connection established without delivering data, which no socket timeout catches. | `worker/frameq_worker/media.py` `run_command`; `docs/exec-plans/active/2026-10-22-douyin-stream-download-reliability-plan.md` | Wrap the yt-dlp download invocation in a bounded external timeout sized from the declared media size, or stream yt-dlp output with a no-progress watchdog, and add a regression test proving a hung child is terminated and reported through the existing `VIDEO_DOWNLOAD_FAILED` taxonomy. |
 | Douyin share page attempt count is an unvalidated judgment call | `SHARE_PAGE_ATTEMPTS` is three, derived from a measured one-in-three degradation rate with a worst case of roughly 20 seconds of added latency. The change reached `main` on 2026-09-16 and no desktop release contains it yet, so the constant has no field data behind it. | `docs/exec-plans/completed/2026-09-16-douyin-share-page-retry-plan.md` | Ship it in a desktop release, then revisit the constant if field reports still show share page failures. |
 | Douyin stream download budgets are reasoned defaults | The 60-second no-progress budget, the one-resume-per-candidate policy, and the 8 MB progress interval come from the 2026-10-22 field report rather than measurements across networks. v0.4.2 shipped them on 2026-10-23 and no field feedback exists yet, so a too-tight budget would surface as premature `DOUYIN_STREAM_DOWNLOAD_FAILED` on slow connections while a too-loose one restores long silent waits. | `worker/frameq_worker/douyin/transport.py`; `worker/frameq_worker/douyin_fallback.py`; `docs/exec-plans/completed/2026-10-22-douyin-stream-download-reliability-plan.md` | Collect field reports from v0.4.2 onward; revisit the three constants only if users report premature failures or silent waits, and add a stall-frequency diagnostic when the download path next changes. |
 | Douyin share page retries are invisible to diagnostics | The share page parse path emits no diagnostic event, so a run that only succeeded after two retries is indistinguishable from a first-try success in an exported diagnostics bundle. | `docs/exec-plans/completed/2026-09-16-douyin-share-page-retry-plan.md` | Add a share page diagnostic event, or record the deliberate decision to stay inside the closed progress contract. |
@@ -23,6 +22,14 @@ Last updated: 2026-11-05
 | `test_markdown_splitter_advances_past_sentence_separator` fails under load on the hosted Windows runner | The case starts a `spawn` child process and calls `join(4)`, so a slow interpreter start on a loaded Windows runner reaches the four-second budget and raises `MarkdownSplitter did not advance past the separator` even when the splitter is correct. Native CI `42044874583` attempt 1 reported 1 failed / 1268 passed; the case passed locally, and `gh run rerun --failed` attempt 2 passed all four jobs. | `worker/tests/test_insights.py:79-96` | Replace the fixed four-second wait with a budget or event signal matched to real child-process startup cost, while retaining the deadlock detection for a splitter that never advances. |
 
 ## Completed / Resolved
+
+### Bounded yt-dlp Download Execution
+
+- Status: resolved on 2026-11-09.
+- Resolution: `worker/frameq_worker/media.py` applies a 20-minute `subprocess.run` budget only to commands shaped `sys.executable -m yt_dlp ...`. `ffprobe` and `ffmpeg` keep their existing execution. On expiry `run_command` returns a `VIDEO_DOWNLOAD_TIMEOUT` result and `download_video` raises immediately, skipping subtitle retry, the YouTube single retry and all platform fallbacks; `MediaPreparationFacade` reports it through the existing `VIDEO_DOWNLOAD_FAILED` path with no new frontend code.
+- Evidence: `uv run ruff check worker` clean; `uv run pytest worker/tests/test_media.py` 40 passed, including five new cases with one real hung child process terminated inside a short injected budget; `uv run pytest worker/tests` 1275 passed / 4 skipped; `node --test scripts/tests/*.test.mjs` 57 passed; `uv run python -m pytest scripts/tests` 1 passed; `validate_agents_docs.py --level WARN` 0 errors / 0 warnings; `git diff --check` clean. A real `yt-dlp 2026.10.21` child completed `run_command` with returncode 0 under the 1200-second default budget.
+- Boundary: a public-network YouTube download regression was blocked by the local proxy returning `502 Bad Gateway` on `127.0.0.1:7890`; the substituted checks do not replace that evidence. Python terminates the yt-dlp parent only, so an ffmpeg merge child may briefly remain until the desktop `ProcessSupervisor` terminates the worker tree. A fixed budget can end a very slow large download early.
+- Plan: `docs/exec-plans/active/2026-11-09-bounded-ytdlp-download-plan.md`.
 
 ### Hosted Linux Server Signal Evidence
 

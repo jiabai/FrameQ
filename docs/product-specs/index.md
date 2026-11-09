@@ -42,6 +42,7 @@
 ## Input & Media Processing
 
 - `2026-11-01-web-page-notes.md` — 网页正文与本地笔记、既有智能提炼；复用系统 WebView 独立宿主，取消额外浏览器下载与准备界面。Windows实现、构建与验收完成，平台能力及未验证范围见2026-11-02完成记录。
+- `2026-11-09-bounded-ytdlp-download.md` — yt-dlp 下载子进程的固定时间预算；到期终止并沿既有下载失败路径结束任务，`ffprobe` 与 `ffmpeg` 的执行时间维持原状。
 
 - `2026-06-16-douyin-video-transcription-client.md` — MVP desktop client: input a Douyin URL, output highest-quality public video and transcript; includes Douyin share-page fallback and the 2026-09-16 share-page retry with a randomized 3 to 10 second wait.
 - `2026-07-05-repeat-url-task-reuse.md` — Reuse an existing completed local task when the same public video URL is submitted again.
