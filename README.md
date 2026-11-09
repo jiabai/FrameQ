@@ -297,7 +297,7 @@ Create or update a release by pushing a `v*` tag or running the workflow manuall
 Release operators can override the default ModelScope download source:
 
 ```powershell
-$env:APP_ASR_MODEL_DOWNLOAD_URL = "https://cdn.example.com/frameq/sensevoice-small-cache.zip"
+$env:APP_ASR_MODEL_DOWNLOAD_URL = "https://cdn.example.com/models/sensevoice-small-cache.zip"
 $env:APP_ASR_MODEL_DOWNLOAD_SHA256 = "expected-sha256"
 $env:APP_MODELSCOPE_ENDPOINT = "https://www.modelscope.cn"
 $env:APP_SENSEVOICE_REVISION = "master"
@@ -366,9 +366,9 @@ Deployment files:
 | File | Purpose |
 | --- | --- |
 | `deploy/server-deployment.md` | Production deployment runbook |
-| `deploy/nginx/app-server.conf` | Nginx reverse proxy for `frameq.8xf.pro` |
-| `deploy/nginx/app-proxy-headers.conf` | Shared proxy headers snippet |
-| `deploy/systemd/app-server.service` | systemd service example |
+| `deploy/nginx/frameq-server.conf` | Nginx reverse proxy for `frameq.8xf.pro` |
+| `deploy/nginx/frameq-proxy-headers.conf` | Shared proxy headers snippet |
+| `deploy/systemd/frameq-server.service` | systemd service example |
 
 Recommended production shape:
 
