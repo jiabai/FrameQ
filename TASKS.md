@@ -904,8 +904,10 @@
   `ACTIVATION_REQUEST_RATE_LIMITED` + `retry_at` + `Retry-After: 60`；激活码兑换授予权益；
   `POST /api/desktop/llm/checkouts` 用同一 `request_id` 两次均 200 且 `quota_remaining`
   保持 19（幂等，不重复扣减），换新 `request_id` 后降到 18（对照）。harness 与报告用后
-  删除，未进仓库。边界：这是 runbook 的 fake 测试路径验收，不替代真机认证冒烟——后者仍需
-  真实测试邮箱收 OTP / 激活码、管理员登录，以及真实登录后的动态日志脱敏复核。
+  删除，未进仓库。边界：这是 runbook 的 fake 测试路径验收。生产真实邮箱的申领→收信→兑换→
+  权益主链路已于 2026-09-19 闭环（证据见 `docs/exec-plans/tech-debt-tracker.md` 的
+  Live Activation Email Path）；仍缺的是管理员登录、真实登录后的动态日志脱敏复核与
+  Admin Web 激活码元数据核对，本 fake 路径不替代。
 
 - [x] Remove the unused WeChat Pay integration (2026-11-08) ✅ 该通道从未启用（生产
   `WECHAT_PAY_ENABLED=0`），前端无 UI 调用方。已删除 server 的 `wechat.ts` / `billing.ts` /
@@ -938,9 +940,9 @@
   与两条 POST 路由 auth-first 401；部署文件 sha256（LF 归一化）与 main 一致。
   三个计划已归档 `docs/exec-plans/completed/`。后续补记：ticket 交换、幂等额度结账与
   429 `retry_at` 已于 2026-11-08 在隔离库 HTTP 验收中闭环（见下一条，runbook 要求的
-  fake/provider-approved 测试路径，不涉及真实付款）；剩余真机认证冒烟（真实测试邮箱 OTP、
-  管理员登录、真实登录后的动态日志脱敏复核）待做。回滚必须整套恢复代码 + 迁移前数据库 +
-  匹配 `.env`。
+  fake/provider-approved 测试路径，不涉及真实付款）；生产真实邮箱的申领/兑换链路已于
+  2026-09-19 跑通，仍待真机的是管理员登录、动态日志脱敏复核与 Admin Web 元数据核对。
+  回滚必须整套恢复代码 + 迁移前数据库 + 匹配 `.env`。
 
 - [x] Roll out self-service email activation to the production server (2026-09-19) ✅ 生产
   `https://frameq.8xf.pro` 已从 `1afb925` 快进部署到 `5c9e974`，三条 20260824 迁移全部应用
@@ -957,8 +959,11 @@
   限流 `429 ACTIVATION_REQUEST_RATE_LIMITED`、坏 locale/多余字段/空体 `400 INVALID_REQUEST`，且
   未产生任何激活码行。生产库零预演残留。执行计划：
   `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md`。
-  残余风险：真机认证冒烟（请求→收信→兑换→权益）与 Admin Web 元数据核对尚未执行，需要真实测试
-  邮箱；SMTP 接受不等于送达。
+  后续补记（2026-11-09 核对）：真机认证冒烟的请求→收信→兑换→权益主链路已于 2026-09-19 用真实
+  测试邮箱在生产跑通，证据见 `docs/exec-plans/tech-debt-tracker.md` 的 Live Activation Email Path；
+  本条当时的「尚未执行」口径已过时。残余风险收窄为：Admin Web 激活码元数据/无明文核对、
+  409/429 与 `Retry-After` 真机验证、管理员登录及真实登录后的动态日志脱敏复核。
+  SMTP 接受不等于送达。
 
 - [x] Make payment settlement, activation-code redemption, and administrator compensation transactional (2026-07-10) ✅ Store semantic transaction boundaries now commit all related state together; administrator quota grants use the same audited additive adjustment and have no remaining-quota bypass; verified webhook replays recover only deterministic old payment states, while ambiguous old activation/admin states require audited `manual_repair`. WeChat billing remains disabled/unintegrated. Server/worker/app/Rust/docs/diff gates passed.
 
@@ -970,18 +975,17 @@
 
 ## 进行中
 
-- [ ] Run the authenticated self-service activation smoke against production (2026-09-19) — ✅ 部署与
-  隔离预演已完成并留证（见 `## Account and Billing` 与
-  `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md`），剩余唯一
-  未完成的验收项是**真机认证冒烟**：需要一个权益缺失/已过期的测试账号，走
-  `GET /api/desktop/account`（`can_request_activation_code=true`）→
-  `POST /api/desktop/activation-codes/request`（仅 `{"locale":"zh-CN"}`，期望 `status=sent`）、
-  人工读信确认三语模板与 31 天/20 Credits/不得转发提示 → 再查 `GET /api/desktop/account`
-  （`can_request_activation_code` 转 false）→ `POST /api/desktop/activation-codes/redeem`
-  （权益 active、`llm_quota_limit=20`、`llm_quota_used=0`、`can_process=true`）→ 权益有效期内重复
-  申领期望 `409 ENTITLEMENT_ACTIVE` → 一分钟内二次申领期望 `429 ACTIVATION_REQUEST_RATE_LIMITED`
-  且带 `Retry-After`。同时核对 Admin Web 激活码列表渲染来源/绑定账号/状态且无明文。记录纪律：只留
-  HTTP 状态码与错误码，不留邮箱、激活码、会话 token 或请求体。阻塞原因：缺真实测试邮箱。
+- [ ] Close the remaining activation acceptance gaps (2026-09-19) — ✅ 生产真机主链路已完成：
+  2026-09-19 用真实测试邮箱跑通 OTP 登录 → 申领 → 收信 → 兑换 → 权益（31 天 / 20 Credits），
+  台账 0→1 条 `self_service_email`，消费后重放与未知码均 400；证据见
+  `docs/exec-plans/tech-debt-tracker.md` 的 Live Activation Email Path 与 `docs/exec-plans/index.md`。
+  部署与隔离预演见 `## Account and Billing` 与
+  `docs/exec-plans/completed/2026-09-19-self-service-activation-server-rollout-plan.md`。
+  仍待验收：人工确认三语邮件模板与 31 天/20 Credits/不得转发提示；权益有效期内重复申领
+  `409 ENTITLEMENT_ACTIVE`、一分钟内二次申领 `429 ACTIVATION_REQUEST_RATE_LIMITED` 且带
+  `Retry-After`；Admin Web 激活码列表的来源/绑定账号/状态且无明文；管理员登录与真实登录后的
+  动态日志脱敏复核。记录纪律：只留 HTTP 状态码与错误码，不留邮箱、激活码、会话 token 或请求体。
+  阻塞原因：需真实测试邮箱与权益缺失/已过期的测试账号。
 
 - [ ] Implement user-initiated desktop diagnostic export (2026-08-09) — ✅ Implementation complete;
   2026-11-08 在 Windows native Tauri build 上**脚本化跑通了真实系统 Save As 对话框的四项验收**，

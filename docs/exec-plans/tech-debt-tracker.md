@@ -238,6 +238,13 @@ Last updated: 2026-11-09
   `expiresAt - redeemedAt = 31 days`, and `redeemBy - sentAt = 30 days`. Replaying the consumed
   code and redeeming an unknown code both returned 400 with the same generic message, confirming
   single-use enforcement and the absence of an oracle.
+- Scope note (2026-11-09): this resolution covers the production happy path only, from authenticated
+  OTP login through request, inbox delivery, redemption and entitlement persistence, plus consumed-code
+  replay and unknown-code rejection. It does not cover the three-locale template inspection, live
+  `409`/`429` plus `Retry-After`, Admin Web activation-code metadata and plaintext checks,
+  administrator login, or post-login dynamic log redaction. `TASKS.md` still tracks those as
+  remaining acceptance items; the 2026-08-24 and 2026-09-19 archived plans keep their original
+  "still open" wording as the historical record of that day's state.
 
 ## Accepted / Deferred
 
