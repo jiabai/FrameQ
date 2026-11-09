@@ -2,7 +2,12 @@
 
 <div align="center">
 
-**A local-first desktop workflow for turning public or authorized video links into local media, transcripts, summaries, and insight prompts.**
+**The open-source, local-first answer to Google NotebookLM — for video and web sources.**
+
+Paste a video link, a web page, or a local media file. FrameQ keeps it on your machine, transcribes it, and turns it into a searchable notebook with summaries, mindmaps, and grounded insight prompts.
+
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue?style=flat-square)](LICENSE)
+[![Open Source](https://img.shields.io/badge/Open%20Source-NotebookLM%20alternative-7c3aed?style=flat-square)](#frameq-vs-google-notebooklm)
 
 [![Desktop](https://img.shields.io/badge/Desktop-Tauri-2563eb?style=flat-square)](https://tauri.app/)
 [![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-0ea5e9?style=flat-square)](https://react.dev/)
@@ -16,19 +21,23 @@
 
 ## Overview
 
-FrameQ is a desktop application that keeps video processing local by default. Paste a supported public or authorized video link, and FrameQ coordinates the local worker to download the video, extract audio, transcribe speech with SenseVoice Small, and export useful files. Summary and insight generation are separate, confirmed steps that use the server-managed LLM checkout and quota flow.
+**FrameQ is an open-source alternative to Google NotebookLM.** NotebookLM turns the documents you upload into a grounded notebook; FrameQ does the same job for the sources that NotebookLM cannot handle well — video links, web pages, and local media — and it does the heavy lifting on your own machine instead of in a cloud pipeline.
+
+Paste a supported public or authorized video link, a public web page, or pick a local video/audio file. FrameQ coordinates the local worker to download the media, extract audio, transcribe speech with SenseVoice Small, and save a note you can reopen, search, collect, and export. Summary, mindmap, insight-topic, transcript-dissection, and draft generation are separate, explicitly confirmed steps that use the server-managed LLM checkout and quota flow.
 
 > [!NOTE]
-> Latest stable release: **v0.4.2** (Windows x64, macOS Intel, macOS Apple Silicon). See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
+> Latest stable release: **v0.5.1** (Windows x64, macOS Intel, macOS Apple Silicon), published 2026-11-09. See [GitHub Releases](https://github.com/jiabai/FrameQ/releases).
+>
+> Licensed under **Apache-2.0**. The desktop client, worker, and server all live in this repository.
 
 ```text
-Supported video link
-  -> yt-dlp download
+Public or authorized video link / web page / local media file
+  -> yt-dlp download or system WebView extraction (20-minute download budget)
   -> ffprobe media validation
   -> ffmpeg 16 kHz mono audio extraction
   -> SenseVoice Small local transcription
-  -> transcript export
-  -> optional confirmed summary, mindmap, and insight generation
+  -> saved note with transcript, in a collection you control
+  -> optional confirmed summary, mindmap, insight topics, dissection, and draft
 ```
 
 > [!IMPORTANT]
@@ -36,8 +45,9 @@ Supported video link
 
 ## Contents
 
-- [Why FrameQ](#why-frameq)
 - [Download Latest Release](#download-latest-release)
+- [FrameQ vs Google NotebookLM](#frameq-vs-google-notebooklm)
+- [Why FrameQ](#why-frameq)
 - [Current Capabilities](#current-capabilities)
 - [Supported Inputs and Outputs](#supported-inputs-and-outputs)
 - [Architecture](#architecture)
@@ -51,11 +61,43 @@ Supported video link
 - [Security Boundary](#security-boundary)
 - [Source of Truth](#source-of-truth)
 
+## Download Latest Release
+
+Grab the newest installer from **[GitHub Releases → latest](https://github.com/jiabai/FrameQ/releases/latest)**.
+
+| Platform | Asset |
+| --- | --- |
+| Windows x64 | `FrameQ_0.5.1_x64-setup.exe` (also `.sig`, used by the in-app updater) |
+| macOS Apple Silicon | `FrameQ_0.5.1_aarch64.dmg` |
+| macOS Intel | `FrameQ_0.5.1_x64.dmg` |
+
+Each release also carries `latest.json` for the Tauri updater and the on-demand `frameq-pytorch-runtime-*.zip` components. The macOS builds are ad-hoc signed, not notarized — see [macOS install and Gatekeeper](#macos-install-and-gatekeeper) for the one-time approval step.
+
+## FrameQ vs Google NotebookLM
+
+NotebookLM popularized the "give it your sources, get a grounded notebook back" loop. FrameQ is the **open-source version of that idea**, rebuilt around two constraints NotebookLM does not have: your media stays local, and video is a first-class source rather than an afterthought.
+
+| Capability | Google NotebookLM | FrameQ |
+| --- | --- | --- |
+| License and hosting | Proprietary, cloud-only | **Apache-2.0**, desktop app you install and run |
+| Video as a source | Accepts some video URLs as a text source | **Full local pipeline**: download, `ffprobe`, audio extraction, local ASR, timestamped transcript |
+| Web pages | Supported as a text source | Supported: public page body extracted through a system WebView into a local note |
+| Local media files | Not uploadable as media | Video/audio file from disk, transcribed locally |
+| Where media is processed | Uploaded to Google | **On your machine.** Video, audio, transcripts and model caches stay in app-local storage |
+| Transcription | Cloud ASR | **SenseVoice Small, local**, ONNX runtime in the installer |
+| Grounded artifacts | Audio/video overviews, mindmaps, reports, study aids | Summary, Mermaid mindmap, insight topics, transcript dissection, platform-style draft |
+| Source-grounded chat | Yes, with citations | **Not yet** — FrameQ generates artifacts rather than answering follow-up questions |
+| Multi-source synthesis | Many sources in one notebook | One source per note; collections group notes but do not cross-analyze them |
+
+Honest boundary: FrameQ is not a feature-for-feature clone. It covers the *source → transcript → notebook → grounded artifacts* path and adds local media processing; it does not yet ship an audio overview, a chat surface, or cross-document reasoning. See [Current Capabilities](#current-capabilities) for exactly what exists today.
+
 ## Why FrameQ
 
 | Principle | What it means |
 | --- | --- |
 | Local-first processing | Videos, audio, transcripts, model caches, and local history stay on the user's machine by default. |
+| Open source, no lock-in | Apache-2.0, desktop client + worker + server in one repository. Nothing you process is tied to a vendor account, and the AI steps can be skipped entirely. |
+| Notebook-shaped, not a downloader | Every processed source becomes a local note with a transcript, grouped into collections and surfaced under artifacts, so results stay reusable instead of being one-off exports. |
 | Clear workflow states | The UI shows video extraction, transcription, insight generation, completion, partial completion, or failure. |
 | Result entry points | Completed tasks expose video, audio, transcript, summary, transcript-dissection, insight-topic, and generated-draft cards. Video, audio, and transcript entries locate their saved files directly; locating the transcript is blocked while edits are unsaved. |
 | Two-stage AI generation | Download, audio extraction, and transcription run first. Summary, transcript dissection, mindmap, insight topics, and draft generation require a separate confirmation and quota check. |
@@ -66,7 +108,11 @@ Supported video link
 
 - Tauri + React + TypeScript desktop client.
 - Python worker managed by `uv`.
-- Public/authorized video download through `yt-dlp`, with focused fallback paths for Douyin, Xiaohongshu, and ordinary Bilibili videos.
+- One home composer for three source types: a public/authorized video link, a public web page, or a single local video/audio file. Choosing a file does not start processing; submission stays explicit.
+- Notebook-style local library: a sidebar with Home, Notes, Collections, and Artifacts, pinned notes, rename/add-to-collection/copy-source/open-source/note-info/delete actions, and a searchable note list backed by real local history.
+- Automatic LLM note titles generated after the transcript is saved (one additional AI Credit), localized to the submission language, with an explicit retry when title generation fails.
+- Public/authorized video download through `yt-dlp`, with focused fallback paths for Douyin, Xiaohongshu, and ordinary Bilibili videos. A download child process carries a 20-minute budget, so a stalled transfer ends as a retryable download failure instead of hanging.
+- Web page notes: a system WebView loads the public page, extracts the body, and saves it as a local Markdown note with source URL and extraction time. Web notes hide audio, timestamps, and video actions, and skip media title generation.
 - Xiaohongshu platform-subtitle reuse: when a public note carries one validated Chinese or English subtitle track, the worker writes it as the transcript and skips local ASR; a missing or rejected track falls back to the unchanged local ASR path.
 - Media validation with `ffprobe`.
 - Audio extraction with `ffmpeg`.
@@ -76,7 +122,8 @@ Supported video link
 - Draft generation (`生成文字稿`) AI target that turns one selected insight into a platform-style draft through server-managed anysearch retrieval and a platform skill. The transcript, video, audio, and source URL never enter the draft prompt, and the result is written to `ai/draft.md` with the pre-edit copy kept under `ai/original/`.
 - Server-managed account, activation-code monthly pass entitlement, self-service activation-email requests for inactive or expired desktop accounts, LLM checkout, and insight quota service.
 - Browser-side per-user Web dashboard (`/dashboard`) with email-OTP login, plus per-page `zh-CN` / `en` / `zh-TW` switching on the `/login`, `/dashboard`, `/admin/login`, and `/admin` pages.
-- User-initiated, local-only desktop diagnostic export of the most recent seven days from the failure UI and Settings.
+- User-initiated, local-only desktop diagnostic export of the most recent seven days from the failure UI and Settings. Douyin share-page retries are recorded as fixed log entries, so a run that only succeeded after a retry is distinguishable from a first-try success.
+- Windows installer preflight: free-space and writability checks before any files are written, one Chinese failure message naming the cause and the log path, and a step log at `%TEMP%\FrameQ-install.log`. Silent installs record the same steps without blocking.
 - Motion-enhanced UI with reduced-motion support (processing stage, task state, ASR download progress, AI target, and history list).
 - Exported artifacts:
   - `outputs/tasks/<task_id>/media/video.mp4`
@@ -97,7 +144,9 @@ Supported video link
 
 | Area | Supported today |
 | --- | --- |
-| Input workflow | One pasted public or user-authorized video source; FrameQ is transcription-first, not a general downloader |
+| Input workflow | One source at a time: a public or user-authorized video link, a public web page, or a local video/audio file. FrameQ is a local notebook for that source, not a general downloader or batch queue |
+| Local media files | One video or audio file picked from disk; transcribed locally without any network download |
+| Public web pages | Any page a system WebView can load without login, paywall, or CAPTCHA; the body is extracted into a Markdown note with its source URL and UTC extraction time |
 | Douyin public videos | Long links, short links, share text, `/note/{id}`, `/share/slides/{id}`, `modal_id`, and `aweme_id` inputs when they resolve to a playable public video |
 | Xiaohongshu public video notes | Share text, direct note IDs, full `xiaohongshu.com/explore/{note_id}` links, `xhslink.com` / `www.xhslink.com` short links, and `xhslink.cn` / `www.xhslink.cn` short links. A validated platform subtitle track is reused when present; otherwise the note goes through local ASR |
 | Bilibili ordinary public videos | BV links, av links, selected `?p=N` parts, and safe `b23.tv` short links that resolve to ordinary `/video/` pages |
@@ -351,6 +400,8 @@ The reviewed migration chain is:
 202608240002_auth_rate_limit_self_service_purpose
 202608240003_self_service_active_unique
 202610100001_anysearch_config
+202610290001_remove_entitlement_status
+202611080001_remove_wechat_billing
 ```
 
 Production rollout and rollback checklist:
