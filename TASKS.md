@@ -18,6 +18,27 @@
 
 ## Active UI Work
 
+- [x] Prepare and publish FrameQ v0.5.1 desktop release (2026-11-09) — ✅ Tag `v0.5.1` at `36f1a6c`
+  (release run `42604242544`, Windows updater / macOS Intel / macOS Apple Silicon all green;
+  published `2026-11-09T11:36:10Z`). Ship set: a 20-minute execution budget for the `yt-dlp`
+  download child so a stalled download ends with a retryable `VIDEO_DOWNLOAD_FAILED` instead of
+  waiting for the 45-minute idle watchdog; Douyin share-page retries recorded in the exported
+  desktop log as `worker.douyin.share_page.retry`; Windows installer free-space and writability
+  preflight with a Chinese failure message and a step log at `%TEMP%\FrameQ-install.log`; the
+  MarkdownSplitter child-process test waits on child signals instead of `join(4)`. Gates: Script
+  `42601635850`, Server `42601635862`, Native `42601635875` (its first macOS desktop job failed the
+  `TaskComposer` focus assertion; `gh run rerun --failed` was green, recorded as a new Medium debt);
+  local version consistency, Node scripts 57, Python scripts 1, docs ERROR/WARN zero, app lint and
+  build, frontend 1506 passed / 1 skipped, worker 1276 passed / 4 skipped, `cargo check` (8m59s),
+  site build, `git diff --check`. Assets: 8, names identical to v0.5.0 after normalization, both
+  `latest.json` Windows signatures equal the uploaded 416-byte `.sig`, and the three installer URLs
+  answered `206` from the deployment server. Site: remote backup `webroot-20261109-193649.tar.gz`,
+  3 uploads / 0 deletes, re-run dry-run 15 unchanged / 0 diffs, three public pages byte-identical to
+  `site/dist`, `v0.5.0` replaced by `v0.5.1` with all three asset links. Residual risk: macOS
+  real-device graphical acceptance, ad-hoc signing without notarization, the public signed-update
+  path still untested end to end, `macos-intel-acceptance.yml` needs a manual dispatch, PyTorch
+  runtime components re-download for upgraders, a very slow large download can hit the 20-minute
+  budget, and the installer's interactive failure dialog was not exercised by hand.
 - [x] Prepare and publish FrameQ v0.5.0 desktop release (2026-11-05, re-published 2026-11-06 and 2026-11-07) — ✅ Tag `v0.5.0` at
   `6857d97` (release run `42048599641`, all three platform jobs green). Ship set: a redesigned
   desktop workspace with draggable split panes, notes, collections and local data management;
