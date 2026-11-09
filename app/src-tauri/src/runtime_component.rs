@@ -19,7 +19,7 @@ use crate::worker_runtime::{
 use crate::{ensure_runtime_dirs, resolve_runtime_paths};
 
 /// 发行资产所在仓库，与 `tauri.conf.json` 的 updater endpoint 保持一致。
-const RELEASE_REPO: &str = "jiabai/FrameQ";
+const RELEASE_REPO: &str = "jiabai/Locus";
 
 #[derive(Debug, Serialize)]
 pub(crate) struct RuntimeComponentDownloadResult {
@@ -101,11 +101,11 @@ mod tests {
     fn release_url_targets_the_versioned_platform_asset() {
         assert_eq!(
             component_release_url("0.3.9", "windows-x64"),
-            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/pytorch-runtime-windows-x64.zip"
+            "https://github.com/jiabai/Locus/releases/download/v0.3.9/pytorch-runtime-windows-x64.zip"
         );
         assert_eq!(
             component_release_url("0.3.9", "macos-arm64"),
-            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/pytorch-runtime-macos-arm64.zip"
+            "https://github.com/jiabai/Locus/releases/download/v0.3.9/pytorch-runtime-macos-arm64.zip"
         );
     }
 

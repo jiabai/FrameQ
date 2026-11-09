@@ -60,7 +60,7 @@
 
 | 身份 | 取值 | 变更方式 |
 | --- | --- | --- |
-| 仓库 | `github.com/jiabai/FrameQ` | GitHub 改名 + 更新 updater endpoint + 站点链接 |
+| 仓库 | `github.com/jiabai/Locus` | 已于 2026-11-10 改名；updater endpoint、组件下载 URL 与站点链接同批更新。旧名重定向已实测可用 |
 | 生产域名 | `frameq.8xf.pro` | DNS + 证书 + nginx |
 | 生产部署目录 | `/opt/frameq/FrameQ` | 运维迁移 |
 | 更新清单参数 | `?updater=1` | 已中性化，无需变更 |

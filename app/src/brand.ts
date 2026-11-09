@@ -13,4 +13,4 @@ export const PRODUCT_NAME = "Locus";
 export const PRODUCT_MARK = "LQ";
 
 /** Public releases page. The repository slug is an external identity that does not follow the brand. */
-export const RELEASES_URL = "https://github.com/jiabai/FrameQ/releases/latest";
+export const RELEASES_URL = "https://github.com/jiabai/Locus/releases/latest";

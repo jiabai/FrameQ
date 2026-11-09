@@ -8,7 +8,7 @@ import {
 } from "./tauriIpcProtocol";
 import type { UpdateDownloadEvent } from "./updateState";
 
-export const DEFAULT_RELEASES_URL = "https://github.com/jiabai/FrameQ/releases/latest";
+export const DEFAULT_RELEASES_URL = "https://github.com/jiabai/Locus/releases/latest";
 
 export type UpdateDelivery = {
   inAppUpdates: boolean;

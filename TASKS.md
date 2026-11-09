@@ -23,6 +23,8 @@
 
 ## Active UI Work
 
+- [x] Rename the GitHub repository to Locus (2026-11-10) — ✅ `jiabai/FrameQ` → `jiabai/Locus` via `gh repo rename`. Old-name redirects verified: releases page, a release asset direct link, and `releases/latest/download/latest.json?updater=1` all return 200, and old/new names resolve to the same `latest.json` asset. Updater endpoint, runtime-component URLs, macOS releases link, `app/src/brand.ts`, `updateClient.ts`, the window-config test, `site/src/consts.ts` and README links now use the new name. Historical release URLs in this ledger and completed plans are kept as-is.
+
 - [ ] Locus v0.6.0 — ✅ 本机准备完成、**发版待办 / NOT published** (2026-11-10). Version bumped to
   `0.6.0` in all six release-version sources; `docs/releases/v0.6.0.md` plus the marketing site's
   local `LATEST_VERSION` and `v0.6.0` release note are prepared. This is the first release under the

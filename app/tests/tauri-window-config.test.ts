@@ -131,7 +131,7 @@ describe("Tauri desktop window configuration", () => {
     expect(config.plugins?.updater?.pubkey).toEqual(expect.any(String));
     expect(config.plugins?.updater?.pubkey?.length).toBeGreaterThan(80);
     expect(config.plugins?.updater?.endpoints).toEqual([
-      "https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?updater=1",
+      "https://github.com/jiabai/Locus/releases/latest/download/latest.json?updater=1",
     ]);
     expect(config.plugins?.updater?.windows?.installMode).toBe("passive");
     expect(config.bundle.resources).not.toContain("resources/models/**/*");

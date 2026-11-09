@@ -613,7 +613,7 @@ mod tests {
         let paths = command_test_paths();
         let job = RuntimeComponentDownloadJob::new(
             paths.user_data_dir.join("runtime").join("pytorch").join("0.3.9"),
-            "https://github.com/jiabai/FrameQ/releases/download/v0.3.9/pytorch-runtime-windows-x64.zip".to_string(),
+            "https://github.com/jiabai/Locus/releases/download/v0.3.9/pytorch-runtime-windows-x64.zip".to_string(),
             Some("deadbeef".to_string()),
         );
 
@@ -632,7 +632,7 @@ mod tests {
         assert_eq!(spec.stdin_payload, None);
         assert_eq!(
             env.get("APP_PYTORCH_RUNTIME_URL"),
-            Some(&"https://github.com/jiabai/FrameQ/releases/download/v0.3.9/pytorch-runtime-windows-x64.zip".to_string())
+            Some(&"https://github.com/jiabai/Locus/releases/download/v0.3.9/pytorch-runtime-windows-x64.zip".to_string())
         );
         assert_eq!(
             env.get("APP_PYTORCH_RUNTIME_SHA256"),

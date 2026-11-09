@@ -1293,7 +1293,7 @@
 ## 2026-06-23 Desktop Update Boundary
 
 - Desktop app updates use Tauri updater signed artifacts and GitHub Releases as the static updater metadata/artifact host.
-- The desktop updater endpoint is `https://github.com/jiabai/FrameQ/releases/latest/download/latest.json?updater=1`; release automation uploads `latest.json`, the NSIS installer, and signed updater bundles to the published GitHub Release.
+- The desktop updater endpoint is `https://github.com/jiabai/Locus/releases/latest/download/latest.json?updater=1`; release automation uploads `latest.json`, the NSIS installer, and signed updater bundles to the published GitHub Release.
 - Python worker code upgrades together with the desktop application bundle; v1 does not support independent worker hot updates from app-local data.
 - App-local data `updates.json` stores only update preferences such as `lastCheckedAt`, `postponedUntil`, and `skippedVersion`.
 - Updates preserve the active data root and fixed configuration root, including migrated models/components, task data, caches, authentication and local settings. Installation and restart wait for active data work; migration waits for update completion and an installed update's restart.

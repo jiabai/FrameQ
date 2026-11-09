@@ -63,7 +63,7 @@ Last updated: 2026-11-10
   Production SMTP, systemd/Nginx, off-host backups, and deployment recovery retain the existing
   2026-09-19 acceptance records and were not rerun in this task.
 - Evidence: `server/tests/lifecycle.test.ts`; hosted run
-  `https://github.com/jiabai/FrameQ/actions/runs/42017204288`;
+  `https://github.com/jiabai/Locus/actions/runs/42017204288`;
   `docs/design-docs/2026-07-22-server-auth-quota-operations-hardening.md`.
 
 ### Pinned yt-dlp Drift and Real Download Acceptance

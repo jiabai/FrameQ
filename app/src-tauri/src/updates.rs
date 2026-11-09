@@ -4,7 +4,7 @@ use std::path::Path;
 use tauri::{AppHandle, Manager};
 
 const UPDATE_PREFERENCES_FILE_NAME: &str = "updates.json";
-const RELEASES_PAGE_URL: &str = "https://github.com/jiabai/FrameQ/releases/latest";
+const RELEASES_PAGE_URL: &str = "https://github.com/jiabai/Locus/releases/latest";
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -107,7 +107,7 @@ mod tests {
         assert_eq!(delivery.in_app_updates, !cfg!(target_os = "macos"));
         assert_eq!(
             delivery.releases_url,
-            "https://github.com/jiabai/FrameQ/releases/latest"
+            "https://github.com/jiabai/Locus/releases/latest"
         );
         assert_eq!(delivery.current_version, env!("CARGO_PKG_VERSION"));
     }

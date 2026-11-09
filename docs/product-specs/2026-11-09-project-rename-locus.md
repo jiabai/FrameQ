@@ -36,10 +36,10 @@
 | 身份 | 现状 | 说明 |
 | --- | --- | --- |
 | 生产域名 | `frameq.8xf.pro` | 需要 DNS、证书、nginx 一起改，另开部署任务 |
-| GitHub 仓库 | `jiabai/FrameQ` | 仓库改名 + 更新 updater endpoint 与站点链接，另开 |
+| GitHub 仓库 | `jiabai/Locus` | 已于 2026-11-10 改名；updater endpoint、组件下载 URL 与站点链接同批更新 |
 | 生产部署目录 / 服务名 | `/opt/frameq/FrameQ`、`frameq-server` | 服务器上的迁移，另开 |
 
-代码里这些身份只在 `app/src/brand.ts`、`server/src/brand.ts`、`site/src/consts.ts` 出现，改它们不影响仓库内其它文件。
+仓库地址分散在若干常量与配置中（Tauri updater endpoint、`runtime_component.rs`、`updates.rs`、`brand.ts`、`updateClient.ts`、`site/src/consts.ts` 等），2026-11-10 已统一换成新名；生产域名、部署目录与服务名仍待运维迁移。
 
 ## 关键约束
 

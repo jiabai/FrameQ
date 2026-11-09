@@ -77,6 +77,6 @@ Done in one pass, commit `5d312de` (290 files). The product is Locus everywhere 
 Residual work, deliberately outside this change:
 
 - The previous app-data directory `%LOCALAPPDATA%\com.frameq.desktop` is untouched. Nothing migrates it; the new build starts from an empty library unless the folder is moved by hand.
-- Production identities still read `frameq`: domain `frameq.8xf.pro`, repository `jiabai/FrameQ`, server paths `/opt/frameq/FrameQ` and service `frameq-server`, database file `frameq.sqlite`. Changing them is deployment work.
+- Production identities still read `frameq`: domain `frameq.8xf.pro`, server paths `/opt/frameq/FrameQ` and service `frameq-server`, database file `frameq.sqlite`. Changing them is deployment work. The GitHub repository was renamed to `jiabai/Locus` on 2026-11-10; updater endpoint, runtime-component URLs, macOS releases link and site links were updated in the same pass, and old-name redirects were verified.
 - `site/src/consts.ts` now derives installer names from `PRODUCT_NAME`, so the marketing site must not be deployed before the first Locus release publishes `Locus_*` assets.
 - macOS-specific pieces (helper bundle `AppWebViewHost.app`, ad-hoc signing, DMG naming) changed but cannot be built or verified on this machine; the next hosted macOS run is the first real proof.
