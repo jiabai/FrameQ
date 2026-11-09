@@ -1,6 +1,8 @@
 # Active Exec Plans
 
-- `2026-11-09-project-rename-locus-plan.md` — 改名为 Locus 并彻底去品牌化：先把包名、环境变量、应用标识符、磁盘契约与日志改成中性名（`worker_core` / `APP_*` / `pro.8xf.app` / `task.json`），再把品牌收敛到三处常量并用 `{{product}}` 渲染文案；不写迁移代码，最后跑三端门禁与本机重装验证。规格、命名规范与计划已定稿，等待确认后执行。
+- `2026-11-10-v0.6.0-local-preparation-plan.md` — v0.6.0 **只在本机准备、未发版**：6 处版本号 bump 到 `0.6.0`，写好 GitHub 发布正文与站点本地发布说明，跑全套门禁与本机构建，形成一个本地 commit；不 push、不打 tag、不建 Release、不部署站点（站点 dist 已指向尚不存在的 `Locus_0.6.0_*` 资产）。用户还有 v0.6.1 功能要做，版本号保持 `0.6.0` 直到下一次发版决策。计划内含完整发版前清单与 v0.6.1 交接步骤。
+
+- `2026-11-09-project-rename-locus-plan.md` — 已完成（提交 `5d312de` / `0a8d377` / `83d50ea`）：改名为 Locus 并彻底去品牌化，包名、环境变量、应用标识符、磁盘契约与日志改成中性名（`worker_core` / `APP_*` / `pro.8xf.app` / `task.json`），品牌收敛到四处常量并用 `{{product}}` 渲染文案；不写迁移代码。残余：旧数据目录不迁移、生产域名与路径仍是旧名、macOS 侧改动等待托管 CI 首次验证。
 
 
 

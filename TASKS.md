@@ -23,6 +23,15 @@
 
 ## Active UI Work
 
+- [ ] Locus v0.6.0 — ✅ 本机准备完成、**发版待办 / NOT published** (2026-11-10). Version bumped to
+  `0.6.0` in all six release-version sources; `docs/releases/v0.6.0.md` plus the marketing site's
+  local `LATEST_VERSION` and `v0.6.0` release note are prepared. This is the first release under the
+  new name: installer assets change from `FrameQ_0.5.1_*` to `Locus_0.6.0_*`, the app data directory
+  moves to `pro.8xf.app`, and old installs are neither migrated nor auto-uninstalled. Deliberately
+  NOT done: `git push`, annotated tag, GitHub Release, updater assets, site deployment. The user has
+  v0.6.1 features to build on this baseline, so the version stays at `0.6.0` until then. Gate results
+  and the publish checklist: `docs/exec-plans/active/2026-11-10-v0.6.0-local-preparation-plan.md`.
+
 - [x] Prepare and publish Locus v0.5.1 desktop release (2026-11-09) — ✅ Tag `v0.5.1` at `36f1a6c`
   (release run `42604242544`, Windows updater / macOS Intel / macOS Apple Silicon all green;
   published `2026-11-09T11:36:10Z`). Ship set: a 20-minute execution budget for the `yt-dlp`

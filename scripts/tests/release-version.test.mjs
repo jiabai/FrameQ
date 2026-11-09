@@ -30,7 +30,7 @@ async function createVersionFixture(versions) {
   );
   await writeFile(
     join(root, "app", "src-tauri", "tauri.conf.json"),
-    JSON.stringify({ productName: "FrameQ", version: versions.tauriConfig }),
+    JSON.stringify({ productName: "App", version: versions.tauriConfig }),
   );
   await writeFile(
     join(root, "app", "src-tauri", "Cargo.toml"),
@@ -44,11 +44,11 @@ async function createVersionFixture(versions) {
   return root;
 }
 
-test("desktop release version sources agree on v0.5.1", async () => {
+test("desktop release version sources agree on v0.6.0", async () => {
   const versions = await readReleaseVersions(repositoryRoot);
 
-  assert.doesNotThrow(() => assertReleaseVersion(versions, "0.5.1"));
-  assert.deepEqual(new Set(Object.values(versions)), new Set(["0.5.1"]));
+  assert.doesNotThrow(() => assertReleaseVersion(versions, "0.6.0"));
+  assert.deepEqual(new Set(Object.values(versions)), new Set(["0.6.0"]));
 });
 
 test("release version mismatch reports only stable source labels", async () => {
