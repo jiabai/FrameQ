@@ -1097,6 +1097,21 @@
 
 ## 已完成
 
+- [x] Add free-space and writability preflight plus a step log to the Windows installer (2026-11-09) — ✅
+  `app/src-tauri/windows/installer-hooks.nsh` 在首个负载写入前用 `${DriveSpace}` 量 `$INSTDIR` 所在卷
+  余量（要求 `ESTIMATEDSIZE` + 256 MB），再建探针文件验证可写；两项结果与安装步骤追加到
+  `$TEMP\FrameQ-install.log`（超 64 KB 先清空，写入失败一律忽略）。交互安装失败弹一条中文提示
+  （写明哪项失败、实测数字或路径、日志路径）并 `Abort` 回组件页；静默 / `/P` / `/UPDATE` 只记录
+  不阻断。2026-10-20 的安全软件提示仍在最前且保持建议性质。踩到的三个坑：模板在本文件 include
+  之后才 `!define ESTIMATEDSIZE`（回退必须写在宏展开处）、`FileOpen ... a` 不定位到末尾（需
+  `FileSeek $h 0 END`）、`${GetTime}` 会覆盖 `$R0`–`$R6`（日志文本须先固化到 `$R8`）。门禁：本机
+  Tauri 自带 `makensis` 编译无告警；脚手架按真实 include 顺序跑三条静默分支——可写目录
+  `writability result=ok`、`C:\Windows\System32\...` 下 `result=fail`（该目录已由 shell 确认不可写）、
+  `ESTIMATEDSIZE=999999999` 时 `freespace result=fail required_mb=976818`——均未阻断；余量数字与
+  PowerShell 一致（95,717 MB vs 95,718 MB）。另用 11-05 生成的真实 `installer.nsi`（v0.4.3 defines）
+  重编通过：209,808,676 字节 / 9m40s / 无告警，产物已删、未发布。技术债对应条目已移入
+  Completed / Resolved。未验证：交互弹窗与 `Abort` 分支需要人工在屏幕前，签名安装包仍由发布流程产出。
+
 - [x] Make Douyin share page retries visible in exported diagnostics (2026-11-09) — ✅ worker 早已通过封闭进度契约
   上报 `douyin.page.retrying`，缺的是桌面端：进度事件不进诊断包，
   `runner/progress.rs` 在路由已校验事件时识别该 message code，按固定文案追加桌面日志
