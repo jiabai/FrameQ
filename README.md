@@ -4,6 +4,8 @@
 
 **The open-source, local-first answer to Google NotebookLM — for video and web sources.**
 
+<sub>开源版 Google NotebookLM · 本地优先 · 视频与网页即来源</sub>
+
 Paste a video link, a web page, or a local media file. FrameQ keeps it on your machine, transcribes it, and turns it into a searchable notebook with summaries, mindmaps, and grounded insight prompts.
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue?style=flat-square)](LICENSE)
@@ -22,6 +24,8 @@ Paste a video link, a web page, or a local media file. FrameQ keeps it on your m
 ## Overview
 
 **FrameQ is an open-source alternative to Google NotebookLM.** NotebookLM turns the documents you upload into a grounded notebook; FrameQ does the same job for the sources that NotebookLM cannot handle well — video links, web pages, and local media — and it does the heavy lifting on your own machine instead of in a cloud pipeline.
+
+> 一句话：**把视频、网页和本地音视频变成你的本地笔记库**——转写、摘要、思维导图、要点与解剖都在本机完成，只有你确认的 AI 步骤才会把文字发出去。
 
 Paste a supported public or authorized video link, a public web page, or pick a local video/audio file. FrameQ coordinates the local worker to download the media, extract audio, transcribe speech with SenseVoice Small, and save a note you can reopen, search, collect, and export. Summary, mindmap, insight-topic, transcript-dissection, and draft generation are separate, explicitly confirmed steps that use the server-managed LLM checkout and quota flow.
 
