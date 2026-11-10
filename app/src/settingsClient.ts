@@ -247,7 +247,7 @@ export async function saveLlmProvider(
   }
   return mapLlmProvidersResponse(
     parseLlmProvidersResponse(
-      await runner("save_llm_provider", { provider, api_key: draft.apiKey }),
+      await runner("save_llm_provider", { provider, apiKey: draft.apiKey }),
     ),
   );
 }
@@ -292,7 +292,9 @@ export async function testLlmConnection(
       model: draft.model,
       timeout_seconds: draft.timeoutSeconds,
     },
-    api_key: draft.apiKey,
+    // Tauri renames top-level command arguments to camelCase; `api_key` here
+    // would arrive as null on the Rust side.
+    apiKey: draft.apiKey,
   };
   if (draft.id !== undefined) {
     args.id = draft.id;

@@ -66,6 +66,10 @@ Rust command → 启动 worker CLI 新参数 `--probe-llm-stdin` → stdin 传�
 - **不改** `contracts/task-artifact-transaction-v1.json` 的落盘白名单：本次不新增任务产物，`llm_providers.json` 属于 app-local 设置，不进任务目录。
 - 探针请求是新 CLI 参数，不是新的 `retry_insights` 字段，因此不扩 `aiGeneration.request`；但要在契约里声明该 CLI 参数的存在与 stdin 结构，避免三端各自猜测。
 
+### IPC 参数命名边界（真实端到端才暴露的坑）
+
+Tauri 会把**顶层命令参数**重命名为 camelCase：Rust 的 `api_key: Option<String>` 必须由前端传 `apiKey`；传 `api_key` 不会报错，而是静默变成 `None`，命令照常进入业务分支再返回 `LLM_PROVIDER_API_KEY_REQUIRED` / `LLM_PROBE_API_KEY_REQUIRED`。而 `provider` / `config` 嵌套对象由 serde 直接反序列化，保持 snake_case（`base_url`、`timeout_seconds`）。所以一次调用里会同时出现两种命名风格，这是 Tauri 的边界行为，不是笔误。改这些参数名必须跑 `app/src/settingsClient.test.ts` 的形状断言，并对真实 app 调一次命令——mock runner 永远发现不了这类错误。
+
 ## 安全边界（不可让步）
 
 1. key 不进 `llm_providers.json`、`.env`、日志、诊断 ZIP、argv、进度事件、错误详情与前端状态；含 key 的 Rust 结构体 `Debug` 返回 `REDACTED`（照 `app/src-tauri/src/local_media.rs:32` 先例）。

@@ -158,6 +158,54 @@ def test_failures_map_to_fixed_codes(monkeypatch, exc, expected) -> None:
     assert "raw vendor body" not in json.dumps(result)
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        '{"code":20012,"message":"Model does not exist. Please check it carefully."}',
+        '{"error":{"message":"Model not found"}}',
+        "invalid model: deepseek-ai/nope",
+        "The model `nope` does not exist",
+        "model_not_found",
+    ],
+)
+def test_vendor_model_errors_with_http_400_map_to_model_not_found(
+    monkeypatch, message
+) -> None:
+    """Some OpenAI-compatible vendors answer HTTP 400, not 404, for a bad model."""
+
+    exc = type("BadRequestError", (Exception,), {})(f"{message} {SECRET}")
+    exc.status_code = 400
+    provider = _FakeProvider(raise_exc=exc)
+    _install(monkeypatch, provider)
+
+    result = llm_probe.run_llm_probe(json.dumps(VALID_REQUEST))
+
+    assert set(result) == {"ok", "error_code", "latency_ms"}
+    assert result["ok"] is False
+    assert result["error_code"] == llm_probe.ERROR_MODEL_NOT_FOUND
+    assert SECRET not in json.dumps(result)
+    assert "does not exist" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "status_code, message",
+    [
+        (400, "invalid request format"),
+        (422, "messages must not be empty"),
+        (500, "internal error"),
+    ],
+)
+def test_other_vendor_errors_stay_unexpected(monkeypatch, status_code, message) -> None:
+    exc = type("VendorError", (Exception,), {})(message)
+    exc.status_code = status_code
+    provider = _FakeProvider(raise_exc=exc)
+    _install(monkeypatch, provider)
+
+    result = llm_probe.run_llm_probe(json.dumps(VALID_REQUEST))
+
+    assert result["error_code"] == llm_probe.ERROR_UNEXPECTED
+
+
 def test_error_role_response_is_invalid_response(monkeypatch) -> None:
     provider = _FakeProvider(outcome="err")
     _install(monkeypatch, provider)

@@ -455,16 +455,21 @@ describe("BYOK LLM provider client", () => {
     });
   });
 
-  test("saves a new provider through the exact snake_case envelope", async () => {
+  test("saves a new provider with Tauri's camelCase key argument", async () => {
     const { calls, runner } = capture();
 
     await expect(saveLlmProvider(draft, runner)).resolves.toEqual(mappedState);
     expect(calls).toEqual([
       {
         command: "save_llm_provider",
-        args: { provider: providerEnvelope, api_key: "sk-secret-value" },
+        args: { provider: providerEnvelope, apiKey: "sk-secret-value" },
       },
     ]);
+    // Tauri renames top-level command arguments to camelCase; sending the raw
+    // snake_case name silently arrives as null and breaks every save.
+    expect(Object.keys(calls[0].args as Record<string, unknown>)).not.toContain(
+      "api_key",
+    );
   });
 
   test("edits a provider with its id and a null key to keep the stored secret", async () => {
@@ -476,7 +481,7 @@ describe("BYOK LLM provider client", () => {
         command: "save_llm_provider",
         args: {
           provider: { id: "provider-1", ...providerEnvelope },
-          api_key: null,
+          apiKey: null,
         },
       },
     ]);
@@ -532,7 +537,7 @@ describe("BYOK LLM provider client", () => {
             model: "deepseek-chat",
             timeout_seconds: 30,
           },
-          api_key: "sk-secret-value",
+          apiKey: "sk-secret-value",
         },
       },
     ]);
@@ -558,7 +563,7 @@ describe("BYOK LLM provider client", () => {
             model: "deepseek-chat",
             timeout_seconds: 30,
           },
-          api_key: null,
+          apiKey: null,
           id: "provider-1",
         },
       },

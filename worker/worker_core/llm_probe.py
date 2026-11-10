@@ -102,10 +102,41 @@ def _status_codes(chain: list[BaseException]) -> set[int]:
     return codes
 
 
+def _looks_like_unknown_model(detail: str) -> bool:
+    """Detect unknown-model failures some vendors report as HTTP 400, not 404.
+
+    The vendor body never leaves this function: only a fixed error code is
+    returned to the desktop, so provider prose cannot leak into the UI.
+    """
+
+    if not detail:
+        return False
+    if "model" not in detail:
+        return False
+    return any(
+        phrase in detail
+        for phrase in (
+            "invalid model",
+            "model is invalid",
+            "does not exist",
+            "doesn't exist",
+            "not exist",
+            "not found",
+            "notfound",
+            "not_found",
+            "unknown",
+            "unsupported",
+            "not available",
+            "no such",
+        )
+    )
+
+
 def _classify_exception(exc: BaseException) -> str:
     chain = _exception_chain(exc)
     names = " ".join(type(item).__name__.lower() for item in chain)
     statuses = _status_codes(chain)
+    detail = " ".join(str(item) for item in chain).lower()
 
     if "timeout" in names or "timedout" in names:
         return ERROR_TIMEOUT
@@ -114,7 +145,7 @@ def _classify_exception(exc: BaseException) -> str:
         for token in ("authentication", "unauthorized", "permissiondenied", "forbidden")
     ):
         return ERROR_AUTH
-    if 404 in statuses or "notfound" in names:
+    if 404 in statuses or "notfound" in names or _looks_like_unknown_model(detail):
         return ERROR_MODEL_NOT_FOUND
     if 429 in statuses or "ratelimit" in names:
         return ERROR_RATE_LIMIT

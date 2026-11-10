@@ -10,7 +10,7 @@ export const settingsFeatureResources = {
       models: { label: "模型服务", description: "托管与自定义 API" },
     },
     basic: {
-      privacy: "这里只管理本机 ASR 与数据位置；AI 配置由服务端统一管理。",
+      privacy: "这里管理本机 ASR 模型与数据位置；调用哪家模型请在「模型服务」里配置。",
       heading: "模型与数据",
       description: "模型选择用于后续任务。更改数据位置需要确认迁移并重启。",
       asrModel: "ASR 模型",
@@ -140,7 +140,7 @@ export const settingsFeatureResources = {
       models: { label: "模型服務", description: "託管與自訂 API" },
     },
     basic: {
-      privacy: "此處只管理本機 ASR 與資料位置；AI 設定由伺服器統一管理。",
+      privacy: "此處管理本機 ASR 模型與資料位置；要呼叫哪家模型請在「模型服務」裡設定。",
       heading: "模型與資料",
       description: "模型選擇用於後續工作。更改資料位置需要確認遷移並重新啟動。",
       asrModel: "ASR 模型",
@@ -270,7 +270,7 @@ export const settingsFeatureResources = {
       models: { label: "Model Service", description: "Managed and custom APIs" },
     },
     basic: {
-      privacy: "Only local ASR and data location are managed here. AI configuration is managed by the server.",
+      privacy: "Local ASR and data location are managed here. Choose which model provider to call under Model Service.",
       heading: "Model and Data",
       description: "Model selection applies to future tasks. Changing data location requires a confirmed migration and restart.",
       asrModel: "ASR model",
