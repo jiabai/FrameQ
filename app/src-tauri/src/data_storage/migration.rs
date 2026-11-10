@@ -95,16 +95,46 @@ impl DataStorageManager {
         if pending.phase!="publishing" {
             pending.phase="copying".into();pending.files_completed=0;pending.bytes_completed=0;pending.last_error=None;
             value.pending=Some(pending.clone());self.persist(&value)?;progress(self.state());
-            for entry in inventory::unique_entries(&inventory) {
-                if self.cancelled.load(Ordering::Acquire){self.finish_cancel()?;return Err(StorageError::new("Cancelled"));}
-                let destination=payload.join(&entry.destination);
-                if entry.directory {create_safe_dirs(&destination)?;continue;}
-                let base=pending.bytes_completed;
-                copy_entry(entry,&destination,&pending.target.join(".app-storage/operations").join(&pending.operation_id).join("partial"),&self.cancelled,&mut |bytes|{
-                    pending.bytes_completed=base+bytes;value.pending=Some(pending.clone());self.persist(&value)?;progress(self.state());Ok(())
-                })?;
-                pending.files_completed+=1;pending.bytes_completed=base+entry.length;value.pending=Some(pending.clone());self.persist(&value)?;progress(self.state());
-            }
+            let entries=inventory::unique_entries(&inventory);
+            for entry in &entries {if entry.directory{create_safe_dirs(&payload.join(&entry.destination))?;}}
+            let files:Vec<&Entry>=entries.iter().filter(|entry|!entry.directory).copied().collect();
+            let total_files=files.len() as u64;
+            let total_bytes=files.iter().try_fold(0u64,|total,entry|total.checked_add(entry.length).ok_or_else(||StorageError::new("InsufficientSpace")))?;
+            let partial_root=pending.target.join(".app-storage/operations").join(&pending.operation_id).join("partial");
+            let files_done=std::sync::atomic::AtomicU64::new(0);
+            let bytes_done=std::sync::atomic::AtomicU64::new(0);
+            let next=std::sync::atomic::AtomicUsize::new(0);
+            let failure:std::sync::Mutex<Option<StorageError>>=std::sync::Mutex::new(None);
+            let outcome=std::thread::scope(|scope|->Result<()> {
+                for _ in 0..worker_count() {
+                    scope.spawn(||{
+                        loop {
+                            if failure.lock().expect("copy failure mutex").is_some(){return;}
+                            if self.cancelled.load(Ordering::Acquire){return;}
+                            let index=next.fetch_add(1,Ordering::SeqCst);
+                            if index>=files.len(){return;}
+                            let entry=files[index];
+                            let reported=std::cell::Cell::new(0u64);
+                            let copied=copy_entry(entry,&payload.join(&entry.destination),&partial_root,&self.cancelled,&mut |bytes|{
+                                let delta=bytes-reported.get();
+                                if delta>0{reported.set(bytes);bytes_done.fetch_add(delta,Ordering::SeqCst);}
+                                Ok(())
+                            });
+                            if let Err(error)=copied {
+                                let mut guard=failure.lock().expect("copy failure mutex");
+                                if guard.is_none(){*guard=Some(error);}
+                                return;
+                            }
+                            // copy_entry 的进度回调只在每 8 MiB 边界上报，尾部不足 8 MiB 的部分在这里补齐。
+                            bytes_done.fetch_add(entry.length.saturating_sub(reported.get()),Ordering::SeqCst);
+                            files_done.fetch_add(1,Ordering::SeqCst);
+                        }
+                    });
+                }
+                parallel_progress_poll(self,&failure,&files_done,&bytes_done,total_files,&mut pending,&mut value,progress)?;
+                Ok(())
+            });
+            finish_parallel_pool(self,outcome,failure,&mut pending,&mut value,&mut *progress,total_files,total_bytes)?;
             pending.phase="verifying".into();pending.files_completed=0;pending.bytes_completed=0;value.pending=Some(pending.clone());self.persist(&value)?;progress(self.state());
             restore_directory_permissions(&payload,&inventory)?;
             self.verify_destination(&inventory,&payload,&mut value,&mut pending,Some(progress))?;
@@ -146,21 +176,68 @@ impl DataStorageManager {
         self.persist(&value)?;Ok(preview)
     }
     fn verify_destination(&self,inventory:&Inventory,root:&Path,value:&mut Control,pending:&mut Pending,mut callback:Option<&mut dyn FnMut(StorageStateView)>)->Result<()> {
-        for entry in inventory::unique_entries(inventory) {
-            if self.cancelled.load(Ordering::Acquire)&&pending.phase=="verifying"{self.finish_cancel()?;return Err(StorageError::new("Cancelled"));}
+        let entries=inventory::unique_entries(inventory);
+        for entry in &entries {
             let target=root.join(&entry.destination);
             verify_permissions(&target,entry)?;
-            if entry.directory {let _=safe_filesystem::open_directory(&target)?;continue;}
-            let base=pending.bytes_completed;let cancellable=pending.phase=="verifying";let mut notified=0u64;
-            let(length,hash,_)=safe_filesystem::hash_file_with_progress(&target,||!cancellable||!self.cancelled.load(Ordering::Acquire),|bytes|{
-                if bytes-notified>=8*1024*1024{pending.bytes_completed=base+bytes;value.pending=Some(pending.clone());self.persist(value).map_err(std::io::Error::other)?;if let Some(f)=callback.as_mut(){f(self.state());}notified=bytes;}Ok(())
-            })?;
-            if length!=entry.length||hash!=entry.sha256{return Err(StorageError::new("VerificationFailed"));}
-            pending.files_completed+=1;pending.bytes_completed=base+length;value.pending=Some(pending.clone());self.persist(value)?;
-            if let Some(f)=callback.as_mut(){f(self.state());}
+            if entry.directory {let _=safe_filesystem::open_directory(&target)?;}
         }
-        let mut expected:std::collections::BTreeSet<_>=inventory::unique_entries(inventory).into_iter().map(|e|e.destination.clone()).collect();
-        for entry in inventory::unique_entries(inventory){let mut path=entry.destination.parent();while let Some(parent)=path{if parent.as_os_str().is_empty(){break;}expected.insert(parent.into());path=parent.parent();}}
+        let files:Vec<&Entry>=entries.iter().filter(|entry|!entry.directory).copied().collect();
+        let total_files=files.len() as u64;
+        let total_bytes=files.iter().try_fold(0u64,|total,entry|total.checked_add(entry.length).ok_or_else(||StorageError::new("InsufficientSpace")))?;
+        let files_done=std::sync::atomic::AtomicU64::new(0);
+        let bytes_done=std::sync::atomic::AtomicU64::new(0);
+        let next=std::sync::atomic::AtomicUsize::new(0);
+        let failure:std::sync::Mutex<Option<StorageError>>=std::sync::Mutex::new(None);
+        let cancellable=pending.phase=="verifying";
+        let outcome=std::thread::scope(|scope|->Result<()> {
+            for _ in 0..worker_count() {
+                scope.spawn(||{
+                    loop {
+                        if failure.lock().expect("verify failure mutex").is_some(){return;}
+                        if self.cancelled.load(Ordering::Acquire){return;}
+                        let index=next.fetch_add(1,Ordering::SeqCst);
+                        if index>=files.len(){return;}
+                        let entry=files[index];
+                        let reported=std::cell::Cell::new(0u64);
+                        let verified=safe_filesystem::hash_file_with_progress(&root.join(&entry.destination),||!cancellable||!self.cancelled.load(Ordering::Acquire),|bytes|{
+                            let delta=bytes-reported.get();
+                            if delta>0{reported.set(bytes);bytes_done.fetch_add(delta,Ordering::SeqCst);}
+                            Ok(())
+                        });
+                        let mismatch=match verified {
+                            Ok((length,hash,_))=>if length==entry.length&&hash==entry.sha256 {
+                                bytes_done.fetch_add(entry.length.saturating_sub(reported.get()),Ordering::SeqCst);
+                                files_done.fetch_add(1,Ordering::SeqCst);
+                                None
+                            } else {Some(StorageError::new("VerificationFailed"))},
+                            Err(error)=>Some(if cancellable&&self.cancelled.load(Ordering::Acquire){StorageError::new("Cancelled")}else{error.into()}),
+                        };
+                        if let Some(error)=mismatch {
+                            let mut guard=failure.lock().expect("verify failure mutex");
+                            if guard.is_none(){*guard=Some(error);}
+                            return;
+                        }
+                    }
+                });
+            }
+            loop {
+                std::thread::sleep(PARALLEL_POLL_INTERVAL);
+                if failure.lock().expect("verify failure mutex").is_some(){break;}
+                if cancellable&&self.cancelled.load(Ordering::Acquire){break;}
+                let completed=files_done.load(Ordering::SeqCst);
+                let bytes=bytes_done.load(Ordering::SeqCst);
+                pending.files_completed=completed;pending.bytes_completed=bytes;
+                // 持久化按轮询节流：resume 按 inventory 逐文件幂等，计数滞后最多一个轮询周期，只影响进度显示。
+                value.pending=Some(pending.clone());self.persist(value)?;
+                if let Some(callback)=callback.as_mut(){callback(self.state());}
+                if completed>=total_files{break;}
+            }
+            Ok(())
+        });
+        finish_parallel_pool(self,outcome,failure,pending,value,|state|{if let Some(callback)=callback.as_mut(){callback(state);}},total_files,total_bytes)?;
+        let mut expected:std::collections::BTreeSet<_>=entries.iter().map(|e|e.destination.clone()).collect();
+        for entry in &entries{let mut path=entry.destination.parent();while let Some(parent)=path{if parent.as_os_str().is_empty(){break;}expected.insert(parent.into());path=parent.parent();}}
         let mut actual=std::collections::BTreeSet::new();collect_relative(root,root,&mut actual)?;
         if actual!=expected {return Err(StorageError::new("VerificationFailed"));}Ok(())
     }
@@ -284,7 +361,8 @@ fn copy_entry(entry:&Entry,destination:&Path,partial_root:&Path,cancel:&std::syn
         if length-notified>=8*1024*1024 {progress(length)?;notified=length;}}
     target.sync_all()?;
     if length!=entry.length||format!("{:x}",hash.finalize())!=entry.sha256 {return Err(StorageError::new("SourceChanged"));}
-    if safe_filesystem::hash_open_file_while(&mut target,||!cancel.load(Ordering::Acquire))?.1!=entry.sha256 {return Err(StorageError::new("VerificationFailed"));}
+    // 写入时已对全部字节计算 SHA-256 且 fsync，这里不再重开文件重哈希一遍：
+    // 写路径静默损坏由随后的 verify_destination 全量校验兜底，双保险收益不抵一遍全量读。
     safe_filesystem::install_owned_file(&target,&partial_parent,partial.file_name().ok_or_else(||StorageError::new("UnsafePath"))?,&destination_parent,destination.file_name().ok_or_else(||StorageError::new("UnsafePath"))?)?;
     #[cfg(unix)] if let Some(mode)=entry.unix_mode {use std::os::unix::fs::PermissionsExt;target.set_permissions(fs::Permissions::from_mode(mode))?;}
     #[cfg(windows)] if entry.readonly {let mut p=target.metadata()?.permissions();p.set_readonly(true);target.set_permissions(p)?;}
@@ -420,4 +498,43 @@ pub(super) fn recover_task_transactions(active:&ActiveStorage,sources:&[PathBuf]
     for root in roots {if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}let tasks=root.join("tasks");if !tasks.exists(){continue;}let _guard=safe_filesystem::open_directory(&tasks)?;
         for task in fs::read_dir(&tasks)? {if cancel.load(Ordering::Acquire){return Err(StorageError::new("Cancelled"));}let task=task?.path();if task.join(".artifact-transaction.json").exists(){let _guard=safe_filesystem::open_directory(&task)?;crate::task_manifest::recover_task_artifacts(&task).map_err(|_|StorageError::new("TaskRecoveryFailed"))?;}}
     }Ok(())
+}
+
+/// 并行复制/验证的工作线程数：SSD 上 4-8 线程收益明显；HDD 可能因随机寻址变慢，
+/// 先按可用并行度收敛到 [2,8]，后续可按介质探测再调。
+fn worker_count()->usize {std::thread::available_parallelism().map(|value|value.get()).unwrap_or(4).clamp(2,8)}
+const PARALLEL_POLL_INTERVAL:std::time::Duration=std::time::Duration::from_millis(250);
+
+/// 复制阶段的主线程轮询：每 250 ms 把原子计数落到 pending 并持久化一次、刷新 UI。
+/// resume 按 inventory 逐文件幂等，计数滞后最多一个轮询周期，只影响进度显示不影响恢复正确性。
+fn parallel_progress_poll(manager:&DataStorageManager,failure:&std::sync::Mutex<Option<StorageError>>,files_done:&std::sync::atomic::AtomicU64,bytes_done:&std::sync::atomic::AtomicU64,total_files:u64,pending:&mut Pending,value:&mut Control,progress:&mut dyn FnMut(StorageStateView))->Result<()> {
+    loop {
+        std::thread::sleep(PARALLEL_POLL_INTERVAL);
+        if failure.lock().expect("copy failure mutex").is_some(){return Ok(());}
+        if manager.cancelled.load(Ordering::Acquire){return Ok(());}
+        let completed=files_done.load(Ordering::SeqCst);
+        pending.files_completed=completed;pending.bytes_completed=bytes_done.load(Ordering::SeqCst);
+        value.pending=Some(pending.clone());manager.persist(value)?;
+        progress(manager.state());
+        if completed>=total_files{return Ok(());}
+    }
+}
+
+/// 并行条目池收尾：优先上报 worker 记录的失败；取消（含进度回调以 Cancelled 中断）
+/// 统一走 finish_cancel 把 pending 转入 cancelled_copy_refs；成功时把计数写成精确总量并持久化。
+fn finish_parallel_pool(manager:&DataStorageManager,outcome:Result<()>,failure:std::sync::Mutex<Option<StorageError>>,pending:&mut Pending,value:&mut Control,mut report:impl FnMut(StorageStateView),total_files:u64,total_bytes:u64)->Result<()> {
+    let failure=failure.into_inner().expect("parallel pool failure mutex");
+    let cancelled=manager.cancelled.load(Ordering::Acquire);
+    let mut error=failure;
+    if error.is_none(){error=outcome.err();}
+    match error {
+        Some(error) if error.code=="Cancelled"||cancelled=>{manager.finish_cancel()?;Err(StorageError::new("Cancelled"))},
+        Some(error)=>Err(error),
+        None if cancelled=>{manager.finish_cancel()?;Err(StorageError::new("Cancelled"))},
+        None=>{
+            pending.files_completed=total_files;pending.bytes_completed=total_bytes;
+            value.pending=Some(pending.clone());manager.persist(value)?;report(manager.state());
+            Ok(())
+        },
+    }
 }

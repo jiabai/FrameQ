@@ -157,12 +157,58 @@ pub(super) fn verify_sources_with_progress(inventory:&Inventory,cancel:Option<&s
     state.total_bytes=Some(inventory.entries.iter().filter(|entry|!entry.directory).try_fold(0u64,|total,entry|total.checked_add(entry.length).ok_or_else(||StorageError::new("InsufficientSpace")))?);
     let mut progress=ScanProgress{state,observer};progress.report()?;
     for source in &inventory.sources {
-        let mut current=Vec::new();visit(&source.path,&source.destination,&mut current,0,cancel,true,&mut progress)?;
         let end=source.entry_start.checked_add(source.entry_count).ok_or_else(||StorageError::new("ControlInvalid"))?;
-        let expected=inventory.entries.get(source.entry_start..end).ok_or_else(||StorageError::new("ControlInvalid"))?;
-        if current!=expected {return Err(StorageError::new("SourceChanged"));}
+        let expected_range=inventory.entries.get(source.entry_start..end).ok_or_else(||StorageError::new("ControlInvalid"))?;
+        let expected:std::collections::HashMap<&Path,&Entry>=expected_range.iter().map(|entry|(entry.destination.as_path(),entry)).collect();
+        let mut current=Vec::new();visit_verified(&source.path,&source.destination,&mut current,0,cancel,&expected,&mut progress)?;
+        if current!=expected_range {return Err(StorageError::new("SourceChanged"));}
     }
     progress.report()?;
+    Ok(())
+}
+/// 与 build 期 `visit` 的区别：文件先做廉价判定——同一物理文件（identity 一致）且长度与
+/// 权限都未变时，直接沿用清单里的 SHA-256，不重新哈希。判定不匹配才重哈希并参与最终比对。
+/// 同 identity 同长度的原地内容篡改不在这里防：复制阶段 `copy_entry` 边读源边比对清单哈希，
+/// 会在写入前拦下 `SourceChanged`。
+fn visit_verified(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,cancel:Option<&std::sync::atomic::AtomicBool>,expected:&std::collections::HashMap<&Path,&Entry>,progress:&mut ScanProgress<'_>)->Result<()> {
+    if cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)){return Err(StorageError::new("Cancelled"));}
+    if depth>128 || entries.len()>1_000_000 || !control::safe_relative(destination) {return Err(StorageError::new("UnsafePath"));}
+    let meta=fs::symlink_metadata(source)?;
+    if crate::atomic_files::is_link_or_reparse_point(&meta) {return Err(StorageError::new("UnsafePath"));}
+    if meta.is_dir() {
+        let id=safe_filesystem::identity(source)?;
+        entries.push(Entry{source:source.into(),destination:destination.into(),directory:true,length:0,sha256:String::new(),identity:id,readonly:meta.permissions().readonly(),unix_mode:unix_mode(&meta)});
+        let mut children=fs::read_dir(source)?.map(|v|v.map(|v|v.path())).collect::<std::io::Result<Vec<_>>>()?;
+        children.sort();
+        for child in children {visit_verified(&child,&destination.join(child.file_name().ok_or_else(||StorageError::new("UnsafePath"))?),entries,depth+1,cancel,expected,progress)?;}
+        safe_filesystem::check_identity(source,id)?;
+    } else if meta.is_file() {
+        let base=progress.state.completed_bytes;
+        progress.state.current_file_bytes=0;progress.state.current_file_total_bytes=meta.len();
+        let file=safe_filesystem::open_regular(source)?;
+        let identity=safe_filesystem::file_identity(&file)?;
+        drop(file);
+        let readonly=meta.permissions().readonly();
+        let mode=unix_mode(&meta);
+        let cheap=expected.get(destination).is_some_and(|entry|!entry.directory&&entry.length==meta.len()&&entry.identity==identity&&!entry.sha256.is_empty()&&entry.readonly==readonly&&entry.unix_mode==mode);
+        let (length,digest)=if cheap {
+            let entry=expected.get(destination).unwrap();
+            progress.state.current_file_bytes=entry.length;
+            (entry.length,entry.sha256.clone())
+        } else {
+            safe_filesystem::hash_file_with_progress(source,||!cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)),|bytes|{
+                if bytes>meta.len(){return Err(std::io::Error::other(StorageError::new("SourceChanged")));}
+                progress.state.current_file_bytes=bytes;
+                progress.state.completed_bytes=base.checked_add(bytes).ok_or_else(||std::io::Error::other(StorageError::new("ControlLimit")))?;
+                progress.report().map_err(std::io::Error::other)
+            }).map(|(length,digest,_)|(length,digest))?
+        };
+        if length!=meta.len(){return Err(StorageError::new("SourceChanged"));}
+        entries.push(Entry{source:source.into(),destination:destination.into(),directory:false,length,sha256:digest,identity,readonly,unix_mode:mode});
+        progress.state.completed_bytes=base.checked_add(length).ok_or_else(||StorageError::new("ControlLimit"))?;
+        progress.state.completed_files=progress.state.completed_files.checked_add(1).ok_or_else(||StorageError::new("ControlLimit"))?;
+        progress.report()?;
+    } else {return Err(StorageError::new("UnsafePath"));}
     Ok(())
 }
 pub(super) fn read(target:&Path,pending:&Pending)->Result<Inventory> {

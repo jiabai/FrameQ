@@ -49,13 +49,15 @@ fn migration_manager(source:&Path)->DataStorageManager {
 fn migration_start_preflight_reverification_can_cancel_before_copying() {
     let(target,_,source)=probe_fixture();let bytes=vec![71;3*1024*1024];fs::write(source.join("cache/large.bin"),&bytes).unwrap();
     let manager=migration_manager(&source);let preview=manager.prepare(target.clone(),vec![],"main",0).unwrap();
+    // 廉价判定按 identity+length 放行未变文件；改变长度使其在重验时走重哈希，才能测分块取消。
+    let mut edited=bytes.clone();edited.push(1);fs::write(source.join("cache/large.bin"),&edited).unwrap();
     let mut durable_phases=Vec::new();let mut read=0;
     let error=manager.start_with_preflight(&preview.plan_token,"main",&mut |state|{durable_phases.push(state.operation.map(|operation|operation.phase));},&mut |event|{
         if event.stage==PreflightStage::IntegrityCheck&&event.current_file_bytes>=1024*1024{read=event.current_file_bytes;manager.signal_preparation_cancel();}Ok(())
     }).unwrap_err();
     assert_eq!(error.code,"Cancelled");assert_eq!(read,1024*1024);assert!(durable_phases.is_empty());
     assert_eq!(manager.state().data_access,"ready");assert_eq!(super::super::paths_for_config(&source).unwrap().data_root,source);
-    assert_eq!(fs::read(source.join("cache/large.bin")).unwrap(),bytes);assert!(!target.join("cache").exists());
+    assert_eq!(fs::read(source.join("cache/large.bin")).unwrap(),edited);assert!(!target.join("cache").exists());
 }
 
 #[test]

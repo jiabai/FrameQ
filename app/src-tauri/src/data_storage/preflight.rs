@@ -164,6 +164,8 @@ mod tests {
         let root=root.canonicalize().unwrap();std::fs::write(root.join("config/cache/original.bin"),vec![7;3*1024*1024]).unwrap();
         let manager=super::super::engine::DataStorageManager::open(root.join("config"),root.join("resources")).unwrap();
         let preview=manager.prepare(root.join("target").canonicalize().unwrap(),vec![],"main",0).unwrap();
+        // 廉价判定按 identity+length 放行未变文件；改变长度使其在重验时走重哈希，才能测分块取消。
+        let mut edited=vec![7;3*1024*1024];edited.push(1);std::fs::write(root.join("config/cache/original.bin"),&edited).unwrap();
         let registry=Registry::default();let id=uuid::Uuid::new_v4().to_string();registry.begin(&id,"main",0,PreflightKind::Migration).unwrap();
         let mut claim=registry.claim(&id,"main",0,PreflightKind::Migration).unwrap();claim.finish(Completion::Migration{operation_id:preview.operation_id.clone(),generation:0});
         let error=manager.requires_preparation_with_progress(&preview.operation_id,&mut |progress|{
@@ -171,6 +173,6 @@ mod tests {
             claim.report(progress,|_|if cancel {registry.cancel(&id,"main",|_,_,completion|super::super::withdraw_preflight_preview(&manager,completion.unwrap())).unwrap();})
         }).unwrap_err();
         assert_eq!(error.code,"Cancelled");assert!(manager.state().operation.is_none());assert_eq!(manager.state().data_access,"ready");
-        assert_eq!(std::fs::metadata(root.join("config/cache/original.bin")).unwrap().len(),3*1024*1024);
+        assert_eq!(std::fs::metadata(root.join("config/cache/original.bin")).unwrap().len(),3*1024*1024+1);
     }
 }

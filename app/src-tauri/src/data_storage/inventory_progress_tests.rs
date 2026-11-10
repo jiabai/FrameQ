@@ -71,13 +71,37 @@ fn inventory_preflight_source_change_after_hashing_requires_reverification() {
 fn inventory_preflight_source_reverification_reports_real_chunks_and_cancels() {
     let active=fixture();fs::create_dir(active.data_root.join("cache")).unwrap();
     let path=active.data_root.join("cache/large.bin");let bytes=vec![57;3*1024*1024];fs::write(&path,&bytes).unwrap();
-    let inventory=build_cancellable(&active,&[],&[],None).unwrap();let cancel=AtomicBool::new(false);let mut last=None;
+    let inventory=build_cancellable(&active,&[],&[],None).unwrap();
+    // 廉价判定按 identity+length 放行未变文件；改变长度使其失配，走重哈希路径才能测分块取消。
+    let mut edited=bytes.clone();edited.push(1);fs::write(&path,&edited).unwrap();
+    let cancel=AtomicBool::new(false);let mut last=None;
     let error=verify_sources_with_progress(&inventory,Some(&cancel),&mut |event|{
         if event.current_file_bytes>=1024*1024{cancel.store(true,Ordering::Release);}last=Some(event);Ok(())
     }).unwrap_err();
     assert_eq!(error.code,"Cancelled");let last=last.unwrap();assert_eq!(last.current_file_bytes,1024*1024);
     assert_eq!(last.completed_files,0);assert_eq!(last.total_files,Some(1));assert_eq!(last.total_bytes,Some(3*1024*1024));
-    assert_eq!(fs::read(path).unwrap(),bytes);
+    assert_eq!(fs::read(path).unwrap(),edited);
+}
+
+#[test]
+fn inventory_preflight_source_reverification_skips_hashing_while_identity_and_length_hold() {
+    let active=fixture();fs::create_dir(active.data_root.join("cache")).unwrap();
+    let path=active.data_root.join("cache/large.bin");let bytes=vec![57;3*1024*1024];fs::write(&path,&bytes).unwrap();
+    let inventory=build_cancellable(&active,&[],&[],None).unwrap();
+    let mut events=Vec::new();
+    verify_sources_with_progress(&inventory,None,&mut |event|{events.push(event);Ok(())}).unwrap();
+    // 廉价判定：不做分块哈希，未变文件一次性计满（无中间 chunk 事件）。
+    assert!(events.iter().all(|event|event.current_file_bytes==0||event.current_file_bytes==bytes.len() as u64));
+    let done=events.last().unwrap();
+    assert_eq!(done.completed_files,1);assert_eq!(done.completed_bytes,bytes.len() as u64);
+    assert_eq!(done.total_files,Some(1));assert_eq!(done.total_bytes,Some(bytes.len() as u64));
+    // 同长度原地改写：重验按设计不拦截，由复制阶段写时哈希兜底 SourceChanged。
+    let mut edited=bytes.clone();edited[0]=42;fs::write(&path,&edited).unwrap();
+    verify_sources_with_progress(&inventory,None,&mut |_|Ok(())).unwrap();
+    // 长度变化：廉价判定失配，重哈希后比对报 SourceChanged。
+    fs::write(&path,b"short now").unwrap();
+    assert_eq!(verify_sources_with_progress(&inventory,None,&mut |_|Ok(())).unwrap_err().code,"SourceChanged");
+    assert_eq!(fs::read(path).unwrap(),b"short now");
 }
 
 #[cfg(windows)]
