@@ -15,6 +15,7 @@ type HookHarness = {
   resetRender: () => void;
   useCallback: <T extends (...args: never[]) => unknown>(callback: T) => T;
   useState: <T>(initialValue: T | (() => T)) => [T, (next: StateUpdater<T>) => void];
+  useEffect: (run: () => void, deps?: readonly unknown[]) => void;
 };
 
 const mocks = vi.hoisted(() => ({
@@ -54,6 +55,7 @@ function createHookHarness(): HookHarness {
       cursor = 0;
     },
     useCallback: (callback) => callback,
+    useEffect: () => undefined,
     useState: <T,>(initialValue: T | (() => T)) => {
       const stateIndex = cursor;
       cursor += 1;
@@ -143,6 +145,7 @@ async function createController(): Promise<{
   vi.doMock("react", () => ({
     useCallback: harness.useCallback,
     useState: harness.useState,
+    useEffect: harness.useEffect,
   }));
   const { useSettingsController } = await import("./useSettingsController");
 
@@ -178,6 +181,7 @@ describe("useSettingsController", () => {
     vi.doMock("react", () => ({
       useCallback: harness.useCallback,
       useState: harness.useState,
+      useEffect: harness.useEffect,
     }));
     const { useSettingsController } = await import("./useSettingsController");
 

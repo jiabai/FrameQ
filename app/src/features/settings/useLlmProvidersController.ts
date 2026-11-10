@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   llmProbeMessage,
   uiMessage,
@@ -35,7 +35,7 @@ function emptyDraft(): LlmProviderDraft {
   };
 }
 
-export function useLlmProvidersController() {
+export function useLlmProvidersController(enabled = false) {
   const [state, setState] = useState<LlmProvidersState>(EMPTY_STATE);
   const [busy, setBusy] = useState(false);
   const [probing, setProbing] = useState(false);
@@ -56,6 +56,14 @@ export function useLlmProvidersController() {
       setBusy(false);
     }
   }, []);
+
+  // Nothing else refreshes the list: without this the panel would keep the
+  // empty initial state on every launch after the first save.
+  useEffect(() => {
+    if (!enabled) return;
+    void loadLlmProviders();
+  }, [enabled, loadLlmProviders]);
+
 
   const startAdd = useCallback(() => {
     setError(null);

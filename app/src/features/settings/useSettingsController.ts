@@ -43,7 +43,11 @@ export function useSettingsController(
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [savedAsrModel, setSavedAsrModel] = useState("iic/SenseVoiceSmall-onnx");
-  const llmProviders = useLlmProvidersController();
+  // Load the saved providers exactly while the Models section is on screen;
+  // the section has no other refresh trigger.
+  const llmProviders = useLlmProvidersController(
+    settingsOpen && settingsCategory === "models",
+  );
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);

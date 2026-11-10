@@ -13,8 +13,12 @@ type StateUpdater<T> = T | ((current: T) => T);
 
 type HookHarness = {
   resetRender: () => void;
-  useCallback: <T extends (...args: never[]) => unknown>(callback: T) => T;
+  useCallback: <T extends (...args: never[]) => unknown>(
+    callback: T,
+    deps?: readonly unknown[],
+  ) => T;
   useState: <T>(initialValue: T | (() => T)) => [T, (next: StateUpdater<T>) => void];
+  useEffect: (run: () => void, deps?: readonly unknown[]) => void;
 };
 
 const mocks = vi.hoisted(() => ({
@@ -37,13 +41,48 @@ vi.mock("../../settingsClient", () => ({
 
 function createHookHarness(): HookHarness {
   const states: unknown[] = [];
+  const callbackCache: Array<{ deps?: readonly unknown[]; value: unknown }> = [];
+  const effects: Array<{ deps?: readonly unknown[]; run: () => void }> = [];
   let cursor = 0;
+  let callbackCursor = 0;
+  let effectCursor = 0;
 
   return {
     resetRender: () => {
       cursor = 0;
+      callbackCursor = 0;
+      effectCursor = 0;
     },
-    useCallback: (callback) => callback,
+    useEffect: (run, deps) => {
+      const index = effectCursor;
+      effectCursor += 1;
+      const previous = effects[index];
+      const changed =
+        !previous ||
+        deps === undefined ||
+        previous.deps === undefined ||
+        deps.length !== previous.deps.length ||
+        deps.some((value, position) => value !== previous.deps?.[position]);
+      if (!changed) return;
+      effects[index] = { deps, run };
+      run();
+    },
+    // Mirrors React: the identity is cached per call site and refreshed
+    // whenever the dependency array changes.
+    useCallback: (callback, deps) => {
+      const index = callbackCursor;
+      callbackCursor += 1;
+      const previous = callbackCache[index];
+      const previousDeps = previous?.deps;
+      const changed =
+        !previous ||
+        deps === undefined ||
+        previousDeps === undefined ||
+        deps.length !== previousDeps.length ||
+        deps.some((value, position) => value !== previousDeps[position]);
+      if (changed) callbackCache[index] = { deps, value: callback };
+      return callbackCache[index].value as typeof callback;
+    },
     useState: <T,>(initialValue: T | (() => T)) => {
       const stateIndex = cursor;
       cursor += 1;
@@ -86,21 +125,22 @@ function createState(
 }
 
 async function createController(): Promise<{
-  render: () => LlmProvidersController;
+  render: (enabled?: boolean) => LlmProvidersController;
 }> {
   const harness = createHookHarness();
   vi.doMock("react", () => ({
     useCallback: harness.useCallback,
     useState: harness.useState,
+    useEffect: harness.useEffect,
   }));
   const { useLlmProvidersController } = await import(
     "./useLlmProvidersController"
   );
 
   return {
-    render: () => {
+    render: (enabled = false) => {
       harness.resetRender();
-      return useLlmProvidersController();
+      return useLlmProvidersController(enabled);
     },
   };
 }
@@ -111,6 +151,28 @@ describe("useLlmProvidersController", () => {
     for (const mock of Object.values(mocks)) {
       mock.mockReset();
     }
+  });
+
+  test("loads the saved providers only once the Models section is active", async () => {
+    const loaded = createState({
+      source: "byok",
+      activeId: "provider-1",
+      providers: [createProvider()],
+    });
+    mocks.getLlmProviders.mockResolvedValue(loaded);
+    const { render } = await createController();
+
+    render(false);
+    expect(mocks.getLlmProviders).not.toHaveBeenCalled();
+
+    render(true);
+    // The load resolves asynchronously; the next render reflects it and must
+    // not trigger a second fetch (the effect deps did not change).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const controller = render(true);
+    expect(mocks.getLlmProviders).toHaveBeenCalledTimes(1);
+    expect(controller.providers).toEqual([createProvider()]);
+    expect(controller.source).toBe("byok");
   });
 
   test("starts with a managed empty state and no key in React state", async () => {
