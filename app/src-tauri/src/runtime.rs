@@ -127,6 +127,20 @@ pub(crate) fn path_to_env_string(path: impl AsRef<Path>) -> String {
     path.as_ref().to_string_lossy().replace('\\', "/")
 }
 
+/// Baseline environment every bundled worker Python process needs.
+///
+/// Real task commands (`worker_runtime::command`) and the BYOK connection
+/// probe (`llm_providers::run_probe`) spawn the same bundled interpreter, so
+/// these four entries live in one place instead of drifting between builders.
+pub(crate) fn worker_python_bootstrap_env(resource_dir: &Path) -> Result<Vec<(String, String)>, String> {
+    Ok(vec![
+        ("PYTHONPATH".to_string(), path_to_env_string(resource_dir.join("worker"))),
+        ("PYTHONUTF8".to_string(), "1".to_string()),
+        ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
+        ("PATH".to_string(), prepend_to_path(&resource_dir.join("bin"))?),
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

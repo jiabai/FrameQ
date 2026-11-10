@@ -42,7 +42,8 @@ mod local_media_contract_tests;
 
 pub(crate) use runtime::{
     bundled_python_path, ensure_runtime_dirs, path_to_env_string, prepend_to_path,
-    resolve_runtime_paths, resolve_fixed_paths, ensure_config_dirs, RuntimePaths, ALLOW_REAL_ASR_ENV, AUDIO_REVIEW_CACHE_DIR_NAME,
+    resolve_runtime_paths, resolve_fixed_paths, ensure_config_dirs, worker_python_bootstrap_env,
+    RuntimePaths, ALLOW_REAL_ASR_ENV, AUDIO_REVIEW_CACHE_DIR_NAME,
     CACHE_DIR_ENV, DESKTOP_LOG_DIR_NAME, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV,
     OUTPUT_DIR_ENV, PYTORCH_RUNTIME_DIR_ENV, PYTORCH_RUNTIME_SHA256_ENV, PYTORCH_RUNTIME_URL_ENV,
     RESOURCE_DIR_ENV, USER_DATA_DIR_ENV,

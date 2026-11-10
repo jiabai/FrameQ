@@ -451,17 +451,11 @@ fn run_probe(
     let mut command = Command::new(crate::bundled_python_path(&paths.resource_dir));
     command
         .args(["-m", "worker_core", "--probe-llm-stdin"])
-        .current_dir(&paths.user_data_dir)
-        .env(
-            "PYTHONPATH",
-            crate::path_to_env_string(paths.resource_dir.join("worker")),
-        )
-        .env("PYTHONUTF8", "1")
-        .env("PYTHONIOENCODING", "utf-8")
-        .env(
-            "PATH",
-            crate::prepend_to_path(&paths.resource_dir.join("bin"))?,
-        )
+        .current_dir(&paths.user_data_dir);
+    for (key, value) in crate::worker_python_bootstrap_env(&paths.resource_dir)? {
+        command.env(key, value);
+    }
+    command
         .env_remove(crate::settings::LLM_PROVIDER_ENV)
         .env_remove(crate::settings::LLM_BASE_URL_ENV)
         .env_remove(crate::settings::LLM_API_KEY_ENV)

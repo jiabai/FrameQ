@@ -11,8 +11,9 @@ use crate::settings::{
 };
 use crate::task_manifest;
 use crate::{
-    bundled_python_path, path_to_env_string, prepend_to_path, RuntimePaths, ALLOW_REAL_ASR_ENV,
-    CACHE_DIR_ENV, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV, OUTPUT_DIR_ENV,
+    bundled_python_path, path_to_env_string, prepend_to_path, worker_python_bootstrap_env,
+    RuntimePaths, ALLOW_REAL_ASR_ENV, CACHE_DIR_ENV, MODELSCOPE_OFFLINE_ENV, MODEL_DIR_ENV,
+    OUTPUT_DIR_ENV,
     PYTORCH_RUNTIME_DIR_ENV, PYTORCH_RUNTIME_SHA256_ENV, PYTORCH_RUNTIME_URL_ENV, RESOURCE_DIR_ENV,
     USER_DATA_DIR_ENV,
 };
@@ -319,18 +320,10 @@ pub(super) fn build_worker_command_spec_with_llm(
     {
         return Err("Worker request stdin payload was too large.".to_string());
     }
-    let resource_bin_dir = paths.resource_dir.join("bin");
-    let path_value = prepend_to_path(&resource_bin_dir)?;
     let output_root = task_manifest::configured_output_root(paths)?;
 
-    let mut env = vec![
-        (
-            "PYTHONPATH".to_string(),
-            path_to_env_string(paths.resource_dir.join("worker")),
-        ),
-        ("PYTHONUTF8".to_string(), "1".to_string()),
-        ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
-        ("PATH".to_string(), path_value),
+    let mut env = worker_python_bootstrap_env(&paths.resource_dir)?;
+    env.extend([
         (OUTPUT_DIR_ENV.to_string(), path_to_env_string(output_root)),
         (
             CACHE_DIR_ENV.to_string(),
@@ -354,7 +347,7 @@ pub(super) fn build_worker_command_spec_with_llm(
         ),
         (ALLOW_REAL_ASR_ENV.to_string(), "1".to_string()),
         (MODELSCOPE_OFFLINE_ENV.to_string(), "1".to_string()),
-    ];
+    ]);
     let env_remove = match llm {
         WorkerLlmConfig::Managed(session) => {
             if uses_llm {
