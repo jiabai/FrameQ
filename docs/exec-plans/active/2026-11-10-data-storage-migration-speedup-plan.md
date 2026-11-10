@@ -1,6 +1,6 @@
 # 2026-11-10 数据存储迁移提速执行计划
 
-状态：第一批 4 项**代码完成**，data_storage 全模块 88 passed / 0 failed（用户干净环境验证）；残余：`cargo test --lib` 全量复跑与本机真实迁移端到端计时对比。
+状态：第一批 4 项 + 第二批（verify_published 降级、build 清单并行化）**代码完成**；data_storage 全模块 88 passed / 0 failed（用户干净环境，针对第一批；第二批待复跑）。recheck 后台化、同卷 rename、validator fingerprint 化维持单独立项。
 
 ## 目标
 
@@ -31,14 +31,17 @@
 | 3 | start 源重验改廉价判定：同一物理文件（identity 一致）且长度与权限未变时直接沿用清单 SHA-256，失配才重哈希 | `inventory.rs::verify_sources_with_progress` → `visit_verified` | inventory 已记录每条目的 `identity` 与 `length`；同 identity 同长度的原地内容篡改由复制阶段写时哈希兜底（`copy_entry` 边读边比对清单哈希），不在这里重复承担 |
 | 4 | persist 节流：复制与目标验证改为每 250 ms 轮询持久化一次（原复制每 8 MiB、验证每文件持久化） | `migration.rs`（`PARALLEL_POLL_INTERVAL`、`parallel_progress_poll`） | control JSON 只承载进度计数；resume 已按 inventory 逐文件幂等，计数滞后最多一个轮询周期，只影响进度条不影响恢复正确性 |
 
-## 第二批（同一计划内可选，时间允许再做）
+## 第二批（2026-11-10 实施）
 
 | # | 改动 | 文件 | 备注 |
 | --- | --- | --- | --- |
-| 5 | estimate + build 合并为单遍树遍历（进度总量后补） | `migration.rs::prepare_inner`、`inventory.rs` | 省一次目录遍历；进度条初始无总量 |
-| 6 | `verify_destination` 与 `verify_published` 二选一全量：publish 是 `rename_no_replace` 不改内容，保留 verify_destination 全量，`verify_published` 降为权限 + 命名空间 + 抽样 | `migration.rs` | rename 语义下终态重哈希属过度验证；需回归验收覆盖 |
+| 5 | ~~estimate + build 合并为单遍树遍历~~ **决定不做** | — | estimate 是纯元数据遍历（秒级），真正开销在哈希；合并会在哈希完成前失去「空间不足」早期报错与进度总量（10 GB 库塞 1 GB 空间会白等数分钟哈希）。收益远小于损失。 |
+| 6 | `verify_published` 降级：publish 是 `rename_no_replace` 不改内容，payload 已由 verify_destination 全量哈希；发布后校验降为权限 + 文件可打开 + 命名空间结构比对 | `migration.rs::verify_published` | 重启后 recheck 仍全量校验一次 |
+| 7 | build 清单哈希并行化（用户委托决策后实施）：遍历阶段只收集元数据，文件 SHA-256 交给 2-8 worker（`hash_entries_parallel`），结果按原下标回填；跨源任务树比对与目标去重移到哈希之后（哈希前 sha 为空无法发现同任务内容冲突） | `inventory.rs::build_inner`、`visit`、`hash_entries_parallel` | 原 estimate 路径（hash=false）行为不变；进度从逐块改为 250ms 聚合轮询 |
 
-## 不在本计划内（单独立项）
+第三批（单独立项，未实施）：recheck 后台化（动 UI 状态机）、同卷 rename 快速路径（动源保留/回滚语义，需设计文档）、validator fingerprint 化（动 worker 契约边界）。
+
+## 不在本计划内（单独立项，见上「第三批」说明）
 
 - **recheck 全量哈希后台化**：改「重启后可用性」的产品语义（模型/运行时就绪状态延迟确认），牵动 UI 状态机。
 - **同卷 rename 快速路径**：动源保留与回滚语义，需独立设计文档。
@@ -58,6 +61,9 @@
 - 源重验廉价判定用 inventory 已有 `DirectoryIdentity`（volume + file index），不引入新持久化字段。Date: 2026-11-10 / WorkBuddy + User。
 - persist 节流从「64 MiB / 512 文件阈值」简化为「250 ms 轮询持久化」：语义等价（每轮询周期至多一次小 JSON 写），且 UI 进度与持久化保持同步（`state()` 读的是 persist 写入的 inner.control）。Date: 2026-11-10 / WorkBuddy。
 - 3 个依赖「重验阶段逐块哈希进度」的测试按新语义改写：改为在 prepare 后改变文件长度（identity+length 失配）强制走重哈希路径，保留「重验期间可取消」的测试意图；新增 `inventory_preflight_source_reverification_skips_hashing_while_identity_and_length_hold` 覆盖廉价判定三条行为（未变文件跳哈希、同长度原地改写不拦截、长度变化报 SourceChanged）。Date: 2026-11-10 / WorkBuddy。
+- 第二批 item 5（estimate+build 合并）实施前否决：estimate 元数据遍历秒级，合并牺牲空间早期报错与进度总量，收益不抵损失。Date: 2026-11-10 / WorkBuddy（用户委托决策）。
+- 第三批三项（recheck 后台化 / 同卷 rename / validator fingerprint 化）用户委托决策后维持单独立项：分别动产品语义、安全语义与 worker 契约，不应与本性能批次捆绑。Date: 2026-11-10 / WorkBuddy（用户委托决策）。
+- build 清单并行化实施（第三批唯一提前项）：剩余唯一单线程全量哈希遍历，复用已落地的 worker 池模式，不碰产品语义。进度从逐块哈希事件改为 250ms 聚合轮询，两个依赖逐块进度的测试改写（哈希完成断言 + 大文件线程定时取消），只读真实库测试的 reports 断言放宽为 `reports>0`。Date: 2026-11-10 / WorkBuddy（用户委托决策）。
 
 ## 验证记录
 

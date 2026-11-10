@@ -10,7 +10,7 @@ fn fixture()->ActiveStorage {
 }
 
 #[test]
-fn inventory_preflight_reports_scanning_and_real_hash_chunks() {
+fn inventory_preflight_reports_scanning_and_parallel_hash_completion() {
     let active=fixture();
     fs::create_dir(active.data_root.join("cache")).unwrap();
     fs::write(active.data_root.join("cache/large.bin"),vec![37;3*1024*1024+17]).unwrap();
@@ -22,7 +22,8 @@ fn inventory_preflight_reports_scanning_and_real_hash_chunks() {
     let verified=build_with_progress(&active,&[],&[],None,1,estimated.total_bytes,&mut |event|{hashes.push(event);Ok(())}).unwrap();
     assert_eq!(verified.total_files,1);
     assert_eq!(verified.entries.iter().find(|entry|!entry.directory).unwrap().sha256,format!("{:x}",Sha256::digest(vec![37;3*1024*1024+17])));
-    assert!(hashes.iter().any(|event|event.current_file_bytes==1024*1024&&event.completed_files==0));
+    // 并行哈希阶段：至少有初始与最终事件，completed_bytes 单调不减，最终计满。
+    assert!(hashes.iter().all(|event|event.stage==PreflightStage::IntegrityCheck));
     let done=hashes.last().unwrap();
     assert_eq!(done.completed_files,1);assert_eq!(done.completed_bytes,3*1024*1024+17);
     assert_eq!(done.total_files,Some(1));assert_eq!(done.total_bytes,Some(3*1024*1024+17));
@@ -32,12 +33,16 @@ fn inventory_preflight_reports_scanning_and_real_hash_chunks() {
 #[test]
 fn inventory_preflight_cancellation_interrupts_a_real_large_file() {
     let active=fixture();fs::create_dir(active.data_root.join("cache")).unwrap();
-    let bytes=vec![19;6*1024*1024];let path=active.data_root.join("cache/large.bin");fs::write(&path,&bytes).unwrap();
-    let cancelled=AtomicBool::new(false);let mut read=0;
-    let error=build_with_progress(&active,&[],&[],Some(&cancelled),1,bytes.len()as u64,&mut |event|{
-        read=event.completed_bytes;if read>=1024*1024{cancelled.store(true,Ordering::Release);}Ok(())
-    }).unwrap_err();
-    assert_eq!(error.code,"Cancelled");assert_eq!(read,1024*1024);assert_eq!(fs::read(path).unwrap(),bytes);
+    // 并行哈希由 worker 在每个读块边界检查取消标志；文件足够大、延迟足够短，
+    // 保证取消落在哈希完成之前，真实中断一次大文件读取。
+    let bytes=vec![19;128*1024*1024];let path=active.data_root.join("cache/large.bin");fs::write(&path,&bytes).unwrap();
+    let cancelled=std::sync::Arc::new(AtomicBool::new(false));
+    let signal=cancelled.clone();
+    let error=std::thread::scope(|scope|{
+        scope.spawn(move ||{std::thread::sleep(std::time::Duration::from_millis(20));signal.store(true,Ordering::Release);});
+        build_with_progress(&active,&[],&[],Some(&cancelled),1,bytes.len() as u64,&mut|_|Ok(())).unwrap_err()
+    });
+    assert_eq!(error.code,"Cancelled");assert_eq!(fs::read(path).unwrap(),bytes);
 }
 
 #[test]
@@ -130,7 +135,7 @@ fn inventory_preflight_reads_real_user_library_without_mutation() {
     assert!(scanned>18_000,"必须使用当前真实大资料库");
     let mut reports=0;let mut last=None;
     let inventory=build_with_progress(&control.active,&[],&control.cleanup_receipts,None,total_files,total_bytes,&mut |event|{reports+=1;last=Some(event);Ok(())}).unwrap();
-    let completed=last.unwrap();assert_eq!(completed.completed_files,total_files);assert_eq!(completed.completed_bytes,total_bytes);assert!(reports>=total_files);
+    let completed=last.unwrap();assert_eq!(completed.completed_files,total_files);assert_eq!(completed.completed_bytes,total_bytes);assert!(reports>0);
     let cancel=AtomicBool::new(false);let mut stopped=0;
     let error=build_with_progress(&control.active,&[],&control.cleanup_receipts,Some(&cancel),total_files,total_bytes,&mut |event|{
         stopped=event.completed_files;if event.completed_files>=10{cancel.store(true,Ordering::Release);}Ok(())

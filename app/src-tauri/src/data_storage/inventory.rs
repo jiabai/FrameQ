@@ -38,7 +38,7 @@ impl ScanProgress<'_> {
     }
 }
 
-fn visit(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,cancel:Option<&std::sync::atomic::AtomicBool>,hash:bool,progress:&mut ScanProgress<'_>)->Result<()> {
+fn visit(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,cancel:Option<&std::sync::atomic::AtomicBool>,progress:&mut ScanProgress<'_>)->Result<()> {
     if cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)){return Err(StorageError::new("Cancelled"));}
     if depth>128 || entries.len()>1_000_000 || !control::safe_relative(destination) {return Err(StorageError::new("UnsafePath"));}
     let meta=fs::symlink_metadata(source)?;
@@ -48,20 +48,14 @@ fn visit(source:&Path,destination:&Path,entries:&mut Vec<Entry>,depth:usize,canc
         entries.push(Entry{source:source.into(),destination:destination.into(),directory:true,length:0,sha256:String::new(),identity:id,readonly:meta.permissions().readonly(),unix_mode:unix_mode(&meta)});
         let mut children=fs::read_dir(source)?.map(|v|v.map(|v|v.path())).collect::<std::io::Result<Vec<_>>>()?;
         children.sort();
-        for child in children {visit(&child,&destination.join(child.file_name().ok_or_else(||StorageError::new("UnsafePath"))?),entries,depth+1,cancel,hash,progress)?;}
+        for child in children {visit(&child,&destination.join(child.file_name().ok_or_else(||StorageError::new("UnsafePath"))?),entries,depth+1,cancel,progress)?;}
         safe_filesystem::check_identity(source,id)?;
     } else if meta.is_file() {
-        let base=progress.state.completed_bytes;
-        progress.state.current_file_bytes=0;progress.state.current_file_total_bytes=if hash{meta.len()}else{0};progress.report()?;
-        let(length,digest,id)=if hash {safe_filesystem::hash_file_with_progress(source,||!cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)),|bytes|{
-            if bytes>meta.len(){return Err(std::io::Error::other(StorageError::new("SourceChanged")));}
-            progress.state.current_file_bytes=bytes;
-            progress.state.completed_bytes=base.checked_add(bytes).ok_or_else(||std::io::Error::other(StorageError::new("ControlLimit")))?;
-            progress.report().map_err(std::io::Error::other)
-        })?}
-            else {let file=safe_filesystem::open_regular(source)?;(file.metadata()?.len(),String::new(),safe_filesystem::file_identity(&file)?)};
-        if hash&&length!=meta.len(){return Err(StorageError::new("SourceChanged"));}
-        entries.push(Entry{source:source.into(),destination:destination.into(),directory:false,length,sha256:digest,identity:id,readonly:meta.permissions().readonly(),unix_mode:unix_mode(&meta)});
+        progress.state.current_file_bytes=0;progress.state.current_file_total_bytes=0;
+        let file=safe_filesystem::open_regular(source)?;
+        let length=file.metadata()?.len();
+        let id=safe_filesystem::file_identity(&file)?;
+        entries.push(Entry{source:source.into(),destination:destination.into(),directory:false,length,sha256:String::new(),identity:id,readonly:meta.permissions().readonly(),unix_mode:unix_mode(&meta)});
         progress.state.completed_files=progress.state.completed_files.checked_add(1).ok_or_else(||StorageError::new("ControlLimit"))?;
         progress.report()?;
     } else {return Err(StorageError::new("UnsafePath"));}
@@ -110,16 +104,23 @@ fn build_inner(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[Receip
     for receipt in receipts {
         mappings.push((active.data_root.join(&receipt.relative_path),receipt.relative_path.clone()));
     }
+    // 遍历阶段只做元数据收集（不哈希）；哈希交给并行阶段，保持清单条目顺序确定。
     let mut entries=Vec::new();let mut sources=Vec::new();let mut physical=BTreeSet::new();
-    let mut tasks:BTreeMap<PathBuf,BTreeMap<PathBuf,(bool,u64,String)>>=BTreeMap::new();
     for(source,destination)in mappings {
         match fs::symlink_metadata(&source) {Err(e) if e.kind()==std::io::ErrorKind::NotFound=>continue,Err(e)=>return Err(e.into()),Ok(_)=>{}}
         let is_directory=fs::symlink_metadata(&source)?.is_dir();
         let id=if is_directory {safe_filesystem::identity(&source)?} else {let file=safe_filesystem::open_regular(&source)?;safe_filesystem::file_identity(&file)?};
         if !physical.insert((id.volume,id.file)) {continue;}
-        let mut current=Vec::new();visit(&source,&destination,&mut current,0,cancel,hash,&mut progress)?;
+        let mut current=Vec::new();visit(&source,&destination,&mut current,0,cancel,&mut progress)?;
+        sources.push(Source{path:source,destination,identity:id,entry_start:entries.len(),entry_count:current.len()});entries.extend(current);
+    }
+    if hash {hash_entries_parallel(&mut entries,cancel,&mut progress)?;}
+    // 跨源任务树与目标去重比对放在哈希之后：哈希前 sha256 为空，无法发现同任务内容冲突。
+    let mut tasks:BTreeMap<PathBuf,BTreeMap<PathBuf,(bool,u64,String)>>=BTreeMap::new();
+    for source in &sources {
+        let range=&entries[source.entry_start..source.entry_start.checked_add(source.entry_count).ok_or_else(||StorageError::new("ControlInvalid"))?];
         let mut source_tasks:BTreeMap<PathBuf,BTreeMap<PathBuf,(bool,u64,String)>>=BTreeMap::new();
-        for entry in &current {
+        for entry in range {
             let parts:Vec<_>=entry.destination.components().collect();
             if parts.len()>=3 && parts[0].as_os_str()=="outputs" && parts[1].as_os_str()=="tasks" {
                 let task:PathBuf=parts[..3].iter().map(|p|p.as_os_str()).collect();
@@ -130,7 +131,6 @@ fn build_inner(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[Receip
             if let Some(existing)=tasks.get(&task) {if *existing!=tree {return Err(StorageError::new("TargetConflict"));}}
             else {tasks.insert(task,tree);}
         }
-        sources.push(Source{path:source,destination,identity:id,entry_start:entries.len(),entry_count:current.len()});entries.extend(current);
     }
     let mut destinations:BTreeMap<PathBuf,&Entry>=BTreeMap::new();
     for entry in &entries {
@@ -144,6 +144,88 @@ fn build_inner(active:&ActiveStorage,legacy_sources:&[PathBuf],receipts:&[Receip
     if hash{progress.state.total_files=Some(progress.state.completed_files);progress.state.total_bytes=Some(progress.state.completed_bytes);}
     progress.report()?;
     Ok(Inventory{schema_version:1,sources,entries,total_files,total_bytes,validation:serde_json::Value::Null})
+}
+
+/// 清单哈希并行阶段：文件条目按游标分发给 2-8 个 worker 逐文件 SHA-256，
+/// 结果经 channel 回主线程按原下标回填，条目顺序与跨源比对语义不变。
+/// 主线程每 250 ms 汇报一次聚合进度；worker 在每个 1 MiB 读块边界检查取消。
+fn hash_entries_parallel(entries:&mut Vec<Entry>,cancel:Option<&std::sync::atomic::AtomicBool>,progress:&mut ScanProgress<'_>)->Result<()> {
+    let file_indices:Vec<usize>=entries.iter().enumerate().filter(|(_,entry)|!entry.directory).map(|(index,_)|index).collect();
+    let total=file_indices.len() as u64;
+    let files_done=std::sync::atomic::AtomicU64::new(0);
+    let bytes_done=std::sync::atomic::AtomicU64::new(0);
+    let next=std::sync::atomic::AtomicUsize::new(0);
+    let failure:std::sync::Mutex<Option<StorageError>>=std::sync::Mutex::new(None);
+    let (tx,rx)=std::sync::mpsc::channel::<(usize,String)>();
+    // 2018 edition 闭包按整体变量捕获：先把共享状态降为引用，worker move 闭包只搬引用。
+    let entries_ref:&Vec<Entry>=entries;
+    let file_indices_ref:&Vec<usize>=&file_indices;
+    let next_ref=&next;
+    let files_done_ref=&files_done;
+    let bytes_done_ref=&bytes_done;
+    let failure_ref=&failure;
+    let outcome=std::thread::scope(|scope|->Result<()> {
+        for _ in 0..super::migration::worker_count() {
+            let tx=tx.clone();
+            scope.spawn(move ||{
+                loop {
+                    if failure_ref.lock().expect("inventory hash failure mutex").is_some(){return;}
+                    if cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)){return;}
+                    let position=next_ref.fetch_add(1,std::sync::atomic::Ordering::SeqCst);
+                    if position>=file_indices_ref.len(){return;}
+                    let slot=file_indices_ref[position];
+                    let entry=&entries_ref[slot];
+                    let reported=std::cell::Cell::new(0u64);
+                    let hashed=safe_filesystem::hash_file_with_progress(&entry.source,||!cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)),|bytes|{
+                        let delta=bytes-reported.get();
+                        if delta>0{reported.set(bytes);bytes_done_ref.fetch_add(delta,std::sync::atomic::Ordering::SeqCst);}
+                        Ok(())
+                    });
+                    match hashed {
+                        Ok((length,digest,identity))=>{
+                            if length!=entry.length||identity!=entry.identity {
+                                let mut guard=failure_ref.lock().expect("inventory hash failure mutex");
+                                if guard.is_none(){*guard=Some(StorageError::new("SourceChanged"));}
+                                return;
+                            }
+                            // 尾部不足 8 MiB 的部分在完成时补齐。
+                            bytes_done_ref.fetch_add(entry.length.saturating_sub(reported.get()),std::sync::atomic::Ordering::SeqCst);
+                            files_done_ref.fetch_add(1,std::sync::atomic::Ordering::SeqCst);
+                            let _=tx.send((slot,digest));
+                        },
+                        Err(error)=>{
+                            let mapped=if error.kind()==std::io::ErrorKind::Interrupted {StorageError::new("Cancelled")}else{StorageError::from(error)};
+                            let mut guard=failure_ref.lock().expect("inventory hash failure mutex");
+                            if guard.is_none(){*guard=Some(mapped);}
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+        drop(tx);
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            if failure.lock().expect("inventory hash failure mutex").is_some(){break;}
+            if cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)){break;}
+            progress.state.completed_files=files_done.load(std::sync::atomic::Ordering::SeqCst);
+            progress.state.completed_bytes=bytes_done.load(std::sync::atomic::Ordering::SeqCst);
+            progress.state.current_file_bytes=0;progress.state.current_file_total_bytes=0;
+            progress.report()?;
+            if progress.state.completed_files>=total{break;}
+        }
+        Ok(())
+    });
+    let mut applied=0u64;
+    while let Ok((slot,digest))=rx.try_recv(){entries[slot].sha256=digest;applied+=1;}
+    let failure=failure.into_inner().expect("inventory hash failure mutex");
+    if let Some(error)=failure {return Err(error);}
+    outcome?;
+    if applied!=total {
+        if cancel.is_some_and(|v|v.load(std::sync::atomic::Ordering::Acquire)){return Err(StorageError::new("Cancelled"));}
+        return Err(StorageError::new("VerificationFailed"));
+    }
+    Ok(())
 }
 pub(super) fn unique_entries(inventory:&Inventory)->Vec<&Entry> {
     let mut values=BTreeMap::new();for entry in &inventory.entries {values.entry(&entry.destination).or_insert(entry);}values.into_values().collect()

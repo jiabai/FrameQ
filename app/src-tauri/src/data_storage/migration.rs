@@ -407,11 +407,14 @@ fn publish(target:&Path,payload:&Path,inventory:&Inventory)->Result<()> {
     Ok(())
 }
 fn verify_published(target:&Path,inventory:&Inventory)->Result<()> {
+    // publish 只是 rename_no_replace（元数据操作，不改文件内容），payload 已由
+    // verify_destination 全量哈希过；这里降级为权限 + 文件可打开 + 命名空间结构比对，
+    // 不再对发布后的数据重复全量哈希。重启后的 recheck 仍会全量校验一次。
     let mut expected=std::collections::BTreeSet::new();
     for entry in inventory::unique_entries(inventory){
         let path=target.join(&entry.destination);
         verify_permissions(&path,entry)?;
-        if entry.directory {let _guard=safe_filesystem::open_directory(&path)?;}else{let(length,hash,_)=safe_filesystem::hash_file(&path)?;if length!=entry.length||hash!=entry.sha256{return Err(StorageError::new("VerificationFailed"));}}
+        if entry.directory {let _guard=safe_filesystem::open_directory(&path)?;}else{let _file=safe_filesystem::open_regular(&path)?;}
         if entry.destination.starts_with(".app-storage"){continue;}
         expected.insert(entry.destination.clone());let mut path=entry.destination.parent();while let Some(p)=path {if p.as_os_str().is_empty(){break;}expected.insert(p.into());path=p.parent();}
     }
@@ -502,7 +505,7 @@ pub(super) fn recover_task_transactions(active:&ActiveStorage,sources:&[PathBuf]
 
 /// 并行复制/验证的工作线程数：SSD 上 4-8 线程收益明显；HDD 可能因随机寻址变慢，
 /// 先按可用并行度收敛到 [2,8]，后续可按介质探测再调。
-fn worker_count()->usize {std::thread::available_parallelism().map(|value|value.get()).unwrap_or(4).clamp(2,8)}
+pub(super) fn worker_count()->usize {std::thread::available_parallelism().map(|value|value.get()).unwrap_or(4).clamp(2,8)}
 const PARALLEL_POLL_INTERVAL:std::time::Duration=std::time::Duration::from_millis(250);
 
 /// 复制阶段的主线程轮询：每 250 ms 把原子计数落到 pending 并持久化一次、刷新 UI。
