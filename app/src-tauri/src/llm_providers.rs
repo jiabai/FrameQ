@@ -328,9 +328,6 @@ fn save_provider(
             }
         }
     };
-    if let Some(value) = new_key {
-        store.set(&id, &value)?;
-    }
     let record = LlmProviderRecord {
         id: id.clone(),
         label: input.label,
@@ -345,9 +342,18 @@ fn save_provider(
         state.providers.push(record);
     }
     if state.active_id.is_none() {
-        state.active_id = Some(id);
+        state.active_id = Some(id.clone());
     }
+    // Commit metadata before the secret: a failed metadata write must not
+    // leave a keychain entry that no state record references — new saves
+    // generate a fresh id, so such orphans would be unreachable and invisible.
+    // The reverse failure (metadata committed, secret missing) surfaces as
+    // `has_key: false` in the list view and `ERR_KEY_REQUIRED` at task start,
+    // which the user can see and fix by editing the provider.
     save_state(user_data_dir, &state)?;
+    if let Some(value) = new_key {
+        store.set(&id, &value)?;
+    }
     list_view(user_data_dir, store)
 }
 
@@ -675,6 +681,47 @@ mod tests {
         fs::write(state_path(&dir), "{not-json").expect("seed corrupt file");
         let error = expect_error(load_state(&dir), "corrupt state");
         assert!(error.contains(ERR_STATE_INVALID), "unexpected error: {error}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Secret store whose writes always fail, to prove metadata-first ordering.
+    struct RejectingSetStore;
+
+    impl SecretStore for RejectingSetStore {
+        fn get(&self, _id: &str) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+
+        fn set(&self, _id: &str, _secret: &str) -> Result<(), String> {
+            Err("simulated keychain failure".to_string())
+        }
+
+        fn delete(&self, _id: &str) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn metadata_commits_before_the_secret_so_failures_stay_visible() {
+        let dir = temp_dir();
+        let error = expect_error(
+            save_provider(&dir, &RejectingSetStore, input("one"), Some("sk-ONE".into())),
+            "rejecting store",
+        );
+        assert!(
+            error.contains("simulated keychain failure"),
+            "unexpected error: {error}"
+        );
+        let state = load_state(&dir).expect("metadata persisted despite store failure");
+        assert_eq!(state.providers.len(), 1);
+        let id = state.providers[0].id.clone();
+        assert_eq!(state.active_id.as_deref(), Some(id.as_str()));
+
+        let store = InMemorySecretStore::default();
+        let mut retry = input("one");
+        retry.id = Some(id);
+        let view = save_provider(&dir, &store, retry, Some("sk-ONE".into())).expect("retry save");
+        assert!(view.providers[0].has_key);
         let _ = fs::remove_dir_all(dir);
     }
 
