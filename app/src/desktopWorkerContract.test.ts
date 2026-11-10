@@ -22,6 +22,11 @@ type MachineReadableSchema = {
 
 type DesktopWorkerContract = {
   contractVersion: number;
+  llmProbe: {
+    cliArgument: string;
+    request: { required: string[]; additionalProperties: boolean };
+    response: { required: string[] };
+  };
   events: {
     workerProgress: string;
     asrModelDownloadProgress: string;
@@ -87,6 +92,8 @@ type DesktopWorkerContract = {
   aiGeneration: {
     command: string;
     serverManagedLlmCheckout: boolean;
+    llmSources: string[];
+    byokProviderEnv: string[];
     request: {
       type: "object";
       required: string[];
@@ -192,10 +199,10 @@ function loadContract(): DesktopWorkerContract {
 }
 
 describe("desktop/worker contract", () => {
-  test("uses strict desktop contract v11 while preserving request versions", () => {
+  test("uses strict desktop contract v12 while preserving request versions", () => {
     const contract = loadContract();
 
-    expect(contract.contractVersion).toBe(11);
+    expect(contract.contractVersion).toBe(12);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.events.workerDiagnosticPrefix).toBe("APP_DIAGNOSTIC ");
@@ -218,7 +225,7 @@ describe("desktop/worker contract", () => {
     };
     visit(contract);
 
-    expect(contract.contractVersion).toBe(11);
+    expect(contract.contractVersion).toBe(12);
     expect(contract.processVideo.workerRequest.properties.contract_version.const).toBe(3);
     expect(contract.localMedia.workerRequest.properties.contract_version).toEqual({ const: 4 });
     expect(contract.processVideo.ipcRequest.required).toEqual(["url", "asrModel"]);
@@ -255,6 +262,28 @@ describe("desktop/worker contract", () => {
     ]) {
       expect(code).toMatch(safeCodePattern);
     }
+  });
+
+  test("declares managed and BYOK LLM sources plus the probe CLI shape", () => {
+    const contract = loadContract();
+
+    expect(contract.aiGeneration.llmSources).toEqual(["managed", "byok"]);
+    expect(contract.aiGeneration.byokProviderEnv).toEqual([
+      "APP_LLM_PROVIDER",
+      "APP_LLM_BASE_URL",
+      "APP_LLM_API_KEY",
+      "APP_LLM_MODEL",
+      "APP_LLM_TIMEOUT_SECONDS",
+    ]);
+    expect(contract.llmProbe.cliArgument).toBe("--probe-llm-stdin");
+    expect(contract.llmProbe.request.required).toEqual([
+      "base_url",
+      "api_key",
+      "model",
+      "provider",
+    ]);
+    expect(contract.llmProbe.request.additionalProperties).toBe(false);
+    expect(contract.llmProbe.response.required).toEqual(["ok", "error_code", "latency_ms"]);
   });
 
   test("declares the closed local-media source and transport boundary", () => {

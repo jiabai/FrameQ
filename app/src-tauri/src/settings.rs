@@ -45,7 +45,7 @@ const ASR_MODEL_MIGRATION_MARKER: &str = "1";
 const APP_SETTINGS_DOTENV_TEMPLATE: &str = "# Desktop local settings.\n\
 # This file lives in app-local data and is read by the desktop client/worker.\n\
 # Insight LLM configuration is managed by the server Admin Web.\n\
-# Do not put APP_LLM_* keys here.\n\
+# Do not put APP_LLM_* keys here. Configure custom models in Settings > Models.\n\
 \n\
 # Optional output directory for generated videos, transcripts, and insights.\n\
 # Leave blank to use app-local data outputs/.\n\

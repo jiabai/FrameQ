@@ -55,4 +55,33 @@ describe("localized worker error resources", () => {
       },
     });
   });
+
+  test("covers the BYOK draft-login error and every probe error code in every locale", () => {
+    const probeKeys = [
+      "invalidRequest",
+      "networkError",
+      "authFailed",
+      "modelNotFound",
+      "timeout",
+      "rateLimited",
+      "invalidResponse",
+      "unexpectedError",
+    ];
+
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(
+        lookup(errorResources[locale], "insight.draftLoginRequired"),
+        `${locale}: errors.insight.draftLoginRequired`,
+      ).toEqual(expect.any(String));
+      for (const key of probeKeys) {
+        expect(
+          lookup(errorResources[locale], `llmProbe.${key}`),
+          `${locale}: errors.llmProbe.${key}`,
+        ).toEqual(expect.any(String));
+      }
+    }
+    expect(WORKER_ERROR_MESSAGE_CODES.AI_DRAFT_REQUIRES_LOGIN).toBe(
+      "insight.draftLoginRequired",
+    );
+  });
 });

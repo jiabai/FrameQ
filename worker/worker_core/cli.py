@@ -9,6 +9,7 @@ from io import TextIOBase
 from pathlib import Path
 from uuid import UUID
 
+from worker_core import llm_probe
 from worker_core import worker_service as worker_service_module
 from worker_core.brand import PRODUCT_NAME
 from worker_core.desktop_contract import (
@@ -167,6 +168,11 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Read one source-identity request JSON object from stdin.",
     )
+    request_group.add_argument(
+        "--probe-llm-stdin",
+        action="store_true",
+        help="Probe one BYOK LLM configuration read from stdin.",
+    )
     args = parser.parse_args(argv)
 
     if args.save_web_page_stdin != (args.web_operation_id is not None):
@@ -183,6 +189,15 @@ def _main_inner(argv: Sequence[str] | None = None) -> int:
         parser.error("--asr-model is only valid with --download-asr-model")
     if args.download_asr_model and args.asr_model is None:
         parser.error("--download-asr-model requires --asr-model")
+
+    if args.probe_llm_stdin:
+        try:
+            probe_request_json = read_stdin_request(sys.stdin)
+        except (OSError, StdinRequestError):
+            probe_request_json = None
+        result = run_worker_business(lambda: llm_probe.run_llm_probe(probe_request_json))
+        print(render_result_json(result))
+        return 0
 
     is_model_download = args.download_asr_model
     stdin_mode = next(

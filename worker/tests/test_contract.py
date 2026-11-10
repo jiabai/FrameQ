@@ -26,10 +26,10 @@ def load_contract() -> dict[str, object]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
-def test_contract_version_is_strictly_v11_while_request_versions_stay_fixed() -> None:
+def test_contract_version_is_strictly_v12_while_request_versions_stay_fixed() -> None:
     contract = load_contract()
 
-    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 11
+    assert DESKTOP_WORKER_CONTRACT_VERSION == contract["contractVersion"] == 12
     assert LOCAL_MEDIA_CONTRACT_VERSION == 4
     assert PROCESS_VIDEO_CONTRACT_VERSION == 3
     assert contract["localMedia"]["workerRequest"]["properties"]["contract_version"] == {
@@ -484,6 +484,25 @@ def test_process_video_contract_is_transcript_only_and_retry_insights_is_ai_path
     assert contract["processVideo"]["serverManagedLlmCheckout"] is False
     assert contract["aiGeneration"]["command"] == "retry_insights"
     assert contract["aiGeneration"]["serverManagedLlmCheckout"] is True
+
+
+def test_ai_generation_declares_managed_and_byok_llm_sources() -> None:
+    contract = load_contract()
+    ai_generation = contract["aiGeneration"]
+
+    assert ai_generation["llmSources"] == ["managed", "byok"]
+    assert ai_generation["byokProviderEnv"] == [
+        "APP_LLM_PROVIDER",
+        "APP_LLM_BASE_URL",
+        "APP_LLM_API_KEY",
+        "APP_LLM_MODEL",
+        "APP_LLM_TIMEOUT_SECONDS",
+    ]
+    probe = contract["llmProbe"]
+    assert probe["cliArgument"] == "--probe-llm-stdin"
+    assert probe["request"]["additionalProperties"] is False
+    assert probe["request"]["required"] == ["base_url", "api_key", "model", "provider"]
+    assert probe["response"]["required"] == ["ok", "error_code", "latency_ms"]
 
 
 def test_retry_insights_request_schema_is_closed_and_machine_readable() -> None:

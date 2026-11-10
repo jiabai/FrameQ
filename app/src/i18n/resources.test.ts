@@ -148,4 +148,75 @@ describe("bundled localization resources", () => {
       "Generating AI results.",
     );
   });
+
+  test("provides the BYOK model-service copy in every locale", () => {
+    const expectedKeys = [
+      "navigation.models.label",
+      "navigation.models.description",
+      "models.heading",
+      "models.description",
+      "models.source.label",
+      "models.source.managed",
+      "models.source.byok",
+      "models.source.managedDescription",
+      "models.source.byokDescription",
+      "models.byokNotice",
+      "models.draftNotice",
+      "models.securityNotice",
+      "models.list.heading",
+      "models.list.empty",
+      "models.list.columnName",
+      "models.list.columnProvider",
+      "models.list.columnModel",
+      "models.list.columnStatus",
+      "models.list.active",
+      "models.list.inactive",
+      "models.list.edit",
+      "models.list.delete",
+      "models.list.activate",
+      "models.add",
+      "models.dialog.titleAdd",
+      "models.dialog.titleEdit",
+      "models.dialog.label",
+      "models.dialog.provider",
+      "models.dialog.baseUrl",
+      "models.dialog.apiKey",
+      "models.dialog.apiKeyPlaceholderNew",
+      "models.dialog.apiKeyPlaceholderEdit",
+      "models.dialog.model",
+      "models.dialog.timeout",
+      "models.dialog.test",
+      "models.dialog.testing",
+      "models.dialog.cancel",
+      "models.dialog.save",
+      "models.dialog.probeNotice",
+      "models.dialog.probeSuccess",
+      "models.dialog.probeFailure",
+      "models.presets.deepseek",
+      "models.presets.siliconflow",
+      "models.presets.zhipu",
+      "models.presets.moonshot",
+      "models.presets.openai",
+      "models.presets.custom",
+      "models.notice.loadFailed",
+      "models.notice.saved",
+      "models.notice.saveFailed",
+      "models.notice.deleteFailed",
+      "models.notice.activateFailed",
+      "models.notice.sourceFailed",
+      "models.notice.probeFailed",
+    ];
+
+    for (const locale of SUPPORTED_LOCALES) {
+      const settings = new Map(
+        flatten(resources[locale].settings as Record<string, unknown>),
+      );
+      for (const key of expectedKeys) {
+        expect(
+          settings.get(key),
+          `${locale}.settings.${key}`,
+        ).toEqual(expect.any(String));
+      }
+    }
+  });
 });

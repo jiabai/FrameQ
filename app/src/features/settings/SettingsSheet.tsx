@@ -23,6 +23,7 @@ import {
 } from "../../i18n/preferencePresentation";
 import type { SettingsCategory, SettingsController } from "./useSettingsController";
 import { LanguagePreferenceField } from "./LanguagePreferenceField";
+import { LlmProviderSheet } from "./LlmProviderSheet";
 import { AnimatedSheet } from "../modal/AnimatedSheet";
 import { asrModelLabel } from "../asrModel/asrModelLabels";
 import { StatusLine } from "../common/StatusLine";
@@ -169,6 +170,11 @@ export function SettingsSheet({
       label: tSettings("navigation.advanced.label"),
       description: tSettings("navigation.advanced.description"),
     },
+    {
+      id: "models",
+      label: tSettings("navigation.models.label"),
+      description: tSettings("navigation.models.description"),
+    },
   ];
   const {
     settingsOpen,
@@ -193,6 +199,7 @@ export function SettingsSheet({
     clearAudioReviewCacheFromSettings,
     clearProfileFromSettings,
     locateSettingsConfigFile,
+    llmProviders,
   } = controller;
   const renderedSettingsNotice = renderUiMessage(locale, settingsNotice);
   const renderedDiagnosticExportNotice = renderUiMessage(locale, diagnosticExportNotice);
@@ -524,7 +531,144 @@ export function SettingsSheet({
     );
   }
 
+  function renderModelsSection() {
+    const llm = llmProviders;
+    const renderedError = renderUiMessage(locale, llm.error);
+    const renderedNotice = renderUiMessage(locale, llm.notice);
+    return (
+      <section id="settings-models" className="sheet-form-section llm-provider-settings-section">
+        <div className="form-section-heading">
+          <h3>{tSettings("models.heading")}</h3>
+          <p>{tSettings("models.description")}</p>
+        </div>
+
+        <div className="settings-status-card">
+          <strong>{tSettings("models.source.label")}</strong>
+          <div className="llm-source-options">
+            <button
+              type="button"
+              className="secondary-button"
+              data-llm-source="managed"
+              aria-pressed={llm.source === "managed"}
+              disabled={llm.busy}
+              onClick={() => void llm.changeSource("managed")}
+            >
+              <span>{tSettings("models.source.managed")}</span>
+              <small>{tSettings("models.source.managedDescription")}</small>
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              data-llm-source="byok"
+              aria-pressed={llm.source === "byok"}
+              disabled={llm.busy}
+              onClick={() => void llm.changeSource("byok")}
+            >
+              <span>{tSettings("models.source.byok")}</span>
+              <small>{tSettings("models.source.byokDescription")}</small>
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-status-card quiet">
+          <small>{tSettings("models.byokNotice")}</small>
+          <small>{tSettings("models.draftNotice")}</small>
+          <small>{tSettings("models.securityNotice")}</small>
+        </div>
+
+        <div className="settings-status-card">
+          <strong>{tSettings("models.list.heading")}</strong>
+          {llm.providers.length === 0 ? (
+            <small>{tSettings("models.list.empty")}</small>
+          ) : (
+            llm.providers.map((provider) => {
+              const active = provider.id === llm.activeId;
+              return (
+                <div
+                  className="settings-status-card"
+                  data-llm-provider-id={provider.id}
+                  key={provider.id}
+                >
+                  <div>
+                    <span className={`model-status-badge ${active ? "ready" : "missing"}`}>
+                      {active
+                        ? tSettings("models.list.active")
+                        : tSettings("models.list.inactive")}
+                    </span>
+                    <div className="settings-summary-list">
+                      <span>{tSettings("models.list.columnName")}</span>
+                      <strong>{provider.label}</strong>
+                      <span>{tSettings("models.list.columnProvider")}</span>
+                      <span>{provider.provider}</span>
+                      <span>{tSettings("models.list.columnModel")}</span>
+                      <span>{provider.model}</span>
+                      <span>{tSettings("models.list.columnStatus")}</span>
+                      <span>
+                        {active
+                          ? tSettings("models.list.active")
+                          : tSettings("models.list.inactive")}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="inspiration-settings-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      data-llm-edit
+                      disabled={llm.busy}
+                      onClick={() => llm.startEdit(provider)}
+                    >
+                      {tSettings("models.list.edit")}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      data-llm-activate
+                      disabled={llm.busy}
+                      onClick={() => void llm.activateProvider(provider.id)}
+                    >
+                      {tSettings("models.list.activate")}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      data-llm-delete
+                      disabled={llm.busy}
+                      onClick={() => void llm.removeProvider(provider.id)}
+                    >
+                      {tSettings("models.list.delete")}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <button
+            type="button"
+            className="primary-button"
+            data-llm-add
+            onClick={() => llm.startAdd()}
+          >
+            {tSettings("models.add")}
+          </button>
+        </div>
+
+        {renderedError ? (
+          <StatusLine className="action-notice inline-notice">
+            {renderedError}
+          </StatusLine>
+        ) : null}
+        {renderedNotice ? (
+          <StatusLine className="action-notice inline-notice">
+            {renderedNotice}
+          </StatusLine>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
+    <>
     <AnimatedSheet
       open={settingsOpen}
       ariaLabel={tSettings("sheet.ariaLabel")}
@@ -569,6 +713,7 @@ export function SettingsSheet({
               {settingsCategory === "storage" ? renderStorageSection() : null}
               {settingsCategory === "updates" ? renderUpdatesSection() : null}
               {settingsCategory === "advanced" ? renderAdvancedSection() : null}
+              {settingsCategory === "models" ? renderModelsSection() : null}
               {renderedSettingsNotice ? (
                 <StatusLine className="action-notice inline-notice">
                   {renderedSettingsNotice}
@@ -593,5 +738,7 @@ export function SettingsSheet({
           </button>
         </div>
     </AnimatedSheet>
+    <LlmProviderSheet controller={llmProviders} locale={locale} />
+    </>
   );
 }

@@ -248,6 +248,11 @@ fn retry_insights_blocking(
 ) -> Result<TaskTerminalResult, String> {
     let _storage_access = crate::data_storage::acquire_data_access(&app)?;
     let paths = resolve_runtime_paths(&app)?;
+    if request.target == RetryInsightsTarget::Draft
+        && crate::llm_providers::draft_byok_requires_login(&paths)?
+    {
+        return Err("AI_DRAFT_REQUIRES_LOGIN".to_string());
+    }
     crate::history_deletion::guard_pending_task(&paths, &request.task_id)?;
     ensure_runtime_dirs(&paths)?;
     let output_root = task_manifest::configured_output_root(&paths)?;

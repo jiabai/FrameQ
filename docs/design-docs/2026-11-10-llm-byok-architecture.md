@@ -36,11 +36,11 @@
   —— **不含 key**。
 - API Key 存系统钥匙串：service `pro.8xf.app.llm`，account 为 provider id。
 - 抽象 `SecretStore` trait + `KeyringSecretStore` 实现；`#[cfg(test)]` 用内存 mock，CI / Linux 不依赖真实钥匙串。前端拿到的配置对象里 key 字段恒为 `null`，另有 `hasKey: boolean`；编辑已有配置时不回传明文。
-- `settings.rs` 的 `APP_SETTINGS_SCHEMA_VERSION` 从 2 升到 3，仅作一次性标记，**不迁移旧数据**（功能首次上线，无存量）。三份 .env 模板（内嵌模板、`app/src-tauri/resources/.env.template`、根 `.env.example`）保留「不要在 .env 里写 LLM 密钥」，补一句「自定义模型请在设置里管理」。
+- `settings.rs` 的 `APP_SETTINGS_SCHEMA_VERSION` **保持 2 不变**：`migrate_settings_schema()` 在版本不匹配时会把 `APP_ASR_MODEL` 一并重置为默认值（见 `settings.rs:376-399`），bump 会让所有现有安装触发一次意外的 ASR 模型回退。BYOK 配置在独立文件里，与 .env 的 schema 版本没有任何耦合。三份 .env 模板保留「不要在 .env 里写 LLM 密钥」，补一句「自定义模型请在设置里管理」。
 
 ### 测试连接
 
-Rust command → 启动 worker CLI 新参数 `--probe-llm-stdin` → stdin 传 `{ base_url, api_key, model, timeout_seconds, provider }`（key 从钥匙串取，不落 argv）→ worker 复用 `_build_single_call_provider()` 发一条 `max_tokens=1` 的极短 chat → 输出结构化结果 `{ ok, error_code, latency_ms }`。
+Rust command → 启动 worker CLI 新参数 `--probe-llm-stdin` → stdin 传封闭四字段 `{ base_url, api_key, model, provider }`（契约 v12 的 `llmProbe.request` 设了 `additionalProperties: false`，且契约遍历测试禁止出现含 `timeout` / `deadline` / `watchdog` 的键名）→ worker 复用 `_build_single_call_provider()` 发一条 `max_tokens=1` 的极短 chat → 输出结构化结果 `{ ok, error_code, latency_ms }`。探针超时由 worker 模块常量 `PROBE_TIMEOUT_SECONDS = 15` 控制，不进入跨语言契约。
 
 错误分类为固定码（网络失败、鉴权失败、模型不存在、超时、限流、响应非法），**不回显供应商原始响应体、不回显 key**。任何进入日志的文本先过 `diagnostics.rs:93-186` 的 `sanitize_diagnostic_text`。
 

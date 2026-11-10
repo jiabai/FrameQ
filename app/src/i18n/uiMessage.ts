@@ -49,3 +49,27 @@ export function renderUiMessage(
     dynamicI18n.getFixedT(locale, namespace)(key, message.args ?? {}),
   );
 }
+
+/** Maps the fixed worker probe error codes to localized, content-free UI messages. */
+export function llmProbeMessage(errorCode: string | null): UiMessage {
+  switch (errorCode) {
+    case "LLM_PROBE_INVALID_REQUEST":
+      return uiMessage("errors.llmProbe.invalidRequest");
+    case "LLM_PROBE_NETWORK_ERROR":
+      return uiMessage("errors.llmProbe.networkError");
+    case "LLM_PROBE_AUTH_FAILED":
+      return uiMessage("errors.llmProbe.authFailed");
+    case "LLM_PROBE_MODEL_NOT_FOUND":
+      return uiMessage("errors.llmProbe.modelNotFound");
+    case "LLM_PROBE_TIMEOUT":
+      return uiMessage("errors.llmProbe.timeout");
+    case "LLM_PROBE_RATE_LIMITED":
+      return uiMessage("errors.llmProbe.rateLimited");
+    case "LLM_PROBE_INVALID_RESPONSE":
+      return uiMessage("errors.llmProbe.invalidResponse");
+    case "LLM_PROBE_UNEXPECTED_ERROR":
+      return uiMessage("errors.llmProbe.unexpectedError");
+    default:
+      return uiMessage("errors.llmProbe.unexpectedError");
+  }
+}

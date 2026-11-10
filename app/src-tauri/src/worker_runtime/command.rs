@@ -1,7 +1,10 @@
 use super::facade::{AsrModelDownloadJob, RuntimeComponentDownloadJob};
+#[cfg(test)]
 use crate::account;
+use crate::llm_providers::WorkerLlmConfig;
 use crate::settings::{
-    legacy_local_llm_env_removals, ANYSEARCH_CHECKOUT_URL_ENV, ANYSEARCH_SESSION_TOKEN_ENV,
+    legacy_local_llm_env_removals, LLM_API_KEY_ENV, LLM_BASE_URL_ENV, LLM_MODEL_ENV,
+    LLM_PROVIDER_ENV, LLM_TIMEOUT_ENV, ANYSEARCH_CHECKOUT_URL_ENV, ANYSEARCH_SESSION_TOKEN_ENV,
     ANYSEARCH_SOURCE_ENV, ASR_MODEL_DOWNLOAD_SHA256_ENV, ASR_MODEL_DOWNLOAD_URL_ENV,
     LLM_CHECKOUT_REQUEST_ID_ENV, LLM_CHECKOUT_URL_ENV, LLM_SESSION_TOKEN_ENV, LLM_SOURCE_ENV,
     MODELSCOPE_ENDPOINT_ENV, SENSEVOICE_REVISION_ENV,
@@ -272,15 +275,28 @@ pub(super) fn build_runtime_component_download_command_spec(
     })
 }
 
+#[cfg(test)]
 pub(super) fn build_worker_command_spec(
     paths: &RuntimePaths,
     invocation: WorkerInvocation,
     server_managed_llm: Option<account::ServerManagedLlmInvocation>,
 ) -> Result<WorkerCommandSpec, String> {
+    build_worker_command_spec_with_llm(
+        paths,
+        invocation,
+        WorkerLlmConfig::Managed(server_managed_llm),
+    )
+}
+
+pub(super) fn build_worker_command_spec_with_llm(
+    paths: &RuntimePaths,
+    invocation: WorkerInvocation,
+    llm: WorkerLlmConfig,
+) -> Result<WorkerCommandSpec, String> {
     if let WorkerInvocation::ProcessWebPage(payload) = &invocation {
         return build_web_page_command_spec(paths, payload);
     }
-    let include_server_managed_llm = worker_invocation_uses_server_managed_llm(&invocation);
+    let uses_llm = worker_invocation_uses_server_managed_llm(&invocation);
     let (args, stdin_payload) = match invocation {
         WorkerInvocation::ProcessVideo(payload) => {
             (vec!["--request-stdin".to_string()], Some(payload))
@@ -339,29 +355,60 @@ pub(super) fn build_worker_command_spec(
         (ALLOW_REAL_ASR_ENV.to_string(), "1".to_string()),
         (MODELSCOPE_OFFLINE_ENV.to_string(), "1".to_string()),
     ];
-    if include_server_managed_llm {
-        if let Some(llm) = server_managed_llm {
-            env.push((LLM_SOURCE_ENV.to_string(), "server".to_string()));
-            env.push((
-                LLM_CHECKOUT_URL_ENV.to_string(),
-                format!(
-                    "{}/api/desktop/llm/checkouts",
-                    llm.server_base_url.trim_end_matches('/')
-                ),
-            ));
-            env.push((LLM_SESSION_TOKEN_ENV.to_string(), llm.session_token.clone()));
-            env.push((LLM_CHECKOUT_REQUEST_ID_ENV.to_string(), llm.request_id));
-            env.push((ANYSEARCH_SOURCE_ENV.to_string(), "server".to_string()));
-            env.push((
-                ANYSEARCH_CHECKOUT_URL_ENV.to_string(),
-                format!(
-                    "{}/api/desktop/anysearch/checkout",
-                    llm.server_base_url.trim_end_matches('/')
-                ),
-            ));
-            env.push((ANYSEARCH_SESSION_TOKEN_ENV.to_string(), llm.session_token));
+    let env_remove = match llm {
+        WorkerLlmConfig::Managed(session) => {
+            if uses_llm {
+                if let Some(llm) = session {
+                    env.push((LLM_SOURCE_ENV.to_string(), "server".to_string()));
+                    env.push((
+                        LLM_CHECKOUT_URL_ENV.to_string(),
+                        format!(
+                            "{}/api/desktop/llm/checkouts",
+                            llm.server_base_url.trim_end_matches('/')
+                        ),
+                    ));
+                    env.push((LLM_SESSION_TOKEN_ENV.to_string(), llm.session_token.clone()));
+                    env.push((LLM_CHECKOUT_REQUEST_ID_ENV.to_string(), llm.request_id));
+                    env.push((ANYSEARCH_SOURCE_ENV.to_string(), "server".to_string()));
+                    env.push((
+                        ANYSEARCH_CHECKOUT_URL_ENV.to_string(),
+                        format!(
+                            "{}/api/desktop/anysearch/checkout",
+                            llm.server_base_url.trim_end_matches('/')
+                        ),
+                    ));
+                    env.push((ANYSEARCH_SESSION_TOKEN_ENV.to_string(), llm.session_token));
+                }
+            }
+            legacy_local_llm_env_removals()
         }
-    }
+        WorkerLlmConfig::Byok { provider, anysearch } => {
+            if uses_llm {
+                env.push((LLM_PROVIDER_ENV.to_string(), provider.provider));
+                env.push((LLM_BASE_URL_ENV.to_string(), provider.base_url));
+                env.push((LLM_API_KEY_ENV.to_string(), provider.api_key));
+                env.push((LLM_MODEL_ENV.to_string(), provider.model));
+                env.push((
+                    LLM_TIMEOUT_ENV.to_string(),
+                    provider.timeout_seconds.to_string(),
+                ));
+                if let Some(session) = anysearch {
+                    env.push((ANYSEARCH_SOURCE_ENV.to_string(), "server".to_string()));
+                    env.push((
+                        ANYSEARCH_CHECKOUT_URL_ENV.to_string(),
+                        format!(
+                            "{}/api/desktop/anysearch/checkout",
+                            session.server_base_url.trim_end_matches('/')
+                        ),
+                    ));
+                    env.push((ANYSEARCH_SESSION_TOKEN_ENV.to_string(), session.session_token));
+                }
+                Vec::new()
+            } else {
+                legacy_local_llm_env_removals()
+            }
+        }
+    };
 
     Ok(WorkerCommandSpec {
         program: bundled_python_path(&paths.resource_dir),
@@ -369,7 +416,7 @@ pub(super) fn build_worker_command_spec(
         stdin_payload,
         env,
         clear_env: false,
-        env_remove: legacy_local_llm_env_removals(),
+        env_remove,
         current_dir: paths.user_data_dir.clone(),
     })
 }
@@ -916,5 +963,111 @@ mod tests {
             env.get("APP_ANYSEARCH_SESSION_TOKEN"),
             Some(&"desktop-token".to_string())
         );
+    }
+
+    fn byok_runtime() -> crate::llm_providers::ByokLlmRuntime {
+        crate::llm_providers::ByokLlmRuntime {
+            provider: "openai_compatible".to_string(),
+            base_url: "https://api.example.com/v1".to_string(),
+            api_key: "sk-BYOK-SECRET".to_string(),
+            model: "deepseek-chat".to_string(),
+            timeout_seconds: 30,
+        }
+    }
+
+    fn byok_server_llm() -> ServerManagedLlmInvocation {
+        ServerManagedLlmInvocation {
+            server_base_url: "http://127.0.0.1:8787".to_string(),
+            session_token: "desktop-token".to_string(),
+            request_id: "llm-run-12345678".to_string(),
+        }
+    }
+
+    const BYOK_ENV_KEYS: [&str; 5] = [
+        "APP_LLM_PROVIDER",
+        "APP_LLM_BASE_URL",
+        "APP_LLM_API_KEY",
+        "APP_LLM_MODEL",
+        "APP_LLM_TIMEOUT_SECONDS",
+    ];
+
+    #[test]
+    fn byok_retry_insights_injects_provider_env_without_removing_it() {
+        let paths = command_test_paths();
+        let request_json = r#"{"task_id":"byok-task","target":"summary","output_language":"en-US"}"#;
+        let spec = super::build_worker_command_spec_with_llm(
+            &paths,
+            WorkerInvocation::RetryInsights(request_json.to_string()),
+            crate::llm_providers::WorkerLlmConfig::Byok {
+                provider: byok_runtime(),
+                anysearch: None,
+            },
+        )
+        .expect("build BYOK worker command spec");
+        let env = spec.env_map();
+
+        assert_eq!(env.get("APP_LLM_PROVIDER"), Some(&"openai_compatible".to_string()));
+        assert_eq!(env.get("APP_LLM_BASE_URL"), Some(&"https://api.example.com/v1".to_string()));
+        assert_eq!(env.get("APP_LLM_API_KEY"), Some(&"sk-BYOK-SECRET".to_string()));
+        assert_eq!(env.get("APP_LLM_MODEL"), Some(&"deepseek-chat".to_string()));
+        assert_eq!(env.get("APP_LLM_TIMEOUT_SECONDS"), Some(&"30".to_string()));
+        assert_eq!(env.get("APP_LLM_SOURCE"), None);
+        assert_eq!(env.get("APP_LLM_CHECKOUT_URL"), None);
+        assert_eq!(env.get("APP_ANYSEARCH_SOURCE"), None);
+        for key in BYOK_ENV_KEYS {
+            assert!(
+                !spec.env_remove.iter().any(|value| value == key),
+                "{key} must not be removed in BYOK mode"
+            );
+        }
+        assert!(!spec.args.iter().any(|arg| arg.contains("sk-BYOK-SECRET")));
+        assert!(!spec
+            .stdin_payload
+            .as_deref()
+            .unwrap_or_default()
+            .contains("sk-BYOK-SECRET"));
+    }
+
+    #[test]
+    fn byok_retry_insights_injects_anysearch_only_when_logged_in() {
+        let paths = command_test_paths();
+        let request_json = r#"{"task_id":"byok-task","target":"draft","output_language":"en-US"}"#;
+        let spec = super::build_worker_command_spec_with_llm(
+            &paths,
+            WorkerInvocation::RetryInsights(request_json.to_string()),
+            crate::llm_providers::WorkerLlmConfig::Byok {
+                provider: byok_runtime(),
+                anysearch: Some(byok_server_llm()),
+            },
+        )
+        .expect("build BYOK worker command spec");
+        let env = spec.env_map();
+
+        assert_eq!(env.get("APP_ANYSEARCH_SOURCE"), Some(&"server".to_string()));
+        assert_eq!(
+            env.get("APP_ANYSEARCH_CHECKOUT_URL"),
+            Some(&"http://127.0.0.1:8787/api/desktop/anysearch/checkout".to_string())
+        );
+        assert_eq!(env.get("APP_ANYSEARCH_SESSION_TOKEN"), Some(&"desktop-token".to_string()));
+        assert_eq!(env.get("APP_LLM_SOURCE"), None);
+        assert_eq!(env.get("APP_LLM_SESSION_TOKEN"), None);
+    }
+
+    #[test]
+    fn byok_process_video_still_removes_legacy_llm_env() {
+        let paths = command_test_paths();
+        let spec = super::build_worker_command_spec_with_llm(
+            &paths,
+            WorkerInvocation::ProcessVideo("{}".to_string()),
+            crate::llm_providers::WorkerLlmConfig::Byok {
+                provider: byok_runtime(),
+                anysearch: None,
+            },
+        )
+        .expect("build BYOK process-video spec");
+        for key in BYOK_ENV_KEYS {
+            assert!(spec.env_remove.iter().any(|value| value == key));
+        }
+        assert!(!spec.env_map().contains_key("APP_LLM_API_KEY"));
     }
 }

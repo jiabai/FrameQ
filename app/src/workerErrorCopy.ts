@@ -102,6 +102,7 @@ export const WORKER_ERROR_MESSAGE_CODES = {
   AI_EMPTY_SUMMARY: "insight.emptySummary",
   AI_INVALID_MINDMAP: "insight.invalidMindmap",
   AI_EMPTY_TRANSCRIPT: "insight.emptyTranscript",
+  AI_DRAFT_REQUIRES_LOGIN: "insight.draftLoginRequired",
   WORKER_CANCELLED: "worker.cancelled",
   WORKER_ALREADY_RUNNING: "worker.alreadyRunning",
   WORKER_IDLE_TIMEOUT: "worker.idleTimeout",

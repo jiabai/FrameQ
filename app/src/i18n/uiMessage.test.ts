@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { initializeI18n } from "./i18n";
-import { renderUiMessage, uiMessage } from "./uiMessage";
+import { llmProbeMessage, renderUiMessage, uiMessage } from "./uiMessage";
 
 describe("semantic UI messages", () => {
   test("re-renders one descriptor in the requested locale", async () => {
@@ -37,5 +37,19 @@ describe("semantic UI messages", () => {
       }),
     ).toBe("");
     expect(renderUiMessage("en-US", uiMessage("common.notRegistered"))).toBe("");
+  });
+
+  test("maps fixed probe error codes to localized messages in every locale", async () => {
+    await initializeI18n("en-US");
+
+    expect(llmProbeMessage("LLM_PROBE_AUTH_FAILED")).toEqual({
+      messageCode: "errors.llmProbe.authFailed",
+    });
+    expect(llmProbeMessage("unknown-code")).toEqual({
+      messageCode: "errors.llmProbe.unexpectedError",
+    });
+    expect(renderUiMessage("en-US", llmProbeMessage("LLM_PROBE_AUTH_FAILED"))).toContain("API Key");
+    expect(renderUiMessage("zh-CN", llmProbeMessage("LLM_PROBE_TIMEOUT"))).toContain("超时");
+    expect(renderUiMessage("zh-TW", llmProbeMessage("LLM_PROBE_TIMEOUT"))).toContain("逾時");
   });
 });

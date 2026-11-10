@@ -12,6 +12,13 @@ import {
   getLlmConfig,
   saveUiPreferences,
   saveLlmConfig,
+  deleteLlmProvider,
+  getLlmProviders,
+  saveLlmProvider,
+  setActiveLlmProvider,
+  setLlmSource,
+  testLlmConnection,
+  type LlmProviderDraft,
   type SettingsCommandRunner,
 } from "./settingsClient";
 import { IpcProtocolError } from "./tauriIpcProtocol";
@@ -367,5 +374,279 @@ describe("settings client", () => {
       language: "en-US",
       recovered: false,
     });
+  });
+});
+
+describe("BYOK LLM provider client", () => {
+  const providerWire = {
+    id: "provider-1",
+    label: "DeepSeek",
+    provider: "openai_compatible",
+    base_url: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+    timeout_seconds: 30,
+    has_key: true,
+  };
+  const providersWire = {
+    source: "byok",
+    active_id: "provider-1",
+    providers: [providerWire],
+  };
+  const mappedView = {
+    id: "provider-1",
+    label: "DeepSeek",
+    provider: "openai_compatible",
+    baseUrl: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+    timeoutSeconds: 30,
+    hasKey: true,
+  };
+  const mappedState = {
+    source: "byok",
+    activeId: "provider-1",
+    providers: [mappedView],
+  };
+
+  function capture() {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return providersWire;
+    };
+    return { calls, runner };
+  }
+
+  const draft: LlmProviderDraft = {
+    label: "DeepSeek",
+    provider: "openai_compatible",
+    baseUrl: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+    timeoutSeconds: 30,
+    apiKey: "sk-secret-value",
+  };
+  const providerEnvelope = {
+    label: "DeepSeek",
+    provider: "openai_compatible",
+    base_url: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+    timeout_seconds: 30,
+  };
+
+  test("lists providers through the exact command and maps has_key without any key", async () => {
+    const { calls, runner } = capture();
+
+    await expect(getLlmProviders(runner)).resolves.toEqual(mappedState);
+    expect(calls).toEqual([{ command: "list_llm_providers", args: {} }]);
+    expect(Object.keys((await getLlmProviders(runner)).providers[0])).not.toContain("apiKey");
+    expect(JSON.stringify(mappedState)).not.toContain("sk-");
+  });
+
+  test("maps an empty provider list with a null active id", async () => {
+    const runner: SettingsCommandRunner = async () => ({
+      source: "managed",
+      active_id: null,
+      providers: [],
+    });
+
+    await expect(getLlmProviders(runner)).resolves.toEqual({
+      source: "managed",
+      activeId: null,
+      providers: [],
+    });
+  });
+
+  test("saves a new provider through the exact snake_case envelope", async () => {
+    const { calls, runner } = capture();
+
+    await expect(saveLlmProvider(draft, runner)).resolves.toEqual(mappedState);
+    expect(calls).toEqual([
+      {
+        command: "save_llm_provider",
+        args: { provider: providerEnvelope, api_key: "sk-secret-value" },
+      },
+    ]);
+  });
+
+  test("edits a provider with its id and a null key to keep the stored secret", async () => {
+    const { calls, runner } = capture();
+
+    await saveLlmProvider({ ...draft, id: "provider-1", apiKey: null }, runner);
+    expect(calls).toEqual([
+      {
+        command: "save_llm_provider",
+        args: {
+          provider: { id: "provider-1", ...providerEnvelope },
+          api_key: null,
+        },
+      },
+    ]);
+  });
+
+  test("deletes a provider by id", async () => {
+    const { calls, runner } = capture();
+
+    await expect(deleteLlmProvider("provider-1", runner)).resolves.toEqual(mappedState);
+    expect(calls).toEqual([
+      { command: "delete_llm_provider", args: { id: "provider-1" } },
+    ]);
+  });
+
+  test("sets the active provider by id", async () => {
+    const { calls, runner } = capture();
+
+    await expect(setActiveLlmProvider("provider-1", runner)).resolves.toEqual(mappedState);
+    expect(calls).toEqual([
+      { command: "set_active_llm_provider", args: { id: "provider-1" } },
+    ]);
+  });
+
+  test.each(["managed", "byok"] as const)(
+    "switches the LLM source to %s",
+    async (source) => {
+      const { calls, runner } = capture();
+
+      await expect(setLlmSource(source, runner)).resolves.toEqual(mappedState);
+      expect(calls).toEqual([{ command: "set_llm_source", args: { source } }]);
+    },
+  );
+
+  test("probes a new connection and maps the failure result", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return { ok: false, error_code: "LLM_PROBE_AUTH_FAILED", latency_ms: 812 };
+    };
+
+    await expect(testLlmConnection(draft, runner)).resolves.toEqual({
+      ok: false,
+      errorCode: "LLM_PROBE_AUTH_FAILED",
+      latencyMs: 812,
+    });
+    expect(calls).toEqual([
+      {
+        command: "test_llm_connection",
+        args: {
+          config: {
+            provider: "openai_compatible",
+            base_url: "https://api.deepseek.com/v1",
+            model: "deepseek-chat",
+            timeout_seconds: 30,
+          },
+          api_key: "sk-secret-value",
+        },
+      },
+    ]);
+  });
+
+  test("probes an existing provider with its id and a null key", async () => {
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const runner: SettingsCommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return { ok: true, error_code: null, latency_ms: 120 };
+    };
+
+    await expect(
+      testLlmConnection({ ...draft, id: "provider-1", apiKey: null }, runner),
+    ).resolves.toEqual({ ok: true, errorCode: null, latencyMs: 120 });
+    expect(calls).toEqual([
+      {
+        command: "test_llm_connection",
+        args: {
+          config: {
+            provider: "openai_compatible",
+            base_url: "https://api.deepseek.com/v1",
+            model: "deepseek-chat",
+            timeout_seconds: 30,
+          },
+          api_key: null,
+          id: "provider-1",
+        },
+      },
+    ]);
+  });
+
+  const invalidProvidersResponses: unknown[] = [
+    null,
+    {},
+    { source: "unknown", active_id: null, providers: [] },
+    { source: "managed", active_id: 42, providers: [] },
+    { source: "managed", active_id: null, providers: "not-an-array" },
+    { source: "managed", active_id: null, providers: [], extra: true },
+    {
+      source: "managed",
+      active_id: null,
+      providers: [{ ...providerWire, api_key: "sk-leak" }],
+    },
+    {
+      source: "managed",
+      active_id: null,
+      providers: [{ ...providerWire, has_key: "true" }],
+    },
+    {
+      source: "managed",
+      active_id: null,
+      providers: [{ ...providerWire, provider: "anthropic" }],
+    },
+    {
+      source: "managed",
+      active_id: null,
+      providers: [{ ...providerWire, timeout_seconds: "30" }],
+    },
+    { source: "managed", active_id: null, providers: [{ id: "incomplete" }] },
+  ];
+
+  test.each(invalidProvidersResponses.map((payload) => [payload]))(
+    "rejects malformed provider list response %#",
+    async (payload) => {
+      const runner: SettingsCommandRunner = async () => payload;
+      await expect(getLlmProviders(runner)).rejects.toEqual(
+        new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+      );
+    },
+  );
+
+  test("shares the strict parser across provider mutation commands", async () => {
+    const runner: SettingsCommandRunner = async () => ({
+      source: "byok",
+      active_id: null,
+      providers: [{ ...providerWire, api_key: "sk-leak" }],
+    });
+
+    await expect(saveLlmProvider(draft, runner)).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+    await expect(deleteLlmProvider("provider-1", runner)).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+    await expect(setActiveLlmProvider("provider-1", runner)).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+    await expect(setLlmSource("byok", runner)).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+  });
+
+  test.each(
+    [
+      null,
+      {},
+      { ok: "true", error_code: null, latency_ms: 1 },
+      { ok: true, error_code: 5, latency_ms: 1 },
+      { ok: true, error_code: null, latency_ms: -1 },
+      { ok: true, error_code: null, latency_ms: 1, extra: true },
+    ].map((payload) => [payload]),
+  )("rejects malformed probe response %#", async (payload) => {
+    const runner: SettingsCommandRunner = async () => payload;
+    await expect(testLlmConnection(draft, runner)).rejects.toEqual(
+      new IpcProtocolError("SETTINGS_IPC_RESPONSE_INVALID"),
+    );
+  });
+
+  test("surfaces Tauri command errors without echoing payloads", async () => {
+    const runner: SettingsCommandRunner = async () => {
+      throw new Error("keyring unavailable");
+    };
+
+    await expect(getLlmProviders(runner)).rejects.toThrow("keyring unavailable");
   });
 });

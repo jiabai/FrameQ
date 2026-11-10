@@ -17,8 +17,9 @@ import {
 } from "../../insightPreferencesClient";
 import type { DiagnosticExportController } from "../diagnostics/useDiagnosticExport";
 import { revealFileInDirectory } from "../common/revealPath";
+import { useLlmProvidersController } from "./useLlmProvidersController";
 
-export type SettingsCategory = "basic" | "inspiration" | "storage" | "updates" | "advanced";
+export type SettingsCategory = "basic" | "inspiration" | "storage" | "updates" | "advanced" | "models";
 
 const defaultAsrModels = ["iic/SenseVoiceSmall-onnx", "iic/SenseVoiceSmall"];
 
@@ -42,6 +43,7 @@ export function useSettingsController(
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [savedAsrModel, setSavedAsrModel] = useState("iic/SenseVoiceSmall-onnx");
+  const llmProviders = useLlmProvidersController();
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -205,6 +207,7 @@ export function useSettingsController(
     clearAudioReviewCacheFromSettings,
     clearProfileFromSettings,
     locateSettingsConfigFile,
+    llmProviders,
   };
 }
 

@@ -135,6 +135,36 @@ const defaultResponses: Record<string, unknown> = {
     config_path: "C:/Locus/app-settings.json",
     asr_model_migrated: false,
   },
+  list_llm_providers: {
+    source: "managed",
+    active_id: null,
+    providers: [],
+  },
+  save_llm_provider: {
+    source: "managed",
+    active_id: null,
+    providers: [],
+  },
+  delete_llm_provider: {
+    source: "managed",
+    active_id: null,
+    providers: [],
+  },
+  set_active_llm_provider: {
+    source: "managed",
+    active_id: null,
+    providers: [],
+  },
+  set_llm_source: {
+    source: "managed",
+    active_id: null,
+    providers: [],
+  },
+  test_llm_connection: {
+    ok: true,
+    error_code: null,
+    latency_ms: 120,
+  },
   get_audio_review_cache_usage: {
     size_bytes: 1_572_864,
     cache_path: "C:/Locus/cache/.app-audio-review",

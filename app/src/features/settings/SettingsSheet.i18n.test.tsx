@@ -8,6 +8,7 @@ import { createInitialUpdateState } from "../../updateState";
 import type { UpdateState } from "../../updateState";
 import { SettingsSheet } from "./SettingsSheet";
 import type { SettingsCategory, SettingsController } from "./useSettingsController";
+import type { LlmProvidersController } from "./useLlmProvidersController";
 
 vi.mock("./LanguagePreferenceField", () => ({
   LanguagePreferenceField: () => null,
@@ -74,6 +75,36 @@ vi.mock("react/jsx-dev-runtime", async () => {
   };
 });
 
+function llmProvidersMock(
+  overrides: Partial<LlmProvidersController> = {},
+): LlmProvidersController {
+  return {
+    source: "managed",
+    activeId: null,
+    providers: [],
+    busy: false,
+    probing: false,
+    notice: null,
+    error: null,
+    dialogOpen: false,
+    draft: null,
+    probe: null,
+    loadLlmProviders: vi.fn(),
+    startAdd: vi.fn(),
+    startEdit: vi.fn(),
+    updateDraft: vi.fn(),
+    closeDialog: vi.fn(),
+    saveDraft: vi.fn(),
+    removeProvider: vi.fn(),
+    activateProvider: vi.fn(),
+    changeSource: vi.fn(),
+    probeConnection: vi.fn(),
+    resetError: vi.fn(),
+    clearNotice: vi.fn(),
+    ...overrides,
+  } as unknown as LlmProvidersController;
+}
+
 function controller(
   category: SettingsCategory,
   overrides: Partial<SettingsController> = {},
@@ -102,6 +133,7 @@ function controller(
     clearAudioReviewCacheFromSettings: vi.fn(),
     clearProfileFromSettings: vi.fn(),
     locateSettingsConfigFile: vi.fn(),
+    llmProviders: llmProvidersMock(),
     ...overrides,
   } as unknown as SettingsController;
 }
@@ -315,5 +347,175 @@ describe("settings localization", () => {
     expect(markup).toContain('role="status"');
     expect(markup).toContain('aria-live="polite"');
     expect(markup).not.toContain("C:/Users/private");
+  });
+
+  test.each([
+    ["zh-CN", "模型服务", "Locus 托管", "我自己的 API", "不扣 AI Credit", "仍需登录", "系统钥匙串", "添加模型", "还没有添加自定义模型"],
+    ["zh-TW", "模型服務", "Locus 託管", "我自己的 API", "不扣 AI Credit", "仍需登入", "系統鑰匙圈", "新增模型", "還沒有新增自訂模型"],
+    ["en-US", "Model Service", "Locus managed", "My own API", "does not consume AI Credits", "still require sign-in", "system credential store", "Add model", "No custom models have been added yet"],
+  ] as const)(
+    "renders the localized model-service section in %s",
+    async (locale, heading, managed, byok, byokNotice, draftNotice, securityNotice, addLabel, emptyLabel) => {
+      await initializeI18n(locale);
+      const markup = renderSettings(locale, "models");
+
+      expect(markup).toContain(`>${heading}</h3>`);
+      expect(markup).toContain(`>${managed}</span>`);
+      expect(markup).toContain(`>${byok}</span>`);
+      expect(markup).toContain('data-llm-source="managed"');
+      expect(markup).toContain('data-llm-source="byok"');
+      expect(markup).toContain(byokNotice);
+      expect(markup).toContain(draftNotice);
+      expect(markup).toContain(securityNotice);
+      expect(markup).toContain(`>${addLabel}</button>`);
+      expect(markup).toContain(emptyLabel);
+    },
+  );
+
+  test.each([
+    ["zh-CN", "名称", "供应商", "模型", "已启用", "编辑", "删除", "设为启用"],
+    ["zh-TW", "名稱", "供應商", "模型", "已啟用", "編輯", "刪除", "設為啟用"],
+    ["en-US", "Name", "Provider", "Model", "Active", "Edit", "Delete", "Set active"],
+  ] as const)(
+    "renders the localized provider list in %s",
+    async (locale, nameLabel, providerLabel, modelLabel, activeLabel, editLabel, deleteLabel, activateLabel) => {
+      await initializeI18n(locale);
+      const markup = renderSettings(locale, "models", {
+        controller: {
+          llmProviders: llmProvidersMock({
+            source: "byok",
+            activeId: "provider-1",
+            providers: [
+              {
+                id: "provider-1",
+                label: "My DeepSeek",
+                provider: "openai_compatible",
+                baseUrl: "https://api.deepseek.com/v1",
+                model: "deepseek-chat",
+                timeoutSeconds: 30,
+                hasKey: true,
+              },
+            ],
+          }),
+        },
+      });
+
+      expect(markup).toContain('data-llm-provider-id="provider-1"');
+      expect(markup).toContain("My DeepSeek");
+      expect(markup).toContain("deepseek-chat");
+      expect(markup).toContain(nameLabel);
+      expect(markup).toContain(providerLabel);
+      expect(markup).toContain(modelLabel);
+      expect(markup).toContain(activeLabel);
+      expect(markup).toContain(`>${editLabel}</button>`);
+      expect(markup).toContain(`>${deleteLabel}</button>`);
+      expect(markup).toContain(`>${activateLabel}</button>`);
+    },
+  );
+
+  test.each([
+    ["zh-CN", "添加模型", "接口地址", "模型名称", "测试连接", "取消", "保存", "智谱", "消耗极少量 token"],
+    ["zh-TW", "新增模型", "介面位址", "模型名稱", "測試連線", "取消", "儲存", "智譜", "消耗極少量 token"],
+    ["en-US", "Add model", "Base URL", "Model", "Test connection", "Cancel", "Save", "Zhipu", "tiny amount of tokens"],
+  ] as const)(
+    "renders the localized add-model dialog in %s",
+    async (locale, title, baseUrlLabel, modelLabel, testLabel, cancelLabel, saveLabel, presetLabel, probeNotice) => {
+      await initializeI18n(locale);
+      const markup = renderSettings(locale, "models", {
+        controller: {
+          llmProviders: llmProvidersMock({
+            dialogOpen: true,
+            draft: {
+              label: "My DeepSeek",
+              provider: "openai_compatible",
+              baseUrl: "https://api.deepseek.com/v1",
+              model: "deepseek-chat",
+              timeoutSeconds: 30,
+              apiKey: null,
+            },
+          }),
+        },
+      });
+
+      expect(markup).toContain(`>${title}</h2>`);
+      expect(markup).toContain(baseUrlLabel);
+      expect(markup).toContain("API Key");
+      expect(markup).toContain(modelLabel);
+      expect(markup).toContain(`>${testLabel}</button>`);
+      expect(markup).toContain(`>${cancelLabel}</button>`);
+      expect(markup).toContain(`>${saveLabel}</button>`);
+      expect(markup).toContain(presetLabel);
+      expect(markup).toContain(probeNotice);
+      expect(markup).toContain("data-llm-test");
+      expect(markup).not.toContain("sk-secret");
+    },
+  );
+
+  test.each([
+    ["zh-CN", "编辑模型", "耗时 180 ms"],
+    ["zh-TW", "編輯模型", "耗時 180 ms"],
+    ["en-US", "Edit model", "Latency: 180 ms"],
+  ] as const)(
+    "renders the edit dialog and a successful probe result in %s",
+    async (locale, title, probeResult) => {
+      await initializeI18n(locale);
+      const markup = renderSettings(locale, "models", {
+        controller: {
+          llmProviders: llmProvidersMock({
+            dialogOpen: true,
+            draft: {
+              id: "provider-1",
+              label: "My DeepSeek",
+              provider: "openai_compatible",
+              baseUrl: "https://api.deepseek.com/v1",
+              model: "deepseek-chat",
+              timeoutSeconds: 30,
+              apiKey: null,
+            },
+            probe: { ok: true, errorCode: null, latencyMs: 180 },
+          }),
+        },
+      });
+
+      expect(markup).toContain(`>${title}</h2>`);
+      expect(markup).toContain(probeResult);
+    },
+  );
+
+  test("wires the source switch and test-connection buttons to the controller", async () => {
+    await initializeI18n("en-US");
+    const changeSource = vi.fn();
+    const probeConnection = vi.fn();
+    renderSettings("en-US", "models", {
+      controller: {
+        llmProviders: llmProvidersMock({
+          dialogOpen: true,
+          draft: {
+            label: "My DeepSeek",
+            provider: "openai_compatible",
+            baseUrl: "https://api.deepseek.com/v1",
+            model: "deepseek-chat",
+            timeoutSeconds: 30,
+            apiKey: null,
+          },
+          changeSource,
+          probeConnection,
+        }),
+      },
+    });
+
+    const byokButton = capturedButtons.find(
+      ({ props }) => props["data-llm-source"] === "byok",
+    );
+    expect(byokButton).toBeDefined();
+    await clickRenderedButton(byokButton as CapturedButton);
+    expect(changeSource).toHaveBeenCalledWith("byok");
+
+    const testButton = capturedButtons.find(
+      ({ props }) => props["data-llm-test"] !== undefined,
+    );
+    expect(testButton).toBeDefined();
+    await clickRenderedButton(testButton as CapturedButton);
+    expect(probeConnection).toHaveBeenCalledTimes(1);
   });
 });

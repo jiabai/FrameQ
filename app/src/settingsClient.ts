@@ -37,6 +37,63 @@ export type LlmConfigDraft = {
   asrModel: string;
 };
 
+export type LlmSource = "managed" | "byok";
+export type LlmProviderKind = "openai" | "openai_compatible";
+
+export type LlmProviderView = {
+  id: string;
+  label: string;
+  provider: LlmProviderKind;
+  baseUrl: string;
+  model: string;
+  timeoutSeconds: number;
+  hasKey: boolean;
+};
+
+export type LlmProvidersState = {
+  source: LlmSource;
+  activeId: string | null;
+  providers: LlmProviderView[];
+};
+
+export type LlmProviderDraft = {
+  id?: string;
+  label: string;
+  provider: LlmProviderKind;
+  baseUrl: string;
+  model: string;
+  timeoutSeconds: number;
+  apiKey: string | null;
+};
+
+export type LlmProbeResult = {
+  ok: boolean;
+  errorCode: string | null;
+  latencyMs: number;
+};
+
+type LlmProviderWire = {
+  id: string;
+  label: string;
+  provider: LlmProviderKind;
+  base_url: string;
+  model: string;
+  timeout_seconds: number;
+  has_key: boolean;
+};
+
+type LlmProvidersResponseWire = {
+  source: LlmSource;
+  active_id: string | null;
+  providers: LlmProviderWire[];
+};
+
+type LlmProbeResponseWire = {
+  ok: boolean;
+  error_code: string | null;
+  latency_ms: number;
+};
+
 export type AsrModelStatusResponseView = {
   userDataDir: string;
   defaultOutputDir: string;
@@ -163,6 +220,85 @@ export async function saveLlmConfig(
         },
       }),
     ),
+  );
+}
+
+export async function getLlmProviders(
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<LlmProvidersState> {
+  return mapLlmProvidersResponse(
+    parseLlmProvidersResponse(await runner("list_llm_providers", {})),
+  );
+}
+
+export async function saveLlmProvider(
+  draft: LlmProviderDraft,
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<LlmProvidersState> {
+  const provider: Record<string, unknown> = {
+    label: draft.label,
+    provider: draft.provider,
+    base_url: draft.baseUrl,
+    model: draft.model,
+    timeout_seconds: draft.timeoutSeconds,
+  };
+  if (draft.id !== undefined) {
+    provider.id = draft.id;
+  }
+  return mapLlmProvidersResponse(
+    parseLlmProvidersResponse(
+      await runner("save_llm_provider", { provider, api_key: draft.apiKey }),
+    ),
+  );
+}
+
+export async function deleteLlmProvider(
+  id: string,
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<LlmProvidersState> {
+  return mapLlmProvidersResponse(
+    parseLlmProvidersResponse(await runner("delete_llm_provider", { id })),
+  );
+}
+
+export async function setActiveLlmProvider(
+  id: string,
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<LlmProvidersState> {
+  return mapLlmProvidersResponse(
+    parseLlmProvidersResponse(
+      await runner("set_active_llm_provider", { id }),
+    ),
+  );
+}
+
+export async function setLlmSource(
+  source: LlmSource,
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<LlmProvidersState> {
+  return mapLlmProvidersResponse(
+    parseLlmProvidersResponse(await runner("set_llm_source", { source })),
+  );
+}
+
+export async function testLlmConnection(
+  draft: LlmProviderDraft,
+  runner: SettingsCommandRunner = defaultSettingsRunner,
+): Promise<LlmProbeResult> {
+  const args: Record<string, unknown> = {
+    config: {
+      provider: draft.provider,
+      base_url: draft.baseUrl,
+      model: draft.model,
+      timeout_seconds: draft.timeoutSeconds,
+    },
+    api_key: draft.apiKey,
+  };
+  if (draft.id !== undefined) {
+    args.id = draft.id;
+  }
+  return mapLlmProbeResponse(
+    parseLlmProbeResponse(await runner("test_llm_connection", args)),
   );
 }
 
@@ -409,5 +545,133 @@ function mapUiPreferencesResponse(response: unknown): UiPreferencesView {
     schemaVersion: 1,
     language: record.language,
     recovered: record.recovered,
+  };
+}
+
+const LLM_PROVIDER_KEYS = [
+  "id",
+  "label",
+  "provider",
+  "base_url",
+  "model",
+  "timeout_seconds",
+  "has_key",
+] as const;
+
+function isLlmSource(value: unknown): value is LlmSource {
+  return value === "managed" || value === "byok";
+}
+
+function isLlmProviderKind(value: unknown): value is LlmProviderKind {
+  return value === "openai" || value === "openai_compatible";
+}
+
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function parseLlmProviderWire(value: unknown): LlmProviderWire {
+  const record = readIpcDataObject(
+    value,
+    [...LLM_PROVIDER_KEYS],
+    [],
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  if (
+    typeof record.id !== "string" ||
+    typeof record.label !== "string" ||
+    !isLlmProviderKind(record.provider) ||
+    typeof record.base_url !== "string" ||
+    typeof record.model !== "string" ||
+    !isPositiveFiniteNumber(record.timeout_seconds) ||
+    typeof record.has_key !== "boolean"
+  ) {
+    throwInvalidSettingsResponse();
+  }
+  return {
+    id: record.id,
+    label: record.label,
+    provider: record.provider,
+    base_url: record.base_url,
+    model: record.model,
+    timeout_seconds: record.timeout_seconds,
+    has_key: record.has_key,
+  };
+}
+
+function parseLlmProvidersResponse(value: unknown): LlmProvidersResponseWire {
+  const record = readIpcDataObject(
+    value,
+    ["source", "active_id", "providers"],
+    [],
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  const providers = readIpcDataArray(
+    record.providers,
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  if (
+    !isLlmSource(record.source) ||
+    !(record.active_id === null || typeof record.active_id === "string")
+  ) {
+    throwInvalidSettingsResponse();
+  }
+  return {
+    source: record.source,
+    active_id: record.active_id,
+    providers: providers.map(parseLlmProviderWire),
+  };
+}
+
+function parseLlmProbeResponse(value: unknown): LlmProbeResponseWire {
+  const record = readIpcDataObject(
+    value,
+    ["ok", "error_code", "latency_ms"],
+    [],
+    SETTINGS_IPC_RESPONSE_INVALID,
+  );
+  if (
+    typeof record.ok !== "boolean" ||
+    !(record.error_code === null || typeof record.error_code === "string") ||
+    typeof record.latency_ms !== "number" ||
+    !Number.isFinite(record.latency_ms) ||
+    record.latency_ms < 0
+  ) {
+    throwInvalidSettingsResponse();
+  }
+  return {
+    ok: record.ok,
+    error_code: record.error_code,
+    latency_ms: record.latency_ms,
+  };
+}
+
+function mapLlmProviderView(response: LlmProviderWire): LlmProviderView {
+  return {
+    id: response.id,
+    label: response.label,
+    provider: response.provider,
+    baseUrl: response.base_url,
+    model: response.model,
+    timeoutSeconds: response.timeout_seconds,
+    hasKey: response.has_key,
+  };
+}
+
+function mapLlmProvidersResponse(
+  response: LlmProvidersResponseWire,
+): LlmProvidersState {
+  return {
+    source: response.source,
+    activeId: response.active_id,
+    providers: response.providers.map(mapLlmProviderView),
+  };
+}
+
+function mapLlmProbeResponse(response: LlmProbeResponseWire): LlmProbeResult {
+  return {
+    ok: response.ok,
+    errorCode: response.error_code,
+    latencyMs: response.latency_ms,
   };
 }

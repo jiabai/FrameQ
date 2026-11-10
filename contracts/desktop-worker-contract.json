@@ -1,5 +1,5 @@
 {
-  "contractVersion": 11,
+  "contractVersion": 12,
   "events": {
     "workerProgress": "worker-progress",
     "workerProgressPrefix": "APP_PROGRESS ",
@@ -1459,6 +1459,17 @@
   "aiGeneration": {
     "command": "retry_insights",
     "serverManagedLlmCheckout": true,
+    "llmSources": [
+      "managed",
+      "byok"
+    ],
+    "byokProviderEnv": [
+      "APP_LLM_PROVIDER",
+      "APP_LLM_BASE_URL",
+      "APP_LLM_API_KEY",
+      "APP_LLM_MODEL",
+      "APP_LLM_TIMEOUT_SECONDS"
+    ],
     "request": {
       "type": "object",
       "required": [
@@ -1941,6 +1952,60 @@
       "weaknesses": 6,
       "templateStepsMinimum": 3,
       "templateStepsMaximum": 7
+    }
+  },
+  "llmProbe": {
+    "cliArgument": "--probe-llm-stdin",
+    "request": {
+      "type": "object",
+      "required": [
+        "base_url",
+        "api_key",
+        "model",
+        "provider"
+      ],
+      "properties": {
+        "base_url": {
+          "type": "string"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "openai_compatible"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "ok",
+        "error_code",
+        "latency_ms"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latency_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

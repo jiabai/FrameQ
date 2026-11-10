@@ -18,6 +18,7 @@ mod history;
 mod history_deletion;
 mod note_actions;
 mod insight_preferences;
+mod llm_providers;
 mod local_media;
 mod local_media_contract;
 mod progress_event;
@@ -63,7 +64,7 @@ pub(crate) use history_deletion::HistoryDeletionState;
 pub(crate) const PROGRESS_EVENT_NAME: &str = "worker-progress";
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "APP_PROGRESS ";
 #[cfg(test)]
-pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 11;
+pub(crate) const DESKTOP_WORKER_CONTRACT_VERSION: u32 = 12;
 pub(crate) const DIAGNOSTIC_EVENT_PREFIX: &str = "APP_DIAGNOSTIC ";
 
 #[cfg(any(windows, target_os = "linux"))]
@@ -139,6 +140,12 @@ pub fn run() {
             settings::dismiss_asr_model_migration,
             settings::get_audio_review_cache_usage,
             settings::clear_audio_review_cache,
+            llm_providers::list_llm_providers,
+            llm_providers::save_llm_provider,
+            llm_providers::delete_llm_provider,
+            llm_providers::set_active_llm_provider,
+            llm_providers::set_llm_source,
+            llm_providers::test_llm_connection,
             ui_preferences::get_ui_preferences,
             ui_preferences::save_ui_preferences,
             insight_preferences::get_insight_preferences,

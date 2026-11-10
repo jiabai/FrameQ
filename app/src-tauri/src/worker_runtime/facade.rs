@@ -1,10 +1,12 @@
-use super::command::{build_worker_command_spec, WorkerInvocation};
+use super::command::{build_worker_command_spec_with_llm, WorkerInvocation};
 use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
 use super::runner::{
     ProgressRoute, WorkerLane, WorkerOperation, WorkerRunError, WorkerRunOutcome, WorkerRunRequest,
 };
-use crate::account::{self, ServerManagedLlmInvocation};
+#[cfg(test)]
+use crate::account::ServerManagedLlmInvocation;
+use crate::llm_providers::WorkerLlmConfig;
 use crate::RuntimePaths;
 #[cfg(not(test))]
 use tauri::Window;
@@ -182,7 +184,7 @@ pub(crate) struct ReservedTaskWorker<'a> {
 
 impl ReservedTaskWorker<'_> {
     pub(crate) fn execute(&self, job: WorkerJob) -> Result<Result<WorkerRunOutcome, WorkerRunError>, String> {
-        let request = self.facade.prepare_with(job, account::server_managed_llm_invocation)?;
+        let request = self.facade.prepare_with(job, crate::llm_providers::resolve_worker_llm_config)?;
         Ok(self.facade.lane.run_reserved(self.facade.paths, request))
     }
 }
@@ -201,13 +203,13 @@ impl<'a> TaskWorkerFacade<'a> {
         &self,
         job: WorkerJob,
     ) -> Result<Result<WorkerRunOutcome, WorkerRunError>, String> {
-        let request = self.prepare_with(job, account::server_managed_llm_invocation)?;
+        let request = self.prepare_with(job, crate::llm_providers::resolve_worker_llm_config)?;
         Ok(self.lane.run(self.paths, request))
     }
 
     fn prepare_with<F>(&self, job: WorkerJob, resolve_llm: F) -> Result<WorkerRunRequest, String>
     where
-        F: FnOnce(&RuntimePaths) -> Result<Option<ServerManagedLlmInvocation>, String>,
+        F: FnOnce(&RuntimePaths) -> Result<WorkerLlmConfig, String>,
     {
         let (invocation, operation, progress, needs_llm) = match job {
             WorkerJob::ProcessVideo { payload, progress } => (
@@ -244,9 +246,9 @@ impl<'a> TaskWorkerFacade<'a> {
         let llm = if needs_llm {
             resolve_llm(self.paths)?
         } else {
-            None
+            WorkerLlmConfig::Managed(None)
         };
-        let command = build_worker_command_spec(self.paths, invocation, llm)?;
+        let command = build_worker_command_spec_with_llm(self.paths, invocation, llm)?;
         Ok(WorkerRunRequest {
             operation,
             command,
@@ -263,7 +265,7 @@ impl<'a> TaskWorkerFacade<'a> {
     where
         F: FnOnce(&RuntimePaths) -> Result<Option<ServerManagedLlmInvocation>, String>,
     {
-        self.prepare_with(job, resolve_llm)
+        self.prepare_with(job, |paths| resolve_llm(paths).map(WorkerLlmConfig::Managed))
     }
 }
 

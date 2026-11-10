@@ -23,6 +23,8 @@
 
 ## Active UI Work
 
+- [x] Locus v0.6.1 自定义 LLM 配置 BYOK（2026-11-10）— ✅ 代码与门禁完成。设置页新增「模型服务」分类：多配置管理（预设供应商 + 可自由输入）、API Key 只存系统钥匙串（`keyring 4.2.0`）、测试连接走 worker 最小 chat 探针、与 Locus 托管并存可切换（BYOK 不扣 AI Credit、不需登录）；草稿仍用 server anysearch，未登录时返回 `AI_DRAFT_REQUIRES_LOGIN`。契约 v12 双模式，`llm_providers.json` 只存元数据，`env_remove` 按来源分支化。门禁：worker 1302/4、前端 1576/1、服务端 375/1、脚本 57+1、Rust 相关 79 项、文档 0/0、diff check、版本一致。**未做**：真实 API Key 端到端（需用户提供）、发版动作。ExecPlan：`docs/exec-plans/active/2026-11-10-v0.6.1-llm-byok-plan.md`。
+
 - [x] Rename the GitHub repository to Locus (2026-11-10) — ✅ `jiabai/FrameQ` → `jiabai/Locus` via `gh repo rename`. Old-name redirects verified: releases page, a release asset direct link, and `releases/latest/download/latest.json?updater=1` all return 200, and old/new names resolve to the same `latest.json` asset. Updater endpoint, runtime-component URLs, macOS releases link, `app/src/brand.ts`, `updateClient.ts`, the window-config test, `site/src/consts.ts` and README links now use the new name. Historical release URLs in this ledger and completed plans are kept as-is.
 
 - [ ] Locus v0.6.0 — ✅ 本机准备完成、**发版待办 / NOT published** (2026-11-10). Version bumped to
