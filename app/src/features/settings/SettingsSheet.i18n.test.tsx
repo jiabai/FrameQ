@@ -350,9 +350,9 @@ describe("settings localization", () => {
   });
 
   test.each([
-    ["zh-CN", "模型服务", "Locus 托管", "我自己的 API", "不扣 AI Credit", "仍需登录", "系统钥匙串", "添加模型", "还没有添加自定义模型"],
-    ["zh-TW", "模型服務", "Locus 託管", "我自己的 API", "不扣 AI Credit", "仍需登入", "系統鑰匙圈", "新增模型", "還沒有新增自訂模型"],
-    ["en-US", "Model Service", "Locus managed", "My own API", "does not consume AI Credits", "still require sign-in", "system credential store", "Add model", "No custom models have been added yet"],
+    ["zh-CN", "模型", "Locus 托管", "我自己的 API", "不扣 AI Credit", "仍需登录", "系统钥匙串", "添加模型", "还没有添加自定义模型"],
+    ["zh-TW", "模型", "Locus 託管", "我自己的 API", "不扣 AI Credit", "仍需登入", "系統鑰匙圈", "新增模型", "還沒有新增自訂模型"],
+    ["en-US", "Models", "Locus managed", "My own API", "No AI Credits", "still need sign-in", "system credential store", "Add model", "No custom models have been added yet"],
   ] as const)(
     "renders the localized model-service section in %s",
     async (locale, heading, managed, byok, byokNotice, draftNotice, securityNotice, addLabel, emptyLabel) => {
@@ -414,9 +414,9 @@ describe("settings localization", () => {
   );
 
   test.each([
-    ["zh-CN", "添加模型", "接口地址", "模型名称", "测试连接", "取消", "保存", "智谱", "消耗极少量 token"],
-    ["zh-TW", "新增模型", "介面位址", "模型名稱", "測試連線", "取消", "儲存", "智譜", "消耗極少量 token"],
-    ["en-US", "Add model", "Base URL", "Model", "Test connection", "Cancel", "Save", "Zhipu", "tiny amount of tokens"],
+    ["zh-CN", "添加模型", "接口地址", "模型名称", "测试连接", "取消", "保存", "智谱", "极短请求"],
+    ["zh-TW", "新增模型", "介面位址", "模型名稱", "測試連線", "取消", "儲存", "智譜", "極短請求"],
+    ["en-US", "Add model", "Base URL", "Model", "Test connection", "Cancel", "Save", "Zhipu", "tiny request"],
   ] as const)(
     "renders the localized add-model dialog in %s",
     async (locale, title, baseUrlLabel, modelLabel, testLabel, cancelLabel, saveLabel, presetLabel, probeNotice) => {

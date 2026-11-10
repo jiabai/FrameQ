@@ -1,6 +1,6 @@
 # Active Exec Plans
 
-- `2026-11-10-v0.6.1-llm-byok-plan.md` — v0.6.1 自定义 LLM 配置（BYOK）**代码与门禁已完成**（2026-11-10）：契约 v12 双模式、Rust `llm_providers.json` + 系统钥匙串、worker 最小 chat 探针、设置页「模型服务」分类与三语文案；默认仍是 Locus 托管，BYOK 不扣 AI Credit、不需登录。全套门禁全绿（worker 1310/4、前端 1576/1、服务端 375/1、脚本 57+1、Rust 相关 79 项、文档 0/0）。**Step 11 已用真实 SiliconFlow Key 跑通**（探针、钥匙串、真实摘要生成），并修掉两个真实调用才暴露的缺陷：Tauri 顶层参数需为 `apiKey`、HTTP 400 的未知模型需归类 `LLM_PROBE_MODEL_NOT_FOUND`；不 bump 版本、不打 tag、不部署站点。
+- `2026-11-10-v0.6.1-llm-byok-plan.md` — v0.6.1 自定义 LLM 配置（BYOK）**代码与门禁已完成**（2026-11-10）：契约 v12 双模式、Rust `llm_providers.json` + 系统钥匙串、worker 最小 chat 探针、设置页「模型」分类与三语文案；默认仍是 Locus 托管，BYOK 不扣 AI Credit、不需登录。全套门禁全绿（worker 1310/4、前端 1576/1、服务端 375/1、脚本 57+1、Rust 相关 79 项、文档 0/0）。**Step 11 已用真实 SiliconFlow Key 跑通**（探针、钥匙串、真实摘要生成），并修掉两个真实调用才暴露的缺陷：Tauri 顶层参数需为 `apiKey`、HTTP 400 的未知模型需归类 `LLM_PROBE_MODEL_NOT_FOUND`；不 bump 版本、不打 tag、不部署站点。
 
 - `2026-11-10-v0.6.0-local-preparation-plan.md` — v0.6.0 **只在本机准备、未发版**：6 处版本号 bump 到 `0.6.0`，写好 GitHub 发布正文与站点本地发布说明，跑全套门禁与本机构建，形成一个本地 commit；不 push、不打 tag、不建 Release、不部署站点（站点 dist 已指向尚不存在的 `Locus_0.6.0_*` 资产）。用户还有 v0.6.1 功能要做，版本号保持 `0.6.0` 直到下一次发版决策。计划内含完整发版前清单与 v0.6.1 交接步骤。
 
