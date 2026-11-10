@@ -102,6 +102,10 @@ export const errorResources = {
       invalidMindmap: "云端 LLM 返回的 Mermaid 思维导图格式不可用。",
       emptyTranscript: "文字稿为空，暂时无法生成 AI 结果。",
       draftLoginRequired: "生成草稿仍需登录 {{product}} 账号，因为检索服务由服务器提供。",
+      keyRejected: "模型供应商拒绝了 API Key，请在模型服务里检查密钥。",
+      modelUnavailable: "模型供应商找不到所配置的模型，请检查模型名称。",
+      rateLimited: "模型供应商暂时限制了请求频率，请稍后重试。",
+      networkFailed: "无法连接模型供应商，请检查网络与接口地址。",
     },
     llmProbe: {
       invalidRequest: "测试请求格式无效，请检查接口地址、模型名称与超时设置。",
@@ -225,6 +229,10 @@ export const errorResources = {
       invalidMindmap: "雲端 LLM 回傳的 Mermaid 心智圖格式無法使用。",
       emptyTranscript: "逐字稿為空，暫時無法產生 AI 結果。",
       draftLoginRequired: "產生草稿仍需登入 {{product}} 帳號，因為檢索服務由伺服器提供。",
+      keyRejected: "模型供應商拒絕了 API Key，請在模型服務裡檢查密鑰。",
+      modelUnavailable: "模型供應商找不到所配置的模型，請檢查模型名稱。",
+      rateLimited: "模型供應商暫時限制了請求頻率，請稍後重試。",
+      networkFailed: "無法連接模型供應商，請檢查網路與介面位址。",
     },
     llmProbe: {
       invalidRequest: "測試請求格式無效，請檢查介面位址、模型名稱與逾時設定。",
@@ -351,6 +359,10 @@ export const errorResources = {
       invalidMindmap: "The cloud LLM returned an invalid Mermaid mind map.",
       emptyTranscript: "The transcript is empty, so AI results cannot be generated.",
       draftLoginRequired: "Generating a draft still requires signing in to {{product}} because retrieval is served by the server.",
+      keyRejected: "The model provider rejected the API key. Check the key in Models settings.",
+      modelUnavailable: "The model provider could not find the configured model. Check the model name.",
+      rateLimited: "The model provider is temporarily rate-limiting requests. Try again later.",
+      networkFailed: "Could not reach the model provider. Check the network and base URL.",
     },
     llmProbe: {
       invalidRequest: "The test request was invalid. Check the base URL, model name, and timeout.",

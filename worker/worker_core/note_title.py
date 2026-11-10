@@ -89,7 +89,7 @@ async def _generate_title(
             response_format={"type": "json_object"},
         )
         if response.role == "err":
-            raise agent_error(response, "Note title")
+            raise agent_error(response, "Note title", provider)
         try:
             return parse_title_response(response.completion_text or "", output_language)
         except (ValueError, TypeError):

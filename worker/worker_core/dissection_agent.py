@@ -191,7 +191,7 @@ async def _generate_dissection(
             break
     final_response = runner.get_final_llm_resp()
     if final_response is not None and final_response.role == "err":
-        raise agent_error(final_response, "Transcript dissection")
+        raise agent_error(final_response, "Transcript dissection", provider)
     if delivery.report is None:
         raise DissectionGenerationError(
             "DISSECTION_INVALID_RESULT",

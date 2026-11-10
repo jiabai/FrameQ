@@ -306,7 +306,7 @@ async def _generate_summary(
 
     final_response = runner.get_final_llm_resp()
     if final_response is not None and final_response.role == "err":
-        raise agent_error(final_response, "Summary")
+        raise agent_error(final_response, "Summary", provider)
     if not delivery.mindmap:
         raise InsightGenerationError(
             "AI_INVALID_MINDMAP",

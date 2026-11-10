@@ -202,7 +202,7 @@ async def _generate_insights(
             break
     response = runner.get_final_llm_resp()
     if response is not None and response.role == "err":
-        raise agent_error(response, "Inspiration")
+        raise agent_error(response, "Inspiration", provider)
     if not delivery.insights:
         raise InsightGenerationError(
             "AI_EMPTY_RESULT", "Inspiration agent did not deliver a valid insight list."

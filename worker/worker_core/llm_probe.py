@@ -11,7 +11,10 @@ import asyncio
 import json
 import time
 
-from worker_core.ai_runtime import _build_single_call_provider
+from worker_core.ai_runtime import (
+    _build_single_call_provider,
+    classify_provider_failure,
+)
 
 PROBE_MAX_TOKENS = 1
 PROBE_TIMEOUT_SECONDS = 15.0
@@ -79,103 +82,21 @@ async def _probe_call(env: dict[str, str]):
         await provider.terminate()
 
 
-def _exception_chain(exc: BaseException) -> list[BaseException]:
-    chain: list[BaseException] = []
-    seen: set[int] = set()
-    current: BaseException | None = exc
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        chain.append(current)
-        current = current.__cause__ or current.__context__
-    return chain
+# 分类在 ai_runtime.classify_provider_failure（生成路径与探针共用一份逻辑），
+# 这里只负责把语义类别翻译成探针自己的封闭错误码。
+PROBE_ERROR_CODE_BY_CATEGORY = {
+    "timeout": ERROR_TIMEOUT,
+    "auth": ERROR_AUTH,
+    "model_not_found": ERROR_MODEL_NOT_FOUND,
+    "rate_limit": ERROR_RATE_LIMIT,
+    "network": ERROR_NETWORK,
+    "invalid_response": ERROR_INVALID_RESPONSE,
+    "unexpected": ERROR_UNEXPECTED,
+}
 
 
-def _status_codes(chain: list[BaseException]) -> set[int]:
-    codes: set[int] = set()
-    for exc in chain:
-        for attribute in ("status_code", "code"):
-            value = getattr(exc, attribute, None)
-            if isinstance(value, int) and not isinstance(value, bool):
-                codes.add(value)
-            elif isinstance(value, str) and value.isdigit():
-                codes.add(int(value))
-    return codes
-
-
-def _looks_like_unknown_model(detail: str) -> bool:
-    """Detect unknown-model failures some vendors report as HTTP 400, not 404.
-
-    The vendor body never leaves this function: only a fixed error code is
-    returned to the desktop, so provider prose cannot leak into the UI.
-    """
-
-    if not detail:
-        return False
-    if "model" not in detail:
-        return False
-    return any(
-        phrase in detail
-        for phrase in (
-            "invalid model",
-            "model is invalid",
-            "does not exist",
-            "doesn't exist",
-            "not exist",
-            "not found",
-            "notfound",
-            "not_found",
-            "unknown",
-            "unsupported",
-            "not available",
-            "no such",
-        )
-    )
-
-
-def _classify_exception(exc: BaseException) -> str:
-    chain = _exception_chain(exc)
-    names = " ".join(type(item).__name__.lower() for item in chain)
-    statuses = _status_codes(chain)
-    detail = " ".join(str(item) for item in chain).lower()
-
-    if "timeout" in names or "timedout" in names:
-        return ERROR_TIMEOUT
-    if {401, 403} & statuses or any(
-        token in names
-        for token in ("authentication", "unauthorized", "permissiondenied", "forbidden")
-    ):
-        return ERROR_AUTH
-    if 404 in statuses or "notfound" in names or _looks_like_unknown_model(detail):
-        return ERROR_MODEL_NOT_FOUND
-    if 429 in statuses or "ratelimit" in names:
-        return ERROR_RATE_LIMIT
-    if any(
-        token in names
-        for token in (
-            "connection",
-            "connecterror",
-            "dns",
-            "socket",
-            "network",
-            "apiconnection",
-            "proxyerror",
-            "gaierror",
-        )
-    ):
-        return ERROR_NETWORK
-    if any(
-        token in names
-        for token in (
-            "empty",
-            "invalidresponse",
-            "validation",
-            "jsondecode",
-            "decode",
-            "parse",
-        )
-    ):
-        return ERROR_INVALID_RESPONSE
-    return ERROR_UNEXPECTED
+def _probe_error_code(exc: BaseException) -> str:
+    return PROBE_ERROR_CODE_BY_CATEGORY[classify_provider_failure(exc)]
 
 
 def _result(ok: bool, error_code: str | None, started: float) -> dict[str, object]:
@@ -194,7 +115,7 @@ def run_llm_probe(request_json: str | None) -> dict[str, object]:
     try:
         response = asyncio.run(_probe_call(_build_env(request)))
     except Exception as exc:
-        return _result(False, _classify_exception(exc), started)
+        return _result(False, _probe_error_code(exc), started)
     if response is None or getattr(response, "role", None) == "err":
         return _result(False, ERROR_INVALID_RESPONSE, started)
     return _result(True, None, started)
