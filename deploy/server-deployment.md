@@ -41,7 +41,7 @@ shell, so nvm is not sourced and `node` / `npm` / `npx` are not on `PATH`. Eithe
 
 The marketing site is the one place the two layouts already agree: live Nginx serves it from
 `root /home/ubuntu/FrameQ/site`, which is also the default `REMOTE_WEBROOT` in
-`scripts/deploy-marketing.sh` and the `root` in `deploy/nginx/frameq-server.conf`. Deploying the
+`scripts/deploy-marketing.sh` and the `root` in `deploy/nginx/locus-server.conf`. Deploying the
 site needs no path override; only the checkout prefix in Sections 3 to 9 differs.
 
 ## 2. Host and secrets
@@ -276,8 +276,8 @@ sudo -u frameq npm run db:migrate:deploy
 sudo -u frameq npm run db:migrate:status
 sudo -u frameq npm run db:preflight -- --mode current
 sudo systemctl start frameq-server
-curl --fail --silent https://frameq.8xf.pro/health/live
-curl --fail --silent https://frameq.8xf.pro/health/ready
+curl --fail --silent https://locus.8xf.pro/health/live
+curl --fail --silent https://locus.8xf.pro/health/ready
 ```
 
 Then verify one non-user test-inbox OTP login, administrator login, ticket exchange, an idempotent

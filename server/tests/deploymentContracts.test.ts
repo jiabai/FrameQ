@@ -140,7 +140,7 @@ describe("production deployment contracts", () => {
   });
 
   test("deployment assets expose exact health paths and align shutdown deadlines", () => {
-    const nginx = readFileSync(join(repositoryRoot, "deploy", "nginx", "frameq-server.conf"), "utf8");
+    const nginx = readFileSync(join(repositoryRoot, "deploy", "nginx", "locus-server.conf"), "utf8");
     const systemd = readFileSync(
       join(repositoryRoot, "deploy", "systemd", "frameq-server.service"),
       "utf8",
@@ -150,6 +150,9 @@ describe("production deployment contracts", () => {
     expect(nginx).toContain("location = /health/live");
     expect(nginx).toContain("location = /health/ready");
     expect(nginx).not.toMatch(/location\s+\^~\s+\/health/);
+    // The production domain is an external fact; pin it so a stale server block
+    // cannot ship a config that answers for a name nobody points at any more.
+    expect(nginx.match(/server_name locus\.8xf\.pro;/g)).toHaveLength(2);
     expect(systemd).toContain("KillSignal=SIGTERM");
     expect(systemd).toContain("TimeoutStopSec=20");
     expect(systemd).toContain("ExecStartPre=/opt/frameq/FrameQ/server/node_modules/.bin/prisma migrate status");

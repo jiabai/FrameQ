@@ -102,12 +102,12 @@ test("route-not-found detection ignores FrameQ's own 404 bodies", () => {
 });
 
 test("only accepts https, plus http for loopback targets", () => {
-  assert.equal(assertUsableBaseUrl("https://frameq.8xf.pro/"), "https://frameq.8xf.pro");
+  assert.equal(assertUsableBaseUrl("https://locus.8xf.pro/"), "https://locus.8xf.pro");
   assert.equal(assertUsableBaseUrl("http://127.0.0.1:8787"), "http://127.0.0.1:8787");
   assert.equal(assertUsableBaseUrl("http://localhost:8787/"), "http://localhost:8787");
-  assert.throws(() => assertUsableBaseUrl("http://frameq.8xf.pro"), /plain HTTP/);
-  assert.throws(() => assertUsableBaseUrl("frameq.8xf.pro"), /Invalid --base-url/);
-  assert.throws(() => assertUsableBaseUrl("ftp://frameq.8xf.pro"), /Unsupported/);
+  assert.throws(() => assertUsableBaseUrl("http://locus.8xf.pro"), /plain HTTP/);
+  assert.throws(() => assertUsableBaseUrl("locus.8xf.pro"), /Invalid --base-url/);
+  assert.throws(() => assertUsableBaseUrl("ftp://locus.8xf.pro"), /Unsupported/);
 });
 
 test("reports a deployed route and exits zero when every check passes", async () => {

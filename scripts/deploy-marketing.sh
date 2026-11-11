@@ -7,8 +7,8 @@
 #   2. Rsync dist/ to the server web root (default /home/ubuntu/FrameQ/site)
 #   3. Print the nginx reload command (run on the server)
 #
-# The marketing site shares the domain frameq.8xf.pro with the
-# server app. nginx (deploy/nginx/frameq-server.conf) serves "/" statically
+# The marketing site shares the domain locus.8xf.pro with the
+# server app. nginx (deploy/nginx/locus-server.conf) serves "/" statically
 # from /home/ubuntu/FrameQ/site and proxies /api/*, /auth/, /admin, /user/, /login,
 # /dashboard to the backend (127.0.0.1:8787).
 #

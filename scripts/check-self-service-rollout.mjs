@@ -34,11 +34,11 @@
 //
 // Usage:
 //   node scripts/check-self-service-rollout.mjs
-//   node scripts/check-self-service-rollout.mjs --base-url https://frameq.8xf.pro
+//   node scripts/check-self-service-rollout.mjs --base-url https://locus.8xf.pro
 //
 import { pathToFileURL } from "node:url";
 
-export const DEFAULT_BASE_URL = "https://frameq.8xf.pro";
+export const DEFAULT_BASE_URL = "https://locus.8xf.pro";
 
 export const ROLLOUT_STATE = Object.freeze({
   NOT_DEPLOYED: "not_deployed",

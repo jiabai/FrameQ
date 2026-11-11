@@ -8,7 +8,7 @@
 ## 1. 概述
 
 营销站是一个纯静态站点（Astro SSG），构建后产出自包含的 `site/dist/`。
-它与 Locus 后端 **共用同一个域名 `https://frameq.8xf.pro/`**，由 nginx 在同一 `443 server` 块内分工：
+它与 Locus 后端 **共用同一个域名 `https://locus.8xf.pro/`**，由 nginx 在同一 `443 server` 块内分工：
 
 | 路径 | 处理方式 |
 |---|---|
@@ -24,7 +24,7 @@
 ## 2. 拓扑
 
 ```text
-Internet ──▶ Nginx :443 (frameq.8xf.pro)
+Internet ──▶ Nginx :443 (locus.8xf.pro)
                   ├── /           ──▶ 静态文件  /home/ubuntu/FrameQ/site   (营销站 dist 内容)
                   ├── /_astro/    ──▶ 静态资源（哈希、immutable）
                   ├── /video/     ──▶ 演示视频 / 海报
@@ -43,12 +43,12 @@ Internet ──▶ Nginx :443 (frameq.8xf.pro)
 
 **服务器（Ubuntu）**
 - 已安装并运行 nginx（后端部署时通常已就绪）
-- 已存在 `deploy/nginx/frameq-server.conf` 所依赖的共享片段：
+- 已存在 `deploy/nginx/locus-server.conf` 所依赖的共享片段：
   `/etc/nginx/snippets/frameq-proxy-headers.conf`（由后端部署引入，静态托管不依赖它）
-- 已配置好证书 `/etc/letsencrypt/live/frameq.8xf.pro/`（后端部署时已签发）
+- 已配置好证书 `/etc/letsencrypt/live/locus.8xf.pro/`（后端部署时已签发）
 - webroot 目录 `/home/ubuntu/FrameQ/site`（与 nginx `root` 对齐；该目录存放 `dist/` 构建产物，不是仓库源码）
 
-> 如果服务器**尚未**部署过后端，`frameq-server.conf` 中的反代块和证书路径都还不存在，
+> 如果服务器**尚未**部署过后端，`locus-server.conf` 中的反代块和证书路径都还不存在，
 > 需要先完成 `server-deployment.md` 的步骤，或把 conf 里反代相关 `location` 块按实际后端情况补齐。
 
 ---
@@ -69,7 +69,7 @@ dist/
 ├── download/index.html
 ├── privacy/index.html
 ├── _astro/             # 打包后的 CSS/JS/字体（哈希命名）
-├── video/              # frameq-demo.mp4 + frameq-demo-poster.jpg
+├── video/              # locus-demo.mp4 + locus-demo-poster.jpg
 ├── og/                 # 社交分享图
 ├── favicon.svg
 ├── robots.txt
@@ -87,7 +87,7 @@ dist/
 配置文件（单一文件，含后端反代 + 静态托管两部分）位于本仓库：
 
 ```text
-deploy/nginx/frameq-server.conf
+deploy/nginx/locus-server.conf
 ```
 
 它已包含：
@@ -106,7 +106,7 @@ deploy/nginx/frameq-server.conf
 ```bash
 # 假设后端已启用 /etc/nginx/sites-enabled/frameq（指向同一文件）
 # 先把最新 conf 传到服务器，再校验
-sudo cp deploy/nginx/frameq-server.conf /etc/nginx/sites-available/frameq
+sudo cp deploy/nginx/locus-server.conf /etc/nginx/sites-available/frameq
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -180,21 +180,21 @@ DEPLOY_SERVER=user@你的服务器 ./scripts/deploy-marketing.sh
 
 ```bash
 # 首页
-curl -sI https://frameq.8xf.pro/ | head -n 1
+curl -sI https://locus.8xf.pro/ | head -n 1
 # 期望：HTTP/2 200
 
 # 演示视频（Range 支持、可拖拽）
-curl -sI https://frameq.8xf.pro/video/frameq-demo.mp4 | grep -iE "HTTP|content-type|content-length|accept-ranges"
+curl -sI https://locus.8xf.pro/video/locus-demo.mp4 | grep -iE "HTTP|content-type|content-length|accept-ranges"
 # 期望：video/mp4，有 Content-Length，Accept-Ranges: bytes
 
 # 打包资源
-curl -sI https://frameq.8xf.pro/_astro/ | head -n 1
+curl -sI https://locus.8xf.pro/_astro/ | head -n 1
 
 # 后端不受影响（仍反代）
-curl --fail --silent https://frameq.8xf.pro/health/live
+curl --fail --silent https://locus.8xf.pro/health/live
 ```
 
-浏览器打开 `https://frameq.8xf.pro/`，确认首页文案、下载/隐私页、视频可点击播放。
+浏览器打开 `https://locus.8xf.pro/`，确认首页文案、下载/隐私页、视频可点击播放。
 
 ---
 
@@ -215,20 +215,20 @@ sudo rsync -a --delete /home/ubuntu/FrameQ/site.bak.<时间戳>/ /home/ubuntu/Fr
 ```
 
 > 注意：回滚只恢复**静态站点**。若 nginx 配置也改动过（如新增静态块），
-> 需同时把 `frameq-server.conf` 回退到上一版，再 `nginx -t && systemctl reload nginx`。
+> 需同时把 `locus-server.conf` 回退到上一版，再 `nginx -t && systemctl reload nginx`。
 
 ---
 
 ## 9. 注意事项
 
 - **源码不在仓库**：`site/` 已 gitignore，仅存于本机。换机器构建需先把 `site/` 带过去。
-- **nginx 与后端同源**：修改 `frameq-server.conf` 会影响后端反代，改前先 `nginx -t`。
+- **nginx 与后端同源**：修改 `locus-server.conf` 会影响后端反代，改前先 `nginx -t`。
 - **证书续期**：conf 保留了 `/.well-known/acme-challenge/`，certbot 续期不受影响。
 - **缓存头**：`/_astro/`（1 年 immutable）、`/video/`（30 天）带缓存；发布新版本后
   哈希文件名会变，旧资源自然失效，无需手动清缓存。
 - **自定义 404**：当前未知路径返回 nginx 默认 404。若想要品牌 404 页，在
   `site/src/pages/404.astro` 建页重建，再把 `location /` 的 `=404` 改为 `/404.html`。
-- **视频源文件**：演示视频源在 `site/public/video/frameq-demo.mp4`（约 5.3 MB），
+- **视频源文件**：演示视频源在 `site/public/video/locus-demo.mp4`（约 5.3 MB），
   构建时原样拷到 `dist/video/`。仓库里没有所谓 75 MB 重编码源——如需重新压片只能重新提供原片。
 - **压缩**：当前未开启 gzip/brotli。如需进一步减小传输体积，可在 nginx 对应
   `location` 或 `http` 块加 `gzip on;` / `brotli on;`（不影响功能）。
@@ -249,10 +249,10 @@ ssh user@服务器 'sudo cp -a /home/ubuntu/FrameQ/site /home/ubuntu/FrameQ/site
 scp -r D:/Github/Locus/site/dist/* user@服务器:/home/ubuntu/FrameQ/site/
 
 # 4) 服务器：若 nginx 配置有变动，覆盖并校验
-sudo cp deploy/nginx/frameq-server.conf /etc/nginx/sites-available/frameq
+sudo cp deploy/nginx/locus-server.conf /etc/nginx/sites-available/frameq
 sudo nginx -t && sudo systemctl reload nginx
 
 # 5) 验证
-curl -sI https://frameq.8xf.pro/ | head -n 1
-curl --fail --silent https://frameq.8xf.pro/health/live
+curl -sI https://locus.8xf.pro/ | head -n 1
+curl --fail --silent https://locus.8xf.pro/health/live
 ```
