@@ -1152,6 +1152,12 @@
 
 ## 已完成
 
+- [x] 生产 systemd 服务改名 `frameq-server` → `locus-server`（2026-11-11 23:07）— ✅ 线上 unit 换成 `/etc/systemd/system/locus-server.service`（描述 `Locus account and activation server`，内容与旧 unit 逐行一致，仅改描述），旧 unit 停用、删除并 `daemon-reload`；`systemctl list-unit-files` 已无任何 `frameq` 单元，新服务 `enabled` + `active`。
+  停机窗口约 6 秒（stop 旧 → start 新）。回滚备份：`/home/ubuntu/systemd-backups/frameq-server.service.20261111T150716Z`。
+  `scripts/restart-server.sh`（服务器本地脚本）默认服务名与三个 `FRAMEQ_*` 变量改成 `LOCUS_*`，`bash -n` 通过并实跑一次重启成功。仓库侧同步：`deploy/systemd/frameq-server.service` → `locus-server.service`（描述改 Locus）、`deploy/README.md`、运行手册 §1a 表与五处 `systemctl` 命令、`scripts/check-self-service-rollout.mjs` 提示文案、`server/tests/deploymentContracts.test.ts` 路径、架构走查链接、改名规格与 active 计划的状态行，提交 `ed66617`。
+  **故意没改**：checkout `/home/ubuntu/FrameQ` 与库文件 `frameq.sqlite` 保留旧名（改名要动 nginx 站点 root、`DATABASE_URL`、备份路径与 systemd `ReadWritePaths`，收益低风险高）；`security.ts` 限流哈希前缀同样保留。
+  验证：`/health/live`、`/health/ready` 直连与 nginx 双 200；`/admin` → `Locus Admin Login`、`/login` → `Locus Login`；`GET /api/desktop/account` 401 `AUTH_REQUIRED`；8787 仅一个监听进程。
+
 - [x] 生产服务端部署到改名后的代码（2026-11-11 深夜）— ✅ 生产 `frameq-server` 从 `f473a86`（11-08 的代码）部署到 `3cfd451`，**`/admin`、`/login` 首次真正显示 Locus**（部署前线上 `<title>FrameQ Admin Login</title>`、页面 14 处 FrameQ，说明此前只改了 nginx 域名与营销站，Node 进程一直跑改名前的代码）。
   同批必须做的配置迁移：生产 `server/.env` 的 `FRAMEQ_SERVER_HOST` / `FRAMEQ_SERVER_PORT` / `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` / `FRAMEQ_ADMIN_EMAIL` / `FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY` 全部改成 `APP_*`——新代码只读 `APP_*`，漏改会在 production 下 fail-closed 起不来；改后逐行比对值未变（文件 538B → 523B，正好是 5 个键各少 3 字符）。
   流程：停服 → 旧代码 `db:preflight --mode current` ok → 备份 `20261111T145359Z`（DB + `.env` + SHA256SUMS，异地副本 `C:/Users/bicho/frameq-server-backups/20261111T145359Z/`，两侧 sha256 均校验）→ 隔离副本 `db:restore-smoke` + `migrate status`（9 条 up to date）→ 743 KB 增量 bundle（服务器 fetch GitHub 仍慢，沿用 bundle 路线）→ checkout → env 改名 → `prisma:generate` / `build` / `npm test`（37 文件 376 通过）/ `db:migrate:deploy`（无待跑迁移）/ `preflight` ok → 启动。
