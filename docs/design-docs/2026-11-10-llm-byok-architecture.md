@@ -5,7 +5,7 @@
 | 状态 | Confirmed，2026-11-10 用户确认五项产品决策 |
 | 创建日期 | 2026-11-10 |
 | 作者 | WorkBuddy |
-| 关联文档 | `docs/product-specs/2026-11-10-llm-byok-custom-providers.md`、`docs/exec-plans/active/2026-11-10-v0.6.1-llm-byok-plan.md` |
+| 关联文档 | `docs/product-specs/2026-11-10-llm-byok-custom-providers.md`、`docs/exec-plans/completed/2026-11-10-v0.6.1-llm-byok-plan.md` |
 | 决策性质 | 新增第二条 LLM 配置来源；改持久化、worker 环境变量注入与冻结契约 |
 
 ## 问题

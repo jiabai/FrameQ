@@ -5,7 +5,7 @@
 参照：用户提供的「添加模型」弹窗截图——供应商（仅支持 OpenAI 兼容协议 API）、API Key、模型名称、测试连接、取消 / 保存。
 
 设计文档：`docs/design-docs/2026-11-10-llm-byok-architecture.md`
-实施计划：`docs/exec-plans/active/2026-11-10-v0.6.1-llm-byok-plan.md`
+实施计划：`docs/exec-plans/completed/2026-11-10-v0.6.1-llm-byok-plan.md`
 
 ## 用户目标
 
