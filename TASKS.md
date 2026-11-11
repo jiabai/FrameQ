@@ -27,14 +27,28 @@
 
 - [x] Rename the GitHub repository to Locus (2026-11-10) — ✅ `jiabai/FrameQ` → `jiabai/Locus` via `gh repo rename`. Old-name redirects verified: releases page, a release asset direct link, and `releases/latest/download/latest.json?updater=1` all return 200, and old/new names resolve to the same `latest.json` asset. Updater endpoint, runtime-component URLs, macOS releases link, `app/src/brand.ts`, `updateClient.ts`, the window-config test, `site/src/consts.ts` and README links now use the new name. Historical release URLs in this ledger and completed plans are kept as-is.
 
-- [ ] Locus v0.6.0 — ✅ 本机准备完成、**发版待办 / NOT published** (2026-11-10). Version bumped to
-  `0.6.0` in all six release-version sources; `docs/releases/v0.6.0.md` plus the marketing site's
-  local `LATEST_VERSION` and `v0.6.0` release note are prepared. This is the first release under the
-  new name: installer assets change from `FrameQ_0.5.1_*` to `Locus_0.6.0_*`, the app data directory
-  moves to `pro.8xf.app`, and old installs are neither migrated nor auto-uninstalled. Deliberately
-  NOT done: `git push`, annotated tag, GitHub Release, updater assets, site deployment. The user has
-  v0.6.1 features to build on this baseline, so the version stays at `0.6.0` until then. Gate results
-  and the publish checklist: `docs/exec-plans/active/2026-11-10-v0.6.0-local-preparation-plan.md`.
+- [x] Prepare and publish Locus v0.6.0 desktop release (2026-11-11) — ✅ Tag `v0.6.0` at `33840fa`
+  (release run `42988520117`, Windows updater / macOS Intel / macOS Apple Silicon all green;
+  published `2026-11-11T09:49:20Z`). First release under the new name: eight assets change from
+  `FrameQ_0.5.1_*` / `frameq-pytorch-runtime-*` to `Locus_0.6.0_*` / `pytorch-runtime-*`, so the
+  normalized asset-name gate was re-baselined once. `latest.json` has only the two established
+  Windows platform keys; both 416-byte signatures match the uploaded `.sig` byte-for-byte, and all
+  three installer URLs return 206 from the deployment server. Release notes:
+  `docs/releases/v0.6.0.md`. Ship set: the Locus rename and de-branding, user-managed model
+  providers (BYOK), actionable generation errors, Collection membership feedback with undo, and
+  faster data-location migration. Old installs are neither migrated nor auto-uninstalled; the data
+  directory moves to `pro.8xf.app`, and the optional PyTorch runtime component must be downloaded
+  again after the version bump. **Publish blocker found and fixed**: the first tag at `6f02de1`
+  failed because the de-branding sweep renamed GitHub Actions Secret keys to `APP_*` while the
+  repository secrets remain `FRAMEQ_*`; `33840fa` maps the neutral `APP_*` environment variables
+  back to those secrets, with regression tests and a naming-policy exception. Local gates: frontend
+  1591 passed / 1 skipped, worker 1332 / 4, server 375 / 1, Node scripts 58, Python scripts 1,
+  docs 0/0, six version sources consistent, all production builds green. Windows native WebView2
+  Collection acceptance passed 17 assertions in each of `en-US`, `zh-CN`, `zh-TW` (51 total).
+  `macos-intel-acceptance.yml` was dispatched (run `42990460341`, both architectures green).
+  Residual: macOS WKWebView pointer/keyboard acceptance still needs a real Mac; old-name redirects
+  are relied on for historical links. Plan:
+  `docs/exec-plans/completed/2026-11-10-v0.6.0-local-preparation-plan.md`.
 
 - [x] Prepare and publish Locus v0.5.1 desktop release (2026-11-09) — ✅ Tag `v0.5.1` at `36f1a6c`
   (release run `42604242544`, Windows updater / macOS Intel / macOS Apple Silicon all green;
