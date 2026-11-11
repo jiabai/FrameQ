@@ -4,7 +4,7 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { appI18n, initializeI18n } from "../../i18n/i18n";
-import { synthesisResources } from "../../i18n/synthesisResources";
+import { studioResources } from "../../i18n/studioResources";
 import { createInitialWorkflow } from "../../workflowState";
 import { canCloseDraftResult, DraftResultSheet } from "./DraftResultSheet";
 
@@ -227,6 +227,6 @@ describe("DraftResultSheet native boundary lifecycle", () => {
     ["zh-TW", "目前草稿有未儲存的修改。關閉並捨棄這些修改？"],
     ["en-US", "This draft has unsaved changes. Close and discard them?"],
   ] as const)("provides the localized discard question in %s", (locale, question) => {
-    expect(synthesisResources[locale].draftResult).toHaveProperty("discardChangesConfirm", question);
+    expect(studioResources[locale].draftResult).toHaveProperty("discardChangesConfirm", question);
   });
 });

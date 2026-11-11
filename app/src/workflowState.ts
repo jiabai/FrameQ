@@ -208,7 +208,7 @@ export type WorkerErrorResult = {
   stage: WorkflowStage;
 };
 
-export type InsightRetryTarget = "summary" | "insights" | "dissection" | "draft";
+export type StudioTool = "summary" | "insights" | "dissection" | "draft";
 
 /**
  * The worker stages that represent an AI-target generation failure. Draft
@@ -223,7 +223,7 @@ const AI_FAILURE_STAGES: ReadonlySet<WorkflowStage> = new Set([
   "draft_generating",
 ]);
 
-function isAiTargetFailure(error: WorkerErrorResult | null): error is WorkerErrorResult {
+function isStudioToolFailure(error: WorkerErrorResult | null): error is WorkerErrorResult {
   return Boolean(error && AI_FAILURE_STAGES.has(error.stage));
 }
 
@@ -240,9 +240,9 @@ export type WorkflowState = {
   // cancel. draft_generating is an error-only stage, never a live phase,
   // so it is excluded — the draft progress phase is insights_generating.
   cancellingFromStage: Exclude<WorkflowStage, "waiting_input" | "cancelling" | "draft_generating" | "completed" | "partial_completed" | "failed"> | null;
-  activeAiTarget: InsightRetryTarget | null;
-  aiErrorTarget: InsightRetryTarget | null;
-  aiTargetErrors: Partial<Record<InsightRetryTarget, WorkerErrorResult>>;
+  activeStudioTool: StudioTool | null;
+  studioToolError: StudioTool | null;
+  studioToolErrors: Partial<Record<StudioTool, WorkerErrorResult>>;
   composerSource: TaskComposerSource;
   taskSource: TaskSourceSummary | null;
   statusMessage: UiMessage | null;
@@ -277,9 +277,9 @@ export function createInitialWorkflow(): WorkflowState {
     markdown: "",
     stage: "waiting_input",
     cancellingFromStage: null,
-    activeAiTarget: null,
-    aiErrorTarget: null,
-    aiTargetErrors: {},
+    activeStudioTool: null,
+    studioToolError: null,
+    studioToolErrors: {},
     composerSource: { kind: "url", urlDraft: "" },
     taskSource: null,
     statusMessage: null,
@@ -311,9 +311,9 @@ export function startProcessing(
     ...state,
     stage: webPage ? "web_loading" : "video_extracting",
     cancellingFromStage: null,
-    activeAiTarget: null,
-    aiErrorTarget: null,
-    aiTargetErrors: {},
+    activeStudioTool: null,
+    studioToolError: null,
+    studioToolErrors: {},
     taskSource,
     statusMessage: null,
     progressMessage: {
@@ -342,16 +342,16 @@ export function startProcessing(
   };
 }
 
-export function startInsightRetry(state: WorkflowState, target: InsightRetryTarget): WorkflowState {
-  const aiTargetErrors = { ...state.aiTargetErrors };
-  delete aiTargetErrors[target];
+export function startInsightRetry(state: WorkflowState, target: StudioTool): WorkflowState {
+  const studioToolErrors = { ...state.studioToolErrors };
+  delete studioToolErrors[target];
   return {
     ...state,
     stage: "insights_generating",
     cancellingFromStage: null,
-    activeAiTarget: target,
-    aiErrorTarget: state.aiErrorTarget === target ? null : state.aiErrorTarget,
-    aiTargetErrors,
+    activeStudioTool: target,
+    studioToolError: state.studioToolError === target ? null : state.studioToolError,
+    studioToolErrors,
     statusMessage: null,
     progressMessage: {
       messageCode:
@@ -373,7 +373,7 @@ export function startNoteTitleGeneration(state: WorkflowState, outputLanguage: S
     ...state,
     stage: "title_generating",
     cancellingFromStage: null,
-    activeAiTarget: null,
+    activeStudioTool: null,
     noteTitle: { text: state.noteTitle?.text ?? null, status: "generating", output_language: outputLanguage, error_code: null },
     statusMessage: uiMessage("workflow.noteTitle.generating"),
     progressMessage: { messageCode: "title.generation.running", args: {} },
@@ -475,16 +475,16 @@ export function confirmProcessingCancellation(state: WorkflowState): WorkflowSta
   }
   if (
     state.cancellingFromStage === "insights_generating" &&
-    state.activeAiTarget !== null &&
+    state.activeStudioTool !== null &&
     state.taskId !== null
   ) {
     return {
       ...state,
-      stage: Object.keys(state.aiTargetErrors).length > 0
+      stage: Object.keys(state.studioToolErrors).length > 0
         ? "partial_completed"
         : "completed",
       cancellingFromStage: null,
-      activeAiTarget: null,
+      activeStudioTool: null,
       statusMessage: null,
       progressMessage: null,
       progressPercent: 100,
@@ -527,7 +527,7 @@ export function getToolbarNewTaskButtonState(stage: WorkflowStage): ToolbarNewTa
 }
 export function summarizeWorkerResult(
   result: WorkerResult,
-  failedAiTarget: InsightRetryTarget | null = null,
+  failedStudioTool: StudioTool | null = null,
 ): WorkflowState {
   const noteTitle = result.note_title ?? null;
   return {
@@ -550,10 +550,10 @@ export function summarizeWorkerResult(
     draft: result.draft ?? "",
     noteTitle,
     error: result.error,
-    aiErrorTarget: isAiTargetFailure(result.error) ? failedAiTarget : null,
-    aiTargetErrors:
-      isAiTargetFailure(result.error) && failedAiTarget
-        ? { [failedAiTarget]: result.error }
+    studioToolError: isStudioToolFailure(result.error) ? failedStudioTool : null,
+    studioToolErrors:
+      isStudioToolFailure(result.error) && failedStudioTool
+        ? { [failedStudioTool]: result.error }
         : {},
   };
 }
@@ -565,14 +565,14 @@ export function editDraft(state: WorkflowState, markdown: string): WorkflowState
 export function finishInsightRetry(
   state: WorkflowState,
   result: WorkerResult,
-  target: InsightRetryTarget,
+  target: StudioTool,
 ): WorkflowState {
   const next = summarizeWorkerResult(result);
-  const aiTargetErrors = { ...state.aiTargetErrors };
-  if (isAiTargetFailure(result.error)) {
-    aiTargetErrors[target] = result.error;
+  const studioToolErrors = { ...state.studioToolErrors };
+  if (isStudioToolFailure(result.error)) {
+    studioToolErrors[target] = result.error;
   } else {
-    delete aiTargetErrors[target];
+    delete studioToolErrors[target];
   }
   // Regenerating insights replaces the insight list, so the previously
   // selected seed id is no longer valid — clear it. Summary and draft regen do
@@ -588,8 +588,8 @@ export function finishInsightRetry(
     composerSource: state.composerSource,
     taskSource: state.taskSource,
     markdown: state.markdown,
-    aiErrorTarget: isAiTargetFailure(result.error) ? target : null,
-    aiTargetErrors,
+    studioToolError: isStudioToolFailure(result.error) ? target : null,
+    studioToolErrors,
     dissection:
       target === "dissection" && result.error && result.dissection === null
         ? state.dissection
@@ -604,7 +604,7 @@ export function finishInsightRetry(
         : state.dissectionStale,
     draftSeedInsightId,
     draftEdited:
-      target === "draft" && !isAiTargetFailure(result.error)
+      target === "draft" && !isStudioToolFailure(result.error)
         ? false
         : state.draftEdited,
   };

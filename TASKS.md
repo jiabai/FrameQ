@@ -489,7 +489,7 @@
   `docs/exec-plans/completed/2026-08-03-v0.3.0-desktop-feature-release-plan.md`.
 
 - [x] Implement transcript dissection generation and persistence (2026-08-01) — ✅ added the third
-  current `智能提炼` target with explicit bounded-call confirmation, contract v5, deterministic
+  current `工作间` tool with explicit bounded-call confirmation, contract v5, deterministic
   UTF-8 source provenance, managed per-call checkout, strict structured generation, atomic
   `ai/dissection.json` + `ai/dissection.md`, Rust-validated History restoration, stale-safe source
   location, copy/export, three locales, and preservation of the former report on failed reruns.

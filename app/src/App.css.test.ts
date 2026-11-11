@@ -170,14 +170,14 @@ describe("App result workspace layout styles", () => {
     const segmentListRule = getRuleBody([".transcript-segments"]);
     const segmentRule = getRuleBody([".transcript-segment"]);
     const segmentDividerRule = getRuleBody([".transcript-segment + .transcript-segment"]);
-    const targetListRule = getRuleBody([".ai-target-list"]);
-    const targetRule = getRuleBody([".ai-target-card"]);
-    const targetDividerRule = getRuleBody([".ai-target-card + .ai-target-card"]);
-    const activeTargetRule = getRuleBody([
-      ".ai-target-card.generating",
-      ".ai-target-card.cancelling",
+    const targetListRule = getRuleBody([".studio-tool-list"]);
+    const targetRule = getRuleBody([".studio-tool-card"]);
+    const targetDividerRule = getRuleBody([".studio-tool-card + .studio-tool-card"]);
+    const activeToolRule = getRuleBody([
+      ".studio-tool-card.generating",
+      ".studio-tool-card.cancelling",
     ]);
-    const failedTargetRule = getRuleBody([".ai-target-card.failed"]);
+    const failedTargetRule = getRuleBody([".studio-tool-card.failed"]);
 
     expect(segmentListRule).toContain("border: 0;");
     expect(segmentListRule).toContain("overflow: visible;");
@@ -194,18 +194,18 @@ describe("App result workspace layout styles", () => {
     expect(targetRule).toContain("border: 0;");
     expect(targetRule).toContain("border-radius: 0;");
     expect(targetDividerRule).toContain("border-top: 1px solid #eceeeb;");
-    expect(activeTargetRule).toContain("background: #f7fbff;");
-    expect(activeTargetRule).not.toContain("border-color");
+    expect(activeToolRule).toContain("background: #f7fbff;");
+    expect(activeToolRule).not.toContain("border-color");
     expect(failedTargetRule).toContain("background: #fff8f7;");
     expect(failedTargetRule).not.toContain("border-color");
   });
 
   test("uses a quiet scoped action before final AI confirmation", () => {
-    const actionRule = getRuleBody([".ai-target-action"]);
+    const actionRule = getRuleBody([".studio-tool-action"]);
     const actionFeedbackRule = getRuleBody([
-      ".ai-target-action:not(:disabled):hover",
-      ".ai-target-action:focus-visible",
-      ".ai-target-actions .secondary-button:not(:disabled):hover",
+      ".studio-tool-action:not(:disabled):hover",
+      ".studio-tool-action:focus-visible",
+      ".studio-tool-actions .secondary-button:not(:disabled):hover",
       ".ai-cancel-button:not(:disabled):hover",
     ]);
 

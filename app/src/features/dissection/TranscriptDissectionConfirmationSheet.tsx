@@ -20,7 +20,7 @@ export function TranscriptDissectionConfirmationSheet({
   onCancel,
   onConfirm,
 }: Props) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   const renderPreview = useLastDefined(preview, null);

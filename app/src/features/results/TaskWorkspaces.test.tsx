@@ -14,7 +14,7 @@ import {
 import { createTaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import type { TranscriptDetailController } from "../transcript/useTranscriptDetailController";
 import { LocalTranscriptWorkspace } from "../transcript/LocalTranscriptWorkspace";
-import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
+import { StudioWorkspace } from "./StudioWorkspace";
 import { AiResultDetailSheet } from "./AiResultDetailSheet";
 import { TaskStatusBanner } from "./TaskStatusBanner";
 import { TaskWorkspaceLayout } from "./TaskWorkspaceLayout";
@@ -180,14 +180,14 @@ describe("task domain workspaces", () => {
           onPolishTranscript={vi.fn()}
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
-        />} ai={<AiGenerationWorkspace
+        />} ai={<StudioWorkspace
           model={model.ai}
           quotaRemaining={8}
           onSummaryAction={vi.fn()}
           onInsightsAction={vi.fn()}
           onDissectionAction={vi.fn()}
           onDraftAction={vi.fn()}
-          onViewTarget={vi.fn()}
+          onViewTool={vi.fn()}
           onCancel={vi.fn()}
         />} />
       </>,
@@ -208,7 +208,7 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("Cloud AI");
     expect(markup).not.toContain(">本地完成</span>");
     expect(markup).not.toContain(">可选</span>");
-    expect(markup.match(/class="ai-target-status"/g)).toHaveLength(4);
+    expect(markup.match(/class="studio-tool-status"/g)).toHaveLength(4);
   });
 
   test.each([
@@ -256,14 +256,14 @@ describe("task domain workspaces", () => {
           onLocateArtifact={vi.fn()}
           onCancel={vi.fn()}
         />
-        <AiGenerationWorkspace
+        <StudioWorkspace
           model={processingModel.ai}
           quotaRemaining={8}
           onSummaryAction={vi.fn()}
           onInsightsAction={vi.fn()}
           onDissectionAction={vi.fn()}
           onDraftAction={vi.fn()}
-          onViewTarget={vi.fn()}
+          onViewTool={vi.fn()}
           onCancel={vi.fn()}
         />
       </>,
@@ -302,14 +302,14 @@ describe("task domain workspaces", () => {
     const generatingWorkflow = startInsightRetry(readyWorkflow(), "summary");
     const generatingModel = createTaskWorkspaceViewModel(generatingWorkflow, aiAccount());
     const generatingMarkup = renderToStaticMarkup(
-      <AiGenerationWorkspace
+      <StudioWorkspace
         model={generatingModel.ai}
         quotaRemaining={8}
         onSummaryAction={vi.fn()}
         onInsightsAction={vi.fn()}
         onDissectionAction={vi.fn()}
         onDraftAction={vi.fn()}
-        onViewTarget={vi.fn()}
+        onViewTool={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -631,39 +631,39 @@ describe("task domain workspaces", () => {
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
     const markup = renderToStaticMarkup(
-      <AiGenerationWorkspace
+      <StudioWorkspace
         model={model.ai}
         quotaRemaining={8}
         onSummaryAction={vi.fn()}
         onInsightsAction={vi.fn()}
         onDissectionAction={vi.fn()}
         onDraftAction={vi.fn()}
-        onViewTarget={vi.fn()}
+        onViewTool={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
     expect(markup).toContain("工作间");
     expect(markup).not.toContain("ai-privacy-copy");
-    expect(markup).toContain('data-ai-target="summary"');
-    expect(markup.match(/data-motion="ai-target"/g)).toHaveLength(4);
+    expect(markup).toContain('data-studio-tool="summary"');
+    expect(markup.match(/data-motion="studio-tool"/g)).toHaveLength(4);
     expect(markup).toContain("要点总结");
     expect(markup).toContain("同时生成 Mermaid 思维导图文件");
-    expect(markup).toContain('data-ai-target="insights"');
+    expect(markup).toContain('data-studio-tool="insights"');
     // Four cards: summary, dissection, insights, and the draft target card (6.1).
-    expect(markup.match(/<article class="ai-target-card/g)).toHaveLength(4);
-    expect(markup).toContain('data-ai-target="dissection"');
+    expect(markup.match(/<article class="studio-tool-card/g)).toHaveLength(4);
+    expect(markup).toContain('data-studio-tool="dissection"');
     expect(markup).toContain("文字稿解剖");
     expect(markup).toContain("启发灵感");
-    expect(markup.indexOf('data-ai-target="dissection"')).toBeLessThan(
-      markup.indexOf('data-ai-target="insights"'),
+    expect(markup.indexOf('data-studio-tool="dissection"')).toBeLessThan(
+      markup.indexOf('data-studio-tool="insights"'),
     );
     expect(markup).toContain("AI Credits 余额：8");
     expect(markup).toContain("工作间中的每次生成可能消耗多个 Credits。");
     expect(markup).not.toContain("当前可用 8 次");
-    expect(markup).not.toContain('data-ai-target="mindmap"');
-    expect(markup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(4);
-    expect(markup).toContain('data-ai-target="draft"');
+    expect(markup).not.toContain('data-studio-tool="mindmap"');
+    expect(markup.match(/class="secondary-button studio-tool-action"/g)).toHaveLength(4);
+    expect(markup).toContain('data-studio-tool="draft"');
     expect(markup).toContain("选择种子并生成");
     expect(markup).not.toContain('class="primary-button"');
   });
@@ -671,25 +671,25 @@ describe("task domain workspaces", () => {
   test("generated dissection card exposes only the view action", () => {
     const model = createTaskWorkspaceViewModel(generatedDissectionWorkflow(), aiAccount());
     const markup = renderToStaticMarkup(
-      <AiGenerationWorkspace
+      <StudioWorkspace
         model={model.ai}
         quotaRemaining={8}
         onSummaryAction={vi.fn()}
         onInsightsAction={vi.fn()}
         onDissectionAction={vi.fn()}
         onDraftAction={vi.fn()}
-        onViewTarget={vi.fn()}
+        onViewTool={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
     const dissectionCard = markup.match(
-      /<article[^>]*data-ai-target="dissection"[\s\S]*?<\/article>/,
+      /<article[^>]*data-studio-tool="dissection"[\s\S]*?<\/article>/,
     )?.[0];
 
     expect(dissectionCard).toBeDefined();
     expect(dissectionCard).toContain("查看结果");
     expect(dissectionCard).not.toContain("确认生成");
-    expect(dissectionCard).not.toContain('class="secondary-button ai-target-action"');
+    expect(dissectionCard).not.toContain('class="secondary-button studio-tool-action"');
   });
 
   test("generated dissection detail exposes a specifically named redissection action", () => {
@@ -757,14 +757,14 @@ describe("task domain workspaces", () => {
     );
     const model = createTaskWorkspaceViewModel(workflow, aiAccount());
     const markup = renderToStaticMarkup(
-      <AiGenerationWorkspace
+      <StudioWorkspace
         model={model.ai}
         quotaRemaining={8}
         onSummaryAction={vi.fn()}
         onInsightsAction={vi.fn()}
         onDissectionAction={vi.fn()}
         onDraftAction={vi.fn()}
-        onViewTarget={vi.fn()}
+        onViewTool={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -778,22 +778,22 @@ describe("task domain workspaces", () => {
     // entry or consume quota. The generate action is disabled.
     const draftModel = createTaskWorkspaceViewModel(readyWorkflow(), aiAccount());
     const markup = renderToStaticMarkup(
-      <AiGenerationWorkspace
+      <StudioWorkspace
         model={draftModel.ai}
         quotaRemaining={8}
         onSummaryAction={vi.fn()}
         onInsightsAction={vi.fn()}
         onDissectionAction={vi.fn()}
         onDraftAction={vi.fn()}
-        onViewTarget={vi.fn()}
+        onViewTool={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
-    expect(markup).toContain('data-ai-target="draft"');
+    expect(markup).toContain('data-studio-tool="draft"');
     // The draft action button is disabled (locked status -> disabled="").
     expect(markup).toContain(
-      'class="secondary-button ai-target-action" disabled=""',
+      'class="secondary-button studio-tool-action" disabled=""',
     );
     expect(markup).toContain("请先生成启发灵感");
   });
@@ -834,7 +834,7 @@ describe("task domain workspaces", () => {
     const workflow = readyWorkflow();
     const model = createTaskWorkspaceViewModel(workflow, aiAccount(0));
     const markup = renderToStaticMarkup(
-      <AiGenerationWorkspace
+      <StudioWorkspace
         model={model.ai}
         quotaRemaining={0}
         notice={{ messageCode: "preferences.notice.preferencesReadFailed" }}
@@ -842,7 +842,7 @@ describe("task domain workspaces", () => {
         onInsightsAction={vi.fn()}
         onDissectionAction={vi.fn()}
         onDraftAction={vi.fn()}
-        onViewTarget={vi.fn()}
+        onViewTool={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -961,14 +961,14 @@ describe("task domain workspaces", () => {
       );
       const model = createTaskWorkspaceViewModel(failedWorkflow, aiAccount());
       const markup = renderToStaticMarkup(
-        <AiGenerationWorkspace
+        <StudioWorkspace
           model={model.ai}
           quotaRemaining={8}
           onSummaryAction={vi.fn()}
           onInsightsAction={vi.fn()}
           onDissectionAction={vi.fn()}
           onDraftAction={vi.fn()}
-          onViewTarget={vi.fn()}
+          onViewTool={vi.fn()}
           onCancel={vi.fn()}
         />,
       );

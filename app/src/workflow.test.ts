@@ -129,7 +129,7 @@ describe("workflow state model", () => {
 
     expect(next.dissection).toEqual(previous.dissection);
     expect(next.dissectionStale).toBe(true);
-    expect(next.aiTargetErrors.dissection?.code).toBe("AI_LLM_REQUEST_FAILED");
+    expect(next.studioToolErrors.dissection?.code).toBe("AI_LLM_REQUEST_FAILED");
   });
 
   test("propagates stale dissection_source_status from a cached worker result", () => {
@@ -540,7 +540,7 @@ describe("workflow state model", () => {
     expect(cancelled.stage).toBe("completed");
     expect(cancelled.taskId).toBe(TASK_ID);
     expect(cancelled.dissection).toEqual(DEFAULT_DISSECTION);
-    expect(cancelled.activeAiTarget).toBeNull();
+    expect(cancelled.activeStudioTool).toBeNull();
   });
 
   test("retains a local selection after cancellation while clearing the running source", () => {
@@ -576,8 +576,8 @@ describe("workflow state model", () => {
 
     // draft reuses the insights_generating progress phase, no new phase.
     expect(retrying.stage).toBe("insights_generating");
-    expect(retrying.activeAiTarget).toBe("draft");
-    expect(retrying.aiErrorTarget).toBeNull();
+    expect(retrying.activeStudioTool).toBe("draft");
+    expect(retrying.studioToolError).toBeNull();
     expect(retrying.progressPercent).toBe(88);
     expect(retrying.error).toBeNull();
     // Transcript and prior AI artifacts are preserved.
@@ -600,8 +600,8 @@ describe("workflow state model", () => {
     );
 
     expect(state.draft).toBe("# 草稿正文\n\n这是基于灵感生成的草稿。");
-    expect(state.aiErrorTarget).toBeNull();
-    expect(state.aiTargetErrors.draft).toBeUndefined();
+    expect(state.studioToolError).toBeNull();
+    expect(state.studioToolErrors.draft).toBeUndefined();
   });
 
   test("attributes a draft_generating error to the draft target without inferring from stage copy", () => {
@@ -632,15 +632,15 @@ describe("workflow state model", () => {
       "draft",
     );
 
-    expect(state.aiErrorTarget).toBe("draft");
-    expect(state.aiTargetErrors.draft).toEqual({
+    expect(state.studioToolError).toBe("draft");
+    expect(state.studioToolErrors.draft).toEqual({
       code: "DRAFT_SEED_INVALID",
       message: "Seed insight 7 is not in insights.json.",
       stage: "draft_generating",
     });
     // Other targets remain unaffected; their artifacts are preserved.
-    expect(state.aiTargetErrors.summary).toBeUndefined();
-    expect(state.aiTargetErrors.insights).toBeUndefined();
+    expect(state.studioToolErrors.summary).toBeUndefined();
+    expect(state.studioToolErrors.insights).toBeUndefined();
     expect(state.summary).toBe("# 要点总结");
     expect(state.insights).toEqual([DEFAULT_INSIGHT]);
     expect(state.draft).toBe("");
@@ -668,8 +668,8 @@ describe("workflow state model", () => {
       "draft",
     );
 
-    expect(state.aiErrorTarget).toBe("draft");
-    expect(state.aiTargetErrors.draft?.code).toBe("DRAFT_GENERATION_FAILED");
+    expect(state.studioToolError).toBe("draft");
+    expect(state.studioToolErrors.draft?.code).toBe("DRAFT_GENERATION_FAILED");
   });
 
   test("exposes a nullable draftSeedInsightId starting at null", () => {
@@ -710,9 +710,9 @@ describe("workflow state model", () => {
       "insights",
     );
 
-    expect(state.aiErrorTarget).toBe("insights");
-    expect(state.aiTargetErrors.insights?.code).toBe("AI_EMPTY_RESULT");
-    expect(state.aiTargetErrors.draft).toBeUndefined();
+    expect(state.studioToolError).toBe("insights");
+    expect(state.studioToolErrors.insights?.code).toBe("AI_EMPTY_RESULT");
+    expect(state.studioToolErrors.draft).toBeUndefined();
   });
 
   test("clears draftSeedInsightId on insights regen success", () => {

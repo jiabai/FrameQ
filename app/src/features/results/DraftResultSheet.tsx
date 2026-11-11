@@ -63,7 +63,7 @@ export function DraftResultSheet({
   onRegenerate,
   onBusyChange,
 }: DraftResultSheetProps) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const resolvedLocale = useUiLocale();
   const [buffer, setBuffer] = useState("");
   const savedBuffer = useRef("");
@@ -162,7 +162,7 @@ export function DraftResultSheet({
         if (cancelled) return;
         setBuffer(draftFallbackRef.current);
         setNotice(
-          uiMessage("synthesis.draftResult.loadFailed", {
+          uiMessage("studio.draftResult.loadFailed", {
             detail: error instanceof Error ? error.message : String(error),
           }),
         );
@@ -203,12 +203,12 @@ export function DraftResultSheet({
       if (saved.task_id !== expectedTaskId || currentTaskRef.current.taskId !== expectedTaskId) return;
       setDirty(false);
       savedBuffer.current = saved.markdown;
-      setNotice(uiMessage("synthesis.draftResult.saved"));
+      setNotice(uiMessage("studio.draftResult.saved"));
       onSaved(saved.markdown, saved.artifacts, expectedTaskId);
     } catch (error) {
       if (currentTaskRef.current.taskId !== expectedTaskId) return;
       setNotice(
-        uiMessage("synthesis.draftResult.saveFailed", {
+        uiMessage("studio.draftResult.saveFailed", {
           detail: error instanceof Error ? error.message : String(error),
         }),
       );
@@ -224,14 +224,14 @@ export function DraftResultSheet({
 
   const handleCopy = useCallback(async () => {
     if (!buffer.trim()) {
-      setNotice(uiMessage("synthesis.draftResult.copyEmpty"));
+      setNotice(uiMessage("studio.draftResult.copyEmpty"));
       return;
     }
     try {
       await navigator.clipboard.writeText(buffer);
-      setNotice(uiMessage("synthesis.draftResult.copied"));
+      setNotice(uiMessage("studio.draftResult.copied"));
     } catch {
-      setNotice(uiMessage("synthesis.draftResult.copyFailed"));
+      setNotice(uiMessage("studio.draftResult.copyFailed"));
     }
   }, [buffer]);
 
@@ -239,18 +239,18 @@ export function DraftResultSheet({
 
   const handleExport = useCallback(async () => {
     if (dirty) {
-      setNotice(uiMessage("synthesis.draftResult.exportDirty"));
+      setNotice(uiMessage("studio.draftResult.exportDirty"));
       return;
     }
     const draftPath = getTaskArtifactPath(workflow, "draft");
     if (!draftPath) {
-      setNotice(uiMessage("synthesis.draftResult.exportMissing"));
+      setNotice(uiMessage("studio.draftResult.exportMissing"));
       return;
     }
     setNotice(
       (await revealPath(draftPath))
-        ? uiMessage("synthesis.draftResult.exported")
-        : uiMessage("synthesis.draftResult.exportFailed"),
+        ? uiMessage("studio.draftResult.exported")
+        : uiMessage("studio.draftResult.exportFailed"),
     );
   }, [dirty, workflow]);
 

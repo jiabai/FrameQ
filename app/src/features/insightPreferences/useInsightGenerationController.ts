@@ -23,14 +23,14 @@ import {
   saveInspirationProfile,
   skipInspirationProfile,
 } from "../../insightPreferencesClient";
-import type { InsightRetryTarget, WorkflowState } from "../../workflow";
+import type { StudioTool, WorkflowState } from "../../workflow";
 import type { SupportedLocale } from "../../i18n/locale";
 import { uiMessage, type UiMessage } from "../../i18n/uiMessage";
 import { hasSourceText, isArticleTaskSource } from "../../webPageProtocol";
 
 type OpenAccountPanel = (notice?: UiMessage) => void;
 type RetryInsightGeneration = (
-  target: InsightRetryTarget,
+  target: StudioTool,
   outputLanguage: SupportedLocale,
   preferenceSnapshot: PreferenceSnapshot | null,
   account: AccountStatus,

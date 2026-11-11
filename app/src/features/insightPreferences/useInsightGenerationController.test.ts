@@ -11,7 +11,7 @@ import type { InsightPreferenceState } from "../../insightPreferencesClient";
 import type { SupportedLocale } from "../../i18n/locale";
 import type { UiMessage } from "../../i18n/uiMessage";
 import type {
-  InsightRetryTarget,
+  StudioTool,
   WorkflowState,
 } from "../../workflow";
 import type { InsightGenerationController } from "./useInsightGenerationController";
@@ -27,7 +27,7 @@ type HookHarness = {
 type OpenAccountPanel = (notice?: UiMessage) => void;
 
 type RetryInsightGeneration = (
-  target: InsightRetryTarget,
+  target: StudioTool,
   outputLanguage: SupportedLocale,
   preferenceSnapshot: PreferenceSnapshot | null,
   account: AccountStatus,
@@ -114,9 +114,9 @@ function createWorkflow(overrides: Partial<WorkflowState> = {}): WorkflowState {
     stage: "partial_completed",
     markdown: "",
     cancellingFromStage: null,
-    activeAiTarget: null,
-    aiErrorTarget: null,
-    aiTargetErrors: {},
+    activeStudioTool: null,
+    studioToolError: null,
+    studioToolErrors: {},
     composerSource: {
       kind: "url",
       urlDraft: "https://example.test/video",

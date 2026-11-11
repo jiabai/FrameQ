@@ -28,7 +28,7 @@ import { useInsightGenerationController } from "./features/insightPreferences/us
 import { TranscriptDissectionConfirmationSheet } from "./features/dissection/TranscriptDissectionConfirmationSheet";
 import { useTranscriptDissectionController } from "./features/dissection/useTranscriptDissectionController";
 import { useDiagnosticExport } from "./features/diagnostics/useDiagnosticExport";
-import { AiGenerationWorkspace } from "./features/results/AiGenerationWorkspace";
+import { StudioWorkspace } from "./features/results/StudioWorkspace";
 import { AiResultDetailSheet } from "./features/results/AiResultDetailSheet";
 import { DraftConfirmationSheet } from "./features/results/DraftConfirmationSheet";
 import { DraftResultSheet } from "./features/results/DraftResultSheet";
@@ -136,7 +136,7 @@ function App() {
   const { t: tCommon } = useTranslation("common");
   const { t: tWorkflow } = useTranslation("workflow");
   const { t: tUpdates } = useTranslation("updates");
-  const { t: tSynthesis } = useTranslation("synthesis");
+  const { t: tStudio } = useTranslation("studio");
   const { t: tShell } = useTranslation("shell");
   const { t: tNotes } = useTranslation("noteActions");
   const [navigation, setNavigation] = useState(createShellNavigation);
@@ -173,7 +173,7 @@ function App() {
   const settingsController = useSettingsController(diagnosticExportController);
   // Draft confirmation + draft viewer sheet state. The
   // confirmation sheet is opened by the draft card's generate action; the
-  // viewer is opened by the draft card's view action (`onViewTarget("draft")`).
+  // viewer is opened by the draft card's view action (`onViewTool("draft")`).
   const [draftConfirmOpen, setDraftConfirmOpen] = useState(false);
   const [draftResultOpen, setDraftResultOpen] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
@@ -901,7 +901,7 @@ function App() {
                   onLocateArtifact={(artifact) => void locateArtifact(artifact)}
                   onCancel={() => void cancelCurrentProcessing()}
                 />}
-                ai={<AiGenerationWorkspace
+                ai={<StudioWorkspace
                   model={taskWorkspaceModel.ai}
                   quotaRemaining={account.llmQuotaRemaining}
                   notice={aiActionNotice}
@@ -915,7 +915,7 @@ function App() {
                     setActionNotice(null);
                     setDraftConfirmOpen(true);
                   }}
-                  onViewTarget={(target) => {
+                  onViewTool={(target) => {
                     setActionNotice(null);
                     // Draft has its own viewer (separate from the shared
                     // summary/insights detail tab). Summary and insights still
@@ -1032,10 +1032,10 @@ function App() {
 
       <ConfirmDialog
         open={draftRegeneration.candidate !== null}
-        title={tSynthesis("draftResult.regenerateTitle")}
-        message={tSynthesis("draftResult.regenerateConfirm")}
-        cancelLabel={tSynthesis("draftResult.keepDraft")}
-        confirmLabel={tSynthesis("draftResult.continueRegeneration")}
+        title={tStudio("draftResult.regenerateTitle")}
+        message={tStudio("draftResult.regenerateConfirm")}
+        cancelLabel={tStudio("draftResult.keepDraft")}
+        confirmLabel={tStudio("draftResult.continueRegeneration")}
         onCancel={draftRegeneration.cancel}
         onConfirm={draftRegeneration.confirm}
       />

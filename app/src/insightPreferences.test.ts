@@ -142,7 +142,7 @@ describe("draft platform selection", () => {
   test("DRAFT_PLATFORMS exposes exactly the 9 stable ids", () => {
     // 9-id vocabulary shared with the worker: the selector must
     // surface every draft platform the worker accepts, no more, no less.
-    // Display labels live in the synthesis i18n resources (draftPlatform.*),
+    // Display labels live in the studio i18n resources (draftPlatform.*),
     // not in this module — they are covered by the resources tests.
     expect(DRAFT_PLATFORMS).toEqual([
       "wechat_official_account",

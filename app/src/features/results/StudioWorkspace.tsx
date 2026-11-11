@@ -2,8 +2,8 @@ import { AlertTriangle, FileText, Lightbulb, ListChecks, LoaderCircle, ScanText,
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
-import type { TaskWorkspaceViewModel, AiTargetViewModel } from "../../taskWorkspaceViewModel";
-import type { InsightRetryTarget } from "../../workflow";
+import type { TaskWorkspaceViewModel, StudioToolViewModel } from "../../taskWorkspaceViewModel";
+import type { StudioTool } from "../../workflow";
 import { useUiLocale } from "../../i18n/LocaleProvider";
 import { formatNumber } from "../../i18n/formatters";
 import type { SupportedLocale } from "../../i18n/locale";
@@ -12,15 +12,15 @@ import { renderUiMessage, uiMessage, type UiMessage } from "../../i18n/uiMessage
 import { UI_MOTION_LAYOUT_TRANSITION, UI_MOTION_TRANSITION } from "../../uiMotion";
 import { StatusLine } from "../common/StatusLine";
 
-const AI_TARGET_ICONS: Record<InsightRetryTarget, React.ReactNode> = {
+const STUDIO_TOOL_ICONS: Record<StudioTool, React.ReactNode> = {
   summary: <ListChecks size={18} aria-hidden="true" />,
   dissection: <ScanText size={18} aria-hidden="true" />,
   insights: <Lightbulb size={18} aria-hidden="true" />,
   draft: <FileText size={18} aria-hidden="true" />,
 };
 
-type AiTargetCardSeed = {
-  target: AiTargetViewModel;
+type StudioToolCardSeed = {
+  tool: StudioToolViewModel;
   title: string;
   description: string;
   onAction: () => void;
@@ -29,7 +29,7 @@ type AiTargetCardSeed = {
   actionLabel?: string;
 };
 
-type AiGenerationWorkspaceProps = {
+type StudioWorkspaceProps = {
   model: TaskWorkspaceViewModel["ai"];
   quotaRemaining: number;
   notice?: UiMessage | null;
@@ -37,11 +37,11 @@ type AiGenerationWorkspaceProps = {
   onInsightsAction: () => void;
   onDissectionAction: () => void;
   onDraftAction: () => void;
-  onViewTarget: (target: InsightRetryTarget) => void;
+  onViewTool: (target: StudioTool) => void;
   onCancel: () => void;
 };
 
-export function AiGenerationWorkspace({
+export function StudioWorkspace({
   model,
   quotaRemaining,
   notice = null,
@@ -49,10 +49,10 @@ export function AiGenerationWorkspace({
   onInsightsAction,
   onDissectionAction,
   onDraftAction,
-  onViewTarget,
+  onViewTool,
   onCancel,
-}: AiGenerationWorkspaceProps) {
-  const { t } = useTranslation("synthesis");
+}: StudioWorkspaceProps) {
+  const { t } = useTranslation("studio");
   const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   const renderedNotice = renderUiMessage(locale, notice);
@@ -77,9 +77,9 @@ export function AiGenerationWorkspace({
       aria-label={t("workspace.ariaLabel")}
       data-task-id={model.taskId ?? undefined}
     >
-      {model.activeTarget || model.phase === "waiting_transcript" ? (
+      {model.activeTool || model.phase === "waiting_transcript" ? (
         <div className="domain-workspace-header ai-workspace-state">
-          {model.activeTarget ? (
+          {model.activeTool ? (
             <span className="workspace-status-badge active">{t("workspace.generating")}</span>
           ) : (
             <span className="workspace-status-badge">{model.sourceKind === "article" ? webT("waiting") : t("workspace.waitingTranscript")}</span>
@@ -104,16 +104,16 @@ export function AiGenerationWorkspace({
         <StatusLine className="ai-workspace-notice">{renderedNotice}</StatusLine>
       ) : null}
 
-      <div className="ai-target-list">
+      <div className="studio-tool-list">
         {([
           {
-            target: model.summary,
-            title: t("target.summary.title"),
-            description: t("target.summary.description"),
+            tool: model.summary,
+            title: t("tools.summary.title"),
+            description: t("tools.summary.description"),
             onAction: onSummaryAction,
           },
           {
-            target: model.dissection,
+            tool: model.dissection,
             title: model.sourceKind === "article" ? webT("dissection.title") : t("dissection.card.title"),
             description: t("dissection.card.description"),
             onAction: onDissectionAction,
@@ -121,26 +121,26 @@ export function AiGenerationWorkspace({
             retainedResult: model.dissectionAvailable,
           },
           {
-            target: model.insights,
-            title: t("target.insights.title"),
-            description: t("target.insights.description"),
+            tool: model.insights,
+            title: t("tools.insights.title"),
+            description: t("tools.insights.description"),
             onAction: onInsightsAction,
           },
           {
-            target: model.draft,
-            title: t("target.draft.title"),
-            description: t("target.draft.description"),
+            tool: model.draft,
+            title: t("tools.draft.title"),
+            description: t("tools.draft.description"),
             onAction: onDraftAction,
             actionLabel: t("action.chooseSeedAndGenerate"),
           },
-        ] satisfies Array<AiTargetCardSeed>).map((card) => (
-          <AiTargetCard
-            key={card.target.target}
+        ] satisfies Array<StudioToolCardSeed>).map((card) => (
+          <StudioToolCard
+            key={card.tool.id}
             {...card}
-            icon={AI_TARGET_ICONS[card.target.target]}
+            icon={STUDIO_TOOL_ICONS[card.tool.id]}
             locale={locale}
             blocked={Boolean(blocker) || model.phase === "generating"}
-            onView={() => onViewTarget(card.target.target)}
+            onView={() => onViewTool(card.tool.id)}
           />
         ))}
       </div>
@@ -164,8 +164,8 @@ export function AiGenerationWorkspace({
   );
 }
 
-type AiTargetCardProps = {
-  target: AiTargetViewModel;
+type StudioToolCardProps = {
+  tool: StudioToolViewModel;
   locale: SupportedLocale;
   title: string;
   description: string;
@@ -178,8 +178,8 @@ type AiTargetCardProps = {
   onView: () => void;
 };
 
-function AiTargetCard({
-  target,
+function StudioToolCard({
+  tool,
   locale,
   title,
   description,
@@ -190,54 +190,54 @@ function AiTargetCard({
   actionLabel,
   onAction,
   onView,
-}: AiTargetCardProps) {
-  const { t } = useTranslation("synthesis");
-  const active = target.status === "generating" || target.status === "cancelling";
-  const ready = target.status === "ready";
-  const failed = target.status === "failed";
-  const locked = target.status === "locked";
+}: StudioToolCardProps) {
+  const { t } = useTranslation("studio");
+  const active = tool.status === "generating" || tool.status === "cancelling";
+  const ready = tool.status === "ready";
+  const failed = tool.status === "failed";
+  const locked = tool.status === "locked";
   const viewable = ready || retainedResult;
   const disabled = locked || active || blocked;
   const defaultActionLabel = failed
     ? t("action.retry")
-    : target.target === "insights"
+    : tool.id === "insights"
       ? t("action.chooseAndConfirm")
       : t("action.confirm");
   const label = actionLabel ?? defaultActionLabel;
-  const timeoutGuidance = renderTimeoutGuidance(target.errorCode, locale);
+  const timeoutGuidance = renderTimeoutGuidance(tool.errorCode, locale);
 
   return (
     <motion.article
-      className={`ai-target-card ${target.status}`}
-      data-ai-target={target.target}
-      data-motion="ai-target"
+      className={`studio-tool-card ${tool.status}`}
+      data-studio-tool={tool.id}
+      data-motion="studio-tool"
       layout
       transition={UI_MOTION_LAYOUT_TRANSITION}
     >
-      <div className="ai-target-heading">
-        <span className="ai-target-icon">{icon}</span>
+      <div className="studio-tool-heading">
+        <span className="studio-tool-icon">{icon}</span>
         <h3>{title}</h3>
-        <span className="ai-target-status">{t(`status.${target.status}`)}</span>
+        <span className="studio-tool-status">{t(`status.${tool.status}`)}</span>
       </div>
-      <p className="ai-target-description">{description}</p>
+      <p className="studio-tool-description">{description}</p>
       {stale ? <p className="dissection-card-stale">{t("dissection.card.stale")}</p> : null}
       <AnimatePresence initial={false}>
-        {target.errorCode ? (
+        {tool.errorCode ? (
           <motion.p
-            className="ai-target-error"
+            className="studio-tool-error"
             initial={{ opacity: 0, y: -3 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
             transition={UI_MOTION_TRANSITION}
           >
-            {timeoutGuidance ?? t("target.error", { code: target.errorCode })}
+            {timeoutGuidance ?? t("tools.error", { code: tool.errorCode })}
           </motion.p>
         ) : null}
       </AnimatePresence>
-      {locked && target.lockedHint ? (
-        <p className="ai-target-locked-hint">{renderUiMessage(locale, target.lockedHint)}</p>
+      {locked && tool.lockedHint ? (
+        <p className="studio-tool-locked-hint">{renderUiMessage(locale, tool.lockedHint)}</p>
       ) : null}
-      <div className="ai-target-actions">
+      <div className="studio-tool-actions">
         {active ? (
           <LoaderCircle size={17} className="spin" aria-label={t("status.generating")} />
         ) : null}
@@ -247,7 +247,7 @@ function AiTargetCard({
             </button>
         ) : null}
         {!active && !ready ? (
-          <button type="button" className="secondary-button ai-target-action" onClick={onAction} disabled={disabled}>
+          <button type="button" className="secondary-button studio-tool-action" onClick={onAction} disabled={disabled}>
             {label}
           </button>
         ) : null}

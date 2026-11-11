@@ -274,7 +274,7 @@ describe("task workspace view model", () => {
 
     const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
 
-    expect(workflow.activeAiTarget).toBe("summary");
+    expect(workflow.activeStudioTool).toBe("summary");
     expect(model.local.phase).toBe("ready");
     expect(model.local.canReview).toBe(true);
     expect(model.local.canEdit).toBe(false);
@@ -293,7 +293,7 @@ describe("task workspace view model", () => {
 
     const model = createTaskWorkspaceViewModel(cancelling, entitledAccount());
 
-    expect(cancelling.activeAiTarget).toBe("insights");
+    expect(cancelling.activeStudioTool).toBe("insights");
     expect(model.local.phase).toBe("ready");
     expect(model.local.canEdit).toBe(false);
     expect(model.ai.insights.status).toBe("cancelling");
@@ -321,7 +321,7 @@ describe("task workspace view model", () => {
 
     const model = createTaskWorkspaceViewModel(state, entitledAccount());
 
-    expect(state.aiErrorTarget).toBe("insights");
+    expect(state.studioToolError).toBe("insights");
     expect(model.local.phase).toBe("ready");
     expect(model.local.error).toBeNull();
     expect(model.ai.summary.status).toBe("ready");
@@ -433,7 +433,7 @@ describe("task workspace view model", () => {
 
     const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
 
-    expect(model.ai.draft.target).toBe("draft");
+    expect(model.ai.draft.id).toBe("draft");
     expect(model.ai.draft.status).toBe("available");
     expect(model.ai.summary.status).toBe("available");
     expect(model.ai.insights.status).toBe("ready");
@@ -469,7 +469,7 @@ describe("task workspace view model", () => {
 
     const model = createTaskWorkspaceViewModel(workflow, entitledAccount());
 
-    expect(workflow.activeAiTarget).toBe("draft");
+    expect(workflow.activeStudioTool).toBe("draft");
     expect(model.ai.draft.status).toBe("generating");
     // Other targets are not generating.
     expect(model.ai.summary.status).not.toBe("generating");
@@ -492,7 +492,7 @@ describe("task workspace view model", () => {
 
     const model = createTaskWorkspaceViewModel(state, entitledAccount());
 
-    expect(state.aiErrorTarget).toBe("draft");
+    expect(state.studioToolError).toBe("draft");
     expect(model.ai.draft.status).toBe("failed");
     expect(model.ai.draft.errorCode).toBe("DRAFT_SEED_INVALID");
     // Summary and insights are untouched by the draft failure.

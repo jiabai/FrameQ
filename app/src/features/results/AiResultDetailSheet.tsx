@@ -35,7 +35,7 @@ export function AiResultDetailSheet({
   onSelectDraftSeed,
   onClearDraftSeed,
 }: AiResultDetailSheetProps) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const { t: webT } = useTranslation("webPage");
   const locale = useUiLocale();
   const renderedActionNotice = renderUiMessage(locale, actionNotice);

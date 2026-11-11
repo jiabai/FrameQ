@@ -77,7 +77,7 @@ describe("note title workflow", () => {
     expect(next.text).toBe(saved.text);
     expect(next.artifacts).toBe(saved.artifacts);
     expect(next.stage).toBe("partial_completed");
-    expect(next.aiTargetErrors).toEqual({});
+    expect(next.studioToolErrors).toEqual({});
   });
 
   test("publication failure exposes retry even when disk still contains the prior completed title", () => {

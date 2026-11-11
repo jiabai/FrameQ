@@ -8,7 +8,7 @@ const accountCopyFiles = [
 
 const accountCreditCopyFiles = [
   ["accountResources.ts", new URL("./i18n/accountResources.ts", import.meta.url)],
-  ["synthesisResources.ts", new URL("./i18n/synthesisResources.ts", import.meta.url)],
+  ["studioResources.ts", new URL("./i18n/studioResources.ts", import.meta.url)],
 ] as const;
 
 describe("account copy", () => {

@@ -17,7 +17,7 @@ preserving server, quota, privacy, stdin transport, and process-supervision sema
 `useTaskProcessingController` remains the workflow/task-identity owner and adds explicit AI
 target state. Pure view-model functions project the workflow into local and AI domain
 states. `LocalTranscriptWorkspace` embeds a reusable `TranscriptReviewPanel` backed by the
-existing transcript controller; `AiGenerationWorkspace` renders two typed target cards and
+existing transcript controller; `StudioWorkspace` renders two typed target cards and
 opens target-specific confirmation/results. App remains the composition root.
 
 ## Progress
@@ -93,7 +93,7 @@ opens target-specific confirmation/results. App remains the composition root.
 
 - Add component tests for semantic region labels, status banner, local file/audio/transcript
   structure, two AI target cards, blockers, read-only explanation, and no generic result grid.
-- Implement `TaskStatusBanner`, `LocalTranscriptWorkspace`, `AiGenerationWorkspace`, and
+- Implement `TaskStatusBanner`, `LocalTranscriptWorkspace`, `StudioWorkspace`, and
   `AiTargetCard` with existing tokens and controller actions.
 
 ### 3. Transcript extraction RED/GREEN

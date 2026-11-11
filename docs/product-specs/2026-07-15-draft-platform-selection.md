@@ -1,6 +1,6 @@
 # 文字稿生成的目标平台选择（draft 平台可改）
 
-> 本规格是 `2026-07-12-generate-draft-from-inspiration.md` 的增量优化。父规格定义了 `生成文字稿` 这张 target 卡片与单条 `Insight` 种子、额度、隐私边界；本规格只改动「目标平台从哪来、怎么映射、用户能否改」这一条链路，不重述父规格的其他内容。冲突时以本规格为准。
+> 本规格是 `2026-07-12-generate-draft-from-inspiration.md` 的增量优化。父规格定义了 `生成文字稿` 这张 工具卡片与单条 `Insight` 种子、额度、隐私边界；本规格只改动「目标平台从哪来、怎么映射、用户能否改」这一条链路，不重述父规格的其他内容。冲突时以本规格为准。
 
 > 相关文档：执行计划 [`2026-07-15-draft-platform-selection-plan.md`](../exec-plans/active/2026-07-15-draft-platform-selection-plan.md)、设计方案 [`2026-07-15-draft-platform-selection.md`](../design-docs/2026-07-15-draft-platform-selection.md)。
 

@@ -19,7 +19,7 @@ Status: Complete，2026-10-25 完成当前实现验收。
 - 有效总结工具直接完成运行，正常生成需要两次 LLM 调用。
 - `StrictInsightRunner` 逐步执行，输入预算必须为 1 至 6 的整数。SDK、provider 和空响应隐式重试均关闭。
 - 托管配置在调用前校验，每次供应商请求独立 checkout；请求标识包含目标名称和调用序号。
-- 共用模块与其他智能提炼目标的验收见 `2026-10-25-intelligent-extraction-agent-runtime-plan.md`。
+- 共用模块与其他工作间目标的验收见 `2026-10-25-intelligent-extraction-agent-runtime-plan.md`。
 
 ## Validation
 

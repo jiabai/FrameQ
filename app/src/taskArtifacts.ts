@@ -51,7 +51,7 @@ function formatInsightForCopy(
   index: number,
   locale: SupportedLocale,
 ): string {
-  const copy = resources[locale].synthesis.detail;
+  const copy = resources[locale].studio.detail;
   const separator = copy.fieldSeparator;
   const questions = new Intl.ListFormat(locale, {
     style: "long",

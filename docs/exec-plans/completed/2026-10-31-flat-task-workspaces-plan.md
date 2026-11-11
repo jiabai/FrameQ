@@ -26,7 +26,7 @@ on 2026-10-31; routine component/style choices are within that authorization.
   declarations instead of accumulating contradictory overrides.
 - `app/src/features/shell/shell.css` owns available-width stacking and shell-specific insets.
 - `LocalTranscriptWorkspace.tsx` and `TranscriptReviewPanel.tsx` retain real transcript controls.
-- `AiGenerationWorkspace.tsx` projects four targets and their actual callbacks and feedback.
+- `StudioWorkspace.tsx` projects four targets and their actual callbacks and feedback.
 - The selected webpage is an ignored design artifact. Its sample content, accounts,
   localStorage editing, notifications, and generation dialogs must not enter production.
 

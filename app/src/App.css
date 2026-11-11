@@ -2577,7 +2577,7 @@ h3 {
 }
 
 .workspace-status-badge,
-.ai-target-status {
+.studio-tool-status {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -2657,7 +2657,7 @@ h3 {
 
 .local-artifact-toolbar,
 .transcript-action-bar,
-.ai-target-actions {
+.studio-tool-actions {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
@@ -2673,7 +2673,7 @@ h3 {
 
 .local-artifact-toolbar button,
 .transcript-action-bar button,
-.ai-target-actions button,
+.studio-tool-actions button,
 .ai-cancel-button {
   min-height: 32px;
 }
@@ -2777,7 +2777,7 @@ h3 {
   padding: 9px 0;
 }
 
-.ai-target-list {
+.studio-tool-list {
   border: 0;
   border-radius: 0;
   border-top: 1px solid #eceeeb;
@@ -2786,7 +2786,7 @@ h3 {
   overflow: visible;
 }
 
-.ai-target-card {
+.studio-tool-card {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -2795,53 +2795,53 @@ h3 {
   padding: 20px 0;
 }
 
-.ai-target-card + .ai-target-card {
+.studio-tool-card + .studio-tool-card {
   border-top: 1px solid #eceeeb;
 }
 
-.ai-target-card.generating,
-.ai-target-card.cancelling {
+.studio-tool-card.generating,
+.studio-tool-card.cancelling {
   background: #f7fbff;
 }
 
-.ai-target-card.failed {
+.studio-tool-card.failed {
   background: #fff8f7;
 }
 
-.ai-target-heading {
+.studio-tool-heading {
   align-items: center;
   display: grid;
   gap: 9px;
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
-.ai-target-heading h3 {
+.studio-tool-heading h3 {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
   min-width: 0;
 }
 
-.ai-target-description,
-.ai-target-error {
+.studio-tool-description,
+.studio-tool-error {
   color: #89917e;
   font-size: 13px;
   line-height: 1.7;
   margin: 7px 0 0 26px;
 }
 
-.ai-target-locked-hint,
+.studio-tool-locked-hint,
 .ai-progress-message {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.7;
 }
 
-.ai-target-locked-hint {
+.studio-tool-locked-hint {
   margin: 12px 0 0 26px;
 }
 
-.ai-target-card .dissection-card-stale {
+.studio-tool-card .dissection-card-stale {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -2862,12 +2862,12 @@ h3 {
   padding: 8px 10px;
 }
 
-.ai-target-error {
+.studio-tool-error {
   color: var(--danger);
   overflow-wrap: anywhere;
 }
 
-.ai-target-icon {
+.studio-tool-icon {
   align-items: center;
   background: transparent;
   border: 0;
@@ -2880,17 +2880,17 @@ h3 {
   width: 17px;
 }
 
-.ai-target-icon svg {
+.studio-tool-icon svg {
   height: 17px;
   width: 17px;
 }
 
-.ai-target-actions {
+.studio-tool-actions {
   justify-content: flex-end;
   margin: 17px 0 0 26px;
 }
 
-.ai-target-actions .secondary-button,
+.studio-tool-actions .secondary-button,
 .ai-cancel-button {
   background: transparent;
   border: 1px solid #d6e6f6;
@@ -2900,16 +2900,16 @@ h3 {
   padding: 5px 11px;
 }
 
-.ai-target-action {
+.studio-tool-action {
   background: transparent;
   border-color: #d6e6f6;
   box-shadow: none;
   color: #2570b3;
 }
 
-.ai-target-action:not(:disabled):hover,
-.ai-target-action:focus-visible,
-.ai-target-actions .secondary-button:not(:disabled):hover,
+.studio-tool-action:not(:disabled):hover,
+.studio-tool-action:focus-visible,
+.studio-tool-actions .secondary-button:not(:disabled):hover,
 .ai-cancel-button:not(:disabled):hover {
   background: #f1f7fe;
   border-color: #d6e6f6;

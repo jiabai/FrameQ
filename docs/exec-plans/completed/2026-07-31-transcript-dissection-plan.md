@@ -214,7 +214,7 @@ artifact commit. It must never clamp or silently drop invalid content.
 | Python persistence | `worker/frameq_worker/{task_store.py,task_transaction.py}`, `worker_application/insight_retry.py` |
 | Rust boundary | `app/src-tauri/src/worker_runtime/result_protocol.rs`, `video_processing/retry_insights.rs`, `video_processing/task_result.rs`, `task_manifest/{schema,access,dissection,tests}.rs`, `history.rs` |
 | Frontend state | `app/src/{desktopWorkerProtocol,workerResultProtocol,workerClient,workflowState,taskWorkspaceViewModel,historyClient,taskArtifacts}.ts` and focused tests |
-| Frontend feature | `app/src/features/dissection/*`, `features/results/{AiGenerationWorkspace,AiResultDetailSheet,DissectionReport}.tsx`, transcript controller/view files, `App.tsx`, `App.css`, i18n resources |
+| Frontend feature | `app/src/features/dissection/*`, `features/results/{StudioWorkspace,AiResultDetailSheet,DissectionReport}.tsx`, transcript controller/view files, `App.tsx`, `App.css`, i18n resources |
 
 ## Plan of Work
 
@@ -455,7 +455,7 @@ artifact commit. It must never clamp or silently drop invalid content.
   transcript and recalculates; no preview evidence, transcript text, or local path enters worker
   stdin. If the transcript changed before worker admission, the worker's stricter current result
   controls and may reject before checkout.
-- [x] Widen `InsightRetryTarget` only to `"summary" | "insights" | "dissection"`; do not add
+- [x] Widen `StudioTool` only to `"summary" | "insights" | "dissection"`; do not add
   `draft`. Add `dissection` and `dissectionStale` to workflow/history state while preserving
   exact-null behavior for old terminal results.
 - [x] On successful transcript save, retain the old report, mark it stale, and disable its source
@@ -487,7 +487,7 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Create: `app/src/features/dissection/TranscriptDissectionConfirmationSheet.test.tsx`
 - Create: `app/src/features/results/DissectionReport.tsx`
 - Create: `app/src/features/results/DissectionReport.test.tsx`
-- Modify: `app/src/features/results/AiGenerationWorkspace.tsx`
+- Modify: `app/src/features/results/StudioWorkspace.tsx`
 - Modify: `app/src/features/results/AiResultDetailSheet.tsx`
 - Modify: `app/src/features/results/TaskWorkspaces.test.tsx`
 - Create: `app/src/features/transcript/transcriptByteRange.ts`
@@ -496,7 +496,7 @@ artifact commit. It must never clamp or silently drop invalid content.
 - Modify: `app/src/features/transcript/useTranscriptDetailController.ts`
 - Modify: `app/src/features/transcript/TranscriptReviewPanel.tsx`
 - Modify: `app/src/features/transcript/transcriptControllerBoundary.test.ts`
-- Modify: `app/src/i18n/synthesisResources.ts`
+- Modify: `app/src/i18n/studioResources.ts`
 - Modify: `app/src/i18n/errorResources.ts`
 - Modify: `app/src/App.tsx`
 - Modify: `app/src/App.css`

@@ -10,7 +10,7 @@ type TaskWorkspaceLayoutProps = {
 };
 
 export function TaskWorkspaceLayout({ title, local, ai }: TaskWorkspaceLayoutProps) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const [expanded, setExpanded] = useState(false);
   const [preferredAiRatio, setPreferredAiRatio] = useState<number | null>(null);
   const [width, setWidth] = useState(0);

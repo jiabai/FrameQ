@@ -4,7 +4,7 @@ import {
 } from "./accountState";
 import { uiMessage, type UiMessage } from "./i18n/uiMessage";
 import type {
-  InsightRetryTarget,
+  StudioTool,
   ProgressMessageDescriptor,
   ProgressStep,
   WorkflowState,
@@ -16,7 +16,7 @@ export type WorkspaceCancellationOwner = "local" | "ai" | null;
 export type LocalWorkspacePhase = "waiting" | "processing" | "ready" | "failed";
 export type AiWorkspacePhase = "waiting_transcript" | "ready" | "generating";
 export type AiAvailability = "available" | "unavailable" | "quota_exhausted";
-export type AiTargetStatus =
+export type StudioToolStatus =
   | "locked"
   | "available"
   | "generating"
@@ -24,9 +24,9 @@ export type AiTargetStatus =
   | "ready"
   | "failed";
 
-export type AiTargetViewModel = {
-  target: InsightRetryTarget;
-  status: AiTargetStatus;
+export type StudioToolViewModel = {
+  id: StudioTool;
+  status: StudioToolStatus;
   errorCode: string | null;
   /** Optional explanation shown when a target is quietly locked (draft seed rules). */
   lockedHint?: UiMessage;
@@ -100,70 +100,70 @@ function aiAvailability(account: AccountStatus): AiAvailability {
   return canGenerateAiWithAccount(account) ? "available" : "unavailable";
 }
 
-function aiTargetStatus(
+function studioToolStatus(
   workflow: WorkflowState,
-  target: InsightRetryTarget,
+  tool: StudioTool,
   transcriptReady: boolean,
-): AiTargetViewModel {
+): StudioToolViewModel {
   if (!transcriptReady) {
-    return { target, status: "locked", errorCode: null };
+    return { id: tool, status: "locked", errorCode: null };
   }
 
-  if (workflow.activeAiTarget === target) {
+  if (workflow.activeStudioTool === tool) {
     return {
-      target,
+      id: tool,
       status: isAiCancellation(workflow) ? "cancelling" : "generating",
       errorCode: null,
     };
   }
 
-  const targetError = workflow.aiTargetErrors[target];
-  if (targetError) {
-    return { target, status: "failed", errorCode: targetError.code };
+  const toolError = workflow.studioToolErrors[tool];
+  if (toolError) {
+    return { id: tool, status: "failed", errorCode: toolError.code };
   }
 
   const ready =
-    target === "summary"
+    tool === "summary"
       ? Boolean(workflow.summary || workflow.artifacts.summary)
-      : target === "insights"
+      : tool === "insights"
         ? Boolean(workflow.insights.length || workflow.artifacts.insights || workflow.artifacts.insights_md)
-        : target === "draft"
+        : tool === "draft"
           ? Boolean(workflow.draft || workflow.artifacts.draft)
           : Boolean(workflow.dissection || workflow.artifacts.dissection);
 
-  if (target === "draft") {
+  if (tool === "draft") {
     // The draft card needs a selectable seed insight. It is quietly locked
     // until (a) insights are ready AND (b) the user has selected exactly one
     // seed (workflow.draftSeedInsightId). When locked it must NOT expose an LLM
-    // entry or consume quota. This does NOT infer the draft target from status
+    // entry or consume quota. This does NOT infer the draft tool from status
     // copy — it is an availability projection from artifact + selection state.
     const insightsReady = Boolean(
       workflow.insights.length || workflow.artifacts.insights || workflow.artifacts.insights_md,
     );
     const seedSelected = workflow.draftSeedInsightId !== null;
     if (ready) {
-      return { target, status: "ready", errorCode: null };
+      return { id: tool, status: "ready", errorCode: null };
     }
     if (!insightsReady) {
       return {
-        target,
+        id: tool,
         status: "locked",
         errorCode: null,
-        lockedHint: uiMessage("synthesis.target.draft.hint.needInsights"),
+        lockedHint: uiMessage("studio.tools.draft.hint.needInsights"),
       };
     }
     if (!seedSelected) {
       return {
-        target,
+        id: tool,
         status: "locked",
         errorCode: null,
-        lockedHint: uiMessage("synthesis.target.draft.hint.selectSeed"),
+        lockedHint: uiMessage("studio.tools.draft.hint.selectSeed"),
       };
     }
-    return { target, status: "available", errorCode: null };
+    return { id: tool, status: "available", errorCode: null };
   }
 
-  return { target, status: ready ? "ready" : "available", errorCode: null };
+  return { id: tool, status: ready ? "ready" : "available", errorCode: null };
 }
 
 function cancellationOwner(workflow: WorkflowState): WorkspaceCancellationOwner {
@@ -216,7 +216,7 @@ export function createTaskWorkspaceViewModel(
   const transcriptReady = hasSavedTranscript(workflow);
   const titleActive = workflow.stage === "title_generating" ||
     (workflow.stage === "cancelling" && workflow.cancellingFromStage === "title_generating");
-  const aiActive = workflow.activeAiTarget !== null || titleActive;
+  const aiActive = workflow.activeStudioTool !== null || titleActive;
   const localProcessing =
     workflow.stage === "video_extracting" ||
     workflow.stage === "video_transcribing" ||
@@ -230,10 +230,10 @@ export function createTaskWorkspaceViewModel(
         ? "failed"
         : "waiting";
   const readOnly = transcriptReady && (aiActive || isAiCancellation(workflow));
-  const summary = aiTargetStatus(workflow, "summary", transcriptReady);
-  const insights = aiTargetStatus(workflow, "insights", transcriptReady);
-  const dissection = aiTargetStatus(workflow, "dissection", transcriptReady);
-  const draft = aiTargetStatus(workflow, "draft", transcriptReady);
+  const summary = studioToolStatus(workflow, "summary", transcriptReady);
+  const insights = studioToolStatus(workflow, "insights", transcriptReady);
+  const dissection = studioToolStatus(workflow, "dissection", transcriptReady);
+  const draft = studioToolStatus(workflow, "draft", transcriptReady);
   const owner = cancellationOwner(workflow);
   const aiPhase: AiWorkspacePhase = !transcriptReady
     ? "waiting_transcript"
@@ -318,7 +318,7 @@ export function createTaskWorkspaceViewModel(
       taskId: workflow.taskId,
       phase: aiPhase,
       availability: aiAvailability(account),
-      activeTarget: workflow.activeAiTarget,
+      activeTool: workflow.activeStudioTool,
       progressMessage:
         aiActive || isAiCancellation(workflow) ? workflow.progressMessage : null,
       cancellation: workspaceCancellation(owner, "ai", workflow),

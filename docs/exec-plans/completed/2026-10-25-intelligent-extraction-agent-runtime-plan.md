@@ -1,10 +1,10 @@
-# 智能提炼 agent_runtime 执行计划
+# 工作间 agent_runtime 执行计划
 
 Status: Complete，2026-10-25 完成实现与验收。
 
 ## Scope
 
-实现 `docs/product-specs/2026-10-25-intelligent-extraction-agent-runtime.md`：三个智能提炼目标统一使用 agent_runtime，产物与隐私契约继续有效。
+实现 `docs/product-specs/2026-10-25-intelligent-extraction-agent-runtime.md`：三个工作间目标统一使用 agent_runtime，产物与隐私契约继续有效。
 
 ## Progress
 

@@ -254,8 +254,8 @@
 - `工作间` is the container. Its four tools are `要点总结 / 重點摘要 / Key Summary`,
   `文字稿解剖 / 逐字稿解剖 / Transcript Dissection`, `启发灵感 / 靈感啟發 / Inspiration`, and
   `生成文字稿 / 產生逐字稿 / Full Transcript`. The Mermaid mind map is an output of Key Summary,
-  not a separate tool. These four map to the existing `target` identifiers in code (`summary`,
-  `dissection`, `insights`, `draft`).
+  not a separate tool. In code they are the `StudioTool` union (`summary`, `dissection`, `insights`,
+  `draft`); the desktop-worker contract carries the same value in its `target` field.
 - Visible copy and `aria-label`/`title`/`placeholder` text resolve from feature namespaces. Progress
   and notices render from semantic codes so an on-screen message changes with the locale; raw worker
   prose is not primary UI copy.

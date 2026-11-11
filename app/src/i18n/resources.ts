@@ -7,7 +7,7 @@ import { errorResources } from "./errorResources";
 import { historyResources } from "./historyResources";
 import { preferenceResources } from "./preferenceResources";
 import { diagnosticsResources, settingsFeatureResources } from "./settingsResources";
-import { synthesisResources } from "./synthesisResources";
+import { studioResources } from "./studioResources";
 import { transcriptResources } from "./transcriptResources";
 import { updatesResources } from "./updatesResources";
 import { workflowResources } from "./workflowResources";
@@ -29,7 +29,7 @@ export const RESOURCE_NAMESPACES = [
   "transcript",
   "asrModel",
   "workflow",
-  "synthesis",
+  "studio",
   "updates",
   "errors",
   "shell",
@@ -160,7 +160,7 @@ export const resources = {
     transcript: transcriptResources["zh-CN"],
     asrModel: asrModelResources["zh-CN"],
     workflow: workflowResources["zh-CN"],
-    synthesis: { ...synthesisResources["zh-CN"], ...dissectionResources["zh-CN"] },
+    studio: { ...studioResources["zh-CN"], ...dissectionResources["zh-CN"] },
     updates: updatesResources["zh-CN"],
     errors: errorResources["zh-CN"],
     shell: shellResources["zh-CN"],
@@ -285,7 +285,7 @@ export const resources = {
     transcript: transcriptResources["zh-TW"],
     asrModel: asrModelResources["zh-TW"],
     workflow: workflowResources["zh-TW"],
-    synthesis: { ...synthesisResources["zh-TW"], ...dissectionResources["zh-TW"] },
+    studio: { ...studioResources["zh-TW"], ...dissectionResources["zh-TW"] },
     updates: updatesResources["zh-TW"],
     errors: errorResources["zh-TW"],
     shell: shellResources["zh-TW"],
@@ -410,7 +410,7 @@ export const resources = {
     transcript: transcriptResources["en-US"],
     asrModel: asrModelResources["en-US"],
     workflow: workflowResources["en-US"],
-    synthesis: { ...synthesisResources["en-US"], ...dissectionResources["en-US"] },
+    studio: { ...studioResources["en-US"], ...dissectionResources["en-US"] },
     updates: updatesResources["en-US"],
     errors: errorResources["en-US"],
     shell: shellResources["en-US"],

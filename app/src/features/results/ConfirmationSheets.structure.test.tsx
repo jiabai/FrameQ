@@ -10,7 +10,7 @@ import { dissectionResources } from "../../i18n/dissectionResources";
 import { initializeI18n } from "../../i18n/i18n";
 import type { SupportedLocale } from "../../i18n/locale";
 import { getPreferenceCopy } from "../../i18n/preferencePresentation";
-import { synthesisResources } from "../../i18n/synthesisResources";
+import { studioResources } from "../../i18n/studioResources";
 import { createInitialWorkflow } from "../../workflowState";
 import { TranscriptDissectionConfirmationSheet } from "../dissection/TranscriptDissectionConfirmationSheet";
 import { createDissectionPreview } from "../dissection/useTranscriptDissectionController";
@@ -104,7 +104,7 @@ describe.each<SupportedLocale>(["zh-CN", "zh-TW", "en-US"])("confirmation region
         onCancel={unexpectedAction}
       />,
     );
-    expect(body.querySelector(".privacy-callout")!.textContent).toBe(synthesisResources[locale].confirmation.privacy);
+    expect(body.querySelector(".privacy-callout")!.textContent).toBe(studioResources[locale].confirmation.privacy);
     expect(body.querySelectorAll(".sheet-facts > div > dt")).toHaveLength(3);
     expect(body.querySelector("[data-output-language]")!.getAttribute("data-output-language")).toBe(locale);
     expect(body.textContent).toContain(getAiCreditsCostHint(locale));
@@ -124,13 +124,13 @@ describe.each<SupportedLocale>(["zh-CN", "zh-TW", "en-US"])("confirmation region
         onCancel={unexpectedAction}
       />,
     );
-    const copy = synthesisResources[locale].draftConfirmation;
+    const copy = studioResources[locale].draftConfirmation;
     expect(body.querySelectorAll('[role="radio"]')).toHaveLength(9);
     expect(body.querySelector(".privacy-callout")!.textContent).toBe(copy.privacy);
     expect(body.textContent).toContain(copy.quotaCost);
     expect(body.textContent).toContain(copy.quotaHint);
     expect(body.querySelector("[role=radio][aria-checked=true]")!.getAttribute("aria-label"))
-      .toBe(synthesisResources[locale].draftPlatform.other);
+      .toBe(studioResources[locale].draftPlatform.other);
     assertOriginalPath(body);
   });
 

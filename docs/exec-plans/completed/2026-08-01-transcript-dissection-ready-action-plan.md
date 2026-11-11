@@ -30,7 +30,7 @@ documentation.
 1. Extended `app/src/features/results/TaskWorkspaces.test.tsx` with a generated dissection fixture.
    Its card must contain `查看结果` but no `确认生成` action, and its detail sheet must contain
    `重新解剖`.
-2. Changed `AiGenerationWorkspace.tsx` to render a generation action only while a target is not
+2. Changed `StudioWorkspace.tsx` to render a generation action only while a target is not
    ready.
 3. Added three-locale dissection-specific redissection copy and used it in
    `AiResultDetailSheet.tsx` with a stable browser selector.

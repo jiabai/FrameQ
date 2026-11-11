@@ -5,7 +5,7 @@
 ## Purpose / Big Picture
 
 使用独立的系统 WebView 加载网页、执行必要页面脚本、提取正文并保存为已有本地笔记。
-取消网页功能的 Chromium/Playwright 组件下载及准备页面，保持 Home、侧栏、正文阅读、合集和现有智能提炼范围。
+取消网页功能的 Chromium/Playwright 组件下载及准备页面，保持 Home、侧栏、正文阅读、合集和现有工作间范围。
 
 规格：[网页正文](../../product-specs/2026-11-01-web-page-notes.md)。
 技术设计：[系统 WebView](../../design-docs/2026-11-02-system-webview-extraction.md)。
@@ -177,7 +177,7 @@ Files：`web_engine.rs` / `web_engine/`、`features/articles/useWebEngine.tsx`�
 ## Validation and Acceptance
 
 核心验收：系统 WebView 实际加载网页并保存真实正文；主界面、账号、文件权限分离；没有额外 Chromium 下载及准备 UI。
-保存、阅读、历史、合集及现有智能提炼保护保持现有契约。取消和关闭拒绝晚到结果，并完成本应用拥有的资源清理。
+保存、阅读、历史、合集及现有工作间保护保持现有契约。取消和关闭拒绝晚到结果，并完成本应用拥有的资源清理。
 
 平台网络/系统进程的限制使用设计中的真实范围；不沿用独立 Chromium 实测作为新方案通过证据。
 新宿主需要自己的 Windows 与 Mac 证据。缺少平台、签名或网络设施时明确标记未验证，保留对应发行门禁。

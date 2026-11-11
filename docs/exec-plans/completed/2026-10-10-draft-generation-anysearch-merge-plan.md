@@ -48,7 +48,7 @@ Residual risk: none from the Rust gate — `cargo test --manifest-path app/src-t
 
 - Spec/docs: `docs/product-specs/draft-generation.md` (merged sections), `docs/exec-plans/completed/2026-07-13-generate-draft-from-inspiration-plan.md`, `2026-07-15-draft-result-editor-plan.md`, `2026-07-15-draft-platform-selection-plan.md`, `2026-07-15-server-managed-anysearch-config-plan.md`
 - Contracts: `contracts/desktop-worker-contract.json`, `app/src/workerResultProtocol.ts`, `app/src/desktopWorkerProtocol.ts`, `app/src-tauri/src/worker_runtime/result_protocol.rs`
-- App: `app/src/features/results/DraftConfirmationSheet.tsx`, `DraftResultSheet.tsx`, `regenerateDraft.ts`, `app/src/insightPreferences.ts`, `app/src/i18n/synthesisResources.ts`, `app/src/App.tsx`, `app/src/features/workflow/useTaskProcessingController.ts`
+- App: `app/src/features/results/DraftConfirmationSheet.tsx`, `DraftResultSheet.tsx`, `regenerateDraft.ts`, `app/src/insightPreferences.ts`, `app/src/i18n/studioResources.ts`, `app/src/App.tsx`, `app/src/features/workflow/useTaskProcessingController.ts`
 - Worker: `worker/frameq_worker/` draft pipeline stage + platform prompt labels
 - Server: `server/src/routes/admin.ts`, `routes/desktopLlm.ts`, `routes/shared.ts`, `src/anysearchConfig.ts`, `src/store/memory/anysearchConfig.ts`, `src/prismaStore/anysearchConfig.ts`, `prisma/migrations/202610100001_anysearch_config/`, `prisma/schema.prisma`
 - Tests: `app/tests/app-input.browser.test.ts`, `app/tests/support/mockTauriBridge.ts`, `server/tests/anysearchAdmin.test.ts`, `server/tests/anysearchConfigStore.test.ts`, `server/tests/serverModuleBoundaries.test.ts`, `server/tests/storeModuleBoundaries.test.ts`, `server/tests/prismaMigration.test.ts`, `server/tests/storeCompatibility.test.ts`

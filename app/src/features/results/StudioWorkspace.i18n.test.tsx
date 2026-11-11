@@ -4,10 +4,10 @@ import { describe, expect, test, vi } from "vitest";
 import { createGuestAccountStatus } from "../../accountState";
 import { initializeI18n } from "../../i18n/i18n";
 import type { SupportedLocale } from "../../i18n/locale";
-import { synthesisResources } from "../../i18n/synthesisResources";
+import { studioResources } from "../../i18n/studioResources";
 import { createTaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import { summarizeWorkerResult } from "../../workflow";
-import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
+import { StudioWorkspace } from "./StudioWorkspace";
 import { TaskWorkspaceLayout } from "./TaskWorkspaceLayout";
 
 function renderWorkspace() {
@@ -37,14 +37,14 @@ function renderWorkspace() {
     canGenerateAi: true,
   };
   return renderToStaticMarkup(
-    <TaskWorkspaceLayout title={workflow.text} local={null} ai={<AiGenerationWorkspace
+    <TaskWorkspaceLayout title={workflow.text} local={null} ai={<StudioWorkspace
       model={createTaskWorkspaceViewModel(workflow, account).ai}
       quotaRemaining={8}
       onSummaryAction={vi.fn()}
       onInsightsAction={vi.fn()}
       onDissectionAction={vi.fn()}
       onDraftAction={vi.fn()}
-      onViewTarget={vi.fn()}
+      onViewTool={vi.fn()}
       onCancel={vi.fn()}
     />} />,
   );
@@ -67,7 +67,7 @@ describe("Studio panel localization", () => {
       expect(markup).toContain(dissection);
       expect(markup).toContain(balance);
       expect(markup.split(balance)).toHaveLength(2);
-      expect(markup.split(synthesisResources[locale].credits.costHint)).toHaveLength(2);
+      expect(markup.split(studioResources[locale].credits.costHint)).toHaveLength(2);
       expect(markup).not.toContain("ai-privacy-copy");
       expect(markup).toContain("AI Credits");
       expect(markup).toContain("Mermaid");

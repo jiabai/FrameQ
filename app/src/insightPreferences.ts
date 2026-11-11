@@ -160,7 +160,7 @@ export const INSIGHT_PREFERENCE_FIELDS: Record<PreferenceField, FieldConfig> = {
 
 // --- Draft platform selection ----------------------------------------------
 // 9 stable English ids shared with the worker's DRAFT_PLATFORM_IDS. Display
-// labels live in the synthesis i18n resources under `draftPlatform.<id>` (the
+// labels live in the studio i18n resources under `draftPlatform.<id>` (the
 // worker's _DRAFT_PLATFORM_LABELS collapses the short-video group to a single
 // form label for the prompt; those form labels are NOT selector labels).
 export type DraftPlatformId =

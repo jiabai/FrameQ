@@ -36,7 +36,7 @@ local/cloud privacy boundary.
 ### 1. Surface hierarchy
 
 - Keep the bordered, rounded, quiet-shadow outer surfaces for `LocalTranscriptWorkspace` and
-  `AiGenerationWorkspace`.
+  `StudioWorkspace`.
 - Keep the audio review player as a compact independent control surface.
 - Render transcript segments inside one quiet list boundary. Individual segments have no card
   background, radius, or outer border; adjacent rows use one divider. The textarea remains an

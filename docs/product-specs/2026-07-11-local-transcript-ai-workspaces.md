@@ -11,7 +11,7 @@ experience is divided into two domain workspaces:
 
 - `LocalTranscriptWorkspace` owns local download/transcode/ASR progress, video and audio
   file actions, audio review, transcript correction, save, copy, and export.
-- `AiGenerationWorkspace` owns AI availability and quota explanations, separate
+- `StudioWorkspace` owns AI availability and quota explanations, separate
   summary and inspiration targets, confirmation, target-local progress, errors, retry, and
   result viewing.
 

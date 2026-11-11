@@ -31,7 +31,7 @@ export function SummaryConfirmationSheet({
   onConfirm,
   onCancel,
 }: SummaryConfirmationSheetProps) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const { t: webT } = useTranslation("webPage");
   const unitCount = useMemo(
     () => countTextUnits(transcriptText, locale),

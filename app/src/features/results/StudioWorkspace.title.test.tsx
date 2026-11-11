@@ -7,7 +7,7 @@ import { createGuestAccountStatus } from "../../accountState";
 import { initializeI18n } from "../../i18n/i18n";
 import { createTaskWorkspaceViewModel } from "../../taskWorkspaceViewModel";
 import { createInitialWorkflow, startNoteTitleGeneration } from "../../workflow";
-import { AiGenerationWorkspace } from "./AiGenerationWorkspace";
+import { StudioWorkspace } from "./StudioWorkspace";
 
 afterEach(cleanup);
 
@@ -23,23 +23,23 @@ test("title generation blocks competing paid actions while saved results stay vi
     llmConfigured: true, canGenerateAi: true, llmQuotaRemaining: 5,
   });
   const actions: string[] = [];
-  const { container } = render(<AiGenerationWorkspace
+  const { container } = render(<StudioWorkspace
     model={model.ai} quotaRemaining={5}
     onSummaryAction={() => actions.push("summary")}
     onInsightsAction={() => actions.push("insights")}
     onDissectionAction={() => actions.push("dissection")}
     onDraftAction={() => actions.push("draft")}
-    onViewTarget={(target) => actions.push(`view-${target}`)}
+    onViewTool={(target) => actions.push(`view-${target}`)}
     onCancel={() => actions.push("cancel")}
   />);
-  const generationButtons = [...container.querySelectorAll<HTMLButtonElement>(".ai-target-action")];
+  const generationButtons = [...container.querySelectorAll<HTMLButtonElement>(".studio-tool-action")];
   expect(generationButtons.length).toBeGreaterThanOrEqual(2);
   for (const button of generationButtons) {
     expect(button.disabled).toBe(true);
     fireEvent.click(button);
   }
   expect(actions).toEqual([]);
-  const view = container.querySelector<HTMLButtonElement>('[data-ai-target="summary"] button');
+  const view = container.querySelector<HTMLButtonElement>('[data-studio-tool="summary"] button');
   expect(view?.disabled).toBe(false);
   fireEvent.click(view!);
   expect(actions).toEqual(["view-summary"]);

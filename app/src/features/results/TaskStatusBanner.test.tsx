@@ -72,7 +72,7 @@ test("keeps local progress, cancellation, failure, and title-generation status v
 test("omits the redundant success banner without changing partial-completion recovery state", () => {
   const partial: WorkflowState = {
     ...savedTranscript(), stage: "partial_completed",
-    aiTargetErrors: { summary: { code: "AI_EMPTY_SUMMARY", message: "", stage: "insights_generating" } },
+    studioToolErrors: { summary: { code: "AI_EMPTY_SUMMARY", message: "", stage: "insights_generating" } },
   };
   const before = structuredClone(partial);
   const model = createTaskWorkspaceViewModel(partial, createGuestAccountStatus());

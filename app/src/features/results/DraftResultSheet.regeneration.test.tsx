@@ -16,7 +16,7 @@ function unexpectedAction(): never {
 }
 
 function DraftSheets({ persistedEdits }: { persistedEdits: boolean }) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const [resultOpen, setDraftResultOpen] = useState(true);
   const [confirmOpen, setDraftConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);

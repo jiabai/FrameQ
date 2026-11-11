@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { AccountStatus } from "../../accountState";
 import type { SupportedLocale } from "../../i18n/locale";
 import type { UiMessage } from "../../i18n/uiMessage";
-import type { InsightRetryTarget, WorkflowState } from "../../workflow";
+import type { StudioTool, WorkflowState } from "../../workflow";
 import { buildDissectionCallPlan } from "./dissectionCallPlan";
 import { hasSourceText } from "../../webPageProtocol";
 
@@ -50,7 +50,7 @@ export function createDissectionPreview({
 }
 
 type RetryDissection = (
-  target: InsightRetryTarget,
+  target: StudioTool,
   outputLanguage: SupportedLocale,
   preferenceSnapshot: null,
   account: AccountStatus,

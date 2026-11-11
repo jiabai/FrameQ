@@ -36,7 +36,7 @@ weight as final cloud confirmation. Playback, editing, and keyboard focus remain
 
 - Evidence: `.transcript-segment.active` uses `box-shadow: 0 0 0 3px var(--focus)`, visually conflating playback with strong focus.
 - Evidence: `LocalTranscriptWorkspace` always renders `本地完成` while `TaskStatusBanner` already renders `本地处理完成` for a ready task.
-- Evidence: `AiGenerationWorkspace` renders `可选` whenever no target is active, while each target separately renders its lifecycle state.
+- Evidence: `StudioWorkspace` renders `可选` whenever no target is active, while each target separately renders its lifecycle state.
 - Evidence: Pending AI actions and the final confirmation-sheet action both use the elevated `.primary-button`.
 - Evidence: `getRuleBody` matches the complete selector text, so separate transcript and AI CSS rules are more reliable than a combined selector for this repository's existing CSS-contract tests.
 - Evidence: Removing per-target borders made the old generating/cancelling/failed `border-color` declarations ineffective. A follow-up RED test exposed the dead state rules; grouped rows now use low-saturation state backgrounds while their text badges remain.
@@ -71,7 +71,7 @@ controls, IPC, filesystem, worker, or OS behavior.
 ## Context and Orientation
 
 - Spec: `docs/product-specs/2026-07-12-task-workspace-visual-hierarchy.md`.
-- Components: `app/src/features/transcript/LocalTranscriptWorkspace.tsx`, `app/src/features/transcript/TranscriptReviewPanel.tsx`, and `app/src/features/results/AiGenerationWorkspace.tsx`.
+- Components: `app/src/features/transcript/LocalTranscriptWorkspace.tsx`, `app/src/features/transcript/TranscriptReviewPanel.tsx`, and `app/src/features/results/StudioWorkspace.tsx`.
 - Styles: `app/src/App.css`. Do not modify global `.compact-button` or `.primary-button` semantics.
 - Unit/contracts: `app/src/features/results/TaskWorkspaces.test.tsx` and `app/src/App.css.test.ts`.
 - Browser: `app/tests/app-input.browser.test.ts` uses deterministic local fixtures without worker, network, LLM, or payment.
@@ -92,9 +92,9 @@ controls, IPC, filesystem, worker, or OS behavior.
 const segmentListRule = getRuleBody([".transcript-segments"]);
 const segmentRule = getRuleBody([".transcript-segment"]);
 const segmentDividerRule = getRuleBody([".transcript-segment + .transcript-segment"]);
-const targetListRule = getRuleBody([".ai-target-list"]);
-const targetRule = getRuleBody([".ai-target-card"]);
-const targetDividerRule = getRuleBody([".ai-target-card + .ai-target-card"]);
+const targetListRule = getRuleBody([".studio-tool-list"]);
+const targetRule = getRuleBody([".studio-tool-card"]);
+const targetDividerRule = getRuleBody([".studio-tool-card + .studio-tool-card"]);
 
 expect(segmentListRule).toContain("border: 1px solid var(--border);");
 expect(segmentListRule).toContain("overflow: hidden;");
@@ -124,7 +124,7 @@ Expected: FAIL because current items each own background, border, radius, and li
 
 ```css
 .transcript-segments,
-.ai-target-list {
+.studio-tool-list {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   display: grid;
@@ -133,14 +133,14 @@ Expected: FAIL because current items each own background, border, radius, and li
 }
 
 .transcript-segment,
-.ai-target-card {
+.studio-tool-card {
   background: transparent;
   border: 0;
   border-radius: 0;
 }
 
 .transcript-segment + .transcript-segment,
-.ai-target-card + .ai-target-card {
+.studio-tool-card + .studio-tool-card {
   border-top: 1px solid var(--border);
 }
 ```
@@ -155,7 +155,7 @@ Run the same focused command. Expected: both files pass.
 
 **Files:**
 - Modify: `app/src/features/transcript/LocalTranscriptWorkspace.tsx`
-- Modify: `app/src/features/results/AiGenerationWorkspace.tsx`
+- Modify: `app/src/features/results/StudioWorkspace.tsx`
 - Test: `app/src/features/results/TaskWorkspaces.test.tsx`
 
 - [x] **Step 1: Write failing component assertions**
@@ -167,7 +167,7 @@ expect(localMarkup).toContain("文字稿校对");
 expect(aiMarkup).not.toContain("Cloud AI");
 expect(aiMarkup).not.toContain(">可选</span>");
 expect(aiMarkup).toContain("AI 整理");
-expect(aiMarkup.match(/class="ai-target-status"/g)).toHaveLength(2);
+expect(aiMarkup.match(/class="studio-tool-status"/g)).toHaveLength(2);
 ```
 
 Add processing, failed, waiting, and generating cases proving meaningful workspace badges remain.
@@ -208,7 +208,7 @@ Run the same component test. Expected: PASS.
 ### Task 3: Lower pre-confirmation AI action weight
 
 **Files:**
-- Modify: `app/src/features/results/AiGenerationWorkspace.tsx`
+- Modify: `app/src/features/results/StudioWorkspace.tsx`
 - Modify: `app/src/App.css`
 - Test: `app/src/features/results/TaskWorkspaces.test.tsx`
 - Test: `app/src/App.css.test.ts`
@@ -216,13 +216,13 @@ Run the same component test. Expected: PASS.
 - [x] **Step 1: Write failing action-contract tests**
 
 ```ts
-expect(aiMarkup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(2);
+expect(aiMarkup.match(/class="secondary-button studio-tool-action"/g)).toHaveLength(2);
 expect(aiMarkup).not.toContain('class="primary-button"');
 
-const actionRule = getRuleBody([".ai-target-action"]);
+const actionRule = getRuleBody([".studio-tool-action"]);
 const actionFeedbackRule = getRuleBody([
-  ".ai-target-action:not(:disabled):hover",
-  ".ai-target-action:focus-visible",
+  ".studio-tool-action:not(:disabled):hover",
+  ".studio-tool-action:focus-visible",
 ]);
 expect(actionRule).toContain("background: #eef6ff;");
 expect(actionRule).toContain("box-shadow: none;");
@@ -240,7 +240,7 @@ Expected: FAIL because pending actions use `.primary-button` and no scoped rule 
 ```tsx
 <button
   type="button"
-  className="secondary-button ai-target-action"
+  className="secondary-button studio-tool-action"
   onClick={onAction}
   disabled={disabled}
 >
@@ -249,15 +249,15 @@ Expected: FAIL because pending actions use `.primary-button` and no scoped rule 
 ```
 
 ```css
-.ai-target-action {
+.studio-tool-action {
   background: #eef6ff;
   border-color: rgba(10, 132, 255, 0.24);
   box-shadow: none;
   color: #075c9f;
 }
 
-.ai-target-action:not(:disabled):hover,
-.ai-target-action:focus-visible {
+.studio-tool-action:not(:disabled):hover,
+.studio-tool-action:focus-visible {
   background: #e2f1ff;
   border-color: #8cc8ff;
 }
@@ -325,8 +325,8 @@ Add computed facts while preserving every existing layout/audio assertion:
 
 ```ts
 const segments = [...document.querySelectorAll('.transcript-segment')];
-const targetCards = [...document.querySelectorAll('.ai-target-card')];
-const targetList = document.querySelector('.ai-target-list');
+const targetCards = [...document.querySelectorAll('.studio-tool-card')];
+const targetList = document.querySelector('.studio-tool-list');
 const segmentList = document.querySelector('.transcript-segments');
 return {
   segmentListBordered: parseFloat(getComputedStyle(segmentList).borderTopWidth) === 1,
@@ -335,7 +335,7 @@ return {
   targetCardsBorderless: targetCards.every((item) => parseFloat(getComputedStyle(item).borderLeftWidth) === 0),
   noEnglishEyebrows: !document.body.innerText.includes('LOCAL TRANSCRIPT') && !document.body.innerText.includes('CLOUD AI'),
   noRedundantWorkspaceStatus: !document.querySelector('.local-transcript-workspace .workspace-status-badge') && !document.querySelector('.ai-generation-workspace .workspace-status-badge'),
-  quietTargetActions: document.querySelectorAll('.ai-target-action').length === 2,
+  quietTargetActions: document.querySelectorAll('.studio-tool-action').length === 2,
 };
 ```
 

@@ -1,4 +1,4 @@
-# 网页正文与智能提炼 Plan
+# 网页正文与工作间 Plan
 
 本记录对应独立网页组件实现的实际验收。用户已于2026-11-02要求复用系统 WebView；后续改造见
 [系统 WebView 完成记录](2026-11-02-system-webview-extraction-plan.md)。此处的浏览器组件及进程控制证据不代表系统 WebView 验收。
@@ -7,9 +7,9 @@ This ExecPlan is a living document. The sections Progress, Surprises & Discoveri
 
 ## Purpose / Big Picture
 
-在现有主页保存公开或已授权网页：真实加载页面、提取格式化正文、保存本地笔记，随后使用现有明确确认的智能提炼。
+在现有主页保存公开或已授权网页：真实加载页面、提取格式化正文、保存本地笔记，随后使用现有明确确认的工作间。
 主页布局、侧边栏、笔记及合集结构保持当前设计。网页详情使用正文阅读视图，来源与媒体分开建模，保留既有笔记和数据保护。
-网页内容留在本机；用户确认智能提炼时，只有现有供应商边界接收对应内容，账号服务保持当前结账职责。
+网页内容留在本机；用户确认工作间时，只有现有供应商边界接收对应内容，账号服务保持当前结账职责。
 
 规格：`docs/product-specs/2026-11-01-web-page-notes.md`。
 执行使用 `subagent-driven-development` 或 `executing-plans` 按任务实施，保留项目的 main 工作流及逐项验证。
@@ -17,13 +17,13 @@ This ExecPlan is a living document. The sections Progress, Surprises & Discoveri
 ## Progress
 
 - [x] 2026-11-01: 接收并核查已确认的网页保存和界面范围。Validation: 本线程支线转交记录及 FrameQ/InsightFlow 只读源码检查。
-- [x] 2026-11-01: 确认网页笔记同时支持现有智能提炼。Validation: 用户回复「同时支持现有智能提炼，沿用当前付费确认」。
+- [x] 2026-11-01: 确认网页笔记同时支持现有工作间。Validation: 用户回复「同时支持现有工作间，沿用当前付费确认」。
 - [x] 2026-11-01: 定义来源、正文、加载隔离、运行组件、保存及界面执行边界。Validation: 本规格、当前源码与下述官方参考。
-- [x] 2026-11-01: 完成规格/计划交叉审查及文档门禁。Validation: 来源/智能提炼与加载隔离两组独立只读复核均无剩余阻断项；文档治理ERROR/WARN均0错误0警告，`git diff --check`通过。
+- [x] 2026-11-01: 完成规格/计划交叉审查及文档门禁。Validation: 来源/工作间与加载隔离两组独立只读复核均无剩余阻断项；文档治理ERROR/WARN均0错误0警告，`git diff --check`通过。
 - [x] 2026-11-01: 用户确认本技术计划，包含按需网页引擎和新提取功能的系统下限。Validation: 本线程用户回复「确认，按计划实施」。
 - [x] 2026-11-02: 实施来源/事务/权威正文契约与旧媒体兼容。Validation: `build/web-python-final-2.log` 1251 passed / 4 skipped，最终 `build/web-rust-final-owner-confirmed.log` 504 passed / 23 ignored；正式 Python CLI 的四种 AI 重试结果经 Rust 来源核验、历史投影与 TypeScript 解析验证。
 - [x] 2026-11-02: 实施网页引擎组件、独立浏览器、公网代理及受监督处理。Validation: Windows 真实组件安装/恢复/离线 CDP、16 条 CONNECT 限额、实际公网页 canary、root 崩溃后管道后代回收、所有权恢复 9 项及 renderer RSS 实测通过；macOS 和完整限制矩阵见下文未验证项。
-- [x] 2026-11-02: 实施 InsightFlow 提取模块、正文保存和现有智能提炼接入。Validation: 真实 Document 提取、静态 RFC 9110 / JavaScript quotes 正文保存、双来源契约和正式 CLI 读取通过；用户选择跳过真实供应商验收。
+- [x] 2026-11-02: 实施 InsightFlow 提取模块、正文保存和现有工作间接入。Validation: 真实 Document 提取、静态 RFC 9110 / JavaScript quotes 正文保存、双来源契约和正式 CLI 读取通过；用户选择跳过真实供应商验收。
 - [x] 2026-11-02: 实施三语界面、笔记/合集/历史、迁移和删除集成。Validation: 最新前端完整 1442 passed / 1 skipped、lint 通过；实际三语正文和信息面板通过1180×760/720×640数值检查，原尺寸菜单7项14px左对齐，实际复制成功反馈和Explorer打开通过；未验证范围见下表。
 - [x] 2026-11-02: 实施真实准入确认、取消和关闭屏障。Validation: 两个同步 begin 命令登记 Pending 并返回 null，长请求仅认领匹配登记；production cargo check、网页/引擎准入及关闭屏障检查通过；实际 IPC 12 次网页和 6 次组件即时取消、两种 SDK listener Abort、实际加载中关闭及重开清理通过。
 - [x] 2026-11-02: 核验应用所有者及受监督成员的独立执行文件规则。Validation: `build/web-owner-hardlink-after.log` 9 项真实测试通过，含 Cargo 硬链接应用在存活时保留工作目录、退出后恢复；所有者按真实 PID/出生时间/绝对路径/文件身份检查并禁止进入终止成员集，其他成员保持单链接约束。
@@ -49,7 +49,7 @@ This ExecPlan is a living document. The sections Progress, Surprises & Discoveri
 ## Decision Log
 
 - Decision: 现有安全媒体任务继续写入/读取 schema 3；网页任务使用 schema 4 和 `web_page` 来源。Rationale: 来源、正文和 ASR 语义可严格区分，原媒体无需改写。Date/Author: 2026-11-01 / User + Codex。
-- Decision: 网页标题来自页面元数据，网页智能提炼沿用显式费用确认。Rationale: 用户已确认网页智能提炼，提取标题已有真实来源。Date/Author: 2026-11-01 / User + Codex。
+- Decision: 网页标题来自页面元数据，网页工作间沿用显式费用确认。Rationale: 用户已确认网页工作间，提取标题已有真实来源。Date/Author: 2026-11-01 / User + Codex。
 - Decision: 所有网页使用同一个真实 Chromium 加载路径。Rationale: 普通 HTML 与 JavaScript 正文共享隔离、网络及取消边界。Date/Author: 2026-11-01 / User + Codex。
 - Decision: 使用按需 `web_engine` 组件，固定 Playwright Python 1.64.1 与匹配 headless shell；新提取功能要求 Windows 11/macOS 14，其他功能系统范围保持原约定。Rationale: 保持安装包轻量且使用当前受支持的浏览器。Date/Author: 2026-11-01 / User + Codex。
 - Decision: Rust 拥有临时浏览器、CDP 就绪材料、公网代理和操作身份；受监督 Python worker 使用该浏览器加载、提取并通过 TaskStore 发布笔记。Rationale: 保留完整进程清理及现有权威保存所有者，避免远程页面接触 Tauri。Date/Author: 2026-11-01 / User + Codex。
@@ -64,7 +64,7 @@ This ExecPlan is a living document. The sections Progress, Surprises & Discoveri
 
 - 前端：`urlSupport.ts`、`workflowState.ts`、`workerResultProtocol.ts`、`historyClient.ts`、`taskWorkspaceViewModel.ts`、`features/workflow/`、`features/collections/`、`features/shell/`、`features/transcript/`、`features/results/MarkdownContent.tsx`。
 - 原生：`task_manifest/{schema,storage,access,transaction,source_identity,dissection}.rs`、`history.rs`、`note_actions.rs`、`collections.rs`、`worker_runtime/`、`runtime_component.rs`、`data_storage.rs`、`data_storage_validation.rs`。
-- Worker：`models.py`、`desktop_contract.py`、`cli.py`、`worker_service.py`、`task_store.py`、`task_transaction.py`、`worker_application/insight_retry.py`、`pipeline_runtime/insights.py`、`ai_prompts.py`、各智能提炼 agent 与 `dissection_report.py`。
+- Worker：`models.py`、`desktop_contract.py`、`cli.py`、`worker_service.py`、`task_store.py`、`task_transaction.py`、`worker_application/insight_retry.py`、`pipeline_runtime/insights.py`、`ai_prompts.py`、各工作间 agent 与 `dissection_report.py`。
 - 契约：`contracts/desktop-worker-contract.json`、`contracts/task-artifact-transaction-v1.json`，新增 `contracts/web-page-request-v1.json` 与网页组件 manifest schema。
 - 构建：`scripts/build-installer.mjs`、新增网页组件构建脚本、`desktop-release.yml`、三平台组件清单及许可证材料。
 - 参考：InsightFlow `siteRules.cjs`、`readingSession.cjs` 的提取部分、`useMarkdownConverter.ts`、`tagsToRemove.ts`。运行时不 import InsightFlow。
@@ -113,7 +113,7 @@ type SavedArticle = {
 - [x] 构建器生成固定版本、目标、解压后 inventory、归档 SHA-256、字节数、运行探针及提取 bundle 指纹。下载地址使用与客户端发行版本绑定的受控 GitHub Release 资产；Windows 实际数据见来源文档。
 - [x] 下载先校验归档必需 SHA，再安全解包、逐项核对及真实离线启动探针；成功后原子安装到 `runtime/web-engine/<version>/`，最后发送完成状态。失败保留上个已验证版本与可识别的暂存材料。
 - [x] 首次网页提交缺组件时，`useWebEngine.tsx` 显示组件确认/下载界面，按真实状态展示大小、进度及取消。组件准备与网页加载具有独立状态；应用启动和笔记读取不触发下载。真实线上资产下载仍按下述发行门禁验证。
-- [x] 原生系统检查及三语说明限定新提取功能为 Windows 11/macOS 14 及以上；已有笔记阅读和智能提炼不导入引擎。当前 Windows 的实际状态接口及缺引擎阅读已验证；更早系统和 macOS 未提供运行环境。
+- [x] 原生系统检查及三语说明限定新提取功能为 Windows 11/macOS 14 及以上；已有笔记阅读和工作间不导入引擎。当前 Windows 的实际状态接口及缺引擎阅读已验证；更早系统和 macOS 未提供运行环境。
 - [x] 用同一安装器对真实 Windows 归档完成本机 hash、解包、逐文件核验、离线 CDP、失败保留和损坏实例恢复验收。
 - [ ] 发行前门禁：在两个 macOS 本机运行器生成并验证组件；公开分发前验证已发布资产的实际下载、hash、安装及启动。本轮未发布资产。
 
@@ -146,7 +146,7 @@ type SavedArticle = {
 - [x] InsightFlow MIT 自有代码、独立 MPL-2.0 站点规则及第三方依赖分别保留来源、修改及许可证。规则表按官方 Clearly Reader 3.0.4 可验证来源记录。
 - [x] 使用真实 Document 解析 HTML 文件，覆盖中英文正文、标题、段落、列表、引用、表格、代码、相对链接、恶意节点及 URL，检查 Markdown 与纯文本的结构/含义；真实 Chromium 静态与 JavaScript 页面另行验证。
 
-### Task 6: 现有智能提炼读取网页正文
+### Task 6: 现有工作间读取网页正文
 
 - [x] 将 `pipeline_runtime/insights.py` 的固定转录路径读取改由已验证任务的权威正文 reader 负责；总结、脑图和灵感读取网页 `article.txt` 的完整正式文本，保留当前分段、预算和结账边界。
 - [x] Python `task_store.py` 的加载、context重建、序列化、既有产物发现及AI finalize保持网页schema4、来源、标题、时间与真实article产物。四种 AI retry 结果均重新读取正式 TXT / Markdown 并经 Rust 核验，保留 CRLF 与 Unicode 原始字节。
@@ -183,7 +183,7 @@ type SavedArticle = {
 
 ### Task 9: 文档与发行事实同步
 
-- [x] 同步`docs/ARCHITECTURE.md`、`docs/SECURITY.md`、`docs/DESIGN.md`及来源、历史、自动标题和智能提炼规格，区分媒体与网页的职责及验收范围。
+- [x] 同步`docs/ARCHITECTURE.md`、`docs/SECURITY.md`、`docs/DESIGN.md`及来源、历史、自动标题和工作间规格，区分媒体与网页的职责及验收范围。
 - [x] 补齐`docs/references/2026-11-01-web-page-extraction-sources.md`的构建锁、许可证和 Windows 实际组件体积记录；本计划持续维护 Progress、Decision Log 及实测/未验证矩阵。
 
 ## Validation and Acceptance
@@ -215,7 +215,7 @@ git diff --check
 - 真实组件归档证明缺少hash、hash错误、缺文件、链接条目、探针失败、安装中断和空间不足均不发布Ready，保留已验证版本；三平台记录实际归档/展开大小。
 - 网页笔记在主页和合集入口创建，刷新、重启后仍可从笔记及合集打开；实际定位正文、复制、改名、固定、来源操作和删除通过。
 - 三语及当前桌面尺寸验证正文和现有操作；默认采用DOM/AX/数值与实际输入，视觉功能另遵守 `RULES.md`。
-- 网页保存不运行ASR、不下载ASR模型、不产生自动标题费用。网页智能提炼沿用真实确认和额度，保存失败不进入生成，已有智能产物不会被失败的新尝试覆盖。
+- 网页保存不运行ASR、不下载ASR模型、不产生自动标题费用。网页工作间沿用真实确认和额度，保存失败不进入生成，已有智能产物不会被失败的新尝试覆盖。
 - 在完全没有web_engine的独立库中，schema4历史/正文读取、总结/灵感/解剖/草稿确认、权威正文读取和worker AI入口仍可用；共享模块不得因缺少组件而导入失败。
 - 当前安全schema3媒体的URL/本地导入、播放、修改、自动标题、总结/灵感/解剖/草稿、取消和迁移回归通过。
 
@@ -261,7 +261,7 @@ git diff --check
 用户于2026-11-02选择「本次跳过付费验收」。本轮不调用真实供应商，不消耗账号额度；
 四种AI入口仍以真实文件、正式CLI、跨语言来源核验和既有确认界面测试验证。
 
-来源契约、网页加载、引擎组件、正文视图及现有智能提炼接入的本地实现已完成。
+来源契约、网页加载、引擎组件、正文视图及现有工作间接入的本地实现已完成。
 本轮完整回归：Python 1251 passed / 4 skipped、前端1442 passed / 1 skipped、Rust 504 passed / 23 ignored；
 所有权9项、watchdog串行13项、真实保存/取消/迁移和脚本门禁的具体范围见上表。
 Windows x64 真实网页引擎已构建，归档 163,109,963 bytes，完整展开 402,464,046 bytes；

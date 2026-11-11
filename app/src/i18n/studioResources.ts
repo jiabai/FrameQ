@@ -1,4 +1,4 @@
-export const synthesisResources = {
+export const studioResources = {
   "zh-CN": {
     workspace: {
       ariaLabel: "工作间面板",
@@ -12,7 +12,7 @@ export const synthesisResources = {
       quotaExhausted: "AI Credits 已用完，请联系管理员补充余额。",
       unavailable: "当前账号或 AI 服务暂不可用。",
     },
-    target: {
+    tools: {
       summary: {
         title: "要点总结",
         description: "同时生成 Mermaid 思维导图文件",
@@ -175,7 +175,7 @@ export const synthesisResources = {
       quotaExhausted: "AI Credits 已用完，請聯絡管理員補充餘額。",
       unavailable: "目前帳號或 AI 服務暫時無法使用。",
     },
-    target: {
+    tools: {
       summary: {
         title: "重點摘要",
         description: "同時產生 Mermaid 心智圖檔案",
@@ -338,7 +338,7 @@ export const synthesisResources = {
       quotaExhausted: "Your AI Credits are depleted. Contact an administrator to add more.",
       unavailable: "The current account or AI service is unavailable.",
     },
-    target: {
+    tools: {
       summary: {
         title: "Key Summary",
         description: "Also generates a Mermaid mind map file",

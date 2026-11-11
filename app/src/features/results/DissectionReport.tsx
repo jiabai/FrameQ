@@ -12,7 +12,7 @@ type Props = {
 };
 
 export function DissectionReport({ report, stale, sourceLocationDisabled = false, onLocateChunks }: Props) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const { t: webT } = useTranslation("webPage");
   const narrative = report.overallNarrative;
   return (

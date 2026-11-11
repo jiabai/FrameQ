@@ -483,8 +483,8 @@ describe("useTaskProcessingController watchdog timeouts", () => {
     controller = render();
 
     expect(controller.workflow.stage).toBe("partial_completed");
-    expect(controller.workflow.activeAiTarget).toBeNull();
-    expect(controller.workflow.aiErrorTarget).toBe("summary");
+    expect(controller.workflow.activeStudioTool).toBeNull();
+    expect(controller.workflow.studioToolError).toBe("summary");
     expect(controller.workflow.taskId).toBe(source.taskId);
     expect(controller.workflow.taskDir).toBe(source.taskDir);
     expect(controller.workflow.text).toBe(source.text);
@@ -1128,7 +1128,7 @@ describe("useTaskProcessingController history restore", () => {
       vi.fn(),
     );
     controller = render();
-    expect(controller.workflow.activeAiTarget).toBe("summary");
+    expect(controller.workflow.activeStudioTool).toBe("summary");
     expect(retryInsightsMock).toHaveBeenCalledWith(
       {
         taskId: "source-task",
@@ -1143,8 +1143,8 @@ describe("useTaskProcessingController history restore", () => {
     controller = render();
 
     expect(controller.workflow.stage).toBe("partial_completed");
-    expect(controller.workflow.activeAiTarget).toBeNull();
-    expect(controller.workflow.aiErrorTarget).toBe("summary");
+    expect(controller.workflow.activeStudioTool).toBeNull();
+    expect(controller.workflow.studioToolError).toBe("summary");
     expect(controller.workflow.text).toBe("history transcript");
   });
 

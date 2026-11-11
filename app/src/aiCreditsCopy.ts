@@ -2,7 +2,7 @@ import type { SupportedLocale } from "./i18n/locale";
 import { resources } from "./i18n/resources";
 
 function creditsCopy(locale: SupportedLocale) {
-  return resources[locale].synthesis.credits;
+  return resources[locale].studio.credits;
 }
 
 export function getAiCreditsCostHint(locale: SupportedLocale): string {

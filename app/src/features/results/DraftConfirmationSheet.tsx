@@ -46,7 +46,7 @@ export function DraftConfirmationSheet({
   onConfirm,
   onCancel,
 }: DraftConfirmationSheetProps) {
-  const { t } = useTranslation("synthesis");
+  const { t } = useTranslation("studio");
   const { t: webT } = useTranslation("webPage");
   const [selectedPlatform, setSelectedPlatform] = useState<DraftPlatformId>("other");
 

@@ -46,7 +46,7 @@
 ### Task 4: AI target layout/state motion
 
 **Files:**
-- Modify: `app/src/features/results/AiGenerationWorkspace.tsx`
+- Modify: `app/src/features/results/StudioWorkspace.tsx`
 - Test: `app/src/features/results/TaskWorkspaces.test.tsx`
 
 - [x] Add assertions for target identity and generating/failed/ready status content.

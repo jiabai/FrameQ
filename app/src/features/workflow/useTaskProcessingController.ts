@@ -23,7 +23,7 @@ import {
   startProcessing,
   startNoteTitleGeneration,
   summarizeWorkerResult,
-  type InsightRetryTarget,
+  type StudioTool,
   type TaskArtifacts,
   type TaskComposerSource,
   type TaskSourceSummary,
@@ -563,7 +563,7 @@ export function useTaskProcessingController({
 
   const retryInsightGeneration = useCallback(
     async (
-      target: InsightRetryTarget,
+      target: StudioTool,
       outputLanguage: SupportedLocale,
       preferenceSnapshot: PreferenceSnapshot | null,
       account: AccountStatus,

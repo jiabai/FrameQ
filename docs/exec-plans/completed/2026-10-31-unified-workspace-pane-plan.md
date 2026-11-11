@@ -20,7 +20,7 @@ stationary AI toggle. The user authorized this final style and effect on 2026-10
 
 - `App.tsx` already computes the real `pageTitle` with manual/generated/history priority.
 - `TaskWorkspaceLayout.tsx` will own only view expansion state and two always-mounted slots.
-- `LocalTranscriptWorkspace` and `AiGenerationWorkspace` retain actual model/controller props;
+- `LocalTranscriptWorkspace` and `StudioWorkspace` retain actual model/controller props;
   their internal headings are replaced by necessary save/processing status feedback.
 - `App.css` and shell CSS own the actual grid, column overflow, spacing, and CSS transitions.
 - Existing confirmation sheets, playback/edit/save controllers, quota, and provider calls remain

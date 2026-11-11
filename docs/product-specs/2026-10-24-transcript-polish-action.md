@@ -18,7 +18,7 @@ ASR 转写受口音、专有名词、同音字影响，正式稿里常有识别�
 - 不改动校对区底部「复制」按钮（仍复制编辑器草稿）与「定位文字稿」。
 - 不新增整理稿预览抽屉或导出入口；整理稿只通过按钮复制。
 - 不把整理稿回写 `transcript.txt`，不更新 manifest 的 `text`/`text_preview`，不登记进任务事务 artifact 白名单。
-- 不在 AI 工作区增加第五张 target 卡片；`transcript` 不进入前端 `InsightRetryTarget` 联合类型。
+- 不在 AI 工作区增加第五张 工具卡片；`transcript` 不进入前端 `StudioTool` 联合类型。
 - 整理失败不改变任务终态，不生成部分产物。
 
 ## Result Experience

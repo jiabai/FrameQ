@@ -577,7 +577,7 @@ classDiagram
     +model: local projection
   }
 
-  class AiGenerationWorkspace {
+  class StudioWorkspace {
     <<presentation>>
     +model: ai projection
   }
@@ -666,7 +666,7 @@ classDiagram
   App *-- WindowChromeController
   App --> TaskWorkspaceViewModel : projects
   App --> LocalTranscriptWorkspace : renders
-  App --> AiGenerationWorkspace : renders
+  App --> StudioWorkspace : renders
 
   TaskProcessingController *-- WorkflowState : owns
   TaskProcessingController --> WorkerClient
@@ -692,7 +692,7 @@ classDiagram
   TaskWorkspaceViewModel --> WorkflowState
   TaskWorkspaceViewModel --> AccountState
   LocalTranscriptWorkspace --> TaskWorkspaceViewModel : reads local only
-  AiGenerationWorkspace --> TaskWorkspaceViewModel : reads ai only
+  StudioWorkspace --> TaskWorkspaceViewModel : reads ai only
 ```
 
 ### 用普通语言复述这张图
@@ -703,7 +703,7 @@ classDiagram
 4. Account controller 拥有登录和权益状态；task/insight controller 只消费能力判断，不应该复制账户状态机。
 5. Tauri client 是 React 的边界。controller 应调用 client，而不是在 UI 组件中直接拼 command payload。
 6. `createTaskWorkspaceViewModel` 不发请求也不保存状态，只把 workflow/account 投影成适合界面渲染的 local/AI workspace；取消按钮、产物定位、只读状态和 transcript source 的可见/可用语义都在这里决定。
-7. `LocalTranscriptWorkspace` 与 `AiGenerationWorkspace` 只接收各自的 projection，不再同时读取
+7. `LocalTranscriptWorkspace` 与 `StudioWorkspace` 只接收各自的 projection，不再同时读取
    原始 `WorkflowState`。未来音频任务可通过 `locateVideo.visible=false` 表达没有视频，组件无需理解来源类型。
 
 图中的 `TranscriptDetailController --> TaskProcessingController` 等关系主要表示 `App.tsx` 的 callback wiring，不代表相应 controller 文件直接 import 另一个 controller。审计时要同时检查“运行期协调关系”和“静态 import 关系”。
@@ -2388,7 +2388,7 @@ UML 节点经过了降噪，不会列出每个 helper。需要验证某条关系
 | Local-media frontend-safe contract/gateway | `app/src/localMediaContract.ts`, `app/src/localMediaClient.ts` |
 | Worker gateway and terminal-result parser | `app/src/workerClient.ts`, `app/src/workerResultProtocol.ts` |
 | Workspace presentation facade | `app/src/taskWorkspaceViewModel.ts` |
-| Workspace presentation consumers | `app/src/features/transcript/LocalTranscriptWorkspace.tsx`, `app/src/features/results/AiGenerationWorkspace.tsx` |
+| Workspace presentation consumers | `app/src/features/transcript/LocalTranscriptWorkspace.tsx`, `app/src/features/results/StudioWorkspace.tsx` |
 | Transcript controller facade and private owners | `app/src/features/transcript/useTranscriptDetailController.ts`, `app/src/features/results/useArtifactDetailController.ts`, `app/src/features/transcript/useTranscriptDocumentController.ts`, `app/src/features/transcript/useTranscriptReviewSession.ts` |
 | History controller | `app/src/features/history/useHistoryController.ts` |
 | Insight generation controller | `app/src/features/insightPreferences/useInsightGenerationController.ts` |

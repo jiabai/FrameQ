@@ -43,7 +43,7 @@ describe("bundled localization resources", () => {
       "transcript",
       "asrModel",
       "workflow",
-      "synthesis",
+      "studio",
       "updates",
       "errors",
       "shell",
