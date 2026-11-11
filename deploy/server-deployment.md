@@ -26,12 +26,13 @@ the same architecture under a different account and prefix, so translate before 
 | Reference | Live production |
 | --- | --- |
 | service account `frameq` | `ubuntu` |
-| checkout `/opt/frameq/FrameQ` | `/home/ubuntu/FrameQ` |
+| checkout `/opt/frameq/FrameQ` | `/home/ubuntu/app` (renamed 2026-11-11) |
 | unit `frameq-server.service` | `locus-server.service` (renamed 2026-11-11) |
+| database `server/data/app.sqlite` | `server/data/app.sqlite` (renamed from `frameq.sqlite` on 2026-11-11) |
 | Node.js from the system packages | Node.js 24.14.1 installed with nvm for `ubuntu` |
 
 Everything below the checkout root keeps the same relative shape (`server/.env` mode `0600`,
-`server/data/frameq.sqlite`, `server/backups/<stamp>/`). Confirm which instance you are on before
+`server/data/app.sqlite`, `server/backups/<stamp>/`). Confirm which instance you are on before
 mutating anything - `systemctl show locus-server -p ExecStart` and
 `git -C <checkout> rev-parse HEAD` - instead of assuming the reference paths exist.
 
@@ -41,7 +42,7 @@ shell, so nvm is not sourced and `node` / `npm` / `npx` are not on `PATH`. Eithe
 `npx: command not found` while the database is fine.
 
 The marketing site is the one place the two layouts already agree: live Nginx serves it from
-`root /home/ubuntu/FrameQ/site`, which is also the default `REMOTE_WEBROOT` in
+`root /home/ubuntu/app/site`, which is also the default `REMOTE_WEBROOT` in
 `scripts/deploy-marketing.sh` and the `root` in `deploy/nginx/locus-server.conf`. Deploying the
 site needs no path override; only the checkout prefix in Sections 3 to 9 differs.
 
@@ -59,7 +60,7 @@ NODE_ENV=production
 APP_SERVER_HOST=127.0.0.1
 APP_SERVER_PORT=8787
 APP_SELF_SERVICE_ACTIVATION_ENABLED=false
-DATABASE_URL=file:/opt/frameq/FrameQ/server/data/frameq.sqlite
+DATABASE_URL=file:/opt/frameq/FrameQ/server/data/app.sqlite
 APP_ADMIN_EMAIL=admin@example.com
 APP_LLM_CONFIG_ENCRYPTION_KEY=<at-least-32-random-characters>
 SMTP_HOST=smtp.example.com
@@ -122,8 +123,8 @@ migrations, then run database preflight and migration status:
 
 ```bash
 sudo systemctl stop locus-server
-test ! -e /opt/frameq/FrameQ/server/data/frameq.sqlite
-sudo -u frameq install -m 600 /dev/null /opt/frameq/FrameQ/server/data/frameq.sqlite
+test ! -e /opt/frameq/FrameQ/server/data/app.sqlite
+sudo -u frameq install -m 600 /dev/null /opt/frameq/FrameQ/server/data/app.sqlite
 cd /opt/frameq/FrameQ/server
 sudo -u frameq npm run db:migrate:deploy
 sudo -u frameq npm run db:migrate:status
@@ -189,7 +190,7 @@ PY
 # 3. Mark the matching prefix as applied, then deploy the remainder.
 cd /opt/frameq/FrameQ/server
 for m in 202607220001_baseline 202607220002_auth_quota_hardening 202608030001_user_session; do
-  sudo -u frameq env DATABASE_URL="file:$PWD/data/frameq.sqlite" \
+  sudo -u frameq env DATABASE_URL="file:$PWD/data/app.sqlite" \
     npx prisma migrate resolve --applied "$m"
 done
 sudo -u frameq npm run db:migrate:deploy
@@ -223,13 +224,13 @@ sudo -u frameq npm --prefix /opt/frameq/FrameQ/server run db:preflight -- --mode
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 sudo -u frameq install -d -m 700 /opt/frameq/FrameQ/server/backups/$STAMP
 sudo -u frameq cp --preserve=mode,timestamps \
-  /opt/frameq/FrameQ/server/data/frameq.sqlite \
-  /opt/frameq/FrameQ/server/backups/$STAMP/frameq.sqlite
+  /opt/frameq/FrameQ/server/data/app.sqlite \
+  /opt/frameq/FrameQ/server/backups/$STAMP/app.sqlite
 sudo -u frameq cp --preserve=mode,timestamps \
   /opt/frameq/FrameQ/server/.env \
   /opt/frameq/FrameQ/server/backups/$STAMP/server.env
 cd /opt/frameq/FrameQ/server/backups/$STAMP
-sudo -u frameq sha256sum frameq.sqlite server.env > SHA256SUMS
+sudo -u frameq sha256sum app.sqlite server.env > SHA256SUMS
 sudo -u frameq chmod -R go-rwx /opt/frameq/FrameQ/server/backups/$STAMP
 ```
 
@@ -248,10 +249,10 @@ RESTORE_ROOT=/var/tmp/frameq-restore-$STAMP
 sudo -u frameq install -d -m 700 "$RESTORE_ROOT"
 cd /protected/off-host-copy
 sudo -u frameq sha256sum --check SHA256SUMS
-sudo -u frameq cp /protected/off-host-copy/frameq.sqlite "$RESTORE_ROOT/frameq.sqlite"
+sudo -u frameq cp /protected/off-host-copy/app.sqlite "$RESTORE_ROOT/app.sqlite"
 cd /opt/frameq/FrameQ/server
-sudo -u frameq npm run db:restore-smoke -- --database "$RESTORE_ROOT/frameq.sqlite"
-sudo -u frameq env DATABASE_URL="file:$RESTORE_ROOT/frameq.sqlite" npm run db:migrate:status
+sudo -u frameq npm run db:restore-smoke -- --database "$RESTORE_ROOT/app.sqlite"
+sudo -u frameq env DATABASE_URL="file:$RESTORE_ROOT/app.sqlite" npm run db:migrate:status
 ```
 
 The restore smoke opens the database read-only, runs `PRAGMA integrity_check`, validates foreign

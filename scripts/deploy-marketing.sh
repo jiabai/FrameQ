@@ -4,12 +4,12 @@
 #
 # What it does:
 #   1. Build the site  -> site/dist
-#   2. Rsync dist/ to the server web root (default /home/ubuntu/FrameQ/site)
+#   2. Rsync dist/ to the server web root (default /home/ubuntu/app/site)
 #   3. Print the nginx reload command (run on the server)
 #
 # The marketing site shares the domain locus.8xf.pro with the
 # server app. nginx (deploy/nginx/locus-server.conf) serves "/" statically
-# from /home/ubuntu/FrameQ/site and proxies /api/*, /auth/, /admin, /user/, /login,
+# from /home/ubuntu/app/site and proxies /api/*, /auth/, /admin, /user/, /login,
 # /dashboard to the backend (127.0.0.1:8787).
 #
 # NOTE: site/ is git-ignored, so the source lives only on this machine.
@@ -32,7 +32,7 @@
 set -euo pipefail
 
 DEPLOY_SERVER="${DEPLOY_SERVER:?set DEPLOY_SERVER=user@your-server}"
-REMOTE_WEBROOT="${REMOTE_WEBROOT:-/home/ubuntu/FrameQ/site}"
+REMOTE_WEBROOT="${REMOTE_WEBROOT:-/home/ubuntu/app/site}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

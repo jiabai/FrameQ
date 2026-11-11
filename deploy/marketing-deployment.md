@@ -17,7 +17,7 @@
 
 **关键前提**：`site/` 已被整体 `gitignore`。仓库里**没有**营销站源码，部署方式是
 **本机构建 → 只把 `dist/` 内容传到服务器**，服务器上不需要 git 仓库、不需要 Node 运行时。
-线上 webroot 为 `/home/ubuntu/FrameQ/site`（Ubuntu），里面放的就是 `dist/` 的内容。
+线上 webroot 为 `/home/ubuntu/app/site`（Ubuntu），里面放的就是 `dist/` 的内容。
 
 ---
 
@@ -25,7 +25,7 @@
 
 ```text
 Internet ──▶ Nginx :443 (locus.8xf.pro)
-                  ├── /           ──▶ 静态文件  /home/ubuntu/FrameQ/site   (营销站 dist 内容)
+                  ├── /           ──▶ 静态文件  /home/ubuntu/app/site   (营销站 dist 内容)
                   ├── /_astro/    ──▶ 静态资源（哈希、immutable）
                   ├── /video/     ──▶ 演示视频 / 海报
                   └── /api/* 等   ──▶ 反代  127.0.0.1:8787              (Locus 后端)
@@ -46,7 +46,7 @@ Internet ──▶ Nginx :443 (locus.8xf.pro)
 - 已存在 `deploy/nginx/locus-server.conf` 所依赖的共享片段：
   `/etc/nginx/snippets/frameq-proxy-headers.conf`（由后端部署引入，静态托管不依赖它）
 - 已配置好证书 `/etc/letsencrypt/live/locus.8xf.pro/`（后端部署时已签发）
-- webroot 目录 `/home/ubuntu/FrameQ/site`（与 nginx `root` 对齐；该目录存放 `dist/` 构建产物，不是仓库源码）
+- webroot 目录 `/home/ubuntu/app/site`（与 nginx `root` 对齐；该目录存放 `dist/` 构建产物，不是仓库源码）
 
 > 如果服务器**尚未**部署过后端，`locus-server.conf` 中的反代块和证书路径都还不存在，
 > 需要先完成 `server-deployment.md` 的步骤，或把 conf 里反代相关 `location` 块按实际后端情况补齐。
@@ -91,7 +91,7 @@ deploy/nginx/locus-server.conf
 ```
 
 它已包含：
-- `root /home/ubuntu/FrameQ/site; index index.html;`
+- `root /home/ubuntu/app/site; index index.html;`
 - `location /_astro/ { expires 1y; immutable; }`（Astro 哈希资源）
 - `location /video/ { expires 30d; }`（演示视频/海报）
 - `location / { try_files $uri $uri/ $uri.html =404; }`（首页/下载/隐私/sitemap 等）
@@ -118,7 +118,7 @@ sudo systemctl reload nginx
 
 ## 6. 部署（只传 dist 内容）
 
-线上 webroot 为 `/home/ubuntu/FrameQ/site`（Ubuntu），里面放 `dist/` 的内容。
+线上 webroot 为 `/home/ubuntu/app/site`（Ubuntu），里面放 `dist/` 的内容。
 **不要**把整个 `site/` 源码目录传上去——它比 `dist/` 大约 12 倍（含 `node_modules`/`src`），
 且运行时完全用不上。实测：`dist/` ≈ 12.5 MB（含 `site.zip` 残留约 6 MB），`site/` ≈ 159 MB。
 
@@ -135,17 +135,17 @@ cd D:/Github/Locus/site && npm ci && npm run build
 rm -f dist/site.zip   # 清掉残留
 
 # 2) 传到服务器（Windows 下用 scp，PowerShell/Git Bash 均可）
-scp -r dist/* user@你的服务器:/home/ubuntu/FrameQ/site/
+scp -r dist/* user@你的服务器:/home/ubuntu/app/site/
 ```
 
 增量更新时，为避免旧文件残留（如已改名的 `_astro/` 哈希文件），建议先清空 webroot 再传：
 
 ```bash
 # 服务器上清空 webroot（谨慎：确认路径正确）
-ssh user@你的服务器 'rm -rf /home/ubuntu/FrameQ/site/*'
+ssh user@你的服务器 'rm -rf /home/ubuntu/app/site/*'
 
 # 本机传新内容
-scp -r D:/Github/Locus/site/dist/* user@你的服务器:/home/ubuntu/FrameQ/site/
+scp -r D:/Github/Locus/site/dist/* user@你的服务器:/home/ubuntu/app/site/
 ```
 
 > 注：`scp -r` 不带 `--delete`，不会自动清旧文件。若不清空，旧的 `_astro/` 哈希资源
@@ -163,7 +163,7 @@ DEPLOY_SERVER=user@你的服务器 ./scripts/deploy-marketing.sh
 
 可选环境变量：
 - `DEPLOY_SERVER`（必填）：SSH 目标，如 `ubuntu@203.0.113.4`
-- `REMOTE_WEBROOT`（默认 `/home/ubuntu/FrameQ/site`）：与 nginx `root` 对齐
+- `REMOTE_WEBROOT`（默认 `/home/ubuntu/app/site`）：与 nginx `root` 对齐
 
 脚本会：① 本机构建 `site/dist` → ② `rsync -avz --delete --exclude='.git'` 传到 `REMOTE_WEBROOT/`。
 `--delete` 会清掉服务器上多余文件，保证与本地构建一致。
@@ -204,13 +204,13 @@ curl --fail --silent https://locus.8xf.pro/health/live
 
 ```bash
 # 在服务器上，部署前执行
-sudo cp -a /home/ubuntu/FrameQ/site /home/ubuntu/FrameQ/site.bak.$(date -u +%Y%m%dT%H%M%SZ)
+sudo cp -a /home/ubuntu/app/site /home/ubuntu/app/site.bak.$(date -u +%Y%m%dT%H%M%SZ)
 ```
 
 回滚：
 
 ```bash
-sudo rsync -a --delete /home/ubuntu/FrameQ/site.bak.<时间戳>/ /home/ubuntu/FrameQ/site/
+sudo rsync -a --delete /home/ubuntu/app/site.bak.<时间戳>/ /home/ubuntu/app/site/
 # 静态站点无需重启 nginx；若同时改过 nginx 配置，用旧 conf 覆盖后 nginx -t && reload
 ```
 
@@ -243,10 +243,10 @@ cd D:/Github/Locus/site && npm ci && npm run build
 rm -f dist/site.zip   # 清掉残留
 
 # 2) 服务器：备份当前站点（可选但建议）
-ssh user@服务器 'sudo cp -a /home/ubuntu/FrameQ/site /home/ubuntu/FrameQ/site.bak.$(date -u +%Y%m%dT%H%M%SZ)'
+ssh user@服务器 'sudo cp -a /home/ubuntu/app/site /home/ubuntu/app/site.bak.$(date -u +%Y%m%dT%H%M%SZ)'
 
 # 3) 本机：传 dist 内容到 webroot（首次部署或 nginx 有变动时，额外执行第 4 步覆盖 conf）
-scp -r D:/Github/Locus/site/dist/* user@服务器:/home/ubuntu/FrameQ/site/
+scp -r D:/Github/Locus/site/dist/* user@服务器:/home/ubuntu/app/site/
 
 # 4) 服务器：若 nginx 配置有变动，覆盖并校验
 sudo cp deploy/nginx/locus-server.conf /etc/nginx/sites-available/frameq

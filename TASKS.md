@@ -1152,10 +1152,16 @@
 
 ## 已完成
 
+- [x] 生产 checkout 与数据库文件去品牌化（2026-11-11 23:29）— ✅ `/home/ubuntu/FrameQ` → **`/home/ubuntu/app`**，`server/data/frameq.sqlite` → **`app.sqlite`**（就地 `mv`，同一文件系统瞬间完成）。
+  步骤：停服 → 新备份 `20261111T152758Z`（DB + `.env` + SHA256SUMS，异地副本 `C:/Users/bicho/frameq-server-backups/20261111T152758Z/`，两侧校验）→ 备份 unit 与 nginx 配置到 `/home/ubuntu/systemd-backups`、`/home/ubuntu/nginx-backups` → `mv` 目录 → `mv` 库文件 → `.env` 的 `DATABASE_URL` 改 `file:../data/app.sqlite` → unit 三处路径（`WorkingDirectory`/`ExecStart`/`ReadWritePaths`）改新前缀 → nginx `root` 改 `/home/ubuntu/app/site` + `nginx -t` + reload → `daemon-reload` → 启动。停机约 1 分钟。
+  验证：新路径 `db:preflight --mode current` ok、`migrate status` up to date；`/`、`/video/locus-launch-30s.mp4`、`/health/live`、`/health/ready` 全 200；`/admin` → `Locus Admin Login`、`/login` → `Locus Login`；`GET /api/desktop/account` 401；unit、nginx、`.env` 内已无 `/home/ubuntu/FrameQ`；站点从新 root 正常出图出视频。
+  仓库同步：`scripts/deploy-marketing.sh` 与 `site/scripts/deploy-sftp.py` 的默认远端路径、`deploy/nginx/locus-server.conf` 的 `root`、`deploy/marketing-deployment.md`、运行手册 §1a 表与全文库名（参考拓扑块里的 `/opt/frameq` 保留为参考示例）、命名规范「外部身份」表、改名规格与 active 计划状态行。
+  注意：`server/backups/` 随 checkout 一起搬到新路径，历史备份仍可用；异地副本目录名 `frameq-server-backups` 未改名（只是本机文件夹）。回滚 = `mv` 回旧名 + 恢复 unit/nginx 备份 + `.env` 改回 `frameq.sqlite`。
+
 - [x] 生产 systemd 服务改名 `frameq-server` → `locus-server`（2026-11-11 23:07）— ✅ 线上 unit 换成 `/etc/systemd/system/locus-server.service`（描述 `Locus account and activation server`，内容与旧 unit 逐行一致，仅改描述），旧 unit 停用、删除并 `daemon-reload`；`systemctl list-unit-files` 已无任何 `frameq` 单元，新服务 `enabled` + `active`。
   停机窗口约 6 秒（stop 旧 → start 新）。回滚备份：`/home/ubuntu/systemd-backups/frameq-server.service.20261111T150716Z`。
   `scripts/restart-server.sh`（服务器本地脚本）默认服务名与三个 `FRAMEQ_*` 变量改成 `LOCUS_*`，`bash -n` 通过并实跑一次重启成功。仓库侧同步：`deploy/systemd/frameq-server.service` → `locus-server.service`（描述改 Locus）、`deploy/README.md`、运行手册 §1a 表与五处 `systemctl` 命令、`scripts/check-self-service-rollout.mjs` 提示文案、`server/tests/deploymentContracts.test.ts` 路径、架构走查链接、改名规格与 active 计划的状态行，提交 `ed66617`。
-  **故意没改**：checkout `/home/ubuntu/FrameQ` 与库文件 `frameq.sqlite` 保留旧名（改名要动 nginx 站点 root、`DATABASE_URL`、备份路径与 systemd `ReadWritePaths`，收益低风险高）；`security.ts` 限流哈希前缀同样保留。
+  **当时故意没改**：checkout `/home/ubuntu/FrameQ` 与库文件 `frameq.sqlite` 保留旧名（改名要动 nginx 站点 root、`DATABASE_URL`、备份路径与 systemd `ReadWritePaths`）；同日 23:29 已按用户要求一并迁移，见上一条。`security.ts` 限流哈希前缀仍然保留。
   验证：`/health/live`、`/health/ready` 直连与 nginx 双 200；`/admin` → `Locus Admin Login`、`/login` → `Locus Login`；`GET /api/desktop/account` 401 `AUTH_REQUIRED`；8787 仅一个监听进程。
 
 - [x] 生产服务端部署到改名后的代码（2026-11-11 深夜）— ✅ 生产 `frameq-server` 从 `f473a86`（11-08 的代码）部署到 `3cfd451`，**`/admin`、`/login` 首次真正显示 Locus**（部署前线上 `<title>FrameQ Admin Login</title>`、页面 14 处 FrameQ，说明此前只改了 nginx 域名与营销站，Node 进程一直跑改名前的代码）。
