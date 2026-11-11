@@ -1,5 +1,7 @@
 # Active Exec Plans
 
+- `2026-11-11-collection-membership-feedback-plan.md` — 合集成员状态反馈：**代码与门禁完成**。用户确认合集保持引用语义，笔记总列表始终全量；添加清单保留已加入笔记并标注状态，加入/移除后显示「笔记仍在笔记列表」的说明与撤销。规格、`DESIGN.md`、组件、三语文案、样式与测试已更新；前端 137 文件 / 1591 通过 / 1 跳过，lint 与 build 通过，文档 0/0。残余：原生窗口真实指针与键盘验收，以及提交与发版决策。前端门禁需在 PowerShell 里先清 `NODE_OPTIONS`。
+
 - `2026-11-10-data-storage-migration-speedup-plan.md` — 数据存储迁移提速（**第一批代码完成**）：并行复制/验证、砍写入后重哈希、源重验 identity+length 廉价判定、persist 250ms 节流；用户干净环境 data_storage 全模块 **88 passed / 0 failed**（agent 宿主内删除拦截致波动假失败，教训已记）。残余：全量 `cargo test --lib` 复跑与真实迁移计时对比。第二批与第三批单独立项。
 
 - `2026-11-10-v0.6.1-llm-byok-plan.md` — v0.6.1 自定义 LLM 配置（BYOK）**代码与门禁已完成**（2026-11-10）：契约 v12 双模式、Rust `llm_providers.json` + 系统钥匙串、worker 最小 chat 探针、设置页「模型」分类与三语文案；默认仍是 Locus 托管，BYOK 不扣 AI Credit、不需登录。全套门禁全绿（worker 1310/4、前端 1576/1、服务端 375/1、脚本 57+1、Rust 相关 79 项、文档 0/0）。**Step 11 已用真实 SiliconFlow Key 跑通**（探针、钥匙串、真实摘要生成），并修掉两个真实调用才暴露的缺陷：Tauri 顶层参数需为 `apiKey`、HTTP 400 的未知模型需归类 `LLM_PROBE_MODEL_NOT_FOUND`；不 bump 版本、不打 tag、不部署站点。

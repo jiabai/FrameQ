@@ -291,6 +291,37 @@
   accent-color: #6e8c77;
 }
 
+.collections-membership-state {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: #6e8c77;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.collections-feedback {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9e4da;
+  border-radius: 6px;
+  margin: 0 0 18px;
+  background: #f5f9f5;
+  color: #4f6654;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.collections-feedback > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.collections-feedback > button {
+  flex: 0 0 auto;
+}
+
 .collections-delete-confirmation {
   padding: 20px;
   border: 1px solid #dfd6d0;

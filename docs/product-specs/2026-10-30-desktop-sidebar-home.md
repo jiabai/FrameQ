@@ -35,6 +35,8 @@ Confirmed visual target, existing workflow integration, and persistent local Col
 
 - Collections are app-local metadata owned by Rust and stored atomically in `collections.json` under app-local data. No collection names or memberships are sent to the account service or AI.
 - Users can create, rename, and delete a collection, and add or remove an existing local task. A task can belong to multiple collections.
+- Membership changes only a grouping reference. The Notes view and the sidebar Notes group always project the complete verified local history; adding a note to a Collection never removes it from those lists, and removing it from a Collection never deletes the note. Deleting a Collection keeps every note visible in the Notes view.
+- The add-notes chooser lists every available local note, including notes already in the current Collection. Already-included notes stay in the chooser with a visible state label. After a membership change commits, the Collection view states that the note stays in Notes and offers an undo action for that change. The confirmation is local, makes no account or AI request, and clears when the selected Collection changes.
 - Collection names are trimmed, non-empty, at most 80 Unicode characters, and reject control characters and case-insensitive duplicates. Opaque collection IDs never derive from user names or paths.
 - Collection membership uses verified task IDs. Stale references to deleted or unavailable tasks do not create visible task records or prevent access to other collections. Reading collections projects memberships against current verified local history.
 - Deleting a collection removes only its grouping metadata. It never deletes, moves, or modifies task/media/result files. The UI states this explicitly before confirmation.
@@ -58,3 +60,4 @@ Confirmed visual target, existing workflow integration, and persistent local Col
 - History, navigation guards, account display, locale changes, keyboard access, and narrow-window layout have executable verification.
 - No worker/server contracts, model download policy, billing rules, or media upload boundaries change.
 - Collection creation, rename, membership changes, persistence across reload, duplicate/invalid names, stale task references, and deletion preserving task files have executable verification using actual local storage.
+- Executable verification covers a membership change leaving the note in the Notes view, the already-included state appearing in the add-notes chooser, and the confirmation with its undo action in all three locales.

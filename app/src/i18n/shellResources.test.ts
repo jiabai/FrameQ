@@ -50,4 +50,17 @@ describe("Collection and Notes terminology", () => {
     expect(shellResources[locale].collections.noteSavedMembershipFailed).toBe(notice);
     expect(shellResources[locale].collections.retryAddNote).toBe(retry);
   });
+
+  test.each([
+    ["zh-CN", "已在此合集", "撤销"],
+    ["zh-TW", "已在此合集", "復原"],
+    ["en-US", "Already in this Collection", "Undo"],
+  ] as const)("provides membership confirmation copy in %s", (locale, alreadyAdded, undo) => {
+    const copy = shellResources[locale].collections;
+    expect(copy.alreadyAdded).toBe(alreadyAdded);
+    expect(copy.undo).toBe(undo);
+    for (const key of ["memberAdded", "memberRemoved", "membershipUndone"] as const) {
+      expect(copy[key]).toBeTruthy();
+    }
+  });
 });

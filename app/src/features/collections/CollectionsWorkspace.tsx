@@ -34,6 +34,7 @@ type CollectionsWorkspaceProps = {
 
 type NameForm = { kind: "create"; initialName: "" } | { kind: "rename"; id: string; initialName: string };
 type FocusTarget = "create" | "rename" | "delete" | "membership" | "heading";
+type MembershipFeedback = { collectionId: string; taskId: string; included: boolean; undone: boolean };
 
 export function CollectionsWorkspace({
   collections,
@@ -64,6 +65,7 @@ export function CollectionsWorkspace({
   const [nameError, setNameError] = useState<"COLLECTION_NAME_INVALID" | "COLLECTION_NAME_EXISTS" | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingMembership, setEditingMembership] = useState(false);
+  const [feedback, setFeedback] = useState<MembershipFeedback | null>(null);
   const [query, setQuery] = useState("");
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
@@ -109,6 +111,7 @@ export function CollectionsWorkspace({
     setNameError(null);
     setEditingMembership(false);
     setQuery("");
+    setFeedback(null);
   }, [selectedCollectionId]);
 
   useEffect(() => {
@@ -202,6 +205,17 @@ export function CollectionsWorkspace({
     setQuery("");
   }
 
+  function undoMembership() {
+    if (!feedback || !selected || busy || pendingRef.current) return;
+    const { taskId, included } = feedback;
+    setFeedback(null);
+    focusTargetRef.current = "membership";
+    void commit(
+      () => onSetMembership(selected.id, taskId, !included),
+      () => setFeedback({ collectionId: selected.id, taskId, included: !included, undone: true }),
+    );
+  }
+
   return (
     <section className="collections-workspace" aria-labelledby={`${id}-title`}>
       <header className="collections-header">
@@ -211,7 +225,7 @@ export function CollectionsWorkspace({
           <p>{t("collections.description")}</p>
         </div>
         <div className="collections-actions">
-          <button className="collections-button" type="button" onClick={onRefresh} disabled={controlsDisabled} aria-label={t("collections.refresh")} title={disabled ? disabledReason : t("collections.refresh")}><RefreshCw size={14} aria-hidden="true" /></button>
+          <button className="collections-button" type="button" onClick={() => { setFeedback(null); onRefresh(); }} disabled={controlsDisabled} aria-label={t("collections.refresh")} title={disabled ? disabledReason : t("collections.refresh")}><RefreshCw size={14} aria-hidden="true" /></button>
           {selected ? (
             <button className="collections-button" type="button" onClick={onNewNote} disabled={controlsDisabled}><Plus size={15} aria-hidden="true" />{t("collections.newNote")}</button>
           ) : !selectedCollectionId ? (
@@ -223,6 +237,15 @@ export function CollectionsWorkspace({
       {disabled ? <p className="collections-notice" id={`${id}-disabled`}>{disabledReason}</p> : null}
       {notice ? <p className="collections-notice" role="status">{notice}</p> : loading ? <p className="collections-notice" role="status">{t("collections.loading")}</p> : null}
       {mutating || pending ? <p className="collections-notice" role="status">{t("collections.saving")}</p> : null}
+
+      {feedback && selectedCollectionId === feedback.collectionId ? (
+        <div className="collections-feedback" role="status">
+          <span>{t(feedback.undone ? "collections.membershipUndone" : feedback.included ? "collections.memberAdded" : "collections.memberRemoved")}</span>
+          {feedback.undone ? null : (
+            <button className="collections-button" type="button" disabled={busy} onClick={undoMembership}>{t("collections.undo")}</button>
+          )}
+        </div>
+      ) : null}
 
       {form && !selectedCollectionId ? (
         <form className="collections-name-form" aria-label={t(form.kind === "create" ? "collections.create" : "collections.rename")} onSubmit={submitName} onKeyDown={(event) => {
@@ -253,20 +276,30 @@ export function CollectionsWorkspace({
               <input ref={filterRef} id={`${id}-filter`} type="search" value={query} onChange={(event) => setQuery(event.currentTarget.value)} />
               {items.length === 0 ? <p className="collections-empty">{t("collections.noHistory")}</p> : filteredTasks.length === 0 ? <p className="collections-empty">{t("collections.noMatches")}</p> : (
                 <ul className="collections-membership-list">
-                  {filteredTasks.map((item) => (
-                    <li key={item.id}>
-                      <label>
-                        <input type="checkbox" data-collection-task={item.taskId} checked={selected.taskIds.includes(item.taskId)} disabled={controlsDisabled} onChange={(event) => {
-                          if (busy || pendingRef.current) return;
-                          const element = event.currentTarget;
-                          const included = element.checked;
-                          membershipFocusRef.current = { collectionId: selected.id, taskId: item.taskId, element };
-                          void commit(() => onSetMembership(selected.id, item.taskId, included));
-                        }} />
-                        <span>{getHistoryTitle(item)}</span>
-                      </label>
-                    </li>
-                  ))}
+                  {filteredTasks.map((item, index) => {
+                    const included = selected.taskIds.includes(item.taskId);
+                    const title = getHistoryTitle(item);
+                    const stateId = `${id}-member-state-${index}`;
+                    return (
+                      <li key={item.id}>
+                        <label>
+                          <input type="checkbox" data-collection-task={item.taskId} checked={included} disabled={controlsDisabled} aria-label={title} aria-describedby={included ? stateId : undefined} onChange={(event) => {
+                            if (busy || pendingRef.current) return;
+                            const element = event.currentTarget;
+                            const nextIncluded = element.checked;
+                            membershipFocusRef.current = { collectionId: selected.id, taskId: item.taskId, element };
+                            setFeedback(null);
+                            void commit(
+                              () => onSetMembership(selected.id, item.taskId, nextIncluded),
+                              () => setFeedback({ collectionId: selected.id, taskId: item.taskId, included: nextIncluded, undone: false }),
+                            );
+                          }} />
+                          <span>{title}</span>
+                          {included ? <small id={stateId} className="collections-membership-state">{t("collections.alreadyAdded")}</small> : null}
+                        </label>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
@@ -285,7 +318,16 @@ export function CollectionsWorkspace({
                   <button className="collections-task" type="button" disabled={controlsDisabled} title={disabled ? disabledReason : undefined} aria-describedby={disabled ? `${id}-disabled` : undefined} aria-label={t("collections.openTask", { title: getHistoryTitle(item) })} onClick={() => onOpenTask(item)}>
                     <FileText size={18} aria-hidden="true" /><span>{getHistoryTitle(item)}</span><ArrowUpRight size={14} aria-hidden="true" />
                   </button>
-                  <button className="collections-remove-task" type="button" disabled={controlsDisabled} title={disabled ? disabledReason : t("collections.removeTask", { title: getHistoryTitle(item) })} aria-label={t("collections.removeTask", { title: getHistoryTitle(item) })} onClick={() => void commit(() => onSetMembership(selected.id, item.taskId, false), () => { focusTargetRef.current = "membership"; })}><X size={15} aria-hidden="true" /></button>
+                  <button className="collections-remove-task" type="button" disabled={controlsDisabled} title={disabled ? disabledReason : t("collections.removeTask", { title: getHistoryTitle(item) })} aria-label={t("collections.removeTask", { title: getHistoryTitle(item) })} onClick={() => {
+                    setFeedback(null);
+                    void commit(
+                      () => onSetMembership(selected.id, item.taskId, false),
+                      () => {
+                        focusTargetRef.current = "membership";
+                        setFeedback({ collectionId: selected.id, taskId: item.taskId, included: false, undone: false });
+                      },
+                    );
+                  }}><X size={15} aria-hidden="true" /></button>
                 </li>
               ))}
             </ul>

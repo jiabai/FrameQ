@@ -213,6 +213,85 @@ describe("CollectionsWorkspace", () => {
     expect(done).toBe(action);
   });
 
+  test("keeps every note in the chooser and labels notes already in the Collection", async () => {
+    await renderLocalized(<CollectionsWorkspace {...props({ selectedCollectionId: research.id })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add notes to Collection" }));
+    const included = screen.getByRole("checkbox", { name: "Interview" }) as HTMLInputElement;
+    const available = screen.getByRole("checkbox", { name: "Lecture" }) as HTMLInputElement;
+    expect(included.checked).toBe(true);
+    expect(available.checked).toBe(false);
+    const state = screen.getByText("Already in this Collection");
+    expect(included.getAttribute("aria-describedby")).toBe(state.id);
+    expect(available.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  test("confirms a committed membership change and undoes it through the same callback", async () => {
+    const membership: Array<[string, boolean]> = [];
+    function CollectionState() {
+      const [collection, setCollection] = useState<Collection>(research);
+      return <CollectionsWorkspace {...props({
+        collections: [collection],
+        selectedCollectionId: collection.id,
+        onSetMembership: async (_collectionId, taskId, included) => {
+          membership.push([taskId, included]);
+          setCollection((current) => ({ ...current, taskIds: included ? [...current.taskIds, taskId] : current.taskIds.filter((id) => id !== taskId) }));
+          return true;
+        },
+      })} />;
+    }
+    await renderLocalized(<CollectionState />);
+    fireEvent.click(screen.getByRole("button", { name: "Add notes to Collection" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Lecture" }));
+    await waitFor(() => expect(screen.getByText("Added to this Collection. The note stays in Notes.")).toBeTruthy());
+    expect((screen.getByRole("checkbox", { name: "Lecture" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(screen.getByText("Change undone. The note stays in Notes.")).toBeTruthy());
+    expect(membership).toEqual([["Lecture", true], ["Lecture", false]]);
+    expect((screen.getByRole("checkbox", { name: "Lecture" }) as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByRole("checkbox", { name: "Lecture" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  });
+
+  test("confirms removal from the Collection and keeps the note in the chooser", async () => {
+    function CollectionState() {
+      const [collection, setCollection] = useState<Collection>(research);
+      return <CollectionsWorkspace {...props({
+        collections: [collection],
+        selectedCollectionId: collection.id,
+        onSetMembership: async (_collectionId, taskId, included) => {
+          setCollection((current) => ({ ...current, taskIds: included ? [...current.taskIds, taskId] : current.taskIds.filter((id) => id !== taskId) }));
+          return true;
+        },
+      })} />;
+    }
+    await renderLocalized(<CollectionState />);
+    fireEvent.click(screen.getByRole("button", { name: "Remove note from Collection: Interview" }));
+    await waitFor(() => expect(screen.getByText("Removed from this Collection. The note stays in Notes.")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Add notes to Collection" }));
+    expect((screen.getByRole("checkbox", { name: "Interview" }) as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByText("Already in this Collection")).toBeNull();
+  });
+
+  test("clears the confirmation when the selected Collection changes", async () => {
+    const options = props({ selectedCollectionId: research.id, onSetMembership: async () => true });
+    const view = await renderLocalized(<CollectionsWorkspace {...options} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add notes to Collection" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Lecture" }));
+    await waitFor(() => expect(screen.getByText("Added to this Collection. The note stays in Notes.")).toBeTruthy());
+    view.rerender(view.wrap(<CollectionsWorkspace {...options} selectedCollectionId={null} />));
+    expect(screen.queryByText("Added to this Collection. The note stays in Notes.")).toBeNull();
+  });
+
+  test.each<SupportedLocale>(["zh-CN", "zh-TW", "en-US"])("shows membership state, confirmation, and undo copy in %s", async (locale) => {
+    const copy = shellResources[locale].collections;
+    await renderLocalized(<CollectionsWorkspace {...props({ selectedCollectionId: research.id, onSetMembership: async () => true })} />, locale);
+    fireEvent.click(screen.getByRole("button", { name: copy.manageTasks }));
+    expect(screen.getByText(copy.alreadyAdded)).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Lecture" }));
+    await waitFor(() => expect(screen.getByText(copy.memberAdded)).toBeTruthy());
+    expect(screen.getByRole("button", { name: copy.undo })).toBeTruthy();
+  });
+
   test("updates membership through committed parent state and filters real task titles", async () => {
     const membership: Array<[string, string, boolean]> = [];
     function CollectionState() {

@@ -175,6 +175,14 @@
   Rename and delete controls belong to the outer manager.
 - A note can belong to more than one Collection. Sidebar counts and detail lists project membership
   against verified local history; unavailable references never manufacture note records.
+- Membership edits a grouping reference only. The Notes view and the sidebar Notes group keep the
+  complete verified local history visible after a note is added to or removed from a Collection.
+  Deleting a Collection leaves its notes visible in Notes.
+- The add-notes chooser keeps every available note visible, including notes already in the current
+  Collection, and labels those with an `已在此合集 / Already in this Collection` state. A committed
+  membership change shows a local status message stating that the note stays in Notes, with an undo
+  control that submits the opposite membership through the same committed path. The status clears
+  when the selected Collection changes.
 - Names are trimmed, non-empty, limited to 80 Unicode characters, and checked for control characters
   and case-insensitive duplicates. User-supplied names and note content remain unchanged by locale selection.
 - New note opens the media composer with the originating Collection as a pending destination.
