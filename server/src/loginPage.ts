@@ -264,7 +264,7 @@ export function renderLoginPage(locale: Locale = "zh-CN"): string {
           });
           if (desktopMode) {
             // Desktop mode: show success panel and trigger the deep link in the background.
-            // The browser stays on this page because frameq:// is a custom scheme
+            // The browser stays on this page because pro.8xf.app:// is a custom scheme
             // the browser cannot navigate to as a document; it hands it off to the OS.
             form.style.display = "none";
             intro.style.display = "none";
