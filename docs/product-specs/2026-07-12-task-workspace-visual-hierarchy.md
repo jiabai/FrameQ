@@ -60,7 +60,7 @@ local/cloud privacy boundary.
 ### 3. Workspace headings
 
 - Remove the visible `Local transcript` and `Cloud AI` eyebrow labels.
-- Keep `文字稿校对` / `本地转录` and `智能提炼` as the only primary workspace headings.
+- Keep `文字稿校对` / `本地转录` and `工作间` as the only primary workspace headings.
 - Do not replace the eyebrow labels with decorative icons. Domain meaning remains explicit through
   the Chinese headings, privacy copy, content, and semantic color.
 

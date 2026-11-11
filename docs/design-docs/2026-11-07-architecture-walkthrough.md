@@ -10,7 +10,7 @@
 | 路径 | 职责 | 归属 | 事实依据 |
 | --- | --- | --- | --- |
 | `app/` | Tauri 宿主 + React/TypeScript 界面。所有桌面功能的第一入口 | 主线 | [AGENTS.md](../../AGENTS.md#L15-L20)、[lib.rs](../../app/src-tauri/src/lib.rs#L108-L190) |
-| `worker/` | Python worker：下载、媒体校验、音频提取、ASR、网页保存、智能提炼 | 主线 | [cli.py](../../worker/frameq_worker/cli.py#L120-L191)、[pipeline_runtime/orchestration.py](../../worker/frameq_worker/pipeline_runtime/orchestration.py#L106-L250) |
+| `worker/` | Python worker：下载、媒体校验、音频提取、ASR、网页保存、工作间 | 主线 | [cli.py](../../worker/frameq_worker/cli.py#L120-L191)、[pipeline_runtime/orchestration.py](../../worker/frameq_worker/pipeline_runtime/orchestration.py#L106-L250) |
 | `server/` | Fastify + Prisma + SQLite：账号、OTP、激活码、额度、LLM/AnySearch 结账、后台页 | 主线 | [server.ts](../../server/src/server.ts#L135-L184)、[schema.prisma](../../server/prisma/schema.prisma#L1-L120) |
 | `contracts/` | 跨语言契约：desktop-worker、网页保存、网页宿主、任务产物事务、平台 URL 支持 | 主线共用边界 | `contracts/*.json`（5 个文件） |
 | `scripts/` | 文档校验、版本检查、安装包构建、开发辅助 | 支撑 | [AGENTS.md](../../AGENTS.md#L38-L40) |

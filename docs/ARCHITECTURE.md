@@ -1376,7 +1376,7 @@ Locus 是本地优先的桌面客户端：本地 worker 处理公开视频或已
 | `app/` | Tauri + React + TypeScript 桌面 UI、状态展示、历史面板、设置面板、导出入口 | 已初始化；web build、Tauri release build 和安装器打包已验证 |
 | `app/src-tauri/src/worker_runtime/` | Rust worker 命令构造、单一受监督运行器、实例安全取消、progress 校验路由和进程树终止 | `WorkerLane::run` 已统一 process-video、AI retry、source preflight 与 ASR model download；低层生命周期 API 对应用模块不可见 |
 | `worker/` | Python 下载、ffprobe 校验、ffmpeg 音频提取、ASR、结果写盘；开发态由 `uv` 管理 `.venv`，分发态由安装包内置 Python runtime 执行 | 已初始化 schema、CLI facade、下载/媒体校验/音频提取、ASR adapter、transcript writers；分发态默认选中 SenseVoice Small，缺失模型仅在已验证任务提交时按选择下载 |
-| `worker/worker_core/summary_agent.py`、`topic_agent.py`、`dissection_agent.py` | 三个智能提炼 agent 的工具、验收与有界运行 | 共享 `agent_runtime`，通过交付工具提交完整产物，每次实际调用独立 checkout |
+| `worker/worker_core/summary_agent.py`、`dissection_agent.py`、`topic_agent.py`、`draft_agent.py` | 工作间里四件工具（要点总结、文字稿解剖、启发灵感、生成文字稿）的实现、验收与有界运行 | 共享 `agent_runtime`，通过交付工具提交完整产物，每次实际调用独立 checkout |
 | `worker/worker_core/ai_runtime.py`、`ai_prompts.py`、`transcript_chunks.py` | 托管 provider、提示词与确定性文字稿分段 | 供应商调用最多执行一次，分段记录 UTF-8 偏移和 SHA-256 |
 | `worker/worker_core/dissection_report.py`、`ai_artifacts.py`、`insight_errors.py` | 解剖报告、产物提交与生成错误 | 保留闭合 schema、完整导出、任务事务与错误协议 |
 | `app/src-tauri/resources/` | 分发态内置 Python runtime、worker、ffmpeg/ffprobe 和配置模板 | 构建脚本生成；仓库只保留 placeholder，避免提交大体积 runtime |
@@ -1502,9 +1502,9 @@ graph LR
 - `worker/worker_core/runtime_component.py`：PyTorch 运行时组件的检测、指纹比对与 `sys.path` 注入；包内 manifest 缺失时门禁不生效，保持未裁剪运行时的原有行为。
 - `worker/worker_core/config.py`：app-local data `.env` 加载、旧本地 LLM dotenv 字段过滤和环境变量合并；项目根 `.env` 不参与 worker runtime。
 - `worker/worker_core/llm.py`：托管 LLM checkout 的 HTTP 协议、配置校验、超时和逐调用请求标识。
-- `worker/worker_core/ai_runtime.py`：智能提炼共享 provider，逐次 checkout、供应商单次调用、
+- `worker/worker_core/ai_runtime.py`：工作间共享 provider，逐次 checkout、供应商单次调用、
   target 请求标识与专用错误映射。
-- `worker/worker_core/ai_prompts.py`：智能提炼和成稿提示词、偏好序列化与平台词表。
+- `worker/worker_core/ai_prompts.py`：工作间和成稿提示词、偏好序列化与平台词表。
 - `worker/worker_core/transcript_chunks.py`：确定性文字稿分段、UTF-8 字节范围和片段 SHA-256。
 - `worker/worker_core/pipeline.py`：稳定 pipeline 导入入口；`pipeline_runtime/shared.py`、
   `transcript.py`、`insights.py`、`orchestration.py` 分别拥有共享 policy、字幕/ASR、AI target
@@ -1514,7 +1514,7 @@ graph LR
 - `worker/worker_core/dissection_agent.py`：文字稿解剖的有界 agent 循环、工具校验反馈与进度。
 - `worker/worker_core/dissection_report.py`：解剖闭合模型、来源校验、UTF-8 溯源与 Markdown 导出。
 - `worker/worker_core/ai_artifacts.py`：AI 产物 payload 的原子提交适配。
-- `worker/worker_core/insight_errors.py`：智能提炼共享生成错误与现有错误码。
+- `worker/worker_core/insight_errors.py`：工作间共享生成错误与现有错误码。
 
 ## 架构不变量
 

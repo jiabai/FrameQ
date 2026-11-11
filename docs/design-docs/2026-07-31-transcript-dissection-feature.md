@@ -7,7 +7,7 @@
 
 ## 输入与命令边界
 
-`智能提炼` 工作区通过 `retry_insights(target="dissection")` 生成文字稿解剖。用户在确认页
+`工作间` 通过 `retry_insights(target="dissection")` 生成文字稿解剖。用户在确认页
 最终确认后，worker 从受验证任务中读取固定正式文件 `transcript/transcript.txt`，冻结原始
 UTF-8 字节和输出语言。请求只传任务标识，不接收文字稿正文或本地文件路径。
 

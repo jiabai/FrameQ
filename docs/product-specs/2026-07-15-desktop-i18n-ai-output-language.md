@@ -101,7 +101,7 @@ English`。选择后：
 
 | zh-CN | zh-TW | en-US |
 |---|---|---|
-| 智能提炼 | AI 提煉 | AI Synthesis |
+| 工作间 | 工作間 | Studio |
 | 本地文字稿 | 本機逐字稿 | Local Transcript |
 | 要点总结 | 重點摘要 | Key Summary |
 | 启发灵感 | 靈感啟發 | Inspiration |

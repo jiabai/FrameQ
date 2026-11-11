@@ -248,9 +248,14 @@
   failed save may roll back the optimistic choice and show a localized notice.
 - A neutral startup shell contains only `Locus`. It must not flash one locale before the saved or
   resolved locale mounts, and preference recovery remains a non-blocking notice rather than a modal.
-- The product glossary fixes `智能提炼 / AI 提煉 / AI Synthesis`, `本地文字稿 / 本機逐字稿 /
+- The product glossary fixes `工作间 / 工作間 / Studio`, `本地文字稿 / 本機逐字稿 /
   Local Transcript`, `要点总结 / 重點摘要 / Key Summary`, and `启发灵感 / 靈感啟發 /
   Inspiration`. Traditional Chinese uses its own reviewed copy; runtime conversion is not allowed.
+- `工作间` is the container. Its four tools are `要点总结 / 重點摘要 / Key Summary`,
+  `文字稿解剖 / 逐字稿解剖 / Transcript Dissection`, `启发灵感 / 靈感啟發 / Inspiration`, and
+  `生成文字稿 / 產生逐字稿 / Full Transcript`. The Mermaid mind map is an output of Key Summary,
+  not a separate tool. These four map to the existing `target` identifiers in code (`summary`,
+  `dissection`, `insights`, `draft`).
 - Visible copy and `aria-label`/`title`/`placeholder` text resolve from feature namespaces. Progress
   and notices render from semantic codes so an on-screen message changes with the locale; raw worker
   prose is not primary UI copy.
@@ -303,8 +308,8 @@
 - The workspace omits the persistent privacy paragraph and its top spacing. Privacy disclosures
   remain in generation confirmations with existing authorization and billing behavior.
 - The shared left title uses the real note title and existing manual/generated/history priority.
-  The shared right title uses the localized AI Synthesis name; inner workspace titles are omitted.
-- AI Synthesis starts collapsed. Task navigation omits the duplicate note title in the outer toolbar.
+  The shared right title uses the localized Studio name; inner workspace titles are omitted.
+- Studio starts collapsed. Task navigation omits the duplicate note title in the outer toolbar.
 - A fixed 30px PanelRightClose/Open button at the title row's right edge controls AI visibility,
   with localized show/hide labels, aria-expanded/controls, and focus recovery. The title and full
   AI pane keep their mounted state but become inert/aria-hidden while collapsed. Hiding never
@@ -501,8 +506,8 @@ UI 必须围绕以下状态组织：
 | `正在取消` | 保留当前任务、URL、阶段进度和结果区，取消按钮显示“正在取消”并禁用；等待 worker 或模型下载给出真实终态 |
 | `视频提取中` | 隐藏输入区，展示下载、校验和音频提取进度 |
 | `视频转译中` | 展示 ASR 进度、当前 ASR 模型识别文案，以及模型缓存/加载状态 |
-| `AI 整理中` | 左侧继续展示可阅读、可回听但不可编辑的已保存文字稿；右侧对应 AI target 显示生成中 |
-| `文字稿完成` | 直接展示文字稿校对工作区和智能提炼工作区；保留需要处理的错误与恢复提示 |
+| `工作间生成中` | 左侧继续展示可阅读、可回听但不可编辑的已保存文字稿；右侧对应工具卡片显示生成中 |
+| `文字稿完成` | 直接展示文字稿校对工作区和工作间；保留需要处理的错误与恢复提示 |
 | `部分完成` | 保留文字稿和已成功生成的 AI 产物，要点总结/灵感卡片展示失败态和重试入口 |
 | `失败` | 展示结构化错误原因、重试入口和可修改 URL 路径 |
 
@@ -511,7 +516,7 @@ UI 必须围绕以下状态组织：
 - `要点总结` 的独立 AI 详情 sheet 必须通过经净化的 GitHub Flavored Markdown 渲染器展示 `summary.md`；不得渲染 Markdown 中的原始 HTML 或 Mermaid 源码。
 - 主按钮文案固定为 `确认`。
 - 处理和完成态不再显示 URL 输入区域。
-- 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载 `要点总结`、`文字稿解剖` 和 `启发灵感` 三个独立 target 卡片。
+- 完成态主界面以同一 taskId 展示两个领域工作区：左侧直接承载视频/音频操作与文字稿校对，右侧承载工作间里的四件工具 `要点总结`、`文字稿解剖`、`启发灵感`、`生成文字稿`，各自是一张独立的工具卡片。
 - 文字稿直接在左侧工作区审阅，不进入共享 Tab；AI 结果可打开各自的轻量详情 sheet，不与文字稿共用容器。
 - AI 详情 sheet 内部内容独立滚动，支持 `Esc` 关闭。
 - AI 详情 sheet 与 `生成文字稿` 结果 sheet 都提供全屏切换：展开后接近视口尺寸，再次点击恢复常规尺寸，关闭 sheet 时重置。
@@ -549,7 +554,7 @@ UI 必须围绕以下状态组织：
 - 媒体输入区域最大宽度为 972px；720x640 窗口使用 66px 侧边栏图标区域，内容与全部操作保持可访问。
 - 处理态将必要状态反馈放在结果工作区上方；完成态直接展示结果工作区。
 - 处理态使用 task monitor：阶段 timeline、百分比、worker 事件文案和取消按钮必须在同一信息层级内可扫描。
-- 完成态使用同一个工作区和细竖线分栏，共享标题行显示真实笔记标题、智能提炼及固定的收起按钮。窄窗口保持左右分栏；收起后左栏占满宽度，智能提炼保持挂载和业务状态，约 220 毫秒平滑收起并支持快速反向切换。共享标题、正文与功能名 14px，功能说明 13px，时间与辅助信息 12px。成功完成提示不渲染元素，也不占用布局空间；处理中、取消中、失败和部分完成的必要反馈继续显示。
+- 完成态使用同一个工作区和细竖线分栏，共享标题行显示真实笔记标题、工作间及固定的收起按钮。窄窗口保持左右分栏；收起后左栏占满宽度，工作间保持挂载和业务状态，约 220 毫秒平滑收起并支持快速反向切换。共享标题、正文与功能名 14px，功能说明 13px，时间与辅助信息 12px。成功完成提示不渲染元素，也不占用布局空间；处理中、取消中、失败和部分完成的必要反馈继续显示。
 - 设置面板沿用主界面的白色平面分区、细线、紧凑表单、本地隐私提示、内部滚动和独立底部操作区。
 - 历史面板使用紧凑列表：状态 badge、摘要、时间、输出目录和结果数量/错误码必须可快速扫描。
 - 历史卡片主标题必须区分文字稿预览与来源 URL fallback，最多显示两行；卡片按内容自然高度排列，单行标题不得为视觉等高预留第二行空白。截断内容仍需通过原生可访问文本和 `title` 保留完整值。

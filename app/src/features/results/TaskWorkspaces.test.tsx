@@ -198,12 +198,12 @@ describe("task domain workspaces", () => {
     expect(markup).not.toContain("视频、音频和文字稿已保存在本机");
     expect(markup).toContain('aria-label="本地文字稿工作区"');
     expect(markup).toContain('data-task-id="same-task"');
-    expect(markup).toContain('aria-label="智能提炼工作区"');
+    expect(markup).toContain('aria-label="工作间面板"');
     expect(markup.match(/data-task-id="same-task"/g)).toHaveLength(2);
     expect(markup).toContain(workflow.text);
     expect(markup).not.toContain(">文字稿校对</h2>");
     expect(markup).not.toContain("local-workspace-state");
-    expect(markup).toContain("智能提炼");
+    expect(markup).toContain("工作间");
     expect(markup).not.toContain("Local transcript");
     expect(markup).not.toContain("Cloud AI");
     expect(markup).not.toContain(">本地完成</span>");
@@ -643,7 +643,7 @@ describe("task domain workspaces", () => {
       />,
     );
 
-    expect(markup).toContain("智能提炼");
+    expect(markup).toContain("工作间");
     expect(markup).not.toContain("ai-privacy-copy");
     expect(markup).toContain('data-ai-target="summary"');
     expect(markup.match(/data-motion="ai-target"/g)).toHaveLength(4);
@@ -659,7 +659,7 @@ describe("task domain workspaces", () => {
       markup.indexOf('data-ai-target="insights"'),
     );
     expect(markup).toContain("AI Credits 余额：8");
-    expect(markup).toContain("一次智能提炼可能消耗多个 Credits。");
+    expect(markup).toContain("工作间中的每次生成可能消耗多个 Credits。");
     expect(markup).not.toContain("当前可用 8 次");
     expect(markup).not.toContain('data-ai-target="mindmap"');
     expect(markup.match(/class="secondary-button ai-target-action"/g)).toHaveLength(4);

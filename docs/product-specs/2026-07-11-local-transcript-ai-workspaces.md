@@ -3,7 +3,7 @@
 ## Product Decision
 
 Task views omit the duplicate note title from the top navigation toolbar. The note title remains
-in the workspace heading. AI Synthesis starts collapsed; its heading button expands or hides it
+in the workspace heading. Studio starts collapsed; its heading button expands or hides it
 without changing task processing or saved content.
 
 A FrameQ task keeps one `taskId` and one local artifact set, but its completed-task
@@ -54,7 +54,7 @@ or ProcessSupervisor internals.
   data, localStorage, dialogs, and account placeholders are not production behavior.
 - The final approved webpage uses one white workspace with a shared 54px title row. The left
   title is the real note display title, using the existing user-title/generated-title/history
-  priority. The right title is AI Synthesis. Remove duplicate inner workspace titles.
+  priority. The right title is Studio. Remove duplicate inner workspace titles.
 - Header and body share two grid tracks with a flexible local pane and an AI pane whose initial
   width is `clamp(280px, 38%, 620px)`, bounded by both panes' responsive minimum widths.
   Manual sizing replaces the initial AI width with the user's preferred proportion.
@@ -107,7 +107,7 @@ or ProcessSupervisor internals.
 - A fixed 30px panel-icon button sits at right:16px/top:12px of the shared title row,
   separate from native window controls. PanelRightClose hides the AI column and title;
   PanelRightOpen restores them. Local content fills the released width and the button's
-  coordinates remain unchanged. Labels are localized Show/Hide AI Synthesis, with
+  coordinates remain unchanged. Labels are localized Show/Hide Studio, with
   `aria-expanded` and `aria-controls` linked to the actual AI region.
 - Keep both child workspaces mounted while hidden. Immediately apply `inert` and `aria-hidden`
   to AI content and its title, move AI focus to the toggle when necessary, and keep local edit,
@@ -129,25 +129,25 @@ or ProcessSupervisor internals.
 - Collapsing hides the separator and AI pane; reopening restores the last preferred proportion
   within current bounds. The ratio stays local to the mounted workspace and writes no preference.
 
-- The `智能提炼` title appears once in the shared row. The region keeps its accessible label.
+- The `工作间` title appears once in the shared row. The region keeps its accessible label.
   Its top content starts with balance and per-call charging guidance, without a persistent
   privacy paragraph or its spacing. Generation confirmation retains privacy, authorization,
   and billing disclosures in all three interface languages.
 - Before a usable saved transcript exists, the workspace is quiet and says it is waiting
   for the transcript. Local processing controls remain in the local workspace.
-- Summary and inspiration remain independent targets, each retaining its own status,
+- Summary and inspiration remain independent tools, each retaining its own status,
   availability blocker, confirmation, retry, progress, error, and result-view action.
-- The four current feature rows (summary, dissection, inspiration, and draft) use plain icons,
+- The four tool rows (summary, dissection, inspiration, and draft) use plain icons,
   a shared name/status line, short descriptions, and compact real actions. Privacy and the
   real account balance appear once above the list; per-call charging and confirmation remain
   explicit. Target errors, retained results, stale-result guidance, quota blockers, and
   cancellation remain available. No rendering/layout change initiates an LLM call.
 - Summary is labelled `要点总结（同时生成思维导图文件）`. Summary still generates
-  summary plus the hidden/local Mermaid file. There is no independent mindmap target or
+  summary plus the hidden/local Mermaid file. There is no independent mindmap tool or
   cloud-generation button.
 - Inspiration alone may open the preference flow and send a preference snapshot. Summary always
   invokes `retryInsights({ taskId, target: "summary", outputLanguage })` and must never carry a
-  snapshot. Both targets require the confirmation-time `outputLanguage` under contract v2.
+  snapshot. Both tools require the confirmation-time `outputLanguage` under contract v2.
 - Each target keeps its existing independent confirmation. Opening a flow consumes no
   Credits; confirmed generation consumes one Credit per actual supplier API-call attempt.
   The UI calls the balance `AI Credits` and explicitly states that one confirmed generation

@@ -2,7 +2,7 @@
 
 ## 用户可见行为
 
-- 「智能提炼」的「要点总结」仍在用户确认后独立生成 `ai/summary.md` 与 `ai/mindmap.mmd`，前端命令、产物路径、输出语言、结果合并和失败重试方式不变。
+- 「工作间」的「要点总结」仍在用户确认后独立生成 `ai/summary.md` 与 `ai/mindmap.mmd`，前端命令、产物路径、输出语言、结果合并和失败重试方式不变。
 - 生成引擎改为 `agent_runtime` 的 `ToolLoopAgentRunner`。agent 先提交 Mermaid 脑图，再基于原文字稿和已提交脑图提交 Markdown 总结；普通文本回复不能代替交付工具。
 - 每次实际云端 LLM 调用仍执行一次服务端 checkout 并扣除一个 AI Credit。agent 为修正无效交付而增加的调用按相同规则计费；打开确认页和取消不扣费。
 - 启发灵感与文字稿解剖的 agent 生成契约见 `2026-10-25-intelligent-extraction-agent-runtime.md`；成稿生成和文字稿整理使用各自入口。

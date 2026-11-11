@@ -44,7 +44,7 @@
 
 ## Input & Media Processing
 
-- `2026-11-01-web-page-notes.md` — 网页正文与本地笔记、既有智能提炼；复用系统 WebView 独立宿主，取消额外浏览器下载与准备界面。Windows实现、构建与验收完成，平台能力及未验证范围见2026-11-02完成记录。
+- `2026-11-01-web-page-notes.md` — 网页正文与本地笔记、既有工作间；复用系统 WebView 独立宿主，取消额外浏览器下载与准备界面。Windows实现、构建与验收完成，平台能力及未验证范围见2026-11-02完成记录。
 - `2026-11-09-bounded-ytdlp-download.md` — yt-dlp 下载子进程的固定时间预算；到期终止并沿既有下载失败路径结束任务，`ffprobe` 与 `ffmpeg` 的执行时间维持原状。
 
 - `2026-06-16-douyin-video-transcription-client.md` — MVP desktop client: input a Douyin URL, output highest-quality public video and transcript; includes Douyin share-page fallback and the 2026-09-16 share-page retry with a randomized 3 to 10 second wait.
@@ -81,7 +81,7 @@
 ## AI Insight
 
 - `2026-11-10-llm-byok-custom-providers.md` — v0.6.1 自定义 LLM 配置（BYOK）：设置里添加自己的 OpenAI 兼容 API，预设供应商 + 可自由输入、系统钥匙串存 key、测试连接走 worker 最小 chat 探针、多配置与启用切换；与 Locus 托管并存且默认不变，切到 BYOK 不扣 AI Credit、不需登录，草稿检索仍走 server。设计见 `docs/design-docs/2026-11-10-llm-byok-architecture.md`。
-- `2026-10-25-intelligent-extraction-agent-runtime.md` — 三个智能提炼目标统一使用 agent_runtime，保留产物与隐私契约，删除旧生成目录。
+- `2026-10-25-intelligent-extraction-agent-runtime.md` — 三个工作间目标统一使用 agent_runtime，保留产物与隐私契约，删除旧生成目录。
 - `2026-07-06-personalized-insight-preferences.md` — Six-field local Inspiration Profile v2 plus per-run six-step generation preferences.
 - `2026-07-12-generate-draft-from-inspiration.md` — Turn a single user-selected `Insight` into a new draft, with strict single-seed, quota, and local-first privacy boundaries.
 - `2026-07-15-draft-platform-selection.md` — Delta on `生成文字稿`: user-visible, editable 9-option target platform on the confirmation page (defaulted from the inspiration profile), replacing `suitable_use` as the platform source with a new platform→form mapping (视频号/抖音/Tiktok/X→抖音).

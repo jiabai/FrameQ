@@ -8,10 +8,10 @@ import { TaskWorkspaceLayout } from "./TaskWorkspaceLayout";
 
 afterEach(cleanup);
 
-test("starts with AI synthesis collapsed and allows opening it", async () => {
+test("starts with Studio collapsed and allows opening it", async () => {
   await initializeI18n("en-US");
   render(workspace());
-  const toggle = screen.getByRole("button", { name: "Show AI Synthesis" });
+  const toggle = screen.getByRole("button", { name: "Show Studio" });
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   expect(screen.queryByRole("button", { name: "AI action" })).toBeNull();
   fireEvent.click(toggle);
@@ -29,14 +29,14 @@ function workspace(title = "A saved note") {
 
 function renderExpanded(title?: string) {
   const view = render(workspace(title));
-  fireEvent.click(screen.getByRole("button", { name: "Show AI Synthesis" }));
+  fireEvent.click(screen.getByRole("button", { name: "Show Studio" }));
   return view;
 }
 
 test.each([
-  ["zh-CN", "智能提炼", "隐藏智能提炼", "显示智能提炼"],
-  ["zh-TW", "AI 提煉", "隱藏 AI 提煉", "顯示 AI 提煉"],
-  ["en-US", "AI Synthesis", "Hide AI Synthesis", "Show AI Synthesis"],
+  ["zh-CN", "工作间", "隐藏工作间", "显示工作间"],
+  ["zh-TW", "工作間", "隱藏工作間", "顯示工作間"],
+  ["en-US", "Studio", "Hide Studio", "Show Studio"],
 ] as const)("localizes the pane control and preserves the note title in %s", async (locale, heading, hide, show) => {
   await initializeI18n(locale);
   const { container } = render(workspace("User's saved note"));
@@ -73,7 +73,7 @@ test("keeps both panes mounted and preserves drafts across hiding, showing, and 
   const aiDraft = screen.getByLabelText<HTMLInputElement>("AI draft");
   fireEvent.change(transcript, { target: { value: "Unsaved transcript edit" } });
   fireEvent.change(aiDraft, { target: { value: "Unsaved AI edit" } });
-  const toggle = screen.getByRole("button", { name: "Hide AI Synthesis" });
+  const toggle = screen.getByRole("button", { name: "Hide Studio" });
   fireEvent.click(toggle);
   view.rerender(workspace("Renamed note"));
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -90,7 +90,7 @@ test("keeps both panes mounted and preserves drafts across hiding, showing, and 
 test("returns focus from the AI pane before hiding and preserves focus in the local pane", async () => {
   await initializeI18n("en-US");
   const { container } = renderExpanded();
-  const toggle = screen.getByRole("button", { name: "Hide AI Synthesis" });
+  const toggle = screen.getByRole("button", { name: "Hide Studio" });
   screen.getByRole("button", { name: "AI action" }).focus();
   fireEvent.click(toggle);
   expect(document.activeElement).toBe(toggle);
@@ -111,7 +111,7 @@ test("returns focus from the AI pane before hiding and preserves focus in the lo
 test("handles rapid batched reversals without a delayed transition state", async () => {
   await initializeI18n("en-US");
   const { container } = renderExpanded();
-  const toggle = screen.getByRole<HTMLButtonElement>("button", { name: "Hide AI Synthesis" });
+  const toggle = screen.getByRole<HTMLButtonElement>("button", { name: "Hide Studio" });
   act(() => { toggle.click(); toggle.click(); toggle.click(); });
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   expect(container.querySelector(".task-workspace-surface")?.classList.contains("is-ai-collapsed")).toBe(true);
@@ -123,7 +123,7 @@ test("handles rapid batched reversals without a delayed transition state", async
 test("owns a unique controlled pane for each rendered workspace", async () => {
   await initializeI18n("en-US");
   render(<>{workspace("First note")}{workspace("Second note")}</>);
-  const controls = screen.getAllByRole("button", { name: "Show AI Synthesis" });
+  const controls = screen.getAllByRole("button", { name: "Show Studio" });
   expect(controls[0].getAttribute("aria-controls")).not.toBe(controls[1].getAttribute("aria-controls"));
   fireEvent.click(controls[0]);
   expect(controls[0].getAttribute("aria-expanded")).toBe("true");

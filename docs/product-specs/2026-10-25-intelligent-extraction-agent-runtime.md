@@ -1,4 +1,4 @@
-# 智能提炼 agent_runtime 生成规格
+# 工作间 agent_runtime 生成规格
 
 ## 用户行为与生成边界
 

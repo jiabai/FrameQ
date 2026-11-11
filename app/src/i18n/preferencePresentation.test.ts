@@ -165,13 +165,13 @@ describe("localized preference presentation", () => {
     expect(settings.defaultSaved_other).toContain("{{count}} items)");
   });
 
-  test("uses the locked AI Synthesis terminology in Credits disclosure", () => {
-    expect(getPreferenceCopy("zh-CN").flow.creditsCostHint).toContain("智能提炼");
-    expect(getPreferenceCopy("zh-TW").flow.creditsCostHint).toContain("AI 提煉");
-    expect(getPreferenceCopy("en-US").flow.creditsCostHint).toContain("AI Synthesis");
-    expect(getPreferenceCopy("zh-CN").flow.quotaDisclosure).toContain("智能提炼");
-    expect(getPreferenceCopy("zh-TW").flow.quotaDisclosure).toContain("AI 提煉");
-    expect(getPreferenceCopy("en-US").flow.quotaDisclosure).toContain("AI Synthesis");
+  test("uses the locked Studio terminology in Credits disclosure", () => {
+    expect(getPreferenceCopy("zh-CN").flow.creditsCostHint).toContain("工作间");
+    expect(getPreferenceCopy("zh-TW").flow.creditsCostHint).toContain("工作間");
+    expect(getPreferenceCopy("en-US").flow.creditsCostHint).toContain("Studio");
+    expect(getPreferenceCopy("zh-CN").flow.quotaDisclosure).toContain("工作间");
+    expect(getPreferenceCopy("zh-TW").flow.quotaDisclosure).toContain("工作間");
+    expect(getPreferenceCopy("en-US").flow.quotaDisclosure).toContain("Studio");
   });
 
   test("keeps business ids, canonical prompt semantics, and localized UI copy separated", () => {

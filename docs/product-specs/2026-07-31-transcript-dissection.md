@@ -3,7 +3,7 @@
 **Date:** 2026-07-31
 **Updated:** 2026-10-25
 **Status:** Implemented
-**Product area:** `智能提炼` 工作区
+**Product area:** `工作间`
 **Target:** `dissection`
 
 ## 用户行为

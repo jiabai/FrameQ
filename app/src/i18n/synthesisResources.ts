@@ -1,11 +1,11 @@
 export const synthesisResources = {
   "zh-CN": {
     workspace: {
-      ariaLabel: "智能提炼工作区",
-      title: "智能提炼",
-      hide: "隐藏智能提炼",
-      show: "显示智能提炼",
-      resize: "调整文字稿与智能提炼栏宽度",
+      ariaLabel: "工作间面板",
+      title: "工作间",
+      hide: "隐藏工作间",
+      show: "显示工作间",
+      resize: "调整文字稿与工作间栏宽度",
       localWidth: "文字稿宽度：{{percent}}%",
       generating: "生成中",
       waitingTranscript: "等待文字稿",
@@ -49,11 +49,11 @@ export const synthesisResources = {
       view: "查看结果",
     },
     credits: {
-      summary: "AI Credits 余额：{{formattedCount}}。一次智能提炼可能消耗多个 Credits。",
+      summary: "AI Credits 余额：{{formattedCount}}。工作间中的每次生成可能消耗多个 Credits。",
       balance: "AI Credits 余额：{{formattedCount}}",
       allocation: "AI Credits：{{remaining}} / {{limit}}",
-      costHint: "一次智能提炼可能消耗多个 Credits。",
-      disclosure: "1 AI Credit = 1 次云端 LLM API 调用尝试；一次智能提炼可能消耗多个 Credits，按实际云端 LLM API 调用扣除 Credits；失败、超时或部分失败的已发起调用仍会扣除 Credits；换个方向后再次确认会按新的实际调用扣除。",
+      costHint: "工作间中的每次生成可能消耗多个 Credits。",
+      disclosure: "1 AI Credit = 1 次云端 LLM API 调用尝试；工作间中的每次生成可能消耗多个 Credits，按实际云端 LLM API 调用扣除 Credits；失败、超时或部分失败的已发起调用仍会扣除 Credits；换个方向后再次确认会按新的实际调用扣除。",
     },
     detail: {
       sectionLabel: "AI 结果",
@@ -164,11 +164,11 @@ export const synthesisResources = {
   },
   "zh-TW": {
     workspace: {
-      ariaLabel: "AI 提煉工作區",
-      title: "AI 提煉",
-      hide: "隱藏 AI 提煉",
-      show: "顯示 AI 提煉",
-      resize: "調整文字稿與 AI 提煉欄寬度",
+      ariaLabel: "工作間面板",
+      title: "工作間",
+      hide: "隱藏工作間",
+      show: "顯示工作間",
+      resize: "調整文字稿與工作間欄寬度",
       localWidth: "文字稿寬度：{{percent}}%",
       generating: "產生中",
       waitingTranscript: "等待逐字稿",
@@ -212,11 +212,11 @@ export const synthesisResources = {
       view: "檢視結果",
     },
     credits: {
-      summary: "AI Credits 餘額：{{formattedCount}}。一次 AI 提煉可能消耗多個 Credits。",
+      summary: "AI Credits 餘額：{{formattedCount}}。工作間中的每次產生可能消耗多個 Credits。",
       balance: "AI Credits 餘額：{{formattedCount}}",
       allocation: "AI Credits：{{remaining}} / {{limit}}",
-      costHint: "一次 AI 提煉可能消耗多個 Credits。",
-      disclosure: "1 AI Credit = 1 次雲端 LLM API 呼叫嘗試；一次 AI 提煉可能消耗多個 Credits，依實際雲端 LLM API 呼叫扣除 Credits；失敗、逾時或部分失敗的已發起呼叫仍會扣除 Credits；換個方向後再次確認會依新的實際呼叫扣除。",
+      costHint: "工作間中的每次產生可能消耗多個 Credits。",
+      disclosure: "1 AI Credit = 1 次雲端 LLM API 呼叫嘗試；工作間中的每次產生可能消耗多個 Credits，依實際雲端 LLM API 呼叫扣除 Credits；失敗、逾時或部分失敗的已發起呼叫仍會扣除 Credits；換個方向後再次確認會依新的實際呼叫扣除。",
     },
     detail: {
       sectionLabel: "AI 結果",
@@ -327,11 +327,11 @@ export const synthesisResources = {
   },
   "en-US": {
     workspace: {
-      ariaLabel: "AI Synthesis workspace",
-      title: "AI Synthesis",
-      hide: "Hide AI Synthesis",
-      show: "Show AI Synthesis",
-      resize: "Resize transcript and AI Synthesis panes",
+      ariaLabel: "Studio panel",
+      title: "Studio",
+      hide: "Hide Studio",
+      show: "Show Studio",
+      resize: "Resize transcript and Studio panes",
       localWidth: "Transcript width: {{percent}}%",
       generating: "Generating",
       waitingTranscript: "Waiting for transcript",
@@ -375,11 +375,11 @@ export const synthesisResources = {
       view: "View result",
     },
     credits: {
-      summary: "AI Credits balance: {{formattedCount}}. One AI Synthesis run may use multiple Credits.",
+      summary: "AI Credits balance: {{formattedCount}}. Each generation in Studio may use multiple Credits.",
       balance: "AI Credits balance: {{formattedCount}}",
       allocation: "AI Credits: {{remaining}} / {{limit}}",
-      costHint: "One AI Synthesis run may use multiple Credits.",
-      disclosure: "1 AI Credit = 1 cloud LLM API call attempt. One AI Synthesis run may use multiple Credits. Credits are deducted for actual cloud LLM API calls; started calls still use Credits if they fail, time out, or partially fail. Confirming Try Another Direction uses Credits for the new calls.",
+      costHint: "Each generation in Studio may use multiple Credits.",
+      disclosure: "1 AI Credit = 1 cloud LLM API call attempt. Each generation in Studio may use multiple Credits. Credits are deducted for actual cloud LLM API calls; started calls still use Credits if they fail, time out, or partially fail. Confirming Try Another Direction uses Credits for the new calls.",
     },
     detail: {
       sectionLabel: "AI result",
