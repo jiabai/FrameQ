@@ -22,7 +22,7 @@ Paste a video link, a web page, or a local media file. Locus keeps it on your ma
 > 一句话：**把视频、网页和本地音视频变成你的本地笔记库**——转写、摘要、思维导图、要点与解剖都在本机完成，只有你确认的 AI 步骤才会把文字发出去。
 
 > [!NOTE]
-> Latest stable release: **v0.6.0** (Windows x64, macOS Intel, macOS Apple Silicon), published 2026-11-11. See [GitHub Releases](https://github.com/jiabai/Locus/releases). Licensed under **Apache-2.0**; the desktop client, worker, and server all live in this repository.
+> Latest stable release: **v0.6.1** (Windows x64, macOS Intel, macOS Apple Silicon), published 2026-11-11. See [GitHub Releases](https://github.com/jiabai/Locus/releases). Licensed under **Apache-2.0**; the desktop client, worker, and server all live in this repository.
 
 ```text
 video link / web page / local media file
