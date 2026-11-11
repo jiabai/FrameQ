@@ -329,9 +329,11 @@ describe("Tauri desktop window configuration", () => {
     expect(workflow).toContain("build_macos_arm64:");
     expect(workflow).toContain("github.event_name == 'push' || inputs.build_macos_arm64");
     expect(workflow).toContain("runs-on: macos-15");
-    expect(workflow).toContain("APP_PYTHON_STANDALONE_URL_ARM64");
-    expect(workflow).toContain("APP_FFMPEG_ARCHIVE_URL_ARM64");
-    expect(workflow).toContain("APP_FFPROBE_ARCHIVE_URL_ARM64");
+    // Consumption stays neutral (APP_*); the arch suffix lives on the repository
+    // Secret, which cannot be renamed without re-entering its value.
+    expect(workflow).toContain("secrets.FRAMEQ_PYTHON_STANDALONE_URL_ARM64");
+    expect(workflow).toContain("secrets.FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64");
+    expect(workflow).toContain("secrets.FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64");
     expect(workflow).toContain("node scripts/build-installer.mjs --target macos-arm64 --skip-tauri-build");
     expect(workflow).toContain("npm --prefix app run tauri -- build --bundles app --target aarch64-apple-darwin");
     expect(workflow).toContain("bash scripts/make-macos-dmg.sh aarch64-apple-darwin Locus");
