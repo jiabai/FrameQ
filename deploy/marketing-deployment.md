@@ -69,7 +69,7 @@ dist/
 ├── download/index.html
 ├── privacy/index.html
 ├── _astro/             # 打包后的 CSS/JS/字体（哈希命名）
-├── video/              # locus-demo.mp4 + locus-demo-poster.jpg
+├── video/              # locus-launch-30s.mp4 + locus-launch-30s-poster.jpg
 ├── og/                 # 社交分享图
 ├── favicon.svg
 ├── robots.txt
@@ -184,7 +184,7 @@ curl -sI https://locus.8xf.pro/ | head -n 1
 # 期望：HTTP/2 200
 
 # 演示视频（Range 支持、可拖拽）
-curl -sI https://locus.8xf.pro/video/locus-demo.mp4 | grep -iE "HTTP|content-type|content-length|accept-ranges"
+curl -sI https://locus.8xf.pro/video/locus-launch-30s.mp4 | grep -iE "HTTP|content-type|content-length|accept-ranges"
 # 期望：video/mp4，有 Content-Length，Accept-Ranges: bytes
 
 # 打包资源
@@ -228,7 +228,7 @@ sudo rsync -a --delete /home/ubuntu/FrameQ/site.bak.<时间戳>/ /home/ubuntu/Fr
   哈希文件名会变，旧资源自然失效，无需手动清缓存。
 - **自定义 404**：当前未知路径返回 nginx 默认 404。若想要品牌 404 页，在
   `site/src/pages/404.astro` 建页重建，再把 `location /` 的 `=404` 改为 `/404.html`。
-- **视频源文件**：演示视频源在 `site/public/video/locus-demo.mp4`（约 5.3 MB），
+- **视频源文件**：演示视频源在 `site/public/video/locus-launch-30s.mp4`（约 6.1 MB，30 秒发布片），
   构建时原样拷到 `dist/video/`。仓库里没有所谓 75 MB 重编码源——如需重新压片只能重新提供原片。
 - **压缩**：当前未开启 gzip/brotli。如需进一步减小传输体积，可在 nginx 对应
   `location` 或 `http` 块加 `gzip on;` / `brotli on;`（不影响功能）。
