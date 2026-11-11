@@ -1152,6 +1152,12 @@
 
 ## 已完成
 
+- [x] 生产服务端部署到改名后的代码（2026-11-11 深夜）— ✅ 生产 `frameq-server` 从 `f473a86`（11-08 的代码）部署到 `3cfd451`，**`/admin`、`/login` 首次真正显示 Locus**（部署前线上 `<title>FrameQ Admin Login</title>`、页面 14 处 FrameQ，说明此前只改了 nginx 域名与营销站，Node 进程一直跑改名前的代码）。
+  同批必须做的配置迁移：生产 `server/.env` 的 `FRAMEQ_SERVER_HOST` / `FRAMEQ_SERVER_PORT` / `FRAMEQ_SELF_SERVICE_ACTIVATION_ENABLED` / `FRAMEQ_ADMIN_EMAIL` / `FRAMEQ_LLM_CONFIG_ENCRYPTION_KEY` 全部改成 `APP_*`——新代码只读 `APP_*`，漏改会在 production 下 fail-closed 起不来；改后逐行比对值未变（文件 538B → 523B，正好是 5 个键各少 3 字符）。
+  流程：停服 → 旧代码 `db:preflight --mode current` ok → 备份 `20261111T145359Z`（DB + `.env` + SHA256SUMS，异地副本 `C:/Users/bicho/frameq-server-backups/20261111T145359Z/`，两侧 sha256 均校验）→ 隔离副本 `db:restore-smoke` + `migrate status`（9 条 up to date）→ 743 KB 增量 bundle（服务器 fetch GitHub 仍慢，沿用 bundle 路线）→ checkout → env 改名 → `prisma:generate` / `build` / `npm test`（37 文件 376 通过）/ `db:migrate:deploy`（无待跑迁移）/ `preflight` ok → 启动。
+  验证：`/health/live`、`/health/ready` 直连与 nginx 双 200；`/admin` → `Locus Admin Login`、`/login` → `Locus Login`，两页 FrameQ 计数均为 0；`GET /api/desktop/account` 仍 401 `AUTH_REQUIRED`；`/api/wechat/notify` 404（微信链路确实已删）；`brand.ts`/`adminPage.ts`/`loginPage.ts` 生产与本地 LF 归一化哈希一致；`systemctl restart` 幂等通过。
+  残余：`security.ts` 限流哈希前缀仍是 `frameq:auth-rate-limit:v1`（改前缀会让现有计数失效，故意保留）；systemd 单元名与 `frameq.sqlite` 属既定生产身份，不在改名范围。回滚需整套「`f473a86` 代码 + 备份 DB + 备份里的旧 `.env`」，env 键名要一起回退。
+
 - [x] Add free-space and writability preflight plus a step log to the Windows installer (2026-11-09) — ✅
   `app/src-tauri/windows/installer-hooks.nsh` 在首个负载写入前用 `${DriveSpace}` 量 `$INSTDIR` 所在卷
   余量（要求 `ESTIMATEDSIZE` + 256 MB），再建探针文件验证可写；两项结果与安装步骤追加到
