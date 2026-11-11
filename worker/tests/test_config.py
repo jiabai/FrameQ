@@ -95,14 +95,14 @@ def test_load_project_env_preserves_server_checkout_process_env(
         tmp_path,
         environ={
             "APP_LLM_SOURCE": "server",
-            "APP_LLM_CHECKOUT_URL": "https://frameq.8xf.pro/api/desktop/llm/checkouts",
+            "APP_LLM_CHECKOUT_URL": "https://locus.8xf.pro/api/desktop/llm/checkouts",
             "APP_LLM_SESSION_TOKEN": "desktop-token",
             "APP_LLM_CHECKOUT_REQUEST_ID": "request-id",
         },
     )
 
     assert env["APP_LLM_SOURCE"] == "server"
-    assert env["APP_LLM_CHECKOUT_URL"] == "https://frameq.8xf.pro/api/desktop/llm/checkouts"
+    assert env["APP_LLM_CHECKOUT_URL"] == "https://locus.8xf.pro/api/desktop/llm/checkouts"
     assert env["APP_LLM_SESSION_TOKEN"] == "desktop-token"
     assert env["APP_LLM_CHECKOUT_REQUEST_ID"] == "request-id"
     assert "APP_LLM_API_KEY" not in env

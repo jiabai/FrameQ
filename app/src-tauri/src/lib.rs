@@ -240,7 +240,7 @@ mod tests {
         let original = std::env::var("APP_SERVER_BASE_URL").ok();
         std::env::remove_var("APP_SERVER_BASE_URL");
 
-        assert_eq!(server_base_url(), "https://frameq.8xf.pro");
+        assert_eq!(server_base_url(), "https://locus.8xf.pro");
 
         std::env::set_var("APP_SERVER_BASE_URL", "http://127.0.0.1:8787/");
 

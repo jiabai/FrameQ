@@ -10,7 +10,7 @@ use crate::brand::PRODUCT_NAME;
 
 const ACCOUNT_SESSION_FILE_NAME: &str = "session.json";
 const ACCOUNT_PENDING_STATE_FILE_NAME: &str = "pending_auth_state.txt";
-const DEFAULT_SERVER_BASE_URL: &str = "https://frameq.8xf.pro";
+const DEFAULT_SERVER_BASE_URL: &str = "https://locus.8xf.pro";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AuthCallback {

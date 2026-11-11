@@ -63,7 +63,7 @@
 | 身份 | 取值 | 变更方式 |
 | --- | --- | --- |
 | 仓库 | `github.com/jiabai/Locus` | 已于 2026-11-10 改名；updater endpoint、组件下载 URL 与站点链接同批更新。旧名重定向已实测可用 |
-| 生产域名 | `frameq.8xf.pro` | DNS + 证书 + nginx |
+| 生产域名 | `locus.8xf.pro` | 已于 2026-11-11 切换；旧域名 `frameq.8xf.pro` 的 DNS 记录删除，不再保留别名。客户端默认服务地址同步改为新域名（`app/src-tauri/src/account.rs` 的 `DEFAULT_SERVER_BASE_URL`），旧版客户端需升级才能继续登录与结账 |
 | 生产部署目录 | `/opt/frameq/FrameQ` | 运维迁移 |
 | 更新清单参数 | `?updater=1` | 已中性化，无需变更 |
 | GitHub Actions Secret | `FRAMEQ_PYTHON_STANDALONE_URL*`、`FRAMEQ_FFMPEG_ARCHIVE_URL*`、`FRAMEQ_FFPROBE_ARCHIVE_URL*` | 值不可读，改名须重新录入；消费侧用中性 `APP_*` 环境变量 |
