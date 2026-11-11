@@ -23,16 +23,16 @@ jobs:
             runner: macos-15-intel
             target: x86_64-apple-darwin
             arch: x86_64
-            python_archive: APP_PYTHON_STANDALONE_URL_MACOS_X64
-            ffmpeg_archive: APP_FFMPEG_ARCHIVE_URL_MACOS_X64
-            ffprobe_archive: APP_FFPROBE_ARCHIVE_URL_MACOS_X64
+            python_archive: FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64
+            ffmpeg_archive: FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64
+            ffprobe_archive: FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64
           - platform: macos-arm64
             runner: macos-15
             target: aarch64-apple-darwin
             arch: arm64
-            python_archive: APP_PYTHON_STANDALONE_URL_ARM64
-            ffmpeg_archive: APP_FFMPEG_ARCHIVE_URL_ARM64
-            ffprobe_archive: APP_FFPROBE_ARCHIVE_URL_ARM64
+            python_archive: FRAMEQ_PYTHON_STANDALONE_URL_ARM64
+            ffmpeg_archive: FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64
+            ffprobe_archive: FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64
     env:
       APP_PYTHON_STANDALONE_URL: ${{ secrets[matrix.python_archive] }}
       APP_FFMPEG_ARCHIVE_URL: ${{ secrets[matrix.ffmpeg_archive] }}

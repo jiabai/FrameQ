@@ -53,6 +53,32 @@ test("both macOS release jobs verify the packaged WebView host in the app and DM
   assert.match(dmgScript, /--target "\$\{NATIVE_TARGET\}" --verify-dmg "\$\{DMG\}"/);
 });
 
+test("desktop release reads runtime archives from the repository's existing secrets", async () => {
+  const workflow = await readFile(workflowPath, "utf8");
+
+  // GitHub Secret names are repository-level external identities: renaming them
+  // requires re-entering the value, which GitHub never exposes. The 2026-11-09
+  // de-branding sweep renamed these references to APP_* and the first v0.6.0
+  // tag build failed with "PythonStandaloneUrl is required". Environment variable
+  // names stay neutral (APP_*) because build-installer.mjs reads those.
+  const expectedSecretReferences = [
+    "APP_PYTHON_STANDALONE_URL: ${{ secrets.FRAMEQ_PYTHON_STANDALONE_URL }}",
+    "APP_FFMPEG_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFMPEG_ARCHIVE_URL }}",
+    "APP_PYTHON_STANDALONE_URL: ${{ secrets.FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64 }}",
+    "APP_FFMPEG_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64 }}",
+    "APP_FFPROBE_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64 }}",
+    "APP_PYTHON_STANDALONE_URL: ${{ secrets.FRAMEQ_PYTHON_STANDALONE_URL_ARM64 }}",
+    "APP_FFMPEG_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64 }}",
+    "APP_FFPROBE_ARCHIVE_URL: ${{ secrets.FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64 }}",
+  ];
+  for (const line of expectedSecretReferences) {
+    assert.ok(workflow.includes(line), `missing secret mapping: ${line}`);
+  }
+  assert.doesNotMatch(workflow, /secrets\.APP_/);
+  assert.equal(countMatches(workflow, /secrets\.FRAMEQ_[A-Z_]+/g), 8);
+  assert.equal(countMatches(workflow, /TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)?:/g), 8);
+});
+
 test("desktop release keeps its draft-first three-platform boundary", async () => {
   const workflow = await readFile(workflowPath, "utf8");
 

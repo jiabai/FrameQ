@@ -93,18 +93,35 @@ test("builds manual internal macOS artifacts for both architectures with read-on
     .map((match) => match[1])
     .sort();
   assert.deepEqual(referencedSecrets, [
-    "APP_FFMPEG_ARCHIVE_URL_ARM64",
-    "APP_FFMPEG_ARCHIVE_URL_MACOS_X64",
-    "APP_FFPROBE_ARCHIVE_URL_ARM64",
-    "APP_FFPROBE_ARCHIVE_URL_MACOS_X64",
-    "APP_PYTHON_STANDALONE_URL_ARM64",
-    "APP_PYTHON_STANDALONE_URL_MACOS_X64",
+    "FRAMEQ_FFMPEG_ARCHIVE_URL_ARM64",
+    "FRAMEQ_FFMPEG_ARCHIVE_URL_MACOS_X64",
+    "FRAMEQ_FFPROBE_ARCHIVE_URL_ARM64",
+    "FRAMEQ_FFPROBE_ARCHIVE_URL_MACOS_X64",
+    "FRAMEQ_PYTHON_STANDALONE_URL_ARM64",
+    "FRAMEQ_PYTHON_STANDALONE_URL_MACOS_X64",
   ]);
   for (const component of ["python", "ffmpeg", "ffprobe"]) {
     assert.match(workflow, new RegExp(`secrets\\[matrix\\.${component}_archive\\]`));
   }
   assert.equal([...workflow.matchAll(/secrets\[/g)].length, 3);
   assert.doesNotMatch(workflow, /secrets\./);
+  // Secret names are repository-level external identities, not code identifiers. The
+  // de-branding sweep renamed them to APP_* and every runner received empty values.
+  // Keep the neutral APP_* environment variable names that scripts consume while
+  // locking the GitHub Secret keys to the names that actually exist in the repo.
+  assert.match(
+    workflow,
+    /APP_PYTHON_STANDALONE_URL:\s*\$\{\{ secrets\[matrix\.python_archive\] \}\}/,
+  );
+  assert.match(
+    workflow,
+    /APP_FFMPEG_ARCHIVE_URL:\s*\$\{\{ secrets\[matrix\.ffmpeg_archive\] \}\}/,
+  );
+  assert.match(
+    workflow,
+    /APP_FFPROBE_ARCHIVE_URL:\s*\$\{\{ secrets\[matrix\.ffprobe_archive\] \}\}/,
+  );
+  assert.doesNotMatch(workflow, /(?:python|ffmpeg|ffprobe)_archive:\s*APP_/);
 
   assert.doesNotMatch(workflow, /^\s+(push|pull_request|schedule|release):/m);
   assert.doesNotMatch(workflow, /contents:\s*write/);

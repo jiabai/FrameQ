@@ -56,6 +56,8 @@
 
 仓库地址、生产域名、数据目录等无法在代码里中性化的身份，集中登记在 `app/src/brand.ts` 与 `server/src/brand.ts`，并在本文件「外部身份」一节列出。变更这些身份属于发布/运维动作，不属于改名。
 
+**GitHub Actions Secret 名称同样属于外部身份，不适用于第 1 节的「环境变量名」规则。** Secret key 存在于仓库设置里，GitHub 不提供读取旧值的接口；改名必须重新录入值，且工作流引用与 Secret 名的不一致不会在常规 CI 中暴露，只在打 tag 发布时让 runner 拿到空值。因此 Secret key 保持创建时的名字，去品牌化只改**消费侧环境变量名**。映射由 `scripts/tests/desktop-release-workflow.test.mjs` 与 `scripts/tests/macos-intel-acceptance-workflow.test.mjs` 锁定：工作流里 `APP_PYTHON_STANDALONE_URL` / `APP_FFMPEG_ARCHIVE_URL` / `APP_FFPROBE_ARCHIVE_URL` 由 `secrets.FRAMEQ_*` 赋值，脚本只读 `APP_*`。
+
 ## 外部身份（当前）
 
 | 身份 | 取值 | 变更方式 |
@@ -64,6 +66,7 @@
 | 生产域名 | `frameq.8xf.pro` | DNS + 证书 + nginx |
 | 生产部署目录 | `/opt/frameq/FrameQ` | 运维迁移 |
 | 更新清单参数 | `?updater=1` | 已中性化，无需变更 |
+| GitHub Actions Secret | `FRAMEQ_PYTHON_STANDALONE_URL*`、`FRAMEQ_FFMPEG_ARCHIVE_URL*`、`FRAMEQ_FFPROBE_ARCHIVE_URL*` | 值不可读，改名须重新录入；消费侧用中性 `APP_*` 环境变量 |
 
 ## 后果
 
