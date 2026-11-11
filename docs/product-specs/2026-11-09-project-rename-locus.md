@@ -35,9 +35,10 @@
 
 | 身份 | 现状 | 说明 |
 | --- | --- | --- |
-| 生产域名 | `frameq.8xf.pro` | 需要 DNS、证书、nginx 一起改，另开部署任务 |
+| 生产域名 | `locus.8xf.pro` | 已于 2026-11-11 完成 DNS、证书与 nginx 切换，旧域名不保留别名 |
 | GitHub 仓库 | `jiabai/Locus` | 已于 2026-11-10 改名；updater endpoint、组件下载 URL 与站点链接同批更新 |
-| 生产部署目录 / 服务名 | `/opt/frameq/FrameQ`、`frameq-server` | 服务器上的迁移，另开 |
+| 生产服务名 | `locus-server` | 已于 2026-11-11 由 `frameq-server` 改名（unit、仓库样例与运行手册同步） |
+| 生产部署目录 / 数据库文件 | `/home/ubuntu/FrameQ`、`frameq.sqlite` | 仍保留旧名，属既定生产身份，迁移另开 |
 
 仓库地址分散在若干常量与配置中（Tauri updater endpoint、`runtime_component.rs`、`updates.rs`、`brand.ts`、`updateClient.ts`、`site/src/consts.ts` 等），2026-11-10 已统一换成新名；生产域名、部署目录与服务名仍待运维迁移。
 

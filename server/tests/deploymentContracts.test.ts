@@ -142,7 +142,7 @@ describe("production deployment contracts", () => {
   test("deployment assets expose exact health paths and align shutdown deadlines", () => {
     const nginx = readFileSync(join(repositoryRoot, "deploy", "nginx", "locus-server.conf"), "utf8");
     const systemd = readFileSync(
-      join(repositoryRoot, "deploy", "systemd", "frameq-server.service"),
+      join(repositoryRoot, "deploy", "systemd", "locus-server.service"),
       "utf8",
     );
     const runbook = readFileSync(join(repositoryRoot, "deploy", "server-deployment.md"), "utf8");

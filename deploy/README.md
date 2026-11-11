@@ -6,7 +6,7 @@ activation-code, self-service activation-email, LLM-checkout, and entitlement se
 - [server-deployment.md](./server-deployment.md) - production deployment runbook.
 - [nginx/locus-server.conf](./nginx/locus-server.conf) - Nginx reverse proxy sample.
 - [nginx/frameq-proxy-headers.conf](./nginx/frameq-proxy-headers.conf) - reusable proxy headers snippet.
-- [systemd/frameq-server.service](./systemd/frameq-server.service) - systemd service sample.
+- [systemd/locus-server.service](./systemd/locus-server.service) - systemd service sample.
 
 The server should be kept private behind Nginx and listen on `127.0.0.1:8787`.
 Do not put real `.env`, SQLite databases, backups, logs, certificates, or private keys in git.

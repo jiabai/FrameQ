@@ -374,7 +374,7 @@ async function main() {
     );
   } else if (result.state === ROLLOUT_STATE.FEATURE_DISABLED) {
     process.stdout.write(
-      "Next step: set APP_SELF_SERVICE_ACTIVATION_ENABLED=true and restart frameq-server.\n",
+      "Next step: set APP_SELF_SERVICE_ACTIVATION_ENABLED=true and restart locus-server.\n",
     );
   }
 

@@ -27,11 +27,12 @@ the same architecture under a different account and prefix, so translate before 
 | --- | --- |
 | service account `frameq` | `ubuntu` |
 | checkout `/opt/frameq/FrameQ` | `/home/ubuntu/FrameQ` |
+| unit `frameq-server.service` | `locus-server.service` (renamed 2026-11-11) |
 | Node.js from the system packages | Node.js 24.14.1 installed with nvm for `ubuntu` |
 
 Everything below the checkout root keeps the same relative shape (`server/.env` mode `0600`,
 `server/data/frameq.sqlite`, `server/backups/<stamp>/`). Confirm which instance you are on before
-mutating anything - `systemctl show frameq-server -p ExecStart` and
+mutating anything - `systemctl show locus-server -p ExecStart` and
 `git -C <checkout> rev-parse HEAD` - instead of assuming the reference paths exist.
 
 A non-interactive SSH session (`ssh host 'cmd'`, or any scripted client) does not load the login
@@ -120,7 +121,7 @@ For a fresh database, create an empty local file with restrictive permissions, d
 migrations, then run database preflight and migration status:
 
 ```bash
-sudo systemctl stop frameq-server
+sudo systemctl stop locus-server
 test ! -e /opt/frameq/FrameQ/server/data/frameq.sqlite
 sudo -u frameq install -m 600 /dev/null /opt/frameq/FrameQ/server/data/frameq.sqlite
 cd /opt/frameq/FrameQ/server
@@ -217,7 +218,7 @@ Always stop the service before copying SQLite. This avoids an incomplete main/WA
 proves that no second application instance owns the file.
 
 ```bash
-sudo systemctl stop frameq-server
+sudo systemctl stop locus-server
 sudo -u frameq npm --prefix /opt/frameq/FrameQ/server run db:preflight -- --mode current
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 sudo -u frameq install -d -m 700 /opt/frameq/FrameQ/server/backups/$STAMP
@@ -262,7 +263,7 @@ delete the rehearsal directory securely.
 ## 7. Deploy and post-deploy smoke
 
 ```bash
-sudo systemctl stop frameq-server
+sudo systemctl stop locus-server
 # Complete Sections 5 and 6 before continuing.
 cd /opt/frameq/FrameQ
 sudo -u frameq git fetch --tags --prune
@@ -275,7 +276,7 @@ sudo -u frameq npm run build
 sudo -u frameq npm run db:migrate:deploy
 sudo -u frameq npm run db:migrate:status
 sudo -u frameq npm run db:preflight -- --mode current
-sudo systemctl start frameq-server
+sudo systemctl start locus-server
 curl --fail --silent https://locus.8xf.pro/health/live
 curl --fail --silent https://locus.8xf.pro/health/ready
 ```

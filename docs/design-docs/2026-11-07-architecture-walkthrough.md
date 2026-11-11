@@ -76,7 +76,7 @@ flowchart LR
 | --- | --- | --- |
 | Windows 安装包 | Tauri NSIS + 内置 Python 运行时与 worker 资源 | 安装包约 269 MB、解压约 1081 MB、36588 个文件；由 `docs/exec-plans/tech-debt-tracker.md` 记录 |
 | macOS 安装包 | DMG，ad-hoc 签名 | 未 notarize；`TASKS.md` 的 v0.5.0 残余风险列出 macOS 图形验收与 Intel 验收工作流 |
-| 服务端 | Nginx 终止 TLS，转发到 `127.0.0.1:8787`；systemd 常驻；启动前跑 Prisma 迁移检查 | [runtimeConfig.ts](../../server/src/runtimeConfig.ts#L69-L73)、[deploy/nginx/locus-server.conf](../../deploy/nginx/locus-server.conf)、[deploy/systemd/frameq-server.service](../../deploy/systemd/frameq-server.service) |
+| 服务端 | Nginx 终止 TLS，转发到 `127.0.0.1:8787`；systemd 常驻；启动前跑 Prisma 迁移检查 | [runtimeConfig.ts](../../server/src/runtimeConfig.ts#L69-L73)、[deploy/nginx/locus-server.conf](../../deploy/nginx/locus-server.conf)、[deploy/systemd/locus-server.service](../../deploy/systemd/locus-server.service) |
 | SQLite | 单文件数据库，单实例写入；备份要求停服务 | `deploy/server-deployment.md` |
 | 营销站 | 静态 Astro 构建后手工部署；`site/` 不进 git | [AGENTS.md](../../AGENTS.md#L22-L24)、[site/src/consts.ts](../../site/src/consts.ts#L33) |
 
