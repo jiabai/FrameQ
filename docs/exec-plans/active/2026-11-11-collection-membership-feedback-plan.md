@@ -14,6 +14,10 @@ This ExecPlan is a living document. The sections Progress, Surprises & Discoveri
 - [x] 2026-11-11: 实现选择清单的已加入状态标注、成员变更说明与撤销，补齐三种语言文案与样式。Validation: `npm --prefix app test -- src/features/collections/CollectionsWorkspace.test.tsx src/i18n/shellResources.test.ts` 输出 2 文件 / 44 项通过。
 - [x] 2026-11-11: 补齐组件测试与三语文案测试，覆盖加入、移除、撤销、切换合集清除状态与状态标注。Validation: 同上 44 项，其中 `CollectionsWorkspace.test.tsx` 32 项、`shellResources.test.ts` 12 项。
 - [x] 2026-11-11: 运行前端全量门禁与生产构建。Validation: `npm --prefix app test` 输出 137 文件 / 1591 通过 / 1 跳过；`npm --prefix app run lint` 通过；`npm --prefix app run build` 通过；`validate_agents_docs.py` ERROR 与 WARN 均为 0 错误 0 警告；`git diff --check` 通过。
+- [x] 2026-11-11: 提交 `b8b1311` 并推送 `origin/main`（`71cde68..b8b1311`）。Validation: `git status -sb` 干净，9 文件 / 278 插入 / 16 删除。
+- [x] 2026-11-11: 在 Windows 原生窗口用真实 WebView2 CDP 指针与键盘输入完成 17 项验收，覆盖加入、撤销、撤销后焦点转移、键盘焦点链、笔记总列表全量与真实 Rust IPC 写入。Validation: `node work/collection-membership-native-acceptance.mjs` 输出 `passed=17 failed=0`，证据 `work/collection-membership-native-acceptance-en-US.json`；`collections.json` 成员状态 false → true → false；`design-qa.md` Remaining acceptance 段已记录。
+- [x] 2026-11-11: 在 `zh-CN` 与 `zh-TW` 原生窗口各复跑同一套 17 项验收，三种语言累计 51 项全过。Validation: 修改 `%LOCALAPPDATA%\pro.8xf.app\ui-preferences.json` 的 `language` 并重启原生窗口，两次均输出 `passed=17 failed=0`，证据 `work/collection-membership-native-acceptance-zh-CN.json` 与 `-zh-TW.json`；`design-qa.md` 已记录各语言文案与撤销后焦点按钮文本。
+- [x] 2026-11-11: 核对 macOS 覆盖边界。Validation: `.github/workflows/macos-intel-acceptance.yml` 只跑 Rust 原生验收与 DMG 打包，未驱动合集反馈焦点链；本机为 Windows 且无 macOS 主机，该项如实保留为残余风险。
 
 ## Surprises & Discoveries
 
@@ -24,6 +28,14 @@ Evidence: `app/src/features/collections/CollectionsWorkspace.test.tsx:232` 以 `
 Evidence: `app/src/App.tsx:599` 把 `collectionsController.errorCode` 转成 `collectionNotice` 传给合集视图，父级错误提示已有通道；成功反馈在组件局部维护即可，失败时清除局部反馈由父级错误提示接管。
 
 Evidence: 本机会话注入的 `NODE_OPTIONS=--require="D:/Program Files/Tencent/WorkBuddy/resources/app.asar.unpacked/cli/vendor/shim/node-language-shim.cjs"` 会让 Vitest 4.1.9 的全部 137 个测试文件在 `describe` 阶段报 `Cannot read properties of undefined (reading 'config')`，表现为 0 test；在 Git Bash 里 `NODE_OPTIONS= npm ...` 未清除该变量，在 PowerShell 里先执行 `$env:NODE_OPTIONS=$null` 后前端门禁全部正常。这是宿主环境问题，与本次代码改动无关。
+
+Evidence: `CollectionsWorkspace.tsx` 的 `controlsDisabled` 在合集数据加载期间为真，页面显示 `Loading Collection…`。脚本化点击必须等待「添加笔记到合集」按钮的 `disabled` 变为 false，否则点击会被忽略；真实用户同样受该加载态保护。
+
+Evidence: WebView2 CDP 的 `Input.dispatchKeyEvent` 对按钮 Enter 需要带 `text: "\r"` 才会激活 click，Space 对选择框需要 `text: " "`。从页面最后一个可聚焦控件按 Tab 会让 `document.activeElement` 变成 `body`，Shift+Tab 可返回该按钮，属于浏览器焦点循环。
+
+Evidence: dev 数据根 `%LOCALAPPDATA%\pro.8xf.app` 是空库；`D:\FrameQ` 的真实任务清单文件名是 `frameq-task.json`，当前 Rust 只读 `task.json`（`app/src-tauri/src/task_manifest.rs:18`）。复制任务目录并另存 `task.json` 后，`desktop.log` 记录 `history.list supported_count=2`。
+
+Evidence: 原生窗口语言由配置根 `%LOCALAPPDATA%\pro.8xf.app\ui-preferences.json` 的 `language` 决定（`app/src-tauri/src/ui_preferences.rs:53`），修改后需重启窗口生效。验收脚本以 `[data-shell-destination="notes"]` 的实际文本判定语言，三种语言共用同一套 17 项断言。
 
 ## Decision Log
 
@@ -37,9 +49,11 @@ Decision: 本次不 bump 版本、不打 tag、不建 Release、不部署站点�
 
 Decision: 前端门禁统一在 PowerShell 里先清除 `NODE_OPTIONS` 再执行。 Rationale: 宿主注入的 shim 让 Vitest 4 的测试收集上下文失效，清除后 137 个文件全部正常运行。 Date/Author: 2026-11-11 / Codex
 
+Decision: 原生验收使用真实数据副本与真实输入事件。 Rationale: 项目规则禁止 mock 与欺骗式验证；CDP 指针与键盘事件走 WebView2 输入管线，Rust IPC 写入可逐字节核对 `collections.json`。 Date/Author: 2026-11-11 / Codex
+
 ## Outcomes & Retrospective
 
-合集详情中的添加清单现在列出全部本地笔记，已加入项带「已在此合集」标注并通过 `aria-describedby` 关联到选择框；加入、移除与撤销提交成功后显示一条说明「笔记仍保留在笔记列表中」的反馈，撤销复用同一成员提交命令，切换合集或刷新后反馈清除。笔记总列表使用完整本地历史的行为没有改动。验证输出：`npm --prefix app test` 137 文件 / 1591 通过 / 1 跳过；`npm --prefix app run lint` 通过（含 `tsc --noEmit` 与 i18n 字面量检查）；`npm --prefix app run build` 通过（2621 模块，产物 `index-WmMP-ug0.js`）；文档治理 ERROR 与 WARN 均 0 错误 0 警告；`git diff --check` 通过。Residual risk: 原生 Tauri 窗口中的真实指针与键盘操作尚未在本轮脚本化验证，撤销按钮在 WebView2 宿主中的焦点转移只由组件测试覆盖；改动尚未提交，未发版，未部署站点。
+合集详情中的添加清单现在列出全部本地笔记，已加入项带「已在此合集」标注并通过 `aria-describedby` 关联到选择框；加入、移除与撤销提交成功后显示一条说明「笔记仍保留在笔记列表中」的反馈，撤销复用同一成员提交命令，切换合集或刷新后反馈清除。笔记总列表使用完整本地历史的行为没有改动。验证输出：`npm --prefix app test` 137 文件 / 1591 通过 / 1 跳过；`npm --prefix app run lint` 通过（含 `tsc --noEmit` 与 i18n 字面量检查）；`npm --prefix app run build` 通过（2621 模块，产物 `index-WmMP-ug0.js`）；文档治理 ERROR 与 WARN 均 0 错误 0 警告；`git diff --check` 通过；提交 `b8b1311` 已推送 `origin/main`。Windows 原生窗口真实指针与键盘验收在 `en-US`、`zh-CN`、`zh-TW` 三种语言各 17 项全过，累计 51 项（脚本 `work/collection-membership-native-acceptance.mjs`，证据 `work/collection-membership-native-acceptance-{en-US,zh-CN,zh-TW}.json`，台账 `design-qa.md`）：撤销后焦点落在 `Finish selecting notes` / `完成笔记选择` / `完成筆記選擇` 按钮，Tab/Shift+Tab 焦点链可逆，`collections.json` 成员状态 false → true → false，侧栏笔记列表保持 2 行。Residual risk: 本机为 Windows，macOS WKWebView 的合集反馈焦点链没有真实窗口验证（`.github/workflows/macos-intel-acceptance.yml` 只覆盖 Rust 验收与 DMG 打包）；其他显示缩放与父级错误提示接管局部反馈的失败路径未由真实窗口触发。未发版，未部署站点。
 
 ## Context and Orientation
 
@@ -66,4 +80,5 @@ Decision: 前端门禁统一在 PowerShell 里先清除 `NODE_OPTIONS` 再执行
 - `npm --prefix app run build`
 - `uv run python scripts/validate_agents_docs.py --level ERROR`
 - `uv run python scripts/validate_agents_docs.py --level WARN`
-- 人工回归：在真实桌面窗口打开一个合集，添加一篇已有笔记，确认该笔记仍出现在侧栏「笔记」与 Notes 页；点击撤销，确认合集计数回到原值且笔记仍在笔记列表。
+- `node work/collection-membership-native-acceptance.mjs`（需先启动 Vite 与带 `--remote-debugging-port=9222` 的原生窗口；证据写入 `work/collection-membership-native-acceptance.json`）
+- 人工回归（2026-11-11 已由上述脚本以真实指针与键盘输入完成）：在真实桌面窗口打开一个合集，添加一篇已有笔记，确认该笔记仍出现在侧栏「笔记」与 Notes 页；点击撤销，确认合集计数回到原值且笔记仍在笔记列表。
