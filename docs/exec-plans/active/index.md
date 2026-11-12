@@ -1,7 +1,5 @@
 # Active Exec Plans
 
-- `2026-11-12-asr-sherpa-onnx-node-spike-plan.md` — ASR 引擎替换可行性测量（**计划已起草，测量未执行**）：为「worker 从 Python 替换为 TypeScript」判定唯一无法通过代码翻译消除的风险点。候选 `sherpa-onnx-node@2.0.1` + SenseVoice int8 2024-07-17 + `silero_vad.onnx`，基线为现有 `funasr_onnx` + FSMN 在线 VAD。用户确认分段边界可变、质量不降即可，验收以字符错误率、漏句、重复循环与 16 条人工成对审查为准，另含三平台原生插件加载与 228MB 模型国内下载测量。24 条真实音频与 8 条人工逐字转写全部留在本机，CI 只运行模型自带 `test_wavs`。产物在 `work/asr-spike/`，不改动生产代码。残余：macOS 两平台需对应主机或托管 CI；GitHub Releases 国内下载速度需镜像来源核实。
-
 - `2026-11-11-collection-membership-feedback-plan.md` — 合集成员状态反馈：**代码、门禁、提交与原生验收完成**。用户确认合集保持引用语义，笔记总列表始终全量；添加清单保留已加入笔记并标注状态，加入/移除后显示「笔记仍在笔记列表」的说明与撤销。规格、`DESIGN.md`、组件、三语文案、样式与测试已更新；前端 137 文件 / 1591 通过 / 1 跳过，lint 与 build 通过，文档 0/0；提交 `b8b1311` 已推送 `origin/main`。2026-11-11 Windows 原生窗口真实指针与键盘验收在 `en-US` / `zh-CN` / `zh-TW` 三语各 17 项全过（累计 51 项，证据 `work/collection-membership-native-acceptance-*.json`，台账 `design-qa.md`），撤销后焦点落在 `Finish selecting notes` / `完成笔记选择` / `完成筆記選擇` 按钮。残余：macOS WKWebView 焦点链需 macOS 主机。前端门禁需在 PowerShell 里先清 `NODE_OPTIONS`。该功能随 v0.6.0 于 2026-11-11 发布。
 
 - `2026-11-10-data-storage-migration-speedup-plan.md` — 数据存储迁移提速（**第一批代码完成**）：并行复制/验证、砍写入后重哈希、源重验 identity+length 廉价判定、persist 250ms 节流；用户干净环境 data_storage 全模块 **88 passed / 0 failed**（agent 宿主内删除拦截致波动假失败，教训已记）。残余：全量 `cargo test --lib` 复跑与真实迁移计时对比。第二批与第三批单独立项。
