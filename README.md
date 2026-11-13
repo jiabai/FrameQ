@@ -19,16 +19,18 @@ Paste a video link, a web page, or a local media file. Locus keeps it on your ma
 
 **Locus is an open-source alternative to Google NotebookLM.** NotebookLM turns the documents you upload into a grounded notebook; Locus does the same job for the sources NotebookLM cannot handle well — video links, web pages, and local media — and does the heavy lifting on your own machine instead of in a cloud pipeline.
 
-> 一句话：**把视频、网页和本地音视频变成你的本地笔记库**——转写、摘要、思维导图、要点与解剖都在本机完成，只有你确认的 AI 步骤才会把文字发出去。
+> 一句话：**把视频、网页和本地音视频变成你的本地笔记库**——下载、转写与文字稿留在本机；摘要、思维导图、要点与解剖由你确认后调用云端 AI 生成。
 
 > [!NOTE]
 > Latest stable release: **v0.6.1** (Windows x64, macOS Intel, macOS Apple Silicon), published 2026-11-11. See [GitHub Releases](https://github.com/jiabai/Locus/releases). Licensed under **Apache-2.0**; the desktop client, worker, and server all live in this repository.
 
-```text
-video link / web page / local media file
-  -> download or system WebView extraction -> ffprobe -> 16 kHz mono audio
-  -> SenseVoice Small local transcription -> saved local note
-  -> optional, separately confirmed: summary / mindmap / insights / dissection / draft
+```mermaid
+flowchart LR
+    A[Video link / web page / local media file] --> B[Download or WebView extraction]
+    B --> C[ffprobe and 16 kHz mono audio]
+    C --> D[SenseVoice Small local transcription]
+    D --> E[Local note]
+    E --> F[Confirmed AI steps: summary / mindmap / insights / dissection / draft]
 ```
 
 > [!IMPORTANT]
@@ -40,11 +42,14 @@ Grab the newest installer from **[GitHub Releases → latest](https://github.com
 
 | Platform | Asset |
 | --- | --- |
-| Windows x64 | `FrameQ_0.5.1_x64-setup.exe` (plus `.sig` for the in-app updater) |
-| macOS Apple Silicon | `FrameQ_0.5.1_aarch64.dmg` |
-| macOS Intel | `FrameQ_0.5.1_x64.dmg` |
+| Windows x64 | `Locus_0.6.1_x64-setup.exe` (plus `Locus_0.6.1_x64-setup.exe.sig` for the in-app updater) |
+| macOS Apple Silicon | `Locus_0.6.1_aarch64.dmg` |
+| macOS Intel | `Locus_0.6.1_x64.dmg` |
 
-Installer assets keep the `FrameQ_` prefix until the first release published under the new name. Releases also carry `latest.json` for the Windows updater and on-demand `pytorch-runtime-*.zip` components. macOS builds are ad-hoc signed, not notarized: the first launch needs a one-time **System Settings → Privacy & Security → Open Anyway**.
+Releases also carry `latest.json` for the Windows updater and on-demand `pytorch-runtime-*.zip` components for the optional PyTorch ASR model. macOS builds are ad-hoc signed, not notarized: the first launch needs a one-time **System Settings → Privacy & Security → Open Anyway**.
+
+> [!WARNING]
+> The account service runs at `locus.8xf.pro`. Releases up to v0.6.0 have the previous domain compiled in, so they can no longer sign in or use Locus-managed AI steps. v0.6.0 receives the fix through the in-app updater; v0.5.1 and earlier need a manual reinstall. Local state from earlier installs is not migrated: the current data directory is `%LOCALAPPDATA%\pro.8xf.app`.
 
 ## Locus vs Google NotebookLM
 
@@ -67,7 +72,7 @@ Honest boundary: Locus is not a feature-for-feature clone. It covers the *source
 - Video download through `yt-dlp` with focused Douyin / Xiaohongshu / Bilibili fallbacks and a 20-minute per-download budget; valid Xiaohongshu platform subtitles are reused instead of running ASR.
 - Web pages loaded in a system WebView and saved as local Markdown with source URL and extraction time.
 - Selectable local ASR models (SenseVoiceSmall-ONNX default; PyTorch optional with an on-demand ~140 MB runtime).
-- Separately confirmed AI steps — summary, mindmap, insight topics, transcript dissection, platform-style draft — through server-managed LLM checkout and quota. A failed AI step leaves the transcript intact and can be retried alone.
+- Separately confirmed AI steps — summary, mindmap, insight topics, transcript dissection, platform-style draft — using Locus-managed models with quota checkout by default, or your own OpenAI-compatible provider (BYOK). BYOK keys are stored only in the operating system keychain, and those steps need no sign-in or AI Credit; platform-style drafts still use server-managed search and require a signed-in account. A failed AI step leaves the transcript intact and can be retried alone.
 - Automatic LLM note titles, a per-user Web dashboard with email-OTP login, and a local-only diagnostic export.
 - Windows installer preflight for free space and writability, with a step log at `%TEMP%\install.log`.
 
@@ -80,28 +85,32 @@ One source at a time; this is a local notebook, not a general downloader or batc
 | Local-first | Videos, audio, transcripts, model caches, and history stay on your machine. |
 | Open source | Apache-2.0; desktop client, worker, and server in one repository; the AI steps can be skipped entirely. |
 | Notebook, not a downloader | Every source becomes a reusable local note instead of a one-off export. |
-| Two-stage AI | Download and transcription run first; each AI step needs a separate confirmation and quota check. |
+| Two-stage AI | Download and transcription run first; each AI step needs a separate confirmation, and Locus-managed steps also check quota. |
 
 ## Quick Start
 
 ```powershell
 uv sync --dev
-npm --prefix app install
-npm --prefix server install
+Push-Location app; npm install; Pop-Location
+Push-Location server; npm install; Pop-Location
 npm --prefix app run tauri -- dev
 ```
 
 Before claiming a change is complete, run the full gate set (see [docs/EXECUTION_GATES.md](docs/EXECUTION_GATES.md)):
 
 ```powershell
+uv run python scripts/validate_agents_docs.py --level ERROR
 uv run python scripts/validate_agents_docs.py --level WARN
 uv run ruff check worker
 uv run pytest worker/tests
 npm --prefix app test
+npm --prefix app run lint
 npm --prefix app run build
 npm --prefix server test
 npm --prefix server run build
 cargo test --manifest-path app/src-tauri/Cargo.toml
+node --test scripts/tests/*.test.mjs
+python -m pytest scripts/tests
 ```
 
 Build without packaging an installer with `npm --prefix app run tauri -- build --no-bundle`; the executable lands at `app/src-tauri/target/release/app.exe`. Local state lives in `%LOCALAPPDATA%\pro.8xf.app`.
@@ -111,7 +120,7 @@ Build without packaging an installer with `npm --prefix app run tauri -- build -
 | Path | Role |
 | --- | --- |
 | `app/` | Tauri + React + TypeScript desktop client |
-| `worker/worker_core/` | Python worker: download, media validation, ASR, intelligent extraction |
+| `worker/worker_core/` | Python worker: download, media validation, ASR, and the Studio AI tools (summary, mindmap, insights, dissection, draft) |
 | `server/` | Fastify account, entitlement, and LLM-checkout service |
 | `contracts/` | Cross-language task and artifact contracts |
 | `deploy/` | Production runbook plus Nginx and systemd reference configs |
@@ -122,7 +131,8 @@ Build without packaging an installer with `npm --prefix app run tauri -- build -
 ## Security Boundary
 
 - Only public, owned, or authorized sources; no login-wall, CAPTCHA, DRM, or privacy bypasses.
-- Only explicitly confirmed AI steps may send transcript text to the server-managed LLM provider. The account service never receives media, transcripts, insights, cookies, model caches, or local history.
+- Only explicitly confirmed AI steps may send transcript text to an LLM: Locus-managed steps go through the server-managed provider and quota checkout, while BYOK steps go to the OpenAI-compatible endpoint you configure. The account service never receives media, transcripts, insights, cookies, model caches, or local history.
+- API keys for custom providers stay in the operating system keychain; they are never written to config files, logs, command-line arguments, or diagnostic exports.
 - Real `.env` files, SQLite databases, backups, logs, model caches, outputs, and secrets stay out of git.
 
 Full boundary: [docs/SECURITY.md](docs/SECURITY.md).
